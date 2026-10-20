@@ -146,7 +146,7 @@ In a Durable Object of a separately deployed Worker, the delay was about 50 ms. 
 
 ### Deploying the sandbox Worker
 
-A complete setup is in [`examples/cloudflare`](https://github.com/masseater/msa/tree/main/libs/codemode/examples/cloudflare). The sandbox Worker is one file:
+The sandbox Worker is one file:
 
 ```ts
 // sandbox/src/index.ts
@@ -209,7 +209,92 @@ Import the sandbox from `/portable` in the agent's Worker. Importing `/cloudflar
 - **One object per session**, `getByName(sessionId)`, keeps a session's scripts together. Two scripts of the same session take turns on one thread.
 - **One object per execution**, `getByName(crypto.randomUUID())`, runs every script on its own.
 
-Run both Workers locally with `wrangler dev -c agent/wrangler.jsonc -c sandbox/wrangler.jsonc`.
+A complete agent Worker keeps the tools in a `Session` Durable Object:
+
+```ts
+// agent/src/index.ts
+// A Worker whose Durable Object runs codemode the way an agent session would: tools run here, in the
+// session object, and scripts run in the separately deployed msa-codemode-sandbox Worker.
+//
+//   curl -X POST http://localhost:8787 --data 'const n = await tools.count({ add: 2 }); text("n=" + n); return n'
+import type { CodemodeSandboxDurableObject } from "@msa/codemode/cloudflare";
+// The portable entry has no QuickJS module: the WebAssembly lives only in the sandbox Worker.
+import { type CodemodeTool, RemoteCodemodeSandbox } from "@msa/codemode/portable";
+import { DurableObject } from "cloudflare:workers";
+
+interface Env {
+  SESSION: DurableObjectNamespace<Session>;
+  CODEMODE_SANDBOX: DurableObjectNamespace<CodemodeSandboxDurableObject>;
+}
+
+export class Session extends DurableObject<Env> {
+  private counter = 0;
+
+  async runCodemode(code: string) {
+    const tools: CodemodeTool[] = [
+      {
+        name: "count",
+        description: "Adds to a counter kept in the session and returns the new value",
+        execute: (args) => {
+          this.counter += (args as { add: number }).add;
+          return this.counter;
+        },
+      },
+    ];
+    // Before: new CodemodeSandbox({ tools, timeoutMs: 60_000 })
+    const sandbox = new RemoteCodemodeSandbox({
+      tools,
+      timeoutMs: 60_000,
+      // One sandbox instance per session keeps a session's scripts together and apart from others.
+      remote: () => this.env.CODEMODE_SANDBOX.getByName(this.ctx.id.toString()),
+    });
+    try {
+      return await sandbox.execute(code);
+    } finally {
+      await sandbox.close();
+    }
+  }
+}
+
+export default {
+  async fetch(request, env) {
+    if (request.method !== "POST") return new Response("POST a script\n", { status: 405 });
+    const result = await env.SESSION.getByName("demo").runCodemode(await request.text());
+    return Response.json(result);
+  },
+} satisfies ExportedHandler<Env>;
+```
+
+```jsonc
+// agent/wrangler.jsonc
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "msa-codemode-agent-example",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-22",
+  "durable_objects": {
+    "bindings": [
+      { "name": "SESSION", "class_name": "Session" },
+      // The sandbox class lives in its own Worker. `script_name` is what puts scripts in a different
+      // isolate; binding a class exported from this Worker would run them on the session's thread.
+      {
+        "name": "CODEMODE_SANDBOX",
+        "class_name": "CodemodeSandbox",
+        "script_name": "msa-codemode-sandbox",
+      },
+    ],
+  },
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Session"] }],
+}
+```
+
+Run both Workers locally with `wrangler dev -c agent/wrangler.jsonc -c sandbox/wrangler.jsonc`, then send a script:
+
+```sh
+curl -X POST http://localhost:8787 --data 'const n = await tools.count({ add: 2 }); text("n=" + n); return n'
+```
+
+Deploy the sandbox first, because the agent's binding refers to it by name.
 
 ### Limits on Cloudflare
 

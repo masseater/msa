@@ -1,25 +1,21 @@
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import {
-  closeSandboxes,
-  createSandbox,
-  delayed,
-  describeBackends,
-  echo,
-  rejectOnAbort,
-} from "./sandbox-support.ts";
+import sandboxSupport from "./sandbox-support.ts";
+
+const { closeSandboxes, createSandbox, delayed, describeBackends, echo, rejectOnAbort } =
+  sandboxSupport;
 
 const exposesToolsAsAsyncFunctionsAnd = Effect.gen(function* () {
   const seen: unknown[] = [];
   const sandbox = createSandbox([
     {
-      name: "add",
       execute: (args) => {
         seen.push(args);
         const { a, b } = args as { a: number; b: number };
         return { sum: a + b };
       },
+      name: "add",
     },
   ]);
   const result = yield* Effect.promise(() =>
@@ -45,8 +41,8 @@ const runsConcurrentCallsAndListsTool = Effect.gen(function* () {
   const sandbox = createSandbox([
     echo,
     {
-      name: "delay",
       execute: (args) => delayed(20, args),
+      name: "delay",
     },
   ]);
   const result = yield* Effect.promise(() =>
@@ -57,15 +53,15 @@ const runsConcurrentCallsAndListsTool = Effect.gen(function* () {
   );
   expect(result).toMatchObject({
     ok: true,
-    value: { values: [1, 2, 3], names: ["echo", "delay"] },
+    value: { names: ["echo", "delay"], values: [1, 2, 3] },
   });
 });
 
 const exposesToolsUnderNormalizedIdentifiersAnd = Effect.gen(function* () {
   const sandbox = createSandbox([
-    { name: "my-tool", description: "Dashes", execute: () => "dash" },
-    { name: "my_tool", description: "Shadowed", execute: () => "underscore" },
-    { name: "mcp__docs__search", execute: () => "mcp" },
+    { description: "Dashes", execute: () => "dash", name: "my-tool" },
+    { description: "Shadowed", execute: () => "underscore", name: "my_tool" },
+    { execute: () => "mcp", name: "mcp__docs__search" },
   ]);
   const result = yield* Effect.promise(() =>
     sandbox.execute(`
@@ -80,8 +76,8 @@ const exposesToolsUnderNormalizedIdentifiersAnd = Effect.gen(function* () {
     ok: true,
     value: {
       all: [
-        { name: "my_tool", description: "Dashes" },
-        { name: "mcp__docs__search", description: "" },
+        { description: "Dashes", name: "my_tool" },
+        { description: "", name: "mcp__docs__search" },
       ],
       calls: ["dash", "dash", "mcp"],
     },
@@ -89,7 +85,7 @@ const exposesToolsUnderNormalizedIdentifiersAnd = Effect.gen(function* () {
 });
 
 const passesUndefinedArgumentsAndResultsThrough = Effect.gen(function* () {
-  const sandbox = createSandbox([{ name: "noop", execute: (args) => args }]);
+  const sandbox = createSandbox([{ execute: (args) => args, name: "noop" }]);
   const result = yield* Effect.promise(() =>
     sandbox.execute("return [await tools.noop(), await tools.noop(null)]"),
   );
@@ -99,10 +95,10 @@ const passesUndefinedArgumentsAndResultsThrough = Effect.gen(function* () {
 const turnsToolErrorsIntoCatchableErrors = Effect.gen(function* () {
   const sandbox = createSandbox([
     {
-      name: "fail",
       execute: () => {
         throw new Error("tool exploded");
       },
+      name: "fail",
     },
   ]);
   const result = yield* Effect.promise(() =>
@@ -125,18 +121,18 @@ const turnsToolErrorsIntoCatchableErrors = Effect.gen(function* () {
 const rejectsCallsToUnknownTools = Effect.gen(function* () {
   const sandbox = createSandbox();
   const result = yield* Effect.promise(() => sandbox.execute("return await tools.missing()"));
-  expect(result).toMatchObject({ ok: false, error: { kind: "script", name: "TypeError" } });
+  expect(result).toMatchObject({ error: { kind: "script", name: "TypeError" }, ok: false });
 });
 
 const abortsUnawaitedCallsWhenTheScript = Effect.gen(function* () {
   let aborted = false;
   const sandbox = createSandbox([
     {
-      name: "slow",
       execute: (_args, { signal }) =>
         rejectOnAbort(signal, () => {
           aborted = true;
         }),
+      name: "slow",
     },
   ]);
   const result = yield* Effect.promise(() => sandbox.execute("tools.slow(); return 'early'"));
@@ -146,7 +142,7 @@ const abortsUnawaitedCallsWhenTheScript = Effect.gen(function* () {
 });
 
 const namesCloseMatchesWhenAScript = Effect.gen(function* () {
-  const sandbox = createSandbox([echo, { name: "web-search", execute: () => "" }]);
+  const sandbox = createSandbox([echo, { execute: () => "", name: "web-search" }]);
   const attempt = (expression: string) =>
     sandbox
       .execute(`return ${expression};`)

@@ -2,8 +2,11 @@ import { Effect, Latch } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import { MAX_OUTPUT_CHARS, MAX_OUTPUT_ITEMS } from "../src/index.ts";
-import { closeSandboxes, createSandbox, delayed, describeBackends } from "./sandbox-support.ts";
-import { abortController, hang } from "./support.ts";
+import sandboxSupport from "./sandbox-support.ts";
+import support from "./support.ts";
+
+const { closeSandboxes, createSandbox, delayed, describeBackends } = sandboxSupport;
+const { abortController, hang } = support;
 
 const terminatesASynchronousInfiniteLoopOn = Effect.gen(function* () {
   const sandbox = createSandbox();
@@ -11,12 +14,12 @@ const terminatesASynchronousInfiniteLoopOn = Effect.gen(function* () {
   const result = yield* Effect.promise(() =>
     sandbox.execute("while (true) {}", { timeoutMs: 200 }),
   );
-  expect(result).toMatchObject({ ok: false, error: { kind: "timeout" } });
+  expect(result).toMatchObject({ error: { kind: "timeout" }, ok: false });
   expect(performance.now() - started).toBeLessThan(5_000);
 });
 
 const runsWithoutADeadlineWhenTimeoutms = Effect.gen(function* () {
-  const sandbox = createSandbox([{ name: "wait", execute: () => delayed(50, "late") }]);
+  const sandbox = createSandbox([{ execute: () => delayed(50, "late"), name: "wait" }]);
   const result = yield* Effect.promise(() =>
     sandbox.execute("return await tools.wait()", {
       timeoutMs: Number.POSITIVE_INFINITY,
@@ -26,15 +29,15 @@ const runsWithoutADeadlineWhenTimeoutms = Effect.gen(function* () {
 });
 
 const failsAScriptThatWaitsOn = Effect.gen(function* () {
-  const sandbox = createSandbox([{ name: "echo", execute: (args) => args }]);
+  const sandbox = createSandbox([{ execute: (args) => args, name: "echo" }]);
   const result = yield* Effect.promise(() =>
     sandbox.execute("await tools.echo(1); await new Promise(() => {}); return 'never'", {
       timeoutMs: Number.POSITIVE_INFINITY,
     }),
   );
   expect(result).toMatchObject({
-    ok: false,
     error: { kind: "script", message: expect.stringContaining("can never settle") },
+    ok: false,
   });
   const returned = yield* Effect.promise(() =>
     sandbox.execute("tools.echo(2); return 'early'", {
@@ -49,7 +52,7 @@ const terminatesAMicrotaskSpinningLoopOn = Effect.gen(function* () {
   const result = yield* Effect.promise(() =>
     sandbox.execute("while (true) await null", { timeoutMs: 200 }),
   );
-  expect(result).toMatchObject({ ok: false, error: { kind: "timeout" } });
+  expect(result).toMatchObject({ error: { kind: "timeout" }, ok: false });
 });
 
 const abortsViaSignalAndCancelsIn = Effect.gen(function* () {
@@ -58,12 +61,12 @@ const abortsViaSignalAndCancelsIn = Effect.gen(function* () {
   let call = Latch.makeUnsafe(false);
   const sandbox = createSandbox([
     {
-      name: "hang",
       execute: (_args, { signal }) => {
         toolSignal = signal;
         call.openUnsafe();
         return hang();
       },
+      name: "hang",
     },
   ]);
   const firstCall = call;
@@ -75,8 +78,8 @@ const abortsViaSignalAndCancelsIn = Effect.gen(function* () {
     sandbox.execute("await tools.hang()", { signal: controller.signal }),
   );
   expect(result).toMatchObject({
-    ok: false,
     error: { kind: "aborted", message: "user cancelled" },
+    ok: false,
   });
 
   const second = abortController();
@@ -88,14 +91,14 @@ const abortsViaSignalAndCancelsIn = Effect.gen(function* () {
   yield* secondCall.await;
   second.abort();
   const aborted = yield* Effect.promise(() => pending);
-  expect(aborted).toMatchObject({ ok: false, error: { kind: "aborted" } });
+  expect(aborted).toMatchObject({ error: { kind: "aborted" }, ok: false });
   expect(aborted.calls).toMatchObject([{ name: "hang", status: "cancelled" }]);
   expect(toolSignal?.aborted).toBe(true);
 
   yield* Effect.promise(() => sandbox.close());
   expect(yield* Effect.promise(() => promise)).toMatchObject({
-    ok: false,
     error: { kind: "aborted", message: "Sandbox closed" },
+    ok: false,
   });
 });
 
@@ -110,12 +113,12 @@ const failsAScriptWhoseOutputPasses = Effect.gen(function* () {
 				`),
     );
     expect(result).toMatchObject({
-      ok: false,
       error: {
         kind: "script",
-        name: "RangeError",
         message: expect.stringContaining("script output exceeded"),
+        name: "RangeError",
       },
+      ok: false,
     });
     const chars = result.output.reduce(
       (sum, item) => sum + (item.type === "text" ? item.text.length : item.data.length),
@@ -126,7 +129,7 @@ const failsAScriptWhoseOutputPasses = Effect.gen(function* () {
   }
 
   const empty = yield* Effect.promise(() => sandbox.execute(`for (;;) text("");`));
-  expect(empty).toMatchObject({ ok: false, error: { name: "RangeError" } });
+  expect(empty).toMatchObject({ error: { name: "RangeError" }, ok: false });
   expect(empty.output).toHaveLength(MAX_OUTPUT_ITEMS);
 });
 

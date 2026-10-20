@@ -21,49 +21,49 @@ function rendersPrimitivesLiteralsAndUnions(): void {
 function rendersObjectsOnOneLineWith(): void {
   expect(
     schemaToType({
-      type: "object",
+      additionalProperties: false,
       properties: { city: { type: "string" }, "max-lines": { type: "number" } },
       required: ["city"],
-      additionalProperties: false,
+      type: "object",
     }),
   ).toBe('{ city: string; "max-lines"?: number; }');
-  expect(schemaToType({ type: "object", additionalProperties: { type: "number" } })).toBe(
+  expect(schemaToType({ additionalProperties: { type: "number" }, type: "object" })).toBe(
     "{ [key: string]: number; }",
   );
   expect(schemaToType({ type: "object" })).toBe("{ [key: string]: unknown; }");
-  expect(schemaToType({ type: "object", properties: {}, additionalProperties: false })).toBe("{}");
+  expect(schemaToType({ additionalProperties: false, properties: {}, type: "object" })).toBe("{}");
 }
 
 function putsPropertyDescriptionsOnCommentLines(): void {
   expect(
     schemaToType({
-      type: "object",
       properties: {
         weather: {
-          type: "array",
           description: "look up weather for a given list of locations",
           items: {
-            type: "object",
             properties: { location: { type: "string" } },
             required: ["location"],
+            type: "object",
           },
+          type: "array",
         },
       },
       required: ["weather"],
+      type: "object",
     }),
   ).toBe(
     "{\n  // look up weather for a given list of locations\n  weather: Array<{ location: string; }>;\n}",
   );
   expect(
     schemaToType({
-      type: "object",
       properties: {
         outer: {
-          type: "object",
           description: "Outer",
-          properties: { inner: { type: "string", description: "Inner" } },
+          properties: { inner: { description: "Inner", type: "string" } },
+          type: "object",
         },
       },
+      type: "object",
     }),
   ).toBe("{\n  // Outer\n  outer?: {\n    // Inner\n    inner?: string;\n  };\n}");
 }
@@ -71,26 +71,26 @@ function putsPropertyDescriptionsOnCommentLines(): void {
 function putsConstraintsTheTypeCannotExpress(): void {
   expect(
     schemaToType({
-      type: "object",
       properties: {
-        timeoutMs: {
-          type: "integer",
-          minimum: 0,
-          maximum: 30000,
-          default: 0,
-          description: "Wait in milliseconds.",
-        },
-        id: { type: "string", pattern: "^[a-z]+$", maxLength: 8 },
+        id: { maxLength: 8, pattern: "^[a-z]+$", type: "string" },
+        name: { type: "string" },
         tags: {
-          type: "array",
+          deprecated: true,
           items: { type: "string" },
           maxItems: 5,
+          type: "array",
           uniqueItems: true,
-          deprecated: true,
         },
-        name: { type: "string" },
+        timeoutMs: {
+          default: 0,
+          description: "Wait in milliseconds.",
+          maximum: 30000,
+          minimum: 0,
+          type: "integer",
+        },
       },
       required: ["id"],
+      type: "object",
     }),
   ).toBe(
     [
@@ -111,27 +111,27 @@ function putsConstraintsTheTypeCannotExpress(): void {
 function readsConstraintsOfOptionalFieldsFrom(): void {
   expect(
     schemaToType({
-      type: "object",
       properties: {
         limit: {
-          anyOf: [{ type: "integer", minimum: 1, maximum: 100 }, { type: "null" }],
+          anyOf: [{ maximum: 100, minimum: 1, type: "integer" }, { type: "null" }],
           default: null,
           title: "Limit",
         },
       },
+      type: "object",
     }),
   ).toBe("{\n  // @integer @minimum 1 @maximum 100\n  limit?: number | null;\n}");
   expect(
     schemaToType({
-      type: "object",
       properties: {
         n: {
-          anyOf: [{ type: "integer", minimum: 10, maximum: 50, format: "int32" }, { type: "null" }],
-          minimum: 0,
-          maximum: 20,
+          anyOf: [{ format: "int32", maximum: 50, minimum: 10, type: "integer" }, { type: "null" }],
           format: "port",
+          maximum: 20,
+          minimum: 0,
         },
       },
+      type: "object",
     }),
   ).toBe(
     "{\n  // @integer @minimum 10 @maximum 20 @format port @format int32\n  n?: number | null;\n}",
@@ -141,20 +141,20 @@ function readsConstraintsOfOptionalFieldsFrom(): void {
 function readsDraft04BooleanExclusiveBounds(): void {
   expect(
     schemaToType({
-      type: "object",
       properties: {
-        n: {
-          type: "integer",
-          minimum: 0,
-          exclusiveMinimum: true,
-          maximum: 10,
-          exclusiveMaximum: false,
-        },
         m: {
-          anyOf: [{ type: "number", maximum: 5, exclusiveMaximum: true }, { type: "null" }],
+          anyOf: [{ exclusiveMaximum: true, maximum: 5, type: "number" }, { type: "null" }],
           maximum: 8,
         },
+        n: {
+          exclusiveMaximum: false,
+          exclusiveMinimum: true,
+          maximum: 10,
+          minimum: 0,
+          type: "integer",
+        },
       },
+      type: "object",
     }),
   ).toBe(
     [
@@ -171,21 +171,21 @@ function readsDraft04BooleanExclusiveBounds(): void {
 function leavesOutLongTagsAndEscapes(): void {
   expect(
     schemaToType({
+      properties: { config: { default: { text: "x".repeat(100) }, type: "object" } },
       type: "object",
-      properties: { config: { type: "object", default: { text: "x".repeat(100) } } },
     }),
   ).toBe("{ config?: { [key: string]: unknown; }; }");
   expect(
     schemaToType({
-      type: "object",
       properties: {
         sep: {
-          type: "string",
-          pattern: "^[\r\n\u2028\u2029]$",
           default: "\u2028",
           description: "a\u2028b",
+          pattern: "^[\r\n\u2028\u2029]$",
+          type: "string",
         },
       },
+      type: "object",
     }),
   ).toBe(
     [
@@ -200,7 +200,7 @@ function leavesOutLongTagsAndEscapes(): void {
 }
 
 function dropsConstraintTagsBeforeRenderingA(): void {
-  const schema = { type: "object", properties: { n: { type: "integer", minimum: 1 } } };
+  const schema = { properties: { n: { minimum: 1, type: "integer" } }, type: "object" };
   expect(schemaToType(schema)).toBe("{\n  // @integer @minimum 1\n  n?: number;\n}");
   expect(schemaToTypeWithin(schema, 20)).toBe("{ n?: number; }");
   expect(schemaToTypeWithin(schema, 10)).toBe("unknown");
@@ -208,21 +208,21 @@ function dropsConstraintTagsBeforeRenderingA(): void {
 
 function resolvesLocalReferencesAndStopsAt(): void {
   const schema = {
-    type: "object",
+    $defs: {
+      Item: {
+        properties: { id: { type: "string" }, parent: { $ref: "#/$defs/Item" } },
+        required: ["id"],
+        type: "object",
+      },
+    },
+    definitions: { Legacy: { enum: ["a", "b"] } },
     properties: {
       item: { $ref: "#/$defs/Item" },
       legacy: { $ref: "#/definitions/Legacy" },
       remote: { $ref: "https://example.com/schema.json" },
     },
     required: ["item"],
-    $defs: {
-      Item: {
-        type: "object",
-        properties: { id: { type: "string" }, parent: { $ref: "#/$defs/Item" } },
-        required: ["id"],
-      },
-    },
-    definitions: { Legacy: { enum: ["a", "b"] } },
+    type: "object",
   };
   expect(schemaToType(schema)).toBe(
     '{ item: { id: string; parent?: unknown; }; legacy?: "a" | "b"; remote?: unknown; }',
@@ -230,9 +230,9 @@ function resolvesLocalReferencesAndStopsAt(): void {
 }
 
 function rendersArraysAndTuples(): void {
-  expect(schemaToType({ type: "array", items: { type: "string" } })).toBe("Array<string>");
+  expect(schemaToType({ items: { type: "string" }, type: "array" })).toBe("Array<string>");
   expect(
-    schemaToType({ type: "array", prefixItems: [{ type: "string" }, { type: "number" }] }),
+    schemaToType({ prefixItems: [{ type: "string" }, { type: "number" }], type: "array" }),
   ).toBe("[string, number]");
   expect(schemaToType({ type: "array" })).toBe("unknown[]");
 }
@@ -241,7 +241,7 @@ function rendersTypesOverTheBudgetAs(): void {
   const properties = Object.fromEntries(
     Array.from({ length: 50 }, (_, i) => [`field${i}`, { type: "string" }]),
   );
-  const schema = { type: "object", properties };
+  const schema = { properties, type: "object" };
   expect(schemaToTypeWithin(schema, 100)).toBe("unknown");
   expect(schemaToType(schema)).toContain("field49?: string;");
 }

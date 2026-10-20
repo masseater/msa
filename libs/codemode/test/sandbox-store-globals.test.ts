@@ -1,13 +1,9 @@
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import {
-  closeSandboxes,
-  createSandbox,
-  describeBackends,
-  echo,
-  newSandbox,
-} from "./sandbox-support.ts";
+import sandboxSupport from "./sandbox-support.ts";
+
+const { closeSandboxes, createSandbox, describeBackends, echo, newSandbox } = sandboxSupport;
 
 const readsTheSnapshotAndReportsWrites = Effect.gen(function* () {
   const sandbox = createSandbox();
@@ -25,8 +21,8 @@ const readsTheSnapshotAndReportsWrites = Effect.gen(function* () {
   );
   expect(result).toMatchObject({
     ok: true,
+    storeWrites: { delete: ["old"], set: { counter: 42, list: [1, { a: null }] } },
     value: [41, 42, null, null],
-    storeWrites: { set: { counter: 42, list: [1, { a: null }] }, delete: ["old"] },
   });
 });
 
@@ -41,8 +37,8 @@ const returnsCopiesSoMutatingALoaded = Effect.gen(function* () {
   );
   expect(result).toMatchObject({
     ok: true,
-    value: [1, 1],
     storeWrites: { set: { kept: { b: 1 } } },
+    value: [1, 1],
   });
 });
 
@@ -79,15 +75,15 @@ const explainsOversizedWrites = Effect.gen(function* () {
 
 function reservesTheStoreAndLoadNames(): void {
   const execute = () => undefined;
-  expect(() => newSandbox({ globals: [{ name: "store", execute }] })).toThrow(/Invalid global/u);
-  expect(() => newSandbox({ globals: [{ name: "load", execute }] })).toThrow(/Invalid global/u);
+  expect(() => newSandbox({ globals: [{ execute, name: "store" }] })).toThrow(/Invalid global/u);
+  expect(() => newSandbox({ globals: [{ execute, name: "load" }] })).toThrow(/Invalid global/u);
 }
 
 const exposesGlobalsAsTopLevelFunctions = Effect.gen(function* () {
   const seen: unknown[] = [];
   const sandbox = newSandbox({
+    globals: [{ execute: (args) => void seen.push(args), name: "attach" }],
     tools: [echo],
-    globals: [{ name: "attach", execute: (args) => void seen.push(args) }],
   });
   const result = yield* Effect.promise(() =>
     sandbox.execute(`
@@ -105,8 +101,8 @@ const groupsNamespacedGlobalsAndSpreadsArguments = Effect.gen(function* () {
   const seen: unknown[] = [];
   const sandbox = newSandbox({
     globals: [
-      { name: "models.list", spread: true, execute: (args) => void seen.push(args) },
-      { name: "models.first", execute: (args) => args },
+      { execute: (args) => void seen.push(args), name: "models.list", spread: true },
+      { execute: (args) => args, name: "models.first" },
     ],
   });
   const result = yield* Effect.promise(() =>
@@ -125,8 +121,8 @@ const namesTheMembersOfANamespace = Effect.gen(function* () {
   const execute = () => undefined;
   const sandbox = newSandbox({
     globals: [
-      { name: "models.classify", execute },
-      { name: "models.generateImages", execute },
+      { execute, name: "models.classify" },
+      { execute, name: "models.generateImages" },
     ],
   });
   const result = yield* Effect.promise(() => sandbox.execute("await models.generateImage();"));
@@ -140,21 +136,21 @@ const namesTheMembersOfANamespace = Effect.gen(function* () {
 function rejectsInvalidAndReservedGlobalNames(): void {
   const execute = () => undefined;
   for (const name of ["a.b.c", "a.", ".a", "tools.x", "store.x", "a.not-valid"]) {
-    expect(() => newSandbox({ globals: [{ name, execute }] }), name).toThrow(/Invalid global/u);
+    expect(() => newSandbox({ globals: [{ execute, name }] }), name).toThrow(/Invalid global/u);
   }
   expect(() =>
     newSandbox({
       globals: [
-        { name: "models", execute },
-        { name: "models.list", execute },
+        { execute, name: "models" },
+        { execute, name: "models.list" },
       ],
     }),
   ).toThrow(/conflicts with the namespace/u);
-  expect(() => newSandbox({ globals: [{ name: "not-valid", execute }] })).toThrow(
+  expect(() => newSandbox({ globals: [{ execute, name: "not-valid" }] })).toThrow(
     /Invalid global/u,
   );
-  expect(() => newSandbox({ globals: [{ name: "tools", execute }] })).toThrow(/Invalid global/u);
-  expect(() => newSandbox({ globals: [{ name: "console", execute }] })).toThrow(/Invalid global/u);
+  expect(() => newSandbox({ globals: [{ execute, name: "tools" }] })).toThrow(/Invalid global/u);
+  expect(() => newSandbox({ globals: [{ execute, name: "console" }] })).toThrow(/Invalid global/u);
 }
 
 afterEach(closeSandboxes);

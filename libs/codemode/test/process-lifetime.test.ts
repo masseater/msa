@@ -1,15 +1,17 @@
 import { fileURLToPath } from "node:url";
 
 import { Effect, Schema } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { allLines, firstLine, isAvailable } from "./process-runner.ts";
+import processRunner from "./process-runner.ts";
+
+const { allLines, firstLine, isAvailable } = processRunner;
 
 type StopMode = "abort" | "timeout" | "close";
 
 const runtimes = [
-  { name: "Node", command: process.execPath, available: true },
-  { name: "Bun", command: "bun", available: await isAvailable("bun") },
+  { command: process.execPath, name: "Node", probe: Effect.succeed(true) },
+  { command: "bun", name: "Bun", probe: Effect.promise(() => isAvailable("bun")) },
 ];
 
 const runFixture = (command: string, args: string[], untilExit: boolean) =>
@@ -17,12 +19,12 @@ const runFixture = (command: string, args: string[], untilExit: boolean) =>
 
 const decodeResultLine = Schema.decodeUnknownEffect(
   Schema.fromJsonString(
-    Schema.Struct({ type: Schema.String, kind: Schema.String, elapsedMs: Schema.Finite }),
+    Schema.Struct({ elapsedMs: Schema.Finite, kind: Schema.String, type: Schema.String }),
   ),
 );
 
 const decodeExitLine = Schema.decodeUnknownEffect(
-  Schema.fromJsonString(Schema.Struct({ type: Schema.String, elapsedMs: Schema.Finite })),
+  Schema.fromJsonString(Schema.Struct({ elapsedMs: Schema.Finite, type: Schema.String })),
 );
 
 const stopsPromptly = Effect.fn(function* (command: string, name: string, how: StopMode) {
@@ -32,8 +34,8 @@ const stopsPromptly = Effect.fn(function* (command: string, name: string, how: S
   if (resultLine === undefined) throw new Error("Expected a result line");
   const result = yield* decodeResultLine(resultLine);
   expect(result).toMatchObject({
-    type: "result",
     kind: how === "timeout" ? "timeout" : "aborted",
+    type: "result",
   });
   expect(result.elapsedMs).toBeLessThan(1000);
   if (name === "Node") {
@@ -45,12 +47,23 @@ const stopsPromptly = Effect.fn(function* (command: string, name: string, how: S
   }
 });
 
-describe.each(runtimes)("$name process lifetime", ({ name, command, available }) => {
-  it.skipIf(!available).each(["abort", "timeout", "close"] as const)(
+describe.each(runtimes)("$name process lifetime", ({ name, command, probe }) => {
+  const availability = { value: false };
+  beforeAll(() =>
+    Effect.runPromise(
+      Effect.map(probe, (value) => {
+        availability.value = value;
+      }),
+    ),
+  );
+  it.for(["abort", "timeout", "close"] as const)(
     name === "Node"
       ? "exits promptly after %s with a real worker"
       : "settles %s promptly with a real worker",
-    (how) => Effect.runPromise(stopsPromptly(command, name, how)),
-    25000,
+    { timeout: 25000 },
+    (how, { skip }) => {
+      if (!availability.value) skip();
+      return Effect.runPromise(stopsPromptly(command, name, how));
+    },
   );
 });

@@ -1,4 +1,4 @@
-import { Console, Effect, Fiber } from "effect";
+import { Console, Effect, Fiber, Schema } from "effect";
 
 import { CodemodeSandbox } from "../../src/runtime/host.ts";
 
@@ -8,7 +8,7 @@ if (how !== "abort" && how !== "timeout" && how !== "close")
 let started = performance.now();
 process.on("exit", () => {
   Effect.runSync(
-    Console.log(JSON.stringify({ type: "exit", elapsedMs: performance.now() - started })),
+    Console.log(JSON.stringify({ elapsedMs: performance.now() - started, type: "exit" })),
   );
 });
 const controller = new AbortController();
@@ -24,7 +24,6 @@ const sandbox = new CodemodeSandbox({
   },
   tools: [
     {
-      name: "ready",
       execute: () => {
         started = performance.now();
         if (how !== "timeout") {
@@ -40,27 +39,38 @@ const sandbox = new CodemodeSandbox({
           );
         }
       },
+      name: "ready",
     },
   ],
 });
-try {
-  const result = await sandbox.execute(
-    "await tools.ready(); return 'a'.repeat(300000).indexOf('a'.repeat(10000) + 'b')",
-    { signal: controller.signal, timeoutMs: how === "timeout" ? 300 : Number.POSITIVE_INFINITY },
-  );
-  if (result.ok) throw new Error("The script completed instead of being cancelled");
-  await sandbox.close();
-  await Effect.runPromise(
-    Console.log(
-      JSON.stringify({
-        type: "result",
-        kind: result.error.kind,
-        elapsedMs: performance.now() - started,
-        workerExited,
-      }),
+
+const encodeLine = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
+
+const closeSandbox = Effect.promise(() => sandbox.close());
+
+const stopTimer = Effect.suspend(() =>
+  timer === undefined ? Effect.void : Effect.asVoid(Fiber.interrupt(timer)),
+);
+
+const program = Effect.gen(function* () {
+  const result = yield* Effect.promise(() =>
+    sandbox.execute(
+      "await tools.ready(); return 'a'.repeat(300000).indexOf('a'.repeat(10000) + 'b')",
+      { signal: controller.signal, timeoutMs: how === "timeout" ? 300 : Number.POSITIVE_INFINITY },
     ),
   );
-} finally {
-  if (timer !== undefined) await Effect.runPromise(Fiber.interrupt(timer));
-  await sandbox.close();
-}
+  if (result.ok)
+    return yield* Effect.die(new Error("The script completed instead of being cancelled"));
+  yield* closeSandbox;
+  const line = yield* Effect.orDie(
+    encodeLine({
+      elapsedMs: performance.now() - started,
+      kind: result.error.kind,
+      type: "result",
+      workerExited,
+    }),
+  );
+  yield* Console.log(line);
+}).pipe(Effect.ensuring(Effect.andThen(stopTimer, closeSandbox)));
+
+void Effect.runPromise(program);

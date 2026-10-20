@@ -18,14 +18,14 @@ const runtime = ManagedRuntime.make(NodeServices.layer);
 const spawn = (command: string, args: string[], options: SpawnOptions) =>
   ChildProcess.make(command, args, options);
 
-export const isAvailable = (command: string): Promise<boolean> =>
+const isAvailable = (command: string): Promise<boolean> =>
   runtime.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
         const handle = yield* spawn(command, ["--version"], {
+          stderr: "ignore",
           stdin: "ignore",
           stdout: "ignore",
-          stderr: "ignore",
         });
         return (yield* handle.exitCode) === 0;
       }),
@@ -35,7 +35,7 @@ export const isAvailable = (command: string): Promise<boolean> =>
     ),
   );
 
-export const firstLine: {
+const firstLine: {
   (args: string[]): (command: string) => Promise<string[]>;
   (command: string, args: string[]): Promise<string[]>;
 } = dual(2, (command: string, args: string[]): Promise<string[]> =>
@@ -43,9 +43,9 @@ export const firstLine: {
     Effect.scoped(
       Effect.gen(function* () {
         const handle = yield* spawn(command, args, {
+          stderr: "inherit",
           stdin: "ignore",
           stdout: "pipe",
-          stderr: "inherit",
         });
         const line = yield* handle.stdout.pipe(
           Stream.decodeText(),
@@ -60,7 +60,7 @@ export const firstLine: {
   ),
 );
 
-export const allLines: {
+const allLines: {
   (args: string[]): (command: string) => Promise<string[]>;
   (command: string, args: string[]): Promise<string[]>;
 } = dual(2, (command: string, args: string[]): Promise<string[]> =>
@@ -68,9 +68,9 @@ export const allLines: {
     Effect.scoped(
       Effect.gen(function* () {
         const handle = yield* spawn(command, args, {
+          stderr: "inherit",
           stdin: "pipe",
           stdout: "pipe",
-          stderr: "inherit",
         });
         const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
         const code = yield* handle.exitCode;
@@ -81,3 +81,11 @@ export const allLines: {
     ).pipe(Effect.timeout(20000)),
   ),
 );
+
+const processRunner = {
+  allLines,
+  firstLine,
+  isAvailable,
+};
+
+export default processRunner;

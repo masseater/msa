@@ -7,11 +7,13 @@ import {
   type CodemodeRemoteRequest,
   type CodemodeServeOptions,
   InlineCodemodeSandbox,
-  loadQuickJSWasm,
   RemoteCodemodeSandbox,
+  loadQuickJSWasm,
   serveCodemodeRemote,
 } from "../src/index.ts";
-import { abortController, hang, toJson } from "./support.ts";
+import support from "./support.ts";
+
+const { abortController, hang, toJson } = support;
 
 const wasm = loadQuickJSWasm();
 
@@ -32,32 +34,32 @@ function recordingRemote(options: Partial<CodemodeServeOptions> = {}) {
       return done;
     },
   };
-  return { remote, exchanges, served };
+  return { exchanges, remote, served };
 }
 
 const failsAScriptThatComputesPast = Effect.gen(function* () {
-  const sandbox = new InlineCodemodeSandbox({ wasm, interruptBudget: 1_000 });
+  const sandbox = new InlineCodemodeSandbox({ interruptBudget: 1_000, wasm });
   for (const code of ["while (true) {}", "while (true) await null"]) {
     const result = yield* Effect.promise(() =>
       sandbox.execute(code, { timeoutMs: Number.POSITIVE_INFINITY }),
     );
     expect(result).toMatchObject({
-      ok: false,
       error: { kind: "timeout", message: "Execution exceeded its interrupt budget of 1000" },
+      ok: false,
     });
   }
 });
 
 const countsTheBudgetAcrossWaitsOn = Effect.gen(function* () {
   const sandbox = new InlineCodemodeSandbox({
-    wasm,
     interruptBudget: 1_000,
-    tools: [{ name: "tick", execute: () => 1 }],
+    tools: [{ execute: () => 1, name: "tick" }],
+    wasm,
   });
   const result = yield* Effect.promise(() =>
     sandbox.execute("for (;;) { for (let i = 0; i < 1e5; i++); await tools.tick(); }"),
   );
-  expect(result).toMatchObject({ ok: false, error: { kind: "timeout" } });
+  expect(result).toMatchObject({ error: { kind: "timeout" }, ok: false });
   expect(result.calls.length).toBeGreaterThan(1);
 });
 
@@ -68,11 +70,11 @@ const runsToolsInTheCallerAnd = Effect.gen(function* () {
     remote: () => remote,
     tools: [
       {
-        name: "add",
         execute: (args) => {
           seen.push(args);
           return (args as { a: number }).a + 1;
         },
+        name: "add",
       },
     ],
   });
@@ -81,7 +83,7 @@ const runsToolsInTheCallerAnd = Effect.gen(function* () {
       store: { k: 1 },
     }),
   );
-  expect(result).toMatchObject({ ok: true, value: 2, output: [{ type: "text", text: "hi" }] });
+  expect(result).toMatchObject({ ok: true, output: [{ text: "hi", type: "text" }], value: 2 });
   expect(seen).toEqual([{ a: 1 }]);
   expect(result.calls).toMatchObject([{ name: "add", status: "ok" }]);
   yield* Effect.promise(() => Promise.all(served));
@@ -95,7 +97,7 @@ const batchesOutputInsteadOfMakingOne = Effect.gen(function* () {
   );
   expect(result).toMatchObject({ ok: true, value: "ok" });
   expect(result.output).toHaveLength(5000);
-  expect(result.output[4999]).toEqual({ type: "text", text: "4999", console: true });
+  expect(result.output[4999]).toEqual({ console: true, text: "4999", type: "text" });
   expect(exchanges.length).toBeLessThanOrEqual(6);
 });
 
@@ -104,10 +106,10 @@ const capsTheInterruptBudgetAndMemory = Effect.gen(function* () {
     maxInterruptBudget: 1_000,
     maxMemoryLimitBytes: 8 * 1024 * 1024,
   });
-  const sandbox = new RemoteCodemodeSandbox({ remote: () => remote, interruptBudget: 1e9 });
+  const sandbox = new RemoteCodemodeSandbox({ interruptBudget: 1e9, remote: () => remote });
   expect(yield* Effect.promise(() => sandbox.execute("while (true) {}"))).toMatchObject({
-    ok: false,
     error: { kind: "timeout", message: "Execution exceeded its interrupt budget of 1000" },
+    ok: false,
   });
   const memory = yield* Effect.promise(() =>
     sandbox.execute("const parts = []; for (;;) parts.push('x'.repeat(1 << 20) + parts.length);"),
@@ -123,11 +125,11 @@ const tellsTheRemoteToStopWhen = Effect.gen(function* () {
     remote: () => remote,
     tools: [
       {
-        name: "hang",
         execute: () => {
           call.openUnsafe();
           return hang();
         },
+        name: "hang",
       },
     ],
   });
@@ -138,8 +140,8 @@ const tellsTheRemoteToStopWhen = Effect.gen(function* () {
   yield* call.await;
   controller.abort();
   expect(yield* Effect.promise(() => pending)).toMatchObject({
-    ok: false,
     error: { kind: "aborted" },
+    ok: false,
   });
   yield* Effect.promise(() => Promise.all(served));
 });
@@ -149,16 +151,16 @@ const reportsAFailingOrVanishingRemote = Effect.gen(function* () {
     remote: () => ({ execute: () => Promise.reject(new Error("object reset")) }),
   });
   expect(yield* Effect.promise(() => failing.execute("return 1"))).toMatchObject({
-    ok: false,
     error: { kind: "sandbox", message: "Remote sandbox failed: object reset" },
+    ok: false,
   });
 
   const silent = new RemoteCodemodeSandbox({
     remote: () => ({ execute: () => Promise.resolve() }),
   });
   expect(yield* Effect.promise(() => silent.execute("return 1"))).toMatchObject({
-    ok: false,
     error: { kind: "sandbox", message: "Remote sandbox returned before the script settled" },
+    ok: false,
   });
 
   const unreachable = new RemoteCodemodeSandbox({
@@ -167,8 +169,8 @@ const reportsAFailingOrVanishingRemote = Effect.gen(function* () {
     },
   });
   expect(yield* Effect.promise(() => unreachable.execute("return 1"))).toMatchObject({
-    ok: false,
     error: { kind: "sandbox", message: "Failed to reach the remote sandbox: no binding" },
+    ok: false,
   });
 });
 

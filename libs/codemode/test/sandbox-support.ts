@@ -8,22 +8,18 @@ import {
   type CodemodeSandboxBaseOptions,
   type CodemodeTool,
   InlineCodemodeSandbox,
-  loadQuickJSWasm,
   RemoteCodemodeSandbox,
+  loadQuickJSWasm,
   serveCodemodeRemote,
 } from "../src/index.ts";
 
 const INTERRUPT_BUDGET = 20_000;
-export const BACKENDS: Record<
-  string,
-  (options: CodemodeSandboxBaseOptions) => CodemodeSandboxBase
-> = {
-  worker: (options) => new CodemodeSandbox(options),
+const BACKENDS: Record<string, (options: CodemodeSandboxBaseOptions) => CodemodeSandboxBase> = {
   inline: (options) =>
     new InlineCodemodeSandbox({
       ...options,
-      wasm: loadQuickJSWasm(),
       interruptBudget: INTERRUPT_BUDGET,
+      wasm: loadQuickJSWasm(),
     }),
   remote: (options) =>
     new RemoteCodemodeSandbox({
@@ -34,24 +30,25 @@ export const BACKENDS: Record<
             structuredClone(request),
             (messages) =>
               exchange(structuredClone(messages)).then((reply) => structuredClone(reply)),
-            { wasm: loadQuickJSWasm(), maxInterruptBudget: INTERRUPT_BUDGET },
+            { maxInterruptBudget: INTERRUPT_BUDGET, wasm: loadQuickJSWasm() },
           ),
       }),
     }),
+  worker: (options) => new CodemodeSandbox(options),
 };
 
 const current = { backend: "worker" };
 const sandboxes: CodemodeSandboxBase[] = [];
 
-export function useBackend(name: string): void {
+function useBackend(name: string): void {
   current.backend = name;
 }
 
-export function track(sandbox: CodemodeSandboxBase): void {
+function track(sandbox: CodemodeSandboxBase): void {
   sandboxes.push(sandbox);
 }
 
-export function newSandbox(options: CodemodeSandboxBaseOptions = {}): CodemodeSandboxBase {
+function newSandbox(options: CodemodeSandboxBaseOptions = {}): CodemodeSandboxBase {
   const create = BACKENDS[current.backend];
   if (create === undefined) throw new Error(`Unknown backend: ${current.backend}`);
   const sandbox = create(options);
@@ -59,15 +56,15 @@ export function newSandbox(options: CodemodeSandboxBaseOptions = {}): CodemodeSa
   return sandbox;
 }
 
-export function createSandbox(tools: CodemodeTool[] = []): CodemodeSandboxBase {
-  return newSandbox({ tools, timeoutMs: 10_000 });
+function createSandbox(tools: CodemodeTool[] = []): CodemodeSandboxBase {
+  return newSandbox({ timeoutMs: 10_000, tools });
 }
 
-export function closeSandboxes(): Promise<void> {
+function closeSandboxes(): Promise<void> {
   return Promise.all(sandboxes.splice(0).map((sandbox) => sandbox.close())).then(() => undefined);
 }
 
-export const describeBackends: {
+const describeBackends: {
   (body: () => void): (title: string) => void;
   (title: string, body: () => void): void;
 } = dual(2, (title: string, body: () => void): void => {
@@ -79,7 +76,7 @@ export const describeBackends: {
   });
 });
 
-export const delayed: {
+const delayed: {
   <A>(value: A): (ms: number) => Promise<A>;
   <A>(ms: number, value: A): Promise<A>;
 } = dual(2, <A>(ms: number, value: A): Promise<A> =>
@@ -88,7 +85,7 @@ export const delayed: {
 
 class ToolAborted extends Data.TaggedError("ToolAborted")<{ readonly message: string }> {}
 
-export const rejectOnAbort: {
+const rejectOnAbort: {
   (onAbort: () => void): (signal: AbortSignal) => Promise<never>;
   (signal: AbortSignal, onAbort: () => void): Promise<never>;
 } = dual(2, (signal: AbortSignal, onAbort: () => void): Promise<never> =>
@@ -102,9 +99,28 @@ export const rejectOnAbort: {
   ),
 );
 
-export const echo: CodemodeTool = { name: "echo", execute: (args) => args };
+const echo: CodemodeTool = { execute: (args) => args, name: "echo" };
 
-export const PNG = "iVBORw0KGgo=";
-export const JPEG = "/9j/4A==";
-export const GIF = "R0lGODlh";
-export const WEBP = "UklGRgAAAABXRUJQ";
+const PNG = "iVBORw0KGgo=";
+const JPEG = "/9j/4A==";
+const GIF = "R0lGODlh";
+const WEBP = "UklGRgAAAABXRUJQ";
+
+const sandboxSupport = {
+  BACKENDS,
+  GIF,
+  JPEG,
+  PNG,
+  WEBP,
+  closeSandboxes,
+  createSandbox,
+  delayed,
+  describeBackends,
+  echo,
+  newSandbox,
+  rejectOnAbort,
+  track,
+  useBackend,
+};
+
+export default sandboxSupport;

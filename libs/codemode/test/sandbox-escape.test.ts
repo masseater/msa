@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { closeSandboxes, createSandbox, describeBackends, echo } from "./sandbox-support.ts";
+import sandboxSupport from "./sandbox-support.ts";
+
+const { closeSandboxes, createSandbox, describeBackends, echo } = sandboxSupport;
 
 const hasNoHostGlobals = Effect.gen(function* () {
   const sandbox = createSandbox();
@@ -74,8 +76,8 @@ const ignoresPatchesToBuiltInsAnd = Effect.gen(function* () {
   );
   expect(result).toMatchObject({
     ok: true,
-    value: [[2], '{"a":1}'],
     storeWrites: { set: { k: [1] } },
+    value: [[2], '{"a":1}'],
   });
 });
 
@@ -131,8 +133,8 @@ const reportsErrorsWhoseNameOrMessage = Effect.gen(function* () {
     sandbox.execute("const error = new Error('x'); error.message = 42; throw error;"),
   );
   expect(result).toMatchObject({
+    error: { kind: "script", message: "42", name: "Error" },
     ok: false,
-    error: { kind: "script", name: "Error", message: "42" },
   });
 });
 
