@@ -107,7 +107,7 @@ function flattenSessionTree(
   return result;
 }
 
-function renderPart3(
+function appendSessionLine(
   cursor: string,
   prefix: string,
   styledMsg: string,
@@ -130,11 +130,11 @@ function renderPart3(
 }
 
 const sessionListHelpers = {
+  appendSessionLine,
   buildSessionTree,
   canonicalizePath,
   flattenSessionTree,
   formatSessionDate,
-  renderPart3,
 };
 
 export default sessionListHelpers;

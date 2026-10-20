@@ -3,109 +3,149 @@ import type tuiTypes from "@msa/tui/index.types";
 
 import type keybindingsTypes from "../../../core/keybindings.types.ts";
 import type sessionManagerTypes from "../../../core/session-manager.types.ts";
-import paths from "../../../utils/paths.ts";
-import themeModule from "../theme/theme.ts";
 import sessionListHelpers from "./session-list-helpers.ts";
 import type sessionListInternalTypes from "./session-list-internal.types.ts";
-import SessionListLayer1 from "./session-list-layer-1.ts";
+import SessionListInput from "./session-list/session-list-input.ts";
+import SessionListRendering from "./session-list/session-list-rendering.ts";
+import sessionSelectorSearch from "./session-selector-search.ts";
 import type sessionSelectorSearchTypes from "./session-selector-search.types.ts";
 
-const { Input, truncateToWidth, visibleWidth } = tui;
-const { abbreviateHomePath } = paths;
-const { theme } = themeModule;
-const { canonicalizePath, formatSessionDate } = sessionListHelpers;
+const { filterAndSortSessions, hasSessionName } = sessionSelectorSearch;
+const { Input } = tui;
+const { buildSessionTree, canonicalizePath, flattenSessionTree } = sessionListHelpers;
 
-export default class SessionList
-  extends SessionListLayer1
-  implements tuiTypes.Component, tuiTypes.Focusable
-{
-  static renderStartIndex(self: SessionList): { startIndex: number; endIndex: number } {
-    const startIndex = Math.max(
-      0,
-      Math.min(
-        self.selectedIndex - Math.floor(self.maxVisible / 2),
-        self.filteredSessions.length - self.maxVisible,
-      ),
+export default class SessionList implements tuiTypes.Component, tuiTypes.Focusable {
+  readonly rendering: SessionListRendering;
+  readonly input: SessionListInput;
+
+  private allSessions: sessionManagerTypes.SessionInfo[] = [];
+
+  filteredSessions: sessionListInternalTypes.FlatSessionNode[] = [];
+
+  selectedIndex: number = 0;
+
+  selectionTouched = false;
+
+  searchInput!: tuiTypes.Input;
+
+  showCwd = false;
+
+  private sortMode: sessionSelectorSearchTypes.SortMode = "threaded";
+
+  nameFilter: sessionSelectorSearchTypes.NameFilter = "all";
+
+  keybindings!: keybindingsTypes.KeybindingsManager;
+
+  showPath = false;
+
+  confirmingDeletePath: string | null = null;
+
+  private currentSessionCanonicalPath?: string | undefined;
+
+  onSelect?: (sessionPath: string) => void;
+
+  onCancel?: () => void;
+
+  onToggleScope?: () => void;
+
+  onToggleSort?: () => void;
+
+  onToggleNameFilter?: () => void;
+
+  onTogglePath?: (showPath: boolean) => void;
+
+  onDeleteConfirmationChange?: (path: string | null) => void;
+
+  onDeleteSession?: (sessionPath: string) => Promise<void>;
+
+  onRenameSession?: (sessionPath: string) => void;
+
+  onError?: (message: string) => void;
+
+  maxVisible: number = 10;
+
+  private focusedState = false;
+
+  getSelectedSessionPath(): string | undefined {
+    const selected = this.filteredSessions[this.selectedIndex];
+    return selected?.session.path;
+  }
+
+  onExit: () => void = () => {};
+
+  get focused(): boolean {
+    return this.focusedState;
+  }
+
+  set focused(value: boolean) {
+    this.focusedState = value;
+    this.searchInput.focused = value;
+  }
+
+  setSortMode(sortMode: sessionSelectorSearchTypes.SortMode): void {
+    this.sortMode = sortMode;
+    this.filterSessions(this.searchInput.getValue());
+  }
+
+  setNameFilter(nameFilter: sessionSelectorSearchTypes.NameFilter): void {
+    this.nameFilter = nameFilter;
+    this.filterSessions(this.searchInput.getValue());
+  }
+
+  setSessions(sessions: sessionManagerTypes.SessionInfo[], showCwd: boolean): void {
+    const selectedPath = this.selectionTouched ? this.getSelectedSessionPath() : undefined;
+    this.allSessions = sessions;
+    this.showCwd = showCwd;
+    this.filterSessions(this.searchInput.getValue());
+    if (!this.selectionTouched) {
+      this.selectedIndex = 0;
+    } else if (selectedPath !== undefined && selectedPath !== "") {
+      const selectedIndex = this.filteredSessions.findIndex(
+        (node) => node.session.path === selectedPath,
+      );
+      if (selectedIndex >= 0) this.selectedIndex = selectedIndex;
+    }
+  }
+
+  filterSessions(query: string): void {
+    const trimmed = query.trim();
+    const nameFiltered =
+      this.nameFilter === "all"
+        ? this.allSessions
+        : this.allSessions.filter((session) => hasSessionName(session));
+
+    if (this.sortMode === "threaded" && trimmed === "") {
+      const roots = buildSessionTree(nameFiltered);
+      this.filteredSessions = flattenSessionTree(roots);
+    } else {
+      const filtered = filterAndSortSessions(nameFiltered, query, this.sortMode, "all");
+      this.filteredSessions = filtered.map((session) => ({
+        ancestorContinues: [],
+        depth: 0,
+        isLast: true,
+        session,
+      }));
+    }
+    this.selectedIndex = Math.min(
+      this.selectedIndex,
+      Math.max(0, this.filteredSessions.length - 1),
     );
-    const endIndex = Math.min(startIndex + self.maxVisible, self.filteredSessions.length);
-    return { endIndex, startIndex };
   }
 
-  static renderIsSelected(
-    self: SessionList,
-    i: number,
-    width: number,
-  ): {
-    isSelected: boolean;
-    styledMsg: string;
-    cursor: string;
-    prefix: string;
-    rightPart: string;
-    isConfirmingDelete: boolean;
-  } {
-    const node = self.filteredSessions[i]!;
-    const session = node.session;
-    const isSelected = i === self.selectedIndex;
-    const isConfirmingDelete = session.path === self.confirmingDeletePath;
-    const { prefix, normalizedMessage, isCurrent, hasName } = SessionList.renderIsSelectedPart1(
-      self,
-      session,
-      node,
-    );
-
-    let rightPart = SessionList.renderIsSelectedPart2(session, self);
-    if (self.showPath) {
-      rightPart = `${abbreviateHomePath(session.path)} ${rightPart}`;
-    }
-
-    const cursor = isSelected ? theme.fg("accent", "› ") : "  ";
-
-    const prefixWidth = visibleWidth(prefix);
-    const rightWidth = visibleWidth(rightPart) + 2;
-    const availableForMsg = width - 2 - prefixWidth - rightWidth;
-
-    const truncatedMsg = truncateToWidth(normalizedMessage, Math.max(10, availableForMsg), "…");
-
-    let messageColor: "error" | "warning" | "accent" | null = null;
-    if (isConfirmingDelete) {
-      messageColor = "error";
-    } else if (isCurrent) {
-      messageColor = "accent";
-    } else if (hasName) {
-      messageColor = "warning";
-    }
-    let styledMsg = messageColor === null ? truncatedMsg : theme.fg(messageColor, truncatedMsg);
-    return { cursor, isConfirmingDelete, isSelected, prefix, rightPart, styledMsg };
+  isCurrentSessionPath(path: string): boolean {
+    if (this.currentSessionCanonicalPath === undefined || this.currentSessionCanonicalPath === "")
+      return false;
+    return (canonicalizePath(path) ?? path) === this.currentSessionCanonicalPath;
   }
 
-  static renderIsSelectedPart2(session: sessionManagerTypes.SessionInfo, self: SessionList) {
-    const age = formatSessionDate(session.modified);
-    const msgCount = String(session.messageCount);
-    let rightPart = `${msgCount} ${age}`;
-    if (self.showCwd && session.cwd !== "") {
-      rightPart = `${abbreviateHomePath(session.cwd)} ${rightPart}`;
-    }
-    return rightPart;
+  invalidate(): void {}
+
+  render(width: number): string[] {
+    return this.rendering.render(width);
   }
 
-  static renderIsSelectedPart1(
-    self: SessionList,
-    session: sessionManagerTypes.SessionInfo,
-    node: sessionListInternalTypes.FlatSessionNode,
-  ) {
-    const isCurrent = self.isCurrentSessionPath(session.path);
-
-    const prefix = self.buildTreePrefix(node);
-
-    const hasName = session.name !== undefined && session.name !== "";
-    const displayText = session.name ?? session.firstMessage;
-    const normalizedMessage = Array.from(displayText, (ch) => {
-      const code = ch.codePointAt(0) ?? 0;
-      return code < 0x20 || code === 0x7f ? " " : ch;
-    })
-      .join("")
-      .trim();
-    return { hasName, isCurrent, normalizedMessage, prefix };
+  handleInput(data: string): void {
+    this.input.handleInput(data);
   }
 
   constructor(
@@ -116,7 +156,8 @@ export default class SessionList
     keybindings: keybindingsTypes.KeybindingsManager,
     currentSessionFilePath?: string,
   ) {
-    super();
+    this.rendering = new SessionListRendering(this);
+    this.input = new SessionListInput(this);
     this.allSessions = sessions;
     this.filteredSessions = [];
     this.searchInput = new Input();
