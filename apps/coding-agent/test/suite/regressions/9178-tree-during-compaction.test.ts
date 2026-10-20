@@ -62,14 +62,14 @@ const rejectsNavigationBeforeTheActiveLeaf = Effect.gen(function* () {
   const originalLeafId = harness.sessionManager.appendMessage(assistantMsg("second assistant"));
   harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 
-  const compactionPromise = harness.session.compact();
+  const compactionPromise = harness.session.compaction.manual.compact();
   yield* Effect.promise(() => compactionStarted.promise);
 
-  expect(harness.session.isCompacting).toBe(true);
+  expect(harness.session.compaction.manual.isCompacting).toBe(true);
   try {
     yield* Effect.promise(() =>
       expect(
-        harness.session.navigateTree(navigationTargetId, { summarize: false }),
+        harness.session.context.tree.navigateTree(navigationTargetId, { summarize: false }),
       ).rejects.toThrow(
         "Wait for the current compaction or tree navigation to finish before navigating the session tree.",
       ),
@@ -114,10 +114,14 @@ const rejectsASecondNavigationWhileThe = Effect.gen(function* () {
   const originalLeafId = harness.sessionManager.appendMessage(assistantMsg("second assistant"));
   harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 
-  const firstNavigation = harness.session.navigateTree(firstTargetId, { summarize: false });
+  const firstNavigation = harness.session.context.tree.navigateTree(firstTargetId, {
+    summarize: false,
+  });
   yield* Effect.promise(() => navigationStarted.promise);
 
-  const secondNavigation = harness.session.navigateTree(secondTargetId, { summarize: false });
+  const secondNavigation = harness.session.context.tree.navigateTree(secondTargetId, {
+    summarize: false,
+  });
   expect(harness.sessionManager.getLeafId()).toBe(originalLeafId);
   navigationReleased.resolve();
 

@@ -65,7 +65,7 @@ export default abstract class InteractiveModeLayer28 extends InteractiveModeLaye
         renderedPendingTools.set(content.id, component);
         continue;
       }
-      const retryAttempt = this.session.retryAttempt;
+      const retryAttempt = this.session.run.retry.retryAttempt;
       const abortedText =
         retryAttempt > 0
           ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`

@@ -127,7 +127,7 @@ const exposesSessionStateBeforeCustomBashSpawnStep3 = (input: {
     );
 
     const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash")!;
-    expect(session.systemPrompt).toContain(
+    expect(session.tools.prompt.systemPrompt).toContain(
       "You can inspect MSA_* environment variables for current model and session details.",
     );
     yield* awaited(bashTool.execute("bash-env", { command: "printf ok" }));

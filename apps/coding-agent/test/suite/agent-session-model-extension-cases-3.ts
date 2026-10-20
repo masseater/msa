@@ -49,8 +49,8 @@ const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => transformedHarness.session.prompt("hello"));
-  yield* Effect.promise(() => transformedHarness.session.prompt("ping"));
+  yield* Effect.promise(() => transformedHarness.session.run.prompting.prompt("hello"));
+  yield* Effect.promise(() => transformedHarness.session.run.prompting.prompt("ping"));
 
   expect(providerUserText).toBe("transformed:hello");
   expect(
@@ -82,8 +82,8 @@ const allowsExtensionCommandsToInspectLive = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  yield* Effect.promise(() => harness.session.prompt("/inspect-options"));
-  yield* Effect.promise(() => harness.session.prompt("/inspect-options"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/inspect-options"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/inspect-options"));
 
   expect(seenOptions).toHaveLength(2);
   expect(seenOptions[0]).toBe(seenOptions[1]);
@@ -127,7 +127,7 @@ const allowsBeforeAgentStartHandlersTo = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(providerSystemPrompt).toContain("extra instructions");
   expect(sawInjectedUserMessage).toBe(true);
@@ -164,8 +164,10 @@ const bindextensionsEmitsSessionStartAndReload = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  yield* Effect.promise(() => harness.session.bindExtensions({ shutdownHandler: () => {} }));
-  yield* Effect.promise(() => harness.session.reload());
+  yield* Effect.promise(() =>
+    harness.session.extensions.binding.bindExtensions({ shutdownHandler: () => {} }),
+  );
+  yield* Effect.promise(() => harness.session.extensions.runtime.reload());
 
   expect(lifecycleEvents).toEqual(["start:startup", "shutdown:reload", "start:reload"]);
 });

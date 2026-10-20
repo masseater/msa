@@ -72,20 +72,20 @@ const shouldQueueExtensionOriginSteeringMessagesWhile = () =>
       created.session.subscribe((event) => {
         if (event.type === "queue_update") queueEvents.push({ steering: event.steering });
       });
-      const firstPrompt = created.session.prompt("First message");
+      const firstPrompt = created.session.run.prompting.prompt("First message");
       yield* waitForStreaming(created.session);
 
       seen.api?.sendUserMessage("Steer from extension", { deliverAs: "steer" });
       yield* Effect.sleep(25);
 
-      expect(created.session.pendingMessageCount).toBe(1);
-      expect(created.session.getSteeringMessages()).toContain("Steer from extension");
+      expect(created.session.run.queue.pendingMessageCount).toBe(1);
+      expect(created.session.run.queue.getSteeringMessages()).toContain("Steer from extension");
       expect(seen.source).toBe("extension");
       expect(queueEvents.some((event) => event.steering.includes("Steer from extension"))).toBe(
         true,
       );
 
-      yield* awaited(created.session.abort());
+      yield* awaited(created.session.run.lifecycle.abort());
       yield* awaited(firstPrompt.catch(() => {}));
       expect(seen.steered).toBe(true);
     }),
@@ -99,9 +99,11 @@ const shouldAllowPromptAfterPreviousCompletes = () =>
         streamFn: streamWith(({ stream }) => reply(stream, assistantMessage("Done"))),
       });
       ({ session } = created);
-      yield* awaited(created.session.prompt("First message"));
+      yield* awaited(created.session.run.prompting.prompt("First message"));
       expect(created.session.isStreaming).toBe(false);
-      yield* awaited(expect(created.session.prompt("Second message")).resolves.not.toThrow());
+      yield* awaited(
+        expect(created.session.run.prompting.prompt("Second message")).resolves.not.toThrow(),
+      );
     }),
   );
 
@@ -131,7 +133,7 @@ const shouldWaitForQueuedAgentEventsBefore = () =>
             }),
           ),
       });
-      yield* awaited(created.session.prompt("hi"));
+      yield* awaited(created.session.run.prompting.prompt("hi"));
       yield* awaited(created.session.agent.waitForIdle());
       expect(snapshots).toEqual([
         ["system", "user", "assistant"],

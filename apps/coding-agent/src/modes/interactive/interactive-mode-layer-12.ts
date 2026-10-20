@@ -78,7 +78,7 @@ export default abstract class InteractiveModeLayer12 extends InteractiveModeLaye
     showDiagnosticsWhenQuiet?: boolean;
   }): void {
     const showListing = options?.force === true || this.getStartupVisibility().details;
-    const runner = this.session.extensionRunner;
+    const runner = this.session.extensions.binding.extensionRunner;
     renderLoadedResources(
       this.loadedResourcesContainer,
       {
@@ -102,12 +102,12 @@ export default abstract class InteractiveModeLayer12 extends InteractiveModeLaye
 
   protected showModelSelector(initialSearchInput?: string): void {
     this.editorSlot.showSelector((done) => {
-      const runtime = this.session.modelRuntime;
+      const runtime = this.session.models.selection.modelRuntime;
       const selector = new ModelSelectorComponent(
         this.ui,
         this.session.model,
         runtime,
-        this.session.scopedModels,
+        this.session.models.selection.scopedModels,
         (model) => this.selectModelFromSelector(model, false, done),
         () => {
           done();

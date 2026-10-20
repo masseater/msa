@@ -24,7 +24,7 @@ const waitsForServersWithDirectTools = Effect.gen(function* () {
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(serversSection(harness)).toContain("- mcp__slow (codemode): Slow docs.");
 });
@@ -33,7 +33,7 @@ const leavesServersWithOnlyDirectTools = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => setupSlow({ exposure: "direct" }, 0));
   harness.setResponses([fauxAssistantMessage("ready")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(serversSection(harness)).toBeUndefined();
 });
@@ -52,7 +52,7 @@ const waitsForTheServersACodemode = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = toolResult(harness, "codemode");
   expect(result.isError).toBe(false);
@@ -78,7 +78,7 @@ return [...new Set(await Promise.all(names.map(async (name) => (await describeNa
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(toolResult(harness, "codemode").isError).toBe(false);
   expect(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1)).toBe(
@@ -96,7 +96,7 @@ const doesNotWaitForServersA = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1)).toBe("2");
 });
@@ -113,7 +113,7 @@ const waitsForServersBeforeToolSearch = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(getMessageText(toolResult(harness, "mcp__slow__search"))).toBe("late guide\nlate faq");
 });
@@ -122,7 +122,7 @@ const holdsTheFirstPromptForServers = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => setupSlow({ exposure: "direct" }, 30));
   harness.setResponses([fauxAssistantMessage("ready")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(declaredToolNames(harness)).toContain("mcp__slow__search");
 });
@@ -133,10 +133,10 @@ const holdsTheFirstPromptForServers2 = Effect.gen(function* () {
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(getAssistantTexts(harness)).toEqual(["ready"]);
-  expect(harness.session.getActiveToolNames()).toEqual([]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([]);
   expect(notifications).toEqual([
     "MCP servers are still connecting; their tools become available once connected.",
   ]);
@@ -145,8 +145,8 @@ const holdsTheFirstPromptForServers2 = Effect.gen(function* () {
 const doesNotLetCodemodeCallItself = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => setup("direct"));
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
-  harness.session.setActiveToolsByName(["codemode", "mcp__docs__search"]);
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
+  harness.session.tools.loadout.setActiveToolsByName(["codemode", "mcp__docs__search"]);
 
   expect(nestedToolNames(harness)).toEqual(["mcp__docs__search"]);
 });
@@ -178,7 +178,7 @@ const findsToolsFromScriptsWithSearchtools = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = toolResult(harness, "codemode");
   expect(result.isError).toBe(false);

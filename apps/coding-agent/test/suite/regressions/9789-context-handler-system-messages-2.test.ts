@@ -63,14 +63,14 @@ const runsAfterContextHandlersOnThe = Effect.gen(function* () {
   yield* Effect.promise(() => compactSession(harness));
   const getRequest = captureRequest(harness, "after compaction");
 
-  yield* Effect.promise(() => harness.session.prompt("third"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("third"));
 
   const input = seen.at(-1);
   expect(input?.[0]?.role).toBe("system");
   expect(input?.[1]?.role).toBe("compactionSummary");
-  expect(harness.session.getActiveToolNames()).toContain("bash");
+  expect(harness.session.tools.loadout.getActiveToolNames()).toContain("bash");
   expect(toolNames(getRequest())).toEqual(
-    harness.session.getActiveToolNames().filter((name) => name !== "bash"),
+    harness.session.tools.loadout.getActiveToolNames().filter((name) => name !== "bash"),
   );
 });
 
@@ -90,12 +90,12 @@ const reportsAHandlerThatDropsThe = Effect.gen(function* () {
   );
   harnesses3.push(harness);
   const errors: string[] = [];
-  harness.session.extensionRunner.onError((error) => {
+  harness.session.extensions.binding.extensionRunner.onError((error) => {
     errors.push(`${error.event}: ${error.error}`);
   });
   const getRequest = captureRequest(harness, "done");
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(getRequest().messages.map((message) => message.role)).toEqual(["user"]);
   expect(errors).toEqual([

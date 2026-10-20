@@ -28,7 +28,7 @@ const marksWhereEachTextItemStarts = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = codemodeResult(harness);
   expect(result.content).toHaveLength(2);
@@ -51,7 +51,7 @@ const reportsScriptFailuresAsResultsThat = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = codemodeResult(harness);
   expect(result.isError).toBe(true);

@@ -18,7 +18,7 @@ const includesCumulativeUsageWithoutCumulativeMessage = Effect.gen(function* () 
   harness = yield* Effect.promise(() => createHarness());
   harness.setResponses([fauxAssistantMessage("hello")]);
 
-  yield* Effect.promise(() => harness.session.prompt("respond"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("respond"));
 
   const update = harness
     .eventsOfType("message_update")

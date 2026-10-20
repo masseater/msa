@@ -48,7 +48,9 @@ const doesNotPersistALengthLimited = Effect.gen(function* () {
   harness.setResponses([fauxAssistantMessage("partial summar", { stopReason: "length" })]);
 
   yield* Effect.promise(() =>
-    expect(harness.session.compact()).rejects.toThrow("generation hit the token cap"),
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow(
+      "generation hit the token cap",
+    ),
   );
   expect(
     harness.sessionManager.getEntries().filter((entry) => entry.type === "compaction"),

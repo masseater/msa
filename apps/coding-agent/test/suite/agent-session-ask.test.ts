@@ -31,7 +31,7 @@ const declaresOnlyTheReadOnlyToolsIn = () =>
       const { harness } = yield* setup();
       const requests = record(harness, [fauxAssistantMessage("answer")]);
 
-      yield* awaited(harness.session.prompt("/ask what does the lookup tool do?"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask what does the lookup tool do?"));
 
       const names = declared(requests[0]);
       expect(names).toEqual(
@@ -48,7 +48,7 @@ const narrowsTheToolsThatReadAndWrite = () =>
       const { harness } = yield* setup();
       const requests = record(harness, [fauxAssistantMessage("answer")]);
 
-      yield* awaited(harness.session.prompt("/ask what do you remember?"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask what do you remember?"));
 
       const actions = (name: string) => {
         const tool = getCurrentTools(requests[0]?.messages ?? []).find((t) => t.name === name);
@@ -76,8 +76,8 @@ const tellsTheModelToAnswerWithoutStarting = () =>
         fauxAssistantMessage("done"),
       ]);
 
-      yield* awaited(harness.session.prompt("/ask can you fix the build?"));
-      yield* awaited(harness.session.prompt("fix the build"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask can you fix the build?"));
+      yield* awaited(harness.session.run.prompting.prompt("fix the build"));
 
       expect(getCurrentSystemPrompt(requests[0]?.messages ?? [])).toContain(
         "reply with an answer only",
@@ -97,11 +97,11 @@ const goesBackToEveryToolOnThe = () =>
         fauxAssistantMessage("done"),
       ]);
 
-      yield* awaited(harness.session.prompt("/ask can you fix the build?"));
-      expect(harness.session.getActiveToolNames()).toEqual(
+      yield* awaited(harness.session.run.prompting.prompt("/ask can you fix the build?"));
+      expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(
         expect.arrayContaining([...BUILTIN_TOOLS, "lookup", "deploy"]),
       );
-      yield* awaited(harness.session.prompt("fix the build"));
+      yield* awaited(harness.session.run.prompting.prompt("fix the build"));
 
       const names = declared(requests[1]);
       expect(names).toEqual(expect.arrayContaining([...BUILTIN_TOOLS, "lookup", "deploy"]));
@@ -140,8 +140,8 @@ const doesNotCarryTheTurnSSelection = () =>
         fauxAssistantMessage("done"),
       ]);
 
-      yield* awaited(harness.session.prompt("/ask can you fix the build?"));
-      yield* awaited(harness.session.prompt("fix the build"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask can you fix the build?"));
+      yield* awaited(harness.session.run.prompting.prompt("fix the build"));
 
       expect(declared(requests[0])).not.toContain("extra");
       expect(declared(requests[0])).not.toContain("bash");
@@ -155,7 +155,7 @@ const keepsTheSentenceAsAnOrdinaryUser = () =>
       const { harness } = yield* setup();
       record(harness, [fauxAssistantMessage("answer")]);
 
-      yield* awaited(harness.session.prompt("/ask can you fix the build?"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask can you fix the build?"));
 
       expect(getUserTexts(harness)).toEqual(["can you fix the build?"]);
     }),

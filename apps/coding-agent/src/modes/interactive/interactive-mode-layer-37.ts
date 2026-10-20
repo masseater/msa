@@ -51,7 +51,7 @@ export default abstract class InteractiveModeLayer37 extends InteractiveModeLaye
       this.showWarning(`Migrated credentials to auth.json: ${migratedProviders.join(", ")}`);
     }
 
-    const modelsJsonError = this.session.modelRuntime.getError();
+    const modelsJsonError = this.session.models.selection.modelRuntime.getError();
     if (modelsJsonError !== undefined && modelsJsonError !== "") {
       this.showError(`models.json error: ${modelsJsonError}`);
     }
@@ -73,7 +73,7 @@ export default abstract class InteractiveModeLayer37 extends InteractiveModeLaye
         this.showTreeSelectorShowingSummaryIndicator(choice.wantsSummary);
       try {
         const result = yield* awaited(
-          this.session.navigateTree(entryId, {
+          this.session.context.tree.navigateTree(entryId, {
             customInstructions: choice.customInstructions,
             summarize: choice.wantsSummary,
           }),
@@ -118,9 +118,9 @@ export default abstract class InteractiveModeLayer37 extends InteractiveModeLaye
         }
         if (this.session.isStreaming) {
           this.restoreQueuedMessagesToEditor();
-          yield* awaited(this.session.abort());
+          yield* awaited(this.session.run.lifecycle.abort());
         }
-        if (this.session.isCompacting) {
+        if (this.session.compaction.manual.isCompacting) {
           this.showError(
             "Wait for the current compaction or tree navigation to finish before navigating the session tree.",
           );

@@ -35,7 +35,7 @@ const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
 
   harness.setResponses([fauxAssistantMessage("reply"), fauxAssistantMessage("follow-up reply")]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
   yield* Effect.promise(() => harness.session.agent.waitForIdle());
 
   expect(getUserTexts(harness)).toEqual(["hello", "conflict report"]);

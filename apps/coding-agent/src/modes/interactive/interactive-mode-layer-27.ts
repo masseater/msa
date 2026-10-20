@@ -21,7 +21,7 @@ export default abstract class InteractiveModeLayer27 extends InteractiveModeLaye
     this.streamingMessage = message;
     let errorMessage: string | undefined;
     if (message.stopReason === "aborted") {
-      const retryAttempt = this.session.retryAttempt;
+      const retryAttempt = this.session.run.retry.retryAttempt;
       errorMessage =
         retryAttempt > 0
           ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}`
@@ -103,7 +103,7 @@ export default abstract class InteractiveModeLayer27 extends InteractiveModeLaye
     const miss = detectCacheMiss(
       this.sessionManager.getEntries(),
       message,
-      this.session.modelRuntime,
+      this.session.models.selection.modelRuntime,
     );
     if (miss !== undefined) this.addCacheMissNotice(miss);
   }

@@ -22,7 +22,7 @@ export default abstract class InteractiveModeLayer35 extends InteractiveModeLaye
     targetId: string,
     options: Parameters<extensionsTypes.ExtensionCommandContextActions["navigateTree"]>[1],
   ) {
-    return this.session
+    return this.session.context.tree
       .navigateTree(targetId, {
         customInstructions: options?.customInstructions,
         label: options?.label,

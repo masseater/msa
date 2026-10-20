@@ -73,7 +73,7 @@ function runProjectAgent(
         harness.settingsManager.setProjectTrusted(options.trusted);
 
         yield* Effect.promise(() =>
-          harness.session.bindExtensions({
+          harness.session.extensions.binding.bindExtensions({
             mode: "tui",
             uiContext: { confirm } as unknown as extensionsTypes.ExtensionUIContext,
           }),
@@ -81,7 +81,7 @@ function runProjectAgent(
 
         harness.setResponses(delegateResponses(harness.tempDir));
 
-        yield* Effect.promise(() => harness.session.prompt("Delegate this task"));
+        yield* Effect.promise(() => harness.session.run.prompting.prompt("Delegate this task"));
 
         const toolResult = harness.session.messages.find(
           (message) => message.role === "toolResult",

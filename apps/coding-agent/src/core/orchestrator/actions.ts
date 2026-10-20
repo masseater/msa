@@ -220,9 +220,9 @@ function setModel(
       if (worker !== undefined) {
         yield* Effect.tryPromise({
           catch: orchestratorError,
-          try: () => worker.setModel(resolved),
+          try: () => worker.models.selection.setModel(resolved),
         });
-        if (thinkingLevel !== undefined) worker.setThinkingLevel(thinkingLevel);
+        if (thinkingLevel !== undefined) worker.models.thinking.setThinkingLevel(thinkingLevel);
       }
       yield* Effect.sync(() => store.updateThread(runtime.database, thread.id, patch, now));
     }

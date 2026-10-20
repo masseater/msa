@@ -29,24 +29,26 @@ const waitsOutARateLimitAnd = Effect.gen(function* () {
       event.entry.type === "custom" &&
       (event.entry.data as goalTypes.GoalEntryData).event === "waiting"
     ) {
-      void harness.session.abort();
+      void harness.session.run.lifecycle.abort();
     }
   });
   harness.setResponses([
     fauxAssistantMessage("", { errorMessage: "429 Too Many Requests", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal anything"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal anything"));
 
   expect(goalEvents(harness).at(-1)).toMatchObject({ delayMs: 60_000, event: "waiting" });
-  expect(harness.session.goal?.condition).toBe("anything");
+  expect(harness.session.integrations.goal.goal?.condition).toBe("anything");
   expect(harness.session.isIdle).toBe(true);
 });
 
 const restoresAnUnfinishedGoalWhenThe = Effect.gen(function* () {
   const unfinished = SessionManager.inMemory();
   unfinished.appendCustomEntry(GOAL_ENTRY_TYPE, { condition: "keep going", event: "set" });
-  expect((yield* Effect.promise(() => setup(unfinished))).session.goal).toMatchObject({
+  expect(
+    (yield* Effect.promise(() => setup(unfinished))).session.integrations.goal.goal,
+  ).toMatchObject({
     condition: "keep going",
     turns: 0,
   });
@@ -61,7 +63,9 @@ const restoresAnUnfinishedGoalWhenThe = Effect.gen(function* () {
     tokens: 1,
     turns: 1,
   });
-  expect((yield* Effect.promise(() => setup(finished))).session.goal).toBeUndefined();
+  expect(
+    (yield* Effect.promise(() => setup(finished))).session.integrations.goal.goal,
+  ).toBeUndefined();
 });
 
 const stopsTheLoopWhenTheRun = Effect.gen(function* () {
@@ -72,15 +76,15 @@ const stopsTheLoopWhenTheRun = Effect.gen(function* () {
     () =>
       runPromise(
         Effect.sync(() => {
-          void harness.session.abort();
+          void harness.session.run.lifecycle.abort();
           return fauxAssistantMessage("", { stopReason: "aborted" });
         }),
       ),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal long task"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal long task"));
 
-  expect(harness.session.goal?.condition).toBe("long task");
+  expect(harness.session.integrations.goal.goal?.condition).toBe("long task");
   expect(harness.session.isIdle).toBe(true);
 });
 

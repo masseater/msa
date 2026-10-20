@@ -59,7 +59,7 @@ export default abstract class InteractiveModeLayer15 extends InteractiveModeLaye
   }
 
   protected handleThinkingCommand(searchTerm?: string): void {
-    const availableLevels = this.session.getAvailableThinkingLevels();
+    const availableLevels = this.session.models.thinking.getAvailableThinkingLevels();
     if (searchTerm === undefined || searchTerm === "") {
       this.showThinkingSelector();
       return;
@@ -85,7 +85,7 @@ export default abstract class InteractiveModeLayer15 extends InteractiveModeLaye
       };
       const selector = new ThinkingSelectorComponent(
         this.session.thinkingLevel ?? DEFAULT_THINKING_LEVEL,
-        this.session.getAvailableThinkingLevels(),
+        this.session.models.thinking.getAvailableThinkingLevels(),
         (level) => selectLevel(level, false),
         () => {
           done();

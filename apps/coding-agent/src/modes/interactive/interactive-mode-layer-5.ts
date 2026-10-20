@@ -122,7 +122,7 @@ export default abstract class InteractiveModeLayer5 extends InteractiveModeLayer
   }
 
   protected updateGoalTicker(): void {
-    if (this.session.goal !== undefined) {
+    if (this.session.integrations.goal.goal !== undefined) {
       this.goalTicker ??= every(() => this.ui.requestRender(), 1000);
     } else if (this.goalTicker !== undefined) {
       this.goalTicker.cancel();
@@ -184,7 +184,7 @@ export default abstract class InteractiveModeLayer5 extends InteractiveModeLayer
   }
 
   protected cycleThinkingLevel(): void {
-    const newLevel = this.session.cycleThinkingLevel();
+    const newLevel = this.session.models.thinking.cycleThinkingLevel();
     if (newLevel === undefined) {
       this.showStatus("Current model does not support thinking");
     } else {
@@ -226,7 +226,7 @@ export default abstract class InteractiveModeLayer5 extends InteractiveModeLayer
       return;
     }
 
-    this.session.setSessionName(name);
+    this.session.context.transcript.setSessionName(name);
     const sessionName = this.sessionManager.getSessionName();
     if (sessionName !== name) {
       this.showWarning(

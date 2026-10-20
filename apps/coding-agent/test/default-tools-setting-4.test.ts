@@ -33,7 +33,7 @@ const appliesThroughServiceBasedSessionCreation = () =>
       );
 
       expect(
-        session
+        session.tools.registry
           .getAllTools()
           .map((tool) => tool.name)
           .sort(),
@@ -54,7 +54,7 @@ const appliesThroughServiceBasedSessionCreation = () =>
           ...ORCHESTRATOR_TOOL_NAMES,
         ].sort(),
       );
-      expect(session.getActiveToolNames()).toEqual(["ls"]);
+      expect(session.tools.loadout.getActiveToolNames()).toEqual(["ls"]);
       session.dispose();
     }),
   );

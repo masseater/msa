@@ -31,7 +31,7 @@ describe("regression: issue 6019 explicit provider retry messages", () => {
             fauxAssistantMessage("recovered"),
           ]);
 
-          yield* Effect.promise(() => harness.session.prompt("test"));
+          yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
           expect(harness.faux.state.callCount).toBe(2);
           expect(

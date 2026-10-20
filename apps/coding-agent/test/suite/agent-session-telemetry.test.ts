@@ -70,7 +70,7 @@ const nestsLlmRequestsAndToolCallsUnderPart1 = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* awaited(harness.session.prompt("go"));
+  yield* awaited(harness.session.run.prompting.prompt("go"));
 
   const spans = telemetry.getSpans();
   const turns = named(spans, "msa.turn");
@@ -145,7 +145,7 @@ const endsTheOpenTurnWhenTheSession = Effect.gen(function* () {
     if (event.type === "turn_start") harness.session.dispose();
   });
 
-  yield* awaited(harness.session.prompt("go").catch(() => undefined));
+  yield* awaited(harness.session.run.prompting.prompt("go").catch(() => undefined));
   unsubscribe();
 
   const turns = named(telemetry.getSpans(), "msa.turn");

@@ -20,7 +20,7 @@ export default abstract class LoginFlowLayer8 extends LoginFlowLayer7 {
             return;
           }
           const service = findExternalService(
-            this.host.session.getExternalServices(),
+            this.host.session.tools.externalServices.getExternalServices(),
             normalizedRef,
           );
           if (service !== undefined) {
@@ -52,7 +52,7 @@ export default abstract class LoginFlowLayer8 extends LoginFlowLayer7 {
     return awaitingWith(
       function* () {
         const { host } = this;
-        const services = host.session.getExternalServices();
+        const services = host.session.tools.externalServices.getExternalServices();
         const statuses = yield* awaited(
           Promise.all(services.map((service) => service.status().catch(() => undefined))),
         );

@@ -48,15 +48,15 @@ export default abstract class InteractiveModeLayer4 extends InteractiveModeLayer
   }
 
   protected getRegisteredToolDefinition(toolName: string) {
-    return this.session.extensionRunner.resolveToolRenderers(toolName, () =>
-      withBuiltInRenderers(toolName, this.session.getToolDefinition(toolName)),
+    return this.session.extensions.binding.extensionRunner.resolveToolRenderers(toolName, () =>
+      withBuiltInRenderers(toolName, this.session.tools.registry.getToolDefinition(toolName)),
     );
   }
 
   protected getMarkdownTransformers(): extensionsTypes.MarkdownTransformer[] {
     return [
       this.mermaidMarkdownTransformer,
-      ...this.session.extensionRunner.getMarkdownTransformers(),
+      ...this.session.extensions.binding.extensionRunner.getMarkdownTransformers(),
     ];
   }
 
@@ -140,13 +140,13 @@ export default abstract class InteractiveModeLayer4 extends InteractiveModeLayer
   protected getAllQueuedMessages(): { steering: string[]; followUp: string[] } {
     return {
       followUp: [
-        ...this.session.getFollowUpMessages(),
+        ...this.session.run.queue.getFollowUpMessages(),
         ...this.compactionQueuedMessages
           .filter((msg) => msg.mode === "followUp")
           .map((msg) => msg.text),
       ],
       steering: [
-        ...this.session.getSteeringMessages(),
+        ...this.session.run.queue.getSteeringMessages(),
         ...this.compactionQueuedMessages
           .filter((msg) => msg.mode === "steer")
           .map((msg) => msg.text),
@@ -155,7 +155,7 @@ export default abstract class InteractiveModeLayer4 extends InteractiveModeLayer
   }
 
   protected clearAllQueues(): { steering: string[]; followUp: string[] } {
-    const { steering, followUp } = this.session.clearQueue();
+    const { steering, followUp } = this.session.run.queue.clearQueue();
     const compactionSteering = this.compactionQueuedMessages
       .filter((msg) => msg.mode === "steer")
       .map((msg) => msg.text);
@@ -172,7 +172,7 @@ export default abstract class InteractiveModeLayer4 extends InteractiveModeLayer
   protected isExtensionCommand(text: string): boolean {
     if (!text.startsWith("/")) return false;
 
-    const extensionRunner = this.session.extensionRunner;
+    const extensionRunner = this.session.extensions.binding.extensionRunner;
 
     const spaceIndex = text.indexOf(" ");
     const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
@@ -204,9 +204,9 @@ export default abstract class InteractiveModeLayer4 extends InteractiveModeLayer
 
   protected updateAvailableProviderCount(): void {
     const models =
-      this.session.scopedModels.length > 0
-        ? this.session.scopedModels.map((scoped) => scoped.model)
-        : this.session.modelRuntime.getAvailableSnapshot();
+      this.session.models.selection.scopedModels.length > 0
+        ? this.session.models.selection.scopedModels.map((scoped) => scoped.model)
+        : this.session.models.selection.modelRuntime.getAvailableSnapshot();
     const uniqueProviders = new Set(models.map((model) => model.provider));
     this.footerDataProvider.setAvailableProviderCount(uniqueProviders.size);
   }

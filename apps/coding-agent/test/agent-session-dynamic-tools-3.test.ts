@@ -82,11 +82,13 @@ const refreshesToolRegistryWhenToolsAreRegistered = Effect.gen(function* () {
     }),
   );
 
-  expect(session.getAllTools().map((tool) => tool.name)).not.toContain("dynamic_tool");
+  expect(session.tools.registry.getAllTools().map((tool) => tool.name)).not.toContain(
+    "dynamic_tool",
+  );
 
-  yield* awaited(session.bindExtensions({}));
+  yield* awaited(session.extensions.binding.bindExtensions({}));
 
-  const allTools = session.getAllTools();
+  const allTools = session.tools.registry.getAllTools();
   const dynamicTool = allTools.find((tool) => tool.name === "dynamic_tool");
   const readTool = allTools.find((tool) => tool.name === "read");
 
@@ -106,9 +108,9 @@ const refreshesToolRegistryWhenToolsAreRegistered = Effect.gen(function* () {
     scope: "temporary",
     source: "builtin",
   });
-  expect(session.getActiveToolNames()).toContain("dynamic_tool");
-  expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-  expect(session.systemPrompt).toContain(
+  expect(session.tools.loadout.getActiveToolNames()).toContain("dynamic_tool");
+  expect(session.tools.prompt.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
+  expect(session.tools.prompt.systemPrompt).toContain(
     "- Use dynamic_tool when the user asks for dynamic behavior tests.",
   );
 
@@ -153,14 +155,14 @@ const returnsSourceMetadataForSdkCustomTools = Effect.gen(function* () {
     }),
   );
 
-  const sdkTool = session.getAllTools().find((tool) => tool.name === "sdk_tool");
+  const sdkTool = session.tools.registry.getAllTools().find((tool) => tool.name === "sdk_tool");
   expect(sdkTool?.sourceInfo).toMatchObject({
     origin: "top-level",
     path: "<sdk:sdk_tool>",
     scope: "temporary",
     source: "sdk",
   });
-  expect(session.getActiveToolNames()).toContain("sdk_tool");
+  expect(session.tools.loadout.getActiveToolNames()).toContain("sdk_tool");
 
   session.dispose();
 });

@@ -58,7 +58,7 @@ export default class InteractiveMode extends InteractiveModeLayer48 {
     this.loginFlow = this.createLoginFlow();
     this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
     this.footer = new FooterComponent(this.session, this.footerDataProvider);
-    this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
+    this.footer.setAutoCompactEnabled(this.session.compaction.auto.autoCompactionEnabled);
     this.footerContainer = new Container();
     this.footerContainer.addChild(this.footer);
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();

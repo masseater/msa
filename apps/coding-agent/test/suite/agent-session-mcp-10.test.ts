@@ -18,7 +18,9 @@ const declaresToolsToolSearchLoadedAgain = Effect.gen(function* () {
   const second = yield* Effect.promise(() => setup4(first.harness.sessionManager));
   yield* Effect.promise(() =>
     vi.waitFor(() =>
-      expect(second.harness.session.getActiveToolNames()).toContain("mcp__docs__search"),
+      expect(second.harness.session.tools.loadout.getActiveToolNames()).toContain(
+        "mcp__docs__search",
+      ),
     ),
   );
   second.harness.setResponses([
@@ -27,7 +29,7 @@ const declaresToolsToolSearchLoadedAgain = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => second.harness.session.prompt("use it"));
+  yield* Effect.promise(() => second.harness.session.run.prompting.prompt("use it"));
 
   expect(getMessageText(toolResult(second.harness, "mcp__docs__search"))).toBe(
     "again guide\nagain faq",

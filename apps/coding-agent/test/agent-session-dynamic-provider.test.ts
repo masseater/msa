@@ -110,7 +110,7 @@ function capturePromptBaseUrl(
             throw new Error("stop");
           }),
         );
-      yield* awaited(session.prompt("hello"));
+      yield* awaited(session.run.prompting.prompt("hello"));
       return yield* awaited(baseUrl);
     }),
   );
@@ -149,7 +149,7 @@ const appliesSessionStartRegisterproviderOverridesToThe = () =>
         ]),
       );
 
-      yield* awaited(session.bindExtensions({}));
+      yield* awaited(session.extensions.binding.bindExtensions({}));
 
       expect(session.model?.baseUrl).toBe("http://localhost:8080/session-start");
       expect(yield* awaited(capturePromptBaseUrl(session))).toBe(
@@ -203,8 +203,8 @@ const appliesCommandTimeRegisterproviderOverridesWithoutReload = () =>
         ]),
       );
 
-      yield* awaited(session.bindExtensions({}));
-      yield* awaited(session.prompt("/use-proxy"));
+      yield* awaited(session.extensions.binding.bindExtensions({}));
+      yield* awaited(session.run.prompting.prompt("/use-proxy"));
 
       expect(session.model?.baseUrl).toBe("http://localhost:8080/command");
       expect(yield* awaited(capturePromptBaseUrl(session))).toBe("http://localhost:8080/command");
@@ -236,8 +236,8 @@ const registersNativeMsaAiProvidersAtCommand = () =>
         ]),
       );
 
-      yield* awaited(session.bindExtensions({}));
-      yield* awaited(session.prompt("/use-native"));
+      yield* awaited(session.extensions.binding.bindExtensions({}));
+      yield* awaited(session.run.prompting.prompt("/use-native"));
 
       expect(session.model?.baseUrl).toBe("http://localhost:8080/native-command");
       expect(yield* awaited(capturePromptBaseUrl(session))).toBe(

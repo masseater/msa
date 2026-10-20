@@ -32,7 +32,7 @@ const activatesOnlyToolsNewlyAddedToDefaulttools = () =>
   runTest(
     Effect.gen(function* () {
       const session = yield* awaited(createFileSession());
-      expect(session.getActiveToolNames()).toEqual([
+      expect(session.tools.loadout.getActiveToolNames()).toEqual([
         "read",
         "bash",
         "edit",
@@ -43,12 +43,12 @@ const activatesOnlyToolsNewlyAddedToDefaulttools = () =>
         "model_upgrade",
         ...ORCHESTRATOR_TOOL_NAMES,
       ]);
-      session.setActiveToolsByName(["read", "edit", "write"]);
+      session.tools.loadout.setActiveToolsByName(["read", "edit", "write"]);
 
       yield* writeSettings({ defaultTools: ["+inactive_tool", "+grep"] });
-      yield* awaited(session.reload());
+      yield* awaited(session.extensions.runtime.reload());
 
-      expect(session.getActiveToolNames().sort()).toEqual([
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([
         "edit",
         "grep",
         "inactive_tool",
@@ -57,8 +57,8 @@ const activatesOnlyToolsNewlyAddedToDefaulttools = () =>
       ]);
 
       yield* writeSettings({ defaultTools: ["-read"] });
-      yield* awaited(session.reload());
-      expect(session.getActiveToolNames().sort()).toEqual([
+      yield* awaited(session.extensions.runtime.reload());
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([
         "edit",
         "grep",
         "inactive_tool",
@@ -74,11 +74,15 @@ const keepsToolsRemovedByNameToolOptions = () =>
     Effect.gen(function* () {
       yield* writeSettings({ defaultTools: ["read"] });
       const session = yield* awaited(createFileSession({ tools: ["-bash", "+grep"] }));
-      expect(session.getActiveToolNames()).toEqual(["read", "grep"]);
+      expect(session.tools.loadout.getActiveToolNames()).toEqual(["read", "grep"]);
 
       yield* writeSettings({ defaultTools: ["read", "bash", "inactive_tool"] });
-      yield* awaited(session.reload());
-      expect(session.getActiveToolNames().sort()).toEqual(["grep", "inactive_tool", "read"]);
+      yield* awaited(session.extensions.runtime.reload());
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([
+        "grep",
+        "inactive_tool",
+        "read",
+      ]);
       session.dispose();
     }),
   );
@@ -88,22 +92,22 @@ const keepsExplicitToolOptionsOnReload = () =>
     Effect.gen(function* () {
       const allowlisted = yield* awaited(createFileSession({ tools: ["read"] }));
       yield* writeSettings({ defaultTools: ["+grep"] });
-      yield* awaited(allowlisted.reload());
-      expect(allowlisted.getActiveToolNames()).toEqual(["read"]);
+      yield* awaited(allowlisted.extensions.runtime.reload());
+      expect(allowlisted.tools.loadout.getActiveToolNames()).toEqual(["read"]);
       allowlisted.dispose();
 
       yield* writeSettings({});
       const builtinless = yield* awaited(createFileSession({ noTools: "builtin" }));
       yield* writeSettings({ defaultTools: ["+grep"] });
-      yield* awaited(builtinless.reload());
-      expect(builtinless.getActiveToolNames()).toEqual([]);
+      yield* awaited(builtinless.extensions.runtime.reload());
+      expect(builtinless.tools.loadout.getActiveToolNames()).toEqual([]);
       builtinless.dispose();
 
       yield* writeSettings({});
       const excluded = yield* awaited(createFileSession({ excludeTools: ["grep"] }));
       yield* writeSettings({ defaultTools: ["+grep", "+inactive_tool"] });
-      yield* awaited(excluded.reload());
-      expect(excluded.getActiveToolNames().sort()).toEqual(
+      yield* awaited(excluded.extensions.runtime.reload());
+      expect(excluded.tools.loadout.getActiveToolNames().sort()).toEqual(
         [
           "bash",
           "edit",

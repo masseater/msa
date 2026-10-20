@@ -59,7 +59,7 @@ const passesImageSettingsAndTheCurrent = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("take a screenshot"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("take a screenshot"));
 
   expect(normalizeToolResultImages).toHaveBeenCalledWith(expect.any(Array), {
     autoResizeImages: false,

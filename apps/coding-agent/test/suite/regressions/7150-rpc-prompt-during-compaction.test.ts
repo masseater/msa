@@ -66,7 +66,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
     yield* rejectsAnRpcPromptWhileManualPart1();
   harness.setResponses([fauxAssistantMessage("probe response")]);
 
-  const compactPromise = harness.session.compact();
+  const compactPromise = harness.session.compaction.manual.compact();
   yield* Effect.promise(() => compactionStarted);
 
   let preflightResult: agentSessionTypes.PromptDisposition | undefined;
@@ -74,7 +74,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   try {
     const tryExit6 = yield* Effect.exit(
       Effect.promise(() =>
-        harness.session.prompt("PROBE-7150", {
+        harness.session.run.prompting.prompt("PROBE-7150", {
           preflightResult: (result) => {
             preflightResult = result;
           },

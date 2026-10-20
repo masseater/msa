@@ -49,7 +49,7 @@ const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
       fauxAssistantMessage("done"),
     ]);
 
-    yield* Effect.promise(() => harness.session.prompt("search something"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("search something"));
 
     const toolResults = harness.session.messages.filter((message) => message.role === "toolResult");
     expect(toolResults).toHaveLength(1);
@@ -82,7 +82,7 @@ const normalizesNullContentInMessageEnd = Effect.gen(function* () {
 
   try {
     harness.setResponses([fauxAssistantMessage("hello")]);
-    yield* Effect.promise(() => harness.session.prompt("hi"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
     const assistantMessages = harness.session.messages.filter(
       (message) => message.role === "assistant",
@@ -99,7 +99,7 @@ const normalizesNullContentInCustomMessages = Effect.gen(function* () {
 
   try {
     yield* Effect.promise(() =>
-      harness.session.sendCustomMessage({
+      harness.session.run.prompting.sendCustomMessage({
         content: null as unknown as string,
         customType: "test",
         details: undefined,

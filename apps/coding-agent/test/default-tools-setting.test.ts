@@ -17,7 +17,7 @@ const usesTheConfiguredListAsTheInitial = Effect.gen(function* () {
   const session = yield* awaited(createSession(["grep", "find"]));
 
   expect(
-    session
+    session.tools.registry
       .getAllTools()
       .map((tool) => tool.name)
       .sort(),
@@ -38,18 +38,23 @@ const usesTheConfiguredListAsTheInitial = Effect.gen(function* () {
       ...ORCHESTRATOR_TOOL_NAMES,
     ].sort(),
   );
-  expect(session.getActiveToolNames()).toEqual(["grep", "find"]);
-  expect(session.systemPrompt).toContain("- grep:");
-  expect(session.systemPrompt).not.toContain("- read:");
+  expect(session.tools.loadout.getActiveToolNames()).toEqual(["grep", "find"]);
+  expect(session.tools.prompt.systemPrompt).toContain("- grep:");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- read:");
   session.dispose();
 });
 
 const canSelectPowershellInsteadOfBash = Effect.gen(function* () {
   const session = yield* awaited(createSession(["read", "powershell", "edit", "write"]));
 
-  expect(session.getActiveToolNames()).toEqual(["read", "powershell", "edit", "write"]);
-  expect(session.systemPrompt).toContain("- powershell: Execute PowerShell commands");
-  expect(session.systemPrompt).not.toContain("- bash:");
+  expect(session.tools.loadout.getActiveToolNames()).toEqual([
+    "read",
+    "powershell",
+    "edit",
+    "write",
+  ]);
+  expect(session.tools.prompt.systemPrompt).toContain("- powershell: Execute PowerShell commands");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- bash:");
   session.dispose();
 });
 
@@ -74,7 +79,7 @@ const activatesAnInactiveExtensionToolWithName = Effect.gen(function* () {
     ]),
   );
 
-  expect(session.getActiveToolNames().sort()).toEqual(
+  expect(session.tools.loadout.getActiveToolNames().sort()).toEqual(
     [
       "bash",
       "edit",
@@ -121,15 +126,15 @@ const keepsExtensionAndSdkCustomToolsEnabledPart1 = () =>
 
 const keepsExtensionAndSdkCustomToolsEnabled = Effect.gen(function* () {
   const { session } = yield* keepsExtensionAndSdkCustomToolsEnabledPart1();
-  yield* awaited(session.bindExtensions({}));
+  yield* awaited(session.extensions.binding.bindExtensions({}));
 
-  expect(session.getActiveToolNames().sort()).toEqual([
+  expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([
     "dynamic_tool",
     "grep",
     "sdk_tool",
     "static_tool",
   ]);
-  expect(session.getAllTools().map((tool) => tool.name)).toEqual(
+  expect(session.tools.registry.getAllTools().map((tool) => tool.name)).toEqual(
     expect.arrayContaining(["read", "dynamic_tool", "sdk_tool", "static_tool"]),
   );
   session.dispose();
@@ -137,18 +142,18 @@ const keepsExtensionAndSdkCustomToolsEnabled = Effect.gen(function* () {
 
 const preservesExplicitToolOptionPrecedence = Effect.gen(function* () {
   const allowlistedSession = yield* awaited(createSession(["grep"], { tools: ["read"] }));
-  expect(allowlistedSession.getActiveToolNames()).toEqual(["read"]);
+  expect(allowlistedSession.tools.loadout.getActiveToolNames()).toEqual(["read"]);
   allowlistedSession.dispose();
 
   const excludedSession = yield* awaited(
     createSession(["read", "grep"], { excludeTools: ["read"] }),
   );
-  expect(excludedSession.getActiveToolNames()).toEqual(["grep"]);
+  expect(excludedSession.tools.loadout.getActiveToolNames()).toEqual(["grep"]);
   excludedSession.dispose();
 
   const toolLessSession = yield* awaited(createSession(["read"], { noTools: "all" }));
-  expect(toolLessSession.getAllTools()).toEqual([]);
-  expect(toolLessSession.getActiveToolNames()).toEqual([]);
+  expect(toolLessSession.tools.registry.getAllTools()).toEqual([]);
+  expect(toolLessSession.tools.loadout.getActiveToolNames()).toEqual([]);
   toolLessSession.dispose();
 });
 

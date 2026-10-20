@@ -108,10 +108,10 @@ const shouldAllowForkingFromSingleMessage = () =>
     Effect.gen(function* () {
       yield* awaited(createSession());
 
-      yield* awaited(session.prompt("Say hello"));
+      yield* awaited(session.run.prompting.prompt("Say hello"));
       yield* awaited(session.agent.waitForIdle());
 
-      const userMessages = session.getUserMessagesForForking();
+      const userMessages = session.context.transcript.getUserMessagesForForking();
       expect(userMessages.length).toBe(1);
       const [userMessage] = userMessages;
       if (userMessage === undefined) throw new Error("expected a user message to fork from");
@@ -135,10 +135,10 @@ const shouldSupportInMemoryForkingInNo = () =>
 
       expect(session.sessionFile).toBeUndefined();
 
-      yield* awaited(session.prompt("Say hi"));
+      yield* awaited(session.run.prompting.prompt("Say hi"));
       yield* awaited(session.agent.waitForIdle());
 
-      const userMessages = session.getUserMessagesForForking();
+      const userMessages = session.context.transcript.getUserMessagesForForking();
       expect(userMessages.length).toBe(1);
       expect(session.messages.length).toBeGreaterThan(0);
 
@@ -196,16 +196,16 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession fo
         Effect.gen(function* () {
           yield* awaited(createSession());
 
-          yield* awaited(session.prompt("Say one"));
+          yield* awaited(session.run.prompting.prompt("Say one"));
           yield* awaited(session.agent.waitForIdle());
 
-          yield* awaited(session.prompt("Say two"));
+          yield* awaited(session.run.prompting.prompt("Say two"));
           yield* awaited(session.agent.waitForIdle());
 
-          yield* awaited(session.prompt("Say three"));
+          yield* awaited(session.run.prompting.prompt("Say three"));
           yield* awaited(session.agent.waitForIdle());
 
-          const userMessages = session.getUserMessagesForForking();
+          const userMessages = session.context.transcript.getUserMessagesForForking();
           expect(userMessages.length).toBe(3);
 
           const secondMessage = userMessages[1];

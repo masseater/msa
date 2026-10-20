@@ -110,7 +110,7 @@ const doesNotHoldLoginBehindAn = Effect.gen(function* () {
 const completesInteractiveLoginBeforeItsBounded = Effect.gen(function* () {
   harness = yield* Effect.promise(() => createHarness());
   vi.useFakeTimers();
-  const runtime = harness.session.modelRuntime;
+  const runtime = harness.session.models.selection.modelRuntime;
   vi.spyOn(runtime, "refresh").mockImplementation((options) => {
     const refresh = deferredPromise<{ aborted: boolean; errors: Map<string, string> }>();
     options?.signal?.addEventListener(

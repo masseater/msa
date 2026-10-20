@@ -103,7 +103,7 @@ function takeOver(
     return true;
   }
   wrapUp.sent = true;
-  void worker.prompt(PROMPT).then(resume.turn, (error: unknown) => {
+  void worker.run.prompting.prompt(PROMPT).then(resume.turn, (error: unknown) => {
     fail(runtime, threadId, `wrap-up failed: ${outcomes.errorText(error)}`);
     resume.settle(error);
   });

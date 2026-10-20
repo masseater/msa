@@ -13,10 +13,6 @@ const { createHarness } = harnessModule;
 
 const { deferredPromise, gate } = testing;
 
-type SessionWithCompactionInternals = {
-  runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
-};
-
 function seedCompactableSession(harness: harnessTypes.Harness): void {
   const model = harness.getModel();
   harness.sessionManager.appendMessage({
@@ -43,10 +39,7 @@ function seedCompactableSession(harness: harnessTypes.Harness): void {
 }
 
 function runAutoCompaction(harness: harnessTypes.Harness): Promise<boolean> {
-  return (harness.session as unknown as SessionWithCompactionInternals)["runAutoCompaction"](
-    "threshold",
-    false,
-  );
+  return harness.session.compaction.auto["runAutoCompaction"]("threshold", false);
 }
 
 const harnesses: harnessTypes.Harness[] = [];
@@ -76,12 +69,12 @@ const doesNotStartPostRunAuto = Effect.gen(function* () {
   ]);
   harness.session.subscribe((event) => {
     if (event.type === "message_end" && event.message.role === "assistant") {
-      harness.session.abortCompaction();
-      void harness.session.abort();
+      harness.session.compaction.manual.abortCompaction();
+      void harness.session.run.lifecycle.abort();
     }
   });
 
-  yield* Effect.promise(() => harness.session.prompt("z".repeat(1000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("z".repeat(1000)));
 
   expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
 });
@@ -95,25 +88,26 @@ const cancelsSummarizationAuthentication = Effect.gen(function* () {
   seedCompactableSession(harness);
   const authStarted = gate();
   let authSignal: AbortSignal | undefined;
-  vi.spyOn(harness.session.modelRuntime, "getAuth").mockImplementation((_model, options) =>
-    runPromise(
-      Effect.gen(function* () {
-        authSignal = options?.signal;
-        authStarted.release();
-        if (authSignal === undefined) throw new Error("Missing auth abort signal");
-        const aborted = deferredPromise<never>();
-        const signal = authSignal;
-        signal.addEventListener("abort", () => aborted.reject(signal.reason), { once: true });
-        return yield* Effect.promise(() => aborted.promise);
-      }),
-    ),
+  vi.spyOn(harness.session.models.selection.modelRuntime, "getAuth").mockImplementation(
+    (_model, options) =>
+      runPromise(
+        Effect.gen(function* () {
+          authSignal = options?.signal;
+          authStarted.release();
+          if (authSignal === undefined) throw new Error("Missing auth abort signal");
+          const aborted = deferredPromise<never>();
+          const signal = authSignal;
+          signal.addEventListener("abort", () => aborted.reject(signal.reason), { once: true });
+          return yield* Effect.promise(() => aborted.promise);
+        }),
+      ),
   );
 
   const compaction = runAutoCompaction(harness);
   yield* Effect.promise(() => authStarted);
   const started = harness.eventsOfType("compaction_start").length;
-  const wasCompacting = harness.session.isCompacting;
-  yield* Effect.promise(() => Promise.all([compaction, harness.session.abort()]));
+  const wasCompacting = harness.session.compaction.manual.isCompacting;
+  yield* Effect.promise(() => Promise.all([compaction, harness.session.run.lifecycle.abort()]));
 
   expect({ authAborted: authSignal?.aborted, started, wasCompacting }).toEqual({
     authAborted: true,
@@ -130,7 +124,7 @@ const cancelsSynchronouslyFromCompactionStart = Effect.gen(function* () {
   harnesses.push(harness);
   seedCompactableSession(harness);
   harness.session.subscribe((event) => {
-    if (event.type === "compaction_start") harness.session.abortCompaction();
+    if (event.type === "compaction_start") harness.session.compaction.manual.abortCompaction();
   });
 
   yield* Effect.promise(() => runAutoCompaction(harness));
@@ -191,7 +185,9 @@ describe("automatic compaction cancellation regressions", () => {
         );
         harnesses.push(harness);
         seedCompactableSession(harness);
-        vi.spyOn(harness.session.modelRuntime, "getAuth").mockRejectedValue(createError());
+        vi.spyOn(harness.session.models.selection.modelRuntime, "getAuth").mockRejectedValue(
+          createError(),
+        );
 
         yield* Effect.promise(() => runAutoCompaction(harness));
 

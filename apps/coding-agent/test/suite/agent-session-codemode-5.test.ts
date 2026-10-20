@@ -56,7 +56,7 @@ const addsTheUsageOfNestedResults = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = codemodeResult(harness);
   expect(result.usage).toMatchObject({ cost: { total: 0.5 }, input: 200, totalTokens: 200 });
@@ -69,7 +69,7 @@ const addsTheUsageOfNestedResults = Effect.gen(function* () {
       persisted.message.role === "toolResult" &&
       persisted.message.usage,
   ).toEqual(result.usage);
-  expect(harness.session.getSessionStats().cost).toBe(0.5);
+  expect(harness.session.context.stats.getSessionStats().cost).toBe(0.5);
 });
 
 const keepsStructuredContentThatToolResult = Effect.gen(function* () {
@@ -95,7 +95,7 @@ const keepsStructuredContentThatToolResult = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
   expect(yield* fromJsonText(resultText(codemodeResult(harness)))).toEqual({ files: 0, names: [] });
 });
 
@@ -120,7 +120,7 @@ const attachesOnlyTheImagesTheScript = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = codemodeResult(harness);
 

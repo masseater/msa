@@ -86,10 +86,10 @@ const sendsEveryQueuedMessageInInputOrder = () =>
     Effect.gen(function* () {
       const harness = yield* startHarness();
       yield* harness.pressEnter("A", 1_000_000);
-      yield* awaited(harness.session.prompt("B", { streamingBehavior: "followUp" }));
+      yield* awaited(harness.session.run.prompting.prompt("B", { streamingBehavior: "followUp" }));
       yield* harness.pressEnter("C", 1_000_050);
-      expect(harness.session.getSteeringMessages()).toEqual(["A", "C"]);
-      expect(harness.session.getFollowUpMessages()).toEqual(["B"]);
+      expect(harness.session.run.queue.getSteeringMessages()).toEqual(["A", "C"]);
+      expect(harness.session.run.queue.getFollowUpMessages()).toEqual(["B"]);
 
       yield* harness.pressEnter("", 1_000_100);
       yield* harness.pressEnter("", 1_000_200);
@@ -102,7 +102,7 @@ const sendsEveryQueuedMessageInInputOrder = () =>
 
       expect(harness.requests).toHaveLength(2);
       expect(harness.requests[1]).toEqual(["start", "A", "B", "C"]);
-      expect(harness.session.pendingMessageCount).toBe(0);
+      expect(harness.session.run.queue.pendingMessageCount).toBe(0);
       expect(harness.queueEvents.at(-1)).toEqual({ followUp: [], steering: [] });
     }),
   );
@@ -118,7 +118,7 @@ const resetsTheCountAfterALongGap = () =>
       yield* harness.pressEnter("", 1_001_300);
 
       expect(harness.statuses).toEqual([]);
-      expect(harness.session.pendingMessageCount).toBe(1);
+      expect(harness.session.run.queue.pendingMessageCount).toBe(1);
 
       yield* harness.pressEnter("", 1_001_400);
       expect(harness.statuses).toEqual(["Sent 1 queued message"]);
@@ -139,7 +139,7 @@ const ignoresEntersWithText = () =>
       yield* harness.pressEnter("", 1_000_400);
 
       expect(harness.statuses).toEqual([]);
-      expect(harness.session.getSteeringMessages()).toEqual(["A", "B"]);
+      expect(harness.session.run.queue.getSteeringMessages()).toEqual(["A", "B"]);
 
       harness.release();
       yield* awaited(harness.firstRun);
@@ -155,7 +155,7 @@ const doesNothingWithAnEmptyQueue = () =>
       yield* harness.pressEnter("", 1_000_200);
 
       expect(harness.statuses).toEqual([]);
-      expect(harness.session.pendingMessageCount).toBe(0);
+      expect(harness.session.run.queue.pendingMessageCount).toBe(0);
       expect(harness.queueEvents).toEqual([]);
 
       harness.release();

@@ -30,8 +30,8 @@ const activatesToolSearchForDeferredMcp = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("find a docs tool"));
-  expect(harness.session.getActiveToolNames()).toEqual(["tool_search", searchName]);
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("find a docs tool"));
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["tool_search", searchName]);
   const toolSearch = harness.session.agent.state.tools.find((tool) => tool.name === "tool_search");
   expect(toolSearch?.description).toBe(TOOL_SEARCH_DESCRIPTION);
   const search = toolResult(harness, "tool_search");
@@ -61,10 +61,10 @@ const activatesToolSearchForDeferredMcpStep1 = (
     );
     const last = branch.at(-1);
     if (firstUser === undefined || last === undefined) throw new Error("Missing entries");
-    yield* Effect.promise(() => harness.session.navigateTree(firstUser.id));
-    expect(harness.session.getActiveToolNames()).not.toContain(searchName);
-    yield* Effect.promise(() => harness.session.navigateTree(last.id));
-    expect(harness.session.getActiveToolNames()).toContain(searchName);
+    yield* Effect.promise(() => harness.session.context.tree.navigateTree(firstUser.id));
+    expect(harness.session.tools.loadout.getActiveToolNames()).not.toContain(searchName);
+    yield* Effect.promise(() => harness.session.context.tree.navigateTree(last.id));
+    expect(harness.session.tools.loadout.getActiveToolNames()).toContain(searchName);
   });
 
 const findsNothingToLoadWhenEvery = Effect.gen(function* () {
@@ -77,7 +77,7 @@ const findsNothingToLoadWhenEvery = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
   expect(getMessageText(toolResult(harness, "tool_search"))).toBe("No matching tools found.");
 });
 

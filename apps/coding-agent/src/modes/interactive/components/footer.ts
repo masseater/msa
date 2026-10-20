@@ -42,7 +42,7 @@ export default class FooterComponent extends FooterComponentLayer2 implements tu
     const entryCount = sessionManager.getEntryCount();
     const sessionId = sessionManager.getSessionId();
     const leafId = sessionManager.getLeafId();
-    const limitsModel = self.session.routedModel?.model ?? self.session.model;
+    const limitsModel = self.session.models.selection.routedModel?.model ?? self.session.model;
     const cached = self.sessionStats;
     if (
       cached !== undefined &&
@@ -89,7 +89,7 @@ export default class FooterComponent extends FooterComponentLayer2 implements tu
     const pwdLine = truncateToWidth(theme.fg("dim", pwd), width, theme.fg("dim", "..."));
     const lines = [pwdLine, dimStatsLeft + dimRemainder];
 
-    const goal = self.session.goal;
+    const goal = self.session.integrations.goal.goal;
     if (goal !== undefined) {
       lines.push(
         truncateToWidth(
@@ -100,12 +100,14 @@ export default class FooterComponent extends FooterComponentLayer2 implements tu
       );
     }
 
-    const prWatch = describePrWatchIndicator(self.session.prWatch);
+    const prWatch = describePrWatchIndicator(self.session.integrations.prWatch.prWatch);
     if (prWatch !== undefined && prWatch !== "") {
       lines.push(truncateToWidth(theme.fg("dim", prWatch), width, theme.fg("dim", "...")));
     }
 
-    const tasks = viewHelpers.describeTaskCounts(self.session.orchestrator?.snapshot.tasks ?? []);
+    const tasks = viewHelpers.describeTaskCounts(
+      self.session.integrations.orchestration.orchestrator?.snapshot.tasks ?? [],
+    );
     return { lines, tasks };
   }
 
@@ -186,7 +188,7 @@ export default class FooterComponent extends FooterComponentLayer2 implements tu
       rightSideWithoutProvider =
         thinkingLevel === "off" ? `${modelName} • thinking off` : `${modelName} • ${thinkingLevel}`;
     }
-    const routed = self.session.routedModel;
+    const routed = self.session.models.selection.routedModel;
     if (routed !== undefined) {
       const level = routed.thinkingLevel === undefined ? "" : ` • ${routed.thinkingLevel}`;
       rightSideWithoutProvider += ` → ${routed.model.id}${level}`;

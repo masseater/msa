@@ -182,7 +182,7 @@ export default abstract class InteractiveModeLayer6 extends InteractiveModeLayer
     this.mountBashComponent(command, excludeFromContext);
     if (result.output !== "") this.bashComponent?.appendOutput(result.output);
     this.completeBashComponent(result);
-    this.session.recordBashResult(command, result, { excludeFromContext });
+    this.session.context.bash.recordBashResult(command, result, { excludeFromContext });
     this.bashComponent = undefined;
     this.ui.requestRender();
   }

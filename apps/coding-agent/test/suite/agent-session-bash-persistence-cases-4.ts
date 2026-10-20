@@ -52,7 +52,7 @@ const doesNotEmitMessageEndFor = Effect.gen(function* () {
     }
   });
 
-  harness.session.recordBashResult("echo hi", {
+  harness.session.context.bash.recordBashResult("echo hi", {
     cancelled: false,
     exitCode: 0,
     output: "hi",

@@ -14,7 +14,7 @@ const deliversAllFollowUpMessagesIn = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
-  harness.session.setFollowUpMode("all");
+  harness.session.run.queue.setFollowUpMode("all");
   let batchedUserMessages: string[] = [];
 
   harness.setResponses([
@@ -29,8 +29,8 @@ const deliversAllFollowUpMessagesIn = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.promise(() => harness.session.followUp("follow-up 1"));
-  yield* Effect.promise(() => harness.session.followUp("follow-up 2"));
+  yield* Effect.promise(() => harness.session.run.queue.followUp("follow-up 1"));
+  yield* Effect.promise(() => harness.session.run.queue.followUp("follow-up 2"));
   releaseToolExecution();
   yield* Effect.promise(() => promptPromise);
 
@@ -62,7 +62,7 @@ const queuesCustomMessagesWithDeliverasSteer = Effect.gen(function* () {
 
   yield* Effect.promise(() => waitForToolStart);
   yield* Effect.promise(() =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       {
         content: "steer custom",
         customType: "queue-test",
@@ -104,7 +104,7 @@ const queuesCustomMessagesWithDeliverasFollowup = Effect.gen(function* () {
 
   yield* Effect.promise(() => waitForToolStart);
   yield* Effect.promise(() =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       {
         content: "follow-up custom",
         customType: "queue-test",
@@ -130,7 +130,7 @@ const injectsNextturnCustomMessagesIntoThe = Effect.gen(function* () {
   let sawCustomMessage = false;
 
   yield* Effect.promise(() =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       { content: "carry this", customType: "next-turn", details: {}, display: true },
       { deliverAs: "nextTurn" },
     ),
@@ -148,7 +148,7 @@ const injectsNextturnCustomMessagesIntoThe = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("normal prompt"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("normal prompt"));
 
   expect(sawCustomMessage).toBe(true);
   expect(harness.session.messages.map((message) => message.role)).toEqual([
@@ -175,18 +175,18 @@ const updatesPendingmessagecountAndRemovesQueuedText = Effect.gen(function* () {
       event.message.role === "user" &&
       getMessageText(event.message) === "queued"
     ) {
-      countsAtQueuedMessageStart.push(harness.session.pendingMessageCount);
+      countsAtQueuedMessageStart.push(harness.session.run.queue.pendingMessageCount);
     }
   });
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.promise(() => harness.session.steer("queued"));
-  expect(harness.session.pendingMessageCount).toBe(1);
+  yield* Effect.promise(() => harness.session.run.queue.steer("queued"));
+  expect(harness.session.run.queue.pendingMessageCount).toBe(1);
   releaseToolExecution();
   yield* Effect.promise(() => promptPromise);
 
   expect(countsAtQueuedMessageStart).toEqual([0]);
-  expect(harness.session.pendingMessageCount).toBe(0);
+  expect(harness.session.run.queue.pendingMessageCount).toBe(0);
 });
 const throwsWhenQueueingAnExtensionCommand = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -205,7 +205,7 @@ const throwsWhenQueueingAnExtensionCommand = Effect.gen(function* () {
   harnesses.push(harness);
 
   yield* Effect.promise(() =>
-    expect(harness.session.steer("/testcmd queued")).rejects.toThrow(
+    expect(harness.session.run.queue.steer("/testcmd queued")).rejects.toThrow(
       'Extension command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.',
     ),
   );
@@ -227,7 +227,7 @@ const throwsWhenQueueingAnExtensionCommand2 = Effect.gen(function* () {
   harnesses.push(harness);
 
   yield* Effect.promise(() =>
-    expect(harness.session.followUp("/testcmd queued")).rejects.toThrow(
+    expect(harness.session.run.queue.followUp("/testcmd queued")).rejects.toThrow(
       'Extension command "/testcmd" cannot be queued. Use prompt() or execute the command when not streaming.',
     ),
   );

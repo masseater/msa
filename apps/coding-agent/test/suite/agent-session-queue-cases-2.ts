@@ -33,7 +33,7 @@ const dispatchesExtensionCommandsImmediatelyWhenPrompted = Effect.gen(function* 
   );
   harnesses.push(harness);
 
-  yield* Effect.promise(() => harness.session.prompt("/testcmd hello world"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/testcmd hello world"));
 
   expect(commandRuns).toEqual(["hello world"]);
   expect(harness.getPendingResponseCount()).toBe(0);
@@ -97,7 +97,7 @@ const deliversFollowUpMessagesOnlyAfter = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.promise(() => harness.session.followUp("after current run"));
+  yield* Effect.promise(() => harness.session.run.queue.followUp("after current run"));
   releaseToolExecution();
   yield* Effect.promise(() => promptPromise);
 
@@ -145,15 +145,17 @@ const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
   yield* Effect.promise(() => waitForToolStart);
   inputEvents.length = 0;
   try {
-    yield* Effect.promise(() => harness.session.steer("steer me", undefined, { source: "rpc" }));
     yield* Effect.promise(() =>
-      harness.session.steer("handle steer", undefined, { source: "rpc" }),
+      harness.session.run.queue.steer("steer me", undefined, { source: "rpc" }),
     );
     yield* Effect.promise(() =>
-      harness.session.followUp("follow me", undefined, { source: "rpc" }),
+      harness.session.run.queue.steer("handle steer", undefined, { source: "rpc" }),
     );
     yield* Effect.promise(() =>
-      harness.session.followUp("handle follow", undefined, { source: "rpc" }),
+      harness.session.run.queue.followUp("follow me", undefined, { source: "rpc" }),
+    );
+    yield* Effect.promise(() =>
+      harness.session.run.queue.followUp("handle follow", undefined, { source: "rpc" }),
     );
 
     expect(inputEvents).toEqual([
@@ -162,8 +164,8 @@ const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
       { source: "rpc", streamingBehavior: "followUp", text: "follow me" },
       { source: "rpc", streamingBehavior: "followUp", text: "handle follow" },
     ]);
-    expect(harness.session.getSteeringMessages()).toEqual(["transformed: steer me"]);
-    expect(harness.session.getFollowUpMessages()).toEqual(["transformed: follow me"]);
+    expect(harness.session.run.queue.getSteeringMessages()).toEqual(["transformed: steer me"]);
+    expect(harness.session.run.queue.getFollowUpMessages()).toEqual(["transformed: follow me"]);
   } finally {
     releaseToolExecution();
   }
@@ -181,8 +183,8 @@ const deliversMultipleSteeringMessagesInOrder = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.promise(() => harness.session.steer("steer 1"));
-  yield* Effect.promise(() => harness.session.steer("steer 2"));
+  yield* Effect.promise(() => harness.session.run.queue.steer("steer 1"));
+  yield* Effect.promise(() => harness.session.run.queue.steer("steer 2"));
   releaseToolExecution();
   yield* Effect.promise(() => promptPromise);
 
@@ -202,8 +204,8 @@ const deliversMultipleFollowUpMessagesIn = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.promise(() => harness.session.followUp("follow-up 1"));
-  yield* Effect.promise(() => harness.session.followUp("follow-up 2"));
+  yield* Effect.promise(() => harness.session.run.queue.followUp("follow-up 1"));
+  yield* Effect.promise(() => harness.session.run.queue.followUp("follow-up 2"));
   releaseToolExecution();
   yield* Effect.promise(() => promptPromise);
 
@@ -219,7 +221,7 @@ const deliversAllSteeringMessagesInOne = Effect.gen(function* () {
   const waiting = yield* Effect.promise(() => createWaitingHarness());
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
-  harness.session.setSteeringMode("all");
+  harness.session.run.queue.setSteeringMode("all");
   let batchedUserMessages: string[] = [];
 
   harness.setResponses([
@@ -233,8 +235,8 @@ const deliversAllSteeringMessagesInOne = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() => waitForToolStart);
-  yield* Effect.promise(() => harness.session.steer("steer 1"));
-  yield* Effect.promise(() => harness.session.steer("steer 2"));
+  yield* Effect.promise(() => harness.session.run.queue.steer("steer 1"));
+  yield* Effect.promise(() => harness.session.run.queue.steer("steer 2"));
   releaseToolExecution();
   yield* Effect.promise(() => promptPromise);
 

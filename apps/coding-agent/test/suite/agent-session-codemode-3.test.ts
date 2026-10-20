@@ -115,7 +115,7 @@ const listsModelsAndClassifiesWithCatalog = Effect.gen(function* () {
 
   expect(result.usage?.input).toBe(1800);
   expect(result.usage?.cost.total).toBeCloseTo(0.006, 10);
-  expect(harness.session.getSessionStats().cost).toBeCloseTo(0.006, 10);
+  expect(harness.session.context.stats.getSessionStats().cost).toBeCloseTo(0.006, 10);
 });
 
 const generatesImagesWithCatalogAuthAnd = Effect.gen(function* () {
@@ -156,7 +156,7 @@ const generatesImagesWithCatalogAuthAnd = Effect.gen(function* () {
     ["models.generateImages", "scorer/painter", "error", undefined, "painter exploded"],
   ]);
   expect(result.usage?.cost.total).toBeCloseTo(0.04, 10);
-  expect(harness.session.getSessionStats().cost).toBeCloseTo(0.04, 10);
+  expect(harness.session.context.stats.getSessionStats().cost).toBeCloseTo(0.04, 10);
 });
 
 const notesGeneratedImagesThatTheScript = Effect.gen(function* () {

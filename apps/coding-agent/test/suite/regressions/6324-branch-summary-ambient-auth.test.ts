@@ -56,7 +56,7 @@ const summarizesTreeBranchesWhenRequestAuth = Effect.gen(function* () {
   harness.sessionManager.appendMessage(assistantMsg("abandoned reply"));
 
   const result = yield* Effect.promise(() =>
-    harness.session.navigateTree(targetId, { summarize: true }),
+    harness.session.context.tree.navigateTree(targetId, { summarize: true }),
   );
 
   expect(result.cancelled).toBe(false);

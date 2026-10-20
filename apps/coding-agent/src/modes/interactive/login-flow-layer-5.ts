@@ -50,7 +50,7 @@ export default abstract class LoginFlowLayer5 extends LoginFlowLayer4 {
           let selectedModel: compatTypes.Model<any> | undefined;
           let selectionError: string | undefined;
           if (isUnknownModel(previousModel)) {
-            const providerModels = host.session.modelRuntime
+            const providerModels = host.session.models.selection.modelRuntime
               .getAvailableSnapshot()
               .filter((model) => model.provider === providerId);
             if (providerId === "llama.cpp") {
@@ -66,7 +66,9 @@ export default abstract class LoginFlowLayer5 extends LoginFlowLayer4 {
                 selectionError = `${actionLabel}, but its default model "${defaultModelId}" is not available. Use /model to select a model.`;
               } else {
                 try {
-                  yield* awaited(host.session.setModel(selectedModel, { persist: true }));
+                  yield* awaited(
+                    host.session.models.selection.setModel(selectedModel, { persist: true }),
+                  );
                 } catch (error: unknown) {
                   selectedModel = undefined;
                   selectionError = `${actionLabel}, but selecting its default model failed: ${toErrorMessage(error)}. Use /model to select a model.`;

@@ -28,7 +28,8 @@ const expected: configuredRuntimeTypes.AddedModelOutput = {
 };
 
 const harness = createMsaDocumentationEvalHarness({
-  output: ({ session }) => inspectAddedModel(session.modelRuntime, PROVIDER_ID, MODEL_ID),
+  output: ({ session }) =>
+    inspectAddedModel(session.models.selection.modelRuntime, PROVIDER_ID, MODEL_ID),
 });
 const judge = StructuredOutputJudge({ allowExtras: false, expected, match: "strict" });
 

@@ -131,7 +131,7 @@ const appliesUpdatedTopLevelPromptSettings = Effect.gen(function* () {
     `${yield* toJsonText({ prompts: ["-prompts/test.md"] })}\n`,
   );
 
-  yield* Effect.promise(() => sessionRuntime.session.reload());
+  yield* Effect.promise(() => sessionRuntime.session.extensions.runtime.reload());
 
   expect(sessionRuntime.services.settingsManager.getGlobalSettings().prompts).toEqual([
     "-prompts/test.md",

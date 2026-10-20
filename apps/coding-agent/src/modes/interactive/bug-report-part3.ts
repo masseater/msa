@@ -30,7 +30,7 @@ function buildBundle(
       includeSummary: summary !== undefined,
       messageCount: session.messages.length,
       model: session.model,
-      modelRuntime: session.modelRuntime,
+      modelRuntime: session.models.selection.modelRuntime,
       projectSettings: session.settingsManager.getProjectSettings(),
       sessionId: session.sessionId,
       thinkingLevel: session.thinkingLevel,

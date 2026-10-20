@@ -23,7 +23,7 @@ const routesEachRequestIncludingRetriesWhile = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(reasons()).toEqual(["user", "retry", "continuation"]);
   expect(requests[1]?.failed?.message.errorMessage).toBe("overloaded_error");
@@ -32,7 +32,7 @@ const routesEachRequestIncludingRetriesWhile = Effect.gen(function* () {
   expect(harness.session.model).toMatchObject({ id: "auto", provider: "router" });
   expect(harness.session.thinkingLevel).toBe("high");
 
-  expect(harness.session.getContextUsage()?.contextWindow).toBe(50_000);
+  expect(harness.session.context.stats.getContextUsage()?.contextWindow).toBe(50_000);
 });
 
 const retriesTheFirstRequestOfA = Effect.gen(function* () {
@@ -41,16 +41,16 @@ const retriesTheFirstRequestOfA = Effect.gen(function* () {
       settings: { retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } },
     }),
   );
-  harness.session.setThinkingLevel("low");
+  harness.session.models.thinking.setThinkingLevel("low");
   harness.setResponses([
     fauxAssistantMessage("easy answer"),
     fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
     fauxAssistantMessage("hard answer"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("easy"));
-  harness.session.setThinkingLevel("high");
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("easy"));
+  harness.session.models.thinking.setThinkingLevel("high");
 
-  yield* Effect.promise(() => harness.session.prompt("hard"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hard"));
 
   expect(reasons()).toEqual(["user", "user", "retry"]);
 
@@ -83,7 +83,7 @@ const routesTheCompactAndRetryAfter = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5000)));
 
   expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual([
     "overflow",
@@ -121,7 +121,7 @@ const routesRequestsAfterExtensionMessagesAs = Effect.gen(function* () {
   );
   harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(reasons()).toEqual(["user", "continuation"]);
 });
@@ -140,8 +140,8 @@ const routesTheFirstRequestOfA = Effect.gen(function* () {
   );
   harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
-  yield* Effect.promise(() => harness.session.prompt("again"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("again"));
 
   expect(harness.session.messages.at(-2)?.role).toBe("custom");
   expect(reasons()).toEqual(["user", "user"]);
@@ -156,10 +156,10 @@ const endsTheRunWithAnError = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("answer")]);
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   fail = true;
-  yield* Effect.promise(() => harness.session.prompt("again"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("again"));
 
   expect(harness.session.messages.at(-1)).toMatchObject({
     errorMessage: expect.stringContaining("router unavailable"),
@@ -170,15 +170,15 @@ const endsTheRunWithAnError = Effect.gen(function* () {
   });
   expect(harness.faux.state.callCount).toBe(1);
 
-  expect(harness.session.getContextUsage()?.contextWindow).toBe(50_000);
+  expect(harness.session.context.stats.getContextUsage()?.contextWindow).toBe(50_000);
 });
 
 const checksCompactionAgainstThePhysicalModel = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => createRoutedHarness());
   harness.setResponses([fauxAssistantMessage("short answer"), fauxAssistantMessage("long answer")]);
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
-  yield* Effect.promise(() => harness.session.prompt("x".repeat(80_000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(80_000)));
 
   expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
 });

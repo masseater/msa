@@ -49,7 +49,7 @@ function createSession() {
 function activeTools() {
   return runTest(
     Effect.gen(function* () {
-      return yield* awaited((yield* awaited(createSession())).getActiveToolNames());
+      return yield* awaited((yield* awaited(createSession())).tools.loadout.getActiveToolNames());
     }),
   );
 }
@@ -84,10 +84,10 @@ const addsThemToARunningSessionOnce = () =>
       vi.stubEnv("PATH", `${joinPath(tempDir, "bin")}:${readEnv("PATH")}`);
       vi.stubEnv("TREG_TOKEN", "");
       const session = yield* awaited(createSession());
-      expect(session.getActiveToolNames()).not.toContain("web_search");
+      expect(session.tools.loadout.getActiveToolNames()).not.toContain("web_search");
       yield* fakeTreg(joinPath(tempDir, "bin"), true);
-      session.refreshExternalServiceTools();
-      expect(session.getActiveToolNames()).toEqual(
+      session.tools.externalServices.refreshExternalServiceTools();
+      expect(session.tools.loadout.getActiveToolNames()).toEqual(
         expect.arrayContaining(["read", "web_search", "web_fetch"]),
       );
     }),

@@ -80,7 +80,7 @@ export default abstract class LoginFlowLayer3 extends LoginFlowLayer2 {
   ) {
     try {
       yield* awaited(
-        host.session.modelRuntime.logout(providerOption.id, {
+        host.session.models.selection.modelRuntime.logout(providerOption.id, {
           signal: AbortSignal.timeout(CREDENTIAL_TIMEOUT_MS),
         }),
       );

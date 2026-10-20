@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompaction5Support from "./agent-session-compaction-5-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
 
 const { fauxAssistantMessage } = ai;
@@ -41,8 +40,8 @@ const resumesAfterThresholdCompactionWhenOnly = Effect.gen(function* () {
   );
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-  yield* Effect.promise(() => harness.session.prompt("first"));
-  yield* Effect.promise(() => harness.session.prompt("second"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
   harness.session.agent.followUp({
     content: [{ text: "queued custom", type: "text" }],
@@ -52,8 +51,7 @@ const resumesAfterThresholdCompactionWhenOnly = Effect.gen(function* () {
     timestamp: currentTimeMillis(),
   });
 
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
 
   yield* Effect.promise(() =>
     expect(sessionInternals["runAutoCompaction"]("threshold", false)).resolves.toBe(true),
@@ -63,8 +61,7 @@ const resumesAfterThresholdCompactionWhenOnly = Effect.gen(function* () {
 const doesNotRetryOverflowRecoveryMore = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const overflowMessage = createAssistant(harness, {
     errorMessage: "prompt is too long",
     stopReason: "error",
@@ -122,7 +119,9 @@ const compactsSuccessfulOverflowResponsesWithoutRetrying = Effect.gen(function* 
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("completed answer")]);
 
-  yield* Effect.promise(() => expect(harness.session.prompt("hello")).resolves.toBeUndefined());
+  yield* Effect.promise(() =>
+    expect(harness.session.run.prompting.prompt("hello")).resolves.toBeUndefined(),
+  );
 
   const compactionEnd = harness.eventsOfType("compaction_end").at(-1);
   expect(compactionEnd).toMatchObject({

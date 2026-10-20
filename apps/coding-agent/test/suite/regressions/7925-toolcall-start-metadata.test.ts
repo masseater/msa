@@ -24,7 +24,7 @@ const includesTheToolCallIdAnd = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("write a file"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("write a file"));
 
   const update = harness
     .eventsOfType("message_update")

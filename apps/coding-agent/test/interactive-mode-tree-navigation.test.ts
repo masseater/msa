@@ -24,24 +24,32 @@ const busyMessage =
 
 const createTreeSession = () => {
   const session = {
-    abort: vi.fn(() =>
-      runTest(
-        Effect.sync(() => {
-          session.isStreaming = false;
-        }),
-      ),
-    ),
-    abortBranchSummary: vi.fn(),
-    isCompacting: false,
+    compaction: { manual: { isCompacting: false } },
+    context: {
+      tree: {
+        abortBranchSummary: vi.fn(),
+        navigateTree: vi.fn(() =>
+          runTest(
+            Effect.gen(function* () {
+              if (session.compaction.manual.isCompacting) throw new Error(busyMessage);
+              return yield* awaited({ cancelled: false });
+            }),
+          ),
+        ),
+      },
+    },
     isStreaming: false,
-    navigateTree: vi.fn(() =>
-      runTest(
-        Effect.gen(function* () {
-          if (session.isCompacting) throw new Error(busyMessage);
-          return yield* awaited({ cancelled: false });
-        }),
-      ),
-    ),
+    run: {
+      lifecycle: {
+        abort: vi.fn(() =>
+          runTest(
+            Effect.sync(() => {
+              session.isStreaming = false;
+            }),
+          ),
+        ),
+      },
+    },
   };
   return session;
 };
@@ -114,7 +122,7 @@ describe("InteractiveMode tree navigation availability", () => {
           ui.extensionDialogs.select.mockImplementation(() =>
             effectRunPromise(
               Effect.gen(function* () {
-                ui.session.isCompacting = true;
+                ui.session.compaction.manual.isCompacting = true;
                 return yield* awaited(choice);
               }),
             ),
@@ -126,8 +134,8 @@ describe("InteractiveMode tree navigation availability", () => {
           expect(ui.showStatusIndicator).not.toHaveBeenCalled();
           expect(ui.clearStatusIndicator).not.toHaveBeenCalled();
           expect(ui.defaultEditor.onEscape).toBe(onEscape);
-          expect(ui.session.navigateTree).not.toHaveBeenCalled();
-          expect(ui.session.abort).not.toHaveBeenCalled();
+          expect(ui.session.context.tree.navigateTree).not.toHaveBeenCalled();
+          expect(ui.session.run.lifecycle.abort).not.toHaveBeenCalled();
           expect(ui.sessionManager.getLeafId()).toBe(originalLeafId);
         }),
       ),
@@ -143,11 +151,11 @@ describe("InteractiveMode tree navigation availability", () => {
         const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
         const { ui, targetId, select } = createTreeUI();
-        ui.session.isCompacting = true;
+        ui.session.compaction.manual.isCompacting = true;
         ui.extensionDialogs.select.mockImplementation(() =>
           effectRunPromise(
             Effect.gen(function* () {
-              ui.session.isCompacting = false;
+              ui.session.compaction.manual.isCompacting = false;
               return yield* awaited("No summary");
             }),
           ),
@@ -155,7 +163,7 @@ describe("InteractiveMode tree navigation availability", () => {
 
         yield* awaited(select());
 
-        expect(ui.session.navigateTree).toHaveBeenCalledWith(targetId, {
+        expect(ui.session.context.tree.navigateTree).toHaveBeenCalledWith(targetId, {
           customInstructions: undefined,
           summarize: false,
         });
@@ -174,7 +182,7 @@ describe("InteractiveMode tree navigation availability", () => {
 
         const { ui, select } = createTreeUI();
         ui.session.isStreaming = true;
-        ui.session.navigateTree.mockImplementation(() =>
+        ui.session.context.tree.navigateTree.mockImplementation(() =>
           effectRunPromise(
             Effect.gen(function* () {
               expect(ui.session.isStreaming).toBe(false);
@@ -186,8 +194,8 @@ describe("InteractiveMode tree navigation availability", () => {
 
         yield* awaited(select());
 
-        expect(ui.session.abort).toHaveBeenCalledOnce();
-        expect(ui.session.navigateTree).toHaveBeenCalledOnce();
+        expect(ui.session.run.lifecycle.abort).toHaveBeenCalledOnce();
+        expect(ui.session.context.tree.navigateTree).toHaveBeenCalledOnce();
         expect(ui.showError).not.toHaveBeenCalled();
       }),
     ));
@@ -204,23 +212,23 @@ describe("InteractiveMode tree navigation availability", () => {
         const { ui, onEscape, select } = createTreeUI();
         ui.session.isStreaming = true;
         ui.extensionDialogs.select.mockResolvedValue("Summarize");
-        ui.session.abort.mockImplementation(() =>
+        ui.session.run.lifecycle.abort.mockImplementation(() =>
           effectRunPromise(
             Effect.sync(() => {
               ui.session.isStreaming = false;
-              ui.session.isCompacting = true;
+              ui.session.compaction.manual.isCompacting = true;
             }),
           ),
         );
 
         yield* awaited(select());
 
-        expect(ui.session.abort).toHaveBeenCalledOnce();
+        expect(ui.session.run.lifecycle.abort).toHaveBeenCalledOnce();
         expect(ui.showError).toHaveBeenCalledWith(busyMessage);
         expect(ui.showStatusIndicator).not.toHaveBeenCalled();
         expect(ui.clearStatusIndicator).not.toHaveBeenCalled();
         expect(ui.defaultEditor.onEscape).toBe(onEscape);
-        expect(ui.session.navigateTree).not.toHaveBeenCalled();
+        expect(ui.session.context.tree.navigateTree).not.toHaveBeenCalled();
       }),
     ));
 });

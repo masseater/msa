@@ -18,8 +18,8 @@ const exposesTheCurrentContextUsageAlongsideToken = () =>
         sessionManager.appendMessage(createAssistantMessage("hi", 200, 2));
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
-        expect(stats.contextUsage).toEqual(session.getContextUsage());
+        const stats = session.context.stats.getSessionStats();
+        expect(stats.contextUsage).toEqual(session.context.stats.getContextUsage());
         expect(stats.contextUsage?.tokens).toBe(200);
         expect(stats.contextUsage?.contextWindow).toBe(model.contextWindow);
         expect(stats.contextUsage?.percent).toBe((200 / model.contextWindow) * 100);
@@ -43,7 +43,7 @@ const reportsUnknownCurrentContextUsageImmediatelyAfter = () =>
         sessionManager.appendMessage(createUserMessage("third", 5));
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
 
         expect(stats.tokens.input).toBe(375_000);
         expect(stats.contextUsage).toBeDefined();
@@ -70,7 +70,7 @@ const usesPostCompactionUsageForCurrentContext = () =>
         sessionManager.appendMessage(createAssistantMessage("response3", 25_000, 6));
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
 
         expect(stats.tokens.input).toBe(400_000);
         expect(stats.contextUsage).toBeDefined();
@@ -98,7 +98,7 @@ const includesBranchSummaryUsageInSessionTotals = () =>
         });
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
         expect(stats.tokens).toEqual({
           cacheRead: 30,
           cacheWrite: 40,

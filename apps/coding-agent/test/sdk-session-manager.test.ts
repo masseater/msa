@@ -101,7 +101,7 @@ const derivesCwdFromAnExplicitSessionmanagerWhen = () =>
       );
 
       expect(session.sessionManager).toBe(sessionManager);
-      expect(session.systemPrompt).toContain(`<cwd>\n${sessionCwd}\n</cwd>`);
+      expect(session.tools.prompt.systemPrompt).toContain(`<cwd>\n${sessionCwd}\n</cwd>`);
 
       const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
       expect(bashTool).toBeTruthy();
@@ -132,7 +132,7 @@ const exposesCurrentSessionStateToTheBuilt = () =>
         }),
       );
       expect(session.sessionFile).toBeTruthy();
-      expect(session.systemPrompt).toContain(
+      expect(session.tools.prompt.systemPrompt).toContain(
         "You can inspect MSA_* environment variables for current model and session details.",
       );
 

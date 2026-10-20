@@ -10,10 +10,6 @@ const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
 
-type SessionWithCompactionInternals = {
-  runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
-};
-
 interface RecordedCompactionEvent {
   type: "session_before_compact" | "session_compact";
   reason: "manual" | "threshold" | "overflow";
@@ -59,8 +55,8 @@ function createCompactionHarness(
         }),
       );
       harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-      yield* Effect.promise(() => harness.session.prompt("first"));
-      yield* Effect.promise(() => harness.session.prompt("second"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
       return harness;
     }),
   );
@@ -73,7 +69,7 @@ const reportsManualReasonForCompact = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createCompactionHarness(recorded));
   harnesses.push(harness);
 
-  yield* Effect.promise(() => harness.session.compact());
+  yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(recorded).toEqual([
     { reason: "manual", type: "session_before_compact", willRetry: false },
@@ -85,7 +81,7 @@ const reportsThresholdReasonForAutoCompaction = Effect.gen(function* () {
   const recorded: RecordedCompactionEvent[] = [];
   const harness = yield* Effect.promise(() => createCompactionHarness(recorded));
   harnesses.push(harness);
-  const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
 
   yield* Effect.promise(() => sessionInternals["runAutoCompaction"]("threshold", false));
 
@@ -99,7 +95,7 @@ const reportsOverflowReasonAndWillretryFor = Effect.gen(function* () {
   const recorded: RecordedCompactionEvent[] = [];
   const harness = yield* Effect.promise(() => createCompactionHarness(recorded));
   harnesses.push(harness);
-  const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
 
   yield* Effect.promise(() => sessionInternals["runAutoCompaction"]("overflow", true));
 

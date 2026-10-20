@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
 
 const { createAssistant, harnesses } = agentSessionCompactionSupport;
@@ -25,10 +24,8 @@ const doesNotTriggerThresholdCompactionBelow = Effect.gen(function* () {
   );
   harnesses.push(disabledHarness);
 
-  const belowThresholdInternals =
-    belowThresholdHarness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
-  const disabledInternals =
-    disabledHarness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const belowThresholdInternals = belowThresholdHarness.session.compaction.auto;
+  const disabledInternals = disabledHarness.session.compaction.auto;
   const belowThresholdSpy = vi
     .spyOn(belowThresholdInternals, "runAutoCompaction")
     .mockResolvedValue(false);

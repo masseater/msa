@@ -38,7 +38,7 @@ const aForcedPromptIsSentAsThe = Effect.gen(function* () {
   try {
     const requests: aiTypes.TranscriptContext[] = aForcedPromptIsSentAsThePart2(harness);
     for (const text of ["one", "two", "three", "four"])
-      yield* awaited(harness.session.prompt(text));
+      yield* awaited(harness.session.run.prompting.prompt(text));
     const systemMessages = requests.map((request) =>
       request.messages.filter((message) => message.role === "system"),
     );
@@ -71,7 +71,9 @@ const aForcedPromptIsSentAsThe = Effect.gen(function* () {
       { plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>" },
       { plan_mode: null },
     ]);
-    expect(getCurrentSystemPrompt(harness.session.messages)).toBe(harness.session.systemPrompt);
+    expect(getCurrentSystemPrompt(harness.session.messages)).toBe(
+      harness.session.tools.prompt.systemPrompt,
+    );
   } finally {
     harness.cleanup();
   }
@@ -125,9 +127,9 @@ const setactivetoolsEmitsPromptSectionsAndToolChanges = Effect.gen(function* () 
         fauxAssistantMessage("second"),
       ]),
     );
-    yield* awaited(harness.session.prompt("first"));
-    harness.session.setActiveToolsByName(["second"]);
-    yield* awaited(harness.session.prompt("second"));
+    yield* awaited(harness.session.run.prompting.prompt("first"));
+    harness.session.tools.loadout.setActiveToolsByName(["second"]);
+    yield* awaited(harness.session.run.prompting.prompt("second"));
     expect(requests).toHaveLength(3);
 
     expectInitialSystemMessage(requests[0]);
@@ -151,7 +153,7 @@ const setactivetoolsEmitsPromptSectionsAndToolChanges = Effect.gen(function* () 
 
     const current = getCurrentSystemMessage(harness.session.messages);
     expect(current?.toolsAdded?.map((value) => value.name)).toEqual(["second"]);
-    expect(getSystemMessageText(current!)).toBe(harness.session.systemPrompt);
+    expect(getSystemMessageText(current!)).toBe(harness.session.tools.prompt.systemPrompt);
   } finally {
     harness.cleanup();
   }
@@ -196,13 +198,13 @@ const setactivetoolsInBeforeAgentStartControlsThe = Effect.gen(function* () {
         return fauxAssistantMessage("second");
       },
     ]);
-    yield* awaited(harness.session.prompt("first"));
-    yield* awaited(harness.session.prompt("second"));
+    yield* awaited(harness.session.run.prompting.prompt("first"));
+    yield* awaited(harness.session.run.prompting.prompt("second"));
     expect(requests).toHaveLength(2);
     const update = requests[1]?.messages.filter((message) => message.role === "system").at(-1);
     expect(update?.toolsRemoved).toEqual([{ name: "first" }]);
     expect(update?.toolsAdded).toBeUndefined();
-    expect(harness.session.getActiveToolNames()).toEqual(["second"]);
+    expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["second"]);
   } finally {
     harness.cleanup();
   }

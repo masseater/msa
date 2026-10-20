@@ -25,9 +25,9 @@ const { createFuzzyAutocompleteItems, isEmbeddedStatus } = interactiveModeHelper
 export default abstract class InteractiveModeLayer13 extends InteractiveModeLayer12 {
   protected modelArgumentCompletions(prefix: string): tuiTypes.AutocompleteItem[] | null {
     const models =
-      this.session.scopedModels.length > 0
-        ? this.session.scopedModels.map((scoped) => scoped.model)
-        : this.session.modelRuntime.getAvailableSnapshot();
+      this.session.models.selection.scopedModels.length > 0
+        ? this.session.models.selection.scopedModels.map((scoped) => scoped.model)
+        : this.session.models.selection.modelRuntime.getAvailableSnapshot();
     if (models.length === 0) return null;
     const items = models.map((m) => ({
       id: m.id,
@@ -51,7 +51,7 @@ export default abstract class InteractiveModeLayer13 extends InteractiveModeLaye
         prefix: string,
       ): tuiTypes.AutocompleteItem[] | null =>
         createFuzzyAutocompleteItems(
-          this.session.getAvailableThinkingLevels(),
+          this.session.models.thinking.getAvailableThinkingLevels(),
           prefix,
           (level) => level,
           (level) => ({
@@ -76,7 +76,7 @@ export default abstract class InteractiveModeLayer13 extends InteractiveModeLaye
             },
             searchText: getLoginProviderSearchText(provider),
           })),
-          ...this.session.getExternalServices().map((service) => ({
+          ...this.session.tools.externalServices.getExternalServices().map((service) => ({
             item: { description: service.purpose, label: service.id, value: service.id },
             searchText: `${service.id} ${service.name} ${service.purpose}`,
           })),
@@ -195,7 +195,7 @@ export default abstract class InteractiveModeLayer13 extends InteractiveModeLaye
     if (allQueued.length === 0) {
       this.updatePendingMessagesDisplay();
       if (options?.abort === true) {
-        void this.session.abort();
+        void this.session.run.lifecycle.abort();
       }
       return 0;
     }
@@ -205,7 +205,7 @@ export default abstract class InteractiveModeLayer13 extends InteractiveModeLaye
     this.editor.setText(combinedText);
     this.updatePendingMessagesDisplay();
     if (options?.abort === true) {
-      void this.session.abort();
+      void this.session.run.lifecycle.abort();
     }
     return allQueued.length;
   }

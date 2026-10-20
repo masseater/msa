@@ -61,7 +61,7 @@ const emitsOneAgentSettledEventAfter = Effect.gen(function* () {
     fauxAssistantMessage("recovered"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([true, false]);
   expect(harness.eventsOfType("agent_settled")).toEqual([
@@ -93,7 +93,7 @@ const settlesOnlyAfterFollowUpsQueued = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(getUserTexts(harness)).toEqual(["hello", "status follow-up"]);
   expect(harness.eventsOfType("agent_end")).toHaveLength(2);
@@ -135,14 +135,14 @@ const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
     yield* extensionCommandWaitforidleWaitsForSessionPart1();
   harnesses.push(harness);
   yield* Effect.promise(() =>
-    harness.session.bindExtensions({
+    harness.session.extensions.binding.bindExtensions({
       commandContextActions: {
         fork: () => Promise.resolve({ cancelled: false }),
         navigateTree: () => Promise.resolve({ cancelled: false }),
         newSession: () => Promise.resolve({ cancelled: false }),
         reload: () => runPromise(Effect.sync(() => {})),
         switchSession: () => Promise.resolve({ cancelled: false }),
-        waitForIdle: () => harness.session.waitForIdle(),
+        waitForIdle: () => harness.session.run.lifecycle.waitForIdle(),
       },
     }),
   );
@@ -160,9 +160,9 @@ const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  const promptPromise = harness.session.prompt("start");
+  const promptPromise = harness.session.run.prompting.prompt("start");
   yield* Effect.promise(() => toolStarted);
-  const commandPromise = harness.session.prompt("/after-idle");
+  const commandPromise = harness.session.run.prompting.prompt("/after-idle");
   yield* Effect.promise(() => commandStarted);
   let commandFinished = false;
   void commandPromise.then(() => {

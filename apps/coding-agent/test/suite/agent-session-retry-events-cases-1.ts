@@ -47,12 +47,12 @@ const retriesAfterATransientErrorAnd = Effect.gen(function* () {
     fauxAssistantMessage("recovered"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(retryEvents).toEqual(["start:1", "end:true"]);
   expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([true, false]);
   expect(harness.faux.state.callCount).toBe(2);
-  expect(harness.session.isRetrying).toBe(false);
+  expect(harness.session.run.retry.isRetrying).toBe(false);
 });
 const retriesMultipleTransientFailuresAndSucceeds = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -73,7 +73,7 @@ const retriesMultipleTransientFailuresAndSucceeds = Effect.gen(function* () {
     fauxAssistantMessage("success"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(retryEvents).toEqual(["start:1", "start:2", "end:true"]);
   expect(harness.faux.state.callCount).toBe(3);
@@ -93,12 +93,13 @@ const finalizesRetryStateWhenAbortIs = Effect.gen(function* () {
   let errorCount = 0;
   harness.session.subscribe((event) => {
     if (event.type !== "message_end" || event.message.role !== "assistant") return;
-    if (event.message.stopReason === "error" && ++errorCount === 2) void harness.session.abort();
+    if (event.message.stopReason === "error" && ++errorCount === 2)
+      void harness.session.run.lifecycle.abort();
   });
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
-  expect(harness.session.retryAttempt).toBe(0);
+  expect(harness.session.run.retry.retryAttempt).toBe(0);
   expect(harness.eventsOfType("agent_end").at(-1)?.willRetry).toBe(false);
   expect(harness.eventsOfType("auto_retry_end").at(-1)).toMatchObject({
     attempt: 1,
@@ -125,7 +126,7 @@ const exhaustsMaxRetriesAndEmitsA = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(retryEvents).toEqual(["start:1", "start:2", "end:false"]);
   expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([
@@ -134,7 +135,7 @@ const exhaustsMaxRetriesAndEmitsA = Effect.gen(function* () {
     false,
   ]);
   expect(harness.faux.state.callCount).toBe(3);
-  expect(harness.session.isRetrying).toBe(false);
+  expect(harness.session.run.retry.isRetrying).toBe(false);
 });
 const promptWaitsForRetryCompletionEven = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -162,10 +163,10 @@ const promptWaitsForRetryCompletionEven = Effect.gen(function* () {
     fauxAssistantMessage("recovered"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(harness.faux.state.callCount).toBe(2);
-  expect(harness.session.isRetrying).toBe(false);
+  expect(harness.session.run.retry.isRetrying).toBe(false);
 });
 const doesNotRetryWhenRetryIs = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -176,7 +177,7 @@ const doesNotRetryWhenRetryIs = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(harness.faux.state.callCount).toBe(1);
   expect(harness.eventsOfType("auto_retry_start")).toEqual([]);
@@ -192,7 +193,7 @@ const doesNotRetryNonRetryableErrors = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "invalid_api_key", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(harness.faux.state.callCount).toBe(1);
   expect(harness.eventsOfType("auto_retry_start")).toEqual([]);
@@ -218,12 +219,12 @@ const cancelsRetrySleepWhenAbortretryIs = Effect.gen(function* () {
     });
   }
 
-  const promptPromise = harness.session.prompt("test");
+  const promptPromise = harness.session.run.prompting.prompt("test");
   yield* Effect.promise(() => sawRetryStart);
-  harness.session.abortRetry();
+  harness.session.run.retry.abortRetry();
   yield* Effect.promise(() => promptPromise);
 
-  expect(harness.session.isRetrying).toBe(false);
+  expect(harness.session.run.retry.isRetrying).toBe(false);
   expect(harness.eventsOfType("auto_retry_end").map((event) => event.finalError)).toContain(
     "Retry cancelled",
   );

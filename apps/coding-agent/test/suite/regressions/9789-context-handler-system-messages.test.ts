@@ -43,13 +43,13 @@ const keepsThePromptAndToolsWhen = Effect.gen(function* () {
   yield* Effect.promise(() => compactSession(harness));
   const getRequest = captureRequest(harness, "after compaction");
 
-  yield* Effect.promise(() => harness.session.prompt("third"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("third"));
 
   const request = getRequest();
   expect(seen.at(-1)?.some((message) => message.role === "system")).toBe(false);
   expect(request.messages[0]?.role).toBe("system");
-  expect(toolNames(request)).toEqual(harness.session.getActiveToolNames());
-  expect(getCurrentSystemPrompt(request.messages)).toBe(harness.session.systemPrompt);
+  expect(toolNames(request)).toEqual(harness.session.tools.loadout.getActiveToolNames());
+  expect(getCurrentSystemPrompt(request.messages)).toBe(harness.session.tools.prompt.systemPrompt);
   expect(request.messages.filter((message) => message.role === "system")).toHaveLength(1);
 });
 
@@ -69,10 +69,10 @@ const keepsMidConversationSystemMessagesIn = Effect.gen(function* () {
   );
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("one")]);
-  yield* Effect.promise(() => harness.session.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
   const getRequest = captureRequest(harness, "two");
 
-  yield* Effect.promise(() => harness.session.prompt("second"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
   const systemMessages = getRequest().messages.filter((message) => message.role === "system");
   expect(systemMessages).toHaveLength(2);
@@ -105,11 +105,11 @@ const appliesInPlaceEditsToEvent = Effect.gen(function* () {
   harnesses.push(harness);
   const getRequest = captureRequest(harness, "done");
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   const request = getRequest();
   expect(request.messages.map((message) => message.role)).toEqual(["system", "user", "user"]);
-  expect(toolNames(request)).toEqual(harness.session.getActiveToolNames());
+  expect(toolNames(request)).toEqual(harness.session.tools.loadout.getActiveToolNames());
 });
 
 const keepsSystemMessagesAHandlerAdds = Effect.gen(function* () {
@@ -132,12 +132,14 @@ const keepsSystemMessagesAHandlerAdds = Effect.gen(function* () {
   harnesses.push(harness);
   const getRequest = captureRequest(harness, "done");
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   const request = getRequest();
   expect(request.messages.map((message) => message.role)).toEqual(["system", "system", "user"]);
-  expect(toolNames(request)).toEqual(harness.session.getActiveToolNames());
-  expect(getCurrentSystemPrompt(request.messages)).toContain(harness.session.systemPrompt);
+  expect(toolNames(request)).toEqual(harness.session.tools.loadout.getActiveToolNames());
+  expect(getCurrentSystemPrompt(request.messages)).toContain(
+    harness.session.tools.prompt.systemPrompt,
+  );
   expect(getCurrentSystemPrompt(request.messages)).toContain("ephemeral reminder");
 });
 

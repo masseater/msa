@@ -19,7 +19,7 @@ const updatesTheSessionCwdOnCrossCwdReplacement = Effect.gen(function* () {
     cwd: secondDir,
     faux,
   });
-  yield* awaited(other.runtime.session.prompt("other"));
+  yield* awaited(other.runtime.session.run.prompting.prompt("other"));
   yield* awaited(runtime.switchSession(other.runtime.session.sessionFile ?? ""));
   const expected = yield* realPath(secondDir);
   expect(yield* realPath(runtime.session.sessionManager.getCwd())).toBe(expected);
@@ -39,10 +39,10 @@ const restoresModelAndThinkingState = Effect.gen(function* () {
   const fauxTwo = faux.getModel("faux-2");
   expect(fauxTwo).toBeDefined();
   if (fauxTwo !== undefined) {
-    yield* awaited(other.runtime.session.setModel(fauxTwo));
+    yield* awaited(other.runtime.session.models.selection.setModel(fauxTwo));
   }
-  other.runtime.session.setThinkingLevel("off");
-  yield* awaited(other.runtime.session.prompt("hello"));
+  other.runtime.session.models.thinking.setThinkingLevel("off");
+  yield* awaited(other.runtime.session.run.prompting.prompt("hello"));
   yield* awaited(runtime.switchSession(other.runtime.session.sessionFile ?? ""));
   expect(runtime.session.model?.id).toBe("faux-2");
   expect(runtime.session.thinkingLevel).toBe("off");

@@ -19,13 +19,13 @@ const shouldPassCorrectDataInBeforeCompact = () =>
       });
       const session = yield* createSession([extension]);
 
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(session.prompt("What is 3+3? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 3+3? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(session.compact());
+      yield* awaited(session.compaction.manual.compact());
 
       expect(capturedBeforeEvent).not.toBeNull();
       const event = capturedBeforeEvent!;
@@ -40,7 +40,7 @@ const shouldPassCorrectDataInBeforeCompact = () =>
       expect(Array.isArray(event.branchEntries)).toBe(true);
 
       expect(typeof session.sessionManager.getEntries).toBe("function");
-      expect(typeof session.modelRuntime.getAuth).toBe("function");
+      expect(typeof session.models.selection.modelRuntime.getAuth).toBe("function");
 
       const entries = session.sessionManager.getEntries();
       expect(Array.isArray(entries)).toBe(true);

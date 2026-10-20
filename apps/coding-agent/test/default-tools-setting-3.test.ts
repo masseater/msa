@@ -60,7 +60,11 @@ const restoresTheLoadoutTheTranscriptRecords = () =>
       const session = yield* awaited(
         resume(createRecordedSession(["read", "grep", "inactive_tool"])),
       );
-      expect(session.getActiveToolNames().sort()).toEqual(["grep", "inactive_tool", "read"]);
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([
+        "grep",
+        "inactive_tool",
+        "read",
+      ]);
       session.dispose();
     }),
   );
@@ -73,7 +77,7 @@ const doesNotRestoreExcludedTools = () =>
           excludeTools: ["inactive_tool"],
         }),
       );
-      expect(session.getActiveToolNames().sort()).toEqual(["grep", "read"]);
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual(["grep", "read"]);
       session.dispose();
     }),
   );
@@ -88,13 +92,13 @@ const usesExplicitToolOptionsInsteadOfThe = () =>
           tools: ["read", "write"],
         }),
       );
-      expect(allowlisted.getActiveToolNames()).toEqual(["read", "write"]);
+      expect(allowlisted.tools.loadout.getActiveToolNames()).toEqual(["read", "write"]);
       allowlisted.dispose();
 
       const builtinless = yield* awaited(
         resume(createRecordedSession(recorded), { noTools: "builtin" }),
       );
-      expect(builtinless.getActiveToolNames()).toEqual(["active_tool"]);
+      expect(builtinless.tools.loadout.getActiveToolNames()).toEqual(["active_tool"]);
       builtinless.dispose();
     }),
   );
@@ -107,7 +111,11 @@ const appliesNameAndNameToolOptionsTo2 = () =>
           tools: ["-grep", "+write"],
         }),
       );
-      expect(session.getActiveToolNames().sort()).toEqual(["inactive_tool", "read", "write"]);
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([
+        "inactive_tool",
+        "read",
+        "write",
+      ]);
       session.dispose();
     }),
   );
@@ -122,7 +130,7 @@ const usesTheDefaultToolsWhenTheTranscript = () =>
         timestamp: currentTimeMillis(),
       });
       const session = yield* awaited(resume(sessionManager));
-      expect(session.getActiveToolNames().sort()).toEqual(
+      expect(session.tools.loadout.getActiveToolNames().sort()).toEqual(
         [
           "active_tool",
           "bash",

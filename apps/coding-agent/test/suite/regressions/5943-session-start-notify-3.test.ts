@@ -27,14 +27,18 @@ const keepsTheReloadBlockerFocusedUntil = Effect.gen(function* () {
       chatRestored = true;
     },
     session: {
-      reload: (options) =>
-        runPromise(
-          Effect.gen(function* () {
-            yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
-            reloadWaiting.release();
-            yield* Effect.promise(() => reloadFinished);
-          }),
-        ),
+      extensions: {
+        runtime: {
+          reload: (options) =>
+            runPromise(
+              Effect.gen(function* () {
+                yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
+                reloadWaiting.release();
+                yield* Effect.promise(() => reloadFinished);
+              }),
+            ),
+        },
+      },
     },
     ui: {
       setFocus: (component) => {

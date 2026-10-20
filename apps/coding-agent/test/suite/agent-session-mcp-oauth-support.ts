@@ -18,7 +18,7 @@ function callWhoami(harness: harnessTypes.Harness): Promise<compatTypes.ToolResu
         fauxAssistantMessage("done"),
       ]);
       const before = harness.session.messages.length;
-      yield* Effect.promise(() => harness.session.prompt("who am i"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("who am i"));
       const result = harness.session.messages
         .slice(before)
         .find((message): message is compatTypes.ToolResultMessage => message.role === "toolResult");

@@ -35,7 +35,9 @@ export default abstract class InteractiveModeLayer48 extends InteractiveModeLaye
         Effect.runFork(
           awaitingWith(function* () {
             try {
-              yield* awaited(refreshModelCatalogs(this.session.modelRuntime, controller.signal));
+              yield* awaited(
+                refreshModelCatalogs(this.session.models.selection.modelRuntime, controller.signal),
+              );
               this.updateAvailableProviderCount();
             } catch {
             } finally {

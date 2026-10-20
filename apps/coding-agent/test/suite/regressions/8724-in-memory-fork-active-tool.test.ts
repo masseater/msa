@@ -46,7 +46,7 @@ const createForkableRuntime = (toolStarted: ReturnType<typeof gate>) =>
       agentDir: harness.tempDir,
       cwd: harness.tempDir,
       diagnostics: [],
-      modelRuntime: harness.session.modelRuntime,
+      modelRuntime: harness.session.models.selection.modelRuntime,
       resourceLoader: harness.session.resourceLoader,
       settingsManager: harness.settingsManager,
     };
@@ -79,15 +79,16 @@ const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
     fauxAssistantMessage(fauxToolCall("block", {}), { stopReason: "toolUse" }),
     fauxAssistantMessage("unused after abort"),
   ]);
-  yield* Effect.promise(() => runtime.session.prompt("first prompt"));
-  const firstUserEntryId = runtime.session.getUserMessagesForForking()[0]?.entryId;
+  yield* Effect.promise(() => runtime.session.run.prompting.prompt("first prompt"));
+  const firstUserEntryId =
+    runtime.session.context.transcript.getUserMessagesForForking()[0]?.entryId;
   expect(firstUserEntryId).toBeDefined();
 
-  const outgoingPrompt = runtime.session.prompt("start blocking tool");
+  const outgoingPrompt = runtime.session.run.prompting.prompt("start blocking tool");
   yield* Effect.promise(() => toolStarted);
   const forkResult = yield* Effect.promise(() => runtime.fork(firstUserEntryId!));
   yield* Effect.promise(() => outgoingPrompt);
-  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  yield* Effect.promise(() => runtime.session.extensions.binding.bindExtensions({}));
 
   expect(forkResult).toEqual({ cancelled: false, selectedText: "first prompt" });
   expect(runtime.session.messages.map((message) => message.role)).toEqual(["system"]);
@@ -105,7 +106,7 @@ const doesNotAppendTheAbortedTurn = Effect.gen(function* () {
       return fauxAssistantMessage("next response");
     },
   ]);
-  yield* Effect.promise(() => runtime.session.prompt("next prompt"));
+  yield* Effect.promise(() => runtime.session.run.prompting.prompt("next prompt"));
 
   expect(capturedRoles).toEqual(["system", "system", "user"]);
 });

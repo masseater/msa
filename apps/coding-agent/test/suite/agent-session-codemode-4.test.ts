@@ -41,7 +41,7 @@ const runsNestedCallsInParallelAnd = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = codemodeResult(harness);
   expect(result.isError).toBe(false);
@@ -102,7 +102,7 @@ const routesNestedCallsThroughExtensionHooksStep1 = (harness: harnessTypes.Harne
       ),
       fauxAssistantMessage("done"),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("go"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
     const result = codemodeResult(harness);
     expect(yield* fromJsonText(resultText(result))).toEqual({
       blocked: "echo of forbidden text is blocked",

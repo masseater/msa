@@ -110,7 +110,7 @@ export default abstract class InteractiveModeLayer18 extends InteractiveModeLaye
 
   protected handleHelpCommand(): void {
     const commands = [
-      ...this.session.extensionRunner
+      ...this.session.extensions.binding.extensionRunner
         .getRegisteredCommands()
         .filter((command) => !isBuiltinSlashCommandName(command.name))
         .map((command) => ({ description: command.description, name: command.invocationName })),
@@ -123,7 +123,7 @@ export default abstract class InteractiveModeLayer18 extends InteractiveModeLaye
   }
 
   protected handleHotkeysCommand(): void {
-    const shortcuts = this.session.extensionRunner.getShortcuts(
+    const shortcuts = this.session.extensions.binding.extensionRunner.getShortcuts(
       this.keybindings.getEffectiveConfig(),
     );
     this.addMarkdownPanel("Keyboard Shortcuts", formatHotkeysMarkdown(shortcuts));

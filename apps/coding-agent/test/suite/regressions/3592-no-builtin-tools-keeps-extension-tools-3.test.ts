@@ -32,9 +32,9 @@ const propagatesNotoolsThroughServiceBasedSession = Effect.gen(function* () {
     }),
   );
 
-  expect(session.getActiveToolNames()).toEqual([]);
-  expect(session.systemPrompt).toContain("<tools>\n(none)\n");
-  expect(session.systemPrompt).not.toContain("- read:");
+  expect(session.tools.loadout.getActiveToolNames()).toEqual([]);
+  expect(session.tools.prompt.systemPrompt).toContain("<tools>\n(none)\n");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- read:");
   session.dispose();
 });
 

@@ -23,7 +23,7 @@ const rejectsDirectModelCallsToCodemode = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const result = toolResult(harness, "mcp__docs__search");
   expect(result.isError).toBe(true);
@@ -40,17 +40,17 @@ const declaresDirectlyExposedMcpToolsTo = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(declaredToolNames(harness)).toEqual([
     "mcp__docs__search",
     "mcp__docs__fail",
     "mcp__docs__shot",
   ]);
-  expect(harness.session.getActiveToolNames()).not.toContain("codemode");
+  expect(harness.session.tools.loadout.getActiveToolNames()).not.toContain("codemode");
 
   const annotations = new Map(
-    harness.session.getAllTools().map((tool) => [tool.name, tool.annotations]),
+    harness.session.tools.registry.getAllTools().map((tool) => [tool.name, tool.annotations]),
   );
   expect(annotations.get("mcp__docs__fail")).toEqual({
     destructiveHint: true,

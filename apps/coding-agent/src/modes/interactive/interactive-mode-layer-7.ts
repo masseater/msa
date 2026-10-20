@@ -38,7 +38,7 @@ export default abstract class InteractiveModeLayer7 extends InteractiveModeLayer
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       try {
-        yield* awaited(this.session.prompt(text, options));
+        yield* awaited(this.session.run.prompting.prompt(text, options));
       } catch (error: unknown) {
         this.showError(error instanceof Error ? error.message : "Unknown error occurred");
       }
@@ -83,10 +83,10 @@ export default abstract class InteractiveModeLayer7 extends InteractiveModeLayer
   protected cycleModel(direction: "forward" | "backward"): Effect.Effect<void> {
     return awaitingWith(function* () {
       try {
-        const result = yield* awaited(this.session.cycleModel(direction));
+        const result = yield* awaited(this.session.models.selection.cycleModel(direction));
         if (result === undefined) {
           const msg =
-            this.session.scopedModels.length > 0
+            this.session.models.selection.scopedModels.length > 0
               ? "Only one model in scope"
               : "Only one model available";
           this.showStatus(msg);
@@ -129,7 +129,7 @@ export default abstract class InteractiveModeLayer7 extends InteractiveModeLayer
 
   protected selectThinkingLevel(level: agentTypes.ThinkingLevel, persist: boolean): void {
     try {
-      this.session.setThinkingLevel(level, { persist });
+      this.session.models.thinking.setThinkingLevel(level, { persist });
       this.footer.invalidate();
       this.updateEditorBorderColor();
       this.showStatus(persist ? `Default thinking level: ${level}` : `Thinking level: ${level}`);
@@ -146,7 +146,7 @@ export default abstract class InteractiveModeLayer7 extends InteractiveModeLayer
     return Effect.runPromise(
       awaitingWith(function* () {
         try {
-          yield* awaited(this.session.setModel(model, { persist }));
+          yield* awaited(this.session.models.selection.setModel(model, { persist }));
           this.updateAvailableProviderCount();
           this.footer.invalidate();
           this.updateEditorBorderColor();

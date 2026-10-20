@@ -91,7 +91,7 @@ const rebindsBeforeWithSession = Effect.gen(function* () {
     responses: ["hello reply"],
   });
   expect(state.events).toEqual(["start:1"]);
-  yield* awaited(runtime.session.prompt("/repro"));
+  yield* awaited(runtime.session.run.prompting.prompt("/repro"));
   expect(state.events).toEqual(["start:1", "shutdown:1", "start:2", "with:1"]);
   expect(state.replacementSessionFile).toBeDefined();
   expect(state.replacementSessionFile).not.toBe(state.oldSessionFile);
@@ -127,8 +127,8 @@ const supportsWithSessionForFork = Effect.gen(function* () {
     extensionFactory: forkExtension,
     responses: ["seed reply", "fork reply"],
   });
-  yield* awaited(runtime.session.prompt("seed"));
-  yield* awaited(runtime.session.prompt("/fork-it"));
+  yield* awaited(runtime.session.run.prompting.prompt("seed"));
+  yield* awaited(runtime.session.run.prompting.prompt("/fork-it"));
   expect(transcript(runtime.session)).toEqual([
     "user:seed",
     "assistant:seed reply",
@@ -159,14 +159,14 @@ const supportsWithSessionForSwitch = Effect.gen(function* () {
     extensionFactory: switchExtension(target),
     responses: ["root reply", "target reply", "switch reply"],
   });
-  yield* awaited(runtime.session.prompt("root"));
+  yield* awaited(runtime.session.run.prompting.prompt("root"));
   const originalSessionPath = runtime.session.sessionFile ?? "";
   const created = yield* awaited(runtime.newSession());
   expect(created.cancelled).toBe(false);
-  yield* awaited(runtime.session.prompt("target"));
+  yield* awaited(runtime.session.run.prompting.prompt("target"));
   target.path = runtime.session.sessionFile ?? "";
   yield* awaited(runtime.switchSession(originalSessionPath));
-  yield* awaited(runtime.session.prompt("/switch-it"));
+  yield* awaited(runtime.session.run.prompting.prompt("/switch-it"));
   expect(runtime.session.sessionFile).toBe(target.path);
   expect(transcript(runtime.session)).toEqual([
     "user:target",

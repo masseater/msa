@@ -57,7 +57,7 @@ const commitsARetainNoneTurnEndStep1 = (
         return fauxAssistantMessage("continued from handoff");
       },
     ]);
-    yield* Effect.promise(() => harness.session.prompt("discarded prompt"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("discarded prompt"));
     const compaction = harness.sessionManager
       .getEntries()
       .find((entry) => entry.type === "compaction");
@@ -139,7 +139,7 @@ describe("AgentSession actionable boundaries", () => {
             },
           ]);
 
-          yield* Effect.promise(() => harness.session.prompt("start"));
+          yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
           expect(requests[0]).toContain("exact handoff");
           if (queueKind === "steering") {

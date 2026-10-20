@@ -87,24 +87,10 @@ const userMessage = (text: string, timestamp: number) => ({
 });
 
 const spyAutoCompaction = () =>
-  vi
-    .spyOn(
-      state.session as unknown as {
-        runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<void>;
-      },
-      "runAutoCompaction",
-    )
-    .mockResolvedValue();
+  vi.spyOn(state.session!.compaction.auto, "runAutoCompaction").mockResolvedValue(false);
 
-const checkCompaction = (message: compatTypes.AssistantMessage, skipAbortedCheck?: boolean) => {
-  const session = state.session as unknown as {
-    checkCompaction: (
-      message: compatTypes.AssistantMessage,
-      skipAbortedCheck?: boolean,
-    ) => Promise<void>;
-  };
-  return awaited(session.checkCompaction(message, skipAbortedCheck));
-};
+const checkCompaction = (message: compatTypes.AssistantMessage, skipAbortedCheck?: boolean) =>
+  awaited(state.session!.compaction.auto.checkCompaction(message, skipAbortedCheck));
 
 const appendCompactedHistory = (
   assistant: compatTypes.AssistantMessage,

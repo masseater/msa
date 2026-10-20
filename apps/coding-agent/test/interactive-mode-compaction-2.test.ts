@@ -10,7 +10,7 @@ const routesInteractiveResponseAbortsThroughAgentsession = () => {
   const abort = vi.fn(() => runTest(Effect.sync(() => {})));
   const ui = {
     clearAllQueues: () => ({ followUp: [], steering: [] }),
-    session: { abort },
+    session: { run: { lifecycle: { abort } } },
     updatePendingMessagesDisplay: vi.fn(),
   };
   const restoreQueuedMessagesToEditor = Reflect.get(
@@ -31,10 +31,14 @@ const preservesSteeringBehaviorWhenFlushingIntoAn = () =>
         compactionQueuedMessages: [{ mode: "steer" as const, text: "change direction" }],
         isExtensionCommand: vi.fn().mockReturnValue(false),
         session: {
-          clearQueue: vi.fn(),
-          followUp: vi.fn().mockResolvedValue(undefined),
-          prompt: vi.fn().mockResolvedValue(undefined),
-          steer: vi.fn().mockResolvedValue(undefined),
+          run: {
+            prompting: { prompt: vi.fn().mockResolvedValue(undefined) },
+            queue: {
+              clearQueue: vi.fn(),
+              followUp: vi.fn().mockResolvedValue(undefined),
+              steer: vi.fn().mockResolvedValue(undefined),
+            },
+          },
         },
         showError: vi.fn(),
         updatePendingMessagesDisplay: vi.fn(),
@@ -48,7 +52,7 @@ const preservesSteeringBehaviorWhenFlushingIntoAn = () =>
       Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
       yield* awaited(flushCompactionQueue.call(fakeThis, { willRetry: false }));
 
-      expect(fakeThis.session.prompt).toHaveBeenCalledWith("change direction", {
+      expect(fakeThis.session.run.prompting.prompt).toHaveBeenCalledWith("change direction", {
         streamingBehavior: "steer",
       });
       expect(fakeThis.compactionQueuedMessages).toEqual([]);

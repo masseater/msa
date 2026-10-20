@@ -59,7 +59,7 @@ const loadsInlineExtensionFactoriesAndDisambiguatesDuplicate = () =>
     Effect.gen(function* () {
       const { calls } = yield* loadsInlineExtensionFactoriesAndDisambiguatesDuplicatePart1();
 
-      const runner = harness.session.extensionRunner;
+      const runner = harness.session.extensions.binding.extensionRunner;
       expect(runner).toBeDefined();
 
       const commands = runner!.getRegisteredCommands();
@@ -101,7 +101,7 @@ const sessionPersistenceWorks = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["persisted"] }));
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const entries = harness.sessionManager.getEntries();
       const messageEntries = entries.filter((e) => e.type === "message");

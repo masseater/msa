@@ -55,8 +55,8 @@ type RenderSessionContextThis = {
   };
   sessionManager: { getCwd(): string; getEntries(): codingAgentTypes.SessionEntry[] };
   session: {
-    retryAttempt: number;
     modelRegistry: { find(provider: string, modelId: string): undefined };
+    run: { retry: { retryAttempt: number } };
   };
   toolOutputExpanded: boolean;
   isInitialized: boolean;
@@ -96,7 +96,7 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
     renderSessionItems: (
       InteractiveMode.prototype as unknown as { renderSessionItems: RenderSessionItems }
     ).renderSessionItems,
-    session: { modelRegistry: { find: () => undefined }, retryAttempt: 0 },
+    session: { modelRegistry: { find: () => undefined }, run: { retry: { retryAttempt: 0 } } },
     sessionManager: { getCwd: () => process.cwd(), getEntries: () => [] },
     settingsManager: {
       getImageWidthCells: () => 60,

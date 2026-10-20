@@ -46,7 +46,7 @@ export default abstract class InteractiveModeLayer16 extends InteractiveModeLaye
     selector: scopedModelsSelectorTypes.ScopedModelsSelectorComponent,
     result: Awaited<ReturnType<typeof refreshModelCatalogs>>,
   ): void {
-    state.availableModels = [...this.session.modelRuntime.getAvailableSnapshot()];
+    state.availableModels = [...this.session.models.selection.modelRuntime.getAvailableSnapshot()];
     state.availableModelIds = new Set(
       state.availableModels.map((model) => `${model.provider}/${model.id}`),
     );
@@ -74,7 +74,9 @@ export default abstract class InteractiveModeLayer16 extends InteractiveModeLaye
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       try {
-        const result = yield* awaited(refreshModelCatalogs(this.session.modelRuntime, signal));
+        const result = yield* awaited(
+          refreshModelCatalogs(this.session.models.selection.modelRuntime, signal),
+        );
         if (!state.disposed) this.applyRefreshedCatalogs(state, selector, result);
       } catch (error: unknown) {
         if (state.disposed) return;

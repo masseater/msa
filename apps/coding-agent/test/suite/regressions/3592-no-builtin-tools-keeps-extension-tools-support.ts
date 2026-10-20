@@ -69,7 +69,7 @@ function createSession(options?: { noTools?: "all" | "builtin"; tools?: string[]
           ...(options?.tools === undefined ? {} : { tools: options.tools }),
         }),
       );
-      yield* Effect.promise(() => session.bindExtensions({}));
+      yield* Effect.promise(() => session.extensions.binding.bindExtensions({}));
       return session;
     }),
   );

@@ -27,13 +27,13 @@ const shouldAllowExtensionsToProvideCustomCompaction = () =>
       });
       const session = yield* createSession([extension]);
 
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(session.prompt("What is 3+3? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 3+3? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      const result = yield* awaited(session.compact());
+      const result = yield* awaited(session.compaction.manual.compact());
 
       expect(result.summary).toBe(customSummary);
 
@@ -67,10 +67,10 @@ const shouldIncludeEntriesInCompactEventAfter = () =>
       const extension = createExtension();
       const session = yield* createSession([extension]);
 
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(session.compact());
+      yield* awaited(session.compaction.manual.compact());
 
       const compactEvents = capturedEvents.filter((e) => e.type === "session_compact");
       expect(compactEvents.length).toBe(1);

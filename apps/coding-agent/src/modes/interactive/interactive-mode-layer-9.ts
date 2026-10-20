@@ -41,8 +41,8 @@ export default abstract class InteractiveModeLayer9 extends InteractiveModeLayer
     }
     this.footer.setSession(this.session);
     this.updateGoalTicker();
-    void this.session.orchestrator?.refresh();
-    this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
+    void this.session.integrations.orchestration.orchestrator?.refresh();
+    this.footer.setAutoCompactEnabled(this.session.compaction.auto.autoCompactionEnabled);
     this.footerDataProvider.setCwd(this.sessionManager.getCwd());
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
     this.outputPad = this.settingsManager.getOutputPad();
@@ -101,7 +101,7 @@ export default abstract class InteractiveModeLayer9 extends InteractiveModeLayer
     if (this.settingsManager.getShowTerminalProgress()) this.ui.terminal.setProgress(true);
     this.autoCompactionEscapeHandler = this.defaultEditor.onEscape;
     this.defaultEditor.onEscape = () => {
-      this.session.abortCompaction();
+      this.session.compaction.manual.abortCompaction();
     };
     this.showStatusIndicator(
       new CompactionStatusIndicator(this.ui, reason, this.compactionStatusColor()),
@@ -154,7 +154,7 @@ export default abstract class InteractiveModeLayer9 extends InteractiveModeLayer
 
     if (wantsSummary) {
       this.defaultEditor.onEscape = () => {
-        this.session.abortBranchSummary();
+        this.session.context.tree.abortBranchSummary();
       };
       this.chatContainer.addChild(new Spacer(1));
       this.showStatusIndicator(new BranchSummaryStatusIndicator(this.ui));

@@ -12,7 +12,7 @@ const keepsExtensionToolsActiveWhenBuilt = Effect.gen(function* () {
   const session = yield* Effect.promise(() => createSession({ noTools: "builtin" }));
 
   expect(
-    session
+    session.tools.registry
       .getAllTools()
       .map((tool) => tool.name)
       .sort(),
@@ -34,10 +34,10 @@ const keepsExtensionToolsActiveWhenBuilt = Effect.gen(function* () {
       ...ORCHESTRATOR_TOOL_NAMES,
     ].sort(),
   );
-  expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
-  expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-  expect(session.systemPrompt).not.toContain("- read:");
-  expect(session.systemPrompt).not.toContain("- bash:");
+  expect(session.tools.loadout.getActiveToolNames()).toEqual(["dynamic_tool"]);
+  expect(session.tools.prompt.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- read:");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- bash:");
   session.dispose();
 });
 

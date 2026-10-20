@@ -82,11 +82,11 @@ const includesSteeringQueuedDuringCompactionIn = Effect.gen(function* () {
     fauxAssistantMessage("finished after delayed steering"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("seed old history"));
-  yield* Effect.promise(() => harness.session.prompt("seed recent history"));
-  const promptPromise = harness.session.prompt("run the large tool");
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("seed old history"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("seed recent history"));
+  const promptPromise = harness.session.run.prompting.prompt("run the large tool");
   yield* Effect.promise(() => compactionStarted);
-  yield* Effect.promise(() => harness.session.steer("change direction"));
+  yield* Effect.promise(() => harness.session.run.queue.steer("change direction"));
   compactionReleased.release();
   yield* Effect.promise(() => promptPromise);
 
@@ -139,14 +139,14 @@ const doesNotCompactAfterATerminatingStep1 = (terminatingTool: agentTypes.AgentT
         stopReason: "toolUse",
       }),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("seed old history"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("seed old history"));
     return yield* doesNotCompactAfterATerminatingStep2(harness);
   });
 
 const doesNotCompactAfterATerminatingStep2 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
-    yield* Effect.promise(() => harness.session.prompt("seed recent history"));
-    yield* Effect.promise(() => harness.session.prompt("run the terminating tool"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("seed recent history"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("run the terminating tool"));
     expect(harness.eventsOfType("compaction_start")).toEqual([]);
     expect(
       harness.sessionManager.getEntries().filter((entry) => entry.type === "compaction"),
@@ -163,7 +163,7 @@ const doesNotCompactWhenALength = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("x".repeat(400), { stopReason: "length" })]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(harness.faux.state.callCount).toBe(1);
   expect(harness.eventsOfType("compaction_start")).toHaveLength(0);

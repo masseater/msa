@@ -29,11 +29,11 @@ const clearsBranchSummaryStateWhenSession = Effect.gen(function* () {
   expect(harness.sessionManager.getLeafId()).toBe(currentLeafId);
 
   const result = yield* Effect.promise(() =>
-    harness.session.navigateTree(targetId, { summarize: false }),
+    harness.session.context.tree.navigateTree(targetId, { summarize: false }),
   );
 
   expect(result).toEqual({ cancelled: true });
-  expect(harness.session.isCompacting).toBe(false);
+  expect(harness.session.compaction.manual.isCompacting).toBe(false);
   expect(harness.sessionManager.getLeafId()).toBe(currentLeafId);
 });
 

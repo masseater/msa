@@ -36,10 +36,10 @@ const retriesAfterATransientErrorAndSucceeds = () =>
       const stream = overloadedThenSuccess(1);
       const created = yield* startSession(stream, { maxRetries: 3 });
       const events = retryEvents(created);
-      yield* awaited(created.prompt("Test"));
+      yield* awaited(created.run.prompting.prompt("Test"));
       expect(stream.callCount()).toBe(2);
       expect(events).toEqual(["start:1", "end:success=true"]);
-      expect(created.isRetrying).toBe(false);
+      expect(created.run.retry.isRetrying).toBe(false);
     }),
   );
 
@@ -49,12 +49,12 @@ const exhaustsMaxRetriesAndEmitsFailure = () =>
       const stream = overloadedThenSuccess(99);
       const created = yield* startSession(stream, { maxRetries: 2 });
       const events = retryEvents(created);
-      yield* awaited(created.prompt("Test"));
+      yield* awaited(created.run.prompting.prompt("Test"));
       expect(stream.callCount()).toBe(3);
       expect(events).toContain("start:1");
       expect(events).toContain("start:2");
       expect(events).toContain("end:success=false");
-      expect(created.isRetrying).toBe(false);
+      expect(created.run.retry.isRetrying).toBe(false);
     }),
   );
 
@@ -69,7 +69,7 @@ const capsAgentRetryDelay = () =>
       created.subscribe((event) => {
         if (event.type === "auto_retry_start") delays.push(event.delayMs);
       });
-      yield* awaited(created.prompt("Test"));
+      yield* awaited(created.run.prompting.prompt("Test"));
       expect(delays).toEqual([1, 2, 4, 5]);
     }),
   );
@@ -80,9 +80,9 @@ const promptWaitsForRetryCompletionEvenWhen = () =>
       const stream = overloadedThenSuccess(1);
       const created = yield* startSession(stream, { maxRetries: 3 });
       delayAssistantMessageEnd(created, 40);
-      yield* awaited(created.prompt("Test"));
+      yield* awaited(created.run.prompting.prompt("Test"));
       expect(stream.callCount()).toBe(2);
-      expect(created.isRetrying).toBe(false);
+      expect(created.run.retry.isRetrying).toBe(false);
     }),
   );
 
@@ -96,7 +96,7 @@ const retriesProviderNetworkErrorFailures = () =>
       );
       const created = yield* startSession(stream, { maxRetries: 3 });
       const events = retryEvents(created);
-      yield* awaited(created.prompt("Test"));
+      yield* awaited(created.run.prompting.prompt("Test"));
       expect(stream.callCount()).toBe(2);
       expect(events).toEqual(["start:1", "end:success=true"]);
     }),

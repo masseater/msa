@@ -67,7 +67,7 @@ const keepsPersistedAssistantToolresultMessageOrderStep1 = (harness: harnessType
       ),
       fauxAssistantMessage("done"),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("run tools"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("run tools"));
     const branchMessages = harness.sessionManager
       .getBranch()
       .filter((entry) => entry.type === "message")
@@ -115,7 +115,7 @@ const runsToolCallHandlersAfterThe = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("run tool"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("run tool"));
 
   expect(branchRolesAtToolCall).toEqual([["system", "user", "assistant"]]);
 });

@@ -126,7 +126,7 @@ export default class Orchestrator implements runtimeTypes.Runtime {
 
   progress(id: string): { startedAt: number | undefined; retrying: boolean } {
     return {
-      retrying: this.workers.get(id)?.isRetrying ?? false,
+      retrying: this.workers.get(id)?.run.retry.isRetrying ?? false,
       startedAt: this.runs.has(id) ? this.runStartedAt.get(id) : undefined,
     };
   }
@@ -216,7 +216,7 @@ export default class Orchestrator implements runtimeTypes.Runtime {
         for (const worker of self.workers.values()) {
           yield* Effect.tryPromise({
             catch: () => undefined,
-            try: () => worker.abort(),
+            try: () => worker.run.lifecycle.abort(),
           });
           worker.dispose();
         }

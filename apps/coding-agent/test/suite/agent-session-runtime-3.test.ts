@@ -31,7 +31,7 @@ const honorsSessionBeforeSwitchCancellationFor = Effect.gen(function* () {
     });
   });
 
-  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  yield* Effect.promise(() => runtime.session.run.prompting.prompt("hello"));
   const originalSessionFile = runtime.session.sessionFile;
 
   cancelReason = "new";
@@ -81,14 +81,14 @@ const emitsSessionBeforeForkAndSessionStep1 = () =>
     const { runtime } = yield* createRuntimeForTest(forkRecorder(events, control));
 
     events.length = 0;
-    yield* Effect.promise(() => runtime.session.prompt("hello"));
-    const userMessage = runtime.session.getUserMessagesForForking()[0]!;
+    yield* Effect.promise(() => runtime.session.run.prompting.prompt("hello"));
+    const userMessage = runtime.session.context.transcript.getUserMessagesForForking()[0]!;
     const previousSessionFile = runtime.session.sessionFile;
 
     const successResult = yield* Effect.promise(() => runtime.fork(userMessage.entryId));
     expect(successResult.cancelled).toBe(false);
     expect(successResult.selectedText).toBe("hello");
-    yield* Effect.promise(() => runtime.session.bindExtensions({}));
+    yield* Effect.promise(() => runtime.session.extensions.binding.bindExtensions({}));
     expect(events).toEqual([
       { entryId: userMessage.entryId, position: "before", type: "session_before_fork" },
       {

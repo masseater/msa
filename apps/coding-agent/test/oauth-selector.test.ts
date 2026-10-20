@@ -32,10 +32,14 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
   ];
   const loginFlow = new LoginFlow({
     session: {
-      modelRuntime: {
-        getProviderAuthStatus: () => ({ configured: false }),
-        getProviders: () => providers,
-        isUsingOAuth: () => false,
+      models: {
+        selection: {
+          modelRuntime: {
+            getProviderAuthStatus: () => ({ configured: false }),
+            getProviders: () => providers,
+            isUsingOAuth: () => false,
+          },
+        },
       },
     },
   } as unknown as loginFlowTypes.LoginFlowHost);

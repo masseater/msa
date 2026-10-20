@@ -26,10 +26,10 @@ const shouldUseExtensionCompactionEvenWithDifferent = () =>
       });
       const session = yield* createSession([extension]);
 
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      const result = yield* awaited(session.compact());
+      const result = yield* awaited(session.compaction.manual.compact());
 
       expect(result.summary).toBe(customSummary);
       expect(result.tokensBefore).toBe(999);

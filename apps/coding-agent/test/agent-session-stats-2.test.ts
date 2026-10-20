@@ -48,7 +48,7 @@ const includesCompactionUsageInSessionTotals = () =>
         });
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
         expect(stats.tokens).toEqual({
           cacheRead: 30,
           cacheWrite: 40,
@@ -90,7 +90,7 @@ const includesCacheWarmingUsageExactlyOnceWithout = () =>
           note: "extension override",
           type: "usage" as const,
         });
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
         expect(stats.tokens).toEqual({
           cacheRead: 97,
           cacheWrite: 0,
@@ -127,7 +127,7 @@ const includesToolResultUsageInSessionTotals = () =>
         );
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
         expect(stats.tokens).toEqual({
           cacheRead: 30,
           cacheWrite: 40,

@@ -88,7 +88,7 @@ const runPrintMode: {
             awaiting(function* () {
               session = runtimeHost.session;
               yield* awaited(
-                session.bindExtensions({
+                session.extensions.binding.bindExtensions({
                   commandContextActions: {
                     fork: (entryId, forkOptions) =>
                       Effect.runPromise(
@@ -101,7 +101,7 @@ const runPrintMode: {
                       Effect.runPromise(
                         awaiting(function* () {
                           const result = yield* awaited(
-                            session.navigateTree(targetId, {
+                            session.context.tree.navigateTree(targetId, {
                               customInstructions: navigateOptions?.customInstructions,
                               label: navigateOptions?.label,
                               replaceInstructions: navigateOptions?.replaceInstructions,
@@ -115,12 +115,12 @@ const runPrintMode: {
                     reload: () =>
                       Effect.runPromise(
                         awaiting(function* () {
-                          yield* awaited(session.reload());
+                          yield* awaited(session.extensions.runtime.reload());
                         }),
                       ),
                     switchSession: (sessionPath, switchOptions) =>
                       runtimeHost.switchSession(sessionPath, switchOptions),
-                    waitForIdle: () => session.waitForIdle(),
+                    waitForIdle: () => session.run.lifecycle.waitForIdle(),
                   },
                   mode: mode === "json" ? "json" : "print",
                   onError: (err) => {
@@ -169,11 +169,11 @@ const runPrintMode: {
           yield* awaited(rebindSession());
 
           if (initialMessage !== undefined && initialMessage !== "") {
-            yield* awaited(session.prompt(initialMessage, { images: initialImages }));
+            yield* awaited(session.run.prompting.prompt(initialMessage, { images: initialImages }));
           }
 
           for (const message of messages) {
-            yield* awaited(session.prompt(message));
+            yield* awaited(session.run.prompting.prompt(message));
           }
 
           if (mode === "text") {

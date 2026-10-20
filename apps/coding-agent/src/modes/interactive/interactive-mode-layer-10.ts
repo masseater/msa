@@ -85,7 +85,7 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
       const isExcluded = text.startsWith("!!");
       const command = isExcluded ? text.slice(2).trim() : text.slice(1).trim();
       if (command === "") return false;
-      if (this.session.isBashRunning) {
+      if (this.session.context.bash.isBashRunning) {
         this.showWarning("A bash command is already running. Press Esc to cancel it first.");
         this.editor.setText(text);
         return true;
@@ -134,10 +134,10 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
       const rest = queuedMessages.slice(firstPromptIndex + 1);
 
       for (const message of preCommands) {
-        yield* awaited(this.session.prompt(message.text));
+        yield* awaited(this.session.run.prompting.prompt(message.text));
       }
 
-      const promptPromise = this.session
+      const promptPromise = this.session.run.prompting
         .prompt(firstPrompt.text, { streamingBehavior: firstPrompt.mode })
         .catch((error) => {
           restoreQueue(error);
@@ -157,13 +157,13 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
       enabledIds !== null && [...availableModelIds].every((id) => enabledIds.includes(id));
     if (enabledIds !== null && hasEnabledAvailableModel && !allAvailableModelsEnabled) {
       const { scopedModels } = resolveModelScopeFromModels(enabledIds, state.availableModels);
-      this.session.setScopedModels(
+      this.session.models.selection.setScopedModels(
         scopedModels.map((scoped) => ({
           model: scoped.model,
           thinkingLevel: scoped.thinkingLevel,
         })),
       );
-    } else this.session.setScopedModels([]);
+    } else this.session.models.selection.setScopedModels([]);
     this.updateAvailableProviderCount();
     this.ui.requestRender();
   }
@@ -175,9 +175,9 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
       try {
         const filePath =
           outputPath?.endsWith(".jsonl") === true
-            ? this.session.exportToJsonl(outputPath)
+            ? this.session.context.exports.exportToJsonl(outputPath)
             : yield* awaited(
-                this.session.exportToHtml(outputPath, {
+                this.session.context.exports.exportToHtml(outputPath, {
                   themeName: theme.name,
                 }),
               );
@@ -223,7 +223,10 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
           this.ui.requestRender();
         };
         const result = yield* awaited(
-          this.session.executeBash(command, onChunk, { excludeFromContext, operations }),
+          this.session.context.bash.executeBash(command, onChunk, {
+            excludeFromContext,
+            operations,
+          }),
         );
         this.completeBashComponent(result);
       } catch (error) {
@@ -243,7 +246,7 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
         let eventResult: extensionsTypes.UserBashEventResult | undefined;
         try {
           eventResult = yield* awaited(
-            this.session.extensionRunner.emitUserBash({
+            this.session.extensions.binding.extensionRunner.emitUserBash({
               command,
               cwd: this.sessionManager.getCwd(),
               excludeFromContext,
@@ -267,7 +270,7 @@ export default abstract class InteractiveModeLayer10 extends InteractiveModeLaye
       this.clearStatusIndicator();
 
       try {
-        yield* awaited(this.session.compact(customInstructions));
+        yield* awaited(this.session.compaction.manual.compact(customInstructions));
       } catch {}
     }, this);
   }

@@ -55,7 +55,7 @@ const createMcpHarness = Effect.fn("createMcpHarness")(function* (
   );
   harnesses.push(harness);
   yield* awaited(
-    harness.session.bindExtensions({
+    harness.session.extensions.binding.bindExtensions({
       uiContext: createTestUiContext({ notify: (message) => notifications.push(message) }),
     }),
   );

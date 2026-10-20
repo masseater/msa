@@ -71,7 +71,9 @@ const setup4 = (
       };
       const harness = yield* awaited(createHarness({ resourceLoader, sessionManager }));
       harnesses4.push(harness);
-      yield* awaited(harness.session.bindExtensions({ uiContext: createTestUiContext() }));
+      yield* awaited(
+        harness.session.extensions.binding.bindExtensions({ uiContext: createTestUiContext() }),
+      );
       return { connected, harness };
     }),
   );

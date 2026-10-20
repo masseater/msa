@@ -21,20 +21,23 @@ function* handleCommandPart1(
   ) => rpcTypesTypes.RpcResponse,
   id: string | undefined,
 ) {
-  const usage = session.getContextUsage();
-  const breakdown = usage === undefined ? undefined : yield* awaited(session.getContextBreakdown());
+  const usage = session.context.stats.getContextUsage();
+  const breakdown =
+    usage === undefined
+      ? undefined
+      : yield* awaited(session.context.breakdown.getContextBreakdown());
   const state: rpcTypesTypes.RpcSessionState = {
-    autoCompactionEnabled: session.autoCompactionEnabled,
-    followUpMode: session.followUpMode,
-    isCompacting: session.isCompacting,
+    autoCompactionEnabled: session.compaction.auto.autoCompactionEnabled,
+    followUpMode: session.run.queue.followUpMode,
+    isCompacting: session.compaction.manual.isCompacting,
     isStreaming: session.isStreaming,
     messageCount: session.messages.length,
     model: session.model,
-    pendingMessageCount: session.pendingMessageCount,
+    pendingMessageCount: session.run.queue.pendingMessageCount,
     sessionFile: session.sessionFile,
     sessionId: session.sessionId,
     sessionName: session.sessionName,
-    steeringMode: session.steeringMode,
+    steeringMode: session.run.queue.steeringMode,
     thinkingLevel: session.thinkingLevel,
     ...(usage !== undefined && breakdown !== undefined
       ? {

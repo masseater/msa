@@ -34,16 +34,16 @@ describe("AgentSession MCP tools after resume and reload", () => {
           yield* Effect.promise(() =>
             vi.waitFor(() =>
               expect(
-                second.harness.session
+                second.harness.session.tools.registry
                   .getAllTools()
                   .some((tool) => tool.name === "mcp__docs__search"),
               ).toBe(true),
             ),
           );
 
-          expect(second.harness.session.getActiveToolNames().includes("mcp__docs__search")).toBe(
-            kept,
-          );
+          expect(
+            second.harness.session.tools.loadout.getActiveToolNames().includes("mcp__docs__search"),
+          ).toBe(kept);
         }),
       ),
   );

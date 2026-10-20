@@ -49,7 +49,7 @@ const appliesMsaSetactivetoolsBeforeTheNext = Effect.gen(function* () {
   );
 
   try {
-    harness.session.setActiveToolsByName(["switch_tools"]);
+    harness.session.tools.loadout.setActiveToolsByName(["switch_tools"]);
 
     const providerToolNames: string[][] = [];
     harness.setResponses([
@@ -65,11 +65,11 @@ const appliesMsaSetactivetoolsBeforeTheNext = Effect.gen(function* () {
       },
     ]);
 
-    expect(harness.session.getActiveToolNames()).toEqual(["switch_tools"]);
+    expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["switch_tools"]);
 
-    yield* Effect.promise(() => harness.session.prompt("start"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
-    expect(harness.session.getActiveToolNames()).toEqual(["after_switch"]);
+    expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["after_switch"]);
     expect(providerToolNames).toEqual([["switch_tools"], ["after_switch"]]);
   } finally {
     harness.cleanup();
@@ -81,25 +81,25 @@ const reportsTheRefreshedSystemPromptDuring = Effect.gen(function* () {
     createHarness({ extensionFactories: [registerSwitchTools] }),
   );
   try {
-    harness.session.setActiveToolsByName(["switch_tools"]);
+    harness.session.tools.loadout.setActiveToolsByName(["switch_tools"]);
     const providerPrompts: string[] = [];
     const sessionPrompts: string[] = [];
     harness.setResponses([
       (context) => {
         providerPrompts.push(getCurrentSystemPrompt(context.messages));
-        sessionPrompts.push(harness.session.systemPrompt);
+        sessionPrompts.push(harness.session.tools.prompt.systemPrompt);
         return fauxAssistantMessage(fauxToolCall("switch_tools", {}), {
           stopReason: "toolUse",
         });
       },
       (context) => {
         providerPrompts.push(getCurrentSystemPrompt(context.messages));
-        sessionPrompts.push(harness.session.systemPrompt);
+        sessionPrompts.push(harness.session.tools.prompt.systemPrompt);
         return fauxAssistantMessage("done");
       },
     ]);
 
-    yield* Effect.promise(() => harness.session.prompt("start"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
     expect(providerPrompts).toHaveLength(2);
     expect(providerPrompts[0]).not.toBe(providerPrompts[1]);
@@ -132,7 +132,7 @@ const preservesBeforeAgentStartSystemPrompt = Effect.gen(function* () {
 const preservesBeforeAgentStartSystemPromptStep1 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     try {
-      harness.session.setActiveToolsByName(["switch_tools"]);
+      harness.session.tools.loadout.setActiveToolsByName(["switch_tools"]);
 
       const providerSystemPrompts: string[] = [];
       const providerToolNames: string[][] = [];
@@ -154,7 +154,7 @@ const preservesBeforeAgentStartSystemPromptStep1 = (harness: harnessTypes.Harnes
         },
       ]);
 
-      yield* Effect.promise(() => harness.session.prompt("start"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
       expect(providerToolNames).toEqual([["switch_tools"], ["after_switch"]]);
       expect(providerSystemPrompts).toHaveLength(2);

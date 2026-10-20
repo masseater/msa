@@ -117,7 +117,7 @@ const createHarness = Effect.fn("createHarness")(function* (
   const queueEvents = collectQueueEvents(session);
   const statuses: string[] = [];
   const onSubmit = attachSubmitHandler(session, statuses);
-  const firstRun = session.prompt("start");
+  const firstRun = session.run.prompting.prompt("start");
   yield* pollUntil(
     Effect.sync(() => session.isStreaming),
     1000,

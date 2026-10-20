@@ -34,8 +34,10 @@ export default abstract class InteractiveModeLayer21 extends InteractiveModeLaye
     if (!message.display) return;
     const renderer =
       message.customType === ORCHESTRATOR_REPORT_MESSAGE_TYPE
-        ? (createTaskReportRenderer(this.session.orchestrator) as extensionsTypes.MessageRenderer)
-        : this.session.extensionRunner.getMessageRenderer(message.customType);
+        ? (createTaskReportRenderer(
+            this.session.integrations.orchestration.orchestrator,
+          ) as extensionsTypes.MessageRenderer)
+        : this.session.extensions.binding.extensionRunner.getMessageRenderer(message.customType);
     const component = new CustomMessageComponent(
       message,
       renderer,
@@ -57,12 +59,12 @@ export default abstract class InteractiveModeLayer21 extends InteractiveModeLaye
     }[];
     configuredEnabledIds: (models: readonly compatTypes.Model<any>[]) => string[] | null;
   } {
-    let availableModels = [...this.session.modelRuntime.getAvailableSnapshot()];
+    let availableModels = [...this.session.models.selection.modelRuntime.getAvailableSnapshot()];
     let availableModelIds = new Set(
       availableModels.map((model) => `${model.provider}/${model.id}`),
     );
     const configuredPatterns = this.settingsManager.getEnabledModels();
-    const sessionScopedModels = this.session.scopedModels;
+    const sessionScopedModels = this.session.models.selection.scopedModels;
     const configuredEnabledIds = (models: readonly compatTypes.Model<any>[]): string[] | null => {
       if (configuredPatterns?.length === undefined || configuredPatterns?.length === 0) return null;
       const resolved = resolveModelScopeFromModels(configuredPatterns, models);

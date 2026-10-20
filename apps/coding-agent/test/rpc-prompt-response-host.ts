@@ -75,7 +75,7 @@ const createRuntimeHost = (
     const runtimeHost = stubRuntimeHost(session);
 
     const cleanup = Effect.gen(function* () {
-      yield* Effect.ignore(awaited(session.abort()));
+      yield* Effect.ignore(awaited(session.run.lifecycle.abort()));
       session.dispose();
       yield* removePath(tempDir);
     });

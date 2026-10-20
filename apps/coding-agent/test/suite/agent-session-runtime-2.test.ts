@@ -31,8 +31,8 @@ const forkAtLeaf = Effect.fn("forkAtLeaf")(function* (
   session: agentSessionTypes.AgentSession,
   fork: (leafId: string) => Promise<unknown>,
 ) {
-  yield* awaited(session.prompt("hello"));
-  yield* awaited(session.prompt("again"));
+  yield* awaited(session.run.prompting.prompt("hello"));
+  yield* awaited(session.run.prompting.prompt("again"));
   const beforeMessages = branchOf(session);
   const leafId = session.sessionManager.getLeafId();
   expect(leafId).toBeTruthy();

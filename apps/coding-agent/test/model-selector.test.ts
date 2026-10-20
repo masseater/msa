@@ -41,7 +41,7 @@ const keepsTheCurrentModelMarkedWhileBrowsing = () =>
       const selector = new ModelSelectorComponent(
         createFakeTui(),
         currentModel,
-        harness.session.modelRuntime,
+        harness.session.models.selection.modelRuntime,
         [],
         () => {},
         () => {},
@@ -71,7 +71,7 @@ const usesTheConfiguredSaveBinding = () =>
       const selector = new ModelSelectorComponent(
         createFakeTui(),
         currentModel,
-        harness.session.modelRuntime,
+        harness.session.models.selection.modelRuntime,
         [],
         () => {},
         () => {},
@@ -91,7 +91,7 @@ const listsEveryCatalogThatFailedToRefresh = () =>
   runTest(
     Effect.gen(function* () {
       harness = yield* awaited(createHarness());
-      vi.spyOn(harness.session.modelRuntime, "refresh").mockResolvedValue({
+      vi.spyOn(harness.session.models.selection.modelRuntime, "refresh").mockResolvedValue({
         aborted: false,
         errors: new Map([
           ["openai", new Error("unavailable")],
@@ -102,7 +102,7 @@ const listsEveryCatalogThatFailedToRefresh = () =>
       const selector = new ModelSelectorComponent(
         createFakeTui(),
         harness.getModel(),
-        harness.session.modelRuntime,
+        harness.session.models.selection.modelRuntime,
         [],
         () => {},
         () => {},

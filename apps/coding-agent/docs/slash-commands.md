@@ -67,7 +67,7 @@ Review a session before exporting or sharing it. Sessions can contain prompts, t
 
 These stay: `read`, `grep`, `find`, `ls`, `web_search`, `web_fetch`, `list_tasks`, `read_task`, `search_reports`, and the read-only MCP tools. `memory` keeps `search` and `list`, and `pr_watch`, `model_policy`, and `model_upgrade` keep `list`. `bash`, `powershell`, `edit`, `write`, the task and message tools that change anything, `codemode`, and `tool_search` are left out.
 
-The same turn is available from [RPC](rpc-commands.md#prompt) with `"mode": "ask"`, and from the SDK with `session.prompt(question, { mode: "ask" })`. An extension author marks a tool with `annotations: { readOnlyHint: true }`, and gives a tool that reads and writes through one `action` a `readOnlyVariant` ([Tool exposure](extensions.md#tool-exposure)).
+The same turn is available from [RPC](rpc-commands.md#prompt) with `"mode": "ask"`, and from the SDK with `session.run.prompting.prompt(question, { mode: "ask" })`. An extension author marks a tool with `annotations: { readOnlyHint: true }`, and gives a tool that reads and writes through one `action` a `readOnlyVariant` ([Tool exposure](extensions.md#tool-exposure)).
 
 ## Commands added by resources
 

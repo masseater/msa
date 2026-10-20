@@ -70,7 +70,9 @@ const removesExtensionOwnedEventBusListenersStep1 = () =>
     );
     const harness = yield* Effect.promise(() => createHarness({ resourceLoader }));
     harnesses.push(harness);
-    yield* Effect.promise(() => harness.session.bindExtensions({ shutdownHandler: () => {} }));
+    yield* Effect.promise(() =>
+      harness.session.extensions.binding.bindExtensions({ shutdownHandler: () => {} }),
+    );
 
     const emit = () =>
       runPromise(
@@ -84,7 +86,7 @@ const removesExtensionOwnedEventBusListenersStep1 = () =>
       );
 
     expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
-    yield* Effect.promise(() => harness.session.reload());
+    yield* Effect.promise(() => harness.session.extensions.runtime.reload());
     expect(() => firstApi?.getCommands()).toThrow("stale after session replacement or reload");
     return { emit, harness };
   });
@@ -92,7 +94,7 @@ const removesExtensionOwnedEventBusListenersStep1 = () =>
 const removesExtensionOwnedEventBusListeners = Effect.gen(function* () {
   const { emit, harness } = yield* removesExtensionOwnedEventBusListenersStep1();
   expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
-  yield* Effect.promise(() => harness.session.reload());
+  yield* Effect.promise(() => harness.session.extensions.runtime.reload());
   expect(yield* Effect.promise(() => emit())).toEqual({ extension: 1, host: 1 });
 
   harness.session.dispose();

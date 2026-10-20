@@ -53,7 +53,7 @@ const treatsExtensionOriginQueuedSlashCommandStep1 = () =>
     ]);
 
     const sawToolStart = toolStarted(harness, "wait");
-    const promptPromise = harness.session.prompt("start");
+    const promptPromise = harness.session.run.prompting.prompt("start");
     yield* Effect.promise(() => sawToolStart);
     yield* Effect.sleep(0);
 

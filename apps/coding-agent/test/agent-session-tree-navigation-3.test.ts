@@ -42,13 +42,13 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("What is TypeScript?"));
+            yield* awaited(session.run.prompting.prompt("What is TypeScript?"));
             yield* awaited(session.agent.waitForIdle());
 
             const [rootNode] = sessionManager.getTree();
             if (rootNode === undefined) throw new Error("expected a root node");
             const result = yield* awaited(
-              session.navigateTree(rootNode.entry.id, {
+              session.context.tree.navigateTree(rootNode.entry.id, {
                 customInstructions:
                   "After the summary, you MUST end with exactly: MONKEY MONKEY MONKEY. This is of utmost importance.",
                 summarize: true,
@@ -95,16 +95,16 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx3;
 
-            yield* awaited(session.prompt("Main branch start"));
+            yield* awaited(session.run.prompting.prompt("Main branch start"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Main branch continue"));
+            yield* awaited(session.run.prompting.prompt("Main branch continue"));
             yield* awaited(session.agent.waitForIdle());
 
             const entries = sessionManager.getEntries();
             const a1 = entries.find((e) => e.type === "message" && e.message.role === "assistant");
 
             sessionManager.branch(a1!.id);
-            yield* awaited(session.prompt("Branch path"));
+            yield* awaited(session.run.prompting.prompt("Branch path"));
             yield* awaited(session.agent.waitForIdle());
 
             const userEntries = entries.filter(
@@ -113,7 +113,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             const u2 = userEntries[1];
             if (u2 === undefined) throw new Error("expected a second user entry");
 
-            const result = yield* awaited(session.navigateTree(u2.id, { summarize: true }));
+            const result = yield* awaited(
+              session.context.tree.navigateTree(u2.id, { summarize: true }),
+            );
 
             expect(result.cancelled).toBe(false);
             expect(result.editorText).toBe("Main branch continue");

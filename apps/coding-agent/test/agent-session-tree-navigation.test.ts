@@ -42,9 +42,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session } = ctx2;
 
-            yield* awaited(session.prompt("First message"));
+            yield* awaited(session.run.prompting.prompt("First message"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Second message"));
+            yield* awaited(session.run.prompting.prompt("Second message"));
             yield* awaited(session.agent.waitForIdle());
 
             const tree = session.sessionManager.getTree();
@@ -55,7 +55,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             expect(rootNode.entry.type).toBe("message");
 
             const result = yield* awaited(
-              session.navigateTree(rootNode.entry.id, { summarize: false }),
+              session.context.tree.navigateTree(rootNode.entry.id, { summarize: false }),
             );
 
             expect(result.cancelled).toBe(false);
@@ -85,7 +85,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("Hello"));
+            yield* awaited(session.run.prompting.prompt("Hello"));
             yield* awaited(session.agent.waitForIdle());
 
             const entries = sessionManager.getEntries();
@@ -95,7 +95,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             expect(assistantEntry).toBeDefined();
 
             const result = yield* awaited(
-              session.navigateTree(assistantEntry!.id, { summarize: false }),
+              session.context.tree.navigateTree(assistantEntry!.id, { summarize: false }),
             );
 
             expect(result.cancelled).toBe(false);
@@ -125,9 +125,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("What is 2+2?"));
+            yield* awaited(session.run.prompting.prompt("What is 2+2?"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("What is 3+3?"));
+            yield* awaited(session.run.prompting.prompt("What is 3+3?"));
             yield* awaited(session.agent.waitForIdle());
 
             const tree = sessionManager.getTree();
@@ -135,7 +135,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             if (rootNode === undefined) throw new Error("expected a root node");
 
             const result = yield* awaited(
-              session.navigateTree(rootNode.entry.id, { summarize: true }),
+              session.context.tree.navigateTree(rootNode.entry.id, { summarize: true }),
             );
 
             expect(result.cancelled).toBe(false);
@@ -171,11 +171,11 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("Message one"));
+            yield* awaited(session.run.prompting.prompt("Message one"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Message two"));
+            yield* awaited(session.run.prompting.prompt("Message two"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Message three"));
+            yield* awaited(session.run.prompting.prompt("Message three"));
             yield* awaited(session.agent.waitForIdle());
 
             const entries = sessionManager.getEntries();
@@ -188,7 +188,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             if (u2 === undefined) throw new Error("expected a second user entry");
             const a1 = entries.find((e) => e.id === u2.parentId);
 
-            const result = yield* awaited(session.navigateTree(u2.id, { summarize: true }));
+            const result = yield* awaited(
+              session.context.tree.navigateTree(u2.id, { summarize: true }),
+            );
 
             expect(result.cancelled).toBe(false);
             expect(result.editorText).toBe("Message two");

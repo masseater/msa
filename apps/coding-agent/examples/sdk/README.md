@@ -102,7 +102,7 @@ session.subscribe((event) => {
     process.stdout.write(event.assistantMessageEvent.delta);
   }
 });
-await session.prompt("Hello");
+await session.run.prompting.prompt("Hello");
 ```
 
 ## Options

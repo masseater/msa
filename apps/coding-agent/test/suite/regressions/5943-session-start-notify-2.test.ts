@@ -48,7 +48,7 @@ const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* ()
           Effect.gen(function* () {
             events.push("bind");
             yield* Effect.promise(() =>
-              harness.session.bindExtensions({
+              harness.session.extensions.binding.bindExtensions({
                 mode: "tui",
                 uiContext: createTestUiContext(),
               }),
@@ -105,7 +105,7 @@ const runsTheReloadRenderHookBefore = Effect.gen(function* () {
 
   try {
     yield* Effect.promise(() =>
-      harness.session.bindExtensions({
+      harness.session.extensions.binding.bindExtensions({
         mode: "tui",
         uiContext: createTestUiContext({ notify: (message) => events.push(message) }),
       }),
@@ -113,7 +113,7 @@ const runsTheReloadRenderHookBefore = Effect.gen(function* () {
     expect(events).toEqual(["start:startup", "notify:startup"]);
 
     events.length = 0;
-    yield* Effect.promise(() => harness.session.reload({ beforeSessionStart }));
+    yield* Effect.promise(() => harness.session.extensions.runtime.reload({ beforeSessionStart }));
 
     expect(beforeSessionStart).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["render", "start:reload", "notify:reload"]);
@@ -132,14 +132,18 @@ const refreshesHidethinkingblockBeforeRebuildingChatDuring = Effect.gen(function
       events.push(`rebuild:${context.hideThinkingBlock}`);
     },
     session: {
-      reload: (options) =>
-        runPromise(
-          Effect.gen(function* () {
-            events.push("reload");
-            yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
-            events.push(`start:${context.hideThinkingBlock}`);
-          }),
-        ),
+      extensions: {
+        runtime: {
+          reload: (options) =>
+            runPromise(
+              Effect.gen(function* () {
+                events.push("reload");
+                yield* Effect.promise(() => Promise.resolve(options?.beforeSessionStart?.()));
+                events.push(`start:${context.hideThinkingBlock}`);
+              }),
+            ),
+        },
+      },
     },
     settingsManager: { getHideThinkingBlock: () => true },
   });

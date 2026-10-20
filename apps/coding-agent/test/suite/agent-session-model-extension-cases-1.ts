@@ -36,7 +36,7 @@ const setmodelSavesTheModelToThe = Effect.gen(function* () {
   harnesses.push(harness);
   const nextModel = harness.getModel("faux-2")!;
 
-  yield* Effect.promise(() => harness.session.setModel(nextModel));
+  yield* Effect.promise(() => harness.session.models.selection.setModel(nextModel));
 
   expect(harness.session.model?.id).toBe("faux-2");
   expect(modelEvents).toEqual(["faux-1->faux-2:set"]);
@@ -61,18 +61,20 @@ const onlyPersistsModelAndThinkingDefaults = Effect.gen(function* () {
   harnesses.push(harness);
   const nextModel = harness.getModel("faux-2")!;
 
-  yield* Effect.promise(() => harness.session.setModel(nextModel));
+  yield* Effect.promise(() => harness.session.models.selection.setModel(nextModel));
   expect(harness.settingsManager.getDefaultProvider()).toBeUndefined();
   expect(harness.settingsManager.getDefaultModel()).toBeUndefined();
 
-  harness.session.setThinkingLevel("low");
+  harness.session.models.thinking.setThinkingLevel("low");
   expect(harness.settingsManager.getDefaultThinkingLevel()).toBeUndefined();
 
-  yield* Effect.promise(() => harness.session.setModel(nextModel, { persist: true }));
+  yield* Effect.promise(() =>
+    harness.session.models.selection.setModel(nextModel, { persist: true }),
+  );
   expect(harness.settingsManager.getDefaultProvider()).toBe(nextModel.provider);
   expect(harness.settingsManager.getDefaultModel()).toBe(nextModel.id);
 
-  harness.session.setThinkingLevel("high", { persist: true });
+  harness.session.models.thinking.setThinkingLevel("high", { persist: true });
   expect(harness.settingsManager.getDefaultThinkingLevel()).toBe("high");
 });
 const persistsTheRequestedDefaultThinkingLevel = Effect.gen(function* () {
@@ -81,7 +83,7 @@ const persistsTheRequestedDefaultThinkingLevel = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  harness.session.setThinkingLevel("max", { persist: true });
+  harness.session.models.thinking.setThinkingLevel("max", { persist: true });
 
   expect(harness.session.thinkingLevel).toBe("high");
   expect(harness.settingsManager.getDefaultThinkingLevel()).toBe("max");
@@ -102,12 +104,12 @@ const cyclemodelAndCyclethinkinglevelAreSessionOnly = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  yield* Effect.promise(() => harness.session.cycleModel());
+  yield* Effect.promise(() => harness.session.models.selection.cycleModel());
   expect(harness.session.model?.id).toBe("faux-2");
   expect(harness.settingsManager.getDefaultModel()).toBe("faux-1");
 
-  harness.session.setThinkingLevel("off");
-  expect(harness.session.cycleThinkingLevel()).toBe("minimal");
+  harness.session.models.thinking.setThinkingLevel("off");
+  expect(harness.session.models.thinking.cycleThinkingLevel()).toBe("minimal");
   expect(harness.settingsManager.getDefaultThinkingLevel()).toBe("low");
 });
 const appliesPerModelThinkingLevelOverride = Effect.gen(function* () {
@@ -124,15 +126,15 @@ const appliesPerModelThinkingLevelOverride = Effect.gen(function* () {
 
   harness.settingsManager.setModelThinkingLevel("faux", "faux-2", "low");
 
-  harness.session.setThinkingLevel("high");
+  harness.session.models.thinking.setThinkingLevel("high");
   expect(harness.session.thinkingLevel).toBe("high");
 
   const model2 = harness.getModel("faux-2")!;
-  yield* Effect.promise(() => harness.session.setModel(model2));
+  yield* Effect.promise(() => harness.session.models.selection.setModel(model2));
   expect(harness.session.thinkingLevel).toBe("low");
 
   const model1 = harness.getModel("faux-1")!;
-  yield* Effect.promise(() => harness.session.setModel(model1));
+  yield* Effect.promise(() => harness.session.models.selection.setModel(model1));
   expect(harness.session.thinkingLevel).toBe("medium");
 });
 const fallsBackToCurrentSessionThinking = Effect.gen(function* () {
@@ -146,8 +148,10 @@ const fallsBackToCurrentSessionThinking = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  harness.session.setThinkingLevel("high");
-  yield* Effect.promise(() => harness.session.setModel(harness.getModel("faux-2")!));
+  harness.session.models.thinking.setThinkingLevel("high");
+  yield* Effect.promise(() =>
+    harness.session.models.selection.setModel(harness.getModel("faux-2")!),
+  );
   expect(harness.session.thinkingLevel).toBe("high");
 });
 const perModelOverrideTakesPriorityOver = Effect.gen(function* () {
@@ -166,7 +170,7 @@ const perModelOverrideTakesPriorityOver = Effect.gen(function* () {
   harnesses.push(harness);
 
   const model2 = harness.getModel("faux-2")!;
-  yield* Effect.promise(() => harness.session.setModel(model2));
+  yield* Effect.promise(() => harness.session.models.selection.setModel(model2));
   expect(harness.session.thinkingLevel).toBe("minimal");
 });
 const cyclesThroughScopedModelsAndPreserves = Effect.gen(function* () {
@@ -181,20 +185,20 @@ const cyclesThroughScopedModelsAndPreserves = Effect.gen(function* () {
   harnesses.push(harness);
   const modelOne = harness.getModel("faux-1")!;
   const modelTwo = harness.getModel("faux-2")!;
-  harness.session.setScopedModels([
+  harness.session.models.selection.setScopedModels([
     { model: modelOne, thinkingLevel: "high" },
     { model: modelTwo },
   ] as Array<{
     model: aiTypes.Model<string>;
     thinkingLevel?: agentTypes.ThinkingLevel;
   }>);
-  harness.session.setThinkingLevel("high");
+  harness.session.models.thinking.setThinkingLevel("high");
 
-  yield* Effect.promise(() => harness.session.cycleModel());
+  yield* Effect.promise(() => harness.session.models.selection.cycleModel());
   expect(harness.session.model?.id).toBe("faux-2");
   expect(harness.session.thinkingLevel).toBe("off");
 
-  yield* Effect.promise(() => harness.session.cycleModel());
+  yield* Effect.promise(() => harness.session.models.selection.cycleModel());
   expect(harness.session.model?.id).toBe("faux-1");
   expect(harness.session.thinkingLevel).toBe("high");
 });
@@ -204,9 +208,9 @@ const clampsThinkingLevelsToModelCapabilities = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  harness.session.setThinkingLevel("high");
+  harness.session.models.thinking.setThinkingLevel("high");
   expect(harness.session.thinkingLevel).toBe("off");
-  expect(harness.session.cycleThinkingLevel()).toBeUndefined();
+  expect(harness.session.models.thinking.cycleThinkingLevel()).toBeUndefined();
 });
 const cyclesXhighBeforeMaxWhenBoth = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -215,7 +219,7 @@ const cyclesXhighBeforeMaxWhenBoth = Effect.gen(function* () {
   harnesses.push(harness);
   harness.getModel().thinkingLevelMap = { max: "max", xhigh: "xhigh" };
 
-  expect(harness.session.getAvailableThinkingLevels()).toEqual([
+  expect(harness.session.models.thinking.getAvailableThinkingLevels()).toEqual([
     "off",
     "minimal",
     "low",
@@ -224,10 +228,10 @@ const cyclesXhighBeforeMaxWhenBoth = Effect.gen(function* () {
     "xhigh",
     "max",
   ]);
-  harness.session.setThinkingLevel("high");
-  expect(harness.session.cycleThinkingLevel()).toBe("xhigh");
-  expect(harness.session.cycleThinkingLevel()).toBe("max");
-  expect(harness.session.cycleThinkingLevel()).toBe("off");
+  harness.session.models.thinking.setThinkingLevel("high");
+  expect(harness.session.models.thinking.cycleThinkingLevel()).toBe("xhigh");
+  expect(harness.session.models.thinking.cycleThinkingLevel()).toBe("max");
+  expect(harness.session.models.thinking.cycleThinkingLevel()).toBe("off");
 });
 const throwsWhenSetmodelIsCalledWithout = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
@@ -242,7 +246,7 @@ const throwsWhenSetmodelIsCalledWithout = Effect.gen(function* () {
   harnesses.push(harness);
 
   yield* Effect.promise(() =>
-    expect(harness.session.setModel(harness.getModel("faux-2")!)).rejects.toThrow(
+    expect(harness.session.models.selection.setModel(harness.getModel("faux-2")!)).rejects.toThrow(
       `No API key for ${harness.getModel().provider}/faux-2`,
     ),
   );

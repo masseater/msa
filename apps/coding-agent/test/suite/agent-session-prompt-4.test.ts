@@ -66,9 +66,9 @@ const keepsTheSameSystemPromptFor = Effect.gen(function* () {
     record(fauxAssistantMessage("done")),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
   yield* Effect.promise(() =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       { content: "background task finished", customType: "task-done", display: true },
       { triggerTurn: true },
     ),
@@ -116,13 +116,13 @@ const queuesACustomMessageSentWhilePart1 = () =>
       },
     ]);
 
-    const first = harness.session.sendCustomMessage(
+    const first = harness.session.run.prompting.sendCustomMessage(
       { content: "task one finished", customType: "first", display: true },
       { triggerTurn: true },
     );
     yield* Effect.promise(() => handlerStarted.promise);
     expect(harness.session.isIdle).toBe(false);
-    const second = harness.session.sendCustomMessage(
+    const second = harness.session.run.prompting.sendCustomMessage(
       { content: "task two finished", customType: "second", display: true },
       { triggerTurn: true },
     );
@@ -169,7 +169,7 @@ const includesACustomMessageSentWithout = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(requests).toHaveLength(1);
   expect(yield* toJsonText(requests[0]?.messages)).toContain("context from handler");
@@ -200,12 +200,12 @@ const abortsARunWhenAbortIs = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("should not complete")]);
 
-  const run = harness.session.sendCustomMessage(
+  const run = harness.session.run.prompting.sendCustomMessage(
     { content: "background task finished", customType: "task-done", display: true },
     { triggerTurn: true },
   );
   yield* Effect.promise(() => handlerStarted.promise);
-  const aborted = harness.session.abort();
+  const aborted = harness.session.run.lifecycle.abort();
   releaseHandler();
   yield* Effect.promise(() => Promise.all([run, aborted]));
 

@@ -40,7 +40,7 @@ const promptsWhileIdleAndRecordsA = Effect.gen(function* () {
 
   harness.setResponses([fauxAssistantMessage("hello")]);
 
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
   expect(harness.session.messages.map((message) => message.role)).toEqual([
     "system",
@@ -82,7 +82,7 @@ const handlesAToolCallTurnAnd = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(toolRuns).toEqual(["hello"]);
   expect(harness.session.messages.map((message) => message.role)).toEqual([
@@ -141,7 +141,7 @@ const executesMultipleToolCallsFromOneStep1 = (toolRuns: string[], harness: harn
         return fauxAssistantMessage(`tool results: ${toolResults.length}`);
       },
     ]);
-    yield* Effect.promise(() => harness.session.prompt("run tools"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("run tools"));
     expect(toolRuns.sort()).toEqual(["fast:b", "slow:a"]);
     expect(
       harness.session.messages.filter((message) => message.role === "toolResult"),
@@ -166,7 +166,7 @@ const preservesImageAttachmentsInTheProvider = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() =>
-    harness.session.prompt("describe", {
+    harness.session.run.prompting.prompt("describe", {
       images: [
         {
           data: "ZmFrZQ==",
@@ -222,7 +222,7 @@ const usesTheModelSelectedByBeforeStep1 = (
     strictModel.inputLimits = { images: { resize: resizeOptions } };
     harness.setResponses([fauxAssistantMessage("done")]);
     yield* Effect.promise(() =>
-      harness.session.prompt("inspect", {
+      harness.session.run.prompting.prompt("inspect", {
         images: [{ data: TINY_PNG_BASE64, mimeType: "image/png", type: "image" }],
       }),
     );

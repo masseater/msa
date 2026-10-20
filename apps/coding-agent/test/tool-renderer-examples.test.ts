@@ -70,8 +70,8 @@ const getSessionState = (
     );
     try {
       return {
-        editToolDefinition: session.getToolDefinition("edit"),
-        systemPrompt: session.systemPrompt,
+        editToolDefinition: session.tools.registry.getToolDefinition("edit"),
+        systemPrompt: session.tools.prompt.systemPrompt,
       };
     } finally {
       session.dispose();

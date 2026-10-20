@@ -75,7 +75,7 @@ const createOracleRuntime = (
       agentDir,
       cwd: session.sessionManager.getCwd(),
       diagnostics: [],
-      modelRuntime: session.modelRuntime,
+      modelRuntime: session.models.selection.modelRuntime,
       resourceLoader: session.resourceLoader,
       settingsManager: session.settingsManager,
     };
@@ -126,7 +126,7 @@ const observeFooter = (
           renders.flatMap(lines).find((line) => BUILT_IN_CONTEXT_PATTERN.test(line)) ?? null;
       }
       observations.push({
-        contextUsage: oracleSession.getContextUsage() ?? null,
+        contextUsage: oracleSession.context.stats.getContextUsage() ?? null,
         percent,
         renderedOutput: renders.at(-1) ?? "",
       });

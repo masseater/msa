@@ -42,7 +42,7 @@ const expected: configuredRuntimeTypes.ProviderRuntimeOutput = {
 
 const harness = createMsaDocumentationEvalHarness({
   output: ({ session }) =>
-    inspectProvider(session.modelRuntime, {
+    inspectProvider(session.models.selection.modelRuntime, {
       createContext: () => ({
         messages: [{ content: OPENAI_PROBE_PROMPT, role: "user", timestamp: 0 }],
       }),

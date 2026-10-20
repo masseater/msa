@@ -44,7 +44,7 @@ void Effect.runPromise(
     const bindSession = (): Promise<codingAgentTypes.AgentSession> => {
       unsubscribe?.();
       const session = runtime.session;
-      return session.bindExtensions({}).then(() => {
+      return session.extensions.binding.bindExtensions({}).then(() => {
         unsubscribe = session.subscribe((event) => {
           if (event.type === "queue_update") {
             process.stdout.write(`Queued: ${event.steering.length + event.followUp.length}\n`);

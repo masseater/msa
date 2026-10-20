@@ -63,17 +63,12 @@ const resumesAfterThresholdCompactionWithAgentQueue = () =>
         role: "custom",
         timestamp: currentTimeMillis(),
       });
-      expect(session.pendingMessageCount).toBe(0);
+      expect(session.run.queue.pendingMessageCount).toBe(0);
       expect(session.agent.hasQueuedMessages()).toBe(true);
       const continueSpy = vi.spyOn(session.agent, "continue").mockResolvedValue();
-      const runAutoCompaction = (
-        session as unknown as {
-          runAutoCompaction: (
-            reason: "overflow" | "threshold",
-            willRetry: boolean,
-          ) => Promise<boolean>;
-        }
-      ).runAutoCompaction.bind(session);
+      const runAutoCompaction = session.compaction.auto.runAutoCompaction.bind(
+        session.compaction.auto,
+      );
       yield* awaited(expect(runAutoCompaction("threshold", false)).resolves.toBe(true));
       expect(continueSpy).not.toHaveBeenCalled();
     }),

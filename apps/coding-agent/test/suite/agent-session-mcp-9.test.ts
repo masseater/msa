@@ -49,7 +49,7 @@ function setup3(
       harnesses3.push(harness);
 
       yield* Effect.promise(() =>
-        harness.session.bindExtensions({ uiContext: createTestUiContext() }),
+        harness.session.extensions.binding.bindExtensions({ uiContext: createTestUiContext() }),
       );
       return { connected, harness };
     }),
@@ -63,10 +63,10 @@ const connectsServersRegisteredWhileExtensionsLoad = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(connected.map((entry) => [entry.name, entry.scope])).toEqual([["plugin", "extension"]]);
-  expect(harness.session.getActiveToolNames()).toContain("mcp__plugin__search");
+  expect(harness.session.tools.loadout.getActiveToolNames()).toContain("mcp__plugin__search");
 });
 
 const connectsAndDisconnectsServersRegisteredDuring = Effect.gen(function* () {
@@ -81,16 +81,20 @@ const connectsAndDisconnectsServersRegisteredDuring = Effect.gen(function* () {
 
   msa.registerMcpServer("late", { url: "http://late.invalid" });
   yield* Effect.promise(() =>
-    vi.waitFor(() => expect(harness.session.getCallableToolNames()).toContain("mcp__late__search")),
+    vi.waitFor(() =>
+      expect(harness.session.tools.loadout.getCallableToolNames()).toContain("mcp__late__search"),
+    ),
   );
   expect(connected.map((entry) => entry.name)).toEqual(["late"]);
 
-  expect(harness.session.getActiveToolNames()).toContain("codemode");
+  expect(harness.session.tools.loadout.getActiveToolNames()).toContain("codemode");
 
   msa.unregisterMcpServer("late");
   yield* Effect.promise(() =>
     vi.waitFor(() =>
-      expect(harness.session.getCallableToolNames()).not.toContain("mcp__late__search"),
+      expect(harness.session.tools.loadout.getCallableToolNames()).not.toContain(
+        "mcp__late__search",
+      ),
     ),
   );
 });
@@ -134,7 +138,9 @@ const reportsRegisteredServersWhenNoExtension = Effect.gen(function* () {
   harnesses3.push(harness);
   const errors: string[] = [];
   yield* Effect.promise(() =>
-    harness.session.bindExtensions({ onError: (error) => errors.push(error.error) }),
+    harness.session.extensions.binding.bindExtensions({
+      onError: (error) => errors.push(error.error),
+    }),
   );
 
   expect(errors).toEqual([

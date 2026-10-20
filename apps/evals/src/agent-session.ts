@@ -138,7 +138,7 @@ const assertOnlyInlineExtensions = ({
 }): Effect.Effect<void> =>
   Effect.sync(() => {
     const expected = new Set(extensionFactories.map(({ name }) => `<inline:${name}>`));
-    const unexpected = session.extensionRunner
+    const unexpected = session.extensions.binding.extensionRunner
       .getExtensionPaths()
       .filter((path) => !expected.has(path));
     if (unexpected.length > 0) {

@@ -75,7 +75,8 @@ export default abstract class InteractiveModeLayer46 extends InteractiveModeLaye
       if (canonical === "/init") return INIT_PROMPT;
       const handoff = parseHandoffCommand(canonical);
       if (handoff !== undefined) {
-        if (this.session.orchestrator !== undefined) return handoffPrompt(handoff.path);
+        if (this.session.integrations.orchestration.orchestrator !== undefined)
+          return handoffPrompt(handoff.path);
         this.showWarning("/handoff needs the orchestrator, which this session does not have");
         this.editor.setText("");
         return undefined;

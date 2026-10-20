@@ -24,7 +24,9 @@ const rejectsNavigationWithoutChangingTheActive = Effect.gen(function* () {
           Effect.gen(function* () {
             const activeLeafId = harness.sessionManager.getLeafId();
             navigationResult = yield* Effect.promise(() =>
-              harness.session.navigateTree(targetId, { summarize: false }).catch((error) => error),
+              harness.session.context.tree
+                .navigateTree(targetId, { summarize: false })
+                .catch((error) => error),
             );
             leafUnchanged =
               activeLeafId !== targetId && harness.sessionManager.getLeafId() === activeLeafId;
@@ -32,7 +34,7 @@ const rejectsNavigationWithoutChangingTheActive = Effect.gen(function* () {
           }),
         ),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("second"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
     expect(navigationResult).toEqual(
       new Error("Wait for the current response to finish before navigating the session tree."),

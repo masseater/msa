@@ -37,13 +37,18 @@ function openSelector(
   let selector: scopedModelsSelectorTypes.ScopedModelsSelectorComponent | undefined;
   let dispose: (() => void) | undefined;
   const done = vi.fn();
-  vi.spyOn(harness.session.modelRuntime, "getAvailableSnapshot").mockImplementation(() => snapshot);
-  vi.spyOn(harness.session.modelRuntime, "refresh").mockImplementation((options) => {
-    const refresh = deferredPromise<aiTypes.ModelsRefreshResult>();
-    refreshSignal = options?.signal;
-    finishRefresh = (value) => refresh.resolve(value);
-    return refresh.promise;
-  });
+  vi.spyOn(
+    harness.session.models.selection.modelRuntime,
+    "getAvailableSnapshot",
+  ).mockImplementation(() => snapshot);
+  vi.spyOn(harness.session.models.selection.modelRuntime, "refresh").mockImplementation(
+    (options) => {
+      const refresh = deferredPromise<aiTypes.ModelsRefreshResult>();
+      refreshSignal = options?.signal;
+      finishRefresh = (value) => refresh.resolve(value);
+      return refresh.promise;
+    },
+  );
   const context = {
     editorSlot: {
       showSelector: (factory: SelectorFactory) => {

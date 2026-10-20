@@ -8,15 +8,23 @@ const interactiveModePrototype =
 type Overrides = SessionStartNotifySupportTypes.ReloadCommandContextOverrides;
 type Context = SessionStartNotifySupportTypes.ReloadCommandContext;
 
-const reloadSession = (overrides: Overrides): Context["session"] => ({
-  extensionRunner: {},
-  isCompacting: false,
-  isStreaming: false,
-  modelRegistry: { getError: () => undefined },
-  reload: (options) => Promise.resolve(options?.beforeSessionStart?.()).then(() => undefined),
-  resourceLoader: { getThemes: () => ({ themes: [] }) },
-  ...overrides.session,
-});
+const reloadSession = (overrides: Overrides): Context["session"] => {
+  const { extensions, ...session } = overrides.session ?? {};
+  return {
+    compaction: { manual: { isCompacting: false } },
+    extensions: {
+      binding: { extensionRunner: {} },
+      runtime: {
+        reload: (options) => Promise.resolve(options?.beforeSessionStart?.()).then(() => undefined),
+      },
+      ...extensions,
+    },
+    isStreaming: false,
+    modelRegistry: { getError: () => undefined },
+    resourceLoader: { getThemes: () => ({ themes: [] }) },
+    ...session,
+  };
+};
 
 const reloadSettings = (overrides: Overrides): Context["settingsManager"] => ({
   getAutocompleteMaxVisible: () => 10,

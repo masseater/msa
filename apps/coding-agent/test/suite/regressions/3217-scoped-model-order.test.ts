@@ -76,7 +76,7 @@ const preservesScopedModelOrderInThe = Effect.gen(function* () {
   const selector = new ModelSelectorComponent(
     createFakeTui(),
     modelOne,
-    harness.session.modelRuntime,
+    harness.session.models.selection.modelRuntime,
     [{ model: modelTwo }, { model: modelOne }, { model: modelThree }],
     () => {},
     () => {},

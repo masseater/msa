@@ -14,7 +14,9 @@ void Effect.runPromise(
         }
       });
 
-      yield* Effect.promise(() => session.prompt("What files are in the current directory?"));
+      yield* Effect.promise(() =>
+        session.run.prompting.prompt("What files are in the current directory?"),
+      );
       for (const msg of session.state.messages) yield* Console.log(msg);
       yield* Console.log();
     } finally {

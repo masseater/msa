@@ -25,7 +25,7 @@ const ignoresZeroUsageMessagesWhenCheckingFor = () =>
         sessionManager.appendMessage(createAssistantMessage("partial", 0, 8));
         syncAgentMessages(session, sessionManager);
 
-        const stats = session.getSessionStats();
+        const stats = session.context.stats.getSessionStats();
         expect(stats.contextUsage).toBeDefined();
         expect(stats.contextUsage?.tokens).not.toBeNull();
         expect(stats.contextUsage?.tokens ?? 0).toBeGreaterThan(25_000);

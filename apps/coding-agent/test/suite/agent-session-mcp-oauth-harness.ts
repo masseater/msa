@@ -106,7 +106,7 @@ const setup = (browser: Browser, oauth?: configTypes.McpOAuthConfig) =>
         input,
         notify: (message) => notifications.push(message),
       });
-      yield* awaited(harness.session.bindExtensions({ uiContext }));
+      yield* awaited(harness.session.extensions.binding.bindExtensions({ uiContext }));
       return { backend, harness, notifications, opened, server };
     }),
   );

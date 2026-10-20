@@ -49,7 +49,7 @@ const appliesNameAndNameToolOptionsTo = Effect.gen(function* () {
   const session = yield* awaited(
     createSession(["+grep"], { tools: ["+inactive_tool", "-write"] }, [inactiveTool]),
   );
-  expect(session.getActiveToolNames().sort()).toEqual(
+  expect(session.tools.loadout.getActiveToolNames().sort()).toEqual(
     [
       "active_tool",
       "bash",
@@ -69,7 +69,7 @@ const appliesNameAndNameToolOptionsTo = Effect.gen(function* () {
   const toolLess = yield* awaited(
     createSession(["read"], { noTools: "all", tools: ["+inactive_tool"] }, [inactiveTool]),
   );
-  expect(toolLess.getActiveToolNames()).toEqual(["inactive_tool"]);
+  expect(toolLess.tools.loadout.getActiveToolNames()).toEqual(["inactive_tool"]);
   toolLess.dispose();
 });
 

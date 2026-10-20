@@ -54,7 +54,10 @@ const restoresTheVirtualSelectionInsteadOfThe = () =>
       const { session } = yield* awaited(resume(runtime));
 
       expect(session.model).toMatchObject({ id: "auto", provider: "router" });
-      expect(session.routedModel?.model).toMatchObject({ id: "large", provider: "faux" });
+      expect(session.models.selection.routedModel?.model).toMatchObject({
+        id: "large",
+        provider: "faux",
+      });
     }),
   );
 
@@ -94,7 +97,7 @@ const fallsBackToThePhysicalModelWhen = () =>
       const { session } = yield* awaited(resume(runtime));
 
       expect(session.model).toMatchObject({ id: "large", provider: "faux" });
-      expect(session.routedModel).toBeUndefined();
+      expect(session.models.selection.routedModel).toBeUndefined();
     }),
   );
 
@@ -163,13 +166,13 @@ const resumesTheSelectionMadeBeforeTreeNavigation = () =>
       ] as const) {
         const sessionManager = SessionManager.inMemory(tempDir);
         const session = yield* awaited(open(sessionManager, before));
-        yield* awaited(session.prompt("one"));
+        yield* awaited(session.run.prompting.prompt("one"));
         const firstAnswer = sessionManager.getLeafId()!;
-        yield* awaited(session.setModel(after));
-        yield* awaited(session.prompt("two"));
+        yield* awaited(session.models.selection.setModel(after));
+        yield* awaited(session.run.prompting.prompt("two"));
 
-        yield* awaited(session.navigateTree(firstAnswer));
-        yield* awaited(session.prompt("three"));
+        yield* awaited(session.context.tree.navigateTree(firstAnswer));
+        yield* awaited(session.run.prompting.prompt("three"));
         session.dispose();
 
         const resumed = yield* awaited(open(sessionManager));
@@ -216,8 +219,8 @@ const doesNotRecordAPhysicalSelectionOn = () =>
         sessionManager.getBranch().filter((entry) => entry.type === "model_change").length;
       const initial = modelChanges();
 
-      yield* awaited(session.prompt("one"));
-      yield* awaited(session.prompt("two"));
+      yield* awaited(session.run.prompting.prompt("one"));
+      yield* awaited(session.run.prompting.prompt("two"));
 
       expect(session.messages.filter((message) => message.role === "assistant")).toMatchObject([
         { model: "small" },
@@ -244,7 +247,7 @@ const recordsAnExplicitModelOverrideOnResume = () =>
 
       expect(lastModelChange()).toMatchObject({ modelId: "auto", provider: "router" });
 
-      yield* awaited(session.prompt("again"));
+      yield* awaited(session.run.prompting.prompt("again"));
       expect(lastModelChange()).toMatchObject({ modelId: "small", provider: "faux" });
     }),
   );

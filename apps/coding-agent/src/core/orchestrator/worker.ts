@@ -6,16 +6,20 @@ import type sessionTelemetryTypes from "../observability/session-telemetry.types
 
 declare namespace workerTypes {
   interface WorkerSession {
-    prompt(text: string): Promise<unknown>;
-    steer(text: string): Promise<unknown>;
-    abort(): Promise<unknown>;
-    setModel(model: compatTypes.Model<any>): Promise<unknown>;
-    setThinkingLevel(level: agentTypes.ThinkingLevel): void;
+    run: {
+      prompting: { prompt(text: string): Promise<unknown> };
+      queue: { steer(text: string): Promise<unknown> };
+      lifecycle: { abort(): Promise<unknown> };
+      retry: { isRetrying: boolean };
+    };
+    models: {
+      selection: { setModel(model: compatTypes.Model<any>): Promise<unknown> };
+      thinking: { setThinkingLevel(level: agentTypes.ThinkingLevel): void };
+    };
     isStreaming: boolean;
     messages: readonly agentTypes.AgentMessage[];
     sessionFile?: string | undefined;
     state: { streamingMessage?: agentTypes.AgentMessage | undefined };
-    isRetrying: boolean;
     subscribe(listener: () => void): () => void;
     dispose(): void;
   }

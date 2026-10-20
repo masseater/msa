@@ -55,7 +55,7 @@ const letsAToolCallHandlerTerminateStep1 = (echoTool: agentTypes.AgentTool<any, 
       }),
       fauxAssistantMessage("should not run"),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("hi"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
     expect(harness.getPendingResponseCount()).toBe(1);
     expect(getAssistantTexts(harness)).not.toContain("should not run");
     expect(harness.eventsOfType("tool_execution_end")[0]?.result).toHaveProperty("terminate", true);

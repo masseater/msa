@@ -17,7 +17,9 @@ const executesBashCommandsAndRecordsThe = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
 
-  const result = yield* Effect.promise(() => harness.session.executeBash("printf 'hello'"));
+  const result = yield* Effect.promise(() =>
+    harness.session.context.bash.executeBash("printf 'hello'"),
+  );
 
   expect(result.output).toContain("hello");
   expect(harness.session.messages[harness.session.messages.length - 1]?.role).toBe("bashExecution");
@@ -39,14 +41,14 @@ const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
     },
   };
 
-  const bashPromise = harness.session.executeBash("sleep", undefined, { operations });
+  const bashPromise = harness.session.context.bash.executeBash("sleep", undefined, { operations });
   yield* Effect.sleep(0);
-  expect(harness.session.isBashRunning).toBe(true);
-  harness.session.abortBash();
+  expect(harness.session.context.bash.isBashRunning).toBe(true);
+  harness.session.context.bash.abortBash();
 
   const result = yield* Effect.promise(() => bashPromise);
   expect(result.cancelled).toBe(true);
-  expect(harness.session.isBashRunning).toBe(false);
+  expect(harness.session.context.bash.isBashRunning).toBe(false);
 });
 const keepsNewerBashExecutionTrackedWhen = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -54,16 +56,16 @@ const keepsNewerBashExecutionTrackedWhen = Effect.gen(function* () {
   const invocations: agentSessionBashPersistenceCases1Types.ControlledBashInvocation[] = [];
   const operations = createControlledBashOperations(invocations);
 
-  const firstBash = harness.session.executeBash("first", undefined, { operations });
-  const secondBash = harness.session.executeBash("second", undefined, { operations });
+  const firstBash = harness.session.context.bash.executeBash("first", undefined, { operations });
+  const secondBash = harness.session.context.bash.executeBash("second", undefined, { operations });
 
   const firstInvocation = invocations[0];
   if (firstInvocation === undefined) throw new Error("expected the first bash invocation");
   firstInvocation.finish();
   const firstResult = yield* Effect.promise(() => firstBash);
-  const runningAfterFirstSettles = harness.session.isBashRunning;
+  const runningAfterFirstSettles = harness.session.context.bash.isBashRunning;
 
-  harness.session.abortBash();
+  harness.session.context.bash.abortBash();
   const secondInvocation = invocations[1];
   if (secondInvocation === undefined) throw new Error("expected the second bash invocation");
   const secondWasAborted = secondInvocation.signal?.aborted;
@@ -74,7 +76,7 @@ const keepsNewerBashExecutionTrackedWhen = Effect.gen(function* () {
   expect(runningAfterFirstSettles).toBe(true);
   expect(secondWasAborted).toBe(true);
   expect(secondResult.cancelled).toBe(true);
-  expect(harness.session.isBashRunning).toBe(false);
+  expect(harness.session.context.bash.isBashRunning).toBe(false);
 });
 const abortsAllActiveBashExecutions = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -82,10 +84,10 @@ const abortsAllActiveBashExecutions = Effect.gen(function* () {
   const invocations: agentSessionBashPersistenceCases1Types.ControlledBashInvocation[] = [];
   const operations = createControlledBashOperations(invocations);
 
-  const firstBash = harness.session.executeBash("first", undefined, { operations });
-  const secondBash = harness.session.executeBash("second", undefined, { operations });
+  const firstBash = harness.session.context.bash.executeBash("first", undefined, { operations });
+  const secondBash = harness.session.context.bash.executeBash("second", undefined, { operations });
 
-  harness.session.abortBash();
+  harness.session.context.bash.abortBash();
   const abortedSignals = invocations.map((invocation) => invocation.signal?.aborted);
   for (const invocation of invocations) {
     invocation.finish();
@@ -94,19 +96,19 @@ const abortsAllActiveBashExecutions = Effect.gen(function* () {
 
   expect(abortedSignals).toEqual([true, true]);
   expect(results.map((result) => result.cancelled)).toEqual([true, true]);
-  expect(harness.session.isBashRunning).toBe(false);
+  expect(harness.session.context.bash.isBashRunning).toBe(false);
 });
 const persistsUserAssistantToolresultAndCustomPart2 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
-      harness.session.sendCustomMessage({
+      harness.session.run.prompting.sendCustomMessage({
         content: "hello",
         customType: "note",
         details: { a: 1 },
         display: true,
       }),
     );
-    yield* Effect.promise(() => harness.session.prompt("start"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
     const entries = harness.sessionManager.getEntries();
     expect(entries.map((entry) => entry.type)).toEqual([
       "custom_message",

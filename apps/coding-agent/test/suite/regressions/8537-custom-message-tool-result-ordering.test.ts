@@ -40,7 +40,7 @@ const appendsTheMessageAfterTheTurn = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness({ tools: [slowTool] }));
   harnesses.push(harness);
   notify = () =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       { content: "subagent replied", customType: "subagent-reply", display: true },
       { triggerTurn: false },
     );
@@ -50,7 +50,7 @@ const appendsTheMessageAfterTheTurn = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
   expect(roles(harness.session.messages)).toEqual([
     "system",
@@ -81,7 +81,7 @@ const keepsSessionEntriesAndMessageEvents = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness({ tools: [slowTool] }));
   harnesses.push(harness);
   notify = () =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       { content: "subagent replied", customType: "subagent-reply", display: true },
       { triggerTurn: false },
     );
@@ -89,7 +89,7 @@ const keepsSessionEntriesAndMessageEvents = Effect.gen(function* () {
     fauxAssistantMessage([fauxToolCall("wait", {})], { stopReason: "toolUse" }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
   return yield* keepsSessionEntriesAndMessageEventsStep1(harness);
 });
 
@@ -144,7 +144,7 @@ const producesAnLlmHistoryWhereEvery = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness({ tools: [slowTool] }));
   harnesses.push(harness);
   notify = () =>
-    harness.session.sendCustomMessage(
+    harness.session.run.prompting.sendCustomMessage(
       { content: "subagent replied", customType: "subagent-reply", display: true },
       { triggerTurn: false },
     );
@@ -153,13 +153,13 @@ const producesAnLlmHistoryWhereEvery = Effect.gen(function* () {
     fauxAssistantMessage("done"),
     fauxAssistantMessage("second turn"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
   return yield* producesAnLlmHistoryWhereEveryStep1(harness);
 });
 
 const producesAnLlmHistoryWhereEveryStep1 = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
-    yield* Effect.promise(() => harness.session.prompt("and now?"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("and now?"));
     const llmMessages = convertToLlm(harness.session.messages);
     const openToolCallIds = new Set<string>();
     for (const message of llmMessages) {

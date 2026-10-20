@@ -34,7 +34,9 @@ void Effect.runPromise(
         }
       });
 
-      yield* Effect.promise(() => session.prompt("List files in the current directory."));
+      yield* Effect.promise(() =>
+        session.run.prompting.prompt("List files in the current directory."),
+      );
       yield* Console.log();
     } finally {
       session.dispose();

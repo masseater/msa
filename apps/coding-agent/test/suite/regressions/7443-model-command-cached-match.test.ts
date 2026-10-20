@@ -22,7 +22,7 @@ const matchesTheAvailabilitySnapshotWithoutStarting = Effect.gen(function* () {
     createHarness({ models: [{ id: "cached", name: "Cached" }] }),
   );
   const refresh = vi
-    .spyOn(harness.session.modelRuntime, "refresh")
+    .spyOn(harness.session.models.selection.modelRuntime, "refresh")
     .mockImplementation(() => neverPromise());
   const context = { session: harness.session, showStatus: vi.fn(), showWarning: vi.fn() };
 
@@ -39,10 +39,12 @@ const usesACallerOwnedDeadlineOnly = Effect.gen(function* () {
   harness = yield* Effect.promise(() =>
     createHarness({ models: [{ id: "cached", name: "Cached" }] }),
   );
-  const refresh = vi.spyOn(harness.session.modelRuntime, "refresh").mockResolvedValue({
-    aborted: true,
-    errors: new Map(),
-  });
+  const refresh = vi
+    .spyOn(harness.session.models.selection.modelRuntime, "refresh")
+    .mockResolvedValue({
+      aborted: true,
+      errors: new Map(),
+    });
   const context = { session: harness.session, showStatus: vi.fn(), showWarning: vi.fn() };
 
   yield* Effect.promise(() =>

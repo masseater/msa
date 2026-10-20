@@ -111,7 +111,9 @@ describe("Interactive user_bash failure handling (#9068)", () => {
     Effect.runPromise(
       Effect.gen(function* () {
         const { events, harness } = yield* partPart1();
-        const executeBash = vi.spyOn(harness.session, "executeBash").mockResolvedValue(localResult);
+        const executeBash = vi
+          .spyOn(harness.session.context.bash, "executeBash")
+          .mockResolvedValue(localResult);
         const context: InteractiveBashContext = {
           chatContainer: { addChild: vi.fn() },
           defaultEditor: {},

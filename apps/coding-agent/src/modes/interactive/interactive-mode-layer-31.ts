@@ -36,7 +36,7 @@ export default abstract class InteractiveModeLayer31 extends InteractiveModeLaye
     if (
       restoreProgress &&
       this.settingsManager.getShowTerminalProgress() &&
-      (this.session.isStreaming || this.session.isCompacting)
+      (this.session.isStreaming || this.session.compaction.manual.isCompacting)
     ) {
       terminal.setProgress(true);
     }
@@ -107,7 +107,7 @@ export default abstract class InteractiveModeLayer31 extends InteractiveModeLaye
         this.settingsManager.setShowTerminalProgress(enabled);
       },
       onSteeringModeChange: (mode) => {
-        this.session.setSteeringMode(mode);
+        this.session.run.queue.setSteeringMode(mode);
       },
       onThemeChange: (themeSetting) => {
         this.settingsManager.setTheme(themeSetting);

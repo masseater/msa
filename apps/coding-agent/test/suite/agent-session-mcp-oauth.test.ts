@@ -21,14 +21,14 @@ const { runCleanups, setup } = agentSessionMcpOauthHarness;
 const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
   const { harness, server, notifications, backend } = yield* Effect.promise(() => setup("follow"));
 
-  yield* Effect.promise(() => harness.session.prompt("/mcp"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp"));
 
   expect(notifications).toContain(
     "MCP servers need attention:\n  issues: needs sign-in\nRun /mcp to fix.",
   );
   expect(notifications.at(-1)).toBe("issues: needs sign-in, run /mcp login issues (direct)");
 
-  yield* Effect.promise(() => harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
   expect(server.log).toEqual(["401 none", "register", "token code"]);
   expect(backend.withLock((current) => ({ result: current }))).toContain(
@@ -49,7 +49,7 @@ const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe("token access-3");
   expect(server.log.slice(-2)).toEqual(["token refresh", "call access-3"]);
 
-  yield* Effect.promise(() => harness.session.prompt("/mcp logout issues"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp logout issues"));
   expect(notifications.at(-1)).toBe('Signed out of MCP server "issues".');
   const result = yield* Effect.promise(() => callWhoami(harness));
   expect(result.isError).toBe(true);
@@ -59,7 +59,7 @@ const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
 const acceptsAPastedRedirectUrlWhen = Effect.gen(function* () {
   const { harness, server, notifications } = yield* Effect.promise(() => setup("paste"));
 
-  yield* Effect.promise(() => harness.session.prompt("/mcp login"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe(`token access-1`);
   expect(server.log).toContain("token code");
@@ -70,7 +70,7 @@ function shutdown(harness: harnessTypes.Harness): Promise<number> {
     Effect.gen(function* () {
       const start = currentTimeMillis();
       yield* Effect.promise(() =>
-        emitSessionShutdownEvent(harness.session.extensionRunner, {
+        emitSessionShutdownEvent(harness.session.extensions.binding.extensionRunner, {
           reason: "quit",
           type: "session_shutdown",
         }),
@@ -86,7 +86,7 @@ for (const path of ["/.well-known/oauth-authorization-server", "/token"]) {
       Effect.gen(function* () {
         const { harness, server, notifications } = yield* Effect.promise(() => setup("follow"));
         server.stall.add(path);
-        const login = harness.session.prompt("/mcp login issues");
+        const login = harness.session.run.prompting.prompt("/mcp login issues");
         yield* Effect.promise(() =>
           vi.waitFor(() => expect(server.stalled).toHaveLength(1), { timeout: 5_000 }),
         );
@@ -102,7 +102,7 @@ for (const path of ["/.well-known/oauth-authorization-server", "/token"]) {
 
 const closesTheSessionWithoutRefreshingAn = Effect.gen(function* () {
   const { harness, server, notifications, backend } = yield* Effect.promise(() => setup("follow"));
-  yield* Effect.promise(() => harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
 
   backend.withLock((current) => {

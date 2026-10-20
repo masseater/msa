@@ -30,7 +30,7 @@ const usesTheConfiguredCallbackUrlAnd = Effect.gen(function* () {
     }),
   );
 
-  yield* Effect.promise(() => harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
   expect(opened[0]?.searchParams.get("redirect_uri")).toBe(callbackUrl);
   expect(opened[0]?.searchParams.get("scope")).toBe("issues:read");
@@ -41,12 +41,12 @@ const registersWithTheConfiguredClientName = Effect.gen(function* () {
   const { harness, server, notifications } = yield* Effect.promise(() =>
     setup("follow", { clientName: "Claude Code" }),
   );
-  yield* Effect.promise(() => harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
   expect(server.registrations.map((metadata) => metadata["client_name"])).toEqual(["Claude Code"]);
 
   const fallback = yield* Effect.promise(() => setup("follow"));
-  yield* Effect.promise(() => fallback.harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => fallback.harness.session.run.prompting.prompt("/mcp login issues"));
   expect(fallback.server.registrations.map((metadata) => metadata["client_name"])).toEqual(["msa"]);
 
   expect(fallback.server.registrations.map((metadata) => metadata["application_type"])).toEqual([
@@ -60,7 +60,7 @@ const addsTheListeningPortToA = Effect.gen(function* () {
       callbackUrl: "http://127.0.0.1/oauth/done",
     }),
   );
-  yield* Effect.promise(() => harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
   expect(opened[0]?.searchParams.get("redirect_uri")).toMatch(
     /^http:\/\/127\.0\.0\.1:\d+\/oauth\/done$/u,
@@ -73,7 +73,7 @@ const addsTheListeningPortToA = Effect.gen(function* () {
       callbackUrl: "http://127.0.0.1/oauth/done",
     }),
   );
-  yield* Effect.promise(() => fixed.harness.session.prompt("/mcp login issues"));
+  yield* Effect.promise(() => fixed.harness.session.run.prompting.prompt("/mcp login issues"));
   expect(fixed.opened[0]?.searchParams.get("redirect_uri")).toBe(
     `http://127.0.0.1:${port}/oauth/done`,
   );

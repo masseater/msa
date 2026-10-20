@@ -15,7 +15,6 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   model: aiTypes.Model<any>;
   thinkingLevel: agentTypes.ThinkingLevel;
   telemetry: orchestratorTypes.CreateWorkerOptions["telemetry"];
-  isRetrying = false;
   state: { streamingMessage?: agentTypes.AgentMessage } = {};
   private readonly pending: Array<{
     resolve: (reply: string) => void;
@@ -68,6 +67,20 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   };
 
   dispose = () => {};
+
+  readonly run = {
+    lifecycle: { abort: () => this.abort() },
+    prompting: { prompt: (text: string) => this.prompt(text) },
+    queue: { steer: (text: string) => this.steer(text) },
+    retry: { isRetrying: false },
+  };
+
+  readonly models = {
+    selection: { setModel: (next: aiTypes.Model<any>) => this.setModel(next) },
+    thinking: {
+      setThinkingLevel: (level: agentTypes.ThinkingLevel) => this.setThinkingLevel(level),
+    },
+  };
 
   subscribe = () => () => {};
 

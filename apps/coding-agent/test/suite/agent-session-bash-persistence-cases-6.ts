@@ -25,7 +25,7 @@ const recordsBashOutputThroughCustomOperations = Effect.gen(function* () {
   };
 
   const result = yield* Effect.promise(() =>
-    harness.session.executeBash("custom", undefined, { operations }),
+    harness.session.context.bash.executeBash("custom", undefined, { operations }),
   );
 
   expect(result.output).toContain("hello from custom ops");
@@ -54,7 +54,7 @@ const streamsBashOutputToTheCallback = Effect.gen(function* () {
   };
 
   yield* Effect.promise(() =>
-    harness.session.executeBash("custom", (delta) => callbackDeltas.push(delta), {
+    harness.session.context.bash.executeBash("custom", (delta) => callbackDeltas.push(delta), {
       id: "bash-1",
       operations,
     }),
@@ -91,7 +91,7 @@ const runChunks = (entry: {
           ),
       };
       const result = yield* Effect.promise(() =>
-        harness.session.executeBash("custom", (delta) => deltas.push(delta), {
+        harness.session.context.bash.executeBash("custom", (delta) => deltas.push(delta), {
           operations,
         }),
       );

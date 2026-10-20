@@ -114,11 +114,11 @@ function setup(complex: number, tools: agentTypes.AgentTool[]) {
         }),
       );
       harnesses.push(harness);
-      const runtime = harness.session.modelRuntime;
+      const runtime = harness.session.models.selection.modelRuntime;
       harness.session.agent.streamFunction = (model, context, options) =>
         runtime.streamSimple(model, context, options);
       yield* awaited(runtime.refresh({ allowNetwork: false }));
-      yield* awaited(harness.session.setModel(runtime.getModel("jev", "auto")!));
+      yield* awaited(harness.session.models.selection.setModel(runtime.getModel("jev", "auto")!));
 
       const respond = (...messages: aiTypes.AssistantMessage[]) => codex.appendResponses(messages);
       const dispatched = () =>
@@ -152,9 +152,9 @@ const letsSolMakeTheFirstEditAnd = () =>
       );
 
       respond(call("read"), call("edit"), fauxAssistantMessage("done"));
-      yield* awaited(harness.session.prompt("Refactor the cache layer."));
+      yield* awaited(harness.session.run.prompting.prompt("Refactor the cache layer."));
       respond(fauxAssistantMessage("added"));
-      yield* awaited(harness.session.prompt("Also add tests."));
+      yield* awaited(harness.session.run.prompting.prompt("Also add tests."));
 
       expect(dispatched()).toEqual(["sol", "sol", "luna", "luna"]);
       expect(phases()).toEqual(["planning", "implementation"]);
@@ -170,7 +170,7 @@ const plansOnTerraAndIgnoresFailedEdits = () =>
       );
 
       respond(call("edit"), call("write"), fauxAssistantMessage("done"));
-      yield* awaited(harness.session.prompt("Add a verbose flag."));
+      yield* awaited(harness.session.run.prompting.prompt("Add a verbose flag."));
 
       expect(dispatched()).toEqual(["terra", "terra", "luna"]);
       expect(phases()).toEqual(["planning", "implementation"]);

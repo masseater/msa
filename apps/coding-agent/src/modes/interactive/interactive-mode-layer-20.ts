@@ -97,7 +97,10 @@ export default abstract class InteractiveModeLayer20 extends InteractiveModeLaye
     this.pendingTools.clear();
     const renderedPendingTools = new Map<string, toolExecutionTypes.ToolExecutionComponent>();
     const cacheMisses = this.settingsManager.getShowCacheMissNotices()
-      ? collectCacheMisses(this.sessionManager.getEntries(), this.session.modelRuntime)
+      ? collectCacheMisses(
+          this.sessionManager.getEntries(),
+          this.session.models.selection.modelRuntime,
+        )
       : new Map<compatTypes.AssistantMessage, cacheStatsTypes.CacheMiss>();
 
     if (options.updateFooter === true) {

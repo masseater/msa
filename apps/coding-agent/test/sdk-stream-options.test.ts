@@ -19,14 +19,20 @@ const schedulesCacheWarmingAfterACompletedSession = () =>
     Effect.gen(function* () {
       const fixture = yield* awaited(createCacheWarmingSession());
       try {
-        yield* awaited(fixture.session.prompt("test"));
-        expect(fixture.session.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(currentTimeMillis());
+        yield* awaited(fixture.session.run.prompting.prompt("test"));
+        expect(fixture.session.models.cacheWarming.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(
+          currentTimeMillis(),
+        );
 
         fixture.session.agent.state.messages = [...fixture.session.agent.state.messages];
         fixture.session.agent.state.model = { ...fixture.session.agent.state.model };
-        expect(fixture.session.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(currentTimeMillis());
+        expect(fixture.session.models.cacheWarming.cacheWarmingStatus?.nextWarmAt).toBeGreaterThan(
+          currentTimeMillis(),
+        );
         fixture.session.agent.state.messages = fixture.session.agent.state.messages.slice(1);
-        expect(fixture.session.cacheWarmingStatus?.reason).toBe("conversation context changed");
+        expect(fixture.session.models.cacheWarming.cacheWarmingStatus?.reason).toBe(
+          "conversation context changed",
+        );
       } finally {
         fixture.dispose();
       }
@@ -55,7 +61,7 @@ const waitsForTheNextRequestInsteadOf = () =>
       );
       try {
         expect(fixture.providerCalls()).toBe(0);
-        expect(fixture.session.cacheWarmingStatus).toEqual({
+        expect(fixture.session.models.cacheWarming.cacheWarmingStatus).toEqual({
           reason: "waiting for first request",
           state: "inactive",
         });

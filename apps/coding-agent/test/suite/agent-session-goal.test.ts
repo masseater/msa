@@ -33,11 +33,11 @@ const worksFromTheConditionAloneAnd = Effect.gen(function* () {
     verdict("met", "tests pass"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal make the tests pass"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal make the tests pass"));
 
   expect(harness.getPendingResponseCount()).toBe(0);
   expect(getUserTexts(harness)).toEqual(["make the tests pass"]);
-  expect(harness.session.goal).toBeUndefined();
+  expect(harness.session.integrations.goal.goal).toBeUndefined();
   expect(goalEvents(harness).map((data) => data.event)).toEqual(["set", "evaluated", "met"]);
   expect(goalEvents(harness).at(-1)).toMatchObject({
     event: "met",
@@ -55,9 +55,9 @@ const endsTheGoalWhenTheEvaluator = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => setup());
   harness.setResponses([...workTurn("blocked"), verdict("impossible", "needs a password")]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal deploy"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal deploy"));
 
-  expect(harness.session.goal).toBeUndefined();
+  expect(harness.session.integrations.goal.goal).toBeUndefined();
   expect(goalEvents(harness).at(-1)).toMatchObject({
     event: "impossible",
     reason: "needs a password",
@@ -75,45 +75,47 @@ const handsControlBackAfterTurnsWithout = Effect.gen(function* () {
     verdict("not_met", "nothing done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal ship it"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal ship it"));
 
   expect(harness.getPendingResponseCount()).toBe(0);
-  expect(harness.session.goal?.condition).toBe("ship it");
-  expect(harness.session.goal?.turns).toBe(3);
+  expect(harness.session.integrations.goal.goal?.condition).toBe("ship it");
+  expect(harness.session.integrations.goal.goal?.turns).toBe(3);
   expect(goalEvents(harness).at(-1)?.event).toBe("paused");
 
   harness.setResponses([...workTurn("done"), verdict("met", "shipped")]);
-  yield* Effect.promise(() => harness.session.prompt("go on"));
-  expect(harness.session.goal).toBeUndefined();
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go on"));
+  expect(harness.session.integrations.goal.goal).toBeUndefined();
 });
 
 const showsStatusAndClearsWithGoal = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => setup());
-  harness.session.setGoal("first");
-  yield* Effect.promise(() => harness.session.prompt("/goal"));
+  harness.session.integrations.goal.setGoal("first");
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal"));
   expect(harness.eventsOfType("goal_status").at(-1)?.goal?.condition).toBe("first");
 
-  yield* Effect.promise(() => harness.session.prompt("/goal stop"));
-  expect(harness.session.goal).toBeUndefined();
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal stop"));
+  expect(harness.session.integrations.goal.goal).toBeUndefined();
   expect(goalEvents(harness).map((data) => data.event)).toEqual(["set", "cleared"]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal clear"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal clear"));
   expect(harness.eventsOfType("goal_status").at(-1)?.goal).toBeUndefined();
 });
 
 const replacesAnActiveGoalWithA = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => setup());
-  harness.session.setGoal("first");
-  harness.session.setGoal("second");
-  expect(harness.session.goal?.condition).toBe("second");
+  harness.session.integrations.goal.setGoal("first");
+  harness.session.integrations.goal.setGoal("second");
+  expect(harness.session.integrations.goal.goal?.condition).toBe("second");
 });
 
 const rejectsConditionsOver4000Characters = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => setup());
   yield* Effect.promise(() =>
-    expect(harness.session.prompt(`/goal ${"x".repeat(4001)}`)).rejects.toThrow("4000"),
+    expect(harness.session.run.prompting.prompt(`/goal ${"x".repeat(4001)}`)).rejects.toThrow(
+      "4000",
+    ),
   );
-  expect(harness.session.goal).toBeUndefined();
+  expect(harness.session.integrations.goal.goal).toBeUndefined();
 });
 
 const clearsTheGoalOnAnAuthentication = Effect.gen(function* () {
@@ -122,9 +124,9 @@ const clearsTheGoalOnAnAuthentication = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "401 Unauthorized", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal anything"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal anything"));
 
-  expect(harness.session.goal).toBeUndefined();
+  expect(harness.session.integrations.goal.goal).toBeUndefined();
   expect(goalEvents(harness).at(-1)).toMatchObject({
     event: "failed",
     reason: "401 Unauthorized",
@@ -143,10 +145,10 @@ const retriesOtherErrorsAndPausesWith = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "socket hang up", stopReason: "error" });
   harness.setResponses([failure(), failure(), failure()]);
 
-  yield* Effect.promise(() => harness.session.prompt("/goal anything"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/goal anything"));
 
   expect(harness.getPendingResponseCount()).toBe(0);
-  expect(harness.session.goal?.condition).toBe("anything");
+  expect(harness.session.integrations.goal.goal?.condition).toBe("anything");
   expect(goalEvents(harness).at(-1)?.event).toBe("paused");
 });
 

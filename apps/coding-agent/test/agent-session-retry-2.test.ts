@@ -52,11 +52,11 @@ const promptWaitsForFullAgentLoopWhen = () =>
         streamFn: stream.streamFn,
         tools: [echoTool(executed)],
       });
-      yield* awaited(session.prompt("Test"));
+      yield* awaited(session.run.prompting.prompt("Test"));
       expect(stream.callCount()).toBe(3);
       expect(executed.value).toBe(true);
       expect(session.isStreaming).toBe(false);
-      yield* awaited(session.prompt("Follow-up"));
+      yield* awaited(session.run.prompting.prompt("Follow-up"));
       expect(stream.callCount()).toBe(4);
     }),
   );

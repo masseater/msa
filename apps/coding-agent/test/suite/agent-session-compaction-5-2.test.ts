@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompaction5Support from "./agent-session-compaction-5-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
@@ -20,8 +19,7 @@ const { currentTimeMillis } = testing;
 const ignoresStalePreCompactionAssistantUsage = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const staleTimestamp = currentTimeMillis() - 10_000;
   const staleAssistant = createAssistant(harness, {
     stopReason: "stop",
@@ -61,8 +59,7 @@ const ignoresStalePreCompactionAssistantUsage = Effect.gen(function* () {
 const triggersThresholdCompactionForErrorMessages = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const successfulAssistant = createAssistant(harness, {
     stopReason: "stop",
     timestamp: currentTimeMillis(),
@@ -100,8 +97,7 @@ const triggersThresholdCompactionForErrorMessages = Effect.gen(function* () {
 const doesNotTriggerThresholdCompactionFor = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const errorAssistant = createAssistant(harness, {
     errorMessage: "529 overloaded",
     stopReason: "error",
@@ -128,8 +124,7 @@ const doesNotTriggerThresholdCompactionFor = Effect.gen(function* () {
 const doesNotTriggerThresholdCompactionWhen = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const preCompactionTimestamp = currentTimeMillis() - 10_000;
   const keptAssistant = createAssistant(harness, {
     stopReason: "stop",
@@ -166,7 +161,7 @@ const doesNotTriggerThresholdCompactionWhen = Effect.gen(function* () {
 
 const doesNotTriggerThresholdCompactionWhenStep1 = (
   harness: harnessTypes.Harness,
-  sessionInternals: agentSessionCompactionSupportTypes.SessionWithCompactionInternals,
+  sessionInternals: harnessTypes.Harness["session"]["compaction"]["auto"],
   preCompactionTimestamp: number,
   keptAssistant: aiTypes.AssistantMessage,
   errorAssistant: aiTypes.AssistantMessage,

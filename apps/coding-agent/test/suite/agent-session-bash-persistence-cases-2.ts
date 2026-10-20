@@ -58,27 +58,27 @@ const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
     });
   }
 
-  const firstPrompt = harness.session.prompt("start");
+  const firstPrompt = harness.session.run.prompting.prompt("start");
   yield* Effect.promise(() => sawToolStart);
-  harness.session.recordBashResult("echo hi", {
+  harness.session.context.bash.recordBashResult("echo hi", {
     cancelled: false,
     exitCode: 0,
     output: "hi",
     truncated: false,
   });
 
-  expect(harness.session.hasPendingBashMessages).toBe(true);
+  expect(harness.session.context.bash.hasPendingBashMessages).toBe(true);
   expect(harness.session.messages.some((message) => message.role === "bashExecution")).toBe(false);
 
   toolRelease.release();
   yield* Effect.promise(() => firstPrompt);
 
-  expect(harness.session.hasPendingBashMessages).toBe(false);
+  expect(harness.session.context.bash.hasPendingBashMessages).toBe(false);
   expect(harness.session.messages.some((message) => message.role === "bashExecution")).toBe(true);
 
-  yield* Effect.promise(() => harness.session.prompt("next turn"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("next turn"));
 
-  expect(harness.session.hasPendingBashMessages).toBe(false);
+  expect(harness.session.context.bash.hasPendingBashMessages).toBe(false);
   expect(harness.session.messages.some((message) => message.role === "bashExecution")).toBe(true);
   expect(getEntryTypes(harness).filter((type) => type === "message").length).toBeGreaterThan(0);
 });

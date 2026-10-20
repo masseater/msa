@@ -26,9 +26,9 @@ const callsMultipleExtensionsInOrder = () =>
         recordingExtension("extension1", callOrder),
         recordingExtension("extension2", callOrder),
       ]);
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
-      yield* awaited(session.compact());
+      yield* awaited(session.compaction.manual.compact());
       expect(callOrder).toEqual([
         "extension1-before",
         "extension2-before",

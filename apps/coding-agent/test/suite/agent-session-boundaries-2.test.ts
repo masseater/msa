@@ -79,7 +79,7 @@ const keepsABoundaryReplacementVerbatimThrough = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("original input"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("original input"));
 
   expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
   expect(requests).toHaveLength(1);
@@ -138,7 +138,7 @@ const keepsBoundaryInputVerbatimThroughThreshold = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("old input ".repeat(500)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("old input ".repeat(500)));
 
   expect(harness.eventsOfType("compaction_start").length).toBeGreaterThan(0);
   expect(requests).toHaveLength(1);

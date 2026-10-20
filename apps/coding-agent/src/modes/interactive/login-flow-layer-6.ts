@@ -69,7 +69,7 @@ export default abstract class LoginFlowLayer6 extends LoginFlowLayer5 {
         const timeout = schedule(() => controller.abort(), CREDENTIAL_TIMEOUT_MS);
         try {
           const result = yield* awaited(
-            session.modelRuntime.refresh({
+            session.models.selection.modelRuntime.refresh({
               providers: [providerId],
               signal: controller.signal,
             }),

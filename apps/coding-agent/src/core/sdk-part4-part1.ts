@@ -308,7 +308,10 @@ function createAgentSession(
                     yield* awaited(workerResourceLoader.reload());
                     const workerFlagValues =
                       workerResourceLoader.getExtensions().runtime.flagValues;
-                    for (const [name, value] of session.extensionRunner.getFlagValues()) {
+                    for (const [
+                      name,
+                      value,
+                    ] of session.extensions.binding.extensionRunner.getFlagValues()) {
                       workerFlagValues.set(name, value);
                     }
                     const workerTools = options.tools?.filter(
@@ -347,7 +350,9 @@ function createAgentSession(
                               ),
                       }),
                     );
-                    yield* awaited(workerSession.bindExtensions({ mode: "print" }));
+                    yield* awaited(
+                      workerSession.extensions.binding.bindExtensions({ mode: "print" }),
+                    );
                     return workerSession;
                   }),
                 )

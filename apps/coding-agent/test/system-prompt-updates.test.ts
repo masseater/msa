@@ -26,8 +26,8 @@ const declaresThePromptAndToolsOnceAnd = () =>
       const harness = yield* awaited(createHarness());
       try {
         harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
-        yield* awaited(harness.session.prompt("one"));
-        yield* awaited(harness.session.prompt("two"));
+        yield* awaited(harness.session.run.prompting.prompt("one"));
+        yield* awaited(harness.session.run.prompting.prompt("two"));
         const systemEntries = harness.sessionManager
           .getEntries()
           .filter((entry) => entry.type === "message" && entry.message.role === "system");
@@ -59,7 +59,7 @@ const declaresThePromptAndToolsOnceAnd = () =>
           "model_policy",
           "model_upgrade",
         ]);
-        expect(getSystemMessageText(head)).toBe(harness.session.systemPrompt);
+        expect(getSystemMessageText(head)).toBe(harness.session.tools.prompt.systemPrompt);
       } finally {
         harness.cleanup();
       }

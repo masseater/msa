@@ -19,7 +19,7 @@ const simpleTextResponse = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["hello world"] }));
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       expect(harness.faux.callCount).toBe(1);
 
@@ -37,9 +37,9 @@ const responseSequence = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["first", "second", "third"] }));
 
-      yield* awaited(harness.session.prompt("a"));
-      yield* awaited(harness.session.prompt("b"));
-      yield* awaited(harness.session.prompt("c"));
+      yield* awaited(harness.session.run.prompting.prompt("a"));
+      yield* awaited(harness.session.run.prompting.prompt("b"));
+      yield* awaited(harness.session.run.prompting.prompt("c"));
 
       expect(harness.faux.callCount).toBe(3);
 
@@ -82,7 +82,7 @@ const toolCallResponseTriggersToolExecution = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("use the tool"));
+      yield* awaited(harness.session.run.prompting.prompt("use the tool"));
 
       expect(toolExecuted).toBe(true);
       expect(harness.faux.callCount).toBe(2);
@@ -101,7 +101,7 @@ const errorResponse = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const assistantMessages = harness.session.messages.filter(
         (m): m is aiTypes.AssistantMessage => m.role === "assistant",
@@ -122,7 +122,7 @@ const turnsAPendingTerminalResponseIntoAn = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const assistantMessages = harness.session.messages.filter(
         (m): m is aiTypes.AssistantMessage => m.role === "assistant",
@@ -143,7 +143,7 @@ const retryOnTransientError = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       expect(harness.faux.callCount).toBe(2);
 
@@ -165,7 +165,7 @@ const customUsageNumbers = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const msg = harness.session.messages.find(
         (m): m is aiTypes.AssistantMessage => m.role === "assistant",

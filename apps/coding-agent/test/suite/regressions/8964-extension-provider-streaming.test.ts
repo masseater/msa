@@ -81,7 +81,7 @@ const streamsThroughModelRegistry = (method: "stream" | "streamSimple") =>
     );
     try {
       expect(getApiProvider(faux.api)).toBeUndefined();
-      yield* Effect.promise(() => harness.session.prompt("/stream-custom"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("/stream-custom"));
 
       expect(observed.receivedApiKey).toBe("extension-key");
       expect(observed.streamedText).toBe("custom provider response");

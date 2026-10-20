@@ -43,7 +43,7 @@ const emitsSessionBeforeSwitchAndSessionStartPart1 = () =>
     expect(events).toEqual([{ reason: "startup", type: "session_start" as const }]);
     events.length = 0;
 
-    yield* awaited(runtimeHost.session.prompt("hello"));
+    yield* awaited(runtimeHost.session.run.prompting.prompt("hello"));
     return { events, runtimeHost };
   });
 
@@ -54,7 +54,7 @@ const emitsSessionBeforeSwitchAndSessionStart = Effect.gen(function* () {
 
   const newSessionResult = yield* awaited(runtimeHost.newSession());
   expect(newSessionResult.cancelled).toBe(false);
-  yield* awaited(runtimeHost.session.bindExtensions({}));
+  yield* awaited(runtimeHost.session.extensions.binding.bindExtensions({}));
   const secondSessionFile = runtimeHost.session.sessionFile;
   expect(events).toEqual([
     { reason: "new", targetSessionFile: undefined, type: "session_before_switch" as const },
@@ -75,7 +75,7 @@ const emitsSessionBeforeSwitchAndSessionStart = Effect.gen(function* () {
 
   const switchResult = yield* awaited(runtimeHost.switchSession(originalSessionFile!));
   expect(switchResult.cancelled).toBe(false);
-  yield* awaited(runtimeHost.session.bindExtensions({}));
+  yield* awaited(runtimeHost.session.extensions.binding.bindExtensions({}));
   expect(events).toEqual([
     {
       reason: "resume",
@@ -112,7 +112,7 @@ const honorsSessionBeforeSwitchCancellation = Effect.gen(function* () {
   expect(events).toEqual([{ reason: "startup", type: "session_start" as const }]);
   events.length = 0;
 
-  yield* awaited(runtimeHost.session.prompt("hello"));
+  yield* awaited(runtimeHost.session.run.prompting.prompt("hello"));
   const originalSessionFile = runtimeHost.session.sessionFile;
 
   const result = yield* awaited(runtimeHost.newSession());

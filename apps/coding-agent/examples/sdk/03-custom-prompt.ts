@@ -32,7 +32,7 @@ const replacePrompt = Effect.gen(function* () {
     });
 
     yield* Console.log("=== Replace prompt ===");
-    yield* Effect.promise(() => session1.prompt("What is 2 + 2?"));
+    yield* Effect.promise(() => session1.run.prompting.prompt("What is 2 + 2?"));
     yield* Console.log("\n");
   } finally {
     session1.dispose();
@@ -65,7 +65,7 @@ const modifyPrompt = Effect.gen(function* () {
     });
 
     yield* Console.log("=== Modify prompt ===");
-    yield* Effect.promise(() => session2.prompt("List 3 benefits of TypeScript."));
+    yield* Effect.promise(() => session2.run.prompting.prompt("List 3 benefits of TypeScript."));
     yield* Console.log();
   } finally {
     session2.dispose();

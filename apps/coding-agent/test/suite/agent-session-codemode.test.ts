@@ -26,41 +26,41 @@ const presentsCallableToolsPerCodemodeMode = Effect.gen(function* () {
     return fauxAssistantMessage("ok");
   };
 
-  harness.session.setActiveToolsByName(["read", "echo", "codemode"]);
+  harness.session.tools.loadout.setActiveToolsByName(["read", "echo", "codemode"]);
   expect(description("echo")).toContain("Codemode: `tools.echo(args)` resolves to");
   expect(description("echo")).not.toContain("codemode tool declaration:");
   expect(description("codemode")).not.toContain("### `echo`");
   harness.setResponses([record]);
-  yield* Effect.promise(() => harness.session.prompt("on"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("on"));
   expect(requestTools[0]).toEqual(expect.arrayContaining(["read", "echo", "codemode"]));
   expect(requestPrompts[0]).toContain("\n- read: ");
 
   harness.settingsManager.applyOverrides({ codemode: { mode: "only" } });
-  harness.session.setActiveToolsByName(["read", "echo", "codemode"]);
+  harness.session.tools.loadout.setActiveToolsByName(["read", "echo", "codemode"]);
   expect(description("echo")).not.toContain("Codemode: `tools.echo");
   expect(description("codemode")).toContain("### `echo`");
   expect(description("codemode")).not.toContain("### `stats`");
   harness.setResponses([record]);
-  yield* Effect.promise(() => harness.session.prompt("only"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("only"));
   expect(requestTools[1]).toContain("codemode");
   expect(requestTools[1]).not.toContain("echo");
   expect(requestTools[1]).not.toContain("read");
 
   expect(requestPrompts[1]).not.toContain("\n- read: ");
   expect(requestPrompts[1]).toContain("\n- codemode: ");
-  expect(harness.session.systemPrompt).not.toContain("\n- read: ");
+  expect(harness.session.tools.prompt.systemPrompt).not.toContain("\n- read: ");
 
   expect(requestPrompts[1]).not.toContain("Use read to examine files");
   expect(description("codemode")).toContain("- Use read to examine files instead of cat or sed.");
 
-  harness.session.setActiveToolsByName(["echo"]);
+  harness.session.tools.loadout.setActiveToolsByName(["echo"]);
   expect(description("echo")).toBe("Echo text back.\n\nSecond paragraph.");
 });
 
 const showsTheGuidelinesOfToolsThat = Effect.gen(function* () {
   const harness = yield* setup();
   harness.settingsManager.applyOverrides({ codemode: { inlineBudget: 0, mode: "only" } });
-  harness.session.setActiveToolsByName(["read", "codemode"]);
+  harness.session.tools.loadout.setActiveToolsByName(["read", "codemode"]);
   const codemode = harness.session.agent.state.tools.find((tool) => tool.name === "codemode");
   expect(codemode?.description).not.toContain("### `read`");
   harness.setResponses([
@@ -70,7 +70,7 @@ const showsTheGuidelinesOfToolsThat = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(resultText(codemodeResult(harness))).toContain(
     "- Use read to examine files instead of cat or sed.",

@@ -55,7 +55,7 @@ export default abstract class LoginFlowLayer4 extends LoginFlowLayer3 {
             ),
           );
           host.editorSlot.restoreEditor();
-          host.session.refreshExternalServiceTools();
+          host.session.tools.externalServices.refreshExternalServiceTools();
           host.showStatus(`Signed in to ${service.name}; ${service.purpose} is available.`);
         } catch (error: unknown) {
           host.editorSlot.restoreEditor();

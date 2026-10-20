@@ -30,10 +30,12 @@ const exportsWithTheActiveFallbackTheme = Effect.gen(function* () {
   );
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("hello")]);
-  yield* awaited(harness.session.prompt("hi"));
+  yield* awaited(harness.session.run.prompting.prompt("hi"));
   initTheme(harness.settingsManager.getTheme());
   const outputPath = joinPath(sessionDir, "export.html");
-  yield* awaited(expect(harness.session.exportToHtml(outputPath)).resolves.toBe(outputPath));
+  yield* awaited(
+    expect(harness.session.context.exports.exportToHtml(outputPath)).resolves.toBe(outputPath),
+  );
   expect(yield* pathExists(outputPath)).toBe(true);
   expect(harness.settingsManager.getTheme()).toBe("missing-theme");
 });

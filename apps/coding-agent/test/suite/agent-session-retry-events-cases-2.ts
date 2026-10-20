@@ -48,12 +48,12 @@ const waitsForTheFullLoopWhen = Effect.gen(function* () {
     fauxAssistantMessage("final answer"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("test"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
   expect(harness.faux.state.callCount).toBe(3);
   expect(toolRuns).toEqual(["hello"]);
   expect(harness.session.isStreaming).toBe(false);
-  yield* Effect.promise(() => harness.session.prompt("follow-up"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("follow-up"));
   expect(harness.faux.state.callCount).toBe(4);
 });
 const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
@@ -68,7 +68,7 @@ const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
       }
     });
     harness.setResponses([fauxAssistantMessage("done")]);
-    yield* Effect.promise(() => harness.session.prompt("hi"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
     expect(order).toEqual([
       "extension:message_start:system",
       "public:message_start:system",
@@ -118,7 +118,7 @@ const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("hello")]);
 
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
   expect(normalizeEventOrder(harness.events)).toEqual([
     "agent_start",
@@ -195,7 +195,7 @@ const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
   return yield* emitsTheExpectedEventOrderFor2Part2({ harness: harness, toolRuns: toolRuns });
 });
 const emitsStreamingDeltasForTextThinking = Effect.gen(function* () {
@@ -214,7 +214,7 @@ const emitsStreamingDeltasForTextThinking = Effect.gen(function* () {
     ),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("hi").catch(() => {}));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi").catch(() => {}));
 
   const updateTypes = harness
     .eventsOfType("message_update")
@@ -228,7 +228,7 @@ const emitsAgentEndForErrorResponses = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("", { errorMessage: "broken", stopReason: "error" })]);
 
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
   expect(harness.eventsOfType("agent_end")).toHaveLength(1);
   expect(harness.events[harness.events.length - 1]?.type).toBe("agent_settled");

@@ -40,7 +40,7 @@ const defersRunsStartedByAgentSettled = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(lifecycle).toEqual([
     "start",

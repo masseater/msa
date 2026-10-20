@@ -51,16 +51,17 @@ const delayAssistantMessageEnd = (
   session: agentSessionTypes.AgentSession,
   delayMs: number,
 ): void => {
-  const original = Reflect.get(session, "emitExtensionEvent") as (
+  const events = session.extensions.events;
+  const original = Reflect.get(events, "emitExtensionEvent") as (
     event: agentTypes.AgentEvent,
   ) => Promise<void>;
-  Reflect.set(session, "emitExtensionEvent", (event: agentTypes.AgentEvent) =>
+  Reflect.set(events, "emitExtensionEvent", (event: agentTypes.AgentEvent) =>
     runTest(
       Effect.gen(function* () {
         if (event.type === "message_end" && event.message.role === "assistant") {
           yield* Effect.sleep(delayMs);
         }
-        yield* awaited(original.call(session, event));
+        yield* awaited(original.call(events, event));
       }),
     ),
   );

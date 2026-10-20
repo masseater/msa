@@ -31,7 +31,9 @@ const runsBeforesessioninvalidateAfterSessionShutdownAndBefore = Effect.gen(func
   const oldSession = runtimeHost.session;
   runtimeHost.setBeforeSessionInvalidate(() => {
     phases.push("beforeSessionInvalidate");
-    expect(oldSession.extensionRunner.createContext().cwd).toBe(oldSession.sessionManager.getCwd());
+    expect(oldSession.extensions.binding.extensionRunner.createContext().cwd).toBe(
+      oldSession.sessionManager.getCwd(),
+    );
   });
   runtimeHost.setRebindSession(() =>
     effectRunPromise(
@@ -44,7 +46,7 @@ const runsBeforesessioninvalidateAfterSessionShutdownAndBefore = Effect.gen(func
   yield* awaited(runtimeHost.newSession());
 
   expect(phases).toEqual(["session_shutdown", "beforeSessionInvalidate", "rebindSession"]);
-  expect(() => oldSession.extensionRunner.createContext().cwd).toThrow(
+  expect(() => oldSession.extensions.binding.extensionRunner.createContext().cwd).toThrow(
     "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
   );
   runtimeHost.setBeforeSessionInvalidate(undefined);

@@ -32,7 +32,7 @@ const allowsExtensionToolCallHandlersToPart2 = (harness: harnessTypes.Harness) =
         return fauxAssistantMessage(errorText);
       },
     ]);
-    yield* Effect.promise(() => harness.session.prompt("hi"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
     expect(getAssistantTexts(harness)).toContain("Blocked by test");
     expect(
       harness.session.messages.find((message) => message.role === "toolResult" && message.isError),
@@ -132,7 +132,7 @@ const allowsExtensionToolResultHandlersTo = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses(echoToolResultResponses);
 
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
   expect(getAssistantTexts(harness)).toContain("patched result");
   const toolResult = harness.session.messages.find(
@@ -187,7 +187,7 @@ const allowsExtensionContextHandlersToModify = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("original"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("original"));
 
   expect(providerUserText).toBe("rewritten");
   const storedUserMessage = harness.session.messages.find((message) => message.role === "user");

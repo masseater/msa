@@ -33,17 +33,9 @@ const doesNotTriggerThresholdCompactionFrom = Effect.gen(function* () {
   harness.sessionManager.appendMessage(response);
   harness.sessionManager.appendCompaction("small summary", userId, 50_001);
   harness.session.refreshContext();
-  const runAutoCompaction = vi.spyOn(
-    harness.session as unknown as {
-      runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
-    },
-    "runAutoCompaction",
-  );
-  const checkCompaction = (
-    harness.session as unknown as {
-      checkCompaction: (message: ReturnType<typeof fauxAssistantMessage>) => Promise<boolean>;
-    }
-  )["checkCompaction"].bind(harness.session);
+  const autoCompaction = harness.session.compaction.auto;
+  const runAutoCompaction = vi.spyOn(autoCompaction, "runAutoCompaction");
+  const checkCompaction = autoCompaction.checkCompaction.bind(autoCompaction);
   const error = fauxAssistantMessage("", {
     errorMessage: "invalid_api_key",
     stopReason: "error",
@@ -64,7 +56,7 @@ const doesNotTreatRetainedPreCompaction = Effect.gen(function* () {
   harness.sessionManager.appendCompaction("summary", retainedId, 10_001);
   harness.session.refreshContext();
 
-  expect(harness.session.getContextUsage()?.tokens).toBeNull();
+  expect(harness.session.context.stats.getContextUsage()?.tokens).toBeNull();
 });
 
 const persistsCustomContextSentDuringPre = Effect.gen(function* () {
@@ -100,7 +92,7 @@ const persistsCustomContextSentDuringPre = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(harness.faux.state.callCount).toBe(2);
   expect(requests[0]).toContain("persist before continue");

@@ -10,11 +10,6 @@ const { createHarness } = harnessModule;
 
 const { currentTimeMillis } = testing;
 
-type SessionWithCompactionInternals = {
-  checkCompaction: (assistantMessage: aiTypes.AssistantMessage) => Promise<boolean>;
-  runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
-};
-
 function createZeroUsageAssistant(harness: harnessTypes.Harness): aiTypes.AssistantMessage {
   const model = harness.getModel();
   return {
@@ -64,7 +59,7 @@ const usesTheMessageEstimateWhenNo = Effect.gen(function* () {
     },
     assistant,
   ];
-  const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const runAutoCompactionSpy = vi
     .spyOn(sessionInternals, "runAutoCompaction")
     .mockResolvedValue(false);
@@ -86,7 +81,7 @@ const doesNotCompactWhenTheZero = Effect.gen(function* () {
     },
     assistant,
   ];
-  const sessionInternals = harness.session as unknown as SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const runAutoCompactionSpy = vi
     .spyOn(sessionInternals, "runAutoCompaction")
     .mockResolvedValue(false);

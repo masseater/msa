@@ -23,7 +23,7 @@ const givesACallToAToolThat = () =>
         fauxAssistantMessage("I cannot deploy in an ask."),
       ]);
 
-      yield* awaited(harness.session.prompt("/ask deploy it"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask deploy it"));
 
       expect(ran).toEqual([]);
       const result = harness.session.messages.findLast((message) => message.role === "toolResult");
@@ -45,7 +45,7 @@ const refusesAWriteActionOnATool = () =>
         fauxAssistantMessage("listed"),
       ]);
 
-      yield* awaited(harness.session.prompt("/ask remember x"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask remember x"));
 
       const results = harness.session.messages.filter((message) => message.role === "toolResult");
       expect(results.map((result) => result.isError)).toEqual([true, false]);
@@ -64,7 +64,9 @@ const isTheSameTurnFromTheSdk = () =>
       const { harness } = yield* setup();
       const requests = record(harness, [fauxAssistantMessage("answer")]);
 
-      yield* awaited(harness.session.prompt("can you fix the build?", { mode: "ask" }));
+      yield* awaited(
+        harness.session.run.prompting.prompt("can you fix the build?", { mode: "ask" }),
+      );
 
       expect(declared(requests[0])).not.toContain("bash");
       expect(declared(requests[0])).toContain("read");
@@ -78,7 +80,9 @@ const needsAQuestion = () =>
       const { harness } = yield* setup();
 
       yield* awaited(
-        expect(harness.session.prompt("/ask")).rejects.toThrow("Usage: /ask <question>"),
+        expect(harness.session.run.prompting.prompt("/ask")).rejects.toThrow(
+          "Usage: /ask <question>",
+        ),
       );
       expect(harness.session.messages).toEqual([]);
     }),
@@ -99,10 +103,10 @@ const isNotQueuedIntoARunningTurn = () =>
           ),
       ]);
 
-      const running = harness.session.prompt("work");
+      const running = harness.session.run.prompting.prompt("work");
       yield* awaited(
         expect(
-          harness.session.prompt("/ask what now?", { streamingBehavior: "steer" }),
+          harness.session.run.prompting.prompt("/ask what now?", { streamingBehavior: "steer" }),
         ).rejects.toThrow("Cannot ask while the agent is running"),
       );
       firstTurn.release();

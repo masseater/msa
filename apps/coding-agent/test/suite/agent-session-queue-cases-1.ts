@@ -39,7 +39,7 @@ const toolStarted = (harness: harnessTypes.Harness, toolName: string) => {
 function createWaitingHarness(
   options: {
     tools?: agentTypes.AgentTool[];
-    extensionFactories?: harnessTypes.Harness["session"]["extensionRunner"] extends never
+    extensionFactories?: harnessTypes.Harness["session"]["extensions"]["binding"]["extensionRunner"] extends never
       ? never
       : Array<(msa: codingAgentTypes.ExtensionAPI) => void>;
   } = {},
@@ -63,7 +63,7 @@ function createWaitingHarness(
       const waitForToolStart = toolStarted(harness, "wait");
       return {
         harness,
-        promptPromise: harness.session.prompt("start"),
+        promptPromise: harness.session.run.prompting.prompt("start"),
         releaseToolExecution: () => toolRelease.release(),
         waitForToolStart,
       };

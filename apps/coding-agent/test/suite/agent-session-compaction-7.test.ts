@@ -31,7 +31,7 @@ const manuallyCompactsWithACustomStreamfn = Effect.gen(function* () {
   seedCompactableSession(harness);
   const getStreamCallCount = useSummaryStreamFn(harness, "summary from custom stream");
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(result.summary).toContain("summary from custom stream");
   expect(getStreamCallCount()).toBe(1);
@@ -41,7 +41,7 @@ const manuallyCompactsWithProviderResolvedBearer = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
   harnesses.push(harness);
   const model = harness.getModel();
-  harness.session.modelRuntime.registerNativeProvider({
+  harness.session.models.selection.modelRuntime.registerNativeProvider({
     auth: {
       apiKey: {
         name: "Faux bearer token",
@@ -69,7 +69,7 @@ const manuallyCompactsWithProviderResolvedBearer = Effect.gen(function* () {
   };
   harness.setResponses([summaryResponse]);
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(result.summary).toContain("summary with bearer auth");
   expect(harness.faux.state.callCount).toBe(1);
@@ -96,7 +96,7 @@ const usesTheStandaloneCompactionRequestContext = Effect.gen(function* () {
     requestOptions = options;
   });
 
-  yield* Effect.promise(() => harness.session.compact());
+  yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(transformContext).not.toHaveBeenCalled();
   expect(getCurrentSystemPrompt(requestContext?.messages ?? [])).not.toBe(
@@ -118,7 +118,7 @@ const persistsUsageFromMsaGeneratedManual = Effect.gen(function* () {
   seedCompactableSession(harness);
   useSummaryStreamFn(harness, "summary from custom stream");
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   const compactionEntries = harness.sessionManager
     .getEntries()

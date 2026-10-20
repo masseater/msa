@@ -44,7 +44,7 @@ const refreshesCanonicalContextBeforePublishingBoundary = Effect.gen(function* (
   });
   harness.setResponses([fauxAssistantMessage("done")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(snapshots).toHaveLength(2);
   expect(snapshots.every((snapshot) => snapshot.includes("committed context"))).toBe(true);
@@ -89,7 +89,7 @@ const continuesFromAnAgentBeforeSettleStep1 = (requests: string[], harness: harn
         return fauxAssistantMessage("second");
       },
     ]);
-    yield* Effect.promise(() => harness.session.prompt("start"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
     expect(requests[0]).toContain("continue now");
     expect(harness.sessionManager.getEntries()).toContainEqual(
       expect.objectContaining({
@@ -152,7 +152,7 @@ const persistsCustomContextQueuedByAgent = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(requests[0]).toContain("queued after agent end");
   expect(harness.sessionManager.getEntries()).toContainEqual(
@@ -204,7 +204,7 @@ const keepsAPreSettlementFollowUpStep1 = (requests: string[], harness: harnessTy
         return fauxAssistantMessage("follow-up response");
       },
     ]);
-    yield* Effect.promise(() => harness.session.prompt("start"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
     expect(harness.faux.state.callCount).toBe(3);
     expect(requests[0]).toContain("boundary context");
     expect(requests[0]).not.toContain("queued follow-up");

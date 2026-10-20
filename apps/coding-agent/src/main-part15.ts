@@ -44,7 +44,7 @@ function* createRuntimePart1(
   );
   const cliThinkingOverride = parsed.thinking !== undefined || cliThinkingFromModel;
   if (created.session.model !== undefined && cliThinkingOverride) {
-    created.session.setThinkingLevel(created.session.thinkingLevel);
+    created.session.models.thinking.setThinkingLevel(created.session.thinkingLevel);
   }
 
   return {

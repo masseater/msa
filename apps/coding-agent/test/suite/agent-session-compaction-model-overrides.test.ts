@@ -77,15 +77,19 @@ const usesTheNewlySelectedModelWithoutStep1 = (harness: harnessTypes.Harness) =>
       fauxAssistantMessage("small response"),
       fauxAssistantMessage("big response"),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("continue on small"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("continue on small"));
     expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
     seedHistory(harness, 2500);
-    yield* Effect.promise(() => harness.session.setModel(harness.getModel("big")!));
-    yield* Effect.promise(() => harness.session.prompt("continue on big"));
+    yield* Effect.promise(() =>
+      harness.session.models.selection.setModel(harness.getModel("big")!),
+    );
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("continue on big"));
     expect(harness.eventsOfType("compaction_end")).toHaveLength(1);
     expect(harness.eventsOfType("compaction_end")[0]?.result?.summary).toBe("big model summary");
     expect(harness.settingsManager.getCompactionReserveTokens()).toBe(10);
-    yield* Effect.promise(() => harness.session.setModel(harness.getModel("small")!));
+    yield* Effect.promise(() =>
+      harness.session.models.selection.setModel(harness.getModel("small")!),
+    );
     expect(harness.settingsManager.getCompactionReserveTokens(harness.session.model)).toBe(10);
   });
 
@@ -106,14 +110,17 @@ const capturesModelIdentityBeforeAwaitingSummarization = Effect.gen(function* ()
   );
   harnesses.push(harness);
   seedHistory(harness);
-  const getAuth = harness.session.modelRuntime.getAuth.bind(harness.session.modelRuntime);
-  vi.spyOn(harness.session.modelRuntime, "getAuth").mockImplementation((model, ...args) =>
-    runPromise(
-      Effect.promise(() => {
-        harness.session.agent.state.model = harness.getModel("second")!;
-        return getAuth(model, ...args);
-      }),
-    ),
+  const getAuth = harness.session.models.selection.modelRuntime.getAuth.bind(
+    harness.session.models.selection.modelRuntime,
+  );
+  vi.spyOn(harness.session.models.selection.modelRuntime, "getAuth").mockImplementation(
+    (model, ...args) =>
+      runPromise(
+        Effect.promise(() => {
+          harness.session.agent.state.model = harness.getModel("second")!;
+          return getAuth(model, ...args);
+        }),
+      ),
   );
   const requests: Array<{ id: string; maxTokens: number | undefined }> = [];
   harness.setResponses([
@@ -122,7 +129,7 @@ const capturesModelIdentityBeforeAwaitingSummarization = Effect.gen(function* ()
       return fauxAssistantMessage("summary");
     },
   ]);
-  yield* Effect.promise(() => harness.session.compact());
+  yield* Effect.promise(() => harness.session.compaction.manual.compact());
   expect(requests).toEqual([{ id: "first", maxTokens: 1600 }]);
 });
 
@@ -172,7 +179,7 @@ type CompactionPath = "manual" | "pre-prompt" | "post-run" | "overflow";
 const triggerCompaction = (harness: harnessTypes.Harness, path: CompactionPath) =>
   Effect.gen(function* () {
     if (path === "manual") {
-      yield* Effect.promise(() => harness.session.compact());
+      yield* Effect.promise(() => harness.session.compaction.manual.compact());
       return;
     }
     harness.setResponses(
@@ -183,7 +190,7 @@ const triggerCompaction = (harness: harnessTypes.Harness, path: CompactionPath) 
           ]
         : [fauxAssistantMessage(path === "post-run" ? "z".repeat(8000) : "done")],
     );
-    yield* Effect.promise(() => harness.session.prompt("continue"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("continue"));
   });
 
 describe("AgentSession compaction model overrides", () => {
@@ -260,8 +267,9 @@ describe("AgentSession compaction model overrides", () => {
             },
             ...(path === "automatic" ? [fauxAssistantMessage("done")] : []),
           ]);
-          if (path === "manual") yield* Effect.promise(() => harness.session.compact());
-          else yield* Effect.promise(() => harness.session.prompt("continue"));
+          if (path === "manual")
+            yield* Effect.promise(() => harness.session.compaction.manual.compact());
+          else yield* Effect.promise(() => harness.session.run.prompting.prompt("continue"));
           expect(budgets).toEqual([1600]);
           expect(
             harness.sessionManager.getEntries().find((entry) => entry.type === "compaction"),

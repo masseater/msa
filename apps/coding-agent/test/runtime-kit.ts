@@ -116,12 +116,12 @@ const bindRuntimeCommands = (
   runtime: agentSessionRuntimeTypes.AgentSessionRuntime,
 ): Promise<void> => {
   const { session } = runtime;
-  return session.bindExtensions({
+  return session.extensions.binding.bindExtensions({
     commandContextActions: {
       fork: (entryId, options) =>
         runtime.fork(entryId, options).then((result) => ({ cancelled: result.cancelled })),
       navigateTree: (targetId, options) =>
-        session
+        session.context.tree
           .navigateTree(targetId, {
             ...(options?.summarize === undefined ? {} : { summarize: options.summarize }),
             ...(options?.customInstructions === undefined
@@ -134,7 +134,7 @@ const bindRuntimeCommands = (
           })
           .then((result) => ({ cancelled: result.cancelled })),
       newSession: (options) => Promise.resolve(runtime.newSession(options)),
-      reload: () => session.reload(),
+      reload: () => session.extensions.runtime.reload(),
       switchSession: (sessionPath, options) =>
         Promise.resolve(runtime.switchSession(sessionPath, options)),
       waitForIdle: () => session.agent.waitForIdle(),
@@ -147,7 +147,7 @@ const bindRuntime = Effect.fn("bindRuntime")(function* (
   commandActions: boolean,
 ) {
   if (!commandActions) {
-    yield* awaited(runtime.session.bindExtensions({}));
+    yield* awaited(runtime.session.extensions.binding.bindExtensions({}));
     return;
   }
   runtime.setRebindSession(() => bindRuntimeCommands(runtime));

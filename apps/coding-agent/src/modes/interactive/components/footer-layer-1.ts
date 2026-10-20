@@ -64,7 +64,7 @@ export default abstract class FooterComponentLayer1 extends FooterComponentLayer
       }
     }
 
-    const contextUsage = this.session.getContextUsage();
+    const contextUsage = this.session.context.stats.getContextUsage();
     this.sessionStats = {
       contextUsage,
       entryCount,
@@ -118,7 +118,7 @@ export default abstract class FooterComponentLayer1 extends FooterComponentLayer
     const usingSubscription =
       state.model === undefined
         ? false
-        : this.session.modelRuntime.isUsingSubscription(state.model.provider);
+        : this.session.models.selection.modelRuntime.isUsingSubscription(state.model.provider);
     return {
       contextPercent,
       contextPercentValue,

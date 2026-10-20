@@ -85,7 +85,9 @@ function shareSession(context: SessionShareContext): Promise<void> {
         }
 
         try {
-          yield* awaited(context.session.exportToHtml(htmlFile, { themeName: theme.name }));
+          yield* awaited(
+            context.session.context.exports.exportToHtml(htmlFile, { themeName: theme.name }),
+          );
         } catch (error: unknown) {
           context.showError(
             `Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`,

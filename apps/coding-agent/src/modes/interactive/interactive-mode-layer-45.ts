@@ -23,17 +23,20 @@ export default abstract class InteractiveModeLayer45 extends InteractiveModeLaye
       awaitingWith(function* () {
         const entries = this.sessionManager.getEntries();
         const model = this.session.model;
-        const contextBreakdown = yield* awaited(this.session.getContextBreakdown());
+        const contextBreakdown = yield* awaited(
+          this.session.context.breakdown.getContextBreakdown(),
+        );
         const telemetry = this.runtimeHost.telemetry;
         const info: sessionInfoTypes.SessionInfo = {
           cacheWarmingMode: this.settingsManager.getCacheWarmingMode(),
-          cacheWarmingStatus: this.session.cacheWarmingStatus,
-          cacheWaste: computeCacheWaste(entries, this.session.modelRuntime),
+          cacheWarmingStatus: this.session.models.cacheWarming.cacheWarmingStatus,
+          cacheWaste: computeCacheWaste(entries, this.session.models.selection.modelRuntime),
           contextBreakdown,
-          contextWindow: this.session.getContextUsage()?.contextWindow ?? model?.contextWindow,
+          contextWindow:
+            this.session.context.stats.getContextUsage()?.contextWindow ?? model?.contextWindow,
           selectedModelKey: `${model?.provider}/${model?.id}`,
           sessionName: this.sessionManager.getSessionName(),
-          stats: this.session.getSessionStats(),
+          stats: this.session.context.stats.getSessionStats(),
           telemetry: telemetry === undefined ? undefined : describeTelemetry(telemetry.status()),
           usageBreakdown: getUsageCostBreakdown(entries),
         };

@@ -28,9 +28,13 @@ function createShowLoadedResourcesThis(options: ShowLoadedResourcesOptions) {
     loadedResourcesContainer: new Container(),
     options: { verbose: options.verbose ?? false },
     session: {
-      extensionRunner: {
-        getCommandDiagnostics: () => [],
-        getShortcutDiagnostics: () => [],
+      extensions: {
+        binding: {
+          extensionRunner: {
+            getCommandDiagnostics: () => [],
+            getShortcutDiagnostics: () => [],
+          },
+        },
       },
       promptTemplates: [],
       resourceLoader: {

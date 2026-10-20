@@ -51,7 +51,7 @@ describe("issue #7269 CLI end-of-options delimiter", () => {
           harness.setResponses([fauxAssistantMessage("ok")]);
           const [message] = parsed.messages;
           if (message === undefined) throw new Error("expected a parsed prompt message");
-          yield* Effect.promise(() => harness.session.prompt(message));
+          yield* Effect.promise(() => harness.session.run.prompting.prompt(message));
           expect(getUserTexts(harness)).toEqual([prompt]);
         }),
       ),

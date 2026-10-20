@@ -17,7 +17,7 @@ const { copyToClipboard } = clipboard;
 
 export default abstract class InteractiveModeLayer25 extends InteractiveModeLayer24 {
   protected showTasksView(initialId?: string): void {
-    const orchestrator = this.session.orchestrator;
+    const orchestrator = this.session.integrations.orchestration.orchestrator;
     if (orchestrator === undefined) {
       this.showStatus("The orchestrator is unavailable in this session");
       return;
@@ -53,7 +53,7 @@ export default abstract class InteractiveModeLayer25 extends InteractiveModeLaye
   }
 
   protected showTaskModelSelector(id: string): void {
-    const orchestrator = this.session.orchestrator;
+    const orchestrator = this.session.integrations.orchestration.orchestrator;
     if (orchestrator === undefined) return;
     this.editorSlot.showSelector((done) => {
       const back = () => {
@@ -63,8 +63,8 @@ export default abstract class InteractiveModeLayer25 extends InteractiveModeLaye
       const selector = new ModelSelectorComponent(
         this.ui,
         undefined,
-        this.session.modelRuntime,
-        this.session.scopedModels,
+        this.session.models.selection.modelRuntime,
+        this.session.models.selection.scopedModels,
         (model) => {
           orchestrator
             .setModel(id, `${model.provider}/${model.id}`)
@@ -94,7 +94,7 @@ export default abstract class InteractiveModeLayer25 extends InteractiveModeLaye
           return;
         }
 
-        const text = this.session.getLastAssistantText();
+        const text = this.session.context.transcript.getLastAssistantText();
         if (text === undefined || text === "") {
           this.showError("No agent messages to copy yet.");
           return;

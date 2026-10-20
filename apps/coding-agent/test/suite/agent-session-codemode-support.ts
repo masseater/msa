@@ -87,7 +87,7 @@ const runCodemode = (
         fauxAssistantMessage([fauxToolCall("codemode", { code })], { stopReason: "toolUse" }),
         fauxAssistantMessage("done"),
       ]);
-      yield* awaited(harness.session.prompt("go"));
+      yield* awaited(harness.session.run.prompting.prompt("go"));
       yield* awaited(workersExited());
       return codemodeResult(harness);
     }),

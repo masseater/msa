@@ -49,15 +49,15 @@ const emitsSessionBeforeForkAndSessionStartStep1 = () =>
     expect(events).toEqual([{ reason: "startup", type: "session_start" as const }]);
     events.length = 0;
 
-    yield* awaited(runtimeHost.session.prompt("hello"));
-    const userMessage = runtimeHost.session.getUserMessagesForForking()[0];
+    yield* awaited(runtimeHost.session.run.prompting.prompt("hello"));
+    const userMessage = runtimeHost.session.context.transcript.getUserMessagesForForking()[0];
     if (userMessage === undefined) throw new Error("expected a user message to fork from");
     const previousSessionFile = runtimeHost.session.sessionFile;
 
     const successResult = yield* awaited(runtimeHost.fork(userMessage.entryId));
     expect(successResult.cancelled).toBe(false);
     expect(successResult.selectedText).toBe("hello");
-    yield* awaited(runtimeHost.session.bindExtensions({}));
+    yield* awaited(runtimeHost.session.extensions.binding.bindExtensions({}));
     expect(events).toEqual([
       {
         entryId: userMessage.entryId,

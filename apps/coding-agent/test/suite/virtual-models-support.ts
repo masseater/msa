@@ -82,11 +82,13 @@ function createRoutedHarness(
       );
       harnesses.push(harness);
 
-      const runtime = harness.session.modelRuntime;
+      const runtime = harness.session.models.selection.modelRuntime;
       harness.session.agent.streamFunction = (model, context, streamOptions) =>
         runtime.streamSimple(model, context, streamOptions);
-      yield* Effect.promise(() => harness.session.setModel(runtime.getModel("router", "auto")!));
-      harness.session.setThinkingLevel("high");
+      yield* Effect.promise(() =>
+        harness.session.models.selection.setModel(runtime.getModel("router", "auto")!),
+      );
+      harness.session.models.thinking.setThinkingLevel("high");
       const reasons = () => requests.map((request) => request.reason);
 
       const dispatched = () => dispatchedModels(harness);

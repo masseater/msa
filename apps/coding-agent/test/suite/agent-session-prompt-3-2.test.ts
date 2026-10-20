@@ -66,11 +66,11 @@ const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
     });
   }
 
-  const promptPromise = harness.session.prompt("start");
+  const promptPromise = harness.session.run.prompting.prompt("start");
   yield* Effect.promise(() => sawToolStart);
 
   yield* Effect.promise(() =>
-    expect(harness.session.prompt("second")).rejects.toThrow(
+    expect(harness.session.run.prompting.prompt("second")).rejects.toThrow(
       "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
     ),
   );
@@ -110,15 +110,15 @@ const throwsWhenPromptedDuringManualCompaction = Effect.gen(function* () {
   );
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-  yield* Effect.promise(() => harness.session.prompt("first"));
-  yield* Effect.promise(() => harness.session.prompt("second"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
-  const compactPromise = harness.session.compact();
+  const compactPromise = harness.session.compaction.manual.compact();
   yield* Effect.promise(() => compactionStarted);
 
   try {
     yield* Effect.promise(() =>
-      expect(harness.session.prompt("third")).rejects.toThrow(
+      expect(harness.session.run.prompting.prompt("third")).rejects.toThrow(
         "Cannot submit a prompt while compaction is in progress. Wait for compaction to finish and retry.",
       ),
     );
@@ -134,7 +134,7 @@ const throwsWhenPromptingWithoutAModel = Effect.gen(function* () {
   harness.session.agent.state.model = undefined as unknown as aiTypes.Model<any>;
 
   yield* Effect.promise(() =>
-    expect(harness.session.prompt("hi")).rejects.toThrow("No model selected."),
+    expect(harness.session.run.prompting.prompt("hi")).rejects.toThrow("No model selected."),
   );
 });
 
@@ -143,7 +143,7 @@ const throwsWhenPromptingWithoutConfiguredAuth = Effect.gen(function* () {
   harnesses.push(harness);
 
   yield* Effect.promise(() =>
-    expect(harness.session.prompt("hi")).rejects.toThrow(
+    expect(harness.session.run.prompting.prompt("hi")).rejects.toThrow(
       `No API key found for ${harness.getModel().provider}.`,
     ),
   );

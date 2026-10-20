@@ -83,7 +83,7 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
     const { burst, fire } = registerEmptyEnter(this.emptyEnterBurst, nowMs());
     this.emptyEnterBurst = burst;
     if (!fire) return;
-    const sent = this.session.flushQueue();
+    const sent = this.session.run.queue.flushQueue();
     if (sent === 0) return;
     this.showStatus(`Sent ${sent} queued message${sent > 1 ? "s" : ""}`);
   }
@@ -146,10 +146,10 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
   protected settingsConfigDisplay() {
     const { defaultModel } = this.showSettingsSelectorSelector();
     return {
-      autoCompact: this.session.autoCompactionEnabled,
+      autoCompact: this.session.compaction.auto.autoCompactionEnabled,
       autoResizeImages: this.settingsManager.getImageAutoResize(),
       autocompleteMaxVisible: this.settingsManager.getAutocompleteMaxVisible(),
-      availableDefaultModels: this.session.modelRuntime.getAvailableSnapshot(),
+      availableDefaultModels: this.session.models.selection.modelRuntime.getAvailableSnapshot(),
       availableThemes: getAvailableThemes(),
       availableThinkingLevels: [...THINKING_LEVEL_OPTIONS],
       blockImages: this.settingsManager.getBlockImages(),
@@ -164,7 +164,7 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
       editorPaddingX: this.settingsManager.getEditorPaddingX(),
       enableInstallTelemetry: this.settingsManager.getEnableInstallTelemetry(),
       enableSkillCommands: this.settingsManager.getEnableSkillCommands(),
-      followUpMode: this.session.followUpMode,
+      followUpMode: this.session.run.queue.followUpMode,
       fullscreenCopyOnSelect: this.settingsManager.getFullscreenCopyOnSelect(),
     } satisfies Partial<settingsSelectorTypes.SettingsConfig>;
   }
@@ -185,7 +185,7 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
       showHardwareCursor: this.settingsManager.getShowHardwareCursor(),
       showImages: this.settingsManager.getShowImages(),
       showTerminalProgress: this.settingsManager.getShowTerminalProgress(),
-      steeringMode: this.session.steeringMode,
+      steeringMode: this.session.run.queue.steeringMode,
       terminalTheme: this.themeController.getTerminalTheme(),
       thinkingLevel: this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL,
       transport: this.settingsManager.getTransport(),
@@ -197,7 +197,7 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
   protected settingsCallbacks1(done: () => void) {
     return {
       onAutoCompactChange: (enabled) => {
-        this.session.setAutoCompactionEnabled(enabled);
+        this.session.compaction.auto.setAutoCompactionEnabled(enabled);
         this.footer.setAutoCompactEnabled(enabled);
       },
       onAutoResizeImagesChange: (enabled) => {
@@ -217,7 +217,7 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
         this.settingsManager.setBlockImages(blocked);
       },
       onCacheWarmingModeChange: (mode) => {
-        this.session.setCacheWarmingMode(mode);
+        this.session.models.cacheWarming.setCacheWarmingMode(mode);
         this.showStatus(`Cache warming: ${mode}`);
       },
       onCancel: () => {
@@ -238,7 +238,7 @@ export default abstract class InteractiveModeLayer8 extends InteractiveModeLayer
   }
 
   protected showMemoryView(): void {
-    const memory = this.session.memory;
+    const memory = this.session.integrations.memory.memory;
     if (memory === undefined) {
       this.showStatus("Memory is disabled (settings: memory.enabled)");
       return;

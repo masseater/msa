@@ -72,10 +72,12 @@ const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
       ),
   ]);
 
-  const promptPromise = harness.session.prompt("Run the tool, then continue responding.");
+  const promptPromise = harness.session.run.prompting.prompt(
+    "Run the tool, then continue responding.",
+  );
   yield* Effect.promise(() => secondResponseStarted);
 
-  const compactPromise = harness.session.compact();
+  const compactPromise = harness.session.compaction.manual.compact();
   const compactExpectation = expect(compactPromise).resolves.toMatchObject({
     summary: "manual summary",
   });

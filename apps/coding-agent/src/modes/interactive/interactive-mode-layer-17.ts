@@ -25,17 +25,21 @@ export default abstract class InteractiveModeLayer17 extends InteractiveModeLaye
       ...(cmd.argumentHint && { argumentHint: cmd.argumentHint }),
     }));
 
-    const extensionCommands: tuiTypes.SlashCommand[] = this.session.extensionRunner
-      .getRegisteredCommands()
-      .filter((cmd) => !isBuiltinSlashCommandName(cmd.name))
-      .map((cmd) => {
-        const slashCommand: tuiTypes.SlashCommand = { name: cmd.invocationName };
-        Object.assign(slashCommand, this.autocompleteDescription(cmd.description, cmd.sourceInfo));
-        if (cmd.getArgumentCompletions !== undefined) {
-          slashCommand.getArgumentCompletions = cmd.getArgumentCompletions;
-        }
-        return slashCommand;
-      });
+    const extensionCommands: tuiTypes.SlashCommand[] =
+      this.session.extensions.binding.extensionRunner
+        .getRegisteredCommands()
+        .filter((cmd) => !isBuiltinSlashCommandName(cmd.name))
+        .map((cmd) => {
+          const slashCommand: tuiTypes.SlashCommand = { name: cmd.invocationName };
+          Object.assign(
+            slashCommand,
+            this.autocompleteDescription(cmd.description, cmd.sourceInfo),
+          );
+          if (cmd.getArgumentCompletions !== undefined) {
+            slashCommand.getArgumentCompletions = cmd.getArgumentCompletions;
+          }
+          return slashCommand;
+        });
 
     this.skillCommands.clear();
     const skillCommandList: tuiTypes.SlashCommand[] = [];
@@ -108,7 +112,7 @@ export default abstract class InteractiveModeLayer17 extends InteractiveModeLaye
   }
 
   protected refreshProvidersAfterAccounts(): Promise<void> {
-    return this.session.modelRuntime
+    return this.session.models.selection.modelRuntime
       .refresh({ allowNetwork: false })
       .then(() => this.setupAutocompleteProvider());
   }
@@ -136,7 +140,7 @@ export default abstract class InteractiveModeLayer17 extends InteractiveModeLaye
         this.setupAutocompleteProvider();
       },
       onFollowUpModeChange: (mode) => {
-        this.session.setFollowUpMode(mode);
+        this.session.run.queue.setFollowUpMode(mode);
       },
       onFullscreenCopyOnSelectChange: (enabled) => {
         this.settingsManager.setFullscreenCopyOnSelect(enabled);
@@ -185,7 +189,7 @@ export default abstract class InteractiveModeLayer17 extends InteractiveModeLaye
         this.settingsManager.setModelThinkingLevel(provider, modelId, level);
         const current = this.session.model;
         if (current !== undefined && current.provider === provider && current.id === modelId) {
-          this.session.setThinkingLevel(level);
+          this.session.models.thinking.setThinkingLevel(level);
           this.footer.invalidate();
           this.updateEditorBorderColor();
         }

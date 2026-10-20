@@ -84,7 +84,7 @@ export default abstract class LoginFlowLayer2 extends LoginFlowLayer1 {
         });
         try {
           yield* awaited(
-            host.session.modelRuntime.login(
+            host.session.models.selection.modelRuntime.login(
               providerId,
               method,
               {

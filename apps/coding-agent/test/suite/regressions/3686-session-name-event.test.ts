@@ -13,7 +13,7 @@ const emitsSessionInfoChangedWhenAgentsession = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
 
-  harness.session.setSessionName("hello world");
+  harness.session.context.transcript.setSessionName("hello world");
 
   expect(harness.sessionManager.getSessionName()).toBe("hello world");
   expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual([
@@ -60,7 +60,7 @@ const emitsSessionInfoChangedToExtensions = Effect.gen(function* () {
   harnesses.push(harness);
 
   api?.setSessionName("first");
-  harness.session.setSessionName("second");
+  harness.session.context.transcript.setSessionName("second");
 
   expect(events).toEqual([{ name: "first" }, { name: "second" }]);
 });

@@ -69,7 +69,9 @@ function waitForRecoveryRefresh(
 ): Promise<void> {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const refresh = harness.session.modelRuntime.refresh({ allowNetwork: false });
+      const refresh = harness.session.models.selection.modelRuntime.refresh({
+        allowNetwork: false,
+      });
       yield* Effect.promise(() => vi.waitFor(() => expect(stalledList.getCallCount()).toBe(2)));
       yield* Effect.promise(() => refresh);
     }),
@@ -82,7 +84,7 @@ let stalledList!: StalledCredentialList;
 
 const recoversWithoutLettingTheStalledRefresh = Effect.gen(function* () {
   harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
-  const runtime = harness.session.modelRuntime;
+  const runtime = harness.session.models.selection.modelRuntime;
   yield* Effect.promise(() =>
     harness.authStorage.modify("stale-provider", () =>
       Promise.resolve({
@@ -133,7 +135,7 @@ const recoversWithoutLettingTheStalledRefreshStep1 = (
 
 const doesNotLetAStaleFailure = Effect.gen(function* () {
   harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
-  const runtime = harness.session.modelRuntime;
+  const runtime = harness.session.models.selection.modelRuntime;
   stalledList = stallNextCredentialList(harness);
   const staleRefresh = runtime.getAvailable();
   yield* Effect.promise(() => stalledList.started);
@@ -151,7 +153,7 @@ const doesNotLetAStaleFailure = Effect.gen(function* () {
 const doesNotLetAStaleProvider = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   harness = yield* Effect.promise(() => createHarness());
-  const runtime = harness.session.modelRuntime;
+  const runtime = harness.session.models.selection.modelRuntime;
   const models = Reflect.get(runtime, "models") as aiTypes.Models;
   const originalGetAvailable = models.getAvailable.bind(models);
   const started = createDeferred();

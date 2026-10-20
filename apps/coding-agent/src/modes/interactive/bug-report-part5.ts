@@ -37,7 +37,7 @@ const reportBug: {
           );
           try {
             summary = yield* awaited(
-              context.session.summarizeForBugReport({
+              context.session.context.exports.summarizeForBugReport({
                 hint: options.hint,
                 signal: loader.signal,
               }),

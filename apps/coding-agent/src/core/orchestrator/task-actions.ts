@@ -55,7 +55,7 @@ function sendNote(
       if (worker === undefined) continue;
       yield* Effect.tryPromise({
         catch: orchestratorError,
-        try: () => worker.steer(input.content),
+        try: () => worker.run.queue.steer(input.content),
       });
       yield* Effect.sync(() => store.markNoteRead(database, note.id, thread.id, now));
       steered.push(thread.id);
@@ -104,7 +104,7 @@ function stop(
       runtime.runs.delete(thread.id);
       void runtime.workers
         .get(thread.id)
-        ?.abort()
+        ?.run.lifecycle.abort()
         .catch(() => undefined);
       yield* Effect.sync(() => store.updateThread(database, thread.id, { status: "stopped" }, now));
     }

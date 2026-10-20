@@ -30,18 +30,22 @@ const promptingSession = (): agentSessionTypes.AgentSession => {
     name: "Acme",
   };
   return {
-    getExternalServices: () => [],
     model: undefined,
-    modelRuntime: {
-      getProviderAuthStatus: () => ({ configured: false }),
-      getProviders: () => [provider],
-      isUsingOAuth: () => false,
-      login: (_id: string, _method: string, callbacks: LoginCallbacks) => {
-        void callbacks.prompt({ message: "Enter Acme API key", type: "text" }).catch(() => {});
-        return runTest(untilAborted(callbacks.signal));
+    models: {
+      selection: {
+        modelRuntime: {
+          getProviderAuthStatus: () => ({ configured: false }),
+          getProviders: () => [provider],
+          isUsingOAuth: () => false,
+          login: (_id: string, _method: string, callbacks: LoginCallbacks) => {
+            void callbacks.prompt({ message: "Enter Acme API key", type: "text" }).catch(() => {});
+            return runTest(untilAborted(callbacks.signal));
+          },
+        },
       },
     },
     settingsManager: { getOrCreateDeviceId: () => "device" },
+    tools: { externalServices: { getExternalServices: () => [] } },
   } as unknown as agentSessionTypes.AgentSession;
 };
 

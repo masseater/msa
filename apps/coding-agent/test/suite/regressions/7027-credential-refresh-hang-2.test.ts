@@ -27,14 +27,14 @@ const startLoginPart1 = () =>
     const unknownModel = { ...model, api: "unknown", id: "unknown", provider: "unknown" };
     const currentModel = vi.spyOn(session, "model", "get").mockReturnValue(unknownModel);
     const availableModels = vi
-      .spyOn(session.modelRuntime, "getAvailableSnapshot")
+      .spyOn(session.models.selection.modelRuntime, "getAvailableSnapshot")
       .mockReturnValue([]);
     return { availableModels, currentModel, model, runPromise, session, unknownModel };
   });
 
 const holdRefresh = (session: harnessTypes.Harness["session"]) => {
   const finisher = { finish: () => {} };
-  vi.spyOn(session.modelRuntime, "refresh").mockImplementation((options) => {
+  vi.spyOn(session.models.selection.modelRuntime, "refresh").mockImplementation((options) => {
     const refresh = deferredPromise<{ aborted: boolean; errors: Map<string, string> }>();
     finisher.finish = () => refresh.resolve({ aborted: false, errors: new Map() });
     options?.signal?.addEventListener(
@@ -42,7 +42,9 @@ const holdRefresh = (session: harnessTypes.Harness["session"]) => {
       () => refresh.resolve({ aborted: true, errors: new Map() }),
       { once: true },
     );
-    return refresh.promise as unknown as ReturnType<typeof session.modelRuntime.refresh>;
+    return refresh.promise as unknown as ReturnType<
+      typeof session.models.selection.modelRuntime.refresh
+    >;
   });
   return () => finisher.finish();
 };
@@ -53,7 +55,7 @@ function startLogin() {
       const { availableModels, currentModel, model, runPromise, session, unknownModel } =
         yield* startLoginPart1();
       const finishRefresh = holdRefresh(session);
-      const setModel = vi.spyOn(session, "setModel").mockResolvedValue();
+      const setModel = vi.spyOn(session.models.selection, "setModel").mockResolvedValue();
       const context = {
         refreshAuthState: vi.fn(),
         session,

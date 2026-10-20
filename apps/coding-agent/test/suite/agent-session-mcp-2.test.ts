@@ -40,7 +40,7 @@ describe("AgentSession MCP integration", () => {
             fauxAssistantMessage("done"),
           ]);
 
-          yield* Effect.promise(() => harness.session.prompt("go"));
+          yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
           expect(calls).toEqual(["read-file:{}", "read_file:{}"]);
         }),

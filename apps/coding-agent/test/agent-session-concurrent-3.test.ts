@@ -41,7 +41,7 @@ const shouldPersistMessageEndEventsInOrder = () =>
             ),
           ),
       });
-      yield* awaited(created.session.prompt("hi"));
+      yield* awaited(created.session.run.prompting.prompt("hi"));
       yield* awaited(created.session.agent.waitForIdle());
       yield* Effect.sleep(100);
       expect(

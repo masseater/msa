@@ -24,10 +24,14 @@ function createLoadedResourcesContext(): SessionStartNotifySupportTypes.LoadedRe
     loadedResourcesContainer: new Container(),
     options: { verbose: true },
     session: {
-      extensionRunner: {
-        getCommandDiagnostics: () => [],
-        getRegisteredCommands: () => [],
-        getShortcutDiagnostics: () => [],
+      extensions: {
+        binding: {
+          extensionRunner: {
+            getCommandDiagnostics: () => [],
+            getRegisteredCommands: () => [],
+            getShortcutDiagnostics: () => [],
+          },
+        },
       },
       promptTemplates: [],
       resourceLoader: {
@@ -88,7 +92,7 @@ const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
           Effect.gen(function* () {
             events.push("bind");
             yield* Effect.promise(() =>
-              harness.session.bindExtensions({
+              harness.session.extensions.binding.bindExtensions({
                 mode: "tui",
                 uiContext: createTestUiContext({
                   notify: (message) => events.push(`notify:${message}`),
@@ -149,7 +153,7 @@ const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () 
           Effect.gen(function* () {
             events.push("bind");
             yield* Effect.promise(() =>
-              harness.session.bindExtensions({
+              harness.session.extensions.binding.bindExtensions({
                 mode: "tui",
                 uiContext: createTestUiContext(),
               }),

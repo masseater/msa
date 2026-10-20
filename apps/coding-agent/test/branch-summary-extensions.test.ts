@@ -52,7 +52,9 @@ const persistsExtensionProvidedSummaryUsageInSession = () =>
       harness.sessionManager.appendMessage(userMsg("abandoned branch work"));
       const sourceId = harness.sessionManager.appendMessage(assistantMsg("abandoned reply"));
 
-      const result = yield* awaited(harness.session.navigateTree(targetId, { summarize: true }));
+      const result = yield* awaited(
+        harness.session.context.tree.navigateTree(targetId, { summarize: true }),
+      );
       const summaryEntry = result.summaryEntry;
 
       expect(summaryEntry?.type).toBe("branch_summary");
@@ -63,7 +65,7 @@ const persistsExtensionProvidedSummaryUsageInSession = () =>
       expect(summaryEntry?.summary).toBe("Summary provided by extension");
       expect(summaryEntry?.usage).toEqual(usage);
 
-      const stats = harness.session.getSessionStats();
+      const stats = harness.session.context.stats.getSessionStats();
       expect(stats.tokens).toEqual({
         cacheRead: 30,
         cacheWrite: 40,

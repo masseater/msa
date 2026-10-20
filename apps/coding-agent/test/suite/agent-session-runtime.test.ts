@@ -51,7 +51,7 @@ const persistsMessageEndAssistantReplacementsTo = Effect.gen(function* () {
     });
   });
 
-  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  yield* Effect.promise(() => runtime.session.run.prompting.prompt("hello"));
 
   const sessionAssistant = runtime.session.messages.find((message) => message.role === "assistant");
   expect(sessionAssistant?.role).toBe("assistant");
@@ -90,13 +90,13 @@ const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
       parameters: Type.Object({}),
     });
   });
-  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  yield* Effect.promise(() => runtime.session.run.prompting.prompt("hello"));
   const firstSessionFile = runtime.session.sessionFile!;
   yield* Effect.promise(() => runtime.newSession());
-  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  yield* Effect.promise(() => runtime.session.extensions.binding.bindExtensions({}));
   faux.setResponses([fauxAssistantMessage(fauxToolCall("block", {}), { stopReason: "toolUse" })]);
   const outgoingSession = runtime.session;
-  const promptPromise = outgoingSession.prompt("start blocking tool");
+  const promptPromise = outgoingSession.run.prompting.prompt("start blocking tool");
   return yield* settlesTheActiveResponseBeforeSessionStep1(
     toolStartedPromise,
     runtime,
@@ -179,12 +179,12 @@ const emitsSessionBeforeSwitchAndSession = Effect.gen(function* () {
   });
   expect(events).toEqual([{ reason: "startup", type: "session_start" }]);
   events.length = 0;
-  yield* Effect.promise(() => runtime.session.prompt("hello"));
+  yield* Effect.promise(() => runtime.session.run.prompting.prompt("hello"));
   const originalSessionFile = runtime.session.sessionFile;
   const originalSession = runtime.session;
   const newSessionResult = yield* Effect.promise(() => runtime.newSession());
   expect(newSessionResult.cancelled).toBe(false);
-  yield* Effect.promise(() => runtime.session.bindExtensions({}));
+  yield* Effect.promise(() => runtime.session.extensions.binding.bindExtensions({}));
   expect(runtime.session).not.toBe(originalSession);
   expect(runtime.session.messages).toEqual([]);
   const secondSessionFile = runtime.session.sessionFile;
@@ -211,7 +211,7 @@ const emitsSessionBeforeSwitchAndSessionStep1 = (
     events.length = 0;
     const switchResult = yield* Effect.promise(() => runtime.switchSession(originalSessionFile!));
     expect(switchResult.cancelled).toBe(false);
-    yield* Effect.promise(() => runtime.session.bindExtensions({}));
+    yield* Effect.promise(() => runtime.session.extensions.binding.bindExtensions({}));
     expect(events).toEqual([
       {
         reason: "resume",

@@ -32,8 +32,8 @@ const rendersCallsToMcpToolsThat = Effect.gen(function* () {
   );
   try {
     const resolve = (toolName: string) =>
-      harness.session.extensionRunner.resolveToolRenderers(toolName, () =>
-        harness.session.getToolDefinition(toolName),
+      harness.session.extensions.binding.extensionRunner.resolveToolRenderers(toolName, () =>
+        harness.session.tools.registry.getToolDefinition(toolName),
       );
 
     const call = resolve("mcp__my_docs__search")?.renderCall?.({ query: "msa" }, theme, {
@@ -42,7 +42,9 @@ const rendersCallsToMcpToolsThat = Effect.gen(function* () {
     expect(stripAnsi(call?.render(100).join("\n") ?? "")).toContain('my_docs/search query="msa"');
     expect(resolve("not_mcp")).toBeUndefined();
 
-    expect(resolve("read")?.renderCall).toBe(harness.session.getToolDefinition("read")?.renderCall);
+    expect(resolve("read")?.renderCall).toBe(
+      harness.session.tools.registry.getToolDefinition("read")?.renderCall,
+    );
   } finally {
     harness.cleanup();
   }
@@ -92,7 +94,9 @@ const rendersThemInHtmlExportsTooStep1 = (
       });
 
       const html = yield* fs.readFileString(
-        yield* Effect.promise(() => harness.session.exportToHtml(joinPath(dir, "export.html"))),
+        yield* Effect.promise(() =>
+          harness.session.context.exports.exportToHtml(joinPath(dir, "export.html")),
+        ),
       );
       const data =
         /<script id="session-data" type="application\/json">([^<]*)<\/script>/u.exec(html)?.[1] ??

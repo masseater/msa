@@ -36,7 +36,7 @@ const sendusermessageWhileIdleTriggersATurn = Effect.gen(function* () {
 
   harness.setResponses([fauxAssistantMessage("response")]);
 
-  yield* Effect.promise(() => harness.session.sendUserMessage("from extension"));
+  yield* Effect.promise(() => harness.session.run.prompting.sendUserMessage("from extension"));
 
   expect(harness.session.messages.map((message) => message.role)).toEqual([
     "system",
@@ -62,7 +62,9 @@ const doesNotReportStreamingbehaviorToInput = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("ok")]);
 
-  yield* Effect.promise(() => harness.session.prompt("idle", { streamingBehavior: "followUp" }));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("idle", { streamingBehavior: "followUp" }),
+  );
 
   expect(inputEvents).toHaveLength(1);
   expect(inputEvents[0]?.streamingBehavior).toBeUndefined();
@@ -123,9 +125,11 @@ const reportsStreamingbehaviorToInputHandlersWhile = Effect.gen(function* () {
     });
   }
 
-  const promptPromise = harness.session.prompt("start");
+  const promptPromise = harness.session.run.prompting.prompt("start");
   yield* Effect.promise(() => sawToolStart);
-  yield* Effect.promise(() => harness.session.prompt("queued", { streamingBehavior: "followUp" }));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("queued", { streamingBehavior: "followUp" }),
+  );
 
   expect(inputEvents.map((event) => event.streamingBehavior)).toEqual([undefined, "followUp"]);
 

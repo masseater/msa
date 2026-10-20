@@ -39,7 +39,7 @@ const allowsExtensionsToReplaceFinalizedAssistant = Effect.gen(function* () {
   );
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("hello")]);
-  yield* Effect.promise(() => harness.session.prompt("hi"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
   const assistantMessage = harness.session.messages.find((message) => message.role === "assistant");
   return yield* allowsExtensionsToReplaceFinalizedAssistantStep1(harness, assistantMessage);
 });

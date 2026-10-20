@@ -105,13 +105,17 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             yield* awaited(createSession(true));
 
-            yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+            yield* awaited(
+              session.run.prompting.prompt("What is 2+2? Reply with just the number."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.prompt("What is 3+3? Reply with just the number."));
+            yield* awaited(
+              session.run.prompting.prompt("What is 3+3? Reply with just the number."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
-            const result = yield* awaited(session.compact());
+            const result = yield* awaited(session.compaction.manual.compact());
 
             expect(result.summary).toBeDefined();
             expect(result.summary.length).toBeGreaterThan(0);
@@ -140,10 +144,10 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             yield* awaited(createSession());
 
-            yield* awaited(session.prompt("Say hello"));
+            yield* awaited(session.run.prompting.prompt("Say hello"));
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.compact());
+            yield* awaited(session.compaction.manual.compact());
 
             const compactionEvents = events.filter(
               (e) => e.type === "compaction_start" || e.type === "compaction_end",

@@ -13,7 +13,7 @@ const filtersNewlinesWhenAgentsessionSetsessionnameIs = Effect.gen(function* () 
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
 
-  harness.session.setSessionName("hello\nworld\r\nagain");
+  harness.session.context.transcript.setSessionName("hello\nworld\r\nagain");
 
   expect(harness.sessionManager.getSessionName()).toBe("hello world again");
   expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual([

@@ -72,7 +72,7 @@ export default class LoginFlow extends LoginFlowLayer8 {
     const deferSelection =
       isUnknownModel(previousModel) &&
       hasDefaultModelProvider(providerId) &&
-      !session.modelRuntime
+      !session.models.selection.modelRuntime
         .getAvailableSnapshot()
         .some(
           (model) =>

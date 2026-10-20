@@ -23,7 +23,7 @@ const retriesATransientDnsLookupFailure = Effect.gen(function* () {
       fauxAssistantMessage("recovered after DNS retry"),
     ]);
 
-    yield* Effect.promise(() => harness.session.prompt("test"));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("test"));
 
     expect(harness.faux.state.callCount).toBe(2);
     expect(harness.eventsOfType("auto_retry_start").map((event) => event.errorMessage)).toEqual([

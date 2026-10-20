@@ -26,7 +26,9 @@ export default abstract class InteractiveModeLayer38 extends InteractiveModeLaye
           Effect.runPromise(
             awaitingWith(function* () {
               try {
-                const result = yield* awaited(this.session.compact(options?.customInstructions));
+                const result = yield* awaited(
+                  this.session.compaction.manual.compact(options?.customInstructions),
+                );
                 options?.onComplete?.(result);
               } catch (error) {
                 const err = error instanceof Error ? error : new Error(String(error));
@@ -36,16 +38,16 @@ export default abstract class InteractiveModeLayer38 extends InteractiveModeLaye
           ))();
       },
       cwd: this.sessionManager.getCwd(),
-      getContextUsage: () => this.session.getContextUsage(),
-      getSystemPrompt: () => this.session.systemPrompt,
-      hasPendingMessages: () => this.session.pendingMessageCount > 0,
+      getContextUsage: () => this.session.context.stats.getContextUsage(),
+      getSystemPrompt: () => this.session.tools.prompt.systemPrompt,
+      hasPendingMessages: () => this.session.run.queue.pendingMessageCount > 0,
       hasUI: true,
       isIdle: () => this.session.isIdle,
       isProjectTrusted: () => this.settingsManager.isProjectTrusted(),
       mode: "tui",
       model: this.session.model,
       modelRegistry: extensionRunner.getModelRegistry(),
-      scopedModels: this.session.scopedModels,
+      scopedModels: this.session.models.selection.scopedModels,
       sessionManager: this.sessionManager,
       shutdown: () => {
         this.shutdownRequested = true;

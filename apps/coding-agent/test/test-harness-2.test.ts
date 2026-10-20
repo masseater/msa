@@ -19,7 +19,7 @@ const eventCapture = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["hello"] }));
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const agentStarts = harness.eventsOfType("agent_start");
       expect(agentStarts).toHaveLength(1);
@@ -37,7 +37,7 @@ const contextCapture = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["reply"] }));
 
-      yield* awaited(harness.session.prompt("my question"));
+      yield* awaited(harness.session.run.prompting.prompt("my question"));
 
       expect(harness.faux.contexts).toHaveLength(1);
       const ctx = harness.faux.contexts[0];
@@ -51,9 +51,9 @@ const wrapsAroundWhenMoreCallsThanResponses = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["a", "b"] }));
 
-      yield* awaited(harness.session.prompt("1"));
-      yield* awaited(harness.session.prompt("2"));
-      yield* awaited(harness.session.prompt("3"));
+      yield* awaited(harness.session.run.prompting.prompt("1"));
+      yield* awaited(harness.session.run.prompting.prompt("2"));
+      yield* awaited(harness.session.run.prompting.prompt("3"));
 
       expect(harness.faux.callCount).toBe(3);
 
@@ -70,7 +70,7 @@ const streamsTextDeltas = () =>
     Effect.gen(function* () {
       harness = yield* awaited(createHarness({ responses: ["hello world"] }));
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const updates = harness.eventsOfType("message_update");
       const textDeltas = updates.filter((e) => e.assistantMessageEvent.type === "text_delta");
@@ -92,7 +92,7 @@ const streamsThinkingDeltas = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("hi"));
+      yield* awaited(harness.session.run.prompting.prompt("hi"));
 
       const updates = harness.eventsOfType("message_update");
       const thinkingStarts = updates.filter(
@@ -138,7 +138,7 @@ const streamsToolCallDeltas = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("use tool"));
+      yield* awaited(harness.session.run.prompting.prompt("use tool"));
 
       const updates = harness.eventsOfType("message_update");
       const toolcallStarts = updates.filter(
@@ -186,7 +186,7 @@ const streamsThinkingThenTextThenToolCall = () =>
         }),
       );
 
-      yield* awaited(harness.session.prompt("do it"));
+      yield* awaited(harness.session.run.prompting.prompt("do it"));
 
       const updates = harness.eventsOfType("message_update");
       const streamTypes = updates.map((e) => e.assistantMessageEvent.type);

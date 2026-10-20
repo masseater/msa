@@ -12,6 +12,15 @@ declare namespace SessionStartNotifySupportTypes {
     settingsManager: { getQuietStartup: () => boolean };
     sessionManager: { getCwd: () => string };
     session: {
+      extensions: {
+        binding: {
+          extensionRunner: {
+            getCommandDiagnostics: () => [];
+            getShortcutDiagnostics: () => [];
+            getRegisteredCommands: () => [];
+          };
+        };
+      };
       promptTemplates: [];
       resourceLoader: {
         getAgentsFiles: () => LoadedResourcesResult<{ agentsFiles: Array<{ path: string }> }>;
@@ -22,16 +31,11 @@ declare namespace SessionStartNotifySupportTypes {
         getThemes: () => LoadedResourcesResult<{ themes: [] }>;
         getExtensions: () => { extensions: []; errors: [] };
       };
-      extensionRunner: {
-        getCommandDiagnostics: () => [];
-        getShortcutDiagnostics: () => [];
-        getRegisteredCommands: () => [];
-      };
     };
     isStartupExpanded: () => boolean;
     getStartupVisibility: () => { header: boolean; details: boolean };
     getBuiltInCommandConflictDiagnostics: (
-      extensionRunner: LoadedResourcesContext["session"]["extensionRunner"],
+      extensionRunner: LoadedResourcesContext["session"]["extensions"]["binding"]["extensionRunner"],
     ) => [];
   };
 
@@ -50,12 +54,16 @@ declare namespace SessionStartNotifySupportTypes {
   type ReloadCommandContext = {
     hideThinkingBlock: boolean;
     session: {
+      compaction: { manual: { isCompacting: boolean } };
+      extensions: {
+        binding: { extensionRunner: unknown };
+        runtime: {
+          reload: (options?: { beforeSessionStart?: () => void | Promise<void> }) => Promise<void>;
+        };
+      };
       isStreaming: boolean;
-      isCompacting: boolean;
-      reload: (options?: { beforeSessionStart?: () => void | Promise<void> }) => Promise<void>;
-      resourceLoader: { getThemes: () => { themes: [] } };
-      extensionRunner: unknown;
       modelRegistry: { getError: () => string | undefined };
+      resourceLoader: { getThemes: () => { themes: [] } };
     };
     settingsManager: {
       getHttpIdleTimeoutMs: () => number;
@@ -119,7 +127,9 @@ declare namespace SessionStartNotifySupportTypes {
     | "defaultEditor"
     | "themeController"
   > & {
-    session?: Partial<ReloadCommandContext["session"]>;
+    session?: Partial<Omit<ReloadCommandContext["session"], "extensions">> & {
+      extensions?: Partial<ReloadCommandContext["session"]["extensions"]>;
+    };
     settingsManager?: Partial<ReloadCommandContext["settingsManager"]>;
     keybindings?: Partial<ReloadCommandContext["keybindings"]>;
     editorSlot?: Partial<ReloadCommandContext["editorSlot"]>;

@@ -105,13 +105,17 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             yield* awaited(createSession());
 
-            yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+            yield* awaited(
+              session.run.prompting.prompt("What is 2+2? Reply with just the number."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.prompt("What is 3+3? Reply with just the number."));
+            yield* awaited(
+              session.run.prompting.prompt("What is 3+3? Reply with just the number."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
-            const result = yield* awaited(session.compact());
+            const result = yield* awaited(session.compaction.manual.compact());
 
             expect(result.summary).toBeDefined();
             expect(result.summary.length).toBeGreaterThan(0);
@@ -143,15 +147,21 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             yield* awaited(createSession());
 
-            yield* awaited(session.prompt("What is the capital of France? One word answer."));
+            yield* awaited(
+              session.run.prompting.prompt("What is the capital of France? One word answer."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.prompt("What is the capital of Germany? One word answer."));
+            yield* awaited(
+              session.run.prompting.prompt("What is the capital of Germany? One word answer."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.compact());
+            yield* awaited(session.compaction.manual.compact());
 
-            yield* awaited(session.prompt("What is the capital of Italy? One word answer."));
+            yield* awaited(
+              session.run.prompting.prompt("What is the capital of Italy? One word answer."),
+            );
             yield* awaited(session.agent.waitForIdle());
 
             expect(session.messages.length).toBeGreaterThan(0);
@@ -179,13 +189,13 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             yield* awaited(createSession());
 
-            yield* awaited(session.prompt("Say hello"));
+            yield* awaited(session.run.prompting.prompt("Say hello"));
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.prompt("Say goodbye"));
+            yield* awaited(session.run.prompting.prompt("Say goodbye"));
             yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.compact());
+            yield* awaited(session.compaction.manual.compact());
 
             const entries = sessionManager.getEntries();
 

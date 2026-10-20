@@ -56,10 +56,12 @@ const enablesPrWatchByDefaultAndLists = () =>
     Effect.gen(function* () {
       const session = yield* awaited(createSession());
       try {
-        expect(session.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
-        expect(session.getActiveToolNames()).toContain("pr_watch");
-        expect(session.systemPrompt).toContain("- pr_watch: Watch a GitHub pull request");
-        expect(session.prWatch.entries).toEqual([]);
+        expect(session.tools.registry.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
+        expect(session.tools.loadout.getActiveToolNames()).toContain("pr_watch");
+        expect(session.tools.prompt.systemPrompt).toContain(
+          "- pr_watch: Watch a GitHub pull request",
+        );
+        expect(session.integrations.prWatch.prWatch.entries).toEqual([]);
       } finally {
         session.dispose();
       }
@@ -71,9 +73,9 @@ const keepsPrWatchOutWhenAPlain = () =>
     Effect.gen(function* () {
       const session = yield* awaited(createSession(["read", "grep"]));
       try {
-        expect(session.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
-        expect(session.getActiveToolNames()).toEqual(["read", "grep"]);
-        expect(session.systemPrompt).not.toContain("- pr_watch:");
+        expect(session.tools.registry.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
+        expect(session.tools.loadout.getActiveToolNames()).toEqual(["read", "grep"]);
+        expect(session.tools.prompt.systemPrompt).not.toContain("- pr_watch:");
       } finally {
         session.dispose();
       }

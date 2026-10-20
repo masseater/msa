@@ -56,12 +56,20 @@ const usageEntries = (options: SessionOptions): Array<Record<string, unknown>> =
 function createSession(options: SessionOptions): agentSessionTypes.AgentSession {
   const entries = usageEntries(options);
   const session = {
-    getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
-    modelRuntime: {
-      isUsingSubscription: () => options.usingSubscription ?? false,
+    context: { stats: { getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }) } },
+    integrations: {
+      goal: { goal: undefined },
+      orchestration: { orchestrator: undefined },
+      prWatch: { prWatch: { entries: [], last: undefined } },
     },
-    prWatch: { entries: [], last: undefined },
-    routedModel: options.routedModel,
+    models: {
+      selection: {
+        modelRuntime: {
+          isUsingSubscription: () => options.usingSubscription ?? false,
+        },
+        routedModel: options.routedModel,
+      },
+    },
     sessionManager: {
       getCwd: () => "/tmp/project",
       getEntries: () => entries,

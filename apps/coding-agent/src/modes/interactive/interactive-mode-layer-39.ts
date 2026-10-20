@@ -17,7 +17,7 @@ export default abstract class InteractiveModeLayer39 extends InteractiveModeLaye
     setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
     this.setupAutocompleteProvider();
 
-    const extensionRunner = this.session.extensionRunner;
+    const extensionRunner = this.session.extensions.binding.extensionRunner;
     this.setupExtensionShortcuts(extensionRunner);
     this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true });
     this.showStartupNoticesIfNeeded();
@@ -50,10 +50,10 @@ export default abstract class InteractiveModeLayer39 extends InteractiveModeLaye
     this.applyRuntimeSettings();
     this.themeController.applyFromSettings();
     this.setupAutocompleteProvider();
-    this.setupExtensionShortcuts(this.session.extensionRunner);
+    this.setupExtensionShortcuts(this.session.extensions.binding.extensionRunner);
     this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true });
     const savedImplicitProjectTrust = this.maybeSaveImplicitProjectTrustAfterReload();
-    const modelsJsonError = this.session.modelRuntime.getError();
+    const modelsJsonError = this.session.models.selection.modelRuntime.getError();
     if (modelsJsonError !== undefined && modelsJsonError !== "")
       this.showError(`models.json error: ${modelsJsonError}`);
     this.showStatus(

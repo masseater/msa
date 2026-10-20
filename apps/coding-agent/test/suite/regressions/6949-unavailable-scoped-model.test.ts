@@ -34,12 +34,16 @@ function createInteractiveContext(options: {
       },
     },
     session: {
-      modelRuntime: {
-        getAvailableSnapshot,
-        refresh: vi.fn().mockResolvedValue({ aborted: false, errors: new Map() }),
+      models: {
+        selection: {
+          modelRuntime: {
+            getAvailableSnapshot,
+            refresh: vi.fn().mockResolvedValue({ aborted: false, errors: new Map() }),
+          },
+          scopedModels: options.scopedModels ?? [],
+          setScopedModels,
+        },
       },
-      scopedModels: options.scopedModels ?? [],
-      setScopedModels,
     },
     settingsManager: {
       getEnabledModels: () => options.enabledModelIds,

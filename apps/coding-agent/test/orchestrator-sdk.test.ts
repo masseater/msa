@@ -29,10 +29,10 @@ const startsWithTheOrchestratorToolsActive = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { session } = yield* createHarness();
-      expect(session.getActiveToolNames()).toEqual(
+      expect(session.tools.loadout.getActiveToolNames()).toEqual(
         expect.arrayContaining(["create_task", "list_tasks", "replan", "stop_task", "handoff"]),
       );
-      expect(session.systemPrompt).toContain("You work as an orchestrator");
+      expect(session.tools.prompt.systemPrompt).toContain("You work as an orchestrator");
       session.dispose();
     }),
   );
@@ -57,7 +57,7 @@ const savesTheThreeSectionsTheModelPasses = () =>
         fauxAssistantMessage("done"),
       ]);
 
-      yield* Effect.promise(() => session.prompt(handoffPrompt("")));
+      yield* Effect.promise(() => session.run.prompting.prompt(handoffPrompt("")));
 
       const result = session.messages.find((message) => message.role === "toolResult");
       const [saved] = yield* Effect.promise(() => pendingHandoffs(`${tempDir}/handoffs`));
@@ -76,7 +76,7 @@ const writesAHandoffUnderTheAgentDir = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { session } = yield* createHarness();
-      const orchestrator = session.orchestrator;
+      const orchestrator = session.integrations.orchestration.orchestrator;
       if (orchestrator === undefined) throw new Error("orchestrator missing");
 
       const result = yield* Effect.promise(() =>
@@ -98,8 +98,8 @@ const doesNotStartAnOrchestratorInsideA = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { session } = yield* createHarness({ isWorker: true });
-      expect(session.orchestrator).toBeUndefined();
-      expect(session.getActiveToolNames()).not.toContain("create_task");
+      expect(session.integrations.orchestration.orchestrator).toBeUndefined();
+      expect(session.tools.loadout.getActiveToolNames()).not.toContain("create_task");
       session.dispose();
     }),
   );
@@ -110,7 +110,7 @@ const keepsWorkerTranscriptsOutOfTheSessions = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { session, sessionManager, sessionDir } = yield* createHarness();
-      const orchestrator = session.orchestrator;
+      const orchestrator = session.integrations.orchestration.orchestrator;
       if (orchestrator === undefined) throw new Error("orchestrator missing");
       const task = yield* Effect.promise(() =>
         orchestrator.createTask({

@@ -53,11 +53,15 @@ function handoffResumePrompt(directory: string, dialogs: Dialogs): Promise<strin
 function offerHandoff(session: agentSessionTypes.AgentSession, dialogs: Dialogs): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      if (session.orchestrator === undefined || session.messages.length > 0) return;
+      if (
+        session.integrations.orchestration.orchestrator === undefined ||
+        session.messages.length > 0
+      )
+        return;
       const prompt = yield* awaited(
         handoffResumePrompt(session.settingsManager.getHandoffDirectory(), dialogs),
       );
-      if (prompt !== undefined) yield* awaited(session.prompt(prompt));
+      if (prompt !== undefined) yield* awaited(session.run.prompting.prompt(prompt));
     }),
   );
 }

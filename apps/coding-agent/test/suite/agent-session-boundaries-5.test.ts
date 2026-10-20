@@ -46,7 +46,7 @@ const keepsTruncatedToolAttemptsInContext = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(executed).toBe(false);
   expect(harness.faux.state.callCount).toBe(2);
@@ -101,7 +101,7 @@ const resetsLengthRecoveryAfterASuccessfulStep1 = (harness: harnessTypes.Harness
           timestamp: currentTimeMillis() + 2_000,
         }),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5000)));
     const omittedIds = harness.sessionManager
       .getEntries()
       .filter((entry) => entry.type === "context_edit")
@@ -163,7 +163,7 @@ const givesADistinctQueuedFollowUpStep1 = (harness: harnessTypes.Harness) =>
         }),
       () => fauxAssistantMessage("follow-up recovered", { timestamp: currentTimeMillis() + 2_000 }),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5000)));
     const lengthIds = harness.sessionManager
       .getEntries()
       .flatMap((entry) =>
@@ -193,7 +193,7 @@ const finishesRetryBookkeepingWhenARetry = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "invalid_api_key", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(harness.faux.state.callCount).toBe(2);
   expect(harness.eventsOfType("auto_retry_end")).toContainEqual(

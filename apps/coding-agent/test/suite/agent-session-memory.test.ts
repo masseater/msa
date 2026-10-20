@@ -26,7 +26,7 @@ function createMemoryHarness(): Promise<harnessTypes.Harness> {
 
 const savesThroughTheMemoryToolAnd = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createMemoryHarness());
-  expect(harness.session.getActiveToolNames()).toContain("memory");
+  expect(harness.session.tools.loadout.getActiveToolNames()).toContain("memory");
 
   harness.setResponses([
     fauxAssistantMessage(
@@ -38,13 +38,17 @@ const savesThroughTheMemoryToolAnd = Effect.gen(function* () {
     ),
     fauxAssistantMessage("saved"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("remember how releases are published"));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("remember how releases are published"),
+  );
   const saved = getToolResult(harness, "memory");
   expect(saved.content[0]).toMatchObject({ type: "text" });
   expect(saved.content[0]?.type === "text" ? saved.content[0].text : "").toContain("Saved memory");
 
   harness.setResponses([fauxAssistantMessage("the tap")]);
-  yield* Effect.promise(() => harness.session.prompt("the release goes to the Homebrew tap?"));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("the release goes to the Homebrew tap?"),
+  );
   const recall = harness.session.messages.find(
     (message) => message.role === "custom" && message.customType === MEMORY_RECALL_MESSAGE_TYPE,
   );
@@ -58,23 +62,23 @@ const savesThroughTheMemoryToolAnd = Effect.gen(function* () {
 const answersMemoryWithStatusStatsList = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createMemoryHarness());
   harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.prompt("/memory"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/memory"));
   let status = harness.eventsOfType("memory_status").at(-1);
   expect(status?.text).toContain("Memory is enabled.");
   expect(status?.text).toContain("/memory list");
 
   harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.prompt("/memory stats"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/memory stats"));
   status = harness.eventsOfType("memory_status").at(-1);
   expect(status?.text).toContain("Total: 0");
 
   harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.prompt("/memory list"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/memory list"));
   status = harness.eventsOfType("memory_status").at(-1);
   expect(status?.text).toBe("No memories stored yet.");
 
   harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.prompt("/memory search nothing"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/memory search nothing"));
   status = harness.eventsOfType("memory_status").at(-1);
   expect(status?.text).toBe("No matching memories.");
 });
@@ -91,14 +95,18 @@ const injectsRecalledMemoriesForTheFirst = Effect.gen(function* () {
   store.close();
 
   harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.prompt("the release goes to the Homebrew tap?"));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("the release goes to the Homebrew tap?"),
+  );
   const recall = harness.session.messages.find(
     (message) => message.role === "custom" && message.customType === MEMORY_RECALL_MESSAGE_TYPE,
   );
   expect(recall).toBeDefined();
 
   harness.setResponses([fauxAssistantMessage("ok")]);
-  yield* Effect.promise(() => harness.session.prompt("unrelated question about weather"));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("unrelated question about weather"),
+  );
   const recalls = harness.session.messages.filter(
     (message) => message.role === "custom" && message.customType === MEMORY_RECALL_MESSAGE_TYPE,
   );

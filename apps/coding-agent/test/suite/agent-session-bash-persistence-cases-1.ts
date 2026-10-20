@@ -33,14 +33,14 @@ const recordsBashResultsImmediatelyWhileIdle = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
 
-  harness.session.recordBashResult("echo hi", {
+  harness.session.context.bash.recordBashResult("echo hi", {
     cancelled: false,
     exitCode: 0,
     output: "hi",
     truncated: false,
   });
 
-  expect(harness.session.hasPendingBashMessages).toBe(false);
+  expect(harness.session.context.bash.hasPendingBashMessages).toBe(false);
   expect(harness.session.messages[harness.session.messages.length - 1]?.role).toBe("bashExecution");
   expect(getEntryTypes(harness)).toContain("message");
 });

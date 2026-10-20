@@ -13,10 +13,10 @@ type SubmitContext = {
     setText: (text: string) => void;
   };
   session: {
-    isCompacting: boolean;
+    compaction: { manual: { isCompacting: boolean } };
+    context: { bash: { isBashRunning: boolean } };
     isStreaming: boolean;
-    isBashRunning: boolean;
-    prompt: (text: string, options?: unknown) => Promise<void>;
+    run: { prompting: { prompt: (text: string, options?: unknown) => Promise<void> } };
   };
   flushPendingBashComponents: () => void;
   onInputCallback?: (text: string) => void;
@@ -51,10 +51,10 @@ function createSubmitContext(): SubmitContext {
     flushPendingBashComponents: vi.fn(),
     pendingUserInputs: [],
     session: {
-      isBashRunning: false,
-      isCompacting: false,
+      compaction: { manual: { isCompacting: false } },
+      context: { bash: { isBashRunning: false } },
       isStreaming: false,
-      prompt: vi.fn(() => runTest(Effect.sync(() => {}))),
+      run: { prompting: { prompt: vi.fn(() => runTest(Effect.sync(() => {}))) } },
     },
   };
 }

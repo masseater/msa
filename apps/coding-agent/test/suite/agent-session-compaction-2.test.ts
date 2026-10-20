@@ -3,7 +3,6 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
 
 const { fauxAssistantMessage } = ai;
@@ -17,8 +16,7 @@ const autoCompactsWithACustomStreamfn = Effect.gen(function* () {
   harnesses.push(harness);
   seedCompactableSession(harness);
   const getStreamCallCount = useSummaryStreamFn(harness, "auto summary from custom stream");
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
 
   yield* Effect.promise(() => sessionInternals["runAutoCompaction"]("threshold", false));
 
@@ -66,8 +64,7 @@ const notifiesExtensionsWhenAutoCompactionFails = Effect.gen(function* () {
   harness.session.agent.streamFunction = () => {
     throw new Error("summary generator blew up");
   };
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
 
   yield* Effect.promise(() =>
     expect(sessionInternals["runAutoCompaction"]("threshold", false)).resolves.toBe(false),
@@ -118,7 +115,7 @@ const compactsAndResumesAfterALength = Effect.gen(function* () {
     fauxAssistantMessage("completed response"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5000)));
 
   expect(harness.faux.state.callCount).toBe(2);
   expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({
@@ -126,7 +123,7 @@ const compactsAndResumesAfterALength = Effect.gen(function* () {
     reason: "overflow",
     willRetry: true,
   });
-  expect(harness.session.getLastAssistantText()).toBe("completed response");
+  expect(harness.session.context.transcript.getLastAssistantText()).toBe("completed response");
 });
 
 const autoCompactsWithACustomStreamfnWhen = () =>

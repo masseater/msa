@@ -203,7 +203,7 @@ function launch(
   worker.subscribe(() => runtime.publish());
   runtime.runs.set(threadId, run);
   runtime.runStartedAt.set(threadId, performance.now());
-  void worker.prompt(prompt).then(
+  void worker.run.prompting.prompt(prompt).then(
     () => runtime.afterTurn(threadId, run, worker),
     (error: unknown) => runtime.settle(threadId, run, worker, error),
   );

@@ -21,7 +21,7 @@ function measureUpdateBytes(text: string): Promise<number> {
       harnesses.push(harness);
       harness.setResponses([fauxAssistantMessage(text)]);
 
-      yield* Effect.promise(() => harness.session.prompt("respond"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("respond"));
 
       const sessionUpdates = harness.eventsOfType("message_update");
       for (const update of sessionUpdates) {

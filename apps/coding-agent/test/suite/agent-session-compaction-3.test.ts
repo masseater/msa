@@ -82,10 +82,10 @@ const runOversizedToolTurn = Effect.fn("runOversizedToolTurn")(function* (modelO
       return fauxAssistantMessage("finished after compaction");
     },
   ]);
-  yield* Effect.promise(() => harness.session.prompt("seed old history"));
-  yield* Effect.promise(() => harness.session.prompt("seed recent history"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("seed old history"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("seed recent history"));
   const agentStartsBefore = harness.eventsOfType("agent_start").length;
-  yield* Effect.promise(() => harness.session.prompt("run the large tool"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("run the large tool"));
   return { agentStartsBefore, harness, observedSettings, order, resumedRequest: resumed.request };
 });
 
@@ -106,7 +106,9 @@ const compactsAfterAnOversizedToolResult = (modelOverride: boolean) =>
     });
     expect(resumedRequest).toContain("compacted history");
     expect(resumedRequest).toContain("large-tool-result");
-    expect(harness.session.getLastAssistantText()).toBe("finished after compaction");
+    expect(harness.session.context.transcript.getLastAssistantText()).toBe(
+      "finished after compaction",
+    );
   });
 
 describe("AgentSession compaction characterization", () => {

@@ -24,9 +24,9 @@ const warnsWhenDeferredMcpToolsHave = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
-  expect(harness.session.getActiveToolNames()).toEqual([]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([]);
   expect(notifications).toEqual([
     "MCP tools are only reachable from the codemode or tool_search tool, but neither is active; they cannot be called.",
   ]);
@@ -34,7 +34,10 @@ const warnsWhenDeferredMcpToolsHave = Effect.gen(function* () {
 
 const tellsScriptsWhatDirectlyExposedMcp = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => setup("direct"));
-  harness.session.setActiveToolsByName([...harness.session.getActiveToolNames(), "codemode"]);
+  harness.session.tools.loadout.setActiveToolsByName([
+    ...harness.session.tools.loadout.getActiveToolNames(),
+    "codemode",
+  ]);
   const search = harness.session.agent.state.tools.find(
     (tool) => tool.name === "mcp__docs__search",
   );
@@ -63,9 +66,9 @@ const activatesAnotherExtensionSCodemodeTool = Effect.gen(function* () {
     setup("codemode", undefined, { extensionFactories: [otherExec] }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
 });
 
 const doesNotActivateAnotherExtensionS = Effect.gen(function* () {
@@ -83,16 +86,16 @@ const doesNotActivateAnotherExtensionS = Effect.gen(function* () {
     setup("codemode", undefined, { extensionFactories: [otherExec] }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
-  expect(harness.session.getActiveToolNames()).toEqual([]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([]);
 });
 
 const doesNotHoldTheFirstPrompt = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => setupSlow({}, Number.POSITIVE_INFINITY));
   harness.setResponses([fauxAssistantMessage("ready")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(getAssistantTexts(harness)).toEqual(["ready"]);
 
@@ -106,7 +109,9 @@ const keepsTheCodemodeDescriptionUnchangedWhen = Effect.gen(function* () {
   const before = description();
   expect(before).toBeDefined();
   yield* Effect.promise(() =>
-    vi.waitFor(() => expect(harness.session.getCallableToolNames()).toContain("mcp__slow__search")),
+    vi.waitFor(() =>
+      expect(harness.session.tools.loadout.getCallableToolNames()).toContain("mcp__slow__search"),
+    ),
   );
   expect(description()).toBe(before);
 });
@@ -117,11 +122,13 @@ const listsAServerBeforeItConnects = Effect.gen(function* () {
   );
   harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
 
-  yield* Effect.promise(() => harness.session.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
   yield* Effect.promise(() =>
-    vi.waitFor(() => expect(harness.session.getCallableToolNames()).toContain("mcp__slow__search")),
+    vi.waitFor(() =>
+      expect(harness.session.tools.loadout.getCallableToolNames()).toContain("mcp__slow__search"),
+    ),
   );
-  yield* Effect.promise(() => harness.session.prompt("second"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
   const systemMessages = harness.session.messages.filter(
     (message): message is compatTypes.SystemMessage => message.role === "system",

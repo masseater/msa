@@ -38,8 +38,8 @@ const listsAndReadsResourcesWithCodex = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("read"));
-  expect(harness.session.getActiveToolNames()).toEqual(
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("read"));
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(
     expect.arrayContaining([
       "list_mcp_resources",
       "list_mcp_resource_templates",
@@ -70,7 +70,7 @@ const listsAndReadsResourcesWithCodexStep1 = (harness: harnessTypes.Harness, cal
       'MCP server "nope" has no resources. Servers with resources: docs',
     );
     expect(calls).toEqual(["read:docs://pages/setup"]);
-    const annotations = harness.session
+    const annotations = harness.session.tools.registry
       .getAllTools()
       .find((tool) => tool.name === "read_mcp_resource");
     expect(annotations?.annotations).toEqual({ readOnlyHint: true });
@@ -94,9 +94,9 @@ return { uris: listed.resources.map((r) => r.uri), text: read.contents[0].text }
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("read"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("read"));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
   expect(
     yield* fromJsonText(getMessageText(toolResult(harness, "codemode")).split("\n").at(-1) ?? ""),
   ).toEqual({
@@ -113,7 +113,7 @@ const appliesPerToolExposureOverrides = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(declaredToolNames(harness)).toEqual(["codemode", "mcp__docs__search"]);
   expect(nestedToolNames(harness)).toEqual(["mcp__docs__search", "mcp__docs__shot"]);
@@ -144,7 +144,7 @@ return { docs, sameForAliases: aliases.every((alias) => JSON.stringify(alias) ==
     fauxAssistantMessage("done"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const description = (name: string) =>
     harness.session.agent.state.tools.find((tool) => tool.name === name)?.description ?? "";
@@ -175,7 +175,7 @@ const listsServersByTheFirstLine = Effect.gen(function* () {
   );
   harness.setResponses([fauxAssistantMessage("done")]);
 
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   const section = serversSection(harness);
   expect(section).toContain("- mcp__docs (tool_search): Docs search.\n");
@@ -189,9 +189,9 @@ const doesNotActivateCodemodeWhenAutoenablecodemode = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
-  expect(harness.session.getActiveToolNames()).toEqual([]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([]);
   expect(nestedToolNames(harness)).toContain("mcp__docs__search");
   expect(notifications).toEqual([
     "MCP tools are only reachable from the codemode or tool_search tool, but neither is active (autoEnableCodemode is false); they cannot be called.",
@@ -214,9 +214,12 @@ const treatsCodemodeMcpToolsAsReachable = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["tool_search", "mcp__docs__search"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([
+    "tool_search",
+    "mcp__docs__search",
+  ]);
   expect(getMessageText(toolResult(harness, "mcp__docs__search"))).toBe("loaded guide\nloaded faq");
   expect(notifications).toEqual([]);
 });
@@ -229,9 +232,9 @@ const reachesDeferredMcpToolsThroughCodemode = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("ready")]);
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
   expect(nestedToolNames(harness)).toContain("mcp__docs__search");
   expect(notifications).toEqual([]);
 });

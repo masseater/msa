@@ -52,7 +52,7 @@ const doesNotLetAnInvalidExplicit = Effect.gen(function* () {
     fauxAssistantMessage("must not run"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(harness.faux.state.callCount).toBe(2);
 });
@@ -79,7 +79,7 @@ const dispatchesActionableTurnEndForSynthetic = Effect.gen(function* () {
     throw new Error("request preparation failed");
   };
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(turnEnds).toBe(1);
   expect(harness.faux.state.callCount).toBe(0);
@@ -127,10 +127,10 @@ const doesNotCompactFromUsageBelonging = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("short response")]);
 
-  yield* Effect.promise(() => harness.session.prompt("small prompt"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("small prompt"));
 
   expect(harness.eventsOfType("compaction_start")).toEqual([]);
-  expect(harness.session.getContextUsage()?.tokens).toBeLessThan(4_000);
+  expect(harness.session.context.stats.getContextUsage()?.tokens).toBeLessThan(4_000);
 });
 
 const doesNotTriggerSuccessfulResponseOverflow = Effect.gen(function* () {
@@ -174,10 +174,12 @@ const doesNotTriggerSuccessfulResponseOverflow = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("done")]);
 
-  yield* Effect.promise(() => harness.session.prompt("large input that is later omitted"));
+  yield* Effect.promise(() =>
+    harness.session.run.prompting.prompt("large input that is later omitted"),
+  );
 
   expect(harness.eventsOfType("compaction_start")).toEqual([]);
-  expect(harness.session.getContextUsage()?.tokens).toBeLessThan(3_000);
+  expect(harness.session.context.stats.getContextUsage()?.tokens).toBeLessThan(3_000);
 });
 
 const doesNotLetAnInvalidExplicitContinuation = () =>

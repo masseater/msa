@@ -160,7 +160,7 @@ const captureStreamOptions = (
               ),
               (stream) => awaited(stream.result()),
             )
-          : awaited(session.prompt("test"));
+          : awaited(session.run.prompting.prompt("test"));
       yield* request.pipe(
         Effect.ensuring(
           Effect.sync(() => {

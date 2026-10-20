@@ -196,7 +196,7 @@ describe("RPC user_bash failure handling (#9068)", () => {
       Effect.gen(function* () {
         const rpc = yield* Effect.promise(() => startRpcHarness(extension));
         const executeBash = vi
-          .spyOn(rpc.harness.session, "executeBash")
+          .spyOn(rpc.harness.session.context.bash, "executeBash")
           .mockResolvedValue(localResult);
 
         try {

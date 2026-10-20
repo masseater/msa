@@ -8,9 +8,9 @@ const { cleanupDirs, createSession, prepareDirs } = regression3592Support;
 const stillDisablesAllToolsWhenNotools = Effect.gen(function* () {
   const session = yield* Effect.promise(() => createSession({ noTools: "all" }));
 
-  expect(session.getAllTools()).toEqual([]);
-  expect(session.getActiveToolNames()).toEqual([]);
-  expect(session.systemPrompt).toContain("<tools>\n(none)\n");
+  expect(session.tools.registry.getAllTools()).toEqual([]);
+  expect(session.tools.loadout.getActiveToolNames()).toEqual([]);
+  expect(session.tools.prompt.systemPrompt).toContain("<tools>\n(none)\n");
   session.dispose();
 });
 

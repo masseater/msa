@@ -18,14 +18,15 @@ type FakeExtensionRunner = {
 };
 
 type FakeSession = {
-  sessionManager: { getHeader: () => object | undefined };
   agent: { waitForIdle: () => Promise<void>; subscribe: ReturnType<typeof vi.fn> };
+  extensions: {
+    binding: { bindExtensions: ReturnType<typeof vi.fn>; extensionRunner: FakeExtensionRunner };
+    runtime: { reload: ReturnType<typeof vi.fn> };
+  };
+  run: { prompting: { prompt: ReturnType<typeof vi.fn> } };
+  sessionManager: { getHeader: () => object | undefined };
   state: { messages: aiTypes.AssistantMessage[] };
-  extensionRunner: FakeExtensionRunner;
-  bindExtensions: ReturnType<typeof vi.fn>;
   subscribe: ReturnType<typeof vi.fn>;
-  prompt: ReturnType<typeof vi.fn>;
-  reload: ReturnType<typeof vi.fn>;
 };
 
 type FakeRuntimeHost = {
@@ -75,10 +76,11 @@ function createRuntimeHost(assistantMessage: aiTypes.AssistantMessage): FakeRunt
 
   const session: FakeSession = {
     agent: { subscribe: vi.fn(() => () => {}), waitForIdle: () => runTest(Effect.sync(() => {})) },
-    bindExtensions: vi.fn(() => runTest(Effect.sync(() => {}))),
-    extensionRunner,
-    prompt: vi.fn(() => runTest(Effect.sync(() => {}))),
-    reload: vi.fn(() => runTest(Effect.sync(() => {}))),
+    extensions: {
+      binding: { bindExtensions: vi.fn(() => runTest(Effect.sync(() => {}))), extensionRunner },
+      runtime: { reload: vi.fn(() => runTest(Effect.sync(() => {}))) },
+    },
+    run: { prompting: { prompt: vi.fn(() => runTest(Effect.sync(() => {}))) } },
     sessionManager: { getHeader: () => undefined },
     state,
     subscribe: vi.fn(() => () => {}),
@@ -88,7 +90,10 @@ function createRuntimeHost(assistantMessage: aiTypes.AssistantMessage): FakeRunt
     dispose: vi.fn(() =>
       runTest(
         awaited(
-          session.extensionRunner.emit({ reason: "quit", type: "session_shutdown" as const }),
+          session.extensions.binding.extensionRunner.emit({
+            reason: "quit",
+            type: "session_shutdown" as const,
+          }),
         ),
       ),
     ),
@@ -140,9 +145,9 @@ describe("runPrintMode", () => {
         );
 
         expect(exitCode).toBe(0);
-        expect(session.prompt).toHaveBeenCalledWith("Say done", { images });
-        expect(session.extensionRunner.emit).toHaveBeenCalledTimes(1);
-        expect(session.extensionRunner.emit).toHaveBeenCalledWith({
+        expect(session.run.prompting.prompt).toHaveBeenCalledWith("Say done", { images });
+        expect(session.extensions.binding.extensionRunner.emit).toHaveBeenCalledTimes(1);
+        expect(session.extensions.binding.extensionRunner.emit).toHaveBeenCalledWith({
           reason: "quit",
           type: "session_shutdown" as const,
         });
@@ -165,9 +170,9 @@ describe("runPrintMode", () => {
         );
 
         expect(exitCode).toBe(0);
-        expect(session.prompt).toHaveBeenCalledWith("hello");
-        expect(session.extensionRunner.emit).toHaveBeenCalledTimes(1);
-        expect(session.extensionRunner.emit).toHaveBeenCalledWith({
+        expect(session.run.prompting.prompt).toHaveBeenCalledWith("hello");
+        expect(session.extensions.binding.extensionRunner.emit).toHaveBeenCalledTimes(1);
+        expect(session.extensions.binding.extensionRunner.emit).toHaveBeenCalledWith({
           reason: "quit",
           type: "session_shutdown" as const,
         });
@@ -193,8 +198,8 @@ describe("runPrintMode", () => {
 
         expect(exitCode).toBe(1);
         expect(errorSpy).toHaveBeenCalledWith("provider failure");
-        expect(session.extensionRunner.emit).toHaveBeenCalledTimes(1);
-        expect(session.extensionRunner.emit).toHaveBeenCalledWith({
+        expect(session.extensions.binding.extensionRunner.emit).toHaveBeenCalledTimes(1);
+        expect(session.extensions.binding.extensionRunner.emit).toHaveBeenCalledWith({
           reason: "quit",
           type: "session_shutdown" as const,
         });

@@ -52,7 +52,8 @@ export default abstract class LoginFlowLayer7 extends LoginFlowLayer6 {
         ? new Set<loginFlowTypes.AuthType>(["oauth", "api_key"])
         : new Set(providerOptions.map((provider) => provider.authType));
     const serviceLabel =
-      providerOptions === undefined && host.session.getExternalServices().length > 0
+      providerOptions === undefined &&
+      host.session.tools.externalServices.getExternalServices().length > 0
         ? "Sign in to a service"
         : undefined;
     const options: string[] = [];

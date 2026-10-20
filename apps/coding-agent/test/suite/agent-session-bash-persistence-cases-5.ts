@@ -28,9 +28,9 @@ const persistsAbortedAssistantMessages = Effect.gen(function* () {
     });
   }
 
-  const promptPromise = harness.session.prompt("hi");
+  const promptPromise = harness.session.run.prompting.prompt("hi");
   yield* Effect.promise(() => sawMessageUpdate);
-  yield* Effect.promise(() => harness.session.abort());
+  yield* Effect.promise(() => harness.session.run.lifecycle.abort());
   yield* Effect.promise(() => promptPromise);
 
   const lastEntry =

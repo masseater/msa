@@ -15,7 +15,7 @@ const { IdleStatus } = statusIndicators;
 export default abstract class InteractiveModeLayer1 extends InteractiveModeLayer0 {
   protected readonly orchestratorPane = new OrchestratorPane({
     columns: () => this.ui.terminal.columns,
-    orchestrator: () => this.session.orchestrator,
+    orchestrator: () => this.session.integrations.orchestration.orchestrator,
     requestRender: () => this.ui.requestRender(),
     rows: () => Math.max(1, this.ui.terminal.rows),
     state: this.tasksViewState,

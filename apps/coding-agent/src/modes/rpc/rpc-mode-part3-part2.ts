@@ -231,7 +231,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
           awaiting(function* () {
             session = runtimeHost.session;
             yield* awaited(
-              session.bindExtensions({
+              session.extensions.binding.bindExtensions({
                 commandContextActions: {
                   fork: (entryId, forkOptions) =>
                     Effect.runPromise(
@@ -244,7 +244,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
                     Effect.runPromise(
                       awaiting(function* () {
                         const result = yield* awaited(
-                          session.navigateTree(targetId, {
+                          session.context.tree.navigateTree(targetId, {
                             customInstructions: options?.customInstructions,
                             label: options?.label,
                             replaceInstructions: options?.replaceInstructions,
@@ -258,12 +258,12 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
                   reload: () =>
                     Effect.runPromise(
                       awaiting(function* () {
-                        yield* awaited(session.reload());
+                        yield* awaited(session.extensions.runtime.reload());
                       }),
                     ),
                   switchSession: (sessionPath, options) =>
                     runtimeHost.switchSession(sessionPath, options),
-                  waitForIdle: () => session.waitForIdle(),
+                  waitForIdle: () => session.run.lifecycle.waitForIdle(),
                 },
                 mode: "rpc",
                 onError: (err) => {
@@ -311,7 +311,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
             switch (command.type) {
               case "prompt": {
                 let preflightSucceeded = false;
-                void session
+                void session.run.prompting
                   .prompt(command.message, {
                     images: command.images,
                     mode: command.mode,
@@ -332,14 +332,14 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
 
               case "steer": {
                 const disposition = yield* awaited(
-                  session.steer(command.message, command.images, { source: "rpc" }),
+                  session.run.queue.steer(command.message, command.images, { source: "rpc" }),
                 );
                 return success(id, "steer", { disposition });
               }
 
               case "follow_up": {
                 const disposition = yield* awaited(
-                  session.followUp(command.message, command.images, {
+                  session.run.queue.followUp(command.message, command.images, {
                     source: "rpc",
                   }),
                 );
@@ -347,12 +347,12 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "abort": {
-                yield* awaited(session.abort());
+                yield* awaited(session.run.lifecycle.abort());
                 return success(id, "abort");
               }
 
               case "clear_queue": {
-                return success(id, "clear_queue", session.clearQueue());
+                return success(id, "clear_queue", session.run.queue.clearQueue());
               }
 
               case "new_session": {
@@ -372,7 +372,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "set_model": {
-                const models = session.modelRuntime.getAvailableSnapshot();
+                const models = session.models.selection.modelRuntime.getAvailableSnapshot();
                 const model = models.find(
                   (m) => m.provider === command.provider && m.id === command.modelId,
                 );
@@ -383,12 +383,12 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
                     `Model not found: ${command.provider}/${command.modelId}`,
                   );
                 }
-                yield* awaited(session.setModel(model));
+                yield* awaited(session.models.selection.setModel(model));
                 return success(id, "set_model", model);
               }
 
               case "cycle_model": {
-                const result = yield* awaited(session.cycleModel());
+                const result = yield* awaited(session.models.selection.cycleModel());
                 if (result === undefined) {
                   return success(id, "cycle_model", null);
                 }
@@ -396,17 +396,17 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "get_available_models": {
-                const models = session.modelRuntime.getAvailableSnapshot();
+                const models = session.models.selection.modelRuntime.getAvailableSnapshot();
                 return success(id, "get_available_models", { models });
               }
 
               case "set_thinking_level": {
-                session.setThinkingLevel(command.level);
+                session.models.thinking.setThinkingLevel(command.level);
                 return success(id, "set_thinking_level");
               }
 
               case "cycle_thinking_level": {
-                const level = session.cycleThinkingLevel();
+                const level = session.models.thinking.cycleThinkingLevel();
                 if (level === undefined) {
                   return success(id, "cycle_thinking_level", null);
                 }
@@ -414,43 +414,45 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "get_available_thinking_levels": {
-                const levels = session.getAvailableThinkingLevels();
+                const levels = session.models.thinking.getAvailableThinkingLevels();
                 return success(id, "get_available_thinking_levels", { levels });
               }
 
               case "set_steering_mode": {
-                session.setSteeringMode(command.mode);
+                session.run.queue.setSteeringMode(command.mode);
                 return success(id, "set_steering_mode");
               }
 
               case "set_follow_up_mode": {
-                session.setFollowUpMode(command.mode);
+                session.run.queue.setFollowUpMode(command.mode);
                 return success(id, "set_follow_up_mode");
               }
 
               case "compact": {
-                const result = yield* awaited(session.compact(command.customInstructions));
+                const result = yield* awaited(
+                  session.compaction.manual.compact(command.customInstructions),
+                );
                 return success(id, "compact", result);
               }
 
               case "set_auto_compaction": {
-                session.setAutoCompactionEnabled(command.enabled);
+                session.compaction.auto.setAutoCompactionEnabled(command.enabled);
                 return success(id, "set_auto_compaction");
               }
 
               case "set_auto_retry": {
-                session.setAutoRetryEnabled(command.enabled);
+                session.run.retry.setAutoRetryEnabled(command.enabled);
                 return success(id, "set_auto_retry");
               }
 
               case "abort_retry": {
-                session.abortRetry();
+                session.run.retry.abortRetry();
                 return success(id, "abort_retry");
               }
 
               case "bash": {
                 const eventResult = yield* awaited(
-                  session.extensionRunner.emitUserBash({
+                  session.extensions.binding.extensionRunner.emitUserBash({
                     command: command.command,
                     cwd: session.sessionManager.getCwd(),
                     excludeFromContext: command.excludeFromContext ?? false,
@@ -459,14 +461,14 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
                 );
 
                 if (eventResult?.result !== undefined) {
-                  session.recordBashResult(command.command, eventResult.result, {
+                  session.context.bash.recordBashResult(command.command, eventResult.result, {
                     excludeFromContext: command.excludeFromContext,
                   });
                   return success(id, "bash", eventResult.result);
                 }
 
                 const result = yield* awaited(
-                  session.executeBash(command.command, undefined, {
+                  session.context.bash.executeBash(command.command, undefined, {
                     excludeFromContext: command.excludeFromContext,
                     id,
                     operations: eventResult?.operations,
@@ -476,17 +478,19 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "abort_bash": {
-                session.abortBash();
+                session.context.bash.abortBash();
                 return success(id, "abort_bash");
               }
 
               case "get_session_stats": {
-                const stats = session.getSessionStats();
+                const stats = session.context.stats.getSessionStats();
                 return success(id, "get_session_stats", stats);
               }
 
               case "export_html": {
-                const path = yield* awaited(session.exportToHtml(command.outputPath));
+                const path = yield* awaited(
+                  session.context.exports.exportToHtml(command.outputPath),
+                );
                 return success(id, "export_html", { path });
               }
 
@@ -522,7 +526,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "get_fork_messages": {
-                const messages = session.getUserMessagesForForking();
+                const messages = session.context.transcript.getUserMessagesForForking();
                 return success(id, "get_fork_messages", { messages });
               }
 
@@ -548,7 +552,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               }
 
               case "get_last_assistant_text": {
-                const text = session.getLastAssistantText();
+                const text = session.context.transcript.getLastAssistantText();
                 return success(id, "get_last_assistant_text", { text });
               }
 
@@ -557,7 +561,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
                 if (name === "") {
                   return error(id, "set_session_name", "Session name cannot be empty");
                 }
-                session.setSessionName(name);
+                session.context.transcript.setSessionName(name);
                 return success(id, "set_session_name");
               }
 
@@ -568,7 +572,7 @@ function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): 
               case "get_commands": {
                 const commands: rpcTypesTypes.RpcSlashCommand[] = [];
 
-                for (const registered of session.extensionRunner.getRegisteredCommands()) {
+                for (const registered of session.extensions.binding.extensionRunner.getRegisteredCommands()) {
                   commands.push({
                     description: registered.description,
                     name: registered.invocationName,

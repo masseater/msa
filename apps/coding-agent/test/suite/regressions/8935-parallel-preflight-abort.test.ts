@@ -78,7 +78,7 @@ const doesNotStartPreparedToolsAfter = Effect.gen(function* () {
     ),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("run both writes"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("run both writes"));
 
   expect(preflights).toEqual(["first", "second"]);
   expect(executions).toEqual([]);

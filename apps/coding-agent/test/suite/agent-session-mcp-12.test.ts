@@ -14,27 +14,33 @@ const doesNotActivateRestoredToolsThat = Effect.gen(function* () {
 
   const second = yield* Effect.promise(() => setup4(first.harness.sessionManager, [], 200));
   second.harness.setResponses([fauxAssistantMessage("done")]);
-  yield* Effect.promise(() => second.harness.session.prompt("go"));
+  yield* Effect.promise(() => second.harness.session.run.prompting.prompt("go"));
   yield* Effect.promise(() =>
     vi.waitFor(() =>
       expect(
-        second.harness.session.getAllTools().some((tool) => tool.name === "mcp__docs__search"),
+        second.harness.session.tools.registry
+          .getAllTools()
+          .some((tool) => tool.name === "mcp__docs__search"),
       ).toBe(true),
     ),
   );
 
-  expect(second.harness.session.getActiveToolNames()).not.toContain("mcp__docs__search");
+  expect(second.harness.session.tools.loadout.getActiveToolNames()).not.toContain(
+    "mcp__docs__search",
+  );
 });
 
 const declaresToolsToolSearchLoadedAgain2 = Effect.gen(function* () {
   const { harness, connected } = yield* Effect.promise(() => setup4());
   yield* Effect.promise(() => loadDocsSearch(harness));
 
-  yield* Effect.promise(() => harness.session.reload());
+  yield* Effect.promise(() => harness.session.extensions.runtime.reload());
 
   yield* Effect.promise(() => vi.waitFor(() => expect(connected).toEqual(["docs", "docs"])));
   yield* Effect.promise(() =>
-    vi.waitFor(() => expect(harness.session.getActiveToolNames()).toContain("mcp__docs__search")),
+    vi.waitFor(() =>
+      expect(harness.session.tools.loadout.getActiveToolNames()).toContain("mcp__docs__search"),
+    ),
   );
 });
 

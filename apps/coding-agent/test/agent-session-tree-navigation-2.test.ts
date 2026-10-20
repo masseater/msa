@@ -42,9 +42,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("Hello"));
+            yield* awaited(session.run.prompting.prompt("Hello"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Goodbye"));
+            yield* awaited(session.run.prompting.prompt("Goodbye"));
             yield* awaited(session.agent.waitForIdle());
 
             const entries = sessionManager.getEntries();
@@ -54,7 +54,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             const a1 = assistantEntries[0];
             if (a1 === undefined) throw new Error("expected an assistant entry");
 
-            const result = yield* awaited(session.navigateTree(a1.id, { summarize: true }));
+            const result = yield* awaited(
+              session.context.tree.navigateTree(a1.id, { summarize: true }),
+            );
 
             expect(result.cancelled).toBe(false);
             expect(result.editorText).toBeUndefined();
@@ -86,9 +88,9 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("Tell me about something"));
+            yield* awaited(session.run.prompting.prompt("Tell me about something"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Continue"));
+            yield* awaited(session.run.prompting.prompt("Continue"));
             yield* awaited(session.agent.waitForIdle());
 
             const entriesBefore = sessionManager.getEntries();
@@ -98,13 +100,15 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
             const rootNode = tree[0];
             if (rootNode === undefined) throw new Error("expected a root node");
 
-            const navigationPromise = session.navigateTree(rootNode.entry.id, { summarize: true });
+            const navigationPromise = session.context.tree.navigateTree(rootNode.entry.id, {
+              summarize: true,
+            });
 
             yield* Effect.sleep(100);
 
-            expect(session.isCompacting).toBe(true);
+            expect(session.compaction.manual.isCompacting).toBe(true);
 
-            session.abortBranchSummary();
+            session.context.tree.abortBranchSummary();
 
             const result = yield* awaited(navigationPromise);
 
@@ -138,16 +142,18 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("First"));
+            yield* awaited(session.run.prompting.prompt("First"));
             yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.prompt("Second"));
+            yield* awaited(session.run.prompting.prompt("Second"));
             yield* awaited(session.agent.waitForIdle());
 
             const entriesBefore = sessionManager.getEntries().length;
 
             const [rootNode] = sessionManager.getTree();
             if (rootNode === undefined) throw new Error("expected a root node");
-            yield* awaited(session.navigateTree(rootNode.entry.id, { summarize: false }));
+            yield* awaited(
+              session.context.tree.navigateTree(rootNode.entry.id, { summarize: false }),
+            );
 
             const entriesAfter = sessionManager.getEntries().length;
             expect(entriesAfter).toBe(entriesBefore);
@@ -179,14 +185,16 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
           Effect.gen(function* () {
             const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.prompt("Hello"));
+            yield* awaited(session.run.prompting.prompt("Hello"));
             yield* awaited(session.agent.waitForIdle());
 
             const leafBefore = sessionManager.getLeafId();
             expect(leafBefore).toBeTruthy();
             const entriesBefore = sessionManager.getEntries().length;
 
-            const result = yield* awaited(session.navigateTree(leafBefore!, { summarize: false }));
+            const result = yield* awaited(
+              session.context.tree.navigateTree(leafBefore!, { summarize: false }),
+            );
 
             expect(result.cancelled).toBe(false);
             expect(sessionManager.getLeafId()).toBe(leafBefore);

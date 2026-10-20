@@ -42,7 +42,7 @@ void Effect.runPromise(
           }
         });
 
-        yield* Effect.promise(() => session.prompt("Say hello in one sentence."));
+        yield* Effect.promise(() => session.run.prompting.prompt("Say hello in one sentence."));
         yield* Console.log();
       } finally {
         session.dispose();

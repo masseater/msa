@@ -169,13 +169,13 @@ const setup4 = () =>
         maxActive: 0,
         observed: [],
       };
-      harness.session.modelRuntime.registerProvider("scorer", {
+      harness.session.models.selection.modelRuntime.registerProvider("scorer", {
         apiKey: "secret-key",
         classifiers: { "test-classifier": { classify: classify(state) } },
         images: { "test-images": { generateImages: generateImages(state) } },
         models: [scorerModel, painterModel],
       });
-      harness.session.setActiveToolsByName(["codemode"]);
+      harness.session.tools.loadout.setActiveToolsByName(["codemode"]);
       return {
         harness,
         holdUntilInFlight: (size: number) => {

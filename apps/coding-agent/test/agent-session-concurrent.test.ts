@@ -25,7 +25,7 @@ const startAbortableSession = Effect.gen(function* () {
     streamFn: streamWith(({ signal, stream }) => replyWhenAborted(stream, signal)),
   });
   ({ session } = created);
-  const firstPrompt = created.session.prompt("First message");
+  const firstPrompt = created.session.run.prompting.prompt("First message");
   yield* waitForStreaming(created.session);
   return { firstPrompt, session: created.session };
 });
@@ -35,7 +35,7 @@ const stopStreaming = (running: {
   firstPrompt: Promise<void>;
 }) =>
   Effect.gen(function* () {
-    yield* awaited(running.session.abort());
+    yield* awaited(running.session.run.lifecycle.abort());
     yield* awaited(running.firstPrompt.catch(() => {}));
   });
 
@@ -45,7 +45,7 @@ const shouldThrowWhenPromptCalledWhileStreaming = () =>
       const running = yield* startAbortableSession;
       expect(running.session.isStreaming).toBe(true);
       yield* awaited(
-        expect(running.session.prompt("Second message")).rejects.toThrow(
+        expect(running.session.run.prompting.prompt("Second message")).rejects.toThrow(
           "Agent is already processing. Specify streamingBehavior ('steer' or 'followUp') to queue the message.",
         ),
       );
@@ -57,8 +57,10 @@ const shouldAllowSteerWhileStreaming = () =>
   runTest(
     Effect.gen(function* () {
       const running = yield* startAbortableSession;
-      yield* awaited(expect(running.session.steer("Steering message")).resolves.toBe("queued"));
-      expect(running.session.pendingMessageCount).toBe(1);
+      yield* awaited(
+        expect(running.session.run.queue.steer("Steering message")).resolves.toBe("queued"),
+      );
+      expect(running.session.run.queue.pendingMessageCount).toBe(1);
       yield* stopStreaming(running);
     }),
   );
@@ -67,8 +69,10 @@ const shouldAllowFollowupWhileStreaming = () =>
   runTest(
     Effect.gen(function* () {
       const running = yield* startAbortableSession;
-      yield* awaited(expect(running.session.followUp("Follow-up message")).resolves.toBe("queued"));
-      expect(running.session.pendingMessageCount).toBe(1);
+      yield* awaited(
+        expect(running.session.run.queue.followUp("Follow-up message")).resolves.toBe("queued"),
+      );
+      expect(running.session.run.queue.pendingMessageCount).toBe(1);
       yield* stopStreaming(running);
     }),
   );

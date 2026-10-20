@@ -38,9 +38,9 @@ const continuesWithDefaultCompactionOnError = () =>
   runTest(
     Effect.gen(function* () {
       const session = yield* createSession([throwingExtension()]);
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
-      const result = yield* awaited(session.compact());
+      const result = yield* awaited(session.compaction.manual.compact());
       expect(result.summary).toBeDefined();
       expect(result.summary.length).toBeGreaterThan(0);
       const compactEvents = capturedEvents.filter(

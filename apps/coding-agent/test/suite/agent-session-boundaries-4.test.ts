@@ -55,10 +55,10 @@ const doesNotConsumeQueuedInputWhen = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(harness.faux.state.callCount).toBe(1);
-  expect(harness.session.pendingMessageCount).toBe(1);
+  expect(harness.session.run.queue.pendingMessageCount).toBe(1);
 });
 
 const commitsPreSettlementDraftsButSuppresses = Effect.gen(function* () {
@@ -88,9 +88,9 @@ const commitsPreSettlementDraftsButSuppresses = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("must not run")]);
 
-  const prompt = harness.session.prompt("start");
+  const prompt = harness.session.run.prompting.prompt("start");
   yield* Effect.promise(() => started.promise);
-  const abort = harness.session.abort();
+  const abort = harness.session.run.lifecycle.abort();
   release.resolve();
   yield* Effect.promise(() => Promise.all([prompt, abort]));
 

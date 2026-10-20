@@ -101,7 +101,7 @@ const expandsSkillCommandsBeforeSendingThe = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/test explain this"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/test explain this"));
 
   expect(expandedPrompt).toContain('<skill name="test" location="');
   expect(expandedPrompt).toContain("Use the skill body.");
@@ -137,7 +137,7 @@ const expandsPromptTemplatesBeforeSendingThe = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("/review src/index.ts"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/review src/index.ts"));
 
   expect(expandedPrompt).toBe("Review this code: src/index.ts");
 });
@@ -171,7 +171,9 @@ const sendusermessageCanOptIntoPromptTemplate = Effect.gen(function* () {
   ]);
 
   yield* Effect.promise(() =>
-    harness.session.sendUserMessage("/review src/index.ts", { expandPromptTemplates: true }),
+    harness.session.run.prompting.sendUserMessage("/review src/index.ts", {
+      expandPromptTemplates: true,
+    }),
   );
 
   expect(expandedPrompt).toBe("Review this code: src/index.ts");
@@ -200,7 +202,7 @@ const dispatchesExtensionCommandsWithoutConsumingA = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("should stay queued")]);
 
-  yield* Effect.promise(() => harness.session.prompt("/testcmd hello world"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("/testcmd hello world"));
 
   expect(commandRuns).toEqual(["hello world"]);
   expect(harness.session.messages).toEqual([]);

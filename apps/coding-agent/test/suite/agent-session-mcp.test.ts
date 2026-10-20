@@ -31,7 +31,7 @@ const keepsMcpToolsWhenToolsNames = Effect.gen(function* () {
         resources: true,
       }),
     );
-    expect(harness.session.getActiveToolNames()).toEqual(["read", "codemode"]);
+    expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["read", "codemode"]);
     expect(nestedToolNames(harness)).toEqual(
       expect.arrayContaining([
         "mcp__docs__search",
@@ -40,7 +40,9 @@ const keepsMcpToolsWhenToolsNames = Effect.gen(function* () {
         "read_mcp_resource",
       ]),
     );
-    expect(harness.session.getAllTools().map((tool) => tool.name)).not.toContain("bash");
+    expect(harness.session.tools.registry.getAllTools().map((tool) => tool.name)).not.toContain(
+      "bash",
+    );
   }
 
   const { harness } = yield* Effect.promise(() =>
@@ -51,10 +53,12 @@ const keepsMcpToolsWhenToolsNames = Effect.gen(function* () {
   );
   yield* Effect.promise(() =>
     vi.waitFor(() =>
-      expect(harness.session.getAllTools().map((tool) => tool.name)).toContain("mcp__docs__fail"),
+      expect(harness.session.tools.registry.getAllTools().map((tool) => tool.name)).toContain(
+        "mcp__docs__fail",
+      ),
     ),
   );
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
 });
 
 const removesMcpToolsWithNoTools = Effect.gen(function* () {
@@ -65,18 +69,18 @@ const removesMcpToolsWithNoTools = Effect.gen(function* () {
     }),
   );
   harness.setResponses([fauxAssistantMessage("done")]);
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(servers).toHaveLength(1);
-  expect(harness.session.getAllTools()).toEqual([]);
-  expect(harness.session.getActiveToolNames()).toEqual([]);
+  expect(harness.session.tools.registry.getAllTools()).toEqual([]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([]);
 });
 
 const doesNotDeclareUnnamedMcpTools = Effect.gen(function* () {
   const first = yield* Effect.promise(() => setup("direct"));
   first.harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-  yield* Effect.promise(() => first.harness.session.prompt("first"));
-  yield* Effect.promise(() => first.harness.session.prompt("second"));
+  yield* Effect.promise(() => first.harness.session.run.prompting.prompt("first"));
+  yield* Effect.promise(() => first.harness.session.run.prompting.prompt("second"));
   expect(declaredToolNames(first.harness)).toContain("mcp__docs__search");
 
   const second = yield* Effect.promise(() =>
@@ -89,10 +93,10 @@ const doesNotDeclareUnnamedMcpTools = Effect.gen(function* () {
     .getBranch()
     .find((entry) => entry.type === "message" && entry.message.role === "assistant");
   if (firstAssistant === undefined) throw new Error("No assistant entry");
-  yield* Effect.promise(() => second.harness.session.navigateTree(firstAssistant.id));
+  yield* Effect.promise(() => second.harness.session.context.tree.navigateTree(firstAssistant.id));
 
-  expect(second.harness.session.getActiveToolNames()).toEqual([]);
-  expect(second.harness.session.getAllTools().map((tool) => tool.name)).toContain(
+  expect(second.harness.session.tools.loadout.getActiveToolNames()).toEqual([]);
+  expect(second.harness.session.tools.registry.getAllTools().map((tool) => tool.name)).toContain(
     "mcp__docs__search",
   );
 });
@@ -107,9 +111,12 @@ const letsToolSearchDeclareUnnamedMcp = Effect.gen(function* () {
     }),
     fauxAssistantMessage("loaded"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("load"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("load"));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["tool_search", "mcp__docs__search"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([
+    "tool_search",
+    "mcp__docs__search",
+  ]);
 });
 
 const filtersMcpToolsByTheMcp = Effect.gen(function* () {
@@ -122,10 +129,13 @@ const filtersMcpToolsByTheMcp = Effect.gen(function* () {
   );
   yield* Effect.promise(() =>
     vi.waitFor(() =>
-      expect(harness.session.getActiveToolNames()).toEqual(["codemode", "mcp__docs__shot"]),
+      expect(harness.session.tools.loadout.getActiveToolNames()).toEqual([
+        "codemode",
+        "mcp__docs__shot",
+      ]),
     ),
   );
-  const registered = harness.session.getAllTools().map((tool) => tool.name);
+  const registered = harness.session.tools.registry.getAllTools().map((tool) => tool.name);
   expect(registered).toEqual(expect.arrayContaining(["mcp__docs__search", "mcp__docs__shot"]));
   expect(registered).not.toContain("mcp__docs__fail");
   expect(registered).not.toContain("list_mcp_resources");
@@ -138,7 +148,7 @@ const removesMcpToolsMatchingExcludeTools = Effect.gen(function* () {
       excludedToolNames: ["mcp__docs__f*"],
     }),
   );
-  const registered = harness.session.getAllTools().map((tool) => tool.name);
+  const registered = harness.session.tools.registry.getAllTools().map((tool) => tool.name);
   expect(registered).toContain("mcp__docs__search");
   expect(registered).not.toContain("mcp__docs__fail");
 });
@@ -179,9 +189,9 @@ const exposesCodemodeOnlyMcpToolsThroughPart1 = () =>
 const exposesCodemodeOnlyMcpToolsThrough = Effect.gen(function* () {
   const { calls, harness, searchName } = yield* exposesCodemodeOnlyMcpToolsThroughPart1();
 
-  yield* Effect.promise(() => harness.session.prompt("search the docs"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("search the docs"));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
   expect(declaredToolNames(harness)).toEqual(["codemode"]);
   expect(nestedToolNames(harness)).toEqual([searchName, "mcp__docs__fail", "mcp__docs__shot"]);
 
@@ -220,18 +230,18 @@ const keepsCodemodeOnlyMcpToolsCallable = Effect.gen(function* () {
   const { harness } = yield* Effect.promise(() => setup("codemode"));
   const searchName = createMcpToolName("docs", "search");
   harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-  yield* Effect.promise(() => harness.session.prompt("first"));
-  yield* Effect.promise(() => harness.session.prompt("second"));
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
   expect(nestedToolNames(harness)).toContain(searchName);
 
   const firstAssistant = harness.sessionManager
     .getBranch()
     .find((entry) => entry.type === "message" && entry.message.role === "assistant");
   if (firstAssistant === undefined) throw new Error("No assistant entry");
-  yield* Effect.promise(() => harness.session.navigateTree(firstAssistant.id));
+  yield* Effect.promise(() => harness.session.context.tree.navigateTree(firstAssistant.id));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["codemode"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["codemode"]);
   expect(nestedToolNames(harness)).toContain(searchName);
 });
 

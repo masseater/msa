@@ -48,7 +48,7 @@ const movesSelectionToTheFirstRow = Effect.gen(function* () {
   const selector = new ModelSelectorComponent(
     createFakeTui(),
     current,
-    harness.session.modelRuntime,
+    harness.session.models.selection.modelRuntime,
     [],
     () => {},
     () => {},
@@ -95,7 +95,7 @@ const movesSelectionToTheFirstRow2 = Effect.gen(function* () {
   const selector = new ModelSelectorComponent(
     createFakeTui(),
     alpha1,
-    harness.session.modelRuntime,
+    harness.session.models.selection.modelRuntime,
     [{ model: alpha2 }, { model: alpha3 }, { model: alpha1 }],
     () => {},
     () => {},

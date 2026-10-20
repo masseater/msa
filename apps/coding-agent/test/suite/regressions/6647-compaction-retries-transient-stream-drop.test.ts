@@ -101,7 +101,7 @@ const retriesATransientTerminatedSummarizationError = Effect.gen(function* () {
     success,
   ]);
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(result.summary).toContain("recovered summary");
   expect(getCallCount()).toBe(3);
@@ -131,7 +131,7 @@ const doesNotRetryANonRetryable = Effect.gen(function* () {
   const getCallCount = useScriptedStreamFn(harness, [error]);
 
   yield* Effect.promise(() =>
-    expect(harness.session.compact()).rejects.toThrow("insufficient_quota"),
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("insufficient_quota"),
   );
   expect(getCallCount()).toBe(1);
   expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
@@ -151,7 +151,9 @@ const doesNotRetryWhenRetryIs = Effect.gen(function* () {
   };
   const getCallCount = useScriptedStreamFn(harness, [error]);
 
-  yield* Effect.promise(() => expect(harness.session.compact()).rejects.toThrow("terminated"));
+  yield* Effect.promise(() =>
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("terminated"),
+  );
   expect(getCallCount()).toBe(1);
   expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
 });
@@ -170,7 +172,9 @@ const stopsRetryingAfterMaxretriesAndReports = Effect.gen(function* () {
   };
   const getCallCount = useScriptedStreamFn(harness, [error, error, error]);
 
-  yield* Effect.promise(() => expect(harness.session.compact()).rejects.toThrow("terminated"));
+  yield* Effect.promise(() =>
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("terminated"),
+  );
   expect(getCallCount()).toBe(3);
   const starts = harness.eventsOfType("summarization_retry_scheduled");
   const ends = harness.eventsOfType("summarization_retry_finished");
@@ -193,10 +197,10 @@ const abortsAnInFlightRetryBackoff = Effect.gen(function* () {
   };
   useScriptedStreamFn(harness, [error, error, error]);
 
-  const compactPromise = harness.session.compact();
+  const compactPromise = harness.session.compaction.manual.compact();
 
   yield* Effect.sleep(0);
-  harness.session.abortCompaction();
+  harness.session.compaction.manual.abortCompaction();
 
   yield* Effect.promise(() => expect(compactPromise).rejects.toThrow());
   const compactionEnd = harness.eventsOfType("compaction_end").at(-1);

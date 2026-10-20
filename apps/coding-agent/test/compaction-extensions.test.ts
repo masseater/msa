@@ -15,13 +15,13 @@ const shouldEmitBeforeCompactAndCompactEvents = () =>
       const extension = createExtension();
       const session = yield* createSession([extension]);
 
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(session.prompt("What is 3+3? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 3+3? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(session.compact());
+      yield* awaited(session.compaction.manual.compact());
 
       const beforeCompactEvents = capturedEvents.filter(
         (e): e is extensionsTypes.SessionBeforeCompactEvent => e.type === "session_before_compact",
@@ -69,10 +69,12 @@ const shouldAllowExtensionsToCancelCompaction = () =>
       const extension = createExtension(() => ({ cancel: true }));
       const session = yield* createSession([extension]);
 
-      yield* awaited(session.prompt("What is 2+2? Reply with just the number."));
+      yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
       yield* awaited(session.agent.waitForIdle());
 
-      yield* awaited(expect(session.compact()).rejects.toThrow("Compaction cancelled"));
+      yield* awaited(
+        expect(session.compaction.manual.compact()).rejects.toThrow("Compaction cancelled"),
+      );
 
       const compactEvents = capturedEvents.filter((e) => e.type === "session_compact");
       expect(compactEvents.length).toBe(0);

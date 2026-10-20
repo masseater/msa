@@ -28,9 +28,9 @@ const emitsAgentEndForAbortedRuns = Effect.gen(function* () {
     });
   }
 
-  const promptPromise = harness.session.prompt("hi");
+  const promptPromise = harness.session.run.prompting.prompt("hi");
   yield* Effect.promise(() => sawMessageUpdate);
-  yield* Effect.promise(() => harness.session.abort());
+  yield* Effect.promise(() => harness.session.run.lifecycle.abort());
   yield* Effect.promise(() => promptPromise);
 
   expect(harness.eventsOfType("agent_end")).toHaveLength(1);

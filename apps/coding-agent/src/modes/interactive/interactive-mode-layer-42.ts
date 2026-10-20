@@ -45,7 +45,7 @@ export default abstract class InteractiveModeLayer42 extends InteractiveModeLaye
           this.showWarning("Wait for the current response to finish before reloading.");
           return;
         }
-        if (this.session.isCompacting) {
+        if (this.session.compaction.manual.isCompacting) {
           this.showWarning("Wait for compaction to finish before reloading.");
           return;
         }
@@ -60,7 +60,9 @@ export default abstract class InteractiveModeLayer42 extends InteractiveModeLaye
         };
         try {
           yield* awaited(
-            this.session.reload({ beforeSessionStart: restoreChatBeforeSessionStart }),
+            this.session.extensions.runtime.reload({
+              beforeSessionStart: restoreChatBeforeSessionStart,
+            }),
           );
           restoreChatBeforeSessionStart();
           this.applyReloadedResources();

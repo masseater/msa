@@ -47,7 +47,7 @@ const shareContext = (
 ) => ({
   editorSlot: { restoreEditor() {}, show() {} },
   session: {
-    exportToHtml,
+    context: { exports: { exportToHtml } },
     sessionManager: { getBranch: () => [], getCwd: () => "/tmp", getSessionId: () => name },
     state: { systemPrompt: name, tools: [] },
   },

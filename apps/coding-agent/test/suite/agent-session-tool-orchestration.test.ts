@@ -90,10 +90,10 @@ const supportsToolsThatCallOtherToolsPart1 = () =>
 const supportsToolsThatCallOtherTools = Effect.gen(function* () {
   const { harness, toolCalls } = yield* supportsToolsThatCallOtherToolsPart1();
   harnesses.push(harness);
-  yield* Effect.promise(() => harness.session.bindExtensions({}));
+  yield* Effect.promise(() => harness.session.extensions.binding.bindExtensions({}));
 
-  expect(harness.session.getActiveToolNames()).toEqual(["echo", "run_tools"]);
-  expect(harness.session.getCallableToolNames()).toEqual(["echo", "helper"]);
+  expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["echo", "run_tools"]);
+  expect(harness.session.tools.loadout.getCallableToolNames()).toEqual(["echo", "helper"]);
   const find = (name: string) =>
     harness.session.agent.state.tools.find((tool) => tool.name === name);
   expect(find("run_tools")?.description).toBe("Runs tools: echo, helper");
@@ -107,7 +107,7 @@ const supportsToolsThatCallOtherTools = Effect.gen(function* () {
     },
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
 
   expect(requestTools[0]).toEqual(["run_tools"]);
   const result = harness.session.messages.find(
@@ -137,10 +137,10 @@ const registersCodemodeAndToolSearchInactive = Effect.gen(function* () {
   const extensionFactories = [createCodemodeExtension(), createToolSearchExtension()];
   const plain = yield* Effect.promise(() => createHarness({ extensionFactories }));
   harnesses.push(plain);
-  expect(plain.session.getAllTools().map((tool) => tool.name)).toEqual(
+  expect(plain.session.tools.registry.getAllTools().map((tool) => tool.name)).toEqual(
     expect.arrayContaining(["codemode", "tool_search"]),
   );
-  expect(plain.session.getActiveToolNames()).toEqual([
+  expect(plain.session.tools.loadout.getActiveToolNames()).toEqual([
     "read",
     "bash",
     "edit",
@@ -158,7 +158,7 @@ const registersCodemodeAndToolSearchInactive = Effect.gen(function* () {
     }),
   );
   harnesses.push(allowed);
-  expect(allowed.session.getActiveToolNames()).toEqual(["read", "codemode"]);
+  expect(allowed.session.tools.loadout.getActiveToolNames()).toEqual(["read", "codemode"]);
   const initial = yield* Effect.promise(() =>
     createHarness({
       extensionFactories,
@@ -166,7 +166,7 @@ const registersCodemodeAndToolSearchInactive = Effect.gen(function* () {
     }),
   );
   harnesses.push(initial);
-  expect(initial.session.getActiveToolNames()).toEqual(["tool_search"]);
+  expect(initial.session.tools.loadout.getActiveToolNames()).toEqual(["tool_search"]);
 });
 
 const leavesResultsWithoutNestedCallsUnchanged = Effect.gen(function* () {
@@ -177,12 +177,12 @@ const leavesResultsWithoutNestedCallsUnchanged = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  yield* Effect.promise(() => harness.session.bindExtensions({}));
+  yield* Effect.promise(() => harness.session.extensions.binding.bindExtensions({}));
   harness.setResponses([
     fauxAssistantMessage([fauxToolCall("echo", { text: "x" })], { stopReason: "toolUse" }),
     fauxAssistantMessage("done"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("go"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("go"));
   const result = harness.session.messages.find((message) => message.role === "toolResult");
   expect(result && "nestedCalls" in result).toBe(false);
 });

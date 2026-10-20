@@ -57,8 +57,8 @@ export default abstract class InteractiveModeLayer41 extends InteractiveModeLaye
     this.defaultEditor.onEscape = () => {
       if (this.session.isStreaming) {
         this.restoreQueuedMessagesToEditor({ abort: true });
-      } else if (this.session.isBashRunning) {
-        this.session.abortBash();
+      } else if (this.session.context.bash.isBashRunning) {
+        this.session.context.bash.abortBash();
       } else if (this.isBashMode) {
         this.editor.setText("");
         this.isBashMode = false;

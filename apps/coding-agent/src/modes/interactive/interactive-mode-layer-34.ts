@@ -27,8 +27,8 @@ export default abstract class InteractiveModeLayer34 extends InteractiveModeLaye
     this.changelogMarkdown = this.getChangelogForDisplay();
 
     const startupVisibility = this.getStartupVisibility();
-    if (this.session.scopedModels.length > 0 && startupVisibility.details) {
-      const modelList = this.session.scopedModels
+    if (this.session.models.selection.scopedModels.length > 0 && startupVisibility.details) {
+      const modelList = this.session.models.selection.scopedModels
         .map((sm) => {
           const thinkingStr = sm.thinkingLevel === undefined ? "" : `:${sm.thinkingLevel}`;
           return `${sm.model.id}${thinkingStr}`;
@@ -73,7 +73,9 @@ export default abstract class InteractiveModeLayer34 extends InteractiveModeLaye
       );
       return;
     }
-    const renderer = this.session.extensionRunner.getEntryRenderer(entry.customType);
+    const renderer = this.session.extensions.binding.extensionRunner.getEntryRenderer(
+      entry.customType,
+    );
     if (renderer === undefined) {
       return;
     }

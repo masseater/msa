@@ -44,7 +44,7 @@ const omitsARecoverableProjectedReplacementBy = Effect.gen(function* () {
   harness.session.refreshContext();
   harness.setResponses([fauxAssistantMessage("new answer")]);
 
-  yield* Effect.promise(() => harness.session.prompt("next prompt"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("next prompt"));
 
   const edits = harness.sessionManager
     .getEntries()
@@ -100,7 +100,7 @@ const recoversAnExplicitOverflowErrorAfter = Effect.gen(function* () {
     }),
     fauxAssistantMessage("recovered"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("x".repeat(5_000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5_000)));
   expect(harness.faux.state.callCount).toBe(2);
   expect(state.overflowId).toBeDefined();
   const edits = harness.sessionManager
@@ -145,7 +145,7 @@ const keepsFollowUpWorkBehindAn = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(harness.faux.state.callCount).toBe(3);
   expect(requests[0]).not.toContain("queued follow-up");
@@ -165,7 +165,7 @@ const marksTheExhaustedRetryRunAs = Effect.gen(function* () {
     fauxAssistantMessage("", { errorMessage: "overloaded_error", stopReason: "error" }),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("start"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
   expect(harness.eventsOfType("agent_end").map((event) => event.willRetry)).toEqual([true, false]);
   expect(harness.eventsOfType("auto_retry_end")).toContainEqual(
@@ -193,7 +193,7 @@ const keepsOmissionsAndDoesNotRetry = Effect.gen(function* () {
     fauxAssistantMessage("must not retry"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5000)));
 
   const entries = harness.sessionManager.getEntries();
   expect(entries.some((entry) => entry.type === "context_edit")).toBe(true);

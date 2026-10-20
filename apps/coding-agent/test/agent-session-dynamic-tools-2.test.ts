@@ -82,12 +82,14 @@ const keepsCustomToolsActiveButOmitsThem = () =>
         }),
       );
 
-      yield* awaited(session.bindExtensions({}));
+      yield* awaited(session.extensions.binding.bindExtensions({}));
 
-      expect(session.getAllTools().map((tool) => tool.name)).toContain("hidden_tool");
-      expect(session.getActiveToolNames()).toContain("hidden_tool");
-      expect(session.systemPrompt).not.toContain("hidden_tool");
-      expect(session.systemPrompt).not.toContain(
+      expect(session.tools.registry.getAllTools().map((tool) => tool.name)).toContain(
+        "hidden_tool",
+      );
+      expect(session.tools.loadout.getActiveToolNames()).toContain("hidden_tool");
+      expect(session.tools.prompt.systemPrompt).not.toContain("hidden_tool");
+      expect(session.tools.prompt.systemPrompt).not.toContain(
         "Description should not appear in available tools",
       );
 

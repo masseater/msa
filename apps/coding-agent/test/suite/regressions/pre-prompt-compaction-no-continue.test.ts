@@ -80,7 +80,7 @@ const compactsLengthStopOverflowBeforeAStep1 = (
     harness.setResponses([fauxAssistantMessage("answered next prompt")]);
     const continueSpy = vi.spyOn(harness.session.agent, "continue");
     yield* Effect.promise(() =>
-      expect(harness.session.prompt("next prompt")).resolves.toBeUndefined(),
+      expect(harness.session.run.prompting.prompt("next prompt")).resolves.toBeUndefined(),
     );
     expect(continueSpy).not.toHaveBeenCalled();
     expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({

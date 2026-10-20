@@ -34,18 +34,18 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
 
   protected submitWhileBusy(text: string): Effect.Effect<boolean> {
     return awaitingWith(function* () {
-      if (this.session.isCompacting) {
+      if (this.session.compaction.manual.isCompacting) {
         if (this.isExtensionCommand(text)) {
           this.editor.addToHistory?.(text);
           this.editor.setText("");
-          yield* awaited(this.session.prompt(text));
+          yield* awaited(this.session.run.prompting.prompt(text));
         } else this.queueCompactionMessage(text, "steer");
         return true;
       }
       if (!this.session.isStreaming) return false;
       this.editor.addToHistory?.(text);
       this.editor.setText("");
-      yield* awaited(this.session.prompt(text, { streamingBehavior: "steer" }));
+      yield* awaited(this.session.run.prompting.prompt(text, { streamingBehavior: "steer" }));
       this.updatePendingMessagesDisplay();
       this.ui.requestRender();
       return true;
@@ -57,11 +57,11 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
       const text = (this.editor.getExpandedText?.() ?? this.editor.getText()).trim();
       if (text === "") return;
 
-      if (this.session.isCompacting) {
+      if (this.session.compaction.manual.isCompacting) {
         if (this.isExtensionCommand(text)) {
           this.editor.addToHistory?.(text);
           this.editor.setText("");
-          yield* awaited(this.session.prompt(text));
+          yield* awaited(this.session.run.prompting.prompt(text));
         } else {
           this.queueCompactionMessage(text, "followUp");
         }
@@ -71,7 +71,7 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
       if (this.session.isStreaming) {
         this.editor.addToHistory?.(text);
         this.editor.setText("");
-        yield* awaited(this.session.prompt(text, { streamingBehavior: "followUp" }));
+        yield* awaited(this.session.run.prompting.prompt(text, { streamingBehavior: "followUp" }));
         this.updatePendingMessagesDisplay();
         this.ui.requestRender();
       } else if (this.editor.onSubmit !== undefined) {
@@ -108,11 +108,11 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
         if (options?.willRetry === true) {
           for (const message of queuedMessages) {
             if (this.isExtensionCommand(message.text)) {
-              yield* awaited(this.session.prompt(message.text));
+              yield* awaited(this.session.run.prompting.prompt(message.text));
             } else if (message.mode === "followUp") {
-              yield* awaited(this.session.followUp(message.text));
+              yield* awaited(this.session.run.queue.followUp(message.text));
             } else {
-              yield* awaited(this.session.steer(message.text));
+              yield* awaited(this.session.run.queue.steer(message.text));
             }
           }
           this.updatePendingMessagesDisplay();
@@ -125,7 +125,7 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
         const firstPrompt = queuedMessages[firstPromptIndex];
         if (firstPrompt === undefined) {
           for (const message of queuedMessages) {
-            yield* awaited(this.session.prompt(message.text));
+            yield* awaited(this.session.run.prompting.prompt(message.text));
           }
           return { done: true, value: undefined };
         }
@@ -169,7 +169,7 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
     this.updatePendingMessagesDisplay();
 
     const restoreQueue = (error: unknown) => {
-      this.session.clearQueue();
+      this.session.run.queue.clearQueue();
       this.compactionQueuedMessages = queuedMessages;
       this.updatePendingMessagesDisplay();
       this.showError(
@@ -188,11 +188,11 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
     return awaitingWith(function* () {
       for (const message of rest) {
         if (this.isExtensionCommand(message.text)) {
-          yield* awaited(this.session.prompt(message.text));
+          yield* awaited(this.session.run.prompting.prompt(message.text));
         } else if (message.mode === "followUp") {
-          yield* awaited(this.session.followUp(message.text));
+          yield* awaited(this.session.run.queue.followUp(message.text));
         } else {
-          yield* awaited(this.session.steer(message.text));
+          yield* awaited(this.session.run.queue.steer(message.text));
         }
       }
       this.updatePendingMessagesDisplay();
@@ -225,7 +225,7 @@ export default abstract class InteractiveModeLayer14 extends InteractiveModeLaye
   }
 
   protected showUserMessageSelector(): void {
-    const userMessages = this.session.getUserMessagesForForking();
+    const userMessages = this.session.context.transcript.getUserMessagesForForking();
 
     if (userMessages.length === 0) {
       this.showStatus("No messages to fork from");

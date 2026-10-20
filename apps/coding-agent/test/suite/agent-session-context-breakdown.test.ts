@@ -29,12 +29,12 @@ const countsTheSystemPromptAndToolDeclarations = () =>
       const harness = yield* awaited(createHarness());
       harnesses.push(harness);
 
-      const breakdown = yield* awaited(harness.session.getContextBreakdown());
+      const breakdown = yield* awaited(harness.session.context.breakdown.getContextBreakdown());
 
       const parts = new Set(breakdown.entries.map((entry) => entry.part));
       expect([...parts].sort()).toEqual(["system", "tools"]);
       expect(breakdown.entries.filter((entry) => entry.part === "tools").length).toBe(
-        harness.session.getActiveToolNames().length,
+        harness.session.tools.loadout.getActiveToolNames().length,
       );
       expect(breakdown.tokens).toBeGreaterThan(0);
       expect(breakdown.entries.reduce((sum, entry) => sum + entry.tokens, 0)).toBe(
@@ -63,12 +63,12 @@ const splitsTheNextRequestIntoPromptSections = () =>
         }),
         fauxAssistantMessage("done"),
       ]);
-      yield* awaited(harness.session.prompt("read both files"));
+      yield* awaited(harness.session.run.prompting.prompt("read both files"));
 
-      const breakdown = yield* awaited(harness.session.getContextBreakdown());
+      const breakdown = yield* awaited(harness.session.context.breakdown.getContextBreakdown());
 
       expect(breakdown.method).toBe("estimated");
-      expect(breakdown.tokens).toBe(harness.session.getContextUsage()?.tokens);
+      expect(breakdown.tokens).toBe(harness.session.context.stats.getContextUsage()?.tokens);
       expect(breakdown.entries.reduce((sum, entry) => sum + entry.tokens, 0)).toBe(
         breakdown.tokens,
       );
@@ -78,7 +78,9 @@ const splitsTheNextRequestIntoPromptSections = () =>
       expect(names("system")).toEqual(
         expect.arrayContaining(["preamble", "tools", "rules", "cwd"]),
       );
-      expect(names("tools").sort()).toEqual([...harness.session.getActiveToolNames()].sort());
+      expect(names("tools").sort()).toEqual(
+        [...harness.session.tools.loadout.getActiveToolNames()].sort(),
+      );
       expect(names("conversation").sort()).toEqual(["assistant", "user"]);
       expect(names("toolResults").sort()).toEqual(["bash", "read"]);
       expect(names("system")).not.toContain("updates");

@@ -5,7 +5,6 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompaction4Support from "./agent-session-compaction-4-support.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import type agentSessionCompactionSupportTypes from "./agent-session-compaction-support.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
@@ -88,7 +87,7 @@ const stopsAfterOneCompactAndRetryStep1 = (harness: harnessTypes.Harness) =>
           timestamp: currentTimeMillis() + 10_000,
         }),
     ]);
-    yield* Effect.promise(() => harness.session.prompt("x".repeat(5000)));
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(5000)));
     expect(harness.faux.state.callCount).toBe(2);
     expect(
       harness.eventsOfType("compaction_start").filter((event) => event.reason === "overflow"),
@@ -105,8 +104,7 @@ const keepsOverflowWordingWhenARepeated = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  const sessionInternals =
-    harness.session as unknown as agentSessionCompactionSupportTypes.SessionWithCompactionInternals;
+  const sessionInternals = harness.session.compaction.auto;
   const lengthOverflowMessage = createAssistant(harness, {
     stopReason: "length",
     timestamp: currentTimeMillis(),
@@ -146,10 +144,10 @@ const cancelsInProgressManualCompactionWhen = Effect.gen(function* () {
   );
   harnesses.push(harness);
 
-  const compactPromise = harness.session.compact();
+  const compactPromise = harness.session.compaction.manual.compact();
   const compactExpectation = expect(compactPromise).rejects.toThrow("Compaction cancelled");
   yield* Effect.promise(() => compactionStarted);
-  harness.session.abortCompaction();
+  harness.session.compaction.manual.abortCompaction();
 
   yield* Effect.promise(() => compactExpectation);
 });
@@ -161,23 +159,23 @@ const abortsAnInProgressManualCompaction = Effect.gen(function* () {
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("continued")]);
 
-  const compactPromise = harness.session.compact();
+  const compactPromise = harness.session.compaction.manual.compact();
   const compactExpectation = expect(compactPromise).rejects.toThrow("Compaction cancelled");
   yield* Effect.promise(() => compactionStarted);
-  yield* Effect.promise(() => harness.session.abort());
+  yield* Effect.promise(() => harness.session.run.lifecycle.abort());
   yield* Effect.promise(() => compactExpectation);
 
   expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({
     aborted: true,
     reason: "manual",
   });
-  expect(harness.session.isCompacting).toBe(false);
+  expect(harness.session.compaction.manual.isCompacting).toBe(false);
   expect(harness.session.isIdle).toBe(true);
 
   yield* Effect.promise(() =>
-    expect(harness.session.prompt("next prompt")).resolves.toBeUndefined(),
+    expect(harness.session.run.prompting.prompt("next prompt")).resolves.toBeUndefined(),
   );
-  expect(harness.session.getLastAssistantText()).toBe("continued");
+  expect(harness.session.context.transcript.getLastAssistantText()).toBe("continued");
 });
 
 const stopsAfterOneCompactAndRetryWhen = () => Effect.runPromise(stopsAfterOneCompactAndRetry);

@@ -64,7 +64,7 @@ function createSession(allowedToolNames?: string[]) {
           ...(allowedToolNames === undefined ? {} : { tools: allowedToolNames }),
         }),
       );
-      yield* Effect.promise(() => session.bindExtensions({}));
+      yield* Effect.promise(() => session.extensions.binding.bindExtensions({}));
       return session;
     }),
   );
@@ -74,26 +74,26 @@ const allowsOnlyExplicitlyListedBuiltIn = Effect.gen(function* () {
   const session = yield* Effect.promise(() => createSession(["read", "dynamic_tool"]));
 
   expect(
-    session
+    session.tools.registry
       .getAllTools()
       .map((tool) => tool.name)
       .sort(),
   ).toEqual(["dynamic_tool", "read"]);
-  expect(session.getActiveToolNames().sort()).toEqual(["dynamic_tool", "read"]);
-  expect(session.systemPrompt).toContain("- read: Read file contents");
-  expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-  expect(session.systemPrompt).not.toContain("- bash:");
-  expect(session.systemPrompt).not.toContain("- edit:");
+  expect(session.tools.loadout.getActiveToolNames().sort()).toEqual(["dynamic_tool", "read"]);
+  expect(session.tools.prompt.systemPrompt).toContain("- read: Read file contents");
+  expect(session.tools.prompt.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- bash:");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- edit:");
   session.dispose();
 });
 
 const disablesAllToolsWhenTheAllowlist = Effect.gen(function* () {
   const session = yield* Effect.promise(() => createSession([]));
 
-  expect(session.getAllTools()).toEqual([]);
-  expect(session.getActiveToolNames()).toEqual([]);
-  expect(session.systemPrompt).toContain("<tools>\n(none)\n");
-  expect(session.systemPrompt).not.toContain("dynamic_tool");
+  expect(session.tools.registry.getAllTools()).toEqual([]);
+  expect(session.tools.loadout.getActiveToolNames()).toEqual([]);
+  expect(session.tools.prompt.systemPrompt).toContain("<tools>\n(none)\n");
+  expect(session.tools.prompt.systemPrompt).not.toContain("dynamic_tool");
   session.dispose();
 });
 

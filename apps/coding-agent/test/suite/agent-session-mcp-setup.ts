@@ -25,12 +25,16 @@ const docsEntry = (
   source: "test",
 });
 
-const waitForSearchTool = (harness: { session: { getAllTools(): { name: string }[] } }) =>
+const waitForSearchTool = (harness: {
+  session: { tools: { registry: { getAllTools(): { name: string }[] } } };
+}) =>
   awaited(
     vi.waitFor(() =>
-      expect(harness.session.getAllTools().some((tool) => tool.name === "mcp__docs__search")).toBe(
-        true,
-      ),
+      expect(
+        harness.session.tools.registry
+          .getAllTools()
+          .some((tool) => tool.name === "mcp__docs__search"),
+      ).toBe(true),
     ),
   );
 

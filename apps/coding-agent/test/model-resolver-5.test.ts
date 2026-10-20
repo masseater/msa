@@ -18,12 +18,14 @@ const addsAPersistedDefaultToAnExisting = () =>
         scoped: true,
       });
 
-      yield* awaited(session.setModel(opus, { persist: true }));
+      yield* awaited(session.models.selection.setModel(opus, { persist: true }));
 
       expect(settingsManager.getDefaultProvider()).toBe(opus.provider);
       expect(settingsManager.getDefaultModel()).toBe(opus.id);
       expect(
-        session.scopedModels.map((scoped) => `${scoped.model.provider}/${scoped.model.id}`),
+        session.models.selection.scopedModels.map(
+          (scoped) => `${scoped.model.provider}/${scoped.model.id}`,
+        ),
       ).toEqual([`${sonnet.provider}/${sonnet.id}`, `${opus.provider}/${opus.id}`]);
       expect(settingsManager.getEnabledModels()).toEqual([
         `${sonnet.provider}/${sonnet.id}`,
@@ -37,9 +39,9 @@ const doesNotCreateAScopedModelList = () =>
     Effect.gen(function* () {
       const { session, settingsManager } = yield* createSession({ scoped: false });
 
-      yield* awaited(session.setModel(opus, { persist: true }));
+      yield* awaited(session.models.selection.setModel(opus, { persist: true }));
 
-      expect(session.scopedModels).toEqual([]);
+      expect(session.models.selection.scopedModels).toEqual([]);
       expect(settingsManager.getEnabledModels()).toBeUndefined();
     }),
   );
@@ -52,10 +54,12 @@ const keepsSessionOnlyModelChangesOutOf = () =>
         scoped: true,
       });
 
-      yield* awaited(session.setModel(opus, { persist: false }));
+      yield* awaited(session.models.selection.setModel(opus, { persist: false }));
 
       expect(
-        session.scopedModels.map((scoped) => `${scoped.model.provider}/${scoped.model.id}`),
+        session.models.selection.scopedModels.map(
+          (scoped) => `${scoped.model.provider}/${scoped.model.id}`,
+        ),
       ).toEqual([`${sonnet.provider}/${sonnet.id}`]);
       expect(settingsManager.getEnabledModels()).toEqual([`${sonnet.provider}/${sonnet.id}`]);
     }),

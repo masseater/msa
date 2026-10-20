@@ -12,12 +12,16 @@ type TestModel = { id: string; provider: string; name: string };
 
 type FakeInteractiveMode = {
   session: {
-    scopedModels: Array<{ model: TestModel }>;
-    modelRuntime: { getAvailableSnapshot: () => TestModel[] };
+    extensions: { binding: { extensionRunner: { getRegisteredCommands: () => [] } } };
+    models: {
+      selection: {
+        modelRuntime: { getAvailableSnapshot: () => TestModel[] };
+        scopedModels: Array<{ model: TestModel }>;
+      };
+    };
     promptTemplates: [];
-    extensionRunner: { getRegisteredCommands: () => [] };
     resourceLoader: { getSkills: () => { skills: [] } };
-    getExternalServices: () => [];
+    tools: { externalServices: { getExternalServices: () => [] } };
   };
   settingsManager: { getEnableSkillCommands: () => boolean };
   skillCommands: Map<string, string>;
@@ -40,12 +44,13 @@ const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () 
   const fakeThis: FakeInteractiveMode = {
     fdPath: null,
     session: {
-      extensionRunner: { getRegisteredCommands: () => [] },
-      getExternalServices: () => [],
-      modelRuntime: { getAvailableSnapshot: () => models },
+      extensions: { binding: { extensionRunner: { getRegisteredCommands: () => [] } } },
+      models: {
+        selection: { modelRuntime: { getAvailableSnapshot: () => models }, scopedModels: [] },
+      },
       promptTemplates: [],
       resourceLoader: { getSkills: () => ({ skills: [] }) },
-      scopedModels: [],
+      tools: { externalServices: { getExternalServices: () => [] } },
     },
     sessionManager: { getCwd: () => "/tmp" },
     settingsManager: { getEnableSkillCommands: () => false },
@@ -70,12 +75,11 @@ const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () 
 const matchesLoginCommandArgumentsByProviderIdStep = () => {
   type LoginCommandMode = {
     session: {
-      scopedModels: [];
-      modelRuntime: { getAvailableSnapshot: () => [] };
+      extensions: { binding: { extensionRunner: { getRegisteredCommands: () => [] } } };
+      models: { selection: { modelRuntime: { getAvailableSnapshot: () => [] }; scopedModels: [] } };
       promptTemplates: [];
-      extensionRunner: { getRegisteredCommands: () => [] };
       resourceLoader: { getSkills: () => { skills: [] } };
-      getExternalServices: () => [];
+      tools: { externalServices: { getExternalServices: () => [] } };
     };
     settingsManager: { getEnableSkillCommands: () => boolean };
     skillCommands: Map<string, string>;
@@ -101,12 +105,11 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
       ],
     },
     session: {
-      extensionRunner: { getRegisteredCommands: () => [] },
-      getExternalServices: () => [],
-      modelRuntime: { getAvailableSnapshot: () => [] },
+      extensions: { binding: { extensionRunner: { getRegisteredCommands: () => [] } } },
+      models: { selection: { modelRuntime: { getAvailableSnapshot: () => [] }, scopedModels: [] } },
       promptTemplates: [],
       resourceLoader: { getSkills: () => ({ skills: [] }) },
-      scopedModels: [],
+      tools: { externalServices: { getExternalServices: () => [] } },
     },
     sessionManager: { getCwd: () => "/tmp" },
     settingsManager: { getEnableSkillCommands: () => false },

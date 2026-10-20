@@ -51,7 +51,7 @@ export default abstract class InteractiveModeLayer36 extends InteractiveModeLaye
         case "auto_retry_start":
           this.retryEscapeHandler = this.defaultEditor.onEscape;
           this.defaultEditor.onEscape = () => {
-            this.session.abortRetry();
+            this.session.run.retry.abortRetry();
           };
           return this.showRetryStatus(event.attempt, event.maxAttempts, event.delayMs);
         case "auto_retry_end":
@@ -84,7 +84,7 @@ export default abstract class InteractiveModeLayer36 extends InteractiveModeLaye
         if (current !== undefined && current.provider === provider && current.id === modelId) {
           const globalDefault =
             this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
-          this.session.setThinkingLevel(globalDefault);
+          this.session.models.thinking.setThinkingLevel(globalDefault);
           this.footer.invalidate();
           this.updateEditorBorderColor();
         }

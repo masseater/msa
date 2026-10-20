@@ -50,7 +50,7 @@ export default abstract class AgentSessionRuntimeLayer1 extends AgentSessionRunt
     targetSessionFile?: string,
   ): Effect.Effect<{ cancelled: boolean }> {
     return awaitingWith(function* () {
-      const runner = this.session.extensionRunner;
+      const runner = this.session.extensions.binding.extensionRunner;
       if (!runner.hasHandlers("session_before_switch")) {
         return { cancelled: false };
       }
@@ -71,7 +71,7 @@ export default abstract class AgentSessionRuntimeLayer1 extends AgentSessionRunt
     options: { position: "before" | "at" },
   ): Effect.Effect<{ cancelled: boolean }> {
     return awaitingWith(function* () {
-      const runner = this.session.extensionRunner;
+      const runner = this.session.extensions.binding.extensionRunner;
       if (!runner.hasHandlers("session_before_fork")) {
         return { cancelled: false };
       }
@@ -92,9 +92,9 @@ export default abstract class AgentSessionRuntimeLayer1 extends AgentSessionRunt
     targetSessionFile?: string,
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
-      yield* awaited(this.session.abort());
+      yield* awaited(this.session.run.lifecycle.abort());
       yield* awaited(
-        emitSessionShutdownEvent(this.session.extensionRunner, {
+        emitSessionShutdownEvent(this.session.extensions.binding.extensionRunner, {
           reason,
           targetSessionFile,
           type: "session_shutdown",
@@ -120,7 +120,7 @@ export default abstract class AgentSessionRuntimeLayer1 extends AgentSessionRunt
         yield* awaited(this.rebindSession(this.session));
       }
       if (withSession !== undefined) {
-        yield* awaited(withSession(this.session.createReplacedSessionContext()));
+        yield* awaited(withSession(this.session.extensions.binding.createReplacedSessionContext()));
       }
     }, this);
   }
@@ -167,7 +167,7 @@ export default abstract class AgentSessionRuntimeLayer1 extends AgentSessionRunt
     return Effect.runPromise(
       awaitingWith(function* () {
         yield* awaited(
-          emitSessionShutdownEvent(this.session.extensionRunner, {
+          emitSessionShutdownEvent(this.session.extensions.binding.extensionRunner, {
             reason: "quit",
             type: "session_shutdown",
           }),

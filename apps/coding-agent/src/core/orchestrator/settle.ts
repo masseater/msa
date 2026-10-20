@@ -93,7 +93,7 @@ function afterTurn(
   }
   const now = Effect.runSync(nowMillis);
   for (const note of pending) store.markNoteRead(runtime.database, note.id, threadId, now);
-  void worker.prompt(prompts.notesBlock(pending)).then(
+  void worker.run.prompting.prompt(prompts.notesBlock(pending)).then(
     () => afterTurn(runtime, threadId, run, worker),
     (error: unknown) => settle(runtime, threadId, run, worker, error),
   );

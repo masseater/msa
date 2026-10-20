@@ -42,15 +42,15 @@ void Effect.runPromise(
     );
 
     try {
-      yield* Effect.promise(() => session.bindExtensions({}));
-      yield* Console.log("Active tools:", session.getActiveToolNames().join(", "));
+      yield* Effect.promise(() => session.extensions.binding.bindExtensions({}));
+      yield* Console.log("Active tools:", session.tools.loadout.getActiveToolNames().join(", "));
       session.subscribe((event) => {
         if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
           process.stdout.write(event.assistantMessageEvent.delta);
         }
       });
       yield* Effect.promise(() =>
-        session.prompt(
+        session.run.prompting.prompt(
           "Use codemode to count the TypeScript files in src/ and list the three largest.",
         ),
       );

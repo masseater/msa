@@ -81,7 +81,9 @@ export default abstract class InteractiveModeLayer24 extends InteractiveModeLaye
   }
 
   protected showModelUpgradeSelector(): void {
-    const candidates = findModelUpgrades(this.session.modelRuntime.getCatalogModels());
+    const candidates = findModelUpgrades(
+      this.session.models.selection.modelRuntime.getCatalogModels(),
+    );
     const plan = planModelUpgrades({
       candidates,
       layers: {

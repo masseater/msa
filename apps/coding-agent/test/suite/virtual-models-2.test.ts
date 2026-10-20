@@ -36,11 +36,11 @@ const compactsBeforeARequestRoutedTo = Effect.gen(function* () {
       return fauxAssistantMessage("small answer");
     },
   ]);
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
   expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
 
-  harness.session.setThinkingLevel("low");
-  yield* Effect.promise(() => harness.session.prompt("next"));
+  harness.session.models.thinking.setThinkingLevel("low");
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("next"));
 
   expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual([
     "threshold",
@@ -77,7 +77,7 @@ const compactsBetweenTurnsOfARun = Effect.gen(function* () {
     },
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("x".repeat(8000)));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("x".repeat(8000)));
 
   expect(harness.eventsOfType("compaction_start").map((event) => event.reason)).toEqual([
     "threshold",
@@ -94,7 +94,7 @@ const projectsTheSessionOncePerRequest = Effect.gen(function* () {
   ]);
   const projections = vi.spyOn(harness.sessionManager, "buildSessionProjection");
 
-  yield* Effect.promise(() => harness.session.prompt("hello"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
 
   expect(projections).toHaveBeenCalledTimes(4);
 });
@@ -122,8 +122,8 @@ const storesRouterStateOnTheBranch = Effect.gen(function* () {
     fauxAssistantMessage("summary"),
   ]);
 
-  yield* Effect.promise(() => harness.session.prompt("one"));
-  yield* Effect.promise(() => harness.session.prompt("two"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("one"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("two"));
   const stored = () =>
     harness.sessionManager
       .getBranch()
@@ -137,7 +137,7 @@ const storesRouterStateOnTheBranch = Effect.gen(function* () {
     { modelId: "auto", provider: "router", state: { turns: 2 } },
   ]);
 
-  yield* Effect.promise(() => harness.session.compact());
+  yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(reasons()).toEqual(["user", "continuation", "user", "direct"]);
   expect(states).toEqual([undefined, { turns: 1 }, { turns: 1 }, undefined]);
@@ -167,10 +167,10 @@ const doesNotRouteCompactionsThatAn = Effect.gen(function* () {
     fauxAssistantMessage("first answer"),
     fauxAssistantMessage("second answer"),
   ]);
-  yield* Effect.promise(() => harness.session.prompt("first"));
-  yield* Effect.promise(() => harness.session.prompt("second"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(result.summary).toBe("extension summary");
   expect(reasons()).toEqual(["user", "user"]);
@@ -194,10 +194,10 @@ const routesCompactionSummariesBeforeSizingThem = Effect.gen(function* () {
     summary,
     summary,
   ]);
-  yield* Effect.promise(() => harness.session.prompt("first"));
-  yield* Effect.promise(() => harness.session.prompt("second"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
 
   expect(result.summary).toContain("summary");
   expect(reasons()).toEqual(["user", "user", "direct"]);

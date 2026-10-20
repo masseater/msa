@@ -14,7 +14,7 @@ const promptAgent = (
   Effect.gen(function* () {
     yield* throwIfAborted(signal);
     const previousMessageCount = session.messages.length;
-    yield* Effect.promise(() => session.prompt(input));
+    yield* Effect.promise(() => session.run.prompting.prompt(input));
     const assistant = session.messages
       .slice(previousMessageCount)
       .reverse()
@@ -30,7 +30,7 @@ const promptAgent = (
         ),
       );
     }
-    const output = session.getLastAssistantText();
+    const output = session.context.transcript.getLastAssistantText();
     if ((output === undefined || output === "") && assistant.stopReason === "stop") {
       return yield* Effect.die(new Error("Agent run produced no assistant text."));
     }
@@ -49,12 +49,12 @@ const runSteps = ({
   const steps = typeof input === "string" ? [{ content: input, type: "prompt" as const }] : input;
   const abortState: { promise?: Promise<void> } = {};
   const abort = () => {
-    abortState.promise ??= session.abort();
+    abortState.promise ??= session.run.lifecycle.abort();
   };
   const body = Effect.gen(function* () {
     let response: string | undefined;
     for (const step of steps) {
-      if (step.type === "reload") yield* Effect.promise(() => session.reload());
+      if (step.type === "reload") yield* Effect.promise(() => session.extensions.runtime.reload());
       else response = yield* promptAgent(session, step.content, signal);
     }
     if (response === undefined) {

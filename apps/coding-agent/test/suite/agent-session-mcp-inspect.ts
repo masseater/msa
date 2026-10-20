@@ -33,7 +33,7 @@ const serversSection = (harness: harnessTypes.Harness): string | null | undefine
 };
 
 const nestedToolNames = (harness: harnessTypes.Harness): string[] =>
-  harness.session.getCallableToolNames();
+  harness.session.tools.loadout.getCallableToolNames();
 
 const loadDocsSearch = (harness: harnessTypes.Harness) =>
   runTest(
@@ -45,8 +45,8 @@ const loadDocsSearch = (harness: harnessTypes.Harness) =>
         ),
         fauxAssistantMessage("loaded"),
       ]);
-      yield* awaited(harness.session.prompt("load"));
-      expect(harness.session.getActiveToolNames()).toContain("mcp__docs__search");
+      yield* awaited(harness.session.run.prompting.prompt("load"));
+      expect(harness.session.tools.loadout.getActiveToolNames()).toContain("mcp__docs__search");
     }),
   );
 

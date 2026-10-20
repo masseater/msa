@@ -47,9 +47,9 @@ function compactSession(harness: harnessTypes.Harness): Promise<void> {
     Effect.gen(function* () {
       harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
       harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-      yield* Effect.promise(() => harness.session.prompt("first"));
-      yield* Effect.promise(() => harness.session.prompt("second"));
-      yield* Effect.promise(() => harness.session.compact());
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+      yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
+      yield* Effect.promise(() => harness.session.compaction.manual.compact());
       expect(harness.session.messages.map((message) => message.role).slice(0, 2)).toEqual([
         "system",
         "compactionSummary",

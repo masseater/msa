@@ -18,7 +18,7 @@ export default abstract class LoginFlowLayer1 extends LoginFlowLayer0 {
   getProviderOptions(
     authType?: loginFlowTypes.AuthType,
   ): oauthSelectorTypes.AuthSelectorProvider[] {
-    const { modelRuntime } = this.host.session;
+    const { modelRuntime } = this.host.session.models.selection;
     const options: oauthSelectorTypes.AuthSelectorProvider[] = [];
     for (const provider of modelRuntime.getProviders()) {
       const authStatus = modelRuntime.getProviderAuthStatus(provider.id);
@@ -63,7 +63,7 @@ export default abstract class LoginFlowLayer1 extends LoginFlowLayer0 {
     host: loginFlowTypes.LoginFlowHost,
     providerOptions: oauthSelectorTypes.AuthSelectorProvider[],
   ) {
-    const allServices = host.session.getExternalServices();
+    const allServices = host.session.tools.externalServices.getExternalServices();
     const statuses = yield* awaited(
       Promise.all(allServices.map((service) => service.status().catch(() => undefined))),
     );
@@ -86,7 +86,7 @@ export default abstract class LoginFlowLayer1 extends LoginFlowLayer0 {
   protected getLogoutProviderOptions(): Effect.Effect<oauthSelectorTypes.AuthSelectorProvider[]> {
     return awaitingWith(
       function* () {
-        const { modelRuntime } = this.host.session;
+        const { modelRuntime } = this.host.session.models.selection;
         const credentials = yield* awaited(
           modelRuntime.listCredentials({
             signal: AbortSignal.timeout(CREDENTIAL_TIMEOUT_MS),

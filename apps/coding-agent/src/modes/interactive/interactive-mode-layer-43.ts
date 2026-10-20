@@ -25,12 +25,12 @@ export default abstract class InteractiveModeLayer43 extends InteractiveModeLaye
       reload: () => this.handleReloadCommand(),
       switchSession: (sessionPath, options) =>
         Effect.runPromise(this.handleResumeSession(sessionPath, options)),
-      waitForIdle: () => this.session.waitForIdle(),
+      waitForIdle: () => this.session.run.lifecycle.waitForIdle(),
     };
   }
 
   protected bindCurrentSessionExtensions(): Promise<void> {
-    return this.session
+    return this.session.extensions.binding
       .bindExtensions({
         abortHandler: () => {
           this.restoreQueuedMessagesToEditor({ abort: true });
@@ -63,7 +63,7 @@ export default abstract class InteractiveModeLayer43 extends InteractiveModeLaye
       const model = yield* awaited(this.findExactModelMatch(searchTerm));
       if (model !== undefined) {
         try {
-          yield* awaited(this.session.setModel(model, { persist: false }));
+          yield* awaited(this.session.models.selection.setModel(model, { persist: false }));
           this.footer.invalidate();
           this.updateEditorBorderColor();
           this.showStatus(`Model: ${model.id}`);
@@ -74,8 +74,8 @@ export default abstract class InteractiveModeLayer43 extends InteractiveModeLaye
       }
 
       const denial = findModelPolicyDenial({
-        catalogModels: this.session.modelRuntime.getCatalogModels(),
-        policy: this.session.modelRuntime.getModelPolicy(),
+        catalogModels: this.session.models.selection.modelRuntime.getCatalogModels(),
+        policy: this.session.models.selection.modelRuntime.getModelPolicy(),
         reference: searchTerm,
       });
       if (denial !== undefined) {
@@ -91,11 +91,12 @@ export default abstract class InteractiveModeLayer43 extends InteractiveModeLaye
     return Effect.runPromise(
       awaitingWith(function* () {
         const cachedModels =
-          this.session.scopedModels.length > 0
-            ? this.session.scopedModels.map((scoped) => scoped.model)
-            : [...this.session.modelRuntime.getAvailableSnapshot()];
+          this.session.models.selection.scopedModels.length > 0
+            ? this.session.models.selection.scopedModels.map((scoped) => scoped.model)
+            : [...this.session.models.selection.modelRuntime.getAvailableSnapshot()];
         const cachedMatch = findExactModelReferenceMatch(searchTerm, cachedModels);
-        if (cachedMatch !== undefined || this.session.scopedModels.length > 0) return cachedMatch;
+        if (cachedMatch !== undefined || this.session.models.selection.scopedModels.length > 0)
+          return cachedMatch;
 
         this.showStatus("Refreshing model catalogs…");
         const controller = new AbortController();
@@ -106,7 +107,7 @@ export default abstract class InteractiveModeLayer43 extends InteractiveModeLaye
         }, 15_000);
         try {
           const result = yield* awaited(
-            refreshModelCatalogs(this.session.modelRuntime, controller.signal),
+            refreshModelCatalogs(this.session.models.selection.modelRuntime, controller.signal),
           );
           if (result.aborted && timedOut) {
             this.showWarning("Model refresh timed out; searching cached models.");
@@ -125,7 +126,7 @@ export default abstract class InteractiveModeLayer43 extends InteractiveModeLaye
           timeout.cancel();
         }
         return findExactModelReferenceMatch(searchTerm, [
-          ...this.session.modelRuntime.getAvailableSnapshot(),
+          ...this.session.models.selection.modelRuntime.getAvailableSnapshot(),
         ]);
       }, this),
     );

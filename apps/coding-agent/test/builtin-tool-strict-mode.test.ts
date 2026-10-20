@@ -121,12 +121,14 @@ describe("strict built-in tools", () => {
               }),
             );
             try {
-              const originalPrompt = session.systemPrompt;
-              yield* awaited(session.bindExtensions({}));
-              expect(session.getActiveToolNames()).toEqual(activeTools);
-              expect(session.systemPrompt).toBe(originalPrompt);
+              const originalPrompt = session.tools.prompt.systemPrompt;
+              yield* awaited(session.extensions.binding.bindExtensions({}));
+              expect(session.tools.loadout.getActiveToolNames()).toEqual(activeTools);
+              expect(session.tools.prompt.systemPrompt).toBe(originalPrompt);
               for (const name of strictToolNames) {
-                expect(session.getToolDefinition(name)?.constrainedSampling).toBe(false);
+                expect(session.tools.registry.getToolDefinition(name)?.constrainedSampling).toBe(
+                  false,
+                );
               }
               for (const tool of session.agent.state.tools) {
                 expect(tool.constrainedSampling).toBe(false);

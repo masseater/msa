@@ -22,10 +22,12 @@ describe("AgentSession MCP integration", () => {
           let tools = SERVER_TOOLS;
           const { harness, servers } = yield* Effect.promise(() => setup(exposure, () => tools));
           harness.setResponses([fauxAssistantMessage("ready")]);
-          yield* Effect.promise(() => harness.session.prompt("start"));
+          yield* Effect.promise(() => harness.session.run.prompting.prompt("start"));
 
           const reachable = () =>
-            exposure === "direct" ? harness.session.getActiveToolNames() : nestedToolNames(harness);
+            exposure === "direct"
+              ? harness.session.tools.loadout.getActiveToolNames()
+              : nestedToolNames(harness);
           const listChanged = () =>
             runPromise(
               Effect.gen(function* () {

@@ -60,11 +60,11 @@ const manuallyCompactsUsingAnExtensionProvided = Effect.gen(function* () {
   const { harness, summaryUsage } = yield* manuallyCompactsUsingAnExtensionProvidedPart1();
   harnesses.push(harness);
 
-  yield* Effect.promise(() => harness.session.prompt("one"));
-  yield* Effect.promise(() => harness.session.prompt("two"));
-  const statsBefore = harness.session.getSessionStats();
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("one"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("two"));
+  const statsBefore = harness.session.context.stats.getSessionStats();
 
-  const result = yield* Effect.promise(() => harness.session.compact());
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
   const compactionEntries = harness.sessionManager
     .getEntries()
     .filter((entry) => entry.type === "compaction");
@@ -81,7 +81,7 @@ const manuallyCompactsUsingAnExtensionProvided = Effect.gen(function* () {
   if (compactionEntry?.type === "compaction") {
     expect(compactionEntry.usage).toEqual(summaryUsage);
   }
-  const statsAfter = harness.session.getSessionStats();
+  const statsAfter = harness.session.context.stats.getSessionStats();
   expect(statsAfter.tokens.input).toBe(statsBefore.tokens.input + summaryUsage.input);
   expect(statsAfter.tokens.output).toBe(statsBefore.tokens.output + summaryUsage.output);
   expect(statsAfter.tokens.cacheRead).toBe(statsBefore.tokens.cacheRead + summaryUsage.cacheRead);
@@ -97,7 +97,7 @@ const checkpointsTheReplayedSystemStateAnd = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
   harness.setResponses([fauxAssistantMessage("declared")]);
-  yield* Effect.promise(() => harness.session.prompt("declare the prompt"));
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("declare the prompt"));
   const declared = harness.session.messages[0];
   if (declared?.role !== "system") throw new Error("expected declared system message");
   harness.sessionManager.appendMessage({
@@ -151,7 +151,9 @@ const checkpointsTheReplayedSystemStateAndStep1 = (
       extra: "<extra>late</extra>",
     });
     expect(checkpoint.toolsAdded?.map((tool) => tool.name)).toEqual(
-      harness.session.getActiveToolNames().filter((name) => name !== "read" && name !== "bash"),
+      harness.session.tools.loadout
+        .getActiveToolNames()
+        .filter((name) => name !== "read" && name !== "bash"),
     );
   });
 
@@ -186,17 +188,17 @@ const allowsAQueuedPromptToStart = Effect.gen(function* () {
       event.reason === "manual" &&
       event.result !== undefined
     ) {
-      expect(harness.session.isCompacting).toBe(false);
-      queuedPrompt = harness.session.prompt("queued after compaction");
+      expect(harness.session.compaction.manual.isCompacting).toBe(false);
+      queuedPrompt = harness.session.run.prompting.prompt("queued after compaction");
     }
   });
 
-  yield* Effect.promise(() => harness.session.compact());
+  yield* Effect.promise(() => harness.session.compaction.manual.compact());
   if (queuedPrompt === undefined) throw new Error("compaction_end did not start the queued prompt");
   yield* Effect.promise(() => Promise.resolve(queuedPrompt));
 
   expect(getUserTexts(harness)).toContain("queued after compaction");
-  expect(harness.session.getLastAssistantText()).toBe("queued response");
+  expect(harness.session.context.transcript.getLastAssistantText()).toBe("queued response");
 });
 
 const throwsWhenCompactingWithoutAModel = Effect.gen(function* () {
@@ -205,7 +207,7 @@ const throwsWhenCompactingWithoutAModel = Effect.gen(function* () {
   harness.session.agent.state.model = undefined as unknown as aiTypes.Model<any>;
 
   yield* Effect.promise(() =>
-    expect(harness.session.compact()).rejects.toThrow("No model selected"),
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("No model selected"),
   );
 });
 
@@ -216,7 +218,7 @@ const throwsWhenCompactingWithoutConfiguredAuth = Effect.gen(function* () {
   seedCompactableSession(harness);
 
   yield* Effect.promise(() =>
-    expect(harness.session.compact()).rejects.toThrow(
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow(
       `No API key found for ${harness.getModel().provider}.`,
     ),
   );

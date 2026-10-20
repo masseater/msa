@@ -33,7 +33,7 @@ const keepsToolDeclarationsStableAcrossASession = () =>
       );
       try {
         harness.setResponses([fauxAssistantMessage("first"), fauxAssistantMessage("second")]);
-        yield* awaited(harness.session.prompt("one"));
+        yield* awaited(harness.session.run.prompting.prompt("one"));
         const head = harness.session.messages[0];
         if (head?.role !== "system") throw new Error("expected system message");
         const declaration = head.toolsAdded?.[0];
@@ -44,7 +44,7 @@ const keepsToolDeclarationsStableAcrossASession = () =>
         harness.session.agent.state.messages = (yield* fromJsonText(
           yield* toJsonText(harness.session.messages),
         )) as agentTypes.AgentMessage[];
-        yield* awaited(harness.session.prompt("two"));
+        yield* awaited(harness.session.run.prompting.prompt("two"));
         expect(
           harness.session.messages.filter((message) => message.role === "system"),
         ).toHaveLength(1);
