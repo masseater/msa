@@ -10,7 +10,7 @@ import type toolCallsTypes from "./tool-calls.types.ts";
 
 const { callOriginOf, contentBlocks, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
 const { analyzeEditArguments } = editReplacement;
-const { collectSessionRecords, emptySessionFileCounts, forEachDecodedLine, messageOf } = sessions;
+const { collectSessionRecords, forEachDecodedLine, messageOf, sessionScanMeta } = sessions;
 
 const MULTIPLE_OCCURRENCES = /^found \d+ occurrences/mu;
 
@@ -161,11 +161,8 @@ const scanEditCalls = (options: scanOptionsTypes.SessionScanRequest) =>
   Effect.gen(function* () {
     const { host } = options;
     const meta: editToolScanTypes.EditScanMeta = {
-      sessionsDir: options.sessionsDir,
-      ...emptySessionFileCounts(),
-      malformedLines: 0,
+      ...sessionScanMeta(options),
       sessionFilesWithEditCalls: 0,
-      since: options.since,
       unmatchedToolResults: 0,
     };
     const records = yield* collectSessionRecords({

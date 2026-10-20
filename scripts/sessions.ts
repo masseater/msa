@@ -133,6 +133,16 @@ const emptySessionFileCounts = (): sessionsTypes.SessionFileCounts => ({
   sessionFilesSkippedOlderThanSince: 0,
 });
 
+const sessionScanMeta = (options: {
+  readonly sessionsDir: string;
+  readonly since: autoSinceTypes.SinceFilter | null;
+}) => ({
+  sessionsDir: options.sessionsDir,
+  ...emptySessionFileCounts(),
+  malformedLines: 0,
+  since: options.since,
+});
+
 const collectSessionRecords = <R>(options: {
   readonly counts: sessionsTypes.SessionFileCounts;
   readonly host: hostTypes.HostShape;
@@ -185,6 +195,7 @@ const sessions = {
   requireSessionsDir,
   sessionEntries,
   sessionFileMillis,
+  sessionScanMeta,
   timestampMillis,
 };
 

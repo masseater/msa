@@ -8,13 +8,8 @@ import toolCalls from "./tool-calls.ts";
 import type toolCallsTypes from "./tool-calls.types.ts";
 
 const { callOriginOf, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
-const {
-  collectSessionRecords,
-  emptySessionFileCounts,
-  forEachDecodedLine,
-  messageOf,
-  timestampMillis,
-} = sessions;
+const { collectSessionRecords, forEachDecodedLine, messageOf, sessionScanMeta, timestampMillis } =
+  sessions;
 
 const EntrySchema = toolCallEntrySchema({});
 
@@ -101,11 +96,8 @@ const scanReadCalls = (options: scanOptionsTypes.SessionScanRequest) =>
   Effect.gen(function* () {
     const { host } = options;
     const meta: readToolScanTypes.ReadScanMeta = {
-      sessionsDir: options.sessionsDir,
-      ...emptySessionFileCounts(),
-      malformedLines: 0,
+      ...sessionScanMeta(options),
       sessionFilesWithReadCalls: 0,
-      since: options.since,
     };
     const records = yield* collectSessionRecords({
       ...options,
