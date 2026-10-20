@@ -23,12 +23,12 @@ import type {
   ResourcesDiscoverResult,
 } from "./types.ts";
 
-interface DiscoveredPath {
+export interface DiscoveredPath {
   path: string;
   extensionPath: string;
 }
 
-interface DiscoveredResources {
+export interface DiscoveredResources {
   skillPaths: DiscoveredPath[];
   promptPaths: DiscoveredPath[];
   themePaths: DiscoveredPath[];
