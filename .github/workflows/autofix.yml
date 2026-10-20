@@ -78,6 +78,7 @@ jobs:
           toolchain: 1.96.0
           components: rustfmt, clippy
           build-warnings: ""
+          cache-workspaces: libs/env/daemon
       - if: steps.target.outputs.stale != 'true'
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
