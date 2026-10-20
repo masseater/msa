@@ -1,59 +1,116 @@
+import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
+import modelSearch from "../model-search.ts";
 import themeModule from "../theme/theme.ts";
-import DynamicBorder from "./dynamic-border.ts";
-import keybindingHints from "./keybinding-hints.ts";
 import type scopedModelsSelectorInternalTypes from "./scoped-models-selector-internal.types.ts";
-import ScopedModelsSelectorComponentLayer1 from "./scoped-models-selector-layer-1.ts";
 import type scopedModelsSelectorTypes from "./scoped-models-selector.types.ts";
+import ScopedModelsInput from "./scoped-models-selector/scoped-models-input.ts";
+import ScopedModelsView from "./scoped-models-selector/scoped-models-view.ts";
 
-const { Container, Input, Spacer, Text } = tui;
 const { theme } = themeModule;
-const { keyDisplayText } = keybindingHints;
+const { fuzzyFilter } = tui;
+const { getModelSearchText } = modelSearch;
 
 export default class ScopedModelsSelectorComponent
-  extends ScopedModelsSelectorComponentLayer1
+  extends tui.Container
   implements tuiTypes.Focusable
 {
-  static updateListSelected(
-    self: ScopedModelsSelectorComponent,
-  ): scopedModelsSelectorInternalTypes.ModelItem | undefined {
-    const startIndex = Math.max(
-      0,
-      Math.min(
-        self.selectedIndex - Math.floor(self.maxVisible / 2),
-        self.filteredItems.length - self.maxVisible,
-      ),
-    );
-    const endIndex = Math.min(startIndex + self.maxVisible, self.filteredItems.length);
-    for (let i = startIndex; i < endIndex; i++) {
-      const item = self.filteredItems[i]!;
-      const isSelected = i === self.selectedIndex;
-      const prefix = isSelected ? theme.fg("accent", "→ ") : "  ";
-      const id = item.model?.id ?? item.fullId;
-      const styledId = item.model === undefined ? theme.strikethrough(id) : id;
-      const modelText = isSelected ? theme.fg("accent", styledId) : styledId;
-      const providerBadge = theme.fg(
-        "muted",
-        item.model === undefined ? " [unavailable]" : ` [${item.model.provider}]`,
-      );
-      const status = item.model !== undefined && item.enabled ? theme.fg("accent", "✓ ") : "  ";
-      self.listContainer.addChild(new Text(`${prefix}${status}${modelText}${providerBadge}`, 0, 0));
-    }
+  readonly input: ScopedModelsInput;
+  readonly view: ScopedModelsView;
 
-    if (startIndex > 0 || endIndex < self.filteredItems.length) {
-      self.listContainer.addChild(
-        new Text(
-          theme.fg("muted", `  (${self.selectedIndex + 1}/${self.filteredItems.length})`),
-          0,
-          0,
-        ),
-      );
-    }
+  modelsById: Map<string, aiTypes.Model<any>> = new Map();
 
-    const selected = self.filteredItems[self.selectedIndex];
-    return selected;
+  allIds: string[] = [];
+
+  enabledIds: scopedModelsSelectorInternalTypes.EnabledIds = null;
+
+  filteredItems: scopedModelsSelectorInternalTypes.ModelItem[] = [];
+
+  selectedIndex = 0;
+
+  searchInput!: tuiTypes.Input;
+
+  private focusedState = false;
+
+  listContainer!: tuiTypes.Container;
+
+  footerText!: tuiTypes.Text;
+
+  callbacks!: scopedModelsSelectorTypes.ModelsCallbacks;
+
+  maxVisible = 8;
+
+  isDirty = false;
+
+  refreshStatusText?: tuiTypes.Text;
+
+  get focused(): boolean {
+    return this.focusedState;
+  }
+
+  set focused(value: boolean) {
+    this.focusedState = value;
+    this.searchInput.focused = value;
+  }
+
+  updateModels(models: readonly aiTypes.Model<any>[], enabledModelIds?: string[] | null): void {
+    const selectedId = this.filteredItems[this.selectedIndex]?.fullId;
+    if (enabledModelIds !== undefined)
+      this.enabledIds = enabledModelIds === null ? null : [...enabledModelIds];
+    this.modelsById.clear();
+    this.allIds = [];
+    for (const model of models) {
+      const fullId = `${model.provider}/${model.id}`;
+      this.modelsById.set(fullId, model);
+      this.allIds.push(fullId);
+    }
+    this.refresh();
+    const refreshedIndex =
+      selectedId !== undefined && selectedId !== ""
+        ? this.filteredItems.findIndex((item) => item.fullId === selectedId)
+        : -1;
+    if (refreshedIndex >= 0) {
+      this.selectedIndex = refreshedIndex;
+      this.view.updateList();
+    }
+  }
+
+  setRefreshStatus(message: string, kind: "muted" | "success" | "warning"): void {
+    this.refreshStatusText?.setText(theme.fg(kind, `  ${message}`));
+  }
+
+  refresh(): void {
+    const query = this.searchInput.getValue();
+    const items = this.view.buildItems();
+    this.filteredItems =
+      query === ""
+        ? items
+        : fuzzyFilter(items, query, (item) =>
+            item.model === undefined
+              ? item.fullId
+              : getModelSearchText({
+                  id: item.model.id,
+                  name: item.model.name,
+                  provider: item.model.provider,
+                }),
+          );
+    this.selectedIndex = Math.min(this.selectedIndex, Math.max(0, this.filteredItems.length - 1));
+    this.view.updateList();
+    this.footerText.setText(this.view.getFooterText());
+  }
+
+  notifyChange(): void {
+    this.callbacks.onChange(this.enabledIds === null ? null : [...this.enabledIds]);
+  }
+
+  getSearchInput(): tuiTypes.Input {
+    return this.searchInput;
+  }
+
+  handleInput(data: string): void {
+    this.input.handleInput(data);
   }
 
   constructor(
@@ -61,6 +118,8 @@ export default class ScopedModelsSelectorComponent
     callbacks: scopedModelsSelectorTypes.ModelsCallbacks,
   ) {
     super();
+    this.input = new ScopedModelsInput(this);
+    this.view = new ScopedModelsView(this);
     this.callbacks = callbacks;
 
     for (const model of config.allModels) {
@@ -70,39 +129,9 @@ export default class ScopedModelsSelectorComponent
     }
 
     this.enabledIds = config.enabledModelIds === null ? null : [...config.enabledModelIds];
-    this.filteredItems = this.buildItems();
+    this.filteredItems = this.view.buildItems();
 
-    this.addChild(new DynamicBorder());
-    this.addChild(new Spacer(1));
-    this.addChild(new Text(theme.fg("accent", theme.bold("Model Configuration")), 0, 0));
-    this.addChild(
-      new Text(
-        theme.fg(
-          "muted",
-          `Session-only. ${keyDisplayText("app.models.save")} to save to settings.`,
-        ),
-        0,
-        0,
-      ),
-    );
-    this.addChild(new Spacer(1));
-
-    this.searchInput = new Input();
-    this.addChild(this.searchInput);
-    this.addChild(new Spacer(1));
-
-    this.listContainer = new Container();
-    this.addChild(this.listContainer);
-
-    this.addChild(new Spacer(1));
-    if (config.refreshStatus !== undefined && config.refreshStatus !== "") {
-      this.refreshStatusText = new Text(theme.fg("muted", `  ${config.refreshStatus}`), 0, 0);
-      this.addChild(this.refreshStatusText);
-    }
-    this.footerText = new Text(this.getFooterText(), 0, 0);
-    this.addChild(this.footerText);
-
-    this.addChild(new DynamicBorder());
-    this.updateList();
+    this.view.build(config.refreshStatus);
+    this.view.updateList();
   }
 }
