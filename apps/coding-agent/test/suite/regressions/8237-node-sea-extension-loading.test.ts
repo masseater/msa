@@ -25,14 +25,18 @@ vi.mock("jiti/static", () => {
 vi.mock("../../../src/core/extensions/virtual-modules.ts", () => {
   state.virtualModulesLoads++;
   return {
-    VIRTUAL_MODULES: {
-      "@msa/coding-agent": {},
-      typebox: {},
+    default: {
+      VIRTUAL_MODULES: {
+        "@msa/coding-agent": {},
+        typebox: {},
+      },
     },
   };
 });
 
-import { loadExtensions } from "../../../src/core/extensions/loader.ts";
+import loader from "../../../src/core/extensions/loader.ts";
+
+const { loadExtensions } = loader;
 
 interface JitiOptionsProbe {
   alias?: unknown;

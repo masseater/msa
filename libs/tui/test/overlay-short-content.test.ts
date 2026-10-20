@@ -7,10 +7,7 @@ import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
 import SimpleContent from "./overlay-short-content-simple-content.ts";
 import SimpleOverlay from "./overlay-short-content-simple-overlay.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 describe("TUI overlay with short content", () => {
   it("should render overlay when content is shorter than terminal height", () =>
     Effect.runPromise(

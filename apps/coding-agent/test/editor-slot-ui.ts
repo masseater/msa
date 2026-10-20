@@ -1,13 +1,12 @@
 import tui from "@msa/tui";
 
-import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
-import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
+import VirtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import EditorSlot from "../src/modes/interactive/editor-slot.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 
+const { getEditorTheme, initTheme } = themeModule;
 const { Container, Editor, TuiMainScreen, getKeybindings, setKeybindings } = tui;
-const { VirtualTerminal } = virtualTerminal;
-
 const prepareTheme = (): void => {
   initTheme("dark");
 };

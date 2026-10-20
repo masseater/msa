@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, Option } from "effect";
 
 const PATTERN = /!\{([^}]+)\}/gu;
@@ -32,7 +32,7 @@ const formatSummary = (expansions: Expansion[]): string =>
     .join("\n");
 
 const expandCommands = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   text: string,
   matches: Array<{ full: string; command: string }>,
 ) =>
@@ -64,7 +64,7 @@ const expandCommands = (
     return { expanded: result, expansions };
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("input", (event, ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {

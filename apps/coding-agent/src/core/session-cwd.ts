@@ -1,22 +1,17 @@
-import { existsSync } from "node:fs";
+import MissingSessionCwdError from "./missing-session-cwd-error.ts";
+import nodeFs from "./platform/node/fs.ts";
+import type sessionCwdTypes from "./session-cwd.types.ts";
 
-import * as Data from "effect/Data";
-
-export interface SessionCwdIssue {
-  sessionFile?: string;
-  sessionCwd: string;
-  fallbackCwd: string;
-}
+const { existsSync } = nodeFs;
 
 interface SessionCwdSource {
   getCwd(): string;
   getSessionFile(): string | undefined;
 }
-
-export function getMissingSessionCwdIssue(
+function getMissingSessionCwdIssue(
   sessionManager: SessionCwdSource,
   fallbackCwd: string,
-): SessionCwdIssue | undefined {
+): sessionCwdTypes.SessionCwdIssue | undefined {
   const sessionFile = sessionManager.getSessionFile();
   if (sessionFile === undefined || sessionFile === "") {
     return undefined;
@@ -33,34 +28,20 @@ export function getMissingSessionCwdIssue(
     sessionFile,
   };
 }
-
-export function formatMissingSessionCwdError(issue: SessionCwdIssue): string {
-  const sessionFile =
-    issue.sessionFile !== undefined && issue.sessionFile !== ""
-      ? `\nSession file: ${issue.sessionFile}`
-      : "";
-  return `Stored session working directory does not exist: ${issue.sessionCwd}${sessionFile}\nCurrent working directory: ${issue.fallbackCwd}`;
-}
-
-export function formatMissingSessionCwdPrompt(issue: SessionCwdIssue): string {
+function formatMissingSessionCwdPrompt(issue: sessionCwdTypes.SessionCwdIssue): string {
   return `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`;
 }
-
-export class MissingSessionCwdError extends Data.TaggedError("MissingSessionCwdError")<{
-  readonly issue: SessionCwdIssue;
-  readonly message: string;
-}> {
-  constructor(issue: SessionCwdIssue) {
-    super({ issue, message: formatMissingSessionCwdError(issue) });
-  }
-}
-
-export function assertSessionCwdExists(
-  sessionManager: SessionCwdSource,
-  fallbackCwd: string,
-): void {
+function assertSessionCwdExists(sessionManager: SessionCwdSource, fallbackCwd: string): void {
   const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
   if (issue !== undefined) {
     throw new MissingSessionCwdError(issue);
   }
 }
+
+const sessionCwd = {
+  assertSessionCwdExists,
+  formatMissingSessionCwdPrompt,
+  getMissingSessionCwdIssue,
+};
+
+export default sessionCwd;

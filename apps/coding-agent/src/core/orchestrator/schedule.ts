@@ -1,12 +1,22 @@
 import { Effect, Fiber } from "effect";
 
-import { conditions } from "./condition.ts";
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { starting } from "./start.ts";
-import { store } from "./store.ts";
+import conditionModule from "./condition.ts";
+import errors from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import start from "./start.ts";
+import storeModule from "./store.ts";
 
-function scheduleEffect(runtime: Runtime): Effect.Effect<string[], OrchestratorError> {
+const { nowMillis } = runtimeModule;
+const { orchestratorError } = errors;
+const { store } = storeModule;
+const { starting } = start;
+const { conditions } = conditionModule;
+
+function scheduleEffect(
+  runtime: runtimeTypes.Runtime,
+): Effect.Effect<string[], errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     if (runtime.replanning) return [];
     const database = runtime.database;
@@ -30,7 +40,9 @@ function scheduleEffect(runtime: Runtime): Effect.Effect<string[], OrchestratorE
   });
 }
 
-function pollEffect(runtime: Runtime): Effect.Effect<void, OrchestratorError> {
+function pollEffect(
+  runtime: runtimeTypes.Runtime,
+): Effect.Effect<void, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     for (const task of store.tasksWithCondition(runtime.database, runtime.options.project)) {
@@ -47,7 +59,10 @@ function pollEffect(runtime: Runtime): Effect.Effect<void, OrchestratorError> {
   });
 }
 
-function startPolling(runtime: Runtime, intervalMs: number): Fiber.Fiber<never, never> {
+function startPolling(
+  runtime: runtimeTypes.Runtime,
+  intervalMs: number,
+): Fiber.Fiber<never, never> {
   return Effect.runFork(
     Effect.forever(
       Effect.sleep(intervalMs).pipe(
@@ -62,4 +77,10 @@ function startPolling(runtime: Runtime, intervalMs: number): Fiber.Fiber<never, 
   );
 }
 
-export const scheduling = { scheduleEffect, startPolling };
+const scheduling = { scheduleEffect, startPolling };
+
+const schedule = {
+  scheduling,
+};
+
+export default schedule;

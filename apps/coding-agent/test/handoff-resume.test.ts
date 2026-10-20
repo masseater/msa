@@ -4,10 +4,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { pendingHandoffs } from "../src/core/orchestrator/handoff-files.ts";
-import { formatDateTime } from "../src/core/orchestrator/handoff-render.ts";
-import { handoffResumePrompt } from "../src/modes/interactive/handoff-resume.ts";
+import handoffFiles from "../src/core/orchestrator/handoff-files.ts";
+import handoffRender from "../src/core/orchestrator/handoff-render.ts";
+import handoffResume from "../src/modes/interactive/handoff-resume.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { pendingHandoffs } = handoffFiles;
+const { handoffResumePrompt } = handoffResume;
+const { formatDateTime } = handoffRender;
 
 const { awaited, joinPath, makeTempDir, pathExists, readTextFile, removePath, runTest } = testing;
 

@@ -4,7 +4,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
 
 const { createModels } = ai;
 

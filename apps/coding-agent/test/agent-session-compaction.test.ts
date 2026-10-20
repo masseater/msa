@@ -4,17 +4,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import {
-  AgentSession,
-  type AgentSessionEvent,
-  SessionManager,
-  SettingsManager,
-  createCodingTools,
-} from "../src/index.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import src from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
 
+const { AgentSession, SessionManager, SettingsManager, createCodingTools } = src;
 const { getModel, streamSimple } = compat;
 
 const { Agent } = agentModule;
@@ -26,13 +22,13 @@ const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 const { awaited, currentTimeMillis, joinPath, makeDirectory, removePath, runTest, tempRoot } =
   testing;
 
-let session: AgentSession;
+let session: srcTypes.AgentSession;
 
 let tempDir: string;
 
-let sessionManager: SessionManager;
+let sessionManager: srcTypes.SessionManager;
 
-let events: AgentSessionEvent[];
+let events: srcTypes.AgentSessionEvent[];
 
 function createSession(inMemory = false) {
   return runTest(

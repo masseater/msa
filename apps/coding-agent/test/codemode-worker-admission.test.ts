@@ -6,7 +6,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { executeCodemode } from "../src/extensions/codemode/execute.ts";
+import execute from "../src/extensions/codemode/execute.ts";
+
+const { executeCodemode } = execute;
 
 const { abortController, awaited, deferredPromise, runTest } = testing;
 

@@ -1,14 +1,18 @@
-import type { ExtensionContext } from "@msa/coding-agent";
-import { DynamicBorder } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { type PresetStore, buildPresetDescription, presetsPathHint } from "./preset-store.ts";
+import presetStore from "./preset-store.ts";
+import type presetStoreTypes from "./preset-store.types.ts";
+
+const { buildPresetDescription, presetsPathHint } = presetStore;
+const { DynamicBorder } = codingAgent;
 
 const { Container, SelectList, Text } = tuiModule;
 
-const buildItems = (store: PresetStore): tuiTypes.SelectItem[] => {
+const buildItems = (store: presetStoreTypes.PresetStore): tuiTypes.SelectItem[] => {
   const items: tuiTypes.SelectItem[] = Object.entries(store.presets).map(([name, preset]) => ({
     description: buildPresetDescription(preset),
     label: name === store.activeName ? `${name} (active)` : name,
@@ -24,7 +28,7 @@ const buildItems = (store: PresetStore): tuiTypes.SelectItem[] => {
 };
 
 const openSelector = (
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
   items: tuiTypes.SelectItem[],
 ): Promise<string | null> =>
   ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
@@ -57,9 +61,9 @@ const openSelector = (
     };
   });
 
-export const showPresetSelector = (request: {
-  readonly store: PresetStore;
-  readonly ctx: ExtensionContext;
+const showPresetSelector = (request: {
+  readonly store: presetStoreTypes.PresetStore;
+  readonly ctx: codingAgentTypes.ExtensionContext;
 }) =>
   Effect.gen(function* () {
     const { store, ctx } = request;
@@ -84,3 +88,9 @@ export const showPresetSelector = (request: {
     ctx.ui.notify(`Preset "${result}" activated`, "info");
     store.updateStatus(ctx);
   });
+
+const presetUi = {
+  showPresetSelector,
+};
+
+export default presetUi;

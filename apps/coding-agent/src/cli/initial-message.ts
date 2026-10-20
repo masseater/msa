@@ -1,25 +1,11 @@
-import type aiTypes from "@msa/ai/index.types";
+import type initialMessageTypes from "./initial-message.types.ts";
 
-import type { Args } from "./args.ts";
-
-export interface InitialMessageInput {
-  parsed: Args;
-  fileText?: string | undefined;
-  fileImages?: aiTypes.ImageContent[] | undefined;
-  stdinContent?: string | undefined;
-}
-
-export interface InitialMessageResult {
-  initialMessage?: string | undefined;
-  initialImages?: aiTypes.ImageContent[] | undefined;
-}
-
-export function buildInitialMessage({
+function buildInitialMessage({
   parsed,
   fileText,
   fileImages,
   stdinContent,
-}: InitialMessageInput): InitialMessageResult {
+}: initialMessageTypes.InitialMessageInput): initialMessageTypes.InitialMessageResult {
   const parts: string[] = [];
   if (stdinContent !== undefined) {
     parts.push(stdinContent);
@@ -38,3 +24,9 @@ export function buildInitialMessage({
     initialMessage: parts.length > 0 ? parts.join("") : undefined,
   };
 }
+
+const initialMessage = {
+  buildInitialMessage,
+};
+
+export default initialMessage;

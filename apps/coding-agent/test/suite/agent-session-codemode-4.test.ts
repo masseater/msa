@@ -3,7 +3,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { type CodemodeToolDetails } from "../../src/extensions/codemode/tool.ts";
+import type toolTypes from "../../src/extensions/codemode/tool.types.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
 import type harnessTypes from "./harness.types.ts";
@@ -48,7 +48,7 @@ const runsNestedCallsInParallelAnd = Effect.gen(function* () {
   expect(resultText(result)).toBe(
     '==> text 1/2 <==\necho,stats,screenshot\n==> text 2/2 <==\n{"a":"echo: one","b":"echo: two","names":["a","b"]}\n<console_output>\nfiles 2\n</console_output>',
   );
-  const details = result.details as unknown as CodemodeToolDetails;
+  const details = result.details as unknown as toolTypes.CodemodeToolDetails;
   expect(details.calls.map((call) => [call.name, call.status])).toEqual([
     ["echo", "ok"],
     ["echo", "ok"],
@@ -108,7 +108,7 @@ const routesNestedCallsThroughExtensionHooksStep1 = (harness: harnessTypes.Harne
       blocked: "echo of forbidden text is blocked",
       stats: "redacted",
     });
-    const details = result.details as unknown as CodemodeToolDetails;
+    const details = result.details as unknown as toolTypes.CodemodeToolDetails;
     expect(details.calls.map((call) => call.status)).toEqual(["error", "ok"]);
   });
 

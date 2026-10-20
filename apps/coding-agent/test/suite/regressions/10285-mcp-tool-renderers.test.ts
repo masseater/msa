@@ -3,13 +3,17 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ToolRenderContext } from "../../../src/core/extensions/types.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
-import { createMcpExtension } from "../../../src/extensions/mcp/index.ts";
+import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
+import extension from "../../../src/extensions/mcp/extension.ts";
+import codingAgent from "../../../src/index.ts";
+import type codingAgentTypes from "../../../src/index.types.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { SessionManager } = codingAgent;
+
+const { createMcpExtension } = extension;
 const { initTheme, stripAnsi, theme } = tuiKit;
 
 const { createHarness } = harnessModule;
@@ -34,7 +38,7 @@ const rendersCallsToMcpToolsThat = Effect.gen(function* () {
 
     const call = resolve("mcp__my_docs__search")?.renderCall?.({ query: "msa" }, theme, {
       expanded: false,
-    } as unknown as ToolRenderContext);
+    } as unknown as extensionsTypesTypes.ToolRenderContext);
     expect(stripAnsi(call?.render(100).join("\n") ?? "")).toContain('my_docs/search query="msa"');
     expect(resolve("not_mcp")).toBeUndefined();
 
@@ -56,7 +60,7 @@ const rendersThemInHtmlExportsToo = Effect.gen(function* () {
 
 const rendersThemInHtmlExportsTooStep1 = (
   dir: string,
-  sessionManager: SessionManager,
+  sessionManager: codingAgentTypes.SessionManager,
   harness: harnessTypes.Harness,
 ) =>
   Effect.gen(function* () {

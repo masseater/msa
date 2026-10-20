@@ -3,8 +3,10 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { getLastAssistantUsage } from "../src/core/compaction/index.ts";
-import { type SessionEntry, type SessionMessageEntry } from "../src/core/session-manager.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { getLastAssistantUsage } = compaction;
 
 const { currentDate, currentTimeMillis } = testing;
 
@@ -56,9 +58,11 @@ beforeEach(() => {
   resetEntryCounter();
 });
 
-function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEntry {
+function createMessageEntry(
+  message: agentTypes.AgentMessage,
+): sessionManagerTypes.SessionMessageEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: SessionMessageEntry = {
+  const entry: sessionManagerTypes.SessionMessageEntry = {
     id,
     message,
     parentId: lastId,
@@ -70,7 +74,7 @@ function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEnt
 }
 
 const shouldFindTheLastNonAbortedAssistant = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("Hello")),
     createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50))),
     createMessageEntry(createUserMessage("How are you?")),
@@ -88,7 +92,7 @@ const shouldSkipAbortedMessages = () => {
     stopReason: "aborted",
   };
 
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("Hello")),
     createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50))),
     createMessageEntry(createUserMessage("How are you?")),
@@ -101,7 +105,7 @@ const shouldSkipAbortedMessages = () => {
 };
 
 const shouldSkipAllZeroAssistantUsage = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("Hello")),
     createMessageEntry(createAssistantMessage("Hi", createMockUsage(100, 50))),
     createMessageEntry(createUserMessage("continue")),
@@ -114,7 +118,9 @@ const shouldSkipAllZeroAssistantUsage = () => {
 };
 
 const shouldReturnUndefinedIfNoAssistantMessages = () => {
-  const entries: SessionEntry[] = [createMessageEntry(createUserMessage("Hello"))];
+  const entries: sessionManagerTypes.SessionEntry[] = [
+    createMessageEntry(createUserMessage("Hello")),
+  ];
   expect(getLastAssistantUsage(entries)).toBeUndefined();
 };
 

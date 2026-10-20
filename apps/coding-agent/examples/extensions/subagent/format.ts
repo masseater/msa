@@ -1,29 +1,28 @@
 import { homedir } from "os";
 
 import type aiTypes from "@msa/ai/index.types";
-import { formatReadLineRange } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 
-import {
-  type DisplayItem,
-  PER_TASK_OUTPUT_CAP,
-  type SingleResult,
-  type UsageStats,
-} from "./types.ts";
+import subagentTypes from "./types.ts";
+import type subagentTypesTypes from "./types.types.ts";
+
+const { PER_TASK_OUTPUT_CAP } = subagentTypes;
+const { formatReadLineRange } = codingAgent;
 
 type ThemeFg = (
   color: "muted" | "accent" | "warning" | "dim" | "toolOutput",
   text: string,
 ) => string;
 
-export const formatTokens = (count: number): string => {
+const formatTokens = (count: number): string => {
   if (count < 1000) return count.toString();
   if (count < 10000) return `${(count / 1000).toFixed(1)}k`;
   if (count < 1000000) return `${Math.round(count / 1000)}k`;
   return `${(count / 1000000).toFixed(1)}M`;
 };
 
-export const formatUsageStats = (request: {
-  readonly usage: UsageStats;
+const formatUsageStats = (request: {
+  readonly usage: subagentTypesTypes.UsageStats;
   readonly model?: string | undefined;
 }): string => {
   const { usage, model } = request;
@@ -90,7 +89,7 @@ const formatGrepCall = (args: Record<string, unknown>, fg: ThemeFg): string =>
 const formatOtherCall = (toolName: string, args: Record<string, unknown>, fg: ThemeFg): string =>
   fg("accent", toolName) + fg("dim", ` ${preview(JSON.stringify(args), 50)}`);
 
-export const formatToolCall = (request: {
+const formatToolCall = (request: {
   readonly toolName: string;
   readonly args: Record<string, unknown>;
   readonly themeFg: ThemeFg;
@@ -116,7 +115,7 @@ export const formatToolCall = (request: {
   }
 };
 
-export const getFinalOutput = (messages: aiTypes.Message[]): string => {
+const getFinalOutput = (messages: aiTypes.Message[]): string => {
   for (const msg of messages.toReversed()) {
     if (msg.role !== "assistant") continue;
     for (const part of msg.content) {
@@ -126,17 +125,17 @@ export const getFinalOutput = (messages: aiTypes.Message[]): string => {
   return "";
 };
 
-export const isFailedResult = (result: SingleResult): boolean =>
+const isFailedResult = (result: subagentTypesTypes.SingleResult): boolean =>
   result.exitCode !== 0 || result.stopReason === "error" || result.stopReason === "aborted";
 
-export const getResultOutput = (result: SingleResult): string => {
+const getResultOutput = (result: subagentTypesTypes.SingleResult): string => {
   if (isFailedResult(result)) {
     return result.errorMessage || result.stderr || getFinalOutput(result.messages) || "(no output)";
   }
   return getFinalOutput(result.messages) || "(no output)";
 };
 
-export const truncateParallelOutput = (output: string): string => {
+const truncateParallelOutput = (output: string): string => {
   const byteLength = Buffer.byteLength(output, "utf8");
   if (byteLength <= PER_TASK_OUTPUT_CAP) return output;
 
@@ -148,8 +147,8 @@ export const truncateParallelOutput = (output: string): string => {
   return `${truncated}\n\n[Output truncated: ${omitted} bytes omitted. Full output preserved in tool details.]`;
 };
 
-export const getDisplayItems = (messages: aiTypes.Message[]): DisplayItem[] => {
-  const items: DisplayItem[] = [];
+const getDisplayItems = (messages: aiTypes.Message[]): subagentTypesTypes.DisplayItem[] => {
+  const items: subagentTypesTypes.DisplayItem[] = [];
   for (const msg of messages) {
     if (msg.role !== "assistant") continue;
     for (const part of msg.content) {
@@ -163,8 +162,10 @@ export const getDisplayItems = (messages: aiTypes.Message[]): DisplayItem[] => {
   return items;
 };
 
-export const aggregateUsage = (results: SingleResult[]): UsageStats => {
-  const total: UsageStats = {
+const aggregateUsage = (
+  results: subagentTypesTypes.SingleResult[],
+): subagentTypesTypes.UsageStats => {
+  const total: subagentTypesTypes.UsageStats = {
     cacheRead: 0,
     cacheWrite: 0,
     contextTokens: 0,
@@ -183,3 +184,17 @@ export const aggregateUsage = (results: SingleResult[]): UsageStats => {
   }
   return total;
 };
+
+const format = {
+  aggregateUsage,
+  formatTokens,
+  formatToolCall,
+  formatUsageStats,
+  getDisplayItems,
+  getFinalOutput,
+  getResultOutput,
+  isFailedResult,
+  truncateParallelOutput,
+};
+
+export default format;

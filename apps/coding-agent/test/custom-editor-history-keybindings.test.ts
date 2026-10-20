@@ -2,12 +2,10 @@ import tui from "@msa/tui";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import testThemes from "../../../libs/tui/test/test-themes.ts";
-import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { CustomEditor } from "../src/modes/interactive/components/custom-editor.ts";
-
+import VirtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import CustomEditor from "../src/modes/interactive/components/custom-editor.ts";
 const { TuiMainScreen, setKeybindings } = tui;
-const { VirtualTerminal } = virtualTerminal;
 const { defaultEditorTheme } = testThemes;
 
 afterEach(() => {

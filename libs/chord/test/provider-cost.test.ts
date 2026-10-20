@@ -7,11 +7,12 @@ import { describe, it, vi } from "vite-plus/test";
 import type deltaModule from "../src/delta/index.ts";
 import chord from "../src/index.ts";
 import type chordTypes from "../src/index.types.ts";
+import CountingLink from "./fixtures/counting-link.ts";
 import counting from "./fixtures/counting.ts";
 
 const { createHost, hostNamed, memoryLinkPair, method, remote } = chord;
 
-const { CountingLink, stateFrames } = counting;
+const { stateFrames } = counting;
 
 const counts = vi.hoisted(() => ({ encoders: 0, encodes: 0 }));
 

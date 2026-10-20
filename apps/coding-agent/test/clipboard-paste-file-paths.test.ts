@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { awaited, readBytesFile, removePath, runTest } = testing;
 
@@ -15,14 +15,18 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock("../src/utils/clipboard.ts", () => ({
-  copyToClipboard: vi.fn(),
-  readClipboardFilePaths: mocks.readClipboardFilePaths,
-  readClipboardText: mocks.readClipboardText,
+  default: {
+    copyToClipboard: vi.fn(),
+    readClipboardFilePaths: mocks.readClipboardFilePaths,
+    readClipboardText: mocks.readClipboardText,
+  },
 }));
 vi.mock("../src/utils/clipboard-image.ts", () => ({
-  extensionForImageMimeType: () => "png",
-  readClipboardImage: mocks.readClipboardImage,
-  readClipboardImageFromCommand: mocks.readClipboardImageFromCommand,
+  default: {
+    extensionForImageMimeType: () => "png",
+    readClipboardImage: mocks.readClipboardImage,
+    readClipboardImageFromCommand: mocks.readClipboardImageFromCommand,
+  },
 }));
 
 beforeEach(() => vi.resetAllMocks());
@@ -48,6 +52,7 @@ const finderFilePathsTakePrecedenceOverTheir = () =>
         handleClipboardPaste(this: typeof context): Promise<void>;
       };
 
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* awaited(prototype.handleClipboardPaste.call(context));
       expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(filePaths.join("\n"));
       expect(mocks.readClipboardImage).not.toHaveBeenCalled();
@@ -75,6 +80,7 @@ const clipboardFilePathsContainingTerminalControlCharacters = () =>
         handleClipboardPaste(this: typeof context): Promise<void>;
       };
 
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* awaited(prototype.handleClipboardPaste.call(context));
 
       expect(insertTextAtCursor).not.toHaveBeenCalled();
@@ -107,6 +113,7 @@ const nativeFilePathErrorsAreShownWithout = () =>
         handleClipboardPaste(this: typeof context): Promise<void>;
       };
 
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* awaited(prototype.handleClipboardPaste.call(context));
 
       expect(context.editor.insertTextAtCursor).not.toHaveBeenCalled();
@@ -144,6 +151,7 @@ test.each([
         handleClipboardPaste(this: typeof context): Promise<void>;
       };
 
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* awaited(prototype.handleClipboardPaste.call(context));
 
       expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(" /tmp/photo.png");
@@ -176,6 +184,7 @@ const bashModeShellQuotesFilePathsAnd = () =>
         handleClipboardPaste(this: typeof context): Promise<void>;
       };
 
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* awaited(prototype.handleClipboardPaste.call(context));
 
       expect(insertTextAtCursor).toHaveBeenCalledExactlyOnceWith(
@@ -191,7 +200,7 @@ test(
 );
 
 function pasteContext() {
-  return {
+  const context = {
     editor: { insertTextAtCursor: vi.fn<(text: string) => void>() },
     insertClipboardImage: (
       InteractiveMode.prototype as unknown as { insertClipboardImage: unknown }
@@ -201,6 +210,8 @@ function pasteContext() {
     showStatus: vi.fn<(message: string) => void>(),
     ui: { requestRender: vi.fn() },
   };
+  Object.setPrototypeOf(context, InteractiveMode.prototype);
+  return context;
 }
 
 const paste = (context: ReturnType<typeof pasteContext>) =>

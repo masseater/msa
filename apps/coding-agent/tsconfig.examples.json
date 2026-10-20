@@ -1,19 +1,9 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "../../tsconfig.json",
   "compilerOptions": {
     "noEmit": true,
-    "paths": {
-      "@msa/coding-agent": ["./src/index.ts"],
-      "@msa/coding-agent/hooks": ["./src/core/hooks/index.ts"],
-      "@msa/tui": ["../../libs/tui/src/index.ts"],
-      "@msa/ai": ["../../libs/ai/src/index.ts"],
-      "@msa/ai/compat": ["../../libs/ai/src/compat.ts"],
-      "@msa/ai/utils/*": ["../../libs/ai/src/utils/*.ts"],
-      "@msa/agent-core": ["../../libs/agent/src/index.ts"],
-      "typebox": ["../../node_modules/typebox"]
-    },
     "skipLibCheck": true
   },
-  "include": ["examples/**/*.ts"],
+  "include": ["examples/**/*.ts", "src/utils/highlight-js.d.ts"],
   "exclude": ["node_modules", "dist"]
 }

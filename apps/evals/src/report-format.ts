@@ -1,12 +1,6 @@
 import { styleText } from "node:util";
 
-import type {
-  EvalComparisonReport,
-  EvalSetComparison,
-  OperationalMetricTotal,
-  PairedMetricSummary,
-  VariantTotals,
-} from "./report-types.ts";
+import type reportTypesTypes from "./report-types.types.ts";
 
 function percentage(value: number | null): string {
   return value === null ? "unavailable" : `${(value * 100).toFixed(1)}%`;
@@ -16,7 +10,11 @@ function signed(value: number, digits: number): string {
   return `${value >= 0 ? "+" : ""}${value.toFixed(digits)}`;
 }
 
-function pairedMetric(label: string, metric: PairedMetricSummary, unit = ""): string {
+function pairedMetric(
+  label: string,
+  metric: reportTypesTypes.PairedMetricSummary,
+  unit = "",
+): string {
   if (metric.meanDelta === null || metric.controlMean === null || metric.treatmentMean === null) {
     return `    ${label.padStart(10)}  unavailable`;
   }
@@ -24,7 +22,7 @@ function pairedMetric(label: string, metric: PairedMetricSummary, unit = ""): st
 }
 
 function operationalMetric(
-  metric: OperationalMetricTotal,
+  metric: reportTypesTypes.OperationalMetricTotal,
   runs: number,
   format: (total: number) => string,
 ): string {
@@ -34,7 +32,7 @@ function operationalMetric(
   return `${format(metric.total)}${coverage}`;
 }
 
-function comparisonLines(comparison: EvalSetComparison): string[] {
+function comparisonLines(comparison: reportTypesTypes.EvalSetComparison): string[] {
   const lines = [
     `  ${comparison.evalSet}`,
     `         Pairs  ${comparison.eligiblePairs}/${comparison.totalPairs} eligible`,
@@ -67,7 +65,7 @@ function comparisonLines(comparison: EvalSetComparison): string[] {
   return lines;
 }
 
-function totalsLine(totals: VariantTotals): string {
+function totalsLine(totals: reportTypesTypes.VariantTotals): string {
   const tokens = operationalMetric(totals.totalTokens, totals.runs, (total) => `${total} tokens`);
   const tools = operationalMetric(totals.toolCalls, totals.runs, (total) => `${total} tools`);
   const latency = operationalMetric(
@@ -83,7 +81,7 @@ function totalsLine(totals: VariantTotals): string {
   return `    ${totals.variant}: ${totals.runs} runs, ${tokens}, ${tools}, ${latency}, ${cost}`;
 }
 
-export function formatEvalComparisonReport(report: EvalComparisonReport): string {
+function formatEvalComparisonReport(report: reportTypesTypes.EvalComparisonReport): string {
   if (report.comparisons.length === 0) return "";
   const lines = [
     styleText("bold", "Documentation Eval Comparisons"),
@@ -101,3 +99,9 @@ export function formatEvalComparisonReport(report: EvalComparisonReport): string
   }
   return lines.join("\n");
 }
+
+const reportFormat = {
+  formatEvalComparisonReport,
+};
+
+export default reportFormat;

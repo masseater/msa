@@ -1,35 +1,12 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-import type { TodoItem } from "./utils.ts";
+import type stateTypes from "./state.types.ts";
+import type utilsTypes from "./utils.types.ts";
 
-export const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
-export const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
+const PLAN_MODE_TOOLS = ["read", "bash", "grep", "find", "ls", "questionnaire"];
+const NORMAL_MODE_TOOLS = ["read", "bash", "edit", "write"];
 const PLAN_MODE_DISABLED_TOOLS = new Set<string>(["edit", "write"]);
 const PLAN_MANAGED_TOOLS = new Set<string>([...PLAN_MODE_TOOLS, ...NORMAL_MODE_TOOLS]);
-
-export interface PlanModeEntry {
-  enabled: boolean;
-  todos?: TodoItem[];
-  executing?: boolean;
-  toolsBeforePlanMode?: string[];
-}
-
-export interface PlanRuntime {
-  enabled: boolean;
-  executing: boolean;
-  todos: TodoItem[];
-  toolsBeforePlanMode: string[] | undefined;
-}
-
-export interface PlanStore {
-  readonly runtime: PlanRuntime;
-  updateStatus(ctx: ExtensionContext): void;
-  enableTools(): void;
-  restoreTools(): void;
-  persist(): void;
-  toggle(ctx: ExtensionContext): void;
-  restore(entry: PlanModeEntry | undefined, ctx: ExtensionContext): void;
-}
 
 const uniqueToolNames = (toolNames: string[]): string[] => [...new Set(toolNames)];
 
@@ -45,7 +22,10 @@ const getNormalModeTools = (activeToolNames: string[]): string[] =>
     ...activeToolNames.filter((name) => !PLAN_MANAGED_TOOLS.has(name)),
   ]);
 
-const todoWidgetLines = (ctx: ExtensionContext, todos: TodoItem[]): string[] =>
+const todoWidgetLines = (
+  ctx: codingAgentTypes.ExtensionContext,
+  todos: utilsTypes.TodoItem[],
+): string[] =>
   todos.map((item) =>
     item.completed
       ? ctx.ui.theme.fg("success", "☑ ") +
@@ -53,7 +33,10 @@ const todoWidgetLines = (ctx: ExtensionContext, todos: TodoItem[]): string[] =>
       : `${ctx.ui.theme.fg("muted", "☐ ")}${item.text}`,
   );
 
-const updateStatus = (ctx: ExtensionContext, runtime: PlanRuntime): void => {
+const updateStatus = (
+  ctx: codingAgentTypes.ExtensionContext,
+  runtime: stateTypes.PlanRuntime,
+): void => {
   const showTodos = runtime.executing && runtime.todos.length > 0;
   if (showTodos) {
     const completed = runtime.todos.filter((t) => t.completed).length;
@@ -70,19 +53,22 @@ const updateStatus = (ctx: ExtensionContext, runtime: PlanRuntime): void => {
   ctx.ui.setWidget("plan-todos", showTodos ? todoWidgetLines(ctx, runtime.todos) : undefined);
 };
 
-const enableTools = (msa: ExtensionAPI, runtime: PlanRuntime): void => {
+const enableTools = (msa: codingAgentTypes.ExtensionAPI, runtime: stateTypes.PlanRuntime): void => {
   if (runtime.toolsBeforePlanMode === undefined) {
     runtime.toolsBeforePlanMode = msa.getActiveTools();
   }
   msa.setActiveTools(getPlanModeTools(runtime.toolsBeforePlanMode));
 };
 
-const restoreTools = (msa: ExtensionAPI, runtime: PlanRuntime): void => {
+const restoreTools = (
+  msa: codingAgentTypes.ExtensionAPI,
+  runtime: stateTypes.PlanRuntime,
+): void => {
   msa.setActiveTools(runtime.toolsBeforePlanMode ?? getNormalModeTools(msa.getActiveTools()));
   runtime.toolsBeforePlanMode = undefined;
 };
 
-const persist = (msa: ExtensionAPI, runtime: PlanRuntime): void => {
+const persist = (msa: codingAgentTypes.ExtensionAPI, runtime: stateTypes.PlanRuntime): void => {
   msa.appendEntry("plan-mode", {
     enabled: runtime.enabled,
     executing: runtime.executing,
@@ -90,10 +76,14 @@ const persist = (msa: ExtensionAPI, runtime: PlanRuntime): void => {
     ...(runtime.toolsBeforePlanMode === undefined
       ? {}
       : { toolsBeforePlanMode: runtime.toolsBeforePlanMode }),
-  } satisfies PlanModeEntry);
+  } satisfies stateTypes.PlanModeEntry);
 };
 
-const toggle = (msa: ExtensionAPI, runtime: PlanRuntime, ctx: ExtensionContext): void => {
+const toggle = (
+  msa: codingAgentTypes.ExtensionAPI,
+  runtime: stateTypes.PlanRuntime,
+  ctx: codingAgentTypes.ExtensionContext,
+): void => {
   runtime.enabled = !runtime.enabled;
   runtime.executing = false;
   runtime.todos = [];
@@ -110,10 +100,10 @@ const toggle = (msa: ExtensionAPI, runtime: PlanRuntime, ctx: ExtensionContext):
 };
 
 const restore = (
-  msa: ExtensionAPI,
-  runtime: PlanRuntime,
-  entry: PlanModeEntry | undefined,
-  ctx: ExtensionContext,
+  msa: codingAgentTypes.ExtensionAPI,
+  runtime: stateTypes.PlanRuntime,
+  entry: stateTypes.PlanModeEntry | undefined,
+  ctx: codingAgentTypes.ExtensionContext,
 ): void => {
   if (entry !== undefined) {
     runtime.enabled = entry.enabled;
@@ -127,8 +117,8 @@ const restore = (
   updateStatus(ctx, runtime);
 };
 
-export const createPlanStore = (msa: ExtensionAPI): PlanStore => {
-  const runtime: PlanRuntime = {
+const createPlanStore = (msa: codingAgentTypes.ExtensionAPI): stateTypes.PlanStore => {
+  const runtime: stateTypes.PlanRuntime = {
     enabled: false,
     executing: false,
     todos: [],
@@ -145,3 +135,11 @@ export const createPlanStore = (msa: ExtensionAPI): PlanStore => {
     updateStatus: (ctx) => updateStatus(ctx, runtime),
   };
 };
+
+const state = {
+  NORMAL_MODE_TOOLS,
+  PLAN_MODE_TOOLS,
+  createPlanStore,
+};
+
+export default state;

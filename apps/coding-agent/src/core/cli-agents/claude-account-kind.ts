@@ -1,8 +1,13 @@
 import type tuiTypes from "@msa/tui/index.types";
+import { Effect } from "effect";
 
-import type { AccountKind, AccountsContext } from "../accounts.ts";
-import {
-  type Account,
+import type accountsTypes from "../accounts.types.ts";
+import platform from "../platform.ts";
+import claudeAccountsModule from "./claude-accounts.ts";
+import type claudeAccountsTypes from "./claude-accounts.types.ts";
+
+const { toDate } = platform;
+const {
   addAccount,
   authStatus,
   blockOf,
@@ -15,7 +20,10 @@ import {
   removeAccount,
   setAutoRotation,
   withAuthStatus,
-} from "./claude-accounts.ts";
+} = claudeAccountsModule;
+
+type Account = claudeAccountsTypes.Account;
+type Context = accountsTypes.AccountsContext;
 
 const ACTIONS: Record<string, string> = {
   add: "add <name> [tokenCommand]: add an account and sign it in",
@@ -28,92 +36,113 @@ const ACTIONS: Record<string, string> = {
   use: "use <name>: try this account first",
 };
 
-async function describeAccounts(): Promise<string> {
-  return (await withAuthStatus(loadAccounts()))
-    .map(({ account, status }, index) => {
-      const auth = account.configDir
-        ? `configDir ${account.configDir}`
-        : account.tokenCommand
-          ? "tokenCommand"
-          : "msa environment";
-      const loginText =
-        describeLogin(status) || `not logged in${status.detail ? ` (${status.detail})` : ""}`;
-      const block = blockOf(account);
-      const state = block
-        ? `blocked until ${new Date(block.until).toLocaleString()} (${block.reason})`
-        : "available";
-      return `${index + 1}. ${account.name}  ${auth}  ${loginText}  ${state}${account.auto === false ? "  (not in rotation)" : ""}`;
-    })
-    .join("\n");
+const present = (value: string | undefined): value is string => value !== undefined && value !== "";
+
+function authLabel(account: Account): string {
+  if (present(account.configDir)) return `configDir ${account.configDir}`;
+  return present(account.tokenCommand) ? "tokenCommand" : "msa environment";
 }
 
-async function login(account: Account, ctx: AccountsContext): Promise<void> {
-  await loginAccount(account, {
-    askCode: (url, signal) => {
-      ctx.ui.notify(`Sign in to Claude for "${account.name}":\n${url}`, "info");
-      return ctx.ui.input(`Paste the code for "${account.name}"`, "code", { signal });
-    },
-  });
-  const status = await authStatus(account);
-  ctx.ui.notify(
-    `"${account.name}" ${status.loggedIn ? `logged in${status.email ? ` as ${status.email}` : ""}` : "is still not logged in"}`,
-    status.loggedIn ? "info" : "warning",
-  );
+function describeAccount(account: Account, status: claudeAccountsTypes.AuthStatus, index: number) {
+  const loggedIn = describeLogin(status);
+  const loginText =
+    loggedIn === ""
+      ? `not logged in${present(status.detail) ? ` (${status.detail})` : ""}`
+      : loggedIn;
+  const block = blockOf(account);
+  const state =
+    block === undefined
+      ? "available"
+      : `blocked until ${toDate(block.until).toLocaleString()} (${block.reason})`;
+  const rotation = account.auto === false ? "  (not in rotation)" : "";
+  return `${index + 1}. ${account.name}  ${authLabel(account)}  ${loginText}  ${state}${rotation}`;
 }
+
+const describeAccounts = (): Promise<string> =>
+  withAuthStatus(loadAccounts()).then((rows) =>
+    rows.map(({ account, status }, index) => describeAccount(account, status, index)).join("\n"),
+  );
+
+const login = (account: Account, ctx: Context) =>
+  Effect.gen(function* () {
+    yield* Effect.promise(() =>
+      loginAccount(account, {
+        askCode: (url, signal) => {
+          ctx.ui.notify(`Sign in to Claude for "${account.name}":\n${url}`, "info");
+          return ctx.ui.input(`Paste the code for "${account.name}"`, "code", { signal });
+        },
+      }),
+    );
+    const status = yield* Effect.promise(() => authStatus(account));
+    const email = present(status.email) ? ` as ${status.email}` : "";
+    ctx.ui.notify(
+      `"${account.name}" ${status.loggedIn ? `logged in${email}` : "is still not logged in"}`,
+      status.loggedIn ? "info" : "warning",
+    );
+  });
 
 function named(name: string | undefined): Account {
-  if (!name) throw new Error("Give an account name");
+  if (!present(name)) throw new Error("Give an account name");
   const account = loadAccounts().find((candidate) => candidate.name === name);
-  if (!account) throw new Error(`No Claude account named "${name}"`);
+  if (account === undefined) throw new Error(`No Claude account named "${name}"`);
   return account;
 }
 
-async function run(args: string, ctx: AccountsContext): Promise<void> {
-  const [action = "", name, ...rest] = args.trim().split(/\s+/).filter(Boolean);
-  const before = loadAccounts().length;
-  switch (action) {
-    case "":
-      break;
-    case "add": {
-      if (!name) throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
-      const account = addAccount(name, rest.join(" ") || undefined);
+const addAndLogin = (name: string | undefined, rest: string[], ctx: Context) =>
+  Effect.gen(function* () {
+    if (!present(name)) throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
+    const tokenCommand = rest.join(" ");
+    const account = addAccount(name, tokenCommand === "" ? undefined : tokenCommand);
+    if (present(account.tokenCommand)) return;
+    yield* login(account, ctx).pipe(
+      Effect.catchDefect((error) =>
+        Effect.sync(() => ctx.ui.notify((error as Error).message, "warning")),
+      ),
+    );
+  });
 
-      if (!account.tokenCommand)
-        await login(account, ctx).catch((error: Error) => ctx.ui.notify(error.message, "warning"));
-      break;
-    }
-    case "login":
-      await login(named(name), ctx);
-      break;
-    case "logout":
-      await logoutAccount(named(name));
-      break;
-    case "remove":
-      named(name);
-      if (!(await ctx.ui.confirm("Remove Claude account", `Forget "${name}" and its login?`)))
-        return;
-      removeAccount(name!);
-      break;
-    case "use":
-      preferAccount(named(name).name);
-      break;
-    case "enable":
-    case "disable":
-      setAutoRotation(named(name).name, action === "enable");
-      break;
-    case "clear":
-      clearBlocks();
-      break;
-    default:
-      throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
-  }
-  ctx.ui.notify(await describeAccounts(), "info");
+const removeNamed = (name: string | undefined, _rest: string[], ctx: Context) =>
+  Effect.gen(function* () {
+    const account = named(name);
+    const confirmed = yield* Effect.promise(() =>
+      ctx.ui.confirm("Remove Claude account", `Forget "${account.name}" and its login?`),
+    );
+    if (confirmed) removeAccount(account.name);
+    return confirmed;
+  });
 
-  if (loadAccounts().length !== before) await ctx.refreshProviders();
-}
+type Handler = (name: string | undefined, rest: string[], ctx: Context) => Effect.Effect<unknown>;
+
+const HANDLERS: Record<string, Handler> = {
+  "": () => Effect.void,
+  add: addAndLogin,
+  clear: () => Effect.sync(clearBlocks),
+  disable: (name) => Effect.sync(() => setAutoRotation(named(name).name, false)),
+  enable: (name) => Effect.sync(() => setAutoRotation(named(name).name, true)),
+  login: (name, _rest, ctx) => Effect.suspend(() => login(named(name), ctx)),
+  logout: (name) => Effect.promise(() => logoutAccount(named(name))),
+  remove: removeNamed,
+  use: (name) => Effect.sync(() => preferAccount(named(name).name)),
+};
+
+const run = (args: string, ctx: Context): Promise<void> =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const [action = "", name, ...rest] = args.trim().split(/\s+/u).filter(Boolean);
+      const handler = Object.hasOwn(HANDLERS, action) ? HANDLERS[action] : undefined;
+      if (handler === undefined)
+        throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
+      const before = loadAccounts().length;
+      const outcome = yield* handler(name, rest, ctx);
+      if (outcome === false) return;
+      const description = yield* Effect.promise(describeAccounts);
+      ctx.ui.notify(description, "info");
+      if (loadAccounts().length !== before) yield* Effect.promise(() => ctx.refreshProviders());
+    }),
+  );
 
 function completions(prefix: string): tuiTypes.AutocompleteItem[] | null {
-  const [action = "", name, ...rest] = prefix.trimStart().split(/\s+/);
+  const [action = "", name, ...rest] = prefix.trimStart().split(/\s+/u);
   if (name === undefined) {
     return Object.entries(ACTIONS)
       .filter(([item]) => item.startsWith(action))
@@ -126,10 +155,16 @@ function completions(prefix: string): tuiTypes.AutocompleteItem[] | null {
     .map((account) => ({ label: account.name, value: `${action} ${account.name}` }));
 }
 
-export const claudeAccounts: AccountKind = {
+const claudeAccounts: accountsTypes.AccountKind = {
   complete: completions,
   describe: describeAccounts,
   description: "Claude Code accounts the claude-subs provider rotates through",
   name: "claude",
   run,
 };
+
+const claudeAccountKind = {
+  claudeAccounts,
+};
+
+export default claudeAccountKind;

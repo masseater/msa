@@ -2,7 +2,7 @@ import retryModule from "@msa/ai/utils/retry";
 
 const { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } = retryModule;
 
-export const SETTINGS_DEFAULTS = {
+const SETTINGS_DEFAULTS = {
   autocompleteMaxVisible: 5,
   branchSummary: {
     reserveTokens: 16384,
@@ -85,3 +85,9 @@ export const SETTINGS_DEFAULTS = {
   treeFilterMode: "default",
   tuiMode: "fullscreen",
 } as const;
+
+const settingsDefaults = {
+  SETTINGS_DEFAULTS,
+};
+
+export default settingsDefaults;

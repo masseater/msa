@@ -1,8 +1,10 @@
 import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import type { Orchestrator } from "./orchestrator.ts";
-import { tool } from "./tool-support.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import toolSupport from "./tool-support.ts";
+
+const { tool } = toolSupport;
 
 const handoffSchema = Type.Object({
   donts: Type.String({
@@ -25,7 +27,9 @@ const handoffSchema = Type.Object({
   }),
 });
 
-export function handoffTools(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function handoffTools(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     handoff: tool({
       description:
@@ -40,12 +44,18 @@ export function handoffTools(orchestrator: Orchestrator): Record<string, ToolDef
       run: (input) =>
         orchestrator
           .handoff({
-            premise: input.premise,
-            goals: input.goals,
             donts: input.donts,
+            goals: input.goals,
+            premise: input.premise,
             ...(input.path === undefined ? {} : { path: input.path }),
           })
           .then((result) => [result.line, result.notice].filter(Boolean).join("\n")),
     }),
   };
 }
+
+const toolsHandoff = {
+  handoffTools,
+};
+
+export default toolsHandoff;

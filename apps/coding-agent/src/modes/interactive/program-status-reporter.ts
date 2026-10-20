@@ -1,22 +1,23 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import { APP_NAME } from "../../config.ts";
-import type { AgentSessionEvent } from "../../core/agent-session.ts";
+import config from "../../config.ts";
+import type agentSessionTypes from "../../core/agent-session.types.ts";
+import type programStatusReporterTypes from "./program-status-reporter.types.ts";
 
-export type BlockedStatus = { kind: NonNullable<tuiTypes.ProgramStatus["kind"]>; message: string };
+const { APP_NAME } = config;
 
 function firstLine(text: string | undefined): string {
   return text?.split(/\r?\n/u, 1)[0]?.trim() || "Error";
 }
 
-export class ProgramStatusReporter {
+export default class ProgramStatusReporter {
   private readonly getTerminal: () => tuiTypes.Terminal;
   private readonly getSessionName: () => string | undefined;
   private runActive = false;
   private compacting = false;
   private runResult: tuiTypes.ProgramStatus = { state: "done" };
   private restingStatus: tuiTypes.ProgramStatus = { state: "idle" };
-  private readonly blocked = new Map<string, BlockedStatus>();
+  private readonly blocked = new Map<string, programStatusReporterTypes.BlockedStatus>();
   private lastReport: string | undefined;
 
   constructor(getTerminal: () => tuiTypes.Terminal, getSessionName: () => string | undefined) {
@@ -24,7 +25,7 @@ export class ProgramStatusReporter {
     this.getSessionName = getSessionName;
   }
 
-  handleEvent(event: AgentSessionEvent): void {
+  handleEvent(event: agentSessionTypes.AgentSessionEvent): void {
     switch (event.type) {
       case "agent_start":
         this.runActive = true;
@@ -67,7 +68,7 @@ export class ProgramStatusReporter {
     this.report();
   }
 
-  setBlocked(source: string, status: BlockedStatus | undefined): void {
+  setBlocked(source: string, status: programStatusReporterTypes.BlockedStatus | undefined): void {
     this.blocked.delete(source);
     if (status !== undefined) this.blocked.set(source, status);
     this.report();

@@ -1,5 +1,3 @@
-import { spawn, spawnSync } from "node:child_process";
-import * as fs from "node:fs";
 import * as os from "node:os";
 
 import tui from "@msa/tui";
@@ -7,49 +5,69 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { getShareViewerUrl } from "../../config.ts";
-import type { AgentSession } from "../../core/agent-session.ts";
-import { awaited, awaiting, performed } from "../../core/awaiting.ts";
-import { join, randomUuid } from "../path.ts";
-import { BorderedLoader } from "./components/bordered-loader.ts";
-import type { EditorSlot } from "./editor-slot.ts";
-import { theme } from "./theme/theme.ts";
+import config from "../../config.ts";
+import type agentSessionTypes from "../../core/agent-session.types.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import nodeChildProcess from "../../core/platform/node/child-process.ts";
+import nodeFs from "../../core/platform/node/fs.ts";
+import path from "../path.ts";
+import BorderedLoader from "./components/bordered-loader.ts";
+import type borderedLoaderTypes from "./components/bordered-loader.types.ts";
+import type editorSlotTypes from "./editor-slot.types.ts";
+import themeModule from "./theme/theme.ts";
+
+const { spawn, spawnSync } = nodeChildProcess;
+
+const { join, randomUuid } = path;
+const { awaited, awaiting, performed } = awaitingModule;
+const { theme } = themeModule;
+const { getShareViewerUrl } = config;
 
 const { hyperlink } = tui;
 
 interface SessionShareContext {
-  session: AgentSession;
+  session: agentSessionTypes.AgentSession;
   ui: tuiTypes.TUI;
-  editorSlot: EditorSlot;
+  editorSlot: editorSlotTypes.EditorSlot;
   showStatus: (message: string) => void;
   showError: (message: string) => void;
 }
 
-export const createShareTrailingEntries: {
-  (parentId: string | null, timestamp: string): (session: AgentSession) => object[];
-  (session: AgentSession, parentId: string | null, timestamp: string): object[];
-} = dual(3, (session: AgentSession, parentId: string | null, timestamp: string): object[] => [
-  {
-    customType: "msa.share",
-    data: {
-      systemPrompt: session.state.systemPrompt,
-      tools: session.state.tools.map((tool) => ({
-        name: tool.name,
-        description: tool.description,
-        parameters: tool.parameters,
-      })),
+const createShareTrailingEntries: {
+  (
+    parentId: string | null,
+    timestamp: string,
+  ): (session: agentSessionTypes.AgentSession) => object[];
+  (session: agentSessionTypes.AgentSession, parentId: string | null, timestamp: string): object[];
+} = dual(
+  3,
+  (
+    session: agentSessionTypes.AgentSession,
+    parentId: string | null,
+    timestamp: string,
+  ): object[] => [
+    {
+      customType: "msa.share",
+      data: {
+        systemPrompt: session.state.systemPrompt,
+        tools: session.state.tools.map((tool) => ({
+          description: tool.description,
+          name: tool.name,
+          parameters: tool.parameters,
+        })),
+      },
+      id: randomUuid().slice(0, 8),
+      parentId,
+      timestamp,
+      type: "custom",
     },
-    id: randomUuid().slice(0, 8),
-    parentId,
-    timestamp,
-    type: "custom",
-  },
-]);
+  ],
+);
 
-export function shareSession(context: SessionShareContext): Promise<void> {
+function shareSession(context: SessionShareContext): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      const tempDir = fs.mkdtempSync(join(os.tmpdir(), "msa-share-"));
+      const tempDir = nodeFs.mkdtempSync(join(os.tmpdir(), "msa-share-"));
       const htmlFile = join(tempDir, "session.html");
 
       try {
@@ -77,7 +95,7 @@ export function shareSession(context: SessionShareContext): Promise<void> {
         yield* performed(shareViaGist(htmlFile, context));
       } finally {
         try {
-          fs.rmSync(tempDir, { force: true, recursive: true });
+          nodeFs.rmSync(tempDir, { force: true, recursive: true });
         } catch {}
       }
     }),
@@ -89,7 +107,7 @@ function shareViaGist(tmpFile: string, context: SessionShareContext): Effect.Eff
     const loader = new BorderedLoader(context.ui, theme, "Creating gist...");
     context.editorSlot.show(loader);
 
-    let proc: ReturnType<typeof spawn> | null = null;
+    let proc: ReturnType<typeof nodeChildProcess.spawn> | null = null;
     loader.onAbort = () => {
       proc?.kill();
       restoreEditor(loader, context);
@@ -97,20 +115,7 @@ function shareViaGist(tmpFile: string, context: SessionShareContext): Effect.Eff
     };
 
     try {
-      const result = yield* awaited(
-        new Promise<{ stdout: string; stderr: string; code: number | null }>((resolve) => {
-          proc = spawn("gh", ["gist", "create", "--public=false", tmpFile]);
-          let stdout = "";
-          let stderr = "";
-          proc.stdout?.on("data", (data) => {
-            stdout += data.toString();
-          });
-          proc.stderr?.on("data", (data) => {
-            stderr += data.toString();
-          });
-          proc.on("close", (code) => resolve({ code, stderr, stdout }));
-        }),
-      );
+      const result = yield* shareViaGistPart1();
 
       if (loader.signal.aborted) return;
       restoreEditor(loader, context);
@@ -139,10 +144,37 @@ function shareViaGist(tmpFile: string, context: SessionShareContext): Effect.Eff
         );
       }
     }
+
+    function* shareViaGistPart1() {
+      return yield* performed(
+        Effect.callback<{ stdout: string; stderr: string; code: number | null }>((resume) => {
+          proc = spawn("gh", ["gist", "create", "--public=false", tmpFile]);
+          let stdout = "";
+          let stderr = "";
+          proc.stdout?.on("data", (data) => {
+            stdout += data.toString();
+          });
+          proc.stderr?.on("data", (data) => {
+            stderr += data.toString();
+          });
+          proc.on("close", (code) => resume(Effect.succeed({ code, stderr, stdout })));
+        }),
+      );
+    }
   });
 }
 
-function restoreEditor(loader: BorderedLoader, context: SessionShareContext): void {
+function restoreEditor(
+  loader: borderedLoaderTypes.BorderedLoader,
+  context: SessionShareContext,
+): void {
   loader.dispose();
   context.editorSlot.restoreEditor();
 }
+
+const sessionShare = {
+  createShareTrailingEntries,
+  shareSession,
+};
+
+export default sessionShare;

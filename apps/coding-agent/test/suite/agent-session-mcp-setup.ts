@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, vi } from "vite-plus/test";
 
-import type { McpExposure, McpServerEntry } from "../../src/extensions/mcp/config.ts";
+import type configTypes from "../../src/extensions/mcp/config.types.ts";
 import agentSessionMcpHarness from "./agent-session-mcp-harness.ts";
 import type agentSessionMcpSetupTypes from "./agent-session-mcp-setup.types.ts";
 
@@ -11,10 +11,10 @@ const { awaited, runTest } = testing;
 const { createMcpHarness } = agentSessionMcpHarness;
 
 const docsEntry = (
-  exposure: McpExposure,
-  toolExposure: Record<string, McpExposure> | undefined,
+  exposure: configTypes.McpExposure,
+  toolExposure: Record<string, configTypes.McpExposure> | undefined,
   description: string | undefined,
-): McpServerEntry => ({
+): configTypes.McpServerEntry => ({
   config: {
     exposure,
     url: "http://unused.invalid",
@@ -35,7 +35,7 @@ const waitForSearchTool = (harness: { session: { getAllTools(): { name: string }
   );
 
 const setup = (
-  exposure: McpExposure,
+  exposure: configTypes.McpExposure,
   listTools?: () => unknown[],
   options: agentSessionMcpSetupTypes.SetupOptions = {},
 ) =>

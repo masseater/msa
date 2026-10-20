@@ -10,7 +10,7 @@ import types from "./protocol/types.ts";
 import type typesModule from "./protocol/types.types.ts";
 import type transportTypes from "./transports/transport.types.ts";
 
-const { McpClientCore, McpClientError, clientResults, foreign: foreignModule } = clientKit;
+const { McpClientError, clientResults, foreign: foreignModule } = clientKit;
 
 const { fromPromise, fromSync, toPromise } = foreignModule;
 const { McpConnectionClosedError } = jsonrpcModule;
@@ -31,7 +31,7 @@ const { LATEST_PROTOCOL_VERSION, SUPPORTED_PROTOCOL_VERSIONS } = types;
 
 const TEMPLATES = "resources/templates/list";
 
-export default class McpClient extends McpClientCore {
+export default class McpClient extends clientKit.McpClientCore {
   readonly options: Readonly<clientTypes.McpClientOptions>;
   private serverInfoValue: typesModule.Implementation | undefined;
   private serverCapabilitiesValue: typesModule.ServerCapabilities | undefined;

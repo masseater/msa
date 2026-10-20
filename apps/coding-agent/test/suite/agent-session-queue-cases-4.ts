@@ -1,5 +1,5 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
@@ -17,7 +17,7 @@ const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
-        (msa: ExtensionAPI) => {
+        (msa: codingAgentTypes.ExtensionAPI) => {
           msa.on("agent_end", () =>
             runPromise(
               Effect.sync(() => {

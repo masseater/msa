@@ -1,7 +1,7 @@
 import ai from "@msa/ai";
 import compat from "@msa/ai/compat";
 import type aiTypes from "@msa/ai/index.types";
-import type { ExtensionFactory } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import testing from "@msa/testing";
 import { Effect, Stream } from "effect";
 import { expect, it } from "vite-plus/test";
@@ -23,7 +23,7 @@ type Observed = {
 };
 
 const registerFaux =
-  (faux: Faux): ExtensionFactory =>
+  (faux: Faux): codingAgentTypes.ExtensionFactory =>
   (msa) => {
     msa.registerProvider(faux.provider.id, {
       api: faux.api,
@@ -35,7 +35,11 @@ const registerFaux =
   };
 
 const streamCustomCommand =
-  (faux: Faux, method: "stream" | "streamSimple", observed: Observed): ExtensionFactory =>
+  (
+    faux: Faux,
+    method: "stream" | "streamSimple",
+    observed: Observed,
+  ): codingAgentTypes.ExtensionFactory =>
   (msa) => {
     msa.registerCommand("stream-custom", {
       description: "Stream a response from the custom provider",

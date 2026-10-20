@@ -4,12 +4,11 @@ import chalk from "chalk";
 import { Cause, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { APP_NAME } from "../../../src/config.ts";
-import type { SessionManager } from "../../../src/core/session-manager.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import SignalShutdownExtensionCleanupSupport from "./5080-signal-shutdown-extension-cleanup-support.ts";
-const { ProcessExitError } = SignalShutdownExtensionCleanupSupport;
-
+import config from "../../../src/config.ts";
+import type sessionManagerTypes from "../../../src/core/session-manager.types.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import ProcessExitError from "./5080-signal-shutdown-extension-cleanup-support.ts";
+const { APP_NAME } = config;
 const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -23,7 +22,7 @@ type ShutdownThis = {
   ui: { terminal: { drainInput: (ms: number) => Promise<void> } };
   themeController: { disableAutoSync: () => void };
   stop: () => void;
-  sessionManager: SessionManager;
+  sessionManager: sessionManagerTypes.SessionManager;
 };
 
 type InteractiveModePrototypeWithShutdown = {
@@ -36,14 +35,16 @@ const tempDirs: string[] = [];
 
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
-function createSessionManager(options: { sessionFile?: string } = {}): SessionManager {
+function createSessionManager(
+  options: { sessionFile?: string } = {},
+): sessionManagerTypes.SessionManager {
   return {
     getSessionDir: () => "/tmp/msa-sessions",
     getSessionFile: () => options.sessionFile,
     getSessionId: () => "test-session",
     isPersisted: () => options.sessionFile !== undefined,
     usesDefaultSessionDir: () => true,
-  } as unknown as SessionManager;
+  } as unknown as sessionManagerTypes.SessionManager;
 }
 
 function createTempFile() {

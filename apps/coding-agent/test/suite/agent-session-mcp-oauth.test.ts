@@ -2,11 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { emitSessionShutdownEvent } from "../../src/core/extensions/runner.ts";
+import runnerEvents from "../../src/core/extensions/runner-events.ts";
 import agentSessionMcpOauthHarness from "./agent-session-mcp-oauth-harness.ts";
 import agentSessionMcpOauthSupport from "./agent-session-mcp-oauth-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { emitSessionShutdownEvent } = runnerEvents;
 
 const { callWhoami } = agentSessionMcpOauthSupport;
 

@@ -2,22 +2,25 @@ import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
-import { VERSION } from "../config.ts";
-import { fetchWithRetry } from "../utils/management-http.ts";
-import { getMsaUserAgent } from "../utils/user-agent.ts";
-import { awaited, awaiting, performed } from "./awaiting.ts";
-import { nowMs } from "./platform.ts";
+import config from "../config.ts";
+import managementHttp from "../utils/management-http.ts";
+import userAgent from "../utils/user-agent.ts";
+import awaitingModule from "./awaiting.ts";
+import platform from "./platform.ts";
+import type remoteCatalogProviderTypes from "./remote-catalog-provider.types.ts";
+
+const { awaited, awaiting, performed } = awaitingModule;
+const { fetchWithRetry } = managementHttp;
+const { getMsaUserAgent } = userAgent;
+const { VERSION } = config;
+const { nowMs } = platform;
 
 const { getModelType, isModelType } = ai;
 
 const DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
 const REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS = 4_000;
-export const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
-export const REMOTE_CATALOG_MODEL_TYPES: readonly aiTypes.ModelType[] = [
-  "chat",
-  "image",
-  "classifier",
-];
+const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
+const REMOTE_CATALOG_MODEL_TYPES: readonly aiTypes.ModelType[] = ["chat", "image", "classifier"];
 
 function isSupportedModelType(model: { type?: unknown }): boolean {
   return (
@@ -109,12 +112,7 @@ function requestCatalog(
   );
 }
 
-export type PersonalizeCatalog = (
-  catalog: readonly aiTypes.AnyModel[],
-  context: aiTypes.RefreshModelsContext,
-) => Promise<readonly aiTypes.AnyModel[]>;
-
-export function withRemoteCatalog(
+function withRemoteCatalog(
   provider: aiTypes.Provider,
   catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
   localGeneratedAt?: number,
@@ -201,9 +199,9 @@ export function withRemoteCatalog(
   };
 }
 
-export function withPersonalizedCatalog(
+function withPersonalizedCatalog(
   provider: aiTypes.Provider,
-  personalize: PersonalizeCatalog,
+  personalize: remoteCatalogProviderTypes.PersonalizeCatalog,
   catalogBaseUrl: string = DEFAULT_CATALOG_BASE_URL,
   localGeneratedAt?: number,
 ): aiTypes.Provider {
@@ -255,7 +253,7 @@ export function withPersonalizedCatalog(
           if (context.signal.aborted) return;
           yield* awaited(
             context.publish({
-              persist: { models: personalized, checkedAt: nowMs() },
+              persist: { checkedAt: nowMs(), models: personalized },
               update: () => {
                 personalModels = personalized;
               },
@@ -265,3 +263,12 @@ export function withPersonalizedCatalog(
       ),
   };
 }
+
+const remoteCatalogProvider = {
+  REMOTE_CATALOG_MODEL_TYPES,
+  REMOTE_CATALOG_REFRESH_INTERVAL_MS,
+  withPersonalizedCatalog,
+  withRemoteCatalog,
+};
+
+export default remoteCatalogProvider;

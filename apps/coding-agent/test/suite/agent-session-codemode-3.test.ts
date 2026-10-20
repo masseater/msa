@@ -3,14 +3,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  CODEMODE_DOCS_PATH,
-  type CodemodeToolDetails,
-  createCodemodeTool,
-} from "../../src/extensions/codemode/tool.ts";
+import toolModule from "../../src/extensions/codemode/tool.ts";
+import type toolTypes from "../../src/extensions/codemode/tool.types.ts";
 import agentSessionCodemodeModels from "./agent-session-codemode-models.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import harnessModule from "./harness.ts";
+
+const { CODEMODE_DOCS_PATH, createCodemodeTool } = toolModule;
 
 const { TINY_PNG_BASE64, checkSavedImages, resultText, runCodemode, trackCodemodeWorkers } =
   agentSessionCodemodeSupport;
@@ -109,7 +108,7 @@ const listsModelsAndClassifiesWithCatalog = Effect.gen(function* () {
   ).toBe(true);
 
   expect(maxActive()).toBe(4);
-  const details = result.details as unknown as CodemodeToolDetails;
+  const details = result.details as unknown as toolTypes.CodemodeToolDetails;
   expect(details.calls.map((call) => [call.name, call.args, call.status, call.cost])).toEqual(
     Array.from({ length: 6 }, () => ["models.classify", "scorer/judge", "ok", 0.001]),
   );
@@ -149,7 +148,7 @@ const generatesImagesWithCatalogAuthAnd = Effect.gen(function* () {
     { text: "a fox", type: "text" },
     { data: TINY_PNG_BASE64, mimeType: "image/png", type: "image" },
   ]);
-  const details = result.details as unknown as CodemodeToolDetails;
+  const details = result.details as unknown as toolTypes.CodemodeToolDetails;
   expect(
     details.calls.map((call) => [call.name, call.args, call.status, call.cost, call.error]),
   ).toEqual([

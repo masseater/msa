@@ -3,12 +3,12 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import ScopedModelsSelectorComponent from "../../../src/modes/interactive/components/scoped-models-selector.ts";
+import type scopedModelsSelectorTypes from "../../../src/modes/interactive/components/scoped-models-selector.types.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
-
 const { setKeybindings } = tui;
 
 const { KeybindingsManager, initTheme, stripAnsi, theme } = tuiKit;
@@ -20,13 +20,15 @@ function createInteractiveContext(options: {
   enabledModelIds: string[];
   scopedModels?: Array<{ model: aiTypes.Model<aiTypes.Api> }>;
 }) {
-  let selector: ScopedModelsSelectorComponent | undefined;
+  let selector: scopedModelsSelectorTypes.ScopedModelsSelectorComponent | undefined;
   const setScopedModels = vi.fn();
   const getAvailableSnapshot = vi.fn(() => options.allModels);
   const context = {
     editorSlot: {
       showSelector: (
-        factory: (done: () => void) => { component: ScopedModelsSelectorComponent },
+        factory: (done: () => void) => {
+          component: scopedModelsSelectorTypes.ScopedModelsSelectorComponent;
+        },
       ) => {
         selector = factory(() => {}).component;
       },
@@ -56,6 +58,7 @@ function showModelsSelector(context: object): Promise<void> {
       const show = Reflect.get(InteractiveMode.prototype, "showModelsSelector") as (
         this: object,
       ) => Promise<void>;
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* Effect.promise(() => Promise.resolve(show.call(context)));
     }),
   );

@@ -1,4 +1,4 @@
-import type packageManagerSupport from "./package-manager-support.ts";
+import type MockSpawnedProcessClass from "./mock-spawned-process.ts";
 
 declare namespace packageManagerSupportTypes {
   interface PackageManagerInternals {
@@ -36,7 +36,7 @@ declare namespace packageManagerSupportTypes {
     ): string;
   }
 
-  type MockSpawnedProcess = (typeof packageManagerSupport.MockSpawnedProcess)["prototype"];
+  type MockSpawnedProcess = (typeof MockSpawnedProcessClass)["prototype"];
 }
 
 export type { packageManagerSupportTypes as default };

@@ -5,10 +5,13 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ansiLinesToHtml } from "../src/core/export-html/ansi-to-html.ts";
-import { createToolHtmlRenderer } from "../src/core/export-html/tool-renderer.ts";
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
-import type { Theme } from "../src/modes/interactive/theme/theme.ts";
+import ansiToHtmlModule from "../src/core/export-html/ansi-to-html.ts";
+import toolRenderer from "../src/core/export-html/tool-renderer.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import type themeTypes from "../src/modes/interactive/theme/theme.types.ts";
+
+const { ansiLinesToHtml } = ansiToHtmlModule;
+const { createToolHtmlRenderer } = toolRenderer;
 
 const { readTextFile, runTest } = testing;
 
@@ -45,11 +48,11 @@ const trimsTuiSpacingLinesFromCustomTool = () => {
     label: "custom",
     name: "custom",
     renderResult: () => component,
-  } as unknown as ToolDefinition;
+  } as unknown as extensionsTypesTypes.ToolDefinition;
   const renderer = createToolHtmlRenderer({
     cwd: "/tmp",
     getToolRenderers: () => tool,
-    theme: {} as Theme,
+    theme: {} as themeTypes.Theme,
   });
 
   expect(renderer.renderResult("id", "custom", [], undefined, false)?.expanded).toBe(

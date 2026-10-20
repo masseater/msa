@@ -6,21 +6,20 @@ const runtime = ManagedRuntime.make(NodeFileSystem.layer);
 const run = <A, E>(use: (fileSystem: FileSystem.FileSystem) => Effect.Effect<A, E>): Promise<A> =>
   runtime.runPromise(FileSystem.FileSystem.use(use));
 
-export const exists = (path: string): Promise<boolean> =>
-  run((fileSystem) => fileSystem.exists(path));
+const exists = (path: string): Promise<boolean> => run((fileSystem) => fileSystem.exists(path));
 
-export const access = (path: string): Promise<void> => run((fileSystem) => fileSystem.access(path));
+const access = (path: string): Promise<void> => run((fileSystem) => fileSystem.access(path));
 
-export const fileSize = (path: string): Promise<number> =>
+const fileSize = (path: string): Promise<number> =>
   run((fileSystem) => Effect.map(fileSystem.stat(path), (info) => Number(info.size)));
 
-export const readFile = (path: string): Promise<Uint8Array> =>
+const readFile = (path: string): Promise<Uint8Array> =>
   run((fileSystem) => fileSystem.readFile(path));
 
-export const readText = (path: string): Promise<string> =>
+const readText = (path: string): Promise<string> =>
   run((fileSystem) => fileSystem.readFileString(path));
 
-export const readHead = (options: { path: string; length: number }): Promise<Uint8Array> =>
+const readHead = (options: { path: string; length: number }): Promise<Uint8Array> =>
   run((fileSystem) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -32,7 +31,7 @@ export const readHead = (options: { path: string; length: number }): Promise<Uin
     ),
   );
 
-export const writeFile = (options: {
+const writeFile = (options: {
   path: string;
   data: string | Uint8Array;
   mode?: number | undefined;
@@ -49,10 +48,7 @@ export const writeFile = (options: {
     ),
   );
 
-export const makeDirectory = (options: {
-  path: string;
-  mode?: number | undefined;
-}): Promise<void> =>
+const makeDirectory = (options: { path: string; mode?: number | undefined }): Promise<void> =>
   run((fileSystem) =>
     fileSystem.makeDirectory(options.path, {
       recursive: true,
@@ -60,7 +56,7 @@ export const makeDirectory = (options: {
     }),
   );
 
-export const remove = (options: {
+const remove = (options: {
   path: string;
   recursive?: boolean | undefined;
   force?: boolean | undefined;
@@ -72,8 +68,24 @@ export const remove = (options: {
     }),
   );
 
-export const rename = (options: { from: string; to: string }): Promise<void> =>
+const rename = (options: { from: string; to: string }): Promise<void> =>
   run((fileSystem) => fileSystem.rename(options.from, options.to));
 
-export const copyFile = (options: { from: string; to: string }): Promise<void> =>
+const copyFile = (options: { from: string; to: string }): Promise<void> =>
   run((fileSystem) => fileSystem.copyFile(options.from, options.to));
+
+const nodeFs = {
+  access,
+  copyFile,
+  exists,
+  fileSize,
+  makeDirectory,
+  readFile,
+  readHead,
+  readText,
+  remove,
+  rename,
+  writeFile,
+};
+
+export default nodeFs;

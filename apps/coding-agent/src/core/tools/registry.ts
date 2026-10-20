@@ -1,90 +1,102 @@
-import { createBashTool, createBashToolDefinition } from "./bash.ts";
-import { createEditTool, createEditToolDefinition } from "./edit.ts";
-import { createFindTool, createFindToolDefinition } from "./find.ts";
-import { createGrepTool, createGrepToolDefinition } from "./grep.ts";
-import { createLsTool, createLsToolDefinition } from "./ls.ts";
-import { createPowerShellTool, createPowerShellToolDefinition } from "./powershell.ts";
-import { createReadTool, createReadToolDefinition } from "./read.ts";
-import {
-  type CwdFactory,
-  type NamedFactory,
-  cwdFactory,
-  namedFactory,
-} from "./tool-definition-wrapper.ts";
-import type { Tool, ToolDef, ToolName, ToolsOptions } from "./tool-types.ts";
-import { createWriteTool, createWriteToolDefinition } from "./write.ts";
+import bashModule from "./bash.ts";
+import editModule from "./edit.ts";
+import findModule from "./find.ts";
+import grepModule from "./grep.ts";
+import lsModule from "./ls.ts";
+import powershellModule from "./powershell.ts";
+import readModule from "./read.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+import type toolTypesTypes from "./tool-types.types.ts";
+import writeModule from "./write.ts";
 
-export const createToolDefinition: NamedFactory<ToolName, ToolsOptions, ToolDef> = namedFactory(
-  (toolName, cwd, options) => {
-    switch (toolName) {
-      case "read":
-        return createReadToolDefinition(cwd, options?.read);
-      case "bash":
-        return createBashToolDefinition(cwd, options?.bash);
-      case "powershell":
-        return createPowerShellToolDefinition(cwd, options?.powershell);
-      case "edit":
-        return createEditToolDefinition(cwd, options?.edit);
-      case "write":
-        return createWriteToolDefinition(cwd, options?.write);
-      case "grep":
-        return createGrepToolDefinition(cwd, options?.grep);
-      case "find":
-        return createFindToolDefinition(cwd, options?.find);
-      case "ls":
-        return createLsToolDefinition(cwd, options?.ls);
-      default:
-        throw new Error(`Unknown tool name: ${toolName}`);
-    }
-  },
-);
+const { cwdFactory, namedFactory } = toolDefinitionWrapper;
+const { createReadTool, createReadToolDefinition } = readModule;
+const { createBashTool, createBashToolDefinition } = bashModule;
+const { createPowerShellTool, createPowerShellToolDefinition } = powershellModule;
+const { createEditTool, createEditToolDefinition } = editModule;
+const { createWriteTool, createWriteToolDefinition } = writeModule;
+const { createGrepTool, createGrepToolDefinition } = grepModule;
+const { createFindTool, createFindToolDefinition } = findModule;
+const { createLsTool, createLsToolDefinition } = lsModule;
 
-export const createTool: NamedFactory<ToolName, ToolsOptions, Tool> = namedFactory(
-  (toolName, cwd, options) => {
-    switch (toolName) {
-      case "read":
-        return createReadTool(cwd, options?.read);
-      case "bash":
-        return createBashTool(cwd, options?.bash);
-      case "powershell":
-        return createPowerShellTool(cwd, options?.powershell);
-      case "edit":
-        return createEditTool(cwd, options?.edit);
-      case "write":
-        return createWriteTool(cwd, options?.write);
-      case "grep":
-        return createGrepTool(cwd, options?.grep);
-      case "find":
-        return createFindTool(cwd, options?.find);
-      case "ls":
-        return createLsTool(cwd, options?.ls);
-      default:
-        throw new Error(`Unknown tool name: ${toolName}`);
-    }
-  },
-);
+const createToolDefinition: toolDefinitionWrapperTypes.NamedFactory<
+  toolTypesTypes.ToolName,
+  toolTypesTypes.ToolsOptions,
+  toolTypesTypes.ToolDef
+> = namedFactory((toolName, cwd, options) => {
+  switch (toolName) {
+    case "read":
+      return createReadToolDefinition(cwd, options?.read);
+    case "bash":
+      return createBashToolDefinition(cwd, options?.bash);
+    case "powershell":
+      return createPowerShellToolDefinition(cwd, options?.powershell);
+    case "edit":
+      return createEditToolDefinition(cwd, options?.edit);
+    case "write":
+      return createWriteToolDefinition(cwd, options?.write);
+    case "grep":
+      return createGrepToolDefinition(cwd, options?.grep);
+    case "find":
+      return createFindToolDefinition(cwd, options?.find);
+    case "ls":
+      return createLsToolDefinition(cwd, options?.ls);
+    default:
+      throw new Error(`Unknown tool name: ${toolName}`);
+  }
+});
 
-export const createCodingToolDefinitions: CwdFactory<ToolsOptions, ToolDef[]> = cwdFactory(
-  (cwd, options) => [
-    createReadToolDefinition(cwd, options?.read),
-    createBashToolDefinition(cwd, options?.bash),
-    createEditToolDefinition(cwd, options?.edit),
-    createWriteToolDefinition(cwd, options?.write),
-  ],
-);
+const createTool: toolDefinitionWrapperTypes.NamedFactory<
+  toolTypesTypes.ToolName,
+  toolTypesTypes.ToolsOptions,
+  toolTypesTypes.Tool
+> = namedFactory((toolName, cwd, options) => {
+  switch (toolName) {
+    case "read":
+      return createReadTool(cwd, options?.read);
+    case "bash":
+      return createBashTool(cwd, options?.bash);
+    case "powershell":
+      return createPowerShellTool(cwd, options?.powershell);
+    case "edit":
+      return createEditTool(cwd, options?.edit);
+    case "write":
+      return createWriteTool(cwd, options?.write);
+    case "grep":
+      return createGrepTool(cwd, options?.grep);
+    case "find":
+      return createFindTool(cwd, options?.find);
+    case "ls":
+      return createLsTool(cwd, options?.ls);
+    default:
+      throw new Error(`Unknown tool name: ${toolName}`);
+  }
+});
 
-export const createReadOnlyToolDefinitions: CwdFactory<ToolsOptions, ToolDef[]> = cwdFactory(
-  (cwd, options) => [
-    createReadToolDefinition(cwd, options?.read),
-    createGrepToolDefinition(cwd, options?.grep),
-    createFindToolDefinition(cwd, options?.find),
-    createLsToolDefinition(cwd, options?.ls),
-  ],
-);
+const createCodingToolDefinitions: toolDefinitionWrapperTypes.CwdFactory<
+  toolTypesTypes.ToolsOptions,
+  toolTypesTypes.ToolDef[]
+> = cwdFactory((cwd, options) => [
+  createReadToolDefinition(cwd, options?.read),
+  createBashToolDefinition(cwd, options?.bash),
+  createEditToolDefinition(cwd, options?.edit),
+  createWriteToolDefinition(cwd, options?.write),
+]);
 
-export const createAllToolDefinitions: CwdFactory<
-  ToolsOptions,
-  Record<ToolName, ToolDef>
+const createReadOnlyToolDefinitions: toolDefinitionWrapperTypes.CwdFactory<
+  toolTypesTypes.ToolsOptions,
+  toolTypesTypes.ToolDef[]
+> = cwdFactory((cwd, options) => [
+  createReadToolDefinition(cwd, options?.read),
+  createGrepToolDefinition(cwd, options?.grep),
+  createFindToolDefinition(cwd, options?.find),
+  createLsToolDefinition(cwd, options?.ls),
+]);
+
+const createAllToolDefinitions: toolDefinitionWrapperTypes.CwdFactory<
+  toolTypesTypes.ToolsOptions,
+  Record<toolTypesTypes.ToolName, toolTypesTypes.ToolDef>
 > = cwdFactory((cwd, options) => ({
   bash: createBashToolDefinition(cwd, options?.bash),
   edit: createEditToolDefinition(cwd, options?.edit),
@@ -96,29 +108,49 @@ export const createAllToolDefinitions: CwdFactory<
   write: createWriteToolDefinition(cwd, options?.write),
 }));
 
-export const createCodingTools: CwdFactory<ToolsOptions, Tool[]> = cwdFactory((cwd, options) => [
+const createCodingTools: toolDefinitionWrapperTypes.CwdFactory<
+  toolTypesTypes.ToolsOptions,
+  toolTypesTypes.Tool[]
+> = cwdFactory((cwd, options) => [
   createReadTool(cwd, options?.read),
   createBashTool(cwd, options?.bash),
   createEditTool(cwd, options?.edit),
   createWriteTool(cwd, options?.write),
 ]);
 
-export const createReadOnlyTools: CwdFactory<ToolsOptions, Tool[]> = cwdFactory((cwd, options) => [
+const createReadOnlyTools: toolDefinitionWrapperTypes.CwdFactory<
+  toolTypesTypes.ToolsOptions,
+  toolTypesTypes.Tool[]
+> = cwdFactory((cwd, options) => [
   createReadTool(cwd, options?.read),
   createGrepTool(cwd, options?.grep),
   createFindTool(cwd, options?.find),
   createLsTool(cwd, options?.ls),
 ]);
 
-export const createAllTools: CwdFactory<ToolsOptions, Record<ToolName, Tool>> = cwdFactory(
-  (cwd, options) => ({
-    bash: createBashTool(cwd, options?.bash),
-    edit: createEditTool(cwd, options?.edit),
-    find: createFindTool(cwd, options?.find),
-    grep: createGrepTool(cwd, options?.grep),
-    ls: createLsTool(cwd, options?.ls),
-    powershell: createPowerShellTool(cwd, options?.powershell),
-    read: createReadTool(cwd, options?.read),
-    write: createWriteTool(cwd, options?.write),
-  }),
-);
+const createAllTools: toolDefinitionWrapperTypes.CwdFactory<
+  toolTypesTypes.ToolsOptions,
+  Record<toolTypesTypes.ToolName, toolTypesTypes.Tool>
+> = cwdFactory((cwd, options) => ({
+  bash: createBashTool(cwd, options?.bash),
+  edit: createEditTool(cwd, options?.edit),
+  find: createFindTool(cwd, options?.find),
+  grep: createGrepTool(cwd, options?.grep),
+  ls: createLsTool(cwd, options?.ls),
+  powershell: createPowerShellTool(cwd, options?.powershell),
+  read: createReadTool(cwd, options?.read),
+  write: createWriteTool(cwd, options?.write),
+}));
+
+const registry = {
+  createAllToolDefinitions,
+  createAllTools,
+  createCodingToolDefinitions,
+  createCodingTools,
+  createReadOnlyToolDefinitions,
+  createReadOnlyTools,
+  createTool,
+  createToolDefinition,
+};
+
+export default registry;

@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { BeforeAgentStartEvent } from "../../src/core/extensions/index.ts";
+import type extensionsTypes from "../../src/core/extensions/index.types.ts";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
 
@@ -29,10 +29,10 @@ const processImage = vi.hoisted(() =>
   ),
 );
 
-vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
+vi.mock("../../src/utils/image-process.ts", () => ({ default: { processImage } }));
 
 const keepsTheSameSystemPromptFor = Effect.gen(function* () {
-  const events: BeforeAgentStartEvent[] = [];
+  const events: extensionsTypes.BeforeAgentStartEvent[] = [];
   const noopTool: agentTypes.AgentTool = {
     description: "Does nothing",
     execute: () => Promise.resolve({ content: [{ text: "ok", type: "text" }], details: {} }),

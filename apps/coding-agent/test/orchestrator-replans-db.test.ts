@@ -4,8 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { db } from "../src/core/orchestrator/db.ts";
-import { replanStore } from "../src/core/orchestrator/replan-store.ts";
+import dbModule from "../src/core/orchestrator/db.ts";
+import replanStoreModule from "../src/core/orchestrator/replan-store.ts";
+
+const { db } = dbModule;
+const { replanStore } = replanStoreModule;
 
 const { joinPath, makeTempDir, removeDirs, runTest, toJsonText } = testing;
 

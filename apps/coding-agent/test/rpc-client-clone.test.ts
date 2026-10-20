@@ -2,8 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
-
+import RpcClient from "../src/modes/rpc/rpc-client.ts";
 const { awaited, runTest } = testing;
 
 type RpcClientPrivate = {

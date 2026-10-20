@@ -4,9 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-
+import AuthStorage from "../src/core/auth-storage.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 const { InMemoryModelsStore, createAssistantMessageEventStream } = ai;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, toJsonText, writeTextFile } = testing;
@@ -96,7 +96,11 @@ const deferredProvider = (
   },
 });
 
-const fetchThenCancel = (runtime: ModelRuntime, providerId: string, modelId: string) =>
+const fetchThenCancel = (
+  runtime: modelRuntimeTypes.ModelRuntime,
+  providerId: string,
+  modelId: string,
+) =>
   Effect.gen(function* () {
     const composedModel = runtime.getModel(providerId, modelId);
     expect(composedModel).toBeDefined();

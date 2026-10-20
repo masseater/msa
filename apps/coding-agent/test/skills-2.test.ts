@@ -1,9 +1,11 @@
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ResourceDiagnostic } from "../src/core/diagnostics.ts";
-import { loadSkillsFromDir } from "../src/core/skills.ts";
+import type diagnosticsTypes from "../src/core/diagnostics.ts";
+import skillsModule from "../src/core/skills.ts";
 import skillsSupport from "./skills-support.ts";
+
+const { loadSkillsFromDir } = skillsModule;
 
 const { fixturesDir } = skillsSupport;
 
@@ -49,7 +51,9 @@ const shouldParseDisableModelInvocationFrontmatterField = () => {
   expect(skills[0]?.disableModelInvocation).toBe(true);
 
   expect(
-    diagnostics.some((d: ResourceDiagnostic) => d.message.includes("unknown frontmatter field")),
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("unknown frontmatter field"),
+    ),
   ).toBe(false);
 };
 

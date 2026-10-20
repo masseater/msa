@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { readEnv } from "../src/core/process-env.ts";
+import processEnv from "../src/core/process-env.ts";
 import rpcSupport from "./rpc-support.ts";
+
+const { readEnv } = processEnv;
 
 const { readSessionEntries, withClient } = rpcSupport;
 

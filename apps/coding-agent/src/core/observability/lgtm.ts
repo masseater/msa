@@ -1,31 +1,25 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { Effect } from "effect";
 
-import { Data, Effect } from "effect";
+import exec from "../exec.ts";
+import nodeFs from "../platform/node/fs.ts";
+import nodePath from "../platform/node/path.ts";
+import type lgtmTypes from "./lgtm.types.ts";
+import PodmanError from "./podman-error.ts";
 
-import { execCommand } from "../exec.ts";
+const { existsSync } = nodeFs;
+const { delimiter, join } = nodePath;
+const { execCommand } = exec;
 
-export const LGTM_CONTAINER = "msa-grafana-lgtm";
-export const LGTM_IMAGE = "docker.io/grafana/otel-lgtm:latest";
-export const LGTM_OTLP_ENDPOINT = "http://localhost:4318";
-export const GRAFANA_URL = "http://localhost:3000";
-
+const LGTM_CONTAINER = "msa-grafana-lgtm";
+const LGTM_IMAGE = "docker.io/grafana/otel-lgtm:latest";
+const LGTM_OTLP_ENDPOINT = "http://localhost:4318";
+const GRAFANA_URL = "http://localhost:3000";
 const PUBLISHED_PORTS = [3000, 4318, 3200, 3100, 9090] as const;
-
-export class PodmanError extends Data.TaggedError("PodmanError")<{
-  readonly message: string;
-}> {}
-
-export type ContainerState = "missing" | "running" | "stopped";
-
-export type LgtmAction = "reuse" | "start" | "run";
-
-export function lgtmAction(state: ContainerState): LgtmAction {
+function lgtmAction(state: lgtmTypes.ContainerState): lgtmTypes.LgtmAction {
   if (state === "running") return "reuse";
   return state === "stopped" ? "start" : "run";
 }
-
-export function findPodman(path: string | undefined): string | undefined {
+function findPodman(path: string | undefined): string | undefined {
   const names = process.platform === "win32" ? ["podman.exe"] : ["podman"];
   for (const directory of (path ?? "").split(delimiter)) {
     if (directory === "") continue;
@@ -36,7 +30,6 @@ export function findPodman(path: string | undefined): string | undefined {
   }
   return undefined;
 }
-
 function podman(binary: string, args: readonly string[]): Effect.Effect<string, PodmanError> {
   return Effect.tryPromise({
     catch: (error) => new PodmanError({ message: String(error) }),
@@ -53,11 +46,10 @@ function podman(binary: string, args: readonly string[]): Effect.Effect<string, 
     ),
   );
 }
-
-export function containerState(
+function containerState(
   binary: string,
   name: string,
-): Effect.Effect<ContainerState, PodmanError> {
+): Effect.Effect<lgtmTypes.ContainerState, PodmanError> {
   return podman(binary, [
     "ps",
     "--all",
@@ -73,8 +65,7 @@ export function containerState(
     }),
   );
 }
-
-function reachablePodman(binary: string): Effect.Effect<ContainerState, PodmanError> {
+function reachablePodman(binary: string): Effect.Effect<lgtmTypes.ContainerState, PodmanError> {
   return containerState(binary, LGTM_CONTAINER).pipe(
     Effect.catch(() =>
       podman(binary, ["machine", "start"]).pipe(
@@ -84,7 +75,6 @@ function reachablePodman(binary: string): Effect.Effect<ContainerState, PodmanEr
     ),
   );
 }
-
 function runArgs(): string[] {
   return [
     "run",
@@ -100,8 +90,7 @@ function runArgs(): string[] {
     LGTM_IMAGE,
   ];
 }
-
-export function ensureLgtm(binary: string): Effect.Effect<LgtmAction, PodmanError> {
+function ensureLgtm(binary: string): Effect.Effect<lgtmTypes.LgtmAction, PodmanError> {
   return Effect.gen(function* () {
     const action = lgtmAction(yield* reachablePodman(binary));
     if (action === "start") yield* podman(binary, ["start", LGTM_CONTAINER]);
@@ -109,3 +98,16 @@ export function ensureLgtm(binary: string): Effect.Effect<LgtmAction, PodmanErro
     return action;
   });
 }
+
+const lgtm = {
+  GRAFANA_URL,
+  LGTM_CONTAINER,
+  LGTM_IMAGE,
+  LGTM_OTLP_ENDPOINT,
+  containerState,
+  ensureLgtm,
+  findPodman,
+  lgtmAction,
+};
+
+export default lgtm;

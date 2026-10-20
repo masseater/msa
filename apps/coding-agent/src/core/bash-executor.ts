@@ -1,34 +1,29 @@
-import type { WriteStream } from "node:fs";
-import { finished } from "node:stream/promises";
-
 import * as Effect from "effect/Effect";
 
-import { splitIncompleteAnsiSuffix, stripAnsi } from "../utils/ansi.ts";
-import { createOutputFileStream } from "../utils/output-files.ts";
-import { sanitizeBinaryOutput } from "../utils/shell.ts";
-import { awaited, awaiting } from "./awaiting.ts";
-import type { BashOperations } from "./tools/bash.ts";
-import { DEFAULT_MAX_BYTES, truncateTail } from "./tools/truncate.ts";
+import ansi from "../utils/ansi.ts";
+import outputFiles from "../utils/output-files.ts";
+import shell from "../utils/shell.ts";
+import awaitingModule from "./awaiting.ts";
+import type bashExecutorTypes from "./bash-executor.types.ts";
+import type nodeFsTypes from "./platform/node/fs.types.ts";
+import nodeStreamPromises from "./platform/node/stream-promises.ts";
+import type bashTypes from "./tools/bash.types.ts";
+import truncate from "./tools/truncate.ts";
 
-export interface BashExecutorOptions {
-  onChunk?: (chunk: string) => void;
-  signal?: AbortSignal;
-}
+const { finished } = nodeStreamPromises;
 
-export interface BashResult {
-  output: string;
-  exitCode: number | undefined;
-  cancelled: boolean;
-  truncated: boolean;
-  fullOutputPath?: string | undefined;
-}
+const { awaited, awaiting } = awaitingModule;
+const { DEFAULT_MAX_BYTES, truncateTail } = truncate;
+const { createOutputFileStream } = outputFiles;
+const { sanitizeBinaryOutput } = shell;
+const { splitIncompleteAnsiSuffix, stripAnsi } = ansi;
 
-export function executeBashWithOperations(
+function executeBashWithOperations(
   command: string,
   cwd: string,
-  operations: BashOperations,
-  options?: BashExecutorOptions,
-): Promise<BashResult> {
+  operations: bashTypes.BashOperations,
+  options?: bashExecutorTypes.BashExecutorOptions,
+): Promise<bashExecutorTypes.BashResult> {
   return Effect.runPromise(
     awaiting(function* () {
       const outputChunks: string[] = [];
@@ -36,7 +31,7 @@ export function executeBashWithOperations(
       const maxOutputBytes = DEFAULT_MAX_BYTES * 2;
 
       let tempFilePath: string | undefined;
-      let tempFileStream: WriteStream | undefined;
+      let tempFileStream: nodeFsTypes.WriteStream | undefined;
       let totalBytes = 0;
 
       const ensureTempFile = () => {
@@ -131,3 +126,9 @@ export function executeBashWithOperations(
     }),
   );
 }
+
+const bashExecutor = {
+  executeBashWithOperations,
+};
+
+export default bashExecutor;

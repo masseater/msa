@@ -1,18 +1,12 @@
-import { splitLinesWithEndings } from "./edit-text.ts";
+import type editReplacementsTypes from "./edit-replacements.types.ts";
+import editText from "./edit-text.ts";
+
+const { splitLinesWithEndings } = editText;
 
 interface LineSpan {
   start: number;
   end: number;
 }
-
-export interface MatchedEdit {
-  editIndex: number;
-  matchIndex: number;
-  matchLength: number;
-  newText: string;
-}
-
-export type TextReplacement = Pick<MatchedEdit, "matchIndex" | "matchLength" | "newText">;
 
 const OUTSIDE_BASE = "Replacement range is outside the base content.";
 
@@ -25,7 +19,10 @@ function getLineSpans(content: string): LineSpan[] {
   });
 }
 
-function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement) {
+function getReplacementLineRange(
+  lines: LineSpan[],
+  replacement: editReplacementsTypes.TextReplacement,
+) {
   const replacementStart = replacement.matchIndex;
   const replacementEnd = replacement.matchIndex + replacement.matchLength;
   const startLine = lines.findIndex(
@@ -43,17 +40,11 @@ function getReplacementLineRange(lines: LineSpan[], replacement: TextReplacement
   return { endLine: endLine + 1, startLine };
 }
 
-export interface ApplyReplacementsInput {
-  content: string;
-  replacements: TextReplacement[];
-  offset?: number;
-}
-
-export function applyReplacements({
+function applyReplacements({
   content,
   replacements,
   offset = 0,
-}: ApplyReplacementsInput): string {
+}: editReplacementsTypes.ApplyReplacementsInput): string {
   let result = content;
   for (const replacement of replacements.toReversed()) {
     const matchIndex = replacement.matchIndex - offset;
@@ -68,10 +59,13 @@ export function applyReplacements({
 interface ReplacementGroup {
   startLine: number;
   endLine: number;
-  replacements: TextReplacement[];
+  replacements: editReplacementsTypes.TextReplacement[];
 }
 
-function groupReplacements(baseLines: LineSpan[], replacements: TextReplacement[]) {
+function groupReplacements(
+  baseLines: LineSpan[],
+  replacements: editReplacementsTypes.TextReplacement[],
+) {
   const groups: ReplacementGroup[] = [];
   const sorted = [...replacements].sort((a, b) => a.matchIndex - b.matchIndex);
   for (const replacement of sorted) {
@@ -87,17 +81,11 @@ function groupReplacements(baseLines: LineSpan[], replacements: TextReplacement[
   return groups;
 }
 
-export interface PreserveUnchangedInput {
-  originalContent: string;
-  baseContent: string;
-  replacements: TextReplacement[];
-}
-
-export function applyReplacementsPreservingUnchangedLines({
+function applyReplacementsPreservingUnchangedLines({
   originalContent,
   baseContent,
   replacements,
-}: PreserveUnchangedInput): string {
+}: editReplacementsTypes.PreserveUnchangedInput): string {
   const originalLines = splitLinesWithEndings(originalContent);
   const baseLines = getLineSpans(baseContent);
   if (originalLines.length !== baseLines.length) {
@@ -124,3 +112,10 @@ export function applyReplacementsPreservingUnchangedLines({
   }
   return result + originalLines.slice(originalLineIndex).join("");
 }
+
+const editReplacements = {
+  applyReplacements,
+  applyReplacementsPreservingUnchangedLines,
+};
+
+export default editReplacements;

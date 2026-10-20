@@ -2,15 +2,20 @@ import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
 import { StructuredOutputJudge, describeEval } from "vitest-evals";
 
-import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import {
+import harnessModule from "../src/harness.ts";
+import acmeServer from "./acme-server.ts";
+import configuredRuntime from "./configured-runtime.ts";
+import type configuredRuntimeTypes from "./configured-runtime.types.ts";
+
+const {
   OPENAI_MODEL_ID,
   OPENAI_PROBE_PROMPT,
   OPENAI_PROBE_RESPONSE,
   OPENAI_PROVIDER_ID,
   createAcmeServer,
-} from "./acme-server.ts";
-import { type ProviderRuntimeOutput, inspectProvider } from "./configured-runtime.ts";
+} = acmeServer;
+const { inspectProvider } = configuredRuntime;
+const { createMsaDocumentationEvalHarness } = harnessModule;
 
 const server = createAcmeServer("openai");
 
@@ -18,7 +23,7 @@ beforeAll(() => Effect.runPromise(server.start));
 beforeEach(() => server.reset());
 afterAll(() => Effect.runPromise(server.stop));
 
-const expected: ProviderRuntimeOutput = {
+const expected: configuredRuntimeTypes.ProviderRuntimeOutput = {
   result: {
     model: {
       contextWindow: 32768,
@@ -39,7 +44,7 @@ const harness = createMsaDocumentationEvalHarness({
   output: ({ session }) =>
     inspectProvider(session.modelRuntime, {
       createContext: () => ({
-        messages: [{ role: "user", content: OPENAI_PROBE_PROMPT, timestamp: 0 }],
+        messages: [{ content: OPENAI_PROBE_PROMPT, role: "user", timestamp: 0 }],
       }),
       modelId: OPENAI_MODEL_ID,
       options: { env: { ACME_API_KEY: "resolved-acme-key" }, maxTokens: 32 },

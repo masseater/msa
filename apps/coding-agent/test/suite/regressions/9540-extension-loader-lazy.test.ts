@@ -22,10 +22,12 @@ vi.mock("jiti/static", () => {
 
 vi.mock("../../../src/core/extensions/virtual-modules.ts", () => {
   state.virtualModulesLoads++;
-  return { VIRTUAL_MODULES: {} };
+  return { default: { VIRTUAL_MODULES: {} } };
 });
 
-import { loadExtensions } from "../../../src/core/extensions/loader.ts";
+import loader from "../../../src/core/extensions/loader.ts";
+
+const { loadExtensions } = loader;
 
 interface JitiOptionsProbe {
   alias?: unknown;

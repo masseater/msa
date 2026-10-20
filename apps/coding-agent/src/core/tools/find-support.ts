@@ -2,10 +2,14 @@ import { Effect } from "effect";
 import { dual } from "effect/Function";
 import { Type } from "typebox";
 
-import { ToolFailure, fromPromise, pathOperations } from "../platform/index.ts";
-import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize, truncateHead } from "./truncate.ts";
+import platform from "../platform/index.ts";
+import type findSupportTypes from "./find-support.types.ts";
+import truncate from "./truncate.ts";
 
-export const findSchema = Type.Object({
+const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
+const { ToolFailure, fromPromise, pathOperations } = platform;
+
+const findSchema = Type.Object({
   limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
   path: Type.Optional(
     Type.String({ description: "Directory to search in (default: current directory)" }),
@@ -15,39 +19,20 @@ export const findSchema = Type.Object({
   }),
 });
 
-export const DEFAULT_FIND_LIMIT = 1000;
+const DEFAULT_FIND_LIMIT = 1000;
 
-export interface FindToolDetails {
-  truncation?: TruncationResult;
-  resultLimitReached?: number;
-}
-
-export interface FindPathModule {
-  readonly sep: string;
-  readonly isAbsolute: (path: string) => boolean;
-  readonly relative: (from: string, to: string) => string;
-}
-
-export interface FindRequest {
-  pattern: string;
-  searchPath: string;
-  effectiveLimit: number;
-}
-
-export const noFilesFound = {
+const noFilesFound = {
   content: [{ text: "No files found matching pattern", type: "text" as const }],
   details: undefined,
 };
 
-export interface FindOutputInput {
-  results: string[];
-  effectiveLimit: number;
-  limitNotice: string;
-}
-
-export function formatFindOutput({ results, effectiveLimit, limitNotice }: FindOutputInput) {
+function formatFindOutput({
+  results,
+  effectiveLimit,
+  limitNotice,
+}: findSupportTypes.FindOutputInput) {
   const truncation = truncateHead(results.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
-  const details: FindToolDetails = {};
+  const details: findSupportTypes.FindToolDetails = {};
   const notices: string[] = [];
   if (results.length >= effectiveLimit) {
     notices.push(limitNotice);
@@ -65,12 +50,19 @@ export function formatFindOutput({ results, effectiveLimit, limitNotice }: FindO
   };
 }
 
-export const relativizeFindResultPath: {
-  (searchPath: string, pathModule?: FindPathModule): (resultPath: string) => string;
-  (resultPath: string, searchPath: string, pathModule?: FindPathModule): string;
+const relativizeFindResultPath: {
+  (
+    searchPath: string,
+    pathModule?: findSupportTypes.FindPathModule,
+  ): (resultPath: string) => string;
+  (resultPath: string, searchPath: string, pathModule?: findSupportTypes.FindPathModule): string;
 } = dual(
   (args) => typeof args[1] === "string",
-  (resultPath: string, searchPath: string, pathModule: FindPathModule = pathOperations): string => {
+  (
+    resultPath: string,
+    searchPath: string,
+    pathModule: findSupportTypes.FindPathModule = pathOperations,
+  ): string => {
     const hadTrailingSeparator =
       resultPath.endsWith(pathModule.sep) || (pathModule.sep === "\\" && resultPath.endsWith("/"));
     const relativePath = pathModule.isAbsolute(resultPath)
@@ -81,18 +73,9 @@ export const relativizeFindResultPath: {
   },
 );
 
-export interface FindOperations {
-  exists: (absolutePath: string) => Promise<boolean> | boolean;
-  glob: (
-    pattern: string,
-    cwd: string,
-    options: { ignore: string[]; limit: number },
-  ) => Promise<string[]> | string[];
-}
-
-export const globWithOperations = Effect.fn("findWithOperations")(function* (
-  ops: FindOperations,
-  { pattern, searchPath, effectiveLimit }: FindRequest,
+const globWithOperations = Effect.fn("findWithOperations")(function* (
+  ops: findSupportTypes.FindOperations,
+  { pattern, searchPath, effectiveLimit }: findSupportTypes.FindRequest,
 ) {
   const exists = yield* fromPromise(() => ops.exists(searchPath));
   if (!exists) return yield* new ToolFailure({ message: `Path not found: ${searchPath}` });
@@ -109,3 +92,14 @@ export const globWithOperations = Effect.fn("findWithOperations")(function* (
     results: results.map((result) => relativizeFindResultPath(result, searchPath)),
   });
 });
+
+const findSupport = {
+  DEFAULT_FIND_LIMIT,
+  findSchema,
+  formatFindOutput,
+  globWithOperations,
+  noFilesFound,
+  relativizeFindResultPath,
+};
+
+export default findSupport;

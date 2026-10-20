@@ -2,15 +2,15 @@ import testing from "@msa/testing";
 import { Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../../../src/core/agent-session.ts";
-import type { ReplacedSessionContext } from "../../../src/core/extensions/index.ts";
-import type { ExtensionAPI, ExtensionCommandContext } from "../../../src/index.ts";
+import type agentSessionTypes from "../../../src/core/agent-session.types.ts";
+import type extensionsTypes from "../../../src/core/extensions/index.types.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import runtimeKit from "../../runtime-kit.ts";
 
 const { awaited, runTest } = testing;
 const { createFauxRuntime, disposeRuntimes } = runtimeKit;
 
-const textOf = (message: AgentSession["messages"][number]): string => {
+const textOf = (message: agentSessionTypes.AgentSession["messages"][number]): string => {
   if (!("content" in message)) {
     return "";
   }
@@ -22,41 +22,42 @@ const textOf = (message: AgentSession["messages"][number]): string => {
         .join("");
 };
 
-const transcript = (session: AgentSession): string[] =>
+const transcript = (session: agentSessionTypes.AgentSession): string[] =>
   session.messages
     .filter((message) => message.role !== "system")
     .map((message) => `${message.role}:${textOf(message)}`);
 
 interface ReproState {
   events: string[];
-  oldCtx?: ExtensionCommandContext;
-  oldMsa?: ExtensionAPI;
+  oldCtx?: srcTypes.ExtensionCommandContext;
+  oldMsa?: srcTypes.ExtensionAPI;
   oldSessionFile?: string | undefined;
   replacementSessionFile?: string | undefined;
   staleCtxThrows: boolean;
   staleMsaThrows: boolean;
 }
 
-const onReplaced = (state: ReproState, instance: number) => (replacedCtx: ReplacedSessionContext) =>
-  runTest(
-    Effect.gen(function* () {
-      state.events.push(`with:${instance}`);
-      state.replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
-      const staleCtx = yield* Effect.exit(
-        Effect.sync(() => state.oldCtx?.sessionManager.getSessionFile()),
-      );
-      state.staleCtxThrows = Exit.isFailure(staleCtx);
-      const staleMsa = yield* Effect.exit(
-        Effect.sync(() => state.oldMsa?.sendUserMessage("stale message")),
-      );
-      state.staleMsaThrows = Exit.isFailure(staleMsa);
-      yield* awaited(replacedCtx.sendUserMessage("Hello from the new session!"));
-    }),
-  );
+const onReplaced =
+  (state: ReproState, instance: number) => (replacedCtx: extensionsTypes.ReplacedSessionContext) =>
+    runTest(
+      Effect.gen(function* () {
+        state.events.push(`with:${instance}`);
+        state.replacementSessionFile = replacedCtx.sessionManager.getSessionFile();
+        const staleCtx = yield* Effect.exit(
+          Effect.sync(() => state.oldCtx?.sessionManager.getSessionFile()),
+        );
+        state.staleCtxThrows = Exit.isFailure(staleCtx);
+        const staleMsa = yield* Effect.exit(
+          Effect.sync(() => state.oldMsa?.sendUserMessage("stale message")),
+        );
+        state.staleMsaThrows = Exit.isFailure(staleMsa);
+        yield* awaited(replacedCtx.sendUserMessage("Hello from the new session!"));
+      }),
+    );
 
 const reproExtension = (state: ReproState) => {
   let instanceId = 0;
-  return (msa: ExtensionAPI) => {
+  return (msa: srcTypes.ExtensionAPI) => {
     instanceId += 1;
     const instance = instanceId;
     msa.on("session_start", () => {
@@ -102,7 +103,7 @@ const rebindsBeforeWithSession = Effect.gen(function* () {
   ]);
 });
 
-const forkExtension = (msa: ExtensionAPI) => {
+const forkExtension = (msa: srcTypes.ExtensionAPI) => {
   msa.registerCommand("fork-it", {
     description: "fork-it",
     handler: (_args, ctx) => {
@@ -136,7 +137,7 @@ const supportsWithSessionForFork = Effect.gen(function* () {
   ]);
 });
 
-const switchExtension = (target: { path: string }) => (msa: ExtensionAPI) => {
+const switchExtension = (target: { path: string }) => (msa: srcTypes.ExtensionAPI) => {
   msa.registerCommand("switch-it", {
     description: "switch-it",
     handler: (_args, ctx) =>

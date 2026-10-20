@@ -2,14 +2,13 @@ import testing from "@msa/testing";
 import { Clock, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 
-import { PrWatchGhError } from "../src/core/pr-watch/gh.ts";
-import type { PrSnapshot } from "../src/core/pr-watch/snapshot.ts";
-import {
-  type PrNotification,
-  createPrWatchEntry,
-  prWatchLoop,
-} from "../src/core/pr-watch/watch.ts";
+import type ghTypes from "../src/core/pr-watch/gh.types.ts";
+import PrWatchGhError from "../src/core/pr-watch/pr-watch-gh-error.ts";
+import type snapshotTypes from "../src/core/pr-watch/snapshot.types.ts";
+import watch from "../src/core/pr-watch/watch.ts";
+import type watchTypes from "../src/core/pr-watch/watch.types.ts";
 import type prWatchLoopSupportTypes from "./pr-watch-loop-support.types.ts";
+const { createPrWatchEntry, prWatchLoop } = watch;
 
 const { runTest } = testing;
 
@@ -17,7 +16,9 @@ const INTERVAL_MS = 45_000;
 
 const STATUS_INTERVAL_MS = 300_000;
 
-const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
+const snapshotOf = (
+  overrides: Partial<snapshotTypes.PrSnapshot> = {},
+): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
   checks: { failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
@@ -34,7 +35,7 @@ const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
 const pendingChecks = snapshotOf();
 
 const scriptedGh = (
-  steps: ReadonlyArray<PrSnapshot | PrWatchGhError>,
+  steps: ReadonlyArray<snapshotTypes.PrSnapshot | ghTypes.PrWatchGhError>,
   behindBy?: number,
 ): prWatchLoopSupportTypes.ScriptedGh => {
   const calls = { count: 0 };
@@ -64,7 +65,7 @@ const runPolls = (
 ): Promise<prWatchLoopSupportTypes.RunResult> =>
   runTest(
     Effect.gen(function* () {
-      const notifications: PrNotification[] = [];
+      const notifications: watchTypes.PrNotification[] = [];
       const changes = { count: 0 };
       const entry = createPrWatchEntry({ number: 12 }, INTERVAL_MS, STATUS_INTERVAL_MS);
       yield* Effect.scoped(

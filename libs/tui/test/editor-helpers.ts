@@ -6,9 +6,7 @@ import type editorTypes from "../src/components/editor.types.ts";
 import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
 import type editorHelpersTypes from "./editor-helpers.types.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
+import VirtualTerminal from "./virtual-terminal.ts";
 
 function createTestTUI(cols = 80): tuiInterfaceTypes.TUI {
   return new TuiMainScreen(new VirtualTerminal(cols, 24));

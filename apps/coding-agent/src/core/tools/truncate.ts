@@ -1,27 +1,10 @@
 import { dual } from "effect/Function";
 
-export const DEFAULT_MAX_LINES = 2000;
-export const DEFAULT_MAX_BYTES = 50 * 1024;
-export const GREP_MAX_LINE_LENGTH = 500;
+import type truncateTypes from "./truncate.types.ts";
 
-export interface TruncationResult {
-  content: string;
-  truncated: boolean;
-  truncatedBy: "lines" | "bytes" | null;
-  totalLines: number;
-  totalBytes: number;
-  outputLines: number;
-  outputBytes: number;
-  lastLinePartial: boolean;
-  firstLineExceedsLimit: boolean;
-  maxLines: number;
-  maxBytes: number;
-}
-
-export interface TruncationOptions {
-  maxLines?: number;
-  maxBytes?: number;
-}
+const DEFAULT_MAX_LINES = 2000;
+const DEFAULT_MAX_BYTES = 50 * 1024;
+const GREP_MAX_LINE_LENGTH = 500;
 
 function splitLinesForCounting(content: string): string[] {
   if (content.length === 0) {
@@ -34,7 +17,7 @@ function splitLinesForCounting(content: string): string[] {
   return lines;
 }
 
-export function formatSize(bytes: number): string {
+function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes}B`;
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
@@ -51,7 +34,7 @@ interface Measured {
   maxBytes: number;
 }
 
-function measure(content: string, options: TruncationOptions): Measured {
+function measure(content: string, options: truncateTypes.TruncationOptions): Measured {
   const lines = splitLinesForCounting(content);
   return {
     content,
@@ -63,7 +46,7 @@ function measure(content: string, options: TruncationOptions): Measured {
   };
 }
 
-function untruncated(measured: Measured): TruncationResult {
+function untruncated(measured: Measured): truncateTypes.TruncationResult {
   return {
     content: measured.content,
     firstLineExceedsLimit: false,
@@ -83,7 +66,7 @@ function truncatedResult(
   measured: Measured,
   truncatedBy: "lines" | "bytes",
   output: { lines: string[]; lastLinePartial?: boolean; firstLineExceedsLimit?: boolean },
-): TruncationResult {
+): truncateTypes.TruncationResult {
   const content = output.lines.join("\n");
   return {
     content,
@@ -105,7 +88,10 @@ const fitsLimits = (measured: Measured): boolean =>
 
 const isContentFirst = (args: IArguments): boolean => typeof args[0] === "string";
 
-function truncateHeadImpl(content: string, options: TruncationOptions = {}): TruncationResult {
+function truncateHeadImpl(
+  content: string,
+  options: truncateTypes.TruncationOptions = {},
+): truncateTypes.TruncationResult {
   const measured = measure(content, options);
   if (fitsLimits(measured)) return untruncated(measured);
   const { lines, maxLines, maxBytes } = measured;
@@ -130,12 +116,15 @@ function truncateHeadImpl(content: string, options: TruncationOptions = {}): Tru
   return truncatedResult(measured, truncatedBy, { lines: kept });
 }
 
-export const truncateHead: {
-  (options?: TruncationOptions): (content: string) => TruncationResult;
-  (content: string, options?: TruncationOptions): TruncationResult;
+const truncateHead: {
+  (options?: truncateTypes.TruncationOptions): (content: string) => truncateTypes.TruncationResult;
+  (content: string, options?: truncateTypes.TruncationOptions): truncateTypes.TruncationResult;
 } = dual(isContentFirst, truncateHeadImpl);
 
-function truncateTailImpl(content: string, options: TruncationOptions = {}): TruncationResult {
+function truncateTailImpl(
+  content: string,
+  options: truncateTypes.TruncationOptions = {},
+): truncateTypes.TruncationResult {
   const measured = measure(content, options);
   if (fitsLimits(measured)) return untruncated(measured);
   const { lines, maxLines, maxBytes } = measured;
@@ -165,9 +154,9 @@ function truncateTailImpl(content: string, options: TruncationOptions = {}): Tru
   return truncatedResult(measured, truncatedBy, { lastLinePartial, lines: kept });
 }
 
-export const truncateTail: {
-  (options?: TruncationOptions): (content: string) => TruncationResult;
-  (content: string, options?: TruncationOptions): TruncationResult;
+const truncateTail: {
+  (options?: truncateTypes.TruncationOptions): (content: string) => truncateTypes.TruncationResult;
+  (content: string, options?: truncateTypes.TruncationOptions): truncateTypes.TruncationResult;
 } = dual(isContentFirst, truncateTailImpl);
 
 function truncateStringToBytesFromEnd(str: string, maxBytes: number): string {
@@ -195,20 +184,15 @@ function truncateLineImpl(
   return { text: `${line.slice(0, maxChars)}... [truncated]`, wasTruncated: true };
 }
 
-export const truncateLine: {
+const truncateLine: {
   (maxChars?: number): (line: string) => { text: string; wasTruncated: boolean };
   (line: string, maxChars?: number): { text: string; wasTruncated: boolean };
 } = dual(isContentFirst, truncateLineImpl);
 
-export interface MiddleTruncationResult {
-  content: string;
-  truncated: boolean;
-  removedChars: number;
-  totalBytes: number;
-  totalLines: number;
-}
-
-function truncateMiddleImpl(content: string, maxBytes: number): MiddleTruncationResult {
+function truncateMiddleImpl(
+  content: string,
+  maxBytes: number,
+): truncateTypes.MiddleTruncationResult {
   const buf = Buffer.from(content, "utf-8");
   const totalLines = splitLinesForCounting(content).length;
   if (buf.length <= maxBytes) {
@@ -231,7 +215,20 @@ function truncateMiddleImpl(content: string, maxBytes: number): MiddleTruncation
   };
 }
 
-export const truncateMiddle: {
-  (maxBytes: number): (content: string) => MiddleTruncationResult;
-  (content: string, maxBytes: number): MiddleTruncationResult;
+const truncateMiddle: {
+  (maxBytes: number): (content: string) => truncateTypes.MiddleTruncationResult;
+  (content: string, maxBytes: number): truncateTypes.MiddleTruncationResult;
 } = dual(2, truncateMiddleImpl);
+
+const truncate = {
+  DEFAULT_MAX_BYTES,
+  DEFAULT_MAX_LINES,
+  GREP_MAX_LINE_LENGTH,
+  formatSize,
+  truncateHead,
+  truncateLine,
+  truncateMiddle,
+  truncateTail,
+};
+
+export default truncate;

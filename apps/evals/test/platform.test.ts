@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { readEnv, runCommand } from "../src/platform.ts";
+import platform from "../src/platform.ts";
+
+const { readEnv, runCommand } = platform;
 
 const probeName = "MSA_EVAL_RUN_COMMAND_PROBE";
 

@@ -3,8 +3,8 @@ import { fileURLToPath } from "node:url";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
-
+import RpcClient from "../src/modes/rpc/rpc-client.ts";
+import type rpcClientTypes from "../src/modes/rpc/rpc-client.types.ts";
 const { awaited, dirnameOf, joinPath, makeTempDir, readDirectory, readTextFile, removePath } =
   testing;
 
@@ -30,7 +30,7 @@ const readSessionEntries = (sessionDir: string): Effect.Effect<any[]> =>
   });
 
 const withClient = <A, E>(
-  use: (client: RpcClient, sessionDir: string) => Effect.Effect<A, E>,
+  use: (client: rpcClientTypes.RpcClient, sessionDir: string) => Effect.Effect<A, E>,
 ): Effect.Effect<A, E> =>
   Effect.gen(function* () {
     const sessionDir = yield* makeTempDir("msa-rpc-test-");

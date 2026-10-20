@@ -1,14 +1,19 @@
-import type { ToolDefinition } from "../extensions/types.ts";
-import type { Orchestrator } from "./orchestrator.ts";
-import { ORCHESTRATOR_TOOL_NAMES } from "./tool-names.ts";
-import { handoffTools } from "./tools-handoff.ts";
-import { messageToolsA, messageToolsB, messageToolsC } from "./tools-message.ts";
-import { replanTools } from "./tools-replan.ts";
-import { taskToolsA, taskToolsB } from "./tools-task.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import type toolNames from "./tool-names.ts";
+import toolsHandoff from "./tools-handoff.ts";
+import toolsMessage from "./tools-message.ts";
+import toolsReplan from "./tools-replan.ts";
+import toolsTask from "./tools-task.ts";
 
-export function createOrchestratorToolDefinitions(
-  orchestrator: Orchestrator,
-): Record<(typeof ORCHESTRATOR_TOOL_NAMES)[number], ToolDefinition> {
+const { taskToolsA, taskToolsB } = toolsTask;
+const { messageToolsA, messageToolsB, messageToolsC } = toolsMessage;
+const { replanTools } = toolsReplan;
+const { handoffTools } = toolsHandoff;
+
+function createOrchestratorToolDefinitions(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<(typeof toolNames.ORCHESTRATOR_TOOL_NAMES)[number], extensionsTypesTypes.ToolDefinition> {
   return {
     ...taskToolsA(orchestrator),
     ...taskToolsB(orchestrator),
@@ -17,5 +22,14 @@ export function createOrchestratorToolDefinitions(
     ...messageToolsB(orchestrator),
     ...replanTools(orchestrator),
     ...handoffTools(orchestrator),
-  } as Record<(typeof ORCHESTRATOR_TOOL_NAMES)[number], ToolDefinition>;
+  } as Record<
+    (typeof toolNames.ORCHESTRATOR_TOOL_NAMES)[number],
+    extensionsTypesTypes.ToolDefinition
+  >;
 }
+
+const tools = {
+  createOrchestratorToolDefinitions,
+};
+
+export default tools;

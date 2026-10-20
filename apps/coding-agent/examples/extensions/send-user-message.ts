@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-const registerAsk = (msa: ExtensionAPI): void => {
+const registerAsk = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("ask", {
     description: "Send a user message to the agent",
     handler: (args, ctx) =>
@@ -23,7 +23,7 @@ const registerAsk = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerSteer = (msa: ExtensionAPI): void => {
+const registerSteer = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("steer", {
     description: "Send a steering message (interrupts current processing)",
     handler: (args, ctx) =>
@@ -44,7 +44,7 @@ const registerSteer = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerFollowup = (msa: ExtensionAPI): void => {
+const registerFollowup = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("followup", {
     description: "Queue a follow-up message (waits for current processing)",
     handler: (args, ctx) =>
@@ -66,7 +66,7 @@ const registerFollowup = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerAskwith = (msa: ExtensionAPI): void => {
+const registerAskwith = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("askwith", {
     description: "Send a user message with structured content",
     handler: (args, ctx) =>
@@ -91,7 +91,7 @@ const registerAskwith = (msa: ExtensionAPI): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   registerAsk(msa);
   registerSteer(msa);
   registerFollowup(msa);

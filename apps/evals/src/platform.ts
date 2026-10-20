@@ -15,6 +15,8 @@ import { Hex } from "effect/encoding";
 import { dual } from "effect/Function";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import type platformTypes from "./platform.types.ts";
+
 const services = ManagedRuntime.make(NodeServices.layer);
 
 const provideNodeServices = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
@@ -27,17 +29,7 @@ const useFileSystem = <A, E>(
 
 const nodePath = services.runSync(Path.Path);
 
-export type PathOperations = {
-  readonly join: (...segments: ReadonlyArray<string>) => string;
-  readonly dirname: (path: string) => string;
-  readonly resolve: (...segments: ReadonlyArray<string>) => string;
-  readonly relative: (from: string, to: string) => string;
-  readonly isAbsolute: (path: string) => boolean;
-  readonly basename: (path: string, suffix?: string) => string;
-  readonly separator: string;
-};
-
-export const pathOperations: PathOperations = {
+const pathOperations: platformTypes.PathOperations = {
   basename: (path, suffix) => nodePath.basename(path, suffix),
   dirname: (path) => nodePath.dirname(path),
   isAbsolute: (path) => nodePath.isAbsolute(path),
@@ -47,17 +39,15 @@ export const pathOperations: PathOperations = {
   separator: nodePath.sep,
 };
 
-export type EntryKind = "directory" | "file" | "symlink" | "other";
-
 const entryKind = (
   fileSystem: FileSystem.FileSystem,
   path: string,
-): Effect.Effect<EntryKind, never> =>
+): Effect.Effect<platformTypes.EntryKind, never> =>
   fileSystem.readLink(path).pipe(
-    Effect.as<EntryKind>("symlink"),
+    Effect.as<platformTypes.EntryKind>("symlink"),
     Effect.catch(() =>
       fileSystem.stat(path).pipe(
-        Effect.map((info): EntryKind => {
+        Effect.map((info): platformTypes.EntryKind => {
           if (info.type === "Directory") return "directory";
           if (info.type === "File") return "file";
           return "other";
@@ -67,9 +57,7 @@ const entryKind = (
     Effect.orDie,
   );
 
-export type ReadProbe = "readable" | "unreadable";
-
-export const files = {
+const files = {
   chmod: (path: string, mode: number): Effect.Effect<void> =>
     useFileSystem((fileSystem) => fileSystem.chmod(path, mode)),
   chown: (path: string, uid: number, gid: number): Effect.Effect<void> =>
@@ -82,27 +70,27 @@ export const files = {
     useFileSystem((fileSystem) => fileSystem.exists(path)),
   glob: (pattern: string, root: string): Effect.Effect<string[]> =>
     useFileSystem((fileSystem) => fileSystem.glob(pattern, { root })),
-  kind: (path: string): Effect.Effect<EntryKind> =>
+  kind: (path: string): Effect.Effect<platformTypes.EntryKind> =>
     useFileSystem((fileSystem) => entryKind(fileSystem, path)),
   makeDirectory: (path: string, mode?: number): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.makeDirectory(path, { recursive: true, mode })),
+    useFileSystem((fileSystem) => fileSystem.makeDirectory(path, { mode, recursive: true })),
   makeTempDirectory: (prefix: string): Effect.Effect<string> =>
     useFileSystem((fileSystem) => fileSystem.makeTempDirectory({ prefix })),
   ownership: (path: string): Effect.Effect<{ uid: number | undefined; mode: number }> =>
     useFileSystem((fileSystem) =>
       fileSystem
         .stat(path)
-        .pipe(Effect.map((info) => ({ uid: Option.getOrUndefined(info.uid), mode: info.mode }))),
+        .pipe(Effect.map((info) => ({ mode: info.mode, uid: Option.getOrUndefined(info.uid) }))),
     ),
-  probeRead: (path: string): Effect.Effect<ReadProbe> =>
+  probeRead: (path: string): Effect.Effect<platformTypes.ReadProbe> =>
     useFileSystem((fileSystem) =>
       fileSystem.readFile(path).pipe(
-        Effect.as<ReadProbe>("readable"),
+        Effect.as<platformTypes.ReadProbe>("readable"),
         Effect.catchIf(
           (error) =>
             Predicate.isTagged(error.reason, "PermissionDenied") ||
             Predicate.isTagged(error.reason, "NotFound"),
-          () => Effect.succeed<ReadProbe>("unreadable"),
+          () => Effect.succeed<platformTypes.ReadProbe>("unreadable"),
         ),
       ),
     ),
@@ -121,49 +109,45 @@ export const files = {
   readFileString: (path: string): Effect.Effect<string> =>
     useFileSystem((fileSystem) => fileSystem.readFileString(path)),
   remove: (path: string): Effect.Effect<void> =>
-    useFileSystem((fileSystem) => fileSystem.remove(path, { recursive: true, force: true })),
+    useFileSystem((fileSystem) => fileSystem.remove(path, { force: true, recursive: true })),
   writeFileString: (path: string, content: string, mode?: number): Effect.Effect<void> =>
     useFileSystem((fileSystem) => fileSystem.writeFileString(path, content, { mode })),
 };
 
-export const sha256Hex = (text: string): Effect.Effect<string> =>
+const sha256Hex = (text: string): Effect.Effect<string> =>
   provideNodeServices(
     Crypto.Crypto.use((crypto) => crypto.digest("SHA-256", new TextEncoder().encode(text))),
   ).pipe(Effect.map(Hex.encode), Effect.orDie);
 
-export const randomUuid: Effect.Effect<string> = provideNodeServices(
+const randomUuid: Effect.Effect<string> = provideNodeServices(
   Crypto.Crypto.use((crypto) => crypto.randomUUIDv4),
 ).pipe(Effect.orDie);
 
-export type CommandResult = { readonly status: number; readonly stdout: string };
-
 const STDOUT_MODES = { capture: "pipe", ignore: "ignore", inherit: "inherit" } as const;
-
-export type CommandOutputMode = "inherit" | "capture" | "ignore";
 
 type CommandOptions = {
   readonly cwd: string;
-  readonly output: CommandOutputMode;
+  readonly output: platformTypes.CommandOutputMode;
   readonly env?: Record<string, string | undefined> | undefined;
 };
 
-export const runCommand: {
+const runCommand: {
   (
     args: ReadonlyArray<string>,
     options: CommandOptions,
-  ): (command: string) => Effect.Effect<CommandResult>;
+  ): (command: string) => Effect.Effect<platformTypes.CommandResult>;
   (
     command: string,
     args: ReadonlyArray<string>,
     options: CommandOptions,
-  ): Effect.Effect<CommandResult>;
+  ): Effect.Effect<platformTypes.CommandResult>;
 } = dual(
   3,
   (
     command: string,
     args: ReadonlyArray<string>,
     options: CommandOptions,
-  ): Effect.Effect<CommandResult> =>
+  ): Effect.Effect<platformTypes.CommandResult> =>
     provideNodeServices(
       Effect.scoped(
         Effect.gen(function* () {
@@ -193,9 +177,20 @@ export const runCommand: {
     ).pipe(Effect.orDie),
 );
 
-export const readEnv = (name: string): string | undefined =>
+const readEnv = (name: string): string | undefined =>
   Effect.runSync(
     Config.option(Config.String(name))
       .parse(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))
       .pipe(Effect.map(Option.getOrUndefined)),
   );
+
+const platform = {
+  files,
+  pathOperations,
+  randomUuid,
+  readEnv,
+  runCommand,
+  sha256Hex,
+};
+
+export default platform;

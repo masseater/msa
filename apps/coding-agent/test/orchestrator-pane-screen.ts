@@ -1,14 +1,15 @@
 import testing from "@msa/testing";
 import tui from "@msa/tui";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-import { CustomEditor } from "../src/modes/interactive/components/custom-editor.ts";
-import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
-import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
-import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import CustomEditor from "../src/modes/interactive/components/custom-editor.ts";
+import TasksView from "../src/modes/interactive/components/tasks-view.ts";
+import EditorSlot from "../src/modes/interactive/editor-slot.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import orchestratorPaneFixtures from "./orchestrator-pane-fixtures.ts";
 
+const { getEditorTheme, initTheme } = themeModule;
 const { Container, setKeybindings } = tui;
 
 const { awaited, runTest } = testing;
@@ -26,7 +27,10 @@ const stopScreens = (): void => {
   for (const view of running.splice(0)) view.stop();
 };
 
-const mountPane = (options: { width?: number; orchestrator?: Orchestrator | undefined }) => {
+const mountPane = (options: {
+  width?: number;
+  orchestrator?: orchestratorTypes.Orchestrator | undefined;
+}) => {
   const { orchestrator, pane, state, terminal, ui } = createPaneUi(options);
   const editor = new CustomEditor(ui, getEditorTheme(), new KeybindingsManager());
   const container = new Container();
@@ -52,7 +56,9 @@ const mountPane = (options: { width?: number; orchestrator?: Orchestrator | unde
   return { editor, state, terminal, ui };
 };
 
-const screen = (options: { width?: number; orchestrator?: Orchestrator | undefined } = {}) => {
+const screen = (
+  options: { width?: number; orchestrator?: orchestratorTypes.Orchestrator | undefined } = {},
+) => {
   const { editor, state, terminal, ui } = mountPane(options);
   const view = {
     divider: () => terminal.getViewport()[0]!.indexOf("│"),

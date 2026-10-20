@@ -6,40 +6,13 @@ import { Context, Crypto, Deferred, Effect, Exit, Layer, ManagedRuntime, Scope }
 import { HttpEffect, HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 
+import type mcpOauthServerTypes from "./mcp-oauth-server.types.ts";
+
 const { LATEST_PROTOCOL_VERSION } = mcp;
 
 const { fromJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
-
-interface StalledRequest {
-  path: string;
-  request: Request;
-}
-
-interface ServerOptions {
-  iss?: string;
-  issParameter?: boolean;
-  cimd?: boolean;
-  redirectPath?: string;
-}
-
-interface ServerState {
-  readonly options: ServerOptions;
-  readonly log: string[];
-  readonly registrations: Record<string, unknown>[];
-  readonly authorizations: URLSearchParams[];
-  readonly tokenRequests: URLSearchParams[];
-  readonly deletes: (string | undefined)[];
-  readonly stall: Set<string>;
-  readonly stalled: StalledRequest[];
-  readonly validTokens: Set<string>;
-  readonly refreshTokens: Set<string>;
-  readonly challenges: Map<string, string>;
-  readonly closing: Deferred.Deferred<void>;
-  issued: number;
-  origin: string;
-}
 
 interface McpMessage {
   id?: number;
@@ -64,7 +37,7 @@ const sha256 = (value: string) =>
     (digest) => Buffer.from(digest),
   );
 
-const issueTokens = (state: ServerState) => {
+const issueTokens = (state: mcpOauthServerTypes.ServerState) => {
   state.issued += 1;
   const tokens = {
     access_token: `access-${state.issued}`,
@@ -75,7 +48,11 @@ const issueTokens = (state: ServerState) => {
   return { ...tokens, expires_in: 3600, token_type: "Bearer" };
 };
 
-const mcpResult = (state: ServerState, message: McpMessage, token: string): unknown => {
+const mcpResult = (
+  state: mcpOauthServerTypes.ServerState,
+  message: McpMessage,
+  token: string,
+): unknown => {
   switch (message.method) {
     case "initialize":
       return {
@@ -93,7 +70,10 @@ const mcpResult = (state: ServerState, message: McpMessage, token: string): unkn
   }
 };
 
-const unauthorized = (state: ServerState, token: string | undefined): Response => {
+const unauthorized = (
+  state: mcpOauthServerTypes.ServerState,
+  token: string | undefined,
+): Response => {
   state.log.push(`401 ${token ?? "none"}`);
   return new Response(null, {
     headers: {
@@ -103,7 +83,10 @@ const unauthorized = (state: ServerState, token: string | undefined): Response =
   });
 };
 
-const handleMcp = Effect.fn("handleMcp")(function* (state: ServerState, request: Request) {
+const handleMcp = Effect.fn("handleMcp")(function* (
+  state: mcpOauthServerTypes.ServerState,
+  request: Request,
+) {
   const token = request.headers.get("authorization")?.replace(/^Bearer /u, "");
   if (request.method === "DELETE") state.deletes.push(token);
   if (request.method !== "POST") {
@@ -122,7 +105,7 @@ const handleMcp = Effect.fn("handleMcp")(function* (state: ServerState, request:
 });
 
 const handleToken = Effect.fn("handleToken")(function* (
-  state: ServerState,
+  state: mcpOauthServerTypes.ServerState,
   params: URLSearchParams,
 ) {
   state.tokenRequests.push(params);
@@ -142,7 +125,7 @@ const handleToken = Effect.fn("handleToken")(function* (
   return json(200, issueTokens(state));
 });
 
-const authorize = (state: ServerState, url: URL): Response => {
+const authorize = (state: mcpOauthServerTypes.ServerState, url: URL): Response => {
   const { options } = state;
   state.authorizations.push(url.searchParams);
   const code = `code-${state.challenges.size + 1}`;
@@ -157,7 +140,7 @@ const authorize = (state: ServerState, url: URL): Response => {
   return new Response(null, { headers: { location: redirect.href }, status: 302 });
 };
 
-const authorizationServerMetadata = (state: ServerState): Response => {
+const authorizationServerMetadata = (state: mcpOauthServerTypes.ServerState): Response => {
   const { options, origin } = state;
   return json(200, {
     authorization_endpoint: `${origin}/authorize`,
@@ -174,14 +157,20 @@ const authorizationServerMetadata = (state: ServerState): Response => {
   });
 };
 
-const register = Effect.fn("register")(function* (state: ServerState, request: Request) {
+const register = Effect.fn("register")(function* (
+  state: mcpOauthServerTypes.ServerState,
+  request: Request,
+) {
   const metadata = (yield* readJson(request)) as Record<string, unknown>;
   state.log.push("register");
   state.registrations.push(metadata);
   return json(201, { ...metadata, client_id: "client-1" });
 });
 
-const route = Effect.fn("route")(function* (state: ServerState, request: Request) {
+const route = Effect.fn("route")(function* (
+  state: mcpOauthServerTypes.ServerState,
+  request: Request,
+) {
   const url = new URL(request.url);
   switch (url.pathname) {
     case "/mcp":
@@ -204,7 +193,10 @@ const route = Effect.fn("route")(function* (state: ServerState, request: Request
   }
 });
 
-const handle = Effect.fn("handle")(function* (state: ServerState, request: Request) {
+const handle = Effect.fn("handle")(function* (
+  state: mcpOauthServerTypes.ServerState,
+  request: Request,
+) {
   const { pathname } = new URL(request.url);
   if (!state.stall.has(pathname)) {
     return yield* route(state, request);
@@ -214,7 +206,9 @@ const handle = Effect.fn("handle")(function* (state: ServerState, request: Reque
   return new Response(null, { status: 503 });
 });
 
-const initialState = (options: ServerOptions): ServerState => ({
+const initialState = (
+  options: mcpOauthServerTypes.ServerOptions,
+): mcpOauthServerTypes.ServerState => ({
   authorizations: [],
   challenges: new Map(),
   closing: Deferred.makeUnsafe<void>(),
@@ -231,7 +225,7 @@ const initialState = (options: ServerOptions): ServerState => ({
   validTokens: new Set(),
 });
 
-const serve = Effect.fn("serve")(function* (state: ServerState) {
+const serve = Effect.fn("serve")(function* (state: mcpOauthServerTypes.ServerState) {
   const scope = yield* Scope.make();
   const serving = HttpServer.serve(
     HttpEffect.fromWebHandler((request) => runtime.runPromise(handle(state, request))),
@@ -243,7 +237,7 @@ const serve = Effect.fn("serve")(function* (state: ServerState) {
   return scope;
 });
 
-const startOAuthMcpServer = (options: ServerOptions = {}) =>
+const startOAuthMcpServer = (options: mcpOauthServerTypes.ServerOptions = {}) =>
   runtime.runPromise(
     Effect.gen(function* () {
       const state = initialState(options);

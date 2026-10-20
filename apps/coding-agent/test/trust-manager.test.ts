@@ -4,8 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { readEnv } from "../src/core/process-env.ts";
-import { ProjectTrustStore, hasTrustRequiringProjectResources } from "../src/core/trust-manager.ts";
+import processEnv from "../src/core/process-env.ts";
+import ProjectTrustStore from "../src/core/project-trust-store.ts";
+import trustManager from "../src/core/trust-manager.ts";
+
+const { hasTrustRequiringProjectResources } = trustManager;
+const { readEnv } = processEnv;
 
 const {
   currentTimeMillis,

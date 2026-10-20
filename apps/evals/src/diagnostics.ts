@@ -1,20 +1,23 @@
-import type { AgentSession } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import type { PreparedModel } from "./agent-session.ts";
-import { sha256Hex } from "./platform.ts";
-import type { MsaRunDiagnostics } from "./run-types.ts";
-import { toTranscriptEvents } from "./transcript.ts";
+import type agentSessionTypes from "./agent-session.types.ts";
+import platform from "./platform.ts";
+import type runTypesTypes from "./run-types.ts";
+import transcript from "./transcript.ts";
 
-export const collectDiagnostics = ({
+const { sha256Hex } = platform;
+const { toTranscriptEvents } = transcript;
+
+const collectDiagnostics = ({
   session,
   model,
   systemPrompt,
 }: {
-  session: AgentSession;
-  model: PreparedModel["model"];
+  session: codingAgentTypes.AgentSession;
+  model: agentSessionTypes.PreparedModel["model"];
   systemPrompt: string;
-}): Effect.Effect<MsaRunDiagnostics> =>
+}): Effect.Effect<runTypesTypes.MsaRunDiagnostics> =>
   Effect.gen(function* () {
     const stats = session.getSessionStats();
     const hasPricing = [model.cost, ...(model.cost.tiers ?? [])].some(
@@ -40,3 +43,9 @@ export const collectDiagnostics = ({
       },
     };
   });
+
+const diagnostics = {
+  collectDiagnostics,
+};
+
+export default diagnostics;

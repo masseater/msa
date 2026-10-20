@@ -3,11 +3,13 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import SessionSelectorComponent from "../src/modes/interactive/components/session-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import sessionSelectorPathDeleteSupport from "./session-selector-path-delete-support.ts";
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { setKeybindings } = tui;
 

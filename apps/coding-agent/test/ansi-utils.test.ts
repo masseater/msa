@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { stripAnsi } from "../src/utils/ansi.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { stripAnsi } = ansi;
 
 function referenceAnsiRegex(): RegExp {
   const ST = "(?:\\u0007|\\u001B\\u005C|\\u009C)";

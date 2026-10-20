@@ -1,25 +1,25 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect, type Fiber } from "effect";
 
-import { BaseOverlay } from "./base-overlay.ts";
-import { TimerPanel } from "./timer-panel.ts";
-
+import BaseOverlay from "./base-overlay.ts";
+import TimerPanel from "./timer-panel.ts";
+import type timerPanelTypes from "./timer-panel.types.ts";
 const { matchesKey } = tuiModule;
 
-export class PassiveDemoController extends BaseOverlay {
+export default class PassiveDemoController extends BaseOverlay {
   focused = false;
   private tui: tuiTypes.TUI;
   private typed = "";
-  private timerComponent: TimerPanel;
+  private timerComponent: timerPanelTypes.TimerPanel;
   private timerHandle: tuiTypes.OverlayHandle | null = null;
   private fiber: Fiber.Fiber<never> | undefined;
   private inputCount = 0;
   private lastInputDebug = "";
   private done: () => void;
 
-  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

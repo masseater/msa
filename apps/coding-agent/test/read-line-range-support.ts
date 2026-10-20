@@ -3,21 +3,21 @@ import { runInNewContext } from "node:vm";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { exportFromFile } from "../src/core/export-html/index.ts";
-import {
-  CURRENT_SESSION_VERSION,
-  type SessionHeader,
-  SessionManager,
-  type SessionMessageEntry,
-} from "../src/core/session-manager.ts";
-import type { formatReadLineRange } from "../src/core/tools/render-utils.ts";
+import exportHtml from "../src/core/export-html/index.ts";
+import sessionManagerSupport from "../src/core/session-manager-support.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import type renderUtils from "../src/core/tools/render-utils.ts";
+
+const { CURRENT_SESSION_VERSION } = sessionManagerSupport;
+const { exportFromFile } = exportHtml;
 
 const { awaited, isoFromMillis, joinPath, readTextFile, toJsonText, writeTextFile } = testing;
 
 interface HtmlViewer {
-  formatReadLineRange: typeof formatReadLineRange;
-  getTreeNodeDisplayHtml(entry: SessionMessageEntry): string;
-  renderEntry(entry: SessionMessageEntry): string;
+  formatReadLineRange: typeof renderUtils.formatReadLineRange;
+  getTreeNodeDisplayHtml(entry: sessionManagerTypes.SessionMessageEntry): string;
+  renderEntry(entry: sessionManagerTypes.SessionMessageEntry): string;
 }
 
 const RANGE_CASES: [unknown, unknown, string][] = [
@@ -55,7 +55,7 @@ const loadHtmlViewer = (html: string): HtmlViewer => {
   );
 };
 
-const assistantEntry = (): SessionMessageEntry => ({
+const assistantEntry = (): sessionManagerTypes.SessionMessageEntry => ({
   id: "assistant",
   message: {
     api: "anthropic-messages",
@@ -79,7 +79,9 @@ const assistantEntry = (): SessionMessageEntry => ({
   type: "message",
 });
 
-const resultEntry = (assistant: SessionMessageEntry): SessionMessageEntry => ({
+const resultEntry = (
+  assistant: sessionManagerTypes.SessionMessageEntry,
+): sessionManagerTypes.SessionMessageEntry => ({
   id: "result",
   message: {
     content: [],
@@ -103,7 +105,7 @@ const writeReadSession = Effect.fn("writeReadSession")(function* (tempDir: strin
     timestamp: assistant.timestamp,
     type: "session" as const,
     version: CURRENT_SESSION_VERSION,
-  } satisfies SessionHeader;
+  } satisfies sessionManagerTypes.SessionHeader;
   const sessionPath = joinPath(tempDir, "session.jsonl");
   const lines = yield* Effect.forEach([header, assistant, result], toJsonText);
   yield* writeTextFile(sessionPath, `${lines.join("\n")}\n`);

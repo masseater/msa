@@ -1,20 +1,18 @@
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { ChildProcess } from "effect/process";
 
-import { stripBom } from "../../utils/text.ts";
-import { join } from "../path.ts";
-import { nodeRuntime } from "../services.ts";
+import text from "../../utils/text.ts";
+import path from "../path.ts";
+import type externalEditorTypes from "./external-editor.types.ts";
 
-export interface ExternalEditorOptions {
-  command: string;
-  content: string;
-}
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+const { join } = path;
+const { stripBom } = text;
 
-export type ExternalEditorResult = { status: "complete"; content: string } | { status: "failed" };
-
-export function editInExternalEditor(
-  options: ExternalEditorOptions,
-): Promise<ExternalEditorResult> {
+function editInExternalEditor(
+  options: externalEditorTypes.ExternalEditorOptions,
+): Promise<externalEditorTypes.ExternalEditorResult> {
   return nodeRuntime.runPromise(
     Effect.scoped(
       Effect.gen(function* () {
@@ -45,3 +43,9 @@ export function editInExternalEditor(
     ).pipe(Effect.orDie),
   );
 }
+
+const externalEditor = {
+  editInExternalEditor,
+};
+
+export default externalEditor;

@@ -7,13 +7,18 @@ const childProcessMocks = vi.hoisted(() => ({
   spawnSync: vi.fn(() => ({ status: 0 })),
 }));
 
-vi.mock("node:child_process", () => childProcessMocks);
+vi.mock("node:child_process", (importOriginal) =>
+  importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, ...childProcessMocks })),
+);
 
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { shareSession } from "../src/modes/interactive/session-share.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import sessionShare from "../src/modes/interactive/session-share.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { shareSession } = sessionShare;
+const { initTheme } = themeModule;
 
 const { awaited, gate, provideNode, readTextFile, runTest, writeTextFile } = testing;
 

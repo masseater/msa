@@ -3,11 +3,15 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { getThemesDir } from "../src/config.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
-import { setThemeJsonValidator } from "../src/modes/interactive/theme/theme.ts";
+import config from "../src/config.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { setThemeJsonValidator } = themeModule;
+const { validateThemeJson } = themeSchema;
+const { getThemesDir } = config;
 
 const { resetCapabilitiesCache, setCapabilityOverrides } = tui;
 

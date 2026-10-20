@@ -8,10 +8,7 @@ import TuiMainScreen from "../src/tui-main-screen.ts";
 import tuiRenderHelpers from "./tui-render-helpers.ts";
 import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 const { getCellItalic, withEnv } = tuiRenderHelpers;
 
 describe("TUI resize handling", () => {

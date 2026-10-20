@@ -1,8 +1,10 @@
-import { BOLD, DIM, RESET } from "./colors.ts";
-import type { UiController } from "./controller.ts";
+import colors from "./colors.ts";
+import type controllerTypes from "./controller.types.ts";
 
-export const runSlashCommand = (request: {
-  readonly ui: UiController;
+const { BOLD, DIM, RESET } = colors;
+
+const runSlashCommand = (request: {
+  readonly ui: controllerTypes.UiController;
   readonly command: string;
 }): boolean => {
   const { ui, command } = request;
@@ -38,7 +40,7 @@ export const runSlashCommand = (request: {
   }
 };
 
-export const showWelcome = (ui: UiController): void => {
+const showWelcome = (ui: controllerTypes.UiController): void => {
   ui.outputLog.append(`${BOLD}RPC Chat${RESET}`);
   ui.outputLog.append(
     `${DIM}Type a message and press Enter. Esc to abort or exit. Ctrl+D to quit.${RESET}`,
@@ -46,3 +48,10 @@ export const showWelcome = (ui: UiController): void => {
   ui.outputLog.append(`${DIM}Slash commands: /select /confirm /input /editor${RESET}`);
   ui.outputLog.append("");
 };
+
+const slashCommands = {
+  runSlashCommand,
+  showWelcome,
+};
+
+export default slashCommands;

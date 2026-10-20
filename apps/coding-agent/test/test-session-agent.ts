@@ -1,9 +1,11 @@
 import agent from "@msa/agent-core";
 import compat from "@msa/ai/compat";
 
-import { createCodingTools } from "../src/index.ts";
+import src from "../src/index.ts";
 import utilities from "./utilities.ts";
 import type utilitiesTypes from "./utilities.types.ts";
+
+const { createCodingTools } = src;
 
 const { getModel, streamSimple } = compat;
 

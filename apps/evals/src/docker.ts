@@ -2,22 +2,14 @@ import { homedir } from "node:os";
 
 import { Effect, Schema } from "effect";
 
-import type { DocumentationVariant, EvalTask } from "./plan.ts";
-import { files, pathOperations, readEnv, runCommand, sha256Hex } from "./platform.ts";
+import type dockerTypes from "./docker.types.ts";
+import type planTypes from "./plan.types.ts";
+import platform from "./platform.ts";
+
+const { files, pathOperations, readEnv, runCommand, sha256Hex } = platform;
 
 const packageRoot = pathOperations.resolve(import.meta.dirname, "..");
 const repositoryRoot = pathOperations.resolve(packageRoot, "../..");
-
-export type BuiltImages = Record<DocumentationVariant, { name: string; id: string }>;
-
-export type DockerContext = {
-  images: BuiltImages;
-  artifactDirectory: string;
-  authPath: string;
-  provider: string;
-  model: string;
-  runsPerVariant: number;
-};
 
 const execute = (command: string, args: readonly string[], capture: boolean) =>
   runCommand(command, args, { cwd: packageRoot, output: capture ? "capture" : "inherit" });
@@ -28,7 +20,7 @@ const requireSuccess = (command: string, args: readonly string[]): Effect.Effect
   );
 
 const buildImage = (
-  variant: DocumentationVariant,
+  variant: planTypes.DocumentationVariant,
   name: string,
 ): Effect.Effect<{ name: string; id: string }> =>
   Effect.gen(function* () {
@@ -54,7 +46,7 @@ const buildImage = (
     return { id, name };
   });
 
-export const buildImages: Effect.Effect<BuiltImages> = Effect.gen(function* () {
+const buildImages: Effect.Effect<dockerTypes.BuiltImages> = Effect.gen(function* () {
   const digest = yield* sha256Hex(repositoryRoot);
   const prefix = `msa-evals-${digest.slice(0, 12)}`;
   const withoutDocs = yield* buildImage("without_docs", `${prefix}-without-docs:local`);
@@ -68,7 +60,7 @@ const decodeCredentials = Schema.decodeUnknownEffect(
   Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
 );
 
-export const requireEvalAuthFile = (provider: string): Effect.Effect<string> =>
+const requireEvalAuthFile = (provider: string): Effect.Effect<string> =>
   Effect.gen(function* () {
     const configuredDirectory = readEnv("MSA_CODING_AGENT_DIR");
     const directory =
@@ -99,8 +91,8 @@ const dockerArgs = ({
   outputDirectory,
   entrypointArgs,
 }: {
-  context: DockerContext;
-  variant: DocumentationVariant;
+  context: dockerTypes.DockerContext;
+  variant: planTypes.DocumentationVariant;
   outputDirectory: string;
   entrypointArgs: readonly string[];
 }): Effect.Effect<string[]> =>
@@ -138,14 +130,14 @@ const dockerArgs = ({
     return args;
   });
 
-export const discoverCases = ({
+const discoverCases = ({
   context,
   variant,
   files: evalFiles,
   vitestArgs,
 }: {
-  context: DockerContext;
-  variant: DocumentationVariant;
+  context: dockerTypes.DockerContext;
+  variant: planTypes.DocumentationVariant;
   files: readonly string[];
   vitestArgs: readonly string[];
 }): Effect.Effect<string> =>
@@ -162,15 +154,15 @@ export const discoverCases = ({
     return pathOperations.join(outputDirectory, "discovered-tests.json");
   });
 
-const taskDirectoryName = (task: EvalTask): Effect.Effect<string> =>
+const taskDirectoryName = (task: planTypes.EvalTask): Effect.Effect<string> =>
   sha256Hex(JSON.stringify([task.evalSet, task.caseId, task.variant, task.model, task.runNumber]));
 
-export const runTask = ({
+const runTask = ({
   context,
   task,
 }: {
-  context: DockerContext;
-  task: EvalTask;
+  context: dockerTypes.DockerContext;
+  task: planTypes.EvalTask;
 }): Effect.Effect<string | undefined> =>
   Effect.gen(function* () {
     const outputDirectory = pathOperations.join(
@@ -189,3 +181,12 @@ export const runTask = ({
     const reportPath = pathOperations.join(outputDirectory, "vitest.json");
     return (yield* files.exists(reportPath)) ? reportPath : undefined;
   });
+
+const docker = {
+  buildImages,
+  discoverCases,
+  requireEvalAuthFile,
+  runTask,
+};
+
+export default docker;

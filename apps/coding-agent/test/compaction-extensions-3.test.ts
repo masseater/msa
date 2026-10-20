@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { SessionCompactEvent, SessionEvent } from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 import compactionExtensionsSupport from "./compaction-extensions-support.ts";
 
 const { awaited, runTest } = testing;
@@ -18,7 +18,7 @@ const throwingExtension = () =>
           (event: unknown) =>
             runTest(
               Effect.sync(() => {
-                capturedEvents.push(event as SessionEvent);
+                capturedEvents.push(event as extensionsTypes.SessionEvent);
                 throw new Error("Extension intentionally throws");
               }),
             ),
@@ -28,7 +28,7 @@ const throwingExtension = () =>
         "session_compact",
         [
           (event: unknown) =>
-            runTest(Effect.sync(() => capturedEvents.push(event as SessionEvent))),
+            runTest(Effect.sync(() => capturedEvents.push(event as extensionsTypes.SessionEvent))),
         ],
       ],
     ]),
@@ -44,7 +44,7 @@ const continuesWithDefaultCompactionOnError = () =>
       expect(result.summary).toBeDefined();
       expect(result.summary.length).toBeGreaterThan(0);
       const compactEvents = capturedEvents.filter(
-        (event): event is SessionCompactEvent => event.type === "session_compact",
+        (event): event is extensionsTypes.SessionCompactEvent => event.type === "session_compact",
       );
       expect(compactEvents.length).toBe(1);
       expect(compactEvents[0]?.fromExtension).toBe(false);

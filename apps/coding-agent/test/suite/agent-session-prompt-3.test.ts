@@ -5,7 +5,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { InputEvent } from "../../src/core/extensions/index.ts";
+import type extensionsTypes from "../../src/core/extensions/index.types.ts";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
 
@@ -28,7 +28,7 @@ const processImage = vi.hoisted(() =>
   ),
 );
 
-vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
+vi.mock("../../src/utils/image-process.ts", () => ({ default: { processImage } }));
 
 const sendusermessageWhileIdleTriggersATurn = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -47,7 +47,7 @@ const sendusermessageWhileIdleTriggersATurn = Effect.gen(function* () {
 });
 
 const doesNotReportStreamingbehaviorToInput = Effect.gen(function* () {
-  const inputEvents: InputEvent[] = [];
+  const inputEvents: extensionsTypes.InputEvent[] = [];
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -72,7 +72,7 @@ const reportsStreamingbehaviorToInputHandlersWhilePart1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const toolRelease = gate();
-    const inputEvents: InputEvent[] = [];
+    const inputEvents: extensionsTypes.InputEvent[] = [];
     const waitTool: agentTypes.AgentTool = {
       description: "Wait for release",
       execute: () =>

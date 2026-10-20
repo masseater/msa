@@ -4,9 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { isValidThinkingLevel } from "../src/cli/args.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { loadThemeFromPath } from "../src/modes/interactive/theme/theme.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import thinkingLevels from "../src/core/thinking-levels.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { isValidThinkingLevel } = thinkingLevels;
+const { loadThemeFromPath } = themeModule;
 
 const {
   awaited,

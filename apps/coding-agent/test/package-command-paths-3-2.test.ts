@@ -2,13 +2,18 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { DefaultPackageManager } from "../src/core/package-manager.ts";
-import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
-import { main } from "../src/main.ts";
-import { ConfigSelectorComponent } from "../src/modes/interactive/components/config-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
+import codingAgent from "../src/index.ts";
+import mainModule from "../src/main.ts";
+import ConfigSelectorComponent from "../src/modes/interactive/components/config-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
+
+const { DefaultPackageManager, SettingsManager } = codingAgent;
+
+const { initTheme } = themeModule;
+const { main } = mainModule;
 
 const { paths, setupPackageTest, teardownPackageTest, toJsonTextSync } = packageCommandPathsSupport;
 

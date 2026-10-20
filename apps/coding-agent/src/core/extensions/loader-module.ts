@@ -4,17 +4,21 @@ import { fileURLToPath } from "node:url";
 import { Effect } from "effect";
 import type { createJiti } from "jiti";
 
-import { isBunBinary, isBundledNode } from "../../config.ts";
-import { fromPromise, pathOperations } from "../platform/index.ts";
-import { pathExists } from "../tools/path-utils.ts";
-import { type ExtensionCacheToken, extensionCache, isCurrentCacheToken } from "./loader-cache.ts";
-import type { ExtensionFactory } from "./types.ts";
+import config from "../../config.ts";
+import platform from "../platform/index.ts";
+import pathUtils from "../tools/path-utils.ts";
+import loaderCache from "./loader-cache.ts";
+import type loaderCacheTypes from "./loader-cache.types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
+
+const { isBunBinary, isBundledNode } = config;
+const { fromPromise, isSea, pathOperations } = platform;
+const { pathExists } = pathUtils;
+const { extensionCache, isCurrentCacheToken } = loaderCache;
 
 const require = createRequire(import.meta.url);
 
-const isNodeSeaBinary =
-  ("sea" in process.features && process.features.sea === true) ||
-  process.getBuiltinModule("node:sea")?.isSea() === true;
+const isNodeSeaBinary = ("sea" in process.features && process.features.sea === true) || isSea();
 const isTypeScriptSourceRuntime =
   !isBunBinary && pathOperations.extname(fileURLToPath(import.meta.url)) === ".ts";
 const usesEmbeddedModules = isBunBinary || isNodeSeaBinary || isBundledNode;
@@ -24,14 +28,16 @@ let createJitiPromise: Promise<typeof createJiti> | undefined;
 function getCreateJiti(): Promise<typeof createJiti> {
   createJitiPromise ??= (
     usesEmbeddedModules ? import("./jiti-static-loader.ts") : import("./jiti-loader.ts")
-  ).then((module) => module.createJiti);
+  ).then((module) => module.default.createJiti);
   return createJitiPromise;
 }
 
 let virtualModulesPromise: Promise<Record<string, unknown>> | undefined;
 
 function getVirtualModules(): Promise<Record<string, unknown>> {
-  virtualModulesPromise ??= import("./virtual-modules.ts").then((module) => module.VIRTUAL_MODULES);
+  virtualModulesPromise ??= import("./virtual-modules.ts").then(
+    (module) => module.default.VIRTUAL_MODULES,
+  );
   return virtualModulesPromise;
 }
 
@@ -107,9 +113,9 @@ const resolutionOptions = Effect.gen(function* () {
   return { alias: yield* aliases };
 });
 
-export const loadExtensionModule = Effect.fn("loadExtensionModule")(function* (input: {
+const loadExtensionModule = Effect.fn("loadExtensionModule")(function* (input: {
   extensionPath: string;
-  cacheToken?: ExtensionCacheToken | undefined;
+  cacheToken?: loaderCacheTypes.ExtensionCacheToken | undefined;
 }) {
   const { extensionPath, cacheToken } = input;
   if (isCurrentCacheToken(cacheToken)) {
@@ -120,8 +126,14 @@ export const loadExtensionModule = Effect.fn("loadExtensionModule")(function* (i
   const options = yield* resolutionOptions;
   const jiti = createJitiImpl(import.meta.url, { moduleCache: false, ...options });
   const module = yield* fromPromise(() => jiti.import(extensionPath, { default: true }));
-  const factory = module as ExtensionFactory;
+  const factory = module as extensionsTypesTypes.ExtensionFactory;
   if (typeof factory !== "function") return undefined;
   if (isCurrentCacheToken(cacheToken)) extensionCache.set(extensionPath, factory);
   return factory;
 });
+
+const loaderModule = {
+  loadExtensionModule,
+};
+
+export default loaderModule;

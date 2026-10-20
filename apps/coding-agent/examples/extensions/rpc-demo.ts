@@ -1,11 +1,11 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 interface DemoState {
   turnCount: number;
 }
 
-const registerStatusEvents = (msa: ExtensionAPI, state: DemoState): void => {
+const registerStatusEvents = (msa: codingAgentTypes.ExtensionAPI, state: DemoState): void => {
   msa.on("session_start", (event, ctx) => {
     ctx.ui.setTitle(event.reason === "new" ? "msa RPC Demo (new session)" : "msa RPC Demo");
     ctx.ui.setWidget("rpc-demo", ["--- RPC Extension UI Demo ---", "Loaded and ready."]);
@@ -22,7 +22,7 @@ const registerStatusEvents = (msa: ExtensionAPI, state: DemoState): void => {
   });
 };
 
-const registerGuardEvents = (msa: ExtensionAPI): void => {
+const registerGuardEvents = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.on("tool_call", (event, ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -71,7 +71,7 @@ const registerGuardEvents = (msa: ExtensionAPI): void => {
   );
 };
 
-const registerCommands = (msa: ExtensionAPI): void => {
+const registerCommands = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("rpc-input", {
     description: "Prompt for text input (demonstrates ctx.ui.input in RPC)",
     handler: (_args, ctx) =>
@@ -118,7 +118,7 @@ const registerCommands = (msa: ExtensionAPI): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const state: DemoState = { turnCount: 0 };
   registerStatusEvents(msa, state);
   registerGuardEvents(msa);

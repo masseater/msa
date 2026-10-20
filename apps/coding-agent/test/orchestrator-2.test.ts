@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { store } from "../src/core/orchestrator/store.ts";
+import storeModule from "../src/core/orchestrator/store.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
+
+const { store } = storeModule;
 
 const { create } = orchestratorSupport;
 

@@ -5,11 +5,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { estimateTokens } from "../../src/core/compaction/index.ts";
+import codingAgent from "../../src/index.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import agentSessionCompactionSupport2 from "./agent-session-compaction-support2.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { estimateTokens } = codingAgent;
 
 const { fauxAssistantMessage } = ai;
 

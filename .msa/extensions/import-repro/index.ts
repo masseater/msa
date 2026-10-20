@@ -1,31 +1,29 @@
 import * as NodeServices from "@effect/platform-node/NodeServices";
-import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Cause, Effect, FileSystem, ManagedRuntime, Path } from "effect";
 
-import { getPlatformContinuationNotice, rewriteSessionCwd } from "./cwd-rewrite.ts";
-import { fetchGistSession, findIssueGistId } from "./gist.ts";
-import {
-  decodeExportedHtml,
-  type DecodedSession,
-  ImportReproError,
-  parseRef,
-  parseSessionJsonl,
-  type SessionRef,
-} from "./session.ts";
+import cwdRewrite from "./cwd-rewrite.ts";
+import gist from "./gist.ts";
+import session from "./session.ts";
+import type sessionTypes from "./session.types.ts";
+
+const { ImportReproError, decodeExportedHtml, parseRef, parseSessionJsonl } = session;
+const { fetchGistSession, findIssueGistId } = gist;
+const { getPlatformContinuationNotice, rewriteSessionCwd } = cwdRewrite;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
 interface LoadedSession {
-  readonly decoded: DecodedSession;
+  readonly decoded: sessionTypes.DecodedSession;
   readonly sourceName: string;
 }
 
-const toImportReproError = (error: { readonly message: string }): ImportReproError =>
+const toImportReproError = (error: { readonly message: string }): sessionTypes.ImportReproError =>
   new ImportReproError({ message: error.message });
 
 const loadSession = (
-  parsedRef: SessionRef,
-): Effect.Effect<LoadedSession, ImportReproError, FileSystem.FileSystem | Path.Path> =>
+  parsedRef: sessionTypes.SessionRef,
+): Effect.Effect<LoadedSession, sessionTypes.ImportReproError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     if (parsedRef.type === "gist") {
       const decoded = yield* fetchGistSession(parsedRef.id);
@@ -49,7 +47,7 @@ const loadSession = (
   });
 
 const confirmOverwrite = (
-  ctx: ExtensionCommandContext,
+  ctx: codingAgentTypes.ExtensionCommandContext,
   destination: string,
 ): Effect.Effect<boolean, never, FileSystem.FileSystem> =>
   Effect.gen(function* () {
@@ -64,9 +62,9 @@ const confirmOverwrite = (
   });
 
 const switchToImported = (
-  ctx: ExtensionCommandContext,
+  ctx: codingAgentTypes.ExtensionCommandContext,
   destination: string,
-  decoded: DecodedSession,
+  decoded: sessionTypes.DecodedSession,
   targetCwd: string,
 ): Effect.Effect<void> => {
   const platformNotice = getPlatformContinuationNotice(decoded.header.cwd);
@@ -76,10 +74,10 @@ const switchToImported = (
         if (platformNotice === undefined || platformNotice === "") return Promise.resolve();
         return nextCtx.sendMessage(
           {
-            customType: "import-repro",
             content: platformNotice,
-            display: true,
+            customType: "import-repro",
             details: { sourceCwd: decoded.header.cwd, targetCwd },
+            display: true,
           },
           { triggerTurn: false },
         );
@@ -90,8 +88,8 @@ const switchToImported = (
 
 const importRepro = (
   ref: string,
-  ctx: ExtensionCommandContext,
-): Effect.Effect<void, ImportReproError, FileSystem.FileSystem | Path.Path> =>
+  ctx: codingAgentTypes.ExtensionCommandContext,
+): Effect.Effect<void, sessionTypes.ImportReproError, FileSystem.FileSystem | Path.Path> =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
@@ -120,11 +118,11 @@ const importRepro = (
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("ir", {
     description:
       "Import a CI issue-analysis session from a gist ID, share URL, or issue URL and switch to it",
-    handler: (args: string, ctx: ExtensionCommandContext) => {
+    handler: (args: string, ctx: codingAgentTypes.ExtensionCommandContext) => {
       const ref = args.trim();
       if (ref === "") {
         ctx.ui.notify("Usage: /ir <gist-id | gist-url | pi.dev/session URL | issue URL>", "error");

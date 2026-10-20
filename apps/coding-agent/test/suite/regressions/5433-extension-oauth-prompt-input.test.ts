@@ -8,18 +8,22 @@ const APC_SEQUENCE = new RegExp(
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { KeybindingsManager } from "../../../src/core/keybindings.ts";
-import { LoginDialogComponent } from "../../../src/modes/interactive/components/login-dialog.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
-
+import KeybindingsManager from "../../../src/core/keybindings-manager.ts";
+import LoginDialogComponent from "../../../src/modes/interactive/components/login-dialog.ts";
+import type loginDialogTypes from "../../../src/modes/interactive/components/login-dialog.types.ts";
+import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import ansi from "../../../src/utils/ansi.ts";
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 const { setKeybindings } = tui;
 
 vi.mock("../../../src/utils/open-browser.ts", () => ({
-  openBrowser: vi.fn(),
+  default: {
+    openBrowser: vi.fn(),
+  },
 }));
 
-function createDialog(): LoginDialogComponent {
+function createDialog(): loginDialogTypes.LoginDialogComponent {
   return new LoginDialogComponent(
     { requestRender: vi.fn() } as unknown as tuiTypes.TUI,
     "prompt-repro",
@@ -28,7 +32,7 @@ function createDialog(): LoginDialogComponent {
   );
 }
 
-function renderDialog(dialog: LoginDialogComponent): string[] {
+function renderDialog(dialog: loginDialogTypes.LoginDialogComponent): string[] {
   return stripAnsi(dialog.render(120).join("\n").replace(APC_SEQUENCE, ""))
     .split("\n")
     .map((line) => line.trimEnd());

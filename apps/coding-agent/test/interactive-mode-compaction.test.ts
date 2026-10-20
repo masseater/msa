@@ -5,10 +5,12 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import type { CompactionEntry, SessionEntry } from "../src/core/session-manager.ts";
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { initTheme } = themeModule;
+const { stripAnsi } = ansi;
 
 const { Container } = tui;
 
@@ -43,7 +45,9 @@ const usesTheCacheMissNoticeSettingFor = () => {
     chatContainer: new Container(),
     settingsManager: { getShowCacheMissNotices: () => true },
   };
+  Object.setPrototypeOf(enabled, InteractiveMode.prototype);
   addCompactionCostNotice.call(enabled, { kind: "compaction", type: "compaction_cost", usage });
+  Object.setPrototypeOf(enabled, InteractiveMode.prototype);
   addCompactionCostNotice.call(enabled, {
     kind: "branch_summary",
     type: "compaction_cost",
@@ -57,6 +61,7 @@ const usesTheCacheMissNoticeSettingFor = () => {
     chatContainer: new Container(),
     settingsManager: { getShowCacheMissNotices: () => false },
   };
+  Object.setPrototypeOf(disabled, InteractiveMode.prototype);
   addCompactionCostNotice.call(disabled, { kind: "compaction", type: "compaction_cost", usage });
   expect(disabled.chatContainer.children).toHaveLength(0);
 };
@@ -83,7 +88,7 @@ const rendersEachCompactionCostAfterItsSummaryPart1 = () => {
 
 const rendersEachCompactionCostAfterItsSummary = () => {
   const { currentUsage, previousUsage } = rendersEachCompactionCostAfterItsSummaryPart1();
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     {
       firstKeptEntryId: "kept",
       id: "current",
@@ -108,9 +113,10 @@ const rendersEachCompactionCostAfterItsSummary = () => {
   const fakeThis = { renderSessionItems: vi.fn() };
   const renderSessionEntries = Reflect.get(InteractiveMode.prototype, "renderSessionEntries") as (
     this: typeof fakeThis,
-    entries: SessionEntry[],
+    entries: sessionManagerTypes.SessionEntry[],
   ) => void;
 
+  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
   renderSessionEntries.call(fakeThis, entries);
 
   expect(fakeThis.renderSessionItems).toHaveBeenCalledWith(
@@ -134,7 +140,7 @@ const rendersRetainedEntriesAndAppendsTheLatestStep1 = () =>
       output: 20,
       totalTokens: 100,
     };
-    const latestCompaction: SessionEntry = {
+    const latestCompaction: sessionManagerTypes.SessionEntry = {
       firstKeptEntryId: "kept",
       id: "latest",
       parentId: "previous",
@@ -144,7 +150,7 @@ const rendersRetainedEntriesAndAppendsTheLatestStep1 = () =>
       type: "compaction",
       usage,
     };
-    const previousCompaction: SessionEntry = {
+    const previousCompaction: sessionManagerTypes.SessionEntry = {
       firstKeptEntryId: "kept",
       id: "previous",
       parentId: null,
@@ -158,8 +164,8 @@ const rendersRetainedEntriesAndAppendsTheLatestStep1 = () =>
   });
 
 const rendersRetainedEntriesAndAppendsTheLatestStep2 = (input: {
-  readonly latestCompaction: CompactionEntry<unknown>;
-  readonly previousCompaction: CompactionEntry<unknown>;
+  readonly latestCompaction: sessionManagerTypes.CompactionEntry<unknown>;
+  readonly previousCompaction: sessionManagerTypes.CompactionEntry<unknown>;
 }) =>
   Effect.sync(() => {
     const { latestCompaction, previousCompaction } = input;
@@ -217,6 +223,7 @@ const rendersRetainedEntriesAndAppendsTheLatest = () =>
         },
       ) => Promise<void>;
 
+      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
       yield* awaited(
         handleEvent.call(fakeThis, {
           aborted: false,
@@ -269,6 +276,7 @@ const updatesTheWorkingStateWhenTheSame = () =>
         event: { type: "turn_start" },
       ) => Promise<void>;
 
+      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
       yield* awaited(handleEvent.call(fakeThis, { type: "turn_start" }));
 
       expect(fakeThis.ui.terminal.setProgress).toHaveBeenCalledWith(true);
@@ -277,6 +285,7 @@ const updatesTheWorkingStateWhenTheSame = () =>
       expect(fakeThis.ui.requestRender).toHaveBeenCalledTimes(1);
 
       fakeThis.workingVisible = false;
+      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
       yield* awaited(handleEvent.call(fakeThis, { type: "turn_start" }));
 
       expect(fakeThis.showWorkingStatusIndicator).toHaveBeenCalledTimes(1);

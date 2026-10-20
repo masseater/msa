@@ -5,11 +5,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createBashTool } from "../src/core/tools/bash.ts";
+import sdk from "../src/core/sdk.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import bash from "../src/core/tools/bash.ts";
+import codingAgent from "../src/index.ts";
+
+const { DefaultResourceLoader, SessionManager, SettingsManager } = codingAgent;
+
+const { createBashTool } = bash;
+const { createAgentSession } = sdk;
 
 const { getModel } = compat;
 
@@ -41,8 +46,8 @@ const exposesSessionStateBeforeCustomBashSpawnStep2 = (context0: {
   readonly args: {
     readonly carried: {
       readonly input: {
-        readonly sessionManager: SessionManager;
-        readonly settingsManager: SettingsManager;
+        readonly sessionManager: sessionManagerTypes.SessionManager;
+        readonly settingsManager: settingsManagerTypes.SettingsManager;
       };
     };
   };
@@ -94,8 +99,8 @@ const registerCapturingBashTools =
   };
 
 const exposesSessionStateBeforeCustomBashSpawnStep3 = (input: {
-  readonly sessionManager: SessionManager;
-  readonly settingsManager: SettingsManager;
+  readonly sessionManager: sessionManagerTypes.SessionManager;
+  readonly settingsManager: settingsManagerTypes.SettingsManager;
 }) =>
   Effect.gen(function* () {
     const { sessionManager, settingsManager } = input;
@@ -145,8 +150,8 @@ const exposesSessionStateBeforeCustomBashSpawnStep3 = (input: {
 const exposesSessionStateBeforeCustomBashSpawnStep4 = (args: {
   readonly carried: {
     readonly input: {
-      readonly sessionManager: SessionManager;
-      readonly settingsManager: SettingsManager;
+      readonly sessionManager: sessionManagerTypes.SessionManager;
+      readonly settingsManager: settingsManagerTypes.SettingsManager;
     };
   };
 }) =>
@@ -162,8 +167,8 @@ const exposesSessionStateBeforeCustomBashSpawnStep4 = (args: {
 
 const exposesSessionStateBeforeCustomBashSpawnStep5 = (carried: {
   readonly input: {
-    readonly sessionManager: SessionManager;
-    readonly settingsManager: SettingsManager;
+    readonly sessionManager: sessionManagerTypes.SessionManager;
+    readonly settingsManager: settingsManagerTypes.SettingsManager;
   };
 }) =>
   Effect.gen(function* () {
@@ -172,8 +177,8 @@ const exposesSessionStateBeforeCustomBashSpawnStep5 = (carried: {
   });
 
 const exposesSessionStateBeforeCustomBashSpawnStep6 = (input: {
-  readonly sessionManager: SessionManager;
-  readonly settingsManager: SettingsManager;
+  readonly sessionManager: sessionManagerTypes.SessionManager;
+  readonly settingsManager: settingsManagerTypes.SettingsManager;
 }) =>
   Effect.gen(function* () {
     const { session } = yield* exposesSessionStateBeforeCustomBashSpawnStep5({ input });

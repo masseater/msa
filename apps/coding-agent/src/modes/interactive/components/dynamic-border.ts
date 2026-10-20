@@ -1,8 +1,10 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import { theme } from "../theme/theme.ts";
+import themeModule from "../theme/theme.ts";
 
-export class DynamicBorder implements tuiTypes.Component {
+const { theme } = themeModule;
+
+export default class DynamicBorder implements tuiTypes.Component {
   private color: (str: string) => string;
 
   constructor(color: (str: string) => string = (str) => theme.fg("border", str)) {

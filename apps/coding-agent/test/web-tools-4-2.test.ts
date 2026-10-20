@@ -3,12 +3,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { readEnv } from "../src/core/process-env.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+import processEnv from "../src/core/process-env.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import webToolsSupport from "./web-tools-support.ts";
+const { createAgentSession } = sdk;
+const { readEnv } = processEnv;
 
 const { getModel } = compat;
 

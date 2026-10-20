@@ -1,16 +1,12 @@
 import http from "@msa/ai/utils/http";
 import { Duration, Effect, Schema } from "effect";
 
-import { ToolFailure, platformRuntime } from "../platform/index.ts";
+import platform from "../platform/index.ts";
+import type embeddingsTypes from "./embeddings.types.ts";
+
+const { ToolFailure } = platform;
 
 const { httpRequest } = http;
-
-export interface EmbeddingClientOptions {
-  baseUrl: string;
-  model: string;
-  apiKey?: string;
-  timeoutMs: number;
-}
 
 interface EmbeddingPayload {
   data?: Array<{ embedding?: unknown }>;
@@ -69,14 +65,14 @@ const requestVector = Effect.fn("requestEmbedding")(function* (request: Embeddin
   return yield* Effect.sync(() => normalizedVector(payload.data?.[0]?.embedding, endpoint));
 });
 
-export class EmbeddingClient {
+export default class EmbeddingClient {
   readonly model: string;
   private readonly endpoint: string;
   private readonly apiKey: string | undefined;
   private readonly timeoutMs: number;
   private dimension: number | undefined;
 
-  constructor(options: EmbeddingClientOptions) {
+  constructor(options: embeddingsTypes.EmbeddingClientOptions) {
     this.endpoint = `${options.baseUrl.replace(/\/+$/u, "")}/embeddings`;
     this.model = options.model;
     this.apiKey = options.apiKey;
@@ -88,7 +84,7 @@ export class EmbeddingClient {
   }
 
   embed(text: string, signal?: AbortSignal): Promise<Float32Array> {
-    return platformRuntime.runPromise(
+    return Effect.runPromise(
       requestVector({
         apiKey: this.apiKey,
         endpoint: this.endpoint,

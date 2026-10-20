@@ -2,25 +2,25 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 
-import type { MessageRenderer } from "../../../core/extensions/types.ts";
-import type { Orchestrator, OrchestratorReport } from "../../../core/orchestrator/orchestrator.ts";
-import { firstLine } from "../../../core/orchestrator/text.ts";
-import type { ReplanView, TaskSnapshot, TaskStatus } from "../../../core/orchestrator/types.ts";
-import { formatToolCallWithArgs } from "../../../core/tools/render-utils.ts";
-import { theme } from "../theme/theme.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import type orchestratorTypes from "../../../core/orchestrator/orchestrator.types.ts";
+import textModule from "../../../core/orchestrator/text.ts";
+import type orchestratorTypesTypes from "../../../core/orchestrator/types.types.ts";
+import renderUtils from "../../../core/tools/render-utils.ts";
+import themeModule from "../theme/theme.ts";
+import type tasksViewHelpersTypes from "./tasks-view-helpers.types.ts";
+
+const { theme } = themeModule;
+const { formatToolCallWithArgs } = renderUtils;
+const { firstLine } = textModule;
 
 const { Text } = tui;
 
-export interface TasksViewState {
-  showFinished: boolean;
-  selectedId?: string | undefined;
-}
-
-function createTasksViewState(): TasksViewState {
+function createTasksViewState(): tasksViewHelpersTypes.TasksViewState {
   return { showFinished: false };
 }
 
-const STATUS_LABEL: Record<TaskStatus, string> = {
+const STATUS_LABEL: Record<orchestratorTypesTypes.TaskStatus, string> = {
   completed: "Done",
   failed: "Failed",
   running: "Running",
@@ -28,7 +28,7 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   waiting: "Waiting",
 };
 
-function glyph(task: TaskSnapshot): string {
+function glyph(task: orchestratorTypesTypes.TaskSnapshot): string {
   if (task.kind === "review") {
     const color =
       task.status === "failed" ? "error" : task.status === "running" ? "accent" : "muted";
@@ -48,11 +48,11 @@ function glyph(task: TaskSnapshot): string {
   }
 }
 
-function finished(task: TaskSnapshot): boolean {
+function finished(task: orchestratorTypesTypes.TaskSnapshot): boolean {
   return task.status === "completed" || task.status === "stopped";
 }
 
-function stoppable(task: TaskSnapshot): boolean {
+function stoppable(task: orchestratorTypesTypes.TaskSnapshot): boolean {
   return task.status === "running" || task.status === "waiting";
 }
 
@@ -77,8 +77,8 @@ function activityLines(messages: readonly agentTypes.AgentMessage[]): string[] {
 }
 
 function depthOf(
-  task: TaskSnapshot,
-  byId: ReadonlyMap<string, TaskSnapshot>,
+  task: orchestratorTypesTypes.TaskSnapshot,
+  byId: ReadonlyMap<string, orchestratorTypesTypes.TaskSnapshot>,
   seen = new Set<string>(),
 ): number {
   if (seen.has(task.id)) return 0;
@@ -89,7 +89,10 @@ function depthOf(
     : Math.max(...parents.map((parent) => depthOf(parent, byId, seen) + 1));
 }
 
-function roundTasks(tasks: readonly TaskSnapshot[], round: string): TaskSnapshot[] {
+function roundTasks(
+  tasks: readonly orchestratorTypesTypes.TaskSnapshot[],
+  round: string,
+): orchestratorTypesTypes.TaskSnapshot[] {
   const inRound = tasks.filter((task) => task.round === round);
   const byId = new Map(inRound.map((task) => [task.id, task]));
   return [...inRound].sort(
@@ -97,7 +100,7 @@ function roundTasks(tasks: readonly TaskSnapshot[], round: string): TaskSnapshot
   );
 }
 
-function describeReplan(replan: ReplanView): string {
+function describeReplan(replan: orchestratorTypesTypes.ReplanView): string {
   const counts = [
     replan.stopped.length > 0 ? `${replan.stopped.length} stopped` : undefined,
     replan.created.length > 0 ? `${replan.created.length} created` : undefined,
@@ -107,9 +110,12 @@ function describeReplan(replan: ReplanView): string {
   return `↺ ${replan.reason}  ${counts.join(" · ")}`;
 }
 
-function describeTaskCounts(tasks: readonly TaskSnapshot[]): string | undefined {
+function describeTaskCounts(
+  tasks: readonly orchestratorTypesTypes.TaskSnapshot[],
+): string | undefined {
   if (tasks.length === 0) return undefined;
-  const count = (status: TaskStatus) => tasks.filter((task) => task.status === status).length;
+  const count = (status: orchestratorTypesTypes.TaskStatus) =>
+    tasks.filter((task) => task.status === status).length;
   const parts = [
     [count("running"), theme.fg("accent", "●"), "running"],
     [count("waiting"), theme.fg("muted", "○"), "waiting"],
@@ -123,9 +129,9 @@ function describeTaskCounts(tasks: readonly TaskSnapshot[]): string | undefined 
     .join("  ");
 }
 
-export function createTaskReportRenderer(
-  orchestrator: Orchestrator | undefined,
-): MessageRenderer<OrchestratorReport> {
+function createTaskReportRenderer(
+  orchestrator: orchestratorTypes.Orchestrator | undefined,
+): extensionsTypesTypes.MessageRenderer<orchestratorTypes.OrchestratorReport> {
   return (message, { expanded, outputPad }) => {
     const details = message.details;
     if (details === undefined) return undefined;
@@ -136,7 +142,7 @@ export function createTaskReportRenderer(
         ? theme.fg("muted", ` · started ${details.started.join(", ")}`)
         : "";
     const lines = [
-      `${glyph({ kind: "work", status: details.status } as TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
+      `${glyph({ kind: "work", status: details.status } as orchestratorTypesTypes.TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
     ];
     const content = typeof message.content === "string" ? message.content : "";
     const report = /<report>\n([\s\S]*)\n<\/report>/u.exec(content)?.[1];
@@ -149,7 +155,7 @@ export function createTaskReportRenderer(
   };
 }
 
-export const viewHelpers = {
+const viewHelpers = {
   STATUS_LABEL,
   activityLines,
   createTasksViewState,
@@ -162,3 +168,10 @@ export const viewHelpers = {
   roundTasks,
   stoppable,
 };
+
+const tasksViewHelpers = {
+  createTaskReportRenderer,
+  viewHelpers,
+};
+
+export default tasksViewHelpers;

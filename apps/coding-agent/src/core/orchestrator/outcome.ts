@@ -1,25 +1,23 @@
 import type compatTypes from "@msa/ai/compat.types";
 import textModule from "@msa/ai/utils/text";
 
-import type { Runtime } from "./runtime.ts";
-import { store } from "./store.ts";
-import type { Assignment, Task, ThreadStatus } from "./types.ts";
-import type { WorkerSession } from "./worker.ts";
+import type outcomeTypes from "./outcome.types.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
+import type workerTypes from "./worker.ts";
+
+const { store } = storeModule;
 
 const { contentText } = textModule;
 
 const REPORT_LIMIT = 4000;
 
-export interface Outcome {
-  status: ThreadStatus;
-  content: string;
-}
-
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function outcomeOf(worker: WorkerSession, error: unknown): Outcome {
+function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTypes.Outcome {
   const last = worker.messages.findLast(
     (message): message is compatTypes.AssistantMessage => message.role === "assistant",
   );
@@ -35,13 +33,13 @@ function outcomeOf(worker: WorkerSession, error: unknown): Outcome {
 }
 
 function applyOutcome(
-  runtime: Runtime,
-  assignments: readonly Assignment[],
-  outcome: Outcome,
+  runtime: runtimeTypes.Runtime,
+  assignments: readonly orchestratorTypesTypes.Assignment[],
+  outcome: outcomeTypes.Outcome,
   now: number,
-): Task[] {
+): orchestratorTypesTypes.Task[] {
   const database = runtime.database;
-  const review: Task[] = [];
+  const review: orchestratorTypesTypes.Task[] = [];
   for (const assignment of assignments) {
     store.insertReport(database, {
       content: outcome.content,
@@ -71,9 +69,9 @@ function applyOutcome(
 }
 
 function reportText(
-  runtime: Runtime,
-  assignments: readonly Assignment[],
-  outcome: Outcome,
+  runtime: runtimeTypes.Runtime,
+  assignments: readonly orchestratorTypesTypes.Assignment[],
+  outcome: outcomeTypes.Outcome,
   started: readonly string[],
 ): string {
   const titles = assignments.map((assignment) => {
@@ -93,4 +91,10 @@ function reportText(
     .join("\n\n");
 }
 
-export const outcomes = { applyOutcome, errorText, outcomeOf, reportText };
+const outcomes = { applyOutcome, errorText, outcomeOf, reportText };
+
+const outcome = {
+  outcomes,
+};
+
+export default outcome;

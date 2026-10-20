@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { substituteArgs } from "../src/core/prompt-templates.ts";
+import promptTemplates from "../src/core/prompt-templates.ts";
+
+const { substituteArgs } = promptTemplates;
 
 const shouldReplaceArgumentsWithAllArgsJoined = () => {
   expect(substituteArgs("Test: $ARGUMENTS", ["a", "b", "c"])).toBe("Test: a b c");

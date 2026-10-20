@@ -1,15 +1,14 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import AgentSession from "../src/core/agent-session.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import testSessionAgent from "./test-session-agent.ts";
 import utilities from "./utilities.ts";
 import type utilitiesTypes from "./utilities.types.ts";
-
 const { awaited, joinPath, makeTempDir, removePath, runTest } = testing;
 
 const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;

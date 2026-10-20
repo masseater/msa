@@ -2,11 +2,14 @@ import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { MessageRenderOptions, MessageRenderer } from "../src/core/extensions/types.ts";
-import type { CustomMessage } from "../src/core/messages.ts";
-import { CustomMessageComponent } from "../src/modes/interactive/components/custom-message.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import type messagesTypes from "../src/core/messages.types.ts";
+import CustomMessageComponent from "../src/modes/interactive/components/custom-message.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { initTheme } = themeModule;
+const { stripAnsi } = ansi;
 
 const { Text } = tui;
 
@@ -14,12 +17,12 @@ const { currentTimeMillis } = testing;
 
 const providesOutputPaddingToCustomRenderersAnd = () => {
   initTheme("dark");
-  const optionsSeen: MessageRenderOptions[] = [];
-  const renderer: MessageRenderer = (_message, options) => {
+  const optionsSeen: extensionsTypesTypes.MessageRenderOptions[] = [];
+  const renderer: extensionsTypesTypes.MessageRenderer = (_message, options) => {
     optionsSeen.push(options);
     return new Text("custom", options.outputPad, 0);
   };
-  const message: CustomMessage = {
+  const message: messagesTypes.CustomMessage = {
     content: "custom",
     customType: "test",
     display: true,

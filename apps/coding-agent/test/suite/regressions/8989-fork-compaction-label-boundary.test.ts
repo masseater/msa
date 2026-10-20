@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type CompactionEntry, SessionManager } from "../../../src/core/session-manager.ts";
+import SessionManager from "../../../src/core/session-manager.ts";
+import type sessionManagerTypes from "../../../src/core/session-manager.types.ts";
 import utilities from "../../utilities.ts";
-
 const { userMsg } = utilities;
 
 const preservesCompactionContextWhenAFork = () => {
@@ -16,7 +16,9 @@ const preservesCompactionContextWhenAFork = () => {
 
   session.createBranchedSession(leafId);
 
-  expect((session.getEntry(compactionId) as CompactionEntry).firstKeptEntryId).toBe(keptId);
+  expect(
+    (session.getEntry(compactionId) as sessionManagerTypes.CompactionEntry).firstKeptEntryId,
+  ).toBe(keptId);
   expect(session.buildSessionContext().messages).toMatchObject([
     { role: "compactionSummary", summary: "summary" },
     { content: "kept", role: "user" },

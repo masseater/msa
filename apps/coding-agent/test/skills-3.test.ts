@@ -3,15 +3,14 @@ import { homedir } from "os";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ResourceDiagnostic } from "../src/core/diagnostics.ts";
-import {
-  type Skill,
-  formatSkillsForPrompt,
-  loadSkills,
-  loadSkillsFromDir,
-} from "../src/core/skills.ts";
-import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
+import type diagnosticsTypes from "../src/core/diagnostics.ts";
+import skillsModule from "../src/core/skills.ts";
+import type skillsTypes from "../src/core/skills.types.ts";
+import sourceInfoModule from "../src/core/source-info.ts";
 import skillsSupport from "./skills-support.ts";
+
+const { formatSkillsForPrompt, loadSkills, loadSkillsFromDir } = skillsModule;
+const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const { fixturesDir } = skillsSupport;
 
@@ -26,7 +25,7 @@ function createTestSkill(options: {
   baseDir: string;
   disableModelInvocation?: boolean;
   source?: string;
-}): Skill {
+}): skillsTypes.Skill {
   return {
     baseDir: options.baseDir,
     description: options.description,
@@ -47,7 +46,7 @@ const shouldReturnEmptyStringForNoSkills = () => {
 };
 
 const shouldFormatSkillsAsXml = () => {
-  const skills: Skill[] = [
+  const skills: skillsTypes.Skill[] = [
     createTestSkill({
       baseDir: "/path/to/skill",
       description: "A test skill.",
@@ -67,7 +66,7 @@ const shouldFormatSkillsAsXml = () => {
 };
 
 const shouldIncludeIntroTextBeforeXml = () => {
-  const skills: Skill[] = [
+  const skills: skillsTypes.Skill[] = [
     createTestSkill({
       baseDir: "/path/to/skill",
       description: "A test skill.",
@@ -85,7 +84,7 @@ const shouldIncludeIntroTextBeforeXml = () => {
 };
 
 const shouldEscapeXmlSpecialCharacters = () => {
-  const skills: Skill[] = [
+  const skills: skillsTypes.Skill[] = [
     createTestSkill({
       baseDir: "/path/to/skill",
       description: 'A skill with <special> & "characters".',
@@ -102,7 +101,7 @@ const shouldEscapeXmlSpecialCharacters = () => {
 };
 
 const shouldFormatMultipleSkills = () => {
-  const skills: Skill[] = [
+  const skills: skillsTypes.Skill[] = [
     createTestSkill({
       baseDir: "/path/one",
       description: "First skill.",
@@ -125,7 +124,7 @@ const shouldFormatMultipleSkills = () => {
 };
 
 const shouldExcludeSkillsWithDisablemodelinvocationFromPrompt = () => {
-  const skills: Skill[] = [
+  const skills: skillsTypes.Skill[] = [
     createTestSkill({
       baseDir: "/path/visible",
       description: "A visible skill.",
@@ -149,7 +148,7 @@ const shouldExcludeSkillsWithDisablemodelinvocationFromPrompt = () => {
 };
 
 const shouldReturnEmptyStringWhenAllSkills = () => {
-  const skills: Skill[] = [
+  const skills: skillsTypes.Skill[] = [
     createTestSkill({
       baseDir: "/path/hidden",
       description: "A hidden skill.",
@@ -183,9 +182,11 @@ const shouldWarnWhenSkillPathDoesNot = () => {
     skillPaths: ["/non/existent/path"],
   });
   expect(skills).toHaveLength(0);
-  expect(diagnostics.some((d: ResourceDiagnostic) => d.message.includes("does not exist"))).toBe(
-    true,
-  );
+  expect(
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("does not exist"),
+    ),
+  ).toBe(true);
 };
 
 const shouldExpandInSkillpaths = () => {
@@ -216,7 +217,7 @@ const shouldDetectNameCollisionsAndKeepFirst = () => {
     source: "second",
   });
 
-  const skillMap = new Map<string, Skill>();
+  const skillMap = new Map<string, skillsTypes.Skill>();
   const collisionWarnings: Array<{ skillPath: string; message: string }> = [];
 
   for (const skill of first.skills) {

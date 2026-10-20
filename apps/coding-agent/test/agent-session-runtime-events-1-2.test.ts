@@ -2,13 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type {
-  ExtensionFactory,
-  SessionBeforeForkEvent,
-  SessionBeforeSwitchEvent,
-  SessionShutdownEvent,
-  SessionStartEvent,
-} from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
 import runtimeKit from "./runtime-kit.ts";
 
 const { createFauxRuntime, disposeRuntimes } = runtimeKit;
@@ -16,12 +10,12 @@ const { createFauxRuntime, disposeRuntimes } = runtimeKit;
 const { awaited, runTest } = testing;
 
 type RecordedSessionEvent =
-  | SessionBeforeSwitchEvent
-  | SessionBeforeForkEvent
-  | SessionShutdownEvent
-  | SessionStartEvent;
+  | srcTypes.SessionBeforeSwitchEvent
+  | srcTypes.SessionBeforeForkEvent
+  | srcTypes.SessionShutdownEvent
+  | srcTypes.SessionStartEvent;
 
-const createRuntimeHost = (extensionFactory: ExtensionFactory) =>
+const createRuntimeHost = (extensionFactory: srcTypes.ExtensionFactory) =>
   runTest(
     Effect.map(
       createFauxRuntime({ extensionFactory, providerViaExtension: false }),
@@ -30,7 +24,7 @@ const createRuntimeHost = (extensionFactory: ExtensionFactory) =>
   );
 
 const forkRecorder =
-  (events: RecordedSessionEvent[], control: { cancelNext: boolean }): ExtensionFactory =>
+  (events: RecordedSessionEvent[], control: { cancelNext: boolean }): srcTypes.ExtensionFactory =>
   (msa) => {
     msa.on("session_before_fork", (event) => {
       events.push(event);

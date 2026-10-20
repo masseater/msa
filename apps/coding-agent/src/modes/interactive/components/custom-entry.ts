@@ -1,21 +1,28 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { EntryRenderer } from "../../../core/extensions/types.ts";
-import type { CustomEntry } from "../../../core/session-manager.ts";
-import { toErrorMessage } from "../../../utils/errors.ts";
-import { theme } from "../theme/theme.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import type sessionManagerTypes from "../../../core/session-manager.types.ts";
+import errors from "../../../utils/errors.ts";
+import themeModule from "../theme/theme.ts";
 
-const { Box, Container, Spacer, Text } = tui;
+const { theme } = themeModule;
+const { toErrorMessage } = errors;
 
-export class CustomEntryComponent extends Container {
-  private entry: CustomEntry<unknown>;
-  private renderer: EntryRenderer;
+const { Box, Spacer, Text } = tui;
+
+export default class CustomEntryComponent extends tui.Container {
+  private entry: sessionManagerTypes.CustomEntry<unknown>;
+  private renderer: extensionsTypesTypes.EntryRenderer;
   private customComponent?: tuiTypes.Component | undefined;
   private expandedState = false;
   private outputPad: number;
 
-  constructor(entry: CustomEntry<unknown>, renderer: EntryRenderer, outputPad = 1) {
+  constructor(
+    entry: sessionManagerTypes.CustomEntry<unknown>,
+    renderer: extensionsTypesTypes.EntryRenderer,
+    outputPad = 1,
+  ) {
     super();
     this.entry = entry;
     this.renderer = renderer;

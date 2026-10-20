@@ -1,37 +1,37 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { renderQuestionnaire } from "./questionnaire-render.ts";
-import {
-  type Answer,
-  type Question,
-  type QuestionnaireResult,
-  type QuestionnaireState,
-  type RenderOption,
-  editorTheme,
-} from "./questionnaire-types.ts";
+import questionnaireRender from "./questionnaire-render.ts";
+import questionnaireTypes from "./questionnaire-types.ts";
+import type questionnaireTypesTypes from "./questionnaire-types.types.ts";
+
+const { editorTheme } = questionnaireTypes;
+const { renderQuestionnaire } = questionnaireRender;
 
 const { Editor, Key, matchesKey } = tuiModule;
 
-const currentQuestion = (state: QuestionnaireState): Question | undefined =>
-  state.questions[state.currentTab];
+const currentQuestion = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+): questionnaireTypesTypes.Question | undefined => state.questions[state.currentTab];
 
-const currentOptions = (state: QuestionnaireState): RenderOption[] => {
+const currentOptions = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+): questionnaireTypesTypes.RenderOption[] => {
   const question = currentQuestion(state);
   if (question === undefined) return [];
 
-  const options: RenderOption[] = [...question.options];
+  const options: questionnaireTypesTypes.RenderOption[] = [...question.options];
   if (question.allowOther) {
     options.push({ isOther: true, label: "Type something.", value: "__other__" });
   }
   return options;
 };
 
-const allAnswered = (state: QuestionnaireState): boolean =>
+const allAnswered = (state: questionnaireTypesTypes.QuestionnaireState): boolean =>
   state.questions.every((q) => state.answers.has(q.id));
 
-const submit = (state: QuestionnaireState, cancelled: boolean): void => {
+const submit = (state: questionnaireTypesTypes.QuestionnaireState, cancelled: boolean): void => {
   state.done({
     answers: Array.from(state.answers.values()),
     cancelled,
@@ -40,7 +40,7 @@ const submit = (state: QuestionnaireState, cancelled: boolean): void => {
 };
 
 const saveAnswer = (
-  state: QuestionnaireState,
+  state: questionnaireTypesTypes.QuestionnaireState,
   questionId: string,
   value: string,
   label: string,
@@ -50,7 +50,7 @@ const saveAnswer = (
   state.answers.set(questionId, { id: questionId, index, label, value, wasCustom });
 };
 
-const advanceAfterAnswer = (state: QuestionnaireState): void => {
+const advanceAfterAnswer = (state: questionnaireTypesTypes.QuestionnaireState): void => {
   if (!state.isMulti) {
     submit(state, false);
     return;
@@ -62,7 +62,10 @@ const advanceAfterAnswer = (state: QuestionnaireState): void => {
   state.refresh();
 };
 
-const handleInputMode = (state: QuestionnaireState, data: string): boolean => {
+const handleInputMode = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+  data: string,
+): boolean => {
   if (!state.inputMode) return false;
 
   if (matchesKey(data, Key.escape)) {
@@ -78,7 +81,10 @@ const handleInputMode = (state: QuestionnaireState, data: string): boolean => {
   return true;
 };
 
-const handleTabNavigation = (state: QuestionnaireState, data: string): boolean => {
+const handleTabNavigation = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+  data: string,
+): boolean => {
   if (!state.isMulti) return false;
 
   if (matchesKey(data, Key.tab) || matchesKey(data, Key.right)) {
@@ -96,7 +102,10 @@ const handleTabNavigation = (state: QuestionnaireState, data: string): boolean =
   return false;
 };
 
-const handleSubmitTab = (state: QuestionnaireState, data: string): boolean => {
+const handleSubmitTab = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+  data: string,
+): boolean => {
   if (state.currentTab !== state.questions.length) return false;
 
   if (matchesKey(data, Key.enter) && allAnswered(state)) {
@@ -107,7 +116,10 @@ const handleSubmitTab = (state: QuestionnaireState, data: string): boolean => {
   return true;
 };
 
-const handleOptionNavigation = (state: QuestionnaireState, data: string): boolean => {
+const handleOptionNavigation = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+  data: string,
+): boolean => {
   const options = currentOptions(state);
 
   if (matchesKey(data, Key.up)) {
@@ -145,24 +157,24 @@ const handleOptionNavigation = (state: QuestionnaireState, data: string): boolea
   return true;
 };
 
-const handleInput = (state: QuestionnaireState, data: string): void => {
+const handleInput = (state: questionnaireTypesTypes.QuestionnaireState, data: string): void => {
   if (handleInputMode(state, data)) return;
   if (handleTabNavigation(state, data)) return;
   if (handleSubmitTab(state, data)) return;
   handleOptionNavigation(state, data);
 };
 
-export const askQuestionnaire = (request: {
+const askQuestionnaire = (request: {
   readonly tui: tuiTypes.TUI;
-  readonly theme: Theme;
-  readonly questions: Question[];
-  readonly done: (result: QuestionnaireResult) => void;
+  readonly theme: codingAgentTypes.Theme;
+  readonly questions: questionnaireTypesTypes.Question[];
+  readonly done: (result: questionnaireTypesTypes.QuestionnaireResult) => void;
 }) => {
   const { tui, theme, questions, done } = request;
   const isMulti = questions.length > 1;
 
-  const state: QuestionnaireState = {
-    answers: new Map<string, Answer>(),
+  const state: questionnaireTypesTypes.QuestionnaireState = {
+    answers: new Map<string, questionnaireTypesTypes.Answer>(),
     cachedLines: undefined,
     currentTab: 0,
     done,
@@ -197,3 +209,9 @@ export const askQuestionnaire = (request: {
     render: (width: number) => renderQuestionnaire({ state, theme, width }),
   };
 };
+
+const questionnaireUi = {
+  askQuestionnaire,
+};
+
+export default questionnaireUi;

@@ -1,30 +1,21 @@
 import { Effect } from "effect";
 
-import { splitBom } from "../../utils/text.ts";
-import { ToolFailure, fromPromise } from "../platform/index.ts";
-import {
-  type Edit,
+import textModule from "../../utils/text.ts";
+import platform from "../platform/index.ts";
+import type editApplyTypes from "./edit-apply.types.ts";
+import editDiff from "./edit-diff.ts";
+import type editDiffTypes from "./edit-diff.types.ts";
+
+const { ToolFailure, fromPromise } = platform;
+const {
   applyEditsToNormalizedContent,
   detectLineEnding,
   generateDiffString,
   generateUnifiedPatch,
   normalizeToLF,
   restoreLineEndings,
-} from "./edit-diff.ts";
-
-export interface EditOperations {
-  readFile: (absolutePath: string) => Promise<Buffer>;
-  writeFile: (absolutePath: string, content: string) => Promise<void>;
-  access: (absolutePath: string) => Promise<void>;
-}
-
-export interface EditRequest {
-  ops: EditOperations;
-  path: string;
-  absolutePath: string;
-  edits: Edit[];
-  signal: AbortSignal | undefined;
-}
+} = editDiff;
+const { splitBom } = textModule;
 
 const accessErrorMessage = (error: unknown): string =>
   error instanceof Error && "code" in error ? `Error code: ${error.code}` : String(error);
@@ -36,7 +27,7 @@ const abortCheck = (signal: AbortSignal | undefined) =>
       : Effect.void,
   );
 
-const accessForEdit = ({ ops, path, absolutePath, signal }: EditRequest) =>
+const accessForEdit = ({ ops, path, absolutePath, signal }: editApplyTypes.EditRequest) =>
   fromPromise(() => ops.access(absolutePath)).pipe(
     Effect.catchTag("ForeignError", (failure) =>
       abortCheck(signal).pipe(
@@ -52,7 +43,12 @@ const accessForEdit = ({ ops, path, absolutePath, signal }: EditRequest) =>
     ),
   );
 
-const editResult = (path: string, edits: Edit[], baseContent: string, newContent: string) => {
+const editResult = (
+  path: string,
+  edits: editDiffTypes.Edit[],
+  baseContent: string,
+  newContent: string,
+) => {
   const diffResult = generateDiffString(baseContent, newContent);
   return {
     content: [
@@ -69,7 +65,7 @@ const editResult = (path: string, edits: Edit[], baseContent: string, newContent
   };
 };
 
-export const performEdit = (request: EditRequest) => {
+const performEdit = (request: editApplyTypes.EditRequest) => {
   const { ops, path, absolutePath, edits, signal } = request;
   const throwIfAborted = abortCheck(signal);
   return Effect.gen(function* () {
@@ -91,3 +87,9 @@ export const performEdit = (request: EditRequest) => {
     return editResult(path, edits, baseContent, newContent);
   });
 };
+
+const editApply = {
+  performEdit,
+};
+
+export default editApply;

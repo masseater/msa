@@ -7,7 +7,7 @@ import java from "highlight.js/lib/languages/java.js";
 import kotlin from "highlight.js/lib/languages/kotlin.js";
 import swift from "highlight.js/lib/languages/swift.js";
 
-export const cLanguages = {
+const cLanguages = {
   c,
   cpp,
   csharp,
@@ -17,3 +17,9 @@ export const cLanguages = {
   kotlin,
   swift,
 };
+
+const highlightC = {
+  cLanguages,
+};
+
+export default highlightC;

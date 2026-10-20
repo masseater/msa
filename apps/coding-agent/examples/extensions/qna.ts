@@ -1,7 +1,9 @@
 import type aiTypes from "@msa/ai/index.types";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { BorderedLoader } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Clock, Effect } from "effect";
+
+const { BorderedLoader } = codingAgent;
 
 const SYSTEM_PROMPT = `You are a question extractor. Given text from a conversation, extract any questions that need answering and format them for the user to fill in.
 
@@ -21,7 +23,7 @@ Keep questions in the order they appeared. Be concise.`;
 
 type LastAssistantText = { ok: true; text: string } | { ok: false; reason: string };
 
-const findLastAssistantText = (ctx: ExtensionContext): LastAssistantText => {
+const findLastAssistantText = (ctx: codingAgentTypes.ExtensionContext): LastAssistantText => {
   for (const entry of ctx.sessionManager.getBranch().toReversed()) {
     if (entry.type !== "message") continue;
     const msg = entry.message;
@@ -39,14 +41,14 @@ const findLastAssistantText = (ctx: ExtensionContext): LastAssistantText => {
   return { ok: false, reason: "No assistant messages found" };
 };
 
-const extractQuestions = (ctx: ExtensionContext, lastAssistantText: string) =>
+const extractQuestions = (ctx: codingAgentTypes.ExtensionContext, lastAssistantText: string) =>
   ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
     const loader = new BorderedLoader(tui, theme, `Extracting questions using ${ctx.model!.id}...`);
     loader.onAbort = () => done(null);
 
     const doExtract = Effect.gen(function* () {
       const userMessage: aiTypes.UserMessage = {
-        content: [{ type: "text", text: lastAssistantText }],
+        content: [{ text: lastAssistantText, type: "text" }],
         role: "user",
         timestamp: yield* Clock.currentTimeMillis,
       };
@@ -79,7 +81,7 @@ const extractQuestions = (ctx: ExtensionContext, lastAssistantText: string) =>
     return loader;
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("qna", {
     description: "Extract questions from last assistant message into editor",
     handler: (_args, ctx) =>

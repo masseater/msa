@@ -1,29 +1,31 @@
-import { spawn, spawnSync } from "child_process";
-import { existsSync } from "node:fs";
+import config from "../config.ts";
+import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform.ts";
+import nodeChildProcess from "../core/platform/node/child-process.ts";
+import nodeFs from "../core/platform/node/fs.ts";
+import platformExtra from "./platform-extra.ts";
+import type shellTypes from "./shell.types.ts";
 
-import { getBinDir } from "../config.ts";
-import { join } from "../core/platform-node.ts";
-import { readEnv } from "../core/platform.ts";
-import { delimiter } from "./platform-extra.ts";
+const { spawn, spawnSync } = nodeChildProcess;
+const { existsSync } = nodeFs;
 
-export interface ShellConfig {
-  shell: string;
-  args: string[];
-  commandTransport?: "argv" | "stdin";
-}
+const { readEnv } = platformModule;
+const { getBinDir } = config;
+const { delimiter } = platformExtra;
+const { join } = platformNode;
 
 function isLegacyWslBashPath(path: string): boolean {
   const normalized = path.replace(/\//gu, "\\").toLowerCase();
   return /^[a-z]:\\windows\\(?:system32|sysnative)\\bash\.exe$/u.test(normalized);
 }
 
-function getBashShellConfig(shell: string): ShellConfig {
+function getBashShellConfig(shell: string): shellTypes.ShellConfig {
   return isLegacyWslBashPath(shell)
     ? { args: ["-s"], commandTransport: "stdin", shell }
     : { args: ["-c"], shell };
 }
 
-export function findExecutableOnPath(executable: string): string | null {
+function findExecutableOnPath(executable: string): string | null {
   if (process.platform === "win32") {
     try {
       const result = spawnSync("where", [executable], {
@@ -53,7 +55,7 @@ export function findExecutableOnPath(executable: string): string | null {
   return null;
 }
 
-export function getShellConfig(customShellPath?: string): ShellConfig {
+function getShellConfig(customShellPath?: string): shellTypes.ShellConfig {
   if (customShellPath !== undefined && customShellPath !== "") {
     if (existsSync(customShellPath)) {
       return getBashShellConfig(customShellPath);
@@ -104,7 +106,7 @@ export function getShellConfig(customShellPath?: string): ShellConfig {
   return { args: ["-c"], shell: "sh" };
 }
 
-export const POWERSHELL_ARGS = [
+const POWERSHELL_ARGS = [
   "-NoProfile",
   "-NonInteractive",
   "-ExecutionPolicy",
@@ -112,7 +114,7 @@ export const POWERSHELL_ARGS = [
   "-Command",
 ] as const;
 
-export function getPowerShellConfig(): ShellConfig {
+function getPowerShellConfig(): shellTypes.ShellConfig {
   if (process.platform !== "win32") {
     throw new Error("The powershell tool is only available on Windows.");
   }
@@ -127,7 +129,7 @@ export function getPowerShellConfig(): ShellConfig {
   return { args: [...POWERSHELL_ARGS], shell };
 }
 
-export function getShellEnv(): NodeJS.ProcessEnv {
+function getShellEnv(): NodeJS.ProcessEnv {
   const binDir = getBinDir();
   const pathKey = Object.keys(process.env).find((key) => key.toLowerCase() === "path") ?? "PATH";
   const currentPath = readEnv(pathKey) ?? "";
@@ -143,7 +145,7 @@ export function getShellEnv(): NodeJS.ProcessEnv {
   };
 }
 
-export function sanitizeBinaryOutput(str: string): string {
+function sanitizeBinaryOutput(str: string): string {
   return Array.from(str)
     .filter((char) => {
       const code = char.codePointAt(0) ?? 0;
@@ -160,22 +162,22 @@ export function sanitizeBinaryOutput(str: string): string {
 
 const trackedDetachedChildPids = new Set<number>();
 
-export function trackDetachedChildPid(pid: number): void {
+function trackDetachedChildPid(pid: number): void {
   trackedDetachedChildPids.add(pid);
 }
 
-export function untrackDetachedChildPid(pid: number): void {
+function untrackDetachedChildPid(pid: number): void {
   trackedDetachedChildPids.delete(pid);
 }
 
-export function killTrackedDetachedChildren(): void {
+function killTrackedDetachedChildren(): void {
   for (const pid of trackedDetachedChildPids) {
     killProcessTree(pid);
   }
   trackedDetachedChildPids.clear();
 }
 
-export function killProcessTree(pid: number): void {
+function killProcessTree(pid: number): void {
   if (process.platform === "win32") {
     try {
       const child = spawn(
@@ -200,3 +202,18 @@ export function killProcessTree(pid: number): void {
     }
   }
 }
+
+const shell = {
+  POWERSHELL_ARGS,
+  findExecutableOnPath,
+  getPowerShellConfig,
+  getShellConfig,
+  getShellEnv,
+  killProcessTree,
+  killTrackedDetachedChildren,
+  sanitizeBinaryOutput,
+  trackDetachedChildPid,
+  untrackDetachedChildPid,
+};
+
+export default shell;

@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import envModule from "../src/env/index.ts";
 import type envTypes from "../src/env/index.types.ts";
 import node from "../src/env/node.ts";
+import type nodeTypes from "../src/env/node.types.ts";
 import toolsSupport from "./tools-support.ts";
 
 const { NodeExecutionEnv } = node;
@@ -33,7 +34,8 @@ const programsEnv = Effect.fn("programsEnv")(function* (
       return Promise.resolve({ ok: true, value: { exitCode } });
     }
   }
-  return { commands, env: new ProgramsEnv({ cwd: yield* createTempDir }) };
+  const env: nodeTypes.NodeExecutionEnv = new ProgramsEnv({ cwd: yield* createTempDir });
+  return { commands, env };
 });
 
 export default programsEnv;

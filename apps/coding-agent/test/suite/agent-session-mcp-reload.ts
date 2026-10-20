@@ -1,14 +1,17 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import type { ExtensionFactory } from "../../src/core/extensions/types.ts";
-import type { SessionManager } from "../../src/core/session-manager.ts";
-import { createMcpExtension } from "../../src/extensions/mcp/index.ts";
-import { createToolSearchExtension } from "../../src/extensions/tool-search/index.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import extensionModule from "../../src/extensions/mcp/extension.ts";
+import extension from "../../src/extensions/tool-search/extension.ts";
 import utilities from "../utilities.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 import mcpFakeServer from "./mcp-fake-server.ts";
+
+const { createToolSearchExtension } = extension;
+const { createMcpExtension } = extensionModule;
 
 const { awaited, runTest } = testing;
 
@@ -29,7 +32,7 @@ const DOCS = [
 ];
 
 const reloadingFactories = (
-  extensionFactories: ExtensionFactory[],
+  extensionFactories: extensionsTypesTypes.ExtensionFactory[],
   initializeDelayMs: number,
   connected: string[],
 ) => [
@@ -47,8 +50,8 @@ const reloadingFactories = (
 ];
 
 const setup4 = (
-  sessionManager?: SessionManager,
-  extensionFactories: ExtensionFactory[] = [],
+  sessionManager?: sessionManagerTypes.SessionManager,
+  extensionFactories: extensionsTypesTypes.ExtensionFactory[] = [],
   initializeDelayMs = 0,
 ) =>
   runTest(

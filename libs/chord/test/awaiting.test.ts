@@ -6,12 +6,10 @@ import { describe, it } from "vite-plus/test";
 
 import chord from "../src/index.ts";
 import type chordTypes from "../src/index.types.ts";
-import counting from "./fixtures/counting.ts";
+import CountingLink from "./fixtures/counting-link.ts";
 import timing from "./fixtures/timing.ts";
 
 const { createHost, hostNamed, isChordError, memoryLinkPair, remote } = chord;
-
-const { CountingLink } = counting;
 const { latch, pollUntil } = timing;
 
 const until = (check: () => boolean, attempts = 200) => pollUntil(check, attempts, Effect.sleep(2));

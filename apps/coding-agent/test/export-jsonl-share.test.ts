@@ -5,11 +5,17 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { defineTool } from "../src/core/extensions/types.ts";
-import { serializeSessionBranch } from "../src/core/session-export.ts";
-import { SessionManager, SettingsManager, createAgentSession } from "../src/index.ts";
-import { createShareTrailingEntries } from "../src/modes/interactive/session-share.ts";
+import extensionsTypes from "../src/core/extensions/types.ts";
+import sessionExport from "../src/core/session-export.ts";
+import src from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
+import sessionShare from "../src/modes/interactive/session-share.ts";
 import utilities from "./utilities.ts";
+
+const { defineTool } = extensionsTypes;
+const { SessionManager, SettingsManager, createAgentSession } = src;
+const { serializeSessionBranch } = sessionExport;
+const { createShareTrailingEntries } = sessionShare;
 
 const { getModel } = compat;
 
@@ -42,7 +48,7 @@ const shareTool = defineTool({
   parameters: Type.Object({ value: Type.String({ description: "Value to render" }) }),
 });
 
-const createShareSession = (tempDir: string, sessionManager: SessionManager) =>
+const createShareSession = (tempDir: string, sessionManager: srcTypes.SessionManager) =>
   awaited(
     createAgentSession({
       agentDir: joinPath(tempDir, "agent"),
@@ -55,7 +61,7 @@ const createShareSession = (tempDir: string, sessionManager: SessionManager) =>
     }),
   );
 
-const appendToolTurn = (sessionManager: SessionManager) => {
+const appendToolTurn = (sessionManager: srcTypes.SessionManager) => {
   const userId = sessionManager.appendMessage(userMsg("hello"));
   const assistant: compatTypes.AssistantMessage = {
     ...assistantMsg(""),

@@ -1,8 +1,8 @@
-import {
-  getResolvedThemeColors,
-  getThemeExportColors,
-} from "../../modes/interactive/theme/theme.ts";
-import { nonEmptyOr } from "../platform/index.ts";
+import themeModule from "../../modes/interactive/theme/theme.ts";
+import platform from "../platform/index.ts";
+
+const { getResolvedThemeColors, getThemeExportColors } = themeModule;
+const { nonEmptyOr } = platform;
 
 function parseColor(color: string): { r: number; g: number; b: number } | undefined {
   const hexMatch = color.match(/^#([0-9a-fA-F]{2})([0-9a-fA-F]{2})([0-9a-fA-F]{2})$/u);
@@ -41,7 +41,7 @@ function adjustBrightness(color: string, factor: number): string {
   return `rgb(${adjust(parsed.r)}, ${adjust(parsed.g)}, ${adjust(parsed.b)})`;
 }
 
-export function deriveExportColors(baseColor: string): {
+function deriveExportColors(baseColor: string): {
   pageBg: string;
   cardBg: string;
   infoBg: string;
@@ -72,7 +72,7 @@ export function deriveExportColors(baseColor: string): {
   };
 }
 
-export function generateThemeVars(themeName?: string): string {
+function generateThemeVars(themeName?: string): string {
   const colors = getResolvedThemeColors(themeName);
   const lines: string[] = [];
   for (const [key, value] of Object.entries(colors)) {
@@ -89,3 +89,10 @@ export function generateThemeVars(themeName?: string): string {
 
   return lines.join("\n      ");
 }
+
+const exportColors = {
+  deriveExportColors,
+  generateThemeVars,
+};
+
+export default exportColors;

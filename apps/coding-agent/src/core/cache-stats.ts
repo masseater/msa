@@ -1,27 +1,11 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import type { SessionEntry } from "./session-manager.ts";
+import type cacheStatsTypes from "./cache-stats.types.ts";
+import type sessionManagerTypes from "./session-manager.types.ts";
 
-export const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 5 * 60 * 1000;
 
 const NOISE_FLOOR_TOKENS = 1024;
-
-export interface CacheMiss {
-  missedTokens: number;
-  missedCost: number;
-  idleMs: number;
-  modelChanged: boolean;
-}
-
-export interface CacheWasteTotals {
-  missedTokens: number;
-  missedCost: number;
-  missCount: number;
-}
-
-export interface ModelPriceSource {
-  getModel(provider: string, modelId: string): { cost: { cacheRead: number } } | undefined;
-}
 
 interface PreviousRequest {
   promptTokens: number;
@@ -33,8 +17,8 @@ interface PreviousRequest {
 function detectMiss(
   prev: PreviousRequest | undefined,
   message: aiTypes.AssistantMessage,
-  models: ModelPriceSource,
-): CacheMiss | undefined {
+  models: cacheStatsTypes.ModelPriceSource,
+): cacheStatsTypes.CacheMiss | undefined {
   const usage = message.usage;
   const promptTokens = usage.input + usage.cacheRead + usage.cacheWrite;
   if (
@@ -79,16 +63,16 @@ function asPreviousRequest(
 }
 
 function scan(
-  entries: SessionEntry[],
-  models: ModelPriceSource,
+  entries: sessionManagerTypes.SessionEntry[],
+  models: cacheStatsTypes.ModelPriceSource,
 ): {
   prev: PreviousRequest | undefined;
-  totals: CacheWasteTotals;
-  misses: Map<aiTypes.AssistantMessage, CacheMiss>;
+  totals: cacheStatsTypes.CacheWasteTotals;
+  misses: Map<aiTypes.AssistantMessage, cacheStatsTypes.CacheMiss>;
 } {
   let prev: PreviousRequest | undefined;
-  const totals: CacheWasteTotals = { missCount: 0, missedCost: 0, missedTokens: 0 };
-  const misses = new Map<aiTypes.AssistantMessage, CacheMiss>();
+  const totals: cacheStatsTypes.CacheWasteTotals = { missCount: 0, missedCost: 0, missedTokens: 0 };
+  const misses = new Map<aiTypes.AssistantMessage, cacheStatsTypes.CacheMiss>();
 
   for (const entry of entries) {
     if (entry.type === "compaction" || entry.type === "branch_summary") {
@@ -119,24 +103,33 @@ function scan(
   return { misses, prev, totals };
 }
 
-export function computeCacheWaste(
-  entries: SessionEntry[],
-  models: ModelPriceSource,
-): CacheWasteTotals {
+function computeCacheWaste(
+  entries: sessionManagerTypes.SessionEntry[],
+  models: cacheStatsTypes.ModelPriceSource,
+): cacheStatsTypes.CacheWasteTotals {
   return scan(entries, models).totals;
 }
 
-export function collectCacheMisses(
-  entries: SessionEntry[],
-  models: ModelPriceSource,
-): Map<aiTypes.AssistantMessage, CacheMiss> {
+function collectCacheMisses(
+  entries: sessionManagerTypes.SessionEntry[],
+  models: cacheStatsTypes.ModelPriceSource,
+): Map<aiTypes.AssistantMessage, cacheStatsTypes.CacheMiss> {
   return scan(entries, models).misses;
 }
 
-export function detectCacheMiss(
-  entries: SessionEntry[],
+function detectCacheMiss(
+  entries: sessionManagerTypes.SessionEntry[],
   message: aiTypes.AssistantMessage,
-  models: ModelPriceSource,
-): CacheMiss | undefined {
+  models: cacheStatsTypes.ModelPriceSource,
+): cacheStatsTypes.CacheMiss | undefined {
   return detectMiss(scan(entries, models).prev, message, models);
 }
+
+const cacheStats = {
+  CACHE_TTL_MS,
+  collectCacheMisses,
+  computeCacheWaste,
+  detectCacheMiss,
+};
+
+export default cacheStats;

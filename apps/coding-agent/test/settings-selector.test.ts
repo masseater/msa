@@ -3,17 +3,17 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import {
-  type SettingsCallbacks,
-  type SettingsConfig,
-  SettingsSelectorComponent,
-} from "../src/modes/interactive/components/settings-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import codingAgent from "../src/index.ts";
+import type settingsSelectorTypes from "../src/modes/interactive/components/settings-selector.types.ts";
+import ansi from "../src/utils/ansi.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
 
+const { SettingsSelectorComponent } = codingAgent;
+const { initTheme } = codingAgent;
+
+const { stripAnsi } = ansi;
 const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;
@@ -37,13 +37,13 @@ const cyclesThroughFullscreenSettings = () => {
     fullscreenScrollbar: "auto",
     fullscreenWheelScrollLines: 7,
     modelThinkingLevels: {},
-  } as unknown as SettingsConfig;
+  } as unknown as settingsSelectorTypes.SettingsConfig;
   const callbacks = {
     onFullscreenCopyOnSelectChange: onCopyOnSelectChange,
     onFullscreenExitOutputChange: onExitOutputChange,
     onFullscreenScrollbarChange: onScrollbarChange,
     onFullscreenWheelScrollLinesChange: onWheelScrollLinesChange,
-  } as unknown as SettingsCallbacks;
+  } as unknown as settingsSelectorTypes.SettingsCallbacks;
 
   const cycle = (label: string, count: number) => {
     const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
@@ -70,11 +70,11 @@ const keepsTheConfiguredFixedThemeMarkedWhile = () => {
     defaultModel: "not set",
     modelThinkingLevels: {},
     terminalTheme: "dark",
-  } as unknown as SettingsConfig;
+  } as unknown as settingsSelectorTypes.SettingsConfig;
   const callbacks = {
     onCancel: () => {},
     onThemePreview: vi.fn(),
-  } as unknown as SettingsCallbacks;
+  } as unknown as settingsSelectorTypes.SettingsCallbacks;
   const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
 
   list.selectItem("theme");
@@ -99,11 +99,11 @@ const keepsAConfiguredAutomaticThemeMarkedWhile = () => {
     defaultModel: "not set",
     modelThinkingLevels: {},
     terminalTheme: "dark",
-  } as unknown as SettingsConfig;
+  } as unknown as settingsSelectorTypes.SettingsConfig;
   const callbacks = {
     onCancel: () => {},
     onThemePreview: vi.fn(),
-  } as unknown as SettingsCallbacks;
+  } as unknown as settingsSelectorTypes.SettingsCallbacks;
   const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
 
   list.selectItem("theme");
@@ -133,8 +133,10 @@ const keepsTheConfiguredPerModelThinkingLevel = () =>
         defaultModel: modelKey,
         modelThinkingLevels: { [modelKey]: "medium" },
         thinkingLevel: "high",
-      } as unknown as SettingsConfig;
-      const callbacks = { onCancel: () => {} } as unknown as SettingsCallbacks;
+      } as unknown as settingsSelectorTypes.SettingsConfig;
+      const callbacks = {
+        onCancel: () => {},
+      } as unknown as settingsSelectorTypes.SettingsCallbacks;
       const list = new SettingsSelectorComponent(config, callbacks).getSettingsList();
 
       list.selectItem("model-thinking");

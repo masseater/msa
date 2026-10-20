@@ -1,27 +1,30 @@
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { createBashTool, createEditTool, createReadTool, createWriteTool } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, ManagedRuntime } from "effect";
 
-import {
+import sshOperations from "./ssh-operations.ts";
+
+const { createBashTool, createEditTool, createReadTool, createWriteTool } = codingAgent;
+const {
   createRemoteBashOps,
   createRemoteEditOps,
   createRemoteReadOps,
   createRemoteWriteOps,
   runSshText,
-} from "./ssh-operations.ts";
+} = sshOperations;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
 const announceRemote = (
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
   remote: { remote: string; remoteCwd: string },
 ): void => {
   ctx.ui.setStatus("ssh", ctx.ui.theme.fg("accent", `SSH: ${remote.remote}:${remote.remoteCwd}`));
   ctx.ui.notify(`SSH mode: ${remote.remote}:${remote.remoteCwd}`, "info");
 };
 
-const resolveRemote = (msa: ExtensionAPI) =>
+const resolveRemote = (msa: codingAgentTypes.ExtensionAPI) =>
   Effect.gen(function* () {
     const arg = msa.getFlag("ssh");
     if (typeof arg !== "string" || arg.length === 0) return undefined;
@@ -41,7 +44,7 @@ interface SshTarget {
 }
 
 const registerReadTool = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   localCwd: string,
   getSsh: () => SshTarget | null,
 ): void => {
@@ -60,7 +63,7 @@ const registerReadTool = (
 };
 
 const registerWriteTool = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   localCwd: string,
   getSsh: () => SshTarget | null,
 ): void => {
@@ -83,7 +86,7 @@ const registerWriteTool = (
 };
 
 const registerEditTool = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   localCwd: string,
   getSsh: () => SshTarget | null,
 ): void => {
@@ -102,7 +105,7 @@ const registerEditTool = (
 };
 
 const registerBashTool = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   localCwd: string,
   getSsh: () => SshTarget | null,
 ): void => {
@@ -120,7 +123,7 @@ const registerBashTool = (
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const localCwd = process.cwd();
   let resolvedSsh: { remote: string; remoteCwd: string } | null = null;
   const getSsh = () => resolvedSsh;

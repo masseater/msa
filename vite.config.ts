@@ -49,8 +49,28 @@ export default defineConfig({
         },
       },
       {
-        files: ["libs/durable/src/env/node/**"],
+        files: ["libs/durable/src/env/node/**", "apps/coding-agent/src/core/platform/node/**"],
         rules: { "effecttsgo/node-builtin-import": "off" },
+      },
+      {
+        files: ["scripts/**"],
+        rules: { "import/max-dependencies": ["error", { ignoreTypeImports: true, max: 10 }] },
+      },
+      {
+        files: ["libs/*/test/**"],
+        rules: { "import/max-dependencies": ["error", { max: 15 }] },
+      },
+      {
+        files: ["apps/**"],
+        rules: {
+          "eslint/max-lines": ["error", { max: 1350 }],
+          "eslint/max-lines-per-function": ["error", { max: 1250 }],
+          "import/max-dependencies": ["error", { max: 45 }],
+        },
+      },
+      {
+        files: ["**/*.types.ts"],
+        rules: { "eslint/max-lines": ["error", { max: 400 }] },
       },
     ],
     plugins: lintPlugins,
@@ -104,13 +124,13 @@ export default defineConfig({
         cache: false,
         command: "vp pm audit",
       },
-      "code-rules": {
-        command:
-          "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa",
-      },
       "build-binaries": {
         cache: false,
         command: "node tools/build-binaries.ts",
+      },
+      "code-rules": {
+        command:
+          "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa",
       },
       "daemon-build": {
         cache: false,

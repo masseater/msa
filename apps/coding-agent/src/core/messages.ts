@@ -1,68 +1,36 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import { toEpochMs } from "./platform.ts";
+import type messagesTypes from "./messages.types.ts";
+import platform from "./platform.ts";
 
-export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
+const { toEpochMs } = platform;
+
+const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
 <summary>
 `;
 
-export const COMPACTION_SUMMARY_SUFFIX = `
+const COMPACTION_SUMMARY_SUFFIX = `
 </summary>`;
 
-export const BRANCH_SUMMARY_PREFIX = `The following is a summary of a branch that this conversation came back from:
+const BRANCH_SUMMARY_PREFIX = `The following is a summary of a branch that this conversation came back from:
 
 <summary>
 `;
 
-export const BRANCH_SUMMARY_SUFFIX = `</summary>`;
-
-export interface BashExecutionMessage {
-  role: "bashExecution";
-  command: string;
-  output: string;
-  exitCode: number | undefined;
-  cancelled: boolean;
-  truncated: boolean;
-  fullOutputPath?: string | undefined;
-  timestamp: number;
-  excludeFromContext?: boolean | undefined;
-}
-
-export interface CustomMessage<T = unknown> {
-  role: "custom";
-  customType: string;
-  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[];
-  display: boolean;
-  details?: T | undefined;
-  timestamp: number;
-}
-
-export interface BranchSummaryMessage {
-  role: "branchSummary";
-  summary: string;
-  fromId: string | null;
-  timestamp: number;
-}
-
-export interface CompactionSummaryMessage {
-  role: "compactionSummary";
-  summary: string;
-  tokensBefore: number;
-  timestamp: number;
-}
+const BRANCH_SUMMARY_SUFFIX = `</summary>`;
 
 declare global {
   interface MsaAgentCustomMessages {
-    bashExecution: BashExecutionMessage;
-    custom: CustomMessage;
-    branchSummary: BranchSummaryMessage;
-    compactionSummary: CompactionSummaryMessage;
+    bashExecution: messagesTypes.BashExecutionMessage;
+    custom: messagesTypes.CustomMessage;
+    branchSummary: messagesTypes.BranchSummaryMessage;
+    compactionSummary: messagesTypes.CompactionSummaryMessage;
   }
 }
 
-export function bashExecutionToText(msg: BashExecutionMessage): string {
+function bashExecutionToText(msg: messagesTypes.BashExecutionMessage): string {
   let text = `Ran \`${msg.command}\`\n`;
   if (msg.output === "") {
     text += "(no output)";
@@ -80,11 +48,11 @@ export function bashExecutionToText(msg: BashExecutionMessage): string {
   return text;
 }
 
-export function createBranchSummaryMessage(
+function createBranchSummaryMessage(
   summary: string,
   fromId: string,
   timestamp: string,
-): BranchSummaryMessage {
+): messagesTypes.BranchSummaryMessage {
   return {
     fromId,
     role: "branchSummary",
@@ -93,11 +61,11 @@ export function createBranchSummaryMessage(
   };
 }
 
-export function createCompactionSummaryMessage(
+function createCompactionSummaryMessage(
   summary: string,
   tokensBefore: number,
   timestamp: string,
-): CompactionSummaryMessage {
+): messagesTypes.CompactionSummaryMessage {
   return {
     role: "compactionSummary",
     summary: summary,
@@ -106,13 +74,13 @@ export function createCompactionSummaryMessage(
   };
 }
 
-export function createCustomMessage(
+function createCustomMessage(
   customType: string,
   content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
   display: boolean,
   details: unknown | undefined,
   timestamp: string,
-): CustomMessage {
+): messagesTypes.CustomMessage {
   return {
     content,
     customType,
@@ -123,7 +91,7 @@ export function createCustomMessage(
   };
 }
 
-export function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Message[] {
+function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Message[] {
   return messages
     .map((m): aiTypes.Message | undefined => {
       switch (m.role) {
@@ -132,27 +100,19 @@ export function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Messa
             return undefined;
           }
           return {
-            content: [{ type: "text", text: bashExecutionToText(m) }],
+            content: [{ text: bashExecutionToText(m), type: "text" }],
             role: "user",
             timestamp: m.timestamp,
           };
         case "custom": {
-          const content =
-            typeof m.content === "string"
-              ? [{ text: m.content, type: "text" as const }]
-              : m.content;
-          return {
-            content,
-            role: "user",
-            timestamp: m.timestamp,
-          };
+          return convertToLlmPart1(m);
         }
         case "branchSummary":
           return {
             content: [
               {
-                type: "text" as const,
                 text: BRANCH_SUMMARY_PREFIX + m.summary + BRANCH_SUMMARY_SUFFIX,
+                type: "text" as const,
               },
             ],
             role: "user",
@@ -162,8 +122,8 @@ export function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Messa
           return {
             content: [
               {
-                type: "text" as const,
                 text: COMPACTION_SUMMARY_PREFIX + m.summary + COMPACTION_SUMMARY_SUFFIX,
+                type: "text" as const,
               },
             ],
             role: "user",
@@ -180,4 +140,28 @@ export function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Messa
       }
     })
     .filter((m) => m !== undefined);
+}
+
+const messages = {
+  BRANCH_SUMMARY_PREFIX,
+  BRANCH_SUMMARY_SUFFIX,
+  COMPACTION_SUMMARY_PREFIX,
+  COMPACTION_SUMMARY_SUFFIX,
+  bashExecutionToText,
+  convertToLlm,
+  createBranchSummaryMessage,
+  createCompactionSummaryMessage,
+  createCustomMessage,
+};
+
+export default messages;
+
+function convertToLlmPart1(m: messagesTypes.CustomMessage<unknown>): aiTypes.Message | undefined {
+  const content =
+    typeof m.content === "string" ? [{ text: m.content, type: "text" as const }] : m.content;
+  return {
+    content,
+    role: "user",
+    timestamp: m.timestamp,
+  };
 }

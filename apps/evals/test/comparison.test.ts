@@ -2,12 +2,15 @@ import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatEvalComparisonReport } from "../src/report-format.ts";
-import { summarizeEvalObservations } from "../src/report-summary.ts";
-import type { EvalObservation, ExpectedEvalRun } from "../src/report-types.ts";
+import reportFormat from "../src/report-format.ts";
+import reportSummary from "../src/report-summary.ts";
+import type reportTypesTypes from "../src/report-types.types.ts";
+
+const { summarizeEvalObservations } = reportSummary;
+const { formatEvalComparisonReport } = reportFormat;
 
 function scored(
-  variant: EvalObservation["variant"],
+  variant: reportTypesTypes.EvalObservation["variant"],
   runNumber: number,
   score: number,
   metrics: Partial<{
@@ -16,7 +19,7 @@ function scored(
     totalMs: number;
     estimatedCostUsd: number;
   }> = {},
-): EvalObservation {
+): reportTypesTypes.EvalObservation {
   return {
     caseId: "create",
     estimatedCostUsd: 0.01,
@@ -34,10 +37,10 @@ function scored(
 }
 
 function errored(
-  variant: EvalObservation["variant"],
+  variant: reportTypesTypes.EvalObservation["variant"],
   runNumber: number,
   totalTokens?: number,
-): EvalObservation {
+): reportTypesTypes.EvalObservation {
   return {
     caseId: "create",
     evalSet: "tool access",
@@ -49,7 +52,7 @@ function errored(
   };
 }
 
-function expectedFor(runNumbers: readonly number[]): ExpectedEvalRun[] {
+function expectedFor(runNumbers: readonly number[]): reportTypesTypes.ExpectedEvalRun[] {
   return runNumbers.flatMap((runNumber) =>
     (["without_docs", "with_docs"] as const).map((variant) => ({
       caseId: "create",
@@ -86,7 +89,7 @@ describe("summarizeEvalObservations", () => {
   });
 
   it("fails closed for incomplete and errored pairs while retaining totals", () => {
-    const observations: EvalObservation[] = [
+    const observations: reportTypesTypes.EvalObservation[] = [
       scored("without_docs", 1, 0),
       errored("with_docs", 1, 120),
       scored("without_docs", 2, 1, { totalTokens: 200 }),

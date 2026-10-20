@@ -3,13 +3,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import {
-  type ModelRegistry,
-  type ProviderConfigInput,
-  clearApiKeyCache,
-} from "../src/core/model-registry.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import type modelRegistryTypes from "../src/core/model-registry.types.ts";
+import providerComposer from "../src/core/provider-composer.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+const { clearApiKeyCache } = providerComposer;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
@@ -29,13 +28,13 @@ let tempDir: string;
 
 let modelsJsonPath: string;
 
-let authStorage: AuthStorage;
+let authStorage: authStorageTypes.AuthStorage;
 
 function providerConfig(
   baseUrl: string,
   models: Array<{ id: string; name?: string }>,
   api: string = "anthropic-messages",
-): ProviderConfigInput {
+): modelRegistryTypes.ProviderConfigInput {
   return {
     api: api as compatTypes.Api,
     apiKey: "test-key",
@@ -58,7 +57,7 @@ const writeModelsJson = Effect.fn("writeModelsJson")(function* (
   yield* writeTextFile(modelsJsonPath, yield* toJsonText({ providers }));
 });
 
-function getModelsForProvider(registry: ModelRegistry, provider: string) {
+function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
   return registry.getAll().filter((m) => m.provider === provider);
 }
 

@@ -1,20 +1,19 @@
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 
-import { stripAnsi } from "../../../utils/ansi.ts";
-import { theme } from "../theme/theme.ts";
-import { AssistantMessageComponent } from "./assistant-message.ts";
-import { type ToolCallSummary, ToolExecutionComponent } from "./tool-execution.ts";
+import themeModule from "../theme/theme.ts";
+import AssistantMessageComponent from "./assistant-message.ts";
+import ToolExecutionComponent from "./tool-execution.ts";
+import type toolExecutionTypes from "./tool-execution.types.ts";
+import ToolRow from "./tool-row.ts";
 
+const { theme } = themeModule;
 const { Container, MouseRegion, Spacer, truncateToWidth } = tui;
 
 const FILE_VERBS: Record<string, string> = { edit: "edited", read: "read", write: "wrote" };
 const SEARCH_TOOLS = new Set(["grep", "find", "ls"]);
-
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
 }
-
 function countDiffLines(diff: string): { added: number; removed: number } {
   let added = 0;
   let removed = 0;
@@ -24,8 +23,7 @@ function countDiffLines(diff: string): { added: number; removed: number } {
   }
   return { added, removed };
 }
-
-function summarize(calls: readonly ToolCallSummary[], thought: boolean): string {
+function summarize(calls: readonly toolExecutionTypes.ToolCallSummary[], thought: boolean): string {
   const files = new Map<string, Set<string>>();
   const counts = new Map<string, number>();
   let added = 0;
@@ -72,50 +70,12 @@ function summarize(calls: readonly ToolCallSummary[], thought: boolean): string 
   if (running > 0) line += theme.fg("muted", " …");
   return line;
 }
-
-class ToolRow implements tuiTypes.Component {
-  open = false;
-  readonly tool: ToolExecutionComponent;
-  private readonly outputPad: () => number;
-
-  constructor(tool: ToolExecutionComponent, outputPad: () => number) {
-    this.tool = tool;
-    this.outputPad = outputPad;
-  }
-
-  render(width: number): string[] {
-    if (this.open) return this.tool.render(width);
-    const callLine = this.tool
-      .render(width)
-      .map((line) => stripAnsi(line).trim())
-      .find((line) => line.length > 0);
-    if (callLine === undefined) return [];
-    const { done, isError } = this.tool.getCallSummary();
-    const color = isError ? "error" : done ? "toolOutput" : "muted";
-    const pad = " ".repeat(this.outputPad());
-    return [
-      truncateToWidth(`${pad}${theme.fg(color, callLine)}${theme.fg("muted", " ›")}`, width, "..."),
-    ];
-  }
-
-  invalidate(): void {
-    this.tool.invalidate();
-  }
-
-  handleMouse(event: tuiTypes.TuiMouseEvent): tuiTypes.TuiMouseEventResult | undefined {
-    if (this.open) return this.tool.handleMouse(event);
-    if (event.type !== "click" || event.button !== "left") return undefined;
-    this.open = true;
-    return { handled: true };
-  }
-}
-
-export class ToolGroupComponent extends Container {
+export default class ToolGroupComponent extends tui.Container {
   readonly items = new Container();
   private expanded = false;
   private showAll = false;
   private outputPad: number;
-  private readonly rows = new Map<ToolExecutionComponent, ToolRow>();
+  private readonly rows = new Map<toolExecutionTypes.ToolExecutionComponent, ToolRow>();
   private readonly spacer = new Spacer(1);
   private readonly headerRegion = new MouseRegion(
     { invalidate: () => {}, render: (width) => [this.header(width)] },
@@ -145,11 +105,11 @@ export class ToolGroupComponent extends Container {
     this.outputPad = outputPad;
   }
 
-  private tools(): ToolExecutionComponent[] {
+  private tools(): toolExecutionTypes.ToolExecutionComponent[] {
     return this.items.children.filter((item) => item instanceof ToolExecutionComponent);
   }
 
-  private row(tool: ToolExecutionComponent): ToolRow {
+  private row(tool: toolExecutionTypes.ToolExecutionComponent): ToolRow {
     let row = this.rows.get(tool);
     if (row === undefined) {
       row = new ToolRow(tool, () => this.outputPad);

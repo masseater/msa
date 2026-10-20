@@ -1,36 +1,31 @@
-import type agentTypes from "@msa/agent-core/index.types";
 import type { Fiber } from "effect";
 import { Effect } from "effect";
 
-import {
-  type ForeignError,
-  currentTimeMillis,
-  fromPromise,
-  platformRuntime,
-} from "../platform/index.ts";
-import type { OutputAccumulator, OutputSnapshot } from "./output-accumulator.ts";
-import { BASH_UPDATE_THROTTLE_MS } from "./renderers/bash.ts";
-import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize } from "./truncate.ts";
+import platform from "../platform/index.ts";
+import type platformTypes from "../platform/index.types.ts";
+import type bashOutputTypes from "./bash-output.types.ts";
+import type outputAccumulatorTypes from "./output-accumulator.types.ts";
+import bash from "./renderers/bash.ts";
+import truncate from "./truncate.ts";
+import type truncateTypes from "./truncate.types.ts";
 
-export interface BashToolDetails {
-  truncation?: TruncationResult | undefined;
-  fullOutputPath?: string | undefined;
-}
+const { currentTimeMillis, fromPromise } = platform;
+const { BASH_UPDATE_THROTTLE_MS } = bash;
+const { DEFAULT_MAX_BYTES, formatSize } = truncate;
 
-export type BashUpdateCallback = (
-  partial: agentTypes.AgentToolResult<BashToolDetails | undefined>,
-) => void;
-
-export class BashOutputReporter {
+export default class BashOutputReporter {
   private acceptingOutput = true;
   private updateTimer: Fiber.Fiber<void> | undefined;
   private updateDirty = false;
   private lastUpdateAt = 0;
 
-  private readonly output: OutputAccumulator;
-  private readonly onUpdate: BashUpdateCallback | undefined;
+  private readonly output: outputAccumulatorTypes.OutputAccumulator;
+  private readonly onUpdate: bashOutputTypes.BashUpdateCallback | undefined;
 
-  constructor(output: OutputAccumulator, onUpdate: BashUpdateCallback | undefined) {
+  constructor(
+    output: outputAccumulatorTypes.OutputAccumulator,
+    onUpdate: bashOutputTypes.BashUpdateCallback | undefined,
+  ) {
     this.output = output;
     this.onUpdate = onUpdate;
   }
@@ -46,7 +41,7 @@ export class BashOutputReporter {
     this.updateTimer = undefined;
   }
 
-  finish(): Effect.Effect<OutputSnapshot, ForeignError> {
+  finish(): Effect.Effect<outputAccumulatorTypes.OutputSnapshot, platformTypes.ForeignError> {
     return Effect.suspend(() => {
       this.acceptingOutput = false;
       this.output.finish();
@@ -58,9 +53,9 @@ export class BashOutputReporter {
   }
 
   format(
-    snapshot: OutputSnapshot,
+    snapshot: outputAccumulatorTypes.OutputSnapshot,
     emptyText = "(no output)",
-  ): { text: string; details: BashToolDetails | undefined } {
+  ): { text: string; details: bashOutputTypes.BashToolDetails | undefined } {
     const { truncation } = snapshot;
     const base = snapshot.content === "" ? emptyText : snapshot.content;
     if (!truncation.truncated) return { details: undefined, text: base };
@@ -93,7 +88,7 @@ export class BashOutputReporter {
       this.emitUpdate();
       return;
     }
-    this.updateTimer ??= platformRuntime.runFork(
+    this.updateTimer ??= Effect.runFork(
       Effect.sleep(delay).pipe(
         Effect.andThen(
           Effect.sync(() => {
@@ -105,7 +100,10 @@ export class BashOutputReporter {
     );
   }
 
-  private truncationNotice(truncation: TruncationResult, snapshot: OutputSnapshot): string {
+  private truncationNotice(
+    truncation: truncateTypes.TruncationResult,
+    snapshot: outputAccumulatorTypes.OutputSnapshot,
+  ): string {
     const startLine = truncation.totalLines - truncation.outputLines + 1;
     const endLine = truncation.totalLines;
     const fullOutput = `Full output: ${snapshot.fullOutputPath}`;

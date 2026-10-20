@@ -2,12 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR, VERSION } from "../src/config.ts";
-import type { ResolvedPaths } from "../src/core/package-manager.ts";
-import { readEnv } from "../src/core/process-env.ts";
-import { handlePackageCommand } from "../src/package-manager-cli.ts";
+import config from "../src/config.ts";
+import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import processEnv from "../src/core/process-env.ts";
+import packageManagerCli from "../src/package-manager-cli.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 import testNetworkEnv from "./test-network-env.ts";
+
+const { readEnv } = processEnv;
+const { ENV_AGENT_DIR, VERSION } = config;
+const { handlePackageCommand } = packageManagerCli;
 
 const { allowNetwork } = testNetworkEnv;
 
@@ -95,7 +99,7 @@ const extension = (
   source: string,
   scope: "user" | "project",
   names: string[],
-): ResolvedPaths => ({
+): packageManagerTypes.ResolvedPaths => ({
   extensions: names.map((name) => ({
     enabled: true,
     metadata: { baseDir: packageRoot, origin: "package", scope, source },

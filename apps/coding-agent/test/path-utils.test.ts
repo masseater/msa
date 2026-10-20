@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { expandPath, resolveReadPath, resolveToCwd } from "../src/core/tools/path-utils.ts";
+import pathUtils from "../src/core/tools/path-utils.ts";
+
+const { expandPath, resolveReadPath, resolveToCwd } = pathUtils;
 
 const {
   awaited,

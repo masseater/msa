@@ -1,11 +1,12 @@
 import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { TrustSelectorComponent } from "../src/modes/interactive/components/trust-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
-
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import TrustSelectorComponent from "../src/modes/interactive/components/trust-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 const { setKeybindings } = tui;
 
 const keepsTheSavedTrustedDecisionMarkedWhile = () => {

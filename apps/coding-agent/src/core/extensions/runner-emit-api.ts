@@ -2,67 +2,60 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
-import type { CacheWarmingAction } from "../cache-warmer.ts";
-import { platformRuntime, unwrapForeign } from "../platform/index.ts";
-import type { BuildSystemPromptOptions } from "../system-prompt.ts";
-import { type Emitters, createEmitters } from "./runner-emitters.ts";
-import { RunnerQueries } from "./runner-queries.ts";
-import type {
-  BeforeAgentStartTrigger,
-  BoundaryBaseEvent,
-  RunnerEmitEvent,
-} from "./runner-types.ts";
-import type {
-  BoundaryContextPreview,
-  CacheWarmingDecisionEvent,
-  ExtensionContext,
-  ExtensionError,
-  InputSource,
-  MessageEndEvent,
-  ResourcesDiscoverEvent,
-  SessionBoundaryDraft,
-  ToolCallEvent,
-  ToolResultEvent,
-  UserBashEvent,
-} from "./types.ts";
+import type cacheWarmerTypes from "../cache-warmer.types.ts";
+import platform from "../platform/index.ts";
+import type systemPromptTypes from "../system-prompt.types.ts";
+import runnerEmitters from "./runner-emitters.ts";
+import type runnerEmittersTypes from "./runner-emitters.types.ts";
+import RunnerQueries from "./runner-queries.ts";
+import type runnerTypesTypes from "./runner-types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
+const { createEmitters } = runnerEmitters;
+const { unwrapForeign } = platform;
 
-export abstract class RunnerEmitApi extends RunnerQueries {
-  private cachedEmitters: Emitters | undefined;
+export default abstract class RunnerEmitApi extends RunnerQueries {
+  private cachedEmitters: runnerEmittersTypes.Emitters | undefined;
 
-  abstract createContext(): ExtensionContext;
-  abstract emitError(error: ExtensionError): void;
+  abstract createContext(): extensionsTypesTypes.ExtensionContext;
+  abstract emitError(error: extensionsTypesTypes.ExtensionError): void;
   protected abstract assertActive(): void;
 
   emitBoundary(
-    baseEvent: BoundaryBaseEvent,
+    baseEvent: runnerTypesTypes.BoundaryBaseEvent,
     buildContext: (
-      entries: SessionBoundaryDraft[],
-    ) => BoundaryContextPreview | Promise<BoundaryContextPreview>,
+      entries: extensionsTypesTypes.SessionBoundaryDraft[],
+    ) =>
+      | extensionsTypesTypes.BoundaryContextPreview
+      | Promise<extensionsTypesTypes.BoundaryContextPreview>,
   ) {
     return this.run(this.emitters().lifecycle.emitBoundary(baseEvent, buildContext));
   }
 
-  emit<TEvent extends RunnerEmitEvent>(event: TEvent) {
+  emit<TEvent extends runnerTypesTypes.RunnerEmitEvent>(event: TEvent) {
     return this.run(this.emitters().lifecycle.emit(event));
   }
 
-  emitCacheWarmingDecision(event: CacheWarmingDecisionEvent): Promise<CacheWarmingAction> {
+  emitCacheWarmingDecision(
+    event: extensionsTypesTypes.CacheWarmingDecisionEvent,
+  ): Promise<cacheWarmerTypes.CacheWarmingAction> {
     return this.run(this.emitters().lifecycle.emitCacheWarmingDecision(event));
   }
 
-  emitMessageEnd(event: MessageEndEvent): Promise<agentTypes.AgentMessage | undefined> {
+  emitMessageEnd(
+    event: extensionsTypesTypes.MessageEndEvent,
+  ): Promise<agentTypes.AgentMessage | undefined> {
     return this.run(this.emitters().lifecycle.emitMessageEnd(event));
   }
 
-  emitToolResult(event: ToolResultEvent) {
+  emitToolResult(event: extensionsTypesTypes.ToolResultEvent) {
     return this.run(this.emitters().lifecycle.emitToolResult(event));
   }
 
-  emitToolCall(event: ToolCallEvent) {
+  emitToolCall(event: extensionsTypesTypes.ToolCallEvent) {
     return this.run(this.emitters().lifecycle.emitToolCall(event));
   }
 
-  emitUserBash(event: UserBashEvent) {
+  emitUserBash(event: extensionsTypesTypes.UserBashEvent) {
     return this.run(this.emitters().lifecycle.emitUserBash(event));
   }
 
@@ -78,24 +71,30 @@ export abstract class RunnerEmitApi extends RunnerQueries {
     return this.run(this.emitters().context.emitBeforeProviderHeaders(headers));
   }
 
-  emitBeforeAgentStart(trigger: BeforeAgentStartTrigger, options: BuildSystemPromptOptions) {
+  emitBeforeAgentStart(
+    trigger: runnerTypesTypes.BeforeAgentStartTrigger,
+    options: systemPromptTypes.BuildSystemPromptOptions,
+  ) {
     return this.run(this.emitters().context.emitBeforeAgentStart(trigger, options));
   }
 
-  emitResourcesDiscover(cwd: string, reason: ResourcesDiscoverEvent["reason"]) {
+  emitResourcesDiscover(
+    cwd: string,
+    reason: extensionsTypesTypes.ResourcesDiscoverEvent["reason"],
+  ) {
     return this.run(this.emitters().context.emitResourcesDiscover(cwd, reason));
   }
 
   emitInput(
     text: string,
     images: aiTypes.ImageContent[] | undefined,
-    source: InputSource,
+    source: extensionsTypesTypes.InputSource,
     streamingBehavior?: "steer" | "followUp",
   ) {
     return this.run(this.emitters().context.emitInput(text, images, source, streamingBehavior));
   }
 
-  private emitters(): Emitters {
+  private emitters(): runnerEmittersTypes.Emitters {
     this.cachedEmitters ??= createEmitters({
       assertActive: () => this.assertActive(),
       createContext: () => this.createContext(),
@@ -106,6 +105,6 @@ export abstract class RunnerEmitApi extends RunnerQueries {
   }
 
   private run<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
-    return platformRuntime.runPromise(unwrapForeign(effect));
+    return Effect.runPromise(unwrapForeign(effect));
   }
 }

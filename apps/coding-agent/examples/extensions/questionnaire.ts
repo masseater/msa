@@ -1,11 +1,13 @@
-import type { ExtensionAPI, Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import type { Question, QuestionnaireResult } from "./questionnaire-types.ts";
-import { askQuestionnaire } from "./questionnaire-ui.ts";
+import type questionnaireTypesTypes from "./questionnaire-types.types.ts";
+import questionnaireUi from "./questionnaire-ui.ts";
+
+const { askQuestionnaire } = questionnaireUi;
 
 const { Text } = tuiModule;
 
@@ -46,12 +48,16 @@ interface QuestionnaireParamsValue {
   }>;
 }
 
-const errorResult = (message: string, questions: Question[] = []) => ({
+const errorResult = (message: string, questions: questionnaireTypesTypes.Question[] = []) => ({
   content: [{ text: message, type: "text" as const }],
-  details: { answers: [], cancelled: true, questions } satisfies QuestionnaireResult,
+  details: {
+    answers: [],
+    cancelled: true,
+    questions,
+  } satisfies questionnaireTypesTypes.QuestionnaireResult,
 });
 
-const answerLines = (result: QuestionnaireResult): string[] =>
+const answerLines = (result: questionnaireTypesTypes.QuestionnaireResult): string[] =>
   result.answers.map((answer) => {
     const label = result.questions.find((q) => q.id === answer.id)?.label || answer.id;
     return answer.wasCustom
@@ -59,7 +65,7 @@ const answerLines = (result: QuestionnaireResult): string[] =>
       : `${label}: user selected: ${answer.index}. ${answer.label}`;
   });
 
-const resultFor = (result: QuestionnaireResult) => {
+const resultFor = (result: questionnaireTypesTypes.QuestionnaireResult) => {
   if (result.cancelled) {
     return {
       content: [{ text: "User cancelled the questionnaire", type: "text" as const }],
@@ -72,7 +78,7 @@ const resultFor = (result: QuestionnaireResult) => {
   };
 };
 
-const toQuestions = (params: QuestionnaireParamsValue): Question[] =>
+const toQuestions = (params: QuestionnaireParamsValue): questionnaireTypesTypes.Question[] =>
   params.questions.map((question, i) => ({
     ...question,
     allowOther: question.allowOther !== false,
@@ -80,7 +86,7 @@ const toQuestions = (params: QuestionnaireParamsValue): Question[] =>
   }));
 
 const runQuestionnaire = (
-  ctx: Parameters<Parameters<ExtensionAPI["on"]>[1]>[1],
+  ctx: Parameters<Parameters<codingAgentTypes.ExtensionAPI["on"]>[1]>[1],
   params: QuestionnaireParamsValue,
 ) =>
   Effect.gen(function* () {
@@ -93,14 +99,17 @@ const runQuestionnaire = (
 
     const questions = toQuestions(params);
     const result = yield* Effect.promise(() =>
-      ctx.ui.custom<QuestionnaireResult>((tui, theme, _kb, done) =>
+      ctx.ui.custom<questionnaireTypesTypes.QuestionnaireResult>((tui, theme, _kb, done) =>
         askQuestionnaire({ done, questions, theme, tui }),
       ),
     );
     return resultFor(result);
   });
 
-const renderCall = (args: QuestionnaireParamsValue, theme: Theme): tuiTypes.Text => {
+const renderCall = (
+  args: QuestionnaireParamsValue,
+  theme: codingAgentTypes.Theme,
+): tuiTypes.Text => {
   const questions = args.questions;
   const count = questions.length;
   const labels = questions.map((q) => q.label || q.id).join(", ");
@@ -115,9 +124,9 @@ const renderCall = (args: QuestionnaireParamsValue, theme: Theme): tuiTypes.Text
 const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   _options: unknown,
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
-  const details = result.details as QuestionnaireResult | undefined;
+  const details = result.details as questionnaireTypesTypes.QuestionnaireResult | undefined;
   if (details === undefined) {
     const content = result.content[0];
     return new Text(content?.type === "text" ? (content.text ?? "") : "", 0, 0);
@@ -136,7 +145,7 @@ const renderResult = (
   return new Text(lines.join("\n"), 0, 0);
 };
 
-export default function questionnaire(msa: ExtensionAPI) {
+export default function questionnaire(msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
     description:
       "Ask the user one or more questions. Use for clarifying requirements, getting preferences, or confirming decisions. For single questions, shows a simple option list. For multiple questions, shows a tab-based interface.",

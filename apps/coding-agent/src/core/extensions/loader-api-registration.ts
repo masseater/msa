@@ -1,19 +1,18 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { ExternalService } from "../external-services.ts";
-import type { ApiScope } from "./loader-scope.ts";
-import type {
-  EntryRenderer,
-  ExtensionContext,
-  MarkdownTransformer,
-  MessageRenderer,
-  RegisteredCommand,
-  ToolDefinition,
-  ToolRendererResolver,
-} from "./types.ts";
+import type externalServicesTypes from "../external-services.types.ts";
+import type loaderScopeTypes from "./loader-scope.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export const toolAndCommandMembers = ({ extension, runtime, assertActive }: ApiScope) => ({
-  registerCommand(name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">): void {
+const toolAndCommandMembers = ({
+  extension,
+  runtime,
+  assertActive,
+}: loaderScopeTypes.ApiScope) => ({
+  registerCommand(
+    name: string,
+    options: Omit<extensionsTypesTypes.RegisteredCommand, "name" | "sourceInfo">,
+  ): void {
     assertActive();
     if (typeof name !== "string" || name.length === 0) {
       throw new Error(
@@ -30,13 +29,16 @@ export const toolAndCommandMembers = ({ extension, runtime, assertActive }: ApiS
 
   registerShortcut(
     shortcut: tuiTypes.KeyId,
-    options: { description?: string; handler: (ctx: ExtensionContext) => Promise<void> | void },
+    options: {
+      description?: string;
+      handler: (ctx: extensionsTypesTypes.ExtensionContext) => Promise<void> | void;
+    },
   ): void {
     assertActive();
-    extension.shortcuts.set(shortcut, { shortcut, extensionPath: extension.path, ...options });
+    extension.shortcuts.set(shortcut, { extensionPath: extension.path, shortcut, ...options });
   },
 
-  registerTool(tool: ToolDefinition): void {
+  registerTool(tool: extensionsTypesTypes.ToolDefinition): void {
     assertActive();
     if (
       typeof tool.parameters !== "object" ||
@@ -52,13 +54,13 @@ export const toolAndCommandMembers = ({ extension, runtime, assertActive }: ApiS
   },
 });
 
-export const flagMembers = ({
+const flagMembers = ({
   extension,
   runtime,
   assertActive,
   isLoading,
   pendingFlagValues,
-}: ApiScope) => ({
+}: loaderScopeTypes.ApiScope) => ({
   getFlag(name: string): boolean | string | undefined {
     assertActive();
     if (!extension.flags.has(name)) return undefined;
@@ -77,7 +79,7 @@ export const flagMembers = ({
         `Invalid default for flag "${name}": expected ${options.type}, got ${typeof options.default}`,
       );
     }
-    extension.flags.set(name, { name, extensionPath: extension.path, ...options });
+    extension.flags.set(name, { extensionPath: extension.path, name, ...options });
     if (options.default !== undefined && !runtime.flagValues.has(name)) {
       if (!isLoading()) runtime.flagValues.set(name, options.default);
       else if (!pendingFlagValues.has(name)) pendingFlagValues.set(name, options.default);
@@ -85,31 +87,45 @@ export const flagMembers = ({
   },
 });
 
-export const rendererMembers = ({ extension, assertActive }: ApiScope) => ({
-  registerEntryRenderer<T>(customType: string, renderer: EntryRenderer<T>): void {
+const rendererMembers = ({ extension, assertActive }: loaderScopeTypes.ApiScope) => ({
+  registerEntryRenderer<T>(
+    customType: string,
+    renderer: extensionsTypesTypes.EntryRenderer<T>,
+  ): void {
     assertActive();
     extension.entryRenderers ??= new Map();
-    extension.entryRenderers.set(customType, renderer as EntryRenderer);
+    extension.entryRenderers.set(customType, renderer as extensionsTypesTypes.EntryRenderer);
   },
 
-  registerExternalService(service: ExternalService): void {
+  registerExternalService(service: externalServicesTypes.ExternalService): void {
     assertActive();
     extension.externalServices = [...(extension.externalServices ?? []), service];
   },
 
-  registerMarkdownTransformer(transformer: MarkdownTransformer): void {
+  registerMarkdownTransformer(transformer: extensionsTypesTypes.MarkdownTransformer): void {
     assertActive();
     extension.markdownTransformer = transformer;
   },
 
-  registerMessageRenderer<T>(customType: string, renderer: MessageRenderer<T>): void {
+  registerMessageRenderer<T>(
+    customType: string,
+    renderer: extensionsTypesTypes.MessageRenderer<T>,
+  ): void {
     assertActive();
-    extension.messageRenderers.set(customType, renderer as MessageRenderer);
+    extension.messageRenderers.set(customType, renderer as extensionsTypesTypes.MessageRenderer);
   },
 
-  registerToolRenderer(resolver: ToolRendererResolver): void {
+  registerToolRenderer(resolver: extensionsTypesTypes.ToolRendererResolver): void {
     assertActive();
     extension.toolRenderers ??= [];
     extension.toolRenderers.push(resolver);
   },
 });
+
+const loaderApiRegistration = {
+  flagMembers,
+  rendererMembers,
+  toolAndCommandMembers,
+};
+
+export default loaderApiRegistration;

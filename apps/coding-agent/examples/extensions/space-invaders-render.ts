@@ -1,13 +1,10 @@
 import tui from "@msa/tui";
 
-import {
-  type Bullet,
-  GAME_HEIGHT,
-  GAME_WIDTH,
-  type GameState,
-  PLAYER_Y,
-  type Shield,
-} from "./space-invaders-state.ts";
+import type spaceInvadersRenderTypes from "./space-invaders-render.types.ts";
+import spaceInvadersState from "./space-invaders-state.ts";
+import type spaceInvadersStateTypes from "./space-invaders-state.types.ts";
+
+const { GAME_HEIGHT, GAME_WIDTH, PLAYER_Y } = spaceInvadersState;
 
 const { visibleWidth } = tui;
 
@@ -28,7 +25,11 @@ const padLine = (line: string, width: number): string => {
   return line + " ".repeat(padding);
 };
 
-const alienAt = (state: GameState, x: number, y: number): string | undefined => {
+const alienAt = (
+  state: spaceInvadersStateTypes.GameState,
+  x: number,
+  y: number,
+): string | undefined => {
   for (const alien of state.aliens) {
     if (!alien.alive || alien.y !== y || Math.abs(alien.x - x) > 1) continue;
     const sprites = [
@@ -42,8 +43,12 @@ const alienAt = (state: GameState, x: number, y: number): string | undefined => 
   return undefined;
 };
 
-const shieldAt = (state: GameState, x: number, y: number): string | undefined => {
-  const shield: Shield | undefined = state.shields.find(
+const shieldAt = (
+  state: spaceInvadersStateTypes.GameState,
+  x: number,
+  y: number,
+): string | undefined => {
+  const shield: spaceInvadersStateTypes.Shield | undefined = state.shields.find(
     (s) => x - s.x >= 0 && x - s.x < 4 && y - (PLAYER_Y - 5) >= 0 && y - (PLAYER_Y - 5) < 3,
   );
   if (shield === undefined) return undefined;
@@ -53,18 +58,28 @@ const shieldAt = (state: GameState, x: number, y: number): string | undefined =>
   return shield.segments[relY]?.[relX] === true ? dim("█") : undefined;
 };
 
-const playerAt = (state: GameState, x: number, y: number): string | undefined => {
+const playerAt = (
+  state: spaceInvadersStateTypes.GameState,
+  x: number,
+  y: number,
+): string | undefined => {
   if (y !== PLAYER_Y || Math.abs(x - state.player.x) > 1) return undefined;
   return white(x === state.player.x ? "▲" : "═");
 };
 
-const bulletAt = (state: GameState, x: number, y: number): string | undefined => {
-  const bullet: Bullet | undefined = state.bullets.find((b) => b.x === x && b.y === y);
+const bulletAt = (
+  state: spaceInvadersStateTypes.GameState,
+  x: number,
+  y: number,
+): string | undefined => {
+  const bullet: spaceInvadersStateTypes.Bullet | undefined = state.bullets.find(
+    (b) => b.x === x && b.y === y,
+  );
   if (bullet === undefined) return undefined;
   return bullet.direction === -1 ? yellow("│") : red("│");
 };
 
-const cellAt = (state: GameState, x: number, y: number): string => {
+const cellAt = (state: spaceInvadersStateTypes.GameState, x: number, y: number): string => {
   const layers = [alienAt, shieldAt, playerAt, bulletAt];
   for (const layer of layers) {
     const cell = layer(state, x, y);
@@ -73,7 +88,7 @@ const cellAt = (state: GameState, x: number, y: number): string => {
   return " ";
 };
 
-const renderRow = (state: GameState, y: number): string => {
+const renderRow = (state: spaceInvadersStateTypes.GameState, y: number): string => {
   let row = "";
   for (let x = 0; x < GAME_WIDTH; x++) {
     row += cellAt(state, x, y);
@@ -81,7 +96,7 @@ const renderRow = (state: GameState, y: number): string => {
   return row;
 };
 
-const footerText = (state: GameState, paused: boolean): string => {
+const footerText = (state: spaceInvadersStateTypes.GameState, paused: boolean): string => {
   if (paused) {
     return `${yellow(bold("PAUSED"))} Press any key to continue, ${bold("Q")} to quit`;
   }
@@ -94,13 +109,7 @@ const footerText = (state: GameState, paused: boolean): string => {
   return `←→ or AD to move, ${bold("SPACE")}/F to fire, ${bold("ESC")} pause, ${bold("Q")} quit`;
 };
 
-export interface FrameOptions {
-  readonly state: GameState;
-  readonly paused: boolean;
-  readonly width: number;
-}
-
-export function renderFrame({ state, paused, width }: FrameOptions): string[] {
+function renderFrame({ state, paused, width }: spaceInvadersRenderTypes.FrameOptions): string[] {
   const boxWidth = GAME_WIDTH;
   const lines: string[] = [];
 
@@ -130,3 +139,9 @@ export function renderFrame({ state, paused, width }: FrameOptions): string[] {
 
   return lines;
 }
+
+const spaceInvadersRender = {
+  renderFrame,
+};
+
+export default spaceInvadersRender;

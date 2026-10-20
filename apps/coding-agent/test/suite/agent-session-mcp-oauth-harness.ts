@@ -2,13 +2,14 @@ import testing from "@msa/testing";
 import { Effect, Layer, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
-import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
-import type { McpOAuthConfig, McpServerEntry } from "../../src/extensions/mcp/config.ts";
-import { createMcpExtension } from "../../src/extensions/mcp/index.ts";
-import { McpOAuthCredentialStore } from "../../src/extensions/mcp/oauth.ts";
+import InMemoryAuthStorageBackend from "../../src/core/in-memory-auth-storage-backend.ts";
+import type configTypes from "../../src/extensions/mcp/config.types.ts";
+import extension from "../../src/extensions/mcp/extension.ts";
+import McpOAuthCredentialStore from "../../src/extensions/mcp/mcp-oauth-credential-store.ts";
 import harnessModule from "./harness.ts";
 import mcpOauthServer from "./mcp-oauth-server.ts";
 
+const { createMcpExtension } = extension;
 const { awaited, runTest } = testing;
 
 const { createHarness, createTestUiContext } = harnessModule;
@@ -62,10 +63,12 @@ const untilAborted = (signal: AbortSignal | undefined): Promise<string | undefin
     }),
   );
 
-const startServer = Effect.fn("startServer")(function* (oauth: McpOAuthConfig | undefined) {
+const startServer = Effect.fn("startServer")(function* (
+  oauth: configTypes.McpOAuthConfig | undefined,
+) {
   const server = yield* awaited(startOAuthMcpServer());
   cleanups.push(server.close);
-  const entry: McpServerEntry = {
+  const entry: configTypes.McpServerEntry = {
     config: { exposure: "direct", url: server.url, ...(oauth === undefined ? {} : { oauth }) },
     name: "issues",
     source: "test",
@@ -73,7 +76,7 @@ const startServer = Effect.fn("startServer")(function* (oauth: McpOAuthConfig | 
   return { entry, server };
 });
 
-const setup = (browser: Browser, oauth?: McpOAuthConfig) =>
+const setup = (browser: Browser, oauth?: configTypes.McpOAuthConfig) =>
   runTest(
     Effect.gen(function* () {
       const { entry, server } = yield* startServer(oauth);

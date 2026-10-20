@@ -3,7 +3,7 @@ import { Effect } from "effect";
 import lockfile from "proper-lockfile";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { FileAuthStorageBackend } from "../src/core/auth-storage.ts";
+import FileAuthStorageBackend from "../src/core/file-auth-storage-backend.ts";
 
 const {
   abortController,

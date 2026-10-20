@@ -1,20 +1,21 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import type themeTypes from "../theme/theme.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { keyHint } = keybindingHints;
 
-const { CancellableLoader, Container, Loader, Spacer, Text } = tuiModule;
+const { CancellableLoader, Loader, Spacer, Text } = tuiModule;
 
-export class BorderedLoader extends Container {
+export default class BorderedLoader extends tuiModule.Container {
   private loader: tuiTypes.CancellableLoader | tuiTypes.Loader;
   private cancellable: boolean;
   private signalController?: AbortController;
 
   constructor(
     tui: tuiTypes.TUI,
-    theme: Theme,
+    theme: themeTypes.Theme,
     message: string,
     options?: { cancellable?: boolean },
   ) {

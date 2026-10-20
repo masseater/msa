@@ -1,10 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ModelRoute,
-  ModelRouteRequest,
-} from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 const PROVIDER = "openai-codex";
@@ -20,14 +15,14 @@ interface JevState {
   model: string;
 }
 
-type JevRequest = ModelRouteRequest<JevState>;
+type JevRequest = codingAgentTypes.ModelRouteRequest<JevState>;
 
 function routeTo(
   request: JevRequest,
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
   id: string,
   state?: JevState,
-): ModelRoute<JevState> {
+): codingAgentTypes.ModelRoute<JevState> {
   const model = ctx.modelRegistry.find(PROVIDER, id);
   if (model === undefined) throw new Error(`Model ${PROVIDER}/${id} is not in the catalog`);
   return {
@@ -53,7 +48,7 @@ function editedThisTurn(messages: readonly aiTypes.Message[]): boolean {
     );
 }
 
-const choosePlanningModel = (request: JevRequest, ctx: ExtensionContext) =>
+const choosePlanningModel = (request: JevRequest, ctx: codingAgentTypes.ExtensionContext) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const previous = request.previous?.model;
@@ -89,7 +84,7 @@ const choosePlanningModel = (request: JevRequest, ctx: ExtensionContext) =>
     }),
   );
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerVirtualModel<JevState>({
     contextWindow: 272_000,
     id: "auto",
@@ -103,11 +98,11 @@ export default function (msa: ExtensionAPI) {
           const state = request.state;
           if (state === undefined) {
             const model = yield* Effect.promise(() => choosePlanningModel(request, ctx));
-            return routeTo(request, ctx, model, { phase: "planning", model });
+            return routeTo(request, ctx, model, { model, phase: "planning" });
           }
 
           if (state.phase === "planning" && editedThisTurn(request.messages)) {
-            return routeTo(request, ctx, LUNA, { phase: "implementation", model: LUNA });
+            return routeTo(request, ctx, LUNA, { model: LUNA, phase: "implementation" });
           }
           return routeTo(request, ctx, state.model);
         }),

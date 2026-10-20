@@ -2,16 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
-import {
-  McpOAuthCredentialStore,
-  type McpOAuthSettings,
-  type McpSignInPrompt,
-  signInMcpServer,
-} from "../src/extensions/mcp/oauth.ts";
+import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
+import McpOAuthCredentialStore from "../src/extensions/mcp/mcp-oauth-credential-store.ts";
+import oauthModule from "../src/extensions/mcp/oauth.ts";
+import type oauthTypesNs from "../src/extensions/mcp/oauth.types.ts";
 import mcpOauthBrowser from "./suite/mcp-oauth-browser.ts";
 import mcpOauthServer from "./suite/mcp-oauth-server.ts";
 
+const { signInMcpServer } = oauthModule;
 const { startOAuthMcpServer } = mcpOauthServer;
 
 const { browserPrompt, clientDocumentId } = mcpOauthBrowser;
@@ -20,7 +18,7 @@ const { awaited, runTest } = testing;
 
 const cleanups3: (() => Promise<void>)[] = [];
 
-const cimd: McpOAuthSettings = { clientRegistration: "cimd" };
+const cimd: oauthTypesNs.McpOAuthSettings = { clientRegistration: "cimd" };
 
 function startServer(options: { issParameter?: boolean; cimd?: boolean; redirectPath?: string }) {
   return runTest(
@@ -31,8 +29,8 @@ function startServer(options: { issParameter?: boolean; cimd?: boolean; redirect
         "test",
         server.url,
       );
-      const browser: McpSignInPrompt = browserPrompt();
-      const signIn = (settings: McpOAuthSettings, prompt = browser) =>
+      const browser: oauthTypesNs.McpSignInPrompt = browserPrompt();
+      const signIn = (settings: oauthTypesNs.McpOAuthSettings, prompt = browser) =>
         signInMcpServer({ prompt, serverUrl: server.url, settings, store });
       return yield* awaited({ server, signIn, store });
     }),
@@ -117,7 +115,7 @@ const acceptsTheAuthorizationResponseOnlyOnThe = () =>
 
       const { signIn: signInByPaste } = yield* awaited(startServer({ cimd: true }));
       let shown: URL | undefined;
-      const paste: McpSignInPrompt = {
+      const paste: oauthTypesNs.McpSignInPrompt = {
         promptForRedirectUrl: () =>
           effectRunPromise(
             Effect.gen(function* () {

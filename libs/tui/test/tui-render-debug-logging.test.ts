@@ -9,11 +9,9 @@ import testPlatform from "./test-platform.ts";
 import tuiRenderDebugLoggingKit from "./tui-render-debug-logging-kit.ts";
 import tuiRenderHelpers from "./tui-render-helpers.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { fileLog, src: tuiModule } = tuiRenderDebugLoggingKit;
-
-const { VirtualTerminal } = virtualTerminal;
 const { TuiMainScreen } = tuiModule;
 const { flushBackgroundFileWrites } = fileLog;
 const { pathOperations } = platform;

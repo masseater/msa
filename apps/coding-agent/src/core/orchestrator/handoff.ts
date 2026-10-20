@@ -1,30 +1,26 @@
 import { Effect } from "effect";
 
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-import { gatherEnvironment } from "./handoff-environment.ts";
-import { handoffPath, saveHandoff } from "./handoff-files.ts";
-import { type HandoffSections, renderHandoff, runningNotice } from "./handoff-render.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { snapshots } from "./snapshot.ts";
-import { store } from "./store.ts";
+import errors from "./errors.ts";
+import handoffEnvironment from "./handoff-environment.ts";
+import handoffFiles from "./handoff-files.ts";
+import handoffRender from "./handoff-render.ts";
+import type handoffTypes from "./handoff.types.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import snapshotModule from "./snapshot.ts";
+import storeModule from "./store.ts";
 
-export interface HandoffInput extends HandoffSections {
-  path?: string;
-}
-
-export interface HandoffResult {
-  path: string;
-  tasks: number;
-  running: number;
-
-  line: string;
-
-  notice: string | undefined;
-}
+const { renderHandoff, runningNotice } = handoffRender;
+const { nowMillis } = runtimeModule;
+const { orchestratorError } = errors;
+const { snapshots } = snapshotModule;
+const { gatherEnvironment } = handoffEnvironment;
+const { handoffPath, saveHandoff } = handoffFiles;
+const { store } = storeModule;
 
 const SECTION_KEYS = ["premise", "goals", "donts"] as const;
 
-function requireSections(input: HandoffSections): void {
+function requireSections(input: handoffTypes.HandoffInput): void {
   for (const key of SECTION_KEYS) {
     if (input[key].trim() === "") {
       throw new Error(`A handoff needs ${key}; write "none" when there is nothing to say`);
@@ -33,9 +29,9 @@ function requireSections(input: HandoffSections): void {
 }
 
 function write(
-  runtime: Runtime,
-  input: HandoffInput,
-): Effect.Effect<HandoffResult, OrchestratorError> {
+  runtime: runtimeTypes.Runtime,
+  input: handoffTypes.HandoffInput,
+): Effect.Effect<handoffTypes.HandoffResult, ReturnType<typeof orchestratorError>> {
   return Effect.gen(function* () {
     yield* Effect.try({ catch: orchestratorError, try: () => requireSections(input) });
     const createdAt = yield* nowMillis;
@@ -45,22 +41,18 @@ function write(
       project,
       runtime.maxConcurrentThreads,
     );
-    const path = yield* Effect.tryPromise({
-      catch: orchestratorError,
-      try: async () => {
-        const environment = await gatherEnvironment(cwd, version);
-        const target = await handoffPath(handoffDirectory, cwd, createdAt, input.path);
-        const content = renderHandoff({
-          createdAt,
-          environment,
-          sections: input,
-          snapshot,
-          notes: store.listNotes(runtime.database, project),
-        });
-        await saveHandoff(target, content);
-        return target;
-      },
+    const attempt = <A>(run: () => Promise<A>) =>
+      Effect.tryPromise({ catch: orchestratorError, try: run });
+    const environment = yield* attempt(() => gatherEnvironment(cwd, version));
+    const path = yield* attempt(() => handoffPath(handoffDirectory, cwd, createdAt, input.path));
+    const content = renderHandoff({
+      createdAt,
+      environment,
+      notes: store.listNotes(runtime.database, project),
+      sections: input,
+      snapshot,
     });
+    yield* attempt(() => saveHandoff(path, content));
     const running = snapshot.tasks.filter((task) => task.status === "running").length;
     return {
       line: `${path} を読んで再開して`,
@@ -72,4 +64,10 @@ function write(
   });
 }
 
-export const handoffs = { write };
+const handoffs = { write };
+
+const handoff = {
+  handoffs,
+};
+
+export default handoff;

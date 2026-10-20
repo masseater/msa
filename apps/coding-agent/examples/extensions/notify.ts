@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import env from "@msa/ai/utils/env";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, ManagedRuntime } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -58,7 +58,7 @@ function notify(title: string, body: string): void {
   }
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("agent_settled", () => {
     notify("msa", "Ready for input");
   });

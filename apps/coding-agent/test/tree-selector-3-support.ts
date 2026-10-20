@@ -1,4 +1,4 @@
-import type { SessionEntry } from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import treeSelectorSupport from "./tree-selector-support.ts";
 
 const { assistantMessage, buildTree, userMessage } = treeSelectorSupport;
@@ -10,7 +10,7 @@ const CTRL_LEFT = "\x1b[1;5D";
 const CTRL_RIGHT = "\x1b[1;5C";
 
 function buildBranchingTree() {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     userMessage("user-1", null, "first message"),
     assistantMessage("asst-1", "user-1", "response 1"),
     userMessage("user-2", "asst-1", "second message"),

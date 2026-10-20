@@ -3,9 +3,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
-import { type InlineExtension } from "../src/core/sdk.ts";
+import toolNames from "../src/core/orchestrator/tool-names.ts";
+import type sdkTypes from "../src/core/sdk.types.ts";
 import defaultToolsSettingSupport from "./default-tools-setting-support.ts";
+
+const { ORCHESTRATOR_TOOL_NAMES } = toolNames;
 
 const { cleanupDirs, createSession, prepareDirs } = defaultToolsSettingSupport;
 
@@ -15,7 +17,7 @@ const appliesNameAndNameToolOptionsToPart1 = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const inactiveTool: InlineExtension = (msa) => {
+    const inactiveTool: sdkTypes.InlineExtension = (msa) => {
       msa.registerTool({
         defaultActive: false,
         description: "Extension tool registered inactive",

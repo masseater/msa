@@ -1,9 +1,11 @@
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect, type Fiber } from "effect";
 
-import { BLUE, BOLD, DIM, RESET } from "./colors.ts";
+import colors from "./colors.ts";
 
-export class LoadingIndicator implements tuiTypes.Component {
+const { BLUE, BOLD, DIM, RESET } = colors;
+
+export default class LoadingIndicator implements tuiTypes.Component {
   private dots = 1;
   private fiber: Fiber.Fiber<never> | undefined;
   private tui: tuiTypes.TUI | null = null;

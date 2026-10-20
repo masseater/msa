@@ -3,14 +3,16 @@ import type agentTypes from "@msa/agent-core/index.types";
 import compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
 
-import type { ExtensionRunner } from "../../../src/core/extensions/index.ts";
-import { convertToLlm } from "../../../src/core/messages.ts";
+import type extensionsTypes from "../../../src/core/extensions/index.types.ts";
+import messagesModule from "../../../src/core/messages.ts";
+
+const { convertToLlm } = messagesModule;
 
 const { streamSimple } = compat;
 
 const { Agent } = agentModule;
 
-type RunnerRef = { current?: ExtensionRunner };
+type RunnerRef = { current?: extensionsTypes.ExtensionRunner };
 
 const extensionHooks = (extensionRunnerRef: RunnerRef) => ({
   onPayload: (payload: unknown) => {

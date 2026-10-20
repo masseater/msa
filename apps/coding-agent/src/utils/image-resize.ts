@@ -3,23 +3,22 @@ import { Worker } from "node:worker_threads";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import {
-  IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
-  type ImageResizeOptions,
-  type ResizeImageWorkerResponse,
-  type ResizedImage,
-  resizeImageInProcess,
-} from "./image-resize-core.ts";
-import { callbackPromise } from "./interop.ts";
+import awaitingModule from "../core/awaiting.ts";
+import imageResizeCore from "./image-resize-core.ts";
+import type imageResizeCoreTypes from "./image-resize-core.types.ts";
+import interop from "./interop.ts";
 
-export type { ImageResizeOptions, ResizedImage } from "./image-resize-core.ts";
+const { IMAGE_RESIZE_WORKER_RESPONSE_TYPE, resizeImageInProcess } = imageResizeCore;
+const { awaited, awaiting } = awaitingModule;
+const { callbackPromise } = interop;
 
 function toTransferableBytes(input: Uint8Array): Uint8Array<ArrayBuffer> {
   return new Uint8Array(input);
 }
 
-function isResizeImageWorkerResponse(value: unknown): value is ResizeImageWorkerResponse {
+function isResizeImageWorkerResponse(
+  value: unknown,
+): value is imageResizeCoreTypes.ResizeImageWorkerResponse {
   return (
     value !== null &&
     typeof value === "object" &&
@@ -36,17 +35,17 @@ function resizeImageInWorker(
   workerSpecifier: string | URL,
   inputBytes: Uint8Array,
   mimeType: string,
-  options?: ImageResizeOptions,
-): Promise<ResizedImage | null> {
+  options?: imageResizeCoreTypes.ImageResizeOptions,
+): Promise<imageResizeCoreTypes.ResizedImage | null> {
   return Effect.runPromise(
     awaiting(function* () {
       const worker = createResizeWorker(workerSpecifier);
       try {
         const inputBytesForWorker = toTransferableBytes(inputBytes);
         return yield* awaited(
-          callbackPromise<ResizedImage | null>((resolve, reject) => {
+          callbackPromise<imageResizeCoreTypes.ResizedImage | null>((resolve, reject) => {
             let settled = false;
-            const settle = (result: ResizedImage | null): void => {
+            const settle = (result: imageResizeCoreTypes.ResizedImage | null): void => {
               if (settled) return;
               settled = true;
               resolve(result);
@@ -88,8 +87,8 @@ function resizeImageInWorker(
 function resizeImageImpl(
   inputBytes: Uint8Array,
   mimeType: string,
-  options?: ImageResizeOptions,
-): Promise<ResizedImage | null> {
+  options?: imageResizeCoreTypes.ImageResizeOptions,
+): Promise<imageResizeCoreTypes.ResizedImage | null> {
   return Effect.runPromise(
     awaiting(function* () {
       const isTypeScriptRuntime = import.meta.url.endsWith(".ts");
@@ -120,19 +119,19 @@ function resizeImageImpl(
   );
 }
 
-export const resizeImage: {
+const resizeImage: {
   (
     inputBytes: Uint8Array,
     mimeType: string,
-    options?: ImageResizeOptions,
-  ): Promise<ResizedImage | null>;
+    options?: imageResizeCoreTypes.ImageResizeOptions,
+  ): Promise<imageResizeCoreTypes.ResizedImage | null>;
   (
     mimeType: string,
-    options?: ImageResizeOptions,
-  ): (inputBytes: Uint8Array) => Promise<ResizedImage | null>;
+    options?: imageResizeCoreTypes.ImageResizeOptions,
+  ): (inputBytes: Uint8Array) => Promise<imageResizeCoreTypes.ResizedImage | null>;
 } = dual((args: IArguments) => args.length >= 2, resizeImageImpl);
 
-export function formatDimensionNote(result: ResizedImage): string | undefined {
+function formatDimensionNote(result: imageResizeCoreTypes.ResizedImage): string | undefined {
   if (!result.wasResized) {
     return undefined;
   }
@@ -140,3 +139,10 @@ export function formatDimensionNote(result: ResizedImage): string | undefined {
   const scale = result.originalWidth / result.width;
   return `[Image: original ${result.originalWidth}x${result.originalHeight}, displayed at ${result.width}x${result.height}. Multiply coordinates by ${scale.toFixed(2)} to map to original image.]`;
 }
+
+const imageResize = {
+  formatDimensionNote,
+  resizeImage,
+};
+
+export default imageResize;

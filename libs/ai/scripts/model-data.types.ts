@@ -1,4 +1,4 @@
-import type modelData from "./model-data.ts";
+import type ModelDataErrorClass from "./model-data-error.ts";
 
 declare namespace modelDataTypes {
   type ModelDataStructure = Record<string, Record<string, string>>;
@@ -21,7 +21,7 @@ declare namespace modelDataTypes {
     readonly structure: Record<string, string>;
   }
 
-  type ModelDataError = (typeof modelData.ModelDataError)["prototype"];
+  type ModelDataError = (typeof ModelDataErrorClass)["prototype"];
 }
 
 export type { modelDataTypes as default };

@@ -1,13 +1,8 @@
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import type {
-  FileEntry,
-  SessionEntry,
-  SessionMessageEntry,
-} from "../../src/core/session-manager.ts";
-import { SessionManager } from "../../src/core/session-manager.ts";
-
+import SessionManager from "../../src/core/session-manager.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 const { currentTimeMillis } = testing;
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
@@ -20,7 +15,9 @@ function userMessage(text: string) {
   };
 }
 
-function storedEntries(build: (source: SessionManager) => void): SessionEntry[] {
+function storedEntries(
+  build: (source: sessionManagerTypes.SessionManager) => void,
+): sessionManagerTypes.SessionEntry[] {
   const source = SessionManager.inMemory("/project");
   build(source);
   return source.getEntries();
@@ -145,7 +142,7 @@ const startsAnEmptySessionWhenThe = () => {
 
 const takesTheSessionIdentityFromA = () => {
   const body = storedEntries((source) => source.appendMessage(userMessage("hello")));
-  const entries: FileEntry[] = [
+  const entries: sessionManagerTypes.FileEntry[] = [
     {
       cwd: "/stored",
       id: "stored-session",
@@ -163,7 +160,7 @@ const takesTheSessionIdentityFromA = () => {
 };
 
 const migratesEntriesRestoredWithAnOlder = () => {
-  const entries: FileEntry[] = [
+  const entries: sessionManagerTypes.FileEntry[] = [
     {
       cwd: "/project",
       id: "v2-session",
@@ -177,11 +174,11 @@ const migratesEntriesRestoredWithAnOlder = () => {
       parentId: null,
       timestamp: "2026-01-01T00:00:01Z",
       type: "message",
-    } as unknown as SessionMessageEntry,
+    } as unknown as sessionManagerTypes.SessionMessageEntry,
   ];
 
   const session = SessionManager.inMemory("/project", undefined, entries);
-  const restored = session.getEntries()[0] as SessionMessageEntry;
+  const restored = session.getEntries()[0] as sessionManagerTypes.SessionMessageEntry;
 
   expect(session.getHeader()!.version).toBe(3);
   expect(restored.message.role).toBe("custom");
@@ -189,18 +186,18 @@ const migratesEntriesRestoredWithAnOlder = () => {
 };
 
 const adoptsHeaderlessEntriesAsCurrentVersion = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     {
       id: "abc12345",
       message: { content: "from a hook", role: "hookMessage", timestamp: 1 },
       parentId: null,
       timestamp: "2026-01-01T00:00:01Z",
       type: "message",
-    } as unknown as SessionMessageEntry,
+    } as unknown as sessionManagerTypes.SessionMessageEntry,
   ];
 
   const session = SessionManager.inMemory("/project", undefined, entries);
-  const restored = session.getEntries()[0] as SessionMessageEntry;
+  const restored = session.getEntries()[0] as sessionManagerTypes.SessionMessageEntry;
 
   expect(restored.message.role).toBe("hookMessage");
 };

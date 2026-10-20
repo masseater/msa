@@ -1,15 +1,14 @@
 import testing from "@msa/testing";
 import { Config, Effect, Function, Option } from "effect";
 
-import { createEventBus } from "../src/core/event-bus.ts";
-import type {
-  Extension,
-  InlineExtension,
-  LoadExtensionsResult,
-} from "../src/core/extensions/index.ts";
-import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";
-import type { ResourceLoader } from "../src/core/resource-loader.ts";
+import eventBusModule from "../src/core/event-bus.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type resourceLoaderTypes from "../src/core/resource-loader.types.ts";
 import type utilitiesTypes from "./utilities.types.ts";
+
+const { createExtensionRuntime, loadExtensionFromFactory } = loader;
+const { createEventBus } = eventBusModule;
 
 const { currentTimeMillis, fromJsonText, readTextFile, runTest } = testing;
 
@@ -55,17 +54,19 @@ const readSessionFileRoles = (file: string): Promise<string[]> =>
     ),
   );
 
-type TestExtensionInput = InlineExtension | utilitiesTypes.CreateTestExtensionsResultInput;
+type TestExtensionInput =
+  | extensionsTypes.InlineExtension
+  | utilitiesTypes.CreateTestExtensionsResultInput;
 
 const createTestExtensionsResultImpl = (
   inputs: TestExtensionInput[],
   cwd = process.cwd(),
-): Promise<LoadExtensionsResult> =>
+): Promise<extensionsTypes.LoadExtensionsResult> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const extensionRuntime = createExtensionRuntime();
       const eventBus = createEventBus();
-      const extensions: Extension[] = [];
+      const extensions: extensionsTypes.Extension[] = [];
 
       for (const [index, input] of inputs.entries()) {
         const isObject = typeof input !== "function";
@@ -95,8 +96,8 @@ const createTestExtensionsResultImpl = (
   );
 
 const createTestExtensionsResult: {
-  (cwd?: string): (inputs: TestExtensionInput[]) => Promise<LoadExtensionsResult>;
-  (inputs: TestExtensionInput[], cwd?: string): Promise<LoadExtensionsResult>;
+  (cwd?: string): (inputs: TestExtensionInput[]) => Promise<extensionsTypes.LoadExtensionsResult>;
+  (inputs: TestExtensionInput[], cwd?: string): Promise<extensionsTypes.LoadExtensionsResult>;
 } = Function.dual(
   (args) => args.length >= 2 || Array.isArray(args[0]),
   createTestExtensionsResultImpl,
@@ -104,7 +105,7 @@ const createTestExtensionsResult: {
 
 function createTestResourceLoader(
   options: utilitiesTypes.CreateTestResourceLoaderOptions = {},
-): ResourceLoader {
+): resourceLoaderTypes.ResourceLoader {
   const extensionsResult = options.extensionsResult ?? {
     errors: [],
     extensions: options.extensions ?? [],

@@ -3,11 +3,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import { VERSION } from "../src/config.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
+import config from "../src/config.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 import modelCatalogProtocol from "./model-catalog-protocol.ts";
 import type modelCatalogProtocolTypes from "./model-catalog-protocol.types.ts";
 import testNetworkEnv from "./test-network-env.ts";
+const { VERSION } = config;
 
 const { InMemoryCredentialStore } = ai;
 
@@ -141,8 +143,8 @@ const beforeAllHook = Effect.gen(function* () {
 });
 
 const captureProviderUrl = Effect.fn("captureProviderUrl")(function* (
-  runtime: ModelRuntime,
-  model: NonNullable<ReturnType<ModelRuntime["getModel"]>>,
+  runtime: modelRuntimeTypes.ModelRuntime,
+  model: NonNullable<ReturnType<modelRuntimeTypes.ModelRuntime["getModel"]>>,
 ) {
   const captured: { url?: URL } = {};
   vi.stubGlobal("fetch", (input: Parameters<typeof fetch>[0], init?: RequestInit) => {

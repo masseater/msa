@@ -1,45 +1,41 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type agentTypes from "@msa/agent-core/index.types";
-import { Effect, FileSystem } from "effect";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import {
-  fromPromise,
-  nonEmptyOr,
-  platformRuntime,
-  rethrowCause,
-  unwrapForeign,
-} from "../platform/index.ts";
-import { type EditOperations, performEdit } from "./edit-apply.ts";
-import {
-  type EditToolInput,
-  editSchema,
-  editToolSystemPromptContribution,
-  prepareEditArguments,
-  validateEditInput,
-} from "./edit-input.ts";
-import { withFileMutationQueue } from "./file-mutation-queue.ts";
-import { resolveToCwd } from "./path-utils.ts";
-import { type EditRenderState, editRenderers } from "./renderers/edit.ts";
-import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import editApply from "./edit-apply.ts";
+import type editApplyTypes from "./edit-apply.types.ts";
+import editInput from "./edit-input.ts";
+import type editInputTypes from "./edit-input.types.ts";
+import type editTypes from "./edit.types.ts";
+import fileMutationQueue from "./file-mutation-queue.ts";
+import pathUtils from "./path-utils.ts";
+import editModule from "./renderers/edit.ts";
+import type editTypesModule from "./renderers/edit.types.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
 
-export type { EditOperations } from "./edit-apply.ts";
-export { editToolSystemPromptContribution, type EditToolInput } from "./edit-input.ts";
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
-export interface EditToolDetails {
-  diff: string;
-  patch: string;
-  firstChangedLine?: number | undefined;
-}
+const { performEdit } = editApply;
+const { editSchema, editToolSystemPromptContribution, prepareEditArguments, validateEditInput } =
+  editInput;
+const { fromPromise, nonEmptyOr, rethrowCause, unwrapForeign } = platform;
+const { editRenderers } = editModule;
+const { resolveToCwd } = pathUtils;
+const { withFileMutationQueue } = fileMutationQueue;
+const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
-const defaultEditOperations: EditOperations = {
+const defaultEditOperations: editApplyTypes.EditOperations = {
   access: (path) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(
         FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true, writable: true })),
       ),
     ),
   readFile: (path) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(
         FileSystem.FileSystem.use((fs) => fs.readFile(path)).pipe(
           Effect.map((bytes) => Buffer.from(bytes)),
@@ -47,19 +43,19 @@ const defaultEditOperations: EditOperations = {
       ),
     ),
   writeFile: (path, content) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(FileSystem.FileSystem.use((fs) => fs.writeFileString(path, content))),
     ),
 };
 
-export interface EditToolOptions {
-  operations?: EditOperations;
-}
-
 const createEditToolDefinitionImpl = (
   cwd: string,
-  options?: EditToolOptions,
-): ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState> => {
+  options?: editTypes.EditToolOptions,
+): extensionsTypesTypes.ToolDefinition<
+  typeof editSchema,
+  editTypes.EditToolDetails | undefined,
+  editTypesModule.EditRenderState
+> => {
   const ops = options?.operations ?? defaultEditOperations;
   return {
     constrainedSampling: { strict: "prefer", type: "json_schema" },
@@ -67,20 +63,20 @@ const createEditToolDefinitionImpl = (
       "Edit a single file using exact text replacement. Every edits[].oldText must match a unique, non-overlapping region of the original file. If two changes affect the same block or nearby lines, merge them into one edit instead of emitting overlapping edits. Do not include large unchanged regions just to connect distant changes.",
     execute: (
       _toolCallId,
-      input: EditToolInput,
+      input: editInputTypes.EditToolInput,
       signal?: AbortSignal,
       _onUpdate?,
-      ctx?: ExtensionContext,
+      ctx?: extensionsTypesTypes.ExtensionContext,
     ) =>
-      platformRuntime.runPromise(
+      nodeRuntime.runPromise(
         unwrapForeign(
           Effect.gen(function* () {
             const { path, edits } = yield* validateEditInput(input);
             const absolutePath = resolveToCwd(path, nonEmptyOr(ctx?.cwd, cwd));
             return yield* fromPromise(() =>
               withFileMutationQueue(absolutePath, () =>
-                platformRuntime.runPromise(
-                  unwrapForeign(performEdit({ ops, path, absolutePath, edits, signal })),
+                nodeRuntime.runPromise(
+                  unwrapForeign(performEdit({ absolutePath, edits, ops, path, signal })),
                 ),
               ),
             );
@@ -98,12 +94,24 @@ const createEditToolDefinitionImpl = (
   };
 };
 
-export const createEditToolDefinition: CwdFactory<
-  EditToolOptions,
-  ToolDefinition<typeof editSchema, EditToolDetails | undefined, EditRenderState>
+const createEditToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
+  editTypes.EditToolOptions,
+  extensionsTypesTypes.ToolDefinition<
+    typeof editSchema,
+    editTypes.EditToolDetails | undefined,
+    editTypesModule.EditRenderState
+  >
 > = cwdFactory(createEditToolDefinitionImpl);
 
-export const createEditTool: CwdFactory<
-  EditToolOptions,
+const createEditTool: toolDefinitionWrapperTypes.CwdFactory<
+  editTypes.EditToolOptions,
   agentTypes.AgentTool<typeof editSchema>
 > = cwdFactory((cwd, options) => wrapToolDefinition(createEditToolDefinitionImpl(cwd, options)));
+
+const edit = {
+  createEditTool,
+  createEditToolDefinition,
+  editToolSystemPromptContribution: editInput.editToolSystemPromptContribution,
+};
+
+export default edit;

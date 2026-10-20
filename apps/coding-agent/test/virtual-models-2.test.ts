@@ -4,7 +4,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type ModelRouteRequest } from "../src/core/virtual-models.ts";
+import type virtualModelsTypes from "../src/core/virtual-models.types.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 
 const { fauxAssistantMessage, getSupportedThinkingLevels } = ai;
@@ -14,7 +14,7 @@ const { assistantFrom, createRuntime } = virtualModelsSupport;
 const { awaited, runTest } = testing;
 
 const listsAVirtualModelAndRoutesIt = Effect.gen(function* () {
-  const requests: ModelRouteRequest[] = [];
+  const requests: virtualModelsTypes.ModelRouteRequest[] = [];
   const { runtime, virtual } = yield* awaited(createRuntime(requests));
   expect(virtual).toMatchObject({
     contextWindow: 0,
@@ -52,7 +52,7 @@ const listsAVirtualModelAndRoutesIt = Effect.gen(function* () {
 });
 
 const reportsTheFailedRequestOfARetry = Effect.gen(function* () {
-  const requests: ModelRouteRequest[] = [];
+  const requests: virtualModelsTypes.ModelRouteRequest[] = [];
   const { runtime, virtual } = yield* awaited(createRuntime(requests));
   const small = runtime.getModel("faux", "small")!;
   const large = runtime.getModel("faux", "large")!;
@@ -163,7 +163,7 @@ const rejectsRoutesToVirtualOrUnknownModels = Effect.gen(function* () {
 });
 
 const routesDirectStreamsimpleCallsWithinTheRouted = Effect.gen(function* () {
-  const requests: ModelRouteRequest[] = [];
+  const requests: virtualModelsTypes.ModelRouteRequest[] = [];
   const { runtime, faux, virtual } = yield* awaited(createRuntime(requests));
   let maxTokens: number | undefined;
   faux.setResponses([

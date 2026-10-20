@@ -2,11 +2,13 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { GOAL_ENTRY_TYPE, type GoalEntryData } from "../../src/core/goal.ts";
-import { SessionManager } from "../../src/core/session-manager.ts";
+import goalModule from "../../src/core/goal.ts";
+import type goalTypes from "../../src/core/goal.types.ts";
+import SessionManager from "../../src/core/session-manager.ts";
 import agentSessionGoalSupport from "./agent-session-goal-support.ts";
 import harnessModule from "./harness.ts";
 
+const { GOAL_ENTRY_TYPE } = goalModule;
 const { fauxAssistantMessage } = ai;
 
 const { goalEvents, harnesses, setup, touchTool, workTurn } = agentSessionGoalSupport;
@@ -25,7 +27,7 @@ const waitsOutARateLimitAnd = Effect.gen(function* () {
     if (
       event.type === "entry_appended" &&
       event.entry.type === "custom" &&
-      (event.entry.data as GoalEntryData).event === "waiting"
+      (event.entry.data as goalTypes.GoalEntryData).event === "waiting"
     ) {
       void harness.session.abort();
     }

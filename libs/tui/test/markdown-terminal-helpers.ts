@@ -8,11 +8,8 @@ import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
 import effectHelpers from "./effect-helpers.ts";
 import type markdownTerminalHelpersTypes from "./markdown-terminal-helpers.types.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 import type virtualTerminalTypes from "./virtual-terminal.types.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
 const { toJson } = effectHelpers;
 
 type Verify = (terminal: virtualTerminalTypes.VirtualTerminal) => Effect.Effect<void>;

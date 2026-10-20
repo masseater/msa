@@ -3,9 +3,11 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { initTheme } = themeModule;
+const { stripAnsi } = ansi;
 
 const { Container } = tui;
 

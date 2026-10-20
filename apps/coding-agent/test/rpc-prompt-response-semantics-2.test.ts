@@ -17,22 +17,28 @@ const rpcIo = vi.hoisted((): rpcPromptResponseSupportTypes.RpcIo => ({
 }));
 
 vi.mock("../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(() => Promise.resolve()),
-  takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(() => Promise.resolve()),
-  writeRawStdout: (line: string) => {
-    rpcIo.outputLines.push(line);
+  default: {
+    flushRawStdout: vi.fn(() => Promise.resolve()),
+    takeOverStdout: vi.fn(),
+    waitForRawStdoutBackpressure: vi.fn(() => Promise.resolve()),
+    writeRawStdout: (line: string) => {
+      rpcIo.outputLines.push(line);
+    },
   },
 }));
 
-vi.mock("../src/modes/interactive/theme/theme.js", () => ({ theme: {} }));
+vi.mock("../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
 vi.mock("../src/modes/rpc/jsonl.js", () => ({
-  attachJsonlLineReader: vi.fn((_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-    rpcIo.lineHandler = onLine;
-    return () => {};
-  }),
-  serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  default: {
+    attachJsonlLineReader: vi.fn(
+      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
+        rpcIo.lineHandler = onLine;
+        return () => {};
+      },
+    ),
+    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  },
 }));
 
 const promptResponses = (id: string) =>

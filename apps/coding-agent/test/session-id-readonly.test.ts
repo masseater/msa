@@ -2,11 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { Args } from "../src/cli/args.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createSessionManager } from "../src/main.ts";
+import type argsTypes from "../src/cli/args.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import mainModule from "../src/main.ts";
 import cliProcess from "./cli-process.ts";
+const { createSessionManager } = mainModule;
 
 const {
   awaited,
@@ -66,7 +68,7 @@ const runReadOnlyHelp = Effect.fn("runReadOnlyHelp")(function* () {
   return { agentDir, code };
 });
 
-function args(overrides: Partial<Args>): Args {
+function args(overrides: Partial<argsTypes.Args>): argsTypes.Args {
   return {
     diagnostics: [],
     fileArgs: [],
@@ -76,7 +78,7 @@ function args(overrides: Partial<Args>): Args {
   };
 }
 
-function persistSession(session: SessionManager, content: string): void {
+function persistSession(session: sessionManagerTypes.SessionManager, content: string): void {
   session.appendMessage({ content, role: "user", timestamp: currentTimeMillis() });
   session.appendMessage({
     api: "anthropic-messages" as const,

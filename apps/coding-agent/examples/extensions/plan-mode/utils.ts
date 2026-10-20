@@ -1,5 +1,7 @@
 import { dual } from "effect/Function";
 
+import type utilsTypes from "./utils.types.ts";
+
 const DESTRUCTIVE_PATTERNS = [
   /\brm\b/iu,
   /\brmdir\b/iu,
@@ -89,19 +91,13 @@ const SAFE_PATTERNS = [
   /^\s*eza\b/u,
 ];
 
-export function isSafeCommand(command: string): boolean {
+function isSafeCommand(command: string): boolean {
   const isDestructive = DESTRUCTIVE_PATTERNS.some((p) => p.test(command));
   const isSafe = SAFE_PATTERNS.some((p) => p.test(command));
   return !isDestructive && isSafe;
 }
 
-export interface TodoItem {
-  step: number;
-  text: string;
-  completed: boolean;
-}
-
-export function cleanStepText(text: string): string {
+function cleanStepText(text: string): string {
   let cleaned = text
     .replace(/\*{1,2}([^*]+)\*{1,2}/gu, "$1")
     .replace(/`([^`]+)`/gu, "$1")
@@ -121,8 +117,8 @@ export function cleanStepText(text: string): string {
   return cleaned;
 }
 
-export function extractTodoItems(message: string): TodoItem[] {
-  const items: TodoItem[] = [];
+function extractTodoItems(message: string): utilsTypes.TodoItem[] {
+  const items: utilsTypes.TodoItem[] = [];
   const headerMatch = message.match(/\*{0,2}Plan:\*{0,2}\s*\n/iu);
   if (headerMatch === null) return items;
 
@@ -150,7 +146,7 @@ export function extractTodoItems(message: string): TodoItem[] {
   return items;
 }
 
-export function extractDoneSteps(message: string): number[] {
+function extractDoneSteps(message: string): number[] {
   const steps: number[] = [];
   for (const match of message.matchAll(/\[DONE:(\d+)\]/giu)) {
     const step = Number(match[1]);
@@ -159,7 +155,7 @@ export function extractDoneSteps(message: string): number[] {
   return steps;
 }
 
-function markCompletedStepsImpl(text: string, items: TodoItem[]): number {
+function markCompletedStepsImpl(text: string, items: utilsTypes.TodoItem[]): number {
   const doneSteps = extractDoneSteps(text);
   for (const step of doneSteps) {
     const item = items.find((t) => t.step === step);
@@ -168,7 +164,17 @@ function markCompletedStepsImpl(text: string, items: TodoItem[]): number {
   return doneSteps.length;
 }
 
-export const markCompletedSteps: {
-  (text: string, items: TodoItem[]): number;
-  (items: TodoItem[]): (text: string) => number;
+const markCompletedSteps: {
+  (text: string, items: utilsTypes.TodoItem[]): number;
+  (items: utilsTypes.TodoItem[]): (text: string) => number;
 } = dual(2, markCompletedStepsImpl);
+
+const utils = {
+  cleanStepText,
+  extractDoneSteps,
+  extractTodoItems,
+  isSafeCommand,
+  markCompletedSteps,
+};
+
+export default utils;

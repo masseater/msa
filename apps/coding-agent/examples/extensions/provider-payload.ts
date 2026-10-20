@@ -1,6 +1,9 @@
 import { NodeServices } from "@effect/platform-node";
-import { CONFIG_DIR_NAME, type ExtensionAPI } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
+
+const { CONFIG_DIR_NAME } = codingAgent;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -15,7 +18,7 @@ const appendPayloadLog = (cwd: string, line: string): Promise<void> =>
     }).pipe(Effect.orDie),
   );
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("before_provider_request", (event, ctx) =>
     appendPayloadLog(ctx.cwd, `${JSON.stringify(event.payload, null, 2)}\n\n`),
   );

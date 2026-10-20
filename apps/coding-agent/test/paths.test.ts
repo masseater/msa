@@ -5,14 +5,16 @@ import testing from "@msa/testing";
 import { Effect, FileSystem } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import paths from "../src/utils/paths.ts";
+
+const {
   canonicalizePath,
   getCwdRelativePath,
   isLocalPath,
   normalizePath,
   normalizeWindowsShellPath,
-  resolvePath as resolvePathTo,
-} from "../src/utils/paths.ts";
+  resolvePath: resolvePathTo,
+} = paths;
 
 const {
   joinPath,

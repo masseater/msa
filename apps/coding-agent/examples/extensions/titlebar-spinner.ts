@@ -1,28 +1,28 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, type Fiber } from "effect";
 
 const BRAILLE_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
 const baseName = (path: string): string => path.split(/[\\/]/u).at(-1) ?? path;
 
-function getBaseTitle(msa: ExtensionAPI): string {
+function getBaseTitle(msa: codingAgentTypes.ExtensionAPI): string {
   const cwd = baseName(process.cwd());
   const session = msa.getSessionName();
   return session !== undefined && session.length > 0 ? `msa - ${session} - ${cwd}` : `msa - ${cwd}`;
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let fiber: Fiber.Fiber<never> | undefined;
   let frameIndex = 0;
 
-  function stopAnimation(ctx: ExtensionContext) {
+  function stopAnimation(ctx: codingAgentTypes.ExtensionContext) {
     fiber?.interruptUnsafe();
     fiber = undefined;
     frameIndex = 0;
     ctx.ui.setTitle(getBaseTitle(msa));
   }
 
-  function startAnimation(ctx: ExtensionContext) {
+  function startAnimation(ctx: codingAgentTypes.ExtensionContext) {
     stopAnimation(ctx);
     fiber = Effect.runFork(
       Effect.forever(

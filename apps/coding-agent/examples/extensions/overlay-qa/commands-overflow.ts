@@ -1,9 +1,10 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-import { registerOverlayCommand } from "./show-overlay.ts";
-import { StreamingOverflowComponent } from "./streaming-overflow-component.ts";
+import showOverlayModule from "./show-overlay.ts";
+import StreamingOverflowComponent from "./streaming-overflow-component.ts";
 
-const registerOverflow = (msa: ExtensionAPI): void => {
+const { registerOverlayCommand } = showOverlayModule;
+const registerOverflow = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerOverlayCommand({
     component: () => (tui, theme, _kb, done) => new StreamingOverflowComponent(tui, theme, done),
     description: "Test width overflow with streaming process output",
@@ -13,6 +14,12 @@ const registerOverflow = (msa: ExtensionAPI): void => {
   });
 };
 
-export const registerOverflowCommand = (msa: ExtensionAPI): void => {
+const registerOverflowCommand = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerOverflow(msa);
 };
+
+const commandsOverflow = {
+  registerOverflowCommand,
+};
+
+export default commandsOverflow;

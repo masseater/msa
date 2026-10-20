@@ -2,10 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { ModelConfig } from "../src/core/model-config.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import ModelConfig from "../src/core/model-config.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
+const { validateThemeJson } = themeSchema;
 
 const {
   awaited,

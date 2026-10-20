@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, describe, expect, test } from "vite-plus/test";
 
-import { getAgentDir } from "../src/config.ts";
-import { loadPromptTemplates } from "../src/core/prompt-templates.ts";
+import config from "../src/config.ts";
+import promptTemplates from "../src/core/prompt-templates.ts";
+
+const { loadPromptTemplates } = promptTemplates;
+const { getAgentDir } = config;
 
 const {
   currentTimeMillis,

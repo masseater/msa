@@ -1,4 +1,4 @@
-import type { AgentSession, InlineExtension, SessionManager } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import type {
   JsonValue,
   SimpleHarnessResult,
@@ -6,41 +6,42 @@ import type {
   UsageSummary,
 } from "vitest-evals/harness";
 
-import type {
-  MsaCodingAgentHarnessOptions,
-  MsaCodingAgentHarnessWithOutput,
-} from "./harness-types.ts";
-import type { MsaCodingAgentModelSelection } from "./model-selection.ts";
-import type { SandboxIdentity } from "./sandbox.ts";
+import type harnessTypesTypes from "./harness-types.ts";
+import type modelSelectionTypes from "./model-selection.types.ts";
+import type sandboxTypes from "./sandbox.types.ts";
 
-export type MsaRunDiagnostics = {
-  events: TranscriptEvent[];
-  metadata: Record<string, unknown>;
-  usage: UsageSummary;
-};
+declare namespace runTypesTypes {
+  type MsaRunDiagnostics = {
+    events: TranscriptEvent[];
+    metadata: Record<string, unknown>;
+    usage: UsageSummary;
+  };
 
-export type Options<TOutput extends JsonValue> =
-  | MsaCodingAgentHarnessOptions
-  | MsaCodingAgentHarnessWithOutput<TOutput>;
+  type Options<TOutput extends JsonValue> =
+    | harnessTypesTypes.MsaCodingAgentHarnessOptions
+    | harnessTypesTypes.MsaCodingAgentHarnessWithOutput<TOutput>;
 
-export type RunState<TOutput extends JsonValue> = {
-  forcedSystemPrompt: string | undefined;
-  sessionManager: SessionManager | undefined;
-  session: AgentSession | undefined;
-  result: SimpleHarnessResult<string | TOutput> | undefined;
-  diagnostics: MsaRunDiagnostics | undefined;
-};
+  type RunState<TOutput extends JsonValue> = {
+    forcedSystemPrompt: string | undefined;
+    sessionManager: codingAgentTypes.SessionManager | undefined;
+    session: codingAgentTypes.AgentSession | undefined;
+    result: SimpleHarnessResult<string | TOutput> | undefined;
+    diagnostics: MsaRunDiagnostics | undefined;
+  };
 
-export type HostSelection = {
-  selection: MsaCodingAgentModelSelection;
-  authPath: string;
-  sandboxIdentity: SandboxIdentity | undefined;
-};
+  type HostSelection = {
+    selection: modelSelectionTypes.MsaCodingAgentModelSelection;
+    authPath: string;
+    sandboxIdentity: sandboxTypes.SandboxIdentity | undefined;
+  };
 
-export type RunPaths = { root: string; workspace: string; agentDir: string };
+  type RunPaths = { root: string; workspace: string; agentDir: string };
 
-export type AgentRunContext = {
-  host: HostSelection;
-  paths: RunPaths;
-  extensionFactories: InlineExtension[];
-};
+  type AgentRunContext = {
+    host: HostSelection;
+    paths: RunPaths;
+    extensionFactories: codingAgentTypes.InlineExtension[];
+  };
+}
+
+export type { runTypesTypes as default };

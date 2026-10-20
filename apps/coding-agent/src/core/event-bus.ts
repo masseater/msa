@@ -2,19 +2,14 @@ import { EventEmitter } from "node:events";
 
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "./awaiting.ts";
-import { writeError } from "./platform.ts";
+import awaitingModule from "./awaiting.ts";
+import type eventBusTypes from "./event-bus.types.ts";
+import platform from "./platform.ts";
 
-export interface EventBus {
-  emit(channel: string, data: unknown): void;
-  on(channel: string, handler: (data: unknown) => void): () => void;
-}
+const { awaited, awaiting } = awaitingModule;
+const { writeError } = platform;
 
-export interface EventBusController extends EventBus {
-  clear(): void;
-}
-
-export function createEventBus(): EventBusController {
+function createEventBus(): eventBusTypes.EventBusController {
   const emitter = new EventEmitter();
   return {
     clear: () => {
@@ -39,3 +34,9 @@ export function createEventBus(): EventBusController {
     },
   };
 }
+
+const eventBus = {
+  createEventBus,
+};
+
+export default eventBus;

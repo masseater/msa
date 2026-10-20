@@ -1,24 +1,28 @@
 import { pathToFileURL } from "node:url";
 
-import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 import { Effect, type Fiber, Function as Fn, Predicate, Schedule } from "effect";
 
-import type { Theme } from "../../modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../utils/ansi.ts";
-import { abbreviateHomePath, resolvePath } from "../../utils/paths.ts";
-import { sanitizeBinaryOutput } from "../../utils/shell.ts";
-import type { ToolRenderContext } from "../extensions/types.ts";
-import { currentTimeMillis, platformRuntime } from "../platform/index.ts";
+import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
+import ansi from "../../utils/ansi.ts";
+import paths from "../../utils/paths.ts";
+import shell from "../../utils/shell.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+
+const { abbreviateHomePath, resolvePath } = paths;
+const { sanitizeBinaryOutput } = shell;
+const { stripAnsi } = ansi;
+const { currentTimeMillis } = platform;
 
 const { getCapabilities, getImageDimensions, hyperlink, imageFallback } = tui;
 
-export function shortenPath(path: unknown): string {
+function shortenPath(path: unknown): string {
   if (typeof path !== "string") return "";
   return abbreviateHomePath(path);
 }
 
-export const linkPath: {
+const linkPath: {
   (rawPath: string, cwd: string): (styledText: string) => string;
   (styledText: string, rawPath: string, cwd: string): string;
 } = Fn.dual(3, (styledText: string, rawPath: string, cwd: string): string => {
@@ -27,7 +31,7 @@ export const linkPath: {
   return hyperlink(styledText, pathToFileURL(absolutePath).href);
 });
 
-export function str(value: unknown): string | null {
+function str(value: unknown): string | null {
   if (typeof value === "string") return value;
   if (Predicate.isNullish(value)) return "";
   return null;
@@ -38,7 +42,7 @@ function parseLineNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
 }
 
-export const formatReadLineRange: {
+const formatReadLineRange: {
   (limit: unknown): (offset: unknown) => string;
   (offset: unknown, limit: unknown): string;
 } = Fn.dual(2, (offset: unknown, limit: unknown): string => {
@@ -52,11 +56,11 @@ export const formatReadLineRange: {
   return `:${start}${end === 0 ? "" : `-${end}`}`;
 });
 
-export function replaceTabs(text: string): string {
+function replaceTabs(text: string): string {
   return text.replace(/\t/gu, "   ");
 }
 
-export function normalizeDisplayText(text: string): string {
+function normalizeDisplayText(text: string): string {
   return text.replace(/\r/gu, "");
 }
 
@@ -64,7 +68,7 @@ type TextOutputSource =
   | { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }> }
   | undefined;
 
-export const getTextOutput: {
+const getTextOutput: {
   (showImages: boolean): (result: TextOutputSource) => string;
   (result: TextOutputSource, showImages: boolean): string;
 } = Fn.dual(2, (result: TextOutputSource, showImages: boolean): string => {
@@ -98,41 +102,41 @@ export const getTextOutput: {
   return output;
 });
 
-export type ToolRenderResultLike<TDetails> = {
-  content: (aiTypes.TextContent | aiTypes.ImageContent)[];
-  details: TDetails;
-};
-
 const COLLAPSED_ARGS_CHARS = 100;
 
-export const formatToolCallWithArgs: {
-  (args: unknown, theme: Theme, expanded: boolean): (title: string) => string;
-  (title: string, args: unknown, theme: Theme, expanded: boolean): string;
-} = Fn.dual(4, (title: string, args: unknown, theme: Theme, expanded: boolean): string => {
-  const header = theme.fg("toolTitle", theme.bold(title));
-  if (Predicate.isNullish(args)) return header;
-  const entries =
-    typeof args === "object" && !Array.isArray(args)
-      ? Object.entries(args)
-      : ([["args", args]] as [string, unknown][]);
-  if (entries.length === 0) return header;
-  if (expanded) {
-    const lines = entries.map(([key, value]) => {
-      const text =
-        typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
-      return `  ${key}: ${replaceTabs(text).replace(/\r/gu, "").split("\n").join("\n    ")}`;
-    });
-    return `${header}\n${theme.fg("muted", lines.join("\n"))}`;
-  }
-  const pairs = entries
-    .map(([key, value]) => `${key}=${JSON.stringify(value) ?? String(value)}`)
-    .join(" ");
-  const preview =
-    pairs.length > COLLAPSED_ARGS_CHARS ? `${pairs.slice(0, COLLAPSED_ARGS_CHARS - 3)}...` : pairs;
-  return `${header} ${theme.fg("muted", preview)}`;
-});
+const formatToolCallWithArgs: {
+  (args: unknown, theme: themeTypes.Theme, expanded: boolean): (title: string) => string;
+  (title: string, args: unknown, theme: themeTypes.Theme, expanded: boolean): string;
+} = Fn.dual(
+  4,
+  (title: string, args: unknown, theme: themeTypes.Theme, expanded: boolean): string => {
+    const header = theme.fg("toolTitle", theme.bold(title));
+    if (Predicate.isNullish(args)) return header;
+    const entries =
+      typeof args === "object" && !Array.isArray(args)
+        ? Object.entries(args)
+        : ([["args", args]] as [string, unknown][]);
+    if (entries.length === 0) return header;
+    if (expanded) {
+      const lines = entries.map(([key, value]) => {
+        const text =
+          typeof value === "string" ? value : (JSON.stringify(value, null, 2) ?? String(value));
+        return `  ${key}: ${replaceTabs(text).replace(/\r/gu, "").split("\n").join("\n    ")}`;
+      });
+      return `${header}\n${theme.fg("muted", lines.join("\n"))}`;
+    }
+    const pairs = entries
+      .map(([key, value]) => `${key}=${JSON.stringify(value) ?? String(value)}`)
+      .join(" ");
+    const preview =
+      pairs.length > COLLAPSED_ARGS_CHARS
+        ? `${pairs.slice(0, COLLAPSED_ARGS_CHARS - 3)}...`
+        : pairs;
+    return `${header} ${theme.fg("muted", preview)}`;
+  },
+);
 
-export function formatToolDuration(ms: number): string {
+function formatToolDuration(ms: number): string {
   const seconds = ms / 1000;
   if (seconds < 60) return `${seconds.toFixed(1)}s`;
 
@@ -150,7 +154,7 @@ interface ToolTimerState {
   interval?: Fiber.Fiber<never> | undefined;
 }
 
-export function startToolTimer(context: ToolRenderContext<ToolTimerState>): void {
+function startToolTimer(context: extensionsTypesTypes.ToolRenderContext<ToolTimerState>): void {
   const state = context.state;
   if (context.executionStarted && state.startedAt === undefined) {
     state.startedAt = currentTimeMillis();
@@ -158,8 +162,10 @@ export function startToolTimer(context: ToolRenderContext<ToolTimerState>): void
   }
 }
 
-const startTicker = (context: ToolRenderContext<ToolTimerState>): Fiber.Fiber<never> =>
-  platformRuntime.runFork(
+const startTicker = (
+  context: extensionsTypesTypes.ToolRenderContext<ToolTimerState>,
+): Fiber.Fiber<never> =>
+  Effect.runFork(
     Effect.sync(() => context.invalidate()).pipe(
       Effect.delay(1000),
       Effect.repeat(Schedule.fixed(1000)),
@@ -167,12 +173,20 @@ const startTicker = (context: ToolRenderContext<ToolTimerState>): Fiber.Fiber<ne
     ),
   );
 
-export const toolTimerText: {
-  (isPartial: boolean): (context: ToolRenderContext<ToolTimerState>) => string | undefined;
-  (context: ToolRenderContext<ToolTimerState>, isPartial: boolean): string | undefined;
+const toolTimerText: {
+  (
+    isPartial: boolean,
+  ): (context: extensionsTypesTypes.ToolRenderContext<ToolTimerState>) => string | undefined;
+  (
+    context: extensionsTypesTypes.ToolRenderContext<ToolTimerState>,
+    isPartial: boolean,
+  ): string | undefined;
 } = Fn.dual(
   2,
-  (context: ToolRenderContext<ToolTimerState>, isPartial: boolean): string | undefined => {
+  (
+    context: extensionsTypesTypes.ToolRenderContext<ToolTimerState>,
+    isPartial: boolean,
+  ): string | undefined => {
     const state = context.state;
     if (state.startedAt !== undefined && isPartial && state.interval === undefined) {
       state.interval = startTicker(context);
@@ -192,7 +206,7 @@ export const toolTimerText: {
   },
 );
 
-export function invalidArgText(theme: Theme): string {
+function invalidArgText(theme: themeTypes.Theme): string {
   return theme.fg("error", "[invalid arg]");
 }
 
@@ -200,15 +214,47 @@ interface RenderToolPathOptions {
   emptyFallback?: string;
 }
 
-export const renderToolPath: {
-  (theme: Theme, cwd: string, options?: RenderToolPathOptions): (rawPath: string | null) => string;
-  (rawPath: string | null, theme: Theme, cwd: string, options?: RenderToolPathOptions): string;
+const renderToolPath: {
+  (
+    theme: themeTypes.Theme,
+    cwd: string,
+    options?: RenderToolPathOptions,
+  ): (rawPath: string | null) => string;
+  (
+    rawPath: string | null,
+    theme: themeTypes.Theme,
+    cwd: string,
+    options?: RenderToolPathOptions,
+  ): string;
 } = Fn.dual(
   (args) => typeof args[1] !== "string",
-  (rawPath: string | null, theme: Theme, cwd: string, options?: RenderToolPathOptions): string => {
+  (
+    rawPath: string | null,
+    theme: themeTypes.Theme,
+    cwd: string,
+    options?: RenderToolPathOptions,
+  ): string => {
     if (rawPath === null) return invalidArgText(theme);
     const value = rawPath === "" ? options?.emptyFallback : rawPath;
     if (value === undefined || value === "") return theme.fg("toolOutput", "...");
     return linkPath(theme.fg("accent", shortenPath(value)), value, cwd);
   },
 );
+
+const renderUtils = {
+  formatReadLineRange,
+  formatToolCallWithArgs,
+  formatToolDuration,
+  getTextOutput,
+  invalidArgText,
+  linkPath,
+  normalizeDisplayText,
+  renderToolPath,
+  replaceTabs,
+  shortenPath,
+  startToolTimer,
+  str,
+  toolTimerText,
+};
+
+export default renderUtils;

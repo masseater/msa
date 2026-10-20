@@ -1,4 +1,4 @@
-import type { ModelReferenceRequest } from "../src/core/model-resolver.ts";
+import type modelResolverTypes from "../src/core/model-resolver.types.ts";
 
 declare namespace modelResolverCasesTypes {
   type ReferenceExpected =
@@ -12,7 +12,7 @@ declare namespace modelResolverCasesTypes {
     expected: ReferenceExpected;
     usable?: string[];
     provider?: string;
-    thinkingSuffix?: ModelReferenceRequest["thinkingSuffix"];
+    thinkingSuffix?: modelResolverTypes.ModelReferenceRequest["thinkingSuffix"];
     fuzzy?: boolean;
   }
 }

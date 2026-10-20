@@ -4,7 +4,9 @@ import { Cause, Effect, Exit, FileSystem, ManagedRuntime, Stream } from "effect"
 import { ChildProcess } from "effect/process";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { envSnapshot } from "../../../src/core/process-env.ts";
+import processEnv from "../../../src/core/process-env.ts";
+
+const { envSnapshot } = processEnv;
 
 const { fromJsonText, joinPath, toJsonText } = testing;
 
@@ -25,7 +27,8 @@ const processShouldSurviveAnErrorEventPart1 = () =>
     yield* fs.writeFileString(
       scriptPath,
       `
-import { setTheme, stopThemeWatcher } from "${themeModulePath}";
+import themeModule from "${themeModulePath}";
+const { setTheme, stopThemeWatcher } = themeModule;
 process.env.MSA_CODING_AGENT_DIR = "${agentDir}";
 
 setTheme("custom-test", true);

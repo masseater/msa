@@ -1,6 +1,6 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let turnCount = 0;
 
   msa.on("session_start", (_event, ctx) => {

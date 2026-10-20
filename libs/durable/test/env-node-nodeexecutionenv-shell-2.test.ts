@@ -18,7 +18,7 @@ const { awaited, toJsonText } = effectSupport;
 const { cleanUpEnvTests, collectShellOutput, createTempDir, tempDirs } = envNodeSupport;
 const { joinPath } = platformSupport;
 
-class FailingSpillExecutionEnv extends NodeExecutionEnv {
+class FailingSpillExecutionEnv extends node.NodeExecutionEnv {
   override createTempFile(
     options: Parameters<nodeTypes.NodeExecutionEnv["createTempFile"]>[0],
     context: Parameters<nodeTypes.NodeExecutionEnv["createTempFile"]>[1],

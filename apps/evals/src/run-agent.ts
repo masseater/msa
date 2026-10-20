@@ -1,22 +1,19 @@
 import { Cause, Effect, Exit, Option } from "effect";
-import type { HarnessContext, JsonValue, SimpleHarnessResult } from "vitest-evals/harness";
+import type { JsonValue, SimpleHarnessResult } from "vitest-evals/harness";
 
-import { executeAgentRun } from "./agent-run.ts";
-import { throwIfAborted } from "./agent-session.ts";
-import type { MsaCodingAgentInput } from "./harness-types.ts";
-import { cleanup, combineFailures, failRun } from "./run-cleanup.ts";
-import { createRunContext } from "./run-context.ts";
-import type { Options } from "./run-types.ts";
+import agentRun from "./agent-run.ts";
+import agentSession from "./agent-session.ts";
+import type runAgentTypes from "./run-agent.types.ts";
+import runCleanup from "./run-cleanup.ts";
+import runContext from "./run-context.ts";
 
-export type AgentRunRequest<TOutput extends JsonValue> = {
-  input: MsaCodingAgentInput;
-  signal: AbortSignal | undefined;
-  setArtifact: HarnessContext["setArtifact"];
-  options: Options<TOutput>;
-};
+const { throwIfAborted } = agentSession;
+const { createRunContext } = runContext;
+const { executeAgentRun } = agentRun;
+const { cleanup, combineFailures, failRun } = runCleanup;
 
-export const runMsaCodingAgent = <TOutput extends JsonValue>(
-  request: AgentRunRequest<TOutput>,
+const runMsaCodingAgent = <TOutput extends JsonValue>(
+  request: runAgentTypes.AgentRunRequest<TOutput>,
 ): Effect.Effect<SimpleHarnessResult<string | TOutput>> =>
   Effect.gen(function* () {
     const startedAt = performance.now();
@@ -42,3 +39,9 @@ export const runMsaCodingAgent = <TOutput extends JsonValue>(
     }
     return { ...state.result, timings: { totalMs: performance.now() - startedAt } };
   });
+
+const runAgent = {
+  runMsaCodingAgent,
+};
+
+export default runAgent;

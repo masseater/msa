@@ -1,7 +1,9 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
-import { createBashTool } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-export default function (msa: ExtensionAPI) {
+const { createBashTool } = codingAgent;
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const cwd = process.cwd();
 
   const bashTool = createBashTool(cwd, {

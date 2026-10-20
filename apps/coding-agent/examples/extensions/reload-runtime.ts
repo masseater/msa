@@ -1,8 +1,8 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("reload-runtime", {
     description: "Reload extensions, skills, prompts, themes, and context files",
     handler: (_args, ctx) => ctx.reload(),
@@ -15,7 +15,7 @@ export default function (msa: ExtensionAPI) {
         Effect.sync(() => {
           msa.sendUserMessage("/reload-runtime", { deliverAs: "followUp" });
           return {
-            content: [{ type: "text", text: "Queued /reload-runtime as a follow-up command." }],
+            content: [{ text: "Queued /reload-runtime as a follow-up command.", type: "text" }],
             details: {},
           };
         }),

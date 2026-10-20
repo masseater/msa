@@ -1,11 +1,13 @@
-import type { AgentSession } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import { throwIfAborted } from "./agent-session.ts";
-import type { MsaCodingAgentInput } from "./harness-types.ts";
+import agentSession from "./agent-session.ts";
+import type harnessTypesTypes from "./harness-types.ts";
+
+const { throwIfAborted } = agentSession;
 
 const promptAgent = (
-  session: AgentSession,
+  session: codingAgentTypes.AgentSession,
   input: string,
   signal: AbortSignal | undefined,
 ): Effect.Effect<string> =>
@@ -35,13 +37,13 @@ const promptAgent = (
     return output ?? "";
   });
 
-export const runSteps = ({
+const runSteps = ({
   session,
   input,
   signal,
 }: {
-  session: AgentSession;
-  input: MsaCodingAgentInput;
+  session: codingAgentTypes.AgentSession;
+  input: harnessTypesTypes.MsaCodingAgentInput;
   signal: AbortSignal | undefined;
 }): Effect.Effect<string> => {
   const steps = typeof input === "string" ? [{ content: input, type: "prompt" as const }] : input;
@@ -73,3 +75,9 @@ export const runSteps = ({
     ),
   );
 };
+
+const agentSteps = {
+  runSteps,
+};
+
+export default agentSteps;

@@ -1,14 +1,11 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ExtensionContext,
-  SessionEntry,
-} from "@msa/coding-agent";
-import { BorderedLoader, convertToLlm, serializeConversation } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Clock, DateTime, Effect } from "effect";
+
+const { BorderedLoader, convertToLlm, serializeConversation } = codingAgent;
 
 const { uuidv7 } = ai;
 
@@ -21,7 +18,7 @@ const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversatio
 
 Output only the new prompt, nothing else.`;
 
-function entryToMessage(entry: SessionEntry): agentTypes.AgentMessage | undefined {
+function entryToMessage(entry: codingAgentTypes.SessionEntry): agentTypes.AgentMessage | undefined {
   if (entry.type === "message") {
     return entry.message;
   }
@@ -36,7 +33,7 @@ function entryToMessage(entry: SessionEntry): agentTypes.AgentMessage | undefine
   return undefined;
 }
 
-function getHandoffMessages(branch: SessionEntry[]): agentTypes.AgentMessage[] {
+function getHandoffMessages(branch: codingAgentTypes.SessionEntry[]): agentTypes.AgentMessage[] {
   const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
   const compaction = branch[compactionIndex];
   if (compaction === undefined) {
@@ -56,7 +53,7 @@ function getHandoffMessages(branch: SessionEntry[]): agentTypes.AgentMessage[] {
 }
 
 const generatePrompt = (
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
   conversationText: string,
   goal: string,
   signal: AbortSignal,
@@ -65,8 +62,8 @@ const generatePrompt = (
     const userMessage: aiTypes.Message = {
       content: [
         {
-          type: "text",
           text: `## Conversation History\n\n${conversationText}\n\n## User's Goal for New Thread\n\n${goal}`,
+          type: "text",
         },
       ],
       role: "user",
@@ -96,7 +93,7 @@ const generatePrompt = (
   });
 
 const generateHandoffPrompt = (
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
   conversationText: string,
   goal: string,
 ): Promise<string | null> =>
@@ -114,7 +111,10 @@ const generateHandoffPrompt = (
     return loader;
   });
 
-const applyHandoff = (prompt: string, replacementCtx: ExtensionCommandContext): Promise<void> =>
+const applyHandoff = (
+  prompt: string,
+  replacementCtx: codingAgentTypes.ExtensionCommandContext,
+): Promise<void> =>
   Effect.runPromise(
     Effect.sync(() => {
       replacementCtx.ui.setEditorText(prompt);
@@ -123,7 +123,7 @@ const applyHandoff = (prompt: string, replacementCtx: ExtensionCommandContext): 
   );
 
 const startHandoffSession = (
-  ctx: ExtensionCommandContext,
+  ctx: codingAgentTypes.ExtensionCommandContext,
   currentSessionFile: string | undefined,
   editedPrompt: string,
 ) =>
@@ -133,7 +133,7 @@ const startHandoffSession = (
   });
 
 const resolvePrompt = (
-  ctx: ExtensionCommandContext,
+  ctx: codingAgentTypes.ExtensionCommandContext,
   args: string,
   currentSessionFile: string | undefined,
 ) =>
@@ -172,7 +172,7 @@ const resolvePrompt = (
     return undefined;
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("handoff", {
     description: "Transfer context to a new focused session",
     handler: (args, ctx) =>

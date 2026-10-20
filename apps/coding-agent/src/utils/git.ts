@@ -1,18 +1,6 @@
 import hostedGitInfo from "hosted-git-info";
 
-export type GitSource = {
-  type: "git";
-
-  repo: string;
-
-  host: string;
-
-  path: string;
-
-  ref?: string | undefined;
-
-  pinned: boolean;
-};
+import type gitTypes from "./git.types.ts";
 
 function splitScpLikeRef(url: string): { repo: string; ref?: string } | undefined {
   const scpLikeMatch = url.match(/^git@([^:]+):(.+)$/u);
@@ -93,7 +81,7 @@ function buildGitSource(args: {
   host: string;
   path: string;
   ref?: string | undefined;
-}): GitSource | null {
+}): gitTypes.GitSource | null {
   if (args.path.startsWith("/")) {
     return null;
   }
@@ -115,7 +103,7 @@ function buildGitSource(args: {
   };
 }
 
-function parseGenericGitUrl(url: string): GitSource | null {
+function parseGenericGitUrl(url: string): gitTypes.GitSource | null {
   const { repo: repoWithoutRef, ref } = splitRef(url);
   let repo = repoWithoutRef;
   let host: string;
@@ -154,7 +142,7 @@ function parseGenericGitUrl(url: string): GitSource | null {
   return buildGitSource({ host, path, ref, repo });
 }
 
-export function parseGitUrl(source: string): GitSource | null {
+function parseGitUrl(source: string): gitTypes.GitSource | null {
   const trimmed = source.trim();
   const hasGitPrefix = trimmed.startsWith("git:");
   const url = hasGitPrefix ? trimmed.slice(4).trim() : trimmed;
@@ -175,18 +163,7 @@ export function parseGitUrl(source: string): GitSource | null {
       if (split.ref !== undefined && split.ref !== "" && info.project?.includes("@")) {
         continue;
       }
-      const useHttpsPrefix =
-        !split.repo.startsWith("http://") &&
-        !split.repo.startsWith("https://") &&
-        !split.repo.startsWith("ssh://") &&
-        !split.repo.startsWith("git://") &&
-        !split.repo.startsWith("git@");
-      return buildGitSource({
-        host: info.domain || "",
-        path: `${info.user}/${info.project}`,
-        ref: info.committish || split.ref || undefined,
-        repo: useHttpsPrefix ? `https://${split.repo}` : split.repo,
-      });
+      return parseGitUrlPart1(split, info);
     }
   }
 
@@ -210,4 +187,25 @@ export function parseGitUrl(source: string): GitSource | null {
   }
 
   return parseGenericGitUrl(url);
+}
+
+const git = {
+  parseGitUrl,
+};
+
+export default git;
+
+function parseGitUrlPart1(split: { repo: string; ref?: string }, info: hostedGitInfo) {
+  const useHttpsPrefix =
+    !split.repo.startsWith("http://") &&
+    !split.repo.startsWith("https://") &&
+    !split.repo.startsWith("ssh://") &&
+    !split.repo.startsWith("git://") &&
+    !split.repo.startsWith("git@");
+  return buildGitSource({
+    host: info.domain || "",
+    path: `${info.user}/${info.project}`,
+    ref: info.committish || split.ref || undefined,
+    repo: useHttpsPrefix ? `https://${split.repo}` : split.repo,
+  });
 }

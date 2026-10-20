@@ -3,12 +3,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { type InlineExtension, createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import sdk from "../src/core/sdk.ts";
+import type sdkTypes from "../src/core/sdk.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import codingAgent from "../src/index.ts";
 import type defaultToolsSettingSupportTypes from "./default-tools-setting-support.types.ts";
 
+const { DefaultResourceLoader, SessionManager, SettingsManager } = codingAgent;
+
+const { createAgentSession } = sdk;
 const { getModel } = compat;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeJsonFile } =
@@ -28,10 +32,10 @@ const prepareDirs = () =>
 const cleanupDirs = () => runTest(dirs.tempDir === "" ? Effect.void : removePath(dirs.tempDir));
 
 const sessionWith = (
-  settingsManager: SettingsManager,
+  settingsManager: settingsManagerTypes.SettingsManager,
   options: defaultToolsSettingSupportTypes.ToolOptions,
-  extensionFactories: InlineExtension[],
-  sessionManager?: SessionManager,
+  extensionFactories: sdkTypes.InlineExtension[],
+  sessionManager?: sessionManagerTypes.SessionManager,
 ) =>
   runTest(
     Effect.gen(function* () {
@@ -60,10 +64,10 @@ const sessionWith = (
 const createSession = (
   defaultTools: string[],
   options: defaultToolsSettingSupportTypes.ToolOptions = {},
-  extensionFactories: InlineExtension[] = [],
+  extensionFactories: sdkTypes.InlineExtension[] = [],
 ) => sessionWith(SettingsManager.inMemory({ defaultTools }), options, extensionFactories);
 
-const inactiveTool: InlineExtension = (msa) => {
+const inactiveTool: sdkTypes.InlineExtension = (msa) => {
   msa.registerTool({
     defaultActive: false,
     description: "Extension tool registered inactive",
@@ -79,9 +83,9 @@ const createFileSession = (options: defaultToolsSettingSupportTypes.ToolOptions 
   sessionWith(SettingsManager.create(dirs.tempDir, dirs.agentDir), options, [inactiveTool]);
 
 const resumeSession = (
-  sessionManager: SessionManager,
+  sessionManager: sessionManagerTypes.SessionManager,
   options: defaultToolsSettingSupportTypes.ToolOptions,
-  extensionFactories: InlineExtension[],
+  extensionFactories: sdkTypes.InlineExtension[],
 ) => sessionWith(SettingsManager.inMemory(), options, extensionFactories, sessionManager);
 
 const writeSettings = (settings: object) =>

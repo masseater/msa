@@ -1,29 +1,19 @@
 import * as Effect from "effect/Effect";
 
-import { APP_NAME, CONFIG_DIR_NAME } from "../config.ts";
-import { awaited, awaiting, performed } from "./awaiting.ts";
-import { emitProjectTrustEvent } from "./extensions/runner.ts";
-import type { LoadExtensionsResult, ProjectTrustContext } from "./extensions/types.ts";
-import { SETTINGS_DEFAULTS } from "./settings-defaults.ts";
-import type { DefaultProjectTrust } from "./settings-manager.ts";
-import {
-  type ProjectTrustOption,
-  type ProjectTrustStore,
-  getProjectTrustOptions,
-  hasTrustRequiringProjectResources,
-} from "./trust-manager.ts";
+import config from "../config.ts";
+import awaitingModule from "./awaiting.ts";
+import runnerEvents from "./extensions/runner-events.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
+import type projectTrustTypes from "./project-trust.types.ts";
+import settingsDefaults from "./settings-defaults.ts";
+import trustManager from "./trust-manager.ts";
+import type trustManagerTypes from "./trust-manager.types.ts";
 
-export type AppMode = "interactive" | "print" | "json" | "rpc";
-
-export interface ResolveProjectTrustedOptions {
-  cwd: string;
-  trustStore: ProjectTrustStore;
-  trustOverride?: boolean | undefined;
-  defaultProjectTrust?: DefaultProjectTrust | undefined;
-  extensionsResult?: LoadExtensionsResult | undefined;
-  projectTrustContext: ProjectTrustContext;
-  onExtensionError?: ((message: string) => void) | undefined;
-}
+const { APP_NAME, CONFIG_DIR_NAME } = config;
+const { getProjectTrustOptions, hasTrustRequiringProjectResources } = trustManager;
+const { awaited, awaiting, performed } = awaitingModule;
+const { emitProjectTrustEvent } = runnerEvents;
+const { SETTINGS_DEFAULTS } = settingsDefaults;
 
 function formatProjectTrustPrompt(cwd: string): string {
   return `Trust project folder?\n${cwd}\n\nThis allows ${APP_NAME} to load ${CONFIG_DIR_NAME} settings and resources, install missing project packages, and execute project extensions.`;
@@ -31,8 +21,8 @@ function formatProjectTrustPrompt(cwd: string): string {
 
 function selectProjectTrustOption(
   cwd: string,
-  ctx: ProjectTrustContext,
-): Effect.Effect<ProjectTrustOption | undefined> {
+  ctx: extensionsTypesTypes.ProjectTrustContext,
+): Effect.Effect<trustManagerTypes.ProjectTrustOption | undefined> {
   return awaiting(function* () {
     const options = getProjectTrustOptions(cwd, { includeSessionOnly: true });
     const selected = yield* awaited(
@@ -46,15 +36,17 @@ function selectProjectTrustOption(
 }
 
 function saveProjectTrustPromptResult(
-  trustStore: ProjectTrustStore,
-  result: ProjectTrustOption,
+  trustStore: trustManagerTypes.ProjectTrustStore,
+  result: trustManagerTypes.ProjectTrustOption,
 ): void {
   if (result.updates.length > 0) {
     trustStore.setMany(result.updates);
   }
 }
 
-export function resolveProjectTrusted(options: ResolveProjectTrustedOptions): Promise<boolean> {
+function resolveProjectTrusted(
+  options: projectTrustTypes.ResolveProjectTrustedOptions,
+): Promise<boolean> {
   return Effect.runPromise(
     awaiting(function* () {
       if (options.trustOverride !== undefined) {
@@ -115,3 +107,9 @@ export function resolveProjectTrusted(options: ResolveProjectTrustedOptions): Pr
     }),
   );
 }
+
+const projectTrust = {
+  resolveProjectTrusted,
+};
+
+export default projectTrust;

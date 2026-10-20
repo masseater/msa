@@ -1,8 +1,8 @@
-import type { CreateAgentSessionOptions } from "../src/core/sdk.ts";
+import type sdkTypes from "../src/core/sdk.types.ts";
 
 declare namespace defaultToolsSettingSupportTypes {
   type ToolOptions = Pick<
-    CreateAgentSessionOptions,
+    sdkTypes.CreateAgentSessionOptions,
     "tools" | "excludeTools" | "noTools" | "customTools"
   >;
 }

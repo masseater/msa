@@ -2,23 +2,22 @@ import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import { vi } from "vite-plus/test";
 
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-import type {
-  OrchestratorSnapshot,
-  ReplanView,
-  TaskSnapshot,
-  ThreadView,
-} from "../src/core/orchestrator/types.ts";
-import {
-  type TasksViewState,
-  viewHelpers,
-} from "../src/modes/interactive/components/tasks-view-helpers.ts";
-import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
+import tasksViewHelpers from "../src/modes/interactive/components/tasks-view-helpers.ts";
+import type tasksViewHelpersTypes from "../src/modes/interactive/components/tasks-view-helpers.types.ts";
+import TasksView from "../src/modes/interactive/components/tasks-view.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { viewHelpers } = tasksViewHelpers;
+const { stripAnsi } = ansi;
 
 const { fauxAssistantMessage } = ai;
 
-function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
+function task(
+  id: string,
+  patch: Partial<orchestratorTypesTypes.TaskSnapshot> = {},
+): orchestratorTypesTypes.TaskSnapshot {
   return {
     assignments: [],
     condition: null,
@@ -45,7 +44,10 @@ function task(id: string, patch: Partial<TaskSnapshot> = {}): TaskSnapshot {
   };
 }
 
-function thread(id: string, patch: Partial<ThreadView> = {}): ThreadView {
+function thread(
+  id: string,
+  patch: Partial<orchestratorTypesTypes.ThreadView> = {},
+): orchestratorTypesTypes.ThreadView {
   return {
     createdAt: 0,
     cwd: "/repo",
@@ -115,7 +117,7 @@ const THREADS = [
   }),
 ];
 
-function roundsOf(tasks: readonly TaskSnapshot[]) {
+function roundsOf(tasks: readonly orchestratorTypesTypes.TaskSnapshot[]) {
   return [...new Set(tasks.map((entry) => entry.round))].map((id) => ({
     id,
     reviewTaskId: tasks.find((entry) => entry.round === id && entry.kind === "review")?.id ?? null,
@@ -124,7 +126,7 @@ function roundsOf(tasks: readonly TaskSnapshot[]) {
   }));
 }
 
-const DEFAULT_REPLANS: readonly ReplanView[] = [
+const DEFAULT_REPLANS: readonly orchestratorTypesTypes.ReplanView[] = [
   {
     created: [{ from: ["d"], taskId: "a", title: "a" }],
     createdAt: 1,
@@ -137,7 +139,10 @@ const DEFAULT_REPLANS: readonly ReplanView[] = [
   },
 ];
 
-const fakeOrchestrator = (tasks: readonly TaskSnapshot[], snapshot: OrchestratorSnapshot) => {
+const fakeOrchestrator = (
+  tasks: readonly orchestratorTypesTypes.TaskSnapshot[],
+  snapshot: orchestratorTypesTypes.OrchestratorSnapshot,
+) => {
   const messages: Record<string, agentTypes.AgentMessage[]> = {
     "th-worker": [fauxAssistantMessage("writing a.ts")],
   };
@@ -158,15 +163,15 @@ const fakeOrchestrator = (tasks: readonly TaskSnapshot[], snapshot: Orchestrator
 function setup(
   options: {
     initialId?: string;
-    state?: TasksViewState;
-    tasks?: readonly TaskSnapshot[];
+    state?: tasksViewHelpersTypes.TasksViewState;
+    tasks?: readonly orchestratorTypesTypes.TaskSnapshot[];
     maxHeight?: number;
-    replans?: readonly ReplanView[];
+    replans?: readonly orchestratorTypesTypes.ReplanView[];
   } = {},
 ) {
   const state = options.state ?? viewHelpers.createTasksViewState();
   const tasks = options.tasks ?? TASKS;
-  const snapshot: OrchestratorSnapshot = {
+  const snapshot: orchestratorTypesTypes.OrchestratorSnapshot = {
     maxConcurrentThreads: 4,
     replans: options.replans ?? DEFAULT_REPLANS,
     rounds: roundsOf(tasks),
@@ -174,15 +179,15 @@ function setup(
     threads: THREADS,
   };
   const orchestrator = fakeOrchestrator(tasks, snapshot);
-  const onClose = vi.fn();
-  const onPickModel = vi.fn();
+  const onClose = vi.fn<() => void>();
+  const onPickModel = vi.fn<() => void>();
   const view = new TasksView(
     {
       maxHeight: () => options.maxHeight ?? 40,
       onClose,
       onError: () => {},
       onPickModel,
-      orchestrator: orchestrator as unknown as Orchestrator,
+      orchestrator: orchestrator as unknown as orchestratorTypes.Orchestrator,
       requestRender: () => {},
       state,
     },

@@ -1,20 +1,8 @@
 import { dual } from "effect/Function";
 
-export const DOCUMENTATION_VARIANTS = ["without_docs", "with_docs"] as const;
-export type DocumentationVariant = (typeof DOCUMENTATION_VARIANTS)[number];
+import type planTypes from "./plan.types.ts";
 
-export type DiscoveredEvalCase = {
-  file: string;
-  fullName: string;
-  evalSet: string;
-  caseId: string;
-};
-
-export type EvalTask = DiscoveredEvalCase & {
-  variant: DocumentationVariant;
-  model: string;
-  runNumber: number;
-};
+const DOCUMENTATION_VARIANTS = ["without_docs", "with_docs"] as const;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -25,7 +13,7 @@ const evalSetOf = (file: string): string => {
   return base.replace(/\.docs\.eval\.ts$/u, "");
 };
 
-export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
+function parseDiscoveredCases(value: unknown): planTypes.DiscoveredEvalCase[] {
   if (!Array.isArray(value)) throw new TypeError("Discovered eval cases must be an array.");
   const identities = new Set<string>();
   return value.map((item) => {
@@ -43,22 +31,33 @@ export function parseDiscoveredCases(value: unknown): DiscoveredEvalCase[] {
   });
 }
 
-export const createTaskPlan: {
-  (model: string, runsPerVariant: number): (cases: readonly DiscoveredEvalCase[]) => EvalTask[];
-  (cases: readonly DiscoveredEvalCase[], model: string, runsPerVariant: number): EvalTask[];
+const createTaskPlan: {
+  (
+    model: string,
+    runsPerVariant: number,
+  ): (cases: readonly planTypes.DiscoveredEvalCase[]) => planTypes.EvalTask[];
+  (
+    cases: readonly planTypes.DiscoveredEvalCase[],
+    model: string,
+    runsPerVariant: number,
+  ): planTypes.EvalTask[];
 } = dual(
   3,
-  (cases: readonly DiscoveredEvalCase[], model: string, runsPerVariant: number): EvalTask[] => {
+  (
+    cases: readonly planTypes.DiscoveredEvalCase[],
+    model: string,
+    runsPerVariant: number,
+  ): planTypes.EvalTask[] => {
     if (!model.includes("/") || model.startsWith("/") || model.endsWith("/")) {
       throw new TypeError("Model identity must contain a provider and model.");
     }
     if (!Number.isSafeInteger(runsPerVariant) || runsPerVariant < 1) {
       throw new TypeError("Runs per variant must be a positive integer.");
     }
-    const tasks: EvalTask[] = [];
+    const tasks: planTypes.EvalTask[] = [];
     for (const evalCase of cases) {
       for (let runNumber = 1; runNumber <= runsPerVariant; runNumber += 1) {
-        const variants: DocumentationVariant[] =
+        const variants: planTypes.DocumentationVariant[] =
           runNumber % 2 === 1 ? ["without_docs", "with_docs"] : ["with_docs", "without_docs"];
         for (const variant of variants) tasks.push({ ...evalCase, model, runNumber, variant });
       }
@@ -66,3 +65,11 @@ export const createTaskPlan: {
     return tasks;
   },
 );
+
+const plan = {
+  DOCUMENTATION_VARIANTS,
+  createTaskPlan,
+  parseDiscoveredCases,
+};
+
+export default plan;

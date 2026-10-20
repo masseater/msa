@@ -14,7 +14,7 @@ import type transportTypes from "./transport.types.ts";
 const { foreign: foreignModule, jsonrpc: jsonrpcModule, McpTransportError } = stdioKit;
 
 const { foreign, toPromise } = foreignModule;
-const { DEFAULT_MAX_MESSAGE_BYTES, TransportEvents } = transport;
+const { DEFAULT_MAX_MESSAGE_BYTES } = transport;
 const { McpConnectionClosedError, parseJsonRpcMessage } = jsonrpcModule;
 
 const DEFAULT_MAX_STDERR_BYTES = 64 * 1024;
@@ -79,7 +79,10 @@ const waitForSpawn = (child: ChildProcess): Effect.Effect<void, foreignTypes.Mcp
     child.once("error", onError);
   });
 
-export default class StdioTransport extends TransportEvents implements transportTypes.McpTransport {
+export default class StdioTransport
+  extends transport.TransportEvents
+  implements transportTypes.McpTransport
+{
   readonly options: Readonly<stdioTypes.StdioTransportOptions>;
   private child: ChildProcess | undefined;
   private stdoutBuffer = Buffer.alloc(0);

@@ -2,8 +2,11 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { StructuredOutputJudge, ToolCallJudge, describeEval } from "vitest-evals";
 
-import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { DOCUMENTATION_EVAL_TOOLS } from "../src/system-prompt.ts";
+import harnessModule from "../src/harness.ts";
+import systemPrompt from "../src/system-prompt.ts";
+
+const { createMsaDocumentationEvalHarness } = harnessModule;
+const { DOCUMENTATION_EVAL_TOOLS } = systemPrompt;
 
 const { contentText } = ai;
 
@@ -22,8 +25,8 @@ const harness = createMsaDocumentationEvalHarness({
             message.role === "toolResult" && message.toolName === TOOL_NAME && !message.isError,
         );
       return {
-        response,
         extensionErrors: extensions.errors,
+        response,
         toolLoaded: extensions.extensions.some(({ tools }) => tools.has(TOOL_NAME)),
         toolResult: result?.role === "toolResult" ? contentText(result.content, "\n") : null,
       };
@@ -38,16 +41,16 @@ describeEval(
     judgeThreshold: null,
     judges: [
       StructuredOutputJudge({
+        allowExtras: false,
         expected: {
-          response: TOOL_RESULT,
           extensionErrors: [],
+          response: TOOL_RESULT,
           toolLoaded: true,
           toolResult: TOOL_RESULT,
         },
         match: "strict",
-        allowExtras: false,
       }),
-      ToolCallJudge({ expectedTools: [{ name: TOOL_NAME, arguments: TOOL_ARGUMENTS }] }),
+      ToolCallJudge({ expectedTools: [{ arguments: TOOL_ARGUMENTS, name: TOOL_NAME }] }),
     ],
   },
   (it) => {

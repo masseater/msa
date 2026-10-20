@@ -1,20 +1,23 @@
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
-import { ensureTool } from "../../utils/tools-manager.ts";
-import { streamCommand } from "../platform/command.ts";
-import { ToolFailure, fromPromise, platformRuntime, rethrowCause } from "../platform/index.ts";
-import { GrepFormatter } from "./grep-format.ts";
-import {
-  type GrepOperations,
-  type GrepRequest,
-  RgMatchCollector,
-  formatGrepOutput,
-  rgArguments,
-} from "./grep-support.ts";
+import toolsManager from "../../utils/tools-manager.ts";
+import command from "../platform/command.ts";
+import platform from "../platform/index.ts";
+import GrepFormatter from "./grep-format.ts";
+import grepSupport from "./grep-support.ts";
+import type grepSupportTypes from "./grep-support.types.ts";
+import RgMatchCollector from "./rg-match-collector.ts";
 
-export const defaultGrepOperations: GrepOperations = {
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { formatGrepOutput, rgArguments } = grepSupport;
+const { ToolFailure, fromPromise, rethrowCause } = platform;
+const { ensureTool } = toolsManager;
+const { streamCommand } = command;
+const defaultGrepOperations: grepSupportTypes.GrepOperations = {
   isDirectory: (path) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(
         FileSystem.FileSystem.use((fs) => fs.stat(path)).pipe(
           Effect.map((info) => info.type === "Directory"),
@@ -22,7 +25,7 @@ export const defaultGrepOperations: GrepOperations = {
       ),
     ),
   readFile: (path) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(FileSystem.FileSystem.use((fs) => fs.readFileString(path, "utf-8"))),
     ),
 };
@@ -37,7 +40,10 @@ const resolveRipgrep = Effect.gen(function* () {
   return rgPath;
 });
 
-const searchWithRipgrep = Effect.fn("ripgrep")(function* (rgPath: string, request: GrepRequest) {
+const searchWithRipgrep = Effect.fn("ripgrep")(function* (
+  rgPath: string,
+  request: grepSupportTypes.GrepRequest,
+) {
   const collector = new RgMatchCollector(request.effectiveLimit);
   const { stoppedEarly, stderr, exitCode } = yield* fromPromise((signal) =>
     streamCommand({
@@ -56,9 +62,9 @@ const searchWithRipgrep = Effect.fn("ripgrep")(function* (rgPath: string, reques
   return collector;
 });
 
-export const runGrep = Effect.fn("grep")(function* (
-  ops: GrepOperations,
-  request: Omit<GrepRequest, "isDirectory">,
+const runGrep = Effect.fn("grep")(function* (
+  ops: grepSupportTypes.GrepOperations,
+  request: Omit<grepSupportTypes.GrepRequest, "isDirectory">,
 ) {
   const rgPath = yield* resolveRipgrep;
   const isDirectory = yield* fromPromise(() => ops.isDirectory(request.searchPath)).pipe(
@@ -87,3 +93,10 @@ export const runGrep = Effect.fn("grep")(function* (
     outputLines,
   });
 });
+
+const grepRun = {
+  defaultGrepOperations,
+  runGrep,
+};
+
+export default grepRun;

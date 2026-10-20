@@ -1,6 +1,6 @@
-import type { ModelRuntime } from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 
-const authOptions = (runtime: ModelRuntime) =>
+const authOptions = (runtime: modelRuntimeTypes.ModelRuntime) =>
   runtime.getProviders().flatMap((provider) => {
     const oauth = provider.auth.oauth;
     const apiKey = provider.auth.apiKey;

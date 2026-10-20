@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ProjectTrustContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 const TRUST_CHOICES = [
@@ -9,7 +9,7 @@ const TRUST_CHOICES = [
   "Let built-in prompt decide",
 ] as const;
 
-const decideTrust = (ctx: ProjectTrustContext, choice: string | undefined) =>
+const decideTrust = (ctx: codingAgentTypes.ProjectTrustContext, choice: string | undefined) =>
   Effect.gen(function* () {
     if (choice === "Trust with note and remember") {
       const note = yield* Effect.promise(() =>
@@ -35,7 +35,7 @@ const decideTrust = (ctx: ProjectTrustContext, choice: string | undefined) =>
     return { trusted: "undecided" } as const;
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let loadCount = 0;
   loadCount++;
 

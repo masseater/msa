@@ -1,20 +1,22 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BaseOverlay } from "./base-overlay.ts";
-import { FOCUS_PANEL_CONFIGS } from "./focus-panel-configs.ts";
-import { FocusPanel, type FocusPanelEntry } from "./focus-panel.ts";
+import BaseOverlay from "./base-overlay.ts";
+import focusPanelConfigs from "./focus-panel-configs.ts";
+import FocusPanel from "./focus-panel.ts";
+import type focusPanelTypes from "./focus-panel.types.ts";
+const { FOCUS_PANEL_CONFIGS } = focusPanelConfigs;
 
 const { matchesKey } = tuiModule;
 
-export class FocusDemoController extends BaseOverlay {
+export default class FocusDemoController extends BaseOverlay {
   private readonly tui: tuiTypes.TUI;
-  private entries: FocusPanelEntry[] = [];
+  private entries: focusPanelTypes.FocusPanelEntry[] = [];
   private readonly done: () => void;
   private closed = false;
 
-  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;
@@ -28,7 +30,7 @@ export class FocusDemoController extends BaseOverlay {
     this.focusFirstOpenPanel();
   }
 
-  focusNext(current: FocusPanel, direction: 1 | -1 = 1): void {
+  focusNext(current: focusPanelTypes.FocusPanel, direction: 1 | -1 = 1): void {
     const openEntries = this.openEntries();
     const currentOpenPosition = openEntries.findIndex((entry) => entry.panel === current);
     if (currentOpenPosition === -1) throw new Error(`Panel ${current.label} is not open`);
@@ -37,7 +39,7 @@ export class FocusDemoController extends BaseOverlay {
     this.focusEntryAt(openEntries, nextOpenPosition);
   }
 
-  dismiss(panel: FocusPanel): void {
+  dismiss(panel: focusPanelTypes.FocusPanel): void {
     const openEntries = this.openEntries();
     const currentOpenPosition = openEntries.findIndex((candidate) => candidate.panel === panel);
     if (currentOpenPosition === -1) return;
@@ -110,7 +112,7 @@ export class FocusDemoController extends BaseOverlay {
     }
   }
 
-  private focusEntryAt(entries: FocusPanelEntry[], index: number): void {
+  private focusEntryAt(entries: focusPanelTypes.FocusPanelEntry[], index: number): void {
     const entry = entries[index];
     if (entry === undefined) throw new Error(`Invalid focus panel index ${index}`);
     entry.handle.focus();
@@ -127,7 +129,7 @@ export class FocusDemoController extends BaseOverlay {
     this.entries = [];
   }
 
-  private openEntries(): FocusPanelEntry[] {
+  private openEntries(): focusPanelTypes.FocusPanelEntry[] {
     return this.entries.filter((entry) => !entry.panel.closed);
   }
 }

@@ -6,16 +6,19 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ToolRenderContext } from "../src/core/extensions/types.ts";
-import { codemodeRenderers } from "../src/extensions/codemode/renderer.ts";
-import type { CodemodeToolDetails } from "../src/extensions/codemode/tool.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import renderer from "../src/extensions/codemode/renderer.ts";
+import type toolTypes from "../src/extensions/codemode/tool.types.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { codemodeRenderers } = renderer;
+const { initTheme, theme } = themeModule;
 
 const { runTest } = testing;
 
 function render(
-  result: agentTypes.AgentToolResult<CodemodeToolDetails | undefined>,
+  result: agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails | undefined>,
   isError = false,
   expanded = true,
   width = 200,
@@ -35,7 +38,7 @@ function render(
     showImages: false,
     state: {},
     toolCallId: "call",
-  } satisfies ToolRenderContext;
+  } satisfies extensionsTypesTypes.ToolRenderContext;
   const component = codemodeRenderers.renderResult?.(
     result,
     { expanded, isPartial: false },

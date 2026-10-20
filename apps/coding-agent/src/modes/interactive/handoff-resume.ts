@@ -1,43 +1,70 @@
-import type { AgentSession } from "../../core/agent-session.ts";
-import {
-  type PendingHandoff,
-  pendingHandoffs,
-  takeHandoff,
-} from "../../core/orchestrator/handoff-files.ts";
-import { formatDateTime } from "../../core/orchestrator/handoff-render.ts";
-import type { ExtensionDialogs } from "./extension-dialogs.ts";
+import { Effect } from "effect";
 
-type Dialogs = Pick<ExtensionDialogs, "select" | "confirm">;
+import type agentSessionTypes from "../../core/agent-session.types.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import handoffFiles from "../../core/orchestrator/handoff-files.ts";
+import type handoffFilesTypes from "../../core/orchestrator/handoff-files.types.ts";
+import handoffRender from "../../core/orchestrator/handoff-render.ts";
+import type extensionDialogsTypes from "./extension-dialogs.types.ts";
 
-function describe(handoff: PendingHandoff): string {
+const { awaited, awaiting } = awaitingModule;
+
+const { pendingHandoffs, takeHandoff } = handoffFiles;
+const { formatDateTime } = handoffRender;
+
+type Dialogs = Pick<extensionDialogsTypes.ExtensionDialogs, "select" | "confirm">;
+
+function describe(handoff: handoffFilesTypes.PendingHandoff): string {
   return `${handoff.name}（${formatDateTime(handoff.createdAt)}、タスク ${handoff.tasks} 本）`;
 }
 
-async function choose(
-  pending: readonly PendingHandoff[],
+function choose(
+  pending: readonly handoffFilesTypes.PendingHandoff[],
   dialogs: Dialogs,
-): Promise<PendingHandoff | undefined> {
-  const [only, ...others] = pending;
-  if (only === undefined) return undefined;
-  if (others.length === 0) {
-    const resume = await dialogs.confirm("引き継ぎ", `${describe(only)}を読んで再開しますか`);
-    return resume ? only : undefined;
-  }
-  const lines = pending.map(describe);
-  const picked = await dialogs.select("引き継ぎを読んで再開しますか（Esc で再開しない）", lines);
-  return pending[lines.findIndex((line) => line === picked)];
+): Promise<handoffFilesTypes.PendingHandoff | undefined> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const [only, ...others] = pending;
+      if (only === undefined) return yield* awaited(undefined);
+      if (others.length === 0) {
+        const resume = yield* awaited(
+          dialogs.confirm("引き継ぎ", `${describe(only)}を読んで再開しますか`),
+        );
+        return yield* awaited(resume ? only : undefined);
+      }
+      const lines = pending.map(describe);
+      const picked = yield* awaited(
+        dialogs.select("引き継ぎを読んで再開しますか（Esc で再開しない）", lines),
+      );
+      return yield* awaited(pending[lines.findIndex((line) => line === picked)]);
+    }),
+  );
 }
 
-export async function handoffResumePrompt(
-  directory: string,
-  dialogs: Dialogs,
-): Promise<string | undefined> {
-  const chosen = await choose(await pendingHandoffs(directory), dialogs);
-  return chosen === undefined ? undefined : takeHandoff(directory, chosen.name);
+function handoffResumePrompt(directory: string, dialogs: Dialogs): Promise<string | undefined> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const chosen = yield* awaited(choose(yield* awaited(pendingHandoffs(directory)), dialogs));
+      return yield* awaited(chosen === undefined ? undefined : takeHandoff(directory, chosen.name));
+    }),
+  );
 }
 
-export async function offerHandoff(session: AgentSession, dialogs: Dialogs): Promise<void> {
-  if (session.orchestrator === undefined || session.messages.length > 0) return;
-  const prompt = await handoffResumePrompt(session.settingsManager.getHandoffDirectory(), dialogs);
-  if (prompt !== undefined) await session.prompt(prompt);
+function offerHandoff(session: agentSessionTypes.AgentSession, dialogs: Dialogs): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (session.orchestrator === undefined || session.messages.length > 0) return;
+      const prompt = yield* awaited(
+        handoffResumePrompt(session.settingsManager.getHandoffDirectory(), dialogs),
+      );
+      if (prompt !== undefined) yield* awaited(session.prompt(prompt));
+    }),
+  );
 }
+
+const handoffResume = {
+  handoffResumePrompt,
+  offerHandoff,
+};
+
+export default handoffResume;

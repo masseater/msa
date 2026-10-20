@@ -4,12 +4,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionRuntime,
-} from "../src/core/agent-session-runtime.ts";
-import { MissingSessionCwdError, getMissingSessionCwdIssue } from "../src/core/session-cwd.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import agentSessionRuntimeSupport from "../src/core/agent-session-runtime-support.ts";
+import type agentSessionRuntimeTypes from "../src/core/agent-session-runtime.types.ts";
+import MissingSessionCwdError from "../src/core/missing-session-cwd-error.ts";
+import sessionCwdModule from "../src/core/session-cwd.ts";
+import SessionManager from "../src/core/session-manager.ts";
+
+const { getMissingSessionCwdIssue } = sessionCwdModule;
+const { createAgentSessionRuntime } = agentSessionRuntimeSupport;
 
 const {
   awaited,
@@ -95,7 +97,7 @@ const throwsAControlledErrorBeforeRuntimeCreation = () =>
 
       const sessionManager = SessionManager.open(sessionFile);
       let createRuntimeCalled = false;
-      const createRuntime: CreateAgentSessionRuntimeFactory = () =>
+      const createRuntime: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = () =>
         effectRunPromise(
           Effect.sync(() => {
             createRuntimeCalled = true;

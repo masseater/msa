@@ -2,29 +2,36 @@ import * as NodePath from "@effect/platform-node/NodePath";
 import { Effect, ManagedRuntime, Path } from "effect";
 import { dual } from "effect/Function";
 
-export {
-  basename,
-  dirname,
-  join,
-  randomUuid,
-  relative,
-  resolve,
-  sep,
-} from "../core/platform-node.ts";
+import platformNode from "../core/platform-node.ts";
 
 const pathService = ManagedRuntime.make(NodePath.layer).runSync(
   Path.Path.use((service) => Effect.succeed(service)),
 );
 
-export const isAbsolute = (path: string): boolean => pathService.isAbsolute(path);
+const isAbsolute = (path: string): boolean => pathService.isAbsolute(path);
 
 const posixService = ManagedRuntime.make(NodePath.layerPosix).runSync(
   Path.Path.use((service) => Effect.succeed(service)),
 );
 
-export const posixRelative: {
+const posixRelative: {
   (to: string): (from: string) => string;
   (from: string, to: string): string;
 } = dual(2, (from: string, to: string): string => posixService.relative(from, to));
 
-export const posixParse = (path: string): Path.Path.Parsed => posixService.parse(path);
+const posixParse = (path: string): Path.Path.Parsed => posixService.parse(path);
+
+const path = {
+  basename: platformNode.basename,
+  dirname: platformNode.dirname,
+  isAbsolute,
+  join: platformNode.join,
+  posixParse,
+  posixRelative,
+  randomUuid: platformNode.randomUuid,
+  relative: platformNode.relative,
+  resolve: platformNode.resolve,
+  sep: platformNode.sep,
+};
+
+export default path;

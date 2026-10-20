@@ -4,10 +4,13 @@ import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { GOAL_ENTRY_TYPE, type GoalEntryData } from "../../src/core/goal.ts";
-import { SessionManager } from "../../src/core/session-manager.ts";
+import goal from "../../src/core/goal.ts";
+import type goalTypes from "../../src/core/goal.types.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { GOAL_ENTRY_TYPE } = goal;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
@@ -28,19 +31,19 @@ function workTurn(text: string): aiTypes.AssistantMessage[] {
   ];
 }
 
-function goalEvents(harness: harnessTypes.Harness): GoalEntryData[] {
+function goalEvents(harness: harnessTypes.Harness): goalTypes.GoalEntryData[] {
   return harness.sessionManager
     .getEntries()
     .flatMap((entry) =>
       entry.type === "custom" && entry.customType === GOAL_ENTRY_TYPE
-        ? [entry.data as GoalEntryData]
+        ? [entry.data as goalTypes.GoalEntryData]
         : [],
     );
 }
 
 const harnesses: harnessTypes.Harness[] = [];
 
-function setup(sessionManager?: SessionManager): Promise<harnessTypes.Harness> {
+function setup(sessionManager?: sessionManagerTypes.SessionManager): Promise<harnessTypes.Harness> {
   return Effect.runPromise(
     Effect.gen(function* () {
       const harness = yield* Effect.promise(() =>

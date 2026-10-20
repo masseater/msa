@@ -3,7 +3,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import agentSessionBoundaries5Support from "./agent-session-boundaries-5-support.ts";
 import harnessModule from "./harness.ts";
 
@@ -58,7 +58,7 @@ const omitsARecoverableProjectedReplacementBy = Effect.gen(function* () {
 });
 
 const overflowRecoveryExtension =
-  (state: { replaced: boolean; overflowId?: string | undefined }): ExtensionFactory =>
+  (state: { replaced: boolean; overflowId?: string | undefined }): srcTypes.ExtensionFactory =>
   (msa) => {
     msa.on("turn_end", (event) => {
       if (state.replaced || event.outcome !== "error") return;

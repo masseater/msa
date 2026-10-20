@@ -2,22 +2,11 @@ import { NodeServices } from "@effect/platform-node";
 import { Effect, ManagedRuntime, Queue, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import type agentProcessTypes from "./agent-process.types.ts";
+
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
-export interface AgentOptions {
-  readonly command: string;
-  readonly args: readonly string[];
-  readonly onLine: (line: string) => void;
-  readonly onExit: (code: number) => void;
-}
-
-export interface AgentHandle {
-  readonly send: (message: Record<string, unknown>) => void;
-  readonly isRunning: () => boolean;
-  readonly stderrText: () => string;
-}
-
-export const startAgent = (options: AgentOptions): AgentHandle => {
+const startAgent = (options: agentProcessTypes.AgentOptions): agentProcessTypes.AgentHandle => {
   const outbound = Effect.runSync(Queue.unbounded<string>());
   let stderrText = "";
   let running = true;
@@ -66,3 +55,9 @@ export const startAgent = (options: AgentOptions): AgentHandle => {
     stderrText: () => stderrText,
   };
 };
+
+const agentProcess = {
+  startAgent,
+};
+
+export default agentProcess;

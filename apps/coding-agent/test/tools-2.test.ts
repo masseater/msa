@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createReadTool, createWriteTool } from "../src/index.ts";
+import src from "../src/index.ts";
 import tools2Support from "./tools-2-support.ts";
+
+const { createReadTool, createWriteTool } = src;
 
 const { getTextOutput } = tools2Support;
 

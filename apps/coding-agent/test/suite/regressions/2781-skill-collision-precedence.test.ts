@@ -3,7 +3,7 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
+import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
 
 const { joinPath, toJsonText } = testing;
 

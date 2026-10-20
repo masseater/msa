@@ -14,7 +14,7 @@ const unfinishedAnsiAtEndRegex = new RegExp(
 
 const MAX_PENDING_ANSI_LENGTH = 256;
 
-export function splitIncompleteAnsiSuffix(value: string): { complete: string; pending: string } {
+function splitIncompleteAnsiSuffix(value: string): { complete: string; pending: string } {
   if (!value.includes("\u001B") && !value.includes("\u009B")) {
     return { complete: value, pending: "" };
   }
@@ -27,7 +27,7 @@ export function splitIncompleteAnsiSuffix(value: string): { complete: string; pe
   return { complete: value.slice(0, splitAt), pending: value.slice(splitAt) };
 }
 
-export function stripAnsi(value: string): string {
+function stripAnsi(value: string): string {
   if (typeof value !== "string") {
     throw new TypeError(`Expected a \`string\`, got \`${typeof value}\``);
   }
@@ -38,3 +38,10 @@ export function stripAnsi(value: string): string {
 
   return value.replace(ansiRegex, "");
 }
+
+const ansi = {
+  splitIncompleteAnsiSuffix,
+  stripAnsi,
+};
+
+export default ansi;

@@ -1,5 +1,9 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
-import {
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+
+import minimalModeRender from "./minimal-mode-render.ts";
+
+const {
   createBashToolDefinition,
   createEditToolDefinition,
   createFindToolDefinition,
@@ -7,9 +11,8 @@ import {
   createLsToolDefinition,
   createReadToolDefinition,
   createWriteToolDefinition,
-} from "@msa/coding-agent";
-
-import { toolRenderers } from "./minimal-mode-render.ts";
+} = codingAgent;
+const { toolRenderers } = minimalModeRender;
 
 const createBuiltInTools = (cwd: string) => ({
   bash: createBashToolDefinition(cwd),
@@ -21,7 +24,7 @@ const createBuiltInTools = (cwd: string) => ({
   write: createWriteToolDefinition(cwd),
 });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const tools = createBuiltInTools(process.cwd());
 
   msa.registerTool({ ...tools.read, ...toolRenderers.read });

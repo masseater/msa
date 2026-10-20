@@ -1,7 +1,9 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { ExtensionShortcut } from "../../core/extensions/index.ts";
-import { formatKeyText, keyDisplayText } from "./components/keybinding-hints.ts";
+import type extensionsTypes from "../../core/extensions/index.types.ts";
+import keybindingHints from "./components/keybinding-hints.ts";
+
+const { formatKeyText, keyDisplayText } = keybindingHints;
 
 type Row = readonly [keys: readonly tuiTypes.Keybinding[] | string, action: string];
 
@@ -78,8 +80,8 @@ function table(
   return `**${title}**\n| Key | Action |\n|-----|--------|\n${body}`;
 }
 
-export function formatHotkeysMarkdown(
-  extensionShortcuts: ReadonlyMap<string, ExtensionShortcut>,
+function formatHotkeysMarkdown(
+  extensionShortcuts: ReadonlyMap<string, extensionsTypes.ExtensionShortcut>,
 ): string {
   const sections = SECTIONS.map(([title, rows]) =>
     table(
@@ -103,3 +105,9 @@ export function formatHotkeysMarkdown(
   }
   return sections.join("\n\n");
 }
+
+const hotkeys = {
+  formatHotkeysMarkdown,
+};
+
+export default hotkeys;

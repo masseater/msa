@@ -2,10 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { PACKAGE_NAME, VERSION } from "../src/config.ts";
-import { readEnv } from "../src/core/process-env.ts";
+import config from "../src/config.ts";
+import processEnv from "../src/core/process-env.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
+
+const { PACKAGE_NAME, VERSION } = config;
+const { readEnv } = processEnv;
 
 const { getNewerPatchVersion, runPackageCommandDirectly, setupPackageTest, teardownPackageTest } =
   packageCommandPathsSupport;

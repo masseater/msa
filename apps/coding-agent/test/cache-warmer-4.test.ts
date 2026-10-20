@@ -2,12 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { type CacheWarmingDecisionEvent } from "../src/core/cache-warmer.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ExtensionFactory } from "../src/core/extensions/types.ts";
+import type cacheWarmerTypes from "../src/core/cache-warmer.types.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 import utilities from "./utilities.ts";
-
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 
 const { createTestExtensionsResult } = utilities;
@@ -22,7 +21,7 @@ afterEach(() => {
 const usesTheLastExtensionOverride = () =>
   runTest(
     Effect.gen(function* () {
-      const factories: ExtensionFactory[] = [
+      const factories: extensionsTypesTypes.ExtensionFactory[] = [
         (msa) => {
           msa.on("cache_warming_decision", () => ({ action: "warm" }));
         },
@@ -39,7 +38,7 @@ const usesTheLastExtensionOverride = () =>
         env.sessionManager,
         env.modelRegistry,
       );
-      const event: CacheWarmingDecisionEvent = {
+      const event: cacheWarmerTypes.CacheWarmingDecisionEvent = {
         action: "warm",
         continuationProbability: 0.15,
         missCost: 0.5,

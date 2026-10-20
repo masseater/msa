@@ -1,11 +1,9 @@
 import type compatTypes from "@msa/ai/compat.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  computeFileLists,
-  createFileOps,
-  extractFileOpsFromMessage,
-} from "../src/core/compaction/utils.ts";
+import utils from "../src/core/compaction/utils.ts";
+
+const { computeFileLists, createFileOps, extractFileOpsFromMessage } = utils;
 
 const includeFilesTouchedByNestedCallsRecorded = () => {
   const result: compatTypes.ToolResultMessage = {

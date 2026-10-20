@@ -1,151 +1,121 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import type { BashResult } from "../bash-executor.ts";
-import type { CacheWarmingDecisionEvent } from "../cache-warmer.ts";
-import type { CompactionResult } from "../compaction/index.ts";
-import type { CustomMessage } from "../messages.ts";
-import type { BashOperations } from "../tools/bash.ts";
-import type {
-  InputEvent,
-  MessageEndEvent,
-  MessageStartEvent,
-  MessageUpdateEvent,
-  ModelSelectEvent,
-  ThinkingLevelSelectEvent,
-  ToolCallEvent,
-  ToolExecutionEndEvent,
-  ToolExecutionStartEvent,
-  ToolExecutionUpdateEvent,
-  ToolResultEvent,
-  TurnEndEvent,
-  TurnStartEvent,
-  UserBashEvent,
-} from "./types-agent-events.ts";
-import type {
-  AfterProviderResponseEvent,
-  AgentBeforeSettleEvent,
-  AgentEndEvent,
-  AgentSettledEvent,
-  AgentStartEvent,
-  BeforeAgentStartEvent,
-  BeforeProviderHeadersEvent,
-  BeforeProviderRequestEvent,
-  BoundaryResult,
-  ContextEvent,
-  ContextWithSystemEvent,
-  McpServersChangeEvent,
-  ProjectTrustEvent,
-  ProviderStreamEvent,
-  ResourcesDiscoverEvent,
-  SessionEvent,
-  UIPromptEndEvent,
-  UIPromptStartEvent,
-} from "./types-session-events.ts";
+import type bashExecutorTypes from "../bash-executor.types.ts";
+import type cacheWarmerTypes from "../cache-warmer.types.ts";
+import type compactionTypes from "../compaction/index.types.ts";
+import type messagesTypes from "../messages.types.ts";
+import type bashTypes from "../tools/bash.types.ts";
+import type typesAgentEventsTypes from "./types-agent-events.ts";
+import type typesSessionEventsTypes from "./types-session-events.ts";
 
-export type ExtensionEvent =
-  | ProjectTrustEvent
-  | ResourcesDiscoverEvent
-  | McpServersChangeEvent
-  | SessionEvent
-  | ContextEvent
-  | ContextWithSystemEvent
-  | CacheWarmingDecisionEvent
-  | BeforeProviderRequestEvent
-  | BeforeProviderHeadersEvent
-  | AfterProviderResponseEvent
-  | ProviderStreamEvent
-  | BeforeAgentStartEvent
-  | AgentStartEvent
-  | AgentEndEvent
-  | AgentBeforeSettleEvent
-  | AgentSettledEvent
-  | UIPromptStartEvent
-  | UIPromptEndEvent
-  | TurnStartEvent
-  | TurnEndEvent
-  | MessageStartEvent
-  | MessageUpdateEvent
-  | MessageEndEvent
-  | ToolExecutionStartEvent
-  | ToolExecutionUpdateEvent
-  | ToolExecutionEndEvent
-  | ModelSelectEvent
-  | ThinkingLevelSelectEvent
-  | UserBashEvent
-  | InputEvent
-  | ToolCallEvent
-  | ToolResultEvent;
+declare namespace typesResultsTypes {
+  type ExtensionEvent =
+    | typesSessionEventsTypes.ProjectTrustEvent
+    | typesSessionEventsTypes.ResourcesDiscoverEvent
+    | typesSessionEventsTypes.McpServersChangeEvent
+    | typesSessionEventsTypes.SessionEvent
+    | typesSessionEventsTypes.ContextEvent
+    | typesSessionEventsTypes.ContextWithSystemEvent
+    | cacheWarmerTypes.CacheWarmingDecisionEvent
+    | typesSessionEventsTypes.BeforeProviderRequestEvent
+    | typesSessionEventsTypes.BeforeProviderHeadersEvent
+    | typesSessionEventsTypes.AfterProviderResponseEvent
+    | typesSessionEventsTypes.ProviderStreamEvent
+    | typesSessionEventsTypes.BeforeAgentStartEvent
+    | typesSessionEventsTypes.AgentStartEvent
+    | typesSessionEventsTypes.AgentEndEvent
+    | typesSessionEventsTypes.AgentBeforeSettleEvent
+    | typesSessionEventsTypes.AgentSettledEvent
+    | typesSessionEventsTypes.UIPromptStartEvent
+    | typesSessionEventsTypes.UIPromptEndEvent
+    | typesAgentEventsTypes.TurnStartEvent
+    | typesAgentEventsTypes.TurnEndEvent
+    | typesAgentEventsTypes.MessageStartEvent
+    | typesAgentEventsTypes.MessageUpdateEvent
+    | typesAgentEventsTypes.MessageEndEvent
+    | typesAgentEventsTypes.ToolExecutionStartEvent
+    | typesAgentEventsTypes.ToolExecutionUpdateEvent
+    | typesAgentEventsTypes.ToolExecutionEndEvent
+    | typesAgentEventsTypes.ModelSelectEvent
+    | typesAgentEventsTypes.ThinkingLevelSelectEvent
+    | typesAgentEventsTypes.UserBashEvent
+    | typesAgentEventsTypes.InputEvent
+    | typesAgentEventsTypes.ToolCallEvent
+    | typesAgentEventsTypes.ToolResultEvent;
 
-export interface ContextEventResult {
-  messages?: agentTypes.AgentMessage[];
-}
+  interface ContextEventResult {
+    messages?: agentTypes.AgentMessage[];
+  }
 
-export type TurnEndEventResult = BoundaryResult;
-export type AgentBeforeSettleEventResult = BoundaryResult;
+  type TurnEndEventResult = typesSessionEventsTypes.BoundaryResult;
 
-export type BeforeProviderRequestEventResult = unknown;
+  type AgentBeforeSettleEventResult = typesSessionEventsTypes.BoundaryResult;
 
-export type {
-  CacheWarmingDecisionEvent,
-  CacheWarmingDecisionEventResult,
-} from "../cache-warmer.ts";
+  type BeforeProviderRequestEventResult = unknown;
 
-export interface ToolCallEventResult {
-  block?: boolean;
-  reason?: string;
-  terminate?: boolean;
-}
+  interface ToolCallEventResult {
+    block?: boolean;
+    reason?: string;
+    terminate?: boolean;
+  }
 
-export type UserBashEventResult =
-  | {
-      operations: BashOperations;
-      result?: never;
-    }
-  | {
-      operations?: never;
-      result: BashResult;
-    };
+  type UserBashEventResult =
+    | {
+        operations: bashTypes.BashOperations;
+        result?: never;
+      }
+    | {
+        operations?: never;
+        result: bashExecutorTypes.BashResult;
+      };
 
-export interface ToolResultEventResult {
-  content?: (aiTypes.TextContent | aiTypes.ImageContent)[] | undefined;
-  details?: unknown;
-  structuredContent?: aiTypes.JsonValue | undefined;
-  isError?: boolean | undefined;
-  usage?: aiTypes.Usage | undefined;
-}
-
-export interface MessageEndEventResult {
-  message?: agentTypes.AgentMessage;
-}
-
-export interface BeforeAgentStartEventResult {
-  message?: Pick<CustomMessage, "customType" | "content" | "display" | "details">;
-  systemPrompt?: string;
-}
-
-export interface SessionBeforeSwitchResult {
-  cancel?: boolean;
-}
-
-export interface SessionBeforeForkResult {
-  cancel?: boolean;
-  skipConversationRestore?: boolean;
-}
-
-export interface SessionBeforeCompactResult {
-  cancel?: boolean;
-  compaction?: CompactionResult;
-}
-
-export interface SessionBeforeTreeResult {
-  cancel?: boolean;
-  summary?: {
-    summary: string;
+  interface ToolResultEventResult {
+    content?: (aiTypes.TextContent | aiTypes.ImageContent)[] | undefined;
     details?: unknown;
-    usage?: aiTypes.Usage;
-  };
-  customInstructions?: string;
-  replaceInstructions?: boolean;
-  label?: string;
+    structuredContent?: aiTypes.JsonValue | undefined;
+    isError?: boolean | undefined;
+    usage?: aiTypes.Usage | undefined;
+  }
+
+  interface MessageEndEventResult {
+    message?: agentTypes.AgentMessage;
+  }
+
+  interface BeforeAgentStartEventResult {
+    message?: Pick<messagesTypes.CustomMessage, "customType" | "content" | "display" | "details">;
+    systemPrompt?: string;
+  }
+
+  interface SessionBeforeSwitchResult {
+    cancel?: boolean;
+  }
+
+  interface SessionBeforeForkResult {
+    cancel?: boolean;
+    skipConversationRestore?: boolean;
+  }
+
+  interface SessionBeforeCompactResult {
+    cancel?: boolean;
+    compaction?: compactionTypes.CompactionResult;
+  }
+
+  interface SessionBeforeTreeResult {
+    cancel?: boolean;
+    summary?: {
+      summary: string;
+      details?: unknown;
+      usage?: aiTypes.Usage;
+    };
+    customInstructions?: string;
+    replaceInstructions?: boolean;
+    label?: string;
+  }
+
+  type CacheWarmingDecisionEvent = cacheWarmerTypes.CacheWarmingDecisionEvent;
+
+  type CacheWarmingDecisionEventResult = cacheWarmerTypes.CacheWarmingDecisionEventResult;
 }
+
+export type { typesResultsTypes as default };

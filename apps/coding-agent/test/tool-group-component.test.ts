@@ -1,16 +1,20 @@
 import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import { createReadToolDefinition } from "../src/core/tools/read.ts";
-import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { ToolGroupComponent } from "../src/modes/interactive/components/tool-group.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import read from "../src/core/tools/read.ts";
+import AssistantMessageComponent from "../src/modes/interactive/components/assistant-message.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import type toolExecutionTypes from "../src/modes/interactive/components/tool-execution.types.ts";
+import ToolGroupComponent from "../src/modes/interactive/components/tool-group.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { createReadToolDefinition } = read;
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const width = 120;
 
-function readCall(id: string, path: string): ToolExecutionComponent {
+function readCall(id: string, path: string): toolExecutionTypes.ToolExecutionComponent {
   const component = new ToolExecutionComponent(
     "read",
     id,

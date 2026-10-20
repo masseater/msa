@@ -4,16 +4,22 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { computeEditsDiff } from "../src/core/tools/edit-diff.ts";
-import { createEditToolDefinition } from "../src/core/tools/edit.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import editDiff from "../src/core/tools/edit-diff.ts";
+import edit from "../src/core/tools/edit.ts";
+import codingAgent from "../src/index.ts";
+import ansi from "../src/utils/ansi.ts";
 import editToolNoFullRedrawSupport from "./edit-tool-no-full-redraw-support.ts";
+import FakeTerminal from "./fake-terminal.ts";
 
+const { ToolExecutionComponent } = codingAgent;
+const { initTheme } = codingAgent;
+
+const { computeEditsDiff } = editDiff;
+const { createEditToolDefinition } = edit;
+const { stripAnsi } = ansi;
 const { TuiMainScreen } = tuiModule;
 
-const { FakeTerminal, createLargeEdits, tempDirs, waitForRender, waitForRenderedText } =
+const { createLargeEdits, tempDirs, waitForRender, waitForRenderedText } =
   editToolNoFullRedrawSupport;
 
 const {

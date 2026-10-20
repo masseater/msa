@@ -2,32 +2,25 @@ import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { resolveCliModel } from "../core/model-resolver.ts";
-import { ModelRuntime } from "../core/model-runtime.ts";
-import { InMemoryCodingAgentModelsStore } from "../core/models-store.ts";
-import type { Args } from "./args.ts";
-import { AuthCommandError, getAuthCredential, validateAuthCommandArgs } from "./auth-command.ts";
+import awaitingModule from "../core/awaiting.ts";
+import InMemoryCodingAgentModelsStore from "../core/in-memory-coding-agent-models-store.ts";
+import modelResolver from "../core/model-resolver.ts";
+import ModelRuntime from "../core/model-runtime.ts";
+import type modelRuntimeTypes from "../core/model-runtime.types.ts";
+import type argsTypes from "./args.types.ts";
+import type authCheckTypes from "./auth-check.types.ts";
+import AuthCommandError from "./auth-command-error.ts";
+import authCommand from "./auth-command.ts";
 
-export type AuthCheckStatus = "ready" | "not_ready" | "invalid";
-export type AuthCheckReason =
-  | "provider_not_found"
-  | "credentials_not_configured"
-  | "credential_not_available"
-  | "invalid_state";
-
-export interface AuthCheckResult {
-  status: AuthCheckStatus;
-  provider: string;
-  reason?: AuthCheckReason;
-  authType?: "api_key" | "oauth";
-}
+const { awaited, awaiting } = awaitingModule;
+const { getAuthCredential, validateAuthCommandArgs } = authCommand;
+const { resolveCliModel } = modelResolver;
 
 function checkProviderAuthImpl(
-  args: Args,
-  modelRuntime: ModelRuntime,
+  args: argsTypes.Args,
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
   options: { refresh: boolean } = { refresh: false },
-): Promise<AuthCheckResult> {
+): Promise<authCheckTypes.AuthCheckResult> {
   return Effect.runPromise(
     awaiting(function* () {
       const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
@@ -65,21 +58,21 @@ function checkProviderAuthImpl(
   );
 }
 
-export const checkProviderAuth: {
+const checkProviderAuth: {
   (
-    args: Args,
-    modelRuntime: ModelRuntime,
+    args: argsTypes.Args,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
     options?: { refresh: boolean },
-  ): Promise<AuthCheckResult>;
+  ): Promise<authCheckTypes.AuthCheckResult>;
   (
-    modelRuntime: ModelRuntime,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
     options?: { refresh: boolean },
-  ): (args: Args) => Promise<AuthCheckResult>;
+  ): (args: argsTypes.Args) => Promise<authCheckTypes.AuthCheckResult>;
 } = dual((args: IArguments) => args.length >= 2, checkProviderAuthImpl);
 
 function getProviderCredentialImpl(
   providerId: string,
-  modelRuntime: ModelRuntime,
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
   credentials: aiTypes.CredentialStore,
   options: { refresh: boolean },
 ): Promise<string | undefined> {
@@ -92,23 +85,23 @@ function getProviderCredentialImpl(
   );
 }
 
-export const getProviderCredential: {
+const getProviderCredential: {
   (
     providerId: string,
-    modelRuntime: ModelRuntime,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
     credentials: aiTypes.CredentialStore,
     options: { refresh: boolean },
   ): Promise<string | undefined>;
   (
-    modelRuntime: ModelRuntime,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
     credentials: aiTypes.CredentialStore,
     options: { refresh: boolean },
   ): (providerId: string) => Promise<string | undefined>;
 } = dual((args: IArguments) => args.length >= 4, getProviderCredentialImpl);
 
-export function createAuthCheckModelRuntime(
+function createAuthCheckModelRuntime(
   credentials: aiTypes.CredentialStore,
-): Promise<ModelRuntime> {
+): Promise<modelRuntimeTypes.ModelRuntime> {
   return Effect.runPromise(
     awaiting(function* () {
       return yield* awaited(
@@ -122,3 +115,11 @@ export function createAuthCheckModelRuntime(
     }),
   );
 }
+
+const authCheck = {
+  checkProviderAuth,
+  createAuthCheckModelRuntime,
+  getProviderCredential,
+};
+
+export default authCheck;

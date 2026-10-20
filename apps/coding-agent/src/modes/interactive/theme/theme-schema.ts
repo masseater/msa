@@ -2,7 +2,10 @@ import { dual } from "effect/Function";
 import { type Static, type TProperties, Type } from "typebox";
 import { Compile } from "typebox/compile";
 
-import { THEME_TOKENS, type ThemeColorValues, type ThemeTokenDescriptors } from "./theme-tokens.ts";
+import themeTokens from "./theme-tokens.ts";
+import type themeTokensTypes from "./theme-tokens.types.ts";
+
+const { THEME_TOKENS } = themeTokens;
 
 function colorValue(description?: string) {
   return Type.Union(
@@ -21,11 +24,11 @@ function colorValue(description?: string) {
   );
 }
 
-export const ColorValueSchema = colorValue();
+const ColorValueSchema = colorValue();
 
-export type ThemeColorValue = Static<typeof ColorValueSchema>;
+type ColorValue = Static<typeof ColorValueSchema>;
 
-function themeTokenProperties(tokens: ThemeTokenDescriptors): TProperties {
+function themeTokenProperties(tokens: themeTokensTypes.ThemeTokenDescriptors): TProperties {
   const properties: TProperties = {};
   for (const [name, descriptor] of Object.entries(tokens)) {
     const schema = colorValue(descriptor.description);
@@ -34,7 +37,7 @@ function themeTokenProperties(tokens: ThemeTokenDescriptors): TProperties {
   return properties;
 }
 
-const ThemeColorsSchema = Type.Unsafe<ThemeColorValues<ThemeColorValue>>(
+const ThemeColorsSchema = Type.Unsafe<themeTokensTypes.ThemeColorValues<ColorValue>>(
   Type.Object(themeTokenProperties(THEME_TOKENS), {
     additionalProperties: false,
     description:
@@ -42,7 +45,7 @@ const ThemeColorsSchema = Type.Unsafe<ThemeColorValues<ThemeColorValue>>(
   }),
 );
 
-export const ThemeJsonSchema = Type.Object(
+const ThemeJsonSchema = Type.Object(
   {
     $schema: Type.Optional(Type.String({ description: "JSON schema reference" })),
     appearance: Type.Optional(
@@ -55,21 +58,21 @@ export const ThemeJsonSchema = Type.Object(
     export: Type.Optional(
       Type.Object(
         {
-          pageBg: Type.Optional(colorValue("Page background color")),
           cardBg: Type.Optional(colorValue("Card/container background color")),
           infoBg: Type.Optional(colorValue("Info sections background (system prompt, notices)")),
+          pageBg: Type.Optional(colorValue("Page background color")),
         },
         {
+          additionalProperties: false,
           description:
             "Optional colors for HTML export (defaults derived from userMessageBg if not specified)",
-          additionalProperties: false,
         },
       ),
     ),
     name: Type.String({
-      pattern: "^[^/]+$",
       description:
         "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings.",
+      pattern: "^[^/]+$",
     }),
     vars: Type.Optional(
       Type.Record(Type.String(), ColorValueSchema, {
@@ -84,11 +87,11 @@ export const ThemeJsonSchema = Type.Object(
   },
 );
 
+type ValidatedThemeJson = Static<typeof ThemeJsonSchema>;
+
 const compiledThemeSchema = Compile(ThemeJsonSchema);
 
-export type ValidatedThemeJson = Static<typeof ThemeJsonSchema>;
-
-export const validateThemeJson: {
+const validateThemeJson: {
   (json: unknown): (label: string) => ValidatedThemeJson;
   (label: string, json: unknown): ValidatedThemeJson;
 } = dual(2, (label: string, json: unknown): ValidatedThemeJson => {
@@ -125,12 +128,7 @@ export const validateThemeJson: {
 
     let errorMessage = `Invalid theme "${label}":\n`;
     if (missingColors.size > 0) {
-      errorMessage += "\nMissing required color tokens:\n";
-      errorMessage += Array.from(missingColors)
-        .sort()
-        .map((color) => `  - ${color}`)
-        .join("\n");
-      errorMessage += '\n\nPlease add these colors to your theme\'s "colors" object.';
+      errorMessage = validateThemeJsonPart1(errorMessage, missingColors);
       errorMessage += "\nSee the built-in themes (dark.json, light.json) for reference values.";
     }
     if (otherErrors.length > 0) {
@@ -142,3 +140,21 @@ export const validateThemeJson: {
 
   return json as ValidatedThemeJson;
 });
+
+const themeSchema = {
+  ColorValueSchema,
+  ThemeJsonSchema,
+  validateThemeJson,
+};
+
+export default themeSchema;
+
+function validateThemeJsonPart1(errorMessage: string, missingColors: Set<string>) {
+  errorMessage += "\nMissing required color tokens:\n";
+  errorMessage += Array.from(missingColors)
+    .sort()
+    .map((color) => `  - ${color}`)
+    .join("\n");
+  errorMessage += '\n\nPlease add these colors to your theme\'s "colors" object.';
+  return errorMessage;
+}

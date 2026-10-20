@@ -2,12 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import { type KeyId } from "../src/core/keybindings.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type keybindingsTypes from "../src/core/keybindings.types.ts";
 import extensionsRunner2Support from "./extensions-runner-2-support.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 
+const { discoverAndLoadExtensions } = loader;
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 
 const { defaultKeybindings } = extensionsRunner2Support;
@@ -71,7 +72,7 @@ const allowsAShortcutWhenTheReservedSet = () =>
       );
       const keybindings = {
         ...defaultKeybindings,
-        "app.model.cycleForward": "ctrl+n" as KeyId,
+        "app.model.cycleForward": "ctrl+n" as keybindingsTypes.KeyId,
       };
       const shortcuts = runner.getShortcuts(keybindings);
 
@@ -113,7 +114,7 @@ const warnsButAllowsWhenExtensionUsesNon = () =>
       expect(warnSpy).toHaveBeenCalledWith(
         expect.stringContaining("built-in shortcut for app.clipboard.pasteImage"),
       );
-      expect(shortcuts.has(pasteImageKey as KeyId)).toBe(true);
+      expect(shortcuts.has(pasteImageKey as keybindingsTypes.KeyId)).toBe(true);
 
       warnSpy.mockRestore();
     }),

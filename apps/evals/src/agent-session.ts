@@ -1,28 +1,31 @@
 import ai from "@msa/ai";
-import {
-  type AgentSession,
-  type InlineExtension,
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
+import type { JsonValue } from "vitest-evals/harness";
+
+import platform from "./platform.ts";
+import type runTypesTypes from "./run-types.ts";
+import workspaceModule from "./workspace.ts";
+
+const {
   ModelRuntime,
   SessionManager,
   createAgentSessionFromServices,
   createAgentSessionServices,
   readStoredCredential,
-} from "@msa/coding-agent";
-import { Effect } from "effect";
-import type { JsonValue } from "vitest-evals/harness";
-
-import { files, pathOperations } from "./platform.ts";
-import type { HostSelection, Options, RunPaths, RunState } from "./run-types.ts";
-import { seedWorkspace } from "./workspace.ts";
+} = codingAgent;
+const { files, pathOperations } = platform;
+const { seedWorkspace } = workspaceModule;
 
 const { InMemoryCredentialStore } = ai;
 
-export const throwIfAborted = (signal: AbortSignal | undefined): Effect.Effect<void> =>
+const throwIfAborted = (signal: AbortSignal | undefined): Effect.Effect<void> =>
   Effect.sync(() => signal?.throwIfAborted());
 
 const authenticate = (
-  modelRuntime: ModelRuntime,
-  selection: HostSelection["selection"],
+  modelRuntime: codingAgentTypes.ModelRuntime,
+  selection: runTypesTypes.HostSelection["selection"],
   storedCredential: ReturnType<typeof readStoredCredential>,
 ) =>
   Effect.gen(function* () {
@@ -47,14 +50,14 @@ const authenticate = (
     return model;
   });
 
-export const prepareModel = <TOutput extends JsonValue>({
+const prepareModel = <TOutput extends JsonValue>({
   options,
   paths,
   host,
 }: {
-  options: Options<TOutput>;
-  paths: RunPaths;
-  host: HostSelection;
+  options: runTypesTypes.Options<TOutput>;
+  paths: runTypesTypes.RunPaths;
+  host: runTypesTypes.HostSelection;
 }) =>
   Effect.gen(function* () {
     const { selection, authPath, sandboxIdentity } = host;
@@ -79,9 +82,9 @@ export const prepareModel = <TOutput extends JsonValue>({
     return { model, modelRuntime };
   });
 
-export type PreparedModel = Effect.Success<ReturnType<typeof prepareModel>>;
+type PreparedModel = Effect.Success<ReturnType<typeof prepareModel>>;
 
-export const openSession = <TOutput extends JsonValue>({
+const openSession = <TOutput extends JsonValue>({
   state,
   options,
   paths,
@@ -89,11 +92,11 @@ export const openSession = <TOutput extends JsonValue>({
   extensionFactories,
   signal,
 }: {
-  state: RunState<TOutput>;
-  options: Options<TOutput>;
-  paths: RunPaths;
+  state: runTypesTypes.RunState<TOutput>;
+  options: runTypesTypes.Options<TOutput>;
+  paths: runTypesTypes.RunPaths;
   prepared: PreparedModel;
-  extensionFactories: InlineExtension[];
+  extensionFactories: codingAgentTypes.InlineExtension[];
   signal: AbortSignal | undefined;
 }) =>
   Effect.gen(function* () {
@@ -126,12 +129,12 @@ export const openSession = <TOutput extends JsonValue>({
     return { session, sessionManager };
   });
 
-export const assertOnlyInlineExtensions = ({
+const assertOnlyInlineExtensions = ({
   session,
   extensionFactories,
 }: {
-  session: AgentSession;
-  extensionFactories: readonly InlineExtension[];
+  session: codingAgentTypes.AgentSession;
+  extensionFactories: readonly codingAgentTypes.InlineExtension[];
 }): Effect.Effect<void> =>
   Effect.sync(() => {
     const expected = new Set(extensionFactories.map(({ name }) => `<inline:${name}>`));
@@ -142,3 +145,12 @@ export const assertOnlyInlineExtensions = ({
       throw new Error(`Isolated eval loaded unexpected extensions: ${unexpected.join(", ")}`);
     }
   });
+
+const agentSession = {
+  assertOnlyInlineExtensions,
+  openSession,
+  prepareModel,
+  throwIfAborted,
+};
+
+export default agentSession;

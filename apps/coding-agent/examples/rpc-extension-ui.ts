@@ -4,9 +4,12 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Console, Effect } from "effect";
 
-import { startAgent } from "./rpc-ui/agent-process.ts";
-import { UiController } from "./rpc-ui/controller.ts";
-import { showWelcome } from "./rpc-ui/slash-commands.ts";
+import agentProcess from "./rpc-ui/agent-process.ts";
+import UiController from "./rpc-ui/controller.ts";
+import type controllerTypes from "./rpc-ui/controller.types.ts";
+import slashCommands from "./rpc-ui/slash-commands.ts";
+const { startAgent } = agentProcess;
+const { showWelcome } = slashCommands;
 
 const { ProcessTerminal, TuiMainScreen } = tuiModule;
 
@@ -43,7 +46,7 @@ const main = () =>
     const terminal = new ProcessTerminal();
     const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
 
-    let controller: UiController | undefined;
+    let controller: controllerTypes.UiController | undefined;
     const agent = startAgent({
       args: [
         cliPath,

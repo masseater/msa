@@ -1,12 +1,17 @@
 import { dual } from "effect/Function";
 
-import { highlightJs as hljs } from "./highlight-languages.ts";
-import { decodeHtmlEntityAt } from "./html.ts";
-import { callbackPromise } from "./interop.ts";
+import highlightLanguages from "./highlight-languages.ts";
+import htmlModule from "./html.ts";
+import interop from "./interop.ts";
+import type syntaxHighlightTypes from "./syntax-highlight.types.ts";
+
+const { callbackPromise } = interop;
+const { decodeHtmlEntityAt } = htmlModule;
+const { highlightJs: hljs } = highlightLanguages;
 
 let allLanguagesPromise: Promise<void> | undefined;
 
-export function loadAllHighlightLanguages(): Promise<void> {
+function loadAllHighlightLanguages(): Promise<void> {
   if (allLanguagesPromise === undefined) {
     allLanguagesPromise = callbackPromise((resolve) => {
       setImmediate(() => {
@@ -20,16 +25,6 @@ export function loadAllHighlightLanguages(): Promise<void> {
     });
   }
   return allLanguagesPromise;
-}
-
-export type HighlightFormatter = (text: string) => string;
-export type HighlightTheme = Partial<Record<string, HighlightFormatter>>;
-
-export interface HighlightOptions {
-  language?: string;
-  ignoreIllegals?: boolean;
-  languageSubset?: string[];
-  theme?: HighlightTheme;
 }
 
 const SPAN_CLOSE = "</span>";
@@ -51,7 +46,10 @@ function getScopeFromSpanTag(tag: string): string | undefined {
   return undefined;
 }
 
-function getScopeFormatter(scope: string, theme: HighlightTheme): HighlightFormatter | undefined {
+function getScopeFormatter(
+  scope: string,
+  theme: syntaxHighlightTypes.HighlightTheme,
+): syntaxHighlightTypes.HighlightFormatter | undefined {
   const exact = theme[scope];
   if (exact !== undefined) {
     return exact;
@@ -78,8 +76,8 @@ function getScopeFormatter(scope: string, theme: HighlightTheme): HighlightForma
 
 function getActiveFormatter(
   scopes: Array<string | undefined>,
-  theme: HighlightTheme,
-): HighlightFormatter | undefined {
+  theme: syntaxHighlightTypes.HighlightTheme,
+): syntaxHighlightTypes.HighlightFormatter | undefined {
   for (let i = scopes.length - 1; i >= 0; i--) {
     const scope = scopes[i];
     if (scope === undefined || scope === "") {
@@ -107,7 +105,10 @@ function isSpanOpenTagStart(html: string, index: number): boolean {
   );
 }
 
-function renderHighlightedHtmlImpl(html: string, theme: HighlightTheme = {}): string {
+function renderHighlightedHtmlImpl(
+  html: string,
+  theme: syntaxHighlightTypes.HighlightTheme = {},
+): string {
   let output = "";
   let textBuffer = "";
   const scopes: Array<string | undefined> = [];
@@ -167,12 +168,12 @@ function renderHighlightedHtmlImpl(html: string, theme: HighlightTheme = {}): st
   return output;
 }
 
-export const renderHighlightedHtml: {
-  (html: string, theme?: HighlightTheme): string;
-  (theme?: HighlightTheme): (html: string) => string;
+const renderHighlightedHtml: {
+  (html: string, theme?: syntaxHighlightTypes.HighlightTheme): string;
+  (theme?: syntaxHighlightTypes.HighlightTheme): (html: string) => string;
 } = dual((args: IArguments) => args.length >= 1, renderHighlightedHtmlImpl);
 
-function highlightImpl(code: string, options: HighlightOptions = {}): string {
+function highlightImpl(code: string, options: syntaxHighlightTypes.HighlightOptions = {}): string {
   const html =
     options.language !== undefined && options.language !== ""
       ? hljs.highlight(code, {
@@ -183,11 +184,20 @@ function highlightImpl(code: string, options: HighlightOptions = {}): string {
   return renderHighlightedHtml(html, options.theme);
 }
 
-export const highlight: {
-  (code: string, options?: HighlightOptions): string;
-  (options?: HighlightOptions): (code: string) => string;
+const highlight: {
+  (code: string, options?: syntaxHighlightTypes.HighlightOptions): string;
+  (options?: syntaxHighlightTypes.HighlightOptions): (code: string) => string;
 } = dual((args: IArguments) => args.length >= 1, highlightImpl);
 
-export function supportsLanguage(name: string): boolean {
+function supportsLanguage(name: string): boolean {
   return hljs.getLanguage(name) !== undefined;
 }
+
+const syntaxHighlight = {
+  highlight,
+  loadAllHighlightLanguages,
+  renderHighlightedHtml,
+  supportsLanguage,
+};
+
+export default syntaxHighlight;

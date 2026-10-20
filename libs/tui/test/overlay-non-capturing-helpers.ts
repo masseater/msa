@@ -6,12 +6,10 @@ import TuiMainScreen from "../src/tui-main-screen.ts";
 import effectHelpers from "./effect-helpers.ts";
 import EmptyContent from "./overlay-non-capturing-empty-content.ts";
 import type overlayNonCapturingHelpersTypes from "./overlay-non-capturing-helpers.types.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 import type virtualTerminalTypes from "./virtual-terminal.types.ts";
 
 const { nextTick } = effectHelpers;
-const { VirtualTerminal } = virtualTerminal;
-
 const renderAndFlush: {
   (tui: tuiInterfaceTypes.TUI, terminal: virtualTerminalTypes.VirtualTerminal): Effect.Effect<void>;
   (

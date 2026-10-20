@@ -1,48 +1,30 @@
-import { Effect, FileSystem, Predicate, Result } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime, Predicate, Result } from "effect";
 import { dual } from "effect/Function";
 
-import { toErrorMessage } from "../../utils/errors.ts";
-import { splitBom } from "../../utils/text.ts";
-import { platformRuntime } from "../platform/index.ts";
-import { type EditDiffResult, generateDiffString } from "./diff-format.ts";
-import {
-  type MatchedEdit,
-  applyReplacements,
-  applyReplacementsPreservingUnchangedLines,
-} from "./edit-replacements.ts";
-import {
-  detectLineEnding,
-  normalizeForFuzzyMatch,
-  normalizeToLF,
-  restoreLineEndings,
-} from "./edit-text.ts";
-import { resolveToCwd } from "./path-utils.ts";
+import errors from "../../utils/errors.ts";
+import textModule from "../../utils/text.ts";
+import diffFormat from "./diff-format.ts";
+import type diffFormatTypes from "./diff-format.types.ts";
+import type editDiffTypes from "./edit-diff.types.ts";
+import editReplacements from "./edit-replacements.ts";
+import type editReplacementsTypes from "./edit-replacements.types.ts";
+import editText from "./edit-text.ts";
+import pathUtils from "./path-utils.ts";
 
-export { type EditDiffResult, generateDiffString, generateUnifiedPatch } from "./diff-format.ts";
-export { detectLineEnding, normalizeToLF, restoreLineEndings };
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
-export interface FuzzyMatchResult {
-  found: boolean;
-  index: number;
-  matchLength: number;
-  usedFuzzyMatch: boolean;
-  contentForReplacement: string;
-}
+const { generateDiffString } = diffFormat;
+const { detectLineEnding, normalizeForFuzzyMatch, normalizeToLF, restoreLineEndings } = editText;
+const { applyReplacements, applyReplacementsPreservingUnchangedLines } = editReplacements;
+const { toErrorMessage } = errors;
+const { splitBom } = textModule;
+const { resolveToCwd } = pathUtils;
 
-export interface Edit {
-  oldText: string;
-  newText: string;
-}
-
-export interface AppliedEditsResult {
-  baseContent: string;
-  newContent: string;
-}
-
-export const fuzzyFindText: {
-  (oldText: string): (content: string) => FuzzyMatchResult;
-  (content: string, oldText: string): FuzzyMatchResult;
-} = dual(2, (content: string, oldText: string): FuzzyMatchResult => {
+const fuzzyFindText: {
+  (oldText: string): (content: string) => editDiffTypes.FuzzyMatchResult;
+  (content: string, oldText: string): editDiffTypes.FuzzyMatchResult;
+} = dual(2, (content: string, oldText: string): editDiffTypes.FuzzyMatchResult => {
   const exactIndex = content.indexOf(oldText);
   if (exactIndex !== -1) {
     return {
@@ -130,9 +112,9 @@ function getNoChangeError(path: string, totalEdits: number): Error {
 
 function matchEdits(
   replacementBaseContent: string,
-  normalizedEdits: Edit[],
+  normalizedEdits: editDiffTypes.Edit[],
   path: string,
-): MatchedEdit[] {
+): editReplacementsTypes.MatchedEdit[] {
   const totalEdits = normalizedEdits.length;
   return normalizedEdits.map((edit, editIndex) => {
     const location = { editIndex, path, totalEdits };
@@ -149,7 +131,7 @@ function matchEdits(
   });
 }
 
-function assertDisjoint(sortedEdits: MatchedEdit[], path: string): void {
+function assertDisjoint(sortedEdits: editReplacementsTypes.MatchedEdit[], path: string): void {
   for (const [i, current] of sortedEdits.entries()) {
     const previous = sortedEdits[i - 1];
     if (previous !== undefined && previous.matchIndex + previous.matchLength > current.matchIndex) {
@@ -162,9 +144,9 @@ function assertDisjoint(sortedEdits: MatchedEdit[], path: string): void {
 
 function applyEditsImpl(
   normalizedContent: string,
-  edits: Edit[],
+  edits: editDiffTypes.Edit[],
   path: string,
-): AppliedEditsResult {
+): editDiffTypes.AppliedEditsResult {
   const normalizedEdits = edits.map((edit) => ({
     newText: normalizeToLF(edit.newText),
     oldText: normalizeToLF(edit.oldText),
@@ -201,14 +183,17 @@ function applyEditsImpl(
   return { baseContent: normalizedContent, newContent };
 }
 
-export const applyEditsToNormalizedContent: {
-  (edits: Edit[], path: string): (normalizedContent: string) => AppliedEditsResult;
-  (normalizedContent: string, edits: Edit[], path: string): AppliedEditsResult;
+const applyEditsToNormalizedContent: {
+  (
+    edits: editDiffTypes.Edit[],
+    path: string,
+  ): (normalizedContent: string) => editDiffTypes.AppliedEditsResult;
+  (
+    normalizedContent: string,
+    edits: editDiffTypes.Edit[],
+    path: string,
+  ): editDiffTypes.AppliedEditsResult;
 } = dual((args) => typeof args[0] === "string", applyEditsImpl);
-
-export interface EditDiffError {
-  error: string;
-}
 
 const causeOf = (error: unknown): unknown =>
   Predicate.hasProperty(error, "cause") && error.cause !== undefined ? error.cause : error;
@@ -220,13 +205,17 @@ const describeAccessError = (error: unknown): string => {
   return cause instanceof Error && "code" in cause ? `Error code: ${cause.code}` : String(cause);
 };
 
-const diffFromContent = (rawContent: string, edits: Edit[], path: string): EditDiffResult => {
+const diffFromContent = (
+  rawContent: string,
+  edits: editDiffTypes.Edit[],
+  path: string,
+): diffFormatTypes.EditDiffResult => {
   const { text: content } = splitBom(rawContent);
   const { baseContent, newContent } = applyEditsImpl(normalizeToLF(content), edits, path);
   return generateDiffString(baseContent, newContent);
 };
 
-const computeDiffEffect = (path: string, edits: Edit[], cwd: string) => {
+const computeDiffEffect = (path: string, edits: editDiffTypes.Edit[], cwd: string) => {
   const absolutePath = resolveToCwd(path, cwd);
   return Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
@@ -240,11 +229,35 @@ const computeDiffEffect = (path: string, edits: Edit[], cwd: string) => {
   }).pipe(Effect.catch((error) => Effect.succeed({ error: failureMessage(error) })));
 };
 
-export const computeEditsDiff: {
-  (edits: Edit[], cwd: string): (path: string) => Promise<EditDiffResult | EditDiffError>;
-  (path: string, edits: Edit[], cwd: string): Promise<EditDiffResult | EditDiffError>;
+const computeEditsDiff: {
+  (
+    edits: editDiffTypes.Edit[],
+    cwd: string,
+  ): (path: string) => Promise<diffFormatTypes.EditDiffResult | editDiffTypes.EditDiffError>;
+  (
+    path: string,
+    edits: editDiffTypes.Edit[],
+    cwd: string,
+  ): Promise<diffFormatTypes.EditDiffResult | editDiffTypes.EditDiffError>;
 } = dual(
   (args) => typeof args[0] === "string",
-  (path: string, edits: Edit[], cwd: string): Promise<EditDiffResult | EditDiffError> =>
-    platformRuntime.runPromise(computeDiffEffect(path, edits, cwd)),
+  (
+    path: string,
+    edits: editDiffTypes.Edit[],
+    cwd: string,
+  ): Promise<diffFormatTypes.EditDiffResult | editDiffTypes.EditDiffError> =>
+    nodeRuntime.runPromise(computeDiffEffect(path, edits, cwd)),
 );
+
+const editDiff = {
+  applyEditsToNormalizedContent,
+  computeEditsDiff,
+  detectLineEnding,
+  fuzzyFindText,
+  generateDiffString: diffFormat.generateDiffString,
+  generateUnifiedPatch: diffFormat.generateUnifiedPatch,
+  normalizeToLF,
+  restoreLineEndings,
+};
+
+export default editDiff;

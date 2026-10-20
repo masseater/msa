@@ -2,14 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
 import runtimeKit from "./runtime-kit.ts";
 
 const { createFauxRuntime, disposeRuntimes } = runtimeKit;
 
 const { awaited, runTest } = testing;
 
-const createRuntimeHost = (extensionFactory: ExtensionFactory) =>
+const createRuntimeHost = (extensionFactory: srcTypes.ExtensionFactory) =>
   runTest(
     Effect.map(
       createFauxRuntime({ extensionFactory, providerViaExtension: false }),

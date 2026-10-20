@@ -1,18 +1,17 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import type { ModelRegistry } from "../src/core/model-registry.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type modelRegistryTypes from "../src/core/model-registry.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
 
 const { createInMemoryModelRegistry } = modelRuntimeTestUtils;
 
 const env = {
   extensionsDir: "",
-  modelRegistry: undefined as unknown as ModelRegistry,
+  modelRegistry: undefined as unknown as modelRegistryTypes.ModelRegistry,
   sessionManager: SessionManager.inMemory(),
   tempDir: "",
 };

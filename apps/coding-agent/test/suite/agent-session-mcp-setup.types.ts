@@ -1,6 +1,6 @@
-import type { ExtensionFactory } from "../../src/core/extensions/types.ts";
-import type { SessionManager } from "../../src/core/session-manager.ts";
-import type { McpExposure } from "../../src/extensions/mcp/config.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import type configTypes from "../../src/extensions/mcp/config.types.ts";
 
 declare namespace agentSessionMcpSetupTypes {
   interface SetupOptions {
@@ -8,10 +8,10 @@ declare namespace agentSessionMcpSetupTypes {
     builtInTools?: string[];
     allowedToolNames?: string[];
     excludedToolNames?: string[];
-    sessionManager?: SessionManager;
+    sessionManager?: sessionManagerTypes.SessionManager;
     waitForTools?: boolean;
-    extensionFactories?: ExtensionFactory[];
-    toolExposure?: Record<string, McpExposure>;
+    extensionFactories?: extensionsTypesTypes.ExtensionFactory[];
+    toolExposure?: Record<string, configTypes.McpExposure>;
     resources?: boolean;
     withoutToolSearch?: boolean;
     description?: string;
@@ -19,8 +19,8 @@ declare namespace agentSessionMcpSetupTypes {
   }
 
   interface SlowConfig {
-    exposure?: McpExposure;
-    toolExposure?: Record<string, McpExposure>;
+    exposure?: configTypes.McpExposure;
+    toolExposure?: Record<string, configTypes.McpExposure>;
     name?: string;
     instructions?: string;
   }

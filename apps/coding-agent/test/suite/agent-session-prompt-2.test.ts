@@ -3,12 +3,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ExtensionAPI } from "../../src/core/extensions/index.ts";
-import type { PromptTemplate } from "../../src/core/prompt-templates.ts";
-import { createSyntheticSourceInfo } from "../../src/core/source-info.ts";
+import type extensionsTypes from "../../src/core/extensions/index.types.ts";
+import type promptTemplatesTypes from "../../src/core/prompt-templates.types.ts";
+import sourceInfoModule from "../../src/core/source-info.ts";
 import utilities from "../utilities.ts";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
+
+const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const { fauxAssistantMessage } = ai;
 
@@ -39,7 +41,7 @@ const processImage = vi.hoisted(() =>
   ),
 );
 
-vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
+vi.mock("../../src/utils/image-process.ts", () => ({ default: { processImage } }));
 
 const expandsSkillCommandsBeforeSendingThePart1 = () =>
   Effect.gen(function* () {
@@ -49,7 +51,7 @@ const expandsSkillCommandsBeforeSendingThePart1 = () =>
     const skillPath = joinPath(tempDir, "test-skill.md");
     yield* writeTextFile(skillPath, "# Test Skill\n\nUse the skill body.");
 
-    const template: PromptTemplate = {
+    const template: promptTemplatesTypes.PromptTemplate = {
       content: "Template body",
       description: "Template that the skill of the same name hides",
       filePath: "/virtual/test.md",
@@ -108,7 +110,7 @@ const expandsSkillCommandsBeforeSendingThe = Effect.gen(function* () {
 });
 
 const expandsPromptTemplatesBeforeSendingThe = Effect.gen(function* () {
-  const template: PromptTemplate = {
+  const template: promptTemplatesTypes.PromptTemplate = {
     content: "Review this code: $1",
     description: "Review template",
     filePath: "/virtual/review.md",
@@ -141,7 +143,7 @@ const expandsPromptTemplatesBeforeSendingThe = Effect.gen(function* () {
 });
 
 const sendusermessageCanOptIntoPromptTemplate = Effect.gen(function* () {
-  const template: PromptTemplate = {
+  const template: promptTemplatesTypes.PromptTemplate = {
     content: "Review this code: $1",
     description: "Review template",
     filePath: "/virtual/review.md",
@@ -207,7 +209,7 @@ const dispatchesExtensionCommandsWithoutConsumingA = Effect.gen(function* () {
 
 const extensionSendusermessageCanOptIntoExtension = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let extensionApi: ExtensionAPI | undefined;
+  let extensionApi: extensionsTypes.ExtensionAPI | undefined;
   const commandRun = deferredPromise<string>();
   const harness = yield* Effect.promise(() =>
     createHarness({

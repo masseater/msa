@@ -1,25 +1,22 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import {
-  SingleLine,
-  collapsedOutput,
-} from "../../../modes/interactive/components/visual-truncate.ts";
-import { theme } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import type { BashToolDetails } from "../bash.ts";
-import {
-  getTextOutput,
-  invalidArgText,
-  startToolTimer,
-  str,
-  toolTimerText,
-} from "../render-utils.ts";
-import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
+import SingleLine from "../../../modes/interactive/components/single-line.ts";
+import visualTruncate from "../../../modes/interactive/components/visual-truncate.ts";
+import themeModule from "../../../modes/interactive/theme/theme.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import type bashTypesModule from "../bash.types.ts";
+import renderUtils from "../render-utils.ts";
+import truncate from "../truncate.ts";
+
+const { getTextOutput, invalidArgText, startToolTimer, str, toolTimerText } = renderUtils;
+const { theme } = themeModule;
+const { DEFAULT_MAX_BYTES, formatSize } = truncate;
+const { collapsedOutput } = visualTruncate;
 
 const { Container, Spacer, Text } = tui;
 
-export const BASH_UPDATE_THROTTLE_MS = 100;
+const BASH_UPDATE_THROTTLE_MS = 100;
 function formatShellCall(
   args: { command?: string; timeout?: number } | undefined,
   prompt: string,
@@ -39,7 +36,7 @@ function formatShellCall(
     !expanded && lines.length > 1 ? theme.fg("muted", ` (+${lines.length - 1} lines)`) : "";
   return theme.fg("toolTitle", theme.bold(`${prompt} ${shown}`)) + more + timeoutSuffix;
 }
-type BashResultDetails = BashToolDetails | undefined;
+type BashResultDetails = bashTypesModule.BashToolDetails | undefined;
 
 function stripFullOutputFooter(output: string, details: BashResultDetails, isPartial: boolean) {
   const fullOutputPath = details?.fullOutputPath;
@@ -79,9 +76,9 @@ function rebuildBashResultRenderComponent(
   component: tuiTypes.Container,
   result: {
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-    details?: BashToolDetails;
+    details?: bashTypesModule.BashToolDetails;
   },
-  options: ToolRenderResultOptions,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
   showImages: boolean,
   timerText: string | undefined,
 ): void {
@@ -115,9 +112,9 @@ function rebuildBashResultRenderComponent(
     component.addChild(new Text(`\n${theme.fg("muted", timerText)}`, 0, 0));
 }
 
-export function createShellRenderers(
+function createShellRenderers(
   prompt: string,
-): Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> {
+): Pick<extensionsTypesTypes.ToolDefinition<any, any>, "renderCall" | "renderResult"> {
   return {
     renderCall(args, _theme, context) {
       startToolTimer(context);
@@ -148,3 +145,10 @@ export function createShellRenderers(
     },
   };
 }
+
+const bash = {
+  BASH_UPDATE_THROTTLE_MS,
+  createShellRenderers,
+};
+
+export default bash;

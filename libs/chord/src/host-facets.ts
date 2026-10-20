@@ -10,7 +10,7 @@ import type serviceTypes from "./service.types.ts";
 import signalModule from "./signal.ts";
 import type typesModule from "./types.types.ts";
 
-const { contract: contractModule, errors: errorsModule, HostRemote } = hostFacetsKit;
+const { contract: contractModule, errors: errorsModule } = hostFacetsKit;
 
 const { hostLifetime, makeService } = serviceModule;
 const { isFacet } = hostTypes;
@@ -18,7 +18,7 @@ const { ChordError } = errorsModule;
 const { placedOn, placementText } = contractModule;
 const { awaitReady } = signalModule;
 
-export default abstract class HostFacets extends HostRemote {
+export default abstract class HostFacets extends hostFacetsKit.HostRemote {
   readonly #facetRuns = new Map<string, AbortController>();
 
   readonly serve: hostTypesModule.Serve = ((type, factory, options = {}) => {

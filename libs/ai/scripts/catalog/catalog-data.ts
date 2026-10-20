@@ -1,11 +1,12 @@
 import { Effect } from "effect";
 
+import ModelDataError from "../model-data-error.ts";
 import modelData from "../model-data.ts";
 import type modelDataTypes from "../model-data.types.ts";
 import type catalogBuildTypes from "./catalog-build.types.ts";
 import type catalogDataTypes from "./catalog-data.types.ts";
 
-const { ModelDataError, groupProviderModelData, readModelDataProviderIds } = modelData;
+const { groupProviderModelData, readModelDataProviderIds } = modelData;
 
 const missingProviders = (providerIds: readonly string[]) =>
   Effect.fail(

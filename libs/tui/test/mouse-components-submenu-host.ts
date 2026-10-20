@@ -1,12 +1,9 @@
 import SelectList from "../src/components/select-list.ts";
 import tuiComponent from "../src/tui-component.ts";
 import mouseComponentsHelpers from "./mouse-components-helpers.ts";
-
-const { Container } = tuiComponent;
-
 const { selectTheme } = mouseComponentsHelpers;
 
-class SubmenuHost extends Container {
+class SubmenuHost extends tuiComponent.Container {
   readonly list = new SelectList(
     [
       { label: "First", value: "first" },

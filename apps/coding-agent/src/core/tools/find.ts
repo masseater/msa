@@ -1,42 +1,38 @@
 import type agentTypes from "@msa/agent-core/index.types";
-import type { Static } from "typebox";
+import { Effect } from "effect";
 
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import { abortedBy, nonEmptyOr, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { globWithFd } from "./find-fd.ts";
-import {
-  DEFAULT_FIND_LIMIT,
-  type FindOperations,
-  type FindToolDetails,
-  findSchema,
-  globWithOperations,
-} from "./find-support.ts";
-import { resolveToCwd } from "./path-utils.ts";
-import { findRenderers } from "./renderers/find.ts";
-import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
-import { DEFAULT_MAX_BYTES } from "./truncate.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import findFd from "./find-fd.ts";
+import findSupport from "./find-support.ts";
+import type findSupportTypes from "./find-support.types.ts";
+import type findTypes from "./find.types.ts";
+import pathUtils from "./path-utils.ts";
+import findModule from "./renderers/find.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+import truncate from "./truncate.ts";
 
-export {
-  relativizeFindResultPath,
-  type FindOperations,
-  type FindToolDetails,
-} from "./find-support.ts";
+const { DEFAULT_FIND_LIMIT, findSchema, globWithOperations } = findSupport;
+const { DEFAULT_MAX_BYTES } = truncate;
+const { resolveToCwd } = pathUtils;
+const { abortedBy, nonEmptyOr, unwrapForeign } = platform;
+const { globWithFd } = findFd;
+const { findRenderers } = findModule;
+const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
-export const findToolSystemPromptContribution = {
+const findToolSystemPromptContribution = {
   guidelines: [],
   snippet: "Find files by glob pattern (respects .gitignore)",
 } as const;
 
-export type FindToolInput = Static<typeof findSchema>;
-
-export interface FindToolOptions {
-  operations?: FindOperations;
-}
-
 const createFindToolDefinitionImpl = (
   cwd: string,
-  options?: FindToolOptions,
-): ToolDefinition<typeof findSchema, FindToolDetails | undefined> => {
+  options?: findTypes.FindToolOptions,
+): extensionsTypesTypes.ToolDefinition<
+  typeof findSchema,
+  findSupportTypes.FindToolDetails | undefined
+> => {
   const customOps = options?.operations;
   return {
     annotations: { readOnlyHint: true },
@@ -46,18 +42,18 @@ const createFindToolDefinitionImpl = (
       { pattern, path: searchDir, limit }: { pattern: string; path?: string; limit?: number },
       signal?: AbortSignal,
       _onUpdate?,
-      ctx?: ExtensionContext,
+      ctx?: extensionsTypesTypes.ExtensionContext,
     ) => {
       const request = {
+        effectiveLimit: limit ?? DEFAULT_FIND_LIMIT,
         pattern,
         searchPath: resolveToCwd(nonEmptyOr(searchDir, "."), nonEmptyOr(ctx?.cwd, cwd)),
-        effectiveLimit: limit ?? DEFAULT_FIND_LIMIT,
       };
       const search =
         customOps?.glob === undefined
           ? globWithFd(request)
           : globWithOperations(customOps, request);
-      return platformRuntime.runPromise(unwrapForeign(search.pipe(abortedBy(signal))));
+      return Effect.runPromise(unwrapForeign(search.pipe(abortedBy(signal))));
     },
     label: "find",
     name: "find",
@@ -67,12 +63,24 @@ const createFindToolDefinitionImpl = (
   };
 };
 
-export const createFindToolDefinition: CwdFactory<
-  FindToolOptions,
-  ToolDefinition<typeof findSchema, FindToolDetails | undefined>
+const createFindToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
+  findTypes.FindToolOptions,
+  extensionsTypesTypes.ToolDefinition<
+    typeof findSchema,
+    findSupportTypes.FindToolDetails | undefined
+  >
 > = cwdFactory(createFindToolDefinitionImpl);
 
-export const createFindTool: CwdFactory<
-  FindToolOptions,
+const createFindTool: toolDefinitionWrapperTypes.CwdFactory<
+  findTypes.FindToolOptions,
   agentTypes.AgentTool<typeof findSchema>
 > = cwdFactory((cwd, options) => wrapToolDefinition(createFindToolDefinitionImpl(cwd, options)));
+
+const find = {
+  createFindTool,
+  createFindToolDefinition,
+  findToolSystemPromptContribution,
+  relativizeFindResultPath: findSupport.relativizeFindResultPath,
+};
+
+export default find;

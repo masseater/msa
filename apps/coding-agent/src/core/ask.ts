@@ -1,23 +1,21 @@
 import type { TSchema } from "typebox";
 
-import type { ToolDefinition } from "./extensions/types.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
 
-export const ASK_SECTION_NAME = "ask";
+const ASK_SECTION_NAME = "ask";
 
-export const ASK_SECTION_TEXT =
+const ASK_SECTION_TEXT =
   "This turn is an /ask: reply with an answer only. You may propose work, but do not start it. " +
   "Only read-only tools are declared, so nothing can be changed, started, sent, or saved.";
 
-export type PromptMode = "ask";
-
-export function parseAskCommand(text: string): { question: string } | undefined {
-  const match = /^\/ask(?:\s+([\s\S]*))?$/.exec(text.trim());
-  if (!match) return undefined;
+function parseAskCommand(text: string): { question: string } | undefined {
+  const match = /^\/ask(?:\s+([\s\S]*))?$/u.exec(text.trim());
+  if (match === null) return undefined;
   return { question: (match[1] ?? "").trim() };
 }
 
-export function readOnlyVariantOf(
-  tool: ToolDefinition<any, any>,
+function readOnlyVariantOf(
+  tool: extensionsTypesTypes.ToolDefinition<any, any>,
   variant: {
     actions: readonly string[];
 
@@ -26,7 +24,7 @@ export function readOnlyVariantOf(
     promptSnippet: string;
     promptGuidelines?: string[] | undefined;
   },
-): ToolDefinition<any, any> {
+): extensionsTypesTypes.ToolDefinition<any, any> {
   return {
     annotations: { readOnlyHint: true },
     description: variant.description,
@@ -47,10 +45,20 @@ export function readOnlyVariantOf(
   };
 }
 
-export function askDefinition(
-  definition: ToolDefinition<any, any>,
-): ToolDefinition<any, any> | undefined {
+function askDefinition(
+  definition: extensionsTypesTypes.ToolDefinition<any, any>,
+): extensionsTypesTypes.ToolDefinition<any, any> | undefined {
   if (definition.annotations?.readOnlyHint === true) return definition;
   const variant = definition.readOnlyVariant;
   return variant?.annotations?.readOnlyHint === true ? variant : undefined;
 }
+
+const ask = {
+  ASK_SECTION_NAME,
+  ASK_SECTION_TEXT,
+  askDefinition,
+  parseAskCommand,
+  readOnlyVariantOf,
+};
+
+export default ask;

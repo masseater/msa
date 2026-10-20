@@ -2,12 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import SessionManager from "../src/core/session-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { discoverAndLoadExtensions } = loader;
 const { createInMemoryModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =

@@ -1,16 +1,15 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 
-import { BaseOverlay } from "./base-overlay.ts";
-
+import BaseOverlay from "./base-overlay.ts";
 const { matchesKey } = tui;
 
-export class PercentTestComponent extends BaseOverlay {
+export default class PercentTestComponent extends BaseOverlay {
   private config: { name: string; row: number; col: number };
   private done: (result: "next" | "close") => void;
 
   constructor(
-    theme: Theme,
+    theme: codingAgentTypes.Theme,
     config: { name: string; row: number; col: number },
     done: (result: "next" | "close") => void,
   ) {

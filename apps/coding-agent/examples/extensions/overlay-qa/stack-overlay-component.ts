@@ -1,16 +1,20 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 
-import { BaseOverlay } from "./base-overlay.ts";
-
+import BaseOverlay from "./base-overlay.ts";
 const { matchesKey, truncateToWidth } = tui;
 
-export class StackOverlayComponent extends BaseOverlay {
+export default class StackOverlayComponent extends BaseOverlay {
   private num: number;
   private position: string;
   private done: (result: string) => void;
 
-  constructor(theme: Theme, num: number, position: string, done: (result: string) => void) {
+  constructor(
+    theme: codingAgentTypes.Theme,
+    num: number,
+    position: string,
+    done: (result: string) => void,
+  ) {
     super(theme);
     this.num = num;
     this.position = position;

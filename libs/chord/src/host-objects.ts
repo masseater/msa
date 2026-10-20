@@ -9,12 +9,7 @@ import serviceModule from "./service.ts";
 import type serviceTypes from "./service.types.ts";
 import type typesModule from "./types.types.ts";
 
-const {
-  contract: contractModule,
-  errors: errorsModule,
-  HostRegistries,
-  ObjectImpl,
-} = hostObjectsKit;
+const { contract: contractModule, errors: errorsModule, ObjectImpl } = hostObjectsKit;
 
 const { ChordError, invalid } = errorsModule;
 const { canonicalIdentity, normalize } = schemaModule;
@@ -45,7 +40,7 @@ const reaches = (from: objectTypes.ObjectImpl, to: objectTypes.ObjectImpl): bool
   return false;
 };
 
-export default abstract class HostObjects extends HostRegistries {
+export default abstract class HostObjects extends hostObjectsKit.HostRegistries {
   readonly #dying = new Map<string, objectTypes.ObjectImpl>();
 
   protected abstract acquireRemote(

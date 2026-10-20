@@ -1,30 +1,33 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { ExtensionWidgetOptions } from "../../core/extensions/index.ts";
-import { ThemedText } from "./components/themed-text.ts";
-import { type Theme, theme } from "./theme/theme.ts";
+import type extensionsTypes from "../../core/extensions/index.types.ts";
+import ThemedText from "./components/themed-text.ts";
+import type extensionWidgetsTypes from "./extension-widgets.types.ts";
+import themeModule from "./theme/theme.ts";
 
+const { theme } = themeModule;
 const { Container, Spacer, Text } = tuiModule;
-
-type Widget = tuiTypes.Component & { dispose?(): void };
-export type WidgetContent = string[] | ((tui: tuiTypes.TUI, thm: Theme) => Widget);
 
 const MAX_WIDGET_LINES = 10;
 
-export class ExtensionWidgets {
+export default class ExtensionWidgets {
   readonly above = new Container();
   readonly below = new Container();
   private readonly ui: tuiTypes.TUI;
-  private readonly aboveWidgets = new Map<string, Widget>();
-  private readonly belowWidgets = new Map<string, Widget>();
+  private readonly aboveWidgets = new Map<string, extensionWidgetsTypes.Widget>();
+  private readonly belowWidgets = new Map<string, extensionWidgetsTypes.Widget>();
 
   constructor(ui: tuiTypes.TUI) {
     this.ui = ui;
     this.fill();
   }
 
-  set(key: string, content: WidgetContent | undefined, options?: ExtensionWidgetOptions): void {
+  set(
+    key: string,
+    content: extensionWidgetsTypes.WidgetContent | undefined,
+    options?: extensionsTypes.ExtensionWidgetOptions,
+  ): void {
     for (const widgets of [this.aboveWidgets, this.belowWidgets]) {
       widgets.get(key)?.dispose?.();
       widgets.delete(key);

@@ -1,19 +1,18 @@
 import type aiTypes from "@msa/ai/index.types";
-import {
-  type AgentSession,
-  AgentSessionRuntime,
-  type AgentSessionServices,
-  InteractiveMode,
-  SessionManager,
-  createAgentSessionFromServices,
-} from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Levenshtein } from "autoevals";
 import { Clock, Effect } from "effect";
 import { createJudge, describeEval } from "vitest-evals";
 
-import type { MsaCodingAgentInput } from "../src/harness-types.ts";
-import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { RecordingTerminal } from "./recording-terminal.ts";
+import type harnessTypesTypes from "../src/harness-types.ts";
+import harnessModule from "../src/harness.ts";
+import RecordingTerminal from "./recording-terminal.ts";
+import type recordingTerminalTypes from "./recording-terminal.types.ts";
+
+const { AgentSessionRuntime, InteractiveMode, SessionManager, createAgentSessionFromServices } =
+  codingAgent;
+const { createMsaDocumentationEvalHarness } = harnessModule;
 
 const CONTEXT_WINDOW = 272_000;
 const BUILT_IN_CONTEXT_PATTERN = /\d+(?:\.\d+)?%\/272k(?: \(auto\))?/u;
@@ -42,14 +41,14 @@ function normalizeWhitespace(text: string): string {
 }
 
 function createContextMessage(
-  model: NonNullable<AgentSession["model"]>,
+  model: NonNullable<codingAgentTypes.AgentSession["model"]>,
   percent: number,
   timestamp: number,
 ): aiTypes.AssistantMessage {
   const tokens = Math.round((model.contextWindow * percent) / 100);
   return {
     api: model.api,
-    content: [{ type: "text", text: "Context usage fixture" }],
+    content: [{ text: "Context usage fixture", type: "text" }],
     model: model.id,
     provider: model.provider,
     role: "assistant",
@@ -67,12 +66,12 @@ function createContextMessage(
 }
 
 const createOracleRuntime = (
-  session: AgentSession,
+  session: codingAgentTypes.AgentSession,
   agentDir: string,
-  model: NonNullable<AgentSession["model"]>,
+  model: NonNullable<codingAgentTypes.AgentSession["model"]>,
 ) =>
   Effect.gen(function* () {
-    const services: AgentSessionServices = {
+    const services: codingAgentTypes.AgentSessionServices = {
       agentDir,
       cwd: session.sessionManager.getCwd(),
       diagnostics: [],
@@ -96,11 +95,11 @@ const createOracleRuntime = (
   });
 
 const observeFooter = (
-  session: AgentSession,
-  oracleSession: AgentSession,
-  model: NonNullable<AgentSession["model"]>,
-  mode: InteractiveMode,
-  terminal: RecordingTerminal,
+  session: codingAgentTypes.AgentSession,
+  oracleSession: codingAgentTypes.AgentSession,
+  model: NonNullable<codingAgentTypes.AgentSession["model"]>,
+  mode: codingAgentTypes.InteractiveMode,
+  terminal: recordingTerminalTypes.RecordingTerminal,
 ): Effect.Effect<TuiFooterOutput> =>
   Effect.gen(function* () {
     const now = yield* Clock.currentTimeMillis;
@@ -140,7 +139,7 @@ const observeFooter = (
   });
 
 const inspectContextFooter = (
-  session: AgentSession,
+  session: codingAgentTypes.AgentSession,
   agentDir: string,
 ): Effect.Effect<TuiFooterOutput> =>
   Effect.gen(function* () {
@@ -231,7 +230,7 @@ const judgeFooter = (output: TuiFooterOutput) =>
     };
   });
 
-const contextFooterJudge = createJudge<MsaCodingAgentInput, TuiFooterOutput>(
+const contextFooterJudge = createJudge<harnessTypesTypes.MsaCodingAgentInput, TuiFooterOutput>(
   "ContextFooterJudge",
   ({ output }) => Effect.runPromise(judgeFooter(output)),
 );

@@ -2,11 +2,13 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { describe, expect, test } from "vite-plus/test";
 
-import { AssistantMessageComponent } from "../src/modes/interactive/components/assistant-message.ts";
-import { UserMessageComponent } from "../src/modes/interactive/components/user-message.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import AssistantMessageComponent from "../src/modes/interactive/components/assistant-message.ts";
+import UserMessageComponent from "../src/modes/interactive/components/user-message.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 
+const { initTheme } = themeModule;
+const { stripAnsi } = ansi;
 const { currentTimeMillis } = testing;
 
 function createAssistantMessage(

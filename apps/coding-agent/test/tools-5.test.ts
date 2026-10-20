@@ -2,14 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { executeBashWithOperations } from "../src/core/bash-executor.ts";
-import { envSnapshot } from "../src/core/process-env.ts";
-import {
-  type BashOperations,
-  createBashTool,
-  createLocalBashOperations,
-} from "../src/core/tools/bash.ts";
+import bashExecutor from "../src/core/bash-executor.ts";
+import processEnv from "../src/core/process-env.ts";
+import bashModule from "../src/core/tools/bash.ts";
+import type bashTypes from "../src/core/tools/bash.types.ts";
 import tools5Support from "./tools-5-support.ts";
+
+const { createBashTool, createLocalBashOperations } = bashModule;
+const { envSnapshot } = processEnv;
+const { executeBashWithOperations } = bashExecutor;
 
 const { getTextOutput } = tools5Support;
 
@@ -48,7 +49,7 @@ const shouldCoalesceStreamingUpdatesForChattyOutput = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const operations: BashOperations = {
+      const operations: bashTypes.BashOperations = {
         exec: (_command, _cwd, { onData }) =>
           effectRunPromise(
             Effect.gen(function* () {
@@ -81,7 +82,7 @@ const shouldNotCountATrailingNewlineAs = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const operations: BashOperations = {
+      const operations: bashTypes.BashOperations = {
         exec: (_command, _cwd, { onData }) =>
           effectRunPromise(
             Effect.gen(function* () {
@@ -116,7 +117,7 @@ const shouldDecodeUtf8CharactersSplitAcross = () =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       const euro = Buffer.from("€\n", "utf-8");
-      const operations: BashOperations = {
+      const operations: bashTypes.BashOperations = {
         exec: (_command, _cwd, { onData }) =>
           effectRunPromise(
             Effect.gen(function* () {

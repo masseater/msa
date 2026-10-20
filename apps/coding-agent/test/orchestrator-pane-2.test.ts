@@ -2,12 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { viewHelpers } from "../src/modes/interactive/components/tasks-view-helpers.ts";
-import { TasksView } from "../src/modes/interactive/components/tasks-view.ts";
-import { ThreadPane } from "../src/modes/interactive/components/thread-pane.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import tasksViewHelpers from "../src/modes/interactive/components/tasks-view-helpers.ts";
+import TasksView from "../src/modes/interactive/components/tasks-view.ts";
+import ThreadPane from "../src/modes/interactive/components/thread-pane.ts";
+import ansi from "../src/utils/ansi.ts";
 import orchestratorPaneFixtures from "./orchestrator-pane-fixtures.ts";
 import orchestratorPaneScreen from "./orchestrator-pane-screen.ts";
+const { stripAnsi } = ansi;
+const { viewHelpers } = tasksViewHelpers;
 
 const { awaited, runTest } = testing;
 

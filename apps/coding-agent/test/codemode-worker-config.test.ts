@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { resolveCodemodeWorkerSpecifier } from "../src/config.ts";
+import config from "../src/config.ts";
+
+const { resolveCodemodeWorkerSpecifier } = config;
 
 const usesARelativeSourceEntrypointInBun = () => {
   expect(resolveCodemodeWorkerSpecifier("bun-binary", "file:///B:/~BUN/root/config.js")).toBe(

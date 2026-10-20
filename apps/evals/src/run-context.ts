@@ -1,16 +1,22 @@
-import { type InlineExtension, getAgentDir } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 import type { JsonValue } from "vitest-evals/harness";
 
-import { resolveModelSelection } from "./model-selection.ts";
-import { files, pathOperations, readEnv } from "./platform.ts";
-import type { HostSelection, Options, RunPaths, RunState } from "./run-types.ts";
-import { resolveSandboxIdentity } from "./sandbox.ts";
+import modelSelection from "./model-selection.ts";
+import platform from "./platform.ts";
+import type runTypesTypes from "./run-types.ts";
+import sandbox from "./sandbox.ts";
+
+const { getAgentDir } = codingAgent;
+const { files, pathOperations, readEnv } = platform;
+const { resolveSandboxIdentity } = sandbox;
+const { resolveModelSelection } = modelSelection;
 
 const systemPromptTransform = <TOutput extends JsonValue>(
-  options: Options<TOutput>,
+  options: runTypesTypes.Options<TOutput>,
   onForced: (prompt: string) => void,
-): InlineExtension[] => {
+): codingAgentTypes.InlineExtension[] => {
   const transform = options.transformSystemPrompt;
   if (transform === undefined) return [];
   return [
@@ -28,26 +34,28 @@ const systemPromptTransform = <TOutput extends JsonValue>(
   ];
 };
 
-const resolveHost = <TOutput extends JsonValue>(options: Options<TOutput>): HostSelection => ({
+const resolveHost = <TOutput extends JsonValue>(
+  options: runTypesTypes.Options<TOutput>,
+): runTypesTypes.HostSelection => ({
   authPath: pathOperations.join(getAgentDir(), "auth.json"),
   sandboxIdentity: resolveSandboxIdentity(),
   selection: resolveModelSelection(options.model, {
-    MSA_PROVIDER: readEnv("MSA_PROVIDER"),
     MSA_MODEL: readEnv("MSA_MODEL"),
+    MSA_PROVIDER: readEnv("MSA_PROVIDER"),
   }),
 });
 
-const pathsUnder = (root: string): RunPaths => ({
+const pathsUnder = (root: string): runTypesTypes.RunPaths => ({
   agentDir: pathOperations.join(root, "agent"),
   root,
   workspace: pathOperations.join(root, "workspace"),
 });
 
-export const createRunContext = <TOutput extends JsonValue>(options: Options<TOutput>) =>
+const createRunContext = <TOutput extends JsonValue>(options: runTypesTypes.Options<TOutput>) =>
   Effect.gen(function* () {
     const host = resolveHost(options);
     const paths = pathsUnder(yield* files.makeTempDirectory("msa-eval-"));
-    const state: RunState<TOutput> = {
+    const state: runTypesTypes.RunState<TOutput> = {
       diagnostics: undefined,
       forcedSystemPrompt: undefined,
       result: undefined,
@@ -59,3 +67,9 @@ export const createRunContext = <TOutput extends JsonValue>(options: Options<TOu
     });
     return { extensionFactories, host, paths, state };
   });
+
+const runContext = {
+  createRunContext,
+};
+
+export default runContext;

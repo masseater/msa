@@ -14,15 +14,23 @@ const duplicateModifierPattern = modifiers
   .map((modifier) => `${modifier}\\+.*${modifier}\\+`)
   .join("|");
 
-export const KeyIdSchema = Type.Unsafe<tuiTypes.KeyId>(
+const KeyIdSchema = Type.Unsafe<tuiTypes.KeyId>(
   Type.String({
     description: "Key identifier with optional ctrl, shift, alt, or super modifiers.",
     pattern: `^(?!.*(?:${duplicateModifierPattern}))(?:(?:${modifiers.join("|")})\\+){0,4}${baseKeyPattern}$`,
   }),
 );
 
-export function keybindingValueSchema(options?: TSchemaOptions) {
+function keybindingValueSchema(options?: TSchemaOptions) {
   return Type.Union([KeyIdSchema, Type.Array(KeyIdSchema)], options);
 }
 
-export const KeybindingValueSchema = keybindingValueSchema();
+const KeybindingValueSchema = keybindingValueSchema();
+
+const keyIdSchema = {
+  KeyIdSchema,
+  KeybindingValueSchema,
+  keybindingValueSchema,
+};
+
+export default keyIdSchema;

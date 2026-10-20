@@ -3,8 +3,11 @@ import { Effect } from "effect";
 import { ChildProcess } from "effect/process";
 import { type TestContext, afterEach, describe, expect, it } from "vite-plus/test";
 
-import { containerState, findPodman, lgtmAction } from "../src/core/observability/lgtm.ts";
-import { readEnv } from "../src/core/process-env.ts";
+import lgtm from "../src/core/observability/lgtm.ts";
+import processEnv from "../src/core/process-env.ts";
+
+const { containerState, findPodman, lgtmAction } = lgtm;
+const { readEnv } = processEnv;
 
 const { provideNode, randomSuffix, runTest } = testing;
 

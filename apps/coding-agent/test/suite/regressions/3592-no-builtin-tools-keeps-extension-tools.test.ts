@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { ORCHESTRATOR_TOOL_NAMES } from "../../../src/core/orchestrator/tool-names.ts";
+import toolNames from "../../../src/core/orchestrator/tool-names.ts";
 import regression3592Support from "./3592-no-builtin-tools-keeps-extension-tools-support.ts";
+
+const { ORCHESTRATOR_TOOL_NAMES } = toolNames;
 
 const { cleanupDirs, createSession, prepareDirs } = regression3592Support;
 

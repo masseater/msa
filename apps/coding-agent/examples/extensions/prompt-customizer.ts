@@ -1,6 +1,6 @@
-import type { BuildSystemPromptOptions, ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-function buildToolGuidance(options: BuildSystemPromptOptions): string {
+function buildToolGuidance(options: codingAgentTypes.BuildSystemPromptOptions): string {
   const hasTool = (name: string) => options.selectedTools?.includes(name) ?? false;
   const rules: string[] = [];
 
@@ -26,7 +26,7 @@ function buildToolGuidance(options: BuildSystemPromptOptions): string {
   return rules.join("\n");
 }
 
-export default function promptCustomizer(msa: ExtensionAPI) {
+export default function promptCustomizer(msa: codingAgentTypes.ExtensionAPI) {
   msa.on("before_agent_start", (event) => {
     const guidance = buildToolGuidance(event.systemPromptOptions);
     if (guidance.length > 0) {

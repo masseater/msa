@@ -3,13 +3,10 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  clearExtensionCache,
-  loadExtensions,
-  loadExtensionsCached,
-} from "../../../src/core/extensions/loader.ts";
-import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
+import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
+import loaderModule from "../../../src/core/extensions/loader.ts";
 
+const { clearExtensionCache, loadExtensions, loadExtensionsCached } = loaderModule;
 const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);

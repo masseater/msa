@@ -6,11 +6,10 @@ import terminalCapabilities from "../src/terminal-capabilities.ts";
 import type tuiComponentTypes from "../src/tui-component.types.ts";
 import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { overrideEnv } = env;
 const { getCellDimensions, resetCapabilitiesCache, setCellDimensions } = terminalCapabilities;
-const { VirtualTerminal } = virtualTerminal;
 
 class InputRecorder implements tuiComponentTypes.Component {
   readonly inputs: string[] = [];

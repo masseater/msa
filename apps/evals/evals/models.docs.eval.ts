@@ -1,13 +1,17 @@
 import { StructuredOutputJudge, describeEval } from "vitest-evals";
 
-import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { type AddedModelOutput, inspectAddedModel } from "./configured-runtime.ts";
+import harnessModule from "../src/harness.ts";
+import configuredRuntime from "./configured-runtime.ts";
+import type configuredRuntimeTypes from "./configured-runtime.types.ts";
+
+const { inspectAddedModel } = configuredRuntime;
+const { createMsaDocumentationEvalHarness } = harnessModule;
 
 const PROVIDER_ID = "openai";
 const MODEL_ID = "fixture-chat";
 const MODEL_NAME = "Fixture Chat";
 
-const expected: AddedModelOutput = {
+const expected: configuredRuntimeTypes.AddedModelOutput = {
   result: {
     existingModelsPreserved: true,
     model: {

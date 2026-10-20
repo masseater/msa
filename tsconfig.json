@@ -27,12 +27,14 @@
       "@msa/chord/state.types": ["./libs/chord/src/state.types.ts"],
       "@msa/telemetry": ["./libs/telemetry/src/index.ts"],
       "@msa/telemetry/index.types": ["./libs/telemetry/src/index.types.ts"],
+      "@msa/telemetry/*": ["./libs/telemetry/src/*"],
       "@msa/telemetry/otlp": ["./libs/telemetry/src/otlp.ts"],
       "@msa/telemetry/otlp.types": ["./libs/telemetry/src/otlp.types.ts"],
       "@msa/telemetry/testing": ["./libs/telemetry/src/testing/index.ts"],
       "@msa/telemetry/testing.types": ["./libs/telemetry/src/testing/index.types.ts"],
       "@msa/codemode": ["./libs/codemode/src/index.ts"],
       "@msa/codemode/index.types": ["./libs/codemode/src/index.types.ts"],
+      "@msa/codemode/*": ["./libs/codemode/src/*"],
       "@msa/codemode/types": ["./libs/codemode/src/types.ts"],
       "@msa/codemode/cloudflare": ["./libs/codemode/src/cloudflare.ts"],
       "@msa/codemode/cloudflare.types": ["./libs/codemode/src/cloudflare.types.ts"],
@@ -46,6 +48,7 @@
       "@msa/codemode/worker-main": ["./libs/codemode/src/runtime/worker-main.ts"],
       "@msa/mcp": ["./libs/mcp/src/index.ts"],
       "@msa/mcp/index.types": ["./libs/mcp/src/index.types.ts"],
+      "@msa/mcp/*": ["./libs/mcp/src/*"],
       "@msa/mcp/oauth": ["./libs/mcp/src/oauth/index.ts"],
       "@msa/mcp/oauth.types": ["./libs/mcp/src/oauth/index.types.ts"],
       "@msa/mcp/testing": ["./libs/mcp/src/testing/index.ts"],
@@ -97,7 +100,9 @@
       "@msa/testing/index.types": ["./libs/testing/src/index.types.ts"],
       "@msa/agent-core": ["./libs/agent/src/index.ts"],
       "@msa/agent-core/index.types": ["./libs/agent/src/index.types.ts"],
+      "@msa/agent-core/*": ["./libs/agent/src/*"],
       "@msa/coding-agent": ["./apps/coding-agent/src/index.ts"],
+      "@msa/coding-agent/index.types": ["./apps/coding-agent/src/index.types.ts"],
       "@msa/coding-agent/hooks": ["./apps/coding-agent/src/core/hooks/index.ts"],
       "@msa/coding-agent/*": ["./apps/coding-agent/src/*"],
       "typebox": ["./node_modules/typebox"],
@@ -121,5 +126,5 @@
     "apps/coding-agent/examples/**/*",
     "libs/agent/examples/**/*"
   ],
-  "exclude": ["**/dist/**", "apps/coding-agent/examples/extensions/gondolin/**"]
+  "exclude": ["**/dist/**"]
 }

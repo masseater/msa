@@ -5,20 +5,17 @@ import type compatTypes from "@msa/ai/compat.types";
 import type aiTypes from "@msa/ai/index.types";
 import { Effect, Function as Fn } from "effect";
 
-import { convertToLlm } from "../messages.ts";
-import {
-  ToolFailure,
-  currentTimeMillis,
-  fromPromise,
-  platformRuntime,
-  unwrapForeign,
-} from "../platform/index.ts";
-import {
-  SUMMARIZATION_PROMPT,
-  TURN_PREFIX_SUMMARIZATION_PROMPT,
-  UPDATE_SUMMARIZATION_PROMPT,
-} from "./compaction-prompts.ts";
-import { SUMMARIZATION_SYSTEM_PROMPT, serializeConversation } from "./utils.ts";
+import messagesModule from "../messages.ts";
+import platform from "../platform/index.ts";
+import compactionPrompts from "./compaction-prompts.ts";
+import type compactionSummaryTypes from "./compaction-summary.types.ts";
+import utils from "./utils.ts";
+
+const { ToolFailure, currentTimeMillis, fromPromise, unwrapForeign } = platform;
+const { SUMMARIZATION_SYSTEM_PROMPT, serializeConversation } = utils;
+const { SUMMARIZATION_PROMPT, TURN_PREFIX_SUMMARIZATION_PROMPT, UPDATE_SUMMARIZATION_PROMPT } =
+  compactionPrompts;
+const { convertToLlm } = messagesModule;
 
 const { contentText, normalizeContext, retryAssistantCall, uuidv7 } = ai;
 const { completeSimple } = compat;
@@ -36,7 +33,7 @@ const getSummarizationFailureImpl = (
   return undefined;
 };
 
-export const getSummarizationFailure: {
+const getSummarizationFailure: {
   (label: string): (response: compatTypes.AssistantMessage) => string | undefined;
   (response: compatTypes.AssistantMessage, label: string): string | undefined;
 } = Fn.dual(2, getSummarizationFailureImpl);
@@ -90,7 +87,7 @@ const completeSummarizationImpl = (
   const produce = (): Promise<compatTypes.AssistantMessage> =>
     streamFn === undefined
       ? completeSimple(model, context, requestOptions)
-      : platformRuntime.runPromise(
+      : Effect.runPromise(
           unwrapForeign(
             fromPromise(() => streamFn(model, context, requestOptions)).pipe(
               Effect.flatMap((stream) => fromPromise(() => stream.result())),
@@ -100,33 +97,17 @@ const completeSummarizationImpl = (
   return retryAssistantCall(produce, retry, requestOptions.signal, callbacks);
 };
 
-export const completeSummarization: {
+const completeSummarization: {
   (...rest: CompleteRest): (model: compatTypes.Model<any>) => Promise<compatTypes.AssistantMessage>;
   (model: compatTypes.Model<any>, ...rest: CompleteRest): Promise<compatTypes.AssistantMessage>;
 } = Fn.dual((args) => !("messages" in (args[0] as object)), completeSummarizationImpl);
-
-export type SummaryRest = [
-  model: compatTypes.Model<any>,
-  reserveTokens: number,
-  apiKey: string | undefined,
-  headers?: Record<string, string>,
-  signal?: AbortSignal,
-  customInstructions?: string,
-  previousSummary?: string,
-  thinkingLevel?: agentTypes.ThinkingLevel,
-  streamFn?: agentTypes.StreamFn,
-  env?: Record<string, string>,
-  retry?: aiTypes.RetryPolicy,
-  callbacks?: aiTypes.RetryCallbacks,
-  sessionId?: string,
-];
 
 function buildSummarizationContext(promptText: string): compatTypes.TranscriptContext {
   return normalizeContext({
     messages: [
       {
+        content: [{ text: promptText, type: "text" }],
         role: "user",
-        content: [{ type: "text", text: promptText }],
         timestamp: currentTimeMillis(),
       },
     ],
@@ -185,7 +166,7 @@ const requireSummary = (
 
 const summaryWithUsage = Effect.fn("generateSummaryWithUsage")(function* (
   currentMessages: agentTypes.AgentMessage[],
-  ...rest: SummaryRest
+  ...rest: compactionSummaryTypes.SummaryRest
 ) {
   const [
     model,
@@ -228,52 +209,42 @@ const summaryWithUsage = Effect.fn("generateSummaryWithUsage")(function* (
 
 const generateSummaryWithUsageImpl = (
   currentMessages: agentTypes.AgentMessage[],
-  ...rest: SummaryRest
+  ...rest: compactionSummaryTypes.SummaryRest
 ): Promise<{ text: string; usage: compatTypes.Usage }> =>
-  platformRuntime.runPromise(unwrapForeign(summaryWithUsage(currentMessages, ...rest)));
+  Effect.runPromise(unwrapForeign(summaryWithUsage(currentMessages, ...rest)));
 
-export const generateSummaryWithUsage: {
+const generateSummaryWithUsage: {
   (
-    ...rest: SummaryRest
+    ...rest: compactionSummaryTypes.SummaryRest
   ): (
     currentMessages: agentTypes.AgentMessage[],
   ) => Promise<{ text: string; usage: compatTypes.Usage }>;
   (
     currentMessages: agentTypes.AgentMessage[],
-    ...rest: SummaryRest
+    ...rest: compactionSummaryTypes.SummaryRest
   ): Promise<{ text: string; usage: compatTypes.Usage }>;
 } = Fn.dual((args) => Array.isArray(args[0]), generateSummaryWithUsageImpl);
 
 const generateSummaryImpl = (
   currentMessages: agentTypes.AgentMessage[],
-  ...rest: SummaryRest
+  ...rest: compactionSummaryTypes.SummaryRest
 ): Promise<string> =>
-  platformRuntime.runPromise(
+  Effect.runPromise(
     unwrapForeign(summaryWithUsage(currentMessages, ...rest).pipe(Effect.map(({ text }) => text))),
   );
 
-export const generateSummary: {
-  (...rest: SummaryRest): (currentMessages: agentTypes.AgentMessage[]) => Promise<string>;
-  (currentMessages: agentTypes.AgentMessage[], ...rest: SummaryRest): Promise<string>;
+const generateSummary: {
+  (
+    ...rest: compactionSummaryTypes.SummaryRest
+  ): (currentMessages: agentTypes.AgentMessage[]) => Promise<string>;
+  (
+    currentMessages: agentTypes.AgentMessage[],
+    ...rest: compactionSummaryTypes.SummaryRest
+  ): Promise<string>;
 } = Fn.dual((args) => Array.isArray(args[0]), generateSummaryImpl);
 
-export interface TurnPrefixInput {
-  messages: agentTypes.AgentMessage[];
-  model: compatTypes.Model<any>;
-  reserveTokens: number;
-  apiKey: string | undefined;
-  headers: Record<string, string> | undefined;
-  env: Record<string, string> | undefined;
-  signal: AbortSignal | undefined;
-  thinkingLevel: agentTypes.ThinkingLevel | undefined;
-  streamFn: agentTypes.StreamFn | undefined;
-  retry: aiTypes.RetryPolicy | undefined;
-  callbacks: aiTypes.RetryCallbacks | undefined;
-  sessionId: string | undefined;
-}
-
-export const generateTurnPrefixSummary = Effect.fn("generateTurnPrefixSummary")(function* (
-  input: TurnPrefixInput,
+const generateTurnPrefixSummary = Effect.fn("generateTurnPrefixSummary")(function* (
+  input: compactionSummaryTypes.TurnPrefixInput,
 ) {
   const { messages, model, reserveTokens, streamFn, retry, callbacks } = input;
   const conversationText = serializeConversation(convertToLlm(messages));
@@ -304,4 +275,13 @@ export const generateTurnPrefixSummary = Effect.fn("generateTurnPrefixSummary")(
   );
 });
 
-export { summaryWithUsage };
+const compactionSummary = {
+  completeSummarization,
+  generateSummary,
+  generateSummaryWithUsage,
+  generateTurnPrefixSummary,
+  getSummarizationFailure,
+  summaryWithUsage,
+};
+
+export default compactionSummary;

@@ -1,55 +1,59 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Theme } from "../../modes/interactive/theme/theme.ts";
-import type { CustomMessage } from "../messages.ts";
-import type { CustomEntry } from "../session-manager.ts";
-import type { SourceInfo } from "../source-info.ts";
-import type { ExtensionCommandContext, ExtensionContext } from "./types-context.ts";
+import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
+import type messagesTypes from "../messages.types.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import type sourceInfoTypes from "../source-info.types.ts";
+import type typesContextTypes from "./types-context.ts";
 
-export interface MessageRenderOptions {
-  expanded: boolean;
-  outputPad: number;
+declare namespace typesRenderTypes {
+  interface MessageRenderOptions {
+    expanded: boolean;
+    outputPad: number;
+  }
+
+  interface MarkdownTransformContext {
+    messageType: "user" | "assistant" | "assistant-thinking";
+    isStreaming: boolean;
+    availableWidth: number;
+  }
+
+  type MarkdownTransformer = (markdown: string, context: MarkdownTransformContext) => string;
+
+  interface EntryRenderOptions {
+    expanded: boolean;
+  }
+
+  type MessageRenderer<T = unknown> = (
+    message: messagesTypes.CustomMessage<T>,
+    options: MessageRenderOptions,
+    theme: themeTypes.Theme,
+  ) => tuiTypes.Component | undefined;
+
+  type EntryRenderer<T = unknown> = (
+    entry: sessionManagerTypes.CustomEntry<T>,
+    options: EntryRenderOptions,
+    theme: themeTypes.Theme,
+  ) => tuiTypes.Component | undefined;
+
+  interface RegisteredCommand {
+    name: string;
+    sourceInfo: sourceInfoTypes.SourceInfo;
+    description?: string;
+    getArgumentCompletions?: (
+      argumentPrefix: string,
+    ) => tuiTypes.AutocompleteItem[] | null | Promise<tuiTypes.AutocompleteItem[] | null>;
+    handler: (args: string, ctx: typesContextTypes.ExtensionCommandContext) => Promise<void>;
+  }
+
+  interface ResolvedCommand extends RegisteredCommand {
+    invocationName: string;
+  }
+
+  type ExtensionHandler<E, R = undefined> = (
+    event: E,
+    ctx: typesContextTypes.ExtensionContext,
+  ) => Promise<R | void> | R | void;
 }
 
-export interface MarkdownTransformContext {
-  messageType: "user" | "assistant" | "assistant-thinking";
-  isStreaming: boolean;
-  availableWidth: number;
-}
-
-export type MarkdownTransformer = (markdown: string, context: MarkdownTransformContext) => string;
-
-export interface EntryRenderOptions {
-  expanded: boolean;
-}
-
-export type MessageRenderer<T = unknown> = (
-  message: CustomMessage<T>,
-  options: MessageRenderOptions,
-  theme: Theme,
-) => tuiTypes.Component | undefined;
-
-export type EntryRenderer<T = unknown> = (
-  entry: CustomEntry<T>,
-  options: EntryRenderOptions,
-  theme: Theme,
-) => tuiTypes.Component | undefined;
-
-export interface RegisteredCommand {
-  name: string;
-  sourceInfo: SourceInfo;
-  description?: string;
-  getArgumentCompletions?: (
-    argumentPrefix: string,
-  ) => tuiTypes.AutocompleteItem[] | null | Promise<tuiTypes.AutocompleteItem[] | null>;
-  handler: (args: string, ctx: ExtensionCommandContext) => Promise<void>;
-}
-
-export interface ResolvedCommand extends RegisteredCommand {
-  invocationName: string;
-}
-
-export type ExtensionHandler<E, R = undefined> = (
-  event: E,
-  ctx: ExtensionContext,
-) => Promise<R | void> | R | void;
+export type { typesRenderTypes as default };

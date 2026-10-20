@@ -3,10 +3,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { VERSION } from "../src/config.ts";
-import { REMOTE_CATALOG_MODEL_TYPES } from "../src/core/remote-catalog-provider.ts";
+import config from "../src/config.ts";
+import remoteCatalogProvider from "../src/core/remote-catalog-provider.ts";
 import remoteCatalogProviderSupport from "./remote-catalog-provider-support.ts";
 import remoteCatalogProviderSupport2 from "./remote-catalog-provider-support2.ts";
+
+const { VERSION } = config;
+const { REMOTE_CATALOG_MODEL_TYPES } = remoteCatalogProvider;
 
 const { InMemoryModelsStore, createModels } = ai;
 

@@ -1,7 +1,9 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { files, pathOperations } from "./platform.ts";
+import platform from "./platform.ts";
+
+const { files, pathOperations } = platform;
 
 const seedFile = (workspace: string, name: string, content: string): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -21,7 +23,7 @@ const seedFile = (workspace: string, name: string, content: string): Effect.Effe
     yield* files.writeFileString(path, content, 0o600);
   });
 
-export const seedWorkspace: {
+const seedWorkspace: {
   (
     fixtures: Readonly<Record<string, string>> | undefined,
   ): (workspace: string) => Effect.Effect<void>;
@@ -38,3 +40,9 @@ export const seedWorkspace: {
       { discard: true },
     ),
 );
+
+const workspace = {
+  seedWorkspace,
+};
+
+export default workspace;

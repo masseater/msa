@@ -1,19 +1,27 @@
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../../core/awaiting.ts";
-import type { ExtensionAPI, ExtensionCommandContext } from "../../core/extensions/types.ts";
-import { toErrorMessage } from "../../utils/errors.ts";
-import {
-  LlamaClient,
-  type LlamaModelInfo,
-  formatBytes,
-  normalizeLlamaServerUrl,
-} from "./client.ts";
-import { HuggingFaceClient, findHuggingFaceToken } from "./huggingface.ts";
-import { LLAMA_PROVIDER_ID, createLlamaProvider } from "./provider.ts";
-import { type LlamaUi, runWithProgress, showLlamaUi } from "./ui.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import type typesContextTypes from "../../core/extensions/types-context.ts";
+import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import errorsModule from "../../utils/errors.ts";
+import clientModule from "./client.ts";
+import type clientTypes from "./client.types.ts";
+import HuggingFaceClient from "./hugging-face-client.ts";
+import huggingface from "./huggingface.ts";
+import type huggingfaceTypes from "./huggingface.types.ts";
+import LlamaClient from "./llama-client.ts";
+import providerModule from "./provider.ts";
+import uiModule from "./ui.ts";
+import type uiTypes from "./ui.types.ts";
 
-function modelIsLoaded(model: LlamaModelInfo): boolean {
+const { formatBytes, normalizeLlamaServerUrl } = clientModule;
+const { toErrorMessage } = errorsModule;
+const { awaited, awaiting } = awaitingModule;
+const { LLAMA_PROVIDER_ID, createLlamaProvider } = providerModule;
+const { runWithProgress, showLlamaUi } = uiModule;
+const { findHuggingFaceToken } = huggingface;
+
+function modelIsLoaded(model: clientTypes.LlamaModelInfo): boolean {
   return model.status.value === "loaded" || model.status.value === "sleeping";
 }
 
@@ -37,7 +45,9 @@ function parseHuggingFaceModel(value: string): { repository: string; quantizatio
     : { quantization: value.slice(colon + 1), repository: value.slice(0, colon) };
 }
 
-function configuredClient(ctx: ExtensionCommandContext): Promise<LlamaClient | undefined> {
+function configuredClient(
+  ctx: extensionsTypesTypes.ExtensionCommandContext,
+): Promise<clientTypes.LlamaClient | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       const result = yield* awaited(ctx.modelRegistry.getProviderAuth(LLAMA_PROVIDER_ID));
@@ -56,15 +66,15 @@ function configuredClient(ctx: ExtensionCommandContext): Promise<LlamaClient | u
   );
 }
 
-export default function llamaExtension(msa: ExtensionAPI): void {
+export default function llamaExtension(msa: extensionsTypesTypes.ExtensionAPI): void {
   const provider = createLlamaProvider();
   msa.registerProvider(provider.provider);
 
   const syncCatalog = (
-    ctx: ExtensionCommandContext,
-    client: LlamaClient,
-    catalog?: LlamaModelInfo[],
-  ): Promise<LlamaModelInfo[]> =>
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    client: clientTypes.LlamaClient,
+    catalog?: clientTypes.LlamaModelInfo[],
+  ): Promise<clientTypes.LlamaModelInfo[]> =>
     Effect.runPromise(
       awaiting(function* () {
         const signal = AbortSignal.timeout(15_000);
@@ -87,11 +97,11 @@ export default function llamaExtension(msa: ExtensionAPI): void {
     );
 
   const loadModel = (
-    ctx: ExtensionCommandContext,
-    ui: LlamaUi,
-    client: LlamaClient,
-    catalog: LlamaModelInfo[],
-    target: LlamaModelInfo,
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    ui: uiTypes.LlamaUi,
+    client: clientTypes.LlamaClient,
+    catalog: clientTypes.LlamaModelInfo[],
+    target: clientTypes.LlamaModelInfo,
   ): Promise<void> =>
     Effect.runPromise(
       awaiting(function* () {
@@ -122,17 +132,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         }
 
         try {
-          const result = yield* awaited(
-            runWithProgress(ui, {
-              cancel: () => client.unload(target.id),
-              cancelMessage: target.id,
-              cancelTitle: "Stop loading?",
-              initialMessage: "Starting…",
-              model: target.id,
-              run: (signal, update) => client.loadAndWait(target.id, update, signal),
-              title: "Loading model",
-            }),
-          );
+          const result = yield* loadModelPart1(ui, client, target);
           if (result.cancelled) {
             if (replace) yield* awaited(restoreLoaded());
             return;
@@ -156,10 +156,10 @@ export default function llamaExtension(msa: ExtensionAPI): void {
     );
 
   const unloadModel = (
-    ctx: ExtensionCommandContext,
-    ui: LlamaUi,
-    client: LlamaClient,
-    model: LlamaModelInfo,
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    ui: uiTypes.LlamaUi,
+    client: clientTypes.LlamaClient,
+    model: clientTypes.LlamaModelInfo,
   ): Promise<void> =>
     Effect.runPromise(
       awaiting(function* () {
@@ -171,9 +171,9 @@ export default function llamaExtension(msa: ExtensionAPI): void {
     );
 
   const downloadModel = (
-    ctx: ExtensionCommandContext,
-    ui: LlamaUi,
-    client: LlamaClient,
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    ui: uiTypes.LlamaUi,
+    client: clientTypes.LlamaClient,
   ): Promise<void> =>
     Effect.runPromise(
       awaiting(function* () {
@@ -215,21 +215,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
           quantization = details.quantizations[options.indexOf(choice)]?.name;
           if (quantization === undefined || quantization === "") return;
         }
-        const model =
-          quantization !== undefined && quantization !== ""
-            ? `${details.id}:${quantization}`
-            : details.id;
-        const result = yield* awaited(
-          runWithProgress(ui, {
-            cancel: () => client.unload(model),
-            cancelMessage: model,
-            cancelTitle: "Stop download?",
-            initialMessage: "Starting…",
-            model,
-            run: (signal, update) => client.downloadAndWait(model, update, signal),
-            title: "Downloading model",
-          }),
-        );
+        const { result, model } = yield* downloadModelPart1(quantization, details, ui, client);
         if (result.cancelled) return;
         yield* awaited(syncCatalog(ctx, client, result.value));
         ctx.ui.notify(`Downloaded ${model}`);
@@ -251,7 +237,7 @@ export default function llamaExtension(msa: ExtensionAPI): void {
             showLlamaUi(ctx, (ui) =>
               Effect.runPromise(
                 awaiting(function* () {
-                  const readCatalog = (): Promise<LlamaModelInfo[] | undefined> =>
+                  const readCatalog = (): Promise<clientTypes.LlamaModelInfo[] | undefined> =>
                     Effect.runPromise(
                       awaiting(function* () {
                         while (true) {
@@ -277,17 +263,16 @@ export default function llamaExtension(msa: ExtensionAPI): void {
                     if (action.type === "close") return;
                     let actionError: unknown;
                     try {
-                      if (action.type === "download")
-                        yield* awaited(downloadModel(ctx, ui, client));
-                      else if (modelIsLoaded(action.model))
-                        yield* awaited(unloadModel(ctx, ui, client, action.model));
-                      else if (action.model.status.value === "unloaded")
-                        yield* awaited(loadModel(ctx, ui, client, catalog, action.model));
-                      else
-                        ctx.ui.notify(
-                          `${action.model.id} is ${action.model.status.value}`,
-                          "warning",
-                        );
+                      yield* handlerPart1(
+                        action,
+                        downloadModel,
+                        ctx,
+                        ui,
+                        client,
+                        unloadModel,
+                        loadModel,
+                        catalog,
+                      );
                     } catch (error) {
                       actionError = error;
                     }
@@ -305,4 +290,78 @@ export default function llamaExtension(msa: ExtensionAPI): void {
         }),
       ),
   });
+}
+
+function* downloadModelPart1(
+  quantization: string | undefined,
+  details: huggingfaceTypes.HuggingFaceModelDetails,
+  ui: uiTypes.LlamaUi,
+  client: LlamaClient,
+) {
+  const model =
+    quantization !== undefined && quantization !== ""
+      ? `${details.id}:${quantization}`
+      : details.id;
+  const result = yield* awaited(
+    runWithProgress(ui, {
+      cancel: () => client.unload(model),
+      cancelMessage: model,
+      cancelTitle: "Stop download?",
+      initialMessage: "Starting…",
+      model,
+      run: (signal, update) => client.downloadAndWait(model, update, signal),
+      title: "Downloading model",
+    }),
+  );
+  return { model, result };
+}
+
+function* handlerPart1(
+  action: { type: "model"; model: clientTypes.LlamaModelInfo } | { type: "download" },
+  downloadModel: (
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    ui: uiTypes.LlamaUi,
+    client: clientTypes.LlamaClient,
+  ) => Promise<void>,
+  ctx: typesContextTypes.ExtensionCommandContext,
+  ui: uiTypes.LlamaUi,
+  client: LlamaClient,
+  unloadModel: (
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    ui: uiTypes.LlamaUi,
+    client: clientTypes.LlamaClient,
+    model: clientTypes.LlamaModelInfo,
+  ) => Promise<void>,
+  loadModel: (
+    ctx: extensionsTypesTypes.ExtensionCommandContext,
+    ui: uiTypes.LlamaUi,
+    client: clientTypes.LlamaClient,
+    catalog: clientTypes.LlamaModelInfo[],
+    target: clientTypes.LlamaModelInfo,
+  ) => Promise<void>,
+  catalog: clientTypes.LlamaModelInfo[],
+) {
+  if (action.type === "download") yield* awaited(downloadModel(ctx, ui, client));
+  else if (modelIsLoaded(action.model)) yield* awaited(unloadModel(ctx, ui, client, action.model));
+  else if (action.model.status.value === "unloaded")
+    yield* awaited(loadModel(ctx, ui, client, catalog, action.model));
+  else ctx.ui.notify(`${action.model.id} is ${action.model.status.value}`, "warning");
+}
+
+function* loadModelPart1(
+  ui: uiTypes.LlamaUi,
+  client: LlamaClient,
+  target: clientTypes.LlamaModelInfo,
+) {
+  return yield* awaited(
+    runWithProgress(ui, {
+      cancel: () => client.unload(target.id),
+      cancelMessage: target.id,
+      cancelTitle: "Stop loading?",
+      initialMessage: "Starting…",
+      model: target.id,
+      run: (signal, update) => client.loadAndWait(target.id, update, signal),
+      title: "Loading model",
+    }),
+  );
 }

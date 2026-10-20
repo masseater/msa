@@ -2,14 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import type { AutocompleteProviderFactory } from "../src/core/extensions/types.ts";
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import customUiScene from "./custom-ui-scene.ts";
+import TestFocusableComponent from "./test-focusable-component.ts";
 
+const { initTheme } = themeModule;
 const { awaited, runTest } = testing;
 
-const { TestFocusableComponent, createCustomUiScene } = customUiScene;
+const { createCustomUiScene } = customUiScene;
 
 const openOverlayThenReplacement = Effect.fn("openOverlayThenReplacement")(function* (
   scene: ReturnType<typeof createCustomUiScene>,
@@ -65,9 +67,9 @@ describe("InteractiveMode.showExtensionCustom", () => {
 });
 
 const storesWrapperFactoriesAndRebuildsAutocompleteImmediately = () => {
-  const wrapper: AutocompleteProviderFactory = (current) => current;
+  const wrapper: extensionsTypesTypes.AutocompleteProviderFactory = (current) => current;
   const fakeThis = {
-    autocompleteProviderWrappers: [] as AutocompleteProviderFactory[],
+    autocompleteProviderWrappers: [] as extensionsTypesTypes.AutocompleteProviderFactory[],
     setupAutocompleteProvider: vi.fn(),
   };
 

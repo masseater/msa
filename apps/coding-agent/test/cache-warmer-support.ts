@@ -5,14 +5,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
-import {
-  type CacheWarmRequest,
-  CacheWarmer,
-  type CacheWarmingAction,
-  type CacheWarmingDecisionEvent,
-} from "../src/core/cache-warmer.ts";
-import { type SessionEntry, SessionManager, type UsageEntry } from "../src/core/session-manager.ts";
-import type { CacheWarmingMode } from "../src/core/settings-manager.ts";
+import CacheWarmer from "../src/core/cache-warmer.ts";
+import type cacheWarmerTypes from "../src/core/cache-warmer.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
+
+const { SessionManager } = codingAgent;
 
 const { getBuiltinModel } = all;
 const { normalizeContext } = ai;
@@ -56,7 +55,7 @@ function response(
   };
 }
 
-function branchWithPrompt(promptTokens: number): SessionEntry[] {
+function branchWithPrompt(promptTokens: number): sessionManagerTypes.SessionEntry[] {
   return [
     {
       id: "a",
@@ -79,17 +78,19 @@ function branchWithPrompt(promptTokens: number): SessionEntry[] {
 function fakeRuntime(
   options: {
     result?: (model: aiTypes.Model<aiTypes.Api>) => Promise<aiTypes.AssistantMessage>;
-    decide?: (event: CacheWarmingDecisionEvent) => CacheWarmingAction | Promise<CacheWarmingAction>;
-    mode?: CacheWarmingMode;
-    branch?: SessionEntry[];
+    decide?: (
+      event: cacheWarmerTypes.CacheWarmingDecisionEvent,
+    ) => cacheWarmerTypes.CacheWarmingAction | Promise<cacheWarmerTypes.CacheWarmingAction>;
+    mode?: codingAgentTypes.CacheWarmingMode;
+    branch?: sessionManagerTypes.SessionEntry[];
   } = {},
 ) {
   const calls: Array<{
     model: aiTypes.Model<aiTypes.Api>;
     options: aiTypes.ModelsSimpleStreamOptions | undefined;
   }> = [];
-  const events: CacheWarmingDecisionEvent[] = [];
-  const warmedEntries: UsageEntry[] = [];
+  const events: cacheWarmerTypes.CacheWarmingDecisionEvent[] = [];
+  const warmedEntries: sessionManagerTypes.UsageEntry[] = [];
   const usageManager = SessionManager.inMemory();
   const appendUsage = vi.fn(usageManager.appendUsage.bind(usageManager));
   const state = {
@@ -125,7 +126,7 @@ function fakeRuntime(
 function request(
   model: aiTypes.Model<aiTypes.Api> = adaptiveModel,
   options: aiTypes.ModelsSimpleStreamOptions = {},
-): CacheWarmRequest {
+): cacheWarmerTypes.CacheWarmRequest {
   return { context: normalizeContext({ messages: [] }), model, options };
 }
 

@@ -2,10 +2,12 @@ import testing from "@msa/testing";
 import { Effect, Result } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { orchestratorError } from "../src/core/orchestrator/errors.ts";
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
+import errors from "../src/core/orchestrator/errors.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
+
+const { orchestratorError } = errors;
 
 const { runTest } = testing;
 
@@ -46,7 +48,7 @@ const stopsAtTheTurnBoundaryHandsThe = Effect.gen(function* () {
 
   workers[0]?.complete(memo);
   const result = (yield* Effect.promise(() => pending)) as Awaited<
-    ReturnType<Orchestrator["replan"]>
+    ReturnType<orchestratorTypes.Orchestrator["replan"]>
   >;
 
   expect(result.aborted).toBeNull();
@@ -103,7 +105,7 @@ const abortsWithoutTouchingThePlanWhenThe = Effect.gen(function* () {
   workers[0]?.fail(new Error("push rejected"));
 
   const result = (yield* Effect.promise(() => pending)) as Awaited<
-    ReturnType<Orchestrator["replan"]>
+    ReturnType<orchestratorTypes.Orchestrator["replan"]>
   >;
   expect(result.aborted).toContain("push rejected");
   expect(result.created).toEqual([]);
@@ -215,7 +217,7 @@ const rewiresAKeptTaskOntoTheTasks = Effect.gen(function* () {
   yield* stopAndWrapUp(orchestrator, [workers[0]!], "half of a is done");
 
   const result = (yield* Effect.promise(() => pending)) as Awaited<
-    ReturnType<Orchestrator["replan"]>
+    ReturnType<orchestratorTypes.Orchestrator["replan"]>
   >;
   const created = result.created[0]!;
   const view = yield* read(orchestrator, b.id);

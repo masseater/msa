@@ -1,7 +1,9 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Effect } from "effect";
 
-import { files, pathOperations, runCommand } from "../src/platform.ts";
+import platform from "../src/platform.ts";
+
+const { files, pathOperations, runCommand } = platform;
 
 const codingAgentName = "@msa/coding-agent";
 const repositoryRoot = pathOperations.resolve(import.meta.dirname, "../../..");

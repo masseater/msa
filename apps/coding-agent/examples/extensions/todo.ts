@@ -1,19 +1,19 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI, ExtensionContext, Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { type Todo, TodoListComponent } from "./todo-list.ts";
-
+import TodoListComponent from "./todo-list.ts";
+import type todoListTypes from "./todo-list.types.ts";
 const { StringEnum } = ai;
 
 const { Text } = tui;
 
 interface TodoDetails {
   action: "list" | "add" | "toggle" | "clear";
-  todos: Todo[];
+  todos: todoListTypes.Todo[];
   nextId: number;
   error?: string;
 }
@@ -25,7 +25,7 @@ const TodoParams = Type.Object({
 });
 
 interface TodoState {
-  todos: Todo[];
+  todos: todoListTypes.Todo[];
   nextId: number;
 }
 
@@ -56,7 +56,7 @@ const addAction = (state: TodoState, value: string | undefined) => {
       details: details(state, "add", "text required"),
     };
   }
-  const newTodo: Todo = { done: false, id: state.nextId++, text: value };
+  const newTodo: todoListTypes.Todo = { done: false, id: state.nextId++, text: value };
   state.todos.push(newTodo);
   return {
     content: [textContent(`Added todo #${newTodo.id}: ${newTodo.text}`)],
@@ -113,7 +113,7 @@ const runAction = (state: TodoState, params: { action: string; text?: string; id
   }
 };
 
-const reconstructState = (state: TodoState, ctx: ExtensionContext): void => {
+const reconstructState = (state: TodoState, ctx: codingAgentTypes.ExtensionContext): void => {
   state.todos = [];
   state.nextId = 1;
 
@@ -132,7 +132,7 @@ const reconstructState = (state: TodoState, ctx: ExtensionContext): void => {
 
 const renderCall = (
   args: { action: string; text?: string; id?: number },
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   let text = theme.fg("toolTitle", theme.bold("todo ")) + theme.fg("muted", args.action);
   if (args.text !== undefined && args.text.length > 0) {
@@ -142,7 +142,11 @@ const renderCall = (
   return new Text(text, 0, 0);
 };
 
-const renderTodoList = (todos: Todo[], expanded: boolean, theme: Theme): tuiTypes.Text => {
+const renderTodoList = (
+  todos: todoListTypes.Todo[],
+  expanded: boolean,
+  theme: codingAgentTypes.Theme,
+): tuiTypes.Text => {
   if (todos.length === 0) {
     return new Text(theme.fg("dim", "No todos"), 0, 0);
   }
@@ -159,7 +163,7 @@ const renderTodoList = (todos: Todo[], expanded: boolean, theme: Theme): tuiType
   return new Text(listText, 0, 0);
 };
 
-const renderAdded = (todos: Todo[], theme: Theme): tuiTypes.Text => {
+const renderAdded = (todos: todoListTypes.Todo[], theme: codingAgentTypes.Theme): tuiTypes.Text => {
   const added = todos.at(-1);
   if (added === undefined) return new Text(theme.fg("success", "✓ Added"), 0, 0);
   return new Text(
@@ -175,7 +179,7 @@ const renderAdded = (todos: Todo[], theme: Theme): tuiTypes.Text => {
 const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   options: { expanded: boolean },
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   const data = result.details as TodoDetails | undefined;
   if (data === undefined) {
@@ -201,7 +205,7 @@ const renderResult = (
   }
 };
 
-const showTodoList = (state: TodoState, ctx: ExtensionContext) =>
+const showTodoList = (state: TodoState, ctx: codingAgentTypes.ExtensionContext) =>
   Effect.gen(function* () {
     if (ctx.mode !== "tui") {
       ctx.ui.notify("/todos requires interactive mode", "error");
@@ -214,7 +218,7 @@ const showTodoList = (state: TodoState, ctx: ExtensionContext) =>
     );
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const state: TodoState = { nextId: 1, todos: [] };
 
   msa.on("session_start", (_event, ctx) => reconstructState(state, ctx));

@@ -1,12 +1,12 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
 const { matchesKey, truncateToWidth, visibleWidth } = tui;
 
-export class StreamingInputPanel implements tuiTypes.Component {
+export default class StreamingInputPanel implements tuiTypes.Component {
   handle: tuiTypes.OverlayHandle | null = null;
-  private theme: Theme;
+  private theme: codingAgentTypes.Theme;
   private typed = "";
   readonly label: string;
   private color: "error" | "success" | "accent";
@@ -14,7 +14,7 @@ export class StreamingInputPanel implements tuiTypes.Component {
   private onClose: () => void;
 
   constructor(
-    theme: Theme,
+    theme: codingAgentTypes.Theme,
     label: string,
     color: "error" | "success" | "accent",
     onTab: () => void,

@@ -3,15 +3,16 @@ import type compatTypes from "@msa/ai/compat.types";
 import type aiTypes from "@msa/ai/index.types";
 import { Effect, Function as Fn } from "effect";
 
-import { ToolFailure, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { combineUsage } from "../usage-totals.ts";
-import { generateTurnPrefixSummary, summaryWithUsage } from "./compaction-summary.ts";
-import type {
-  CompactionDetails,
-  CompactionPreparation,
-  CompactionResult,
-} from "./compaction-types.ts";
-import { computeFileLists, formatFileOperations } from "./utils.ts";
+import platform from "../platform/index.ts";
+import usageTotals from "../usage-totals.ts";
+import compactionSummary from "./compaction-summary.ts";
+import type compactionTypesTypes from "./compaction-types.types.ts";
+import utils from "./utils.ts";
+
+const { generateTurnPrefixSummary, summaryWithUsage } = compactionSummary;
+const { combineUsage } = usageTotals;
+const { computeFileLists, formatFileOperations } = utils;
+const { ToolFailure, unwrapForeign } = platform;
 
 type CompactRest = [
   model: compatTypes.Model<any>,
@@ -28,7 +29,7 @@ type CompactRest = [
 ];
 
 interface SplitTurnInput {
-  preparation: CompactionPreparation;
+  preparation: compactionTypesTypes.CompactionPreparation;
   rest: CompactRest;
   summarize: (messages: agentTypes.AgentMessage[]) => ReturnType<typeof summaryWithUsage>;
 }
@@ -79,7 +80,10 @@ const summarizeSplitTurn = ({ preparation, rest, summarize }: SplitTurnInput) =>
     };
   });
 
-const summarizerFor = (preparation: CompactionPreparation, rest: CompactRest) => {
+const summarizerFor = (
+  preparation: compactionTypesTypes.CompactionPreparation,
+  rest: CompactRest,
+) => {
   const [
     model,
     apiKey,
@@ -113,7 +117,7 @@ const summarizerFor = (preparation: CompactionPreparation, rest: CompactRest) =>
 };
 
 const compactEffect = Effect.fn("compact")(function* (
-  preparation: CompactionPreparation,
+  preparation: compactionTypesTypes.CompactionPreparation,
   ...rest: CompactRest
 ) {
   const summarize = summarizerFor(preparation, rest);
@@ -128,8 +132,8 @@ const compactEffect = Effect.fn("compact")(function* (
       message: "First kept entry has no UUID - session may need migration",
     });
   }
-  const result: CompactionResult = {
-    details: { readFiles, modifiedFiles } as CompactionDetails,
+  const result: compactionTypesTypes.CompactionResult = {
+    details: { modifiedFiles, readFiles } as compactionTypesTypes.CompactionDetails,
     firstKeptEntryId: preparation.firstKeptEntryId,
     summary: text + formatFileOperations(readFiles, modifiedFiles),
     tokensBefore: preparation.tokensBefore,
@@ -139,15 +143,28 @@ const compactEffect = Effect.fn("compact")(function* (
 });
 
 const compactImpl = (
-  preparation: CompactionPreparation,
+  preparation: compactionTypesTypes.CompactionPreparation,
   ...rest: CompactRest
-): Promise<CompactionResult> =>
-  platformRuntime.runPromise(unwrapForeign(compactEffect(preparation, ...rest)));
+): Promise<compactionTypesTypes.CompactionResult> =>
+  Effect.runPromise(unwrapForeign(compactEffect(preparation, ...rest)));
 
-export const compact: {
-  (...rest: CompactRest): (preparation: CompactionPreparation) => Promise<CompactionResult>;
-  (preparation: CompactionPreparation, ...rest: CompactRest): Promise<CompactionResult>;
+const compact: {
+  (
+    ...rest: CompactRest
+  ): (
+    preparation: compactionTypesTypes.CompactionPreparation,
+  ) => Promise<compactionTypesTypes.CompactionResult>;
+  (
+    preparation: compactionTypesTypes.CompactionPreparation,
+    ...rest: CompactRest
+  ): Promise<compactionTypesTypes.CompactionResult>;
 } = Fn.dual(
   (args) => typeof args[0] === "object" && args[0] !== null && "firstKeptEntryId" in args[0],
   compactImpl,
 );
+
+const compactionCompact = {
+  compact,
+};
+
+export default compactionCompact;

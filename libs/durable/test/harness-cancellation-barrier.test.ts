@@ -17,7 +17,7 @@ const { awaited } = testSupport;
 const { context, flush } = testSupport;
 const { aborted, deferred, eventually, openTasks } = testSupport;
 
-class HoldMarks extends MemoryStorage {
+class HoldMarks extends memory.MemoryStorage {
   target: durableTypes.TaskId | undefined;
   readonly held = deferred();
   readonly release = deferred();

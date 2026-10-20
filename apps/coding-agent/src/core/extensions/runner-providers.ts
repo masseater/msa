@@ -1,29 +1,24 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import { toErrorMessage } from "../../utils/errors.ts";
-import type { ModelRegistry } from "../model-registry.ts";
-import type { VirtualModelDefinition } from "../virtual-models.ts";
-import type { ExtensionError, ExtensionRuntime, ProviderConfig } from "./types.ts";
+import errors from "../../utils/errors.ts";
+import type modelRegistryTypes from "../model-registry.types.ts";
+import type virtualModelsTypes from "../virtual-models.types.ts";
+import type runnerProvidersTypes from "./runner-providers.types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export interface ProviderActions {
-  registerProvider?: (name: string, config: ProviderConfig) => void;
-  registerNativeProvider?: (provider: aiTypes.Provider) => void;
-  unregisterProvider?: (name: string) => void;
-  registerVirtualModel?: (definition: VirtualModelDefinition) => void;
-  unregisterVirtualModel?: (provider: string, id: string) => void;
-}
+const { toErrorMessage } = errors;
 
-export class ProviderBinder {
-  private readonly runtime: ExtensionRuntime;
-  private readonly modelRegistry: ModelRegistry;
-  private readonly actions: ProviderActions | undefined;
-  private readonly emitError: (error: ExtensionError) => void;
+export default class ProviderBinder {
+  private readonly runtime: extensionsTypesTypes.ExtensionRuntime;
+  private readonly modelRegistry: modelRegistryTypes.ModelRegistry;
+  private readonly actions: runnerProvidersTypes.ProviderActions | undefined;
+  private readonly emitError: (error: extensionsTypesTypes.ExtensionError) => void;
 
   constructor(
-    runtime: ExtensionRuntime,
-    modelRegistry: ModelRegistry,
-    actions: ProviderActions | undefined,
-    emitError: (error: ExtensionError) => void,
+    runtime: extensionsTypesTypes.ExtensionRuntime,
+    modelRegistry: modelRegistryTypes.ModelRegistry,
+    actions: runnerProvidersTypes.ProviderActions | undefined,
+    emitError: (error: extensionsTypesTypes.ExtensionError) => void,
   ) {
     this.runtime = runtime;
     this.modelRegistry = modelRegistry;
@@ -51,7 +46,7 @@ export class ProviderBinder {
     };
   }
 
-  private registerProvider(name: string, config: ProviderConfig): void {
+  private registerProvider(name: string, config: extensionsTypesTypes.ProviderConfig): void {
     if (this.actions?.registerProvider === undefined)
       this.modelRegistry.registerProvider(name, config);
     else this.actions.registerProvider(name, config);
@@ -65,7 +60,7 @@ export class ProviderBinder {
     }
   }
 
-  private registerVirtualModel(definition: VirtualModelDefinition): void {
+  private registerVirtualModel(definition: virtualModelsTypes.VirtualModelDefinition): void {
     if (this.actions?.registerVirtualModel === undefined) {
       this.modelRegistry.registerVirtualModel(definition);
     } else {

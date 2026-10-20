@@ -3,8 +3,11 @@ import { Effect } from "effect";
 import { ChildProcess } from "effect/process";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { executeBashWithOperations } from "../src/core/bash-executor.ts";
-import { createBashTool, createLocalBashOperations } from "../src/core/tools/bash.ts";
+import bashExecutor from "../src/core/bash-executor.ts";
+import bash from "../src/core/tools/bash.ts";
+
+const { executeBashWithOperations } = bashExecutor;
+const { createBashTool, createLocalBashOperations } = bash;
 
 const {
   abortController,

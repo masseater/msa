@@ -3,9 +3,11 @@ import { Effect } from "effect";
 import { ChildProcess } from "effect/process";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { pendingHandoffs } from "../src/core/orchestrator/handoff-files.ts";
+import handoffFiles from "../src/core/orchestrator/handoff-files.ts";
 import orchestratorHandoffSupport from "./orchestrator-handoff-support.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { pendingHandoffs } = handoffFiles;
 
 const { sections } = orchestratorHandoffSupport;
 

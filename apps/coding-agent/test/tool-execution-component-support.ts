@@ -2,11 +2,11 @@ import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
 import { Type } from "typebox";
 
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 
 const { awaited, runTest } = testing;
 
-function createBaseToolDefinition(name = "custom_tool"): ToolDefinition {
+function createBaseToolDefinition(name = "custom_tool"): extensionsTypesTypes.ToolDefinition {
   return {
     description: "custom tool",
     execute: () =>

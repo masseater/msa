@@ -4,11 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultPackageManager } from "../src/core/package-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import DefaultPackageManager from "../src/core/default-package-manager.ts";
+import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import gitUpdateSupport from "./git-update-support.ts";
 import testNetworkEnv from "./test-network-env.ts";
-
 const { createCommit, getCurrentCommit, getFileContent, git, gitSource, initGitRepo } =
   gitUpdateSupport;
 
@@ -33,9 +34,9 @@ let agentDir: string;
 
 let installedDir: string;
 
-let settingsManager: SettingsManager;
+let settingsManager: settingsManagerTypes.SettingsManager;
 
-let packageManager: DefaultPackageManager;
+let packageManager: packageManagerTypes.DefaultPackageManager;
 
 const shouldCheckoutTheConfiguredPinnedGitRef = () =>
   runTest(

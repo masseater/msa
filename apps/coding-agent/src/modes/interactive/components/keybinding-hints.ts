@@ -2,15 +2,14 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import { theme } from "../theme/theme.ts";
+import themeModule from "../theme/theme.ts";
+import type keybindingHintsTypes from "./keybinding-hints.types.ts";
+
+const { theme } = themeModule;
 
 const { getKeybindings } = tui;
 
-export interface KeyTextFormatOptions {
-  capitalize?: boolean;
-}
-
-function formatKeyPart(part: string, options: KeyTextFormatOptions): string {
+function formatKeyPart(part: string, options: keybindingHintsTypes.KeyTextFormatOptions): string {
   const displayPart =
     process.platform === "darwin" && part.toLowerCase() === "alt" ? "option" : part;
   return options.capitalize === true
@@ -18,12 +17,12 @@ function formatKeyPart(part: string, options: KeyTextFormatOptions): string {
     : displayPart;
 }
 
-export const formatKeyText: {
-  (options?: KeyTextFormatOptions): (key: string) => string;
-  (key: string, options?: KeyTextFormatOptions): string;
+const formatKeyText: {
+  (options?: keybindingHintsTypes.KeyTextFormatOptions): (key: string) => string;
+  (key: string, options?: keybindingHintsTypes.KeyTextFormatOptions): string;
 } = dual(
   (args) => typeof args[0] === "string",
-  (key: string, options: KeyTextFormatOptions = {}): string =>
+  (key: string, options: keybindingHintsTypes.KeyTextFormatOptions = {}): string =>
     key
       .split("/")
       .map((k) =>
@@ -35,20 +34,23 @@ export const formatKeyText: {
       .join("/"),
 );
 
-function formatKeys(keys: tuiTypes.KeyId[], options: KeyTextFormatOptions = {}): string {
+function formatKeys(
+  keys: tuiTypes.KeyId[],
+  options: keybindingHintsTypes.KeyTextFormatOptions = {},
+): string {
   if (keys.length === 0) return "";
   return formatKeyText(keys.join("/"), options);
 }
 
-export function keyText(keybinding: tuiTypes.Keybinding): string {
+function keyText(keybinding: tuiTypes.Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding));
 }
 
-export function keyDisplayText(keybinding: tuiTypes.Keybinding): string {
+function keyDisplayText(keybinding: tuiTypes.Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding), { capitalize: true });
 }
 
-export const keyHint: {
+const keyHint: {
   (description: string): (keybinding: tuiTypes.Keybinding) => string;
   (keybinding: tuiTypes.Keybinding, description: string): string;
 } = dual(
@@ -57,11 +59,11 @@ export const keyHint: {
     theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`),
 );
 
-export function expandHint(summary: string): string {
+function expandHint(summary: string): string {
   return `${theme.fg("muted", `${summary} (`)}${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
 }
 
-export const rawKeyHint: {
+const rawKeyHint: {
   (description: string): (key: string) => string;
   (key: string, description: string): string;
 } = dual(
@@ -69,3 +71,14 @@ export const rawKeyHint: {
   (key: string, description: string): string =>
     theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`),
 );
+
+const keybindingHints = {
+  expandHint,
+  formatKeyText,
+  keyDisplayText,
+  keyHint,
+  keyText,
+  rawKeyHint,
+};
+
+export default keybindingHints;

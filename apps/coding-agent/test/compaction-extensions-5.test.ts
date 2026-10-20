@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { SessionBeforeCompactEvent } from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 import compactionExtensionsSupport from "./compaction-extensions-support.ts";
 
 const { awaited, runTest } = testing;
@@ -11,7 +11,7 @@ const { cleanUp, createExtension, createSession, hasApiKey, prepare } = compacti
 const shouldPassCorrectDataInBeforeCompact = () =>
   runTest(
     Effect.gen(function* () {
-      let capturedBeforeEvent: SessionBeforeCompactEvent | null = null;
+      let capturedBeforeEvent: extensionsTypes.SessionBeforeCompactEvent | null = null;
 
       const extension = createExtension((event) => {
         capturedBeforeEvent = event;

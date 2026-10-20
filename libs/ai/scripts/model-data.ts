@@ -1,9 +1,10 @@
-import { Data, Effect, Function } from "effect";
+import { Effect, Function } from "effect";
 import { Hex } from "effect/encoding";
 
 import cryptoModule from "../src/utils/crypto.ts";
 import jsonCodec from "../src/utils/json-codec.ts";
 import modelDataChecks from "./model-data-checks.ts";
+import ModelDataError from "./model-data-error.ts";
 import type modelDataTypes from "./model-data.types.ts";
 import ScriptFileError from "./script-file-error.ts";
 import scriptFiles from "./script-files.ts";
@@ -11,7 +12,6 @@ import type scriptFilesTypes from "./script-files.types.ts";
 
 const { digest } = cryptoModule;
 const { decodeJson, encodeJson } = jsonCodec;
-
 const {
   apiPlacementErrors,
   groupedModelErrors,
@@ -25,19 +25,11 @@ const { ScriptFiles } = scriptFiles;
 
 const MODEL_DATA_SCHEMA_VERSION = 6;
 const MODEL_DATA_MANIFEST_FILE = ".manifest.json";
-
-class ModelDataError extends Data.TaggedError("ModelDataError")<{
-  readonly message: string;
-}> {}
-
 const MODEL_DATA_IMPORT_PATTERN =
   /^import \w+Models from "\.\/providers\/([^"/]+)\.models\.ts";$/gmu;
-
 const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
-
 const sha256 = (value: string): Effect.Effect<string> =>
   Effect.map(digest("SHA-256", new TextEncoder().encode(value)), Hex.encode);
-
 const readJsonObject = Effect.fn("readJsonObject")(function* (path: string, description: string) {
   const files = yield* ScriptFiles;
   const parsed = yield* files.readText(path).pipe(
@@ -50,7 +42,6 @@ const readJsonObject = Effect.fn("readJsonObject")(function* (path: string, desc
   if (!isRecord(parsed)) return yield* fail(`${description} must contain a JSON object`);
   return parsed;
 });
-
 const collectJsonObject = (path: string, description: string, errors: string[]) =>
   readJsonObject(path, description).pipe(
     Effect.catchTag("ModelDataError", (error) =>
@@ -60,7 +51,6 @@ const collectJsonObject = (path: string, description: string, errors: string[]) 
       }),
     ),
   );
-
 const readProviderStructure = Effect.fn("readProviderStructure")(function* (
   path: string,
   providerId: string,
@@ -70,7 +60,6 @@ const readProviderStructure = Effect.fn("readProviderStructure")(function* (
   if ("error" in result) return yield* fail(result.error);
   return result.structure;
 });
-
 const readModelDataProviderIds = Effect.fn("readModelDataProviderIds")(function* (
   packageRoot: string,
 ) {
@@ -89,7 +78,6 @@ const readModelDataProviderIds = Effect.fn("readModelDataProviderIds")(function*
   }
   return providerIds;
 });
-
 const readModelDataStructure = Effect.fn("readModelDataStructure")(function* (packageRoot: string) {
   const files = yield* ScriptFiles;
   const providersDir = files.join(packageRoot, "src", "providers");
@@ -109,7 +97,6 @@ const readModelDataStructure = Effect.fn("readModelDataStructure")(function* (pa
   );
   return sortedRecord(structures);
 });
-
 const modelDataStructureHash = (
   structure: modelDataTypes.ModelDataStructure,
 ): Effect.Effect<string> =>
@@ -120,7 +107,6 @@ const modelDataStructureHash = (
       ),
     ),
   ).pipe(Effect.flatMap(sha256));
-
 const createModelDataManifest: {
   (
     fileContents: Readonly<Record<string, string>>,
@@ -151,7 +137,6 @@ const createModelDataManifest: {
     };
   }),
 );
-
 const providerFileErrors = Effect.fn("providerFileErrors")(function* (
   [providerId, expectedModels]: readonly [string, Readonly<Record<string, string>>],
   dataDir: string,
@@ -178,7 +163,6 @@ const providerFileErrors = Effect.fn("providerFileErrors")(function* (
     ...apiPlacementErrors({ actualModels: grouped.actualModels, expectedModels, providerId }),
   ];
 });
-
 function validationFailure(errors: readonly string[]): ModelDataError {
   const visible = errors.slice(0, 30);
   const suffix =
@@ -187,7 +171,6 @@ function validationFailure(errors: readonly string[]): ModelDataError {
     message: `Invalid generated model data:\n${visible.map((error) => `  - ${error}`).join("\n")}${suffix}`,
   });
 }
-
 const validateModelDataDirectory: {
   (
     dataDir: string,
@@ -230,7 +213,6 @@ const validateModelDataDirectory: {
     if (errors.length > 0) return yield* validationFailure(errors);
   }),
 );
-
 const validateGeneratedModelData = Effect.fn("validateGeneratedModelData")(function* (
   packageRoot: string,
 ) {
@@ -238,7 +220,6 @@ const validateGeneratedModelData = Effect.fn("validateGeneratedModelData")(funct
   const files = yield* ScriptFiles;
   yield* validateModelDataDirectory(structure, files.join(packageRoot, "src", "providers", "data"));
 });
-
 const groupProviderModelData: {
   <T extends modelDataTypes.ModelCatalogEntry>(
     models: readonly T[],
@@ -273,7 +254,6 @@ const groupProviderModelData: {
 const modelData = {
   MODEL_DATA_MANIFEST_FILE,
   MODEL_DATA_SCHEMA_VERSION,
-  ModelDataError,
   createModelDataManifest,
   groupProviderModelData,
   modelDataStructureHash,

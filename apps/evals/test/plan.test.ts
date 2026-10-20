@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { createTaskPlan, parseDiscoveredCases } from "../src/plan.ts";
+import plan from "../src/plan.ts";
+
+const { createTaskPlan, parseDiscoveredCases } = plan;
 
 const discovered = [{ file: "evals/models.docs.eval.ts", name: "adds the model" }];
 

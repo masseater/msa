@@ -4,10 +4,11 @@ import delta from "../../src/delta/index.ts";
 import prototypes from "../fixtures/prototypes.ts";
 import type prototypesTypes from "../fixtures/prototypes.types.ts";
 import trackerModule from "../fixtures/tracker.ts";
+import TrapSetter from "../fixtures/trap-setter.ts";
 
 const { track } = delta;
 
-const { TrapSetter, trappedObject } = prototypes;
+const { trappedObject } = prototypes;
 const { replay, settle } = trackerModule;
 
 const definesOwnPropertiesWithoutInvokingInherited = (): void => {

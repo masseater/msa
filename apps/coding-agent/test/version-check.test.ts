@@ -2,15 +2,18 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { readEnv } from "../src/core/process-env.ts";
-import {
+import processEnv from "../src/core/process-env.ts";
+import versionCheck from "../src/utils/version-check.ts";
+import testNetworkEnv from "./test-network-env.ts";
+
+const { readEnv } = processEnv;
+const {
   checkForNewMsaVersion,
   comparePackageVersions,
   formatVersionCheckError,
   getLatestMsaRelease,
   isNewerPackageVersion,
-} from "../src/utils/version-check.ts";
-import testNetworkEnv from "./test-network-env.ts";
+} = versionCheck;
 
 const { allowNetwork } = testNetworkEnv;
 

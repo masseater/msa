@@ -1,27 +1,17 @@
 import type telemetryTypes from "@msa/telemetry/index.types";
 
-import { shortId } from "../../utils/text.ts";
-import type { PrNotification, PrWatchHost } from "./watch.ts";
+import textModule from "../../utils/text.ts";
+import type sessionHostTypes from "./session-host.types.ts";
+import type watchTypes from "./watch.types.ts";
 
-export const PR_WATCH_MESSAGE_TYPE = "msa.pr_watch";
+const { shortId } = textModule;
 
-export interface PrWatchMessage {
-  readonly customType: string;
-  readonly content: string;
-  readonly display: boolean;
-}
+const PR_WATCH_MESSAGE_TYPE = "msa.pr_watch";
 
-export interface PrWatchDelivery {
-  readonly threadId: string;
-  readonly sendMessage: (
-    message: PrWatchMessage,
-    options: { readonly triggerTurn: boolean; readonly deliverAs: "steer" },
-  ) => void;
-  readonly changed: () => void;
-  readonly telemetry: telemetryTypes.TelemetryContext;
-}
-
-function record(telemetry: telemetryTypes.TelemetryContext, notification: PrNotification): void {
+function record(
+  telemetry: telemetryTypes.TelemetryContext,
+  notification: watchTypes.PrNotification,
+): void {
   telemetry.log({
     attributes: {
       "msa.pr_watch.label": notification.label,
@@ -42,7 +32,7 @@ function record(telemetry: telemetryTypes.TelemetryContext, notification: PrNoti
   });
 }
 
-export function createPrWatchHost(delivery: PrWatchDelivery): PrWatchHost {
+function createPrWatchHost(delivery: sessionHostTypes.PrWatchDelivery): watchTypes.PrWatchHost {
   const thread = shortId(delivery.threadId);
   return {
     changed: () => delivery.changed(),
@@ -56,3 +46,10 @@ export function createPrWatchHost(delivery: PrWatchDelivery): PrWatchHost {
     },
   };
 }
+
+const sessionHost = {
+  PR_WATCH_MESSAGE_TYPE,
+  createPrWatchHost,
+};
+
+export default sessionHost;

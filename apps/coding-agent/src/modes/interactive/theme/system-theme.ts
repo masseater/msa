@@ -2,7 +2,8 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import type { TerminalTheme, ThemeAppearance, ThemeBg, ThemeColor, ThemeToken } from "./theme.ts";
+import type systemThemeTypes from "./system-theme.types.ts";
+import type themeTypes from "./theme.types.ts";
 
 const {
   colorToOkhsl,
@@ -14,7 +15,7 @@ const {
   rgbColor,
 } = tui;
 
-export const SYSTEM_THEME_NAME = "system";
+const SYSTEM_THEME_NAME = "system";
 
 interface Family {
   hue: number;
@@ -41,7 +42,7 @@ const FAMILIES = {
 
 type FamilyName = keyof typeof FAMILIES;
 
-const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
+const TOKEN_FAMILIES: Record<themeTypes.ThemeToken, FamilyName> = {
   accent: "violet",
   bashMode: "green",
   border: "blue",
@@ -100,7 +101,7 @@ const TOKEN_FAMILIES: Record<ThemeToken, FamilyName> = {
   warning: "yellow",
 };
 
-const TOKEN_SLOTS: Partial<Record<ThemeToken, number>> = {
+const TOKEN_SLOTS: Partial<Record<themeTypes.ThemeToken, number>> = {
   searchMatchBg: 3,
   syntaxNumber: 5,
   syntaxString: 2,
@@ -262,21 +263,21 @@ const LEVELS = {
       reachable: [0.368, 1],
     },
   },
-} satisfies Record<string, Record<ThemeAppearance, Curve>>;
+} satisfies Record<string, Record<themeTypes.ThemeAppearance, Curve>>;
 
 type Level = keyof typeof LEVELS;
 
-type Surface = ThemeBg | "background" | "scrollbarTrack";
+type Surface = themeTypes.ThemeBg | "background" | "scrollbarTrack";
 
 interface Rule {
-  token: ThemeToken;
+  token: themeTypes.ThemeToken;
   on: Surface[];
   level: Level;
 }
 
 const TOOL_PANELS: Surface[] = ["toolPendingBg", "toolSuccessBg", "toolErrorBg"];
 const MESSAGE_PANELS: Surface[] = ["userMessageBg", "customMessageBg"];
-const PANELS: ThemeBg[] = [
+const PANELS: themeTypes.ThemeBg[] = [
   "userMessageBg",
   "toolPendingBg",
   "toolSuccessBg",
@@ -285,7 +286,7 @@ const PANELS: ThemeBg[] = [
   "searchMatchBg",
   "customMessageBg",
 ];
-const THINKING: [ThemeColor, Level][] = [
+const THINKING: [themeTypes.ThemeColor, Level][] = [
   ["thinkingOff", "thinking0"],
   ["thinkingMinimal", "thinking1"],
   ["thinkingLow", "thinking2"],
@@ -295,7 +296,7 @@ const THINKING: [ThemeColor, Level][] = [
   ["thinkingMax", "thinking6"],
 ];
 
-const each = (tokens: ThemeToken[], on: Surface[], level: Level): Rule[] =>
+const each = (tokens: themeTypes.ThemeToken[], on: Surface[], level: Level): Rule[] =>
   tokens.map((token) => ({ level, on, token }));
 
 const RULES: Rule[] = [
@@ -370,17 +371,20 @@ const RULES: Rule[] = [
   })),
 ];
 
-const READABLE_FLOOR: Record<ThemeAppearance, Level> = { dark: "readable", light: "subtle" };
+const READABLE_FLOOR: Record<themeTypes.ThemeAppearance, Level> = {
+  dark: "readable",
+  light: "subtle",
+};
 
 const FOREGROUND_LEVEL: Level = "emphasis";
 
-const FOREGROUND_TOKENS: ThemeColor[] = ["text", "userMessageText", "toolTitle"];
+const FOREGROUND_TOKENS: themeTypes.ThemeColor[] = ["text", "userMessageText", "toolTitle"];
 
 const TEXT_MINIMUM_WCAG_CONTRAST = 4.5;
 
-const SOLVE_ORDER: ThemeToken[] = (() => {
-  const order: ThemeToken[] = [];
-  const visit = (token: ThemeToken): void => {
+const SOLVE_ORDER: themeTypes.ThemeToken[] = (() => {
+  const order: themeTypes.ThemeToken[] = [];
+  const visit = (token: themeTypes.ThemeToken): void => {
     if (order.includes(token)) return;
     for (const rule of RULES) {
       if (rule.token !== token) continue;
@@ -392,25 +396,11 @@ const SOLVE_ORDER: ThemeToken[] = (() => {
   return order;
 })();
 
-export interface SystemThemeInput {
-  foreground?: tuiTypes.RgbColor | undefined;
-  background?: tuiTypes.RgbColor | undefined;
-  palette?: tuiTypes.RgbColor[] | undefined;
-  saturation?: number;
-  appearanceHint?: ThemeAppearance;
-}
-
-export interface SystemThemeColors {
-  colors: Record<ThemeToken, string | number>;
-  dim: ThemeColor[];
-  appearance: ThemeAppearance | undefined;
-}
-
 function oklabLightness(color: tuiTypes.RgbColor): number {
   return colorToOklch(rgbColor(color.r, color.g, color.b)).l;
 }
 
-export function relativeLuminance({ r, g, b }: tuiTypes.RgbColor): number {
+function relativeLuminance({ r, g, b }: tuiTypes.RgbColor): number {
   const linear = (channel: number) => {
     const value = channel / 255;
     return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
@@ -418,7 +408,7 @@ export function relativeLuminance({ r, g, b }: tuiTypes.RgbColor): number {
   return 0.2126 * linear(r) + 0.7152 * linear(g) + 0.0722 * linear(b);
 }
 
-export const wcagContrast: {
+const wcagContrast: {
   (second: tuiTypes.RgbColor): (first: tuiTypes.RgbColor) => number;
   (first: tuiTypes.RgbColor, second: tuiTypes.RgbColor): number;
 } = dual(2, (first: tuiTypes.RgbColor, second: tuiTypes.RgbColor): number => {
@@ -427,12 +417,20 @@ export const wcagContrast: {
   return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
 });
 
-export const terminalAppearance: {
-  (foreground: tuiTypes.RgbColor | undefined): (background: tuiTypes.RgbColor) => ThemeAppearance;
-  (background: tuiTypes.RgbColor, foreground: tuiTypes.RgbColor | undefined): ThemeAppearance;
+const terminalAppearance: {
+  (
+    foreground: tuiTypes.RgbColor | undefined,
+  ): (background: tuiTypes.RgbColor) => themeTypes.ThemeAppearance;
+  (
+    background: tuiTypes.RgbColor,
+    foreground: tuiTypes.RgbColor | undefined,
+  ): themeTypes.ThemeAppearance;
 } = dual(
   2,
-  (background: tuiTypes.RgbColor, foreground: tuiTypes.RgbColor | undefined): ThemeAppearance => {
+  (
+    background: tuiTypes.RgbColor,
+    foreground: tuiTypes.RgbColor | undefined,
+  ): themeTypes.ThemeAppearance => {
     const white = { b: 255, g: 255, r: 255 };
     const black = { b: 0, g: 0, r: 0 };
     const whiteContrast = wcagContrast(white, background);
@@ -468,7 +466,7 @@ function saturationCurve({ saturation: { min, max } }: Family, lightness: number
 
 function levelTarget(
   level: Level,
-  appearance: ThemeAppearance,
+  appearance: themeTypes.ThemeAppearance,
   surfaceL: number,
 ): number | undefined {
   const curve: Curve = LEVELS[level][appearance];
@@ -479,7 +477,9 @@ function levelTarget(
   );
 }
 
-export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeColors {
+function generateSystemThemeColors(
+  input: systemThemeTypes.SystemThemeInput,
+): systemThemeTypes.SystemThemeColors {
   const saturation = clamp(input.saturation ?? 1, 0, 1);
   const { background, foreground } = input;
   if (background === undefined) return indexedColors(saturation, input.appearanceHint);
@@ -516,12 +516,12 @@ export function generateSystemThemeColors(input: SystemThemeInput): SystemThemeC
 }
 
 function generateSystemThemeColorsSurfacesOf2(
-  input: SystemThemeInput,
+  input: systemThemeTypes.SystemThemeInput,
   background: tuiTypes.RgbColor,
   foreground: tuiTypes.RgbColor | undefined,
   saturation: number,
 ): {
-  surfacesOf: (token: ThemeToken) => tuiTypes.RgbColor[];
+  surfacesOf: (token: themeTypes.ThemeToken) => tuiTypes.RgbColor[];
   solved: Map<
     | "accent"
     | "border"
@@ -636,7 +636,7 @@ function generateSystemThemeColorsSurfacesOf2(
     | "bashMode",
     string | number
   >;
-  appearance: TerminalTheme;
+  appearance: themeTypes.TerminalTheme;
 } {
   const { paint, readable, backgroundL, target, lighter, appearance } =
     generateSystemThemeColorsPaint(input, background, foreground, saturation);
@@ -667,17 +667,17 @@ function generateSystemThemeColorsSurfacesOf2(
 }
 
 function generateSystemThemeColorsPaint(
-  input: SystemThemeInput,
+  input: systemThemeTypes.SystemThemeInput,
   background: tuiTypes.RgbColor,
   foreground: tuiTypes.RgbColor | undefined,
   saturation: number,
 ): {
-  paint: (token: ThemeToken, oklabL: number) => tuiTypes.RgbColor;
+  paint: (token: themeTypes.ThemeToken, oklabL: number) => tuiTypes.RgbColor;
   readable: (color: tuiTypes.RgbColor) => boolean;
   backgroundL: number;
   target: (level: Level, surfaceL: number, t: number) => number | undefined;
   lighter: boolean;
-  appearance: TerminalTheme;
+  appearance: themeTypes.TerminalTheme;
 } {
   const palette = input.palette?.length === 16 ? input.palette.map(sourceOf) : undefined;
 
@@ -686,20 +686,7 @@ function generateSystemThemeColorsPaint(
   const extreme = lighter ? 1 : 0;
   const backgroundL = oklabLightness(background);
 
-  const paint = (token: ThemeToken, oklabL: number): tuiTypes.RgbColor => {
-    const lightness = oklabToOkhslLightness(oklabL);
-    const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
-    const source = palette?.[TOKEN_SLOTS[token] ?? family.slot];
-    if (source === undefined) {
-      const { min, max } = family.saturation;
-      return okhslColor(
-        family.hue,
-        (min + (max - min) * bellWeight(lightness)) * saturation,
-        lightness,
-      );
-    }
-    return anchored(source, family, lightness, saturation);
-  };
+  const paint = generateSystemThemeColorsPaintPart1(palette, saturation);
 
   const target = (level: Level, surfaceL: number, t: number): number | undefined => {
     const reached = levelTarget(level, appearance, surfaceL);
@@ -720,8 +707,28 @@ function generateSystemThemeColorsPaint(
   return { appearance, backgroundL, lighter, paint, readable, target };
 }
 
+function generateSystemThemeColorsPaintPart1(
+  palette: SourceColor[] | undefined,
+  saturation: number,
+) {
+  return (token: themeTypes.ThemeToken, oklabL: number): tuiTypes.RgbColor => {
+    const lightness = oklabToOkhslLightness(oklabL);
+    const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
+    const source = palette?.[TOKEN_SLOTS[token] ?? family.slot];
+    if (source === undefined) {
+      const { min, max } = family.saturation;
+      return okhslColor(
+        family.hue,
+        (min + (max - min) * bellWeight(lightness)) * saturation,
+        lightness,
+      );
+    }
+    return anchored(source, family, lightness, saturation);
+  };
+}
+
 function generateSystemThemeColorsColors(
-  paint: (token: ThemeToken, oklabL: number) => tuiTypes.RgbColor,
+  paint: (token: themeTypes.ThemeToken, oklabL: number) => tuiTypes.RgbColor,
   readable: (color: tuiTypes.RgbColor) => boolean,
   backgroundL: number,
   background: tuiTypes.RgbColor,
@@ -782,23 +789,17 @@ function generateSystemThemeColorsColors(
         tuiTypes.RgbColor
       >
     | undefined;
-  solve: (t: number) => Map<Surface | ThemeToken, tuiTypes.RgbColor> | undefined;
+  solve: (t: number) => Map<Surface | themeTypes.ThemeToken, tuiTypes.RgbColor> | undefined;
   relaxation: number;
 } {
-  const limitPanel = (token: ThemeToken, l: number): tuiTypes.RgbColor => {
-    const color = paint(token, l);
-    if (readable(color)) return color;
-    let [low, high] = [backgroundL, l];
-    for (let index = 0; index < 20; index++) {
-      const middle = (low + high) / 2;
-      if (readable(paint(token, middle))) low = middle;
-      else high = middle;
-    }
-    return paint(token, low);
-  };
+  const limitPanel = generateSystemThemeColorsColorsPart1(paint, readable, backgroundL);
 
-  const solve = (t: number): Map<Surface | ThemeToken, tuiTypes.RgbColor> | undefined => {
-    const colors = new Map<Surface | ThemeToken, tuiTypes.RgbColor>([["background", background]]);
+  const solve = (
+    t: number,
+  ): Map<Surface | themeTypes.ThemeToken, tuiTypes.RgbColor> | undefined => {
+    const colors = new Map<Surface | themeTypes.ThemeToken, tuiTypes.RgbColor>([
+      ["background", background],
+    ]);
     for (const token of SOLVE_ORDER) {
       const targets: number[] = [];
       for (const rule of RULES) {
@@ -810,7 +811,10 @@ function generateSystemThemeColorsColors(
         }
       }
       const l = lighter ? Math.max(...targets) : Math.min(...targets);
-      colors.set(token, PANELS.includes(token as ThemeBg) ? limitPanel(token, l) : paint(token, l));
+      colors.set(
+        token,
+        PANELS.includes(token as themeTypes.ThemeBg) ? limitPanel(token, l) : paint(token, l),
+      );
     }
     return colors;
   };
@@ -818,6 +822,24 @@ function generateSystemThemeColorsColors(
   let relaxation = 0;
   let colors = solve(0);
   return { colors, relaxation, solve };
+}
+
+function generateSystemThemeColorsColorsPart1(
+  paint: (token: themeTypes.ThemeToken, oklabL: number) => tuiTypes.RgbColor,
+  readable: (color: tuiTypes.RgbColor) => boolean,
+  backgroundL: number,
+) {
+  return (token: themeTypes.ThemeToken, l: number): tuiTypes.RgbColor => {
+    const color = paint(token, l);
+    if (readable(color)) return color;
+    let [low, high] = [backgroundL, l];
+    for (let index = 0; index < 20; index++) {
+      const middle = (low + high) / 2;
+      if (readable(paint(token, middle))) low = middle;
+      else high = middle;
+    }
+    return paint(token, low);
+  };
 }
 
 function generateSystemThemeColorsSurfacesOf(
@@ -877,7 +899,7 @@ function generateSystemThemeColorsSurfacesOf(
     | undefined,
   background: tuiTypes.RgbColor,
 ): {
-  surfacesOf: (token: ThemeToken) => tuiTypes.RgbColor[];
+  surfacesOf: (token: themeTypes.ThemeToken) => tuiTypes.RgbColor[];
   solved: Map<
     | "accent"
     | "border"
@@ -990,14 +1012,14 @@ function generateSystemThemeColorsSurfacesOf(
     string | number
   >;
 } {
-  const solved = colors ?? new Map<Surface | ThemeToken, tuiTypes.RgbColor>();
-  const surfacesOf = (token: ThemeToken) =>
+  const solved = colors ?? new Map<Surface | themeTypes.ThemeToken, tuiTypes.RgbColor>();
+  const surfacesOf = (token: themeTypes.ThemeToken) =>
     RULES.filter((rule) => rule.token === token).flatMap((rule) =>
       rule.on.map((surface) => solved.get(surface) ?? background),
     );
 
-  const result = {} as Record<ThemeToken, string | number>;
-  for (const token of Object.keys(TOKEN_FAMILIES) as ThemeToken[]) {
+  const result = {} as Record<themeTypes.ThemeToken, string | number>;
+  for (const token of Object.keys(TOKEN_FAMILIES) as themeTypes.ThemeToken[]) {
     const color = solved.get(token);
     result[token] = color === undefined ? "" : hexOf(color);
   }
@@ -1053,19 +1075,33 @@ function withTextContrast(
 
 function indexedColors(
   saturation: number,
-  appearance: ThemeAppearance | undefined,
-): SystemThemeColors {
-  const colors = {} as Record<ThemeToken, string | number>;
-  const dim: ThemeColor[] = [];
-  for (const [token, familyName] of Object.entries(TOKEN_FAMILIES) as [ThemeToken, FamilyName][]) {
-    if (PANELS.includes(token as ThemeBg)) {
+  appearance: themeTypes.ThemeAppearance | undefined,
+): systemThemeTypes.SystemThemeColors {
+  const colors = {} as Record<themeTypes.ThemeToken, string | number>;
+  const dim: themeTypes.ThemeColor[] = [];
+  for (const [token, familyName] of Object.entries(TOKEN_FAMILIES) as [
+    themeTypes.ThemeToken,
+    FamilyName,
+  ][]) {
+    if (PANELS.includes(token as themeTypes.ThemeBg)) {
       colors[token] = "";
       continue;
     }
     const neutral = familyName === "neutral";
     colors[token] =
       !neutral && saturation > 0 ? (TOKEN_SLOTS[token] ?? FAMILIES[familyName].slot) : "";
-    if (neutral && !FOREGROUND_TOKENS.includes(token as ThemeColor)) dim.push(token as ThemeColor);
+    if (neutral && !FOREGROUND_TOKENS.includes(token as themeTypes.ThemeColor))
+      dim.push(token as themeTypes.ThemeColor);
   }
   return { appearance, colors, dim };
 }
+
+const systemTheme = {
+  SYSTEM_THEME_NAME,
+  generateSystemThemeColors,
+  relativeLuminance,
+  terminalAppearance,
+  wcagContrast,
+};
+
+export default systemTheme;

@@ -1,9 +1,19 @@
 import { Effect } from "effect";
 
-import type { Runtime } from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
 
-function runCondition(runtime: Runtime, command: string, cwd: string): Effect.Effect<boolean> {
+function runCondition(
+  runtime: runtimeTypes.Runtime,
+  command: string,
+  cwd: string,
+): Effect.Effect<boolean> {
   return Effect.promise(() => runtime.options.runCondition(command, cwd));
 }
 
-export const conditions = { runCondition };
+const conditions = { runCondition };
+
+const condition = {
+  conditions,
+};
+
+export default condition;

@@ -3,12 +3,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { truncateMiddle } from "../src/core/tools/truncate.ts";
-import {
-  convertMcpResult,
-  createMcpResultSchema,
-  createMcpToolName,
-} from "../src/extensions/mcp/tools.ts";
+import truncate from "../src/core/tools/truncate.ts";
+import tools from "../src/extensions/mcp/tools.ts";
+
+const { convertMcpResult, createMcpResultSchema, createMcpToolName } = tools;
+const { truncateMiddle } = truncate;
 
 const { renderToolOutputType } = declarations;
 

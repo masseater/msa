@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Console, Effect } from "effect";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("model_select", (event, ctx) => {
     const { model, previousModel, source } = event;
 

@@ -1,11 +1,14 @@
 import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import type { ReadonlyFooterDataProvider } from "../src/core/footer-data-provider.ts";
-import { FooterComponent } from "../src/modes/interactive/components/footer.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import type footerDataProviderTypes from "../src/core/footer-data-provider.types.ts";
+import FooterComponent from "../src/modes/interactive/components/footer.ts";
+import type footerTypes from "../src/modes/interactive/components/footer.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { visibleWidth } = tui;
 
@@ -17,7 +20,7 @@ type AssistantUsage = {
   cost: { total: number };
 };
 
-function renderStatsLine(footer: FooterComponent): string {
+function renderStatsLine(footer: footerTypes.FooterComponent): string {
   const statsLine = footer.render(120)[1];
   if (statsLine === undefined) throw new Error("expected the footer to render a stats line");
   return stripAnsi(statsLine);
@@ -50,7 +53,7 @@ const usageEntries = (options: SessionOptions): Array<Record<string, unknown>> =
   return entries;
 };
 
-function createSession(options: SessionOptions): AgentSession {
+function createSession(options: SessionOptions): agentSessionTypes.AgentSession {
   const entries = usageEntries(options);
   const session = {
     getContextUsage: () => ({ contextWindow: 200_000, percent: 12.3 }),
@@ -77,10 +80,12 @@ function createSession(options: SessionOptions): AgentSession {
       thinkingLevel: options.thinkingLevel ?? "off",
     },
   };
-  return session as unknown as AgentSession;
+  return session as unknown as agentSessionTypes.AgentSession;
 }
 
-function createFooterData(providerCount: number): ReadonlyFooterDataProvider {
+function createFooterData(
+  providerCount: number,
+): footerDataProviderTypes.ReadonlyFooterDataProvider {
   const provider = {
     getAvailableProviderCount: () => providerCount,
     getExtensionStatuses: () => new Map<string, string>(),

@@ -2,9 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createEditTool } from "../src/core/tools/edit.ts";
-import { createWriteTool } from "../src/core/tools/write.ts";
+import edit from "../src/core/tools/edit.ts";
+import write from "../src/core/tools/write.ts";
 import fileMutationQueueToolsSupport from "./file-mutation-queue-tools-support.ts";
+
+const { createEditTool } = edit;
+const { createWriteTool } = write;
 
 const { accessFile, createDeferred, delay } = fileMutationQueueToolsSupport;
 

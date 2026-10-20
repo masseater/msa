@@ -1,6 +1,6 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
+import type agentSessionTypes from "../../../src/core/agent-session.types.ts";
 
 declare namespace SessionStartNotifySupportTypes {
   type LoadedResourcesResult<T> = { [K in keyof T]: T[K] } & { diagnostics: [] };
@@ -128,7 +128,10 @@ declare namespace SessionStartNotifySupportTypes {
     themeController?: Partial<ReloadCommandContext["themeController"]>;
   };
 
-  type MessageEvent = Extract<AgentSessionEvent, { type: "message_start" | "message_end" }>;
+  type MessageEvent = Extract<
+    agentSessionTypes.AgentSessionEvent,
+    { type: "message_start" | "message_end" }
+  >;
 }
 
 export type { SessionStartNotifySupportTypes as default };

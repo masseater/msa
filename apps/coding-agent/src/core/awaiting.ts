@@ -5,11 +5,11 @@ import { dual } from "effect/Function";
 
 type Steps<A> = Generator<Effect.Effect<unknown, never, never>, A, any>;
 
-export function* awaited<A>(value: A | PromiseLike<A>): Steps<Awaited<A>> {
+function* awaited<A>(value: A | PromiseLike<A>): Steps<Awaited<A>> {
   return (yield Effect.promise(() => Promise.resolve(value))) as Awaited<A>;
 }
 
-export function* performed<A>(effect: Effect.Effect<A>): Steps<A> {
+function* performed<A>(effect: Effect.Effect<A>): Steps<A> {
   return (yield effect) as A;
 }
 
@@ -30,11 +30,20 @@ const drive = <A>(start: () => Steps<A>): Effect.Effect<A> =>
     return step.value;
   });
 
-export const awaiting = <A>(body: () => Steps<A>): Effect.Effect<A> => drive(body);
+const awaiting = <A>(body: () => Steps<A>): Effect.Effect<A> => drive(body);
 
-export const awaitingWith: {
+const awaitingWith: {
   <This>(self: This): <A>(body: (this: This) => Steps<A>) => Effect.Effect<A>;
   <This, A>(body: (this: This) => Steps<A>, self: This): Effect.Effect<A>;
 } = dual(2, <This, A>(body: (this: This) => Steps<A>, self: This): Effect.Effect<A> =>
   drive(() => body.call(self)),
 );
+
+const awaitingModule = {
+  awaited,
+  awaiting,
+  awaitingWith,
+  performed,
+};
+
+export default awaitingModule;

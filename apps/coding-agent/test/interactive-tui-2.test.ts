@@ -3,16 +3,13 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  InteractiveMode,
-  createInteractiveTui,
-} from "../src/modes/interactive/interactive-mode.ts";
-import interactiveTuiSupport from "./interactive-tui-support.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
+import RecordingTerminal from "./interactive-tui-support.ts";
+
+const { createInteractiveTui } = tuiRenderer;
 
 const { Text } = tui;
-
-const { RecordingTerminal } = interactiveTuiSupport;
-
 const { awaited, runTest } = testing;
 
 const clipboardMocks = vi.hoisted(() => ({
@@ -21,7 +18,7 @@ const clipboardMocks = vi.hoisted(() => ({
   readClipboardText: vi.fn<() => Promise<string | null>>(),
 }));
 
-vi.mock("../src/utils/clipboard.ts", () => clipboardMocks);
+vi.mock("../src/utils/clipboard.ts", () => ({ default: clipboardMocks }));
 
 type CopyCommandContext = {
   session: { getLastAssistantText: () => string | undefined };

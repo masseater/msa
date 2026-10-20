@@ -3,13 +3,12 @@ import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import AgentSession from "../src/core/agent-session.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
-
 const { getModel, streamSimple } = compat;
 
 const { Agent } = agentModule;

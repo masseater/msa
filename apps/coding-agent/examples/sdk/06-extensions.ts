@@ -1,10 +1,7 @@
-import {
-  DefaultResourceLoader,
-  SessionManager,
-  createAgentSession,
-  getAgentDir,
-} from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { Console, Effect } from "effect";
+
+const { DefaultResourceLoader, SessionManager, createAgentSession, getAgentDir } = codingAgent;
 
 const resourceLoader = new DefaultResourceLoader({
   additionalExtensionPaths: ["./my-logging-extension.ts", "./my-safety-extension.ts"],
@@ -18,22 +15,29 @@ const resourceLoader = new DefaultResourceLoader({
     },
   ],
 });
-await resourceLoader.reload();
 
-const { session } = await createAgentSession({
-  resourceLoader,
-  sessionManager: SessionManager.inMemory(),
-});
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => resourceLoader.reload());
 
-try {
-  session.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      process.stdout.write(event.assistantMessageEvent.delta);
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+
+    try {
+      session.subscribe((event) => {
+        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+          process.stdout.write(event.assistantMessageEvent.delta);
+        }
+      });
+
+      yield* Effect.promise(() => session.prompt("List files in the current directory."));
+      yield* Console.log();
+    } finally {
+      session.dispose();
     }
-  });
-
-  await session.prompt("List files in the current directory.");
-  Effect.runSync(Console.log());
-} finally {
-  session.dispose();
-}
+  }),
+);

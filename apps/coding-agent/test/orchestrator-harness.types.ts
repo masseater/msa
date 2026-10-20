@@ -1,4 +1,4 @@
-import type orchestratorHarness from "./orchestrator-harness.ts";
+import type FakeWorkerClass from "./fake-worker.ts";
 
 declare namespace orchestratorHarnessTypes {
   interface HarnessOptions {
@@ -10,7 +10,7 @@ declare namespace orchestratorHarnessTypes {
     cwd?: string;
   }
 
-  type FakeWorker = (typeof orchestratorHarness.FakeWorker)["prototype"];
+  type FakeWorker = (typeof FakeWorkerClass)["prototype"];
 }
 
 export type { orchestratorHarnessTypes as default };

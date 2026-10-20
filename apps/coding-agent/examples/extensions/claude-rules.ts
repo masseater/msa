@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -16,7 +16,7 @@ const findRuleFiles = (cwd: string) =>
       .map((entry) => entry.replaceAll(path.sep, "/"));
   });
 
-export default function claudeRulesExtension(msa: ExtensionAPI) {
+export default function claudeRulesExtension(msa: codingAgentTypes.ExtensionAPI) {
   let ruleFiles: string[] = [];
 
   msa.on("session_start", (_event, ctx) =>

@@ -1,21 +1,20 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type agentTypes from "@msa/agent-core/index.types";
-import { Effect, FileSystem } from "effect";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
-import { detectSupportedImageMimeTypeFromFile } from "../../utils/mime.ts";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import {
-  abortedBy,
-  fromPromise,
-  nonEmptyOr,
-  platformRuntime,
-  rethrowCause,
-  unwrapForeign,
-} from "../platform/index.ts";
-import { resolveReadPathAsync } from "./path-utils.ts";
-import {
-  type ReadOperations,
-  type ReadToolDetails,
-  type ReadToolOptions,
+import mime from "../../utils/mime.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import pathUtils from "./path-utils.ts";
+import readContent from "./read-content.ts";
+import type readContentTypes from "./read-content.types.ts";
+import readModule from "./renderers/read.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const {
   readDescription,
   readImageContent,
   readOutputSchema,
@@ -23,27 +22,21 @@ import {
   readTextContent,
   readToolSystemPromptContribution,
   toReadOutput,
-} from "./read-content.ts";
-import { readRenderers } from "./renderers/read.ts";
-import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
+} = readContent;
+const { abortedBy, fromPromise, nonEmptyOr, rethrowCause, unwrapForeign } = platform;
+const { detectSupportedImageMimeTypeFromFile } = mime;
+const { resolveReadPathAsync } = pathUtils;
+const { readRenderers } = readModule;
+const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
-export {
-  readToolSystemPromptContribution,
-  type ReadOperations,
-  type ReadToolDetails,
-  type ReadToolInput,
-  type ReadToolOptions,
-  type ReadToolOutput,
-} from "./read-content.ts";
-
-const defaultReadOperations: ReadOperations = {
+const defaultReadOperations: readContentTypes.ReadOperations = {
   access: (path) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(FileSystem.FileSystem.use((fs) => fs.access(path, { readable: true }))),
     ),
   detectImageMimeType: detectSupportedImageMimeTypeFromFile,
   readFile: (path) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(
         FileSystem.FileSystem.use((fs) => fs.readFile(path)).pipe(
           Effect.map((bytes) => Buffer.from(bytes)),
@@ -53,13 +46,13 @@ const defaultReadOperations: ReadOperations = {
 };
 
 interface ReadRequest {
-  ops: ReadOperations;
-  options: ReadToolOptions | undefined;
+  ops: readContentTypes.ReadOperations;
+  options: readContentTypes.ReadToolOptions | undefined;
   cwd: string;
   path: string;
   offset: number | undefined;
   limit: number | undefined;
-  ctx: ExtensionContext | undefined;
+  ctx: extensionsTypesTypes.ExtensionContext | undefined;
 }
 
 const readFileTool = Effect.fn("read")(function* (request: ReadRequest) {
@@ -78,7 +71,7 @@ const readFileTool = Effect.fn("read")(function* (request: ReadRequest) {
       ops,
       resizeOptions: ctx?.model?.inputLimits?.images?.resize ?? options?.resizeOptions,
     });
-    return { content, details: undefined as ReadToolDetails | undefined };
+    return { content, details: undefined as readContentTypes.ReadToolDetails | undefined };
   }
   const buffer = yield* fromPromise(() => ops.readFile(absolutePath));
   return yield* readTextContent({
@@ -91,8 +84,11 @@ const readFileTool = Effect.fn("read")(function* (request: ReadRequest) {
 
 const createReadToolDefinitionImpl = (
   cwd: string,
-  options?: ReadToolOptions,
-): ToolDefinition<typeof readSchema, ReadToolDetails | undefined> => {
+  options?: readContentTypes.ReadToolOptions,
+): extensionsTypesTypes.ToolDefinition<
+  typeof readSchema,
+  readContentTypes.ReadToolDetails | undefined
+> => {
   const ops = options?.operations ?? defaultReadOperations;
   return {
     annotations: { readOnlyHint: true },
@@ -103,11 +99,11 @@ const createReadToolDefinitionImpl = (
       { path, offset, limit }: { path: string; offset?: number; limit?: number },
       signal?: AbortSignal,
       _onUpdate?,
-      ctx?: ExtensionContext,
+      ctx?: extensionsTypesTypes.ExtensionContext,
     ) =>
-      platformRuntime.runPromise(
+      nodeRuntime.runPromise(
         unwrapForeign(
-          readFileTool({ ops, options, cwd, path, offset, limit, ctx }).pipe(
+          readFileTool({ ctx, cwd, limit, offset, ops, options, path }).pipe(
             abortedBy(signal),
             Effect.map((result) => ({
               content: result.content,
@@ -127,12 +123,23 @@ const createReadToolDefinitionImpl = (
   };
 };
 
-export const createReadToolDefinition: CwdFactory<
-  ReadToolOptions,
-  ToolDefinition<typeof readSchema, ReadToolDetails | undefined>
+const createReadToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
+  readContentTypes.ReadToolOptions,
+  extensionsTypesTypes.ToolDefinition<
+    typeof readSchema,
+    readContentTypes.ReadToolDetails | undefined
+  >
 > = cwdFactory(createReadToolDefinitionImpl);
 
-export const createReadTool: CwdFactory<
-  ReadToolOptions,
+const createReadTool: toolDefinitionWrapperTypes.CwdFactory<
+  readContentTypes.ReadToolOptions,
   agentTypes.AgentTool<typeof readSchema>
 > = cwdFactory((cwd, options) => wrapToolDefinition(createReadToolDefinitionImpl(cwd, options)));
+
+const read = {
+  createReadTool,
+  createReadToolDefinition,
+  readToolSystemPromptContribution: readContent.readToolSystemPromptContribution,
+};
+
+export default read;

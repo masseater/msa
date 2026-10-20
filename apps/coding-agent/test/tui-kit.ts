@@ -1,10 +1,9 @@
-import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { getEditorTheme, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { getEditorTheme, initTheme, theme } = themeModule;
+const { stripAnsi } = ansi;
 const tuiKit = {
   KeybindingsManager,
   VirtualTerminal,

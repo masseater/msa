@@ -1,24 +1,19 @@
-import { getPackageDir, isBunBinary, isBunRuntime, moduleDirname } from "./config-package.ts";
-import { basename, dirname } from "./core/platform-node.ts";
-import { readEnv } from "./core/platform.ts";
-import { spawnProcessSync } from "./utils/child-process.ts";
-import { windowsBasename, windowsDirname } from "./utils/platform-extra.ts";
+import type configInstallCommandTypes from "./config-install-command.types.ts";
+import configPackage from "./config-package.ts";
+import platformNode from "./core/platform-node.ts";
+import platformModule from "./core/platform.ts";
+import childProcess from "./utils/child-process.ts";
+import platformExtra from "./utils/platform-extra.ts";
 
-export type InstallMethod = "bun-binary" | "npm" | "pnpm" | "yarn" | "bun" | "unknown";
+const { getPackageDir, isBunBinary, isBunRuntime, moduleDirname } = configPackage;
+const { windowsBasename, windowsDirname } = platformExtra;
+const { basename, dirname } = platformNode;
+const { readEnv } = platformModule;
+const { spawnProcessSync } = childProcess;
 
-interface SelfUpdateCommandStep {
-  command: string;
-  args: string[];
-  display: string;
-}
-
-export interface SelfUpdateCommand extends SelfUpdateCommandStep {
-  steps?: SelfUpdateCommandStep[];
-}
-
-export type SelfUpdatePackageTarget = string | { packageName: string; installSpec?: string };
-
-export function normalizeSelfUpdatePackageTarget(target: SelfUpdatePackageTarget): {
+function normalizeSelfUpdatePackageTarget(
+  target: configInstallCommandTypes.SelfUpdatePackageTarget,
+): {
   packageName: string;
   installSpec: string;
 } {
@@ -28,10 +23,10 @@ export function normalizeSelfUpdatePackageTarget(target: SelfUpdatePackageTarget
   return { installSpec: target.installSpec ?? target.packageName, packageName: target.packageName };
 }
 
-export function makeSelfUpdateCommand(
-  installStep: SelfUpdateCommandStep,
-  uninstallStep?: SelfUpdateCommandStep,
-): SelfUpdateCommand {
+function makeSelfUpdateCommand(
+  installStep: configInstallCommandTypes.SelfUpdateCommandStep,
+  uninstallStep?: configInstallCommandTypes.SelfUpdateCommandStep,
+): configInstallCommandTypes.SelfUpdateCommand {
   if (uninstallStep === undefined) return installStep;
   return {
     ...installStep,
@@ -40,7 +35,10 @@ export function makeSelfUpdateCommand(
   };
 }
 
-export function makeSelfUpdateCommandStep(command: string, args: string[]): SelfUpdateCommandStep {
+function makeSelfUpdateCommandStep(
+  command: string,
+  args: string[],
+): configInstallCommandTypes.SelfUpdateCommandStep {
   return {
     args,
     command,
@@ -48,7 +46,7 @@ export function makeSelfUpdateCommandStep(command: string, args: string[]): Self
   };
 }
 
-export function detectInstallMethod(): InstallMethod {
+function detectInstallMethod(): configInstallCommandTypes.InstallMethod {
   if (isBunBinary) {
     return "bun-binary";
   }
@@ -73,7 +71,7 @@ export function detectInstallMethod(): InstallMethod {
   return "unknown";
 }
 
-export function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
+function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
   const packageDir = getPackageDir();
   const path =
     process.platform === "win32" || packageDir.includes("\\")
@@ -96,46 +94,18 @@ export function getInferredNpmInstall(): { root: string; prefix: string } | unde
   return undefined;
 }
 
-export function getSelfUpdateCommandForMethod(
-  method: InstallMethod,
+function getSelfUpdateCommandForMethod(
+  method: configInstallCommandTypes.InstallMethod,
   installedPackageName: string,
-  updatePackageTarget: SelfUpdatePackageTarget = installedPackageName,
+  updatePackageTarget: configInstallCommandTypes.SelfUpdatePackageTarget = installedPackageName,
   npmCommand?: string[],
-): SelfUpdateCommand | undefined {
+): configInstallCommandTypes.SelfUpdateCommand | undefined {
   const target = normalizeSelfUpdatePackageTarget(updatePackageTarget);
   switch (method) {
     case "bun-binary":
       return undefined;
-    case "pnpm": {
-      const globalRoot = readCommandOutput("pnpm", ["root", "-g"]);
-      const match =
-        globalRoot !== undefined && globalRoot !== ""
-          ? undefined
-          : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/u.exec(getPackageDir());
-      const globalDir = match?.[1];
-      const binDirArgs =
-        globalDir === undefined
-          ? []
-          : [`--config.global-bin-dir=${readEnv("PNPM_HOME") || dirname(dirname(globalDir))}`];
-      return makeSelfUpdateCommand(
-        makeSelfUpdateCommandStep("pnpm", [
-          "install",
-          "-g",
-          "--ignore-scripts",
-          "--config.minimumReleaseAge=0",
-          ...binDirArgs,
-          target.installSpec,
-        ]),
-        target.packageName === installedPackageName
-          ? undefined
-          : makeSelfUpdateCommandStep("pnpm", [
-              "remove",
-              "-g",
-              ...binDirArgs,
-              installedPackageName,
-            ]),
-      );
-    }
+    case "pnpm":
+      return getSelfUpdateCommandForMethodPart1(target, installedPackageName);
     case "yarn":
       return makeSelfUpdateCommand(
         makeSelfUpdateCommandStep("yarn", [
@@ -163,32 +133,13 @@ export function getSelfUpdateCommandForMethod(
       );
     case "npm": {
       const [command = "npm", ...npmArgs] = npmCommand ?? [];
-      const inferred =
-        npmCommand?.length !== undefined && npmCommand?.length !== 0
-          ? undefined
-          : getInferredNpmInstall();
-      const prefixArgs = [
-        ...npmArgs,
-        ...(inferred === undefined ? [] : ["--prefix", inferred.prefix]),
-      ];
-
-      const installStep = makeSelfUpdateCommandStep(command, [
-        ...prefixArgs,
-        "install",
-        "-g",
-        "--ignore-scripts",
-        "--min-release-age=0",
-        target.installSpec,
-      ]);
-      const uninstallStep =
-        target.packageName === installedPackageName
-          ? undefined
-          : makeSelfUpdateCommandStep(command, [
-              ...prefixArgs,
-              "uninstall",
-              "-g",
-              installedPackageName,
-            ]);
+      const { installStep, uninstallStep } = getSelfUpdateCommandForMethodPart5(
+        npmCommand,
+        npmArgs,
+        command,
+        target,
+        installedPackageName,
+      );
       return makeSelfUpdateCommand(installStep, uninstallStep);
     }
     case "unknown":
@@ -196,7 +147,119 @@ export function getSelfUpdateCommandForMethod(
   }
 }
 
-export function readCommandOutput(
+function getSelfUpdateCommandForMethodPart5(
+  npmCommand: string[] | undefined,
+  npmArgs: string[],
+  command: string,
+  target: { packageName: string; installSpec: string },
+  installedPackageName: string,
+): { installStep: any; uninstallStep: any } {
+  return getSelfUpdateCommandForMethodPart4(
+    npmCommand,
+    npmArgs,
+    command,
+    target,
+    installedPackageName,
+  );
+}
+
+function getSelfUpdateCommandForMethodPart4(
+  npmCommand: string[] | undefined,
+  npmArgs: string[],
+  command: string,
+  target: { packageName: string; installSpec: string },
+  installedPackageName: string,
+): { installStep: any; uninstallStep: any } {
+  return getSelfUpdateCommandForMethodPart3(
+    npmCommand,
+    npmArgs,
+    command,
+    target,
+    installedPackageName,
+  );
+}
+
+function getSelfUpdateCommandForMethodPart3(
+  npmCommand: string[] | undefined,
+  npmArgs: string[],
+  command: string,
+  target: { packageName: string; installSpec: string },
+  installedPackageName: string,
+): { installStep: any; uninstallStep: any } {
+  return getSelfUpdateCommandForMethodPart2(
+    npmCommand,
+    npmArgs,
+    command,
+    target,
+    installedPackageName,
+  );
+}
+
+function getSelfUpdateCommandForMethodPart2(
+  npmCommand: string[] | undefined,
+  npmArgs: string[],
+  command: string,
+  target: { packageName: string; installSpec: string },
+  installedPackageName: string,
+) {
+  const inferred =
+    npmCommand?.length !== undefined && npmCommand?.length !== 0
+      ? undefined
+      : getInferredNpmInstall();
+  const prefixArgs = [...npmArgs, ...(inferred === undefined ? [] : ["--prefix", inferred.prefix])];
+
+  const installStep = makeSelfUpdateCommandStep(command, [
+    ...prefixArgs,
+    "install",
+    "-g",
+    "--ignore-scripts",
+    "--min-release-age=0",
+    target.installSpec,
+  ]);
+  const uninstallStep =
+    target.packageName === installedPackageName
+      ? undefined
+      : makeSelfUpdateCommandStep(command, [
+          ...prefixArgs,
+          "uninstall",
+          "-g",
+          installedPackageName,
+        ]);
+  return { installStep, uninstallStep };
+}
+
+function getSelfUpdateCommandForMethodPart1(
+  target: { packageName: string; installSpec: string },
+  installedPackageName: string,
+) {
+  {
+    const globalRoot = readCommandOutput("pnpm", ["root", "-g"]);
+    const match =
+      globalRoot !== undefined && globalRoot !== ""
+        ? undefined
+        : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/u.exec(getPackageDir());
+    const globalDir = match?.[1];
+    const binDirArgs =
+      globalDir === undefined
+        ? []
+        : [`--config.global-bin-dir=${readEnv("PNPM_HOME") || dirname(dirname(globalDir))}`];
+    return makeSelfUpdateCommand(
+      makeSelfUpdateCommandStep("pnpm", [
+        "install",
+        "-g",
+        "--ignore-scripts",
+        "--config.minimumReleaseAge=0",
+        ...binDirArgs,
+        target.installSpec,
+      ]),
+      target.packageName === installedPackageName
+        ? undefined
+        : makeSelfUpdateCommandStep("pnpm", ["remove", "-g", ...binDirArgs, installedPackageName]),
+    );
+  }
+}
+
+function readCommandOutput(
   command: string,
   args: string[],
   options: { requireSuccess?: boolean } = {},
@@ -213,3 +276,15 @@ export function readCommandOutput(
   }
   return undefined;
 }
+
+const configInstallCommand = {
+  detectInstallMethod,
+  getInferredNpmInstall,
+  getSelfUpdateCommandForMethod,
+  makeSelfUpdateCommand,
+  makeSelfUpdateCommandStep,
+  normalizeSelfUpdatePackageTarget,
+  readCommandOutput,
+};
+
+export default configInstallCommand;

@@ -180,7 +180,7 @@ function applySgrCode(params: number[], style: TextStyle): void {
 const ESC = String.fromCodePoint(27);
 const ANSI_REGEX = new RegExp(`${ESC}\\[([\\d;]*)m`, "gu");
 
-export function ansiToHtml(text: string): string {
+function ansiToHtml(text: string): string {
   const style = createEmptyStyle();
   let result = "";
   let lastIndex = 0;
@@ -229,8 +229,15 @@ export function ansiToHtml(text: string): string {
   return result;
 }
 
-export function ansiLinesToHtml(lines: string[]): string {
+function ansiLinesToHtml(lines: string[]): string {
   return lines
     .map((line) => `<div class="ansi-line">${ansiToHtml(line) || "&nbsp;"}</div>`)
     .join("");
 }
+
+const ansiToHtmlModule = {
+  ansiLinesToHtml,
+  ansiToHtml,
+};
+
+export default ansiToHtmlModule;

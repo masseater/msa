@@ -1,12 +1,14 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
+import slashCommands from "../src/core/slash-commands.ts";
+
+const {
   canonicalizeBuiltinSlashCommand,
   formatHelpMarkdown,
   handoffPrompt,
   parseHandoffCommand,
   withSkillCommands,
-} from "../src/core/slash-commands.ts";
+} = slashCommands;
 
 const listsEverySkillUnderItsNameTaking = () => {
   const commands = [

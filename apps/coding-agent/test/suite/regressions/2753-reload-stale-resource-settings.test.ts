@@ -4,16 +4,15 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionFromServices,
-  createAgentSessionRuntime,
-  createAgentSessionServices,
-} from "../../../src/core/agent-session-runtime.ts";
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { ModelRuntime } from "../../../src/core/model-runtime.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
+import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
+import AuthStorage from "../../../src/core/auth-storage.ts";
+import type modelRuntimeTypes from "../../../src/core/model-runtime.types.ts";
+import codingAgent from "../../../src/index.ts";
 
+const { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices } =
+  codingAgent;
+
+const { ModelRuntime, SessionManager } = codingAgent;
 const { registerFauxProvider } = compat;
 
 const { joinPath, toJsonText } = testing;
@@ -63,7 +62,11 @@ const createFauxModelRuntime = (agentDir: string) =>
   });
 
 const runtimeFactory =
-  (agentDir: string, faux: Faux, modelRuntime: ModelRuntime): CreateAgentSessionRuntimeFactory =>
+  (
+    agentDir: string,
+    faux: Faux,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+  ): agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory =>
   ({ cwd, sessionManager, sessionStartEvent }) =>
     Effect.runPromise(
       Effect.gen(function* () {

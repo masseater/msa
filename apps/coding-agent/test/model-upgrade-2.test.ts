@@ -2,14 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  createUpgradeReplacements,
-  rewriteModelReferencesInSettings,
-} from "../src/core/model-upgrade.ts";
-import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
-import { createModelUpgradeToolDefinition } from "../src/core/tools/model-upgrade.ts";
-import { wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
+import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
+import modelUpgrade from "../src/core/model-upgrade.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import modelUpgradeModule from "../src/core/tools/model-upgrade.ts";
+import toolDefinitionWrapper from "../src/core/tools/tool-definition-wrapper.ts";
 import modelUpgradeSupport from "./model-upgrade-support.ts";
+const { createUpgradeReplacements, rewriteModelReferencesInSettings } = modelUpgrade;
+const { wrapToolDefinition } = toolDefinitionWrapper;
+const { createModelUpgradeToolDefinition } = modelUpgradeModule;
 
 const { awaited, runTest } = testing;
 

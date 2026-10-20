@@ -2,8 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import type { ExtensionAPI } from "../src/core/extensions/types.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import agentSessionConcurrentSupport from "./agent-session-concurrent-support.ts";
 import sessionKit from "./session-kit.ts";
 
@@ -24,12 +24,12 @@ const { dummyCall, dummyTool, installExtensionRunner, toolCallResponder } =
 
 let tempDir = "";
 
-let session: AgentSession | undefined;
+let session: agentSessionTypes.AgentSession | undefined;
 
 const steeringSession = (seen: {
   steered: boolean;
   source: string | undefined;
-  api?: ExtensionAPI;
+  api?: extensionsTypesTypes.ExtensionAPI;
 }) =>
   createAgentSession({
     cwd: tempDir,
@@ -58,7 +58,11 @@ const steeringSession = (seen: {
 const shouldQueueExtensionOriginSteeringMessagesWhile = () =>
   runTest(
     Effect.gen(function* () {
-      const seen: { steered: boolean; source: string | undefined; api?: ExtensionAPI } = {
+      const seen: {
+        steered: boolean;
+        source: string | undefined;
+        api?: extensionsTypesTypes.ExtensionAPI;
+      } = {
         source: undefined,
         steered: false,
       };

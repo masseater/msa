@@ -9,11 +9,9 @@ import tuiRenderHelpers from "./tui-render-helpers.ts";
 import tuiRenderKittyHelpers from "./tui-render-kitty-helpers.ts";
 import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { Image, TuiMainScreen } = tuiModule;
-const { VirtualTerminal } = virtualTerminal;
-
 const { withEnv } = tuiRenderHelpers;
 const { renderKittyTestImage, withKittyCells } = tuiRenderKittyHelpers;
 

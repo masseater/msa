@@ -3,7 +3,9 @@ import { applyPatch } from "diff";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createEditTool } from "../src/index.ts";
+import src from "../src/index.ts";
+
+const { createEditTool } = src;
 
 const {
   awaited,

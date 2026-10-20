@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { KEYBINDINGS, useWindowsKeybindings } from "../src/core/keybindings.ts";
+import keybindings from "../src/core/keybindings.ts";
+
+const { KEYBINDINGS, useWindowsKeybindings } = keybindings;
 
 const { readTextFile, resolvePath, runTest } = testing;
 

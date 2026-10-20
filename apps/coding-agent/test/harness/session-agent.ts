@@ -2,11 +2,10 @@ import agentModule from "@msa/agent-core";
 import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../../src/core/auth-storage.ts";
+import AuthStorage from "../../src/core/auth-storage.ts";
 import modelRuntimeTestUtils from "../model-runtime-test-utils.ts";
 import fauxStream from "./faux-stream.ts";
 import type sessionAgentTypes from "./session-agent.types.ts";
-
 const { Agent } = agentModule;
 
 const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;

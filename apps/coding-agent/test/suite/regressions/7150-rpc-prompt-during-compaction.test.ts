@@ -3,7 +3,7 @@ import testing from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { PromptDisposition } from "../../../src/core/agent-session.ts";
+import type agentSessionTypes from "../../../src/core/agent-session.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
@@ -69,7 +69,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   const compactPromise = harness.session.compact();
   yield* Effect.promise(() => compactionStarted);
 
-  let preflightResult: PromptDisposition | undefined;
+  let preflightResult: agentSessionTypes.PromptDisposition | undefined;
   let promptError: unknown;
   try {
     const tryExit6 = yield* Effect.exit(

@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-export const callbackPromise = <T>(
+const callbackPromise = <T>(
   register: (
     resolve: (value: T | PromiseLike<T>) => void,
     reject: (reason?: unknown) => void,
@@ -21,7 +21,14 @@ const currentFetch = (): typeof globalThis.fetch => globalThis.fetch;
 const fetchResponseImpl = (input: string | URL | Request, init?: RequestInit): Promise<Response> =>
   Effect.runPromise(Effect.promise(() => currentFetch()(input, init)));
 
-export const fetchResponse: {
+const fetchResponse: {
   (input: string | URL | Request, init?: RequestInit): Promise<Response>;
   (init?: RequestInit): (input: string | URL | Request) => Promise<Response>;
 } = dual((args: IArguments) => args.length >= 1, fetchResponseImpl);
+
+const interop = {
+  callbackPromise,
+  fetchResponse,
+};
+
+export default interop;

@@ -3,8 +3,10 @@ import testing from "@msa/testing";
 import { Effect, ManagedRuntime, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
+import config from "../src/config.ts";
 import type cliProcessTypes from "./cli-process.types.ts";
+
+const { ENV_AGENT_DIR } = config;
 
 const { resolvePath } = testing;
 

@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { readClipboardImageFromCommand } from "../src/utils/clipboard-image.ts";
+import clipboardImage from "../src/utils/clipboard-image.ts";
+
+const { readClipboardImageFromCommand } = clipboardImage;
 
 const { awaited, makeTempFile, removePath, runTest, writeBytesFile } = testing;
 

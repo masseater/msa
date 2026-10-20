@@ -3,9 +3,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { RuntimeCredentials } from "../src/core/runtime-credentials.ts";
-
+import AuthStorage from "../src/core/auth-storage.ts";
+import RuntimeCredentials from "../src/core/runtime-credentials.ts";
 const { abortController, awaited, currentTimeMillis, runTest } = testing;
 
 const runtimeOverridesMaskStoredCredentialsWithoutPersisting = () =>

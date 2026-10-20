@@ -3,13 +3,15 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../../../src/config.ts";
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { runMigrations } from "../../../src/migrations.ts";
+import config from "../../../src/config.ts";
+import AuthStorage from "../../../src/core/auth-storage.ts";
+import migrations from "../../../src/migrations.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { ENV_AGENT_DIR } = config;
+const { runMigrations } = migrations;
 const { createHarness } = harnessModule;
 const { createModelRegistry } = modelRuntimeTestUtils;
 

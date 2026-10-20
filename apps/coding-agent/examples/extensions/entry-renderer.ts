@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Clock, DateTime, Effect } from "effect";
 
@@ -9,7 +9,7 @@ interface StatusCardData {
   timestamp: number;
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerEntryRenderer<StatusCardData>("status-card", (entry, { expanded }, theme) => {
     const data = entry.data ?? {
       message: "No data",

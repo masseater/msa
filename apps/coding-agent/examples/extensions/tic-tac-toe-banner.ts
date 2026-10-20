@@ -1,19 +1,26 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { BoardDetails } from "./tic-tac-toe-game.ts";
-import { renderBoardSnapshot } from "./tic-tac-toe-render.ts";
+import type ticTacToeGameTypes from "./tic-tac-toe-game.types.ts";
+import ticTacToeRender from "./tic-tac-toe-render.ts";
+
+const { renderBoardSnapshot } = ticTacToeRender;
 
 const { visibleWidth } = tui;
 
-export class BannerMessageComponent implements tuiTypes.Component {
+export default class BannerMessageComponent implements tuiTypes.Component {
   private readonly title: string;
-  private readonly details: BoardDetails | undefined;
+  private readonly details: ticTacToeGameTypes.BoardDetails | undefined;
   private readonly expanded: boolean;
-  private readonly theme: Theme;
+  private readonly theme: codingAgentTypes.Theme;
 
-  constructor(title: string, details: BoardDetails | undefined, expanded: boolean, theme: Theme) {
+  constructor(
+    title: string,
+    details: ticTacToeGameTypes.BoardDetails | undefined,
+    expanded: boolean,
+    theme: codingAgentTypes.Theme,
+  ) {
     this.title = title;
     this.details = details;
     this.expanded = expanded;

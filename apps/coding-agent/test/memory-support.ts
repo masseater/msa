@@ -1,8 +1,8 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { MemoryService, type ResolvedMemorySettings } from "../src/core/memory/memory.ts";
-
+import MemoryService from "../src/core/memory/memory-service.ts";
+import type memoryTypes from "../src/core/memory/memory.types.ts";
 const { closeServers, joinPath, listen, makeTempDir, readMessage, removeDirs } = testing;
 
 const workspaces: string[] = [];
@@ -37,8 +37,8 @@ const embeddingServer = Effect.fn("embeddingServer")(function* (responses: numbe
 
 const settings = (
   workspace: string,
-  overrides: Partial<ResolvedMemorySettings> = {},
-): ResolvedMemorySettings => ({
+  overrides: Partial<memoryTypes.ResolvedMemorySettings> = {},
+): memoryTypes.ResolvedMemorySettings => ({
   database: joinPath(workspace, "memory.db"),
   embedding: {
     baseUrl: "http://127.0.0.1:1/v1",
@@ -53,7 +53,7 @@ const settings = (
   ...overrides,
 });
 
-const embeddingSettings = (baseUrl: string): ResolvedMemorySettings["embedding"] => ({
+const embeddingSettings = (baseUrl: string): memoryTypes.ResolvedMemorySettings["embedding"] => ({
   baseUrl,
   documentPrefix: "D: ",
   enabled: true,
@@ -62,10 +62,10 @@ const embeddingSettings = (baseUrl: string): ResolvedMemorySettings["embedding"]
   timeoutMs: 2_000,
 });
 
-const openService = (cwd: string, serviceSettings: ResolvedMemorySettings) =>
+const openService = (cwd: string, serviceSettings: memoryTypes.ResolvedMemorySettings) =>
   Effect.acquireRelease(
     Effect.sync(() => new MemoryService({ cwd, settings: serviceSettings })),
-    (service) => Effect.sync(() => service.close()),
+    (service) => Effect.promise(() => service.close()),
   );
 
 const memorySupport = {

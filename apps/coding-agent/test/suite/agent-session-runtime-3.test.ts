@@ -2,30 +2,23 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { SessionManager } from "../../src/core/session-manager.ts";
-import type {
-  ExtensionAPI,
-  SessionBeforeForkEvent,
-  SessionBeforeSwitchEvent,
-  SessionShutdownEvent,
-  SessionStartEvent,
-} from "../../src/index.ts";
+import SessionManager from "../../src/core/session-manager.ts";
+import type srcTypes from "../../src/index.types.ts";
 import agentSessionRuntimeSupport from "./agent-session-runtime-support.ts";
-
 const { createRuntimeForTest, disposeRuntimes } = agentSessionRuntimeSupport;
 
 const { basenameOf, currentTimeMillis, makeDirectory, makeTempDir, pathExists, runTest } = testing;
 
 type RecordedSessionEvent =
-  | SessionBeforeSwitchEvent
-  | SessionBeforeForkEvent
-  | SessionShutdownEvent
-  | SessionStartEvent;
+  | srcTypes.SessionBeforeSwitchEvent
+  | srcTypes.SessionBeforeForkEvent
+  | srcTypes.SessionShutdownEvent
+  | srcTypes.SessionStartEvent;
 
 const honorsSessionBeforeSwitchCancellationFor = Effect.gen(function* () {
   const events: RecordedSessionEvent[] = [];
   let cancelReason: "new" | "resume" | undefined;
-  const { runtime } = yield* createRuntimeForTest((msa: ExtensionAPI) => {
+  const { runtime } = yield* createRuntimeForTest((msa: srcTypes.ExtensionAPI) => {
     msa.on("session_before_switch", (event) => {
       events.push(event);
       if (event.reason === cancelReason) {
@@ -63,7 +56,8 @@ const honorsSessionBeforeSwitchCancellationFor = Effect.gen(function* () {
 });
 
 const forkRecorder =
-  (events: RecordedSessionEvent[], control: { cancelNext: boolean }) => (msa: ExtensionAPI) => {
+  (events: RecordedSessionEvent[], control: { cancelNext: boolean }) =>
+  (msa: srcTypes.ExtensionAPI) => {
     msa.on("session_before_fork", (event) => {
       events.push(event);
       if (control.cancelNext) {

@@ -1,16 +1,17 @@
-import type { Readable } from "node:stream";
 import { StringDecoder } from "node:string_decoder";
 
 import { dual } from "effect/Function";
 
-export function serializeJsonLine(value: unknown): string {
+import type nodeStreamTypes from "../../core/platform/node/stream.types.ts";
+
+function serializeJsonLine(value: unknown): string {
   return `${JSON.stringify(value)}\n`;
 }
 
-export const attachJsonlLineReader: {
-  (onLine: (line: string) => void): (stream: Readable) => () => void;
-  (stream: Readable, onLine: (line: string) => void): () => void;
-} = dual(2, (stream: Readable, onLine: (line: string) => void): (() => void) => {
+const attachJsonlLineReader: {
+  (onLine: (line: string) => void): (stream: nodeStreamTypes.Readable) => () => void;
+  (stream: nodeStreamTypes.Readable, onLine: (line: string) => void): () => void;
+} = dual(2, (stream: nodeStreamTypes.Readable, onLine: (line: string) => void): (() => void) => {
   const decoder = new StringDecoder("utf8");
   let buffer = "";
 
@@ -48,3 +49,10 @@ export const attachJsonlLineReader: {
     stream.off("end", onEnd);
   };
 });
+
+const jsonl = {
+  attachJsonlLineReader,
+  serializeJsonLine,
+};
+
+export default jsonl;

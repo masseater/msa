@@ -5,13 +5,10 @@ import type envTypes from "../src/env/index.types.ts";
 import node from "../src/env/node.ts";
 import effectSupport from "./effect-support.ts";
 import toolsSupport from "./tools-support.ts";
-
-const { NodeExecutionEnv } = node;
-
 const { awaited } = effectSupport;
 const { delay } = toolsSupport;
 
-class SlowReadExecutionEnv extends NodeExecutionEnv {
+class SlowReadExecutionEnv extends node.NodeExecutionEnv {
   override readTextFile(
     path: string,
     context: chordTypes.Context,

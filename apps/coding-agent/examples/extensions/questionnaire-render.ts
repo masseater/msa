@@ -1,17 +1,20 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 
-import type { QuestionnaireState, RenderOption } from "./questionnaire-types.ts";
+import type questionnaireTypesTypes from "./questionnaire-types.types.ts";
 
 const { visibleWidth, wrapTextWithAnsi } = tui;
 
-const currentQuestion = (state: QuestionnaireState) => state.questions[state.currentTab];
+const currentQuestion = (state: questionnaireTypesTypes.QuestionnaireState) =>
+  state.questions[state.currentTab];
 
-const currentOptions = (state: QuestionnaireState): RenderOption[] => {
+const currentOptions = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+): questionnaireTypesTypes.RenderOption[] => {
   const question = currentQuestion(state);
   if (question === undefined) return [];
 
-  const options: RenderOption[] = [...question.options];
+  const options: questionnaireTypesTypes.RenderOption[] = [...question.options];
   if (question.allowOther) {
     options.push({ isOther: true, label: "Type something.", value: "__other__" });
   }
@@ -41,7 +44,10 @@ const appendWrappedWithPrefix = (
   }
 };
 
-const tabBar = (state: QuestionnaireState, theme: Theme): string => {
+const tabBar = (
+  state: questionnaireTypesTypes.QuestionnaireState,
+  theme: codingAgentTypes.Theme,
+): string => {
   const tabs: string[] = ["← "];
   for (const [i, question] of state.questions.entries()) {
     const isActive = i === state.currentTab;
@@ -65,8 +71,8 @@ const tabBar = (state: QuestionnaireState, theme: Theme): string => {
 
 const appendOptions = (
   lines: string[],
-  state: QuestionnaireState,
-  theme: Theme,
+  state: questionnaireTypesTypes.QuestionnaireState,
+  theme: codingAgentTypes.Theme,
   width: number,
 ): void => {
   for (const [i, opt] of currentOptions(state).entries()) {
@@ -85,8 +91,8 @@ const appendOptions = (
 
 const appendInputMode = (
   lines: string[],
-  state: QuestionnaireState,
-  theme: Theme,
+  state: questionnaireTypesTypes.QuestionnaireState,
+  theme: codingAgentTypes.Theme,
   width: number,
 ): void => {
   const question = currentQuestion(state);
@@ -106,8 +112,8 @@ const appendInputMode = (
 
 const appendSubmitTab = (
   lines: string[],
-  state: QuestionnaireState,
-  theme: Theme,
+  state: questionnaireTypesTypes.QuestionnaireState,
+  theme: codingAgentTypes.Theme,
   width: number,
 ): void => {
   appendWrappedWithPrefix(lines, " ", theme.fg("accent", theme.bold("Ready to submit")), width);
@@ -139,9 +145,9 @@ const appendSubmitTab = (
   );
 };
 
-export const renderQuestionnaire = (request: {
-  readonly state: QuestionnaireState;
-  readonly theme: Theme;
+const renderQuestionnaire = (request: {
+  readonly state: questionnaireTypesTypes.QuestionnaireState;
+  readonly theme: codingAgentTypes.Theme;
   readonly width: number;
 }): string[] => {
   const { state, theme, width } = request;
@@ -181,3 +187,9 @@ export const renderQuestionnaire = (request: {
   state.cachedLines = lines;
   return lines;
 };
+
+const questionnaireRender = {
+  renderQuestionnaire,
+};
+
+export default questionnaireRender;

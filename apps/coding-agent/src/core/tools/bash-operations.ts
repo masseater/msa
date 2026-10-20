@@ -1,38 +1,27 @@
 import { constants as osConstants } from "node:os";
 
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { dual } from "effect/Function";
 
-import { type ChildProcess, spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
-import {
-  type ShellConfig,
-  getShellConfig,
-  getShellEnv,
-  killProcessTree,
-  trackDetachedChildPid,
-  untrackDetachedChildPid,
-} from "../../utils/shell.ts";
-import { ToolFailure, fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
+import childProcess from "../../utils/child-process.ts";
+import type childProcessTypes from "../../utils/child-process.types.ts";
+import shellModule from "../../utils/shell.ts";
+import type shellTypes from "../../utils/shell.types.ts";
+import platformModule from "../platform/index.ts";
+import type bashOperationsTypes from "./bash-operations.types.ts";
 
-type SpawnedShell = ChildProcess;
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { spawnProcess, waitForChildProcess } = childProcess;
+const { ToolFailure, fromPromise, unwrapForeign } = platformModule;
+const { getShellEnv, killProcessTree, trackDetachedChildPid, untrackDetachedChildPid } =
+  shellModule;
+
+type SpawnedShell = childProcessTypes.ChildProcess;
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
-
-export interface BashOperations {
-  exec: (
-    command: string,
-    cwd: string,
-    options: {
-      onData: (data: Buffer) => void;
-      signal?: AbortSignal | undefined;
-      timeout?: number | undefined;
-      env?: NodeJS.ProcessEnv | undefined;
-    },
-  ) => Promise<{ exitCode: number | null }>;
-}
-
-export type ExecuteOptions = Parameters<BashOperations["exec"]>[2];
 
 const validateTimeout = (timeout: number | undefined) => {
   if (timeout === undefined) return Effect.void;
@@ -52,10 +41,10 @@ const childPid = (pid: number | undefined): number | undefined =>
   pid === undefined || pid === 0 ? undefined : pid;
 
 const spawnShell = (
-  shellConfig: ShellConfig,
+  shellConfig: shellTypes.ShellConfig,
   command: string,
   cwd: string,
-  env: ExecuteOptions["env"],
+  env: bashOperationsTypes.ExecuteOptions["env"],
 ) =>
   Effect.acquireRelease(
     Effect.sync(() => {
@@ -91,7 +80,7 @@ const exitCodeOf = (exitCode: number | null, signalCode: NodeJS.Signals | null):
 
 const superviseChild = Effect.fn("superviseChild")(function* (
   child: SpawnedShell,
-  { onData, signal, timeout }: ExecuteOptions,
+  { onData, signal, timeout }: bashOperationsTypes.ExecuteOptions,
 ) {
   let timedOut = false;
   const killChild = (): void => {
@@ -128,10 +117,10 @@ const superviseChild = Effect.fn("superviseChild")(function* (
 
 const runShell = Effect.fn("runShell")(function* (
   shellName: string,
-  resolveShellConfig: () => ShellConfig,
+  resolveShellConfig: () => shellTypes.ShellConfig,
   command: string,
   cwd: string,
-  options: ExecuteOptions,
+  options: bashOperationsTypes.ExecuteOptions,
 ) {
   yield* validateTimeout(options.timeout);
   if (options.signal?.aborted === true) return yield* new ToolFailure({ message: "aborted" });
@@ -152,18 +141,36 @@ const runShell = Effect.fn("runShell")(function* (
   );
 });
 
-export const createLocalShellOperations: {
-  (resolveShellConfig: () => ShellConfig): (shellName: string) => BashOperations;
-  (shellName: string, resolveShellConfig: () => ShellConfig): BashOperations;
-} = dual(2, (shellName: string, resolveShellConfig: () => ShellConfig): BashOperations => ({
-  exec: (command, cwd, options) =>
-    platformRuntime.runPromise(
-      unwrapForeign(runShell(shellName, resolveShellConfig, command, cwd, options)),
-    ),
-}));
+const createLocalShellOperations: {
+  (
+    resolveShellConfig: () => shellTypes.ShellConfig,
+  ): (shellName: string) => bashOperationsTypes.BashOperations;
+  (
+    shellName: string,
+    resolveShellConfig: () => shellTypes.ShellConfig,
+  ): bashOperationsTypes.BashOperations;
+} = dual(
+  2,
+  (
+    shellName: string,
+    resolveShellConfig: () => shellTypes.ShellConfig,
+  ): bashOperationsTypes.BashOperations => ({
+    exec: (command, cwd, options) =>
+      nodeRuntime.runPromise(
+        unwrapForeign(runShell(shellName, resolveShellConfig, command, cwd, options)),
+      ),
+  }),
+);
 
-export function createLocalBashOperations(options?: {
+function createLocalBashOperations(options?: {
   shellPath?: string | undefined;
-}): BashOperations {
-  return createLocalShellOperations("bash", () => getShellConfig(options?.shellPath));
+}): bashOperationsTypes.BashOperations {
+  return createLocalShellOperations("bash", () => shellModule.getShellConfig(options?.shellPath));
 }
+
+const bashOperations = {
+  createLocalBashOperations,
+  createLocalShellOperations,
+};
+
+export default bashOperations;

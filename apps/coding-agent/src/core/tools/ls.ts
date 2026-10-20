@@ -1,22 +1,27 @@
+import * as NodeServices from "@effect/platform-node/NodeServices";
 import type agentTypes from "@msa/agent-core/index.types";
-import { Effect, FileSystem } from "effect";
-import { type Static, Type } from "typebox";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Type } from "typebox";
 
-import { toErrorMessage } from "../../utils/errors.ts";
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import {
-  ToolFailure,
-  abortedBy,
-  fromMaybePromise,
-  nonEmptyOr,
-  pathOperations,
-  platformRuntime,
-  rethrowCause,
-} from "../platform/index.ts";
-import { pathExists, resolveToCwd } from "./path-utils.ts";
-import { lsRenderers } from "./renderers/ls.ts";
-import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
-import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize, truncateHead } from "./truncate.ts";
+import errors from "../../utils/errors.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import type lsTypes from "./ls.types.ts";
+import pathUtils from "./path-utils.ts";
+import lsModule from "./renderers/ls.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+import truncate from "./truncate.ts";
+
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { pathExists, resolveToCwd } = pathUtils;
+const { ToolFailure, abortedBy, fromMaybePromise, nonEmptyOr, pathOperations, rethrowCause } =
+  platform;
+const { toErrorMessage } = errors;
+const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
+const { lsRenderers } = lsModule;
+const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
 const lsSchema = Type.Object({
   limit: Type.Optional(
@@ -27,36 +32,21 @@ const lsSchema = Type.Object({
   ),
 });
 
-export const lsToolSystemPromptContribution = {
+const lsToolSystemPromptContribution = {
   guidelines: [],
   snippet: "List directory contents",
 } as const;
 
-export type LsToolInput = Static<typeof lsSchema>;
-
 const DEFAULT_LIMIT = 500;
 
-export interface LsToolDetails {
-  truncation?: TruncationResult;
-  entryLimitReached?: number;
-}
-
-export interface LsOperations {
-  exists: (absolutePath: string) => Promise<boolean> | boolean;
-  stat: (
-    absolutePath: string,
-  ) => Promise<{ isDirectory: () => boolean }> | { isDirectory: () => boolean };
-  readdir: (absolutePath: string) => Promise<string[]> | string[];
-}
-
-const defaultLsOperations: LsOperations = {
+const defaultLsOperations: lsTypes.LsOperations = {
   exists: pathExists,
   readdir: (absolutePath) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(FileSystem.FileSystem.use((fs) => fs.readDirectory(absolutePath))),
     ),
   stat: (absolutePath) =>
-    platformRuntime.runPromise(
+    nodeRuntime.runPromise(
       rethrowCause(
         FileSystem.FileSystem.use((fs) => fs.stat(absolutePath)).pipe(
           Effect.map((info) => ({ isDirectory: () => info.type === "Directory" })),
@@ -65,12 +55,8 @@ const defaultLsOperations: LsOperations = {
     ),
 };
 
-export interface LsToolOptions {
-  operations?: LsOperations;
-}
-
 const listEntries = Effect.fn("listEntries")(function* (
-  ops: LsOperations,
+  ops: lsTypes.LsOperations,
   dirPath: string,
   limit: number,
 ) {
@@ -101,7 +87,7 @@ const formatListing = (results: string[], entryLimitReached: boolean, effectiveL
     return { content: [{ text: "(empty directory)", type: "text" as const }], details: undefined };
   }
   const truncation = truncateHead(results.join("\n"), { maxLines: Number.MAX_SAFE_INTEGER });
-  const details: LsToolDetails = {};
+  const details: lsTypes.LsToolDetails = {};
   const notices: string[] = [];
   if (entryLimitReached) {
     notices.push(
@@ -122,7 +108,7 @@ const formatListing = (results: string[], entryLimitReached: boolean, effectiveL
 };
 
 const runLs = Effect.fn("ls")(function* (
-  ops: LsOperations,
+  ops: lsTypes.LsOperations,
   dirPath: string,
   effectiveLimit: number,
 ) {
@@ -137,8 +123,8 @@ const runLs = Effect.fn("ls")(function* (
 
 const createLsToolDefinitionImpl = (
   cwd: string,
-  options?: LsToolOptions,
-): ToolDefinition<typeof lsSchema, LsToolDetails | undefined> => {
+  options?: lsTypes.LsToolOptions,
+): extensionsTypesTypes.ToolDefinition<typeof lsSchema, lsTypes.LsToolDetails | undefined> => {
   const ops = options?.operations ?? defaultLsOperations;
   return {
     annotations: { readOnlyHint: true },
@@ -148,9 +134,9 @@ const createLsToolDefinitionImpl = (
       { path, limit }: { path?: string; limit?: number },
       signal?: AbortSignal,
       _onUpdate?,
-      ctx?: ExtensionContext,
+      ctx?: extensionsTypesTypes.ExtensionContext,
     ) =>
-      platformRuntime.runPromise(
+      nodeRuntime.runPromise(
         Effect.suspend(() =>
           runLs(
             ops,
@@ -167,12 +153,21 @@ const createLsToolDefinitionImpl = (
   };
 };
 
-export const createLsToolDefinition: CwdFactory<
-  LsToolOptions,
-  ToolDefinition<typeof lsSchema, LsToolDetails | undefined>
+const createLsToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
+  lsTypes.LsToolOptions,
+  extensionsTypesTypes.ToolDefinition<typeof lsSchema, lsTypes.LsToolDetails | undefined>
 > = cwdFactory(createLsToolDefinitionImpl);
 
-export const createLsTool: CwdFactory<
-  LsToolOptions,
+const createLsTool: toolDefinitionWrapperTypes.CwdFactory<
+  lsTypes.LsToolOptions,
   agentTypes.AgentTool<typeof lsSchema>
 > = cwdFactory((cwd, options) => wrapToolDefinition(createLsToolDefinitionImpl(cwd, options)));
+
+const ls = {
+  createLsTool,
+  createLsToolDefinition,
+  lsSchema,
+  lsToolSystemPromptContribution,
+};
+
+export default ls;

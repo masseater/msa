@@ -1,15 +1,18 @@
-import { type ExecOptions, execCommand } from "../exec.ts";
-import type { ApiScope, HandlerFn } from "./loader-scope.ts";
-import type { ExtensionAPI } from "./types.ts";
+import execModule from "../exec.ts";
+import type execTypes from "../exec.types.ts";
+import type loaderScopeTypes from "./loader-scope.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export const eventMembers = ({
+const { execCommand } = execModule;
+
+const eventMembers = ({
   extension,
   runtime,
   eventBus,
   assertActive,
   isLoading,
   loadingUnsubscribers,
-}: ApiScope) => ({
+}: loaderScopeTypes.ApiScope) => ({
   events: {
     emit(channel: string, data: unknown) {
       assertActive();
@@ -23,9 +26,9 @@ export const eventMembers = ({
     },
   },
 
-  on(event: string, handler: HandlerFn): () => void {
+  on(event: string, handler: loaderScopeTypes.HandlerFn): () => void {
     assertActive();
-    const registeredHandler: HandlerFn = (...args) => handler(...args);
+    const registeredHandler: loaderScopeTypes.HandlerFn = (...args) => handler(...args);
     const list = extension.handlers.get(event) ?? [];
     list.push(registeredHandler);
     extension.handlers.set(event, list);
@@ -41,7 +44,10 @@ export const eventMembers = ({
   },
 });
 
-export const messageMembers = ({ runtime, assertActive }: ApiScope): Partial<ExtensionAPI> => ({
+const messageMembers = ({
+  runtime,
+  assertActive,
+}: loaderScopeTypes.ApiScope): Partial<extensionsTypesTypes.ExtensionAPI> => ({
   appendEntry(customType: string, data?: unknown): void {
     assertActive();
     runtime.appendEntry(customType, data);
@@ -73,8 +79,12 @@ export const messageMembers = ({ runtime, assertActive }: ApiScope): Partial<Ext
   },
 });
 
-export const stateMembers = ({ runtime, cwd, assertActive }: ApiScope): Partial<ExtensionAPI> => ({
-  exec(command: string, args: string[], options?: ExecOptions) {
+const stateMembers = ({
+  runtime,
+  cwd,
+  assertActive,
+}: loaderScopeTypes.ApiScope): Partial<extensionsTypesTypes.ExtensionAPI> => ({
+  exec(command: string, args: string[], options?: execTypes.ExecOptions) {
     assertActive();
     return execCommand(command, args, options?.cwd ?? cwd, options);
   },
@@ -119,3 +129,11 @@ export const stateMembers = ({ runtime, cwd, assertActive }: ApiScope): Partial<
     runtime.setThinkingLevel(level);
   },
 });
+
+const loaderApiSession = {
+  eventMembers,
+  messageMembers,
+  stateMembers,
+};
+
+export default loaderApiSession;

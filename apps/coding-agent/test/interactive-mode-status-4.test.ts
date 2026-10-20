@@ -3,8 +3,8 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { AuthSelectorProvider } from "../src/modes/interactive/components/oauth-selector.ts";
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import type oauthSelectorTypes from "../src/modes/interactive/components/oauth-selector.types.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { abortController, awaited, runTest } = testing;
 
@@ -52,6 +52,7 @@ const matchesModelCommandArgumentsAcrossProviderModel = Effect.gen(function* () 
     skillCommands: new Map(),
   };
 
+  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
   const provider = createBaseAutocompleteProvider.call(fakeThis);
   const line = "/model codexgpt";
   const suggestions = yield* awaited(
@@ -80,7 +81,7 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
     skillCommands: Map<string, string>;
     sessionManager: { getCwd: () => string };
     fdPath: null;
-    loginFlow: { getProviderOptions: () => AuthSelectorProvider[] };
+    loginFlow: { getProviderOptions: () => oauthSelectorTypes.AuthSelectorProvider[] };
   };
   const createBaseAutocompleteProvider = (
     InteractiveMode as unknown as {
@@ -118,6 +119,7 @@ const matchesLoginCommandArgumentsByProviderId = Effect.gen(function* () {
   const { createBaseAutocompleteProvider, fakeThis } =
     matchesLoginCommandArgumentsByProviderIdStep();
 
+  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
   const provider = createBaseAutocompleteProvider.call(fakeThis);
   const line = "/login subscription anthrop";
   const suggestions = yield* awaited(

@@ -2,12 +2,14 @@ import { EventEmitter } from "node:events";
 
 import * as undici from "undici";
 
-import { readEnv } from "./platform.ts";
+import platform from "./platform.ts";
 
-export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
+const { readEnv } = platform;
+
+const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 const DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS = 2_000;
 
-export const HTTP_IDLE_TIMEOUT_CHOICES = [
+const HTTP_IDLE_TIMEOUT_CHOICES = [
   { label: "30 sec", timeoutMs: 30_000 },
   { label: "1 min", timeoutMs: 60_000 },
   { label: "2 min", timeoutMs: 120_000 },
@@ -18,7 +20,7 @@ export const HTTP_IDLE_TIMEOUT_CHOICES = [
 const originalGlobalFetch = globalThis.fetch;
 let installedGlobalFetch: typeof globalThis.fetch | undefined;
 
-export function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
+function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed.toLowerCase() === "disabled") {
@@ -36,7 +38,7 @@ export function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
-export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
+function formatHttpIdleTimeoutMs(timeoutMs: number): string {
   const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.timeoutMs === timeoutMs);
   if (choice !== undefined) {
     return choice.label;
@@ -44,7 +46,7 @@ export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
   return `${timeoutMs / 1000} sec`;
 }
 
-export function applyHttpProxySettings(httpProxy: string | undefined): void {
+function applyHttpProxySettings(httpProxy: string | undefined): void {
   const proxy = httpProxy?.trim();
   if (proxy === undefined || proxy === "") return;
   if (readEnv("HTTP_PROXY") === undefined) Reflect.set(process.env, "HTTP_PROXY", proxy);
@@ -77,7 +79,7 @@ function createUndiciOriginDispatcher(origin: string | URL, options: object): un
   );
 }
 
-export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
+function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
   const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
   if (normalizedTimeoutMs === undefined) {
     throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
@@ -105,3 +107,14 @@ export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TI
     installedGlobalFetch = globalThis.fetch;
   }
 }
+
+const httpDispatcher = {
+  DEFAULT_HTTP_IDLE_TIMEOUT_MS,
+  HTTP_IDLE_TIMEOUT_CHOICES,
+  applyHttpProxySettings,
+  configureHttpDispatcher,
+  formatHttpIdleTimeoutMs,
+  parseHttpIdleTimeoutMs,
+};
+
+export default httpDispatcher;

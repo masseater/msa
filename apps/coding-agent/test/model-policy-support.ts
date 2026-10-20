@@ -2,22 +2,20 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import {
-  EMPTY_MODEL_POLICY,
-  type ModelPolicy,
-  mergeModelPolicies,
-} from "../src/core/model-policy.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { InMemoryCodingAgentModelsStore } from "../src/core/models-store.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import InMemoryCodingAgentModelsStore from "../src/core/in-memory-coding-agent-models-store.ts";
+import modelPolicy from "../src/core/model-policy.ts";
+import type modelPolicyTypes from "../src/core/model-policy.types.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
 
+const { EMPTY_MODEL_POLICY, mergeModelPolicies } = modelPolicy;
 const { awaited, joinPath, makeTempDir, removeDirs, runTest, toJsonText, writeTextFile } = testing;
 
 function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return { id, name: id, provider } as unknown as aiTypes.Model<aiTypes.Api>;
 }
 
-function policy(allow: string[], deny: string[]): ModelPolicy {
+function policy(allow: string[], deny: string[]): modelPolicyTypes.ModelPolicy {
   return { allow, deny };
 }
 

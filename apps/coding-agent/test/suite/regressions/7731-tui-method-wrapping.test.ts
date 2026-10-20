@@ -1,7 +1,9 @@
 import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { createInteractiveTuiReference } from "../../../src/modes/interactive/interactive-mode.ts";
+import tuiRenderer from "../../../src/modes/interactive/tui-renderer.ts";
+
+const { createInteractiveTuiReference } = tuiRenderer;
 
 const callsTheMethodCapturedBeforeA = () => {
   const renderer = {

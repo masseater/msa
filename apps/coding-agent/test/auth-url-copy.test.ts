@@ -4,12 +4,14 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { McpManagerView } from "../src/extensions/mcp/ui.ts";
-import { LoginDialogComponent } from "../src/modes/interactive/components/login-dialog.ts";
-import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import McpManagerView from "../src/extensions/mcp/mcp-manager-view.ts";
+import LoginDialogComponent from "../src/modes/interactive/components/login-dialog.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 
+const { stripAnsi } = ansi;
+const { initTheme, theme } = themeModule;
 const { setKeybindings } = tuiModule;
 
 const { abortController, awaited, runTest } = testing;
@@ -18,8 +20,8 @@ const { copyToClipboard } = vi.hoisted(() => ({
   copyToClipboard: vi.fn((_text: string) => testing.runTest(Effect.sync(() => {}))),
 }));
 
-vi.mock("../src/utils/clipboard.ts", () => ({ copyToClipboard }));
-vi.mock("../src/utils/open-browser.ts", () => ({ openBrowser: vi.fn() }));
+vi.mock("../src/utils/clipboard.ts", () => ({ default: { copyToClipboard } }));
+vi.mock("../src/utils/open-browser.ts", () => ({ default: { openBrowser: vi.fn() } }));
 
 const URL = `https://auth.example.invalid/authorize?${"x".repeat(300)}`;
 const CTRL_X = "\x18";

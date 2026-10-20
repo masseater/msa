@@ -2,12 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ExtensionUIContext } from "../src/core/extensions/types.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 import extensionsRunnerSupport from "./extensions-runner-support.ts";
 
+const { discoverAndLoadExtensions } = loader;
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 
 const { extensionActions, extensionContextActions } = extensionsRunnerSupport;
@@ -93,7 +94,7 @@ const exposesRpcModeWithHasuiTrueWhen = () =>
         env.modelRegistry,
       );
       runner.bindCore(extensionActions, extensionContextActions);
-      runner.setUIContext({} as ExtensionUIContext, "rpc");
+      runner.setUIContext({} as extensionsTypesTypes.ExtensionUIContext, "rpc");
 
       const ctx = runner.createContext();
       expect(ctx.mode).toBe("rpc");
@@ -113,7 +114,7 @@ const exposesTuiModeWithHasuiTrueWhen = () =>
         env.modelRegistry,
       );
       runner.bindCore(extensionActions, extensionContextActions);
-      runner.setUIContext({} as ExtensionUIContext, "tui");
+      runner.setUIContext({} as extensionsTypesTypes.ExtensionUIContext, "tui");
 
       const ctx = runner.createContext();
       expect(ctx.mode).toBe("tui");

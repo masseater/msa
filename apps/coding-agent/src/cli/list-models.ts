@@ -4,11 +4,17 @@ import chalk from "chalk";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { hiddenModelsByPolicy } from "../core/model-policy.ts";
-import type { ModelRuntime } from "../core/model-runtime.ts";
-import { writeError, writeLog } from "../core/platform.ts";
+import authGuidance from "../core/auth-guidance.ts";
+import awaitingModule from "../core/awaiting.ts";
+import modelPolicy from "../core/model-policy.ts";
+import type ModelRuntime from "../core/model-runtime.ts";
+import type modelRuntimeTypes from "../core/model-runtime.types.ts";
+import platform from "../core/platform.ts";
+
+const { awaited, awaiting } = awaitingModule;
+const { writeError, writeLog } = platform;
+const { formatNoModelsAvailableMessage } = authGuidance;
+const { hiddenModelsByPolicy } = modelPolicy;
 
 const { fuzzyFilter } = tui;
 
@@ -25,22 +31,13 @@ function formatTokenCount(count: number): string {
 }
 
 function listModelsImpl(
-  modelRuntime: ModelRuntime,
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
   searchPattern?: string,
   signal?: AbortSignal,
 ): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      const loadError = modelRuntime.getError();
-      if (loadError !== undefined && loadError !== "") {
-        writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
-      }
-
-      const models = [
-        ...(yield* awaited(
-          modelRuntime.getAvailable(undefined, signal === undefined ? {} : { signal }),
-        )),
-      ];
+      const models = yield* listModelsImplPart2(modelRuntime, signal);
 
       if (models.length === 0) {
         writeLog(formatNoModelsAvailableMessage());
@@ -72,45 +69,7 @@ function listModelsImpl(
         thinking: m.reasoning ? "yes" : "no",
       }));
 
-      const headers = {
-        context: "context",
-        images: "images",
-        maxOut: "max-out",
-        model: "model",
-        provider: "provider",
-        thinking: "thinking",
-      };
-
-      const widths = {
-        context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
-        images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
-        maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
-        model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
-        provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
-        thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
-      };
-
-      const headerLine = [
-        headers.provider.padEnd(widths.provider),
-        headers.model.padEnd(widths.model),
-        headers.context.padEnd(widths.context),
-        headers.maxOut.padEnd(widths.maxOut),
-        headers.thinking.padEnd(widths.thinking),
-        headers.images.padEnd(widths.images),
-      ].join("  ");
-      writeLog(headerLine);
-
-      for (const row of rows) {
-        const line = [
-          row.provider.padEnd(widths.provider),
-          row.model.padEnd(widths.model),
-          row.context.padEnd(widths.context),
-          row.maxOut.padEnd(widths.maxOut),
-          row.thinking.padEnd(widths.thinking),
-          row.images.padEnd(widths.images),
-        ].join("  ");
-        writeLog(line);
-      }
+      listModelsImplPart1(rows);
 
       const policy = modelRuntime.getModelPolicy();
       const hidden = hiddenModelsByPolicy(policy, modelRuntime.getCatalogModels());
@@ -127,7 +86,85 @@ function listModelsImpl(
   );
 }
 
-export const listModels: {
-  (modelRuntime: ModelRuntime, searchPattern?: string, signal?: AbortSignal): Promise<void>;
-  (searchPattern?: string, signal?: AbortSignal): (modelRuntime: ModelRuntime) => Promise<void>;
+const listModels: {
+  (
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+    searchPattern?: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
+  (
+    searchPattern?: string,
+    signal?: AbortSignal,
+  ): (modelRuntime: modelRuntimeTypes.ModelRuntime) => Promise<void>;
 } = dual((args: IArguments) => args.length >= 1, listModelsImpl);
+
+const listModelsModule = {
+  listModels,
+};
+
+export default listModelsModule;
+
+function* listModelsImplPart2(modelRuntime: ModelRuntime, signal: AbortSignal | undefined) {
+  const loadError = modelRuntime.getError();
+  if (loadError !== undefined && loadError !== "") {
+    writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
+  }
+
+  const models = [
+    ...(yield* awaited(
+      modelRuntime.getAvailable(undefined, signal === undefined ? {} : { signal }),
+    )),
+  ];
+  return models;
+}
+
+function listModelsImplPart1(
+  rows: {
+    context: string;
+    images: string;
+    maxOut: string;
+    model: string;
+    provider: string;
+    thinking: string;
+  }[],
+) {
+  const headers = {
+    context: "context",
+    images: "images",
+    maxOut: "max-out",
+    model: "model",
+    provider: "provider",
+    thinking: "thinking",
+  };
+
+  const widths = {
+    context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
+    images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
+    maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
+    model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
+    provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
+    thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
+  };
+
+  const headerLine = [
+    headers.provider.padEnd(widths.provider),
+    headers.model.padEnd(widths.model),
+    headers.context.padEnd(widths.context),
+    headers.maxOut.padEnd(widths.maxOut),
+    headers.thinking.padEnd(widths.thinking),
+    headers.images.padEnd(widths.images),
+  ].join("  ");
+  writeLog(headerLine);
+
+  for (const row of rows) {
+    const line = [
+      row.provider.padEnd(widths.provider),
+      row.model.padEnd(widths.model),
+      row.context.padEnd(widths.context),
+      row.maxOut.padEnd(widths.maxOut),
+      row.thinking.padEnd(widths.thinking),
+      row.images.padEnd(widths.images),
+    ].join("  ");
+    writeLog(line);
+  }
+}

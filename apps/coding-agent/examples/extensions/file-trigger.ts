@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, FileSystem, ManagedRuntime, Stream } from "effect";
 
 const TRIGGER_FILE = "/tmp/agent-trigger.txt";
@@ -31,7 +31,7 @@ const watchTrigger = (onContent: (content: string) => void) =>
     yield* Stream.runForEach(watcher, () => handleChange(onContent));
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("session_start", (_event, ctx) => {
     runtime.runFork(
       watchTrigger((content) => {

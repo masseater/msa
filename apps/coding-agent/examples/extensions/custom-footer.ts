@@ -1,10 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  ReadonlyFooterDataProvider,
-  Theme,
-} from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
@@ -12,8 +7,12 @@ import { Effect } from "effect";
 const { truncateToWidth, visibleWidth } = tuiModule;
 
 const makeFooter =
-  (ctx: ExtensionContext) =>
-  (tui: tuiTypes.TUI, theme: Theme, footerData: ReadonlyFooterDataProvider) => {
+  (ctx: codingAgentTypes.ExtensionContext) =>
+  (
+    tui: tuiTypes.TUI,
+    theme: codingAgentTypes.Theme,
+    footerData: codingAgentTypes.ReadonlyFooterDataProvider,
+  ) => {
     const unsub = footerData.onBranchChange(() => tui.requestRender());
 
     return {
@@ -45,7 +44,7 @@ const makeFooter =
     };
   };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let enabled = false;
 
   msa.registerCommand("footer", {

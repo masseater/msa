@@ -2,7 +2,9 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import { serializeConversation } from "../src/core/compaction/utils.ts";
+import utils from "../src/core/compaction/utils.ts";
+
+const { serializeConversation } = utils;
 
 const { currentTimeMillis } = testing;
 

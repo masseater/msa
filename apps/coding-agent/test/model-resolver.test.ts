@@ -3,14 +3,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import {
-  type ModelReferenceRequest,
-  resolveModelReference,
-  resolveModelScope,
-  resolveModelScopeWithDiagnostics,
-} from "../src/core/model-resolver.ts";
+import modelResolver from "../src/core/model-resolver.ts";
+import type modelResolverTypes from "../src/core/model-resolver.types.ts";
 import modelResolverCases from "./model-resolver-cases.ts";
 import modelResolverSupport from "./model-resolver-support.ts";
+
+const { resolveModelReference, resolveModelScope, resolveModelScopeWithDiagnostics } =
+  modelResolver;
 
 const { referenceCases } = modelResolverCases;
 const { allModels, mockModels, modelRef, referenceCatalog } = modelResolverSupport;
@@ -20,7 +19,7 @@ const { awaited, runTest } = testing;
 describe("resolveModelReference", () => {
   test.each(referenceCases)("$name", (testCase) => {
     const usable = new Set(testCase.usable);
-    const request: ModelReferenceRequest = {
+    const request: modelResolverTypes.ModelReferenceRequest = {
       text: testCase.text,
       ...(testCase.provider === undefined ? {} : { provider: testCase.provider }),
       fuzzy: testCase.fuzzy ?? true,

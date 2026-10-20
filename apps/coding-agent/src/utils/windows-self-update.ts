@@ -1,11 +1,18 @@
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { basename, dirname, join, randomUuid, relative, resolve } from "../core/platform-node.ts";
-import { nowMs } from "../core/platform.ts";
-import { copyFile, exists, makeDirectory, remove, rename } from "./node-fs.ts";
-import { getCwdRelativePath } from "./paths.ts";
-import { toNamespacedPath } from "./platform-extra.ts";
+import awaitingModule from "../core/awaiting.ts";
+import platformNode from "../core/platform-node.ts";
+import platform from "../core/platform.ts";
+import nodeFs from "./node-fs.ts";
+import paths from "./paths.ts";
+import platformExtra from "./platform-extra.ts";
+
+const { toNamespacedPath } = platformExtra;
+const { basename, dirname, join, randomUuid, relative, resolve } = platformNode;
+const { getCwdRelativePath } = paths;
+const { copyFile, exists, makeDirectory, remove, rename } = nodeFs;
+const { nowMs } = platform;
+const { awaited, awaiting } = awaitingModule;
 
 const QUARANTINE_DIR_NAME = ".msa-native-quarantine";
 
@@ -51,7 +58,7 @@ function getLoadedSharedObjectsInPackageDir(packageDir: string): string[] {
   return loadedFiles;
 }
 
-export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): Promise<void> {
+function cleanupWindowsSelfUpdateQuarantine(packageDir: string): Promise<void> {
   const quarantineRoot = getQuarantineRoot(packageDir);
   if (quarantineRoot === undefined || quarantineRoot === "") {
     return Effect.runPromise(Effect.void);
@@ -59,7 +66,7 @@ export function cleanupWindowsSelfUpdateQuarantine(packageDir: string): Promise<
   return remove({ force: true, path: quarantineRoot, recursive: true }).catch(() => undefined);
 }
 
-export function quarantineWindowsNativeDependencies(packageDir: string): Promise<void> {
+function quarantineWindowsNativeDependencies(packageDir: string): Promise<void> {
   const resolvedPackageDir = normalizePath(packageDir);
   const quarantineRoot = getQuarantineRoot(resolvedPackageDir);
   if (quarantineRoot === undefined || quarantineRoot === "") {
@@ -80,3 +87,10 @@ export function quarantineWindowsNativeDependencies(packageDir: string): Promise
     }),
   );
 }
+
+const windowsSelfUpdate = {
+  cleanupWindowsSelfUpdateQuarantine,
+  quarantineWindowsNativeDependencies,
+};
+
+export default windowsSelfUpdate;

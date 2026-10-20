@@ -1,25 +1,30 @@
 import { Effect } from "effect";
 
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-import type { ReplanInput } from "../src/core/orchestrator/types.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 
 const { harness } = orchestratorHarness;
 
 const { waitFor } = harness;
 
-const create = (orchestrator: Orchestrator, input: Parameters<Orchestrator["createTask"]>[0]) =>
-  Effect.promise(() => orchestrator.createTask(input));
+const create = (
+  orchestrator: orchestratorTypes.Orchestrator,
+  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
+) => Effect.promise(() => orchestrator.createTask(input));
 
-const read = (orchestrator: Orchestrator, id: string) =>
+const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
   Effect.promise(() => orchestrator.read(id));
 
-function replan(orchestrator: Orchestrator, input: ReplanInput): Promise<unknown> {
+function replan(
+  orchestrator: orchestratorTypes.Orchestrator,
+  input: orchestratorTypesTypes.ReplanInput,
+): Promise<unknown> {
   return orchestrator.replan(input).catch((error: unknown) => error);
 }
 
 function stopAndWrapUp(
-  orchestrator: Orchestrator,
+  orchestrator: orchestratorTypes.Orchestrator,
   workers: { prompts: string[]; complete: (reply: string) => void }[],
   memo: string,
 ) {

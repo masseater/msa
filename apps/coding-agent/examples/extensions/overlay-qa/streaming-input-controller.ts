@@ -1,16 +1,16 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { DateTime, Effect, type Fiber } from "effect";
 
-import { BaseOverlay } from "./base-overlay.ts";
-import { StreamingInputPanel } from "./streaming-input-panel.ts";
-
+import BaseOverlay from "./base-overlay.ts";
+import StreamingInputPanel from "./streaming-input-panel.ts";
+import type streamingInputPanelTypes from "./streaming-input-panel.types.ts";
 const { matchesKey } = tuiModule;
 
-export class StreamingInputController extends BaseOverlay {
+export default class StreamingInputController extends BaseOverlay {
   private tui: tuiTypes.TUI;
-  private panels: StreamingInputPanel[] = [];
+  private panels: streamingInputPanelTypes.StreamingInputPanel[] = [];
   private handles: tuiTypes.OverlayHandle[] = [];
   private focusIndex = -1;
   private streamLines: string[] = [];
@@ -18,7 +18,7 @@ export class StreamingInputController extends BaseOverlay {
   private lineCount = 0;
   private done: () => void;
 
-  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

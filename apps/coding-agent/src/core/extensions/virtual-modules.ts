@@ -7,9 +7,9 @@ import * as bundledTypebox from "typebox";
 import * as bundledTypeboxCompile from "typebox/compile";
 import * as bundledTypeboxValue from "typebox/value";
 
-import * as bundledMsaCodingAgent from "../../index.ts";
+import bundledMsaCodingAgent from "../../index.ts";
 
-export const VIRTUAL_MODULES: Record<string, unknown> = {
+const VIRTUAL_MODULES: Record<string, unknown> = {
   "@earendil-works/pi-agent-core": agent,
   "@earendil-works/pi-ai": compat,
   "@earendil-works/pi-ai/compat": compat,
@@ -38,3 +38,9 @@ export const VIRTUAL_MODULES: Record<string, unknown> = {
   "typebox/compile": bundledTypeboxCompile,
   "typebox/value": bundledTypeboxValue,
 };
+
+const virtualModules = {
+  VIRTUAL_MODULES,
+};
+
+export default virtualModules;

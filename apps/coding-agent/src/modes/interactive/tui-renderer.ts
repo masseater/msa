@@ -2,58 +2,55 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { awaited, awaiting } from "../../core/awaiting.ts";
-import { copyToClipboard } from "../../utils/clipboard.ts";
-import { toErrorMessage } from "../../utils/errors.ts";
-import { openBrowser } from "../../utils/open-browser.ts";
-import { keyDisplayText } from "./components/keybinding-hints.ts";
-import { theme } from "./theme/theme.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import clipboard from "../../utils/clipboard.ts";
+import errors from "../../utils/errors.ts";
+import openBrowserModule from "../../utils/open-browser.ts";
+import keybindingHints from "./components/keybinding-hints.ts";
+import themeModule from "./theme/theme.ts";
+import type tuiRendererTypes from "./tui-renderer.types.ts";
+
+const { theme } = themeModule;
+const { keyDisplayText } = keybindingHints;
+const { openBrowser } = openBrowserModule;
+const { awaited, awaiting } = awaitingModule;
+const { copyToClipboard } = clipboard;
+const { toErrorMessage } = errors;
 
 const { ProcessTerminal, TuiAltScreen, TuiMainScreen } = tuiModule;
 
-export interface InteractiveTuiOptions {
-  readonly tuiMode: "regular" | "fullscreen";
-  readonly showHardwareCursor: boolean;
-  readonly logDirectory: string;
-  readonly terminal?: tuiTypes.Terminal | undefined;
-  readonly onRightClickPaste?: (() => void) | undefined;
-  readonly fullscreenCopyOnSelect?: boolean | undefined;
-  readonly fullscreenWheelScrollLines?: tuiTypes.WheelScrollLines | undefined;
-}
-
-export function createInteractiveTui(
-  options: InteractiveTuiOptions & { readonly tuiMode: "fullscreen" },
+function createInteractiveTui(
+  options: tuiRendererTypes.InteractiveTuiOptions & { readonly tuiMode: "fullscreen" },
 ): tuiTypes.TuiAltScreen;
-export function createInteractiveTui(
-  options: InteractiveTuiOptions & { readonly tuiMode: "regular" },
+function createInteractiveTui(
+  options: tuiRendererTypes.InteractiveTuiOptions & { readonly tuiMode: "regular" },
 ): tuiTypes.TuiMainScreen;
-export function createInteractiveTui(
-  options: InteractiveTuiOptions,
+function createInteractiveTui(
+  options: tuiRendererTypes.InteractiveTuiOptions,
 ): tuiTypes.TuiMainScreen | tuiTypes.TuiAltScreen;
-export function createInteractiveTui(
-  options: InteractiveTuiOptions,
+function createInteractiveTui(
+  options: tuiRendererTypes.InteractiveTuiOptions,
 ): tuiTypes.TuiMainScreen | tuiTypes.TuiAltScreen {
   const terminal = options.terminal ?? new ProcessTerminal();
   if (options.tuiMode === "fullscreen") {
     const styleSearchMatch = (text: string) =>
       theme.bg("searchMatchBg", theme.fg("searchMatchText", text));
     return new TuiAltScreen(terminal, options.showHardwareCursor, options.logDirectory, {
-      searchMatchStyle: (text) => theme.underline(styleSearchMatch(text)),
-      searchCurrentMatchStyle: (text) => theme.bold(theme.inverse(styleSearchMatch(text))),
-      searchNavigationButtonStyle: (text, hovered) => (hovered ? theme.underline(text) : text),
+      openUrl: openBrowser,
       scrollToEndIndicator: () => {
         const shortcut = keyDisplayText("tui.altScreen.bottom");
         const label = ` ↓ Jump to latest message${shortcut === "" ? "" : ` · ${shortcut}`} `;
         return theme.bg("selectedBg", theme.fg("text", label));
       },
-      openUrl: openBrowser,
+      searchCurrentMatchStyle: (text) => theme.bold(theme.inverse(styleSearchMatch(text))),
+      searchMatchStyle: (text) => theme.underline(styleSearchMatch(text)),
+      searchNavigationButtonStyle: (text, hovered) => (hovered ? theme.underline(text) : text),
       ...(options.onRightClickPaste === undefined
         ? {}
         : { onRightClickPaste: options.onRightClickPaste }),
       ...(options.fullscreenCopyOnSelect === undefined
         ? {}
         : { copyOnSelect: options.fullscreenCopyOnSelect }),
-      wheelScrollLines: options.fullscreenWheelScrollLines ?? "auto",
       copySelection: (text) =>
         Effect.runPromise(
           awaiting(function* () {
@@ -65,12 +62,13 @@ export function createInteractiveTui(
             }
           }),
         ),
+      wheelScrollLines: options.fullscreenWheelScrollLines ?? "auto",
     });
   }
   return new TuiMainScreen(terminal, options.showHardwareCursor, options.logDirectory);
 }
 
-export function createInteractiveTuiReference(getTui: () => tuiTypes.TUI): tuiTypes.TUI {
+function createInteractiveTuiReference(getTui: () => tuiTypes.TUI): tuiTypes.TUI {
   return new Proxy({} as tuiTypes.TUI, {
     get: (_target, property) => {
       const tui = getTui();
@@ -99,3 +97,10 @@ export function createInteractiveTuiReference(getTui: () => tuiTypes.TUI): tuiTy
     },
   });
 }
+
+const tuiRenderer = {
+  createInteractiveTui,
+  createInteractiveTuiReference,
+};
+
+export default tuiRenderer;

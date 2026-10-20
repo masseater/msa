@@ -2,9 +2,11 @@ import testing from "@msa/testing";
 import { Effect, Result } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { orchestratorError } from "../src/core/orchestrator/errors.ts";
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
+import errors from "../src/core/orchestrator/errors.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { orchestratorError } = errors;
 
 const { joinPath, makeTempDir, removePath } = testing;
 
@@ -12,10 +14,12 @@ const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
 
-const create = (orchestrator: Orchestrator, input: Parameters<Orchestrator["createTask"]>[0]) =>
-  Effect.promise(() => orchestrator.createTask(input));
+const create = (
+  orchestrator: orchestratorTypes.Orchestrator,
+  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
+) => Effect.promise(() => orchestrator.createTask(input));
 
-const read = (orchestrator: Orchestrator, id: string) =>
+const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
   Effect.promise(() => orchestrator.read(id));
 
 function attempt<A>(run: () => Promise<A>) {

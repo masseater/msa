@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { awaited, runTest } = testing;
 
@@ -18,6 +18,7 @@ const routesInteractiveResponseAbortsThroughAgentsession = () => {
     "restoreQueuedMessagesToEditor",
   ) as (this: typeof ui, options?: { abort?: boolean }) => number;
 
+  Object.setPrototypeOf(ui, InteractiveMode.prototype);
   restoreQueuedMessagesToEditor.call(ui, { abort: true });
 
   expect(abort).toHaveBeenCalledOnce();
@@ -44,6 +45,7 @@ const preservesSteeringBehaviorWhenFlushingIntoAn = () =>
         "flushCompactionQueue",
       ) as (this: typeof fakeThis, options?: { willRetry?: boolean }) => Promise<void>;
 
+      Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
       yield* awaited(flushCompactionQueue.call(fakeThis, { willRetry: false }));
 
       expect(fakeThis.session.prompt).toHaveBeenCalledWith("change direction", {

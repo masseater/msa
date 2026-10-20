@@ -8,10 +8,7 @@ import TuiMainScreen from "../src/tui-main-screen.ts";
 import tuiOverlayStyleLeakHelpers from "./tui-overlay-style-leak-helpers.ts";
 import StaticLines from "./tui-overlay-style-leak-static-lines.ts";
 import StaticOverlay from "./tui-overlay-style-leak-static-overlay.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 const { getCellItalic, renderAndFlush } = tuiOverlayStyleLeakHelpers;
 
 describe("TUI overlay compositing", () => {

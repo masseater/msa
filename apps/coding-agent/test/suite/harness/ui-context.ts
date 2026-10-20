@@ -1,7 +1,11 @@
-import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
-import { theme } from "../../../src/modes/interactive/theme/theme.ts";
+import type extensionsTypes from "../../../src/core/extensions/index.types.ts";
+import themeModule from "../../../src/modes/interactive/theme/theme.ts";
 
-function createTestUiContext(overrides: Partial<ExtensionUIContext> = {}): ExtensionUIContext {
+const { theme } = themeModule;
+
+function createTestUiContext(
+  overrides: Partial<extensionsTypes.ExtensionUIContext> = {},
+): extensionsTypes.ExtensionUIContext {
   return {
     addAutocompleteProvider: () => {},
     confirm: () => Promise.resolve(false),

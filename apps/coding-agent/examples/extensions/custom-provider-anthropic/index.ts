@@ -1,31 +1,34 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-import { loginAnthropic, refreshAnthropicToken } from "./auth.ts";
-import { streamCustomAnthropic } from "./stream.ts";
+import auth from "./auth.ts";
+import stream from "./stream.ts";
 
-export default function (msa: ExtensionAPI) {
+const { loginAnthropic, refreshAnthropicToken } = auth;
+const { streamCustomAnthropic } = stream;
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerProvider("custom-anthropic", {
     api: "custom-anthropic-api",
     apiKey: "$CUSTOM_ANTHROPIC_API_KEY",
     baseUrl: "https://api.anthropic.com",
     models: [
       {
+        contextWindow: 200000,
+        cost: { cacheRead: 0.5, cacheWrite: 6.25, input: 5, output: 25 },
         id: "claude-opus-4-5",
+        input: ["text", "image"],
+        maxTokens: 64000,
         name: "Claude Opus 4.5 (Custom)",
         reasoning: true,
-        input: ["text", "image"],
-        cost: { input: 5, output: 25, cacheRead: 0.5, cacheWrite: 6.25 },
-        contextWindow: 200000,
-        maxTokens: 64000,
       },
       {
+        contextWindow: 200000,
+        cost: { cacheRead: 0.3, cacheWrite: 3.75, input: 3, output: 15 },
         id: "claude-sonnet-4-5",
+        input: ["text", "image"],
+        maxTokens: 64000,
         name: "Claude Sonnet 4.5 (Custom)",
         reasoning: true,
-        input: ["text", "image"],
-        cost: { input: 3, output: 15, cacheRead: 0.3, cacheWrite: 3.75 },
-        contextWindow: 200000,
-        maxTokens: 64000,
       },
     ],
     oauth: {

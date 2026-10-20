@@ -1,9 +1,18 @@
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
-import { CONFIG_DIR_NAME, getAgentDir } from "../../config.ts";
-import { resolvePath } from "../../utils/paths.ts";
-import { readMsaManifest } from "../manifest.ts";
-import { pathOperations, platformRuntime } from "../platform/index.ts";
+import config from "../../config.ts";
+import pathsModule from "../../utils/paths.ts";
+import manifestModule from "../manifest.ts";
+import platform from "../platform/index.ts";
+import type loaderDiscoveryTypes from "./loader-discovery.types.ts";
+
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { pathOperations } = platform;
+const { readMsaManifest } = manifestModule;
+const { CONFIG_DIR_NAME, getAgentDir } = config;
+const { resolvePath } = pathsModule;
 
 const isExtensionFile = (name: string): boolean => name.endsWith(".ts") || name.endsWith(".js");
 
@@ -79,13 +88,11 @@ const configuredEntries = (resolved: string) =>
     return entries ?? (yield* discoverInDir(resolved));
   });
 
-export interface DiscoveryInput {
-  configuredPaths: string[];
-  cwd: string;
-  agentDir?: string;
-}
-
-const discover = ({ configuredPaths, cwd, agentDir = getAgentDir() }: DiscoveryInput) =>
+const discover = ({
+  configuredPaths,
+  cwd,
+  agentDir = getAgentDir(),
+}: loaderDiscoveryTypes.DiscoveryInput) =>
   Effect.gen(function* () {
     const resolvedCwd = resolvePath(cwd);
     const resolvedAgentDir = resolvePath(agentDir);
@@ -109,7 +116,12 @@ const discover = ({ configuredPaths, cwd, agentDir = getAgentDir() }: DiscoveryI
     return { allPaths, resolvedCwd };
   });
 
-export const discoverExtensionPaths = (
-  input: DiscoveryInput,
-): Promise<{ resolvedCwd: string; allPaths: string[] }> =>
-  platformRuntime.runPromise(discover(input));
+const discoverExtensionPaths = (
+  input: loaderDiscoveryTypes.DiscoveryInput,
+): Promise<{ resolvedCwd: string; allPaths: string[] }> => nodeRuntime.runPromise(discover(input));
+
+const loaderDiscovery = {
+  discoverExtensionPaths,
+};
+
+export default loaderDiscovery;

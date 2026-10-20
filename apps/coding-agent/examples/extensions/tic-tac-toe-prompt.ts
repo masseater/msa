@@ -1,6 +1,8 @@
-import { AGENT_CURSOR_HOME_COL, AGENT_CURSOR_HOME_ROW } from "./tic-tac-toe-game.ts";
+import ticTacToeGame from "./tic-tac-toe-game.ts";
 
-export const ticTacToeInstructions = `
+const { AGENT_CURSOR_HOME_COL, AGENT_CURSOR_HOME_ROW } = ticTacToeGame;
+
+const ticTacToeInstructions = `
 
 ## Tic-Tac-Toe (you are Player O)
 
@@ -59,3 +61,9 @@ Decide the target cell first, then dump every action for the turn in one go.
 2. Otherwise, if X has two in a line with the third cell empty, block there.
 3. Otherwise, prefer center, then corners, then edges.
 `;
+
+const ticTacToePrompt = {
+  ticTacToeInstructions,
+};
+
+export default ticTacToePrompt;

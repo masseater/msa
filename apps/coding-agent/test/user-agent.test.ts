@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getMsaUserAgent } from "../src/utils/user-agent.ts";
+import userAgentModule from "../src/utils/user-agent.ts";
+
+const { getMsaUserAgent } = userAgentModule;
 
 const formatsTheUserAgentExpectedByPi = () => {
   const runtime =

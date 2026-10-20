@@ -2,10 +2,13 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { ToolExecutionComponent } from "../../../src/modes/interactive/components/tool-execution.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
+import ToolExecutionComponent from "../../../src/modes/interactive/components/tool-execution.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import ansi from "../../../src/utils/ansi.ts";
+
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { Container } = tui;
 

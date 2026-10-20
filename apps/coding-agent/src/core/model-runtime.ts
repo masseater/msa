@@ -3,56 +3,64 @@ import type aiTypes from "@msa/ai/index.types";
 import allModule from "@msa/ai/providers/all";
 import openrouterUserModels from "@msa/ai/providers/openrouter-user-models";
 import modelOperations from "@msa/ai/utils/model-operations";
-import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 
-import { getAgentDir } from "../config.ts";
-import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
-import { toErrorMessage } from "../utils/errors.ts";
-import { AuthStorage as DefaultAuthStorage } from "./auth-storage.ts";
-import { awaited, awaiting, awaitingWith, performed } from "./awaiting.ts";
-import { cliAgentProviders } from "./cli-agents/index.ts";
-import { ModelConfig } from "./model-config.ts";
-import { EMPTY_MODEL_POLICY, type ModelPolicy, withModelPolicy } from "./model-policy.ts";
-import { FileModelsStore, InMemoryCodingAgentModelsStore } from "./models-store.ts";
-import { dirname, join } from "./platform-node.ts";
-import { makeLatch, schedule } from "./platform.ts";
-import { readEnv } from "./process-env.ts";
-import {
-  type AuthStatus,
-  type CompatibilityRequestConfig,
-  type ProviderConfigInput,
+import configModule from "../config.ts";
+import abortModule from "../utils/abort.ts";
+import errorsModule from "../utils/errors.ts";
+import DefaultAuthStorage from "./auth-storage.ts";
+import awaitingModule from "./awaiting.ts";
+import cliAgents from "./cli-agents/index.ts";
+import CredentialSynchronizationError from "./credential-synchronization-error.ts";
+import FileModelsStore from "./file-models-store.ts";
+import InMemoryCodingAgentModelsStore from "./in-memory-coding-agent-models-store.ts";
+import ModelConfig from "./model-config.ts";
+import type modelConfigTypes from "./model-config.types.ts";
+import modelPolicy from "./model-policy.ts";
+import type modelPolicyTypes from "./model-policy.types.ts";
+import type modelRuntimeTypes from "./model-runtime.types.ts";
+import platformNode from "./platform-node.ts";
+import platform from "./platform.ts";
+import processEnv from "./process-env.ts";
+import providerComposer from "./provider-composer.ts";
+import type providerComposerTypes from "./provider-composer.types.ts";
+import remoteCatalogProvider from "./remote-catalog-provider.ts";
+import RuntimeCredentials from "./runtime-credentials.ts";
+import type runtimeCredentialsTypes from "./runtime-credentials.types.ts";
+import virtualModelsModule from "./virtual-models.ts";
+import type virtualModelsTypes from "./virtual-models.types.ts";
+
+const { createVirtualModel, findLatestResponse, isVirtualModel, withVirtualModels } =
+  virtualModelsModule;
+const {
   composeModelProvider,
   configuredRequestAuthStatus,
   resolveCompatibilityRequestConfig,
   resolveConfiguredModelHeaders,
   validateExtensionProvider,
-} from "./provider-composer.ts";
-import { withPersonalizedCatalog, withRemoteCatalog } from "./remote-catalog-provider.ts";
-import { RuntimeCredentials } from "./runtime-credentials.ts";
-import {
-  type ModelRoute,
-  type ModelRouteReason,
-  type VirtualModelDefinition,
-  createVirtualModel,
-  findLatestResponse,
-  isVirtualModel,
-  withVirtualModels,
-} from "./virtual-models.ts";
-
+} = providerComposer;
+const { EMPTY_MODEL_POLICY, withModelPolicy } = modelPolicy;
+const { awaited, awaiting, awaitingWith, performed } = awaitingModule;
+const { dirname, join } = platformNode;
+const { getAgentDir } = configModule;
+const { withPersonalizedCatalog, withRemoteCatalog } = remoteCatalogProvider;
+const { readEnv } = processEnv;
+const { makeLatch, schedule } = platform;
+const { toErrorMessage } = errorsModule;
+const { cliAgentProviders } = cliAgents;
+const { operationSignal, raceWithAbortSignal } = abortModule;
 const { ModelsError, clampThinkingLevel, createModels, lazyStream, normalizeContext } = ai;
 const { personalizeOpenRouterCatalog } = openrouterUserModels;
 const { assertClassifierInputSupported, classifierErrorResult, imageErrorResult } = modelOperations;
+
 const assertChatModel: typeof modelOperations.assertChatModel = modelOperations.assertChatModel;
 const assertClassifierModel: typeof modelOperations.assertClassifierModel =
   modelOperations.assertClassifierModel;
 const assertImageModel: typeof modelOperations.assertImageModel = modelOperations.assertImageModel;
-
 interface RegisteredVirtualModel {
   model: aiTypes.Model<aiTypes.Api>;
-  route: VirtualModelDefinition["route"];
+  route: virtualModelsTypes.VirtualModelDefinition["route"];
 }
-
 interface ModelRuntimeSnapshot {
   all: readonly aiTypes.Model<aiTypes.Api>[];
   available: readonly aiTypes.Model<aiTypes.Api>[];
@@ -60,57 +68,6 @@ interface ModelRuntimeSnapshot {
   storedProviders: ReadonlySet<string>;
   auth: ReadonlyMap<string, aiTypes.AuthCheck | undefined>;
 }
-
-export interface CreateModelRuntimeOptions {
-  credentials?: aiTypes.CredentialStore | undefined;
-  authPath?: string | undefined;
-  modelsPath?: string | null | undefined;
-  modelsStore?: aiTypes.ModelsStore | undefined;
-  modelsStorePath?: string | undefined;
-  allowModelNetwork?: boolean | undefined;
-  modelRefreshTimeoutMs?: number | undefined;
-  catalogBaseUrl?: string | undefined;
-  signal?: AbortSignal | undefined;
-  refreshOnCreate?: boolean | undefined;
-}
-
-export interface ModelRuntimeAuthOverrides extends aiTypes.AuthOperationOptions {
-  apiKey?: string | undefined;
-  env?: Record<string, string> | undefined;
-  minOAuthValidityMs?: number | undefined;
-}
-
-export type CredentialSynchronizationOperation =
-  | "login"
-  | "logout"
-  | "setRuntimeApiKey"
-  | "removeRuntimeApiKey";
-
-export class CredentialSynchronizationError extends Data.TaggedError(
-  "CredentialSynchronizationError",
-)<{
-  readonly providerId: string;
-  readonly operation: CredentialSynchronizationOperation;
-  readonly credential: aiTypes.Credential | undefined;
-  readonly message: string;
-  readonly cause: unknown;
-}> {
-  constructor(
-    providerId: string,
-    operation: CredentialSynchronizationOperation,
-    credential: aiTypes.Credential | undefined,
-    options: ErrorOptions,
-  ) {
-    super({
-      cause: options.cause,
-      credential,
-      message: `Credential ${operation} committed for ${providerId}, but local synchronization failed`,
-      operation,
-      providerId,
-    });
-  }
-}
-
 function mergeHeaders(
   base: aiTypes.ProviderHeaders | undefined,
   override: aiTypes.ProviderHeaders | undefined,
@@ -126,21 +83,23 @@ function mergeHeaders(
   }
   return merged;
 }
-
-export class ModelRuntime implements aiTypes.Models {
+export default class ModelRuntime implements aiTypes.Models {
   private readonly models: aiTypes.MutableModels;
-  private readonly credentials: RuntimeCredentials;
+  private readonly credentials: runtimeCredentialsTypes.RuntimeCredentials;
   private readonly catalogProviders: readonly aiTypes.Provider[];
   private builtins: ReadonlyMap<string, aiTypes.Provider> = new Map();
   private readonly nativeExtensionProviders = new Map<string, aiTypes.Provider>();
-  private readonly extensionProviders = new Map<string, ProviderConfigInput>();
+  private readonly extensionProviders = new Map<
+    string,
+    providerComposerTypes.ProviderConfigInput
+  >();
   private readonly virtualModels = new Map<string, Map<string, RegisteredVirtualModel>>();
   private readonly catalogProvidersById = new Map<string, aiTypes.Provider>();
-  private policy: ModelPolicy = EMPTY_MODEL_POLICY;
+  private policy: modelPolicyTypes.ModelPolicy = EMPTY_MODEL_POLICY;
   private readonly compositionErrors = new Map<string, string>();
   private readonly modelsPath: string | undefined;
   private readonly modelNetworkEnabled: boolean;
-  private config: ModelConfig;
+  private config: modelConfigTypes.ModelConfig;
   private snapshot: ModelRuntimeSnapshot = {
     all: [],
     auth: new Map(),
@@ -156,8 +115,8 @@ export class ModelRuntime implements aiTypes.Models {
   private readonly credentialOperations = new Map<string, Promise<unknown>>();
 
   private constructor(
-    credentials: RuntimeCredentials,
-    config: ModelConfig,
+    credentials: runtimeCredentialsTypes.RuntimeCredentials,
+    config: modelConfigTypes.ModelConfig,
     modelsPath: string | undefined,
     modelsStore: aiTypes.ModelsStore,
     providers: readonly aiTypes.Provider[],
@@ -172,7 +131,7 @@ export class ModelRuntime implements aiTypes.Models {
     this.rebuildProviders();
   }
 
-  static create(options: CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
+  static create(options: modelRuntimeTypes.CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
     return Effect.runPromise(
       awaiting(function* () {
         const credentials = new RuntimeCredentials(
@@ -217,31 +176,40 @@ export class ModelRuntime implements aiTypes.Models {
           refreshFromNetwork && options.modelRefreshTimeoutMs !== undefined
             ? new AbortController()
             : undefined;
-        const timeout =
-          controller === undefined
-            ? undefined
-            : schedule(() => controller.abort(), options.modelRefreshTimeoutMs ?? 0);
-        const signal =
-          controller === undefined
-            ? options.signal
-            : options.signal === undefined
-              ? controller.signal
-              : AbortSignal.any([options.signal, controller.signal]);
-        try {
-          if (options.refreshOnCreate !== false) {
-            yield* awaited(
-              runtime.refresh({
-                allowNetwork: refreshFromNetwork,
-                ...(signal === undefined ? {} : { signal }),
-              }),
-            );
-          }
-        } finally {
-          if (timeout !== undefined) timeout.cancel();
-        }
+        yield* ModelRuntime.createPart1(controller, options, runtime, refreshFromNetwork);
         return runtime;
       }),
     );
+  }
+
+  private static *createPart1(
+    controller: AbortController | undefined,
+    options: modelRuntimeTypes.CreateModelRuntimeOptions,
+    runtime: ModelRuntime,
+    refreshFromNetwork: boolean,
+  ) {
+    const timeout =
+      controller === undefined
+        ? undefined
+        : schedule(() => controller.abort(), options.modelRefreshTimeoutMs ?? 0);
+    const signal =
+      controller === undefined
+        ? options.signal
+        : options.signal === undefined
+          ? controller.signal
+          : AbortSignal.any([options.signal, controller.signal]);
+    try {
+      if (options.refreshOnCreate !== false) {
+        yield* awaited(
+          runtime.refresh({
+            allowNetwork: refreshFromNetwork,
+            ...(signal === undefined ? {} : { signal }),
+          }),
+        );
+      }
+    } finally {
+      if (timeout !== undefined) timeout.cancel();
+    }
   }
 
   private providerIds(): Set<string> {
@@ -271,11 +239,11 @@ export class ModelRuntime implements aiTypes.Models {
     return provider;
   }
 
-  getModelPolicy(): ModelPolicy {
+  getModelPolicy(): modelPolicyTypes.ModelPolicy {
     return this.policy;
   }
 
-  setModelPolicy(policy: ModelPolicy): void {
+  setModelPolicy(policy: modelPolicyTypes.ModelPolicy): void {
     if (
       policy.allow.join("\n") === this.policy.allow.join("\n") &&
       policy.deny.join("\n") === this.policy.deny.join("\n")
@@ -562,7 +530,9 @@ export class ModelRuntime implements aiTypes.Models {
     return errors.length > 0 ? errors.join("\n\n") : undefined;
   }
 
-  getRegisteredProviderConfig(providerId: string): ProviderConfigInput | undefined {
+  getRegisteredProviderConfig(
+    providerId: string,
+  ): providerComposerTypes.ProviderConfigInput | undefined {
     return this.extensionProviders.get(providerId);
   }
 
@@ -576,7 +546,9 @@ export class ModelRuntime implements aiTypes.Models {
     return this.nativeExtensionProviders.get(providerId);
   }
 
-  getCompatibilityRequestConfig(model: aiTypes.Model<aiTypes.Api>): CompatibilityRequestConfig {
+  getCompatibilityRequestConfig(
+    model: aiTypes.Model<aiTypes.Api>,
+  ): providerComposerTypes.CompatibilityRequestConfig {
     return resolveCompatibilityRequestConfig(
       model,
       this.config.getProvider(model.provider),
@@ -601,15 +573,15 @@ export class ModelRuntime implements aiTypes.Models {
 
   getAuth(
     providerId: string,
-    overrides?: ModelRuntimeAuthOverrides,
+    overrides?: modelRuntimeTypes.ModelRuntimeAuthOverrides,
   ): Promise<aiTypes.AuthResult | undefined>;
   getAuth(
     model: aiTypes.AnyModel,
-    overrides?: ModelRuntimeAuthOverrides,
+    overrides?: modelRuntimeTypes.ModelRuntimeAuthOverrides,
   ): Promise<aiTypes.AuthResult | undefined>;
   getAuth(
     providerOrModel: string | aiTypes.AnyModel,
-    overrides: ModelRuntimeAuthOverrides = {},
+    overrides: modelRuntimeTypes.ModelRuntimeAuthOverrides = {},
   ): Promise<aiTypes.AuthResult | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
@@ -665,7 +637,7 @@ export class ModelRuntime implements aiTypes.Models {
 
   private synchronizeCredentialState(
     providerId: string,
-    operation: CredentialSynchronizationOperation,
+    operation: modelRuntimeTypes.CredentialSynchronizationOperation,
     credential: aiTypes.Credential | undefined,
     signal: AbortSignal,
   ): Effect.Effect<void> {
@@ -740,7 +712,7 @@ export class ModelRuntime implements aiTypes.Models {
     return this.credentials.list(options);
   }
 
-  getProviderAuthStatus(providerId: string): AuthStatus {
+  getProviderAuthStatus(providerId: string): providerComposerTypes.AuthStatus {
     if (this.credentials.hasRuntimeApiKey(providerId))
       return { configured: true, source: "runtime" };
     if (this.snapshot.storedProviders.has(providerId))
@@ -801,8 +773,8 @@ export class ModelRuntime implements aiTypes.Models {
           options: {
             ...providerOptions,
             apiKey: providerOptions.apiKey ?? resolution.auth.apiKey,
-            headers,
             env,
+            headers,
           } as Omit<TOptions, "transformHeaders"> & aiTypes.ProviderRequestOptions<TModel>,
           provider,
         };
@@ -1099,13 +1071,7 @@ export class ModelRuntime implements aiTypes.Models {
           ...options,
           allowNetwork: options.allowNetwork ?? this.modelNetworkEnabled,
         };
-        const result = ((yield* awaited(this.models.refresh(refreshOptions))) as
-          | aiTypes.ModelsRefreshResult
-          | undefined) ?? {
-          aborted: refreshOptions.signal?.aborted ?? false,
-          errors: new Map(),
-        };
-        const errors = new Map(result.errors);
+        const { errors, result } = yield* this.refreshPart1(refreshOptions);
         this.updateModelSnapshot();
         if (options.providers === undefined) {
           try {
@@ -1143,6 +1109,22 @@ export class ModelRuntime implements aiTypes.Models {
     );
   }
 
+  private *refreshPart1(refreshOptions: {
+    allowNetwork: boolean;
+    providers?: readonly string[];
+    force?: boolean;
+    signal?: AbortSignal;
+  }) {
+    const result = ((yield* awaited(this.models.refresh(refreshOptions))) as
+      | aiTypes.ModelsRefreshResult
+      | undefined) ?? {
+      aborted: refreshOptions.signal?.aborted ?? false,
+      errors: new Map(),
+    };
+    const errors = new Map(result.errors);
+    return { errors, result };
+  }
+
   registerNativeProvider(provider: aiTypes.Provider): void {
     if (provider.id.trim() === "") throw new Error("Provider id must not be empty.");
     this.extensionProviders.delete(provider.id);
@@ -1159,7 +1141,7 @@ export class ModelRuntime implements aiTypes.Models {
 
   private markProvisionallyConfigured(
     providerId: string,
-    configuredStatus: AuthStatus | undefined,
+    configuredStatus: providerComposerTypes.AuthStatus | undefined,
     type: aiTypes.AuthType,
   ): void {
     if (!this.snapshot.storedProviders.has(providerId) && configuredStatus?.configured !== true)
@@ -1176,7 +1158,7 @@ export class ModelRuntime implements aiTypes.Models {
     };
   }
 
-  registerProvider(providerId: string, config: ProviderConfigInput): void {
+  registerProvider(providerId: string, config: providerComposerTypes.ProviderConfigInput): void {
     validateExtensionProvider(
       providerId,
       this.builtins.get(providerId),
@@ -1185,7 +1167,7 @@ export class ModelRuntime implements aiTypes.Models {
     );
     this.nativeExtensionProviders.delete(providerId);
     const previous = this.extensionProviders.get(providerId);
-    const effective: ProviderConfigInput = { ...previous };
+    const effective: providerComposerTypes.ProviderConfigInput = { ...previous };
     for (const [key, value] of Object.entries(config)) {
       if (value !== undefined) (effective as Record<string, unknown>)[key] = value;
     }
@@ -1210,7 +1192,7 @@ export class ModelRuntime implements aiTypes.Models {
     void this.refresh({ allowNetwork: false });
   }
 
-  registerVirtualModel(definition: VirtualModelDefinition): void {
+  registerVirtualModel(definition: virtualModelsTypes.VirtualModelDefinition): void {
     const { provider: providerId, id } = definition;
     if (providerId.trim() === "" || id.trim() === "")
       throw new Error("Virtual model provider and id must not be empty.");
@@ -1252,13 +1234,13 @@ export class ModelRuntime implements aiTypes.Models {
     model: aiTypes.Model<aiTypes.Api>,
     messages: readonly aiTypes.Message[],
     options: {
-      reason: ModelRouteReason;
+      reason: virtualModelsTypes.ModelRouteReason;
       thinkingLevel: aiTypes.ModelThinkingLevel;
       signal?: AbortSignal | undefined;
       failed?: aiTypes.AssistantMessage | undefined;
       state?: unknown;
     },
-  ): Promise<ModelRoute> {
+  ): Promise<virtualModelsTypes.ModelRoute> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const name = `Virtual model ${model.provider}/${model.id}`;
@@ -1273,9 +1255,9 @@ export class ModelRuntime implements aiTypes.Models {
             ...request,
             failed: failedModel &&
               failed && {
+                message: failed,
                 model: failedModel,
                 thinkingLevel: failed.thinkingLevel,
-                message: failed,
               },
             messages,
             model,

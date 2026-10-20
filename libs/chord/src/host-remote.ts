@@ -10,13 +10,13 @@ import type hostTypesModule from "./host-types.types.ts";
 import type remoteRefTypes from "./remote-ref.types.ts";
 import type typesModule from "./types.types.ts";
 
-const { contract: contractModule, errors: errorsModule, HostObjects, remoteRef } = hostRemoteKit;
+const { contract: contractModule, errors: errorsModule, remoteRef } = hostRemoteKit;
 
 const { RemoteBinding, RemoteRef } = remoteRef;
 const { ChordError, invalid } = errorsModule;
 const { contractFromDescription, resolveHost } = contractModule;
 
-export default abstract class HostRemote extends HostObjects {
+export default abstract class HostRemote extends hostRemoteKit.HostObjects {
   readonly bindings = new Map<string, remoteRefTypes.RemoteBinding>();
   readonly #lingering = new Map<string, remoteRefTypes.RemoteBinding>();
   readonly #routes = new Map<string, hostTypesModule.Route>();

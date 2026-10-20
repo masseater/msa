@@ -1,7 +1,9 @@
 import type compatTypes from "@msa/ai/compat.types";
 import http from "@msa/ai/utils/http";
-import { Clock, Data, Effect, Option, Schema } from "effect";
+import { Clock, Effect, Option, Schema } from "effect";
 import { dual } from "effect/Function";
+
+import AnthropicAuthError from "./anthropic-auth-error.ts";
 
 const { httpRequest } = http;
 
@@ -11,21 +13,13 @@ const AUTHORIZE_URL = "https://claude.ai/oauth/authorize";
 const TOKEN_URL = "https://console.anthropic.com/v1/oauth/token";
 const REDIRECT_URI = "https://console.anthropic.com/oauth/code/callback";
 const SCOPES = "org:create_api_key user:profile user:inference";
-
-export const isOAuthToken = (apiKey: string): boolean => apiKey.includes("sk-ant-oat");
-
-class AnthropicAuthError extends Data.TaggedError("AnthropicAuthError")<{
-  readonly message: string;
-}> {}
-
+const isOAuthToken = (apiKey: string): boolean => apiKey.includes("sk-ant-oat");
 const TokenSchema = Schema.Struct({
   access_token: Schema.String,
   expires_in: Schema.Finite,
   refresh_token: Schema.String,
 });
-
 const decodeToken = Schema.decodeUnknownOption(Schema.fromJsonString(TokenSchema));
-
 const TokenRequestSchema = Schema.Struct({
   client_id: Schema.String,
   code: Schema.optional(Schema.String),
@@ -35,15 +29,12 @@ const TokenRequestSchema = Schema.Struct({
   refresh_token: Schema.optional(Schema.String),
   state: Schema.optional(Schema.String),
 });
-
 const encodeTokenRequest = Schema.encodeEffect(Schema.fromJsonString(TokenRequestSchema));
-
 const base64Url = (bytes: Uint8Array): string =>
   btoa(String.fromCharCode(...bytes))
     .replace(/\+/gu, "-")
     .replace(/\//gu, "_")
     .replace(/=+$/u, "");
-
 const generatePKCE = (): Promise<{ verifier: string; challenge: string }> => {
   const array = new Uint8Array(32);
   crypto.getRandomValues(array);
@@ -52,7 +43,6 @@ const generatePKCE = (): Promise<{ verifier: string; challenge: string }> => {
     .digest("SHA-256", new TextEncoder().encode(verifier))
     .then((hash) => ({ challenge: base64Url(new Uint8Array(hash)), verifier }));
 };
-
 const requestToken = (body: typeof TokenRequestSchema.Type, signal?: AbortSignal) =>
   Effect.gen(function* () {
     const payload = yield* encodeTokenRequest(body).pipe(Effect.orDie);
@@ -76,7 +66,6 @@ const requestToken = (body: typeof TokenRequestSchema.Type, signal?: AbortSignal
     }
     return parsed.value;
   });
-
 const credentialsOf = (
   token: typeof TokenSchema.Type,
   now: number,
@@ -85,8 +74,7 @@ const credentialsOf = (
   expires: now + token.expires_in * 1000 - 5 * 60 * 1000,
   refresh: token.refresh_token,
 });
-
-export const loginAnthropic = (
+const loginAnthropic = (
   callbacks: compatTypes.OAuthLoginCallbacks,
 ): Promise<compatTypes.OAuthCredentials> =>
   Effect.runPromise(
@@ -120,7 +108,6 @@ export const loginAnthropic = (
       return credentialsOf(token, yield* Clock.currentTimeMillis);
     }),
   );
-
 const refreshAnthropicTokenImpl = (
   credentials: compatTypes.OAuthCredentials,
   signal: AbortSignal,
@@ -138,8 +125,7 @@ const refreshAnthropicTokenImpl = (
       return credentialsOf(token, yield* Clock.currentTimeMillis);
     }),
   );
-
-export const refreshAnthropicToken: {
+const refreshAnthropicToken: {
   (
     credentials: compatTypes.OAuthCredentials,
     signal: AbortSignal,
@@ -148,3 +134,11 @@ export const refreshAnthropicToken: {
     signal: AbortSignal,
   ): (credentials: compatTypes.OAuthCredentials) => Promise<compatTypes.OAuthCredentials>;
 } = dual((args: IArguments) => args.length >= 2, refreshAnthropicTokenImpl);
+
+const auth = {
+  isOAuthToken,
+  loginAnthropic,
+  refreshAnthropicToken,
+};
+
+export default auth;

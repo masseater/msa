@@ -1,10 +1,13 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import type { PlanStore } from "./state.ts";
-import { type TodoItem, extractTodoItems } from "./utils.ts";
+import type stateTypes from "./state.types.ts";
+import utils from "./utils.ts";
+import type utilsTypes from "./utils.types.ts";
+
+const { extractTodoItems } = utils;
 
 const PLAN_CHOICES = ["Execute the plan (track progress)", "Stay in plan mode", "Refine the plan"];
 
@@ -17,7 +20,7 @@ const getTextContent = (message: aiTypes.AssistantMessage): string =>
     .map((block) => block.text)
     .join("\n");
 
-const planMessage = (todos: TodoItem[]) => {
+const planMessage = (todos: utilsTypes.TodoItem[]) => {
   const todoListText = todos.map((t, i) => `${i + 1}. ☐ ${t.text}`).join("\n");
   return {
     content: `**Plan Steps (${todos.length}):**\n\n${todoListText}`,
@@ -27,9 +30,9 @@ const planMessage = (todos: TodoItem[]) => {
 };
 
 const startExecution = (
-  msa: ExtensionAPI,
-  store: PlanStore,
-  ctx: ExtensionContext,
+  msa: codingAgentTypes.ExtensionAPI,
+  store: stateTypes.PlanStore,
+  ctx: codingAgentTypes.ExtensionContext,
   planTodoListMessage: ReturnType<typeof planMessage>,
 ): void => {
   const { runtime } = store;
@@ -58,7 +61,11 @@ After completing a step, include a [DONE:n] tag in your response.`;
   );
 };
 
-const completeExecution = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionContext): boolean => {
+const completeExecution = (
+  msa: codingAgentTypes.ExtensionAPI,
+  store: stateTypes.PlanStore,
+  ctx: codingAgentTypes.ExtensionContext,
+): boolean => {
   const { runtime } = store;
   if (!runtime.executing || runtime.todos.length === 0) return false;
   if (!runtime.todos.every((t) => t.completed)) return true;
@@ -80,8 +87,8 @@ const completeExecution = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionCo
 };
 
 const extractPlan = (
-  store: PlanStore,
-  ctx: ExtensionContext,
+  store: stateTypes.PlanStore,
+  ctx: codingAgentTypes.ExtensionContext,
   messages: agentTypes.AgentMessage[],
 ): void => {
   const { runtime } = store;
@@ -99,11 +106,11 @@ const extractPlan = (
   store.persist();
 };
 
-export const handleAgentEnd = (request: {
-  readonly msa: ExtensionAPI;
-  readonly store: PlanStore;
+const handleAgentEnd = (request: {
+  readonly msa: codingAgentTypes.ExtensionAPI;
+  readonly store: stateTypes.PlanStore;
   readonly event: { messages: agentTypes.AgentMessage[] };
-  readonly ctx: ExtensionContext;
+  readonly ctx: codingAgentTypes.ExtensionContext;
 }) =>
   Effect.gen(function* () {
     const { msa, store, event, ctx } = request;
@@ -132,3 +139,9 @@ export const handleAgentEnd = (request: {
       }
     }
   });
+
+const approval = {
+  handleAgentEnd,
+};
+
+export default approval;

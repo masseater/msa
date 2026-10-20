@@ -2,7 +2,7 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect, Schema } from "effect";
 
-import type { createLlamaProvider } from "../src/extensions/llama/provider.ts";
+import type providerModule from "../src/extensions/llama/provider.ts";
 import type llamaExtensionSupportTypes from "./llama-extension-support.types.ts";
 
 const { abortController, awaited, listen, readBody, runTest, toJsonText } = testing;
@@ -44,7 +44,7 @@ const eventStream = () => {
       const chunk = encoder.encode(`data: ${yield* toJsonText(event)}\n\n`);
       for (const controller of streams) controller.enqueue(chunk);
     });
-  const response = () => {
+  const response = (): Response => {
     let owned: ReadableStreamDefaultController<Uint8Array> | undefined;
     return new Response(
       new ReadableStream<Uint8Array>({
@@ -87,7 +87,7 @@ const localCredential = (url: string) => ({
 });
 
 const refresh = (
-  controller: ReturnType<typeof createLlamaProvider>,
+  controller: ReturnType<typeof providerModule.createLlamaProvider>,
   options: llamaExtensionSupportTypes.RefreshOptions,
 ) =>
   awaited(

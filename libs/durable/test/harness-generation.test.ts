@@ -5,6 +5,7 @@ import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import harnessGenerationKit from "./harness-generation-kit.ts";
 import harnessGenerationSupport from "./harness-generation-support.ts";
 import harnessSupport from "./harness-support.ts";
@@ -21,7 +22,7 @@ const { allEntries, chatSetup, openChat, textOf, unanswered } = chatSupport;
 const { awaited } = effectSupport;
 const { ERROR_503, live, livePublications, runTask } = harnessGenerationSupport;
 const { addSection } = harnessSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 
 const answersInputSettles = Effect.gen(function* () {
   const setup = chatSetup();

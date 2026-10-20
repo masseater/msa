@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createWebSearchToolDefinition } from "../src/core/tools/web-search.ts";
+import webSearch from "../src/core/tools/web-search.ts";
 import webToolsSupport from "./web-tools-support.ts";
+
+const { createWebSearchToolDefinition } = webSearch;
 
 const { cli, run, text } = webToolsSupport;
 

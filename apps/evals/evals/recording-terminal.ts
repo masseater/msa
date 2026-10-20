@@ -3,7 +3,7 @@ import { stripVTControlCharacters } from "node:util";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-export class RecordingTerminal {
+export default class RecordingTerminal {
   readonly columns = 100;
   readonly rows = 30;
   readonly kittyProtocolActive = true;

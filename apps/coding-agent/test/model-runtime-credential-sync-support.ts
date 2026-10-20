@@ -2,10 +2,11 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 import type modelRuntimeCredentialSyncSupportTypes from "./model-runtime-credential-sync-support.types.ts";
-
 const { awaited, runTest } = testing;
 
 function model(provider: string): aiTypes.Model<"openai-completions"> {
@@ -68,8 +69,8 @@ const makeProvider = (
 
 const withProvider = (
   registered: aiTypes.Provider,
-  credentials: AuthStorage = AuthStorage.inMemory(),
-): Promise<ModelRuntime> =>
+  credentials: authStorageTypes.AuthStorage = AuthStorage.inMemory(),
+): Promise<modelRuntimeTypes.ModelRuntime> =>
   runTest(
     Effect.gen(function* () {
       const runtime = yield* awaited(

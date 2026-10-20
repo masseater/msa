@@ -2,16 +2,21 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { getBranchSelection } from "../src/core/virtual-models.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import virtualModels from "../src/core/virtual-models.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
+const { getBranchSelection } = virtualModels;
 
 const { assistantFrom, createRuntime } = virtualModelsSupport;
 
 const { awaited, runTest } = testing;
 
-function select(build: (sessionManager: SessionManager) => void, runtime: ModelRuntime) {
+function select(
+  build: (sessionManager: sessionManagerTypes.SessionManager) => void,
+  runtime: modelRuntimeTypes.ModelRuntime,
+) {
   const sessionManager = SessionManager.inMemory();
   build(sessionManager);
   const lookups: string[] = [];

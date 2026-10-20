@@ -2,7 +2,7 @@ import type agentTypes from "@msa/agent-core/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { type ModelRouteRequest } from "../../src/core/virtual-models.ts";
+import type virtualModelsTypes from "../../src/core/virtual-models.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 import type virtualModelsSupportTypes from "./virtual-models-support.types.ts";
@@ -34,7 +34,10 @@ const harnesses: harnessTypes.Harness[] = [];
 type ExtensionFactory = NonNullable<harnessTypes.HarnessOptions["extensionFactories"]>[number];
 
 const registerAutoRouter =
-  (route: virtualModelsSupportTypes.Route, requests: ModelRouteRequest[]): ExtensionFactory =>
+  (
+    route: virtualModelsSupportTypes.Route,
+    requests: virtualModelsTypes.ModelRouteRequest[],
+  ): ExtensionFactory =>
   (msa) => {
     msa.registerVirtualModel({
       contextWindow: 1000,
@@ -62,7 +65,7 @@ function createRoutedHarness(
 ) {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const requests: ModelRouteRequest[] = [];
+      const requests: virtualModelsTypes.ModelRouteRequest[] = [];
       const harness = yield* Effect.promise(() =>
         createHarness({
           ...options,

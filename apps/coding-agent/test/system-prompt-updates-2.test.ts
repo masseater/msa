@@ -5,7 +5,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, test } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
 import harnessModule from "./suite/harness.ts";
 
 const {
@@ -23,7 +23,7 @@ const { awaited, runTest } = testing;
 const aForcedPromptIsSentAsThePart1 = () =>
   Effect.gen(function* () {
     let turn = 0;
-    const extension: ExtensionFactory = (msa) => {
+    const extension: srcTypes.ExtensionFactory = (msa) => {
       msa.on("before_agent_start", (event) => {
         if (++turn === 3) event.systemPromptOptions.sections["plan_mode"] = "Plan only.";
         return turn === 2 || turn === 3 ? { systemPrompt: "Exact prompt." } : undefined;
@@ -36,15 +36,7 @@ const aForcedPromptIsSentAsThePart1 = () =>
 const aForcedPromptIsSentAsThe = Effect.gen(function* () {
   const { harness } = yield* aForcedPromptIsSentAsThePart1();
   try {
-    const requests: aiTypes.TranscriptContext[] = [];
-    harness.setResponses(
-      ["one", "two", "three", "four"].map(
-        (text) => (providerContext: aiTypes.TranscriptContext) => {
-          requests.push(providerContext);
-          return fauxAssistantMessage(text);
-        },
-      ),
-    );
+    const requests: aiTypes.TranscriptContext[] = aForcedPromptIsSentAsThePart2(harness);
     for (const text of ["one", "two", "three", "four"])
       yield* awaited(harness.session.prompt(text));
     const systemMessages = requests.map((request) =>
@@ -85,7 +77,7 @@ const aForcedPromptIsSentAsThe = Effect.gen(function* () {
   }
 });
 
-const promptedToolsExtension: ExtensionFactory = (msa) => {
+const promptedToolsExtension: srcTypes.ExtensionFactory = (msa) => {
   for (const name of ["first", "second"]) {
     msa.registerTool({
       description: `${name} description`,
@@ -168,7 +160,7 @@ const setactivetoolsEmitsPromptSectionsAndToolChanges = Effect.gen(function* () 
 const setactivetoolsInBeforeAgentStartControlsThe = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const extension: ExtensionFactory = (msa) => {
+  const extension: srcTypes.ExtensionFactory = (msa) => {
     for (const name of ["first", "second"]) {
       msa.registerTool({
         description: `${name} description`,
@@ -226,3 +218,14 @@ describe("system prompt updates", () => {
   test("setActiveTools in before_agent_start controls the same request", () =>
     runTest(setactivetoolsInBeforeAgentStartControlsThe));
 });
+
+function aForcedPromptIsSentAsThePart2(harness: any) {
+  const requests: aiTypes.TranscriptContext[] = [];
+  harness.setResponses(
+    ["one", "two", "three", "four"].map((text) => (providerContext: aiTypes.TranscriptContext) => {
+      requests.push(providerContext);
+      return fauxAssistantMessage(text);
+    }),
+  );
+  return requests;
+}

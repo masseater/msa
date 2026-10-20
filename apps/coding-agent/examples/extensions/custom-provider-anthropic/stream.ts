@@ -5,9 +5,13 @@ import type aiTypes from "@msa/ai/index.types";
 import { Clock, Data, Effect, Stream } from "effect";
 import { dual } from "effect/Function";
 
-import { isOAuthToken } from "./auth.ts";
-import { convertMessages, convertTools, sanitizeSurrogates } from "./convert.ts";
-import { handleEvent } from "./stream-events.ts";
+import auth from "./auth.ts";
+import convert from "./convert.ts";
+import streamEvents from "./stream-events.ts";
+
+const { convertMessages, convertTools, sanitizeSurrogates } = convert;
+const { isOAuthToken } = auth;
+const { handleEvent } = streamEvents;
 
 const {
   collapseSystemMessages,
@@ -128,8 +132,8 @@ const buildParams = (
   const params: MessageCreateParamsStreaming = {
     max_tokens: options?.maxTokens ?? Math.floor(model.maxTokens / 3),
     messages: convertMessages({
-      messages: transcript.messages,
       isOAuth,
+      messages: transcript.messages,
     }) as MessageCreateParamsStreaming["messages"],
     model: model.id,
     stream: true,
@@ -224,7 +228,7 @@ const streamCustomAnthropicImpl = (
   return stream;
 };
 
-export const streamCustomAnthropic: {
+const streamCustomAnthropic: {
   (
     model: aiTypes.Model<aiTypes.Api>,
     context: aiTypes.TranscriptContext,
@@ -235,3 +239,9 @@ export const streamCustomAnthropic: {
     options?: aiTypes.SimpleStreamOptions,
   ): (model: aiTypes.Model<aiTypes.Api>) => aiTypes.AssistantMessageEventStream;
 } = dual((args: IArguments) => args.length >= 2, streamCustomAnthropicImpl);
+
+const stream = {
+  streamCustomAnthropic,
+};
+
+export default stream;

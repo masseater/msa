@@ -1,18 +1,19 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { ToolDefinition } from "../../core/extensions/types.ts";
-import {
-  getTextOutput,
-  replaceTabs,
-  startToolTimer,
-  str,
-  toolTimerText,
-} from "../../core/tools/render-utils.ts";
-import { expandHint } from "../../modes/interactive/components/keybinding-hints.ts";
-import { SingleLine, collapsedOutput } from "../../modes/interactive/components/visual-truncate.ts";
-import { type Theme, highlightCode } from "../../modes/interactive/theme/theme.ts";
-import type { CodemodeNestedCall, CodemodeToolDetails } from "./tool.ts";
+import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import renderUtils from "../../core/tools/render-utils.ts";
+import keybindingHints from "../../modes/interactive/components/keybinding-hints.ts";
+import SingleLine from "../../modes/interactive/components/single-line.ts";
+import visualTruncate from "../../modes/interactive/components/visual-truncate.ts";
+import themeModule from "../../modes/interactive/theme/theme.ts";
+import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
+import type toolTypes from "./tool.types.ts";
+
+const { highlightCode } = themeModule;
+const { getTextOutput, replaceTabs, startToolTimer, str, toolTimerText } = renderUtils;
+const { collapsedOutput } = visualTruncate;
+const { expandHint } = keybindingHints;
 
 const { Container, Spacer, Text } = tui;
 
@@ -28,7 +29,7 @@ function formatCost(cost: number): string {
   return `$${cost >= 0.01 ? cost.toFixed(2) : cost.toPrecision(2)}`;
 }
 
-function statusIcon(call: CodemodeNestedCall, theme: Theme): string {
+function statusIcon(call: toolTypes.CodemodeNestedCall, theme: themeTypes.Theme): string {
   switch (call.status) {
     case "running":
       return theme.fg("warning", "…");
@@ -41,7 +42,11 @@ function statusIcon(call: CodemodeNestedCall, theme: Theme): string {
   }
 }
 
-function formatCall(call: CodemodeNestedCall, theme: Theme, expanded: boolean): string {
+function formatCall(
+  call: toolTypes.CodemodeNestedCall,
+  theme: themeTypes.Theme,
+  expanded: boolean,
+): string {
   const args =
     !expanded && call.args.length > COLLAPSED_ARGS_CHARS
       ? `${call.args.slice(0, COLLAPSED_ARGS_CHARS - 3)}...`
@@ -57,8 +62,8 @@ function formatCall(call: CodemodeNestedCall, theme: Theme, expanded: boolean): 
   return line;
 }
 
-export const codemodeRenderers: Pick<
-  ToolDefinition<any, CodemodeToolDetails | undefined>,
+const codemodeRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, toolTypes.CodemodeToolDetails | undefined>,
   "renderCall" | "renderResult"
 > = {
   renderCall(args, theme, context) {
@@ -138,3 +143,9 @@ export const codemodeRenderers: Pick<
     return component;
   },
 };
+
+const renderer = {
+  codemodeRenderers,
+};
+
+export default renderer;

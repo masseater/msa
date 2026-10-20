@@ -1,20 +1,27 @@
 import { Effect } from "effect";
 
-import { resolvePath } from "../../utils/paths.ts";
-import type { EventBus } from "../event-bus.ts";
-import { causeMessage, fromPromise, pathOperations } from "../platform/index.ts";
-import {
-  createSyntheticSourceInfo,
-  getSyntheticPathSource,
-  isSyntheticPath,
-} from "../source-info.ts";
-import { time } from "../timings.ts";
-import { createExtensionAPI } from "./loader-api.ts";
-import type { ExtensionCacheToken } from "./loader-cache.ts";
-import { loadExtensionModule } from "./loader-module.ts";
-import type { Extension, ExtensionFactory, ExtensionRuntime } from "./types.ts";
+import paths from "../../utils/paths.ts";
+import type eventBusTypes from "../event-bus.types.ts";
+import platform from "../platform/index.ts";
+import sourceInfoModule from "../source-info.ts";
+import timings from "../timings.ts";
+import loaderApi from "./loader-api.ts";
+import type loaderCacheTypes from "./loader-cache.types.ts";
+import type loaderExtensionTypes from "./loader-extension.types.ts";
+import loaderModule from "./loader-module.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-function createExtension(extensionPath: string, resolvedPath: string): Extension {
+const { createSyntheticSourceInfo, getSyntheticPathSource, isSyntheticPath } = sourceInfoModule;
+const { causeMessage, fromPromise, pathOperations } = platform;
+const { createExtensionAPI } = loaderApi;
+const { time } = timings;
+const { resolvePath } = paths;
+const { loadExtensionModule } = loaderModule;
+
+function createExtension(
+  extensionPath: string,
+  resolvedPath: string,
+): extensionsTypesTypes.Extension {
   const source = getSyntheticPathSource(extensionPath) ?? "local";
   const baseDir = isSyntheticPath(extensionPath) ? undefined : pathOperations.dirname(resolvedPath);
 
@@ -27,23 +34,21 @@ function createExtension(extensionPath: string, resolvedPath: string): Extension
     path: extensionPath,
     resolvedPath,
     shortcuts: new Map(),
-    sourceInfo: createSyntheticSourceInfo(extensionPath, { source, baseDir }),
+    sourceInfo: createSyntheticSourceInfo(extensionPath, { baseDir, source }),
     tools: new Map(),
   };
 }
 
 interface InitializeInput {
-  factory: ExtensionFactory;
+  factory: extensionsTypesTypes.ExtensionFactory;
   extensionPath: string;
   resolvedPath: string;
   cwd: string;
-  eventBus: EventBus;
-  runtime: ExtensionRuntime;
+  eventBus: eventBusTypes.EventBus;
+  runtime: extensionsTypesTypes.ExtensionRuntime;
 }
 
-export const initializeExtension = Effect.fn("initializeExtension")(function* (
-  input: InitializeInput,
-) {
+const initializeExtension = Effect.fn("initializeExtension")(function* (input: InitializeInput) {
   const { factory, extensionPath, resolvedPath, cwd, eventBus, runtime } = input;
   const extension = createExtension(extensionPath, resolvedPath);
   const load = createExtensionAPI({ cwd, eventBus, extension, runtime });
@@ -55,26 +60,15 @@ export const initializeExtension = Effect.fn("initializeExtension")(function* (
   return extension;
 });
 
-export interface LoadOutcome {
-  extension: Extension | null;
-  error: string | null;
-}
-
 interface LoadOneInput {
   extensionPath: string;
   cwd: string;
-  eventBus: EventBus;
-  runtime: ExtensionRuntime;
-  cacheToken?: ExtensionCacheToken | undefined;
+  eventBus: eventBusTypes.EventBus;
+  runtime: extensionsTypesTypes.ExtensionRuntime;
+  cacheToken?: loaderCacheTypes.ExtensionCacheToken | undefined;
 }
 
-export const loadExtension = ({
-  extensionPath,
-  cwd,
-  eventBus,
-  runtime,
-  cacheToken,
-}: LoadOneInput) =>
+const loadExtension = ({ extensionPath, cwd, eventBus, runtime, cacheToken }: LoadOneInput) =>
   Effect.gen(function* () {
     const resolvedPath = resolvePath(extensionPath, cwd, { normalizeUnicodeSpaces: true });
     const factory = yield* loadExtensionModule({ cacheToken, extensionPath: resolvedPath });
@@ -83,7 +77,7 @@ export const loadExtension = ({
       return {
         error: `Extension does not export a valid factory function: ${extensionPath}`,
         extension: null,
-      } as LoadOutcome;
+      } as loaderExtensionTypes.LoadOutcome;
     }
     const extension = yield* initializeExtension({
       cwd,
@@ -93,12 +87,19 @@ export const loadExtension = ({
       resolvedPath,
       runtime,
     });
-    return { error: null, extension } as LoadOutcome;
+    return { error: null, extension } as loaderExtensionTypes.LoadOutcome;
   }).pipe(
     Effect.catchCause((cause) =>
       Effect.succeed({
         error: `Failed to load extension: ${causeMessage(cause)}`,
         extension: null,
-      } as LoadOutcome),
+      } as loaderExtensionTypes.LoadOutcome),
     ),
   );
+
+const loaderExtension = {
+  initializeExtension,
+  loadExtension,
+};
+
+export default loaderExtension;

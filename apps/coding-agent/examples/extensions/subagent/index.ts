@@ -1,15 +1,18 @@
-import { CONFIG_DIR_NAME, type ExtensionAPI, getAgentDir } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import { discoverAgents, joinPath } from "./agents.ts";
-import { dispatch } from "./dispatch.ts";
-import { renderCall, renderResult } from "./render.ts";
-import {
-  type DispatchDefaults,
-  type SingleResult,
-  type SubagentDetails,
-  SubagentParams,
-} from "./types.ts";
+import agentsModule from "./agents.ts";
+import dispatchModule from "./dispatch.ts";
+import render from "./render.ts";
+import subagentTypes from "./types.ts";
+import type subagentTypesTypes from "./types.types.ts";
+
+const { discoverAgents, joinPath } = agentsModule;
+const { CONFIG_DIR_NAME, getAgentDir } = codingAgent;
+const { SubagentParams } = subagentTypes;
+const { dispatch } = dispatchModule;
+const { renderCall, renderResult } = render;
 
 const description = (): string =>
   [
@@ -19,7 +22,7 @@ const description = (): string =>
     `To enable project-local agents in ${CONFIG_DIR_NAME}/agents, set agentScope: "both" (or "project").`,
   ].join(" ");
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
     description: description(),
     execute: (_toolCallId, params, signal, onUpdate, ctx) =>
@@ -27,33 +30,33 @@ export default function (msa: ExtensionAPI) {
         Effect.gen(function* () {
           const agentScope = params.agentScope ?? "user";
           const discovery = yield* discoverAgents(ctx.cwd, agentScope);
-          const dispatchDefaults: DispatchDefaults = {
+          const dispatchDefaults: subagentTypesTypes.DispatchDefaults = {
             model: ctx.model === undefined ? undefined : `${ctx.model.provider}/${ctx.model.id}`,
             thinkingLevel: ctx.thinkingLevel,
           };
 
           const makeDetails =
-            (mode: SubagentDetails["mode"]) =>
-            (results: SingleResult[]): SubagentDetails => ({
-              mode,
+            (mode: subagentTypesTypes.SubagentDetails["mode"]) =>
+            (results: subagentTypesTypes.SingleResult[]): subagentTypesTypes.SubagentDetails => ({
               agentScope,
+              mode,
               projectAgentsDir: discovery.projectAgentsDir,
               results,
             });
 
           return yield* dispatch({
-            context: {
-              ctx,
-              signal,
-              onUpdate,
-              agents: discovery.agents,
-              dispatchDefaults,
-              projectAgentsDir: discovery.projectAgentsDir,
-              makeDetails,
-            },
-            params,
             agentScope,
             confirm: params.confirmProjectAgents ?? true,
+            context: {
+              agents: discovery.agents,
+              ctx,
+              dispatchDefaults,
+              makeDetails,
+              onUpdate,
+              projectAgentsDir: discovery.projectAgentsDir,
+              signal,
+            },
+            params,
           });
         }),
       ),
@@ -61,6 +64,6 @@ export default function (msa: ExtensionAPI) {
     name: "subagent",
     parameters: SubagentParams,
     renderCall: (args, theme) => renderCall({ args, theme }),
-    renderResult: (result, options, theme) => renderResult({ result, options, theme }),
+    renderResult: (result, options, theme) => renderResult({ options, result, theme }),
   });
 }

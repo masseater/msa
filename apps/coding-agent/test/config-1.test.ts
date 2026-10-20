@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { findNodePackageDir } from "../src/config.ts";
-import { readEnv } from "../src/core/process-env.ts";
+import config from "../src/config.ts";
+import processEnv from "../src/core/process-env.ts";
+
+const { readEnv } = processEnv;
+const { findNodePackageDir } = config;
 
 const { joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } = testing;
 

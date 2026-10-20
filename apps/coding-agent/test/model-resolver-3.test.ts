@@ -1,7 +1,9 @@
 import all from "@msa/ai/providers/all";
 import { describe, expect, test } from "vite-plus/test";
 
-import { defaultModelPerProvider } from "../src/core/model-resolver.ts";
+import modelResolver from "../src/core/model-resolver.ts";
+
+const { defaultModelPerProvider } = modelResolver;
 
 const { getBuiltinModels, getBuiltinProviders } = all;
 

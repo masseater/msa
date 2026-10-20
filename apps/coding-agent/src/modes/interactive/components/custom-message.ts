@@ -2,15 +2,17 @@ import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { MessageRenderer } from "../../../core/extensions/types.ts";
-import type { CustomMessage } from "../../../core/messages.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import type messagesTypes from "../../../core/messages.types.ts";
+import themeModule from "../theme/theme.ts";
 
-const { Box, Container, Markdown, Spacer, Text } = tui;
+const { getMarkdownTheme, theme } = themeModule;
 
-export class CustomMessageComponent extends Container {
-  private message: CustomMessage<unknown>;
-  private customRenderer?: MessageRenderer | undefined;
+const { Box, Markdown, Spacer, Text } = tui;
+
+export default class CustomMessageComponent extends tui.Container {
+  private message: messagesTypes.CustomMessage<unknown>;
+  private customRenderer?: extensionsTypesTypes.MessageRenderer | undefined;
   private box: tuiTypes.Box;
   private customComponent?: tuiTypes.Component | undefined;
   private markdownTheme: tuiTypes.MarkdownTheme;
@@ -18,8 +20,8 @@ export class CustomMessageComponent extends Container {
   private outputPad: number;
 
   constructor(
-    message: CustomMessage<unknown>,
-    customRenderer?: MessageRenderer,
+    message: messagesTypes.CustomMessage<unknown>,
+    customRenderer?: extensionsTypesTypes.MessageRenderer,
     markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {

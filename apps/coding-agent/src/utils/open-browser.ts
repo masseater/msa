@@ -1,6 +1,8 @@
-import { spawnProcess } from "./child-process.ts";
+import childProcess from "./child-process.ts";
 
-export function openBrowser(target: string): void {
+const { spawnProcess } = childProcess;
+
+function openBrowser(target: string): void {
   const [cmd, args]: [string, string[]] =
     process.platform === "darwin"
       ? ["open", [target]]
@@ -12,3 +14,9 @@ export function openBrowser(target: string): void {
     .on("error", () => {})
     .unref();
 }
+
+const openBrowserModule = {
+  openBrowser,
+};
+
+export default openBrowserModule;

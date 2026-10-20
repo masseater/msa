@@ -1,21 +1,13 @@
-import { formatAge } from "../../utils/text.ts";
-import type { ResolvedMemorySettings } from "./memory-types.ts";
-import {
-  MEMORY_KINDS,
-  type MemoryKind,
-  type MemoryRecord,
-  type MemoryScore,
-  type MemoryStoreStats,
-} from "./store.ts";
+import textModule from "../../utils/text.ts";
+import type memoryFormatTypes from "./memory-format.types.ts";
+import type memoryTypesTypes from "./memory-types.ts";
+import storeTypesModule from "./store-types.ts";
+import type storeTypes from "./store.types.ts";
 
-export type MemoryCommand =
-  | { kind: "status" }
-  | { kind: "list" }
-  | { kind: "stats" }
-  | { kind: "search"; query: string }
-  | { kind: "forget"; id: string };
+const { MEMORY_KINDS } = storeTypesModule;
+const { formatAge } = textModule;
 
-export function parseMemoryCommand(text: string): MemoryCommand | undefined {
+function parseMemoryCommand(text: string): memoryFormatTypes.MemoryCommand | undefined {
   const match = /^\/memory(?:\s+([\s\S]*))?$/u.exec(text.trim());
   if (match === null) return undefined;
   const args = (match[1] ?? "").trim();
@@ -36,7 +28,7 @@ export function parseMemoryCommand(text: string): MemoryCommand | undefined {
   }
 }
 
-export function isMemoryKind(value: string): value is MemoryKind {
+function isMemoryKind(value: string): value is storeTypes.MemoryKind {
   return (MEMORY_KINDS as readonly string[]).includes(value);
 }
 
@@ -45,11 +37,11 @@ function truncate(text: string, max = 160): string {
   return line.length > max ? `${line.slice(0, max)}…` : line;
 }
 
-function scopeLabel(record: MemoryRecord): string {
+function scopeLabel(record: storeTypes.MemoryRecord): string {
   return record.scope === "project" ? `project:${record.project ?? "?"}` : "global";
 }
 
-export function formatRecallBlock(records: readonly MemoryRecord[]): string {
+function formatRecallBlock(records: readonly storeTypes.MemoryRecord[]): string {
   return [
     "<memory>",
     "Long-term memory from previous sessions, recalled for this request. The memory tool can save, search, and forget memories.",
@@ -58,7 +50,7 @@ export function formatRecallBlock(records: readonly MemoryRecord[]): string {
   ].join("\n");
 }
 
-export function formatMemoryList(records: readonly MemoryRecord[]): string {
+function formatMemoryList(records: readonly storeTypes.MemoryRecord[]): string {
   if (records.length === 0) return "No memories stored yet.";
   return [
     `${records.length} ${records.length === 1 ? "memory" : "memories"}:`,
@@ -69,13 +61,13 @@ export function formatMemoryList(records: readonly MemoryRecord[]): string {
   ].join("\n");
 }
 
-function formatSignals(scored: MemoryScore): string {
+function formatSignals(scored: storeTypes.MemoryScore): string {
   const signals = [`keywords ${Math.round(scored.keyword * 100)}%`];
   if (scored.vector !== undefined) signals.unshift(`similarity ${scored.vector.toFixed(2)}`);
   return signals.join(", ");
 }
 
-export function formatSearchResults(scores: readonly MemoryScore[]): string {
+function formatSearchResults(scores: readonly storeTypes.MemoryScore[]): string {
   if (scores.length === 0) return "No matching memories.";
   return [
     `${scores.length} ${scores.length === 1 ? "match" : "matches"}:`,
@@ -86,19 +78,12 @@ export function formatSearchResults(scores: readonly MemoryScore[]): string {
   ].join("\n");
 }
 
-export interface MemoryStatusInput {
-  settings: ResolvedMemorySettings;
-  project: string;
-  stats: MemoryStoreStats;
-  lastEmbeddingError: string | undefined;
-}
-
-export function formatMemoryStatus({
+function formatMemoryStatus({
   settings,
   project,
   stats,
   lastEmbeddingError,
-}: MemoryStatusInput): string {
+}: memoryFormatTypes.MemoryStatusInput): string {
   const failed = lastEmbeddingError !== undefined && lastEmbeddingError !== "";
   const embedding = settings.embedding.enabled
     ? failed
@@ -115,12 +100,12 @@ export function formatMemoryStatus({
   ].join("\n");
 }
 
-export function formatMemoryStats({
+function formatMemoryStats({
   settings,
   stats,
 }: {
-  settings: ResolvedMemorySettings;
-  stats: MemoryStoreStats;
+  settings: memoryTypesTypes.ResolvedMemorySettings;
+  stats: storeTypes.MemoryStoreStats;
 }): string {
   const kinds = Object.entries(stats.byKind)
     .map(([kind, count]) => `${kind}: ${count}`)
@@ -132,3 +117,15 @@ export function formatMemoryStats({
     `Database: ${settings.database}`,
   ].join("\n");
 }
+
+const memoryFormat = {
+  formatMemoryList,
+  formatMemoryStats,
+  formatMemoryStatus,
+  formatRecallBlock,
+  formatSearchResults,
+  isMemoryKind,
+  parseMemoryCommand,
+};
+
+export default memoryFormat;

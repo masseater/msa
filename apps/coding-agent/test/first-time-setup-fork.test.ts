@@ -4,9 +4,9 @@ vi.mock("../src/config.ts", (importOriginal) =>
   testing.runTest(
     Effect.gen(function* () {
       const actual = yield* testing.awaited(importOriginal());
+      const { default: config } = actual as { default: Record<string, unknown> };
       return yield* testing.awaited({
-        ...(actual as Record<string, unknown>),
-        PACKAGE_NAME: "@example/msa-coding-agent",
+        default: { ...config, PACKAGE_NAME: "@example/msa-coding-agent" },
       });
     }),
   ),
@@ -15,8 +15,11 @@ vi.mock("../src/config.ts", (importOriginal) =>
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
+import startupUi from "../src/cli/startup-ui.ts";
+import processEnv from "../src/core/process-env.ts";
+
+const { deleteEnv, readEnv, writeEnv } = processEnv;
+const { shouldRunFirstTimeSetup } = startupUi;
 
 const { joinPath, makeTempDir, removePath, runTest } = testing;
 

@@ -1,7 +1,9 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { runMcpCommand } from "../src/extensions/mcp/cli.ts";
+import cli from "../src/extensions/mcp/cli.ts";
+
+const { runMcpCommand } = cli;
 
 const {
   awaited,

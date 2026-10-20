@@ -4,26 +4,25 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import type { TuiMode } from "../src/core/settings-manager.ts";
-import {
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
+import type statusIndicatorTypes from "../src/modes/interactive/components/status-indicator.types.ts";
+import statusIndicators from "../src/modes/interactive/components/status-indicators.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
+import RecordingTerminal from "./interactive-tui-support.ts";
+
+const {
   BranchSummaryStatusIndicator,
   CompactionStatusIndicator,
   RetryStatusIndicator,
-  type StatusIndicator,
-  type StatusIndicatorKind,
   WorkingStatusIndicator,
-} from "../src/modes/interactive/components/status-indicator.ts";
-import {
-  InteractiveMode,
-  createInteractiveTui,
-} from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import interactiveTuiSupport from "./interactive-tui-support.ts";
+} = statusIndicators;
 
+const { initTheme } = codingAgent;
+
+const { createInteractiveTui } = tuiRenderer;
 const { Container, Text } = tuiModule;
-
-const { RecordingTerminal } = interactiveTuiSupport;
-
 const { awaited, runTest } = testing;
 
 const clipboardMocks = vi.hoisted(() => ({
@@ -32,7 +31,7 @@ const clipboardMocks = vi.hoisted(() => ({
   readClipboardText: vi.fn<() => Promise<string | null>>(),
 }));
 
-vi.mock("../src/utils/clipboard.ts", () => clipboardMocks);
+vi.mock("../src/utils/clipboard.ts", () => ({ default: clipboardMocks }));
 
 type RenderSessionEntriesContext = {
   renderer: ReturnType<typeof createInteractiveTui>;
@@ -83,27 +82,37 @@ describe("InteractiveMode transcript rebuild", () => {
 
 type StatusEditor = {
   embedWorkingStatus: boolean;
-  setWorkingStatusIndicator: (indicator: StatusIndicator | undefined) => void;
+  setWorkingStatusIndicator: (indicator: statusIndicatorTypes.StatusIndicator | undefined) => void;
 };
 
 type ClearStatusContext = {
-  activeStatusIndicator: { kind: StatusIndicatorKind; dispose: () => void } | undefined;
+  activeStatusIndicator:
+    | { kind: statusIndicatorTypes.StatusIndicatorKind; dispose: () => void }
+    | undefined;
   activeWorkingIndicatorEmbedded: boolean;
   statusContainer: tuiTypes.Container;
   defaultEditor: StatusEditor;
   editor: Partial<StatusEditor>;
-  options: { tuiMode?: TuiMode };
+  options: { tuiMode?: codingAgentTypes.TuiMode };
   ui: { getClearOnShrink: () => boolean };
   idleStatus: tuiTypes.Component;
-  setEditorWorkingStatusIndicator(indicator: StatusIndicator | undefined): boolean;
+  setEditorWorkingStatusIndicator(
+    indicator: statusIndicatorTypes.StatusIndicator | undefined,
+  ): boolean;
 };
 
 type InteractiveModePrototype = {
-  showStatusIndicator(this: ClearStatusContext, indicator: StatusIndicator): void;
-  clearStatusIndicator(this: ClearStatusContext, kind?: StatusIndicatorKind): void;
+  showStatusIndicator(
+    this: ClearStatusContext,
+    indicator: statusIndicatorTypes.StatusIndicator,
+  ): void;
+  clearStatusIndicator(
+    this: ClearStatusContext,
+    kind?: statusIndicatorTypes.StatusIndicatorKind,
+  ): void;
   setEditorWorkingStatusIndicator(
     this: ClearStatusContext,
-    indicator: StatusIndicator | undefined,
+    indicator: statusIndicatorTypes.StatusIndicator | undefined,
   ): boolean;
 };
 
@@ -155,30 +164,32 @@ describe("clear-on-shrink status spacing", () => {
 });
 
 describe("clear-on-shrink status spacing", () => {
-  it.each<StatusIndicatorKind>(["working", "compaction", "branchSummary", "retry"])(
-    "does not reserve separate status height for an embedded %s indicator",
-    (kind) => {
-      const dispose = vi.fn();
-      const editor: StatusEditor = { embedWorkingStatus: true, setWorkingStatusIndicator: vi.fn() };
-      const context: ClearStatusContext = {
-        activeStatusIndicator: { dispose, kind },
-        activeWorkingIndicatorEmbedded: true,
-        defaultEditor: editor,
-        editor,
-        idleStatus: new Text("", 0, 0),
-        options: { tuiMode: "regular" },
-        setEditorWorkingStatusIndicator: interactiveModePrototype.setEditorWorkingStatusIndicator,
-        statusContainer: new Container(),
-        ui: { getClearOnShrink: () => true },
-      };
+  it.each<statusIndicatorTypes.StatusIndicatorKind>([
+    "working",
+    "compaction",
+    "branchSummary",
+    "retry",
+  ])("does not reserve separate status height for an embedded %s indicator", (kind) => {
+    const dispose = vi.fn();
+    const editor: StatusEditor = { embedWorkingStatus: true, setWorkingStatusIndicator: vi.fn() };
+    const context: ClearStatusContext = {
+      activeStatusIndicator: { dispose, kind },
+      activeWorkingIndicatorEmbedded: true,
+      defaultEditor: editor,
+      editor,
+      idleStatus: new Text("", 0, 0),
+      options: { tuiMode: "regular" },
+      setEditorWorkingStatusIndicator: interactiveModePrototype.setEditorWorkingStatusIndicator,
+      statusContainer: new Container(),
+      ui: { getClearOnShrink: () => true },
+    };
 
-      interactiveModePrototype.clearStatusIndicator.call(context);
+    interactiveModePrototype.clearStatusIndicator.call(context);
 
-      expect(dispose).toHaveBeenCalledOnce();
-      expect(editor.setWorkingStatusIndicator).toHaveBeenCalledWith(undefined);
-      expect(context.statusContainer.children).toHaveLength(0);
-    },
-  );
+    expect(dispose).toHaveBeenCalledOnce();
+    expect(editor.setWorkingStatusIndicator).toHaveBeenCalledWith(undefined);
+    expect(context.statusContainer.children).toHaveLength(0);
+  });
 });
 
 describe("clear-on-shrink status spacing", () => {

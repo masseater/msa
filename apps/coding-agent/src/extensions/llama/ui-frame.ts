@@ -2,12 +2,11 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import { DynamicBorder } from "../../modes/interactive/components/dynamic-border.ts";
-import type { Theme } from "../../modes/interactive/theme/theme.ts";
-
+import DynamicBorder from "../../modes/interactive/components/dynamic-border.ts";
+import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 const { Container, Spacer, Text } = tui;
 
-export function selectTheme(theme: Theme) {
+function selectTheme(theme: themeTypes.Theme) {
   return {
     description: (text: string) => theme.fg("muted", text),
     noMatch: (text: string) => theme.fg("warning", text),
@@ -18,7 +17,7 @@ export function selectTheme(theme: Theme) {
 }
 
 function frameImpl(
-  theme: Theme,
+  theme: themeTypes.Theme,
   title: string,
   body: tuiTypes.Component[],
   footer?: string,
@@ -35,11 +34,23 @@ function frameImpl(
   return container;
 }
 
-export const frame: {
-  (theme: Theme, title: string, body: tuiTypes.Component[], footer?: string): tuiTypes.Container;
+const frame: {
+  (
+    theme: themeTypes.Theme,
+    title: string,
+    body: tuiTypes.Component[],
+    footer?: string,
+  ): tuiTypes.Container;
   (
     title: string,
     body: tuiTypes.Component[],
     footer?: string,
-  ): (theme: Theme) => tuiTypes.Container;
+  ): (theme: themeTypes.Theme) => tuiTypes.Container;
 } = dual((args: IArguments) => args.length >= 3, frameImpl);
+
+const uiFrame = {
+  frame,
+  selectTheme,
+};
+
+export default uiFrame;

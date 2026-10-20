@@ -1,17 +1,20 @@
 import { NodeServices } from "@effect/platform-node";
 import type aiTypes from "@msa/ai/index.types";
-import { Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Option, Path, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import type { AgentConfig } from "./agents.ts";
-import { getFinalOutput } from "./format.ts";
-import type { DispatchDefaults, OnUpdateCallback, SingleResult, SubagentDetails } from "./types.ts";
+import type agentsTypes from "./agents.types.ts";
+import format from "./format.ts";
+import type runnerTypes from "./runner.types.ts";
+import type subagentTypesTypes from "./types.types.ts";
+
+const { getFinalOutput } = format;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fsService = runtime.runSync(FileSystem.FileSystem);
 const pathService = runtime.runSync(Path.Path);
 
-export const mapWithConcurrencyLimit = <TIn, TOut>(request: {
+const mapWithConcurrencyLimit = <TIn, TOut>(request: {
   readonly items: TIn[];
   readonly concurrency: number;
   readonly run: (item: TIn, index: number) => Promise<TOut>;
@@ -61,9 +64,9 @@ const getMsaInvocation = (args: string[]) =>
   });
 
 const buildArgs = (
-  agent: AgentConfig,
+  agent: agentsTypes.AgentConfig,
   task: string,
-  dispatchDefaults: DispatchDefaults,
+  dispatchDefaults: subagentTypesTypes.DispatchDefaults,
   promptPath: string | undefined,
 ): string[] => {
   const args: string[] = ["--mode", "json", "-p", "--no-session"];
@@ -81,7 +84,7 @@ const buildArgs = (
   return args;
 };
 
-const applyMessage = (result: SingleResult, msg: aiTypes.Message): void => {
+const applyMessage = (result: subagentTypesTypes.SingleResult, msg: aiTypes.Message): void => {
   result.messages.push(msg);
   if (msg.role !== "assistant") return;
 
@@ -102,7 +105,11 @@ const applyMessage = (result: SingleResult, msg: aiTypes.Message): void => {
   }
 };
 
-const applyEvent = (result: SingleResult, line: string, emitUpdate: () => void): void => {
+const applyEvent = (
+  result: subagentTypesTypes.SingleResult,
+  line: string,
+  emitUpdate: () => void,
+): void => {
   if (line.trim().length === 0) return;
 
   let event: { type?: string; message?: unknown };
@@ -160,19 +167,6 @@ const runSubagentProcess = (request: SpawnRequest) =>
     );
   });
 
-export interface RunSingleRequest {
-  readonly defaultCwd: string;
-  readonly dispatchDefaults: DispatchDefaults;
-  readonly agents: AgentConfig[];
-  readonly agentName: string;
-  readonly task: string;
-  readonly cwd: string | undefined;
-  readonly step: number | undefined;
-  readonly signal: AbortSignal | undefined;
-  readonly onUpdate: OnUpdateCallback | undefined;
-  readonly makeDetails: (results: SingleResult[]) => SubagentDetails;
-}
-
 const emptyUsage = () => ({
   cacheRead: 0,
   cacheWrite: 0,
@@ -183,7 +177,9 @@ const emptyUsage = () => ({
   turns: 0,
 });
 
-const unknownAgentResult = (request: RunSingleRequest): SingleResult => {
+const unknownAgentResult = (
+  request: runnerTypes.RunSingleRequest,
+): subagentTypesTypes.SingleResult => {
   const available = request.agents.map((a) => `"${a.name}"`).join(", ") || "none";
   return {
     agent: request.agentName,
@@ -197,7 +193,10 @@ const unknownAgentResult = (request: RunSingleRequest): SingleResult => {
   };
 };
 
-const makeResult = (request: RunSingleRequest, agent: AgentConfig): SingleResult => ({
+const makeResult = (
+  request: runnerTypes.RunSingleRequest,
+  agent: agentsTypes.AgentConfig,
+): subagentTypesTypes.SingleResult => ({
   agent: request.agentName,
   agentSource: agent.source,
   exitCode: 0,
@@ -210,16 +209,18 @@ const makeResult = (request: RunSingleRequest, agent: AgentConfig): SingleResult
 });
 
 const finishResult = (
-  result: SingleResult,
+  result: subagentTypesTypes.SingleResult,
   exitCode: number,
   signal: AbortSignal | undefined,
-): SingleResult => {
+): subagentTypesTypes.SingleResult => {
   result.exitCode = exitCode;
   if (signal?.aborted === true) throw new Error("Subagent was aborted");
   return result;
 };
 
-export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult> => {
+const runSingleAgent = (
+  request: runnerTypes.RunSingleRequest,
+): Promise<subagentTypesTypes.SingleResult> => {
   const agent = request.agents.find((a) => a.name === request.agentName);
   if (agent === undefined) return Promise.resolve(unknownAgentResult(request));
 
@@ -234,11 +235,16 @@ export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult>
   return runtime.runPromise(
     Effect.acquireUseRelease(
       agent.systemPrompt.trim().length > 0
-        ? writePromptToTempFile(agent.name, agent.systemPrompt)
-        : Effect.succeed(undefined),
+        ? Effect.asSome(writePromptToTempFile(agent.name, agent.systemPrompt))
+        : Effect.succeedNone,
       (tmp) =>
         Effect.gen(function* () {
-          const args = buildArgs(agent, request.task, request.dispatchDefaults, tmp?.filePath);
+          const args = buildArgs(
+            agent,
+            request.task,
+            request.dispatchDefaults,
+            Option.getOrUndefined(tmp)?.filePath,
+          );
           const invocation = yield* getMsaInvocation(args);
           const exitCode = yield* runSubagentProcess({
             args: invocation.args,
@@ -252,7 +258,14 @@ export const runSingleAgent = (request: RunSingleRequest): Promise<SingleResult>
           });
           return finishResult(currentResult, Number(exitCode), request.signal);
         }),
-      removeTempPrompt,
+      (tmp) => removeTempPrompt(Option.getOrUndefined(tmp)),
     ),
   );
 };
+
+const runner = {
+  mapWithConcurrencyLimit,
+  runSingleAgent,
+};
+
+export default runner;

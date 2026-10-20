@@ -1,16 +1,20 @@
-import type { EventBus } from "../event-bus.ts";
-import type { Extension, ExtensionRuntime } from "./types.ts";
+import type eventBusTypes from "../event-bus.types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export interface ApiScope {
-  extension: Extension;
-  runtime: ExtensionRuntime;
-  cwd: string;
-  eventBus: EventBus;
-  assertActive: () => void;
-  applyRuntimeChange: (change: () => void) => void;
-  isLoading: () => boolean;
-  pendingFlagValues: Map<string, boolean | string>;
-  loadingUnsubscribers: Array<() => void>;
+declare namespace loaderScopeTypes {
+  interface ApiScope {
+    extension: extensionsTypesTypes.Extension;
+    runtime: extensionsTypesTypes.ExtensionRuntime;
+    cwd: string;
+    eventBus: eventBusTypes.EventBus;
+    assertActive: () => void;
+    applyRuntimeChange: (change: () => void) => void;
+    isLoading: () => boolean;
+    pendingFlagValues: Map<string, boolean | string>;
+    loadingUnsubscribers: Array<() => void>;
+  }
+
+  type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 }
 
-export type HandlerFn = (...args: unknown[]) => Promise<unknown>;
+export type { loaderScopeTypes as default };

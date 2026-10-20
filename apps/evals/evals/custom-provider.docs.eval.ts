@@ -2,16 +2,21 @@ import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach } from "vite-plus/test";
 import { StructuredOutputJudge, describeEval } from "vitest-evals";
 
-import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import {
+import harnessModule from "../src/harness.ts";
+import acmeServer from "./acme-server.ts";
+import configuredRuntime from "./configured-runtime.ts";
+import type configuredRuntimeTypes from "./configured-runtime.types.ts";
+
+const {
   STREAM_API_DOCUMENTATION,
   STREAM_MODEL_ID,
   STREAM_PROBE_PROMPT,
   STREAM_PROBE_RESPONSE,
   STREAM_PROVIDER_ID,
   createAcmeServer,
-} from "./acme-server.ts";
-import { type ProviderRuntimeOutput, inspectProvider } from "./configured-runtime.ts";
+} = acmeServer;
+const { inspectProvider } = configuredRuntime;
+const { createMsaDocumentationEvalHarness } = harnessModule;
 
 const DOCUMENTATION_PATH = "fixtures/acme-stream-api.json";
 const STREAM_API_KEY = "resolved-stream-key";
@@ -21,7 +26,7 @@ beforeAll(() => Effect.runPromise(server.start));
 beforeEach(() => server.reset());
 afterAll(() => Effect.runPromise(server.stop));
 
-const expected: ProviderRuntimeOutput = {
+const expected: configuredRuntimeTypes.ProviderRuntimeOutput = {
   result: {
     model: {
       contextWindow: 16384,
@@ -41,12 +46,12 @@ const expected: ProviderRuntimeOutput = {
 const harness = createMsaDocumentationEvalHarness({
   output: ({ session }) =>
     inspectProvider(session.modelRuntime, {
-      providerId: STREAM_PROVIDER_ID,
-      modelId: STREAM_MODEL_ID,
       createContext: () => ({
-        messages: [{ role: "user", content: STREAM_PROBE_PROMPT, timestamp: 0 }],
+        messages: [{ content: STREAM_PROBE_PROMPT, role: "user", timestamp: 0 }],
       }),
+      modelId: STREAM_MODEL_ID,
       options: { env: { ACME_STREAM_API_KEY: STREAM_API_KEY }, maxTokens: 32 },
+      providerId: STREAM_PROVIDER_ID,
       validRequestReceived: server.validRequestReceived,
     }),
   workspaceFiles: { [DOCUMENTATION_PATH]: STREAM_API_DOCUMENTATION },

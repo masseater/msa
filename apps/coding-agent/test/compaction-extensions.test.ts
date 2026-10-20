@@ -2,10 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type {
-  SessionBeforeCompactEvent,
-  SessionCompactEvent,
-} from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 import compactionExtensionsSupport from "./compaction-extensions-support.ts";
 
 const { awaited, runTest } = testing;
@@ -27,10 +24,10 @@ const shouldEmitBeforeCompactAndCompactEvents = () =>
       yield* awaited(session.compact());
 
       const beforeCompactEvents = capturedEvents.filter(
-        (e): e is SessionBeforeCompactEvent => e.type === "session_before_compact",
+        (e): e is extensionsTypes.SessionBeforeCompactEvent => e.type === "session_before_compact",
       );
       const compactEvents = capturedEvents.filter(
-        (e): e is SessionCompactEvent => e.type === "session_compact",
+        (e): e is extensionsTypes.SessionCompactEvent => e.type === "session_compact",
       );
 
       expect(beforeCompactEvents.length).toBe(1);

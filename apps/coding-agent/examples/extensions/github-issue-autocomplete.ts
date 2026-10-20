@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect, Option, Schema } from "effect";
@@ -41,7 +41,7 @@ const parseGitHubRepo = (remoteUrl: string): string | undefined => {
   return undefined;
 };
 
-const resolveGitHubRepo = (msa: ExtensionAPI, cwd: string) =>
+const resolveGitHubRepo = (msa: codingAgentTypes.ExtensionAPI, cwd: string) =>
   Effect.gen(function* () {
     const result = yield* Effect.promise(() =>
       msa.exec("git", ["remote", "-v"], { cwd, timeout: 5_000 }),
@@ -94,15 +94,13 @@ const filterIssues = (issues: GitHubIssue[], query: string): tuiTypes.Autocomple
     .map(formatIssueItem);
 };
 
-const makeIssueLoader = (msa: ExtensionAPI, ctx: ExtensionContext, repo: string) => {
+const makeIssueLoader = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
+  repo: string,
+) => {
   let issuesPromise: Promise<GitHubIssue[] | undefined> | undefined;
-  let errorShown = false;
-
-  const notifyError = (message: string): void => {
-    if (errorShown) return;
-    errorShown = true;
-    ctx.ui.notify(`github-issue-autocomplete: ${message}`, "error");
-  };
+  const notifyError = makeIssueLoaderPart1(ctx);
 
   const load = Effect.gen(function* () {
     const result = yield* Effect.promise(() =>
@@ -186,7 +184,18 @@ const createIssueAutocompleteProvider = (
     current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true,
 });
 
-export default function (msa: ExtensionAPI): void {
+function makeIssueLoaderPart1(ctx: codingAgentTypes.ExtensionContext) {
+  let errorShown = false;
+
+  const notifyError = (message: string): void => {
+    if (errorShown) return;
+    errorShown = true;
+    ctx.ui.notify(`github-issue-autocomplete: ${message}`, "error");
+  };
+  return notifyError;
+}
+
+export default function (msa: codingAgentTypes.ExtensionAPI): void {
   msa.on("session_start", (_event, ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {

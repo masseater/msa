@@ -1,7 +1,7 @@
-import type editToolNoFullRedrawSupport from "./edit-tool-no-full-redraw-support.ts";
+import type FakeTerminalClass from "./fake-terminal.ts";
 
 declare namespace editToolNoFullRedrawSupportTypes {
-  type FakeTerminal = (typeof editToolNoFullRedrawSupport.FakeTerminal)["prototype"];
+  type FakeTerminal = (typeof FakeTerminalClass)["prototype"];
 }
 
 export type { editToolNoFullRedrawSupportTypes as default };

@@ -3,7 +3,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
+import modelPolicyModule from "../src/core/model-policy.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import modelPolicySupport from "./model-policy-support.ts";
+
+const {
   EMPTY_MODEL_POLICY,
   addModelPolicyPattern,
   allowModelReference,
@@ -13,10 +18,7 @@ import {
   mergeModelPolicies,
   removeModelPolicyPattern,
   withModelPolicy,
-} from "../src/core/model-policy.ts";
-import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
-import modelPolicySupport from "./model-policy-support.ts";
-
+} = modelPolicyModule;
 const { removePath, runTest } = testing;
 
 const { model, policy } = modelPolicySupport;

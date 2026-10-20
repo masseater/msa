@@ -4,16 +4,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { MemoryStore } from "../src/core/memory/store.ts";
+import MemoryStore from "../src/core/memory/memory-store.ts";
+import type storeTypes from "../src/core/memory/store.types.ts";
 import memorySupport from "./memory-support.ts";
-
 const { joinPath, runTest } = testing;
 
 const { cleanup, makeWorkspace, vector } = memorySupport;
 
 afterEach(() => runTest(cleanup));
 
-const withStore = (use: (store: MemoryStore) => void): void => {
+const withStore = (use: (store: storeTypes.MemoryStore) => void): void => {
   const store = new MemoryStore(":memory:");
   try {
     use(store);
@@ -22,7 +22,10 @@ const withStore = (use: (store: MemoryStore) => void): void => {
   }
 };
 
-const saveTwice = (store: MemoryStore, input: Parameters<MemoryStore["save"]>[0]) => {
+const saveTwice = (
+  store: storeTypes.MemoryStore,
+  input: Parameters<storeTypes.MemoryStore["save"]>[0],
+) => {
   const first = store.save(input);
   const again = store.save(input);
   expect(first.created).toBe(true);

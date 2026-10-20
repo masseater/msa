@@ -4,10 +4,11 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type { AgentSessionRuntimeDiagnostic } from "../../../src/core/agent-session-services.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
+import type agentSessionServicesTypes from "../../../src/core/agent-session-services.types.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import themeModule from "../../../src/modes/interactive/theme/theme.ts";
 import harnessModule from "../harness.ts";
+const { initTheme } = themeModule;
 
 const { Container } = tui;
 
@@ -25,7 +26,7 @@ const rendersStartupDiagnosticsInsideTheTranscript = Effect.gen(function* () {
   vi.stubEnv("MSA_OFFLINE", "1");
   try {
     const chatContainer = new Container();
-    const startupDiagnostics: AgentSessionRuntimeDiagnostic[] = [
+    const startupDiagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[] = [
       {
         message: "Invalid settings file /tmp/settings.json: malformed JSON",
         type: "warning",
@@ -49,6 +50,7 @@ const rendersStartupDiagnosticsInsideTheTranscript = Effect.gen(function* () {
       InteractiveMode.prototype as unknown as { run(this: typeof context): Promise<void> }
     ).run;
 
+    Object.setPrototypeOf(context, InteractiveMode.prototype);
     void run.call(context);
 
     yield* Effect.promise(() =>

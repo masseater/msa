@@ -2,72 +2,82 @@ import type aiTypes from "@msa/ai/index.types";
 import type tuiTypes from "@msa/tui/index.types";
 import type { TSchema } from "typebox";
 
-import type { ExternalService } from "../external-services.ts";
-import type { McpServerConfig, RegisteredMcpServer } from "../mcp-servers.ts";
-import type { ExtensionContext } from "./types-context.ts";
-import type { ExtensionVirtualModel, ProviderConfig } from "./types-provider.ts";
-import type {
-  EntryRenderer,
-  MarkdownTransformer,
-  MessageRenderer,
-  RegisteredCommand,
-} from "./types-render.ts";
-import type { ToolDefinition, ToolRendererResolver } from "./types-tools.ts";
+import type externalServicesTypes from "../external-services.types.ts";
+import type mcpServersTypes from "../mcp-servers.types.ts";
+import type typesContextTypes from "./types-context.ts";
+import type typesProviderTypes from "./types-provider.ts";
+import type typesRenderTypes from "./types-render.ts";
+import type typesToolsTypes from "./types-tools.types.ts";
 
-export interface ExtensionRegistrationApi {
-  registerTool<TParams extends TSchema = TSchema, TDetails = unknown, TState = any>(
-    tool: ToolDefinition<TParams, TDetails, TState>,
-  ): void;
+declare namespace typesApiRegistrationTypes {
+  interface ExtensionRegistrationApi {
+    registerTool<TParams extends TSchema = TSchema, TDetails = unknown, TState = any>(
+      tool: typesToolsTypes.ToolDefinition<TParams, TDetails, TState>,
+    ): void;
 
-  registerCommand(name: string, options: Omit<RegisteredCommand, "name" | "sourceInfo">): void;
+    registerCommand(
+      name: string,
+      options: Omit<typesRenderTypes.RegisteredCommand, "name" | "sourceInfo">,
+    ): void;
 
-  registerShortcut(
-    shortcut: tuiTypes.KeyId,
-    options: {
-      description?: string;
-      handler: (ctx: ExtensionContext) => Promise<void> | void;
-    },
-  ): void;
+    registerShortcut(
+      shortcut: tuiTypes.KeyId,
+      options: {
+        description?: string;
+        handler: (ctx: typesContextTypes.ExtensionContext) => Promise<void> | void;
+      },
+    ): void;
 
-  registerFlag(
-    name: string,
-    options:
-      | {
-          description?: string;
-          type: "boolean";
-          default?: boolean;
-        }
-      | {
-          description?: string;
-          type: "string";
-          default?: string;
-        },
-  ): void;
+    registerFlag(
+      name: string,
+      options:
+        | {
+            description?: string;
+            type: "boolean";
+            default?: boolean;
+          }
+        | {
+            description?: string;
+            type: "string";
+            default?: string;
+          },
+    ): void;
 
-  getFlag(name: string): boolean | string | undefined;
+    getFlag(name: string): boolean | string | undefined;
 
-  registerMessageRenderer<T = unknown>(customType: string, renderer: MessageRenderer<T>): void;
+    registerMessageRenderer<T = unknown>(
+      customType: string,
+      renderer: typesRenderTypes.MessageRenderer<T>,
+    ): void;
 
-  registerMarkdownTransformer(transformer: MarkdownTransformer): void;
+    registerMarkdownTransformer(transformer: typesRenderTypes.MarkdownTransformer): void;
 
-  registerExternalService(service: ExternalService): void;
+    registerExternalService(service: externalServicesTypes.ExternalService): void;
 
-  registerEntryRenderer<T = unknown>(customType: string, renderer: EntryRenderer<T>): void;
+    registerEntryRenderer<T = unknown>(
+      customType: string,
+      renderer: typesRenderTypes.EntryRenderer<T>,
+    ): void;
 
-  registerToolRenderer(resolver: ToolRendererResolver): void;
+    registerToolRenderer(resolver: typesToolsTypes.ToolRendererResolver): void;
 
-  registerProvider(provider: aiTypes.Provider): void;
-  registerProvider(name: string, config: ProviderConfig): void;
+    registerProvider(provider: aiTypes.Provider): void;
+    registerProvider(name: string, config: typesProviderTypes.ProviderConfig): void;
 
-  unregisterProvider(name: string): void;
+    unregisterProvider(name: string): void;
 
-  registerMcpServer(name: string, config: McpServerConfig): void;
+    registerMcpServer(name: string, config: mcpServersTypes.McpServerConfig): void;
 
-  unregisterMcpServer(name: string): void;
+    unregisterMcpServer(name: string): void;
 
-  getMcpServers(): RegisteredMcpServer[];
+    getMcpServers(): mcpServersTypes.RegisteredMcpServer[];
 
-  registerVirtualModel<TState = unknown>(model: ExtensionVirtualModel<TState>): void;
+    registerVirtualModel<TState = unknown>(
+      model: typesProviderTypes.ExtensionVirtualModel<TState>,
+    ): void;
 
-  unregisterVirtualModel(provider: string, id: string): void;
+    unregisterVirtualModel(provider: string, id: string): void;
+  }
 }
+
+export type { typesApiRegistrationTypes as default };

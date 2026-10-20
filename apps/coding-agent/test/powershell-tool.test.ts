@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createPowerShellTool } from "../src/core/tools/powershell.ts";
-import { POWERSHELL_ARGS, getPowerShellConfig } from "../src/utils/shell.ts";
+import powershell from "../src/core/tools/powershell.ts";
+import shell from "../src/utils/shell.ts";
+
+const { POWERSHELL_ARGS, getPowerShellConfig } = shell;
+const { createPowerShellTool } = powershell;
 
 const { awaited, runTest } = testing;
 

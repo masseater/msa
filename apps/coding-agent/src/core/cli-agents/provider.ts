@@ -1,23 +1,17 @@
-import { existsSync } from "node:fs";
-
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 
+import nodeFs from "../platform/node/fs.ts";
+import type providerTypes from "./provider.types.ts";
+
+const { existsSync } = nodeFs;
+
 const { createProvider } = ai;
 
-export interface CliAgentModel {
+function cliAgentProvider(input: {
   id: string;
   name: string;
-  reasoning: boolean;
-  input: ("text" | "image")[];
-  contextWindow: number;
-  maxTokens: number;
-}
-
-export function cliAgentProvider(input: {
-  id: string;
-  name: string;
-  models: readonly CliAgentModel[];
+  models: readonly providerTypes.CliAgentModel[];
 
   executable(): string | undefined;
   streamSimple(
@@ -35,11 +29,13 @@ export function cliAgentProvider(input: {
     auth: {
       apiKey: {
         name: `${input.name} login`,
-        resolve: async () => {
+        resolve: () => {
           const executable = input.executable();
-          return executable && existsSync(executable)
-            ? { auth: {}, source: executable }
-            : undefined;
+          return Promise.resolve(
+            executable !== undefined && executable !== "" && existsSync(executable)
+              ? { auth: {}, source: executable }
+              : undefined,
+          );
         },
       },
     },
@@ -47,10 +43,16 @@ export function cliAgentProvider(input: {
     models: input.models.map((model) => ({
       ...model,
       api,
-      provider: input.id,
       baseUrl: "",
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+      provider: input.id,
     })),
     name: input.name,
   });
 }
+
+const provider = {
+  cliAgentProvider,
+};
+
+export default provider;

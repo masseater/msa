@@ -1,11 +1,13 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import { DoomOverlayComponent } from "./doom-component.ts";
-import { DoomEngine } from "./doom-engine.ts";
-import { ensureWadFile } from "./wad-finder.ts";
+import DoomOverlayComponent from "./doom-component.ts";
+import DoomEngine from "./doom-engine.ts";
+import type doomEngineTypes from "./doom-engine.types.ts";
+import wadFinder from "./wad-finder.ts";
+const { ensureWadFile } = wadFinder;
 
-let activeEngine: DoomEngine | null = null;
+let activeEngine: doomEngineTypes.DoomEngine | null = null;
 let activeWadPath: string | null = null;
 
 const OVERLAY_OPTIONS = {
@@ -27,7 +29,10 @@ const startEngine = (wad: string) =>
     return false;
   });
 
-const showOverlay = (ctx: ExtensionCommandContext, isResume: boolean): Effect.Effect<void> =>
+const showOverlay = (
+  ctx: codingAgentTypes.ExtensionCommandContext,
+  isResume: boolean,
+): Effect.Effect<void> =>
   Effect.promise(() =>
     ctx.ui.custom(
       (tui, _theme, _keybindings, done) =>
@@ -36,7 +41,7 @@ const showOverlay = (ctx: ExtensionCommandContext, isResume: boolean): Effect.Ef
     ),
   );
 
-const runDoom = (args: string, ctx: ExtensionCommandContext) =>
+const runDoom = (args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
   Effect.gen(function* () {
     ctx.ui.notify("Loading DOOM...", "info");
     const wad = args.trim().length > 0 ? args.trim() : yield* Effect.promise(ensureWadFile);
@@ -59,7 +64,7 @@ const runDoom = (args: string, ctx: ExtensionCommandContext) =>
     ),
   );
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("doom-overlay", {
     description: "Play DOOM as an overlay. Q to pause and exit.",
 

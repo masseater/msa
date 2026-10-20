@@ -1,12 +1,13 @@
 import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { TaskSnapshot } from "../src/core/orchestrator/types.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import tasksViewHarness from "./tasks-view-harness.ts";
 import tasksViewSupport from "./tasks-view-support.ts";
 
+const { initTheme } = themeModule;
 const { setKeybindings } = tui;
 
 const { DOWN, ENTER, PAGE_DOWN, PAGE_UP } = tasksViewSupport;
@@ -24,7 +25,7 @@ beforeAll(() => {
   setKeybindings(new KeybindingsManager());
 });
 
-function failedTasks(count: number): TaskSnapshot[] {
+function failedTasks(count: number): orchestratorTypesTypes.TaskSnapshot[] {
   return Array.from({ length: count }, (_, index) =>
     task(`t${index + 1}`, {
       reports: [

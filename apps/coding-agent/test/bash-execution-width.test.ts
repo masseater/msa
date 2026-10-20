@@ -1,8 +1,9 @@
 import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import BashExecutionComponent from "../src/modes/interactive/components/bash-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+const { initTheme } = themeModule;
 
 const { visibleWidth } = tui;
 

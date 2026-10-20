@@ -4,6 +4,7 @@ import harnessModule from "@msa/durable/harness";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -14,7 +15,7 @@ const { watchEvents } = harnessModule;
 
 const { awaited } = effectSupport;
 const { FailingCalls, Waiting, running, signals, started } = harnessStorageFailureSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 const { deferred, openTasks } = taskSupport;
 
 const endsEverythingFirst = Effect.gen(function* () {

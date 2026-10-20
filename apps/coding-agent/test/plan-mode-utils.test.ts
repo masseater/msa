@@ -1,10 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  cleanStepText,
-  extractTodoItems,
-  isSafeCommand,
-} from "../examples/extensions/plan-mode/utils.ts";
+import utils from "../examples/extensions/plan-mode/utils.ts";
+
+const { cleanStepText, extractTodoItems, isSafeCommand } = utils;
 
 const allowsBasicReadCommands = () => {
   expect(isSafeCommand("ls -la")).toBe(true);

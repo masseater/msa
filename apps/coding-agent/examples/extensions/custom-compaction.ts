@@ -1,7 +1,9 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI, ExtensionContext, SessionBeforeCompactEvent } from "@msa/coding-agent";
-import { convertToLlm, serializeConversation } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Clock, Effect, Option } from "effect";
+
+const { convertToLlm, serializeConversation } = codingAgent;
 
 const { uuidv7 } = ai;
 
@@ -15,7 +17,6 @@ const buildSummaryMessages = (conversationText: string, previousSummary: string 
     {
       content: [
         {
-          type: "text" as const,
           text: `You are a conversation summarizer. Create a comprehensive summary of this conversation that captures:${previousContext}
 
 1. The main goals and objectives discussed
@@ -32,6 +33,7 @@ Format the summary as structured markdown with clear sections.
 <conversation>
 ${conversationText}
 </conversation>`,
+          type: "text" as const,
         },
       ],
       role: "user" as const,
@@ -40,7 +42,7 @@ ${conversationText}
   ];
 };
 
-const resolveModel = (ctx: ExtensionContext) => {
+const resolveModel = (ctx: codingAgentTypes.ExtensionContext) => {
   const model = ctx.modelRegistry.find("opencode", "gemini-3.5-flash");
   if (model === undefined) {
     ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
@@ -49,7 +51,7 @@ const resolveModel = (ctx: ExtensionContext) => {
 };
 
 const notifyStart = (
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
   messageCount: number,
   tokensBefore: number,
   modelId: string,
@@ -61,8 +63,8 @@ const notifyStart = (
 };
 
 const completeSummary = (
-  ctx: ExtensionContext,
-  model: Parameters<ExtensionContext["modelRegistry"]["complete"]>[0],
+  ctx: codingAgentTypes.ExtensionContext,
+  model: Parameters<codingAgentTypes.ExtensionContext["modelRegistry"]["complete"]>[0],
   messages: ReturnType<typeof buildSummaryMessages>,
   signal: AbortSignal,
 ) =>
@@ -100,7 +102,10 @@ const completeSummary = (
     return { summary, usage: response.value.usage };
   });
 
-const summarize = (event: SessionBeforeCompactEvent, ctx: ExtensionContext) =>
+const summarize = (
+  event: codingAgentTypes.SessionBeforeCompactEvent,
+  ctx: codingAgentTypes.ExtensionContext,
+) =>
   Effect.gen(function* () {
     ctx.ui.notify("Custom compaction extension triggered", "info");
 
@@ -136,6 +141,6 @@ const summarize = (event: SessionBeforeCompactEvent, ctx: ExtensionContext) =>
     };
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("session_before_compact", (event, ctx) => Effect.runPromise(summarize(event, ctx)));
 }

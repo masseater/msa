@@ -8,6 +8,7 @@ import type envTypes from "../src/env/index.types.ts";
 import durableKit from "./durable-kit.ts";
 import support from "./support.ts";
 import toolsSupport from "./tools-support.ts";
+import toolsTimeoutEnvSupport from "./tools-timeout-env-support.ts";
 
 const { envNode: node, tools: toolsModule, truncate } = durableKit;
 
@@ -17,16 +18,8 @@ const { getOrThrow } = envModule;
 const { DEFAULT_MAX_LINES } = truncate;
 
 const { BACKGROUND_CONTEXT, abortController, awaited, withAbortSignal } = support;
-const {
-  TRUNCATED_OUTPUT_LINES,
-  TimeoutOutputExecutionEnv,
-  createEnv,
-  createTempDir,
-  fakeApi,
-  removeTempDirs,
-  run,
-  runFailing,
-} = toolsSupport;
+const { createEnv, createTempDir, fakeApi, removeTempDirs, run, runFailing } = toolsSupport;
+const { TRUNCATED_OUTPUT_LINES, TimeoutOutputExecutionEnv } = toolsTimeoutEnvSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 

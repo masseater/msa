@@ -4,10 +4,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../src/core/extensions/types.ts";
-import { MCP_SERVERS_SECTION } from "../../src/extensions/mcp/index.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import extension from "../../src/extensions/mcp/extension.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
+
+const { MCP_SERVERS_SECTION } = extension;
 
 const { fauxAssistantMessage } = ai;
 
@@ -46,7 +48,7 @@ const tellsScriptsWhatDirectlyExposedMcp = Effect.gen(function* () {
 });
 
 const activatesAnotherExtensionSCodemodeTool = Effect.gen(function* () {
-  const otherExec: ExtensionFactory = (msa) => {
+  const otherExec: extensionsTypesTypes.ExtensionFactory = (msa) => {
     msa.registerTool({
       defaultActive: false,
       description: "Another extension's codemode tool.",
@@ -67,7 +69,7 @@ const activatesAnotherExtensionSCodemodeTool = Effect.gen(function* () {
 });
 
 const doesNotActivateAnotherExtensionS = Effect.gen(function* () {
-  const otherExec: ExtensionFactory = (msa) => {
+  const otherExec: extensionsTypesTypes.ExtensionFactory = (msa) => {
     msa.registerTool({
       defaultActive: false,
       description: "Another extension's codemode tool.",

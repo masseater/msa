@@ -4,8 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
-import { loadThemeFromPath, setThemeJsonValidator } from "../src/modes/interactive/theme/theme.ts";
+import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { loadThemeFromPath, setThemeJsonValidator } = themeModule;
+const { validateThemeJson } = themeSchema;
 
 const { joinPath, makeTempDir, readJsonFile, removeDirs, runTest, writeJsonFile } = testing;
 

@@ -4,9 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { processFileArguments } from "../src/cli/file-processor.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createReadTool } from "../src/core/tools/read.ts";
+import fileProcessor from "../src/cli/file-processor.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import read from "../src/core/tools/read.ts";
+const { createReadTool } = read;
+const { processFileArguments } = fileProcessor;
 
 const {
   awaited,

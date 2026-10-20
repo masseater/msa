@@ -1,8 +1,10 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
-import { DynamicBorder, getMarkdownTheme } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Clock, Effect } from "effect";
+
+const { DynamicBorder, getMarkdownTheme } = codingAgent;
 
 const { uuidv7 } = ai;
 
@@ -123,7 +125,7 @@ const buildSummaryPrompt = (conversationText: string): string =>
     "</conversation>",
   ].join("\n");
 
-const showSummaryUi = (summary: string, ctx: ExtensionCommandContext) => {
+const showSummaryUi = (summary: string, ctx: codingAgentTypes.ExtensionCommandContext) => {
   if (ctx.mode !== "tui") {
     return Promise.resolve();
   }
@@ -151,7 +153,10 @@ const showSummaryUi = (summary: string, ctx: ExtensionCommandContext) => {
   });
 };
 
-const summarizeConversation = (ctx: ExtensionCommandContext, conversationText: string) =>
+const summarizeConversation = (
+  ctx: codingAgentTypes.ExtensionCommandContext,
+  conversationText: string,
+) =>
   Effect.gen(function* () {
     const model = ctx.modelRegistry.find("openai", "gpt-5.2");
     if (model === undefined) {
@@ -165,7 +170,7 @@ const summarizeConversation = (ctx: ExtensionCommandContext, conversationText: s
 
     const summaryMessages = [
       {
-        content: [{ type: "text" as const, text: buildSummaryPrompt(conversationText) }],
+        content: [{ text: buildSummaryPrompt(conversationText), type: "text" as const }],
         role: "user" as const,
         timestamp: yield* Clock.currentTimeMillis,
       },
@@ -189,7 +194,7 @@ const summarizeConversation = (ctx: ExtensionCommandContext, conversationText: s
       .join("\n");
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("summarize", {
     description: "Summarize the current conversation in a custom UI",
     handler: (_args, ctx) =>

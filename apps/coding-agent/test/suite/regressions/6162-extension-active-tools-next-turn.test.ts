@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionAPI, ExtensionFactory } from "../../../src/index.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
@@ -18,7 +18,7 @@ function getProviderToolNames(context: aiTypes.TranscriptContext): string[] {
     .sort();
 }
 
-function registerSwitchTools(msa: ExtensionAPI): void {
+function registerSwitchTools(msa: srcTypes.ExtensionAPI): void {
   msa.registerTool({
     description: "Switch the active extension tool set",
     execute: () =>
@@ -110,7 +110,7 @@ const reportsTheRefreshedSystemPromptDuring = Effect.gen(function* () {
 });
 
 const preservesBeforeAgentStartSystemPrompt = Effect.gen(function* () {
-  const extensionFactories: ExtensionFactory[] = [
+  const extensionFactories: srcTypes.ExtensionFactory[] = [
     (msa) => {
       msa.on("before_agent_start", (event) =>
         Promise.resolve({

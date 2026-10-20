@@ -1,5 +1,5 @@
 import type agentTypes from "@msa/agent-core/index.types";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -41,7 +41,7 @@ function createWaitingHarness(
     tools?: agentTypes.AgentTool[];
     extensionFactories?: harnessTypes.Harness["session"]["extensionRunner"] extends never
       ? never
-      : Array<(msa: ExtensionAPI) => void>;
+      : Array<(msa: codingAgentTypes.ExtensionAPI) => void>;
   } = {},
 ): Promise<{
   harness: harnessTypes.Harness;

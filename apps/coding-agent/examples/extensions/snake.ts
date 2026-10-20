@@ -1,19 +1,23 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import { Effect, type Fiber } from "effect";
 
-import { renderFrame } from "./snake-render.ts";
-import { type GameState, TICK_MS, advance, createInitialState } from "./snake-state.ts";
+import snakeRender from "./snake-render.ts";
+import snakeState from "./snake-state.ts";
+import type snakeStateTypes from "./snake-state.types.ts";
+
+const { TICK_MS, advance, createInitialState } = snakeState;
+const { renderFrame } = snakeRender;
 
 const { matchesKey } = tuiModule;
 
 const SNAKE_SAVE_TYPE = "snake-save";
 
 class SnakeComponent {
-  private state: GameState;
+  private state: snakeStateTypes.GameState;
   private fiber: Fiber.Fiber<never> | undefined;
   private onClose: () => void;
-  private onSave: (state: GameState | null) => void;
+  private onSave: (state: snakeStateTypes.GameState | null) => void;
   private tui: { requestRender: () => void };
   private cachedLines: string[] = [];
   private cachedWidth = 0;
@@ -24,8 +28,8 @@ class SnakeComponent {
   constructor(
     tui: { requestRender: () => void },
     onClose: () => void,
-    onSave: (state: GameState | null) => void,
-    savedState?: GameState,
+    onSave: (state: snakeStateTypes.GameState | null) => void,
+    savedState?: snakeStateTypes.GameState,
   ) {
     this.tui = tui;
     if (savedState !== undefined && !savedState.gameOver) {
@@ -125,7 +129,7 @@ class SnakeComponent {
   }
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("snake", {
     description: "Play Snake!",
 
@@ -138,10 +142,10 @@ export default function (msa: ExtensionAPI) {
           }
 
           const entries = ctx.sessionManager.getEntries();
-          let savedState: GameState | undefined;
+          let savedState: snakeStateTypes.GameState | undefined;
           for (const entry of entries.toReversed()) {
             if (entry.type === "custom" && entry.customType === SNAKE_SAVE_TYPE) {
-              savedState = entry.data as GameState;
+              savedState = entry.data as snakeStateTypes.GameState;
               break;
             }
           }

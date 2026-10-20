@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import agentSessionAskSupport from "./agent-session-ask-support.ts";
 import harnessModule from "./harness.ts";
 
@@ -114,7 +114,7 @@ const doesNotCarryTheTurnSSelection = () =>
   runTest(
     Effect.gen(function* () {
       let turn = 0;
-      const extension: ExtensionFactory = (msa) => {
+      const extension: srcTypes.ExtensionFactory = (msa) => {
         msa.registerTool({
           defaultActive: false,
           description: "extra description",

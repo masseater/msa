@@ -1,12 +1,15 @@
 import { expect } from "vite-plus/test";
 
-import { type SessionEntry, buildSessionContext } from "../../src/core/session-manager.ts";
+import sessionManagerSupport from "../../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 import buildContextCases1 from "./build-context-cases-1.ts";
+
+const { buildSessionContext } = sessionManagerSupport;
 
 const { branchSummary, compaction, msg } = buildContextCases1;
 
 const includesBranchSummaryInPath = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "start" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response" }),
     msg({ id: "3", parentId: "2", role: "user", text: "abandoned path" }),
@@ -20,7 +23,7 @@ const includesBranchSummaryInPath = () => {
   expect((ctx.messages[3] as any).content).toBe("new direction");
 };
 const complexTreeWithMultipleBranchesAnd = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "start" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "r1" }),
     msg({ id: "3", parentId: "2", role: "user", text: "q2" }),
@@ -53,7 +56,7 @@ const complexTreeWithMultipleBranchesAnd = () => {
   expect((ctxBranch.messages[4] as any).content).toBe("better approach");
 };
 const usesLastEntryWhenLeafidNot = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "hi" }),
   ];
@@ -61,7 +64,7 @@ const usesLastEntryWhenLeafidNot = () => {
   expect(ctx.messages).toHaveLength(2);
 };
 const handlesOrphanedEntriesGracefully = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     msg({ id: "2", parentId: "missing", role: "assistant", text: "orphan" }),
   ];

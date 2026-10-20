@@ -3,6 +3,7 @@ import memory from "@msa/durable/storage/memory";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessTaskGraphSupport from "./harness-task-graph-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -13,7 +14,7 @@ const { MemoryStorage } = memory;
 
 const { abortController, awaited } = effectSupport;
 const { family } = harnessTaskGraphSupport;
-const { ControlledStorage, context, flush } = sessionSupport;
+const { context, flush } = sessionSupport;
 const { completed, deferred, openTasks } = taskSupport;
 
 function gatesNever() {

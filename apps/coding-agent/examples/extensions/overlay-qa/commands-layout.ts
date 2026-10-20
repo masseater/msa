@@ -1,15 +1,16 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { AnchorTestComponent } from "./anchor-test-component.ts";
-import { EdgeTestComponent } from "./edge-test-component.ts";
-import { MarginTestComponent } from "./margin-test-component.ts";
-import { MaxHeightTestComponent } from "./max-height-test-component.ts";
-import { PercentTestComponent } from "./percent-test-component.ts";
-import { registerOverlayCommand, showOverlay } from "./show-overlay.ts";
-import { SidepanelComponent } from "./sidepanel-component.ts";
+import AnchorTestComponent from "./anchor-test-component.ts";
+import EdgeTestComponent from "./edge-test-component.ts";
+import MarginTestComponent from "./margin-test-component.ts";
+import MaxHeightTestComponent from "./max-height-test-component.ts";
+import PercentTestComponent from "./percent-test-component.ts";
+import showOverlayModule from "./show-overlay.ts";
+import SidepanelComponent from "./sidepanel-component.ts";
 
+const { registerOverlayCommand, showOverlay } = showOverlayModule;
 const ANCHORS: tuiTypes.OverlayAnchor[] = [
   "top-left",
   "top-center",
@@ -44,10 +45,10 @@ const PERCENT_CONFIGS = [
   { col: 100, name: "colPercent: 100 (right)", row: 50 },
 ];
 
-const registerAnchors = (msa: ExtensionAPI): void => {
+const registerAnchors = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-anchors", {
     description: "Cycle through all anchor positions",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           let index = 0;
@@ -76,10 +77,10 @@ const registerAnchors = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerMargins = (msa: ExtensionAPI): void => {
+const registerMargins = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-margins", {
     description: "Test margin and offset options",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           let index = 0;
@@ -104,10 +105,10 @@ const registerMargins = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerPercent = (msa: ExtensionAPI): void => {
+const registerPercent = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-percent", {
     description: "Test percentage-based positioning",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           let index = 0;
@@ -132,7 +133,7 @@ const registerPercent = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerEdge = (msa: ExtensionAPI): void => {
+const registerEdge = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerOverlayCommand({
     component: () => (_tui, theme, _kb, done) => new EdgeTestComponent(theme, done),
     description: "Test overlay positioned at terminal edge",
@@ -142,7 +143,7 @@ const registerEdge = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerMaxHeight = (msa: ExtensionAPI): void => {
+const registerMaxHeight = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerOverlayCommand({
     component: () => (_tui, theme, _kb, done) => new MaxHeightTestComponent(theme, done),
     description: "Test maxHeight truncation",
@@ -152,7 +153,7 @@ const registerMaxHeight = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerSidepanel = (msa: ExtensionAPI): void => {
+const registerSidepanel = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerOverlayCommand({
     component: () => (tui, theme, _kb, done) => new SidepanelComponent(tui, theme, done),
     description: "Test responsive sidepanel (hides when terminal < 100 cols)",
@@ -168,7 +169,7 @@ const registerSidepanel = (msa: ExtensionAPI): void => {
   });
 };
 
-export const registerLayoutCommands = (msa: ExtensionAPI): void => {
+const registerLayoutCommands = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerAnchors(msa);
   registerMargins(msa);
   registerPercent(msa);
@@ -176,3 +177,9 @@ export const registerLayoutCommands = (msa: ExtensionAPI): void => {
   registerMaxHeight(msa);
   registerSidepanel(msa);
 };
+
+const commandsLayout = {
+  registerLayoutCommands,
+};
+
+export default commandsLayout;

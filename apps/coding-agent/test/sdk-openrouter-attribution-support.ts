@@ -3,12 +3,13 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import type sdkOpenrouterAttributionSupportTypes from "./sdk-openrouter-attribution-support.types.ts";
+const { createAgentSession } = sdk;
 
 const { createAssistantMessageEventStream, normalizeContext } = ai;
 
@@ -136,10 +137,10 @@ const captureHeaders = (
       );
       yield* request.pipe(
         Effect.ensuring(
-          Effect.sync(() => {
-            session.dispose();
-            modelRegistry.unregisterProvider(model.provider);
-          }),
+          Effect.andThen(
+            Effect.sync(() => modelRegistry.unregisterProvider(model.provider)),
+            awaited(session.dispose()),
+          ),
         ),
       );
       return capture.options?.headers;

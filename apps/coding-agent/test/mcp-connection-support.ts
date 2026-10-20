@@ -5,15 +5,13 @@ import type testingTypes from "@msa/mcp/testing.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
-import type { McpServerEntry } from "../src/extensions/mcp/config.ts";
-import {
-  McpOAuthCredentialStore,
-  McpServerConnection,
-  type McpServerLog,
-} from "../src/extensions/mcp/runtime.ts";
+import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
+import runtime from "../src/extensions/mcp/runtime.ts";
+import type runtimeTypes from "../src/extensions/mcp/runtime.types.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import type mcpConnectionSupportTypes from "./mcp-connection-support.types.ts";
 
+const { McpOAuthCredentialStore, McpServerConnection } = runtime;
 const { LATEST_PROTOCOL_VERSION, McpSessionExpiredError } = mcp;
 const { createInMemoryTransportPair } = testingModule;
 
@@ -21,9 +19,13 @@ const { runTest } = testing;
 
 const fakeServers: testingTypes.InMemoryTransport[] = [];
 
-const STDIO_ENTRY: McpServerEntry = { config: { command: "unused" }, name: "fake", source: "test" };
+const STDIO_ENTRY: codingAgentTypes.McpServerEntry = {
+  config: { command: "unused" },
+  name: "fake",
+  source: "test",
+};
 
-const HTTP_ENTRY: McpServerEntry = {
+const HTTP_ENTRY: codingAgentTypes.McpServerEntry = {
   config: { headers: { Authorization: "x" }, url: "http://unused.invalid" },
   name: "fake",
   source: "test",
@@ -85,9 +87,9 @@ const failingTransport = (error: Error) => () => {
 };
 
 const connect = (
-  entry: McpServerEntry,
+  entry: codingAgentTypes.McpServerEntry,
   transports: (() => ReturnType<typeof createTransport>)[],
-  log?: McpServerLog,
+  log?: runtimeTypes.McpServerLog,
 ) => {
   let opened = 0;
   const connection = new McpServerConnection({

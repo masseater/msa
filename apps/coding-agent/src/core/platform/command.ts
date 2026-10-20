@@ -1,23 +1,13 @@
-import { Effect, Fiber, Stream } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, Fiber, ManagedRuntime, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { platformRuntime } from "./index.ts";
-import { ToolFailure } from "./tool-failure.ts";
+import type commandTypes from "./command.types.ts";
+import ToolFailure from "./tool-failure.ts";
 
-export interface CommandRequest {
-  readonly file: string;
-  readonly args: ReadonlyArray<string>;
-  readonly cwd?: string;
-  readonly signal?: AbortSignal;
-}
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
-export interface CommandOutput {
-  readonly lines: ReadonlyArray<string>;
-  readonly stderr: string;
-  readonly exitCode: number;
-}
-
-const collect = (request: CommandRequest) =>
+const collect = (request: commandTypes.CommandRequest) =>
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -39,8 +29,8 @@ const collect = (request: CommandRequest) =>
     }),
   );
 
-export const runCommand = (request: CommandRequest): Promise<CommandOutput> =>
-  platformRuntime.runPromise(
+const runCommand = (request: commandTypes.CommandRequest): Promise<commandTypes.CommandOutput> =>
+  nodeRuntime.runPromise(
     collect(request).pipe(
       Effect.mapError(
         (error) =>
@@ -53,17 +43,7 @@ export const runCommand = (request: CommandRequest): Promise<CommandOutput> =>
     request.signal === undefined ? undefined : { signal: request.signal },
   );
 
-export interface StreamRequest extends CommandRequest {
-  readonly onLine: (line: string) => boolean;
-}
-
-export interface StreamOutput {
-  readonly stoppedEarly: boolean;
-  readonly stderr: string;
-  readonly exitCode: number | undefined;
-}
-
-const streamLines = (request: StreamRequest) =>
+const streamLines = (request: commandTypes.StreamRequest) =>
   Effect.scoped(
     Effect.gen(function* () {
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -91,8 +71,8 @@ const streamLines = (request: StreamRequest) =>
     }),
   );
 
-export const streamCommand = (request: StreamRequest): Promise<StreamOutput> =>
-  platformRuntime.runPromise(
+const streamCommand = (request: commandTypes.StreamRequest): Promise<commandTypes.StreamOutput> =>
+  nodeRuntime.runPromise(
     streamLines(request).pipe(
       Effect.mapError(
         (error) =>
@@ -104,3 +84,10 @@ export const streamCommand = (request: StreamRequest): Promise<StreamOutput> =>
     ),
     request.signal === undefined ? undefined : { signal: request.signal },
   );
+
+const command = {
+  runCommand,
+  streamCommand,
+};
+
+export default command;

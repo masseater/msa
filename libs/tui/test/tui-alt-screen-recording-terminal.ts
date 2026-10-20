@@ -1,6 +1,4 @@
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
+import VirtualTerminal from "./virtual-terminal.ts";
 
 class RecordingTerminal extends VirtualTerminal {
   readonly events: Array<{ type: "write"; data: string } | { type: "start" } | { type: "stop" }> =

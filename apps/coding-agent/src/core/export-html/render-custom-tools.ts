@@ -1,16 +1,16 @@
 import { Function as Fn } from "effect";
 
-import type { SessionEntry } from "../session-manager.ts";
-import type { RenderedToolHtml, ToolHtmlRenderer } from "./export-types.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import type exportTypesTypes from "./export-types.ts";
 
 const TEMPLATE_RENDERED_TOOLS = new Set(["bash", "read", "write", "edit", "ls"]);
 
-type MessageEntry = Extract<SessionEntry, { type: "message" }>;
+type MessageEntry = Extract<sessionManagerTypes.SessionEntry, { type: "message" }>;
 
 function renderToolCalls(
   message: MessageEntry["message"],
-  toolRenderer: ToolHtmlRenderer,
-  renderedTools: Record<string, RenderedToolHtml>,
+  toolRenderer: exportTypesTypes.ToolHtmlRenderer,
+  renderedTools: Record<string, exportTypesTypes.RenderedToolHtml>,
 ): void {
   if (message.role !== "assistant" || !Array.isArray(message.content)) return;
   for (const block of message.content) {
@@ -24,8 +24,8 @@ function renderToolCalls(
 
 function renderToolResult(
   message: MessageEntry["message"],
-  toolRenderer: ToolHtmlRenderer,
-  renderedTools: Record<string, RenderedToolHtml>,
+  toolRenderer: exportTypesTypes.ToolHtmlRenderer,
+  renderedTools: Record<string, exportTypesTypes.RenderedToolHtml>,
 ): void {
   if (message.role !== "toolResult" || message.toolCallId === "") return;
   const toolName = message.toolName || "";
@@ -47,13 +47,23 @@ function renderToolResult(
   }
 }
 
-export const preRenderCustomTools: {
-  (toolRenderer: ToolHtmlRenderer): (entries: SessionEntry[]) => Record<string, RenderedToolHtml>;
-  (entries: SessionEntry[], toolRenderer: ToolHtmlRenderer): Record<string, RenderedToolHtml>;
+const preRenderCustomTools: {
+  (
+    toolRenderer: exportTypesTypes.ToolHtmlRenderer,
+  ): (
+    entries: sessionManagerTypes.SessionEntry[],
+  ) => Record<string, exportTypesTypes.RenderedToolHtml>;
+  (
+    entries: sessionManagerTypes.SessionEntry[],
+    toolRenderer: exportTypesTypes.ToolHtmlRenderer,
+  ): Record<string, exportTypesTypes.RenderedToolHtml>;
 } = Fn.dual(
   2,
-  (entries: SessionEntry[], toolRenderer: ToolHtmlRenderer): Record<string, RenderedToolHtml> => {
-    const renderedTools: Record<string, RenderedToolHtml> = {};
+  (
+    entries: sessionManagerTypes.SessionEntry[],
+    toolRenderer: exportTypesTypes.ToolHtmlRenderer,
+  ): Record<string, exportTypesTypes.RenderedToolHtml> => {
+    const renderedTools: Record<string, exportTypesTypes.RenderedToolHtml> = {};
     for (const entry of entries) {
       if (entry.type !== "message") continue;
       renderToolCalls(entry.message, toolRenderer, renderedTools);
@@ -62,3 +72,9 @@ export const preRenderCustomTools: {
     return renderedTools;
   },
 );
+
+const renderCustomTools = {
+  preRenderCustomTools,
+};
+
+export default renderCustomTools;

@@ -1,11 +1,18 @@
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import { fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { type TregOptions, callTreg, pickString, rows } from "../treg.ts";
-import { webSearchRenderers } from "./renderers/web.ts";
-import { DEFAULT_MAX_BYTES, type TruncationResult, formatSize, truncateHead } from "./truncate.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import treg from "../treg.ts";
+import type tregTypes from "../treg.types.ts";
+import web from "./renderers/web.ts";
+import truncate from "./truncate.ts";
+import type webSearchTypes from "./web-search.types.ts";
+
+const { callTreg, pickString, rows } = treg;
+const { fromPromise, unwrapForeign } = platform;
+const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
+const { webSearchRenderers } = web;
 
 const DEFAULT_LIMIT = 8;
 const MAX_LIMIT = 20;
@@ -13,27 +20,13 @@ const MAX_LIMIT = 20;
 const webSearchSchema = Type.Object({
   limit: Type.Optional(
     Type.Integer({
-      minimum: 1,
-      maximum: MAX_LIMIT,
       description: `Maximum number of results (default: ${DEFAULT_LIMIT}).`,
+      maximum: MAX_LIMIT,
+      minimum: 1,
     }),
   ),
   query: Type.String({ description: "What to search the web for." }),
 });
-
-export type WebSearchToolInput = Static<typeof webSearchSchema>;
-
-export interface WebSearchResultSummary {
-  title: string;
-  url?: string;
-}
-
-export interface WebSearchToolDetails {
-  results: WebSearchResultSummary[];
-  servedBy?: string;
-  costMicro?: number;
-  truncation?: TruncationResult;
-}
 
 function formatRow(row: unknown, index: number): string {
   const title = pickString(row, "title", "name");
@@ -51,7 +44,7 @@ function formatRow(row: unknown, index: number): string {
 }
 
 const searchWeb = Effect.fn("webSearch")(function* (
-  options: TregOptions,
+  options: tregTypes.TregOptions,
   query: string,
   limit: number,
   signal: AbortSignal | undefined,
@@ -60,7 +53,7 @@ const searchWeb = Effect.fn("webSearch")(function* (
     callTreg(options, "treg.web.search", { limit, q: query }, signal),
   );
   const found = rows(result.output, "results");
-  const details: WebSearchToolDetails = {
+  const details: webSearchTypes.WebSearchToolDetails = {
     results: found.map((row) => {
       const url = pickString(row, "url", "link");
       return {
@@ -87,14 +80,17 @@ const searchWeb = Effect.fn("webSearch")(function* (
   return { content: [{ text, type: "text" as const }], details };
 });
 
-export function createWebSearchToolDefinition(
-  options: TregOptions,
-): ToolDefinition<typeof webSearchSchema, WebSearchToolDetails> {
+function createWebSearchToolDefinition(
+  options: tregTypes.TregOptions,
+): extensionsTypesTypes.ToolDefinition<
+  typeof webSearchSchema,
+  webSearchTypes.WebSearchToolDetails
+> {
   return {
     annotations: { openWorldHint: true, readOnlyHint: true },
     description: `Search the web. Returns each result's title, URL and snippet. Output is truncated to ${DEFAULT_MAX_BYTES / 1024}KB.`,
     execute: (_toolCallId, params, signal) =>
-      platformRuntime.runPromise(
+      Effect.runPromise(
         unwrapForeign(searchWeb(options, params.query, params.limit ?? DEFAULT_LIMIT, signal)),
       ),
     executionMode: "parallel",
@@ -108,3 +104,10 @@ export function createWebSearchToolDefinition(
     ...webSearchRenderers,
   };
 }
+
+const webSearch = {
+  createWebSearchToolDefinition,
+  webSearchSchema,
+};
+
+export default webSearch;

@@ -1,16 +1,16 @@
-import type { PrWatchGh } from "../src/core/pr-watch/gh.ts";
-import type { PrNotification, PrWatchEntry } from "../src/core/pr-watch/watch.ts";
+import type ghTypes from "../src/core/pr-watch/gh.types.ts";
+import type watchTypes from "../src/core/pr-watch/watch.types.ts";
 
 declare namespace prWatchLoopSupportTypes {
   interface ScriptedGh {
-    readonly gh: PrWatchGh;
+    readonly gh: ghTypes.PrWatchGh;
     readonly calls: { count: number };
     readonly behindCalls: { count: number };
   }
 
   interface RunResult {
-    readonly entry: PrWatchEntry;
-    readonly notifications: PrNotification[];
+    readonly entry: watchTypes.PrWatchEntry;
+    readonly notifications: watchTypes.PrNotification[];
     readonly changes: number;
     readonly calls: number;
     readonly behindCalls: number;

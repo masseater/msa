@@ -1,14 +1,14 @@
 import type agentTypes from "@msa/agent-core/index.types";
 
-import { SessionManager } from "../session-manager.ts";
-import type { WorkerSession } from "./worker.ts";
+import SessionManager from "../session-manager.ts";
+import type workerTypes from "./worker.ts";
 
-export class TranscriptCache {
+export default class TranscriptCache {
   private readonly cache = new Map<string, readonly agentTypes.AgentMessage[]>();
 
   messages(
     id: string,
-    workers: ReadonlyMap<string, WorkerSession>,
+    workers: ReadonlyMap<string, workerTypes.WorkerSession>,
     sessionFile: string | null,
   ): readonly agentTypes.AgentMessage[] {
     const worker = workers.get(id);

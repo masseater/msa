@@ -11,7 +11,6 @@ import sandboxBase from "./sandbox-base.ts";
 const { errorMessage } = preludeSource;
 const { isWorkerToHostMessage } = executionModule;
 const { RuntimeError } = bridge;
-const { CodemodeSandboxBase } = sandboxBase;
 type Resolve = (reply: protocolTypes.CodemodeRemoteReply) => void;
 
 interface Link {
@@ -114,7 +113,7 @@ const remoteLauncher =
       };
     });
 
-export default class RemoteCodemodeSandbox extends CodemodeSandboxBase {
+export default class RemoteCodemodeSandbox extends sandboxBase.CodemodeSandboxBase {
   constructor(options: protocolTypes.RemoteCodemodeSandboxOptions) {
     super(options, remoteLauncher(options.remote, options.interruptBudget));
   }

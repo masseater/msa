@@ -1,37 +1,16 @@
-import type compatTypes from "@msa/ai/compat.types";
+import type configTypes from "./config.types.ts";
 
-export const GITLAB_COM_URL = "https://gitlab.com";
-export const AI_GATEWAY_URL = "https://cloud.gitlab.com";
-export const ANTHROPIC_PROXY_URL = `${AI_GATEWAY_URL}/ai/v1/proxy/anthropic/`;
-export const OPENAI_PROXY_URL = `${AI_GATEWAY_URL}/ai/v1/proxy/openai/v1`;
+const GITLAB_COM_URL = "https://gitlab.com";
+const AI_GATEWAY_URL = "https://cloud.gitlab.com";
+const ANTHROPIC_PROXY_URL = `${AI_GATEWAY_URL}/ai/v1/proxy/anthropic/`;
+const OPENAI_PROXY_URL = `${AI_GATEWAY_URL}/ai/v1/proxy/openai/v1`;
 
-export const BUNDLED_CLIENT_ID = "da4edff2e6ebd2bc3208611e2768bc1c1dd7be791dc5ff26ca34ca9ee44f7d4b";
-export const OAUTH_SCOPES = ["api"];
-export const REDIRECT_URI = "http://127.0.0.1:8080/callback";
-export const DIRECT_ACCESS_TTL = 25 * 60 * 1000;
+const BUNDLED_CLIENT_ID = "da4edff2e6ebd2bc3208611e2768bc1c1dd7be791dc5ff26ca34ca9ee44f7d4b";
+const OAUTH_SCOPES = ["api"];
+const REDIRECT_URI = "http://127.0.0.1:8080/callback";
+const DIRECT_ACCESS_TTL = 25 * 60 * 1000;
 
-export type Backend = "anthropic" | "openai";
-
-export interface GitLabModel {
-  id: string;
-  name: string;
-  backend: Backend;
-  baseUrl: string;
-  reasoning: boolean;
-  thinkingLevelMap?: compatTypes.ThinkingLevelMap;
-  input: ("text" | "image")[];
-  cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
-  contextWindow: number;
-  maxTokens: number;
-}
-
-export interface DirectAccessToken {
-  token: string;
-  headers: Record<string, string>;
-  expiresAt: number;
-}
-
-export const MODELS: GitLabModel[] = [
+const MODELS: configTypes.GitLabModel[] = [
   {
     backend: "anthropic",
     baseUrl: ANTHROPIC_PROXY_URL,
@@ -139,4 +118,19 @@ export const MODELS: GitLabModel[] = [
   },
 ];
 
-export const MODEL_MAP = new Map(MODELS.map((m) => [m.id, m]));
+const MODEL_MAP = new Map(MODELS.map((m) => [m.id, m]));
+
+const config = {
+  AI_GATEWAY_URL,
+  ANTHROPIC_PROXY_URL,
+  BUNDLED_CLIENT_ID,
+  DIRECT_ACCESS_TTL,
+  GITLAB_COM_URL,
+  MODELS,
+  MODEL_MAP,
+  OAUTH_SCOPES,
+  OPENAI_PROXY_URL,
+  REDIRECT_URI,
+};
+
+export default config;

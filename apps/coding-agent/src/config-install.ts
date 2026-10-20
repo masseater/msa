@@ -1,30 +1,27 @@
-import { accessSync, constants, existsSync, realpathSync } from "fs";
 import { homedir } from "os";
 
 import { dual } from "effect/Function";
 
-import {
-  type InstallMethod,
-  type SelfUpdateCommand,
-  type SelfUpdatePackageTarget,
+import configInstallCommand from "./config-install-command.ts";
+import type configInstallCommandTypes from "./config-install-command.types.ts";
+import configPackage from "./config-package.ts";
+import platformNode from "./core/platform-node.ts";
+import nodeFs from "./core/platform/node/fs.ts";
+
+const { accessSync, constants, existsSync, realpathSync } = nodeFs;
+
+const {
   detectInstallMethod,
   getInferredNpmInstall,
   getSelfUpdateCommandForMethod,
   normalizeSelfUpdatePackageTarget,
   readCommandOutput,
-} from "./config-install-command.ts";
-import { RELEASES_URL, getPackageDir } from "./config-package.ts";
-import { dirname, join, resolve, sep } from "./core/platform-node.ts";
-
-export {
-  detectInstallMethod,
-  type InstallMethod,
-  type SelfUpdateCommand,
-  type SelfUpdatePackageTarget,
-} from "./config-install-command.ts";
+} = configInstallCommand;
+const { dirname, join, resolve, sep } = platformNode;
+const { RELEASES_URL, getPackageDir } = configPackage;
 
 function getGlobalPackageRoots(
-  method: InstallMethod,
+  method: configInstallCommandTypes.InstallMethod,
   _packageName: string,
   npmCommand?: string[],
 ): string[] {
@@ -131,7 +128,7 @@ function isSelfUpdatePathWritable(): boolean {
 }
 
 function isManagedByGlobalPackageManager(
-  method: InstallMethod,
+  method: configInstallCommandTypes.InstallMethod,
   packageName: string,
   npmCommand?: string[],
 ): boolean {
@@ -150,8 +147,8 @@ function isManagedByGlobalPackageManager(
 function getSelfUpdateCommandImpl(
   packageName: string,
   npmCommand?: string[],
-  updatePackageTarget: SelfUpdatePackageTarget = packageName,
-): SelfUpdateCommand | undefined {
+  updatePackageTarget: configInstallCommandTypes.SelfUpdatePackageTarget = packageName,
+): configInstallCommandTypes.SelfUpdateCommand | undefined {
   const method = detectInstallMethod();
   const command = getSelfUpdateCommandForMethod(
     method,
@@ -169,22 +166,22 @@ function getSelfUpdateCommandImpl(
   return command;
 }
 
-export const getSelfUpdateCommand: {
+const getSelfUpdateCommand: {
   (
     packageName: string,
     npmCommand?: string[],
-    updatePackageTarget?: SelfUpdatePackageTarget,
-  ): SelfUpdateCommand | undefined;
+    updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
+  ): configInstallCommandTypes.SelfUpdateCommand | undefined;
   (
     npmCommand?: string[],
-    updatePackageTarget?: SelfUpdatePackageTarget,
-  ): (packageName: string) => SelfUpdateCommand | undefined;
+    updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
+  ): (packageName: string) => configInstallCommandTypes.SelfUpdateCommand | undefined;
 } = dual((args: IArguments) => args.length >= 1, getSelfUpdateCommandImpl);
 
 function getSelfUpdateUnavailableInstructionImpl(
   packageName: string,
   npmCommand?: string[],
-  updatePackageTarget: SelfUpdatePackageTarget = packageName,
+  updatePackageTarget: configInstallCommandTypes.SelfUpdatePackageTarget = packageName,
 ): string {
   const method = detectInstallMethod();
   const target = normalizeSelfUpdatePackageTarget(updatePackageTarget);
@@ -204,19 +201,19 @@ function getSelfUpdateUnavailableInstructionImpl(
   return `Update ${target.installSpec} using the package manager, wrapper, or source checkout that provides this installation.`;
 }
 
-export const getSelfUpdateUnavailableInstruction: {
+const getSelfUpdateUnavailableInstruction: {
   (
     packageName: string,
     npmCommand?: string[],
-    updatePackageTarget?: SelfUpdatePackageTarget,
+    updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
   ): string;
   (
     npmCommand?: string[],
-    updatePackageTarget?: SelfUpdatePackageTarget,
+    updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
   ): (packageName: string) => string;
 } = dual((args: IArguments) => args.length >= 1, getSelfUpdateUnavailableInstructionImpl);
 
-export function getUpdateInstruction(packageName: string): string {
+function getUpdateInstruction(packageName: string): string {
   const method = detectInstallMethod();
   const command = getSelfUpdateCommandForMethod(method, packageName);
   if (command !== undefined) {
@@ -224,3 +221,12 @@ export function getUpdateInstruction(packageName: string): string {
   }
   return getSelfUpdateUnavailableInstruction(packageName);
 }
+
+const configInstall = {
+  detectInstallMethod: configInstallCommand.detectInstallMethod,
+  getSelfUpdateCommand,
+  getSelfUpdateUnavailableInstruction,
+  getUpdateInstruction,
+};
+
+export default configInstall;

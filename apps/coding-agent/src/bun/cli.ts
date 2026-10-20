@@ -1,9 +1,17 @@
-import { restoreSandboxEnv } from "./restore-sandbox-env.ts";
+import restoreSandboxEnvModule from "./restore-sandbox-env.ts";
+
+const { restoreSandboxEnv } = restoreSandboxEnvModule;
 
 restoreSandboxEnv();
-const { setupBunRuntime } = await import("./runtime-setup.ts");
-setupBunRuntime();
-const { setupCli } = await import("../cli/setup.ts");
-const { main } = await import("../main.ts");
-setupCli();
-main(process.argv.slice(2));
+void import("./runtime-setup.ts")
+  .then(({ default: runtimeSetup }) => {
+    runtimeSetup.setupBunRuntime();
+    return import("../cli/setup.ts");
+  })
+  .then(({ default: setup }) =>
+    import("../main.ts").then(({ default: mainModule }) => ({ mainModule, setup })),
+  )
+  .then(({ mainModule, setup }) => {
+    setup.setupCli();
+    return mainModule.main(process.argv.slice(2));
+  });

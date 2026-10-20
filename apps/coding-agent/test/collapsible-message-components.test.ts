@@ -2,11 +2,14 @@ import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import { BranchSummaryMessageComponent } from "../src/modes/interactive/components/branch-summary-message.ts";
-import { CompactionSummaryMessageComponent } from "../src/modes/interactive/components/compaction-summary-message.ts";
-import { SkillInvocationMessageComponent } from "../src/modes/interactive/components/skill-invocation-message.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import BranchSummaryMessageComponent from "../src/modes/interactive/components/branch-summary-message.ts";
+import CompactionSummaryMessageComponent from "../src/modes/interactive/components/compaction-summary-message.ts";
+import SkillInvocationMessageComponent from "../src/modes/interactive/components/skill-invocation-message.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { currentTimeMillis } = testing;
 

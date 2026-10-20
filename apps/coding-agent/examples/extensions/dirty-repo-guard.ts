@@ -1,7 +1,11 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-const checkDirtyRepo = (msa: ExtensionAPI, ctx: ExtensionContext, action: string) =>
+const checkDirtyRepo = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
+  action: string,
+) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { stdout, code } = yield* Effect.promise(() =>
@@ -37,7 +41,7 @@ const checkDirtyRepo = (msa: ExtensionAPI, ctx: ExtensionContext, action: string
     }),
   );
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("session_before_switch", (event, ctx) => {
     const action = event.reason === "new" ? "new session" : "switch session";
     return checkDirtyRepo(msa, ctx, action);

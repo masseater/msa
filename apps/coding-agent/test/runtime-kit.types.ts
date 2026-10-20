@@ -1,6 +1,6 @@
 import type compat from "@msa/ai/compat";
 
-import type { ExtensionFactory } from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
 
 declare namespace runtimeKitTypes {
   type Faux = ReturnType<typeof compat.registerFauxProvider>;
@@ -10,7 +10,7 @@ declare namespace runtimeKitTypes {
     readonly bootstrapModel?: boolean;
     readonly commandActions?: boolean;
     readonly cwd?: string;
-    readonly extensionFactory?: ExtensionFactory;
+    readonly extensionFactory?: srcTypes.ExtensionFactory;
     readonly faux?: Faux;
     readonly inMemory?: boolean;
     readonly models?: { id: string; reasoning: boolean }[];

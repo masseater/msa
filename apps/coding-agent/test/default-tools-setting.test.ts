@@ -3,9 +3,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
-import type { InlineExtension } from "../src/core/sdk.ts";
+import toolNames from "../src/core/orchestrator/tool-names.ts";
+import type sdkTypes from "../src/core/sdk.types.ts";
 import defaultToolsSettingSupport from "./default-tools-setting-support.ts";
+
+const { ORCHESTRATOR_TOOL_NAMES } = toolNames;
 
 const { cleanupDirs, createSession, prepareDirs } = defaultToolsSettingSupport;
 
@@ -96,7 +98,7 @@ const okTool = (name: string, label: string, description: string) => ({
   parameters: Type.Object({}),
 });
 
-const staticAndDynamicTools: InlineExtension = (msa) => {
+const staticAndDynamicTools: sdkTypes.InlineExtension = (msa) => {
   msa.registerTool(okTool("static_tool", "Static Tool", "Statically registered extension tool"));
   msa.on("session_start", () => {
     msa.registerTool(

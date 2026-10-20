@@ -3,7 +3,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { findInitialModel } from "../src/core/model-resolver.ts";
+import modelResolver from "../src/core/model-resolver.ts";
+
+const { findInitialModel } = modelResolver;
 
 const { awaited, runTest } = testing;
 

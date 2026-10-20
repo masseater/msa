@@ -3,12 +3,12 @@ import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../../src/index.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import type harnessTypes from "../harness.types.ts";
 
 const { fauxAssistantMessage, getCurrentTools } = ai;
 
-const compactViaHook: ExtensionFactory = (msa) => {
+const compactViaHook: srcTypes.ExtensionFactory = (msa) => {
   msa.on("session_before_compact", (event) =>
     Promise.resolve({
       compaction: {

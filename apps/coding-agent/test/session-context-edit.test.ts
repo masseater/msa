@@ -2,13 +2,11 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  DEFAULT_COMPACTION_SETTINGS,
-  estimateProjectedContextTokens,
-  prepareCompaction,
-} from "../src/core/compaction/index.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import compactionModule from "../src/core/compaction/index.ts";
+import SessionManager from "../src/core/session-manager.ts";
 import sessionContextEditSupport from "./session-context-edit-support.ts";
+const { DEFAULT_COMPACTION_SETTINGS, estimateProjectedContextTokens, prepareCompaction } =
+  compactionModule;
 
 const { assistant, text } = sessionContextEditSupport;
 

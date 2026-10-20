@@ -1,10 +1,10 @@
 import ai from "@msa/ai";
-import type { AgentSession } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { type TranscriptEvent, normalizeRecord, toJsonValue } from "vitest-evals/harness";
 
 const { contentText } = ai;
 
-type SessionMessage = AgentSession["messages"][number];
+type SessionMessage = codingAgentTypes.AgentSession["messages"][number];
 
 function assistantEvents(message: Extract<SessionMessage, { role: "assistant" }>) {
   const events: TranscriptEvent[] = [];
@@ -47,6 +47,14 @@ function messageEvents(message: SessionMessage): TranscriptEvent[] {
   return [];
 }
 
-export function toTranscriptEvents(messages: AgentSession["messages"]): TranscriptEvent[] {
+function toTranscriptEvents(
+  messages: codingAgentTypes.AgentSession["messages"],
+): TranscriptEvent[] {
   return messages.flatMap(messageEvents);
 }
+
+const transcript = {
+  toTranscriptEvents,
+};
+
+export default transcript;

@@ -3,13 +3,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, expect, it } from "vite-plus/test";
 
-import { VERSION } from "../src/config.ts";
-import { pendingHandoffs } from "../src/core/orchestrator/handoff-files.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { handoffPrompt } from "../src/core/slash-commands.ts";
+import config from "../src/config.ts";
+import handoffFiles from "../src/core/orchestrator/handoff-files.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import slashCommands from "../src/core/slash-commands.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSdkSupport from "./orchestrator-sdk-support.ts";
 
+const { handoffPrompt } = slashCommands;
+const { pendingHandoffs } = handoffFiles;
+const { VERSION } = config;
 const { fauxAssistantMessage, fauxToolCall } = compat;
 
 const { readTextFile, removePath, runTest } = testing;

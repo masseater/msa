@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -14,7 +14,7 @@ function normalizeToolName(input: string): string | undefined {
 }
 
 const makeRegisterEchoTool =
-  (msa: ExtensionAPI, registeredToolNames: Set<string>) =>
+  (msa: codingAgentTypes.ExtensionAPI, registeredToolNames: Set<string>) =>
   (name: string, label: string, prefix: string): boolean => {
     if (registeredToolNames.has(name)) {
       return false;
@@ -26,8 +26,8 @@ const makeRegisterEchoTool =
       execute: (_toolCallId, params) =>
         Effect.runPromise(
           Effect.succeed({
-            content: [{ type: "text", text: `${prefix}${params.message}` }],
-            details: { tool: name, prefix },
+            content: [{ text: `${prefix}${params.message}`, type: "text" }],
+            details: { prefix, tool: name },
           }),
         ),
       label,
@@ -40,7 +40,7 @@ const makeRegisterEchoTool =
     return true;
   };
 
-export default function dynamicToolsExtension(msa: ExtensionAPI) {
+export default function dynamicToolsExtension(msa: codingAgentTypes.ExtensionAPI) {
   const registeredToolNames = new Set<string>();
   const registerEchoTool = makeRegisterEchoTool(msa, registeredToolNames);
 

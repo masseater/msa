@@ -1,17 +1,16 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BaseOverlay } from "./base-overlay.ts";
-
+import BaseOverlay from "./base-overlay.ts";
 const { matchesKey } = tui;
 
-export class AnchorTestComponent extends BaseOverlay {
+export default class AnchorTestComponent extends BaseOverlay {
   private anchor: tuiTypes.OverlayAnchor;
   private done: (result: "next" | "confirm" | "cancel") => void;
 
   constructor(
-    theme: Theme,
+    theme: codingAgentTypes.Theme,
     anchor: tuiTypes.OverlayAnchor,
     done: (result: "next" | "confirm" | "cancel") => void,
   ) {

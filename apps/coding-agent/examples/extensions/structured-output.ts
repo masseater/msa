@@ -1,7 +1,10 @@
-import { type ExtensionAPI, defineTool } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Effect } from "effect";
 import { Type } from "typebox";
+
+const { defineTool } = codingAgent;
 
 const { Text } = tui;
 
@@ -17,11 +20,11 @@ const structuredOutputTool = defineTool({
   execute: (_toolCallId, params) =>
     Effect.runPromise(
       Effect.succeed({
-        content: [{ type: "text", text: `Saved structured output: ${params.headline}` }],
+        content: [{ text: `Saved structured output: ${params.headline}`, type: "text" }],
         details: {
+          actionItems: params.actionItems,
           headline: params.headline,
           summary: params.summary,
-          actionItems: params.actionItems,
         } satisfies StructuredOutputDetails,
         terminate: true,
       }),
@@ -29,9 +32,9 @@ const structuredOutputTool = defineTool({
   label: "Structured Output",
   name: "structured_output",
   parameters: Type.Object({
+    actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
     headline: Type.String({ description: "Short title for the result" }),
     summary: Type.String({ description: "One-paragraph summary" }),
-    actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
   }),
   promptGuidelines: [
     "Use structured_output as your final action when the user asks for structured output, JSON-like output, or a machine-readable summary.",
@@ -55,6 +58,6 @@ const structuredOutputTool = defineTool({
   },
 });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool(structuredOutputTool);
 }

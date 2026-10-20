@@ -4,9 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import toolNames from "../src/core/orchestrator/tool-names.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import settingsManagerSupport from "./settings-manager-support.ts";
+const { ORCHESTRATOR_TOOL_NAMES } = toolNames;
 
 const { readSettings, removeSettingsDirs, withSettings } = settingsManagerSupport;
 

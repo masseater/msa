@@ -1,0 +1,44 @@
+import type defaultResourceLoaderInternalTypes from "./default-resource-loader-internal.types.ts";
+import type diagnosticsTypes from "./diagnostics.ts";
+import type eventBusTypes from "./event-bus.types.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
+import type packageManagerTypes from "./package-manager.types.ts";
+import type promptTemplatesTypes from "./prompt-templates.types.ts";
+import type resourceLoaderTypes from "./resource-loader.types.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
+import type skillsTypes from "./skills.types.ts";
+
+export default abstract class DefaultResourceLoaderLayer0 {
+  protected options!: resourceLoaderTypes.DefaultResourceLoaderOptions;
+  cwd!: string;
+  agentDir!: string;
+  settingsManager!: settingsManagerTypes.SettingsManager;
+  eventBus!: eventBusTypes.EventBus;
+  protected packageManager!: packageManagerTypes.DefaultPackageManager;
+  additionalExtensionPaths!: string[];
+  additionalSkillPaths!: string[];
+  additionalPromptTemplatePaths!: string[];
+  additionalThemePaths!: string[];
+  extensionFactories!: extensionsTypesTypes.InlineExtension[];
+  protected builtinExtensions!: Map<string, defaultResourceLoaderInternalTypes.BuiltinExtension>;
+  noExtensions!: boolean;
+  disabledBuiltinExtensions!: Set<string>;
+  noSkills!: boolean;
+  noPromptTemplates!: boolean;
+  noThemes!: boolean;
+  noContextFiles!: boolean;
+  protected systemPromptSource?: string | undefined;
+  protected appendSystemPromptSource?: string[] | undefined;
+  extensionsOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["extensionsOverride"];
+  skillsOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["skillsOverride"];
+  promptsOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["promptsOverride"];
+  themesOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["themesOverride"];
+  agentsFilesOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["agentsFilesOverride"];
+  systemPromptOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["systemPromptOverride"];
+  appendSystemPromptOverride!: resourceLoaderTypes.DefaultResourceLoaderOptions["appendSystemPromptOverride"];
+  protected extensionsResult!: extensionsTypesTypes.LoadExtensionsResult;
+  skills!: skillsTypes.Skill[];
+  protected skillDiagnostics!: diagnosticsTypes.ResourceDiagnostic[];
+  prompts!: promptTemplatesTypes.PromptTemplate[];
+  protected promptDiagnostics!: diagnosticsTypes.ResourceDiagnostic[];
+}

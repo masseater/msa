@@ -1,9 +1,8 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerSupportTypes from "./settings-manager-support.types.ts";
-
 const { joinPath, makeDirectory, makeTempDir, readJsonFile, removeDirs } = testing;
 
 const tempDirs: string[] = [];

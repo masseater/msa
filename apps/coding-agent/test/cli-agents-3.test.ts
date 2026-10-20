@@ -3,10 +3,14 @@ import testing from "@msa/testing";
 import { Data, Effect, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { completeAccountsArgument, runAccountsCommand } from "../src/core/accounts.ts";
-import { loadAccounts } from "../src/core/cli-agents/claude-accounts.ts";
-import { openCodeProvider } from "../src/core/cli-agents/opencode.ts";
+import accounts from "../src/core/accounts.ts";
+import claudeAccounts from "../src/core/cli-agents/claude-accounts.ts";
+import opencode from "../src/core/cli-agents/opencode.ts";
 import cliAgentsSupport from "./cli-agents-support.ts";
+
+const { completeAccountsArgument, runAccountsCommand } = accounts;
+const { loadAccounts } = claudeAccounts;
+const { openCodeProvider } = opencode;
 
 const { awaited, joinPath, runTest } = testing;
 const { cleanAgentDir, currentAgentDir, prepareAgentDir, writeAccounts, writeScript } =

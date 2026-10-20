@@ -8,13 +8,10 @@ import effectSupport from "./effect-support.ts";
 import toolsSupport from "./tools-support.ts";
 
 const { BACKGROUND_CONTEXT } = contextModule;
-
-const { NodeExecutionEnv } = node;
-
 const { awaited } = effectSupport;
 const { deferred } = toolsSupport;
 
-class BlockingEditExecutionEnv extends NodeExecutionEnv {
+class BlockingEditExecutionEnv extends node.NodeExecutionEnv {
   readonly firstEditWriteStarted = deferred();
   readonly finishFirstEditWrite = deferred();
   firstEditWriteSettled = false;

@@ -1,101 +1,134 @@
-import type {
-  BashToolCallEvent,
-  BashToolResultEvent,
-  EditToolCallEvent,
-  EditToolResultEvent,
-  FindToolCallEvent,
-  FindToolResultEvent,
-  GrepToolCallEvent,
-  GrepToolResultEvent,
-  LsToolCallEvent,
-  LsToolResultEvent,
-  PowerShellToolCallEvent,
-  PowerShellToolResultEvent,
-  ReadToolCallEvent,
-  ReadToolResultEvent,
-  ToolCallEvent,
-  ToolResultEvent,
-  WriteToolCallEvent,
-  WriteToolResultEvent,
-} from "./types-agent-events.ts";
+import type typesAgentEventsTypes from "./types-agent-events.ts";
 
-type WithInputType<TInput> = ToolCallEvent & { readonly inputType?: TInput };
+type WithInputType<TInput> = typesAgentEventsTypes.ToolCallEvent & { readonly inputType?: TInput };
 
-export function isBashToolResult(e: ToolResultEvent): e is BashToolResultEvent {
+function isBashToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.BashToolResultEvent {
   return e.toolName === "bash";
 }
-export function isPowerShellToolResult(e: ToolResultEvent): e is PowerShellToolResultEvent {
+function isPowerShellToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.PowerShellToolResultEvent {
   return e.toolName === "powershell";
 }
-export function isReadToolResult(e: ToolResultEvent): e is ReadToolResultEvent {
+function isReadToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.ReadToolResultEvent {
   return e.toolName === "read";
 }
-export function isEditToolResult(e: ToolResultEvent): e is EditToolResultEvent {
+function isEditToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.EditToolResultEvent {
   return e.toolName === "edit";
 }
-export function isWriteToolResult(e: ToolResultEvent): e is WriteToolResultEvent {
+function isWriteToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.WriteToolResultEvent {
   return e.toolName === "write";
 }
-export function isGrepToolResult(e: ToolResultEvent): e is GrepToolResultEvent {
+function isGrepToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.GrepToolResultEvent {
   return e.toolName === "grep";
 }
-export function isFindToolResult(e: ToolResultEvent): e is FindToolResultEvent {
+function isFindToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.FindToolResultEvent {
   return e.toolName === "find";
 }
-export function isLsToolResult(e: ToolResultEvent): e is LsToolResultEvent {
+function isLsToolResult(
+  e: typesAgentEventsTypes.ToolResultEvent,
+): e is typesAgentEventsTypes.LsToolResultEvent {
   return e.toolName === "ls";
 }
 
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "bash") => boolean;
-export function isToolCallEventType(
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "bash") => boolean;
+function isToolCallEventType(
   toolName: "bash",
-  event: ToolCallEvent,
-): event is BashToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "powershell") => boolean;
-export function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.BashToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "powershell") => boolean;
+function isToolCallEventType(
   toolName: "powershell",
-  event: ToolCallEvent,
-): event is PowerShellToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "read") => boolean;
-export function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.PowerShellToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "read") => boolean;
+function isToolCallEventType(
   toolName: "read",
-  event: ToolCallEvent,
-): event is ReadToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "edit") => boolean;
-export function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.ReadToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "edit") => boolean;
+function isToolCallEventType(
   toolName: "edit",
-  event: ToolCallEvent,
-): event is EditToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "write") => boolean;
-export function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.EditToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "write") => boolean;
+function isToolCallEventType(
   toolName: "write",
-  event: ToolCallEvent,
-): event is WriteToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "grep") => boolean;
-export function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.WriteToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "grep") => boolean;
+function isToolCallEventType(
   toolName: "grep",
-  event: ToolCallEvent,
-): event is GrepToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "find") => boolean;
-export function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.GrepToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "find") => boolean;
+function isToolCallEventType(
   toolName: "find",
-  event: ToolCallEvent,
-): event is FindToolCallEvent;
-export function isToolCallEventType(event: ToolCallEvent): (toolName: "ls") => boolean;
-export function isToolCallEventType(toolName: "ls", event: ToolCallEvent): event is LsToolCallEvent;
-export function isToolCallEventType<
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.FindToolCallEvent;
+function isToolCallEventType(
+  event: typesAgentEventsTypes.ToolCallEvent,
+): (toolName: "ls") => boolean;
+function isToolCallEventType(
+  toolName: "ls",
+  event: typesAgentEventsTypes.ToolCallEvent,
+): event is typesAgentEventsTypes.LsToolCallEvent;
+function isToolCallEventType<
   TName extends string,
   TInput extends Record<string, unknown> = Record<string, unknown>,
 >(event: WithInputType<TInput>): (toolName: TName) => boolean;
-export function isToolCallEventType<
+function isToolCallEventType<
   TName extends string,
   TInput extends Record<string, unknown> = Record<string, unknown>,
 >(
   toolName: TName,
   event: WithInputType<TInput>,
-): event is ToolCallEvent & { toolName: TName; input: TInput };
-export function isToolCallEventType(...args: unknown[]): unknown {
-  const [first, second] = args as [string | ToolCallEvent, ToolCallEvent | undefined];
+): event is typesAgentEventsTypes.ToolCallEvent & { toolName: TName; input: TInput };
+function isToolCallEventType(...args: unknown[]): unknown {
+  const [first, second] = args as [
+    string | typesAgentEventsTypes.ToolCallEvent,
+    typesAgentEventsTypes.ToolCallEvent | undefined,
+  ];
   if (typeof first === "string") return second?.toolName === first;
   return (toolName: string) => first.toolName === toolName;
 }
+
+const typesGuards = {
+  isBashToolResult,
+  isEditToolResult,
+  isFindToolResult,
+  isGrepToolResult,
+  isLsToolResult,
+  isPowerShellToolResult,
+  isReadToolResult,
+  isToolCallEventType,
+  isWriteToolResult,
+};
+
+export default typesGuards;

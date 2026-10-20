@@ -3,7 +3,9 @@ import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { refreshModelCatalogs } from "../src/modes/interactive/model-catalog-refresh.ts";
+import modelCatalogRefresh from "../src/modes/interactive/model-catalog-refresh.ts";
+
+const { refreshModelCatalogs } = modelCatalogRefresh;
 
 const { abortController, awaited, failure, runTest } = testing;
 
@@ -55,12 +57,7 @@ describe("interactive model catalog refresh", () => {
   it("shares one runtime refresh between concurrent callers", () =>
     runTest(
       Effect.gen(function* () {
-        const deferred = createDeferred<aiTypes.ModelsRefreshResult>();
-        const runtime = {
-          refresh: vi.fn((_options?: aiTypes.ModelsRefreshOptions) => deferred.promise),
-        };
-        const firstController = abortController();
-        const secondController = abortController();
+        const { runtime, firstController, secondController, deferred } = helperPart1();
 
         const first = refreshModelCatalogs(runtime, firstController.signal);
         const second = refreshModelCatalogs(runtime, secondController.signal);
@@ -102,3 +99,13 @@ describe("interactive model catalog refresh", () => {
     abortsAnAbandonedRefreshAndAllowsA,
   );
 });
+
+function helperPart1() {
+  const deferred = createDeferred<aiTypes.ModelsRefreshResult>();
+  const runtime = {
+    refresh: vi.fn((_options?: aiTypes.ModelsRefreshOptions) => deferred.promise),
+  };
+  const firstController = abortController();
+  const secondController = abortController();
+  return { deferred, firstController, runtime, secondController };
+}

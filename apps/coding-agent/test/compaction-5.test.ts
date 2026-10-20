@@ -3,16 +3,10 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  DEFAULT_COMPACTION_SETTINGS,
-  findCutPoint,
-  prepareCompaction,
-} from "../src/core/compaction/index.ts";
-import {
-  type CustomMessageEntry,
-  type SessionEntry,
-  type SessionMessageEntry,
-} from "../src/core/session-manager.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { DEFAULT_COMPACTION_SETTINGS, findCutPoint, prepareCompaction } = compaction;
 
 const { currentDate, currentTimeMillis } = testing;
 
@@ -64,9 +58,11 @@ beforeEach(() => {
   resetEntryCounter();
 });
 
-function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEntry {
+function createMessageEntry(
+  message: agentTypes.AgentMessage,
+): sessionManagerTypes.SessionMessageEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: SessionMessageEntry = {
+  const entry: sessionManagerTypes.SessionMessageEntry = {
     id,
     message,
     parentId: lastId,
@@ -77,9 +73,9 @@ function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEnt
   return entry;
 }
 
-function createCustomMessageEntry(content: string): CustomMessageEntry {
+function createCustomMessageEntry(content: string): sessionManagerTypes.CustomMessageEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: CustomMessageEntry = {
+  const entry: sessionManagerTypes.CustomMessageEntry = {
     content,
     customType: "test",
     display: true,
@@ -93,7 +89,7 @@ function createCustomMessageEntry(content: string): CustomMessageEntry {
 }
 
 const shouldFindCutPointBasedOnActual = () => {
-  const entries: SessionEntry[] = [];
+  const entries: sessionManagerTypes.SessionEntry[] = [];
   for (let i = 0; i < 10; i++) {
     entries.push(createMessageEntry(createUserMessage(`User ${i}`)));
     entries.push(
@@ -106,18 +102,21 @@ const shouldFindCutPointBasedOnActual = () => {
   const result = findCutPoint(entries, 0, entries.length, 2500);
 
   expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
-  const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
+  const role = (entries[result.firstKeptEntryIndex] as sessionManagerTypes.SessionMessageEntry)
+    .message.role;
   expect(role === "user" || role === "assistant").toBe(true);
 };
 
 const shouldReturnStartindexIfNoValidCut = () => {
-  const entries: SessionEntry[] = [createMessageEntry(createAssistantMessage("a"))];
+  const entries: sessionManagerTypes.SessionEntry[] = [
+    createMessageEntry(createAssistantMessage("a")),
+  ];
   const result = findCutPoint(entries, 0, entries.length, 1000);
   expect(result.firstKeptEntryIndex).toBe(0);
 };
 
 const shouldKeepEverythingIfAllMessagesFit = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("1")),
     createMessageEntry(createAssistantMessage("a", createMockUsage(0, 50, 500, 0))),
     createMessageEntry(createUserMessage("2")),
@@ -129,7 +128,7 @@ const shouldKeepEverythingIfAllMessagesFit = () => {
 };
 
 const shouldIndicateSplitTurnWhenCuttingAt = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("Turn 1")),
     createMessageEntry(createAssistantMessage("A1", createMockUsage(0, 100, 1000, 0))),
     createMessageEntry(createUserMessage("Turn 2")),
@@ -140,7 +139,7 @@ const shouldIndicateSplitTurnWhenCuttingAt = () => {
 
   const result = findCutPoint(entries, 0, entries.length, 3000);
 
-  const cutEntry = entries[result.firstKeptEntryIndex] as SessionMessageEntry;
+  const cutEntry = entries[result.firstKeptEntryIndex] as sessionManagerTypes.SessionMessageEntry;
   if (cutEntry.message.role === "assistant") {
     expect(result.isSplitTurn).toBe(true);
     expect(result.turnStartIndex).toBe(2);
@@ -148,7 +147,7 @@ const shouldIndicateSplitTurnWhenCuttingAt = () => {
 };
 
 const shouldBudgetContextVisibleCustomMessageEntries = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("hi")),
     createMessageEntry(createAssistantMessage("hello")),
     createCustomMessageEntry("x".repeat(4000)),

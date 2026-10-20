@@ -1,30 +1,22 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import {
-  type ProjectTrustOption,
-  type ProjectTrustStoreEntry,
-  getProjectTrustOptions,
-} from "../../../core/trust-manager.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+import trustManager from "../../../core/trust-manager.ts";
+import type trustManagerTypes from "../../../core/trust-manager.types.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+import type trustSelectorTypes from "./trust-selector.types.ts";
+
+const { getProjectTrustOptions } = trustManager;
+const { theme } = themeModule;
+const { keyHint, rawKeyHint } = keybindingHints;
 
 const { Container, Spacer, Text, getKeybindings } = tui;
 
-export type TrustSelection = Pick<ProjectTrustOption, "trusted" | "updates">;
-
-export interface TrustSelectorOptions {
-  cwd: string;
-  savedDecision: ProjectTrustStoreEntry | null;
-  projectTrusted: boolean;
-  onSelect: (selection: TrustSelection) => void;
-  onCancel: () => void;
-}
-
 function formatDecision(
   trustPath: string | undefined,
-  decision: ProjectTrustStoreEntry | null,
+  decision: trustManagerTypes.ProjectTrustStoreEntry | null,
 ): string {
   if (decision === null) {
     return "none";
@@ -36,15 +28,15 @@ function formatDecision(
   return `${label} (${decision.path})`;
 }
 
-export class TrustSelectorComponent extends Container {
+export default class TrustSelectorComponent extends tui.Container {
   private selectedIndex: number;
   private readonly listContainer: tuiTypes.Container;
-  private readonly trustOptions: ProjectTrustOption[];
-  private readonly savedDecision: ProjectTrustStoreEntry | null;
-  private readonly onSelectCallback: (selection: TrustSelection) => void;
+  private readonly trustOptions: trustManagerTypes.ProjectTrustOption[];
+  private readonly savedDecision: trustManagerTypes.ProjectTrustStoreEntry | null;
+  private readonly onSelectCallback: (selection: trustSelectorTypes.TrustSelection) => void;
   private readonly onCancelCallback: () => void;
 
-  constructor(options: TrustSelectorOptions) {
+  constructor(options: trustSelectorTypes.TrustSelectorOptions) {
     super();
 
     this.savedDecision = options.savedDecision;
@@ -104,7 +96,7 @@ export class TrustSelectorComponent extends Container {
     self.updateList();
   }
 
-  private isSavedOption(option: ProjectTrustOption): boolean {
+  private isSavedOption(option: trustManagerTypes.ProjectTrustOption): boolean {
     return (
       option.savedPath !== undefined &&
       this.savedDecision?.decision === option.trusted &&

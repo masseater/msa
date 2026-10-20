@@ -1,14 +1,15 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
-import {
-  type Theme,
-  getLanguageFromPath,
-  highlightCode,
-} from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import { normalizeDisplayText, renderToolPath, replaceTabs, str } from "../render-utils.ts";
+import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
+import themeModule from "../../../modes/interactive/theme/theme.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import renderUtils from "../render-utils.ts";
+
+const { getLanguageFromPath, highlightCode } = themeModule;
+const { normalizeDisplayText, renderToolPath, replaceTabs, str } = renderUtils;
+const { expandHint } = keybindingHints;
 
 const { Container, Text } = tui;
 
@@ -19,7 +20,7 @@ type WriteHighlightCache = {
   normalizedLines: string[];
   highlightedLines: string[];
 };
-class WriteCallRenderComponent extends Text {
+class WriteCallRenderComponent extends tui.Text {
   cache?: WriteHighlightCache | undefined;
 
   constructor() {
@@ -101,8 +102,8 @@ function trimTrailingEmptyLines(lines: string[]): string[] {
 }
 function formatWriteCall(
   args: { path?: string; file_path?: string; content?: string } | undefined,
-  options: ToolRenderResultOptions,
-  theme: Theme,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
+  theme: themeTypes.Theme,
   cache: WriteHighlightCache | undefined,
   cwd: string,
 ): string {
@@ -134,7 +135,7 @@ function formatWriteResult(
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
     isError?: boolean;
   },
-  theme: Theme,
+  theme: themeTypes.Theme,
 ): string | undefined {
   if (result.isError !== true) {
     return undefined;
@@ -149,7 +150,10 @@ function formatWriteResult(
   return `\n${theme.fg("error", output)}`;
 }
 
-export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {
+const writeRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, any>,
+  "renderCall" | "renderResult"
+> = {
   renderCall(args, theme, context) {
     const renderArgs = args as { path?: string; file_path?: string; content?: string } | undefined;
     const rawPath = str(renderArgs?.file_path ?? renderArgs?.path);
@@ -188,3 +192,9 @@ export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rend
     return text;
   },
 };
+
+const write = {
+  writeRenderers,
+};
+
+export default write;

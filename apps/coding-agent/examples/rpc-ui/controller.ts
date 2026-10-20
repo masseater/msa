@@ -1,20 +1,23 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BLUE, BOLD, DIM, GREEN, MAGENTA, RED, RESET, YELLOW } from "./colors.ts";
-import type { ExtensionUIRequest } from "./extension-ui-request.ts";
-import { InputDialog } from "./input-dialog.ts";
-import { LoadingIndicator } from "./loading-indicator.ts";
-import { OutputLog } from "./output-log.ts";
-import { PromptInput } from "./prompt-input.ts";
-import { SelectDialog } from "./select-dialog.ts";
-import { runSlashCommand } from "./slash-commands.ts";
+import colors from "./colors.ts";
+import type extensionUiRequestTypes from "./extension-ui-request.ts";
+import InputDialog from "./input-dialog.ts";
+import LoadingIndicator from "./loading-indicator.ts";
+import OutputLog from "./output-log.ts";
+import PromptInput from "./prompt-input.ts";
+import SelectDialog from "./select-dialog.ts";
+import slashCommands from "./slash-commands.ts";
+
+const { BLUE, BOLD, DIM, GREEN, MAGENTA, RED, RESET, YELLOW } = colors;
+const { runSlashCommand } = slashCommands;
 
 const { Container } = tuiModule;
 
 const NOTICE = `${MAGENTA}${BOLD}Notification:${RESET}`;
 
-export class UiController {
+export default class UiController {
   readonly outputLog = new OutputLog();
   readonly promptInput = new PromptInput();
   private readonly loadingIndicator = new LoadingIndicator();
@@ -154,7 +157,7 @@ export class UiController {
     this.respond(id, value === undefined ? { cancelled: true } : { value });
   }
 
-  private handleDialogRequest(req: ExtensionUIRequest): void {
+  private handleDialogRequest(req: extensionUiRequestTypes.ExtensionUIRequest): void {
     if (req.method === "select") {
       this.selectDialog(req.title ?? "Select", req.options ?? [], (value) =>
         this.respondValue(req.id, value),
@@ -183,7 +186,7 @@ export class UiController {
     }
   }
 
-  private handleOutputRequest(req: ExtensionUIRequest): void {
+  private handleOutputRequest(req: extensionUiRequestTypes.ExtensionUIRequest): void {
     switch (req.method) {
       case "notify": {
         const notifyType = req.notifyType ?? "info";
@@ -211,7 +214,7 @@ export class UiController {
     }
   }
 
-  handleExtensionUI(req: ExtensionUIRequest): void {
+  handleExtensionUI(req: extensionUiRequestTypes.ExtensionUIRequest): void {
     this.handleDialogRequest(req);
     this.handleOutputRequest(req);
   }
@@ -243,7 +246,7 @@ export class UiController {
       return;
     }
     if (type === "extension_ui_request") {
-      this.handleExtensionUI(data as unknown as ExtensionUIRequest);
+      this.handleExtensionUI(data as unknown as extensionUiRequestTypes.ExtensionUIRequest);
       return;
     }
     if (type === "message_update") {

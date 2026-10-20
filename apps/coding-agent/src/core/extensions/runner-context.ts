@@ -1,36 +1,14 @@
-import type { ModelRegistry } from "../model-registry.ts";
-import type { SessionManager } from "../session-manager.ts";
-import type { RunnerBindings } from "./runner-bindings.ts";
-import type {
-  ExecuteToolOptions,
-  ExtensionCommandContext,
-  ExtensionContext,
-  ExtensionMode,
-  ExtensionRuntime,
-  ExtensionToolContext,
-  ExtensionUIContext,
-} from "./types.ts";
+import type runnerContextTypes from "./runner-context.types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export interface ContextHost {
-  assertActive: () => void;
-  ui: () => ExtensionUIContext;
-  mode: () => ExtensionMode;
-  hasUI: () => boolean;
-  cwd: string;
-  sessionManager: SessionManager;
-  modelRegistry: ModelRegistry;
-  runtime: ExtensionRuntime;
-  bindings: RunnerBindings;
-}
+export default class ContextFactory {
+  private readonly host: runnerContextTypes.ContextHost;
 
-export class ContextFactory {
-  private readonly host: ContextHost;
-
-  constructor(host: ContextHost) {
+  constructor(host: runnerContextTypes.ContextHost) {
     this.host = host;
   }
 
-  createContext(): ExtensionContext {
+  createContext(): extensionsTypesTypes.ExtensionContext {
     const { host } = this;
     const { bindings } = host;
     const guarded = <T>(read: () => T): T => {
@@ -79,47 +57,57 @@ export class ContextFactory {
     };
   }
 
-  createToolContext(toolCallId: string, signal: AbortSignal | undefined): ExtensionToolContext {
+  createToolContext(
+    toolCallId: string,
+    signal: AbortSignal | undefined,
+  ): extensionsTypesTypes.ExtensionToolContext {
     const { host } = this;
-    return Object.defineProperties(this.createContext() as ExtensionToolContext, {
-      executeTool: {
-        value: (name: string, args: unknown, options: ExecuteToolOptions = {}) => {
-          host.assertActive();
-          const { executeToolFn } = host.bindings;
-          if (executeToolFn === undefined) {
-            return Promise.resolve({
-              toolCall: { type: "toolCall", id: `${toolCallId}/0`, name, arguments: {} },
-              result: {
-                content: [
-                  { type: "text", text: "Nested tool calls are not available in this context" },
-                ],
-                details: {},
-              },
-              isError: true,
+    return Object.defineProperties(
+      this.createContext() as extensionsTypesTypes.ExtensionToolContext,
+      {
+        executeTool: {
+          value: (
+            name: string,
+            args: unknown,
+            options: extensionsTypesTypes.ExecuteToolOptions = {},
+          ) => {
+            host.assertActive();
+            const { executeToolFn } = host.bindings;
+            if (executeToolFn === undefined) {
+              return Promise.resolve({
+                isError: true,
+                result: {
+                  content: [
+                    { text: "Nested tool calls are not available in this context", type: "text" },
+                  ],
+                  details: {},
+                },
+                toolCall: { arguments: {}, id: `${toolCallId}/0`, name, type: "toolCall" },
+              });
+            }
+            return executeToolFn(toolCallId, name, args, {
+              ...options,
+              signal: options.signal ?? signal,
             });
-          }
-          return executeToolFn(toolCallId, name, args, {
-            ...options,
-            signal: options.signal ?? signal,
-          });
+          },
+        },
+        tools: {
+          get() {
+            host.assertActive();
+            return host.bindings.getCallableToolsFn();
+          },
         },
       },
-      tools: {
-        get() {
-          host.assertActive();
-          return host.bindings.getCallableToolsFn();
-        },
-      },
-    });
+    );
   }
 
-  createCommandContext(): ExtensionCommandContext {
+  createCommandContext(): extensionsTypesTypes.ExtensionCommandContext {
     const { host } = this;
     const { bindings } = host;
     const context = Object.defineProperties(
       {},
       Object.getOwnPropertyDescriptors(this.createContext()),
-    ) as ExtensionCommandContext;
+    ) as extensionsTypesTypes.ExtensionCommandContext;
     const guarded = <T>(read: () => T): T => {
       host.assertActive();
       return read();

@@ -3,8 +3,6 @@ import type layoutNodeTypes from "../layout-node.types.ts";
 import tuiComponent from "../tui-component.ts";
 import type tuiComponentTypes from "../tui-component.types.ts";
 import type stackTypes from "./stack.types.ts";
-
-const { Container } = tuiComponent;
 const { LAYOUT_NODE } = layoutNode;
 
 function isStackEntry(child: stackTypes.StackChild): child is stackTypes.StackEntry {
@@ -15,7 +13,7 @@ function normalizeSize(value: number | undefined, fallback: number): number {
   return value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
 }
 
-export default abstract class Stack extends Container {
+export default abstract class Stack extends tuiComponent.Container {
   protected readonly entries: layoutNodeTypes.StackLayoutEntry[] = [];
   protected readonly gap: number;
   protected readonly align: "stretch" | "start" | "center" | "end";

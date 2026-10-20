@@ -1,23 +1,18 @@
 import tui from "@msa/tui";
 
-import { APP_NAME } from "../../../config.ts";
-import { SYSTEM_THEME_NAME } from "../theme/system-theme.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+import config from "../../../config.ts";
+import systemTheme from "../theme/system-theme.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type firstTimeSetupTypes from "./first-time-setup.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-const { Container, Spacer, Text, getKeybindings } = tui;
+const { SYSTEM_THEME_NAME } = systemTheme;
+const { keyHint, rawKeyHint } = keybindingHints;
+const { theme } = themeModule;
+const { APP_NAME } = config;
 
-export interface FirstTimeSetupResult {
-  theme: string;
-  shareAnalytics: boolean;
-}
-
-export interface FirstTimeSetupOptions {
-  onThemePreview: (themeName: string) => void;
-  onSubmit: (result: FirstTimeSetupResult) => void;
-  onCancel: () => void;
-}
+const { Spacer, Text, getKeybindings } = tui;
 
 const THEME_OPTIONS: Array<{ value: string; label: string }> = [
   { label: "System (matches your terminal colors)", value: SYSTEM_THEME_NAME },
@@ -32,13 +27,13 @@ const ANALYTICS_OPTIONS: Array<{ value: boolean; label: string }> = [
 
 const SETUP_LOGO_LINES = ["██████", "██  ██", "████  ██", "██    ██"];
 
-export class FirstTimeSetupComponent extends Container {
+export default class FirstTimeSetupComponent extends tui.Container {
   private step: "theme" | "analytics" = "theme";
   private themeIndex: number;
   private analyticsIndex = 0;
-  private readonly options: FirstTimeSetupOptions;
+  private readonly options: firstTimeSetupTypes.FirstTimeSetupOptions;
 
-  constructor(options: FirstTimeSetupOptions) {
+  constructor(options: firstTimeSetupTypes.FirstTimeSetupOptions) {
     super();
     this.options = options;
     this.themeIndex = 0;

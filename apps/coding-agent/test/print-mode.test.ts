@@ -3,12 +3,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { SessionShutdownEvent } from "../src/index.ts";
-import { runPrintMode } from "../src/modes/print-mode.ts";
+import type srcTypes from "../src/index.types.ts";
+import printMode from "../src/modes/print-mode.ts";
+
+const { runPrintMode } = printMode;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
-type EmitEvent = SessionShutdownEvent;
+type EmitEvent = srcTypes.SessionShutdownEvent;
 
 type FakeExtensionRunner = {
   hasHandlers: (eventType: string) => boolean;

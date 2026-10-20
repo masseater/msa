@@ -3,7 +3,9 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createFindToolDefinition } from "../../../src/core/tools/find.ts";
+import find from "../../../src/core/tools/find.ts";
+
+const { createFindToolDefinition } = find;
 
 const { joinPath } = testing;
 

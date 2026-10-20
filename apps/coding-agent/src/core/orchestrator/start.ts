@@ -1,31 +1,52 @@
 import { Effect, Result } from "effect";
 
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-import { newId } from "./ids.ts";
-import { prompts } from "./prompts.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { snapshots } from "./snapshot.ts";
-import { store } from "./store.ts";
-import type { Note, Task, TaskView, ThreadRole } from "./types.ts";
-import type { WorkerSession } from "./worker.ts";
+import errors from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import ids from "./ids.ts";
+import promptsModule from "./prompts.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import snapshot from "./snapshot.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
+import type workerTypes from "./worker.ts";
+
+const { nowMillis } = runtimeModule;
+const { store } = storeModule;
+const { snapshots } = snapshot;
+const { prompts } = promptsModule;
+const { newId } = ids;
+const { orchestratorError } = errors;
 
 interface ThreadPlan {
   threadId: string;
   prompt: string;
   model: string;
-  thinkingLevel: Task["thinkingLevel"];
-  notes: readonly Note[];
+  thinkingLevel: orchestratorTypesTypes.Task["thinkingLevel"];
+  notes: readonly orchestratorTypesTypes.Note[];
 }
 
-function notesFor(runtime: Runtime, taskId: string, threadId: string): Note[] {
+function notesFor(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+  threadId: string,
+): orchestratorTypesTypes.Note[] {
   return store.unreadNotes(runtime.database, runtime.options.project, taskId, threadId);
 }
 
-function markRead(runtime: Runtime, notes: readonly Note[], threadId: string, now: number): void {
+function markRead(
+  runtime: runtimeTypes.Runtime,
+  notes: readonly orchestratorTypesTypes.Note[],
+  threadId: string,
+  now: number,
+): void {
   for (const note of notes) store.markNoteRead(runtime.database, note.id, threadId, now);
 }
 
-function dependencyViews(runtime: Runtime, task: TaskView): TaskView[] {
+function dependencyViews(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.TaskView,
+): orchestratorTypesTypes.TaskView[] {
   const byId = new Map(
     snapshots
       .taskViews(runtime.database, runtime.options.project)
@@ -35,10 +56,10 @@ function dependencyViews(runtime: Runtime, task: TaskView): TaskView[] {
 }
 
 function reviewerPrompt(
-  runtime: Runtime,
-  task: TaskView,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.TaskView,
   workerReport: string,
-  notes: readonly Note[],
+  notes: readonly orchestratorTypesTypes.Note[],
 ): string {
   if (task.kind === "review") {
     const byId = new Map(
@@ -55,11 +76,11 @@ function reviewerPrompt(
 }
 
 function promptFor(
-  runtime: Runtime,
-  task: TaskView,
-  role: ThreadRole,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.TaskView,
+  role: orchestratorTypesTypes.ThreadRole,
   workerReport: string,
-  notes: readonly Note[],
+  notes: readonly orchestratorTypesTypes.Note[],
   extra: string,
 ): string {
   const base =
@@ -70,9 +91,9 @@ function promptFor(
 }
 
 function planThread(
-  runtime: Runtime,
-  task: Task,
-  role: ThreadRole,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   workerReport: string,
   extra: string,
 ): ThreadPlan {
@@ -93,10 +114,10 @@ function planThread(
 }
 
 function failThread(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
-  task: Task,
-  role: ThreadRole,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   now: number,
   message: string,
 ): void {
@@ -107,10 +128,10 @@ function failThread(
 }
 
 function insertRunningThread(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
-  task: Task,
-  role: ThreadRole,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   now: number,
 ): void {
   const database = runtime.database;
@@ -136,12 +157,12 @@ function insertRunningThread(
 }
 
 function openWorker(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
-  task: Task,
-  role: ThreadRole,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<WorkerSession | undefined, OrchestratorError> {
+): Effect.Effect<workerTypes.WorkerSession | undefined, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
@@ -156,8 +177,8 @@ function openWorker(
           runtime.options.createWorker({
             cwd: task.cwd,
             model: runtime.options.resolveModel(plan.model),
-            thinkingLevel,
             telemetry,
+            thinkingLevel,
           }),
       }),
     );
@@ -170,9 +191,9 @@ function openWorker(
 }
 
 function launch(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
-  worker: WorkerSession,
+  worker: workerTypes.WorkerSession,
   prompt: string,
   now: number,
 ): void {
@@ -189,12 +210,12 @@ function launch(
 }
 
 function startTasks(
-  runtime: Runtime,
-  task: Task,
-  role: ThreadRole,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   workerReport = "",
   extra = "",
-): Effect.Effect<void, OrchestratorError> {
+): Effect.Effect<void, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const plan = planThread(runtime, task, role, workerReport, extra);
@@ -204,4 +225,10 @@ function startTasks(
   });
 }
 
-export const starting = { startTasks };
+const starting = { startTasks };
+
+const start = {
+  starting,
+};
+
+export default start;

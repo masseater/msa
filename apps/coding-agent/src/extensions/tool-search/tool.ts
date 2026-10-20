@@ -1,77 +1,16 @@
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import type {
-  ExtensionAPI,
-  ToolDefinition,
-  ToolExposure,
-  ToolInfo,
-  ToolNamespace,
-} from "../../core/extensions/types.ts";
+import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import Bm25Ranker from "./bm-25-ranker.ts";
+import type toolTypes from "./tool.types.ts";
 
-export const TOOL_SEARCH_TOOL_NAME = "tool_search";
-export const DEFAULT_TOOL_SEARCH_LIMIT = 8;
-
-export interface ToolSearchDocument {
-  name: string;
-  text: string;
-}
-
-export interface ToolSearchMatch {
-  name: string;
-  score: number;
-}
-
-export interface ToolRanker {
-  rank(query: string, documents: readonly ToolSearchDocument[], limit: number): ToolSearchMatch[];
-}
-
-const STOP_WORDS: ReadonlySet<string> = new Set([
-  "a",
-  "an",
-  "and",
-  "are",
-  "as",
-  "at",
-  "be",
-  "by",
-  "for",
-  "from",
-  "in",
-  "is",
-  "it",
-  "of",
-  "on",
-  "or",
-  "that",
-  "the",
-  "this",
-  "to",
-  "with",
-]);
-
-function stem(term: string): string {
-  if (term.length > 4 && term.endsWith("ies")) return `${term.slice(0, -3)}y`;
-  if (term.length > 4 && /(ches|shes|sses|xes|zes)$/u.test(term)) return term.slice(0, -2);
-  if (term.length > 3 && term.endsWith("s") && !term.endsWith("ss")) return term.slice(0, -1);
-  return term;
-}
-
-export function tokenize(text: string): string[] {
-  return text
-    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
-    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1 $2")
-    .toLowerCase()
-    .split(/[^a-z0-9]+/u)
-    .filter((term) => term.length > 0 && !STOP_WORDS.has(term))
-    .map(stem);
-}
-
+const TOOL_SEARCH_TOOL_NAME = "tool_search";
+const DEFAULT_TOOL_SEARCH_LIMIT = 8;
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
 function schemaText(schema: unknown, parts: string[]): void {
   if (!isObject(schema)) return;
   if (typeof schema["description"] === "string") parts.push(schema["description"]);
@@ -87,73 +26,28 @@ function schemaText(schema: unknown, parts: string[]): void {
     if (Array.isArray(variants)) for (const variant of variants) schemaText(variant, parts);
   }
 }
-
 function createToolSearchDocumentImpl(
-  tool: Pick<ToolInfo, "name" | "description" | "parameters">,
-  namespace?: ToolNamespace,
-): ToolSearchDocument {
+  tool: Pick<extensionsTypesTypes.ToolInfo, "name" | "description" | "parameters">,
+  namespace?: extensionsTypesTypes.ToolNamespace,
+): toolTypes.ToolSearchDocument {
   const parts = [tool.name, tool.name.replaceAll("_", " "), tool.description];
   schemaText(tool.parameters, parts);
   if (namespace !== undefined)
     parts.push(namespace.name, namespace.description ?? "", namespace.instructions ?? "");
   return { name: tool.name, text: parts.filter((part) => part.trim()).join(" ") };
 }
-
-export const createToolSearchDocument: {
+const createToolSearchDocument: {
   (
-    tool: Pick<ToolInfo, "name" | "description" | "parameters">,
-    namespace?: ToolNamespace,
-  ): ToolSearchDocument;
+    tool: Pick<extensionsTypesTypes.ToolInfo, "name" | "description" | "parameters">,
+    namespace?: extensionsTypesTypes.ToolNamespace,
+  ): toolTypes.ToolSearchDocument;
   (
-    namespace?: ToolNamespace,
-  ): (tool: Pick<ToolInfo, "name" | "description" | "parameters">) => ToolSearchDocument;
+    namespace?: extensionsTypesTypes.ToolNamespace,
+  ): (
+    tool: Pick<extensionsTypesTypes.ToolInfo, "name" | "description" | "parameters">,
+  ) => toolTypes.ToolSearchDocument;
 } = dual((args: IArguments) => args.length >= 1, createToolSearchDocumentImpl);
-
-export class Bm25Ranker implements ToolRanker {
-  private readonly k1: number;
-  private readonly b: number;
-
-  constructor(options: { k1?: number; b?: number } = {}) {
-    this.k1 = options.k1 ?? 1.2;
-    this.b = options.b ?? 0.75;
-  }
-
-  rank(query: string, documents: readonly ToolSearchDocument[], limit: number): ToolSearchMatch[] {
-    const queryTerms = [...new Set(tokenize(query))];
-    if (queryTerms.length === 0 || documents.length === 0 || limit <= 0) return [];
-    const indexed = documents.map((document) => {
-      const counts = new Map<string, number>();
-      for (const term of tokenize(document.text)) counts.set(term, (counts.get(term) ?? 0) + 1);
-      const length = [...counts.values()].reduce((sum, count) => sum + count, 0);
-      return { counts, document, length };
-    });
-    const averageLength =
-      indexed.reduce((sum, { length }) => sum + length, 0) / documents.length || 1;
-    const idf = new Map(
-      queryTerms.map((term) => {
-        const frequency = indexed.filter(({ counts }) => counts.has(term)).length;
-        return [
-          term,
-          Math.log(1 + (documents.length - frequency + 0.5) / (frequency + 0.5)),
-        ] as const;
-      }),
-    );
-    const matches: ToolSearchMatch[] = [];
-    for (const { document, counts, length } of indexed) {
-      let score = 0;
-      for (const term of queryTerms) {
-        const count = counts.get(term);
-        if (count === undefined || count === 0) continue;
-        const norm = this.k1 * (1 - this.b + (this.b * length) / averageLength);
-        score += (idf.get(term) ?? 0) * ((count * (this.k1 + 1)) / (count + norm));
-      }
-      if (score > 0) matches.push({ name: document.name, score });
-    }
-    return matches.sort((a, b) => b.score - a.score).slice(0, limit);
-  }
-}
-
-export const toolSearchSchema = Type.Object({
+const toolSearchSchema = Type.Object({
   limit: Type.Optional(
     Type.Number({
       description: `Maximum number of tools to return. Defaults to ${DEFAULT_TOOL_SEARCH_LIMIT}.`,
@@ -161,31 +55,14 @@ export const toolSearchSchema = Type.Object({
   ),
   query: Type.String({ description: "Search query for deferred tools." }),
 });
-
-export type ToolSearchInput = Static<typeof toolSearchSchema>;
-
-export interface ToolSearchResultTool {
-  name: string;
-  description: string;
-}
-
-export interface ToolSearchToolDetails {
-  loaded: string[];
-}
-
-export interface ToolSearchToolOptions {
-  tools?: Pick<ExtensionAPI, "getAllTools" | "getActiveTools" | "setActiveTools">;
-}
-
-function isSearchable(exposure: ToolExposure): boolean {
+function isSearchable(exposure: extensionsTypesTypes.ToolExposure): boolean {
   return exposure === "codemode" || exposure === "deferred";
 }
-
 function searchAndLoad(
-  tools: NonNullable<ToolSearchToolOptions["tools"]>,
+  tools: NonNullable<toolTypes.ToolSearchToolOptions["tools"]>,
   query: string,
   limit: number,
-): ToolSearchResultTool[] {
+): toolTypes.ToolSearchResultTool[] {
   const active = tools.getActiveTools();
   const candidates = tools
     .getAllTools()
@@ -198,12 +75,10 @@ function searchAndLoad(
     name: match.name,
   }));
 }
-
-export const TOOL_SEARCH_DESCRIPTION = `# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (\`${TOOL_SEARCH_TOOL_NAME}\`) to search for the required tools. For MCP tool discovery, always use \`${TOOL_SEARCH_TOOL_NAME}\`.`;
-
-export function createToolSearchToolDefinition(
-  options: ToolSearchToolOptions = {},
-): ToolDefinition<typeof toolSearchSchema, ToolSearchToolDetails> {
+const TOOL_SEARCH_DESCRIPTION = `# Tool discovery\n\nSearches over deferred tool metadata with BM25 and exposes matching tools for the next model call.\n\nSome of the tools, such as tools of MCP servers, may not have been provided to you upfront, and you should use this tool (\`${TOOL_SEARCH_TOOL_NAME}\`) to search for the required tools. For MCP tool discovery, always use \`${TOOL_SEARCH_TOOL_NAME}\`.`;
+function createToolSearchToolDefinition(
+  options: toolTypes.ToolSearchToolOptions = {},
+): extensionsTypesTypes.ToolDefinition<typeof toolSearchSchema, toolTypes.ToolSearchToolDetails> {
   return {
     description: TOOL_SEARCH_DESCRIPTION,
     execute(_toolCallId, { query, limit }) {
@@ -221,7 +96,7 @@ export function createToolSearchToolDefinition(
                   .map((tool) => `- ${tool.name}: ${tool.description.trim().split(/\r?\n/u)[0]}`)
                   .join("\n")}`;
           return {
-            content: [{ type: "text", text }],
+            content: [{ text, type: "text" }],
             details: { loaded: tools.map((tool) => tool.name) },
           };
         }),
@@ -235,3 +110,14 @@ export function createToolSearchToolDefinition(
     reachesTools: () => "all",
   };
 }
+
+const tool = {
+  DEFAULT_TOOL_SEARCH_LIMIT,
+  TOOL_SEARCH_DESCRIPTION,
+  TOOL_SEARCH_TOOL_NAME,
+  createToolSearchDocument,
+  createToolSearchToolDefinition,
+  toolSearchSchema,
+};
+
+export default tool;

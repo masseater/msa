@@ -1,5 +1,5 @@
 import type chordTypes from "../../src/index.types.ts";
-import type flow from "./flow.ts";
+import type AckGateClass from "./ack-gate.ts";
 
 declare namespace flowTypes {
   interface FlowClient {
@@ -7,7 +7,7 @@ declare namespace flowTypes {
     readonly gate: AckGate;
   }
 
-  type AckGate = (typeof flow.AckGate)["prototype"];
+  type AckGate = (typeof AckGateClass)["prototype"];
 }
 
 export type { flowTypes as default };

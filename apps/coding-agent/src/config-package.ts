@@ -1,29 +1,37 @@
-import { existsSync, readFileSync } from "fs";
 import { createRequire } from "module";
 import { homedir } from "os";
 import { fileURLToPath } from "url";
 
 import { dual } from "effect/Function";
 
-import { basename, dirname, join, resolve } from "./core/platform-node.ts";
-import { readEnv } from "./core/platform.ts";
-import { normalizePath } from "./utils/paths.ts";
-import { stripBom } from "./utils/text.ts";
+import type configPackageTypes from "./config-package.types.ts";
+import platformNode from "./core/platform-node.ts";
+import platform from "./core/platform.ts";
+import nodeFs from "./core/platform/node/fs.ts";
+import paths from "./utils/paths.ts";
+import text from "./utils/text.ts";
 
-export const moduleFilename = fileURLToPath(import.meta.url);
-export const moduleDirname = dirname(moduleFilename);
+const { existsSync, readFileSync } = nodeFs;
 
-export const isBunBinary =
+const { basename, dirname, join, resolve } = platformNode;
+const { readEnv } = platform;
+const { normalizePath } = paths;
+const { stripBom } = text;
+
+const moduleFilename = fileURLToPath(import.meta.url);
+const moduleDirname = dirname(moduleFilename);
+
+const isBunBinary =
   import.meta.url.includes("$bunfs") ||
   import.meta.url.includes("~BUN") ||
   import.meta.url.includes("%7EBUN");
 
-export const isBunRuntime = process.versions["bun"] !== undefined && process.versions["bun"] !== "";
+const isBunRuntime = process.versions["bun"] !== undefined && process.versions["bun"] !== "";
 
 declare const MSA_BUNDLED_NODE: boolean;
-export const isBundledNode = typeof MSA_BUNDLED_NODE !== "undefined" && MSA_BUNDLED_NODE;
+const isBundledNode = typeof MSA_BUNDLED_NODE !== "undefined" && MSA_BUNDLED_NODE;
 
-export function findNodePackageDir(startDir: string): string {
+function findNodePackageDir(startDir: string): string {
   let dir = startDir;
   while (dir !== dirname(dir)) {
     if (existsSync(join(dir, "package.json"))) {
@@ -39,7 +47,7 @@ export function findNodePackageDir(startDir: string): string {
   return startDir;
 }
 
-export function getPackageDir(): string {
+function getPackageDir(): string {
   const envDir = readEnv("MSA_PACKAGE_DIR");
   if (envDir !== undefined && envDir !== "") {
     return normalizePath(envDir);
@@ -51,7 +59,7 @@ export function getPackageDir(): string {
   return findNodePackageDir(moduleDirname);
 }
 
-export function getThemesDir(): string {
+function getThemesDir(): string {
   if (isBunBinary) {
     return join(getPackageDir(), "theme");
   }
@@ -61,7 +69,7 @@ export function getThemesDir(): string {
   return join(packageDir, srcOrDist, "modes", "interactive", "theme");
 }
 
-export function getExportTemplateDir(): string {
+function getExportTemplateDir(): string {
   if (isBunBinary) {
     return join(getPackageDir(), "export-html");
   }
@@ -70,27 +78,27 @@ export function getExportTemplateDir(): string {
   return join(packageDir, srcOrDist, "core", "export-html");
 }
 
-export function getPackageJsonPath(): string {
+function getPackageJsonPath(): string {
   return join(getPackageDir(), "package.json");
 }
 
-export function getReadmePath(): string {
+function getReadmePath(): string {
   return resolve(join(getPackageDir(), "README.md"));
 }
 
-export function getDocsPath(): string {
+function getDocsPath(): string {
   return resolve(join(getPackageDir(), "docs"));
 }
 
-export function getExamplesPath(): string {
+function getExamplesPath(): string {
   return resolve(join(getPackageDir(), "examples"));
 }
 
-export function getChangelogPath(): string {
+function getChangelogPath(): string {
   return resolve(join(getPackageDir(), "CHANGELOG.md"));
 }
 
-export function getInteractiveAssetsDir(): string {
+function getInteractiveAssetsDir(): string {
   if (isBunBinary) {
     return join(getPackageDir(), "assets");
   }
@@ -99,17 +107,17 @@ export function getInteractiveAssetsDir(): string {
   return join(packageDir, srcOrDist, "modes", "interactive", "assets");
 }
 
-export function getBundledInteractiveAssetPath(name: string): string {
+function getBundledInteractiveAssetPath(name: string): string {
   return join(getInteractiveAssetsDir(), name);
 }
 
 let quickJSWasmPath: string | undefined;
 
-export function setEmbeddedQuickJSWasmPath(path: string): void {
+function setEmbeddedQuickJSWasmPath(path: string): void {
   quickJSWasmPath = path;
 }
 
-export function getQuickJSWasmPath(): string {
+function getQuickJSWasmPath(): string {
   quickJSWasmPath ??= createRequire(import.meta.url).resolve("quickjs-wasi/quickjs.wasm");
   return quickJSWasmPath;
 }
@@ -123,7 +131,7 @@ function resolveCodemodeWorkerSpecifierImpl(
   return undefined;
 }
 
-export const resolveCodemodeWorkerSpecifier: {
+const resolveCodemodeWorkerSpecifier: {
   (
     runtime: "bun-binary" | "bundled-node" | "unbundled",
     moduleUrl: string,
@@ -135,7 +143,7 @@ export const resolveCodemodeWorkerSpecifier: {
 
 let codemodeWorkerDataUrl: URL | undefined;
 
-export function getCodemodeWorkerSpecifier(): string | URL | undefined {
+function getCodemodeWorkerSpecifier(): string | URL | undefined {
   const runtime = isBunBinary ? "bun-binary" : isBundledNode ? "bundled-node" : "unbundled";
   const specifier = resolveCodemodeWorkerSpecifier(runtime, import.meta.url);
   if (runtime !== "bundled-node" || !(specifier instanceof URL)) return specifier;
@@ -146,11 +154,9 @@ export function getCodemodeWorkerSpecifier(): string | URL | undefined {
   return codemodeWorkerDataUrl;
 }
 
-export type InstallChange = { kind: "updated"; version: string } | { kind: "removed" };
-
-export function detectInstallChange(
+function detectInstallChange(
   packageJsonPath = startupPackageJsonPath,
-): InstallChange | undefined {
+): configPackageTypes.InstallChange | undefined {
   if (isBunBinary || packageJsonPath === undefined || packageJsonPath === "") return undefined;
   let installed: PackageJson;
   try {
@@ -187,29 +193,28 @@ try {
 }
 
 const msaConfigName: string | undefined = pkg.msaConfig?.name;
-export const PACKAGE_NAME: string = pkg.name || "@msa/coding-agent";
-export const APP_NAME: string = msaConfigName || "msa";
-export const APP_TITLE: string =
-  msaConfigName !== undefined && msaConfigName !== "" ? APP_NAME : "msa";
-export const CONFIG_DIR_NAME: string = pkg.msaConfig?.configDir || ".msa";
-export const VERSION: string = pkg.version || "0.0.0";
-export const RELEASES_URL = "https://github.com/masseater/msa/releases";
+const PACKAGE_NAME: string = pkg.name || "@msa/coding-agent";
+const APP_NAME: string = msaConfigName || "msa";
+const APP_TITLE: string = msaConfigName !== undefined && msaConfigName !== "" ? APP_NAME : "msa";
+const CONFIG_DIR_NAME: string = pkg.msaConfig?.configDir || ".msa";
+const VERSION: string = pkg.version || "0.0.0";
+const RELEASES_URL = "https://github.com/masseater/msa/releases";
 
-export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
-export const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
+const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_DIR`;
+const ENV_SESSION_DIR = `${APP_NAME.toUpperCase()}_CODING_AGENT_SESSION_DIR`;
 
-export function expandTildePath(path: string): string {
+function expandTildePath(path: string): string {
   return normalizePath(path);
 }
 
 const DEFAULT_SHARE_VIEWER_URL = "https://pi.dev/session/";
 
-export function getShareViewerUrl(gistId: string): string {
+function getShareViewerUrl(gistId: string): string {
   const baseUrl = readEnv("MSA_SHARE_VIEWER_URL") || DEFAULT_SHARE_VIEWER_URL;
   return `${baseUrl}#${gistId}`;
 }
 
-export function getAgentDir(): string {
+function getAgentDir(): string {
   const envDir = readEnv(ENV_AGENT_DIR);
   if (envDir !== undefined && envDir !== "") {
     return expandTildePath(envDir);
@@ -217,38 +222,84 @@ export function getAgentDir(): string {
   return join(homedir(), CONFIG_DIR_NAME, "agent");
 }
 
-export function getCustomThemesDir(): string {
+function getCustomThemesDir(): string {
   return join(getAgentDir(), "themes");
 }
 
-export function getModelsPath(): string {
+function getModelsPath(): string {
   return join(getAgentDir(), "models.json");
 }
 
-export function getAuthPath(): string {
+function getAuthPath(): string {
   return join(getAgentDir(), "auth.json");
 }
 
-export function getSettingsPath(): string {
+function getSettingsPath(): string {
   return join(getAgentDir(), "settings.json");
 }
 
-export function getToolsDir(): string {
+function getToolsDir(): string {
   return join(getAgentDir(), "tools");
 }
 
-export function getBinDir(): string {
+function getBinDir(): string {
   return join(getAgentDir(), "bin");
 }
 
-export function getPromptsDir(): string {
+function getPromptsDir(): string {
   return join(getAgentDir(), "prompts");
 }
 
-export function getSessionsDir(): string {
+function getSessionsDir(): string {
   return join(getAgentDir(), "sessions");
 }
 
-export function getDebugLogPath(): string {
+function getDebugLogPath(): string {
   return join(getAgentDir(), `${APP_NAME}-debug.log`);
 }
+
+const configPackage = {
+  APP_NAME,
+  APP_TITLE,
+  CONFIG_DIR_NAME,
+  ENV_AGENT_DIR,
+  ENV_SESSION_DIR,
+  PACKAGE_NAME,
+  RELEASES_URL,
+  VERSION,
+  detectInstallChange,
+  expandTildePath,
+  findNodePackageDir,
+  getAgentDir,
+  getAuthPath,
+  getBinDir,
+  getBundledInteractiveAssetPath,
+  getChangelogPath,
+  getCodemodeWorkerSpecifier,
+  getCustomThemesDir,
+  getDebugLogPath,
+  getDocsPath,
+  getExamplesPath,
+  getExportTemplateDir,
+  getInteractiveAssetsDir,
+  getModelsPath,
+  getPackageDir,
+  getPackageJsonPath,
+  getPromptsDir,
+  getQuickJSWasmPath,
+  getReadmePath,
+  getSessionsDir,
+  getSettingsPath,
+  getShareViewerUrl,
+  getThemesDir,
+  getToolsDir,
+  isBunBinary,
+  isBunRuntime,
+  isBundledNode,
+  moduleDirname,
+  moduleFilename,
+  resolveCodemodeWorkerSpecifier,
+  setEmbeddedQuickJSWasmPath,
+};
+
+export default configPackage;

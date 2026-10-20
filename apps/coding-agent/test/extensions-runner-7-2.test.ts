@@ -2,14 +2,19 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { createEventBus } from "../src/core/event-bus.ts";
-import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ModelRegistry } from "../src/core/model-registry.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type runnerTypes from "../src/core/extensions/runner.types.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { createEventBus } = codingAgent;
+
+const { SessionManager } = codingAgent;
+
+const { createExtensionRuntime, loadExtensionFromFactory } = loader;
 const { createInMemoryModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
@@ -18,9 +23,9 @@ let tempDir: string;
 
 let extensionsDir: string;
 
-let sessionManager: SessionManager;
+let sessionManager: codingAgentTypes.SessionManager;
 
-let modelRegistry: ModelRegistry;
+let modelRegistry: codingAgentTypes.ModelRegistry;
 
 const chainsSharedDraftProposalsAndPreservesOmittedPart1 = () =>
   Effect.gen(function* () {
@@ -111,7 +116,7 @@ const chainsSharedDraftProposalsAndPreservesOmitted = Effect.gen(function* () {
 const reportsInvalidBoundaryPreviewsAndLetsLaterStep1Step = ({
   runner,
 }: {
-  runner: ExtensionRunner;
+  runner: runnerTypes.ExtensionRunner;
 }) =>
   Effect.gen(function* () {
     const errors: string[] = [];

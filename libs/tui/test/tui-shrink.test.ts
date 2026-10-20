@@ -6,9 +6,7 @@ import { Effect } from "effect";
 import type tuiComponentTypes from "../src/tui-component.types.ts";
 import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
+import VirtualTerminal from "./virtual-terminal.ts";
 
 class Lines implements tuiComponentTypes.Component {
   private lines: string[];

@@ -2,9 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 import settingsManagerSupport from "./settings-manager-support.ts";
-
 const { readSettings, removeSettingsDirs, withSettings } = settingsManagerSupport;
 
 const { awaited, runTest, writeJsonFile } = testing;

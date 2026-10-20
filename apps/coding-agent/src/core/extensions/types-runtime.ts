@@ -1,61 +1,60 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import type { CustomMessage } from "../messages.ts";
-import type { Settings } from "../settings-manager.ts";
-import type { SlashCommandInfo } from "../slash-commands.ts";
-import type { SourceInfo } from "../source-info.ts";
-import type {
-  ToolAnnotations,
-  ToolDefinition,
-  ToolExposure,
-  ToolNamespace,
-} from "./types-tools.ts";
+import type messagesTypes from "../messages.types.ts";
+import type settingsManagerTypes from "../settings-manager.types.ts";
+import type slashCommandsTypes from "../slash-commands.types.ts";
+import type sourceInfoTypes from "../source-info.types.ts";
+import type typesToolsTypes from "./types-tools.types.ts";
 
-export type HandlerFn = (...args: unknown[]) => Promise<unknown>;
+declare namespace typesRuntimeTypes {
+  type HandlerFn = (...args: unknown[]) => Promise<unknown>;
 
-export type SendMessageHandler = <T = unknown>(
-  message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
-  options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
-) => void;
+  type SendMessageHandler = <T = unknown>(
+    message: Pick<messagesTypes.CustomMessage<T>, "customType" | "content" | "display" | "details">,
+    options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
+  ) => void;
 
-export type SendUserMessageHandler = (
-  content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
-  options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
-) => void;
+  type SendUserMessageHandler = (
+    content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
+    options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
+  ) => void;
 
-export type AppendEntryHandler = <T = unknown>(customType: string, data?: T) => void;
+  type AppendEntryHandler = <T = unknown>(customType: string, data?: T) => void;
 
-export type SetSessionNameHandler = (name: string) => void;
+  type SetSessionNameHandler = (name: string) => void;
 
-export type GetSessionNameHandler = () => string | undefined;
+  type GetSessionNameHandler = () => string | undefined;
 
-export type GetActiveToolsHandler = () => string[];
+  type GetActiveToolsHandler = () => string[];
 
-export type ToolInfo = Pick<
-  ToolDefinition,
-  "name" | "description" | "parameters" | "promptGuidelines" | "reachesTools"
-> & {
-  exposure: ToolExposure;
-  namespace?: ToolNamespace;
-  annotations?: ToolAnnotations;
-  sourceInfo: SourceInfo;
-};
+  type ToolInfo = Pick<
+    typesToolsTypes.ToolDefinition,
+    "name" | "description" | "parameters" | "promptGuidelines" | "reachesTools"
+  > & {
+    exposure: typesToolsTypes.ToolExposure;
+    namespace?: typesToolsTypes.ToolNamespace;
+    annotations?: typesToolsTypes.ToolAnnotations;
+    sourceInfo: sourceInfoTypes.SourceInfo;
+  };
 
-export type GetAllToolsHandler = () => ToolInfo[];
+  type GetAllToolsHandler = () => ToolInfo[];
 
-export type GetSettingsHandler = () => Settings;
+  type GetSettingsHandler = () => settingsManagerTypes.Settings;
 
-export type GetCommandsHandler = () => SlashCommandInfo[];
+  type GetCommandsHandler = () => slashCommandsTypes.SlashCommandInfo[];
 
-export type SetActiveToolsHandler = (toolNames: string[]) => void;
+  type SetActiveToolsHandler = (toolNames: string[]) => void;
 
-export type RefreshToolsHandler = () => void;
+  type RefreshToolsHandler = () => void;
 
-export type SetModelHandler = (model: aiTypes.Model<any>) => Promise<boolean>;
+  type SetModelHandler = (model: aiTypes.Model<any>) => Promise<boolean>;
 
-export type GetThinkingLevelHandler = () => agentTypes.ThinkingLevel;
+  type GetThinkingLevelHandler = () => agentTypes.ThinkingLevel;
 
-export type SetThinkingLevelHandler = (level: agentTypes.ThinkingLevel) => void;
+  type SetThinkingLevelHandler = (level: agentTypes.ThinkingLevel) => void;
 
-export type SetLabelHandler = (entryId: string, label: string | undefined) => void;
+  type SetLabelHandler = (entryId: string, label: string | undefined) => void;
+}
+
+export type { typesRuntimeTypes as default };

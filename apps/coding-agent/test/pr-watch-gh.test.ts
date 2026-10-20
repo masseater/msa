@@ -2,12 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ExecResult } from "../src/core/exec.ts";
-import { ghCompareArgs, ghPrViewArgs, makeGh } from "../src/core/pr-watch/gh.ts";
+import type execTypes from "../src/core/exec.types.ts";
+import ghModule from "../src/core/pr-watch/gh.ts";
+
+const { ghCompareArgs, ghPrViewArgs, makeGh } = ghModule;
 
 const { runTest } = testing;
 
-const execResult = (overrides: Partial<ExecResult> = {}): ExecResult => ({
+const execResult = (overrides: Partial<execTypes.ExecResult> = {}): execTypes.ExecResult => ({
   code: 0,
   killed: false,
   stderr: "",
@@ -32,7 +34,7 @@ const viewJson = JSON.stringify({
   updatedAt: "2024-05-01T00:00:00Z",
 });
 
-const runGh = (result: ExecResult) =>
+const runGh = (result: execTypes.ExecResult) =>
   makeGh({
     cwd: "/tmp",
     find: () => "/usr/local/bin/gh",

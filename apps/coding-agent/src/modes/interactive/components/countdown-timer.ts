@@ -1,10 +1,12 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import { type Scheduled } from "../../../core/platform.ts";
-import { every } from "../../interval.ts";
+import type platformTypes from "../../../core/platform.types.ts";
+import interval from "../../interval.ts";
 
-export class CountdownTimer {
-  private intervalId: Scheduled | undefined;
+const { every } = interval;
+
+export default class CountdownTimer {
+  private intervalId: platformTypes.Scheduled | undefined;
   private remainingSeconds: number;
   private tui: tuiTypes.TUI | undefined;
   private onTick: (seconds: number) => void;

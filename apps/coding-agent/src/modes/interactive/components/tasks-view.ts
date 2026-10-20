@@ -1,17 +1,28 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
-import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
-import { toErrorMessage } from "../../../utils/errors.ts";
-import { shortId } from "../../../utils/text.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
-import { type ViewFrame, fitView } from "./scroll-window.ts";
-import { taskList } from "./tasks-list.ts";
-import { taskDetail } from "./tasks-view-detail.ts";
-import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
+import type orchestratorTypesTypes from "../../../core/orchestrator/types.types.ts";
+import errors from "../../../utils/errors.ts";
+import textModule from "../../../utils/text.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+import scrollWindow from "./scroll-window.ts";
+import type scrollWindowTypes from "./scroll-window.types.ts";
+import tasksList from "./tasks-list.ts";
+import tasksViewDetail from "./tasks-view-detail.ts";
+import tasksViewHelpers from "./tasks-view-helpers.ts";
+import type tasksViewHelpersTypes from "./tasks-view-helpers.types.ts";
+import type tasksViewTypes from "./tasks-view.types.ts";
+
+const { viewHelpers } = tasksViewHelpers;
+const { taskList } = tasksList;
+const { theme } = themeModule;
+const { shortId } = textModule;
+const { fitView } = scrollWindow;
+const { keyHint } = keybindingHints;
+const { taskDetail } = tasksViewDetail;
+const { toErrorMessage } = errors;
 
 const { Input, Spacer, getKeybindings, matchesKey, truncateToWidth, visibleWidth } = tui;
 
@@ -42,8 +53,8 @@ function composerLabel(composing: Composing): string {
 function parseDepends(text: string): { add: string[]; remove: string[] } {
   const add: string[] = [];
   const remove: string[] = [];
-  for (const token of text.split(/[\s,]+/).filter(Boolean)) {
-    const id = token.replace(/^[+-]/, "");
+  for (const token of text.split(/[\s,]+/u).filter(Boolean)) {
+    const id = token.replace(/^[+-]/u, "");
     if (id === "") continue;
     if (token.startsWith("-")) remove.push(id);
     else add.push(id);
@@ -51,22 +62,12 @@ function parseDepends(text: string): { add: string[]; remove: string[] } {
   return { add, remove };
 }
 
-export interface TasksViewOptions {
-  orchestrator: Orchestrator;
-  onClose: () => void;
-  onPickModel: (taskId: string) => void;
-  onError: (message: string) => void;
-  requestRender: () => void;
-  maxHeight: () => number;
-  state?: TasksViewState;
-}
-
-export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
+export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
   readonly wantsViewportKeys = true;
-  private readonly options: TasksViewOptions;
+  private readonly options: tasksViewTypes.TasksViewOptions;
   private openId: string | undefined;
   private readonly input = new Input({ prompt: "› " });
-  private readonly state: TasksViewState;
+  private readonly state: tasksViewHelpersTypes.TasksViewState;
   private composing: Composing | undefined;
 
   private scroll = 0;
@@ -74,7 +75,7 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
   private room = 0;
   private isFocused = false;
 
-  constructor(options: TasksViewOptions, initialId?: string) {
+  constructor(options: tasksViewTypes.TasksViewOptions, initialId?: string) {
     this.options = options;
     this.state = options.state ?? viewHelpers.createTasksViewState();
     if (initialId !== undefined) this.state.selectedId = initialId;
@@ -93,15 +94,15 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
 
   invalidate(): void {}
 
-  private tasks(): readonly TaskSnapshot[] {
+  private tasks(): readonly orchestratorTypesTypes.TaskSnapshot[] {
     return this.options.orchestrator.snapshot.tasks;
   }
 
-  private shownTasks(): TaskSnapshot[] {
+  private shownTasks(): orchestratorTypesTypes.TaskSnapshot[] {
     return taskList.shownTasks(this.options.orchestrator, this.state);
   }
 
-  private selected(): TaskSnapshot | undefined {
+  private selected(): orchestratorTypesTypes.TaskSnapshot | undefined {
     return taskList.selectedTask(this.options.orchestrator, this.state);
   }
 
@@ -114,7 +115,11 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
     ];
   }
 
-  private rowLine(task: TaskSnapshot, selected: boolean, width: number): string {
+  private rowLine(
+    task: orchestratorTypesTypes.TaskSnapshot,
+    selected: boolean,
+    width: number,
+  ): string {
     return taskList.taskRow(task, {
       meta: (entry) =>
         [shortId(entry.id), modelName(entry.model ?? "default")].filter(Boolean).join("  "),
@@ -137,19 +142,13 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
 
   private renderRound(
     round: { id: string; title: string },
-    selected: TaskSnapshot | undefined,
+    selected: orchestratorTypesTypes.TaskSnapshot | undefined,
     width: number,
   ): { lines: string[]; cursor?: { start: number; end: number } | undefined } {
     const tasks = this.tasks();
     const inRound = roundTasks(tasks, round.id);
     if (inRound.length === 0) return { lines: [] };
-    const review = inRound.find((task) => task.kind === "review");
-    const lines = [
-      theme.fg(
-        "muted",
-        ` ${round.title}${review === undefined ? "" : `  ${glyph(review)} review ${review.status}`}`,
-      ),
-    ];
+    const lines = this.renderRoundPart1(inRound, round);
     const byId = new Map(inRound.map((task) => [task.id, task]));
     const shown = inRound.filter((task) => this.state.showFinished || !finished(task));
     const done = inRound.filter((task) => task.status === "completed").length;
@@ -189,7 +188,21 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
     return { cursor, lines };
   }
 
-  private renderList(width: number): ViewFrame {
+  private renderRoundPart1(
+    inRound: orchestratorTypesTypes.TaskSnapshot[],
+    round: { id: string; title: string },
+  ) {
+    const review = inRound.find((task) => task.kind === "review");
+    const lines = [
+      theme.fg(
+        "muted",
+        ` ${round.title}${review === undefined ? "" : `  ${glyph(review)} review ${review.status}`}`,
+      ),
+    ];
+    return lines;
+  }
+
+  private renderList(width: number): scrollWindowTypes.ViewFrame {
     const tasks = this.tasks();
     const header = this.header("Tasks", viewHelpers.describeTaskCounts(tasks) ?? "", width);
     const replan = this.options.orchestrator.snapshot.replans[0];
@@ -237,7 +250,10 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
     };
   }
 
-  private renderDetail(task: TaskSnapshot, width: number): ViewFrame {
+  private renderDetail(
+    task: orchestratorTypesTypes.TaskSnapshot,
+    width: number,
+  ): scrollWindowTypes.ViewFrame {
     const right = theme.fg("dim", `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round}`);
     return {
       body: taskDetail.sections(this.options.orchestrator, task, width),
@@ -265,11 +281,7 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
       this.options.requestRender();
       return;
     }
-    const kb = getKeybindings();
-    const shown = this.shownTasks();
-    const selected = this.selected();
-    const page = Math.max(1, this.room - 1);
-    const half = Math.max(1, Math.floor(this.room / 2));
+    const { kb, page, half, shown, selected } = this.handleInputPart1();
     if (kb.matches(data, "tui.select.cancel")) {
       if (this.openId === undefined) this.options.onClose();
       else this.openDetail(undefined);
@@ -338,11 +350,20 @@ export class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
     this.options.requestRender();
   }
 
-  private move(tasks: readonly TaskSnapshot[], step: number): void {
+  private handleInputPart1() {
+    const kb = getKeybindings();
+    const shown = this.shownTasks();
+    const selected = this.selected();
+    const page = Math.max(1, this.room - 1);
+    const half = Math.max(1, Math.floor(this.room / 2));
+    return { half, kb, page, selected, shown };
+  }
+
+  private move(tasks: readonly orchestratorTypesTypes.TaskSnapshot[], step: number): void {
     taskList.moveSelection(this.state, tasks, step);
   }
 
-  private moveBy(tasks: readonly TaskSnapshot[], step: number): void {
+  private moveBy(tasks: readonly orchestratorTypesTypes.TaskSnapshot[], step: number): void {
     taskList.moveSelectionBy(this.state, tasks, step);
   }
 

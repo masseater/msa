@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionAPI } from "../../../src/index.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
@@ -22,7 +22,7 @@ const emitsSessionInfoChangedWhenAgentsession = Effect.gen(function* () {
 });
 
 const emitsSessionInfoChangedWhenAn = Effect.gen(function* () {
-  let api: ExtensionAPI | undefined;
+  let api: srcTypes.ExtensionAPI | undefined;
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -43,7 +43,7 @@ const emitsSessionInfoChangedWhenAn = Effect.gen(function* () {
 });
 
 const emitsSessionInfoChangedToExtensions = Effect.gen(function* () {
-  let api: ExtensionAPI | undefined;
+  let api: srcTypes.ExtensionAPI | undefined;
   const events: Array<{ name: string | undefined }> = [];
   const harness = yield* Effect.promise(() =>
     createHarness({

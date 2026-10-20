@@ -1,23 +1,12 @@
 import { NodeServices } from "@effect/platform-node";
-import type {
-  BashOperations,
-  EditOperations,
-  ReadOperations,
-  WriteOperations,
-} from "@msa/coding-agent";
-import { Data, Effect, ManagedRuntime, Option, Stream } from "effect";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect, ManagedRuntime, Option, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
+import SshError from "./ssh-error.ts";
+import type sshOperationsTypes from "./ssh-operations.types.ts";
+
 const runtime = ManagedRuntime.make(NodeServices.layer);
-
-export interface RemotePaths {
-  readonly remote: string;
-  readonly remoteCwd: string;
-  readonly localCwd: string;
-}
-
-class SshError extends Data.TaggedError("SshError")<{ readonly message: string }> {}
-
 const runSsh = (remote: string, command: string) =>
   Effect.gen(function* () {
     const service = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -41,25 +30,24 @@ const runSsh = (remote: string, command: string) =>
       }),
     );
   });
-
-export const runSshText = (request: {
+const runSshText = (request: {
   readonly remote: string;
   readonly command: string;
 }): Promise<string> => runtime.runPromise(runSsh(request.remote, request.command));
-
 const sshExec = (remote: string, command: string): Promise<Buffer> =>
   runtime.runPromise(runSsh(remote, command).pipe(Effect.map((stdout) => Buffer.from(stdout))));
-
-export const createRemoteReadOps = (paths: RemotePaths): ReadOperations => {
+const createRemoteReadOps = (
+  paths: sshOperationsTypes.RemotePaths,
+): codingAgentTypes.ReadOperations => {
   const { remote, remoteCwd, localCwd } = paths;
   const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
   return {
     access: (p) =>
-      runSshText({ remote, command: `test -r ${JSON.stringify(toRemote(p))}` }).then(
+      runSshText({ command: `test -r ${JSON.stringify(toRemote(p))}`, remote }).then(
         () => undefined,
       ),
     detectImageMimeType: (p) =>
-      runSshText({ remote, command: `file --mime-type -b ${JSON.stringify(toRemote(p))}` }).then(
+      runSshText({ command: `file --mime-type -b ${JSON.stringify(toRemote(p))}`, remote }).then(
         (output) => {
           const mime = output.trim();
           return ["image/jpeg", "image/png", "image/gif", "image/webp"].includes(mime)
@@ -71,31 +59,32 @@ export const createRemoteReadOps = (paths: RemotePaths): ReadOperations => {
     readFile: (p) => sshExec(remote, `cat ${JSON.stringify(toRemote(p))}`),
   };
 };
-
-export const createRemoteWriteOps = (paths: RemotePaths): WriteOperations => {
+const createRemoteWriteOps = (
+  paths: sshOperationsTypes.RemotePaths,
+): codingAgentTypes.WriteOperations => {
   const { remote, remoteCwd, localCwd } = paths;
   const toRemote = (p: string) => p.replace(localCwd, remoteCwd);
   return {
     mkdir: (dir) =>
-      runSshText({ remote, command: `mkdir -p ${JSON.stringify(toRemote(dir))}` }).then(
+      runSshText({ command: `mkdir -p ${JSON.stringify(toRemote(dir))}`, remote }).then(
         () => undefined,
       ),
     writeFile: (p, content) => {
       const b64 = Buffer.from(content).toString("base64");
       return runSshText({
-        remote,
         command: `echo ${JSON.stringify(b64)} | base64 -d > ${JSON.stringify(toRemote(p))}`,
+        remote,
       }).then(() => undefined);
     },
   };
 };
-
-export const createRemoteEditOps = (paths: RemotePaths): EditOperations => {
+const createRemoteEditOps = (
+  paths: sshOperationsTypes.RemotePaths,
+): codingAgentTypes.EditOperations => {
   const read = createRemoteReadOps(paths);
   const write = createRemoteWriteOps(paths);
   return { access: read.access, readFile: read.readFile, writeFile: write.writeFile };
 };
-
 const abortEffect = (signal: AbortSignal): Effect.Effect<never, SshError> =>
   Effect.callback<never, SshError>((resume) => {
     if (signal.aborted) {
@@ -106,7 +95,6 @@ const abortEffect = (signal: AbortSignal): Effect.Effect<never, SshError> =>
     signal.addEventListener("abort", listener, { once: true });
     return Effect.sync(() => signal.removeEventListener("abort", listener));
   });
-
 const runRemoteBash = (
   request: { remote: string; command: string },
   onData: (data: Buffer) => void,
@@ -142,8 +130,9 @@ const runRemoteBash = (
       }),
     );
   });
-
-export const createRemoteBashOps = (paths: RemotePaths): BashOperations => ({
+const createRemoteBashOps = (
+  paths: sshOperationsTypes.RemotePaths,
+): codingAgentTypes.BashOperations => ({
   exec: (command, cwd, { onData, signal, timeout }) => {
     const remoteCommand = `cd ${JSON.stringify(cwd.replace(paths.localCwd, paths.remoteCwd))} && ${command}`;
     const effect = runRemoteBash({ command: remoteCommand, remote: paths.remote }, onData, timeout);
@@ -152,3 +141,13 @@ export const createRemoteBashOps = (paths: RemotePaths): BashOperations => ({
     );
   },
 });
+
+const sshOperations = {
+  createRemoteBashOps,
+  createRemoteEditOps,
+  createRemoteReadOps,
+  createRemoteWriteOps,
+  runSshText,
+};
+
+export default sshOperations;

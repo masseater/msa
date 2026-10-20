@@ -4,11 +4,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createExtensionRuntime } from "../src/core/extensions/loader.ts";
-import type { ResourceLoader } from "../src/core/resource-loader.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type resourceLoaderTypes from "../src/core/resource-loader.types.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import sourceInfoModule from "../src/core/source-info.ts";
+
+const { createAgentSession } = sdk;
+const { createExtensionRuntime } = loader;
+const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const {
   awaited,
@@ -48,7 +52,7 @@ const shouldHaveEmptySkillsWhenResourceLoader = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const resourceLoader: ResourceLoader = {
+      const resourceLoader: resourceLoaderTypes.ResourceLoader = {
         extendResources: () => {},
         getAgentsFiles: () => ({ agentsFiles: [] }),
         getAppendSystemPrompt: () => [],
@@ -90,7 +94,7 @@ const shouldUseProvidedSkillsWhenResourceLoader = () =>
         sourceInfo: createSyntheticSourceInfo("/fake/path/SKILL.md", { source: "sdk" }),
       };
 
-      const resourceLoader: ResourceLoader = {
+      const resourceLoader: resourceLoaderTypes.ResourceLoader = {
         extendResources: () => {},
         getAgentsFiles: () => ({ agentsFiles: [] }),
         getAppendSystemPrompt: () => [],

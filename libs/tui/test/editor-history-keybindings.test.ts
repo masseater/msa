@@ -6,12 +6,10 @@ import keybindingDefinitions from "../src/keybinding-definitions.ts";
 import keybindingsModule from "../src/keybindings.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
 import testThemes from "./test-themes.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { KeybindingsManager, setKeybindings } = keybindingsModule;
 const { TUI_KEYBINDINGS } = keybindingDefinitions;
-
-const { VirtualTerminal } = virtualTerminal;
 const { defaultEditorTheme } = testThemes;
 
 afterEach(() => {

@@ -1,18 +1,19 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
-import type { ExtensionAPI, ExtensionContext, SessionEntry } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Effect } from "effect";
 
-import { handleAgentEnd } from "./approval.ts";
-import {
-  executionContextMessage,
-  filterPlanContext,
-  guardBash,
-  planModeContextMessage,
-} from "./context.ts";
-import { type PlanStore, createPlanStore } from "./state.ts";
-import { markCompletedSteps } from "./utils.ts";
+import approval from "./approval.ts";
+import context from "./context.ts";
+import state from "./state.ts";
+import type stateTypes from "./state.types.ts";
+import utils from "./utils.ts";
+
+const { createPlanStore } = state;
+const { executionContextMessage, filterPlanContext, guardBash, planModeContextMessage } = context;
+const { markCompletedSteps } = utils;
+const { handleAgentEnd } = approval;
 
 const { Key } = tui;
 
@@ -25,7 +26,10 @@ const getTextContent = (message: aiTypes.AssistantMessage): string =>
     .map((block) => block.text)
     .join("\n");
 
-const registerCommands = (msa: ExtensionAPI, store: PlanStore): void => {
+const registerCommands = (
+  msa: codingAgentTypes.ExtensionAPI,
+  store: stateTypes.PlanStore,
+): void => {
   msa.registerCommand("plan", {
     description: "Toggle plan mode (read-only exploration)",
     handler: (_args, ctx) => Effect.runPromise(Effect.sync(() => store.toggle(ctx))),
@@ -55,7 +59,7 @@ const registerCommands = (msa: ExtensionAPI, store: PlanStore): void => {
   });
 };
 
-const registerGuards = (msa: ExtensionAPI, store: PlanStore): void => {
+const registerGuards = (msa: codingAgentTypes.ExtensionAPI, store: stateTypes.PlanStore): void => {
   const { runtime } = store;
   const guard = guardBash(runtime);
   const filter = filterPlanContext(runtime);
@@ -79,7 +83,10 @@ const registerGuards = (msa: ExtensionAPI, store: PlanStore): void => {
   });
 };
 
-const registerProgress = (msa: ExtensionAPI, store: PlanStore): void => {
+const registerProgress = (
+  msa: codingAgentTypes.ExtensionAPI,
+  store: stateTypes.PlanStore,
+): void => {
   const { runtime } = store;
 
   msa.on("turn_end", (event, ctx) => {
@@ -97,7 +104,7 @@ const registerProgress = (msa: ExtensionAPI, store: PlanStore): void => {
   );
 };
 
-const completedTextSinceExecute = (entries: SessionEntry[]): string => {
+const completedTextSinceExecute = (entries: codingAgentTypes.SessionEntry[]): string => {
   let executeIndex = -1;
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i] as { type: string; customType?: string };
@@ -116,7 +123,11 @@ const completedTextSinceExecute = (entries: SessionEntry[]): string => {
   return messages.map(getTextContent).join("\n");
 };
 
-const restoreFromBranch = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionContext): void => {
+const restoreFromBranch = (
+  msa: codingAgentTypes.ExtensionAPI,
+  store: stateTypes.PlanStore,
+  ctx: codingAgentTypes.ExtensionContext,
+): void => {
   const { runtime } = store;
   if (msa.getFlag("plan") === true) {
     runtime.enabled = true;
@@ -128,7 +139,7 @@ const restoreFromBranch = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionCo
       (e: { type: string; customType?: string }) =>
         e.type === "custom" && e.customType === "plan-mode",
     )
-    .pop() as { data?: Parameters<PlanStore["restore"]>[0] } | undefined;
+    .pop() as { data?: Parameters<stateTypes.PlanStore["restore"]>[0] } | undefined;
 
   if (planModeEntry !== undefined && runtime.executing && runtime.todos.length > 0) {
     markCompletedSteps(completedTextSinceExecute(entries), runtime.todos);
@@ -137,7 +148,7 @@ const restoreFromBranch = (msa: ExtensionAPI, store: PlanStore, ctx: ExtensionCo
   store.restore(planModeEntry?.data, ctx);
 };
 
-export default function planModeExtension(msa: ExtensionAPI): void {
+export default function planModeExtension(msa: codingAgentTypes.ExtensionAPI): void {
   const store = createPlanStore(msa);
 
   msa.registerFlag("plan", {

@@ -1,8 +1,10 @@
-import type { ExtensionAPI, Theme } from "@msa/coding-agent";
-import { VERSION } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-function getMsaMascot(theme: Theme): string[] {
+const { VERSION } = codingAgent;
+
+function getMsaMascot(theme: codingAgentTypes.Theme): string[] {
   const msaBlue = (text: string) => theme.fg("accent", text);
   const white = (text: string) => text;
   const black = (text: string) => theme.fg("dim", text);
@@ -21,7 +23,7 @@ function getMsaMascot(theme: Theme): string[] {
   return ["", lineEyes, lineBar, lineLeg, lineLeg, lineLeg, lineLeg, ""];
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("session_start", (_event, ctx) => {
     if (ctx.mode === "tui") {
       ctx.ui.setHeader((_tui, theme) => ({

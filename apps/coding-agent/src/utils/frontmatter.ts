@@ -1,6 +1,8 @@
 import { parse } from "yaml";
 
-import { stripBom } from "./text.ts";
+import text from "./text.ts";
+
+const { stripBom } = text;
 
 type ParsedFrontmatter<T extends Record<string, unknown>> = {
   frontmatter: T;
@@ -28,7 +30,7 @@ const extractFrontmatter = (content: string): { yamlString: string | null; body:
   };
 };
 
-export const parseFrontmatter = <T extends Record<string, unknown> = Record<string, unknown>>(
+const parseFrontmatter = <T extends Record<string, unknown> = Record<string, unknown>>(
   content: string,
 ): ParsedFrontmatter<T> => {
   const { yamlString, body } = extractFrontmatter(content);
@@ -39,4 +41,11 @@ export const parseFrontmatter = <T extends Record<string, unknown> = Record<stri
   return { body, frontmatter: (parsed ?? {}) as T };
 };
 
-export const stripFrontmatter = (content: string): string => parseFrontmatter(content).body;
+const stripFrontmatter = (content: string): string => parseFrontmatter(content).body;
+
+const frontmatter = {
+  parseFrontmatter,
+  stripFrontmatter,
+};
+
+export default frontmatter;

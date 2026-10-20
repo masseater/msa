@@ -1,11 +1,13 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BOLD, DIM, MAGENTA, RESET } from "./colors.ts";
+import colors from "./colors.ts";
+
+const { BOLD, DIM, MAGENTA, RESET } = colors;
 
 const { Input, matchesKey } = tui;
 
-export class InputDialog implements tuiTypes.Component {
+export default class InputDialog implements tuiTypes.Component {
   private dialogInput: tuiTypes.Input;
   private title: string;
   onCtrlD?: () => void;

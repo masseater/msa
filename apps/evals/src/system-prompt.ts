@@ -1,23 +1,32 @@
 import { dual } from "effect/Function";
 
-import type { MsaCodingAgentHarnessOptions } from "./harness-types.ts";
-import type { DocumentationVariant } from "./plan.ts";
+import type harnessTypesTypes from "./harness-types.ts";
+import type planTypes from "./plan.types.ts";
 
-export const DOCUMENTATION_EVAL_TOOLS = ["read", "write", "edit", "grep", "find", "ls"] as const;
+const DOCUMENTATION_EVAL_TOOLS = ["read", "write", "edit", "grep", "find", "ls"] as const;
 
-export const verifySystemPrompt: {
+const verifySystemPrompt: {
   (
-    options: Pick<MsaCodingAgentHarnessOptions, "name" | "expectedMsaDocumentation">,
+    options: Pick<
+      harnessTypesTypes.MsaCodingAgentHarnessOptions,
+      "name" | "expectedMsaDocumentation"
+    >,
   ): (systemPrompt: string) => string;
   (
     systemPrompt: string,
-    options: Pick<MsaCodingAgentHarnessOptions, "name" | "expectedMsaDocumentation">,
+    options: Pick<
+      harnessTypesTypes.MsaCodingAgentHarnessOptions,
+      "name" | "expectedMsaDocumentation"
+    >,
   ): string;
 } = dual(
   2,
   (
     systemPrompt: string,
-    options: Pick<MsaCodingAgentHarnessOptions, "name" | "expectedMsaDocumentation">,
+    options: Pick<
+      harnessTypesTypes.MsaCodingAgentHarnessOptions,
+      "name" | "expectedMsaDocumentation"
+    >,
   ): string => {
     if (options.expectedMsaDocumentation === undefined) return systemPrompt;
     if (!systemPrompt.includes("\n<rules>\n")) {
@@ -31,12 +40,12 @@ export const verifySystemPrompt: {
   },
 );
 
-export function resolveDocumentationVariant(value: string | undefined): DocumentationVariant {
+function resolveDocumentationVariant(value: string | undefined): planTypes.DocumentationVariant {
   if (value === "without_docs" || value === "with_docs") return value;
   throw new TypeError('MSA_EVAL_VARIANT must be "without_docs" or "with_docs".');
 }
 
-export function excludeMsaDocumentation(defaultPrompt: string): string {
+function excludeMsaDocumentation(defaultPrompt: string): string {
   const documentationStartMarker = "\n<docs>\n";
   const documentationEndMarker = "\n</docs>";
   const documentationStart = defaultPrompt.indexOf(documentationStartMarker);
@@ -56,3 +65,12 @@ export function excludeMsaDocumentation(defaultPrompt: string): string {
     defaultPrompt.slice(documentationEnd + documentationEndMarker.length)
   );
 }
+
+const systemPrompt = {
+  DOCUMENTATION_EVAL_TOOLS,
+  excludeMsaDocumentation,
+  resolveDocumentationVariant,
+  verifySystemPrompt,
+};
+
+export default systemPrompt;

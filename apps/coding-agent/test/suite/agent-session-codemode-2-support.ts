@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { createCodemodeExtension } = extension;
 
 const { createHarness } = harnessModule;
 

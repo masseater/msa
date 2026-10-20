@@ -1,4 +1,4 @@
-export function hslToRgb(request: {
+function hslToRgb(request: {
   readonly h: number;
   readonly s: number;
   readonly l: number;
@@ -26,3 +26,9 @@ export function hslToRgb(request: {
   }
   return [Math.round(r * 255), Math.round(g * 255), Math.round(b * 255)];
 }
+
+const hslToRgbModule = {
+  hslToRgb,
+};
+
+export default hslToRgbModule;

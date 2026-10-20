@@ -1,8 +1,6 @@
 import { dual } from "effect/Function";
-export interface DecodedHtmlEntity {
-  text: string;
-  length: number;
-}
+
+import type htmlTypes from "./html.types.ts";
 
 function decodeCodePoint(codePoint: number): string | undefined {
   if (!Number.isInteger(codePoint) || codePoint < 0 || codePoint > 0x10ffff) {
@@ -11,7 +9,7 @@ function decodeCodePoint(codePoint: number): string | undefined {
   return String.fromCodePoint(codePoint);
 }
 
-export function decodeHtmlEntity(entity: string): string | undefined {
+function decodeHtmlEntity(entity: string): string | undefined {
   switch (entity) {
     case "amp":
       return "&";
@@ -36,7 +34,10 @@ export function decodeHtmlEntity(entity: string): string | undefined {
   return undefined;
 }
 
-function decodeHtmlEntityAtImpl(html: string, index: number): DecodedHtmlEntity | undefined {
+function decodeHtmlEntityAtImpl(
+  html: string,
+  index: number,
+): htmlTypes.DecodedHtmlEntity | undefined {
   const semicolonIndex = html.indexOf(";", index + 1);
   if (semicolonIndex === -1 || semicolonIndex - index > 16) {
     return undefined;
@@ -51,7 +52,14 @@ function decodeHtmlEntityAtImpl(html: string, index: number): DecodedHtmlEntity 
   return { length: semicolonIndex - index + 1, text: decoded };
 }
 
-export const decodeHtmlEntityAt: {
-  (html: string, index: number): DecodedHtmlEntity | undefined;
-  (index: number): (html: string) => DecodedHtmlEntity | undefined;
+const decodeHtmlEntityAt: {
+  (html: string, index: number): htmlTypes.DecodedHtmlEntity | undefined;
+  (index: number): (html: string) => htmlTypes.DecodedHtmlEntity | undefined;
 } = dual((args: IArguments) => args.length >= 2, decodeHtmlEntityAtImpl);
+
+const html = {
+  decodeHtmlEntity,
+  decodeHtmlEntityAt,
+};
+
+export default html;

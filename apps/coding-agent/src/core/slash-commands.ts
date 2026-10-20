@@ -1,24 +1,11 @@
-import { APP_NAME } from "../config.ts";
-import { ACCOUNTS_DESCRIPTION } from "./accounts.ts";
-import type { SourceInfo } from "./source-info.ts";
+import config from "../config.ts";
+import accounts from "./accounts.ts";
+import type slashCommandsTypes from "./slash-commands.types.ts";
 
-export type SlashCommandSource = "extension" | "prompt" | "skill";
+const { ACCOUNTS_DESCRIPTION } = accounts;
+const { APP_NAME } = config;
 
-export interface SlashCommandInfo {
-  name: string;
-  description?: string | undefined;
-  source: SlashCommandSource;
-  sourceInfo: SourceInfo;
-}
-
-export interface BuiltinSlashCommand {
-  name: string;
-  description: string;
-  argumentHint?: string;
-  aliases?: readonly string[];
-}
-
-export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
+const BUILTIN_SLASH_COMMANDS: ReadonlyArray<slashCommandsTypes.BuiltinSlashCommand> = [
   { description: "Show the available commands", name: "help" },
   { aliases: ["settings", "theme"], description: "Open settings", name: "config" },
   {
@@ -116,23 +103,23 @@ const BUILTIN_NAMES: ReadonlyMap<string, string> = new Map(
   ]),
 );
 
-export function isBuiltinSlashCommandName(name: string): boolean {
+function isBuiltinSlashCommandName(name: string): boolean {
   return BUILTIN_NAMES.has(name);
 }
 
-export function canonicalizeBuiltinSlashCommand(text: string): string {
+function canonicalizeBuiltinSlashCommand(text: string): string {
   const typed = slashCommandName(text);
   if (typed === undefined) return text;
   const name = BUILTIN_NAMES.get(typed);
   return name === undefined ? text : `/${name}${text.slice(typed.length + 1)}`;
 }
 
-export function parseHandoffCommand(text: string): { path: string } | undefined {
+function parseHandoffCommand(text: string): { path: string } | undefined {
   const match = /^\/handoff(?:\s+([\s\S]*))?$/u.exec(text.trim());
-  return match ? { path: (match[1] ?? "").trim() } : undefined;
+  return match === null ? undefined : { path: (match[1] ?? "").trim() };
 }
 
-export function handoffPrompt(path: string): string {
+function handoffPrompt(path: string): string {
   return [
     "Hand this orchestrator over to the next msa session. Call the `handoff` tool once.",
     "Write `premise` (what the next session must take as given), `goals` (the goal states in dependency order), and `donts` (what must not be started, and why) from this conversation. The tool fills in everything else.",
@@ -143,13 +130,13 @@ export function handoffPrompt(path: string): string {
     .join("\n");
 }
 
-export const INIT_PROMPT =
+const INIT_PROMPT =
   "Analyze this repository and write an AGENTS.md at its root for future sessions: the setup " +
   "commands, how to build, test, and lint, the layout of the code, and the conventions to follow. " +
   "Read package.json (or the equivalent), the build and test configuration, and AGENTS.md and " +
   "CLAUDE.md if they already exist. Keep it short and specific to this repository.";
 
-export function formatHelpMarkdown(
+function formatHelpMarkdown(
   added: ReadonlyArray<{ name: string; description?: string | undefined }>,
 ): string {
   const row = (name: string, description = "") =>
@@ -174,16 +161,30 @@ export function formatHelpMarkdown(
   return lines.join("\n");
 }
 
-export function slashCommandName(text: string): string | undefined {
+function slashCommandName(text: string): string | undefined {
   if (!text.startsWith("/")) return undefined;
   const end = text.search(/\s/u);
   return end === -1 ? text.slice(1) : text.slice(1, end);
 }
 
-export function withSkillCommands<T extends { name: string }>(
+function withSkillCommands<T extends { name: string }>(
   commands: readonly T[],
   skills: readonly T[],
 ): T[] {
   const skillNames = new Set(skills.map((skill) => skill.name));
   return [...commands.filter((command) => !skillNames.has(command.name)), ...skills];
 }
+
+const slashCommands = {
+  BUILTIN_SLASH_COMMANDS,
+  INIT_PROMPT,
+  canonicalizeBuiltinSlashCommand,
+  formatHelpMarkdown,
+  handoffPrompt,
+  isBuiltinSlashCommandName,
+  parseHandoffCommand,
+  slashCommandName,
+  withSkillCommands,
+};
+
+export default slashCommands;

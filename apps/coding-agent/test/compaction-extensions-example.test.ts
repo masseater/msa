@@ -3,22 +3,20 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import customCompactionExtension from "../examples/extensions/custom-compaction.ts";
-import type {
-  ExtensionAPI,
-  SessionBeforeCompactEvent,
-  SessionCompactEvent,
-} from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 
 const { abortController, awaited, currentTimeMillis, runTest } = testing;
 
 vi.mock("@msa/coding-agent", () => ({
-  convertToLlm: (messages: unknown) => messages,
-  serializeConversation: () => "conversation",
+  default: {
+    convertToLlm: (messages: unknown) => messages,
+    serializeConversation: () => "conversation",
+  },
 }));
 
 const customCompactionExampleShouldTypeCheckCorrectly = () => {
-  const exampleExtension = (msa: ExtensionAPI) => {
-    msa.on("session_before_compact", (event: SessionBeforeCompactEvent, ctx) =>
+  const exampleExtension = (msa: extensionsTypes.ExtensionAPI) => {
+    msa.on("session_before_compact", (event: extensionsTypes.SessionBeforeCompactEvent, ctx) =>
       runTest(
         Effect.gen(function* () {
           const { preparation, branchEntries } = event;
@@ -115,7 +113,7 @@ const registeredCompactionHandler = () => {
     on(event: string, fn: unknown) {
       if (event === "session_before_compact") handler = fn as typeof handler;
     },
-  } as ExtensionAPI);
+  } as extensionsTypes.ExtensionAPI);
   expect(handler).toBeDefined();
   return handler!;
 };
@@ -161,8 +159,8 @@ const customCompactionExampleDispatchesThroughModelregistryComplete = () =>
   );
 
 const compactEventShouldHaveCorrectFields = () => {
-  const checkCompactEvent = (msa: ExtensionAPI) => {
-    msa.on("session_compact", (event: SessionCompactEvent) =>
+  const checkCompactEvent = (msa: extensionsTypes.ExtensionAPI) => {
+    msa.on("session_compact", (event: extensionsTypes.SessionCompactEvent) =>
       runTest(
         Effect.sync(() => {
           const entry = event.compactionEntry;

@@ -1,20 +1,18 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { theme } from "../theme/theme.ts";
+import themeModule from "../theme/theme.ts";
+import type paneResizerTypes from "./pane-resizer.types.ts";
+
+const { theme } = themeModule;
 
 const { truncateToWidth } = tui;
 
-export interface PaneResizerOptions {
-  height: () => number;
-  onDrag: (screenX: number) => void;
-}
-
-export class PaneResizer implements tuiTypes.Component {
-  private readonly options: PaneResizerOptions;
+export default class PaneResizer implements tuiTypes.Component {
+  private readonly options: paneResizerTypes.PaneResizerOptions;
   private dragging = false;
 
-  constructor(options: PaneResizerOptions) {
+  constructor(options: paneResizerTypes.PaneResizerOptions) {
     this.options = options;
   }
 

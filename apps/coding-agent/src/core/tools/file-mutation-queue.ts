@@ -1,7 +1,12 @@
-import { Deferred, Effect, FileSystem, Semaphore } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Deferred, Effect, FileSystem, ManagedRuntime, Semaphore } from "effect";
 import { dual } from "effect/Function";
 
-import { isMissingPath, pathOperations, platformRuntime } from "../platform/index.ts";
+import platform from "../platform/index.ts";
+
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { isMissingPath, pathOperations } = platform;
 
 const fileMutationQueues = new Map<string, Deferred.Deferred<void>>();
 const registration = Semaphore.makeUnsafe(1);
@@ -42,9 +47,15 @@ const withMutationQueue = Effect.fn("withFileMutationQueue")(function* <A>(
   );
 });
 
-export const withFileMutationQueue: {
+const withFileMutationQueue: {
   <T>(fn: () => Promise<T>): (filePath: string) => Promise<T>;
   <T>(filePath: string, fn: () => Promise<T>): Promise<T>;
 } = dual(2, <T>(filePath: string, fn: () => Promise<T>): Promise<T> =>
-  platformRuntime.runPromise(withMutationQueue(filePath, fn)),
+  nodeRuntime.runPromise(withMutationQueue(filePath, fn)),
 );
+
+const fileMutationQueue = {
+  withFileMutationQueue,
+};
+
+export default fileMutationQueue;

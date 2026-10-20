@@ -2,17 +2,19 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { McpManagerView } from "../src/extensions/mcp/ui.ts";
-import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
-
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import McpManagerView from "../src/extensions/mcp/mcp-manager-view.ts";
+import type uiTypes from "../src/extensions/mcp/ui.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { stripAnsi } = ansi;
+const { initTheme, theme } = themeModule;
 const { setKeybindings } = tuiModule;
 
 const ESCAPE = "\x1b";
 const tui = { requestRender: vi.fn() } as unknown as tuiTypes.TUI;
 
-function rendered(view: McpManagerView): string {
+function rendered(view: uiTypes.McpManagerView): string {
   return stripAnsi(view.render(80).join("\n"));
 }
 

@@ -1,6 +1,9 @@
 import ai from "@msa/ai";
-import { type ExtensionAPI, defineTool } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
+
+const { defineTool } = codingAgent;
 
 const { Type } = ai;
 
@@ -9,7 +12,7 @@ const helloTool = defineTool({
   execute: (_toolCallId, params) =>
     Effect.runPromise(
       Effect.succeed({
-        content: [{ type: "text", text: `Hello, ${params.name}!` }],
+        content: [{ text: `Hello, ${params.name}!`, type: "text" }],
         details: { greeted: params.name },
       }),
     ),
@@ -20,6 +23,6 @@ const helloTool = defineTool({
   }),
 });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool(helloTool);
 }

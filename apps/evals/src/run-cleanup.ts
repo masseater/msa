@@ -6,10 +6,13 @@ import {
   normalizeHarnessRun,
 } from "vitest-evals/harness";
 
-import type { MsaCodingAgentInput } from "./harness-types.ts";
-import { files } from "./platform.ts";
-import { MSA_SESSION_SNAPSHOT_ARTIFACT } from "./report-types.ts";
-import type { RunState } from "./run-types.ts";
+import type harnessTypesTypes from "./harness-types.ts";
+import platform from "./platform.ts";
+import reportTypes from "./report-types.ts";
+import type runTypesTypes from "./run-types.ts";
+
+const { files } = platform;
+const { MSA_SESSION_SNAPSHOT_ARTIFACT } = reportTypes;
 
 const collectingErrors =
   (errors: unknown[]) =>
@@ -22,12 +25,12 @@ const collectingErrors =
         : Effect.void,
     );
 
-export const cleanup = <TOutput extends JsonValue>({
+const cleanup = <TOutput extends JsonValue>({
   state,
   root,
   setArtifact,
 }: {
-  state: RunState<TOutput>;
+  state: runTypesTypes.RunState<TOutput>;
   root: string;
   setArtifact: HarnessContext["setArtifact"];
 }): Effect.Effect<unknown[]> =>
@@ -49,7 +52,7 @@ export const cleanup = <TOutput extends JsonValue>({
     return errors;
   });
 
-export const combineFailures = ({
+const combineFailures = ({
   runError,
   cleanupErrors,
 }: {
@@ -71,14 +74,14 @@ export const combineFailures = ({
   return runError;
 };
 
-export const failRun = <TOutput extends JsonValue>({
+const failRun = <TOutput extends JsonValue>({
   state,
   input,
   failure,
   startedAt,
 }: {
-  state: RunState<TOutput>;
-  input: MsaCodingAgentInput;
+  state: runTypesTypes.RunState<TOutput>;
+  input: harnessTypesTypes.MsaCodingAgentInput;
   failure: unknown;
   startedAt: number;
 }): Effect.Effect<never> => {
@@ -91,3 +94,11 @@ export const failRun = <TOutput extends JsonValue>({
   });
   return Effect.die(attachHarnessRunToError(failure, partialRun));
 };
+
+const runCleanup = {
+  cleanup,
+  combineFailures,
+  failRun,
+};
+
+export default runCleanup;

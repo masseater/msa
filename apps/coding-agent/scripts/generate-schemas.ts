@@ -5,9 +5,13 @@ import type { SchemaError } from "effect/Schema";
 import type { TSchema } from "typebox";
 import { format } from "vite-plus/fmt";
 
-import { Host, runScript } from "../../../scripts/host.ts";
-import { schemaArtifacts } from "./schema-artifacts.ts";
-import type { SchemaArtifact } from "./schema-artifacts.ts";
+import hostModule from "../../../scripts/host.ts";
+import schemaArtifactsModule from "./schema-artifacts.ts";
+import type schemaArtifactsTypes from "./schema-artifacts.types.ts";
+
+const { Host, runScript } = hostModule;
+
+const { schemaArtifacts } = schemaArtifactsModule;
 
 const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
 const schemaBaseUrl =
@@ -115,7 +119,7 @@ const addDefinitions = (
     return { ...compactSchema, $defs: compactDefinitions };
   });
 
-const serializeSchema = (artifact: SchemaArtifact) =>
+const serializeSchema = (artifact: schemaArtifactsTypes.SchemaArtifact) =>
   Effect.gen(function* () {
     const definitions = artifact.definitions;
     const schema =
@@ -130,7 +134,7 @@ const serializeSchema = (artifact: SchemaArtifact) =>
     })}\n`;
   });
 
-const renderArtifact = (artifact: SchemaArtifact) =>
+const renderArtifact = (artifact: schemaArtifactsTypes.SchemaArtifact) =>
   Effect.gen(function* () {
     const relativePath = `schemas/${artifact.filename}`;
     const serialized = yield* serializeSchema(artifact);
@@ -170,4 +174,8 @@ if (invokedFile === fileURLToPath(import.meta.url)) {
   runScript(program);
 }
 
-export { renderConfigSchemas };
+const generateSchemas = {
+  renderConfigSchemas,
+};
+
+export default generateSchemas;

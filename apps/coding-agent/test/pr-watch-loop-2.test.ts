@@ -2,9 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { PrWatchGhError } from "../src/core/pr-watch/gh.ts";
+import PrWatchGhError from "../src/core/pr-watch/pr-watch-gh-error.ts";
 import prWatchLoopSupport from "./pr-watch-loop-support.ts";
-
 const { awaited, runTest } = testing;
 
 const { INTERVAL_MS, pendingChecks, runPolls, scriptedGh, seen, snapshotOf } = prWatchLoopSupport;

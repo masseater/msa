@@ -8,14 +8,13 @@ import truncate from "../src/truncate.ts";
 import effectSupport from "./effect-support.ts";
 
 const { DEFAULT_MAX_LINES } = truncate;
-const { NodeExecutionEnv } = node;
 const { ExecutionError, err, getOrThrow } = env;
 
 const { awaited } = effectSupport;
 
 const TRUNCATED_OUTPUT_LINES = DEFAULT_MAX_LINES + 1;
 
-class TimeoutOutputExecutionEnv extends NodeExecutionEnv {
+class TimeoutOutputExecutionEnv extends node.NodeExecutionEnv {
   override exec(
     _command: string | readonly string[],
     options: envTypes.ShellExecOptions | undefined,

@@ -2,8 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { SettingsManager } from "../src/core/settings-manager.ts";
-
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 const {
   awaited,
   joinPath,
@@ -25,7 +25,7 @@ interface SettingsFile {
 interface SettingsPaths {
   readonly settingsPath: string;
   readonly projectSettingsPath: string;
-  readonly openManager: () => SettingsManager;
+  readonly openManager: () => settingsManagerTypes.SettingsManager;
 }
 
 const tempDirs: string[] = [];

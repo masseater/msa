@@ -1,7 +1,10 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import { NESTED_CALL_LIMITS, NestedCallRecorder } from "../src/core/nested-tool-calls.ts";
+import NestedCallRecorder from "../src/core/nested-call-recorder.ts";
+import nestedToolCalls from "../src/core/nested-tool-calls.ts";
+
+const { NESTED_CALL_LIMITS } = nestedToolCalls;
 
 const call2 = (
   id: string,

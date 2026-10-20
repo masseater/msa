@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
+import modelUpgrade from "../src/core/model-upgrade.ts";
+import type settingsSchemaTypes from "../src/core/settings-schema.types.ts";
+import modelUpgradeSupport from "./model-upgrade-support.ts";
+
+const {
   compareModelVersions,
   createUpgradeReplacements,
   findModelUpgrade,
@@ -8,9 +12,7 @@ import {
   parseModelIdVersion,
   planModelUpgrades,
   rewriteModelReferencesInSettings,
-} from "../src/core/model-upgrade.ts";
-import type { Settings } from "../src/core/settings-schema.ts";
-import modelUpgradeSupport from "./model-upgrade-support.ts";
+} = modelUpgrade;
 
 const { model, settingsNamingTheOldModel, upgradePair } = modelUpgradeSupport;
 
@@ -162,11 +164,11 @@ const replacesEveryReferenceThatNamesTheOld = () => {
 };
 
 const leavesSettingsThatNameOtherModelsAlone = () => {
-  const settings: Settings = {
+  const settings: settingsSchemaTypes.Settings = {
     defaultModel: "gpt-5.5",
     defaultProvider: "openai",
     enabledModels: ["openai/*"],
-  } as Settings;
+  } as settingsSchemaTypes.Settings;
   expect(
     rewriteModelReferencesInSettings(settings, createUpgradeReplacements(upgradePair().candidates)),
   ).toEqual([]);
@@ -186,10 +188,10 @@ describe("rewriteModelReferencesInSettings", () => {
 const reportsTheChangesWithoutWritingEitherLayer = () => {
   const { candidates } = upgradePair();
   const global = settingsNamingTheOldModel();
-  const project: Settings = {
+  const project: settingsSchemaTypes.Settings = {
     defaultModel: "claude-sonnet-4-5",
     defaultProvider: "anthropic-api",
-  } as Settings;
+  } as settingsSchemaTypes.Settings;
   const plan = planModelUpgrades({ candidates, layers: { global, project } });
 
   expect(plan.changes.filter((change) => change.scope === "global").length).toBe(7);

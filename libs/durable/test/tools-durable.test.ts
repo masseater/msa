@@ -5,6 +5,7 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 import envModule from "../src/env/index.ts";
 import envModuleModule from "../src/tools/env.ts";
 import toolsModule from "../src/tools/index.ts";
+import BlockingWriteExecutionEnv from "./blocking-write-execution-env.ts";
 import support from "./support.ts";
 import BlockingEditExecutionEnv from "./tools-blocking-edit-env-support.ts";
 import SlowReadExecutionEnv from "./tools-slow-read-env-support.ts";
@@ -17,15 +18,7 @@ const { createEditTool, createWriteTool } = toolsModule;
 const { withFileMutationQueue } = envModuleModule;
 
 const { abortController, awaited, makeDirectory, makeSymlink } = support;
-const {
-  BlockingWriteExecutionEnv,
-  createEnv,
-  createTempDir,
-  deferred,
-  delay,
-  removeTempDirs,
-  run,
-} = toolsSupport;
+const { createEnv, createTempDir, deferred, delay, removeTempDirs, run } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 

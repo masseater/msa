@@ -1,4 +1,4 @@
-import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 type WorkingIndicatorMode = "dot" | "none" | "pulse" | "spinner" | "default";
@@ -13,7 +13,7 @@ const PASTEL_RAINBOW = [
   "\x1b[38;2;218;186;255m",
 ] as const;
 const RESET_FG = "\x1b[39m";
-const HIDDEN_INDICATOR: WorkingIndicatorOptions = {
+const HIDDEN_INDICATOR: codingAgentTypes.WorkingIndicatorOptions = {
   frames: [],
 };
 
@@ -21,7 +21,9 @@ function colorize(text: string, color: string): string {
   return `${color}${text}${RESET_FG}`;
 }
 
-function getIndicator(mode: WorkingIndicatorMode): WorkingIndicatorOptions | undefined {
+function getIndicator(
+  mode: WorkingIndicatorMode,
+): codingAgentTypes.WorkingIndicatorOptions | undefined {
   switch (mode) {
     case "dot":
       return {
@@ -66,10 +68,10 @@ function describeMode(mode: WorkingIndicatorMode): string {
   }
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let mode: WorkingIndicatorMode = "spinner";
 
-  const applyIndicator = (ctx: ExtensionContext) => {
+  const applyIndicator = (ctx: codingAgentTypes.ExtensionContext) => {
     ctx.ui.setWorkingIndicator(getIndicator(mode));
     ctx.ui.setStatus(
       "working-indicator",

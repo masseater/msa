@@ -3,9 +3,10 @@ import { tmpdir } from "node:os";
 import { Effect, Option } from "effect";
 import { dual } from "effect/Function";
 
-import { files, pathOperations, readEnv } from "./platform.ts";
+import platform from "./platform.ts";
+import type sandboxTypes from "./sandbox.types.ts";
 
-export type SandboxIdentity = { uid: number; gid: number };
+const { files, pathOperations, readEnv } = platform;
 
 function parseSandboxId(name: "MSA_EVAL_SANDBOX_UID" | "MSA_EVAL_SANDBOX_GID"): number | undefined {
   const value = readEnv(name);
@@ -15,7 +16,7 @@ function parseSandboxId(name: "MSA_EVAL_SANDBOX_UID" | "MSA_EVAL_SANDBOX_GID"): 
   return id;
 }
 
-export function resolveSandboxIdentity(): SandboxIdentity | undefined {
+function resolveSandboxIdentity(): sandboxTypes.SandboxIdentity | undefined {
   const uid = parseSandboxId("MSA_EVAL_SANDBOX_UID");
   const gid = parseSandboxId("MSA_EVAL_SANDBOX_GID");
   if (uid === undefined && gid === undefined) return undefined;
@@ -25,10 +26,10 @@ export function resolveSandboxIdentity(): SandboxIdentity | undefined {
   return { gid, uid };
 }
 
-export const chownTree: {
-  (identity: SandboxIdentity): (path: string) => Effect.Effect<void>;
-  (path: string, identity: SandboxIdentity): Effect.Effect<void>;
-} = dual(2, (path: string, identity: SandboxIdentity): Effect.Effect<void> =>
+const chownTree: {
+  (identity: sandboxTypes.SandboxIdentity): (path: string) => Effect.Effect<void>;
+  (path: string, identity: sandboxTypes.SandboxIdentity): Effect.Effect<void>;
+} = dual(2, (path: string, identity: sandboxTypes.SandboxIdentity): Effect.Effect<void> =>
   Effect.gen(function* () {
     if ((yield* files.kind(path)) === "directory") {
       const entries = yield* files.readDirectory(path);
@@ -83,7 +84,7 @@ function requirePosixRoot(): void {
   }
 }
 
-function dropPrivileges(identity: SandboxIdentity): void {
+function dropPrivileges(identity: sandboxTypes.SandboxIdentity): void {
   process.setgroups?.([]);
   process.setgid?.(identity.gid);
   process.setuid?.(identity.uid);
@@ -101,7 +102,7 @@ const assertUnreadable = (path: string): Effect.Effect<void> =>
       : Effect.void,
   );
 
-const enter = (root: string, identity: SandboxIdentity): Effect.Effect<void> =>
+const enter = (root: string, identity: sandboxTypes.SandboxIdentity): Effect.Effect<void> =>
   Effect.gen(function* () {
     yield* Effect.sync(requirePosixRoot);
     const protectedPaths = yield* protectTransformedModules;
@@ -110,9 +111,19 @@ const enter = (root: string, identity: SandboxIdentity): Effect.Effect<void> =>
     yield* Effect.forEach(protectedPaths, assertUnreadable, { discard: true });
   });
 
-export const enterToolSandbox: {
-  (identity: SandboxIdentity | undefined): (root: string) => Effect.Effect<void>;
-  (root: string, identity: SandboxIdentity | undefined): Effect.Effect<void>;
-} = dual(2, (root: string, identity: SandboxIdentity | undefined): Effect.Effect<void> =>
-  identity === undefined ? Effect.void : enter(root, identity),
+const enterToolSandbox: {
+  (identity: sandboxTypes.SandboxIdentity | undefined): (root: string) => Effect.Effect<void>;
+  (root: string, identity: sandboxTypes.SandboxIdentity | undefined): Effect.Effect<void>;
+} = dual(
+  2,
+  (root: string, identity: sandboxTypes.SandboxIdentity | undefined): Effect.Effect<void> =>
+    identity === undefined ? Effect.void : enter(root, identity),
 );
+
+const sandbox = {
+  chownTree,
+  enterToolSandbox,
+  resolveSandboxIdentity,
+};
+
+export default sandbox;

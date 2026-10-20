@@ -2,11 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ProjectTrustStore } from "../src/core/trust-manager.ts";
-import { main } from "../src/main.ts";
+import ProjectTrustStore from "../src/core/project-trust-store.ts";
+import mainModule from "../src/main.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
+const { main } = mainModule;
 const { setupPackageTest, teardownPackageTest } = packageCommandPathsSupport;
 
 const {

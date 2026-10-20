@@ -3,8 +3,10 @@ import { Effect } from "effect";
 import { Compile } from "typebox/compile";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { SettingsSchema } from "../src/core/settings-schema.ts";
+import settingsSchema from "../src/core/settings-schema.ts";
 import configSchemasSupport from "./config-schemas-support.ts";
+
+const { SettingsSchema } = settingsSchema;
 
 const { loadSchemas, renderedSchemas } = configSchemasSupport;
 

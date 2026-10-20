@@ -1,10 +1,8 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
+import VirtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
 
-const { VirtualTerminal } = virtualTerminal;
-
-class RecordingTerminal extends VirtualTerminal implements tuiTypes.Terminal {
+export default class RecordingTerminal extends VirtualTerminal implements tuiTypes.Terminal {
   readonly writes: string[] = [];
   startCount = 0;
   stopCount = 0;
@@ -24,9 +22,3 @@ class RecordingTerminal extends VirtualTerminal implements tuiTypes.Terminal {
     super.stop();
   }
 }
-
-const interactiveTuiSupport = {
-  RecordingTerminal,
-};
-
-export default interactiveTuiSupport;

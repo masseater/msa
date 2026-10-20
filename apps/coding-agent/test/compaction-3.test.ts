@@ -3,7 +3,9 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import { estimateContextTokens } from "../src/core/compaction/index.ts";
+import compaction from "../src/core/compaction/index.ts";
+
+const { estimateContextTokens } = compaction;
 
 const { currentTimeMillis } = testing;
 

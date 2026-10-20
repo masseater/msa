@@ -5,13 +5,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  AgentSessionRuntime,
-  type AgentSessionServices,
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionFromServices,
-} from "../../../src/core/agent-session-runtime.ts";
+import AgentSessionRuntime from "../../../src/core/agent-session-runtime.ts";
+import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
+import agentSessionServices from "../../../src/core/agent-session-services.ts";
 import harnessModule from "../harness.ts";
+
+const { createAgentSessionFromServices } = agentSessionServices;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
@@ -43,7 +42,7 @@ const createForkableRuntime = (toolStarted: ReturnType<typeof gate>) =>
     const harness = yield* Effect.promise(() =>
       createHarness({ tools: [blockingTool(toolStarted)] }),
     );
-    const services: AgentSessionServices = {
+    const services: agentSessionRuntimeTypes.AgentSessionServices = {
       agentDir: harness.tempDir,
       cwd: harness.tempDir,
       diagnostics: [],
@@ -51,7 +50,7 @@ const createForkableRuntime = (toolStarted: ReturnType<typeof gate>) =>
       resourceLoader: harness.session.resourceLoader,
       settingsManager: harness.settingsManager,
     };
-    const createRuntime: CreateAgentSessionRuntimeFactory = ({
+    const createRuntime: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = ({
       sessionManager,
       sessionStartEvent,
     }) =>

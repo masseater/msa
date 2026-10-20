@@ -1,8 +1,12 @@
 import { dual } from "effect/Function";
 
-import { schedule } from "../core/platform.ts";
-import { spawnProcess } from "./child-process.ts";
-import { callbackPromise } from "./interop.ts";
+import platform from "../core/platform.ts";
+import childProcess from "./child-process.ts";
+import interop from "./interop.ts";
+
+const { callbackPromise } = interop;
+const { spawnProcess } = childProcess;
+const { schedule } = platform;
 
 function runClipboardCommandImpl(
   command: string,
@@ -45,7 +49,7 @@ function runClipboardCommandImpl(
   });
 }
 
-export const runClipboardCommand: {
+const runClipboardCommand: {
   (
     command: string,
     args: readonly string[],
@@ -56,3 +60,9 @@ export const runClipboardCommand: {
     options?: { input?: string; timeoutMs?: number; maxBufferBytes?: number },
   ): (command: string) => Promise<Buffer | undefined>;
 } = dual((args: IArguments) => args.length >= 2, runClipboardCommandImpl);
+
+const clipboardCommand = {
+  runClipboardCommand,
+};
+
+export default clipboardCommand;

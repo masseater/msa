@@ -2,8 +2,11 @@ import { crc32, deflateRawSync } from "node:zlib";
 
 import { dual } from "effect/Function";
 
-import { nowMs, toDate } from "../core/platform.ts";
-import { writeFile } from "./node-fs.ts";
+import platform from "../core/platform.ts";
+import nodeFs from "./node-fs.ts";
+
+const { nowMs, toDate } = platform;
+const { writeFile } = nodeFs;
 
 interface ZipEntry {
   name: string;
@@ -92,7 +95,13 @@ function writeZipArchiveImpl(filePath: string, entries: readonly ZipEntry[]): Pr
   return writeFile({ data: createZipArchive(entries), path: filePath });
 }
 
-export const writeZipArchive: {
+const writeZipArchive: {
   (filePath: string, entries: readonly ZipEntry[]): Promise<void>;
   (entries: readonly ZipEntry[]): (filePath: string) => Promise<void>;
 } = dual((args: IArguments) => args.length >= 2, writeZipArchiveImpl);
+
+const zip = {
+  writeZipArchive,
+};
+
+export default zip;

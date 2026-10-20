@@ -1,9 +1,12 @@
 import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import type { Orchestrator } from "./orchestrator.ts";
-import { prompts } from "./prompts.ts";
-import { taskIdObject, taskIdSchema, tool } from "./tool-support.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import promptsModule from "./prompts.ts";
+import toolSupport from "./tool-support.ts";
+
+const { taskIdObject, taskIdSchema, tool } = toolSupport;
+const { prompts } = promptsModule;
 
 const messageSchema = Type.Object({
   message: Type.String({
@@ -25,7 +28,7 @@ const noteSchema = Type.Object({
 });
 
 const searchSchema = Type.Object({
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
+  limit: Type.Optional(Type.Integer({ maximum: 50, minimum: 1 })),
   query: Type.String({ description: "Words to find in reports across every task and thread." }),
 });
 
@@ -33,7 +36,9 @@ const maxConcurrentSchema = Type.Object({
   value: Type.Integer({ description: "Threads that may run at the same time.", minimum: 1 }),
 });
 
-export function messageToolsA(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function messageToolsA(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     send_message: tool({
       description:
@@ -58,8 +63,8 @@ export function messageToolsA(orchestrator: Orchestrator): Record<string, ToolDe
       run: ({ content, audience, round, taskIds }) =>
         orchestrator
           .sendNote({
-            content,
             audience,
+            content,
             ...(round === undefined ? {} : { round }),
             ...(taskIds === undefined ? {} : { taskIds }),
           })
@@ -80,7 +85,9 @@ export function messageToolsA(orchestrator: Orchestrator): Record<string, ToolDe
   };
 }
 
-export function messageToolsC(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function messageToolsC(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     search_reports: tool({
       annotations: { readOnlyHint: true },
@@ -106,38 +113,48 @@ export function messageToolsC(orchestrator: Orchestrator): Record<string, ToolDe
   };
 }
 
-export function messageToolsB(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function messageToolsB(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     rerun_task: tool({
-      name: "rerun_task",
-      label: "rerun task",
       description:
         "Run a finished, failed, or stopped task again in a new thread. Dependencies and notes apply as usual.",
-      promptSnippet: "Rerun a task in a new thread",
+      label: "rerun task",
+      name: "rerun_task",
       parameters: taskIdObject,
+      promptSnippet: "Rerun a task in a new thread",
       run: ({ taskId }) =>
         orchestrator.rerun(taskId).then((task) => `${task.id} is ${task.status}.`),
     }),
     set_max_concurrent_threads: tool({
-      name: "set_max_concurrent_threads",
-      label: "set max concurrent threads",
       description: "Change how many threads may run at the same time, from now on.",
-      promptSnippet: "Change the concurrency limit",
+      label: "set max concurrent threads",
+      name: "set_max_concurrent_threads",
       parameters: maxConcurrentSchema,
+      promptSnippet: "Change the concurrency limit",
       run: ({ value }) =>
         orchestrator
           .setMaxConcurrentThreads(value)
           .then((max) => `Max concurrent threads: ${max}.`),
     }),
     stop_task: tool({
-      name: "stop_task",
-      label: "stop task",
       description:
         "Stop a task, aborting its running thread. Dependents keep waiting until it is rerun, or you remove the dependency.",
-      promptSnippet: "Stop a task",
+      label: "stop task",
+      name: "stop_task",
       parameters: taskIdObject,
+      promptSnippet: "Stop a task",
       run: ({ taskId }) =>
         orchestrator.stop(taskId).then((task) => `${task.id} is ${task.status}.`),
     }),
   };
 }
+
+const toolsMessage = {
+  messageToolsA,
+  messageToolsB,
+  messageToolsC,
+};
+
+export default toolsMessage;

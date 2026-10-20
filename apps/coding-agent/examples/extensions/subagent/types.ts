@@ -1,61 +1,12 @@
-import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
-import type aiTypes from "@msa/ai/index.types";
 import { Type } from "typebox";
-
-import type { AgentScope } from "./agents.ts";
 
 const { StringEnum } = ai;
 
-export const MAX_PARALLEL_TASKS = 8;
-export const MAX_CONCURRENCY = 4;
-export const COLLAPSED_ITEM_COUNT = 10;
-export const PER_TASK_OUTPUT_CAP = 50 * 1024;
-
-export interface UsageStats {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  cost: number;
-  contextTokens: number;
-  turns: number;
-}
-
-export interface SingleResult {
-  agent: string;
-  agentSource: "user" | "project" | "unknown";
-  task: string;
-  exitCode: number;
-  messages: aiTypes.Message[];
-  stderr: string;
-  usage: UsageStats;
-  model?: string | undefined;
-  stopReason?: string;
-  errorMessage?: string;
-  step?: number | undefined;
-}
-
-export interface SubagentDetails {
-  mode: "single" | "parallel" | "chain";
-  agentScope: AgentScope;
-  projectAgentsDir: string | null;
-  results: SingleResult[];
-}
-
-export type OnUpdateCallback = (partial: {
-  content: { type: "text"; text: string }[];
-  details: SubagentDetails;
-}) => void;
-
-export interface DispatchDefaults {
-  model?: string | undefined;
-  thinkingLevel?: agentTypes.ThinkingLevel | undefined;
-}
-
-export type DisplayItem =
-  | { type: "text"; text: string }
-  | { type: "toolCall"; name: string; args: Record<string, unknown> };
+const MAX_PARALLEL_TASKS = 8;
+const MAX_CONCURRENCY = 4;
+const COLLAPSED_ITEM_COUNT = 10;
+const PER_TASK_OUTPUT_CAP = 50 * 1024;
 
 const TaskItem = Type.Object({
   agent: Type.String({ description: "Name of the agent to invoke" }),
@@ -75,7 +26,7 @@ const AgentScopeSchema = StringEnum(["user", "project", "both"] as const, {
     'Which agent directories to use. Default: "user". Use "both" to include project-local agents.',
 });
 
-export const SubagentParams = Type.Object({
+const SubagentParams = Type.Object({
   agent: Type.Optional(
     Type.String({ description: "Name of the agent to invoke (for single mode)" }),
   ),
@@ -85,8 +36,8 @@ export const SubagentParams = Type.Object({
   ),
   confirmProjectAgents: Type.Optional(
     Type.Boolean({
-      description: "Prompt before running project-local agents. Default: true.",
       default: true,
+      description: "Prompt before running project-local agents. Default: true.",
     }),
   ),
   cwd: Type.Optional(
@@ -97,3 +48,13 @@ export const SubagentParams = Type.Object({
     Type.Array(TaskItem, { description: "Array of {agent, task} for parallel execution" }),
   ),
 });
+
+const subagentTypes = {
+  COLLAPSED_ITEM_COUNT,
+  MAX_CONCURRENCY,
+  MAX_PARALLEL_TASKS,
+  PER_TASK_OUTPUT_CAP,
+  SubagentParams,
+};
+
+export default subagentTypes;

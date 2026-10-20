@@ -5,8 +5,11 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { readEnv } from "../src/core/process-env.ts";
-import { getThemeExportColors } from "../src/modes/interactive/theme/theme.ts";
+import processEnv from "../src/core/process-env.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { readEnv } = processEnv;
+const { getThemeExportColors } = themeModule;
 
 const { colorToHex, okhslColor } = tui;
 

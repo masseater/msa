@@ -1,14 +1,14 @@
 import testing from "@msa/testing";
 
-import type {
-  SessionEntry,
-  SessionMessageEntry,
-  SessionTreeNode,
-} from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 
 const { currentDate, currentTimeMillis } = testing;
 
-function userMessage(id: string, parentId: string | null, content: string): SessionMessageEntry {
+function userMessage(
+  id: string,
+  parentId: string | null,
+  content: string,
+): sessionManagerTypes.SessionMessageEntry {
   return {
     id,
     message: { content, role: "user", timestamp: currentTimeMillis() },
@@ -18,7 +18,11 @@ function userMessage(id: string, parentId: string | null, content: string): Sess
   };
 }
 
-function assistantMessage(id: string, parentId: string | null, text: string): SessionMessageEntry {
+function assistantMessage(
+  id: string,
+  parentId: string | null,
+  text: string,
+): sessionManagerTypes.SessionMessageEntry {
   return {
     id,
     message: {
@@ -44,20 +48,22 @@ function assistantMessage(id: string, parentId: string | null, text: string): Se
   };
 }
 
-function buildTree(entries: Array<SessionEntry>): SessionTreeNode[] {
+function buildTree(
+  entries: Array<sessionManagerTypes.SessionEntry>,
+): sessionManagerTypes.SessionTreeNode[] {
   if (entries.length === 0) return [];
 
-  const nodes: SessionTreeNode[] = entries.map((entry) => ({
+  const nodes: sessionManagerTypes.SessionTreeNode[] = entries.map((entry) => ({
     children: [],
     entry,
   }));
 
-  const byId = new Map<string, SessionTreeNode>();
+  const byId = new Map<string, sessionManagerTypes.SessionTreeNode>();
   for (const node of nodes) {
     byId.set(node.entry.id, node);
   }
 
-  const roots: SessionTreeNode[] = [];
+  const roots: sessionManagerTypes.SessionTreeNode[] = [];
   for (const node of nodes) {
     if (node.entry.parentId === null) {
       roots.push(node);

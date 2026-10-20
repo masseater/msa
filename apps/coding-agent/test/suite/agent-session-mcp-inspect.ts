@@ -4,8 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { MCP_SERVERS_SECTION } from "../../src/extensions/mcp/index.ts";
+import extension from "../../src/extensions/mcp/extension.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { MCP_SERVERS_SECTION } = extension;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

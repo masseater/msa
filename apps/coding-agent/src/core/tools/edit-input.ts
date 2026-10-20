@@ -1,32 +1,14 @@
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
 
-import { ToolFailure } from "../platform/index.ts";
-import type { Edit } from "./edit-diff.ts";
+import platform from "../platform/index.ts";
+import type editDiffTypes from "./edit-diff.types.ts";
+import type editInputTypes from "./edit-input.types.ts";
+import editSchemaModule from "./edit-schema.ts";
 
-const replaceEditSchema = Type.Object(
-  {
-    newText: Type.String({ description: "Replacement text for this targeted edit." }),
-    oldText: Type.String({
-      description:
-        "Exact text for one targeted replacement. It must be unique in the original file and must not overlap with any other edits[].oldText in the same call.",
-    }),
-  },
-  {},
-);
+const { ToolFailure } = platform;
+const { editSchema } = editSchemaModule;
 
-export const editSchema = Type.Object(
-  {
-    edits: Type.Array(replaceEditSchema, {
-      description:
-        "One or more targeted replacements. Each edit is matched against the original file, not incrementally. Do not include overlapping or nested edits. If two changes touch the same block or nearby lines, merge them into one edit instead.",
-    }),
-    path: Type.String({ description: "Path to the file to edit (relative or absolute)" }),
-  },
-  {},
-);
-
-export const editToolSystemPromptContribution = {
+const editToolSystemPromptContribution = {
   guidelines: [
     "Use edit for precise changes (edits[].oldText must match exactly)",
     "When changing multiple separate locations in one file, use one edit call with multiple entries in edits[] instead of multiple edit calls",
@@ -37,8 +19,7 @@ export const editToolSystemPromptContribution = {
     "Make precise file edits with exact text replacement, including multiple disjoint edits in one call",
 } as const;
 
-export type EditToolInput = Static<typeof editSchema>;
-type LegacyEditToolInput = EditToolInput & {
+type LegacyEditToolInput = editInputTypes.EditToolInput & {
   oldText?: unknown;
   newText?: unknown;
 };
@@ -54,9 +35,9 @@ function isSingleEditInput(value: unknown): value is SingleEditInput {
   return typeof edit["oldText"] === "string" && typeof edit["newText"] === "string";
 }
 
-export function prepareEditArguments(input: unknown): EditToolInput {
+function prepareEditArguments(input: unknown): editInputTypes.EditToolInput {
   if (typeof input !== "object" || input === null) {
-    return input as EditToolInput;
+    return input as editInputTypes.EditToolInput;
   }
 
   const args = input as Record<string, unknown>;
@@ -76,20 +57,29 @@ export function prepareEditArguments(input: unknown): EditToolInput {
 
   const legacy = args as LegacyEditToolInput;
   if (typeof legacy.oldText !== "string" || typeof legacy.newText !== "string") {
-    return args as EditToolInput;
+    return args as editInputTypes.EditToolInput;
   }
 
   const edits = Array.isArray(legacy.edits) ? [...legacy.edits] : [];
   edits.push({ newText: legacy.newText, oldText: legacy.oldText });
   const { oldText: _oldText, newText: _newText, ...rest } = legacy;
-  return { ...rest, edits } as EditToolInput;
+  return { ...rest, edits } as editInputTypes.EditToolInput;
 }
 
-export const validateEditInput = (input: EditToolInput) =>
+const validateEditInput = (input: editInputTypes.EditToolInput) =>
   !Array.isArray(input.edits) || input.edits.length === 0
     ? Effect.fail(
         new ToolFailure({
           message: "Edit tool input is invalid. edits must contain at least one replacement.",
         }),
       )
-    : Effect.succeed({ edits: input.edits as Edit[], path: input.path });
+    : Effect.succeed({ edits: input.edits as editDiffTypes.Edit[], path: input.path });
+
+const editInput = {
+  editSchema,
+  editToolSystemPromptContribution,
+  prepareEditArguments,
+  validateEditInput,
+};
+
+export default editInput;

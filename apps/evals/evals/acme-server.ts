@@ -3,21 +3,23 @@ import { Context, Effect, Exit, Layer, Option, Schema, Scope } from "effect";
 import { HttpEffect, HttpServer } from "effect/http";
 import * as NetAddress from "effect/net/NetAddress";
 
-export const OPENAI_PROVIDER_ID = "acme";
-export const OPENAI_MODEL_ID = "acme-chat";
-export const OPENAI_PROBE_PROMPT = "Reply with ACME_OK.";
-export const OPENAI_PROBE_RESPONSE = "ACME_OK";
-export const STREAM_PROVIDER_ID = "acme-stream";
-export const STREAM_MODEL_ID = "acme-stream-chat";
-export const STREAM_PROBE_PROMPT = "Reply with ACME_STREAM_OK.";
-export const STREAM_PROBE_RESPONSE = "ACME_STREAM_OK";
+import type acmeServerTypes from "./acme-server.types.ts";
 
-export const STREAM_API_DOCUMENTATION = `${JSON.stringify(
+const OPENAI_PROVIDER_ID = "acme";
+const OPENAI_MODEL_ID = "acme-chat";
+const OPENAI_PROBE_PROMPT = "Reply with ACME_OK.";
+const OPENAI_PROBE_RESPONSE = "ACME_OK";
+const STREAM_PROVIDER_ID = "acme-stream";
+const STREAM_MODEL_ID = "acme-stream-chat";
+const STREAM_PROBE_PROMPT = "Reply with ACME_STREAM_OK.";
+const STREAM_PROBE_RESPONSE = "ACME_STREAM_OK";
+
+const STREAM_API_DOCUMENTATION = `${JSON.stringify(
   {
     name: "Acme Streaming API",
     request: {
       body: {
-        messages: [{ role: "user", content: "Hello" }],
+        messages: [{ content: "Hello", role: "user" }],
         model: STREAM_MODEL_ID,
         stream: true,
       },
@@ -160,16 +162,7 @@ const handle =
 const webHandler = (mode: ServerMode, probe: Probe) =>
   HttpEffect.fromWebHandler((request) => Effect.runPromise(handle(mode, probe)(request)));
 
-export type AcmeServer = {
-  start: Effect.Effect<void>;
-  stop: Effect.Effect<void>;
-  reset(): void;
-  origin(): string;
-  baseUrl(): string;
-  validRequestReceived(): boolean;
-};
-
-export function createAcmeServer(mode: ServerMode): AcmeServer {
+function createAcmeServer(mode: ServerMode): acmeServerTypes.AcmeServer {
   const probe: Probe = { validRequestReceived: false };
   let scope: Scope.Closeable | undefined;
   let serverOrigin = "";
@@ -205,3 +198,18 @@ export function createAcmeServer(mode: ServerMode): AcmeServer {
     validRequestReceived: () => probe.validRequestReceived,
   };
 }
+
+const acmeServer = {
+  OPENAI_MODEL_ID,
+  OPENAI_PROBE_PROMPT,
+  OPENAI_PROBE_RESPONSE,
+  OPENAI_PROVIDER_ID,
+  STREAM_API_DOCUMENTATION,
+  STREAM_MODEL_ID,
+  STREAM_PROBE_PROMPT,
+  STREAM_PROBE_RESPONSE,
+  STREAM_PROVIDER_ID,
+  createAcmeServer,
+};
+
+export default acmeServer;

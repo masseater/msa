@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { substituteArgs } from "../src/core/prompt-templates.ts";
+import promptTemplates from "../src/core/prompt-templates.ts";
+
+const { substituteArgs } = promptTemplates;
 
 const shouldUseDefaultWhenPositionalArgIs = () => {
   expect(substituteArgs(`List exactly \${1:-7} next steps`, [])).toBe("List exactly 7 next steps");

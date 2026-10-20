@@ -1,9 +1,11 @@
-import { readHead } from "./node-fs.ts";
+import nodeFs from "./node-fs.ts";
+
+const { readHead } = nodeFs;
 
 const IMAGE_TYPE_SNIFF_BYTES = 4100;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-export function detectSupportedImageMimeType(buffer: Uint8Array): string | null {
+function detectSupportedImageMimeType(buffer: Uint8Array): string | null {
   if (startsWith(buffer, [0xff, 0xd8, 0xff])) {
     return buffer[3] === 0xf7 ? null : "image/jpeg";
   }
@@ -22,7 +24,7 @@ export function detectSupportedImageMimeType(buffer: Uint8Array): string | null 
   return null;
 }
 
-export function detectSupportedImageMimeTypeFromFile(filePath: string): Promise<string | null> {
+function detectSupportedImageMimeTypeFromFile(filePath: string): Promise<string | null> {
   return readHead({ length: IMAGE_TYPE_SNIFF_BYTES, path: filePath }).then(
     detectSupportedImageMimeType,
   );
@@ -111,3 +113,10 @@ function startsWithAscii(buffer: Uint8Array, offset: number, text: string): bool
   }
   return true;
 }
+
+const mime = {
+  detectSupportedImageMimeType,
+  detectSupportedImageMimeTypeFromFile,
+};
+
+export default mime;

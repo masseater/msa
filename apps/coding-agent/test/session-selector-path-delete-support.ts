@@ -1,9 +1,8 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { SessionInfo } from "../src/core/session-manager.ts";
-
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 const {
   dateFromMillis,
   joinPath,
@@ -18,7 +17,9 @@ const {
 
 const flushPromises = sleep("1 millis");
 
-function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
+function makeSession(
+  overrides: Partial<sessionManagerTypes.SessionInfo> & { id: string },
+): sessionManagerTypes.SessionInfo {
   return {
     cwd: overrides.cwd ?? "",
     id: overrides.id,

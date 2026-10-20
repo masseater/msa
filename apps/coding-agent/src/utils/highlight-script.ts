@@ -7,7 +7,7 @@ import python from "highlight.js/lib/languages/python.js";
 import ruby from "highlight.js/lib/languages/ruby.js";
 import typescript from "highlight.js/lib/languages/typescript.js";
 
-export const scriptLanguages = {
+const scriptLanguages = {
   bash,
   javascript,
   lua,
@@ -17,3 +17,9 @@ export const scriptLanguages = {
   ruby,
   typescript,
 };
+
+const highlightScript = {
+  scriptLanguages,
+};
+
+export default highlightScript;

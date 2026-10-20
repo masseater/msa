@@ -1,22 +1,25 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
+import paths from "../utils/paths.ts";
+import platformNode from "./platform-node.ts";
+import platform from "./platform.ts";
+import nodeFs from "./platform/node/fs.ts";
+import sessionManagerSupport from "./session-manager-support.ts";
+import type sessionManagerTypes from "./session-manager.types.ts";
 
-import { resolvePath } from "../utils/paths.ts";
-import { dirname } from "./platform-node.ts";
-import { nowIso } from "./platform.ts";
-import {
-  CURRENT_SESSION_VERSION,
-  type SessionHeader,
-  type SessionManager,
-} from "./session-manager.ts";
+const { existsSync, mkdirSync, writeFileSync } = nodeFs;
+
+const { CURRENT_SESSION_VERSION } = sessionManagerSupport;
+const { nowIso } = platform;
+const { resolvePath } = paths;
+const { dirname } = platformNode;
 
 type TrailingEntries = (parentId: string | null, timestamp: string) => readonly object[];
 
-export function serializeSessionBranch(
-  sessionManager: SessionManager,
+function serializeSessionBranch(
+  sessionManager: sessionManagerTypes.SessionManager,
   createTrailingEntries?: TrailingEntries,
 ): string {
   const timestamp = nowIso();
-  const header: SessionHeader = {
+  const header: sessionManagerTypes.SessionHeader = {
     cwd: sessionManager.getCwd(),
     id: sessionManager.getSessionId(),
     timestamp,
@@ -33,7 +36,10 @@ export function serializeSessionBranch(
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
 }
 
-export function exportSessionToJsonl(sessionManager: SessionManager, outputPath?: string): string {
+function exportSessionToJsonl(
+  sessionManager: sessionManagerTypes.SessionManager,
+  outputPath?: string,
+): string {
   const filePath = resolvePath(
     outputPath ?? `session-${nowIso().replace(/[:.]/gu, "-")}.jsonl`,
     process.cwd(),
@@ -43,3 +49,10 @@ export function exportSessionToJsonl(sessionManager: SessionManager, outputPath?
   writeFileSync(filePath, serializeSessionBranch(sessionManager));
   return filePath;
 }
+
+const sessionExport = {
+  exportSessionToJsonl,
+  serializeSessionBranch,
+};
+
+export default sessionExport;

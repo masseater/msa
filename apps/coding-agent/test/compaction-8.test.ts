@@ -3,12 +3,11 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type CompactionSettings,
-  DEFAULT_COMPACTION_SETTINGS,
-  prepareCompaction,
-} from "../src/core/compaction/index.ts";
-import { type CompactionEntry, type SessionMessageEntry } from "../src/core/session-manager.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type compactionTypes from "../src/core/compaction/index.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { DEFAULT_COMPACTION_SETTINGS, prepareCompaction } = compaction;
 
 const { currentDate, currentTimeMillis } = testing;
 
@@ -60,9 +59,11 @@ beforeEach(() => {
   resetEntryCounter();
 });
 
-function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEntry {
+function createMessageEntry(
+  message: agentTypes.AgentMessage,
+): sessionManagerTypes.SessionMessageEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: SessionMessageEntry = {
+  const entry: sessionManagerTypes.SessionMessageEntry = {
     id,
     message,
     parentId: lastId,
@@ -73,9 +74,12 @@ function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEnt
   return entry;
 }
 
-function createCompactionEntry(summary: string, firstKeptEntryId: string): CompactionEntry {
+function createCompactionEntry(
+  summary: string,
+  firstKeptEntryId: string,
+): sessionManagerTypes.CompactionEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: CompactionEntry = {
+  const entry: sessionManagerTypes.CompactionEntry = {
     firstKeptEntryId,
     id,
     parentId: lastId,
@@ -164,7 +168,7 @@ const shouldReSummarizePreviouslyKeptMessagesWhen = () => {
     createAssistantMessage("assistant msg 4 ".repeat(12), createMockUsage(8000, 2000)),
   );
 
-  const settings: CompactionSettings = {
+  const settings: compactionTypes.CompactionSettings = {
     ...DEFAULT_COMPACTION_SETTINGS,
     keepRecentTokens: 100,
   };

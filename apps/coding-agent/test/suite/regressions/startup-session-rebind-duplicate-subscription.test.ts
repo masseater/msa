@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 
 const { gate } = testing;
 

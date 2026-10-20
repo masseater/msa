@@ -3,7 +3,9 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { readClipboardImage } from "../src/utils/clipboard-image.ts";
+import clipboardImage from "../src/utils/clipboard-image.ts";
+
+const { readClipboardImage } = clipboardImage;
 
 const { awaited, runTest, writeBytesFile } = testing;
 
@@ -14,7 +16,9 @@ const mocks = vi.hoisted(() => ({
   getNativeClipboard: vi.fn<() => tuiTypes.NativeClipboard | undefined>(),
 }));
 
-vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
+vi.mock("../src/utils/clipboard-command.ts", () => ({
+  default: { runClipboardCommand: mocks.command },
+}));
 vi.mock("@msa/tui", () => ({ default: { getNativeClipboard: mocks.getNativeClipboard } }));
 
 function commandResult(stdout: Buffer, status = 0): Buffer | undefined {

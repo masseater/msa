@@ -5,9 +5,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createToolDefinitionFromAgentTool } from "../../src/core/tools/tool-definition-wrapper.ts";
+import toolDefinitionWrapper from "../../src/core/tools/tool-definition-wrapper.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { createToolDefinitionFromAgentTool } = toolDefinitionWrapper;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

@@ -3,11 +3,13 @@ import { homedir } from "node:os";
 import testing from "@msa/testing";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
-import { getStartupVisibility } from "../src/modes/interactive/loaded-resources.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import loadedResources from "../src/modes/interactive/loaded-resources.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import interactiveModeStatus5Support from "./interactive-mode-status-5-support.ts";
 import interactiveModeStatusSupport from "./interactive-mode-status-support.ts";
+const { getStartupVisibility } = loadedResources;
+const { initTheme } = themeModule;
 
 const { createShowLoadedResourcesThis } = interactiveModeStatus5Support;
 

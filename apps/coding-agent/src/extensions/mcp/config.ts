@@ -1,45 +1,19 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-
 import { dual } from "effect/Function";
 
-import { CONFIG_DIR_NAME } from "../../config.ts";
-import {
-  type McpExposure,
-  type McpServerConfig,
-  mcpNamespace,
-  validateMcpServerConfig,
-} from "../../core/mcp-servers.ts";
-import { dirname, join } from "../../core/platform-node.ts";
-import { toErrorMessage } from "../../utils/errors.ts";
+import configModule from "../../config.ts";
+import mcpServers from "../../core/mcp-servers.ts";
+import type mcpServersTypes from "../../core/mcp-servers.types.ts";
+import platformNode from "../../core/platform-node.ts";
+import nodeFs from "../../core/platform/node/fs.ts";
+import errorsModule from "../../utils/errors.ts";
+import type configTypes from "./config.types.ts";
 
-export type {
-  McpExposure,
-  McpHttpServerConfig,
-  McpOAuthConfig,
-  McpServerConfig,
-  McpStdioServerConfig,
-} from "../../core/mcp-servers.ts";
-export { getMcpToolExposure } from "../../core/mcp-servers.ts";
+const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 
-export interface McpServerEntry {
-  name: string;
-  config: McpServerConfig;
-
-  source: string;
-
-  scope?: "global" | "project" | "extension";
-
-  override?: string;
-}
-
-export interface LoadedMcpConfig {
-  servers: McpServerEntry[];
-
-  autoEnableCodemode?: boolean;
-  errors: string[];
-
-  projectConfig?: string;
-}
+const { mcpNamespace, validateMcpServerConfig } = mcpServers;
+const { toErrorMessage } = errorsModule;
+const { dirname, join } = platformNode;
+const { CONFIG_DIR_NAME } = configModule;
 
 const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"];
 
@@ -54,7 +28,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 interface McpConfigState {
-  servers: Map<string, McpServerEntry>;
+  servers: Map<string, configTypes.McpServerEntry>;
   autoEnableCodemode?: boolean;
   errors: string[];
 }
@@ -83,20 +57,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
   for (const [name, value] of Object.entries(parsed["mcpServers"] ?? {})) {
     if (scope === "project" && isRecord(value) && isOverride(value)) {
       const base = servers.get(name);
-      const extra = Object.keys(value).filter((key) => !OVERRIDE_KEYS.includes(key));
-      if (base === undefined) {
-        errors.push(
-          `${path}: server "${name}" needs "command" or "url", or a global server to override`,
-        );
-      } else if (extra.length > 0) {
-        errors.push(
-          `${path}: server "${name}": an override can only set ${OVERRIDE_KEYS.join(", ")}`,
-        );
-      } else {
-        const config = validateMcpServerConfig(name, { ...base.config, ...value });
-        if (typeof config === "string") errors.push(`${path}: ${config}`);
-        else servers.set(name, { ...base, config, override: path });
-      }
+      readConfigFilePart1(value, base, errors, path, name, servers);
       continue;
     }
     const config = validateMcpServerConfig(name, value);
@@ -120,11 +81,33 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
   }
 }
 
-export function loadMcpConfig(options: {
+function readConfigFilePart1(
+  value: Record<string, unknown>,
+  base: configTypes.McpServerEntry | undefined,
+  errors: string[],
+  path: string,
+  name: string,
+  servers: Map<string, configTypes.McpServerEntry>,
+) {
+  const extra = Object.keys(value).filter((key) => !OVERRIDE_KEYS.includes(key));
+  if (base === undefined) {
+    errors.push(
+      `${path}: server "${name}" needs "command" or "url", or a global server to override`,
+    );
+  } else if (extra.length > 0) {
+    errors.push(`${path}: server "${name}": an override can only set ${OVERRIDE_KEYS.join(", ")}`);
+  } else {
+    const config = validateMcpServerConfig(name, { ...base.config, ...value });
+    if (typeof config === "string") errors.push(`${path}: ${config}`);
+    else servers.set(name, { ...base, config, override: path });
+  }
+}
+
+function loadMcpConfig(options: {
   agentDir: string;
   cwd: string;
   projectTrusted: boolean;
-}): LoadedMcpConfig {
+}): configTypes.LoadedMcpConfig {
   const state: McpConfigState = { errors: [], servers: new Map() };
   readConfigFile(join(options.agentDir, "mcp.json"), "global", state);
   const projectConfig = options.projectTrusted
@@ -142,15 +125,10 @@ export function loadMcpConfig(options: {
   };
 }
 
-export interface McpServerConfigPatch {
-  enabled?: boolean;
-  exposure?: McpExposure;
-}
-
 function updateMcpServerConfigImpl(
   path: string,
   name: string,
-  patch: McpServerConfigPatch,
+  patch: configTypes.McpServerConfigPatch,
   options: { override?: boolean } = {},
 ): void {
   editMcpServers(path, (servers, parsed) => {
@@ -173,16 +151,25 @@ function updateMcpServerConfigImpl(
   });
 }
 
-export const updateMcpServerConfig: {
-  (path: string, name: string, patch: McpServerConfigPatch, options?: { override?: boolean }): void;
+const updateMcpServerConfig: {
+  (
+    path: string,
+    name: string,
+    patch: configTypes.McpServerConfigPatch,
+    options?: { override?: boolean },
+  ): void;
   (
     name: string,
-    patch: McpServerConfigPatch,
+    patch: configTypes.McpServerConfigPatch,
     options?: { override?: boolean },
   ): (path: string) => void;
 } = dual((args: IArguments) => args.length >= 3, updateMcpServerConfigImpl);
 
-function addMcpServerConfigImpl(path: string, name: string, config: McpServerConfig): boolean {
+function addMcpServerConfigImpl(
+  path: string,
+  name: string,
+  config: mcpServersTypes.McpServerConfig,
+): boolean {
   let replaced = false;
   editMcpServers(path, (servers, parsed) => {
     const target = servers ?? {};
@@ -194,9 +181,9 @@ function addMcpServerConfigImpl(path: string, name: string, config: McpServerCon
   return replaced;
 }
 
-export const addMcpServerConfig: {
-  (path: string, name: string, config: McpServerConfig): boolean;
-  (name: string, config: McpServerConfig): (path: string) => boolean;
+const addMcpServerConfig: {
+  (path: string, name: string, config: mcpServersTypes.McpServerConfig): boolean;
+  (name: string, config: mcpServersTypes.McpServerConfig): (path: string) => boolean;
 } = dual((args: IArguments) => args.length >= 3, addMcpServerConfigImpl);
 
 function removeMcpServerConfigImpl(path: string, name: string): boolean {
@@ -211,7 +198,7 @@ function removeMcpServerConfigImpl(path: string, name: string): boolean {
   return removed;
 }
 
-export const removeMcpServerConfig: {
+const removeMcpServerConfig: {
   (path: string, name: string): boolean;
   (name: string): (path: string) => boolean;
 } = dual((args: IArguments) => args.length >= 2, removeMcpServerConfigImpl);
@@ -234,3 +221,13 @@ function editMcpServers(
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(parsed, null, indent)}\n`);
 }
+
+const config = {
+  addMcpServerConfig,
+  getMcpToolExposure: mcpServers.getMcpToolExposure,
+  loadMcpConfig,
+  removeMcpServerConfig,
+  updateMcpServerConfig,
+};
+
+export default config;

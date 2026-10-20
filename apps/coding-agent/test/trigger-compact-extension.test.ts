@@ -1,13 +1,9 @@
 import { describe, expect, test, vi } from "vite-plus/test";
 
 import triggerCompactExtension from "../examples/extensions/trigger-compact.ts";
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ExtensionContext,
-} from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 
-function createContext(tokens: number | null, compact = vi.fn()): ExtensionContext {
+function createContext(tokens: number | null, compact = vi.fn()): extensionsTypes.ExtensionContext {
   return {
     abort: vi.fn(),
     compact,
@@ -24,28 +20,34 @@ function createContext(tokens: number | null, compact = vi.fn()): ExtensionConte
     isProjectTrusted: () => true,
     mode: "print",
     model: undefined,
-    modelRegistry: {} as ExtensionContext["modelRegistry"],
+    modelRegistry: {} as extensionsTypes.ExtensionContext["modelRegistry"],
     scopedModels: [],
-    sessionManager: {} as ExtensionContext["sessionManager"],
+    sessionManager: {} as extensionsTypes.ExtensionContext["sessionManager"],
     shutdown: vi.fn(),
     signal: undefined,
-    ui: {} as ExtensionContext["ui"],
+    ui: {} as extensionsTypes.ExtensionContext["ui"],
   };
 }
 
 const onlyAutoCompactsWhenContextUsageCrosses = () => {
   let turnEndHandler:
-    | ((event: { type: "turn_end" }, ctx: ExtensionContext | ExtensionCommandContext) => void)
+    | ((
+        event: { type: "turn_end" },
+        ctx: extensionsTypes.ExtensionContext | extensionsTypes.ExtensionCommandContext,
+      ) => void)
     | undefined;
 
   const api = {
-    on: (event: string, handler: (event: { type: "turn_end" }, ctx: ExtensionContext) => void) => {
+    on: (
+      event: string,
+      handler: (event: { type: "turn_end" }, ctx: extensionsTypes.ExtensionContext) => void,
+    ) => {
       if (event === "turn_end") {
         turnEndHandler = handler;
       }
     },
     registerCommand: vi.fn(),
-  } as unknown as ExtensionAPI;
+  } as unknown as extensionsTypes.ExtensionAPI;
 
   triggerCompactExtension(api);
   expect(turnEndHandler).toBeDefined();

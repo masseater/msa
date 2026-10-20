@@ -2,28 +2,17 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Cause, Clock, Effect, ManagedRuntime, Path, Predicate } from "effect";
 import { dual } from "effect/Function";
 
-import { ForeignError } from "./foreign-error.ts";
-import { ToolFailure } from "./tool-failure.ts";
-
-export { ForeignError } from "./foreign-error.ts";
-export { ToolFailure } from "./tool-failure.ts";
-
-export const platformRuntime = ManagedRuntime.make(NodeServices.layer);
-export interface PathOperations {
-  readonly join: (...segments: ReadonlyArray<string>) => string;
-  readonly resolve: (...segments: ReadonlyArray<string>) => string;
-  readonly dirname: (path: string) => string;
-  readonly basename: (path: string, suffix?: string) => string;
-  readonly extname: (path: string) => string;
-  readonly relative: (from: string, to: string) => string;
-  readonly isAbsolute: (path: string) => boolean;
-  readonly normalize: (path: string) => string;
-  readonly sep: string;
-}
+import ForeignError from "./foreign-error.ts";
+import type foreignErrorTypes from "./foreign-error.types.ts";
+import type platformTypes from "./index.types.ts";
+import nodeSea from "./node/sea.ts";
+import ToolFailure from "./tool-failure.ts";
+import type toolFailureTypes from "./tool-failure.types.ts";
+const platformRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const servicePath = platformRuntime.runSync(Path.Path);
 
-export const pathOperations: PathOperations = {
+const pathOperations: platformTypes.PathOperations = {
   basename: (path, suffix) => servicePath.basename(path, suffix),
   dirname: (path) => servicePath.dirname(path),
   extname: (path) => servicePath.extname(path),
@@ -35,16 +24,18 @@ export const pathOperations: PathOperations = {
   sep: servicePath.sep,
 };
 
-export const currentTimeMillis = (): number => platformRuntime.runSync(Clock.currentTimeMillis);
+const currentTimeMillis = (): number => platformRuntime.runSync(Clock.currentTimeMillis);
 
-export const abortedBy =
+const abortedBy =
   (signal: AbortSignal | undefined) =>
-  <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E | ToolFailure, R> =>
+  <A, E, R>(
+    effect: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E | toolFailureTypes.ToolFailure, R> =>
     signal === undefined
       ? effect
       : Effect.raceFirst(
           effect,
-          Effect.callback<never, ToolFailure>((resume, abortSignal) => {
+          Effect.callback<never, toolFailureTypes.ToolFailure>((resume, abortSignal) => {
             const fail = (): void =>
               resume(Effect.fail(new ToolFailure({ message: "Operation aborted" })));
             if (signal.aborted) fail();
@@ -52,7 +43,7 @@ export const abortedBy =
           }),
         );
 
-export const isMissingPath = (error: unknown): boolean => {
+const isMissingPath = (error: unknown): boolean => {
   if (!Predicate.hasProperty(error, "reason")) return false;
   const { reason } = error;
   if (Predicate.isTagged(reason, "NotFound")) return true;
@@ -62,7 +53,7 @@ export const isMissingPath = (error: unknown): boolean => {
   );
 };
 
-export const rethrowCause = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, never, R> =>
+const rethrowCause = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, never, R> =>
   effect.pipe(
     Effect.catch((error) =>
       Effect.die(
@@ -71,47 +62,68 @@ export const rethrowCause = <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Ef
     ),
   );
 
-export const fromMaybePromise = <A>(evaluate: () => Promise<A> | A): Effect.Effect<A> =>
+const fromMaybePromise = <A>(evaluate: () => Promise<A> | A): Effect.Effect<A> =>
   Effect.promise(() => Promise.resolve(evaluate()));
 
-export const nonEmptyOr: {
+const nonEmptyOr: {
   (fallback: string): (value: string | undefined) => string;
   (value: string | undefined, fallback: string): string;
 } = dual(2, (value: string | undefined, fallback: string): string =>
   value === undefined || value === "" ? fallback : value,
 );
 
-export const fromPromise = <A>(
+const fromPromise = <A>(
   evaluate: (signal: AbortSignal) => PromiseLike<A> | A,
-): Effect.Effect<A, ForeignError> =>
+): Effect.Effect<A, foreignErrorTypes.ForeignError> =>
   Effect.tryPromise({
     catch: (cause) =>
       new ForeignError({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
     try: (signal) => Promise.resolve(evaluate(signal)),
   });
 
-export const unwrapForeign = <A, E, R>(
+const unwrapForeign = <A, E, R>(
   effect: Effect.Effect<A, E, R>,
-): Effect.Effect<A, Exclude<E, ForeignError>, R> =>
+): Effect.Effect<A, Exclude<E, foreignErrorTypes.ForeignError>, R> =>
   effect.pipe(
     Effect.catch((error) =>
       error instanceof ForeignError
         ? Effect.die(error.cause)
-        : Effect.fail(error as Exclude<E, ForeignError>),
+        : Effect.fail(error as Exclude<E, foreignErrorTypes.ForeignError>),
     ),
   );
 
-export const randomHex = (byteCount: number): string =>
+const randomHex = (byteCount: number): string =>
   Array.from(globalThis.crypto.getRandomValues(new Uint8Array(byteCount)), (byte) =>
     byte.toString(16).padStart(2, "0"),
   ).join("");
 
-export const errorFromCause = (cause: Cause.Cause<unknown>): unknown => {
+const errorFromCause = (cause: Cause.Cause<unknown>): unknown => {
   const squashed = Cause.squash(cause);
   return squashed instanceof ForeignError ? squashed.cause : squashed;
 };
 
-export const causeMessage = (cause: Cause.Cause<unknown>): string => {
+const causeMessage = (cause: Cause.Cause<unknown>): string => {
   const error = errorFromCause(cause);
   return error instanceof Error ? error.message : String(error);
 };
+
+const platform = {
+  ForeignError: ForeignError,
+  ToolFailure: ToolFailure,
+  abortedBy,
+  causeMessage,
+  currentTimeMillis,
+  errorFromCause,
+  fromMaybePromise,
+  fromPromise,
+  isMissingPath,
+  isSea: nodeSea.isSea,
+  nonEmptyOr,
+  pathOperations,
+
+  randomHex,
+  rethrowCause,
+  unwrapForeign,
+};
+
+export default platform;

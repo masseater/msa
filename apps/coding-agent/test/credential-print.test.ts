@@ -3,23 +3,26 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import { parseArgs } from "../src/cli/args.ts";
-import {
-  AuthCommandError,
-  getAuthCredential,
-  isAuthCommandHelp,
-  parseAuthCommand,
-} from "../src/cli/auth-command.ts";
-import { resolveCredentialForPrint } from "../src/cli/credential-print.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { main } from "../src/main.ts";
+import AuthCommandError from "../src/cli/auth-command-error.ts";
+import authCommand from "../src/cli/auth-command.ts";
+import credentialPrint from "../src/cli/credential-print.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 
+const { main, parseArgs } = codingAgent;
+
+const { ModelRuntime } = codingAgent;
+const { resolveCredentialForPrint } = credentialPrint;
+const { getAuthCredential, isAuthCommandHelp, parseAuthCommand } = authCommand;
 const { InMemoryModelsStore } = ai;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
-function createRuntime(credentials: AuthStorage): Promise<ModelRuntime> {
+function createRuntime(
+  credentials: authStorageTypes.AuthStorage,
+): Promise<codingAgentTypes.ModelRuntime> {
   return runTest(
     awaited(
       ModelRuntime.create({

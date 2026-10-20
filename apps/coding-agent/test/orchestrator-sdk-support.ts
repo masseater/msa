@@ -2,10 +2,13 @@ import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+
+const { createAgentSession } = sdk;
 
 const { fauxAssistantMessage, registerFauxProvider } = compat;
 
@@ -14,7 +17,7 @@ const { makeDirectory, tempRoot } = testing;
 const tempDir = `${tempRoot()}/msa-orchestrator-sdk-${process.pid}`;
 
 function registerModel(
-  modelRuntime: ModelRuntime,
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
   model: NonNullable<ReturnType<ReturnType<typeof registerFauxProvider>["getModel"]>>,
 ): void {
   modelRuntime.registerProvider(model.provider, {

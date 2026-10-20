@@ -1,19 +1,22 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { BranchSummaryMessage } from "../../../core/messages.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
-import { keyText } from "./keybinding-hints.ts";
+import type messagesTypes from "../../../core/messages.types.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-const { Box, Container, Markdown, MouseRegion, Spacer, Text } = tui;
+const { getMarkdownTheme, theme } = themeModule;
+const { keyText } = keybindingHints;
 
-export class BranchSummaryMessageComponent extends Box {
+const { Container, Markdown, MouseRegion, Spacer, Text } = tui;
+
+export default class BranchSummaryMessageComponent extends tui.Box {
   private expanded = false;
-  private message: BranchSummaryMessage;
+  private message: messagesTypes.BranchSummaryMessage;
   private markdownTheme: tuiTypes.MarkdownTheme;
 
   constructor(
-    message: BranchSummaryMessage,
+    message: messagesTypes.BranchSummaryMessage,
     markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {

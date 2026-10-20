@@ -1,11 +1,13 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BOLD, DIM, MAGENTA, RESET, YELLOW } from "./colors.ts";
+import colors from "./colors.ts";
+
+const { BOLD, DIM, MAGENTA, RESET, YELLOW } = colors;
 
 const { SelectList } = tui;
 
-export class SelectDialog implements tuiTypes.Component {
+export default class SelectDialog implements tuiTypes.Component {
   private list: tuiTypes.SelectList;
   private title: string;
   onSelect?: (value: string) => void;

@@ -1,34 +1,28 @@
-import { spawn } from "node:child_process";
-
 import * as Effect from "effect/Effect";
 
-import { waitForChildProcess } from "../utils/child-process.ts";
-import { awaiting, performed } from "./awaiting.ts";
-import { type Scheduled, schedule } from "./platform.ts";
+import childProcess from "../utils/child-process.ts";
+import awaitingModule from "./awaiting.ts";
+import type execTypes from "./exec.types.ts";
+import platform from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+import nodeChildProcess from "./platform/node/child-process.ts";
 
-export interface ExecOptions {
-  signal?: AbortSignal;
-  timeout?: number;
-  cwd?: string;
-}
+const { spawn } = nodeChildProcess;
 
-export interface ExecResult {
-  stdout: string;
-  stderr: string;
-  code: number;
-  killed: boolean;
-}
+const { awaiting, performed } = awaitingModule;
+const { schedule } = platform;
+const { waitForChildProcess } = childProcess;
 
-export function execCommand(
+function execCommand(
   command: string,
   args: string[],
   cwd: string,
-  options?: ExecOptions,
-): Promise<ExecResult> {
+  options?: execTypes.ExecOptions,
+): Promise<execTypes.ExecResult> {
   return Effect.runPromise(
     awaiting(function* () {
       return yield* performed(
-        Effect.callback<ExecResult>((resume) => {
+        Effect.callback<execTypes.ExecResult>((resume) => {
           const proc = spawn(command, args, {
             cwd,
             shell: false,
@@ -38,7 +32,7 @@ export function execCommand(
           let stdout = "";
           let stderr = "";
           let killed = false;
-          let timeoutId: Scheduled | undefined;
+          let timeoutId: platformTypes.Scheduled | undefined;
 
           const killProcess = () => {
             if (!killed) {
@@ -96,3 +90,9 @@ export function execCommand(
     }),
   );
 }
+
+const exec = {
+  execCommand,
+};
+
+export default exec;

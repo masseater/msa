@@ -1,14 +1,15 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Clock, Effect, type Fiber } from "effect";
 
-import { BaseOverlay } from "./base-overlay.ts";
-import { hslToRgb } from "./hsl-to-rgb.ts";
+import BaseOverlay from "./base-overlay.ts";
+import hslToRgbModule from "./hsl-to-rgb.ts";
+const { hslToRgb } = hslToRgbModule;
 
 const { matchesKey, truncateToWidth } = tuiModule;
 
-export class AnimationDemoComponent extends BaseOverlay {
+export default class AnimationDemoComponent extends BaseOverlay {
   private tui: tuiTypes.TUI;
   private frame = 0;
   private fiber: Fiber.Fiber<never> | undefined;
@@ -17,7 +18,7 @@ export class AnimationDemoComponent extends BaseOverlay {
   private framesSinceLastFps = 0;
   private done: () => void;
 
-  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

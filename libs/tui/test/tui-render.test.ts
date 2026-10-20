@@ -9,11 +9,9 @@ import tuiRenderHelpers from "./tui-render-helpers.ts";
 import InputComponent from "./tui-render-input-component.ts";
 import tuiRenderKit from "./tui-render-kit.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { effectHelpers, src: tuiModule } = tuiRenderKit;
-
-const { VirtualTerminal } = virtualTerminal;
 const { TuiMainScreen } = tuiModule;
 const { nextTick } = effectHelpers;
 

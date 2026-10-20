@@ -1,6 +1,7 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { KeybindingsConfig } from "../keybindings.ts";
+import type keybindingsTypes from "../keybindings.types.ts";
+import type runnerKeybindingsTypes from "./runner-keybindings.types.ts";
 
 const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
   "app.interrupt",
@@ -23,14 +24,10 @@ const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
   "tui.editor.deleteToLineEnd",
 ] as const;
 
-export type BuiltInKeyBindings = Partial<
-  Record<tuiTypes.KeyId, { keybinding: string; restrictOverride: boolean }>
->;
-
-export const buildBuiltinKeybindings = (
-  resolvedKeybindings: KeybindingsConfig,
-): BuiltInKeyBindings => {
-  const builtinKeybindings = {} as BuiltInKeyBindings;
+const buildBuiltinKeybindings = (
+  resolvedKeybindings: keybindingsTypes.KeybindingsConfig,
+): runnerKeybindingsTypes.BuiltInKeyBindings => {
+  const builtinKeybindings = {} as runnerKeybindingsTypes.BuiltInKeyBindings;
   for (const [keybinding, keys] of Object.entries(resolvedKeybindings)) {
     if (keys === undefined) continue;
     const keyList = Array.isArray(keys) ? keys : [keys];
@@ -49,3 +46,9 @@ export const buildBuiltinKeybindings = (
   }
   return builtinKeybindings;
 };
+
+const runnerKeybindings = {
+  buildBuiltinKeybindings,
+};
+
+export default runnerKeybindings;

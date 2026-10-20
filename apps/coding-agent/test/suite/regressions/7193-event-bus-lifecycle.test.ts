@@ -1,25 +1,25 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createEventBus } from "../../../src/core/event-bus.ts";
-import {
-  createExtensionRuntime,
-  loadExtensionFromFactory,
-} from "../../../src/core/extensions/loader.ts";
-import type { ExtensionAPI, ExtensionFactory, ResourceLoader } from "../../../src/index.ts";
+import eventBusModule from "../../../src/core/event-bus.ts";
+import loader from "../../../src/core/extensions/loader.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { createEventBus } = eventBusModule;
+const { createExtensionRuntime, loadExtensionFromFactory } = loader;
 
 const { createHarness } = harnessModule;
 
 const harnesses: harnessTypes.Harness[] = [];
 
-type ExtensionsResult = ReturnType<ResourceLoader["getExtensions"]>;
+type ExtensionsResult = ReturnType<srcTypes.ResourceLoader["getExtensions"]>;
 
 const reloadingResourceLoader = (
   initial: ExtensionsResult,
   load: () => Promise<ExtensionsResult>,
-): ResourceLoader => {
+): srcTypes.ResourceLoader => {
   let current = initial;
   return {
     extendResources: () => {},
@@ -47,8 +47,8 @@ const removesExtensionOwnedEventBusListenersStep1 = () =>
     const eventBus = createEventBus();
     let extensionCalls = 0;
     let hostCalls = 0;
-    let firstApi: ExtensionAPI | undefined;
-    const factory: ExtensionFactory = (msa) => {
+    let firstApi: srcTypes.ExtensionAPI | undefined;
+    const factory: srcTypes.ExtensionFactory = (msa) => {
       firstApi ??= msa;
       msa.events.on("reload:test", () => extensionCalls++);
     };

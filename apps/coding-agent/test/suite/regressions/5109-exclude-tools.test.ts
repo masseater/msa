@@ -2,7 +2,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../../src/index.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 
 const { createHarness } = harnessModule;
@@ -11,7 +11,7 @@ function toolNames(tools: Array<{ name: string }>): string[] {
   return tools.map((tool) => tool.name).sort();
 }
 
-const extensionFactories: ExtensionFactory[] = [
+const extensionFactories: srcTypes.ExtensionFactory[] = [
   (msa) => {
     msa.on("session_start", () => {
       msa.registerTool({

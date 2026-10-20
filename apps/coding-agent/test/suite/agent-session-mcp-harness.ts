@@ -1,13 +1,17 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
-import { createMcpExtension } from "../../src/extensions/mcp/index.ts";
-import { createToolSearchExtension } from "../../src/extensions/tool-search/index.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
+import mcpExtension from "../../src/extensions/mcp/extension.ts";
+import extensionModule from "../../src/extensions/tool-search/extension.ts";
 import type agentSessionMcpHarnessTypes from "./agent-session-mcp-harness.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 import mcpFakeServer from "./mcp-fake-server.ts";
+
+const { createCodemodeExtension } = extension;
+const { createToolSearchExtension } = extensionModule;
+const { createMcpExtension } = mcpExtension;
 
 const { awaited } = testing;
 

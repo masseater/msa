@@ -1,15 +1,21 @@
-import { getDocsPath, getExamplesPath, getReadmePath } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { describe, expect, it } from "vite-plus/test";
 
-import { buildSystemPrompt } from "../../coding-agent/src/core/system-prompt.ts";
-import { createMsaDocumentationEvalHarness } from "../src/harness.ts";
-import { resolveModelSelection } from "../src/model-selection.ts";
-import {
+import systemPromptModule from "../../coding-agent/src/core/system-prompt.ts";
+import harness from "../src/harness.ts";
+import modelSelection from "../src/model-selection.ts";
+import systemPrompt from "../src/system-prompt.ts";
+
+const { resolveModelSelection } = modelSelection;
+const {
   DOCUMENTATION_EVAL_TOOLS,
   excludeMsaDocumentation,
   resolveDocumentationVariant,
   verifySystemPrompt,
-} from "../src/system-prompt.ts";
+} = systemPrompt;
+const { buildSystemPrompt } = systemPromptModule;
+const { getDocsPath, getExamplesPath, getReadmePath } = codingAgent;
+const { createMsaDocumentationEvalHarness } = harness;
 
 describe("resolveModelSelection", () => {
   it("prefers an explicit harness model", () => {

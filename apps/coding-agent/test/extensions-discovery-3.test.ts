@@ -4,7 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { discoverAndLoadExtensions } from "../src/core/extensions/loader.ts";
+import loader from "../src/core/extensions/loader.ts";
+
+const { discoverAndLoadExtensions } = loader;
 
 const {
   awaited,

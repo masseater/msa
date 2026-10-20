@@ -1,66 +1,22 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Orchestrator } from "../../core/orchestrator/orchestrator.ts";
-import type { CustomEditor } from "./components/custom-editor.ts";
-import { PaneResizer } from "./components/pane-resizer.ts";
-import type { TasksViewState } from "./components/tasks-view-helpers.ts";
-import { ThreadPane } from "./components/thread-pane.ts";
+import type customEditorTypes from "./components/custom-editor.types.ts";
+import PaneResizer from "./components/pane-resizer.ts";
+import ThreadPane from "./components/thread-pane.ts";
+import orchestratorPaneSupport from "./orchestrator-pane-support.ts";
+import type orchestratorPaneTypes from "./orchestrator-pane.types.ts";
+import PaneWidth from "./pane-width.ts";
 
-const { SplitPane, splitPaneWidths } = tui;
+const { SplitPane } = tui;
+const { ORCHESTRATOR_PANE } = orchestratorPaneSupport;
 
-export const ORCHESTRATOR_PANE = {
-  minLeftWidth: 40,
-  minRightWidth: 24,
-  share: 0.3,
-  stepColumns: 2,
-} as const;
-
-export class PaneWidth {
-  private current: number = ORCHESTRATOR_PANE.share;
-
-  get share(): number {
-    return this.current;
-  }
-
-  dragTo(screenX: number, totalWidth: number): boolean {
-    return this.setRightWidth(Math.floor(totalWidth) - 1 - screenX, totalWidth);
-  }
-
-  nudge(columns: number, totalWidth: number): boolean {
-    const right = splitPaneWidths(totalWidth, this.current).right;
-    const collapsed = right < ORCHESTRATOR_PANE.minRightWidth;
-    const target = collapsed && columns > 0 ? ORCHESTRATOR_PANE.minRightWidth : right + columns;
-    return this.setRightWidth(target, totalWidth);
-  }
-
-  private setRightWidth(width: number, totalWidth: number): boolean {
-    const content = Math.floor(totalWidth) - 1;
-    if (content < 1) return false;
-    const rounded = Math.round(width);
-    const maximum = Math.max(0, content - ORCHESTRATOR_PANE.minLeftWidth);
-    const next =
-      rounded < ORCHESTRATOR_PANE.minRightWidth ? 0 : Math.min(maximum, rounded) / content;
-    if (next === this.current) return false;
-    this.current = next;
-    return true;
-  }
-}
-
-export interface OrchestratorPaneOptions {
-  orchestrator: () => Orchestrator | undefined;
-  state: TasksViewState;
-  columns: () => number;
-  rows: () => number;
-  requestRender: () => void;
-}
-
-export class OrchestratorPane {
+export default class OrchestratorPane {
   readonly width = new PaneWidth();
-  private readonly options: OrchestratorPaneOptions;
+  private readonly options: orchestratorPaneTypes.OrchestratorPaneOptions;
   private threadsOpen = false;
 
-  constructor(options: OrchestratorPaneOptions) {
+  constructor(options: orchestratorPaneTypes.OrchestratorPaneOptions) {
     this.options = options;
   }
 
@@ -76,13 +32,13 @@ export class OrchestratorPane {
       left,
       minLeftWidth: ORCHESTRATOR_PANE.minLeftWidth,
       minRightWidth: ORCHESTRATOR_PANE.minRightWidth,
-      right: new ThreadPane({ orchestrator, state, height: rows }),
+      right: new ThreadPane({ height: rows, orchestrator, state }),
       rightShare: () => this.width.share,
       visible: () => !this.threadsOpen && orchestrator() !== undefined,
     });
   }
 
-  bindKeys(editor: CustomEditor, openThreads: () => void): void {
+  bindKeys(editor: customEditorTypes.CustomEditor, openThreads: () => void): void {
     const active = () => this.options.orchestrator() !== undefined;
     const resize = (columns: number) => {
       if (active() && this.width.nudge(columns, this.options.columns())) {

@@ -2,24 +2,24 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { DEFAULT_COMPACTION_SETTINGS, findCutPoint } from "../src/core/compaction/index.ts";
-import {
-  type SessionEntry,
-  type SessionMessageEntry,
-  buildSessionContext,
-  migrateSessionEntries,
-  parseSessionEntries,
-} from "../src/core/session-manager.ts";
+import compaction from "../src/core/compaction/index.ts";
+import sessionManagerSupport from "../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { buildSessionContext, migrateSessionEntries, parseSessionEntries } = sessionManagerSupport;
+const { DEFAULT_COMPACTION_SETTINGS, findCutPoint } = compaction;
 
 const { joinPath, readTextFile, runTest } = testing;
 
-const loadLargeSessionEntries: Effect.Effect<SessionEntry[]> = Effect.gen(function* () {
-  const sessionPath = joinPath(__dirname, "fixtures/large-session.jsonl");
-  const content = yield* readTextFile(sessionPath);
-  const entries = parseSessionEntries(content);
-  migrateSessionEntries(entries);
-  return entries.filter((e): e is SessionEntry => e.type !== "session");
-});
+const loadLargeSessionEntries: Effect.Effect<sessionManagerTypes.SessionEntry[]> = Effect.gen(
+  function* () {
+    const sessionPath = joinPath(__dirname, "fixtures/large-session.jsonl");
+    const content = yield* readTextFile(sessionPath);
+    const entries = parseSessionEntries(content);
+    migrateSessionEntries(entries);
+    return entries.filter((e): e is sessionManagerTypes.SessionEntry => e.type !== "session");
+  },
+);
 const shouldParseTheLargeSession = () =>
   runTest(
     Effect.gen(function* () {
@@ -41,7 +41,8 @@ const shouldFindCutPointInLargeSession = () =>
         DEFAULT_COMPACTION_SETTINGS.keepRecentTokens,
       );
       expect(entries[result.firstKeptEntryIndex]?.type).toBe("message");
-      const role = (entries[result.firstKeptEntryIndex] as SessionMessageEntry).message.role;
+      const role = (entries[result.firstKeptEntryIndex] as sessionManagerTypes.SessionMessageEntry)
+        .message.role;
       expect(role === "user" || role === "assistant").toBe(true);
     }),
   );

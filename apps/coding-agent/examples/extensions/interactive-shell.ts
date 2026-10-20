@@ -1,6 +1,6 @@
 import { NodeServices } from "@effect/platform-node";
 import env from "@msa/ai/utils/env";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, ManagedRuntime } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -142,7 +142,10 @@ const bashResult = (output: string, exitCode: number) => ({
   result: { cancelled: false, exitCode, output, truncated: false },
 });
 
-const openShell = (ctx: ExtensionContext, command: string): Promise<number | null> =>
+const openShell = (
+  ctx: codingAgentTypes.ExtensionContext,
+  command: string,
+): Promise<number | null> =>
   ctx.ui.custom<number | null>((tui, _theme, _kb, done) => {
     tui.stop();
     process.stdout.write("\x1b[2J\x1b[H");
@@ -170,7 +173,7 @@ const stripForcePrefix = (command: string): { command: string; forced: boolean }
   return { command, forced: false };
 };
 
-const runInteractive = (ctx: ExtensionContext, command: string) =>
+const runInteractive = (ctx: codingAgentTypes.ExtensionContext, command: string) =>
   Effect.gen(function* () {
     const exitCode = yield* Effect.promise(() => openShell(ctx, command));
     const output =
@@ -180,7 +183,7 @@ const runInteractive = (ctx: ExtensionContext, command: string) =>
     return bashResult(output, exitCode ?? 1);
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("user_bash", (event, ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {

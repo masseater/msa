@@ -97,7 +97,7 @@ const completedSse = (
   return sseText([...helloEvents(terminal), ...(options.includeDone === true ? ["[DONE]"] : [])]);
 };
 
-const sseResponse = (body: string | ReadableStream<Uint8Array>) =>
+const sseResponse = (body: string | ReadableStream<Uint8Array>): Response =>
   new Response(body, { headers: { "content-type": "text/event-stream" }, status: 200 });
 
 const openSseBody = (text: string) =>

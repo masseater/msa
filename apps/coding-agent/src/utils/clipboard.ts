@@ -3,12 +3,19 @@ import { platform, tmpdir } from "node:os";
 import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { join, randomUuid } from "../core/platform-node.ts";
-import { readEnv } from "../core/platform.ts";
-import { runClipboardCommand } from "./clipboard-command.ts";
-import { remove, writeFile } from "./node-fs.ts";
-import { isWSL } from "./wsl.ts";
+import awaitingModule from "../core/awaiting.ts";
+import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform.ts";
+import clipboardCommand from "./clipboard-command.ts";
+import nodeFs from "./node-fs.ts";
+import wsl from "./wsl.ts";
+
+const { awaited, awaiting } = awaitingModule;
+const { join, randomUuid } = platformNode;
+const { remove, writeFile } = nodeFs;
+const { runClipboardCommand } = clipboardCommand;
+const { readEnv } = platformModule;
+const { isWSL } = wsl;
 
 const { getNativeClipboard } = tui;
 
@@ -62,7 +69,7 @@ function copyViaWindowsClipboard(text: string): Promise<boolean> {
   );
 }
 
-export function readClipboardText(): Promise<string | null> {
+function readClipboardText(): Promise<string | null> {
   return Effect.runPromise(
     awaiting(function* () {
       const commands: [string, string[]][] = [];
@@ -92,7 +99,7 @@ export function readClipboardText(): Promise<string | null> {
   );
 }
 
-export function readClipboardFilePaths(): Promise<string[] | null> {
+function readClipboardFilePaths(): Promise<string[] | null> {
   return Effect.runPromise(
     awaiting(function* () {
       const paths = yield* awaited(getNativeClipboard()?.getFilePaths?.());
@@ -101,7 +108,7 @@ export function readClipboardFilePaths(): Promise<string[] | null> {
   );
 }
 
-export function copyToClipboard(text: string): Promise<void> {
+function copyToClipboard(text: string): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       const p = platform();
@@ -117,39 +124,8 @@ export function copyToClipboard(text: string): Promise<void> {
           }
         } catch {}
       }
-      if (!copied) {
-        const commands: [string, string[]][] = [];
-        if (p === "darwin") commands.push(["pbcopy", []]);
-        else if (p === "win32") commands.push(["clip", []]);
-        else {
-          if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "")
-            commands.push(["termux-clipboard-set", []]);
-          if (env["WAYLAND_DISPLAY"] !== undefined && env["WAYLAND_DISPLAY"] !== "")
-            commands.push(["wl-copy", []]);
-          if (env["DISPLAY"] !== undefined && env["DISPLAY"] !== "") {
-            commands.push(
-              ["xclip", ["-selection", "clipboard"]],
-              ["xsel", ["--clipboard", "--input"]],
-            );
-          }
-        }
-        for (const [command, args] of commands) {
-          if (
-            (yield* awaited(
-              runClipboardCommand(command, args, { input: text, timeoutMs: 5000 }),
-            )) !== undefined
-          ) {
-            copied = true;
-            break;
-          }
-        }
-      }
-      let osc52Emitted = false;
-      if (!copied && p === "linux" && (yield* awaited(isWSL(env)))) {
-        if (env["WT_SESSION"] !== undefined && env["WT_SESSION"] !== "")
-          osc52Emitted = emitOsc52(text);
-        copied = osc52Emitted || (yield* awaited(copyViaWindowsClipboard(text)));
-      }
+      let osc52Emitted;
+      ({ osc52Emitted, copied } = yield* copyToClipboardPart1(copied, p, env, text));
 
       const headless =
         p === "linux" &&
@@ -181,4 +157,44 @@ export function copyToClipboard(text: string): Promise<void> {
       throw new Error("Clipboard unavailable");
     }),
   );
+}
+
+const clipboard = {
+  copyToClipboard,
+  readClipboardFilePaths,
+  readClipboardText,
+};
+
+export default clipboard;
+
+function* copyToClipboardPart1(copied: boolean, p: string, env: NodeJS.ProcessEnv, text: string) {
+  if (!copied) {
+    const commands: [string, string[]][] = [];
+    if (p === "darwin") commands.push(["pbcopy", []]);
+    else if (p === "win32") commands.push(["clip", []]);
+    else {
+      if (env["TERMUX_VERSION"] !== undefined && env["TERMUX_VERSION"] !== "")
+        commands.push(["termux-clipboard-set", []]);
+      if (env["WAYLAND_DISPLAY"] !== undefined && env["WAYLAND_DISPLAY"] !== "")
+        commands.push(["wl-copy", []]);
+      if (env["DISPLAY"] !== undefined && env["DISPLAY"] !== "") {
+        commands.push(["xclip", ["-selection", "clipboard"]], ["xsel", ["--clipboard", "--input"]]);
+      }
+    }
+    for (const [command, args] of commands) {
+      if (
+        (yield* awaited(runClipboardCommand(command, args, { input: text, timeoutMs: 5000 }))) !==
+        undefined
+      ) {
+        copied = true;
+        break;
+      }
+    }
+  }
+  let osc52Emitted = false;
+  if (!copied && p === "linux" && (yield* awaited(isWSL(env)))) {
+    if (env["WT_SESSION"] !== undefined && env["WT_SESSION"] !== "") osc52Emitted = emitOsc52(text);
+    copied = osc52Emitted || (yield* awaited(copyViaWindowsClipboard(text)));
+  }
+  return { copied, osc52Emitted };
 }

@@ -5,9 +5,10 @@ import testing from "@msa/testing";
 import { Effect, FileSystem } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
 
+const { createAgentSession } = sdk;
 const { getModel } = compat;
 
 const {

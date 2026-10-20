@@ -1,9 +1,9 @@
-import type { AgentSessionRuntimeDiagnostic } from "./agent-session-services.ts";
-import type { SettingsManager } from "./settings-manager.ts";
+import type agentSessionServicesTypes from "./agent-session-services.types.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
 
-export function collectSettingsDiagnostics(
-  settingsManager: SettingsManager,
-): AgentSessionRuntimeDiagnostic[] {
+function collectSettingsDiagnostics(
+  settingsManager: settingsManagerTypes.SettingsManager,
+): agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[] {
   return settingsManager.drainErrors().map(({ scope, path, error }) => ({
     message:
       path !== undefined && path !== ""
@@ -13,9 +13,9 @@ export function collectSettingsDiagnostics(
   }));
 }
 
-export function deduplicateDiagnostics(
-  diagnostics: readonly AgentSessionRuntimeDiagnostic[],
-): AgentSessionRuntimeDiagnostic[] {
+function deduplicateDiagnostics(
+  diagnostics: readonly agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[],
+): agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[] {
   const seen = new Set<string>();
   return diagnostics.filter((diagnostic) => {
     const key = `${diagnostic.type}\0${diagnostic.message}`;
@@ -24,3 +24,10 @@ export function deduplicateDiagnostics(
     return true;
   });
 }
+
+const settingsDiagnostics = {
+  collectSettingsDiagnostics,
+  deduplicateDiagnostics,
+};
+
+export default settingsDiagnostics;

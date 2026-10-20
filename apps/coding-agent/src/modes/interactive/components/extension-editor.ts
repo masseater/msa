@@ -2,26 +2,32 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { awaited, awaitingWith } from "../../../core/awaiting.ts";
-import type { KeybindingsManager } from "../../../core/keybindings.ts";
-import { readEnv } from "../../../core/process-env.ts";
-import { editInExternalEditor } from "../external-editor.ts";
-import { getEditorTheme, theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import type keybindingsTypes from "../../../core/keybindings.types.ts";
+import processEnv from "../../../core/process-env.ts";
+import externalEditor from "../external-editor.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type extensionEditorTypes from "./extension-editor.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-const { Container, Editor, Spacer, Text, getKeybindings } = tuiModule;
+const { readEnv } = processEnv;
+const { getEditorTheme, theme } = themeModule;
+const { keyHint } = keybindingHints;
+const { awaited, awaitingWith } = awaitingModule;
+const { editInExternalEditor } = externalEditor;
 
-export interface ExtensionEditorOptions extends tuiTypes.EditorOptions {
-  description?: string;
-}
+const { Editor, Spacer, Text, getKeybindings } = tuiModule;
 
-export class ExtensionEditorComponent extends Container implements tuiTypes.Focusable {
+export default class ExtensionEditorComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
   private editor: tuiTypes.Editor;
   private onSubmitCallback: (value: string) => void;
   private onCancelCallback: () => void;
   private tui: tuiTypes.TUI;
-  private keybindings: KeybindingsManager;
+  private keybindings: keybindingsTypes.KeybindingsManager;
   private externalEditorCommand: string;
 
   private focusedState = false;
@@ -35,12 +41,12 @@ export class ExtensionEditorComponent extends Container implements tuiTypes.Focu
 
   constructor(
     tui: tuiTypes.TUI,
-    keybindings: KeybindingsManager,
+    keybindings: keybindingsTypes.KeybindingsManager,
     title: string,
     prefill: string | undefined,
     onSubmit: (value: string) => void,
     onCancel: () => void,
-    options?: ExtensionEditorOptions,
+    options?: extensionEditorTypes.ExtensionEditorOptions,
     externalEditorCommand?: string,
   ) {
     super();

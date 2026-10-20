@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 
@@ -25,7 +25,7 @@ const keepsATaskResumesItInA = () =>
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "two checks still failing");
 
       const result = (yield* Effect.promise(() => pending)) as Awaited<
-        ReturnType<Orchestrator["replan"]>
+        ReturnType<orchestratorTypes.Orchestrator["replan"]>
       >;
       expect(result.kept).toEqual([a.id]);
       expect(result.started).toEqual([a.id]);
@@ -66,7 +66,7 @@ const closesADroppedTaskWithItsReason = () =>
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "a is done");
 
       const result = (yield* Effect.promise(() => pending)) as Awaited<
-        ReturnType<Orchestrator["replan"]>
+        ReturnType<orchestratorTypes.Orchestrator["replan"]>
       >;
       expect(result.dropped).toEqual([{ reason: "a already does it", taskId: b.id, title: "b" }]);
       const dropped = yield* read(orchestrator, b.id);
@@ -105,7 +105,7 @@ const mergesSeveralTasksIntoOneAndCarries = () =>
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "half of a is done");
 
       const result = (yield* Effect.promise(() => pending)) as Awaited<
-        ReturnType<Orchestrator["replan"]>
+        ReturnType<orchestratorTypes.Orchestrator["replan"]>
       >;
       const merged = result.created[0]!;
       expect(merged.from).toEqual([a.id, b.id]);

@@ -1,18 +1,24 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { BoardDetails, GameStatus } from "./tic-tac-toe-game.ts";
-import { renderBoardSnapshot } from "./tic-tac-toe-render.ts";
+import type ticTacToeGameTypes from "./tic-tac-toe-game.types.ts";
+import ticTacToeRender from "./tic-tac-toe-render.ts";
+
+const { renderBoardSnapshot } = ticTacToeRender;
 
 const { visibleWidth } = tui;
 
-export class GameOverMessageComponent implements tuiTypes.Component {
-  private readonly status: GameStatus;
-  private readonly details: BoardDetails | undefined;
-  private readonly theme: Theme;
+export default class GameOverMessageComponent implements tuiTypes.Component {
+  private readonly status: ticTacToeGameTypes.GameStatus;
+  private readonly details: ticTacToeGameTypes.BoardDetails | undefined;
+  private readonly theme: codingAgentTypes.Theme;
 
-  constructor(status: GameStatus, details: BoardDetails | undefined, theme: Theme) {
+  constructor(
+    status: ticTacToeGameTypes.GameStatus,
+    details: ticTacToeGameTypes.BoardDetails | undefined,
+    theme: codingAgentTypes.Theme,
+  ) {
     this.status = status;
     this.details = details;
     this.theme = theme;

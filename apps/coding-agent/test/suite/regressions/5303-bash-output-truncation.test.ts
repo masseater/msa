@@ -3,7 +3,9 @@ import { EventEmitter } from "node:events";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { waitForChildProcess } from "../../../src/utils/child-process.ts";
+import childProcess from "../../../src/utils/child-process.ts";
+
+const { waitForChildProcess } = childProcess;
 
 class FakeStdout extends EventEmitter {
   write(chunk: string): void {

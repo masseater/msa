@@ -1,4 +1,4 @@
-import type { SettingsManager } from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 
 declare namespace settingsManagerSupportTypes {
   interface SettingsPaths {
@@ -6,7 +6,9 @@ declare namespace settingsManagerSupportTypes {
     readonly projectDir: string;
     readonly settingsPath: string;
     readonly projectSettingsPath: string;
-    readonly openManager: (options?: { projectTrusted?: boolean }) => SettingsManager;
+    readonly openManager: (options?: {
+      projectTrusted?: boolean;
+    }) => settingsManagerTypes.SettingsManager;
   }
 }
 

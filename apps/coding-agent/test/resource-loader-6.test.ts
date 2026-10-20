@@ -4,12 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import SessionManager from "../src/core/session-manager.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-
 const { createModelRegistry } = modelRuntimeTestUtils;
 
 const {

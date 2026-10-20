@@ -1,9 +1,9 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 const TRIGGER = /\b(changes?|diff|modified)\b/iu;
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("input", (event) =>
     Effect.runPromise(
       Effect.gen(function* () {

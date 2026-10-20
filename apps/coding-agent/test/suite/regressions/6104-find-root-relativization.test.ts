@@ -1,10 +1,9 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  createFindToolDefinition,
-  relativizeFindResultPath,
-} from "../../../src/core/tools/find.ts";
+import find from "../../../src/core/tools/find.ts";
+
+const { createFindToolDefinition, relativizeFindResultPath } = find;
 
 interface PathFns {
   readonly sep: string;

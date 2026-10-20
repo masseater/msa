@@ -1,161 +1,224 @@
-import type {
-  CacheWarmingDecisionEvent,
-  CacheWarmingDecisionEventResult,
-} from "../cache-warmer.ts";
-import type {
-  InputEvent,
-  InputEventResult,
-  MessageEndEvent,
-  MessageStartEvent,
-  MessageUpdateEvent,
-  ModelSelectEvent,
-  ThinkingLevelSelectEvent,
-  ToolCallEvent,
-  ToolExecutionEndEvent,
-  ToolExecutionStartEvent,
-  ToolExecutionUpdateEvent,
-  ToolResultEvent,
-  TurnEndEvent,
-  TurnStartEvent,
-  UserBashEvent,
-} from "./types-agent-events.ts";
-import type { ExtensionHandler } from "./types-render.ts";
-import type {
-  AgentBeforeSettleEventResult,
-  BeforeAgentStartEventResult,
-  BeforeProviderRequestEventResult,
-  ContextEventResult,
-  MessageEndEventResult,
-  SessionBeforeCompactResult,
-  SessionBeforeForkResult,
-  SessionBeforeSwitchResult,
-  SessionBeforeTreeResult,
-  ToolCallEventResult,
-  ToolResultEventResult,
-  TurnEndEventResult,
-  UserBashEventResult,
-} from "./types-results.ts";
-import type {
-  AfterProviderResponseEvent,
-  AgentBeforeSettleEvent,
-  AgentEndEvent,
-  AgentSettledEvent,
-  AgentStartEvent,
-  BeforeAgentStartEvent,
-  BeforeProviderHeadersEvent,
-  BeforeProviderRequestEvent,
-  ContextEvent,
-  ContextWithSystemEvent,
-  McpServersChangeEvent,
-  ProjectTrustHandler,
-  ProviderStreamEvent,
-  ResourcesDiscoverEvent,
-  ResourcesDiscoverResult,
-  SessionBeforeCompactEvent,
-  SessionBeforeForkEvent,
-  SessionBeforeSwitchEvent,
-  SessionBeforeTreeEvent,
-  SessionCompactEvent,
-  SessionCompactFailedEvent,
-  SessionInfoChangedEvent,
-  SessionShutdownEvent,
-  SessionStartEvent,
-  SessionTreeEvent,
-  UIPromptEndEvent,
-  UIPromptStartEvent,
-} from "./types-session-events.ts";
+import type cacheWarmerTypes from "../cache-warmer.types.ts";
+import type typesAgentEventsTypes from "./types-agent-events.ts";
+import type typesRenderTypes from "./types-render.ts";
+import type typesResultsTypes from "./types-results.ts";
+import type typesSessionEventsTypes from "./types-session-events.ts";
 
-export interface ExtensionEventApi {
-  on(event: "project_trust", handler: ProjectTrustHandler): () => void;
-  on(
-    event: "resources_discover",
-    handler: ExtensionHandler<ResourcesDiscoverEvent, ResourcesDiscoverResult>,
-  ): () => void;
-  on(event: "session_start", handler: ExtensionHandler<SessionStartEvent>): () => void;
-  on(event: "session_info_changed", handler: ExtensionHandler<SessionInfoChangedEvent>): () => void;
-  on(
-    event: "session_before_switch",
-    handler: ExtensionHandler<SessionBeforeSwitchEvent, SessionBeforeSwitchResult>,
-  ): () => void;
-  on(
-    event: "session_before_fork",
-    handler: ExtensionHandler<SessionBeforeForkEvent, SessionBeforeForkResult>,
-  ): () => void;
-  on(
-    event: "session_before_compact",
-    handler: ExtensionHandler<SessionBeforeCompactEvent, SessionBeforeCompactResult>,
-  ): () => void;
-  on(event: "session_compact", handler: ExtensionHandler<SessionCompactEvent>): () => void;
-  on(
-    event: "session_compact_failed",
-    handler: ExtensionHandler<SessionCompactFailedEvent>,
-  ): () => void;
-  on(event: "session_shutdown", handler: ExtensionHandler<SessionShutdownEvent>): () => void;
-  on(event: "mcp_servers_change", handler: ExtensionHandler<McpServersChangeEvent>): () => void;
-  on(
-    event: "session_before_tree",
-    handler: ExtensionHandler<SessionBeforeTreeEvent, SessionBeforeTreeResult>,
-  ): () => void;
-  on(event: "session_tree", handler: ExtensionHandler<SessionTreeEvent>): () => void;
-  on(event: "context", handler: ExtensionHandler<ContextEvent, ContextEventResult>): () => void;
-  on(
-    event: "context_with_system",
-    handler: ExtensionHandler<ContextWithSystemEvent, ContextEventResult>,
-  ): () => void;
-  on(
-    event: "cache_warming_decision",
-    handler: ExtensionHandler<CacheWarmingDecisionEvent, CacheWarmingDecisionEventResult>,
-  ): () => void;
-  on(
-    event: "before_provider_request",
-    handler: ExtensionHandler<BeforeProviderRequestEvent, BeforeProviderRequestEventResult>,
-  ): () => void;
-  on(
-    event: "before_provider_headers",
-    handler: ExtensionHandler<BeforeProviderHeadersEvent>,
-  ): () => void;
-  on(
-    event: "after_provider_response",
-    handler: ExtensionHandler<AfterProviderResponseEvent>,
-  ): () => void;
-  on(event: "provider_stream_event", handler: ExtensionHandler<ProviderStreamEvent>): () => void;
-  on(
-    event: "before_agent_start",
-    handler: ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult>,
-  ): () => void;
-  on(event: "agent_start", handler: ExtensionHandler<AgentStartEvent>): () => void;
-  on(event: "agent_end", handler: ExtensionHandler<AgentEndEvent>): () => void;
-  on(
-    event: "agent_before_settle",
-    handler: ExtensionHandler<AgentBeforeSettleEvent, AgentBeforeSettleEventResult>,
-  ): () => void;
-  on(event: "agent_settled", handler: ExtensionHandler<AgentSettledEvent>): () => void;
-  on(event: "ui_prompt_start", handler: ExtensionHandler<UIPromptStartEvent>): () => void;
-  on(event: "ui_prompt_end", handler: ExtensionHandler<UIPromptEndEvent>): () => void;
-  on(event: "turn_start", handler: ExtensionHandler<TurnStartEvent>): () => void;
-  on(event: "turn_end", handler: ExtensionHandler<TurnEndEvent, TurnEndEventResult>): () => void;
-  on(event: "message_start", handler: ExtensionHandler<MessageStartEvent>): () => void;
-  on(event: "message_update", handler: ExtensionHandler<MessageUpdateEvent>): () => void;
-  on(
-    event: "message_end",
-    handler: ExtensionHandler<MessageEndEvent, MessageEndEventResult>,
-  ): () => void;
-  on(event: "tool_execution_start", handler: ExtensionHandler<ToolExecutionStartEvent>): () => void;
-  on(
-    event: "tool_execution_update",
-    handler: ExtensionHandler<ToolExecutionUpdateEvent>,
-  ): () => void;
-  on(event: "tool_execution_end", handler: ExtensionHandler<ToolExecutionEndEvent>): () => void;
-  on(event: "model_select", handler: ExtensionHandler<ModelSelectEvent>): () => void;
-  on(
-    event: "thinking_level_select",
-    handler: ExtensionHandler<ThinkingLevelSelectEvent>,
-  ): () => void;
-  on(event: "tool_call", handler: ExtensionHandler<ToolCallEvent, ToolCallEventResult>): () => void;
-  on(
-    event: "tool_result",
-    handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>,
-  ): () => void;
-  on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): () => void;
-  on(event: "input", handler: ExtensionHandler<InputEvent, InputEventResult>): () => void;
+declare namespace typesApiEventsTypes {
+  interface ExtensionEventApi {
+    on(event: "project_trust", handler: typesSessionEventsTypes.ProjectTrustHandler): () => void;
+    on(
+      event: "resources_discover",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.ResourcesDiscoverEvent,
+        typesSessionEventsTypes.ResourcesDiscoverResult
+      >,
+    ): () => void;
+    on(
+      event: "session_start",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.SessionStartEvent>,
+    ): () => void;
+    on(
+      event: "session_info_changed",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.SessionInfoChangedEvent>,
+    ): () => void;
+    on(
+      event: "session_before_switch",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.SessionBeforeSwitchEvent,
+        typesResultsTypes.SessionBeforeSwitchResult
+      >,
+    ): () => void;
+    on(
+      event: "session_before_fork",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.SessionBeforeForkEvent,
+        typesResultsTypes.SessionBeforeForkResult
+      >,
+    ): () => void;
+    on(
+      event: "session_before_compact",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.SessionBeforeCompactEvent,
+        typesResultsTypes.SessionBeforeCompactResult
+      >,
+    ): () => void;
+    on(
+      event: "session_compact",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.SessionCompactEvent>,
+    ): () => void;
+    on(
+      event: "session_compact_failed",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.SessionCompactFailedEvent>,
+    ): () => void;
+    on(
+      event: "session_shutdown",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.SessionShutdownEvent>,
+    ): () => void;
+    on(
+      event: "mcp_servers_change",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.McpServersChangeEvent>,
+    ): () => void;
+    on(
+      event: "session_before_tree",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.SessionBeforeTreeEvent,
+        typesResultsTypes.SessionBeforeTreeResult
+      >,
+    ): () => void;
+    on(
+      event: "session_tree",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.SessionTreeEvent>,
+    ): () => void;
+    on(
+      event: "context",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.ContextEvent,
+        typesResultsTypes.ContextEventResult
+      >,
+    ): () => void;
+    on(
+      event: "context_with_system",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.ContextWithSystemEvent,
+        typesResultsTypes.ContextEventResult
+      >,
+    ): () => void;
+    on(
+      event: "cache_warming_decision",
+      handler: typesRenderTypes.ExtensionHandler<
+        cacheWarmerTypes.CacheWarmingDecisionEvent,
+        cacheWarmerTypes.CacheWarmingDecisionEventResult
+      >,
+    ): () => void;
+    on(
+      event: "before_provider_request",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.BeforeProviderRequestEvent,
+        typesResultsTypes.BeforeProviderRequestEventResult
+      >,
+    ): () => void;
+    on(
+      event: "before_provider_headers",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.BeforeProviderHeadersEvent>,
+    ): () => void;
+    on(
+      event: "after_provider_response",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.AfterProviderResponseEvent>,
+    ): () => void;
+    on(
+      event: "provider_stream_event",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.ProviderStreamEvent>,
+    ): () => void;
+    on(
+      event: "before_agent_start",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.BeforeAgentStartEvent,
+        typesResultsTypes.BeforeAgentStartEventResult
+      >,
+    ): () => void;
+    on(
+      event: "agent_start",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.AgentStartEvent>,
+    ): () => void;
+    on(
+      event: "agent_end",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.AgentEndEvent>,
+    ): () => void;
+    on(
+      event: "agent_before_settle",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesSessionEventsTypes.AgentBeforeSettleEvent,
+        typesResultsTypes.AgentBeforeSettleEventResult
+      >,
+    ): () => void;
+    on(
+      event: "agent_settled",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.AgentSettledEvent>,
+    ): () => void;
+    on(
+      event: "ui_prompt_start",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.UIPromptStartEvent>,
+    ): () => void;
+    on(
+      event: "ui_prompt_end",
+      handler: typesRenderTypes.ExtensionHandler<typesSessionEventsTypes.UIPromptEndEvent>,
+    ): () => void;
+    on(
+      event: "turn_start",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.TurnStartEvent>,
+    ): () => void;
+    on(
+      event: "turn_end",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesAgentEventsTypes.TurnEndEvent,
+        typesResultsTypes.TurnEndEventResult
+      >,
+    ): () => void;
+    on(
+      event: "message_start",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.MessageStartEvent>,
+    ): () => void;
+    on(
+      event: "message_update",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.MessageUpdateEvent>,
+    ): () => void;
+    on(
+      event: "message_end",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesAgentEventsTypes.MessageEndEvent,
+        typesResultsTypes.MessageEndEventResult
+      >,
+    ): () => void;
+    on(
+      event: "tool_execution_start",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.ToolExecutionStartEvent>,
+    ): () => void;
+    on(
+      event: "tool_execution_update",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.ToolExecutionUpdateEvent>,
+    ): () => void;
+    on(
+      event: "tool_execution_end",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.ToolExecutionEndEvent>,
+    ): () => void;
+    on(
+      event: "model_select",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.ModelSelectEvent>,
+    ): () => void;
+    on(
+      event: "thinking_level_select",
+      handler: typesRenderTypes.ExtensionHandler<typesAgentEventsTypes.ThinkingLevelSelectEvent>,
+    ): () => void;
+    on(
+      event: "tool_call",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesAgentEventsTypes.ToolCallEvent,
+        typesResultsTypes.ToolCallEventResult
+      >,
+    ): () => void;
+    on(
+      event: "tool_result",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesAgentEventsTypes.ToolResultEvent,
+        typesResultsTypes.ToolResultEventResult
+      >,
+    ): () => void;
+    on(
+      event: "user_bash",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesAgentEventsTypes.UserBashEvent,
+        typesResultsTypes.UserBashEventResult
+      >,
+    ): () => void;
+    on(
+      event: "input",
+      handler: typesRenderTypes.ExtensionHandler<
+        typesAgentEventsTypes.InputEvent,
+        typesAgentEventsTypes.InputEventResult
+      >,
+    ): () => void;
+  }
 }
+
+export type { typesApiEventsTypes as default };

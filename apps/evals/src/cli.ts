@@ -1,26 +1,25 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Console, Data, DateTime, Effect, Schema } from "effect";
 
-import { type EvalCliOptions, parseEvalCli } from "./cli-options.ts";
-import {
-  type DockerContext,
-  buildImages,
-  discoverCases,
-  requireEvalAuthFile,
-  runTask,
-} from "./docker.ts";
-import {
-  DOCUMENTATION_VARIANTS,
-  type DiscoveredEvalCase,
-  type EvalTask,
-  createTaskPlan,
-  parseDiscoveredCases,
-} from "./plan.ts";
-import { files, pathOperations, randomUuid, sha256Hex } from "./platform.ts";
-import { formatEvalComparisonReport } from "./report-format.ts";
-import { erroredObservation, readTaskObservation } from "./report-read.ts";
-import { summarizeEvalObservations } from "./report-summary.ts";
-import type { EvalObservation } from "./report-types.ts";
+import cliOptions from "./cli-options.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import dockerModule from "./docker.ts";
+import type dockerTypes from "./docker.types.ts";
+import plan from "./plan.ts";
+import type planTypes from "./plan.types.ts";
+import platform from "./platform.ts";
+import reportFormat from "./report-format.ts";
+import reportRead from "./report-read.ts";
+import reportSummary from "./report-summary.ts";
+import type reportTypesTypes from "./report-types.types.ts";
+
+const { files, pathOperations, randomUuid, sha256Hex } = platform;
+const { DOCUMENTATION_VARIANTS, createTaskPlan, parseDiscoveredCases } = plan;
+const { buildImages, discoverCases, requireEvalAuthFile, runTask } = dockerModule;
+const { erroredObservation, readTaskObservation } = reportRead;
+const { parseEvalCli } = cliOptions;
+const { summarizeEvalObservations } = reportSummary;
+const { formatEvalComparisonReport } = reportFormat;
 
 class BlockedPairsError extends Data.TaggedError("BlockedPairsError") {}
 
@@ -48,7 +47,7 @@ function normalizeDiscoveredFile(path: string): string {
   return path.slice(prefix.length);
 }
 
-const caseIdentities = (cases: readonly DiscoveredEvalCase[]): string =>
+const caseIdentities = (cases: readonly planTypes.DiscoveredEvalCase[]): string =>
   JSON.stringify(
     cases
       .map(({ fullName, file }) => JSON.stringify([fullName, normalizeDiscoveredFile(file)]))
@@ -79,11 +78,11 @@ const decodeJson = (text: string): Effect.Effect<unknown> =>
   Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(Effect.orDie);
 
 const discoverVariant = (
-  docker: DockerContext,
+  docker: dockerTypes.DockerContext,
   variant: (typeof DOCUMENTATION_VARIANTS)[number],
   evalFiles: readonly string[],
   vitestArgs: readonly string[],
-): Effect.Effect<DiscoveredEvalCase[]> =>
+): Effect.Effect<planTypes.DiscoveredEvalCase[]> =>
   Effect.gen(function* () {
     const path = yield* discoverCases({ context: docker, files: evalFiles, variant, vitestArgs });
     return parseDiscoveredCases(yield* decodeJson(yield* files.readFileString(path)));
@@ -101,7 +100,7 @@ const writeJson = (path: string, value: unknown): Effect.Effect<void> =>
 const writeProtocol = (
   artifactDirectory: string,
   protocol: Record<string, unknown>,
-  tasks: readonly EvalTask[],
+  tasks: readonly planTypes.EvalTask[],
 ): Effect.Effect<string> =>
   Effect.gen(function* () {
     const protocolDigest = yield* Effect.flatMap(Effect.orDie(encodeCompact(protocol)), sha256Hex);
@@ -114,11 +113,11 @@ const writeProtocol = (
   });
 
 const runAllTasks = (
-  docker: DockerContext,
-  tasks: readonly EvalTask[],
-): Effect.Effect<EvalObservation[]> =>
+  docker: dockerTypes.DockerContext,
+  tasks: readonly planTypes.EvalTask[],
+): Effect.Effect<reportTypesTypes.EvalObservation[]> =>
   Effect.gen(function* () {
-    const observations: EvalObservation[] = [];
+    const observations: reportTypesTypes.EvalObservation[] = [];
     for (const [index, task] of tasks.entries()) {
       yield* Console.log(
         `\n[${index + 1}/${tasks.length}] ${task.evalSet} > ${task.caseId} | ${task.variant} | ${task.model} | run ${task.runNumber}`,
@@ -142,9 +141,9 @@ const runAllTasks = (
   });
 
 const prepareDocker = (
-  cli: EvalCliOptions & { provider: string; model: string },
+  cli: cliOptionsTypes.EvalCliOptions & { provider: string; model: string },
   artifactDirectory: string,
-): Effect.Effect<DockerContext> =>
+): Effect.Effect<dockerTypes.DockerContext> =>
   Effect.gen(function* () {
     const authPath = yield* requireEvalAuthFile(cli.provider);
     yield* files.makeDirectory(artifactDirectory, 0o700);
@@ -163,10 +162,10 @@ const prepareDocker = (
   });
 
 const discoverCommonCases = (
-  docker: DockerContext,
+  docker: dockerTypes.DockerContext,
   evalFiles: readonly string[],
   vitestArgs: readonly string[],
-): Effect.Effect<DiscoveredEvalCase[]> =>
+): Effect.Effect<planTypes.DiscoveredEvalCase[]> =>
   Effect.gen(function* () {
     const [firstVariant, secondVariant] = DOCUMENTATION_VARIANTS;
     const first = yield* discoverVariant(docker, firstVariant, evalFiles, vitestArgs);
@@ -220,7 +219,7 @@ const main = Effect.gen(function* () {
   const protocolDigest = yield* writeProtocol(
     artifactDirectory,
     {
-      cases: cases.map(({ evalSet, caseId, file }) => ({ evalSet, caseId, file })),
+      cases: cases.map(({ evalSet, caseId, file }) => ({ caseId, evalSet, file })),
       files: evalFiles,
       images: docker.images,
       model: modelIdentity,

@@ -4,8 +4,11 @@ import { fileURLToPath } from "node:url";
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Data, Effect, Runtime } from "effect";
 
-import { files, pathOperations, readEnv, runCommand } from "../src/platform.ts";
-import { chownTree } from "../src/sandbox.ts";
+import platform from "../src/platform.ts";
+import sandbox from "../src/sandbox.ts";
+
+const { files, pathOperations, readEnv, runCommand } = platform;
+const { chownTree } = sandbox;
 
 class ChildExit extends Data.TaggedError("ChildExit")<{ readonly status: number }> {
   override readonly [Runtime.errorExitCode] = this.status;

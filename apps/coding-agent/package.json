@@ -37,6 +37,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index.types": {
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
+    },
     "./rpc-entry": {
       "import": "./dist/bundle/rpc-entry.js"
     }

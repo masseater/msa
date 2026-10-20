@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type BashOperations, createBashTool } from "../../../src/core/tools/bash.ts";
+import bashModule from "../../../src/core/tools/bash.ts";
+import type bashTypes from "../../../src/core/tools/bash.types.ts";
+
+const { createBashTool } = bashModule;
 
 function getTextOutput(result: { content?: Array<{ type: string; text?: string }> }): string {
   return (
@@ -15,7 +18,7 @@ function getTextOutput(result: { content?: Array<{ type: string; text?: string }
 const ignoresOutputCallbacksAfterBashOperations = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   let late: (() => void) | undefined;
-  const operations: BashOperations = {
+  const operations: bashTypes.BashOperations = {
     exec: (_command, _cwd, { onData }) =>
       runPromise(
         Effect.sync(() => {

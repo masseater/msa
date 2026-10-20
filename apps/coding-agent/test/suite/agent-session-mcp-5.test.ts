@@ -4,10 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { TOOL_SEARCH_DESCRIPTION } from "../../src/extensions/tool-search/tool.ts";
+import toolModule from "../../src/extensions/tool-search/tool.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { TOOL_SEARCH_DESCRIPTION } = toolModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

@@ -2,13 +2,15 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession, type AgentSessionEvent } from "../../src/core/agent-session.ts";
-import { SessionManager } from "../../src/core/session-manager.ts";
-import { SettingsManager } from "../../src/core/settings-manager.ts";
-import type { ResourceLoader } from "../../src/index.ts";
+import type agentSessionTypes from "../../src/core/agent-session.types.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import codingAgent from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import fauxModelModule from "./faux-model.ts";
 import sessionAgent from "./session-agent.ts";
 import type sessionTypesModule from "./session-types.ts";
+
+const { AgentSession, SessionManager, SettingsManager } = codingAgent;
 
 const { fauxModel } = fauxModelModule;
 const { buildAgent } = sessionAgent;
@@ -23,12 +25,12 @@ const resolveModel = (options: sessionTypesModule.HarnessOptions): aiTypes.Model
 };
 
 const harnessOf = (input: {
-  readonly session: AgentSession;
+  readonly session: agentSessionTypes.AgentSession;
   readonly agent: sessionTypesModule.Harness["agent"];
-  readonly sessionManager: SessionManager;
+  readonly sessionManager: sessionManagerTypes.SessionManager;
   readonly settingsManager: sessionTypesModule.Harness["settingsManager"];
   readonly faux: sessionTypesModule.Harness["faux"];
-  readonly events: AgentSessionEvent[];
+  readonly events: agentSessionTypes.AgentSessionEvent[];
   readonly tempDir: string;
 }): sessionTypesModule.Harness => ({
   agent: input.agent,
@@ -37,9 +39,10 @@ const harnessOf = (input: {
     Effect.runFork(removePath(input.tempDir));
   },
   events: input.events,
-  eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
+  eventsOfType<T extends agentSessionTypes.AgentSessionEvent["type"]>(type: T) {
     return input.events.filter(
-      (event): event is Extract<AgentSessionEvent, { type: T }> => event.type === type,
+      (event): event is Extract<agentSessionTypes.AgentSessionEvent, { type: T }> =>
+        event.type === type,
     );
   },
   faux: input.faux,
@@ -51,7 +54,7 @@ const harnessOf = (input: {
 
 const buildHarness = Effect.fn("buildHarness")(function* (
   options: sessionTypesModule.HarnessOptions,
-  resourceLoader: ResourceLoader,
+  resourceLoader: srcTypes.ResourceLoader,
   tempDir: string,
 ) {
   const model = resolveModel(options);
@@ -76,7 +79,7 @@ const buildHarness = Effect.fn("buildHarness")(function* (
       ? {}
       : { baseToolsOverride: options.baseToolsOverride }),
   });
-  const events: AgentSessionEvent[] = [];
+  const events: agentSessionTypes.AgentSessionEvent[] = [];
   session.subscribe((event) => {
     events.push(event);
   });

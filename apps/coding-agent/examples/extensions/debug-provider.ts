@@ -1,6 +1,9 @@
-import { type ExtensionAPI, type Theme, keyHint } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Effect } from "effect";
+
+const { keyHint } = codingAgent;
 
 const { Box, Text } = tui;
 
@@ -17,7 +20,7 @@ interface ProviderDebugEntry {
 const renderDebugEntry = (
   entry: { data?: ProviderDebugEntry | undefined },
   { expanded }: { expanded: boolean },
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ) => {
   const data = entry.data;
   if (data === undefined) {
@@ -46,7 +49,7 @@ interface DebugState {
   completedEntry: ProviderDebugEntry | undefined;
 }
 
-const registerCaptureEvents = (msa: ExtensionAPI, state: DebugState): void => {
+const registerCaptureEvents = (msa: codingAgentTypes.ExtensionAPI, state: DebugState): void => {
   msa.on("turn_start", () => {
     state.activeEvents = state.enabled ? [] : undefined;
   });
@@ -73,7 +76,7 @@ const registerCaptureEvents = (msa: ExtensionAPI, state: DebugState): void => {
   });
 };
 
-const registerToggleCommand = (msa: ExtensionAPI, state: DebugState): void => {
+const registerToggleCommand = (msa: codingAgentTypes.ExtensionAPI, state: DebugState): void => {
   msa.registerCommand("debug-provider", {
     description: "Toggle capture of raw provider stream events",
     handler: (args, ctx) =>
@@ -97,7 +100,7 @@ const registerToggleCommand = (msa: ExtensionAPI, state: DebugState): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const state: DebugState = {
     activeEvents: undefined,
     completedEntry: undefined,

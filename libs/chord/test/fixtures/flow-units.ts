@@ -5,12 +5,10 @@ import { Type } from "typebox";
 import type hostTypes from "../../src/host.types.ts";
 import chord from "../../src/index.ts";
 import type chordTypes from "../../src/index.types.ts";
-import counting from "./counting.ts";
+import CountingLink from "./counting-link.ts";
 import timing from "./timing.ts";
 
 const { createHost, hostNamed, memoryLinkPair, method, remote } = chord;
-
-const { CountingLink } = counting;
 const { pollUntil } = timing;
 
 const until = pollUntil(400, Effect.sleep(2));

@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { fetchWithRetry } from "../src/utils/management-http.ts";
+import managementHttp from "../src/utils/management-http.ts";
+
+const { fetchWithRetry } = managementHttp;
 
 const { abortController, awaited, runTest } = testing;
 

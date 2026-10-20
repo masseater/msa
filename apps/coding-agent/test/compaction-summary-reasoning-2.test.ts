@@ -4,11 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type CompactionPreparation,
-  compact,
-  generateSummary,
-} from "../src/core/compaction/index.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type compactionTypes from "../src/core/compaction/index.types.ts";
+
+const { compact, generateSummary } = compaction;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
@@ -132,7 +131,7 @@ const doesNotSetAnthropicRefusalFallbackFor = () =>
 const clampsCompactionSummaryMaxtokensToTheModel = () =>
   runTest(
     Effect.gen(function* () {
-      const preparation: CompactionPreparation = {
+      const preparation: compactionTypes.CompactionPreparation = {
         fileOps: { edited: new Set(), read: new Set(), written: new Set() },
         firstKeptEntryId: "entry-keep",
         isSplitTurn: true,

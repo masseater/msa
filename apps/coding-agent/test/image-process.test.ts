@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { processImage } from "../src/utils/image-process.ts";
-import { detectSupportedImageMimeType } from "../src/utils/mime.ts";
+import imageProcess from "../src/utils/image-process.ts";
+import mime from "../src/utils/mime.ts";
+
+const { detectSupportedImageMimeType } = mime;
+const { processImage } = imageProcess;
 
 const { awaited, runTest } = testing;
 

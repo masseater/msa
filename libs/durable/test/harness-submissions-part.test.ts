@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type sessionTypes from "../src/session/session.types.ts";
 import chatSupport from "./chat-support.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import directories from "./harness-submissions-support.ts";
 import platformSupport from "./platform-support.ts";
@@ -15,7 +16,7 @@ const { AssistantEntry, UserEntry, defineEntry } = durable;
 const { chatSetup, openChat } = chatSupport;
 const { awaited } = effectSupport;
 const { removeDir } = platformSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 
 afterEach(() =>
   Effect.runPromise(

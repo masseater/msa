@@ -2,12 +2,17 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { awaited, awaitingWith } from "../../core/awaiting.ts";
-import type { KeybindingsManager } from "../../core/keybindings.ts";
-import { type Scheduled, schedule } from "../../core/platform.ts";
-import type { Theme } from "../../modes/interactive/theme/theme.ts";
-import { toErrorMessage } from "../../utils/errors.ts";
-import type { HuggingFaceModel } from "./huggingface.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import type keybindingsTypes from "../../core/keybindings.types.ts";
+import platform from "../../core/platform.ts";
+import type platformTypes from "../../core/platform.types.ts";
+import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
+import errors from "../../utils/errors.ts";
+import type huggingfaceTypes from "./huggingface.types.ts";
+
+const { schedule } = platform;
+const { awaited, awaitingWith } = awaitingModule;
+const { toErrorMessage } = errors;
 
 const { Container, Input, Spacer, Text, fuzzyFilter } = tuiModule;
 
@@ -17,31 +22,34 @@ function compactCount(value: number): string {
   return String(value);
 }
 
-export class HuggingFaceSearch extends Container implements tuiTypes.Focusable {
+export default class HuggingFaceSearch extends tuiModule.Container implements tuiTypes.Focusable {
   private readonly tui: tuiTypes.TUI;
-  private readonly theme: Theme;
-  private readonly keybindings: KeybindingsManager;
-  private readonly search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>;
-  private readonly cache: Map<string, HuggingFaceModel[]>;
+  private readonly theme: themeTypes.Theme;
+  private readonly keybindings: keybindingsTypes.KeybindingsManager;
+  private readonly search: (
+    query: string,
+    signal: AbortSignal,
+  ) => Promise<huggingfaceTypes.HuggingFaceModel[]>;
+  private readonly cache: Map<string, huggingfaceTypes.HuggingFaceModel[]>;
   private readonly onSelectModel: (model: string | undefined) => void;
   private readonly input = new Input();
   private readonly resultsContainer = new Container();
-  private results: HuggingFaceModel[] = [];
-  private filteredResults: HuggingFaceModel[] = [];
+  private results: huggingfaceTypes.HuggingFaceModel[] = [];
+  private filteredResults: huggingfaceTypes.HuggingFaceModel[] = [];
   private selectedIndex = 0;
   private query = "";
   private status = "Type at least 2 characters";
-  private debounce: Scheduled | undefined;
+  private debounce: platformTypes.Scheduled | undefined;
   private request: AbortController | undefined;
   private closed = false;
   private isFocused = false;
 
   constructor(
     tui: tuiTypes.TUI,
-    theme: Theme,
-    keybindings: KeybindingsManager,
-    search: (query: string, signal: AbortSignal) => Promise<HuggingFaceModel[]>,
-    cache: Map<string, HuggingFaceModel[]>,
+    theme: themeTypes.Theme,
+    keybindings: keybindingsTypes.KeybindingsManager,
+    search: (query: string, signal: AbortSignal) => Promise<huggingfaceTypes.HuggingFaceModel[]>,
+    cache: Map<string, huggingfaceTypes.HuggingFaceModel[]>,
     onSelectModel: (model: string | undefined) => void,
   ) {
     super();

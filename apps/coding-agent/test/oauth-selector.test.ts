@@ -2,12 +2,14 @@ import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { OAuthSelectorComponent } from "../src/modes/interactive/components/oauth-selector.ts";
-import { LoginFlow, type LoginFlowHost } from "../src/modes/interactive/login-flow.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
-
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import OAuthSelectorComponent from "../src/modes/interactive/components/oauth-selector.ts";
+import LoginFlow from "../src/modes/interactive/login-flow.ts";
+import type loginFlowTypes from "../src/modes/interactive/login-flow.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 const { setKeybindings } = tui;
 
 const { awaited, runTest } = testing;
@@ -36,7 +38,7 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
         isUsingOAuth: () => false,
       },
     },
-  } as unknown as LoginFlowHost);
+  } as unknown as loginFlowTypes.LoginFlowHost);
 
   const apiKeyOptions = loginFlow.getProviderOptions("api_key");
   expect(apiKeyOptions).toMatchObject([

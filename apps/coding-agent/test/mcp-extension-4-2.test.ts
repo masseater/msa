@@ -4,15 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
-import {
-  McpOAuthCredentialStore,
-  McpServerConnection,
-  McpServerLog,
-  createDefaultTransport,
-} from "../src/extensions/mcp/runtime.ts";
+import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
+import runtime from "../src/extensions/mcp/runtime.ts";
 import mcpConnectionSupport from "./mcp-connection-support.ts";
 
+const { McpOAuthCredentialStore, McpServerConnection, McpServerLog, createDefaultTransport } =
+  runtime;
 const { createInMemoryTransportPair } = testingModule;
 const { McpAuthRequiredError, McpHttpError } = mcp;
 

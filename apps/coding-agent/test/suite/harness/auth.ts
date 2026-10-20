@@ -3,10 +3,10 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import type { ModelRegistry } from "../../../src/core/model-registry.ts";
+import AuthStorage from "../../../src/core/auth-storage.ts";
+import type authStorageTypes from "../../../src/core/auth-storage.types.ts";
+import type modelRegistryTypes from "../../../src/core/model-registry.types.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
-
 const { registerFauxProvider } = compat;
 
 const { createInMemoryModelRegistry, createModelRegistry } = modelRuntimeTestUtils;
@@ -26,7 +26,7 @@ function createFauxProvider(
 function createAuthStorage(entry: {
   provider: string;
   withConfiguredAuth: boolean;
-}): Promise<AuthStorage> {
+}): Promise<authStorageTypes.AuthStorage> {
   const authStorage = AuthStorage.inMemory();
   if (!entry.withConfiguredAuth) return Promise.resolve(authStorage);
   return authStorage
@@ -46,7 +46,7 @@ function writeModelsJson(entry: {
 }
 
 function registerFauxModels(entry: {
-  modelRegistry: ModelRegistry;
+  modelRegistry: modelRegistryTypes.ModelRegistry;
   model: compatTypes.Model<string>;
   fauxProvider: compatTypes.FauxProviderRegistration;
 }): void {
@@ -62,9 +62,9 @@ function registerFauxModels(entry: {
 }
 
 function createRegistry(entry: {
-  authStorage: AuthStorage;
+  authStorage: authStorageTypes.AuthStorage;
   modelsPath: string | undefined;
-}): Promise<ModelRegistry> {
+}): Promise<modelRegistryTypes.ModelRegistry> {
   return entry.modelsPath === undefined || entry.modelsPath === ""
     ? createInMemoryModelRegistry(entry.authStorage)
     : createModelRegistry(entry.authStorage, entry.modelsPath);

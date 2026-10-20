@@ -1,6 +1,6 @@
-import { CustomEditor, type ExtensionAPI } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
-
 const { matchesKey, truncateToWidth, visibleWidth } = tuiModule;
 
 const NORMAL_KEYS: Record<string, string | null> = {
@@ -15,7 +15,7 @@ const NORMAL_KEYS: Record<string, string | null> = {
   x: "\x1b[3~",
 };
 
-class ModalEditor extends CustomEditor {
+class ModalEditor extends codingAgent.CustomEditor {
   private mode: "normal" | "insert" = "insert";
 
   override handleInput(data: string): void {
@@ -63,7 +63,7 @@ class ModalEditor extends CustomEditor {
   }
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("session_start", (_event, ctx) => {
     ctx.ui.setEditorComponent((tui, theme, kb) => new ModalEditor(tui, theme, kb));
   });

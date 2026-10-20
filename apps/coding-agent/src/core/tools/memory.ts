@@ -1,22 +1,18 @@
 import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
-import { readOnlyVariantOf } from "../ask.ts";
-import type { ToolDefinition } from "../extensions/types.ts";
-import {
-  type MemoryService,
-  formatMemoryList,
-  formatSearchResults,
-  isMemoryKind,
-} from "../memory/memory.ts";
-import { MEMORY_KINDS } from "../memory/store.ts";
-import {
-  type ForeignError,
-  ToolFailure,
-  fromPromise,
-  platformRuntime,
-  unwrapForeign,
-} from "../platform/index.ts";
+import ask from "../ask.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import memoryFormat from "../memory/memory-format.ts";
+import type memoryTypesModule from "../memory/memory.types.ts";
+import storeTypes from "../memory/store-types.ts";
+import platform from "../platform/index.ts";
+import type platformTypes from "../platform/index.types.ts";
+
+const { MEMORY_KINDS } = storeTypes;
+const { ToolFailure, fromPromise, unwrapForeign } = platform;
+const { formatMemoryList, formatSearchResults, isMemoryKind } = memoryFormat;
+const { readOnlyVariantOf } = ask;
 
 const memorySchema = Type.Object({
   action: Type.Union(
@@ -57,9 +53,7 @@ const memoryReadSchema = Type.Object({
   query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
 });
 
-export type MemoryToolInput = Static<typeof memorySchema>;
-
-export const memoryToolSystemPromptContribution = {
+const memoryToolSystemPromptContribution = {
   guidelines: [
     "Use the memory tool to save durable facts, user preferences, and decisions that future sessions need; do not save transient details",
   ],
@@ -113,7 +107,7 @@ const parseScope = Effect.fn("parseScope")(function* (raw: string | undefined) {
 });
 
 const saveMemory = Effect.fn("memorySave")(function* (
-  service: MemoryService,
+  service: memoryTypesModule.MemoryService,
   params: MemoryParams,
 ) {
   const content = yield* requireText(params.content, "save", "content");
@@ -149,7 +143,7 @@ const saveMemory = Effect.fn("memorySave")(function* (
 });
 
 const searchMemory = Effect.fn("memorySearch")(function* (
-  service: MemoryService,
+  service: memoryTypesModule.MemoryService,
   params: MemoryParams,
 ) {
   const query = yield* requireText(params.query, "search", "query");
@@ -158,7 +152,7 @@ const searchMemory = Effect.fn("memorySearch")(function* (
 });
 
 const forgetMemory = Effect.fn("memoryForget")(function* (
-  service: MemoryService,
+  service: memoryTypesModule.MemoryService,
   params: MemoryParams,
 ) {
   const id = yield* requireText(params.id, "forget", "id");
@@ -170,16 +164,16 @@ const forgetMemory = Effect.fn("memoryForget")(function* (
   });
 });
 
-const listMemory = (service: MemoryService, params: MemoryParams) =>
+const listMemory = (service: memoryTypesModule.MemoryService, params: MemoryParams) =>
   Effect.sync(() => {
     const records = service.list(params.limit ?? 20);
     return textResult(formatMemoryList(records), { action: "list", count: records.length });
   });
 
 const runMemoryAction = (
-  service: MemoryService,
+  service: memoryTypesModule.MemoryService,
   params: MemoryParams,
-): Effect.Effect<MemoryToolResult, ForeignError | ToolFailure> => {
+): Effect.Effect<MemoryToolResult, platformTypes.ForeignError | platformTypes.ToolFailure> => {
   switch (params.action) {
     case "save":
       return saveMemory(service, params);
@@ -192,14 +186,17 @@ const runMemoryAction = (
   }
 };
 
-export function createMemoryToolDefinition(
-  service: MemoryService,
-): ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
-  const memory: ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> = {
+function createMemoryToolDefinition(
+  service: memoryTypesModule.MemoryService,
+): extensionsTypesTypes.ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
+  const memory: extensionsTypesTypes.ToolDefinition<
+    typeof memorySchema,
+    Record<string, unknown> | undefined
+  > = {
     description:
       "Long-term memory shared across sessions. Save durable facts, user preferences, and decisions (one per memory); search before assuming something was never decided; forget memories the user wants removed. Memories are scoped to this project by default, or global for user-level preferences.",
     execute: (_toolCallId, params) =>
-      platformRuntime.runPromise(unwrapForeign(runMemoryAction(service, params))),
+      Effect.runPromise(unwrapForeign(runMemoryAction(service, params))),
     label: "memory",
     name: "memory",
     parameters: memorySchema,
@@ -217,3 +214,11 @@ export function createMemoryToolDefinition(
     }),
   };
 }
+
+const memory = {
+  createMemoryToolDefinition,
+  memorySchema,
+  memoryToolSystemPromptContribution,
+};
+
+export default memory;

@@ -4,11 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import type { ExtensionFactory } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { DefaultResourceLoader, ModelRuntime, createAgentSession } from "../src/index.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type sdkTypes from "../src/core/sdk.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import src from "../src/index.ts";
+const { DefaultResourceLoader, ModelRuntime, createAgentSession } = src;
 
 const { getModel } = compat;
 
@@ -50,7 +51,7 @@ let tempDir: string;
 
 let agentDir: string;
 
-function createSession(extensionFactories: ExtensionFactory[]) {
+function createSession(extensionFactories: sdkTypes.ExtensionFactory[]) {
   return runTest(
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());

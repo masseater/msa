@@ -8,10 +8,7 @@ import TuiMainScreen from "../src/tui-main-screen.ts";
 import EmptyContent from "./overlay-options-empty-content.ts";
 import renderAndFlush from "./overlay-options-helpers.ts";
 import StaticOverlay from "./overlay-options-static-overlay.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 describe("TUI overlay options", () => {
   describe("margin", () => {
     it("should clamp negative margins to zero", () =>

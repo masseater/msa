@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 
-import { fromPromise, pathOperations, platformRuntime } from "../platform/index.ts";
-import { pathExists } from "../tools/path-utils.ts";
+import platform from "../platform/index.ts";
+import pathUtils from "../tools/path-utils.ts";
+
+const { fromPromise, pathOperations } = platform;
+const { pathExists } = pathUtils;
 
 const gitRootOf = (dir: string) =>
   Effect.gen(function* () {
@@ -14,12 +17,19 @@ const gitRootOf = (dir: string) =>
     }
   });
 
-export const projectNameOf = (dir: string) =>
+const projectNameOf = (dir: string) =>
   gitRootOf(pathOperations.resolve(dir)).pipe(
     Effect.map((root) => (root === undefined ? undefined : pathOperations.basename(root))),
   );
 
-export const resolveProjectName = (dir: string): Promise<string> =>
-  platformRuntime.runPromise(
+const resolveProjectName = (dir: string): Promise<string> =>
+  Effect.runPromise(
     projectNameOf(dir).pipe(Effect.map((name) => name ?? (pathOperations.basename(dir) || dir))),
   );
+
+const memoryProject = {
+  projectNameOf,
+  resolveProjectName,
+};
+
+export default memoryProject;

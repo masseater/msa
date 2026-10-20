@@ -2,25 +2,22 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type SystemThemeInput,
-  generateSystemThemeColors,
-  wcagContrast,
-} from "../src/modes/interactive/theme/system-theme.ts";
-import {
-  type ThemeToken,
-  getAvailableThemes,
-  getThemeByName,
-  getThemeExportColors,
-  setTerminalColors,
-} from "../src/modes/interactive/theme/theme.ts";
+import systemTheme from "../src/modes/interactive/theme/system-theme.ts";
+import type systemThemeTypes from "../src/modes/interactive/theme/system-theme.types.ts";
+import terminalColors from "../src/modes/interactive/theme/terminal-colors.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import type themeTypes from "../src/modes/interactive/theme/theme.types.ts";
+
+const { generateSystemThemeColors, wcagContrast } = systemTheme;
+const { getAvailableThemes, getThemeByName, getThemeExportColors } = themeModule;
+const { setTerminalColors } = terminalColors;
 
 const { colorToOklch, colorToRgb, parseColor, rgbColor } = tui;
 
 const rgb = (hex: string): tuiTypes.RgbColor => colorToRgb(parseColor(hex));
 const lightness = ({ r, g, b }: tuiTypes.RgbColor) => colorToOklch(rgbColor(r, g, b)).l;
 
-const DRACULA: SystemThemeInput = {
+const DRACULA: systemThemeTypes.SystemThemeInput = {
   background: rgb("#282a36"),
   foreground: rgb("#f8f8f2"),
   palette: ["#21222c", "#ff5555", "#50fa7b", "#f1fa8c", "#bd93f9", "#ff79c6", "#8be9fd", "#f8f8f2"]
@@ -42,9 +39,9 @@ const TERMINALS = {
   dracula: DRACULA,
   midGray: { background: rgb("#808080"), foreground: rgb("#ffffff") },
   solarizedLight: { background: rgb("#fdf6e3"), foreground: rgb("#657b83") },
-} satisfies Record<string, SystemThemeInput>;
+} satisfies Record<string, systemThemeTypes.SystemThemeInput>;
 
-const PANELS: ThemeToken[] = [
+const PANELS: themeTypes.ThemeToken[] = [
   "userMessageBg",
   "toolPendingBg",
   "toolSuccessBg",
@@ -52,7 +49,10 @@ const PANELS: ThemeToken[] = [
   "selectedBg",
 ];
 
-function resolved(input: SystemThemeInput, token: ThemeToken): tuiTypes.RgbColor {
+function resolved(
+  input: systemThemeTypes.SystemThemeInput,
+  token: themeTypes.ThemeToken,
+): tuiTypes.RgbColor {
   const value = generateSystemThemeColors(input).colors[token];
   if (value === "") return PANELS.includes(token) ? input.background! : input.foreground!;
   return rgb(value as string);
@@ -73,7 +73,7 @@ const usesTheTerminalForegroundAndPaletteHues = () => {
 };
 
 const keepsPastelPaletteColorsPastelAtOther = () => {
-  const frappe: SystemThemeInput = {
+  const frappe: systemThemeTypes.SystemThemeInput = {
     background: rgb("#303446"),
     foreground: rgb("#c6d0f5"),
     palette: [
@@ -140,7 +140,8 @@ describe("generateSystemThemeColors", () => {
   it("orders foreground roles by contrast and keeps panels close to the background", () => {
     for (const [name, input] of Object.entries(TERMINALS)) {
       const background = lightness(input.background!);
-      const offset = (token: ThemeToken) => lightness(resolved(input, token)) - background;
+      const offset = (token: themeTypes.ThemeToken) =>
+        lightness(resolved(input, token)) - background;
 
       if (name !== "midGray") {
         expect(Math.abs(offset("text")), name).toBeGreaterThan(Math.abs(offset("muted")));

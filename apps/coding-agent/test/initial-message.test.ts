@@ -1,9 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import type { Args } from "../src/cli/args.ts";
-import { buildInitialMessage } from "../src/cli/initial-message.ts";
+import type argsTypes from "../src/cli/args.types.ts";
+import initialMessageModule from "../src/cli/initial-message.ts";
 
-function createArgs(messages: string[] = []): Args {
+const { buildInitialMessage } = initialMessageModule;
+
+function createArgs(messages: string[] = []): argsTypes.Args {
   return {
     diagnostics: [],
     fileArgs: [],

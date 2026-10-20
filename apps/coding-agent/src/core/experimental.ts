@@ -1,5 +1,13 @@
-import { readEnv } from "./process-env.ts";
+import processEnv from "./process-env.ts";
 
-export function areExperimentalFeaturesEnabled(): boolean {
+const { readEnv } = processEnv;
+
+function areExperimentalFeaturesEnabled(): boolean {
   return readEnv("MSA_EXPERIMENTAL") === "1";
 }
+
+const experimental = {
+  areExperimentalFeaturesEnabled,
+};
+
+export default experimental;

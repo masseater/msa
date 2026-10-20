@@ -1,9 +1,12 @@
-import type { Runtime } from "./runtime.ts";
-import { snapshots } from "./snapshot.ts";
-import { store } from "./store.ts";
-import type { Note, Task, TaskView } from "./types.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import snapshot from "./snapshot.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
-function taskView(runtime: Runtime, id: string): TaskView {
+const { snapshots } = snapshot;
+const { store } = storeModule;
+
+function taskView(runtime: runtimeTypes.Runtime, id: string): orchestratorTypesTypes.TaskView {
   const found = snapshots
     .taskViews(runtime.database, runtime.options.project)
     .find((task) => task.id === id);
@@ -11,7 +14,7 @@ function taskView(runtime: Runtime, id: string): TaskView {
   return found;
 }
 
-function runningThreadOf(runtime: Runtime, taskId: string) {
+function runningThreadOf(runtime: runtimeTypes.Runtime, taskId: string) {
   for (const assignment of store.assignmentsOfTask(runtime.database, taskId)) {
     const thread = store.getThread(runtime.database, assignment.threadId);
     if (thread?.status === "running") return thread;
@@ -19,10 +22,19 @@ function runningThreadOf(runtime: Runtime, taskId: string) {
   return undefined;
 }
 
-function appliesTo(note: Pick<Note, "round" | "taskIds">, task: Task): boolean {
+function appliesTo(
+  note: Pick<orchestratorTypesTypes.Note, "round" | "taskIds">,
+  task: orchestratorTypesTypes.Task,
+): boolean {
   if (note.round !== null) return task.round === note.round;
   if (note.taskIds.length === 0) return true;
   return note.taskIds.includes(task.id);
 }
 
-export const actionHelpers = { appliesTo, runningThreadOf, taskView };
+const actionHelpers = { appliesTo, runningThreadOf, taskView };
+
+const actionHelpersModule = {
+  actionHelpers,
+};
+
+export default actionHelpersModule;

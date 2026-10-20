@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createGrepTool } from "../src/index.ts";
+import src from "../src/index.ts";
 import tools5Support from "./tools-5-support.ts";
+
+const { createGrepTool } = src;
 
 const { getTextOutput } = tools5Support;
 

@@ -5,12 +5,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type SessionEntry,
-  sessionEntryToContextMessages,
-} from "../../src/core/session-manager.ts";
-import type { ExtensionFactory } from "../../src/index.ts";
+import sessionManagerSupport from "../../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import type srcTypes from "../../src/index.types.ts";
 import harnessModule from "./harness.ts";
+
+const { sessionEntryToContextMessages } = sessionManagerSupport;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
@@ -18,18 +18,18 @@ const { createHarness } = harnessModule;
 
 const { currentTimeMillis, nowIso } = testing;
 
-function messageEntry(message: Record<string, unknown>): SessionEntry {
+function messageEntry(message: Record<string, unknown>): sessionManagerTypes.SessionEntry {
   return {
     id: "entry-1",
     message,
     parentId: null,
     timestamp: nowIso(),
     type: "message",
-  } as unknown as SessionEntry;
+  } as unknown as sessionManagerTypes.SessionEntry;
 }
 
 const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
-  const extensionFactories: ExtensionFactory[] = [
+  const extensionFactories: srcTypes.ExtensionFactory[] = [
     (msa) => {
       msa.registerTool({
         description: "Custom tool that returns a result without content",
@@ -63,7 +63,7 @@ const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
 
 const normalizesNullContentInMessageEnd = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const extensionFactories: ExtensionFactory[] = [
+  const extensionFactories: srcTypes.ExtensionFactory[] = [
     (msa) => {
       msa.on("message_end", (event) =>
         runPromise(
@@ -160,7 +160,7 @@ const normalizesNullContentWhenLoadingCustom = () => {
     parentId: null,
     timestamp: nowIso(),
     type: "custom_message",
-  } as unknown as SessionEntry;
+  } as unknown as sessionManagerTypes.SessionEntry;
 
   const [message] = sessionEntryToContextMessages(entry);
   expect(message).toMatchObject({ content: [], role: "custom" });

@@ -5,12 +5,10 @@ import type layoutNodeTypes from "../layout-node.types.ts";
 import tuiComponent from "../tui-component.ts";
 import type tuiComponentTypes from "../tui-component.types.ts";
 import type scrollViewTypes from "./scroll-view.types.ts";
-
-const { Container } = tuiComponent;
 const { runAfter } = delay;
 const { LAYOUT_NODE } = layoutNode;
 
-export default class ScrollView extends Container {
+export default class ScrollView extends tuiComponent.Container {
   private readonly child: tuiComponentTypes.Component;
   readonly followEnd: boolean;
   readonly primary: boolean;

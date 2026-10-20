@@ -4,12 +4,13 @@ import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { ModelChangeEntry, SessionEntry } from "../src/core/session-manager.ts";
-import { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import treeSelectorSupport from "./tree-selector-support.ts";
 
+const { initTheme } = themeModule;
 const { setKeybindings, visibleWidth } = tui;
 
 const { assistantMessage, buildTree, userMessage } = treeSelectorSupport;
@@ -24,7 +25,7 @@ beforeEach(() => {
   setKeybindings(new KeybindingsManager());
 });
 
-function modelChange(id: string, parentId: string | null): ModelChangeEntry {
+function modelChange(id: string, parentId: string | null): sessionManagerTypes.ModelChangeEntry {
   return {
     id,
     modelId: "claude-sonnet-4",
@@ -59,7 +60,7 @@ const focusesNearestVisibleAncestorWhenCurrentleafidIs = () => {
 };
 
 const hidesContextEditsByDefaultAndLabels = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     userMessage("user-1", null, "hello"),
     assistantMessage("asst-1", "user-1", "hi"),
     {

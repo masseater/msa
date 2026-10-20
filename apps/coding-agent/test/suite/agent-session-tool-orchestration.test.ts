@@ -5,17 +5,20 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionAPI } from "../../src/core/extensions/types.ts";
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
-import { createToolSearchExtension } from "../../src/extensions/tool-search/index.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
+import extensionModule from "../../src/extensions/tool-search/extension.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { createCodemodeExtension } = extension;
+const { createToolSearchExtension } = extensionModule;
 
 const { fauxAssistantMessage, fauxToolCall, getCurrentTools } = ai;
 
 const { createHarness } = harnessModule;
 
-function orchestratorExtension(msa: ExtensionAPI): void {
+function orchestratorExtension(msa: extensionsTypesTypes.ExtensionAPI): void {
   msa.registerTool({
     description: "Echo text.",
     execute: (_id, { text }) =>

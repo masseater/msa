@@ -1,11 +1,15 @@
 import ai from "@msa/ai";
-import { defineTool } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 import { describeEval, toolCalls } from "vitest-evals";
 
-import { createMsaCodingAgentHarness } from "../src/harness.ts";
-import { files, pathOperations } from "../src/platform.ts";
+import harnessModule from "../src/harness.ts";
+import platform from "../src/platform.ts";
+
+const { defineTool } = codingAgent;
+const { pathOperations } = platform;
+const { createMsaCodingAgentHarness } = harnessModule;
 
 const { Type } = ai;
 
@@ -15,7 +19,7 @@ const submitAudit = defineTool({
   description: "Submit the final verdict after completing the documentation investigation.",
   execute: (_toolCallId, params) =>
     Promise.resolve({
-      content: [{ type: "text", text: "Documentation audit submitted." }],
+      content: [{ text: "Documentation audit submitted.", type: "text" }],
       details: params,
       terminate: true,
     }),
@@ -23,12 +27,12 @@ const submitAudit = defineTool({
   name: TOOL_NAME,
   parameters: Type.Object(
     {
+      explanation: Type.String({ maxLength: 2000, minLength: 1 }),
       verdict: Type.Union([
         Type.Literal("match"),
         Type.Literal("mismatch"),
         Type.Literal("inconclusive"),
       ]),
-      explanation: Type.String({ minLength: 1, maxLength: 2000 }),
     },
     { additionalProperties: false },
   ),
@@ -37,8 +41,9 @@ const submitAudit = defineTool({
 
 const repositoryRoot = pathOperations.resolve(import.meta.dirname, "../../..");
 const docsRoot = pathOperations.resolve(repositoryRoot, "apps/coding-agent/docs");
-const pages = (await Effect.runPromise(files.glob("**/*.md", docsRoot)))
-  .map((path) => ({ path: path.replaceAll("\\", "/") }))
+const DOCS_GLOB_PREFIX = "../../coding-agent/docs/";
+const pages = Object.keys(import.meta.glob("../../coding-agent/docs/**/*.md"))
+  .map((path) => ({ path: path.slice(DOCS_GLOB_PREFIX.length) }))
   .sort((left, right) => left.path.localeCompare(right.path));
 const harness = createMsaCodingAgentHarness({
   customTools: [submitAudit],

@@ -4,11 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type PersonalizeCatalog,
-  withPersonalizedCatalog,
-} from "../src/core/remote-catalog-provider.ts";
+import remoteCatalogProvider from "../src/core/remote-catalog-provider.ts";
+import type remoteCatalogProviderTypes from "../src/core/remote-catalog-provider.types.ts";
 import remoteCatalogProviderSupport from "./remote-catalog-provider-support.ts";
+
+const { withPersonalizedCatalog } = remoteCatalogProvider;
 
 const { InMemoryModelsStore } = ai;
 
@@ -39,7 +39,7 @@ const keepsTheSavedListAndSavesNothing = () =>
       const store = new InMemoryModelsStore();
       const saved = { checkedAt: 1, models: [model("allowed")] };
       yield* awaited(store.write("test-provider", saved));
-      const personalize: PersonalizeCatalog = () =>
+      const personalize: remoteCatalogProviderTypes.PersonalizeCatalog = () =>
         effectRunPromise(
           Effect.sync(() => {
             throw new Error("user models request failed");
@@ -60,7 +60,7 @@ const restoresASavedListAsIsAnd = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const personalize: PersonalizeCatalog = () =>
+      const personalize: remoteCatalogProviderTypes.PersonalizeCatalog = () =>
         effectRunPromise(
           Effect.sync(() => {
             throw new Error("not used offline");

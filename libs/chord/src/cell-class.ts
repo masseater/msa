@@ -10,7 +10,6 @@ import schemaModule from "./schema.ts";
 import type typesModule from "./types.types.ts";
 
 const { cellDerived, cellSource, delta } = cellKit;
-const { Source } = cellSource;
 const { assertValid } = schemaModule;
 const { diffRevisions, track } = delta;
 const { computeDependents, sharesStructure } = cellDerived;
@@ -46,7 +45,7 @@ function unbox(ops: readonly deltaTypes.Op[], value: unknown): deltaTypes.Op[] {
   return result;
 }
 
-export default class Cell<T> extends Source<T> {
+export default class Cell<T> extends cellSource.Source<T> {
   schema: TSchema;
   #tracker: deltaTypes.Tracker<Box<T>>;
   readonly #guard: cellSourceTypes.WriteGuard;

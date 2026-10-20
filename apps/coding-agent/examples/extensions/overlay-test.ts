@@ -1,14 +1,14 @@
-import type { ExtensionAPI, ExtensionCommandContext, Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 const { CURSOR_MARKER, matchesKey, renderFakeCursor, visibleWidth } = tui;
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("overlay-test", {
     description: "Test overlay rendering with edge cases",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           const result = yield* Effect.promise(() =>
@@ -41,7 +41,7 @@ const renderItem = (
   item: OverlayItem,
   isSelected: boolean,
   focused: boolean,
-  th: Theme,
+  th: codingAgentTypes.Theme,
 ): string => {
   const prefix = isSelected ? " ▶ " : "   ";
 
@@ -74,11 +74,11 @@ class OverlayTestComponent implements tuiTypes.Focusable {
     { cursor: 0, hasInput: false, label: "Cancel", text: "" },
   ];
 
-  private theme: Theme;
+  private theme: codingAgentTypes.Theme;
   private done: (result: { action: string; query?: string } | undefined) => void;
 
   constructor(
-    theme: Theme,
+    theme: codingAgentTypes.Theme,
     done: (result: { action: string; query?: string } | undefined) => void,
   ) {
     this.theme = theme;

@@ -3,14 +3,10 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type CompactionEntry,
-  type ModelChangeEntry,
-  type SessionEntry,
-  type SessionMessageEntry,
-  type ThinkingLevelChangeEntry,
-  buildSessionContext,
-} from "../src/core/session-manager.ts";
+import sessionManagerSupport from "../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { buildSessionContext } = sessionManagerSupport;
 
 const { currentDate, currentTimeMillis } = testing;
 
@@ -62,9 +58,11 @@ beforeEach(() => {
   resetEntryCounter();
 });
 
-function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEntry {
+function createMessageEntry(
+  message: agentTypes.AgentMessage,
+): sessionManagerTypes.SessionMessageEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: SessionMessageEntry = {
+  const entry: sessionManagerTypes.SessionMessageEntry = {
     id,
     message,
     parentId: lastId,
@@ -75,9 +73,12 @@ function createMessageEntry(message: agentTypes.AgentMessage): SessionMessageEnt
   return entry;
 }
 
-function createCompactionEntry(summary: string, firstKeptEntryId: string): CompactionEntry {
+function createCompactionEntry(
+  summary: string,
+  firstKeptEntryId: string,
+): sessionManagerTypes.CompactionEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: CompactionEntry = {
+  const entry: sessionManagerTypes.CompactionEntry = {
     firstKeptEntryId,
     id,
     parentId: lastId,
@@ -90,9 +91,12 @@ function createCompactionEntry(summary: string, firstKeptEntryId: string): Compa
   return entry;
 }
 
-function createModelChangeEntry(provider: string, modelId: string): ModelChangeEntry {
+function createModelChangeEntry(
+  provider: string,
+  modelId: string,
+): sessionManagerTypes.ModelChangeEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: ModelChangeEntry = {
+  const entry: sessionManagerTypes.ModelChangeEntry = {
     id,
     modelId,
     parentId: lastId,
@@ -104,9 +108,11 @@ function createModelChangeEntry(provider: string, modelId: string): ModelChangeE
   return entry;
 }
 
-function createThinkingLevelEntry(thinkingLevel: string): ThinkingLevelChangeEntry {
+function createThinkingLevelEntry(
+  thinkingLevel: string,
+): sessionManagerTypes.ThinkingLevelChangeEntry {
   const id = `test-id-${entryCounter++}`;
-  const entry: ThinkingLevelChangeEntry = {
+  const entry: sessionManagerTypes.ThinkingLevelChangeEntry = {
     id,
     parentId: lastId,
     thinkingLevel,
@@ -118,7 +124,7 @@ function createThinkingLevelEntry(thinkingLevel: string): ThinkingLevelChangeEnt
 }
 
 const shouldLoadAllMessagesWhenNoCompaction = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("1")),
     createMessageEntry(createAssistantMessage("a")),
     createMessageEntry(createUserMessage("2")),
@@ -140,7 +146,7 @@ const shouldHandleSingleCompaction = () => {
   const u3 = createMessageEntry(createUserMessage("3"));
   const a3 = createMessageEntry(createAssistantMessage("c"));
 
-  const entries: SessionEntry[] = [u1, a1, u2, a2, compaction, u3, a3];
+  const entries: sessionManagerTypes.SessionEntry[] = [u1, a1, u2, a2, compaction, u3, a3];
 
   const loaded = buildSessionContext(entries);
 
@@ -163,7 +169,18 @@ const shouldHandleMultipleCompactionsOnlyLatestMatters = () => {
   const u4 = createMessageEntry(createUserMessage("4"));
   const d = createMessageEntry(createAssistantMessage("d"));
 
-  const entries: SessionEntry[] = [u1, a1, compact1, u2, b, u3, c, compact2, u4, d];
+  const entries: sessionManagerTypes.SessionEntry[] = [
+    u1,
+    a1,
+    compact1,
+    u2,
+    b,
+    u3,
+    c,
+    compact2,
+    u4,
+    d,
+  ];
 
   const loaded = buildSessionContext(entries);
 
@@ -178,7 +195,7 @@ const shouldKeepAllMessagesWhenFirstkeptentryidIs = () => {
   const u2 = createMessageEntry(createUserMessage("2"));
   const b = createMessageEntry(createAssistantMessage("b"));
 
-  const entries: SessionEntry[] = [u1, a1, compact1, u2, b];
+  const entries: sessionManagerTypes.SessionEntry[] = [u1, a1, compact1, u2, b];
 
   const loaded = buildSessionContext(entries);
 
@@ -186,7 +203,7 @@ const shouldKeepAllMessagesWhenFirstkeptentryidIs = () => {
 };
 
 const shouldTrackModelAndThinkingLevelChanges = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     createMessageEntry(createUserMessage("1")),
     createModelChangeEntry("openai", "gpt-4"),
     createMessageEntry(createAssistantMessage("a")),

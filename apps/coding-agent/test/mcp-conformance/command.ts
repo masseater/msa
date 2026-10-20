@@ -4,7 +4,9 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 
-import { envSnapshot } from "../../src/core/process-env.ts";
+import processEnv from "../../src/core/process-env.ts";
+
+const { envSnapshot } = processEnv;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 

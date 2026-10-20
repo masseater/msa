@@ -2,11 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { main } from "../src/main.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
+import mainModule from "../src/main.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
+const { main } = mainModule;
 const { runPackageCommandDirectly, setupPackageTest, teardownPackageTest } =
   packageCommandPathsSupport;
 
@@ -55,7 +57,7 @@ const refreshesOnlyModelCatalogsWithUpdateModels = () =>
       );
       const create = vi
         .spyOn(ModelRuntime, "create")
-        .mockResolvedValue({ refresh } as unknown as ModelRuntime);
+        .mockResolvedValue({ refresh } as unknown as modelRuntimeTypes.ModelRuntime);
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
       const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 

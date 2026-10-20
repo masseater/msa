@@ -1,101 +1,23 @@
-import { readFile } from "node:fs/promises";
-
-import compatSchema from "@msa/ai/providers/compat-schema";
-import modelSchema from "@msa/ai/providers/model-schema";
 import * as Effect from "effect/Effect";
-import { type Static, Type } from "typebox";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
 
-import { stripJsonComments } from "../utils/json.ts";
-import { normalizePath } from "../utils/paths.ts";
-import { stripBom } from "../utils/text.ts";
-import { awaited, awaiting } from "./awaiting.ts";
+import json from "../utils/json.ts";
+import paths from "../utils/paths.ts";
+import text from "../utils/text.ts";
+import awaitingModule from "./awaiting.ts";
+import modelConfigSupport from "./model-config-support.ts";
+import type modelConfigTypes from "./model-config.types.ts";
+import nodeFsPromises from "./platform/node/fs-promises.ts";
 
-const {
-  ModelCostSchema,
-  ModelInputLimitsSchema,
-  ModelInputModalitySchema,
-  ModelPromptCacheSchema,
-  ThinkingLevelMapSchema,
-} = modelSchema;
-const { ProviderCompatSchema } = compatSchema;
-
-const SamplingParamsSchema = Type.Record(Type.String(), Type.Unknown());
-const SamplingParamsByThinkingLevelSchema = Type.Object({
-  high: Type.Optional(SamplingParamsSchema),
-  low: Type.Optional(SamplingParamsSchema),
-  max: Type.Optional(SamplingParamsSchema),
-  medium: Type.Optional(SamplingParamsSchema),
-  minimal: Type.Optional(SamplingParamsSchema),
-  off: Type.Optional(SamplingParamsSchema),
-  xhigh: Type.Optional(SamplingParamsSchema),
-});
-
-const PositiveTokenCountSchema = Type.Number({ exclusiveMinimum: 0 });
-
-const ModelDefinitionSchema = Type.Object({
-  api: Type.Optional(Type.String({ minLength: 1 })),
-  baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-  compat: Type.Optional(ProviderCompatSchema),
-  contextWindow: Type.Optional(PositiveTokenCountSchema),
-  cost: Type.Optional(ModelCostSchema),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  id: Type.String({ minLength: 1 }),
-  input: Type.Optional(Type.Array(ModelInputModalitySchema)),
-  inputLimits: Type.Optional(ModelInputLimitsSchema),
-  maxTokens: Type.Optional(PositiveTokenCountSchema),
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  promptCache: Type.Optional(ModelPromptCacheSchema),
-  reasoning: Type.Optional(Type.Boolean()),
-  samplingParams: Type.Optional(SamplingParamsSchema),
-  samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
-  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
-});
-
-const ModelOverrideSchema = Type.Object({
-  compat: Type.Optional(ProviderCompatSchema),
-  contextWindow: Type.Optional(PositiveTokenCountSchema),
-  cost: Type.Optional(Type.Partial(ModelCostSchema)),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  input: Type.Optional(Type.Array(ModelInputModalitySchema)),
-  inputLimits: Type.Optional(ModelInputLimitsSchema),
-  maxTokens: Type.Optional(PositiveTokenCountSchema),
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  promptCache: Type.Optional(ModelPromptCacheSchema),
-  reasoning: Type.Optional(Type.Boolean()),
-  samplingParams: Type.Optional(SamplingParamsSchema),
-  samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
-  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
-});
-
-const ProviderConfigSchema = Type.Object({
-  api: Type.Optional(Type.String({ minLength: 1 })),
-  apiKey: Type.Optional(Type.String({ minLength: 1 })),
-  authHeader: Type.Optional(Type.Boolean()),
-  baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-  compat: Type.Optional(ProviderCompatSchema),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  modelOverrides: Type.Optional(Type.Record(Type.String(), ModelOverrideSchema)),
-  models: Type.Optional(Type.Array(ModelDefinitionSchema)),
-  name: Type.Optional(Type.String({ minLength: 1 })),
-});
-
-const ModelsConfigProperties = {
-  providers: Type.Record(Type.String(), ProviderConfigSchema),
-};
-
-export const ModelsConfigSchema = Type.Object({
-  $schema: Type.Optional(Type.String()),
-  ...ModelsConfigProperties,
-});
+const { readFile } = nodeFsPromises;
+const { awaited, awaiting } = awaitingModule;
+const { normalizePath } = paths;
+const { stripJsonComments } = json;
+const { stripBom } = text;
+const { ModelsConfigSchema } = modelConfigSupport;
 
 const validateModelsConfig = Compile(ModelsConfigSchema);
-
-export type ModelsJsonModel = Static<typeof ModelDefinitionSchema>;
-export type ModelsJsonModelOverride = Static<typeof ModelOverrideSchema>;
-export type ModelsJsonProvider = Static<typeof ProviderConfigSchema>;
-
 function formatValidationPath(error: TLocalizedValidationError): string {
   if (error.keyword === "required") {
     const requiredProperties = (error.params as { requiredProperties?: string[] })
@@ -109,18 +31,19 @@ function formatValidationPath(error: TLocalizedValidationError): string {
   const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
   return path || "root";
 }
-
 function deepFreeze<T>(value: T): T {
   if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
-
-export class ModelConfig {
-  private readonly providers: ReadonlyMap<string, ModelsJsonProvider>;
+export default class ModelConfig {
+  private readonly providers: ReadonlyMap<string, modelConfigTypes.ModelsJsonProvider>;
   private readonly error: string | undefined;
 
-  private constructor(providers: ReadonlyMap<string, ModelsJsonProvider>, error?: string) {
+  private constructor(
+    providers: ReadonlyMap<string, modelConfigTypes.ModelsJsonProvider>,
+    error?: string,
+  ) {
     this.providers = providers;
     this.error = error;
   }
@@ -164,7 +87,7 @@ export class ModelConfig {
           );
         }
 
-        const providers = new Map<string, ModelsJsonProvider>();
+        const providers = new Map<string, modelConfigTypes.ModelsJsonProvider>();
         for (const [providerId, provider] of Object.entries(parsed.providers)) {
           providers.set(providerId, deepFreeze(structuredClone(provider)));
         }
@@ -173,7 +96,7 @@ export class ModelConfig {
     );
   }
 
-  getProvider(providerId: string): ModelsJsonProvider | undefined {
+  getProvider(providerId: string): modelConfigTypes.ModelsJsonProvider | undefined {
     return this.providers.get(providerId);
   }
 

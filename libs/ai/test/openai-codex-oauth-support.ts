@@ -15,7 +15,7 @@ const DEVICE_TOKEN_URL = "https://auth.openai.com/api/accounts/deviceauth/token"
 const OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token";
 const CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann";
 
-const neverAbortedSignal = new AbortController().signal;
+const neverAbortedSignal: AbortSignal = new AbortController().signal;
 
 const jsonResponse = (body: unknown, status = 200): Response =>
   Response.json(body, { headers: { "Content-Type": "application/json" }, status });

@@ -3,6 +3,7 @@ import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -11,7 +12,7 @@ const { StorageRequestError } = durable;
 
 const { awaited } = effectSupport;
 const { FailingCalls, started } = harnessStorageFailureSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 
 const failsFailedId = Effect.gen(function* () {
   const storage = new FailingCalls();

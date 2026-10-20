@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { normalizeSessionName, parseArgs } from "../src/cli/args.ts";
+import args from "../src/cli/args.ts";
+
+const { normalizeSessionName, parseArgs } = args;
 
 const reportsAMissingModeValue = () => {
   const result = parseArgs(["--mode"]);

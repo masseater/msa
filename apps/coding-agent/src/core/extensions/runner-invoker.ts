@@ -1,41 +1,25 @@
 import { Effect } from "effect";
 
-import { toErrorMessage } from "../../utils/errors.ts";
-import { fromPromise } from "../platform/index.ts";
-import { snapshotEventHandlers } from "./runner-support.ts";
-import type { HandlerFn } from "./types-runtime.ts";
-import type { Extension, ExtensionContext, ExtensionError, ExtensionEvent } from "./types.ts";
+import errors from "../../utils/errors.ts";
+import platform from "../platform/index.ts";
+import type runnerInvokerTypes from "./runner-invoker.types.ts";
+import runnerSupport from "./runner-support.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export interface EmitHost {
-  readonly extensions: Extension[];
-  createContext(): ExtensionContext;
-  emitError(error: ExtensionError): void;
-  assertActive(): void;
-}
+const { snapshotEventHandlers } = runnerSupport;
+const { toErrorMessage } = errors;
+const { fromPromise } = platform;
 
-export interface HandlerRun {
-  ext: Extension;
-  eventType: string;
-  handler: HandlerFn;
-  event: unknown;
-  ctx: ExtensionContext;
-}
+export default class HandlerInvoker {
+  protected readonly host: runnerInvokerTypes.EmitHost;
 
-export type HandlerOutcome = { ok: true; value: unknown } | { ok: false };
-
-export interface HandlerSlot {
-  ext: Extension;
-  handler: HandlerFn;
-}
-
-export class HandlerInvoker {
-  protected readonly host: EmitHost;
-
-  constructor(host: EmitHost) {
+  constructor(host: runnerInvokerTypes.EmitHost) {
     this.host = host;
   }
 
-  protected slots(eventType: ExtensionEvent["type"]): HandlerSlot[] {
+  protected slots(
+    eventType: extensionsTypesTypes.ExtensionEvent["type"],
+  ): runnerInvokerTypes.HandlerSlot[] {
     return snapshotEventHandlers(this.host.extensions, eventType).flatMap(({ ext, handlers }) =>
       handlers.map((handler) => ({ ext, handler })),
     );
@@ -55,11 +39,11 @@ export class HandlerInvoker {
     });
   }
 
-  protected invoke({ ext, eventType, handler, event, ctx }: HandlerRun) {
+  protected invoke({ ext, eventType, handler, event, ctx }: runnerInvokerTypes.HandlerRun) {
     return fromPromise(() => handler(event, ctx)).pipe(
-      Effect.map((value): HandlerOutcome => ({ ok: true, value })),
+      Effect.map((value): runnerInvokerTypes.HandlerOutcome => ({ ok: true, value })),
       Effect.catchTag("ForeignError", (failure) =>
-        Effect.sync((): HandlerOutcome => {
+        Effect.sync((): runnerInvokerTypes.HandlerOutcome => {
           this.reportError(ext.path, eventType, failure.cause);
           return { ok: false };
         }),

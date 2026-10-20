@@ -4,9 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { convertToLlm } from "../../../src/core/messages.ts";
+import messagesModule from "../../../src/core/messages.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { convertToLlm } = messagesModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

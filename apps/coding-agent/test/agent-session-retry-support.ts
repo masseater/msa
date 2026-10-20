@@ -3,7 +3,7 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import sessionKit from "./session-kit.ts";
 
 const { awaited, runTest } = testing;
@@ -47,7 +47,10 @@ const createRetrySession = Effect.fn("createRetrySession")(function* (options: {
   return created.session;
 });
 
-const delayAssistantMessageEnd = (session: AgentSession, delayMs: number): void => {
+const delayAssistantMessageEnd = (
+  session: agentSessionTypes.AgentSession,
+  delayMs: number,
+): void => {
   const original = Reflect.get(session, "emitExtensionEvent") as (
     event: agentTypes.AgentEvent,
   ) => Promise<void>;
@@ -63,7 +66,7 @@ const delayAssistantMessageEnd = (session: AgentSession, delayMs: number): void 
   );
 };
 
-const retryEvents = (session: AgentSession): string[] => {
+const retryEvents = (session: agentSessionTypes.AgentSession): string[] => {
   const events: string[] = [];
   session.subscribe((event) => {
     if (event.type === "auto_retry_start") events.push(`start:${event.attempt}`);

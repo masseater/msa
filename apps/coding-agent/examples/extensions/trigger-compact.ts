@@ -1,11 +1,14 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
 const COMPACT_THRESHOLD_TOKENS = 100_000;
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let previousTokens: number | null | undefined;
 
-  const triggerCompaction = (ctx: ExtensionContext, customInstructions?: string) => {
+  const triggerCompaction = (
+    ctx: codingAgentTypes.ExtensionContext,
+    customInstructions?: string,
+  ) => {
     if (ctx.hasUI) {
       ctx.ui.notify("Compaction started", "info");
     }
@@ -42,6 +45,13 @@ export default function (msa: ExtensionAPI) {
     triggerCompaction(ctx);
   });
 
+  helperPart1(msa, triggerCompaction);
+}
+
+function helperPart1(
+  msa: codingAgentTypes.ExtensionAPI,
+  triggerCompaction: (ctx: codingAgentTypes.ExtensionContext, customInstructions?: string) => void,
+) {
   msa.registerCommand("trigger-compact", {
     description: "Trigger compaction immediately",
     handler: (args, ctx) => {

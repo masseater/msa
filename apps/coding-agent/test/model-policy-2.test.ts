@@ -2,12 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { saveModelPolicy } from "../src/core/model-policy.ts";
-import { findModelPolicyDenial, resolveCliModel } from "../src/core/model-resolver.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createModelPolicyToolDefinition } from "../src/core/tools/model-policy.ts";
-import { wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
+import coreModelPolicy from "../src/core/model-policy.ts";
+import modelResolver from "../src/core/model-resolver.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import modelPolicyModule from "../src/core/tools/model-policy.ts";
+import toolDefinitionWrapper from "../src/core/tools/tool-definition-wrapper.ts";
 import modelPolicySupport from "./model-policy-support.ts";
+
+const { findModelPolicyDenial, resolveCliModel } = modelResolver;
+const { wrapToolDefinition } = toolDefinitionWrapper;
+const { createModelPolicyToolDefinition } = modelPolicyModule;
+const { saveModelPolicy } = coreModelPolicy;
 
 const { awaited, runTest } = testing;
 

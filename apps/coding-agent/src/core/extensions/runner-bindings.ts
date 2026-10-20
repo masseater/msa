@@ -1,45 +1,9 @@
-import type agentTypes from "@msa/agent-core/index.types";
-import type aiTypes from "@msa/ai/index.types";
+import systemPrompt from "../system-prompt.ts";
+import type runnerBindingsTypes from "./runner-bindings.types.ts";
 
-import type { ScopedModel } from "../model-resolver.ts";
-import {
-  type BuildSystemPromptOptions,
-  normalizeBuildSystemPromptOptions,
-} from "../system-prompt.ts";
-import type {
-  ForkHandler,
-  NavigateTreeHandler,
-  NewSessionHandler,
-  ReloadHandler,
-  ShutdownHandler,
-  SwitchSessionHandler,
-} from "./runner-types.ts";
-import type { CompactOptions, ContextUsage, ExtensionContextActions } from "./types.ts";
+const { normalizeBuildSystemPromptOptions } = systemPrompt;
 
-export interface RunnerBindings {
-  getModel: () => aiTypes.Model<any> | undefined;
-  getScopedModels: () => readonly ScopedModel[];
-  isIdleFn: () => boolean;
-  isProjectTrustedFn: () => boolean;
-  getSignalFn: () => AbortSignal | undefined;
-  waitForIdleFn: () => Promise<void>;
-  abortFn: () => void;
-  hasPendingMessagesFn: () => boolean;
-  getContextUsageFn: () => ContextUsage | undefined;
-  compactFn: (options?: CompactOptions) => void;
-  getSystemPromptFn: () => string;
-  getSystemPromptOptionsFn: () => BuildSystemPromptOptions;
-  executeToolFn: ExtensionContextActions["executeTool"] | undefined;
-  getCallableToolsFn: () => readonly agentTypes.AgentTool[];
-  newSessionHandler: NewSessionHandler;
-  forkHandler: ForkHandler;
-  navigateTreeHandler: NavigateTreeHandler;
-  switchSessionHandler: SwitchSessionHandler;
-  reloadHandler: ReloadHandler;
-  shutdownHandler: ShutdownHandler;
-}
-
-export const idleCommandBindings = () => ({
+const idleCommandBindings = () => ({
   forkHandler: () => Promise.resolve({ cancelled: false }),
   navigateTreeHandler: () => Promise.resolve({ cancelled: false }),
   newSessionHandler: () => Promise.resolve({ cancelled: false }),
@@ -48,7 +12,7 @@ export const idleCommandBindings = () => ({
   waitForIdleFn: () => Promise.resolve(),
 });
 
-export const createBindings = (cwd: string): RunnerBindings => ({
+const createBindings = (cwd: string): runnerBindingsTypes.RunnerBindings => ({
   abortFn: () => {},
   compactFn: () => {},
   executeToolFn: undefined,
@@ -66,13 +30,11 @@ export const createBindings = (cwd: string): RunnerBindings => ({
   ...idleCommandBindings(),
 });
 
-export interface ContextActionsInput {
-  bindings: RunnerBindings;
-  actions: ExtensionContextActions;
-  cwd: string;
-}
-
-export const applyContextActions = ({ bindings, actions, cwd }: ContextActionsInput): void => {
+const applyContextActions = ({
+  bindings,
+  actions,
+  cwd,
+}: runnerBindingsTypes.ContextActionsInput): void => {
   bindings.getModel = actions.getModel;
   bindings.getScopedModels = actions.getScopedModels;
   bindings.isIdleFn = actions.isIdle;
@@ -89,3 +51,11 @@ export const applyContextActions = ({ bindings, actions, cwd }: ContextActionsIn
   bindings.executeToolFn = actions.executeTool;
   bindings.getCallableToolsFn = actions.getCallableTools ?? (() => []);
 };
+
+const runnerBindings = {
+  applyContextActions,
+  createBindings,
+  idleCommandBindings,
+};
+
+export default runnerBindings;

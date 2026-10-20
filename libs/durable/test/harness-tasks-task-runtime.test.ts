@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import clockModule from "../src/clock.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -14,7 +15,7 @@ const { currentTimeMillis } = clockModule;
 
 const { abortController, awaited } = effectSupport;
 const { oneStep, openRoot, start, withSignal } = harnessTasksSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 const { completed, deferred, eventually, settled } = taskSupport;
 
 const ordersRuntimeCommits = Effect.gen(function* () {

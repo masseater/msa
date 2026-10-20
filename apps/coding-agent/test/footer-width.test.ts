@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatCwdForFooter } from "../src/modes/interactive/components/footer.ts";
+import footerSupport from "../src/modes/interactive/components/footer-support.ts";
+
+const { formatCwdForFooter } = footerSupport;
 
 const doesNotAbbreviateSiblingPathsThatShare = () => {
   expect(formatCwdForFooter("/home/user2", "/home/user")).toBe("/home/user2");

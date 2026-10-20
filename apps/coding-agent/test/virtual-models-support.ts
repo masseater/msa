@@ -3,15 +3,14 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { type ModelRouteRequest, type VirtualModelDefinition } from "../src/core/virtual-models.ts";
-
+import AuthStorage from "../src/core/auth-storage.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type virtualModelsTypes from "../src/core/virtual-models.types.ts";
 const { InMemoryModelsStore, fauxAssistantMessage, fauxProvider } = ai;
 
 const { awaited, runTest } = testing;
 
-function createRuntime(requests: ModelRouteRequest[] = []) {
+function createRuntime(requests: virtualModelsTypes.ModelRouteRequest[] = []) {
   return runTest(
     Effect.gen(function* () {
       const runtime = yield* awaited(
@@ -35,7 +34,7 @@ function createRuntime(requests: ModelRouteRequest[] = []) {
         ],
       });
       runtime.registerNativeProvider(faux.provider);
-      const definition: VirtualModelDefinition = {
+      const definition: virtualModelsTypes.VirtualModelDefinition = {
         id: "auto",
         name: "Auto",
         provider: "router",

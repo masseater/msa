@@ -1,17 +1,23 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import { type McpServerConfig, mcpNamespace, validateMcpServerConfig } from "../mcp-servers.ts";
-import type { ModelRouteRequest, VirtualModelDefinition } from "../virtual-models.ts";
-import type { ApiScope } from "./loader-scope.ts";
-import type { ExtensionVirtualModel, ProviderConfig } from "./types.ts";
+import mcpServersModule from "../mcp-servers.ts";
+import type mcpServersTypes from "../mcp-servers.types.ts";
+import type virtualModelsTypes from "../virtual-models.types.ts";
+import type loaderScopeTypes from "./loader-scope.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export const providerMembers = ({
+const { mcpNamespace, validateMcpServerConfig } = mcpServersModule;
+
+const providerMembers = ({
   extension,
   runtime,
   assertActive,
   applyRuntimeChange,
-}: ApiScope) => ({
-  registerProvider(providerOrName: aiTypes.Provider | string, config?: ProviderConfig) {
+}: loaderScopeTypes.ApiScope) => ({
+  registerProvider(
+    providerOrName: aiTypes.Provider | string,
+    config?: extensionsTypesTypes.ProviderConfig,
+  ) {
     assertActive();
     if (typeof providerOrName === "string") {
       if (config === undefined)
@@ -22,12 +28,15 @@ export const providerMembers = ({
     applyRuntimeChange(() => runtime.registerNativeProvider(providerOrName, extension.path));
   },
 
-  registerVirtualModel<TState>(model: ExtensionVirtualModel<TState>) {
+  registerVirtualModel<TState>(model: extensionsTypesTypes.ExtensionVirtualModel<TState>) {
     assertActive();
-    const definition: VirtualModelDefinition = {
+    const definition: virtualModelsTypes.VirtualModelDefinition = {
       ...model,
       route: (request) =>
-        model.route(request as ModelRouteRequest<TState>, runtime.createContext()),
+        model.route(
+          request as virtualModelsTypes.ModelRouteRequest<TState>,
+          runtime.createContext(),
+        ),
     };
     applyRuntimeChange(() => runtime.registerVirtualModel(definition, extension.path));
   },
@@ -43,13 +52,18 @@ export const providerMembers = ({
   },
 });
 
-export const mcpMembers = ({ extension, runtime, assertActive, applyRuntimeChange }: ApiScope) => ({
+const mcpMembers = ({
+  extension,
+  runtime,
+  assertActive,
+  applyRuntimeChange,
+}: loaderScopeTypes.ApiScope) => ({
   getMcpServers() {
     assertActive();
     return runtime.mcpServers.list();
   },
 
-  registerMcpServer(name: string, config: McpServerConfig) {
+  registerMcpServer(name: string, config: mcpServersTypes.McpServerConfig) {
     assertActive();
     const validated = validateMcpServerConfig(name, config);
     if (typeof validated === "string") {
@@ -67,7 +81,7 @@ export const mcpMembers = ({ extension, runtime, assertActive, applyRuntimeChang
     if (clash !== undefined) {
       throw new Error(`MCP server "${name}" conflicts with registered server "${clash.name}"`);
     }
-    const server = { name, config: structuredClone(validated), extensionPath: extension.path };
+    const server = { config: structuredClone(validated), extensionPath: extension.path, name };
     applyRuntimeChange(() => runtime.mcpServers.register(server));
   },
 
@@ -76,3 +90,10 @@ export const mcpMembers = ({ extension, runtime, assertActive, applyRuntimeChang
     applyRuntimeChange(() => runtime.mcpServers.unregister(name, extension.path));
   },
 });
+
+const loaderApiProviders = {
+  mcpMembers,
+  providerMembers,
+};
+
+export default loaderApiProviders;

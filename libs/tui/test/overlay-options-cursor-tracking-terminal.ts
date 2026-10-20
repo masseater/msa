@@ -1,6 +1,4 @@
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
+import VirtualTerminal from "./virtual-terminal.ts";
 
 class CursorTrackingTerminal extends VirtualTerminal {
   cursorVisible = true;

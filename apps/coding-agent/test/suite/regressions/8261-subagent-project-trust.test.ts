@@ -5,7 +5,7 @@ import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import subagentExtension from "../../../examples/extensions/subagent/index.ts";
-import type { ExtensionUIContext } from "../../../src/core/extensions/index.ts";
+import type extensionsTypes from "../../../src/core/extensions/index.types.ts";
 import harnessModule from "../harness.ts";
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
@@ -18,14 +18,16 @@ const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 vi.mock("@msa/coding-agent", () => ({
-  CONFIG_DIR_NAME: ".msa",
-  getAgentDir: () => "/missing-user-agent-dir",
-  getMarkdownTheme: () => ({}),
-  parseFrontmatter: (content: string) => ({
-    body: content,
-    frontmatter: { description: "Project test agent", name: "project-agent" },
-  }),
-  withFileMutationQueue: (_path: string, fn: () => Promise<unknown>) => Promise.resolve(fn()),
+  default: {
+    CONFIG_DIR_NAME: ".msa",
+    getAgentDir: () => "/missing-user-agent-dir",
+    getMarkdownTheme: () => ({}),
+    parseFrontmatter: (content: string) => ({
+      body: content,
+      frontmatter: { description: "Project test agent", name: "project-agent" },
+    }),
+    withFileMutationQueue: (_path: string, fn: () => Promise<unknown>) => Promise.resolve(fn()),
+  },
 }));
 
 interface RunOptions {
@@ -73,7 +75,7 @@ function runProjectAgent(
         yield* Effect.promise(() =>
           harness.session.bindExtensions({
             mode: "tui",
-            uiContext: { confirm } as unknown as ExtensionUIContext,
+            uiContext: { confirm } as unknown as extensionsTypes.ExtensionUIContext,
           }),
         );
 

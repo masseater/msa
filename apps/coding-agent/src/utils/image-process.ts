@@ -1,27 +1,14 @@
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { convertImageBytesToPng } from "./image-convert.ts";
-import { type ImageResizeOptions, formatDimensionNote, resizeImage } from "./image-resize.ts";
+import awaitingModule from "../core/awaiting.ts";
+import imageConvert from "./image-convert.ts";
+import type imageProcessTypes from "./image-process.types.ts";
+import imageResize from "./image-resize.ts";
 
-export interface ProcessImageOptions {
-  autoResizeImages?: boolean;
-
-  resizeOptions?: ImageResizeOptions | undefined;
-}
-
-export type ProcessImageResult =
-  | {
-      ok: true;
-      data: string;
-      mimeType: string;
-      hints: string[];
-    }
-  | {
-      ok: false;
-      message: string;
-    };
+const { awaited, awaiting } = awaitingModule;
+const { convertImageBytesToPng } = imageConvert;
+const { formatDimensionNote, resizeImage } = imageResize;
 
 interface NormalizedImage {
   bytes: Uint8Array;
@@ -79,8 +66,8 @@ function conversionHint(from: string | undefined, to: string): string | undefine
 function processImageImpl(
   bytes: Uint8Array,
   mimeType: string,
-  options?: ProcessImageOptions,
-): Promise<ProcessImageResult> {
+  options?: imageProcessTypes.ProcessImageOptions,
+): Promise<imageProcessTypes.ProcessImageResult> {
   return Effect.runPromise(
     awaiting(function* () {
       const autoResizeImages = options?.autoResizeImages ?? true;
@@ -131,10 +118,20 @@ function processImageImpl(
   );
 }
 
-export const processImage: {
-  (bytes: Uint8Array, mimeType: string, options?: ProcessImageOptions): Promise<ProcessImageResult>;
+const processImage: {
+  (
+    bytes: Uint8Array,
+    mimeType: string,
+    options?: imageProcessTypes.ProcessImageOptions,
+  ): Promise<imageProcessTypes.ProcessImageResult>;
   (
     mimeType: string,
-    options?: ProcessImageOptions,
-  ): (bytes: Uint8Array) => Promise<ProcessImageResult>;
+    options?: imageProcessTypes.ProcessImageOptions,
+  ): (bytes: Uint8Array) => Promise<imageProcessTypes.ProcessImageResult>;
 } = dual((args: IArguments) => args.length >= 2, processImageImpl);
+
+const imageProcess = {
+  processImage,
+};
+
+export default imageProcess;

@@ -1,7 +1,7 @@
 import { NodeServices } from "@effect/platform-node";
 import compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
-import { getAgentDir } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import {
   Clock,
   Console,
@@ -15,7 +15,12 @@ import {
   Stream,
 } from "effect";
 
-import { MODELS, streamGitLabDuo } from "./index.ts";
+import config from "./config.ts";
+import streamModule from "./stream.ts";
+
+const { getAgentDir } = codingAgent;
+const { MODELS } = config;
+const { streamGitLabDuo } = streamModule;
 
 const { registerApiProvider, streamSimple } = compat;
 

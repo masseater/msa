@@ -1,21 +1,17 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
+import type typesModulePart1 from "@msa/ai/types-part1.types";
 import * as Effect from "effect/Effect";
 
-import type { SessionEntry } from "./session-manager.ts";
+import type sessionManagerTypes from "./session-manager.types.ts";
+import type virtualModelsTypes from "./virtual-models.types.ts";
 
 const { isModelType, lazyStream } = ai;
 
-export const VIRTUAL_MODEL_API = "msa-virtual";
+const VIRTUAL_MODEL_API = "msa-virtual";
 
-export const VIRTUAL_MODEL_STATE_ENTRY = "msa.virtual-model-state";
-
-export interface VirtualModelStateData<TState = unknown> {
-  provider: string;
-  modelId: string;
-  state: TState;
-}
+const VIRTUAL_MODEL_STATE_ENTRY = "msa.virtual-model-state";
 
 const THINKING_LEVELS: readonly aiTypes.ModelThinkingLevel[] = [
   "off",
@@ -27,49 +23,11 @@ const THINKING_LEVELS: readonly aiTypes.ModelThinkingLevel[] = [
   "max",
 ];
 
-export type ModelRouteReason = "user" | "continuation" | "retry" | "direct";
-
-export interface ModelRouteRequest<TState = unknown> {
-  model: aiTypes.Model<aiTypes.Api>;
-  thinkingLevel: aiTypes.ModelThinkingLevel;
-  reason: ModelRouteReason;
-  previous?:
-    | { model: aiTypes.Model<aiTypes.Api>; thinkingLevel?: aiTypes.ModelThinkingLevel | undefined }
-    | undefined;
-  failed?:
-    | {
-        model: aiTypes.Model<aiTypes.Api>;
-        thinkingLevel?: aiTypes.ModelThinkingLevel | undefined;
-        message: aiTypes.AssistantMessage;
-      }
-    | undefined;
-  state?: TState;
-  messages: readonly aiTypes.Message[];
-  signal?: AbortSignal | undefined;
-}
-
-export interface ModelRoute<TState = unknown> {
-  model: aiTypes.Model<aiTypes.Api>;
-  thinkingLevel: aiTypes.ModelThinkingLevel;
-  state?: TState;
-}
-
-export interface VirtualModelDefinition<TState = unknown> {
-  provider: string;
-  id: string;
-  name: string;
-  thinkingLevels?: readonly aiTypes.ModelThinkingLevel[];
-  contextWindow?: number;
-  maxTokens?: number;
-  input?: ("text" | "image")[];
-  route(request: ModelRouteRequest<TState>): ModelRoute<TState> | Promise<ModelRoute<TState>>;
-}
-
-export function isVirtualModel(model: { api: string }): boolean {
+function isVirtualModel(model: { api: string }): boolean {
   return model.api === VIRTUAL_MODEL_API;
 }
 
-export function findLatestResponse(
+function findLatestResponse(
   messages: readonly agentTypes.AgentMessage[],
 ): aiTypes.AssistantMessage | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
@@ -85,8 +43,8 @@ export function findLatestResponse(
   return undefined;
 }
 
-export function getBranchSelection(
-  branch: readonly SessionEntry[],
+function getBranchSelection(
+  branch: readonly sessionManagerTypes.SessionEntry[],
   getModel: (provider: string, modelId: string) => aiTypes.Model<aiTypes.Api> | undefined,
 ): { provider: string; modelId: string } | undefined {
   for (let i = branch.length - 1; i >= 0; i--) {
@@ -112,7 +70,7 @@ export function getBranchSelection(
 }
 
 function findLastModelChange(
-  branch: readonly SessionEntry[],
+  branch: readonly sessionManagerTypes.SessionEntry[],
   before: number,
 ): { provider: string; modelId: string } | undefined {
   for (let i = before - 1; i >= 0; i--) {
@@ -122,22 +80,22 @@ function findLastModelChange(
   return undefined;
 }
 
-export function getVirtualModelState(
-  branch: readonly SessionEntry[],
+function getVirtualModelState(
+  branch: readonly sessionManagerTypes.SessionEntry[],
   provider: string,
   modelId: string,
 ): unknown {
   for (let i = branch.length - 1; i >= 0; i--) {
     const entry = branch[i];
     if (entry?.type !== "custom" || entry.customType !== VIRTUAL_MODEL_STATE_ENTRY) continue;
-    const data = entry.data as VirtualModelStateData | undefined;
+    const data = entry.data as virtualModelsTypes.VirtualModelStateData | undefined;
     if (data?.provider === provider && data.modelId === modelId) return data.state;
   }
   return undefined;
 }
 
-export function createVirtualModel(
-  definition: Omit<VirtualModelDefinition, "route">,
+function createVirtualModel(
+  definition: Omit<virtualModelsTypes.VirtualModelDefinition, "route">,
 ): aiTypes.Model<aiTypes.Api> {
   const levels = definition.thinkingLevels ?? ["off"];
   const thinkingLevelMap: aiTypes.ThinkingLevelMap = {};
@@ -170,7 +128,7 @@ function unroutedStream(model: aiTypes.Model<aiTypes.Api>): aiTypes.AssistantMes
   );
 }
 
-export function withVirtualModels(
+function withVirtualModels(
   providerId: string,
   provider: aiTypes.Provider | undefined,
   virtualModels: readonly aiTypes.Model<aiTypes.Api>[],
@@ -190,25 +148,19 @@ export function withVirtualModels(
       streamSimple: unroutedStream,
     };
   }
-  const ids = new Set(virtualModels.map((model) => model.id));
-  const physical = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]) =>
-    models.filter(
-      (model) => !isVirtualModel(model) && !(isModelType(model, "chat") && ids.has(model.id)),
-    );
-  const virtual = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]) =>
-    models.filter((model) => isVirtualModel(model));
+  const { physical, virtual } = withVirtualModelsPart1(virtualModels);
   const { filterModels, filterAllModels } = provider;
   return {
     ...provider,
-    getModels: () => [...physical(provider.getModels()), ...virtualModels],
-    getAllModels: () => [
-      ...physical(provider.getAllModels?.() ?? provider.getModels()),
-      ...virtualModels,
-    ],
     filterModels: (models, credential) => {
       const real = physical(models);
       return [...(filterModels?.(real, credential) ?? real), ...virtual(models)];
     },
+    getAllModels: () => [
+      ...physical(provider.getAllModels?.() ?? provider.getModels()),
+      ...virtualModels,
+    ],
+    getModels: () => [...physical(provider.getModels()), ...virtualModels],
     ...(filterAllModels === undefined
       ? {}
       : {
@@ -224,4 +176,28 @@ export function withVirtualModels(
         ? unroutedStream(model)
         : provider.streamSimple(model, context, options),
   };
+}
+
+const virtualModels = {
+  VIRTUAL_MODEL_API,
+  VIRTUAL_MODEL_STATE_ENTRY,
+  createVirtualModel,
+  findLatestResponse,
+  getBranchSelection,
+  getVirtualModelState,
+  isVirtualModel,
+  withVirtualModels,
+};
+
+export default virtualModels;
+
+function withVirtualModelsPart1(virtualModelList: readonly aiTypes.Model<typesModulePart1.Api>[]) {
+  const ids = new Set(virtualModelList.map((model) => model.id));
+  const physical = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]) =>
+    models.filter(
+      (model) => !isVirtualModel(model) && !(isModelType(model, "chat") && ids.has(model.id)),
+    );
+  const virtual = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]) =>
+    models.filter((model) => isVirtualModel(model));
+  return { physical, virtual };
 }

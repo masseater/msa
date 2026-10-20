@@ -1,6 +1,6 @@
-import { BaseOverlay } from "./base-overlay.ts";
+import BaseOverlay from "./base-overlay.ts";
 
-export class TimerPanel extends BaseOverlay {
+export default class TimerPanel extends BaseOverlay {
   private seconds = 0;
 
   tick(): void {

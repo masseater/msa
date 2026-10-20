@@ -5,12 +5,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  completeSummarization,
-  generateSummary,
-  generateSummaryWithUsage,
-} from "../src/core/compaction/index.ts";
+import compaction from "../src/core/compaction/index.ts";
 import compactionSummaryReasoning1Support from "./compaction-summary-reasoning-1-support.ts";
+
+const { completeSummarization, generateSummary, generateSummaryWithUsage } = compaction;
 
 const { normalizeContext } = ai;
 

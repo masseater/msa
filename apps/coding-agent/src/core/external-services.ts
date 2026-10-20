@@ -1,41 +1,20 @@
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "./awaiting.ts";
-import { claudeCodeService } from "./cli-agents/claude-service.ts";
-import type { ToolDefinition } from "./extensions/types.ts";
-import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
-import { createWebSearchToolDefinition } from "./tools/web-search.ts";
-import { TREG_INSTALL_COMMAND, findTreg, findTregCli, loginTreg, logoutTreg } from "./treg.ts";
+import awaitingModule from "./awaiting.ts";
+import claudeService from "./cli-agents/claude-service.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
+import type externalServicesTypes from "./external-services.types.ts";
+import webFetch from "./tools/web-fetch.ts";
+import webSearch from "./tools/web-search.ts";
+import tregModule from "./treg.ts";
 
-export interface ServiceSignInPage {
-  url: string;
-  code?: string;
-}
+const { awaited, awaiting } = awaitingModule;
+const { TREG_INSTALL_COMMAND, findTreg, findTregCli, loginTreg, logoutTreg } = tregModule;
+const { createWebSearchToolDefinition } = webSearch;
+const { createWebFetchToolDefinition } = webFetch;
+const { claudeCodeService } = claudeService;
 
-export type ServiceStatus =
-  | { installed: false; install: string }
-  | { installed: true; signedIn: boolean };
-
-export interface ServiceLogoutInteraction {
-  select(title: string, options: string[]): Promise<string>;
-}
-
-export interface ServiceLoginInteraction extends ServiceLogoutInteraction {
-  showPage(page: ServiceSignInPage): void;
-  prompt(message: string, placeholder?: string): Promise<string>;
-}
-
-export interface ExternalService {
-  id: string;
-  name: string;
-  purpose: string;
-  status(): Promise<ServiceStatus>;
-  login(interaction: ServiceLoginInteraction, signal: AbortSignal): Promise<void>;
-  logout(interaction: ServiceLogoutInteraction): Promise<void>;
-  tools?(): ToolDefinition[];
-}
-
-const treg: ExternalService = {
+const treg: externalServicesTypes.ExternalService = {
   id: "treg",
   login(interaction, signal) {
     return Effect.runPromise(
@@ -62,7 +41,7 @@ const treg: ExternalService = {
       Effect.sync(() => {
         const cli = findTregCli();
         return cli === undefined
-          ? { installed: false, install: TREG_INSTALL_COMMAND }
+          ? { install: TREG_INSTALL_COMMAND, installed: false }
           : { installed: true, signedIn: cli.signedIn };
       }),
     );
@@ -72,20 +51,30 @@ const treg: ExternalService = {
     return options === undefined
       ? []
       : [
-          createWebSearchToolDefinition(options) as ToolDefinition,
-          createWebFetchToolDefinition(options) as ToolDefinition,
+          createWebSearchToolDefinition(options) as extensionsTypesTypes.ToolDefinition,
+          createWebFetchToolDefinition(options) as extensionsTypesTypes.ToolDefinition,
         ];
   },
 };
 
-export const EXTERNAL_SERVICES: readonly ExternalService[] = [treg, claudeCodeService];
+const EXTERNAL_SERVICES: readonly externalServicesTypes.ExternalService[] = [
+  treg,
+  claudeCodeService,
+];
 
-export function findExternalService(
-  services: readonly ExternalService[],
+function findExternalService(
+  services: readonly externalServicesTypes.ExternalService[],
   ref: string,
-): ExternalService | undefined {
+): externalServicesTypes.ExternalService | undefined {
   const normalized = ref.trim().toLowerCase();
   return services.find(
     (service) => service.id === normalized || service.name.toLowerCase() === normalized,
   );
 }
+
+const externalServices = {
+  EXTERNAL_SERVICES,
+  findExternalService,
+};
+
+export default externalServices;

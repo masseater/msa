@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 const makeTimeoutSignal = (ms: number): { signal: AbortSignal; cancel: () => void } => {
@@ -9,7 +9,7 @@ const makeTimeoutSignal = (ms: number): { signal: AbortSignal; cancel: () => voi
   return { cancel: () => fiber.interruptUnsafe(), signal: controller.signal };
 };
 
-const registerTimedConfirm = (msa: ExtensionAPI): void => {
+const registerTimedConfirm = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("timed", {
     description: "Show a timed confirmation dialog (auto-cancels in 5s with countdown)",
     handler: (_args, ctx) =>
@@ -33,7 +33,7 @@ const registerTimedConfirm = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerTimedSelect = (msa: ExtensionAPI): void => {
+const registerTimedSelect = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("timed-select", {
     description: "Show a timed select dialog (auto-cancels in 10s with countdown)",
     handler: (_args, ctx) =>
@@ -55,7 +55,7 @@ const registerTimedSelect = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerTimedSignal = (msa: ExtensionAPI): void => {
+const registerTimedSignal = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("timed-signal", {
     description: "Show a timed confirm using AbortSignal (manual approach)",
     handler: (_args, ctx) => {
@@ -86,7 +86,7 @@ const registerTimedSignal = (msa: ExtensionAPI): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   registerTimedConfirm(msa);
   registerTimedSelect(msa);
   registerTimedSignal(msa);

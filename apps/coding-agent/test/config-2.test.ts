@@ -2,9 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { detectInstallMethod, getSelfUpdateCommand, getUpdateInstruction } from "../src/config.ts";
-import { readEnv } from "../src/core/process-env.ts";
+import config from "../src/config.ts";
+import processEnv from "../src/core/process-env.ts";
 import config2Support from "./config-2-support.ts";
+
+const { readEnv } = processEnv;
+const { detectInstallMethod, getSelfUpdateCommand, getUpdateInstruction } = config;
 
 const { setExecPath } = config2Support;
 

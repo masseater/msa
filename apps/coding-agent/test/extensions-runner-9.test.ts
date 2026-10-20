@@ -2,21 +2,19 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createEventBus } from "../src/core/event-bus.ts";
-import {
-  createExtensionRuntime,
-  discoverAndLoadExtensions,
-  loadExtensionFromFactory,
-} from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ExtensionFactory } from "../src/core/extensions/types.ts";
+import eventBus from "../src/core/event-bus.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 
+const { createExtensionRuntime, discoverAndLoadExtensions, loadExtensionFromFactory } = loader;
+const { createEventBus } = eventBus;
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 
 const { awaited, joinPath, runTest, writeTextFile } = testing;
 
-function loadSubscriptionExtension(factory: ExtensionFactory) {
+function loadSubscriptionExtension(factory: extensionsTypesTypes.ExtensionFactory) {
   return runTest(
     Effect.gen(function* () {
       const runtime = createExtensionRuntime();

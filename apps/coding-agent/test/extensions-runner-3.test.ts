@@ -2,13 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { discoverAndLoadExtensions, loadExtensions } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ModelRegistry } from "../src/core/model-registry.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type modelRegistryTypes from "../src/core/model-registry.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-
+const { discoverAndLoadExtensions, loadExtensions } = loader;
 const { createInMemoryModelRegistry } = modelRuntimeTestUtils;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
@@ -18,9 +19,9 @@ let tempDir: string;
 
 let extensionsDir: string;
 
-let sessionManager: SessionManager;
+let sessionManager: sessionManagerTypes.SessionManager;
 
-let modelRegistry: ModelRegistry;
+let modelRegistry: modelRegistryTypes.ModelRegistry;
 
 const collectsToolsFromMultipleExtensions = () =>
   runTest(

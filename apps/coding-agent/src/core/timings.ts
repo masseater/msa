@@ -1,5 +1,8 @@
-import { nowMs, writeError } from "./platform.ts";
-import { readEnv } from "./process-env.ts";
+import platform from "./platform.ts";
+import processEnv from "./process-env.ts";
+
+const { readEnv } = processEnv;
+const { nowMs, writeError } = platform;
 
 const ENABLED = readEnv("MSA_TIMING") === "1";
 interface TimingNamespace {
@@ -11,12 +14,12 @@ type TimingLabel = "main" | "extensions";
 
 const timingNamespaces = new Map<TimingLabel, TimingNamespace>();
 
-export function resetTimings(namespace: TimingLabel = "main"): void {
+function resetTimings(namespace: TimingLabel = "main"): void {
   if (!ENABLED) return;
   timingNamespaces.set(namespace, { lastTime: nowMs(), timings: [] });
 }
 
-export function time(label: string, namespace: TimingLabel = "main"): void {
+function time(label: string, namespace: TimingLabel = "main"): void {
   if (!ENABLED) return;
   const now = nowMs();
 
@@ -40,9 +43,17 @@ function printTimingGroup(title: string, timings: TimingNamespace["timings"]): v
   writeError(`${"-".repeat(title.length + 8)}\n`);
 }
 
-export function printTimings(): void {
+function printTimings(): void {
   if (!ENABLED) return;
   for (const [namespace, timingNamespace] of timingNamespaces) {
     printTimingGroup(`Startup Timings: ${namespace}`, timingNamespace.timings);
   }
 }
+
+const timings = {
+  printTimings,
+  resetTimings,
+  time,
+};
+
+export default timings;

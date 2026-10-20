@@ -1,35 +1,35 @@
 import { Cause, Effect, Exit } from "effect";
 import { type Harness, type JsonValue, createHarness } from "vitest-evals/harness";
 
-import type {
-  MsaCodingAgentHarnessOptions,
-  MsaCodingAgentHarnessWithOutput,
-  MsaCodingAgentInput,
-} from "./harness-types.ts";
-import { readEnv } from "./platform.ts";
-import { runMsaCodingAgent } from "./run-agent.ts";
-import { resolveSandboxIdentity } from "./sandbox.ts";
-import {
-  DOCUMENTATION_EVAL_TOOLS,
-  excludeMsaDocumentation,
-  resolveDocumentationVariant,
-} from "./system-prompt.ts";
+import type harnessTypesTypes from "./harness-types.ts";
+import platform from "./platform.ts";
+import runAgent from "./run-agent.ts";
+import sandbox from "./sandbox.ts";
+import systemPrompt from "./system-prompt.ts";
+
+const { runMsaCodingAgent } = runAgent;
+const { readEnv } = platform;
+const { resolveSandboxIdentity } = sandbox;
+const { DOCUMENTATION_EVAL_TOOLS, excludeMsaDocumentation, resolveDocumentationVariant } =
+  systemPrompt;
 
 const settle = <A>(effect: Effect.Effect<A>): Promise<A> =>
   Effect.runPromiseExit(effect).then((exit) =>
     Exit.isSuccess(exit) ? exit.value : Promise.reject(Cause.squash(exit.cause)),
   );
 
-export function createMsaCodingAgentHarness<TOutput extends JsonValue>(
-  options: MsaCodingAgentHarnessWithOutput<TOutput>,
-): Harness<MsaCodingAgentInput, TOutput>;
-export function createMsaCodingAgentHarness(
-  options?: MsaCodingAgentHarnessOptions,
-): Harness<MsaCodingAgentInput, string>;
-export function createMsaCodingAgentHarness<TOutput extends JsonValue>(
-  options: MsaCodingAgentHarnessOptions | MsaCodingAgentHarnessWithOutput<TOutput> = {},
-): Harness<MsaCodingAgentInput, string | TOutput> {
-  return createHarness<MsaCodingAgentInput, string | TOutput>({
+function createMsaCodingAgentHarness<TOutput extends JsonValue>(
+  options: harnessTypesTypes.MsaCodingAgentHarnessWithOutput<TOutput>,
+): Harness<harnessTypesTypes.MsaCodingAgentInput, TOutput>;
+function createMsaCodingAgentHarness(
+  options?: harnessTypesTypes.MsaCodingAgentHarnessOptions,
+): Harness<harnessTypesTypes.MsaCodingAgentInput, string>;
+function createMsaCodingAgentHarness<TOutput extends JsonValue>(
+  options:
+    | harnessTypesTypes.MsaCodingAgentHarnessOptions
+    | harnessTypesTypes.MsaCodingAgentHarnessWithOutput<TOutput> = {},
+): Harness<harnessTypesTypes.MsaCodingAgentInput, string | TOutput> {
+  return createHarness<harnessTypesTypes.MsaCodingAgentInput, string | TOutput>({
     name: options.name ?? "msa-coding-agent",
     run: ({ input, signal, setArtifact }) =>
       settle(runMsaCodingAgent({ input, options, setArtifact, signal })),
@@ -37,21 +37,21 @@ export function createMsaCodingAgentHarness<TOutput extends JsonValue>(
 }
 
 type DocumentationHarnessOptions = Omit<
-  MsaCodingAgentHarnessOptions,
+  harnessTypesTypes.MsaCodingAgentHarnessOptions,
   "name" | "transformSystemPrompt" | "expectedMsaDocumentation"
 >;
 type DocumentationHarnessWithOutput<TOutput extends JsonValue> = Omit<
-  MsaCodingAgentHarnessWithOutput<TOutput>,
+  harnessTypesTypes.MsaCodingAgentHarnessWithOutput<TOutput>,
   "name" | "transformSystemPrompt" | "expectedMsaDocumentation"
 >;
 
-export function createMsaDocumentationEvalHarness<TOutput extends JsonValue>(
+function createMsaDocumentationEvalHarness<TOutput extends JsonValue>(
   options: DocumentationHarnessWithOutput<TOutput>,
-): Harness<MsaCodingAgentInput, TOutput>;
-export function createMsaDocumentationEvalHarness(
+): Harness<harnessTypesTypes.MsaCodingAgentInput, TOutput>;
+function createMsaDocumentationEvalHarness(
   options?: DocumentationHarnessOptions,
-): Harness<MsaCodingAgentInput, string>;
-export function createMsaDocumentationEvalHarness<TOutput extends JsonValue>(
+): Harness<harnessTypesTypes.MsaCodingAgentInput, string>;
+function createMsaDocumentationEvalHarness<TOutput extends JsonValue>(
   options: DocumentationHarnessOptions | DocumentationHarnessWithOutput<TOutput> = {},
 ) {
   if (readEnv("MSA_EVAL_CONTAINER") !== "1" || resolveSandboxIdentity() === undefined) {
@@ -66,3 +66,10 @@ export function createMsaDocumentationEvalHarness<TOutput extends JsonValue>(
     expectedMsaDocumentation: variant === "with_docs",
   });
 }
+
+const harness = {
+  createMsaCodingAgentHarness,
+  createMsaDocumentationEvalHarness,
+};
+
+export default harness;

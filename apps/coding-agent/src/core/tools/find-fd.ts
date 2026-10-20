@@ -1,15 +1,17 @@
 import { Effect } from "effect";
 
-import { ensureTool } from "../../utils/tools-manager.ts";
-import { runCommand } from "../platform/command.ts";
-import { ToolFailure, fromPromise, pathOperations } from "../platform/index.ts";
-import {
-  type FindRequest,
-  formatFindOutput,
-  noFilesFound,
-  relativizeFindResultPath,
-} from "./find-support.ts";
-import { pathExists } from "./path-utils.ts";
+import toolsManager from "../../utils/tools-manager.ts";
+import command from "../platform/command.ts";
+import platformModule from "../platform/index.ts";
+import findSupport from "./find-support.ts";
+import type findSupportTypes from "./find-support.types.ts";
+import pathUtils from "./path-utils.ts";
+
+const { ToolFailure, fromPromise, pathOperations } = platformModule;
+const { pathExists } = pathUtils;
+const { formatFindOutput, noFilesFound, relativizeFindResultPath } = findSupport;
+const { ensureTool } = toolsManager;
+const { runCommand } = command;
 
 const isInsideGitRepo = (searchPath: string) =>
   Effect.gen(function* () {
@@ -23,7 +25,7 @@ const isInsideGitRepo = (searchPath: string) =>
   });
 
 const fdArguments = (
-  { pattern, searchPath, effectiveLimit }: FindRequest,
+  { pattern, searchPath, effectiveLimit }: findSupportTypes.FindRequest,
   insideGitRepo: boolean,
 ) => {
   const args = ["--glob", "--color=never", "--hidden"];
@@ -43,7 +45,7 @@ const fdArguments = (
   return args;
 };
 
-export const globWithFd = Effect.fn("findWithFd")(function* (request: FindRequest) {
+const globWithFd = Effect.fn("findWithFd")(function* (request: findSupportTypes.FindRequest) {
   const fdPath = yield* fromPromise(() => ensureTool("fd"));
   if (fdPath === undefined || fdPath === "") {
     return yield* new ToolFailure({ message: "fd is not available and could not be downloaded" });
@@ -71,3 +73,9 @@ export const globWithFd = Effect.fn("findWithFd")(function* (request: FindReques
     results,
   });
 });
+
+const findFd = {
+  globWithFd,
+};
+
+export default findFd;

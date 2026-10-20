@@ -1,12 +1,6 @@
-export interface ThemeTokenDescriptor {
-  slot: "foreground" | "background";
-  description: string;
-  fallback?: string;
-}
+import type themeTokensTypes from "./theme-tokens.types.ts";
 
-export type ThemeTokenDescriptors = Readonly<Record<string, ThemeTokenDescriptor>>;
-
-function defineThemeTokens<const T extends ThemeTokenDescriptors>(tokens: T): T {
+function defineThemeTokens<const T extends themeTokensTypes.ThemeTokenDescriptors>(tokens: T): T {
   for (const [name, descriptor] of Object.entries(tokens)) {
     if (descriptor.fallback === undefined) continue;
     const fallback = tokens[descriptor.fallback];
@@ -22,7 +16,7 @@ function defineThemeTokens<const T extends ThemeTokenDescriptors>(tokens: T): T 
   return tokens;
 }
 
-export const THEME_TOKENS = defineThemeTokens({
+const THEME_TOKENS = defineThemeTokens({
   accent: {
     description: "Primary accent color (logo, selected items, cursor)",
     slot: "foreground",
@@ -109,22 +103,8 @@ export const THEME_TOKENS = defineThemeTokens({
   warning: { description: "Warning states", slot: "foreground" },
 });
 
-export type ThemeToken = keyof typeof THEME_TOKENS;
-export type ThemeColor = {
-  [K in ThemeToken]: (typeof THEME_TOKENS)[K]["slot"] extends "foreground" ? K : never;
-}[ThemeToken];
-export type ThemeBg = Exclude<ThemeToken, ThemeColor>;
-
-type OptionalToken = {
-  [K in ThemeToken]: (typeof THEME_TOKENS)[K] extends { fallback: string } ? K : never;
-}[ThemeToken];
-
-type RequiredToken = Exclude<ThemeToken, OptionalToken>;
-
-export type ThemeColorValues<Value> = {
-  [K in RequiredToken]: Value;
-} & {
-  [K in OptionalToken]?: Value;
+const themeTokens = {
+  THEME_TOKENS,
 };
 
-export type ResolvedThemeColorValues<Value> = Record<ThemeToken, Value>;
+export default themeTokens;

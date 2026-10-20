@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
-import { createEditToolDefinition } from "../src/core/tools/edit.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import edit from "../src/core/tools/edit.ts";
+
+const { createEditToolDefinition } = edit;
 
 const { awaited, joinPath, makeTempDir, readTextFile, removeDirs, runTest, writeTextFile } =
   testing;
@@ -86,7 +88,13 @@ const preparedArgsExecuteCorrectly = () =>
       });
 
       const result = yield* awaited(
-        definition.execute("tool-1", prepared, undefined, undefined, {} as ExtensionToolContext),
+        definition.execute(
+          "tool-1",
+          prepared,
+          undefined,
+          undefined,
+          {} as extensionsTypesTypes.ExtensionToolContext,
+        ),
       );
       expect(result.content).toEqual([
         { text: "Successfully replaced 1 block(s) in legacy.txt.", type: "text" as const },

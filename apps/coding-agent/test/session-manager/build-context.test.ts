@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type SessionEntry, buildSessionContext } from "../../src/core/session-manager.ts";
+import sessionManagerSupport from "../../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 import buildContextCases from "./build-context-cases.ts";
+
+const { buildSessionContext } = sessionManagerSupport;
 
 const {
   buildcontextentriesReturnsCompactionAwareEntriesIncluding,
@@ -29,7 +32,9 @@ const emptyEntriesReturnsEmptyContext = () => {
 };
 
 const singleUserMessage = () => {
-  const entries: SessionEntry[] = [msg({ id: "1", parentId: null, role: "user", text: "hello" })];
+  const entries: sessionManagerTypes.SessionEntry[] = [
+    msg({ id: "1", parentId: null, role: "user", text: "hello" }),
+  ];
   const ctx = buildSessionContext(entries);
   expect(ctx.messages).toHaveLength(1);
   expect(ctx.messages[0]?.role).toBe("user");

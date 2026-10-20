@@ -4,14 +4,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import {
-  type BuildSystemPromptOptions,
-  normalizeBuildSystemPromptOptions,
-} from "../src/core/system-prompt.ts";
+import systemPrompt from "../src/core/system-prompt.ts";
+import type systemPromptTypes from "../src/core/system-prompt.types.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import type agentSessionConcurrentSupportTypes from "./agent-session-concurrent-support.types.ts";
 import sessionKit from "./session-kit.ts";
 import type sessionKitTypes from "./session-kit.types.ts";
+
+const { normalizeBuildSystemPromptOptions } = systemPrompt;
 
 const { runTest } = testing;
 const { assistantMessage, reply } = sessionKit;
@@ -59,12 +59,15 @@ const toolCallResponder =
   };
 
 const installExtensionRunner = (
-  session: AgentSession,
+  session: codingAgentTypes.AgentSession,
   handlers: agentSessionConcurrentSupportTypes.RunnerHandlers,
 ): void => {
   const runner = {
     emit: () => runTest(Effect.void),
-    emitBeforeAgentStart: (_trigger: unknown, systemPromptOptions: BuildSystemPromptOptions) =>
+    emitBeforeAgentStart: (
+      _trigger: unknown,
+      systemPromptOptions: systemPromptTypes.BuildSystemPromptOptions,
+    ) =>
       runTest(
         Effect.succeed({
           messages: [],

@@ -2,12 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import { LoginDialogComponent } from "../src/modes/interactive/components/login-dialog.ts";
-import { LoginFlow } from "../src/modes/interactive/login-flow.ts";
-import type { ProgramStatusReporter } from "../src/modes/interactive/program-status-reporter.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import LoginDialogComponent from "../src/modes/interactive/components/login-dialog.ts";
+import LoginFlow from "../src/modes/interactive/login-flow.ts";
+import type programStatusReporterTypes from "../src/modes/interactive/program-status-reporter.types.ts";
 import editorSlotUi from "./editor-slot-ui.ts";
-
 const { awaited, runTest } = testing;
 
 const { createEditorSlotUi, prepareTheme } = editorSlotUi;
@@ -24,7 +23,7 @@ const untilAborted = (signal: AbortSignal) =>
     signal.addEventListener("abort", () => resume(Effect.die(signal.reason)), { once: true });
   });
 
-const promptingSession = (): AgentSession => {
+const promptingSession = (): agentSessionTypes.AgentSession => {
   const provider = {
     auth: { apiKey: { login: () => Promise.resolve({}), name: "Acme API key" } },
     id: "acme",
@@ -43,7 +42,7 @@ const promptingSession = (): AgentSession => {
       },
     },
     settingsManager: { getOrCreateDeviceId: () => "device" },
-  } as unknown as AgentSession;
+  } as unknown as agentSessionTypes.AgentSession;
 };
 
 const treatsEscapeInTheCredentialPromptAs = Effect.gen(function* () {
@@ -52,7 +51,9 @@ const treatsEscapeInTheCredentialPromptAs = Effect.gen(function* () {
   const showError = vi.fn();
   const flow = new LoginFlow({
     editorSlot,
-    programStatus: { setBlocked: () => {} } as unknown as ProgramStatusReporter,
+    programStatus: {
+      setBlocked: () => {},
+    } as unknown as programStatusReporterTypes.ProgramStatusReporter,
     refreshAuthState: () => {},
     session: promptingSession(),
     showError,

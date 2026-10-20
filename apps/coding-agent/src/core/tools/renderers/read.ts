@@ -2,35 +2,34 @@ import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { expandHint, keyText } from "../../../modes/interactive/components/keybinding-hints.ts";
-import {
-  type Theme,
-  getLanguageFromPath,
-  highlightCode,
-} from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import type { ReadToolDetails } from "../read-content.ts";
-import {
-  formatReadLineRange,
-  getTextOutput,
-  renderToolPath,
-  replaceTabs,
-  str,
-} from "../render-utils.ts";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } from "../truncate.ts";
-import {
-  type CompactReadClassification,
-  getCompactReadClassification,
-} from "./read-classification.ts";
+import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
+import themeModule from "../../../modes/interactive/theme/theme.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import type readContentTypes from "../read-content.types.ts";
+import renderUtils from "../render-utils.ts";
+import truncate from "../truncate.ts";
+import readClassification from "./read-classification.ts";
+import type readClassificationTypes from "./read-classification.types.ts";
+
+const { getLanguageFromPath, highlightCode } = themeModule;
+const { formatReadLineRange, getTextOutput, renderToolPath, replaceTabs, str } = renderUtils;
+const { getCompactReadClassification } = readClassification;
+const { expandHint, keyText } = keybindingHints;
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize } = truncate;
 
 const { Text } = tui;
 
 type ReadRenderArgs = { path?: string; file_path?: string; offset?: unknown; limit?: unknown };
-function styledReadLineRange(args: ReadRenderArgs | undefined, theme: Theme): string {
+function styledReadLineRange(args: ReadRenderArgs | undefined, theme: themeTypes.Theme): string {
   const range = formatReadLineRange(args?.offset, args?.limit);
   return range === "" ? "" : theme.fg("warning", range);
 }
-function formatReadCall(args: ReadRenderArgs | undefined, theme: Theme, cwd: string): string {
+function formatReadCall(
+  args: ReadRenderArgs | undefined,
+  theme: themeTypes.Theme,
+  cwd: string,
+): string {
   const pathDisplay = renderToolPath(str(args?.file_path ?? args?.path), theme, cwd);
   return `${theme.fg("toolTitle", theme.bold("read"))} ${pathDisplay}${styledReadLineRange(args, theme)}`;
 }
@@ -42,9 +41,9 @@ function trimTrailingEmptyLines(lines: string[]): string[] {
   return lines.slice(0, end);
 }
 function formatCompactReadCall(
-  classification: CompactReadClassification,
+  classification: readClassificationTypes.CompactReadClassification,
   args: ReadRenderArgs | undefined,
-  theme: Theme,
+  theme: themeTypes.Theme,
 ): string {
   const hint = theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
   if (classification.kind === "skill") {
@@ -68,10 +67,10 @@ function formatReadResult(
   args: ReadRenderArgs | undefined,
   result: {
     content: (aiTypes.TextContent | aiTypes.ImageContent)[];
-    details?: ReadToolDetails | undefined;
+    details?: readContentTypes.ReadToolDetails | undefined;
   },
-  options: ToolRenderResultOptions,
-  theme: Theme,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
+  theme: themeTypes.Theme,
   showImages: boolean,
   _cwd: string,
   isError: boolean,
@@ -110,8 +109,8 @@ function formatReadResult(
   return text;
 }
 
-export const readRenderers: Pick<
-  ToolDefinition<any, ReadToolDetails | undefined>,
+const readRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, readContentTypes.ReadToolDetails | undefined>,
   "renderCall" | "renderResult"
 > = {
   renderCall(rawArgs, theme, context) {
@@ -143,3 +142,9 @@ export const readRenderers: Pick<
     return text;
   },
 };
+
+const read = {
+  readRenderers,
+};
+
+export default read;

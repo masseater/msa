@@ -1,49 +1,41 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { renderDiff } from "../../../modes/interactive/components/diff.ts";
-import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
-import type { Theme } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition } from "../../extensions/types.ts";
-import type { EditDiffError, EditDiffResult } from "../edit-diff.ts";
-import type { EditToolDetails } from "../edit.ts";
-import { renderToolPath, str } from "../render-utils.ts";
-import {
-  type RenderableEditArgs,
-  getRenderablePreviewInput,
-  requestEditPreview,
-} from "./edit-preview-input.ts";
+import diffModule from "../../../modes/interactive/components/diff.ts";
+import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import type editTypesModule from "../edit.types.ts";
+import renderUtils from "../render-utils.ts";
+import editPreviewInput from "./edit-preview-input.ts";
+import type editPreviewInputTypes from "./edit-preview-input.types.ts";
+import type editTypes from "./edit.types.ts";
+
+const { getRenderablePreviewInput, requestEditPreview } = editPreviewInput;
+const { renderToolPath, str } = renderUtils;
+const { renderDiff } = diffModule;
+const { expandHint } = keybindingHints;
 
 const { Box, Container, Spacer, Text } = tui;
 
-type EditPreview = EditDiffResult | EditDiffError;
-export type EditRenderState = {
-  callComponent?: EditCallRenderComponent;
-};
 type EditToolResultLike = {
   content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-  details?: EditToolDetails;
+  details?: editTypesModule.EditToolDetails;
 };
-type EditCallRenderComponent = tuiTypes.Box & {
-  preview?: EditPreview | undefined;
-  previewArgsKey?: string | undefined;
-  previewPending?: boolean;
-  settledError?: boolean;
-};
-function createEditCallRenderComponent(): EditCallRenderComponent {
+function createEditCallRenderComponent(): editTypes.EditCallRenderComponent {
   return Object.assign(new Box(1, 1, (text: string) => text), {
-    preview: undefined as EditPreview | undefined,
+    preview: undefined as editTypes.EditPreview | undefined,
     previewArgsKey: undefined as string | undefined,
     previewPending: false,
     settledError: false,
   });
 }
 function getEditCallRenderComponent(
-  state: EditRenderState,
+  state: editTypes.EditRenderState,
   lastComponent: unknown,
-): EditCallRenderComponent {
+): editTypes.EditCallRenderComponent {
   if (lastComponent instanceof Box) {
-    const component = lastComponent as EditCallRenderComponent;
+    const component = lastComponent as editTypes.EditCallRenderComponent;
     state.callComponent = component;
     return component;
   }
@@ -54,7 +46,11 @@ function getEditCallRenderComponent(
   state.callComponent = component;
   return component;
 }
-function formatEditCall(args: RenderableEditArgs | undefined, theme: Theme, cwd: string): string {
+function formatEditCall(
+  args: editPreviewInputTypes.RenderableEditArgs | undefined,
+  theme: themeTypes.Theme,
+  cwd: string,
+): string {
   const pathDisplay = renderToolPath(str(args?.file_path ?? args?.path), theme, cwd);
   return `${theme.fg("toolTitle", theme.bold("edit"))} ${pathDisplay}`;
 }
@@ -65,10 +61,10 @@ function summarizeDiff(diff: string): string {
   return `+${added} -${removed} lines`;
 }
 function formatEditResult(
-  args: RenderableEditArgs | undefined,
-  preview: EditPreview | undefined,
+  args: editPreviewInputTypes.RenderableEditArgs | undefined,
+  preview: editTypes.EditPreview | undefined,
   result: EditToolResultLike,
-  theme: Theme,
+  theme: themeTypes.Theme,
   isError: boolean,
   expanded: boolean,
 ): string | undefined {
@@ -96,9 +92,9 @@ function formatEditResult(
   return undefined;
 }
 function getEditHeaderBg(
-  preview: EditPreview | undefined,
+  preview: editTypes.EditPreview | undefined,
   settledError: boolean | undefined,
-  theme: Theme,
+  theme: themeTypes.Theme,
 ): (text: string) => string {
   if (preview !== undefined) {
     if ("error" in preview) {
@@ -112,13 +108,13 @@ function getEditHeaderBg(
   return (text: string) => theme.bg("toolPendingBg", text);
 }
 function buildEditCallComponent(
-  component: EditCallRenderComponent,
-  args: RenderableEditArgs | undefined,
-  theme: Theme,
+  component: editTypes.EditCallRenderComponent,
+  args: editPreviewInputTypes.RenderableEditArgs | undefined,
+  theme: themeTypes.Theme,
   cwd: string,
   outputPad: number,
   expanded: boolean,
-): EditCallRenderComponent {
+): editTypes.EditCallRenderComponent {
   component.setBgFn(getEditHeaderBg(component.preview, component.settledError, theme));
   component.setPaddingX(outputPad);
   component.clear();
@@ -139,8 +135,8 @@ function buildEditCallComponent(
   return component;
 }
 function setEditPreview(
-  component: EditCallRenderComponent,
-  preview: EditPreview,
+  component: editTypes.EditCallRenderComponent,
+  preview: editTypes.EditPreview,
   argsKey: string | undefined,
 ): boolean {
   const current = component.preview;
@@ -158,15 +154,17 @@ function setEditPreview(
   return changed;
 }
 
-type EditRenderResultContext = Parameters<NonNullable<ToolDefinition<any, any>["renderResult"]>>[3];
+type EditRenderResultContext = Parameters<
+  NonNullable<extensionsTypesTypes.ToolDefinition<any, any>["renderResult"]>
+>[3];
 
 function syncCallComponent(
-  callComponent: EditCallRenderComponent,
+  callComponent: editTypes.EditCallRenderComponent,
   typedResult: EditToolResultLike,
-  theme: Theme,
+  theme: themeTypes.Theme,
   context: EditRenderResultContext,
 ): void {
-  const args = context.args as RenderableEditArgs | undefined;
+  const args = context.args as editPreviewInputTypes.RenderableEditArgs | undefined;
   const previewInput = getRenderablePreviewInput(args);
   const argsKey =
     previewInput === null
@@ -197,10 +195,15 @@ function syncCallComponent(
   }
 }
 
-export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {
+const editRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, any>,
+  "renderCall" | "renderResult"
+> = {
   renderCall(args, theme, context) {
     const component = getEditCallRenderComponent(context.state, context.lastComponent);
-    const previewInput = getRenderablePreviewInput(args as RenderableEditArgs | undefined);
+    const previewInput = getRenderablePreviewInput(
+      args as editPreviewInputTypes.RenderableEditArgs | undefined,
+    );
     const argsKey =
       previewInput === null
         ? undefined
@@ -236,7 +239,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
 
     return buildEditCallComponent(
       component,
-      args as RenderableEditArgs | undefined,
+      args as editPreviewInputTypes.RenderableEditArgs | undefined,
       theme,
       context.cwd,
       context.outputPad,
@@ -251,7 +254,7 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
     }
 
     const output = formatEditResult(
-      context.args as RenderableEditArgs | undefined,
+      context.args as editPreviewInputTypes.RenderableEditArgs | undefined,
       callComponent?.preview,
       typedResult,
       theme,
@@ -268,3 +271,9 @@ export const editRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
     return component;
   },
 };
+
+const edit = {
+  editRenderers,
+};
+
+export default edit;

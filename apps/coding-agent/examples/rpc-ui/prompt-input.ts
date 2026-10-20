@@ -1,11 +1,13 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BOLD, GREEN, RESET } from "./colors.ts";
+import colors from "./colors.ts";
+
+const { BOLD, GREEN, RESET } = colors;
 
 const { Input, matchesKey } = tui;
 
-export class PromptInput implements tuiTypes.Component {
+export default class PromptInput implements tuiTypes.Component {
   readonly input: tuiTypes.Input;
   onCtrlD?: () => void;
 

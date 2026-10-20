@@ -2,11 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { withEnv } from "../src/core/process-env.ts";
-import { runMigrations } from "../src/migrations.ts";
+import configModule from "../src/config.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import processEnv from "../src/core/process-env.ts";
+import migrations from "../src/migrations.ts";
 
+const { runMigrations } = migrations;
+const { withEnv } = processEnv;
+const { ENV_AGENT_DIR } = configModule;
 const { joinPath, makeTempDir, readJsonFile, removeDirs, runTest, writeJsonFile } = testing;
 
 const tempDirs: string[] = [];

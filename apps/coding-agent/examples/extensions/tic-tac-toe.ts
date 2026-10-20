@@ -1,30 +1,28 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import { registerPlayTool, registerSeeBoardTool } from "./tic-tac-toe-actions.ts";
-import { BannerMessageComponent } from "./tic-tac-toe-banner.ts";
-import { TicTacToeComponent } from "./tic-tac-toe-component.ts";
-import {
-  type BoardDetails,
-  type GameState,
-  type GameStatus,
-  boardToAscii,
-  checkWin,
-  createInitialState,
-  setCell,
-} from "./tic-tac-toe-game.ts";
-import { GameOverMessageComponent } from "./tic-tac-toe-gameover.ts";
-import { ticTacToeInstructions } from "./tic-tac-toe-prompt.ts";
+import ticTacToeActions from "./tic-tac-toe-actions.ts";
+import BannerMessageComponent from "./tic-tac-toe-banner.ts";
+import TicTacToeComponent from "./tic-tac-toe-component.ts";
+import type ticTacToeComponentTypes from "./tic-tac-toe-component.types.ts";
+import ticTacToeGame from "./tic-tac-toe-game.ts";
+import type ticTacToeGameTypes from "./tic-tac-toe-game.types.ts";
+import GameOverMessageComponent from "./tic-tac-toe-gameover.ts";
+import ticTacToePrompt from "./tic-tac-toe-prompt.ts";
+
+const { boardToAscii, checkWin, createInitialState, setCell } = ticTacToeGame;
+const { ticTacToeInstructions } = ticTacToePrompt;
+const { registerPlayTool, registerSeeBoardTool } = ticTacToeActions;
 
 const SAVE_TYPE = "tic-tac-toe-save";
 const MOVE_MESSAGE_TYPE = "tic-tac-toe-move";
 const GAME_OVER_MESSAGE_TYPE = "tic-tac-toe-game-over";
 
-let gameState: GameState = createInitialState();
-let component: TicTacToeComponent | null = null;
+let gameState: ticTacToeGameTypes.GameState = createInitialState();
+let component: ticTacToeComponentTypes.TicTacToeComponent | null = null;
 let gameActive = false;
 
-const getBoardDetails = (): BoardDetails => ({
+const getBoardDetails = (): ticTacToeGameTypes.BoardDetails => ({
   agentCursorCol: gameState.agentCursorCol,
   agentCursorRow: gameState.agentCursorRow,
   board: gameState.board.map((row) => [...row]),
@@ -32,7 +30,7 @@ const getBoardDetails = (): BoardDetails => ({
   status: gameState.status,
 });
 
-const reconstructState = (ctx: ExtensionContext): void => {
+const reconstructState = (ctx: codingAgentTypes.ExtensionContext): void => {
   gameState = createInitialState();
   gameActive = false;
 
@@ -42,7 +40,7 @@ const reconstructState = (ctx: ExtensionContext): void => {
     if (msg.role !== "toolResult") continue;
     if (msg.toolName !== "tic_tac_toe" && msg.toolName !== "tic_tac_toe_see_board") continue;
 
-    const details = msg.details as BoardDetails | undefined;
+    const details = msg.details as ticTacToeGameTypes.BoardDetails | undefined;
     if (details !== undefined) {
       gameState.board = details.board.map((row) => [...row]);
       gameState.agentCursorRow = details.agentCursorRow;
@@ -66,7 +64,7 @@ const gameOverLabel = (): string => {
   }
 };
 
-const emitGameOverMessage = (msa: ExtensionAPI): void => {
+const emitGameOverMessage = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.sendMessage({
     content: `Game over: ${gameOverLabel()}.`,
     customType: GAME_OVER_MESSAGE_TYPE,
@@ -75,14 +73,14 @@ const emitGameOverMessage = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerSessionEvents = (msa: ExtensionAPI): void => {
+const registerSessionEvents = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.on("session_start", (_event, ctx) => reconstructState(ctx));
   msa.on("session_tree", (_event, ctx) => reconstructState(ctx));
 };
 
-const registerMessageRenderers = (msa: ExtensionAPI): void => {
+const registerMessageRenderers = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerMessageRenderer(MOVE_MESSAGE_TYPE, (message, { expanded }, theme) => {
-    const details = message.details as BoardDetails | undefined;
+    const details = message.details as ticTacToeGameTypes.BoardDetails | undefined;
     const turnLabel =
       details?.currentTurn === "O"
         ? `${theme.fg("warning", theme.bold("O"))} (Agent)`
@@ -92,20 +90,20 @@ const registerMessageRenderers = (msa: ExtensionAPI): void => {
   });
 
   msa.registerMessageRenderer(GAME_OVER_MESSAGE_TYPE, (message, _options, theme) => {
-    const details = message.details as BoardDetails | undefined;
-    const status = (details?.status ?? "draw") as GameStatus;
+    const details = message.details as ticTacToeGameTypes.BoardDetails | undefined;
+    const status = (details?.status ?? "draw") as ticTacToeGameTypes.GameStatus;
     return new GameOverMessageComponent(status, details, theme);
   });
 };
 
-const registerPrompt = (msa: ExtensionAPI): void => {
+const registerPrompt = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.on("before_agent_start", (event) => {
     if (!gameActive) return undefined;
     return { systemPrompt: event.systemPrompt + ticTacToeInstructions };
   });
 };
 
-const announceTurn = (msa: ExtensionAPI, row: number, col: number): void => {
+const announceTurn = (msa: codingAgentTypes.ExtensionAPI, row: number, col: number): void => {
   const boardAscii = boardToAscii({
     agentCursorCol: gameState.agentCursorCol,
     agentCursorRow: gameState.agentCursorRow,
@@ -127,7 +125,7 @@ const announceTurn = (msa: ExtensionAPI, row: number, col: number): void => {
   );
 };
 
-const handleUserPlay = (msa: ExtensionAPI, row: number, col: number): void => {
+const handleUserPlay = (msa: codingAgentTypes.ExtensionAPI, row: number, col: number): void => {
   setCell({ board: gameState.board, col, mark: gameState.userMark, row });
   gameState.status = checkWin(gameState.board);
   if (gameState.status === "playing") {
@@ -144,7 +142,10 @@ const handleUserPlay = (msa: ExtensionAPI, row: number, col: number): void => {
   gameActive = false;
 };
 
-const openBoard = (msa: ExtensionAPI, ctx: ExtensionContext): Promise<void> =>
+const openBoard = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
+): Promise<void> =>
   ctx.ui.custom<void>((tui, _theme, _kb, done) => {
     component = new TicTacToeComponent(
       tui,
@@ -159,7 +160,7 @@ const openBoard = (msa: ExtensionAPI, ctx: ExtensionContext): Promise<void> =>
     return component;
   });
 
-const registerCommand = (msa: ExtensionAPI): void => {
+const registerCommand = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("tic-tac-toe", {
     description: "Play tic-tac-toe against the agent",
     handler: (_args, ctx) =>
@@ -182,7 +183,7 @@ const registerCommand = (msa: ExtensionAPI): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const access = {
     emitGameOver: () => emitGameOverMessage(msa),
     getState: () => gameState,

@@ -4,15 +4,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import {
-  buildSystemPromptSections,
-  buildSystemPromptState,
-  diffSystemPromptSections,
-} from "../src/core/system-prompt.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import systemPromptModule from "../src/core/system-prompt.ts";
 import harnessModule from "./suite/harness.ts";
+const { createAgentSession } = sdk;
+const { buildSystemPromptSections, buildSystemPromptState, diffSystemPromptSections } =
+  systemPromptModule;
 
 const { fauxAssistantMessage, getCurrentSystemMessage, getSystemMessageText } = ai;
 const { getModel } = compat;

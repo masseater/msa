@@ -1,24 +1,33 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Effect } from "effect";
 
-import { actionHelpers } from "./action-helpers.ts";
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-import { newId } from "./ids.ts";
-import { rounds } from "./rounds.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { scheduling } from "./schedule.ts";
-import { store } from "./store.ts";
-import { taskActions } from "./task-actions.ts";
-import { requireStates } from "./text.ts";
-import type {
-  CreateTaskInput,
-  SetTaskDependsInput,
-  SetTaskStateInput,
-  Task,
-  TaskView,
-} from "./types.ts";
+import actionHelpersModule from "./action-helpers.ts";
+import errors from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import idsModule from "./ids.ts";
+import roundsModule from "./rounds.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import schedule from "./schedule.ts";
+import storeModule from "./store.ts";
+import taskActionsModule from "./task-actions.ts";
+import text from "./text.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
-function resolveRound(runtime: Runtime, input: CreateTaskInput): string {
+const { nowMillis } = runtimeModule;
+const { store } = storeModule;
+const { orchestratorError } = errors;
+const { requireStates } = text;
+const { newId } = idsModule;
+const { rounds } = roundsModule;
+const { scheduling } = schedule;
+const { actionHelpers } = actionHelpersModule;
+const { taskActions } = taskActionsModule;
+
+function resolveRound(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.CreateTaskInput,
+): string {
   if (input.round !== undefined) return input.round;
   const dependencies = input.dependsOn ?? [];
   if (dependencies.length === 0) return "main";
@@ -35,9 +44,9 @@ function resolveRound(runtime: Runtime, input: CreateTaskInput): string {
 }
 
 function createTask(
-  runtime: Runtime,
-  input: CreateTaskInput,
-): Effect.Effect<TaskView, OrchestratorError> {
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.CreateTaskInput,
+): Effect.Effect<orchestratorTypesTypes.TaskView, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const database = runtime.database;
@@ -46,7 +55,7 @@ function createTask(
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     const round = resolveRound(runtime, input);
     const id = newId("t");
-    const task: Task = {
+    const task: orchestratorTypesTypes.Task = {
       condition: input.condition ?? null,
       createdAt: now,
       currentState: states.currentState,
@@ -89,7 +98,11 @@ function uniqueIds(ids: readonly string[]): string[] {
   return [...new Set(ids)];
 }
 
-function taskOf(runtime: Runtime, id: string, label: string): Task {
+function taskOf(
+  runtime: runtimeTypes.Runtime,
+  id: string,
+  label: string,
+): orchestratorTypesTypes.Task {
   const task = store.getTask(runtime.database, id);
   if (task === undefined || task.project !== runtime.options.project) {
     throw new Error(`Unknown task in ${label}: ${id}`);
@@ -97,7 +110,10 @@ function taskOf(runtime: Runtime, id: string, label: string): Task {
   return task;
 }
 
-function dependencyEdit(runtime: Runtime, input: SetTaskDependsInput): DependencyEdit {
+function dependencyEdit(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.SetTaskDependsInput,
+): DependencyEdit {
   const taskIds = uniqueIds(input.taskIds);
   const add = uniqueIds(input.add ?? []);
   const remove = uniqueIds(input.remove ?? []);
@@ -131,9 +147,9 @@ function dependencyEdit(runtime: Runtime, input: SetTaskDependsInput): Dependenc
 }
 
 function setDepends(
-  runtime: Runtime,
-  input: SetTaskDependsInput,
-): Effect.Effect<TaskView[], OrchestratorError> {
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.SetTaskDependsInput,
+): Effect.Effect<orchestratorTypesTypes.TaskView[], errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const edit = yield* Effect.sync(() => dependencyEdit(runtime, input));
     yield* Effect.sync(() =>
@@ -157,9 +173,9 @@ function setDepends(
 }
 
 function setState(
-  runtime: Runtime,
-  input: SetTaskStateInput,
-): Effect.Effect<TaskView, OrchestratorError> {
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.SetTaskStateInput,
+): Effect.Effect<orchestratorTypesTypes.TaskView, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     if (input.currentState === undefined && input.goalState === undefined) {
@@ -186,11 +202,11 @@ function setState(
 }
 
 function setModel(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   taskId: string,
   model: string,
   thinkingLevel?: agentTypes.ThinkingLevel,
-): Effect.Effect<TaskView, OrchestratorError> {
+): Effect.Effect<orchestratorTypesTypes.TaskView, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const resolved = runtime.options.resolveModel(model);
@@ -215,10 +231,16 @@ function setModel(
   });
 }
 
-export const actions = {
+const actions = {
   createTask,
   setDepends,
   setModel,
   setState,
   ...taskActions,
 };
+
+const actionsModule = {
+  actions,
+};
+
+export default actionsModule;

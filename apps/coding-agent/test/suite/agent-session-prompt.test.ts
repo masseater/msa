@@ -29,7 +29,7 @@ const processImage = vi.hoisted(() =>
   ),
 );
 
-vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
+vi.mock("../../src/utils/image-process.ts", () => ({ default: { processImage } }));
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";

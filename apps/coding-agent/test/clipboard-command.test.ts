@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect, Fiber } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { runClipboardCommand } from "../src/utils/clipboard-command.ts";
+import clipboardCommand from "../src/utils/clipboard-command.ts";
+
+const { runClipboardCommand } = clipboardCommand;
 
 const { awaited, runTest } = testing;
 

@@ -2,14 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { CustomEntry } from "../../src/core/session-manager.ts";
-import { readCodemodeStore } from "../../src/extensions/codemode/execute.ts";
-import {
-  CODEMODE_STORE_ENTRY_TYPE,
-  createCodemodeTool,
-} from "../../src/extensions/codemode/tool.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import executeModule from "../../src/extensions/codemode/execute.ts";
+import toolModule from "../../src/extensions/codemode/tool.ts";
 import agentSessionCodemode2Support from "./agent-session-codemode-2-support.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
+
+const { CODEMODE_STORE_ENTRY_TYPE, createCodemodeTool } = toolModule;
+const { readCodemodeStore } = executeModule;
 
 const { harnesses3, increment, setup3 } = agentSessionCodemode2Support;
 
@@ -38,7 +38,10 @@ const loadsTheValuesWrittenOnThe = Effect.gen(function* () {
 
 const foldsStoreEntriesFromTheRoot = () => {
   let counter = 0;
-  const entry = (data: unknown, customType = CODEMODE_STORE_ENTRY_TYPE): CustomEntry => ({
+  const entry = (
+    data: unknown,
+    customType = CODEMODE_STORE_ENTRY_TYPE,
+  ): sessionManagerTypes.CustomEntry => ({
     customType,
     data,
     id: `entry-${++counter}`,

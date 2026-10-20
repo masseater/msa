@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
-
+import SessionManager from "../../src/core/session-manager.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 const savesCustomEntriesAndIncludesThem = () => {
   const session = SessionManager.inMemory();
 
@@ -30,7 +30,7 @@ const savesCustomEntriesAndIncludesThem = () => {
   const entries = session.getEntries();
   expect(entries).toHaveLength(3);
 
-  const customEntry = entries.find((e) => e.type === "custom") as CustomEntry;
+  const customEntry = entries.find((e) => e.type === "custom") as sessionManagerTypes.CustomEntry;
   expect(customEntry).toBeDefined();
   expect(customEntry.customType).toBe("my_data");
   expect(customEntry.data).toEqual({ foo: "bar" });

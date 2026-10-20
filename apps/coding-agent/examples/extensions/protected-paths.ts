@@ -1,6 +1,6 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const protectedPaths = [".env", ".git/", "node_modules/"];
 
   msa.on("tool_call", (event, ctx) => {

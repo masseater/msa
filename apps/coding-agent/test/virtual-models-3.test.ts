@@ -4,12 +4,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished } from "vite-plus/test";
 
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import codingAgent from "../src/index.ts";
 import utilities from "./utilities.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 
+const { createAgentSession } = codingAgent;
+
+const { SessionManager } = codingAgent;
 const { fauxAssistantMessage } = ai;
 
 const { assistantFrom, createRuntime } = virtualModelsSupport;
@@ -20,7 +23,7 @@ const { awaited, makeTempDir, removePath, runTest } = testing;
 
 let tempDir: string;
 
-function resume(runtime: ModelRuntime, model?: aiTypes.Model<string>) {
+function resume(runtime: modelRuntimeTypes.ModelRuntime, model?: aiTypes.Model<string>) {
   return runTest(
     Effect.gen(function* () {
       const sessionManager = SessionManager.inMemory(tempDir);
@@ -135,7 +138,10 @@ const resumesTheSelectionMadeBeforeTreeNavigation = () =>
       const { runtime, faux, virtual } = yield* awaited(createRuntime());
       faux.setResponses(Array.from({ length: 6 }, () => fauxAssistantMessage("ok")));
       const large = runtime.getModel("faux", "large")!;
-      const open = (sessionManager: SessionManager, model?: aiTypes.Model<string>) =>
+      const open = (
+        sessionManager: sessionManagerTypes.SessionManager,
+        model?: aiTypes.Model<string>,
+      ) =>
         effectRunPromise(
           Effect.gen(function* () {
             const resourceLoader = createTestResourceLoader();

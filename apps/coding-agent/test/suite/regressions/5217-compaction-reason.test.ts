@@ -2,7 +2,7 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../../src/index.ts";
+import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
@@ -20,7 +20,7 @@ interface RecordedCompactionEvent {
   willRetry: boolean;
 }
 
-function recordingExtension(recorded: RecordedCompactionEvent[]): ExtensionFactory {
+function recordingExtension(recorded: RecordedCompactionEvent[]): srcTypes.ExtensionFactory {
   return (msa) => {
     msa.on("session_before_compact", (event) =>
       Effect.runPromise(

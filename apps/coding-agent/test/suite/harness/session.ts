@@ -1,8 +1,7 @@
 import { Effect } from "effect";
 
-import type { AgentSessionEvent } from "../../../src/core/agent-session.ts";
-import { AgentSession } from "../../../src/core/agent-session.ts";
-import type { ExtensionRunner } from "../../../src/core/extensions/index.ts";
+import codingAgent from "../../../src/index.ts";
+import type codingAgentTypes from "../../../src/index.types.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
 import utilities from "../../utilities.ts";
 import agentModule from "./agent.ts";
@@ -10,6 +9,8 @@ import auth from "./auth.ts";
 import runtime from "./runtime.ts";
 import state from "./state.ts";
 import type typesModule from "./types.ts";
+
+const { AgentSession } = codingAgent;
 
 const { createTempDir, removeTempDir } = runtime;
 const {
@@ -77,13 +78,13 @@ const toolSelection = (options: typesModule.HarnessOptions) => ({
 const harnessFor = (input: {
   authStorage: typesModule.Harness["authStorage"];
   fauxProvider: Faux;
-  session: AgentSession;
+  session: codingAgentTypes.AgentSession;
   sessionManager: typesModule.Harness["sessionManager"];
   settingsManager: typesModule.Harness["settingsManager"];
   tempDir: string;
 }): typesModule.Harness => {
   const { fauxProvider, session, tempDir } = input;
-  const events: AgentSessionEvent[] = [];
+  const events: codingAgentTypes.AgentSessionEvent[] = [];
   session.subscribe((event) => {
     events.push(event);
   });
@@ -96,9 +97,10 @@ const harnessFor = (input: {
       void removeTempDir(tempDir);
     },
     events,
-    eventsOfType<T extends AgentSessionEvent["type"]>(type: T) {
+    eventsOfType<T extends codingAgentTypes.AgentSessionEvent["type"]>(type: T) {
       return events.filter(
-        (event): event is Extract<AgentSessionEvent, { type: T }> => event.type === type,
+        (event): event is Extract<codingAgentTypes.AgentSessionEvent, { type: T }> =>
+          event.type === type,
       );
     },
     faux: fauxProvider,
@@ -123,7 +125,7 @@ const createHarness = (options: typesModule.HarnessOptions = {}): Promise<typesM
         tempDir,
         fauxProvider,
       );
-      const extensionRunnerRef: { current?: ExtensionRunner } = {};
+      const extensionRunnerRef: { current?: codingAgentTypes.ExtensionRunner } = {};
       const sessionManager = createSessionManager(options.sessionManager);
       const settingsManager = createSettingsManager({ settings: options.settings, tempDir });
       const session = new AgentSession({

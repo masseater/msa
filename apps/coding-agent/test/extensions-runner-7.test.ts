@@ -2,16 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createEventBus } from "../src/core/event-bus.ts";
-import {
-  createExtensionRuntime,
-  discoverAndLoadExtensions,
-  loadExtensionFromFactory,
-} from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import { buildSystemPrompt } from "../src/core/system-prompt.ts";
+import eventBusModule from "../src/core/event-bus.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import systemPrompt from "../src/core/system-prompt.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 import extensionsRunnerSupport from "./extensions-runner-support.ts";
+
+const { createExtensionRuntime, discoverAndLoadExtensions, loadExtensionFromFactory } = loader;
+const { buildSystemPrompt } = systemPrompt;
+const { createEventBus } = eventBusModule;
 
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 

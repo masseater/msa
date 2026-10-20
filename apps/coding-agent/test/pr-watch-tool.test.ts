@@ -2,17 +2,21 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { PrWatchGh } from "../src/core/pr-watch/gh.ts";
-import { PrWatch } from "../src/core/pr-watch/service.ts";
-import type { PrSnapshot } from "../src/core/pr-watch/snapshot.ts";
-import type { PrNotification, PrWatchHost } from "../src/core/pr-watch/watch.ts";
-import { createPrWatchToolDefinition } from "../src/core/tools/pr-watch.ts";
+import type ghTypes from "../src/core/pr-watch/gh.types.ts";
+import PrWatch from "../src/core/pr-watch/service.ts";
+import type serviceTypes from "../src/core/pr-watch/service.types.ts";
+import type snapshotTypes from "../src/core/pr-watch/snapshot.types.ts";
+import type watchTypes from "../src/core/pr-watch/watch.types.ts";
+import prWatch from "../src/core/tools/pr-watch.ts";
 
+const { createPrWatchToolDefinition } = prWatch;
 const { awaited, pollUntil, runTest } = testing;
 
 const STATUS_INTERVAL_MS = 300_000;
 
-const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
+const snapshotOf = (
+  overrides: Partial<snapshotTypes.PrSnapshot> = {},
+): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
   checks: { failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
@@ -28,10 +32,13 @@ const snapshotOf = (overrides: Partial<PrSnapshot> = {}): PrSnapshot => ({
 
 const pendingChecks = snapshotOf();
 
-const neverGh: PrWatchGh = { behind: () => Effect.never, view: () => Effect.never };
+const neverGh: ghTypes.PrWatchGh = { behind: () => Effect.never, view: () => Effect.never };
 
-const createHost = (): { host: PrWatchHost; notifications: PrNotification[] } => {
-  const notifications: PrNotification[] = [];
+const createHost = (): {
+  host: watchTypes.PrWatchHost;
+  notifications: watchTypes.PrNotification[];
+} => {
+  const notifications: watchTypes.PrNotification[] = [];
   return {
     host: {
       changed: () => undefined,
@@ -52,8 +59,12 @@ const textOf = (result: { content: readonly { type: string; text?: string }[] })
   result.content.map((part) => part.text ?? "").join("");
 
 const withTool = <A>(
-  use: (tool: PrWatchTool, service: PrWatch) => Effect.Effect<A>,
-  options: { gh?: PrWatchGh; host?: ReturnType<typeof createHost>; intervalMs?: number } = {},
+  use: (tool: PrWatchTool, service: serviceTypes.PrWatch) => Effect.Effect<A>,
+  options: {
+    gh?: ghTypes.PrWatchGh;
+    host?: ReturnType<typeof createHost>;
+    intervalMs?: number;
+  } = {},
 ): Promise<A> =>
   runTest(
     Effect.acquireUseRelease(
@@ -118,7 +129,7 @@ const listsTheWatchesWithTheirLastState = () => {
     checks: { failed: 1, passed: 1, pending: 0, pendingNames: [], total: 2 },
   });
   let polls = 0;
-  const gh: PrWatchGh = {
+  const gh: ghTypes.PrWatchGh = {
     behind: () => Effect.succeed(0),
     view: () => {
       polls += 1;

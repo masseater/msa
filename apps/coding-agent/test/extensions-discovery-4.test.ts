@@ -39,7 +39,8 @@ const loadextensionsOnlyLoadsExplicitPathsWithoutDiscovery = () =>
       const explicitPath = joinPath(tempDir, "explicit.ts");
       yield* writeTextFile(explicitPath, extensionCodeWithTool("explicit"));
 
-      const { loadExtensions } = yield* awaited(import("../src/core/extensions/loader.ts"));
+      const { loadExtensions } = (yield* awaited(import("../src/core/extensions/loader.ts")))
+        .default;
       const result = yield* awaited(loadExtensions([explicitPath], tempDir));
 
       expect(result.errors).toHaveLength(0);
@@ -54,7 +55,8 @@ const loadextensionsWithNoPathsLoadsNothing = () =>
     Effect.gen(function* () {
       yield* writeTextFile(joinPath(extensionsDir, "discovered.ts"), extensionCode);
 
-      const { loadExtensions } = yield* awaited(import("../src/core/extensions/loader.ts"));
+      const { loadExtensions } = (yield* awaited(import("../src/core/extensions/loader.ts")))
+        .default;
       const result = yield* awaited(loadExtensions([], tempDir));
 
       expect(result.errors).toHaveLength(0);

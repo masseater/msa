@@ -1,8 +1,10 @@
 import { Effect } from "effect";
 
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-const create = (orchestrator: Orchestrator, input: Parameters<Orchestrator["createTask"]>[0]) =>
-  Effect.promise(() => orchestrator.createTask(input));
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+const create = (
+  orchestrator: orchestratorTypes.Orchestrator,
+  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
+) => Effect.promise(() => orchestrator.createTask(input));
 
 const orchestratorSupport = {
   create,

@@ -2,11 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { DefaultPackageManager } from "../src/core/package-manager.ts";
-import { readEnv } from "../src/core/process-env.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import DefaultPackageManager from "../src/core/default-package-manager.ts";
+import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import processEnv from "../src/core/process-env.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import packageManagerSupport from "./package-manager-support.ts";
 import type packageManagerSupportTypes from "./package-manager-support.types.ts";
+const { readEnv } = processEnv;
 
 const { packagePaths } = packageManagerSupport;
 
@@ -25,9 +28,9 @@ let tempDir: string;
 
 let agentDir: string;
 
-let settingsManager: SettingsManager;
+let settingsManager: settingsManagerTypes.SettingsManager;
 
-let packageManager: DefaultPackageManager;
+let packageManager: packageManagerTypes.DefaultPackageManager;
 
 let previousOfflineEnv: string | undefined;
 

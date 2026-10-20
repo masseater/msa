@@ -1,5 +1,5 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI, InputEvent } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
@@ -40,7 +40,7 @@ const dispatchesExtensionCommandsImmediatelyWhenPrompted = Effect.gen(function* 
   expect(harness.session.messages).toEqual([]);
 });
 const deliversExtensionOriginSteeringMessagesBefore = Effect.gen(function* () {
-  let extensionApi: ExtensionAPI | undefined;
+  let extensionApi: codingAgentTypes.ExtensionAPI | undefined;
   const waiting = yield* Effect.promise(() =>
     createWaitingHarness({
       extensionFactories: [
@@ -107,7 +107,9 @@ const deliversFollowUpMessagesOnlyAfter = Effect.gen(function* () {
 });
 const runsDirectSteeringAndFollowUpPart1 = () =>
   Effect.gen(function* () {
-    const inputEvents: Array<Pick<InputEvent, "text" | "source" | "streamingBehavior">> = [];
+    const inputEvents: Array<
+      Pick<codingAgentTypes.InputEvent, "text" | "source" | "streamingBehavior">
+    > = [];
     const waiting = yield* Effect.promise(() =>
       createWaitingHarness({
         extensionFactories: [

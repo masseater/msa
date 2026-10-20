@@ -9,11 +9,11 @@ import type tuiOverlayStackTypes from "./tui-overlay-stack.types.ts";
 
 const { containsComponent } = overlayContains;
 
-const { Container, isFocusable } = tuiComponent;
+const { isFocusable } = tuiComponent;
 
 type OverlayFocusRestorePolicy = "clear" | "preserve";
 
-export default abstract class TuiOverlayHost extends Container {
+export default abstract class TuiOverlayHost extends tuiComponent.Container {
   public terminal: terminalProtocolTypes.Terminal;
   protected stopped = false;
   protected readonly overlays = new OverlayStack(() => this.terminal);

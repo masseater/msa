@@ -1,35 +1,24 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
+import type questionUiTypes from "./question-ui.types.ts";
+
 const { Editor, Key, matchesKey, visibleWidth, wrapTextWithAnsi } = tuiModule;
-
-export interface OptionWithDesc {
-  label: string;
-  description?: string;
-}
-
-export type DisplayOption = OptionWithDesc & { isOther?: boolean };
-
-export interface QuestionAnswer {
-  answer: string;
-  wasCustom: boolean;
-  index?: number;
-}
 
 interface QuestionState {
   readonly tui: tuiTypes.TUI;
-  readonly theme: Theme;
+  readonly theme: codingAgentTypes.Theme;
   readonly question: string;
-  readonly options: DisplayOption[];
+  readonly options: questionUiTypes.DisplayOption[];
   readonly editor: tuiTypes.Editor;
-  readonly done: (result: QuestionAnswer | null) => void;
+  readonly done: (result: questionUiTypes.QuestionAnswer | null) => void;
   optionIndex: number;
   editMode: boolean;
   cachedLines: string[] | undefined;
 }
 
-const editorTheme = (theme: Theme): tuiTypes.EditorTheme => ({
+const editorTheme = (theme: codingAgentTypes.Theme): tuiTypes.EditorTheme => ({
   borderColor: (s) => theme.fg("accent", s),
   selectList: {
     description: (t) => theme.fg("muted", t),
@@ -160,12 +149,12 @@ const renderQuestion = (state: QuestionState, width: number): string[] => {
   return lines;
 };
 
-export const askQuestion = (request: {
+const askQuestion = (request: {
   readonly tui: tuiTypes.TUI;
-  readonly theme: Theme;
+  readonly theme: codingAgentTypes.Theme;
   readonly question: string;
-  readonly options: DisplayOption[];
-  readonly done: (result: QuestionAnswer | null) => void;
+  readonly options: questionUiTypes.DisplayOption[];
+  readonly done: (result: questionUiTypes.QuestionAnswer | null) => void;
 }) => {
   const { tui, theme, question, options, done } = request;
   const state: QuestionState = {
@@ -199,3 +188,9 @@ export const askQuestion = (request: {
     render: (width: number) => renderQuestion(state, width),
   };
 };
+
+const questionUi = {
+  askQuestion,
+};
+
+export default questionUi;

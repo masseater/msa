@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createBashTool, createLocalBashOperations } from "../src/core/tools/bash.ts";
-import * as shellModule from "../src/utils/shell.ts";
+import bash from "../src/core/tools/bash.ts";
+import shellModule from "../src/utils/shell.ts";
+
+const { createBashTool, createLocalBashOperations } = bash;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;
 

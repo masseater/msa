@@ -1,7 +1,7 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import type { Settings } from "../../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../../src/core/settings-manager.types.ts";
 import type fauxModelTypes from "./faux-model.types.ts";
 
 declare namespace sessionAgentTypes {
@@ -11,7 +11,7 @@ declare namespace sessionAgentTypes {
     readonly tools: ReadonlyArray<agentTypes.AgentTool>;
     readonly responses: fauxModelTypes.FauxResponseInput[];
     readonly tempDir: string;
-    readonly settings: Partial<Settings> | undefined;
+    readonly settings: Partial<settingsManagerTypes.Settings> | undefined;
   }
 }
 

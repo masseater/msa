@@ -2,9 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type { SessionHeader } from "../src/core/session-manager.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+const { initTheme } = themeModule;
 
 const {
   awaited,
@@ -20,7 +21,7 @@ const {
 } = testing;
 
 const createSessionFile = Effect.fn("createSessionFile")(function* (path: string) {
-  const header: SessionHeader = {
+  const header: sessionManagerTypes.SessionHeader = {
     cwd: "/tmp",
     id: "test-session",
     timestamp: isoFromMillis(0),

@@ -1,14 +1,20 @@
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { SessionInfo } from "../src/core/session-manager.ts";
-import { filterAndSortSessions } from "../src/modes/interactive/components/session-selector-search.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import sessionSelectorSearch from "../src/modes/interactive/components/session-selector-search.ts";
+
+const { filterAndSortSessions } = sessionSelectorSearch;
 
 const { dateFromMillis } = testing;
 
 function makeSession(
-  overrides: Partial<SessionInfo> & { id: string; modified: Date; allMessagesText: string },
-): SessionInfo {
+  overrides: Partial<sessionManagerTypes.SessionInfo> & {
+    id: string;
+    modified: Date;
+    allMessagesText: string;
+  },
+): sessionManagerTypes.SessionInfo {
   return {
     cwd: overrides.cwd ?? "",
     id: overrides.id,
@@ -22,7 +28,7 @@ function makeSession(
   };
 }
 
-const sessions2: SessionInfo[] = [
+const sessions2: sessionManagerTypes.SessionInfo[] = [
   makeSession({
     allMessagesText: "blueberry",
     id: "named1",
@@ -48,7 +54,7 @@ const sessions2: SessionInfo[] = [
 ];
 
 const filtersByQuotedPhraseWithWhitespaceNormalization = () => {
-  const sessions: SessionInfo[] = [
+  const sessions: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "node\n\n   cve was discussed",
       id: "a",
@@ -66,7 +72,7 @@ const filtersByQuotedPhraseWithWhitespaceNormalization = () => {
 };
 
 const filtersByRegexReAndIsCase = () => {
-  const sessions: SessionInfo[] = [
+  const sessions: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "Brave is great",
       id: "a",
@@ -84,7 +90,7 @@ const filtersByRegexReAndIsCase = () => {
 };
 
 const recentSortPreservesInputOrder = () => {
-  const sessions: SessionInfo[] = [
+  const sessions: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "brave",
       id: "newer",
@@ -107,7 +113,7 @@ const recentSortPreservesInputOrder = () => {
 };
 
 const relevanceSortOrdersByScoreAndTie = () => {
-  const sessions: SessionInfo[] = [
+  const sessions: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "xxxx brave",
       id: "late",
@@ -123,7 +129,7 @@ const relevanceSortOrdersByScoreAndTie = () => {
   const result1 = filterAndSortSessions(sessions, '"brave"', "relevance");
   expect(result1.map((s) => s.id)).toEqual(["early", "late"]);
 
-  const tieSessions: SessionInfo[] = [
+  const tieSessions: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "brave",
       id: "newer",
@@ -141,7 +147,7 @@ const relevanceSortOrdersByScoreAndTie = () => {
 };
 
 const returnsEmptyListForInvalidRegex = () => {
-  const sessions: SessionInfo[] = [
+  const sessions: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "brave",
       id: "a",
@@ -169,7 +175,7 @@ const appliesNameFilterBeforeSearchQuery = () => {
 };
 
 const excludesWhitespaceOnlyNamesFromNamedFilter = () => {
-  const sessionsWithWhitespace: SessionInfo[] = [
+  const sessionsWithWhitespace: sessionManagerTypes.SessionInfo[] = [
     makeSession({
       allMessagesText: "test",
       id: "whitespace",

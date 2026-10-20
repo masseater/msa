@@ -2,27 +2,18 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import type { SettingsManager } from "../core/settings-manager.ts";
-import {
-  ConfigSelectorComponent,
-  type ScopedResolvedPaths,
-} from "../modes/interactive/components/config-selector.ts";
-import { initTheme, stopThemeWatcher } from "../modes/interactive/theme/theme.ts";
-import { callbackPromise } from "../utils/interop.ts";
+import awaitingModule from "../core/awaiting.ts";
+import ConfigSelectorComponent from "../modes/interactive/components/config-selector.ts";
+import themeModule from "../modes/interactive/theme/theme.ts";
+import interop from "../utils/interop.ts";
+import type configSelectorTypes from "./config-selector.types.ts";
 
+const { awaited, awaiting } = awaitingModule;
+const { initTheme, stopThemeWatcher } = themeModule;
+const { callbackPromise } = interop;
 const { ProcessTerminal, TuiMainScreen } = tui;
 
-export interface ConfigSelectorOptions {
-  resolvedPaths: ScopedResolvedPaths;
-  settingsManager: SettingsManager;
-  cwd: string;
-  agentDir: string;
-  writeScope: "global" | "project";
-  projectModeAvailable: boolean;
-}
-
-export function selectConfig(options: ConfigSelectorOptions): Promise<void> {
+function selectConfig(options: configSelectorTypes.ConfigSelectorOptions): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       initTheme(options.settingsManager.getTheme(), true);
@@ -69,3 +60,9 @@ export function selectConfig(options: ConfigSelectorOptions): Promise<void> {
     }),
   );
 }
+
+const configSelector = {
+  selectConfig,
+};
+
+export default configSelector;

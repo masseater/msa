@@ -3,7 +3,9 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { copyToClipboard } from "../src/utils/clipboard.ts";
+import clipboardModule from "../src/utils/clipboard.ts";
+
+const { copyToClipboard } = clipboardModule;
 
 const { awaited, pathExists, readTextFile, runTest } = testing;
 
@@ -25,7 +27,9 @@ const mocks = vi.hoisted(() => ({
   platform: vi.fn<() => NodeJS.Platform>(),
 }));
 vi.mock("@msa/tui", () => ({ default: { getNativeClipboard: mocks.getNativeClipboard } }));
-vi.mock("../src/utils/clipboard-command.ts", () => ({ runClipboardCommand: mocks.command }));
+vi.mock("../src/utils/clipboard-command.ts", () => ({
+  default: { runClipboardCommand: mocks.command },
+}));
 vi.mock("node:os", () =>
   import("node:os").then((actual) => ({
     ...actual,

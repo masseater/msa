@@ -2,17 +2,17 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { type MermaidArt, type Span, render } from "grok-mermaid";
 
-import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
-import type { MermaidRenderingMode } from "../../../core/settings-manager.ts";
-import type { Theme } from "../theme/theme.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import type settingsManagerTypes from "../../../core/settings-manager.types.ts";
+import type themeTypes from "../theme/theme.types.ts";
 
 const { Marked } = tui;
 
 const markdownParser = new Marked();
 
 interface MermaidTransformerOptions {
-  getMode: () => MermaidRenderingMode;
-  theme?: Theme;
+  getMode: () => settingsManagerTypes.MermaidRenderingMode;
+  theme?: themeTypes.Theme;
 }
 
 function isMermaid(
@@ -34,7 +34,7 @@ function codeSpan(line: string): string {
   return `${fence}${padding}${content}${padding}${fence}`;
 }
 
-function styleSpan(span: Span, theme: Theme): string {
+function styleSpan(span: Span, theme: themeTypes.Theme): string {
   switch (span.cls) {
     case "border":
       return theme.fg("borderMuted", span.text);
@@ -51,13 +51,13 @@ function styleSpan(span: Span, theme: Theme): string {
   }
 }
 
-function themedLines(art: MermaidArt, theme: Theme): string[] {
+function themedLines(art: MermaidArt, theme: themeTypes.Theme): string[] {
   return art.styled.map((row) => row.map((span) => styleSpan(span, theme)).join(""));
 }
 
-export function createMermaidMarkdownTransformer(
+function createMermaidMarkdownTransformer(
   options: MermaidTransformerOptions,
-): MarkdownTransformer {
+): extensionsTypesTypes.MarkdownTransformer {
   return (markdown, context) => {
     const mode = options.getMode();
     if (
@@ -87,3 +87,9 @@ export function createMermaidMarkdownTransformer(
       .join("");
   };
 }
+
+const mermaid = {
+  createMermaidMarkdownTransformer,
+};
+
+export default mermaid;

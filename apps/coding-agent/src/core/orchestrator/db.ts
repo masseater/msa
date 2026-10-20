@@ -1,6 +1,10 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+
+import nodeFs from "../platform/node/fs.ts";
+import nodePath from "../platform/node/path.ts";
+
+const { mkdirSync } = nodeFs;
+const { dirname } = nodePath;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -230,4 +234,10 @@ function definedEntries(value: object): [string, unknown][] {
   return Object.entries(value).filter(([, field]) => field !== undefined);
 }
 
-export const db = { definedEntries, openDatabase, transaction };
+const db = { definedEntries, openDatabase, transaction };
+
+const dbModule = {
+  db,
+};
+
+export default dbModule;

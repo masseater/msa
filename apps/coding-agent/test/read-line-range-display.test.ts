@@ -2,9 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { formatReadLineRange } from "../src/core/tools/render-utils.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import renderUtils from "../src/core/tools/render-utils.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import readLineRangeSupport from "./read-line-range-support.ts";
+
+const { formatReadLineRange } = renderUtils;
+const { initTheme } = themeModule;
 
 const { makeTempDir, removePath, runTest } = testing;
 

@@ -1,6 +1,6 @@
 import { dual } from "effect/Function";
 
-export function detectLineEnding(content: string): "\r\n" | "\n" {
+function detectLineEnding(content: string): "\r\n" | "\n" {
   const crlfIdx = content.indexOf("\r\n");
   const lfIdx = content.indexOf("\n");
   if (lfIdx === -1) return "\n";
@@ -8,18 +8,18 @@ export function detectLineEnding(content: string): "\r\n" | "\n" {
   return crlfIdx < lfIdx ? "\r\n" : "\n";
 }
 
-export function normalizeToLF(text: string): string {
+function normalizeToLF(text: string): string {
   return text.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n");
 }
 
-export const restoreLineEndings: {
+const restoreLineEndings: {
   (ending: "\r\n" | "\n"): (text: string) => string;
   (text: string, ending: "\r\n" | "\n"): string;
 } = dual(2, (text: string, ending: "\r\n" | "\n"): string =>
   ending === "\r\n" ? text.replace(/\n/gu, "\r\n") : text,
 );
 
-export function normalizeForFuzzyMatch(text: string): string {
+function normalizeForFuzzyMatch(text: string): string {
   return text
     .normalize("NFKC")
     .split("\n")
@@ -31,6 +31,16 @@ export function normalizeForFuzzyMatch(text: string): string {
     .replace(/[\u00A0\u2002-\u200A\u202F\u205F\u3000]/gu, " ");
 }
 
-export function splitLinesWithEndings(content: string): string[] {
+function splitLinesWithEndings(content: string): string[] {
   return content.match(/[^\n]*\n|[^\n]+/gu) ?? [];
 }
+
+const editText = {
+  detectLineEnding,
+  normalizeForFuzzyMatch,
+  normalizeToLF,
+  restoreLineEndings,
+  splitLinesWithEndings,
+};
+
+export default editText;

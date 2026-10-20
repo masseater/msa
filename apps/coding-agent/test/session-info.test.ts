@@ -1,13 +1,18 @@
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
-import type { SessionStats } from "../src/core/agent-session.ts";
-import { type SessionInfo, formatSessionInfo } from "../src/modes/interactive/session-info.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import sessionInfo from "../src/modes/interactive/session-info.ts";
+import type sessionInfoTypes from "../src/modes/interactive/session-info.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { initTheme } = themeModule;
+const { formatSessionInfo } = sessionInfo;
+const { stripAnsi } = ansi;
 
 beforeAll(() => initTheme("dark"));
 
-function info(overrides: Partial<SessionInfo> = {}): SessionInfo {
+function info(overrides: Partial<sessionInfoTypes.SessionInfo> = {}): sessionInfoTypes.SessionInfo {
   const stats = {
     assistantMessages: 1,
     cost: 0.5,
@@ -18,18 +23,24 @@ function info(overrides: Partial<SessionInfo> = {}): SessionInfo {
     toolResults: 0,
     totalMessages: 2,
     userMessages: 1,
-  } as SessionStats;
+  } as agentSessionTypes.SessionStats;
   return {
-    cacheWarmingMode: "off" as SessionInfo["cacheWarmingMode"],
+    cacheWarmingMode: "off" as sessionInfoTypes.SessionInfo["cacheWarmingMode"],
     cacheWarmingStatus: undefined,
-    cacheWaste: { missCount: 0, missedCost: 0, missedTokens: 0 } as SessionInfo["cacheWaste"],
+    cacheWaste: {
+      missCount: 0,
+      missedCost: 0,
+      missedTokens: 0,
+    } as sessionInfoTypes.SessionInfo["cacheWaste"],
     contextBreakdown: { entries: [], method: "estimated", tokens: 0 },
     contextWindow: 200_000,
     selectedModelKey: "faux/one",
     sessionName: undefined,
     stats,
     telemetry: undefined,
-    usageBreakdown: [{ cost: 0.5, key: "faux/one", tokens: 420 }] as SessionInfo["usageBreakdown"],
+    usageBreakdown: [
+      { cost: 0.5, key: "faux/one", tokens: 420 },
+    ] as sessionInfoTypes.SessionInfo["usageBreakdown"],
     ...overrides,
   };
 }

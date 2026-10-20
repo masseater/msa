@@ -2,16 +2,18 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRegistry } from "../src/core/model-registry.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { InMemoryCodingAgentModelsStore } from "../src/core/models-store.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import InMemoryCodingAgentModelsStore from "../src/core/in-memory-coding-agent-models-store.ts";
+import ModelRegistry from "../src/core/model-registry.ts";
+import type modelRegistryTypes from "../src/core/model-registry.types.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 
 const { awaited, joinPath, runTest } = testing;
 
-const runtimes = new WeakMap<ModelRegistry, ModelRuntime>();
+const runtimes = new WeakMap<modelRegistryTypes.ModelRegistry, modelRuntimeTypes.ModelRuntime>();
 
-function wrap(runtime: ModelRuntime): ModelRegistry {
+function wrap(runtime: modelRuntimeTypes.ModelRuntime): modelRegistryTypes.ModelRegistry {
   const registry = new ModelRegistry(runtime);
   runtimes.set(registry, runtime);
   return registry;
@@ -19,7 +21,7 @@ function wrap(runtime: ModelRuntime): ModelRegistry {
 
 const createModelRegistry = (
   ...[credentials, modelsPath]: [credentials: aiTypes.CredentialStore, modelsPath?: string]
-): Promise<ModelRegistry> =>
+): Promise<modelRegistryTypes.ModelRegistry> =>
   runTest(
     Effect.gen(function* () {
       const runtime = yield* awaited(
@@ -36,7 +38,7 @@ const createModelRegistry = (
 
 const createInMemoryModelRegistry = (
   credentials: aiTypes.CredentialStore,
-): Promise<ModelRegistry> =>
+): Promise<modelRegistryTypes.ModelRegistry> =>
   runTest(
     Effect.gen(function* () {
       const runtime = yield* awaited(
@@ -46,7 +48,9 @@ const createInMemoryModelRegistry = (
     }),
   );
 
-function getModelRuntime(modelRegistry: ModelRegistry): ModelRuntime {
+function getModelRuntime(
+  modelRegistry: modelRegistryTypes.ModelRegistry,
+): modelRuntimeTypes.ModelRuntime {
   const runtime = runtimes.get(modelRegistry);
   if (runtime === undefined) throw new Error("ModelRegistry was not created by the test helper");
   return runtime;

@@ -2,10 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { defaultModelPerProvider } from "../../../src/core/model-resolver.ts";
+import modelResolver from "../../../src/core/model-resolver.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import CredentialRefreshHangSupport from "./7027-credential-refresh-hang-support.ts";
+
+const { defaultModelPerProvider } = modelResolver;
 
 const { complete } = CredentialRefreshHangSupport;
 

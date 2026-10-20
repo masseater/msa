@@ -1,19 +1,21 @@
-import type { ExtensionAPI, ExtensionCommandContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import { AnimationDemoComponent } from "./animation-demo-component.ts";
-import { FocusDemoController } from "./focus-demo-controller.ts";
-import { setGlobalToggleHandle } from "./global-toggle-handle.ts";
-import { PassiveDemoController } from "./passive-demo-controller.ts";
-import { showOverlay } from "./show-overlay.ts";
-import { StackOverlayComponent } from "./stack-overlay-component.ts";
-import { StreamingInputController } from "./streaming-input-controller.ts";
-import { ToggleDemoComponent } from "./toggle-demo-component.ts";
+import AnimationDemoComponent from "./animation-demo-component.ts";
+import FocusDemoController from "./focus-demo-controller.ts";
+import globalToggleHandle from "./global-toggle-handle.ts";
+import PassiveDemoController from "./passive-demo-controller.ts";
+import showOverlayModule from "./show-overlay.ts";
+import StackOverlayComponent from "./stack-overlay-component.ts";
+import StreamingInputController from "./streaming-input-controller.ts";
+import ToggleDemoComponent from "./toggle-demo-component.ts";
 
-const registerAnimation = (msa: ExtensionAPI): void => {
+const { showOverlay } = showOverlayModule;
+const { setGlobalToggleHandle } = globalToggleHandle;
+const registerAnimation = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-animation", {
     description: "Test real-time animation in overlay (~30 FPS)",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.promise(() =>
           showOverlay<void>({
@@ -26,7 +28,7 @@ const registerAnimation = (msa: ExtensionAPI): void => {
   });
 };
 
-const showStacked = (ctx: ExtensionCommandContext, layer: 1 | 2 | 3) => {
+const showStacked = (ctx: codingAgentTypes.ExtensionCommandContext, layer: 1 | 2 | 3) => {
   const labels = {
     1: { label: "back (red border)", offsetX: -8, offsetY: -4 },
     2: { label: "middle (green border)", offsetX: 0, offsetY: 0 },
@@ -43,10 +45,10 @@ const showStacked = (ctx: ExtensionCommandContext, layer: 1 | 2 | 3) => {
   );
 };
 
-const registerStack = (msa: ExtensionAPI): void => {
+const registerStack = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-stack", {
     description: "Test stacked overlays",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           ctx.ui.notify("Showing overlay 1 (back)...", "info");
@@ -67,10 +69,10 @@ const registerStack = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerToggle = (msa: ExtensionAPI): void => {
+const registerToggle = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-toggle", {
     description: "Test overlay toggle (press 't' to toggle visibility)",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           yield* Effect.promise(() =>
@@ -89,10 +91,10 @@ const registerToggle = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerPassive = (msa: ExtensionAPI): void => {
+const registerPassive = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-passive", {
     description: "Test non-capturing overlay (passive info panel alongside active overlay)",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           ctx.ui.setEditorText("");
@@ -108,10 +110,10 @@ const registerPassive = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerFocus = (msa: ExtensionAPI): void => {
+const registerFocus = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-focus", {
     description: "Test focus cycling, input routing, dismissal, and rendering order with overlays",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           ctx.ui.setEditorText("");
@@ -127,10 +129,10 @@ const registerFocus = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerStreaming = (msa: ExtensionAPI): void => {
+const registerStreaming = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("overlay-streaming", {
     description: "Multiple input panels with simulated streaming (Tab to cycle focus)",
-    handler: (_args: string, ctx: ExtensionCommandContext) =>
+    handler: (_args: string, ctx: codingAgentTypes.ExtensionCommandContext) =>
       Effect.runPromise(
         Effect.gen(function* () {
           ctx.ui.setEditorText("");
@@ -146,7 +148,7 @@ const registerStreaming = (msa: ExtensionAPI): void => {
   });
 };
 
-export const registerEffectCommands = (msa: ExtensionAPI): void => {
+const registerEffectCommands = (msa: codingAgentTypes.ExtensionAPI): void => {
   registerAnimation(msa);
   registerStack(msa);
   registerToggle(msa);
@@ -154,3 +156,9 @@ export const registerEffectCommands = (msa: ExtensionAPI): void => {
   registerFocus(msa);
   registerStreaming(msa);
 };
+
+const commandsEffects = {
+  registerEffectCommands,
+};
+
+export default commandsEffects;

@@ -4,11 +4,13 @@ import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
-import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
-import { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
+import components from "../../../src/modes/interactive/components/index.ts";
+import type modelSelectorTypes from "../../../src/modes/interactive/components/model-selector.types.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { ModelSelectorComponent, ScopedModelsSelectorComponent } = components;
 
 const { setKeybindings } = tui;
 
@@ -93,7 +95,7 @@ const preservesScopedModelOrderInTheStep1 = (
   modelOne: modelTypesModule.Model<string>,
   modelTwo: modelTypesModule.Model<string>,
   modelThree: modelTypesModule.Model<string>,
-  selector: ModelSelectorComponent,
+  selector: modelSelectorTypes.ModelSelectorComponent,
 ) =>
   Effect.sync(() => {
     const renderedLines = stripAnsi(selector.render(120).join("\n"))

@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createReadTool } from "../src/index.ts";
+import src from "../src/index.ts";
+
+const { createReadTool } = src;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, writeBytesFile, writeTextFile } =
   testing;

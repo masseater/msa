@@ -1,12 +1,7 @@
-import { readEnv } from "./platform.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import platform from "./platform.ts";
 
-export type EvalCliOptions = {
-  provider?: string | undefined;
-  model?: string | undefined;
-  runsPerVariant: number;
-  requestedFiles: string[];
-  discoveryArgs: string[];
-};
+const { readEnv } = platform;
 
 type ParsedArguments = {
   provider: string | undefined;
@@ -112,7 +107,7 @@ function selectModel(parsed: ParsedArguments): { provider?: string; model?: stri
   };
 }
 
-export function parseEvalCli(args: readonly string[]): EvalCliOptions {
+function parseEvalCli(args: readonly string[]): cliOptionsTypes.EvalCliOptions {
   const parsed = parseArguments(args);
   const configuredRuns = nonEmpty(parsed.runsText ?? readEnv("MSA_EVAL_RUNS_PER_VARIANT"));
   const runsPerVariant = configuredRuns === undefined ? 1 : Number(configuredRuns);
@@ -126,3 +121,9 @@ export function parseEvalCli(args: readonly string[]): EvalCliOptions {
     runsPerVariant,
   };
 }
+
+const cliOptions = {
+  parseEvalCli,
+};
+
+export default cliOptions;

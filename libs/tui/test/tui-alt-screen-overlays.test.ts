@@ -6,11 +6,9 @@ import { Effect } from "effect";
 import tuiModule from "../src/index.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import InputOverlay from "./tui-alt-screen-input-overlay.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { Text, TuiAltScreen } = tuiModule;
-const { VirtualTerminal } = virtualTerminal;
-
 const { viewportHas } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {

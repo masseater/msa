@@ -1,14 +1,11 @@
 import { Type } from "typebox";
 
-import {
-  DEFAULT_MAX_BYTES,
-  GREP_MAX_LINE_LENGTH,
-  type TruncationResult,
-  formatSize,
-  truncateHead,
-} from "./truncate.ts";
+import type grepSupportTypes from "./grep-support.types.ts";
+import truncate from "./truncate.ts";
 
-export const grepSchema = Type.Object({
+const { DEFAULT_MAX_BYTES, GREP_MAX_LINE_LENGTH, formatSize, truncateHead } = truncate;
+
+const grepSchema = Type.Object({
   context: Type.Optional(
     Type.Number({
       description: "Number of lines to show before and after each match (default: 0)",
@@ -33,38 +30,8 @@ export const grepSchema = Type.Object({
   ),
   pattern: Type.String({ description: "Search pattern (regex or literal string)" }),
 });
-
-export const DEFAULT_GREP_LIMIT = 100;
-
-export interface GrepToolDetails {
-  truncation?: TruncationResult;
-  matchLimitReached?: number;
-  linesTruncated?: boolean;
-}
-
-export interface GrepOperations {
-  isDirectory: (absolutePath: string) => Promise<boolean> | boolean;
-  readFile: (absolutePath: string) => Promise<string> | string;
-}
-
-export interface GrepRequest {
-  pattern: string;
-  searchPath: string;
-  glob: string | undefined;
-  ignoreCase: boolean | undefined;
-  literal: boolean | undefined;
-  contextValue: number;
-  effectiveLimit: number;
-  isDirectory: boolean;
-}
-
-export interface RgMatch {
-  filePath: string;
-  lineNumber: number;
-  lineText?: string | undefined;
-}
-
-export function rgArguments(request: GrepRequest): string[] {
+const DEFAULT_GREP_LIMIT = 100;
+function rgArguments(request: grepSupportTypes.GrepRequest): string[] {
   const args = ["--json", "--line-number", "--color=never", "--hidden"];
   if (request.ignoreCase === true) args.push("--ignore-case");
   if (request.literal === true) args.push("--fixed-strings");
@@ -72,50 +39,12 @@ export function rgArguments(request: GrepRequest): string[] {
   args.push("--", request.pattern, request.searchPath);
   return args;
 }
-
-export class RgMatchCollector {
-  readonly matches: RgMatch[] = [];
-  matchCount = 0;
-  matchLimitReached = false;
-  private readonly limit: number;
-
-  constructor(limit: number) {
-    this.limit = limit;
-  }
-
-  readonly onLine = (line: string): boolean => {
-    if (line.trim() === "" || this.matchCount >= this.limit) return false;
-    let event: any;
-    try {
-      event = JSON.parse(line);
-    } catch {
-      return false;
-    }
-    if (event.type !== "match") return false;
-    this.matchCount++;
-    const filePath = event.data?.path?.text;
-    const lineNumber = event.data?.line_number;
-    if (typeof filePath === "string" && filePath !== "" && typeof lineNumber === "number") {
-      this.matches.push({ filePath, lineNumber, lineText: event.data?.lines?.text });
-    }
-    this.matchLimitReached = this.matchCount >= this.limit;
-    return this.matchLimitReached;
-  };
-}
-
-export interface GrepOutputInput {
-  outputLines: string[];
-  effectiveLimit: number;
-  matchLimitReached: boolean;
-  linesTruncated: boolean;
-}
-
-export function formatGrepOutput(input: GrepOutputInput) {
+function formatGrepOutput(input: grepSupportTypes.GrepOutputInput) {
   const { effectiveLimit } = input;
   const truncation = truncateHead(input.outputLines.join("\n"), {
     maxLines: Number.MAX_SAFE_INTEGER,
   });
-  const details: GrepToolDetails = {};
+  const details: grepSupportTypes.GrepToolDetails = {};
   const notices: string[] = [];
   if (input.matchLimitReached) {
     notices.push(
@@ -140,3 +69,12 @@ export function formatGrepOutput(input: GrepOutputInput) {
     details: Object.keys(details).length > 0 ? details : undefined,
   };
 }
+
+const grepSupport = {
+  DEFAULT_GREP_LIMIT,
+  formatGrepOutput,
+  grepSchema,
+  rgArguments,
+};
+
+export default grepSupport;

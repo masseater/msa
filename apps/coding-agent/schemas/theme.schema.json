@@ -309,10 +309,6 @@
     "export": {
       "type": "object",
       "properties": {
-        "pageBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Page background color"
-        },
         "cardBg": {
           "$ref": "#/$defs/ColorValue",
           "description": "Card/container background color"
@@ -320,15 +316,19 @@
         "infoBg": {
           "$ref": "#/$defs/ColorValue",
           "description": "Info sections background (system prompt, notices)"
+        },
+        "pageBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Page background color"
         }
       },
-      "description": "Optional colors for HTML export (defaults derived from userMessageBg if not specified)",
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Optional colors for HTML export (defaults derived from userMessageBg if not specified)"
     },
     "name": {
       "type": "string",
-      "pattern": "^[^/]+$",
-      "description": "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings."
+      "description": "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings.",
+      "pattern": "^[^/]+$"
     },
     "vars": {
       "type": "object",

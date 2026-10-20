@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import type { BashOperations } from "../../src/core/tools/bash.ts";
+import type bashTypes from "../../src/core/tools/bash.types.ts";
 import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
 import type agentSessionBashPersistenceCases1Types from "./agent-session-bash-persistence-cases-1.types.ts";
 import harnessModule from "./harness.ts";
@@ -25,7 +25,7 @@ const executesBashCommandsAndRecordsThe = Effect.gen(function* () {
 const cancelsRunningBashCommandsWithAbortbash = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const operations: BashOperations = {
+  const operations: bashTypes.BashOperations = {
     exec: (_command, _cwd, options) => {
       const execution = deferredPromise<{ exitCode: number | null }>();
       options.signal?.addEventListener(

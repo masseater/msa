@@ -2,10 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { parseArgs } from "../src/cli/args.ts";
-import { checkProviderAuth, getProviderCredential } from "../src/cli/auth-check.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
+import args from "../src/cli/args.ts";
+import authCheck from "../src/cli/auth-check.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
 import authCheckSupport from "./auth-check-support.ts";
+const { checkProviderAuth, getProviderCredential } = authCheck;
+const { parseArgs } = args;
 
 const { afterEachHook, beforeEachHook, createRuntime } = authCheckSupport;
 

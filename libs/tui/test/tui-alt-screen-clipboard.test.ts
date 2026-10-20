@@ -7,12 +7,10 @@ import tuiModule from "../src/index.ts";
 import effectHelpers from "./effect-helpers.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { Text, TuiAltScreen } = tuiModule;
 const { toJson } = effectHelpers;
-const { VirtualTerminal } = virtualTerminal;
-
 const { someWriteSince, viewportHas } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {

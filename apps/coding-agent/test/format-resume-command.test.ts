@@ -2,9 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { APP_NAME } from "../src/config.ts";
-import type { SessionManager } from "../src/core/session-manager.ts";
-import { formatResumeCommand } from "../src/modes/interactive/interactive-mode.ts";
+import config from "../src/config.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import interactiveModeSupport from "../src/modes/interactive/interactive-mode-support.ts";
+
+const { formatResumeCommand } = interactiveModeSupport;
+const { APP_NAME } = config;
 
 const { joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;
 
@@ -44,14 +47,14 @@ function createSessionManager(options: {
   sessionId?: string;
   sessionDir?: string;
   usesDefaultSessionDir?: boolean;
-}): SessionManager {
+}): sessionManagerTypes.SessionManager {
   return {
     getSessionDir: () => options.sessionDir ?? "/tmp/msa-sessions",
     getSessionFile: () => options.sessionFile,
     getSessionId: () => options.sessionId ?? "0197f6e4-4cf9-7f44-a2d8-f8f7f49ee9d3",
     isPersisted: () => options.persisted ?? true,
     usesDefaultSessionDir: () => options.usesDefaultSessionDir ?? true,
-  } as unknown as SessionManager;
+  } as unknown as sessionManagerTypes.SessionManager;
 }
 
 const returnsASessionResumeCommandForDefault = () =>

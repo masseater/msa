@@ -1,22 +1,18 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
+
+import type todoListTypes from "./todo-list.types.ts";
 
 const { matchesKey, truncateToWidth } = tui;
 
-export interface Todo {
-  id: number;
-  text: string;
-  done: boolean;
-}
-
-export class TodoListComponent {
-  private todos: Todo[];
-  private theme: Theme;
+export default class TodoListComponent {
+  private todos: todoListTypes.Todo[];
+  private theme: codingAgentTypes.Theme;
   private onClose: () => void;
   private cachedWidth?: number | undefined;
   private cachedLines?: string[] | undefined;
 
-  constructor(todos: Todo[], theme: Theme, onClose: () => void) {
+  constructor(todos: todoListTypes.Todo[], theme: codingAgentTypes.Theme, onClose: () => void) {
     this.todos = todos;
     this.theme = theme;
     this.onClose = onClose;

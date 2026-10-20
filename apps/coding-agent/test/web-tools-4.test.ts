@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { webFetchRenderers, webSearchRenderers } from "../src/core/tools/renderers/web.ts";
+import web from "../src/core/tools/renderers/web.ts";
 import tuiKit from "./tui-kit.ts";
+
+const { webFetchRenderers, webSearchRenderers } = web;
 
 const { initTheme, stripAnsi, theme } = tuiKit;
 

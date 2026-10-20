@@ -1,62 +1,46 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Effect, Result } from "effect";
 
-import { toErrorMessage } from "../../utils/errors.ts";
-import type { CacheWarmingAction } from "../cache-warmer.ts";
-import { fromPromise } from "../platform/index.ts";
-import { HandlerInvoker } from "./runner-invoker.ts";
-import { isUserBashEventResult } from "./runner-support.ts";
-import type {
-  BoundaryBaseEvent,
-  BoundaryDispatchResult,
-  RunnerEmitEvent,
-  RunnerEmitResult,
-  SessionBeforeEvent,
-  SessionBeforeEventResult,
-} from "./runner-types.ts";
-import type {
-  AgentBeforeSettleEvent,
-  BoundaryContextPreview,
-  BoundaryResult,
-  CacheWarmingDecisionEvent,
-  CacheWarmingDecisionEventResult,
-  MessageEndEvent,
-  MessageEndEventResult,
-  SessionBoundaryDraft,
-  ToolCallEvent,
-  ToolCallEventResult,
-  ToolResultEvent,
-  ToolResultEventResult,
-  TurnEndEvent,
-  UserBashEvent,
-  UserBashEventResult,
-} from "./types.ts";
+import errors from "../../utils/errors.ts";
+import type cacheWarmerTypes from "../cache-warmer.types.ts";
+import platform from "../platform/index.ts";
+import HandlerInvoker from "./runner-invoker.ts";
+import runnerSupport from "./runner-support.ts";
+import type runnerTypesTypes from "./runner-types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
+const { fromPromise } = platform;
+const { toErrorMessage } = errors;
+const { isUserBashEventResult } = runnerSupport;
 
-const isSessionBeforeEvent = (event: RunnerEmitEvent): event is SessionBeforeEvent =>
+const isSessionBeforeEvent = (
+  event: runnerTypesTypes.RunnerEmitEvent,
+): event is runnerTypesTypes.SessionBeforeEvent =>
   event.type === "session_before_switch" ||
   event.type === "session_before_fork" ||
   event.type === "session_before_compact" ||
   event.type === "session_before_tree";
 
 type BuildBoundaryContext = (
-  entries: SessionBoundaryDraft[],
-) => BoundaryContextPreview | Promise<BoundaryContextPreview>;
+  entries: extensionsTypesTypes.SessionBoundaryDraft[],
+) =>
+  | extensionsTypesTypes.BoundaryContextPreview
+  | Promise<extensionsTypesTypes.BoundaryContextPreview>;
 
-export class LifecycleEmitter extends HandlerInvoker {
-  emitBoundary(baseEvent: BoundaryBaseEvent, buildContext: BuildBoundaryContext) {
+export default class LifecycleEmitter extends HandlerInvoker {
+  emitBoundary(baseEvent: runnerTypesTypes.BoundaryBaseEvent, buildContext: BuildBoundaryContext) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      let entries: SessionBoundaryDraft[] = [];
+      let entries: extensionsTypesTypes.SessionBoundaryDraft[] = [];
       let shouldContinue = false;
       let context = yield* fromPromise(() => buildContext(entries));
       let valid = true;
       for (const { ext, handler } of this.slots(baseEvent.type)) {
         const event = { ...baseEvent, context, continue: shouldContinue, entries } as
-          | TurnEndEvent
-          | AgentBeforeSettleEvent;
+          | extensionsTypesTypes.TurnEndEvent
+          | extensionsTypesTypes.AgentBeforeSettleEvent;
         const outcome = yield* this.invoke({ ctx, event, eventType: baseEvent.type, ext, handler });
         if (outcome.ok) {
-          const handlerResult = outcome.value as BoundaryResult | undefined;
+          const handlerResult = outcome.value as extensionsTypesTypes.BoundaryResult | undefined;
           if (handlerResult?.entries !== undefined) entries = handlerResult.entries;
           if (handlerResult?.continue !== undefined) shouldContinue = handlerResult.continue;
         }
@@ -75,36 +59,36 @@ export class LifecycleEmitter extends HandlerInvoker {
           );
         }
       }
-      const result: BoundaryDispatchResult = valid
+      const result: runnerTypesTypes.BoundaryDispatchResult = valid
         ? { context, continue: shouldContinue, entries, valid: true }
         : { context, continue: false, entries: [], valid: false };
       return result;
     });
   }
 
-  emit<TEvent extends RunnerEmitEvent>(event: TEvent) {
+  emit<TEvent extends runnerTypesTypes.RunnerEmitEvent>(event: TEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      let result: SessionBeforeEventResult | undefined;
+      let result: runnerTypesTypes.SessionBeforeEventResult | undefined;
       for (const { ext, handler } of this.slots(event.type)) {
         const outcome = yield* this.invoke({ ctx, event, eventType: event.type, ext, handler });
         if (outcome.ok && isSessionBeforeEvent(event) && outcome.value !== undefined) {
-          result = outcome.value as SessionBeforeEventResult;
-          if (result.cancel === true) return result as RunnerEmitResult<TEvent>;
+          result = outcome.value as runnerTypesTypes.SessionBeforeEventResult;
+          if (result.cancel === true) return result as runnerTypesTypes.RunnerEmitResult<TEvent>;
         }
       }
-      return result as RunnerEmitResult<TEvent>;
+      return result as runnerTypesTypes.RunnerEmitResult<TEvent>;
     });
   }
 
-  emitCacheWarmingDecision(event: CacheWarmingDecisionEvent) {
+  emitCacheWarmingDecision(event: extensionsTypesTypes.CacheWarmingDecisionEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      let action: CacheWarmingAction = event.action;
+      let action: cacheWarmerTypes.CacheWarmingAction = event.action;
       for (const { ext, handler } of this.slots(event.type)) {
         const outcome = yield* this.invoke({ ctx, event, eventType: event.type, ext, handler });
         const result = outcome.ok
-          ? (outcome.value as CacheWarmingDecisionEventResult | undefined)
+          ? (outcome.value as extensionsTypesTypes.CacheWarmingDecisionEventResult | undefined)
           : undefined;
         if (result?.action !== undefined) action = result.action;
       }
@@ -112,13 +96,16 @@ export class LifecycleEmitter extends HandlerInvoker {
     });
   }
 
-  emitMessageEnd(event: MessageEndEvent) {
+  emitMessageEnd(event: extensionsTypesTypes.MessageEndEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       let currentMessage = event.message;
       let modified = false;
       for (const { ext, handler } of this.slots("message_end")) {
-        const currentEvent: MessageEndEvent = { ...event, message: currentMessage };
+        const currentEvent: extensionsTypesTypes.MessageEndEvent = {
+          ...event,
+          message: currentMessage,
+        };
         const outcome = yield* this.invoke({
           ctx,
           event: currentEvent,
@@ -127,7 +114,7 @@ export class LifecycleEmitter extends HandlerInvoker {
           handler,
         });
         const handlerResult = outcome.ok
-          ? (outcome.value as MessageEndEventResult | undefined)
+          ? (outcome.value as extensionsTypesTypes.MessageEndEventResult | undefined)
           : undefined;
         if (handlerResult?.message === undefined) continue;
         if (handlerResult.message.role !== currentMessage.role) {
@@ -146,14 +133,14 @@ export class LifecycleEmitter extends HandlerInvoker {
     });
   }
 
-  emitToolCall(event: ToolCallEvent) {
+  emitToolCall(event: extensionsTypesTypes.ToolCallEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      let result: ToolCallEventResult | undefined;
+      let result: extensionsTypesTypes.ToolCallEventResult | undefined;
       for (const { handler } of this.slots("tool_call")) {
         const handlerResult = yield* fromPromise(() => handler(event, ctx));
         if (typeof handlerResult === "object" && handlerResult !== null) {
-          result = handlerResult as ToolCallEventResult;
+          result = handlerResult as extensionsTypesTypes.ToolCallEventResult;
           if (result.block === true) return result;
         }
       }
@@ -161,7 +148,7 @@ export class LifecycleEmitter extends HandlerInvoker {
     });
   }
 
-  emitUserBash(event: UserBashEvent) {
+  emitUserBash(event: extensionsTypesTypes.UserBashEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       for (const { ext, handler } of this.slots("user_bash")) {
@@ -179,17 +166,17 @@ export class LifecycleEmitter extends HandlerInvoker {
           this.reportError(ext.path, "user_bash", invalid);
           return yield* Effect.die(invalid);
         }
-        const valid: UserBashEventResult = handlerResult;
+        const valid: extensionsTypesTypes.UserBashEventResult = handlerResult;
         return valid;
       }
       return undefined;
     });
   }
 
-  emitToolResult(event: ToolResultEvent) {
+  emitToolResult(event: extensionsTypesTypes.ToolResultEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      const currentEvent: ToolResultEvent = { ...event };
+      const currentEvent: extensionsTypesTypes.ToolResultEvent = { ...event };
       let modified = false;
       for (const { ext, handler } of this.slots("tool_result")) {
         const outcome = yield* this.invoke({
@@ -200,13 +187,13 @@ export class LifecycleEmitter extends HandlerInvoker {
           handler,
         });
         const handlerResult = outcome.ok
-          ? (outcome.value as ToolResultEventResult | undefined)
+          ? (outcome.value as extensionsTypesTypes.ToolResultEventResult | undefined)
           : undefined;
         if (handlerResult === undefined) continue;
         modified = applyToolResult(currentEvent, handlerResult) || modified;
       }
       if (!modified) return undefined;
-      const merged: ToolResultEventResult = {
+      const merged: extensionsTypesTypes.ToolResultEventResult = {
         content: currentEvent.content,
         details: currentEvent.details,
         isError: currentEvent.isError,
@@ -218,7 +205,10 @@ export class LifecycleEmitter extends HandlerInvoker {
   }
 }
 
-function applyToolResult(target: ToolResultEvent, result: ToolResultEventResult): boolean {
+function applyToolResult(
+  target: extensionsTypesTypes.ToolResultEvent,
+  result: extensionsTypesTypes.ToolResultEventResult,
+): boolean {
   let modified = false;
   if (result.content !== undefined) {
     target.content = result.content;

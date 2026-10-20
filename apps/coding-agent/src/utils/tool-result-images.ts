@@ -1,22 +1,21 @@
-import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { processImage } from "./image-process.ts";
+import awaitingModule from "../core/awaiting.ts";
+import imageProcess from "./image-process.ts";
+import type toolResultImagesTypes from "./tool-result-images.types.ts";
 
-export type ToolResultContent = aiTypes.TextContent | aiTypes.ImageContent;
-
-export interface NormalizeToolResultImagesOptions {
-  autoResizeImages?: boolean;
-
-  resizeOptions?: aiTypes.ModelImageResizeOptions;
-}
+const { awaited, awaiting } = awaitingModule;
+const { processImage } = imageProcess;
 
 function* normalizeImageBlock(
-  block: Extract<ToolResultContent, { type: "image" }>,
-  options: NormalizeToolResultImagesOptions | undefined,
-): Generator<Effect.Effect<unknown>, ToolResultContent[] | undefined, unknown> {
+  block: Extract<toolResultImagesTypes.ToolResultContent, { type: "image" }>,
+  options: toolResultImagesTypes.NormalizeToolResultImagesOptions | undefined,
+): Generator<
+  Effect.Effect<unknown>,
+  toolResultImagesTypes.ToolResultContent[] | undefined,
+  unknown
+> {
   const processed = yield* awaited(
     processImage(Buffer.from(block.data, "base64"), block.mimeType, {
       autoResizeImages: options?.autoResizeImages ?? true,
@@ -30,7 +29,7 @@ function* normalizeImageBlock(
     processed.hints.length === 0
   )
     return undefined;
-  const next: ToolResultContent[] = [
+  const next: toolResultImagesTypes.ToolResultContent[] = [
     { data: processed.data, mimeType: processed.mimeType, type: "image" },
   ];
   if (processed.hints.length > 0) next.push({ text: processed.hints.join("\n"), type: "text" });
@@ -38,14 +37,14 @@ function* normalizeImageBlock(
 }
 
 function normalizeToolResultImagesImpl(
-  content: ToolResultContent[],
-  options?: NormalizeToolResultImagesOptions,
-): Promise<ToolResultContent[]> {
+  content: toolResultImagesTypes.ToolResultContent[],
+  options?: toolResultImagesTypes.NormalizeToolResultImagesOptions,
+): Promise<toolResultImagesTypes.ToolResultContent[]> {
   return Effect.runPromise(
     awaiting(function* () {
       if (!content.some((block) => block.type === "image")) return content;
 
-      const normalized: ToolResultContent[] = [];
+      const normalized: toolResultImagesTypes.ToolResultContent[] = [];
       let changed = false;
       for (const block of content) {
         if (block.type !== "image") {
@@ -65,12 +64,20 @@ function normalizeToolResultImagesImpl(
   );
 }
 
-export const normalizeToolResultImages: {
+const normalizeToolResultImages: {
   (
-    content: ToolResultContent[],
-    options?: NormalizeToolResultImagesOptions,
-  ): Promise<ToolResultContent[]>;
+    content: toolResultImagesTypes.ToolResultContent[],
+    options?: toolResultImagesTypes.NormalizeToolResultImagesOptions,
+  ): Promise<toolResultImagesTypes.ToolResultContent[]>;
   (
-    options?: NormalizeToolResultImagesOptions,
-  ): (content: ToolResultContent[]) => Promise<ToolResultContent[]>;
+    options?: toolResultImagesTypes.NormalizeToolResultImagesOptions,
+  ): (
+    content: toolResultImagesTypes.ToolResultContent[],
+  ) => Promise<toolResultImagesTypes.ToolResultContent[]>;
 } = dual((args: IArguments) => args.length >= 1, normalizeToolResultImagesImpl);
+
+const toolResultImages = {
+  normalizeToolResultImages,
+};
+
+export default toolResultImages;

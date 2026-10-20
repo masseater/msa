@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
 import type typesModule from "../../../../../libs/ai/src/types.types.ts";
-import { ModelRuntime } from "../../../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../../../src/core/model-runtime.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
@@ -113,7 +113,7 @@ const recoversWithoutLettingTheStalledRefresh = Effect.gen(function* () {
 });
 
 const recoversWithoutLettingTheStalledRefreshStep1 = (
-  runtime: ModelRuntime,
+  runtime: modelRuntimeTypes.ModelRuntime,
   staleRefresh: Promise<readonly modelTypesModule.Model<typesModule.Api>[]>,
 ) =>
   Effect.gen(function* () {

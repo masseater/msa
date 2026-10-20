@@ -1,27 +1,30 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
-import { createMarkdownTransform } from "./markdown-transform.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import themeModule from "../theme/theme.ts";
+import markdownTransform from "./markdown-transform.ts";
 
-const { Container, Markdown } = tui;
+const { getMarkdownTheme, theme } = themeModule;
+const { createMarkdownTransform } = markdownTransform;
+
+const { Markdown } = tui;
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
-export class UserMessageComponent extends Container {
+export default class UserMessageComponent extends tui.Container {
   private text: string;
   private markdownTheme: tuiTypes.MarkdownTheme;
   private outputPad: number;
-  private markdownTransformers: readonly MarkdownTransformer[];
+  private markdownTransformers: readonly extensionsTypesTypes.MarkdownTransformer[];
 
   constructor(
     text: string,
     markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
-    markdownTransformers: readonly MarkdownTransformer[] = [],
+    markdownTransformers: readonly extensionsTypesTypes.MarkdownTransformer[] = [],
   ) {
     super();
     this.text = text;

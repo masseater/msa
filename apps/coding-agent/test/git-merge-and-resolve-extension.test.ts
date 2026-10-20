@@ -3,17 +3,22 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import mergeAndResolve from "../examples/extensions/git-merge-and-resolve.ts";
-import type { ExecResult, ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } =
   testing;
 
-type AgentEndHandler = (event: { type: "agent_end" }, ctx: ExtensionContext) => Promise<undefined>;
+type AgentEndHandler = (
+  event: { type: "agent_end" },
+  ctx: extensionsTypes.ExtensionContext,
+) => Promise<undefined>;
 
-const ok: ExecResult = { code: 0, killed: false, stderr: "", stdout: "" };
-const fail: ExecResult = { code: 1, killed: false, stderr: "error", stdout: "" };
+const ok: extensionsTypes.ExecResult = { code: 0, killed: false, stderr: "", stdout: "" };
+const fail: extensionsTypes.ExecResult = { code: 1, killed: false, stderr: "error", stdout: "" };
 
-function withUpstream(results: Map<string, ExecResult>): Map<string, ExecResult> {
+function withUpstream(
+  results: Map<string, extensionsTypes.ExecResult>,
+): Map<string, extensionsTypes.ExecResult> {
   results.set("git rev-parse --git-dir", ok);
   results.set("git rev-parse MERGE_HEAD", fail);
   results.set("git status --porcelain", ok);
@@ -25,11 +30,11 @@ function withUpstream(results: Map<string, ExecResult>): Map<string, ExecResult>
   return results;
 }
 
-function setup(cwd: string, execResults: Map<string, ExecResult>) {
+function setup(cwd: string, execResults: Map<string, extensionsTypes.ExecResult>) {
   let handler: AgentEndHandler | undefined;
   const sendUserMessage = vi.fn();
 
-  const exec = vi.fn<ExtensionAPI["exec"]>().mockImplementation((cmd, args) =>
+  const exec = vi.fn<extensionsTypes.ExtensionAPI["exec"]>().mockImplementation((cmd, args) =>
     runTest(
       Effect.gen(function* () {
         const key = [cmd, ...args].join(" ");
@@ -44,11 +49,11 @@ function setup(cwd: string, execResults: Map<string, ExecResult>) {
       if (event === "agent_end") handler = h;
     },
     sendUserMessage,
-  } as unknown as ExtensionAPI;
+  } as unknown as extensionsTypes.ExtensionAPI;
 
   mergeAndResolve(api);
 
-  const ctx = { cwd, ui: { notify: vi.fn() } } as unknown as ExtensionContext;
+  const ctx = { cwd, ui: { notify: vi.fn() } } as unknown as extensionsTypes.ExtensionContext;
 
   function trigger() {
     return runTest(awaited(handler!({ type: "agent_end" as const }, ctx)));
@@ -68,7 +73,7 @@ const skipsWhenNotAGitRepository = () =>
   runTest(
     Effect.gen(function* () {
       const cwd = yield* createTempDir;
-      const results = new Map<string, ExecResult>();
+      const results = new Map<string, extensionsTypes.ExecResult>();
       results.set("git rev-parse --git-dir", fail);
 
       const { trigger, exec, sendUserMessage } = setup(cwd, results);
@@ -83,7 +88,7 @@ const skipsWhenNoUpstreamIsConfigured = () =>
   runTest(
     Effect.gen(function* () {
       const cwd = yield* createTempDir;
-      const results = new Map<string, ExecResult>();
+      const results = new Map<string, extensionsTypes.ExecResult>();
       results.set("git rev-parse --git-dir", ok);
       results.set("git rev-parse --abbrev-ref --symbolic-full-name @{u}", fail);
 
@@ -107,7 +112,7 @@ const reSendsConflictsWhenInAnUnfinished = () =>
       ].join("\n");
       yield* writeTextFile(joinPath(cwd, "file.ts"), conflictContent);
 
-      const results = new Map<string, ExecResult>();
+      const results = new Map<string, extensionsTypes.ExecResult>();
       results.set("git rev-parse --git-dir", ok);
       results.set("git rev-parse MERGE_HEAD", ok);
       results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "file.ts\n" });
@@ -128,7 +133,7 @@ const skipsWhenWorkingTreeIsDirtyAnd = () =>
   runTest(
     Effect.gen(function* () {
       const cwd = yield* createTempDir;
-      const results = new Map<string, ExecResult>();
+      const results = new Map<string, extensionsTypes.ExecResult>();
       results.set("git rev-parse --git-dir", ok);
       results.set("git rev-parse MERGE_HEAD", fail);
       results.set("git status --porcelain", { ...ok, stdout: " M src/index.ts\n" });
@@ -145,7 +150,7 @@ const skipsWhenFetchFails = () =>
   runTest(
     Effect.gen(function* () {
       const cwd = yield* createTempDir;
-      const results = withUpstream(new Map<string, ExecResult>());
+      const results = withUpstream(new Map<string, extensionsTypes.ExecResult>());
       results.set("git fetch origin", fail);
 
       const { trigger, sendUserMessage } = setup(cwd, results);
@@ -159,7 +164,7 @@ const skipsWhenMergeIsClean = () =>
   runTest(
     Effect.gen(function* () {
       const cwd = yield* createTempDir;
-      const results = withUpstream(new Map<string, ExecResult>());
+      const results = withUpstream(new Map<string, extensionsTypes.ExecResult>());
       results.set("git merge --no-ff origin/main", ok);
 
       const { trigger, sendUserMessage } = setup(cwd, results);
@@ -191,7 +196,7 @@ const sendsConflictReportAsAFollowUp = () =>
       yield* makeDirectory(joinPath(cwd, "src"));
       yield* writeTextFile(joinPath(cwd, "src/index.ts"), conflictContent);
 
-      const results = withUpstream(new Map<string, ExecResult>());
+      const results = withUpstream(new Map<string, extensionsTypes.ExecResult>());
       results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
       results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "src/index.ts\n" });
 
@@ -221,7 +226,7 @@ const handlesEmptyOursOrTheirsSections = () =>
 
       yield* writeTextFile(joinPath(cwd, "empty-ours.ts"), conflictContent);
 
-      const results = withUpstream(new Map<string, ExecResult>());
+      const results = withUpstream(new Map<string, extensionsTypes.ExecResult>());
       results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
       results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "empty-ours.ts\n" });
 
@@ -240,7 +245,7 @@ const skipsMessageWhenMergeFailsButNo = () =>
   runTest(
     Effect.gen(function* () {
       const cwd = yield* createTempDir;
-      const results = withUpstream(new Map<string, ExecResult>());
+      const results = withUpstream(new Map<string, extensionsTypes.ExecResult>());
       results.set("git merge --no-ff origin/main", { ...fail, code: 1 });
       results.set("git diff --name-only --diff-filter=U", { ...ok, stdout: "" });
 

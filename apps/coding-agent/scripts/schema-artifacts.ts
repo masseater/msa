@@ -1,11 +1,16 @@
 import compatSchema from "@msa/ai/providers/compat-schema";
 import modelSchema from "@msa/ai/providers/model-schema";
-import type { TSchema } from "typebox";
 
-import { KeybindingValueSchema, KeybindingsSchema } from "../src/core/keybindings-schema.ts";
-import { ModelsConfigSchema } from "../src/core/model-config.ts";
-import { SettingsSchema } from "../src/core/settings-schema.ts";
-import { ColorValueSchema, ThemeJsonSchema } from "../src/modes/interactive/theme/theme-schema.ts";
+import keybindingsSchema from "../src/core/keybindings-schema.ts";
+import modelConfigSupport from "../src/core/model-config-support.ts";
+import settingsSchema from "../src/core/settings-schema.ts";
+import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
+import type schemaArtifactsTypes from "./schema-artifacts.types.ts";
+
+const { ModelsConfigSchema } = modelConfigSupport;
+const { SettingsSchema } = settingsSchema;
+const { KeybindingValueSchema, KeybindingsSchema } = keybindingsSchema;
+const { ColorValueSchema, ThemeJsonSchema } = themeSchema;
 
 const {
   ModelCostSchema,
@@ -16,13 +21,7 @@ const {
 } = modelSchema;
 const { ProviderCompatSchema } = compatSchema;
 
-interface SchemaArtifact {
-  filename: `${string}.schema.json`;
-  schema: TSchema;
-  definitions?: Readonly<Record<string, TSchema>>;
-}
-
-const schemaArtifacts: readonly SchemaArtifact[] = [
+const schemaArtifacts: readonly schemaArtifactsTypes.SchemaArtifact[] = [
   {
     definitions: {
       ModelCost: ModelCostSchema,
@@ -51,5 +50,8 @@ const schemaArtifacts: readonly SchemaArtifact[] = [
   },
 ];
 
-export { schemaArtifacts };
-export type { SchemaArtifact };
+const schemaArtifactsModule = {
+  schemaArtifacts,
+};
+
+export default schemaArtifactsModule;

@@ -3,11 +3,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { LlamaClient, type LlamaProgress } from "../src/extensions/llama/client.ts";
-import { HuggingFaceClient, findHuggingFaceToken } from "../src/extensions/llama/huggingface.ts";
-import { createLlamaProvider } from "../src/extensions/llama/provider.ts";
+import type clientTypes from "../src/extensions/llama/client.types.ts";
+import HuggingFaceClient from "../src/extensions/llama/hugging-face-client.ts";
+import huggingface from "../src/extensions/llama/huggingface.ts";
+import LlamaClient from "../src/extensions/llama/llama-client.ts";
+import providerModule from "../src/extensions/llama/provider.ts";
 import llamaExtensionSupport from "./llama-extension-support.ts";
 
+const { createLlamaProvider } = providerModule;
+const { findHuggingFaceToken } = huggingface;
 const { abortController, awaited, closeServers, runTest } = testing;
 const { eventStream, later, refresh, serve } = llamaExtensionSupport;
 
@@ -187,7 +191,7 @@ const downloadsWithByteProgressAndReturnsThe = () =>
   runTest(
     Effect.gen(function* () {
       const url = yield* downloadServer();
-      const progress: LlamaProgress[] = [];
+      const progress: clientTypes.LlamaProgress[] = [];
       const models = yield* awaited(
         new LlamaClient(url).downloadAndWait("owner/repo:Q4_K_M", (entry) => progress.push(entry)),
       );

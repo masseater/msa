@@ -3,6 +3,7 @@ import { Effect, ManagedRuntime } from "effect";
 import jsonCodec from "../src/utils/json-codec.ts";
 import type hydrateModelCatalogTypes from "./hydrate-model-catalog.types.ts";
 import modelDataChecks from "./model-data-checks.ts";
+import ModelDataError from "./model-data-error.ts";
 import modelData from "./model-data.ts";
 import type modelDataTypes from "./model-data.types.ts";
 import scriptFiles from "./script-files.ts";
@@ -12,7 +13,6 @@ const { decodeJson, encodeJson } = jsonCodec;
 const { isRecord } = modelDataChecks;
 const {
   MODEL_DATA_MANIFEST_FILE,
-  ModelDataError,
   createModelDataManifest,
   groupProviderModelData,
   readModelDataProviderIds,

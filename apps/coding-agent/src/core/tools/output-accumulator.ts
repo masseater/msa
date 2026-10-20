@@ -1,39 +1,24 @@
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 
-import {
-  type OutputFileStream as OutputFile,
-  createOutputFileStream,
-} from "../../utils/output-files.ts";
-import { platformRuntime, rethrowCause } from "../platform/index.ts";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type TruncationResult,
-  truncateTail,
-} from "./truncate.ts";
+import outputFiles from "../../utils/output-files.ts";
+import type outputFilesTypes from "../../utils/output-files.types.ts";
+import platform from "../platform/index.ts";
+import type outputAccumulatorTypes from "./output-accumulator.types.ts";
+import truncate from "./truncate.ts";
+import type truncateTypes from "./truncate.types.ts";
 
-export interface OutputAccumulatorOptions {
-  maxLines?: number;
-  maxBytes?: number;
-  tempFilePrefix?: string;
-}
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
-export interface OutputSnapshot {
-  content: string;
-  truncation: TruncationResult;
-  fullOutputPath?: string | undefined;
-}
-
-export interface FullOutput {
-  content: string;
-  truncated: boolean;
-}
+const { createOutputFileStream } = outputFiles;
+const { rethrowCause } = platform;
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } = truncate;
 
 function byteLength(text: string): number {
   return Buffer.byteLength(text, "utf-8");
 }
 
-type OutputFileStream = OutputFile["stream"];
+type OutputFileStream = outputFilesTypes.OutputFileStream["stream"];
 
 const readOutputFile = (path: string, maxBytes: number) =>
   Effect.scoped(
@@ -78,7 +63,7 @@ const endStream = (stream: OutputFileStream) =>
     stream.end();
   });
 
-export class OutputAccumulator {
+export default class OutputAccumulator {
   private readonly maxLines: number;
   private readonly maxBytes: number;
   private readonly maxRollingBytes: number;
@@ -100,7 +85,7 @@ export class OutputAccumulator {
   private tempFilePath: string | undefined;
   private tempFileStream: OutputFileStream | undefined;
 
-  constructor(options: OutputAccumulatorOptions = {}) {
+  constructor(options: outputAccumulatorTypes.OutputAccumulatorOptions = {}) {
     this.maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
     this.maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
     this.maxRollingBytes = Math.max(this.maxBytes * 2, 1);
@@ -134,7 +119,7 @@ export class OutputAccumulator {
     }
   }
 
-  snapshot(options: { persistIfTruncated?: boolean } = {}): OutputSnapshot {
+  snapshot(options: { persistIfTruncated?: boolean } = {}): outputAccumulatorTypes.OutputSnapshot {
     const tailTruncation = truncateTail(this.getSnapshotText(), {
       maxBytes: this.maxBytes,
       maxLines: this.maxLines,
@@ -143,7 +128,7 @@ export class OutputAccumulator {
     const truncatedBy = truncated
       ? (tailTruncation.truncatedBy ?? (this.totalDecodedBytes > this.maxBytes ? "bytes" : "lines"))
       : null;
-    const truncation: TruncationResult = {
+    const truncation: truncateTypes.TruncationResult = {
       ...tailTruncation,
       maxBytes: this.maxBytes,
       maxLines: this.maxLines,
@@ -170,17 +155,17 @@ export class OutputAccumulator {
       return Promise.resolve();
     }
     this.tempFileStream = undefined;
-    return platformRuntime.runPromise(endStream(stream));
+    return nodeRuntime.runPromise(endStream(stream));
   }
 
-  readFullOutput(maxBytes: number): Promise<FullOutput> {
+  readFullOutput(maxBytes: number): Promise<outputAccumulatorTypes.FullOutput> {
     if (this.tempFilePath === undefined || this.tempFilePath === "") {
       return Promise.resolve({
         content: new TextDecoder().decode(Buffer.concat(this.rawChunks)),
         truncated: false,
       });
     }
-    return platformRuntime.runPromise(readOutputFile(this.tempFilePath, maxBytes));
+    return nodeRuntime.runPromise(readOutputFile(this.tempFilePath, maxBytes));
   }
 
   getLastLineBytes(): number {

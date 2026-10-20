@@ -1,7 +1,11 @@
-import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
+import platformNode from "../../core/platform-node.ts";
+import platform from "../../core/platform.ts";
+import nodeFs from "../../core/platform/node/fs.ts";
 
-import { dirname } from "../../core/platform-node.ts";
-import { nowMs, toDate } from "../../core/platform.ts";
+const { appendFileSync, mkdirSync, renameSync, statSync } = nodeFs;
+
+const { nowMs, toDate } = platform;
+const { dirname } = platformNode;
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 
@@ -29,7 +33,7 @@ function formatMcpLogMessage(server: string, params: unknown, now: Date = toDate
   return `${now.toISOString()} [${server}] ${level}${logger} ${text}\n`;
 }
 
-export class McpServerLog {
+export default class McpServerLog {
   readonly path: string;
   private size: number | undefined;
 

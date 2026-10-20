@@ -2,9 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createBashTool, createLocalBashOperations } from "../src/core/tools/bash.ts";
-import { computeEditsDiff } from "../src/core/tools/edit-diff.ts";
-import { createEditTool } from "../src/index.ts";
+import bash from "../src/core/tools/bash.ts";
+import editDiff from "../src/core/tools/edit-diff.ts";
+import src from "../src/index.ts";
+
+const { createEditTool } = src;
+const { createBashTool, createLocalBashOperations } = bash;
+const { computeEditsDiff } = editDiff;
 
 const {
   awaited,

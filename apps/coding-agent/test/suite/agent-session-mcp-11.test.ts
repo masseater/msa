@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../src/core/extensions/types.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 const { harnesses4, loadDocsSearch, setup4 } = agentSessionMcpSupport;
 
@@ -21,7 +21,7 @@ describe("AgentSession MCP tools after resume and reload", () => {
           const first = yield* Effect.promise(() => setup4());
           yield* Effect.promise(() => loadDocsSearch(first.harness));
 
-          const setLoadout: ExtensionFactory = (msa) => {
+          const setLoadout: extensionsTypesTypes.ExtensionFactory = (msa) => {
             msa.on("session_start", () =>
               msa.setActiveTools(
                 loadout === undefined ? [...msa.getActiveTools(), "read"] : [...loadout],

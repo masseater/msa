@@ -1,13 +1,14 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
-import {
-  type ProjectedSessionEntry,
-  type SessionEntry,
-  sessionEntryToContextMessages,
-} from "../session-manager.ts";
-import { estimateTokens } from "./compaction-tokens.ts";
-import type { CutPointResult } from "./compaction-types.ts";
+import sessionManagerSupport from "../session-manager-support.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import type compactionCutTypes from "./compaction-cut.types.ts";
+import compactionTokens from "./compaction-tokens.ts";
+import type compactionTypesTypes from "./compaction-types.types.ts";
+
+const { sessionEntryToContextMessages } = sessionManagerSupport;
+const { estimateTokens } = compactionTokens;
 
 function isCutPointMessage(message: agentTypes.AgentMessage): boolean {
   switch (message.role) {
@@ -39,7 +40,7 @@ function isTurnStartMessage(message: agentTypes.AgentMessage): boolean {
   return false;
 }
 
-function isTurnStartEntry(entry: SessionEntry): boolean {
+function isTurnStartEntry(entry: sessionManagerTypes.SessionEntry): boolean {
   if (entry.type === "compaction") {
     return false;
   }
@@ -47,7 +48,7 @@ function isTurnStartEntry(entry: SessionEntry): boolean {
 }
 
 function findValidCutPoints(
-  entries: SessionEntry[],
+  entries: sessionManagerTypes.SessionEntry[],
   startIndex: number,
   endIndex: number,
 ): number[] {
@@ -65,7 +66,7 @@ function findValidCutPoints(
 }
 
 const findTurnStartIndexImpl = (
-  entries: SessionEntry[],
+  entries: sessionManagerTypes.SessionEntry[],
   entryIndex: number,
   startIndex: number,
 ): number => {
@@ -78,9 +79,9 @@ const findTurnStartIndexImpl = (
   return -1;
 };
 
-export const findTurnStartIndex: {
-  (entryIndex: number, startIndex: number): (entries: SessionEntry[]) => number;
-  (entries: SessionEntry[], entryIndex: number, startIndex: number): number;
+const findTurnStartIndex: {
+  (entryIndex: number, startIndex: number): (entries: sessionManagerTypes.SessionEntry[]) => number;
+  (entries: sessionManagerTypes.SessionEntry[], entryIndex: number, startIndex: number): number;
 } = Fn.dual(3, findTurnStartIndexImpl);
 
 interface BudgetWalk {
@@ -129,11 +130,11 @@ const tokensOfMessages = (messages: agentTypes.AgentMessage[]): number =>
   messages.reduce((sum, message) => sum + estimateTokens(message), 0);
 
 const findCutPointImpl = (
-  entries: SessionEntry[],
+  entries: sessionManagerTypes.SessionEntry[],
   startIndex: number,
   endIndex: number,
   keepRecentTokens: number,
-): CutPointResult => {
+): compactionTypesTypes.CutPointResult => {
   const cutPoints = findValidCutPoints(entries, startIndex, endIndex);
   if (cutPoints.length === 0) {
     return { firstKeptEntryIndex: startIndex, isSplitTurn: false, turnStartIndex: -1 };
@@ -166,27 +167,27 @@ const findCutPointImpl = (
   };
 };
 
-export const findCutPoint: {
+const findCutPoint: {
   (
     startIndex: number,
     endIndex: number,
     keepRecentTokens: number,
-  ): (entries: SessionEntry[]) => CutPointResult;
+  ): (entries: sessionManagerTypes.SessionEntry[]) => compactionTypesTypes.CutPointResult;
   (
-    entries: SessionEntry[],
+    entries: sessionManagerTypes.SessionEntry[],
     startIndex: number,
     endIndex: number,
     keepRecentTokens: number,
-  ): CutPointResult;
+  ): compactionTypesTypes.CutPointResult;
 } = Fn.dual(4, findCutPointImpl);
 
-function isProjectedTurnStart(entry: ProjectedSessionEntry): boolean {
+function isProjectedTurnStart(entry: sessionManagerTypes.ProjectedSessionEntry): boolean {
   if (entry.sourceEntry.type === "compaction") return false;
   return entry.messages.some(isTurnStartMessage);
 }
 
 function findProjectedTurnStartIndex(
-  entries: ProjectedSessionEntry[],
+  entries: sessionManagerTypes.ProjectedSessionEntry[],
   entryIndex: number,
   startIndex: number,
 ): number {
@@ -197,14 +198,14 @@ function findProjectedTurnStartIndex(
   return -1;
 }
 
-const isIntrinsicallyVisible = (entry: ProjectedSessionEntry): boolean =>
+const isIntrinsicallyVisible = (entry: sessionManagerTypes.ProjectedSessionEntry): boolean =>
   entry.sourceEntry.type !== "context_edit" &&
   sessionEntryToContextMessages(entry.sourceEntry).length > 0;
 
-const isOmitted = (entry: ProjectedSessionEntry): boolean =>
+const isOmitted = (entry: sessionManagerTypes.ProjectedSessionEntry): boolean =>
   isIntrinsicallyVisible(entry) && entry.messages.length === 0;
 
-function isRecoveryOmissionSuffix(suffix: ProjectedSessionEntry[]): boolean {
+function isRecoveryOmissionSuffix(suffix: sessionManagerTypes.ProjectedSessionEntry[]): boolean {
   const omittedSuffixIds = new Set(suffix.filter(isOmitted).map((entry) => entry.sourceEntry.id));
   const hasExternalReplacement = suffix.some(
     (entry) =>
@@ -229,7 +230,7 @@ function isRecoveryOmissionSuffix(suffix: ProjectedSessionEntry[]): boolean {
 }
 
 function projectedCutPoints(
-  entries: ProjectedSessionEntry[],
+  entries: sessionManagerTypes.ProjectedSessionEntry[],
   startIndex: number,
   endIndex: number,
 ): number[] {
@@ -246,19 +247,12 @@ function projectedCutPoints(
   return cutPoints;
 }
 
-export interface ProjectedCutInput {
-  entries: ProjectedSessionEntry[];
-  startIndex: number;
-  endIndex: number;
-  keepRecentTokens: number;
-}
-
-export function findProjectedCutPoint({
+function findProjectedCutPoint({
   entries,
   startIndex,
   endIndex,
   keepRecentTokens,
-}: ProjectedCutInput): CutPointResult {
+}: compactionCutTypes.ProjectedCutInput): compactionTypesTypes.CutPointResult {
   const cutPoints = projectedCutPoints(entries, startIndex, endIndex);
   if (cutPoints.length === 0) {
     return { firstKeptEntryIndex: startIndex, isSplitTurn: false, turnStartIndex: -1 };
@@ -295,3 +289,11 @@ export function findProjectedCutPoint({
     turnStartIndex,
   };
 }
+
+const compactionCut = {
+  findCutPoint,
+  findProjectedCutPoint,
+  findTurnStartIndex,
+};
+
+export default compactionCut;

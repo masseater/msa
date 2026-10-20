@@ -1,6 +1,7 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import { LoginFlow, type LoginFlowHost } from "../../../src/modes/interactive/login-flow.ts";
+import LoginFlow from "../../../src/modes/interactive/login-flow.ts";
+import type loginFlowTypes from "../../../src/modes/interactive/login-flow.types.ts";
 
 function complete(
   host: object,
@@ -9,7 +10,7 @@ function complete(
   authType: "oauth" | "api_key",
   previousModel: aiTypes.Model<aiTypes.Api>,
 ): Promise<void> {
-  return new LoginFlow(host as LoginFlowHost).completeProviderAuthentication(
+  return new LoginFlow(host as loginFlowTypes.LoginFlowHost).completeProviderAuthentication(
     providerId,
     providerName,
     authType,

@@ -6,13 +6,11 @@ import { describe, it } from "vite-plus/test";
 
 import chord from "../src/index.ts";
 import type chordTypes from "../src/index.types.ts";
-import counting from "./fixtures/counting.ts";
+import CountingLink from "./fixtures/counting-link.ts";
 import review from "./fixtures/review.ts";
 import timing from "./fixtures/timing.ts";
 
 const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, remote } = chord;
-
-const { CountingLink } = counting;
 const { abortController } = review;
 const { latch, ticks } = timing;
 

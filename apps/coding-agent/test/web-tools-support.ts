@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
-import { type TregRunner } from "../src/core/treg.ts";
+import type tregTypes from "../src/core/treg.types.ts";
 
 const { awaited, changeMode, joinPath, runTest, writeTextFile } = testing;
 
@@ -17,7 +17,7 @@ const fakeTreg = Effect.fn("fakeTreg")(function* (bin: string, loggedIn: boolean
 });
 
 function cli(result: unknown, status = 200, chargedMicro?: number) {
-  return vi.fn<TregRunner>(() =>
+  return vi.fn<tregTypes.TregRunner>(() =>
     runTest(
       awaited({
         exitCode: status >= 400 ? 1 : 0,

@@ -3,7 +3,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { SessionBeforeCompactEvent } from "../../src/core/extensions/index.ts";
+import type extensionsTypes from "../../src/core/extensions/index.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
@@ -135,7 +135,7 @@ const capturesModelIdentityBeforeAwaitingSummarizationAuth = () =>
 const partPart1 = (input: { readonly path: "manual" | "pre-prompt" | "post-run" | "overflow" }) =>
   Effect.gen(function* () {
     const { path } = input;
-    const preparations: SessionBeforeCompactEvent[] = [];
+    const preparations: extensionsTypes.SessionBeforeCompactEvent[] = [];
     const harness = yield* Effect.promise(() =>
       createHarness({
         extensionFactories: [

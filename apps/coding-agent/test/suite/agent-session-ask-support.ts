@@ -4,7 +4,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import type { ExtensionFactory, ToolDefinition } from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
@@ -36,7 +36,10 @@ const harnesses: harnessTypes.Harness[] = [];
 
 const setup = Effect.fn("setup")(function* () {
   const ran: string[] = [];
-  const tool = (name: string, annotations?: ToolDefinition["annotations"]): ToolDefinition => ({
+  const tool = (
+    name: string,
+    annotations?: srcTypes.ToolDefinition["annotations"],
+  ): srcTypes.ToolDefinition => ({
     description: `${name} description`,
     execute: () => {
       ran.push(name);
@@ -48,7 +51,7 @@ const setup = Effect.fn("setup")(function* () {
     promptSnippet: `${name} snippet`,
     ...(annotations === undefined ? {} : { annotations }),
   });
-  const extension: ExtensionFactory = (msa) => {
+  const extension: srcTypes.ExtensionFactory = (msa) => {
     msa.registerTool(tool("lookup", { readOnlyHint: true }));
     msa.registerTool(tool("deploy"));
   };

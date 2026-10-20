@@ -3,12 +3,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import type { ExtensionAPI } from "../../src/core/extensions/types.ts";
-import { createToolDefinitionFromAgentTool } from "../../src/core/tools/tool-definition-wrapper.ts";
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import toolDefinitionWrapper from "../../src/core/tools/tool-definition-wrapper.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { createCodemodeExtension } = extension;
+
+const { createToolDefinitionFromAgentTool } = toolDefinitionWrapper;
 
 const { awaited } = testing;
 
@@ -61,7 +65,7 @@ const screenshotTool: agentTypes.AgentTool = {
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const registerTools = (msa: ExtensionAPI) => {
+const registerTools = (msa: extensionsTypesTypes.ExtensionAPI) => {
   for (const tool of [echoTool as agentTypes.AgentTool, statsTool, screenshotTool]) {
     msa.registerTool(createToolDefinitionFromAgentTool(tool));
   }

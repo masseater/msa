@@ -2,19 +2,20 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createExtensionRuntime } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner } from "../src/core/extensions/runner.ts";
-import type { ProviderConfig } from "../src/core/extensions/types.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 import extensionsRunnerSupport from "./extensions-runner-support.ts";
 
+const { createExtensionRuntime } = loader;
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 
 const { extensionActions, extensionContextActions } = extensionsRunnerSupport;
 
 const { awaited, runTest } = testing;
 
-const providerModelConfig: ProviderConfig = {
+const providerModelConfig: extensionsTypesTypes.ProviderConfig = {
   api: "openai-completions" as const,
   apiKey: "provider-test-key",
   baseUrl: "https://provider.test/v1",

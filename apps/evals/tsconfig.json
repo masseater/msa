@@ -13,6 +13,7 @@
     "docker/**/*.ts",
     "docker/**/*.mjs",
     "test/**/*.ts",
-    "*.config.ts"
+    "*.config.ts",
+    "../coding-agent/src/utils/highlight-js.d.ts"
   ]
 }

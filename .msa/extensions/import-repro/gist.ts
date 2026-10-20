@@ -6,13 +6,10 @@ import {
   type HttpClientResponse,
 } from "effect/http";
 
-import {
-  decodeExportedHtml,
-  type DecodedSession,
-  ImportReproError,
-  type IssueRef,
-  parseSessionJsonl,
-} from "./session.ts";
+import session from "./session.ts";
+import type sessionTypes from "./session.types.ts";
+
+const { ImportReproError, decodeExportedHtml, parseSessionJsonl } = session;
 
 const GIST_URL_IN_TEXT_RE = /https:\/\/gist\.github\.com\/(?:[^/\s]+\/)?([0-9a-fA-F]{20,})\b/gu;
 const COMMENTS_PER_PAGE = 100;
@@ -38,13 +35,17 @@ interface IssueComment {
   user?: { login?: string } | null;
 }
 
-const toImportReproError = (error: { readonly message: string }): ImportReproError =>
+const toImportReproError = (error: { readonly message: string }): sessionTypes.ImportReproError =>
   new ImportReproError({ message: error.message });
 
 const fetchResponse = (
   url: string,
   headers: Record<string, string>,
-): Effect.Effect<HttpClientResponse.HttpClientResponse, ImportReproError, HttpClient.HttpClient> =>
+): Effect.Effect<
+  HttpClientResponse.HttpClientResponse,
+  sessionTypes.ImportReproError,
+  HttpClient.HttpClient
+> =>
   HttpClient.HttpClient.use((client) =>
     client.execute(HttpClientRequest.get(url).pipe(HttpClientRequest.setHeaders(headers))),
   ).pipe(Effect.mapError(toImportReproError));
@@ -54,9 +55,11 @@ const isOk = (response: HttpClientResponse.HttpClientResponse): boolean =>
 
 const readBody = <A, E extends { readonly message: string }>(
   read: Effect.Effect<A, E>,
-): Effect.Effect<A, ImportReproError> => Effect.mapError(read, toImportReproError);
+): Effect.Effect<A, sessionTypes.ImportReproError> => Effect.mapError(read, toImportReproError);
 
-const fetchText = (url: string): Effect.Effect<string, ImportReproError, HttpClient.HttpClient> =>
+const fetchText = (
+  url: string,
+): Effect.Effect<string, sessionTypes.ImportReproError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const response = yield* fetchResponse(url, { Accept: "application/vnd.github+json" });
     if (!isOk(response)) {
@@ -69,7 +72,7 @@ const fetchText = (url: string): Effect.Effect<string, ImportReproError, HttpCli
 
 const readGistFile = (
   file: GistFile,
-): Effect.Effect<string, ImportReproError, HttpClient.HttpClient> => {
+): Effect.Effect<string, sessionTypes.ImportReproError, HttpClient.HttpClient> => {
   if (file.content !== undefined && file.content !== "" && file.truncated !== true) {
     return Effect.succeed(file.content);
   }
@@ -99,7 +102,7 @@ const collectIssueGistIds = (
   repo: string,
   issue: string,
   page: number,
-): Effect.Effect<string[], ImportReproError, HttpClient.HttpClient> =>
+): Effect.Effect<string[], sessionTypes.ImportReproError, HttpClient.HttpClient> =>
   Effect.gen(function* () {
     const response = yield* fetchResponse(
       issueCommentsUrl(owner, repo, issue, page),
@@ -121,7 +124,11 @@ const findIssueGistIdWithClient = ({
   owner,
   repo,
   issue,
-}: IssueRef): Effect.Effect<string, ImportReproError, HttpClient.HttpClient> =>
+}: sessionTypes.IssueRef): Effect.Effect<
+  string,
+  sessionTypes.ImportReproError,
+  HttpClient.HttpClient
+> =>
   Effect.gen(function* () {
     const gistId = (yield* collectIssueGistIds(owner, repo, issue, 1)).at(-1);
     if (gistId === undefined) {
@@ -134,7 +141,11 @@ const findIssueGistIdWithClient = ({
 
 const fetchGistSessionWithClient = (
   gistId: string,
-): Effect.Effect<DecodedSession, ImportReproError, HttpClient.HttpClient> =>
+): Effect.Effect<
+  sessionTypes.DecodedSession,
+  sessionTypes.ImportReproError,
+  HttpClient.HttpClient
+> =>
   Effect.gen(function* () {
     const response = yield* fetchResponse(
       `https://api.github.com/gists/${gistId}`,
@@ -166,8 +177,19 @@ const withHttpClient = <A, E>(
 ): Effect.Effect<A, E> =>
   Effect.flatMap(httpRuntime.contextEffect, (context) => Effect.provideContext(effect, context));
 
-export const findIssueGistId = (issue: IssueRef): Effect.Effect<string, ImportReproError> =>
+const findIssueGistId = (
+  issue: sessionTypes.IssueRef,
+): Effect.Effect<string, sessionTypes.ImportReproError> =>
   withHttpClient(findIssueGistIdWithClient(issue));
 
-export const fetchGistSession = (gistId: string): Effect.Effect<DecodedSession, ImportReproError> =>
+const fetchGistSession = (
+  gistId: string,
+): Effect.Effect<sessionTypes.DecodedSession, sessionTypes.ImportReproError> =>
   withHttpClient(fetchGistSessionWithClient(gistId));
+
+const gist = {
+  fetchGistSession,
+  findIssueGistId,
+};
+
+export default gist;

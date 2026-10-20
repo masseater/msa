@@ -1,30 +1,17 @@
 import { NodeServices } from "@effect/platform-node";
-import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 import { dual } from "effect/Function";
+
+import type agentsTypes from "./agents.types.ts";
+
+const { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } = codingAgent;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const pathService = runtime.runSync(Path.Path);
 
-export const joinPath = (...segments: string[]): string => pathService.join(...segments);
+const joinPath = (...segments: string[]): string => pathService.join(...segments);
 const fsService = runtime.runSync(FileSystem.FileSystem);
-
-export type AgentScope = "user" | "project" | "both";
-
-export interface AgentConfig {
-  name: string;
-  description: string;
-  tools?: string[] | undefined;
-  model?: string | undefined;
-  systemPrompt: string;
-  source: "user" | "project";
-  filePath: string;
-}
-
-export interface AgentDiscoveryResult {
-  agents: AgentConfig[];
-  projectAgentsDir: string | null;
-}
 
 type AgentFrontmatter = {
   name?: unknown;
@@ -50,7 +37,7 @@ const readAgentFile = (filePath: string, source: "user" | "project") =>
     if (typeof frontmatter.name !== "string" || typeof frontmatter.description !== "string") {
       return undefined;
     }
-    const agent: AgentConfig = {
+    const agent: agentsTypes.AgentConfig = {
       description: frontmatter.description,
       filePath,
       model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
@@ -69,7 +56,7 @@ const loadAgentsFromDir = (dir: string, source: "user" | "project") =>
       names.filter((name) => name.endsWith(".md")),
       (name) => readAgentFile(pathService.join(dir, name), source),
     );
-    return agents.filter((agent): agent is AgentConfig => agent !== undefined);
+    return agents.filter((agent): agent is agentsTypes.AgentConfig => agent !== undefined);
   });
 
 const isDirectory = (p: string) =>
@@ -90,7 +77,7 @@ const findNearestProjectAgentsDir = (cwd: string) =>
     }
   });
 
-const discoverAgentsImpl = (cwd: string, scope: AgentScope) =>
+const discoverAgentsImpl = (cwd: string, scope: agentsTypes.AgentScope) =>
   Effect.gen(function* () {
     const userDir = pathService.join(getAgentDir(), "agents");
     const projectAgentsDir = yield* findNearestProjectAgentsDir(cwd);
@@ -100,23 +87,23 @@ const discoverAgentsImpl = (cwd: string, scope: AgentScope) =>
         ? []
         : yield* loadAgentsFromDir(projectAgentsDir, "project");
 
-    const agentMap = new Map<string, AgentConfig>();
+    const agentMap = new Map<string, agentsTypes.AgentConfig>();
     if (scope !== "project") for (const agent of userAgents) agentMap.set(agent.name, agent);
     if (scope !== "user") for (const agent of projectAgents) agentMap.set(agent.name, agent);
-    const result: AgentDiscoveryResult = {
+    const result: agentsTypes.AgentDiscoveryResult = {
       agents: Array.from(agentMap.values()),
       projectAgentsDir,
     };
     return result;
   });
 
-export const discoverAgents: {
-  (cwd: string, scope: AgentScope): Effect.Effect<AgentDiscoveryResult>;
-  (scope: AgentScope): (cwd: string) => Effect.Effect<AgentDiscoveryResult>;
+const discoverAgents: {
+  (cwd: string, scope: agentsTypes.AgentScope): Effect.Effect<agentsTypes.AgentDiscoveryResult>;
+  (scope: agentsTypes.AgentScope): (cwd: string) => Effect.Effect<agentsTypes.AgentDiscoveryResult>;
 } = dual(2, discoverAgentsImpl);
 
 function formatAgentListImpl(
-  agents: AgentConfig[],
+  agents: agentsTypes.AgentConfig[],
   maxItems: number,
 ): { text: string; remaining: number } {
   if (agents.length === 0) return { remaining: 0, text: "none" };
@@ -128,7 +115,15 @@ function formatAgentListImpl(
   };
 }
 
-export const formatAgentList: {
-  (agents: AgentConfig[], maxItems: number): { text: string; remaining: number };
-  (maxItems: number): (agents: AgentConfig[]) => { text: string; remaining: number };
+const formatAgentList: {
+  (agents: agentsTypes.AgentConfig[], maxItems: number): { text: string; remaining: number };
+  (maxItems: number): (agents: agentsTypes.AgentConfig[]) => { text: string; remaining: number };
 } = dual(2, formatAgentListImpl);
+
+const agents = {
+  discoverAgents,
+  formatAgentList,
+  joinPath,
+};
+
+export default agents;

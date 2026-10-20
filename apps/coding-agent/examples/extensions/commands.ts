@@ -1,13 +1,13 @@
-import type { ExtensionAPI, SlashCommandInfo } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-const formatCommand = (cmd: SlashCommandInfo): string => {
+const formatCommand = (cmd: codingAgentTypes.SlashCommandInfo): string => {
   const desc =
     cmd.description !== undefined && cmd.description.length > 0 ? ` - ${cmd.description}` : "";
   return `/${cmd.name}${desc}`;
 };
 
-const groupCommands = (commands: SlashCommandInfo[]): string[] => {
+const groupCommands = (commands: codingAgentTypes.SlashCommandInfo[]): string[] => {
   const items: string[] = [];
   const sources: Array<{ key: "extension" | "prompt" | "skill"; label: string }> = [
     { key: "extension", label: "Extensions" },
@@ -25,7 +25,7 @@ const groupCommands = (commands: SlashCommandInfo[]): string[] => {
   return items;
 };
 
-export default function commandsExtension(msa: ExtensionAPI) {
+export default function commandsExtension(msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("commands", {
     description: "List available slash commands",
     getArgumentCompletions: (prefix) => {

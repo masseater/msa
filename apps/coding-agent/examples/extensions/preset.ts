@@ -1,20 +1,29 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Effect } from "effect";
 
-import { type Preset, type PresetStore, createPresetStore } from "./preset-store.ts";
-import { showPresetSelector } from "./preset-ui.ts";
+import presetStore from "./preset-store.ts";
+import type presetStoreTypes from "./preset-store.types.ts";
+import presetUi from "./preset-ui.ts";
+
+const { createPresetStore } = presetStore;
+const { showPresetSelector } = presetUi;
 
 const { Key } = tui;
 
-const activate = (store: PresetStore, name: string, preset: Preset, ctx: ExtensionContext) =>
+const activate = (
+  store: presetStoreTypes.PresetStore,
+  name: string,
+  preset: presetStoreTypes.Preset,
+  ctx: codingAgentTypes.ExtensionContext,
+) =>
   Effect.gen(function* () {
     yield* Effect.promise(() => store.apply(name, preset, ctx));
     ctx.ui.notify(`Preset "${name}" activated`, "info");
     store.updateStatus(ctx);
   });
 
-const cyclePreset = (store: PresetStore, ctx: ExtensionContext) =>
+const cyclePreset = (store: presetStoreTypes.PresetStore, ctx: codingAgentTypes.ExtensionContext) =>
   Effect.gen(function* () {
     const names = store.order();
     if (names.length === 0) {
@@ -39,7 +48,11 @@ const cyclePreset = (store: PresetStore, ctx: ExtensionContext) =>
     yield* activate(store, nextName, preset, ctx);
   });
 
-const runPresetCommand = (store: PresetStore, args: string, ctx: ExtensionContext) =>
+const runPresetCommand = (
+  store: presetStoreTypes.PresetStore,
+  args: string,
+  ctx: codingAgentTypes.ExtensionContext,
+) =>
   Effect.gen(function* () {
     const name = args.trim();
     if (name.length === 0) {
@@ -57,7 +70,11 @@ const runPresetCommand = (store: PresetStore, args: string, ctx: ExtensionContex
     yield* activate(store, name, preset, ctx);
   });
 
-const restoreFromBranch = (msa: ExtensionAPI, store: PresetStore, ctx: ExtensionContext): void => {
+const restoreFromBranch = (
+  msa: codingAgentTypes.ExtensionAPI,
+  store: presetStoreTypes.PresetStore,
+  ctx: codingAgentTypes.ExtensionContext,
+): void => {
   const presetFlag = msa.getFlag("preset");
   if (typeof presetFlag === "string" && presetFlag.length > 0) {
     const preset = store.presets[presetFlag];
@@ -86,7 +103,7 @@ const restoreFromBranch = (msa: ExtensionAPI, store: PresetStore, ctx: Extension
   store.updateStatus(ctx);
 };
 
-export default function presetExtension(msa: ExtensionAPI) {
+export default function presetExtension(msa: codingAgentTypes.ExtensionAPI) {
   const store = createPresetStore(msa);
 
   msa.registerFlag("preset", {

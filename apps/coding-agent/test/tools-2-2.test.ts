@@ -3,8 +3,10 @@ import { applyPatch } from "diff";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createEditTool } from "../src/index.ts";
+import src from "../src/index.ts";
 import tools2Support from "./tools-2-support.ts";
+
+const { createEditTool } = src;
 
 const { getTextOutput } = tools2Support;
 

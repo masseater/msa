@@ -54,7 +54,7 @@ function startImpl(
   conversation: durableTypes.Conversation,
   name: string,
   options: durableTypes.TaskOptions = OWN_CONVERSATION,
-) {
+): Promise<durableTypes.TaskId<string>> {
   return Promise.resolve(
     conversation.commit((tx) => tx.createTask(Node, { name }, options), context),
   );

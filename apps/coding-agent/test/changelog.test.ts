@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { type ChangelogEntry, normalizeChangelogLinks } from "../src/utils/changelog.ts";
+import changelog from "../src/utils/changelog.ts";
+import type changelogTypes from "../src/utils/changelog.types.ts";
 
-const entry: ChangelogEntry = {
+const { normalizeChangelogLinks } = changelog;
+
+const entry: changelogTypes.ChangelogEntry = {
   content: "",
   major: 0,
   minor: 79,

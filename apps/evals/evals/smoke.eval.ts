@@ -2,8 +2,11 @@ import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 import { describeEval } from "vitest-evals";
 
-import { createMsaCodingAgentHarness } from "../src/harness.ts";
-import { readEnv } from "../src/platform.ts";
+import harnessModule from "../src/harness.ts";
+import platform from "../src/platform.ts";
+
+const { createMsaCodingAgentHarness } = harnessModule;
+const { readEnv } = platform;
 
 const harness = createMsaCodingAgentHarness({ noTools: "all" });
 

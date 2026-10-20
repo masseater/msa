@@ -2,12 +2,11 @@ import testing from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type BashOperations,
-  createBashTool,
-  createLocalBashOperations,
-} from "../src/core/tools/bash.ts";
-import * as shellModule from "../src/utils/shell.ts";
+import bashModule from "../src/core/tools/bash.ts";
+import type bashTypes from "../src/core/tools/bash.types.ts";
+import shellModule from "../src/utils/shell.ts";
+
+const { createBashTool, createLocalBashOperations } = bashModule;
 
 const { awaited, makeTempDir, pathExists, readTextFile, removePath, runTest, toJsonText } = testing;
 
@@ -32,7 +31,7 @@ const shouldRejectANullExitCodeFrom = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const operations: BashOperations = {
+      const operations: bashTypes.BashOperations = {
         exec: (_command, _cwd, { onData }) =>
           effectRunPromise(
             Effect.gen(function* () {
@@ -72,7 +71,7 @@ const shouldIncludeFullOutputPathForTruncated = () =>
         { error: "timeout:5", expected: "Command timed out after 5 seconds" },
         { error: "aborted", expected: "Command aborted" },
       ]) {
-        const operations: BashOperations = {
+        const operations: bashTypes.BashOperations = {
           exec: (_command, _cwd, { onData }) =>
             effectRunPromise(
               Effect.sync(() => {

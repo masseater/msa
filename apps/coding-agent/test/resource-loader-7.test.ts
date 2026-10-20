@@ -4,7 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { loadProjectContextFiles } from "../src/core/resource-loader.ts";
+import resourceLoader from "../src/core/resource-loader.ts";
+
+const { loadProjectContextFiles } = resourceLoader;
 
 const {
   currentTimeMillis,

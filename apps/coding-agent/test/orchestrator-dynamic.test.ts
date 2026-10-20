@@ -1,16 +1,20 @@
 import { Effect, Result } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { orchestratorError } from "../src/core/orchestrator/errors.ts";
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
+import errors from "../src/core/orchestrator/errors.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { orchestratorError } = errors;
 
 const { harness } = orchestratorHarness;
 
 const { reviews, setup, taskStatus, waitFor } = harness;
 
-const create = (orchestrator: Orchestrator, input: Parameters<Orchestrator["createTask"]>[0]) =>
-  Effect.promise(() => orchestrator.createTask(input));
+const create = (
+  orchestrator: orchestratorTypes.Orchestrator,
+  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
+) => Effect.promise(() => orchestrator.createTask(input));
 
 const waitsAgainForADependencyAddedAfter = () =>
   Effect.runPromise(

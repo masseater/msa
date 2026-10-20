@@ -2,11 +2,12 @@ import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import treeSelectorSupport from "./tree-selector-support.ts";
 
+const { initTheme } = themeModule;
 const { setKeybindings } = tui;
 
 const { assistantMessage, buildTree, userMessage } = treeSelectorSupport;

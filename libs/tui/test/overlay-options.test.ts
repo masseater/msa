@@ -9,11 +9,9 @@ import HyperlinkContent from "./overlay-options-hyperlink-content.ts";
 import overlayOptionsKit from "./overlay-options-kit.ts";
 import StaticOverlay from "./overlay-options-static-overlay.ts";
 import StyledContent from "./overlay-options-styled-content.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { overlayOptionsEmptyContent: EmptyContent, src: tuiModule } = overlayOptionsKit;
-
-const { VirtualTerminal } = virtualTerminal;
 const { TuiMainScreen } = tuiModule;
 
 describe("TUI overlay options", () => {

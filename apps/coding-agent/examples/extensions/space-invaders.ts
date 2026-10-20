@@ -1,16 +1,13 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import { Effect, type Fiber } from "effect";
 
-import { renderFrame } from "./space-invaders-render.ts";
-import {
-  type Counters,
-  type GameState,
-  type KeyState,
-  TICK_MS,
-  advance,
-  createInitialState,
-} from "./space-invaders-state.ts";
+import spaceInvadersRender from "./space-invaders-render.ts";
+import spaceInvadersState from "./space-invaders-state.ts";
+import type spaceInvadersStateTypes from "./space-invaders-state.types.ts";
+
+const { TICK_MS, advance, createInitialState } = spaceInvadersState;
+const { renderFrame } = spaceInvadersRender;
 
 const { Key, isKeyRelease, matchesKey } = tuiModule;
 
@@ -37,7 +34,11 @@ const pausedAction = (data: string, released: boolean): KeyAction => {
   return "resume";
 };
 
-const playingAction = (data: string, released: boolean, state: GameState): KeyAction => {
+const playingAction = (
+  data: string,
+  released: boolean,
+  state: spaceInvadersStateTypes.GameState,
+): KeyAction => {
   if (!released && matchesKey(data, Key.escape)) return "save";
   if (!released && (data === "q" || data === "Q")) return "discard";
   if (!released && (state.gameOver || state.victory)) {
@@ -47,12 +48,12 @@ const playingAction = (data: string, released: boolean, state: GameState): KeyAc
 };
 
 class SpaceInvadersComponent {
-  private state: GameState;
-  private keys: KeyState = { fire: false, left: false, right: false };
-  private counters: Counters = { fireCooldown: 0, playerMoveCounter: 0 };
+  private state: spaceInvadersStateTypes.GameState;
+  private keys: spaceInvadersStateTypes.KeyState = { fire: false, left: false, right: false };
+  private counters: spaceInvadersStateTypes.Counters = { fireCooldown: 0, playerMoveCounter: 0 };
   private fiber: Fiber.Fiber<never> | undefined;
   private onClose: () => void;
-  private onSave: (state: GameState | null) => void;
+  private onSave: (state: spaceInvadersStateTypes.GameState | null) => void;
   private tui: { requestRender: () => void };
   private cachedLines: string[] = [];
   private cachedWidth = 0;
@@ -65,8 +66,8 @@ class SpaceInvadersComponent {
   constructor(
     tui: { requestRender: () => void },
     onClose: () => void,
-    onSave: (state: GameState | null) => void,
-    savedState?: GameState,
+    onSave: (state: spaceInvadersStateTypes.GameState | null) => void,
+    savedState?: spaceInvadersStateTypes.GameState,
   ) {
     this.tui = tui;
     if (savedState !== undefined && !savedState.gameOver && !savedState.victory) {
@@ -167,17 +168,17 @@ class SpaceInvadersComponent {
 }
 
 const findSavedState = (
-  entries: ReturnType<ExtensionContext["sessionManager"]["getEntries"]>,
-): GameState | undefined => {
+  entries: ReturnType<codingAgentTypes.ExtensionContext["sessionManager"]["getEntries"]>,
+): spaceInvadersStateTypes.GameState | undefined => {
   for (const entry of entries.toReversed()) {
     if (entry.type === "custom" && entry.customType === INVADERS_SAVE_TYPE) {
-      return entry.data as GameState;
+      return entry.data as spaceInvadersStateTypes.GameState;
     }
   }
   return undefined;
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("invaders", {
     description: "Play Space Invaders!",
 

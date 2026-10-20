@@ -1,36 +1,20 @@
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { applyExifOrientation } from "./exif-orientation.ts";
-import { loadPhoton } from "./photon.ts";
+import awaitingModule from "../core/awaiting.ts";
+import exifOrientation from "./exif-orientation.ts";
+import type imageResizeCoreTypes from "./image-resize-core.types.ts";
+import photonModule from "./photon.ts";
 
-export interface ImageResizeOptions {
-  maxWidth?: number;
-  maxHeight?: number;
-  maxBytes?: number;
-  jpegQuality?: number;
-}
+const { awaited, awaiting } = awaitingModule;
+const { loadPhoton } = photonModule;
+const { applyExifOrientation } = exifOrientation;
 
-export interface ResizedImage {
-  data: string;
-  mimeType: string;
-  originalWidth: number;
-  originalHeight: number;
-  width: number;
-  height: number;
-  wasResized: boolean;
-}
-
-export const IMAGE_RESIZE_WORKER_RESPONSE_TYPE = "msa:image-resize-response";
-
-export type ResizeImageWorkerResponse =
-  | { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; result: ResizedImage | null }
-  | { type: typeof IMAGE_RESIZE_WORKER_RESPONSE_TYPE; error: string };
+const IMAGE_RESIZE_WORKER_RESPONSE_TYPE = "msa:image-resize-response";
 
 const DEFAULT_MAX_BYTES = 4.5 * 1024 * 1024;
 
-const DEFAULT_OPTIONS: Required<ImageResizeOptions> = {
+const DEFAULT_OPTIONS: Required<imageResizeCoreTypes.ImageResizeOptions> = {
   jpegQuality: 80,
   maxBytes: DEFAULT_MAX_BYTES,
   maxHeight: 2000,
@@ -55,8 +39,8 @@ function encodeCandidate(buffer: Uint8Array, mimeType: string): EncodedCandidate
 function resizeImageInProcessImpl(
   inputBytes: Uint8Array,
   mimeType: string,
-  options?: ImageResizeOptions,
-): Promise<ResizedImage | null> {
+  options?: imageResizeCoreTypes.ImageResizeOptions,
+): Promise<imageResizeCoreTypes.ResizedImage | null> {
   return Effect.runPromise(
     awaiting(function* () {
       const opts = { ...DEFAULT_OPTIONS, ...options };
@@ -172,14 +156,21 @@ function resizeImageInProcessImpl(
   );
 }
 
-export const resizeImageInProcess: {
+const resizeImageInProcess: {
   (
     inputBytes: Uint8Array,
     mimeType: string,
-    options?: ImageResizeOptions,
-  ): Promise<ResizedImage | null>;
+    options?: imageResizeCoreTypes.ImageResizeOptions,
+  ): Promise<imageResizeCoreTypes.ResizedImage | null>;
   (
     mimeType: string,
-    options?: ImageResizeOptions,
-  ): (inputBytes: Uint8Array) => Promise<ResizedImage | null>;
+    options?: imageResizeCoreTypes.ImageResizeOptions,
+  ): (inputBytes: Uint8Array) => Promise<imageResizeCoreTypes.ResizedImage | null>;
 } = dual((args: IArguments) => args.length >= 2, resizeImageInProcessImpl);
+
+const imageResizeCore = {
+  IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
+  resizeImageInProcess,
+};
+
+export default imageResizeCore;

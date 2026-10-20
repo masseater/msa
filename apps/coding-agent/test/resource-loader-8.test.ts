@@ -4,8 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { getThemesDir } from "../src/config.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
+import config from "../src/config.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+
+const { getThemesDir } = config;
 
 const {
   awaited,

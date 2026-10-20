@@ -4,6 +4,7 @@ import { afterAll, describe, expect, it } from "vite-plus/test";
 
 import envModule from "../src/env/index.ts";
 import toolsModule from "../src/tools/index.ts";
+import BlockingWriteExecutionEnv from "./blocking-write-execution-env.ts";
 import support from "./support.ts";
 import toolsSupport from "./tools-support.ts";
 
@@ -13,7 +14,7 @@ const { createEditTool, createWriteTool } = toolsModule;
 const { getOrThrow } = envModule;
 
 const { awaited, makeSymlink } = support;
-const { BlockingWriteExecutionEnv, createEnv, createTempDir, removeTempDirs, run } = toolsSupport;
+const { createEnv, createTempDir, removeTempDirs, run } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 

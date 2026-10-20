@@ -4,9 +4,9 @@ import ai from "@msa/ai";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage, ReadOnlyAuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 const { InMemoryModelsStore } = ai;
 
 const {
@@ -25,7 +25,9 @@ const tempDir = joinPath(
   `msa-test-auth-check-${currentTimeMillis()}-${randomSuffixSync()}`,
 );
 
-function createRuntime(credentials: AuthStorage | ReadOnlyAuthStorage): Promise<ModelRuntime> {
+function createRuntime(
+  credentials: authStorageTypes.AuthStorage | authStorageTypes.ReadOnlyAuthStorage,
+): Promise<modelRuntimeTypes.ModelRuntime> {
   return runTest(
     awaited(
       ModelRuntime.create({

@@ -2,11 +2,12 @@ import compat from "@msa/ai/compat";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { MEMORY_RECALL_MESSAGE_TYPE } from "../../src/core/memory/memory.ts";
-import { MemoryStore } from "../../src/core/memory/store.ts";
+import MemoryStore from "../../src/core/memory/memory-store.ts";
+import memory from "../../src/core/memory/memory.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { MEMORY_RECALL_MESSAGE_TYPE } = memory;
 const { fauxAssistantMessage, fauxToolCall } = compat;
 
 const { createHarness, getToolResult } = harnessModule;

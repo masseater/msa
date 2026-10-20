@@ -2,10 +2,12 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { createCodemodeExtension } = extension;
 
 const { awaited, runTest } = testing;
 

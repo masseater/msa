@@ -3,10 +3,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { SessionManager } from "../src/core/session-manager.ts";
-import { getUsageCostBreakdown } from "../src/core/usage-totals.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import usageTotals from "../src/core/usage-totals.ts";
 import agentSessionStatsSupport from "./agent-session-stats-support.ts";
 
+const { getUsageCostBreakdown } = usageTotals;
 const {
   createAssistantMessage,
   createSession,

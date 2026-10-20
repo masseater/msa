@@ -1,13 +1,21 @@
 import { homedir } from "node:os";
-import { join } from "node:path";
 
 import type aiTypes from "@msa/ai/index.types";
 import all from "@msa/ai/providers/all";
 
-import { envSnapshot, readEnv } from "../process-env.ts";
-import { cliAgentProvider } from "./provider.ts";
-import { type CliBackend, streamViaCli } from "./run.ts";
-import { flattenTranscript } from "./transcript.ts";
+import nodePath from "../platform/node/path.ts";
+import processEnv from "../process-env.ts";
+import provider from "./provider.ts";
+import run from "./run.ts";
+import type runTypes from "./run.types.ts";
+import transcript from "./transcript.ts";
+
+const { join } = nodePath;
+
+const { envSnapshot, readEnv } = processEnv;
+const { flattenTranscript } = transcript;
+const { streamViaCli } = run;
+const { cliAgentProvider } = provider;
 
 const { getBuiltinModels } = all;
 
@@ -63,10 +71,9 @@ interface OpenCodeEvent {
   };
 }
 
-const backend: CliBackend<OpenCodeEvent> = {
+const backend: runTypes.CliBackend<OpenCodeEvent> = {
   command(model, context, cwd) {
     return {
-      bin: openCodeExecutable(),
       args: [
         "run",
         "--standalone",
@@ -76,13 +83,14 @@ const backend: CliBackend<OpenCodeEvent> = {
         "--model",
         `opencode/${model.id}`,
       ],
-      stdin: buildPrompt(context.messages, cwd),
+      bin: openCodeExecutable(),
       env: {
         ...envSnapshot(),
         XDG_DATA_HOME:
           readEnv("OPENCODE_FREE_DATA_HOME")?.trim() ||
           join(homedir(), ".local", "share", "msa-opencode-free"),
       },
+      stdin: buildPrompt(context.messages, cwd),
     };
   },
   handleEvent(event, sink) {
@@ -91,34 +99,40 @@ const backend: CliBackend<OpenCodeEvent> = {
       sink.fail(event.error?.message ?? "");
     } else if (event.type === "text" && part.type === "text") {
       sink.setText(part.id ?? "text", part.text ?? "");
-    } else if (event.type === "step_finish" && part.tokens) {
+    } else if (event.type === "step_finish" && part.tokens !== undefined) {
       const tokens = part.tokens;
       sink.addUsage({
-        input: tokens.input ?? 0,
-        output: tokens.output ?? 0,
         cacheRead: tokens.cache?.read ?? 0,
         cacheWrite: tokens.cache?.write ?? 0,
+        input: tokens.input ?? 0,
+        output: tokens.output ?? 0,
         ...(tokens.reasoning === undefined ? {} : { reasoning: tokens.reasoning }),
       });
     }
   },
   providerId: PROVIDER_ID,
-  shouldRetry: (detail) => /readiness|server-connection|database is locked/i.test(detail),
+  shouldRetry: (detail) => /readiness|server-connection|database is locked/iu.test(detail),
 };
 
-export function openCodeProvider(): aiTypes.Provider {
+function openCodeProvider(): aiTypes.Provider {
   return cliAgentProvider({
     executable: openCodeExecutable,
     id: PROVIDER_ID,
     models: freeModels().map((free) => ({
+      contextWindow: free.contextWindow,
       id: free.id,
+      input: ["text"],
+      maxTokens: free.maxTokens,
       name: free.name,
       reasoning: false,
-      input: ["text"],
-      contextWindow: free.contextWindow,
-      maxTokens: free.maxTokens,
     })),
     name: "OpenCode Free",
     streamSimple: (model, context, options) => streamViaCli(backend, model, context, options),
   });
 }
+
+const opencode = {
+  openCodeProvider,
+};
+
+export default opencode;

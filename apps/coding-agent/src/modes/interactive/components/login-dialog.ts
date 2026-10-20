@@ -3,19 +3,26 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { openBrowser } from "../../../utils/open-browser.ts";
-import { theme } from "../theme/theme.ts";
-import { AuthUrlComponent } from "./auth-url.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import openBrowserModule from "../../../utils/open-browser.ts";
+import themeModule from "../theme/theme.ts";
+import AuthUrlComponent from "./auth-url.ts";
+import type authUrlTypes from "./auth-url.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { theme } = themeModule;
+const { openBrowser } = openBrowserModule;
+const { keyHint } = keybindingHints;
 
 const { Container, Input, Spacer, Text, getKeybindings } = tuiModule;
 
-export class LoginDialogComponent extends Container implements tuiTypes.Focusable {
+export default class LoginDialogComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
   private contentContainer: tuiTypes.Container;
   private input: tuiTypes.Input;
   private tui: tuiTypes.TUI;
-  private authUrl?: AuthUrlComponent | undefined;
+  private authUrl?: authUrlTypes.AuthUrlComponent | undefined;
   private abortController = new AbortController();
   private inputResolver?: ((value: string) => void) | undefined;
   private inputRejecter?: ((error: Error) => void) | undefined;

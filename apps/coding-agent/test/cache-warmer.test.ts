@@ -4,12 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  getCacheWarmingDelayMs,
-  getPromptCacheTtlMs,
-  isReplayable,
-} from "../src/core/cache-warmer.ts";
+import cacheWarmerSupportModule from "../src/core/cache-warmer-support.ts";
 import cacheWarmerSupport from "./cache-warmer-support.ts";
+
+const { getCacheWarmingDelayMs, getPromptCacheTtlMs, isReplayable } = cacheWarmerSupportModule;
 
 const { getBuiltinModel } = all;
 

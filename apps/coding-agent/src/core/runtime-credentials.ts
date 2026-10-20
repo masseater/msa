@@ -1,9 +1,11 @@
 import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
-import { awaited, awaitingWith } from "./awaiting.ts";
+import awaitingModule from "./awaiting.ts";
 
-export class RuntimeCredentials implements aiTypes.CredentialStore {
+const { awaited, awaitingWith } = awaitingModule;
+
+export default class RuntimeCredentials implements aiTypes.CredentialStore {
   private readonly store: aiTypes.CredentialStore;
   private readonly overrides = new Map<string, string>();
 

@@ -1,12 +1,11 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { UserBashEvent, UserBashEventResult } from "../../../src/core/extensions/types.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
-
 const { localResult } = UserBashFailClosedSupport;
 
 const { createHarness } = harnessModule;
@@ -17,31 +16,39 @@ const rpcIo = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-  takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-  writeRawStdout: (line: string) => {
-    rpcIo.outputLines.push(line);
+  default: {
+    flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    takeOverStdout: vi.fn(),
+    waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    writeRawStdout: (line: string) => {
+      rpcIo.outputLines.push(line);
+    },
   },
 }));
 
-vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ theme: {} }));
+vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
 vi.mock("../../../src/modes/interactive/components/bash-execution.js", () => ({
-  BashExecutionComponent: class {
-    appendOutput(): void {}
-    setComplete(): void {}
+  default: {
+    BashExecutionComponent: class {
+      appendOutput(): void {}
+      setComplete(): void {}
+    },
   },
 }));
 
 vi.mock("../../../src/modes/rpc/jsonl.js", () => ({
-  attachJsonlLineReader: vi.fn((_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-    rpcIo.lineHandler = onLine;
-    return () => {
-      rpcIo.lineHandler = undefined;
-    };
-  }),
-  serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  default: {
+    attachJsonlLineReader: vi.fn(
+      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
+        rpcIo.lineHandler = onLine;
+        return () => {
+          rpcIo.lineHandler = undefined;
+        };
+      },
+    ),
+    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  },
 }));
 
 type InteractiveBashContext = {
@@ -76,7 +83,7 @@ afterEach(() => {
 const partPart1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    const events: UserBashEvent[] = [];
+    const events: extensionsTypesTypes.UserBashEvent[] = [];
     const harness = yield* Effect.promise(() =>
       createHarness({
         extensionFactories: [
@@ -85,7 +92,7 @@ const partPart1 = () =>
               runPromise(
                 Effect.sync(() => {
                   events.push(event);
-                  return {} as unknown as UserBashEventResult;
+                  return {} as unknown as extensionsTypesTypes.UserBashEventResult;
                 }),
               ),
             );
@@ -119,6 +126,7 @@ describe("Interactive user_bash failure handling (#9068)", () => {
           ui: { requestRender: vi.fn() },
           updateEditorBorderColor: vi.fn(),
         };
+        Object.setPrototypeOf(context, InteractiveMode.prototype);
         interactiveModePrototype.setupEditorSubmitHandler.call(context);
 
         try {

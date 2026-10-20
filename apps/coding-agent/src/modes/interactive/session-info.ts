@@ -1,28 +1,19 @@
-import type { SessionStats } from "../../core/agent-session.ts";
-import type { CacheWasteTotals } from "../../core/cache-stats.ts";
-import { type CacheWarmingStatus, formatCacheWarmingStatus } from "../../core/cache-warmer.ts";
-import type { ContextBreakdown, ContextPart } from "../../core/context-breakdown.ts";
-import type { CacheWarmingMode } from "../../core/settings-manager.ts";
-import type { UsageCostBreakdownEntry } from "../../core/usage-totals.ts";
-import { formatTokens } from "./components/footer.ts";
-import { theme } from "./theme/theme.ts";
+import type agentSessionTypes from "../../core/agent-session.types.ts";
+import type cacheStatsTypes from "../../core/cache-stats.types.ts";
+import cacheWarmerSupport from "../../core/cache-warmer-support.ts";
+import type contextBreakdownTypes from "../../core/context-breakdown.types.ts";
+import type usageTotalsTypes from "../../core/usage-totals.types.ts";
+import footerSupport from "./components/footer-support.ts";
+import type sessionInfoTypes from "./session-info.types.ts";
+import themeModule from "./theme/theme.ts";
 
-export type SessionInfo = {
-  stats: SessionStats;
-  sessionName: string | undefined;
-  cacheWaste: CacheWasteTotals;
-  usageBreakdown: readonly UsageCostBreakdownEntry[];
-  cacheWarmingMode: CacheWarmingMode;
-  cacheWarmingStatus: CacheWarmingStatus | undefined;
-  selectedModelKey: string;
-  contextBreakdown: ContextBreakdown;
-  contextWindow: number | undefined;
-  telemetry: string | undefined;
-};
+const { theme } = themeModule;
+const { formatTokens } = footerSupport;
+const { formatCacheWarmingStatus } = cacheWarmerSupport;
 
 const label = (text: string): string => theme.fg("dim", text);
 
-const CONTEXT_PARTS: readonly { part: ContextPart; title: string }[] = [
+const CONTEXT_PARTS: readonly { part: contextBreakdownTypes.ContextPart; title: string }[] = [
   { part: "system", title: "System prompt" },
   { part: "tools", title: "Tools" },
   { part: "conversation", title: "Conversation" },
@@ -33,8 +24,8 @@ const CONTEXT_PARTS: readonly { part: ContextPart; title: string }[] = [
 
 const CONTEXT_PART_LIMIT = 8;
 
-export function formatContextBreakdown(
-  breakdown: ContextBreakdown,
+function formatContextBreakdown(
+  breakdown: contextBreakdownTypes.ContextBreakdown,
   contextWindow: number | undefined,
 ): string[] {
   const { tokens: total } = breakdown;
@@ -78,7 +69,7 @@ export function formatContextBreakdown(
   return lines;
 }
 
-export function formatSessionInfo(info: SessionInfo): string {
+function formatSessionInfo(info: sessionInfoTypes.SessionInfo): string {
   const { stats, cacheWaste, lines, usageBreakdown } = formatSessionInfoStats(info);
 
   if (stats.cost > 0 || cacheWaste.missedTokens > 0) {
@@ -104,11 +95,11 @@ export function formatSessionInfo(info: SessionInfo): string {
   return `${lines.join("\n")}\n`;
 }
 
-function formatSessionInfoStats(info: SessionInfo): {
-  stats: SessionStats;
-  cacheWaste: CacheWasteTotals;
+function formatSessionInfoStats(info: sessionInfoTypes.SessionInfo): {
+  stats: agentSessionTypes.SessionStats;
+  cacheWaste: cacheStatsTypes.CacheWasteTotals;
   lines: string[];
-  usageBreakdown: readonly UsageCostBreakdownEntry[];
+  usageBreakdown: readonly usageTotalsTypes.UsageCostBreakdownEntry[];
 } {
   const { stats, cacheWaste, usageBreakdown, cacheWarmingStatus } = info;
   const lines: string[] = [theme.bold("Session Info"), ""];
@@ -152,3 +143,10 @@ function formatSessionInfoStats(info: SessionInfo): {
   if (info.telemetry !== undefined) lines.push("", theme.bold("Telemetry"), info.telemetry);
   return { cacheWaste, lines, stats, usageBreakdown };
 }
+
+const sessionInfo = {
+  formatContextBreakdown,
+  formatSessionInfo,
+};
+
+export default sessionInfo;

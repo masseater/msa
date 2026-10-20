@@ -1,12 +1,12 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 
 const { truncateToWidth, visibleWidth } = tui;
 
-export abstract class BaseOverlay {
-  protected theme: Theme;
+export default abstract class BaseOverlay {
+  protected theme: codingAgentTypes.Theme;
 
-  constructor(theme: Theme) {
+  constructor(theme: codingAgentTypes.Theme) {
     this.theme = theme;
   }
 

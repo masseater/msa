@@ -1,10 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import type { Skill } from "../src/core/skills.ts";
-import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
-import { buildSystemPrompt } from "../src/core/system-prompt.ts";
+import type skillsTypes from "../src/core/skills.types.ts";
+import sourceInfoModule from "../src/core/source-info.ts";
+import systemPrompt from "../src/core/system-prompt.ts";
 
-const testSkill: Skill = {
+const { createSyntheticSourceInfo } = sourceInfoModule;
+const { buildSystemPrompt } = systemPrompt;
+
+const testSkill: skillsTypes.Skill = {
   baseDir: "/skills/test-skill",
   description: "A test skill.",
   disableModelInvocation: false,

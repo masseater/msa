@@ -2,13 +2,16 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ExtensionAPI, ExtensionFactory } from "../../src/core/extensions/types.ts";
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
-import type { McpServerEntry } from "../../src/extensions/mcp/config.ts";
-import { createMcpExtension } from "../../src/extensions/mcp/index.ts";
+import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
+import type configTypes from "../../src/extensions/mcp/config.types.ts";
+import extensionModule from "../../src/extensions/mcp/extension.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { createCodemodeExtension } = extension;
+const { createMcpExtension } = extensionModule;
 
 const { fauxAssistantMessage } = ai;
 
@@ -18,10 +21,13 @@ const { createHarness, createTestUiContext } = harnessModule;
 
 const harnesses3: harnessTypes.Harness[] = [];
 
-function setup3(plugins: ExtensionFactory | ExtensionFactory[], configured: McpServerEntry[] = []) {
+function setup3(
+  plugins: extensionsTypesTypes.ExtensionFactory | extensionsTypesTypes.ExtensionFactory[],
+  configured: configTypes.McpServerEntry[] = [],
+) {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const connected: McpServerEntry[] = [];
+      const connected: configTypes.McpServerEntry[] = [];
       const harness = yield* Effect.promise(() =>
         createHarness({
           extensionFactories: [
@@ -64,7 +70,7 @@ const connectsServersRegisteredWhileExtensionsLoad = Effect.gen(function* () {
 });
 
 const connectsAndDisconnectsServersRegisteredDuring = Effect.gen(function* () {
-  let api: ExtensionAPI | undefined;
+  let api: extensionsTypesTypes.ExtensionAPI | undefined;
   const { harness, connected } = yield* Effect.promise(() =>
     setup3((msa) => {
       api = msa;
@@ -163,7 +169,7 @@ describe("AgentSession MCP servers registered by extensions", () => {
   it.each(["my-docs", "my_docs"])("prefers the mcp.json server over a registered %s", (name) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const configured: McpServerEntry = {
+        const configured: configTypes.McpServerEntry = {
           config: { url: "http://config.invalid" },
           name: "my-docs",
           source: "mcp.json",

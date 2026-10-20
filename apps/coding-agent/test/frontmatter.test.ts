@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseFrontmatter, stripFrontmatter } from "../src/utils/frontmatter.ts";
+import frontmatterModule from "../src/utils/frontmatter.ts";
+
+const { parseFrontmatter, stripFrontmatter } = frontmatterModule;
 
 const parsesKeysStripsQuotesAndReturnsBody = () => {
   const input =

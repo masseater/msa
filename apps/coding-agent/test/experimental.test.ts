@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { areExperimentalFeaturesEnabled } from "../src/core/experimental.ts";
-import { withEnv } from "../src/core/process-env.ts";
+import experimental from "../src/core/experimental.ts";
+import processEnv from "../src/core/process-env.ts";
+
+const { areExperimentalFeaturesEnabled } = experimental;
+const { withEnv } = processEnv;
 
 const { runTest } = testing;
 

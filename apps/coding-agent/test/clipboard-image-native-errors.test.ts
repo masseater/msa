@@ -3,7 +3,7 @@ import type tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { awaited, runTest } = testing;
 
@@ -32,12 +32,16 @@ vi.mock("@msa/tui", (importOriginal) =>
   ),
 );
 vi.mock("../src/utils/clipboard.ts", () => ({
-  copyToClipboard: vi.fn(),
-  readClipboardFilePaths: vi.fn(() => testing.runTest(testing.awaited(null))),
-  readClipboardText,
+  default: {
+    copyToClipboard: vi.fn(),
+    readClipboardFilePaths: vi.fn(() => testing.runTest(testing.awaited(null))),
+    readClipboardText,
+  },
 }));
 vi.mock("../src/utils/clipboard-command.ts", () => ({
-  runClipboardCommand: vi.fn(() => testing.runTest(testing.awaited(undefined))),
+  default: {
+    runClipboardCommand: vi.fn(() => testing.runTest(testing.awaited(undefined))),
+  },
 }));
 afterEach(() => vi.unstubAllEnvs());
 
@@ -54,6 +58,7 @@ const nativeImageErrorsAbortPasteWithoutReading = () =>
       const prototype = InteractiveMode.prototype as unknown as {
         handleClipboardPaste(this: typeof context): Promise<void>;
       };
+      Object.setPrototypeOf(context, InteractiveMode.prototype);
       yield* awaited(prototype.handleClipboardPaste.call(context));
       expect(readClipboardText).not.toHaveBeenCalled();
       expect(context.editor.insertTextAtCursor).not.toHaveBeenCalled();

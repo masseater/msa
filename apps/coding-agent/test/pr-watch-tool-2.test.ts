@@ -1,7 +1,9 @@
 import telemetryModule from "@msa/telemetry";
 import { describe, expect, it } from "vite-plus/test";
 
-import { PR_WATCH_MESSAGE_TYPE, createPrWatchHost } from "../src/core/pr-watch/session-host.ts";
+import sessionHost from "../src/core/pr-watch/session-host.ts";
+
+const { PR_WATCH_MESSAGE_TYPE, createPrWatchHost } = sessionHost;
 
 const { InMemoryTelemetryContext, NOOP_TELEMETRY_CONTEXT } = telemetryModule;
 

@@ -4,13 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type CompactionPreparation,
-  compact,
-  generateSummary,
-  generateSummaryWithUsage,
-} from "../src/core/compaction/index.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type compactionTypes from "../src/core/compaction/index.types.ts";
 import compactionSummaryReasoning1Support from "./compaction-summary-reasoning-1-support.ts";
+
+const { compact, generateSummary, generateSummaryWithUsage } = compaction;
 
 const { createModel } = compactionSummaryReasoning1Support;
 
@@ -70,7 +68,7 @@ const messages: agentTypes.AgentMessage[] = [
 const preservesThePreviousSummaryWithoutAnEmpty = () =>
   runTest(
     Effect.gen(function* () {
-      const preparation: CompactionPreparation = {
+      const preparation: compactionTypes.CompactionPreparation = {
         fileOps: { edited: new Set(), read: new Set(), written: new Set() },
         firstKeptEntryId: "entry-keep",
         isSplitTurn: true,
@@ -114,7 +112,7 @@ const rejectsToolCallsFromSplitTurnSummaries = () =>
   runTest(
     Effect.gen(function* () {
       completeSimpleMock.mockResolvedValueOnce(mockToolCallResponse);
-      const preparation: CompactionPreparation = {
+      const preparation: compactionTypes.CompactionPreparation = {
         fileOps: { edited: new Set(), read: new Set(), written: new Set() },
         firstKeptEntryId: "entry-keep",
         isSplitTurn: true,
@@ -157,7 +155,7 @@ const rejectsALengthLimitedSplitTurnSummary = () =>
         content: [{ text: "partial", type: "text" as const }],
         stopReason: "length",
       });
-      const preparation: CompactionPreparation = {
+      const preparation: compactionTypes.CompactionPreparation = {
         fileOps: { edited: new Set(), read: new Set(), written: new Set() },
         firstKeptEntryId: "entry-keep",
         isSplitTurn: true,

@@ -1,29 +1,22 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI, Theme, ToolExecutionMode } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { BannerMessageComponent } from "./tic-tac-toe-banner.ts";
-import {
-  AGENT_CURSOR_HOME_COL,
-  AGENT_CURSOR_HOME_ROW,
-  type BoardDetails,
-  type GameState,
-  TicTacToeError,
-  boardToAscii,
-  checkWin,
-  getCell,
-  setCell,
-} from "./tic-tac-toe-game.ts";
+import type ticTacToeActionsTypes from "./tic-tac-toe-actions.types.ts";
+import BannerMessageComponent from "./tic-tac-toe-banner.ts";
+import TicTacToeError from "./tic-tac-toe-error.ts";
+import ticTacToeGame from "./tic-tac-toe-game.ts";
+import type ticTacToeGameTypes from "./tic-tac-toe-game.types.ts";
 
+const { AGENT_CURSOR_HOME_COL, AGENT_CURSOR_HOME_ROW, boardToAscii, checkWin, getCell, setCell } =
+  ticTacToeGame;
 const { StringEnum } = ai;
 
 const { Text } = tui;
 
-export type Action = "move_up" | "move_down" | "move_left" | "move_right" | "play";
-
-export const ACTION_DELAYS: Record<Action, number> = {
+const ACTION_DELAYS: Record<ticTacToeActionsTypes.Action, number> = {
   move_down: 300,
   move_left: 300,
   move_right: 300,
@@ -31,18 +24,9 @@ export const ACTION_DELAYS: Record<Action, number> = {
   play: 0,
 };
 
-export interface GameAccess {
-  readonly msa: ExtensionAPI;
-  readonly getState: () => GameState;
-  readonly syncComponent: () => void;
-  readonly save: () => void;
-  readonly setActive: (active: boolean) => void;
-  readonly emitGameOver: () => void;
-}
-
-export const applyAction = (request: {
-  readonly access: GameAccess;
-  readonly action: Action;
+const applyAction = (request: {
+  readonly access: ticTacToeActionsTypes.GameAccess;
+  readonly action: ticTacToeActionsTypes.Action;
 }): string => {
   const { access, action } = request;
   const gameState = access.getState();
@@ -64,7 +48,7 @@ export const applyAction = (request: {
   }
 };
 
-const playForAgent = (access: GameAccess): string => {
+const playForAgent = (access: ticTacToeActionsTypes.GameAccess): string => {
   const gameState = access.getState();
   if (gameState.status !== "playing") {
     throw new TicTacToeError({ message: `Game is over (${gameState.status}).` });
@@ -109,10 +93,10 @@ const playForAgent = (access: GameAccess): string => {
 const renderMoveResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   options: { expanded: boolean },
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
   context: { isError?: boolean } | undefined,
 ) => {
-  const details = result.details as BoardDetails | undefined;
+  const details = result.details as ticTacToeGameTypes.BoardDetails | undefined;
   const content = result.content[0];
   const message = content?.type === "text" ? (content.text ?? "") : "";
   const prefix =
@@ -125,7 +109,7 @@ const renderMoveResult = (
   return new Text(summary, 0, 0);
 };
 
-export const registerPlayTool = (access: GameAccess): void => {
+const registerPlayTool = (access: ticTacToeActionsTypes.GameAccess): void => {
   const { msa } = access;
   msa.registerTool({
     description:
@@ -141,12 +125,12 @@ export const registerPlayTool = (access: GameAccess): void => {
           access.save();
 
           return {
-            content: [{ type: "text" as const, text: result }],
-            details: access.getState() as unknown as BoardDetails,
+            content: [{ text: result, type: "text" as const }],
+            details: access.getState() as unknown as ticTacToeGameTypes.BoardDetails,
           };
         }),
       ),
-    executionMode: "sequential" as ToolExecutionMode,
+    executionMode: "sequential" as codingAgentTypes.ToolExecutionMode,
     label: "Tic-Tac-Toe",
     name: "tic_tac_toe",
     parameters: Type.Object({
@@ -172,7 +156,7 @@ export const registerPlayTool = (access: GameAccess): void => {
   });
 };
 
-const boardText = (state: GameState): string => {
+const boardText = (state: ticTacToeGameTypes.GameState): string => {
   const boardAscii = boardToAscii({
     agentCursorCol: state.agentCursorCol,
     agentCursorRow: state.agentCursorRow,
@@ -189,9 +173,9 @@ const boardText = (state: GameState): string => {
 const renderSeeBoardResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   options: { expanded: boolean },
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ) => {
-  const details = result.details as BoardDetails | undefined;
+  const details = result.details as ticTacToeGameTypes.BoardDetails | undefined;
   const summary =
     theme.fg("success", "\u2713 ") +
     theme.fg("muted", `cursor (${details?.agentCursorRow ?? 0},${details?.agentCursorCol ?? 0})`);
@@ -201,9 +185,9 @@ const renderSeeBoardResult = (
   return new Text(summary, 0, 0);
 };
 
-export const registerSeeBoardTool = (request: {
-  readonly access: GameAccess;
-  readonly getBoardDetails: () => BoardDetails;
+const registerSeeBoardTool = (request: {
+  readonly access: ticTacToeActionsTypes.GameAccess;
+  readonly getBoardDetails: () => ticTacToeGameTypes.BoardDetails;
 }): void => {
   const { access, getBoardDetails } = request;
 
@@ -213,7 +197,7 @@ export const registerSeeBoardTool = (request: {
     execute: (_toolCallId, _params, _signal, _onUpdate, _ctx) =>
       Effect.runPromise(
         Effect.sync(() => ({
-          content: [{ type: "text" as const, text: boardText(access.getState()) }],
+          content: [{ text: boardText(access.getState()), type: "text" as const }],
           details: getBoardDetails(),
         })),
       ),
@@ -227,3 +211,12 @@ export const registerSeeBoardTool = (request: {
     renderResult: renderSeeBoardResult,
   });
 };
+
+const ticTacToeActions = {
+  ACTION_DELAYS,
+  applyAction,
+  registerPlayTool,
+  registerSeeBoardTool,
+};
+
+export default ticTacToeActions;

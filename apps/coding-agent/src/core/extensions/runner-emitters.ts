@@ -1,13 +1,14 @@
-import { ContextEmitter } from "./runner-context-emitter.ts";
-import type { EmitHost } from "./runner-invoker.ts";
-import { LifecycleEmitter } from "./runner-lifecycle-emitter.ts";
-
-export interface Emitters {
-  lifecycle: LifecycleEmitter;
-  context: ContextEmitter;
-}
-
-export const createEmitters = (host: EmitHost): Emitters => ({
+import ContextEmitter from "./runner-context-emitter.ts";
+import type runnerEmittersTypes from "./runner-emitters.types.ts";
+import type runnerInvokerTypes from "./runner-invoker.types.ts";
+import LifecycleEmitter from "./runner-lifecycle-emitter.ts";
+const createEmitters = (host: runnerInvokerTypes.EmitHost): runnerEmittersTypes.Emitters => ({
   context: new ContextEmitter(host),
   lifecycle: new LifecycleEmitter(host),
 });
+
+const runnerEmitters = {
+  createEmitters,
+};
+
+export default runnerEmitters;

@@ -2,15 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  MemoryService,
-  type ResolvedMemorySettings,
-  resolveProjectName,
-} from "../src/core/memory/memory.ts";
-import { MemoryStore } from "../src/core/memory/store.ts";
-import { MemoryView } from "../src/modes/interactive/components/memory-view.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import memoryProject from "../src/core/memory/memory-project.ts";
+import MemoryService from "../src/core/memory/memory-service.ts";
+import MemoryStore from "../src/core/memory/memory-store.ts";
+import type memoryTypes from "../src/core/memory/memory.types.ts";
+import MemoryView from "../src/modes/interactive/components/memory-view.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { resolveProjectName } = memoryProject;
+const { initTheme } = themeModule;
+const { stripAnsi } = ansi;
 
 const { awaited, joinPath, makeTempDir, removeDirs, runTest } = testing;
 
@@ -20,9 +22,9 @@ const DOWN = "\x1b[B";
 const BASE_TIME = 1_700_000_000_000;
 
 const tempDirs: string[] = [];
-const services: MemoryService[] = [];
+const services: memoryTypes.MemoryService[] = [];
 
-const settingsFor = (dir: string): ResolvedMemorySettings => ({
+const settingsFor = (dir: string): memoryTypes.ResolvedMemorySettings => ({
   database: joinPath(dir, "memory.db"),
   embedding: {
     baseUrl: "http://127.0.0.1:1/v1",
@@ -40,10 +42,14 @@ beforeAll(() => {
   initTheme(undefined, false);
 });
 
-afterEach(() => {
-  for (const service of services.splice(0)) service.close();
-  return runTest(removeDirs(tempDirs.splice(0)));
-});
+afterEach(() =>
+  runTest(
+    Effect.andThen(
+      Effect.promise(() => Promise.all(services.splice(0).map((service) => service.close()))),
+      removeDirs(tempDirs.splice(0)),
+    ),
+  ),
+);
 
 const seedMemories = Effect.fn("seedMemories")(function* (
   dir: string,

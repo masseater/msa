@@ -5,11 +5,10 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
+import AuthStorage from "../../../src/core/auth-storage.ts";
+import ModelSelectorComponent from "../../../src/modes/interactive/components/model-selector.ts";
 import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
 import tuiKit from "../../tui-kit.ts";
-
 const { setKeybindings } = tuiModule;
 
 const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;

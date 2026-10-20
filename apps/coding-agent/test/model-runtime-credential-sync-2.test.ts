@@ -3,10 +3,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { CredentialSynchronizationError, ModelRuntime } from "../src/core/model-runtime.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import CredentialSynchronizationError from "../src/core/credential-synchronization-error.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
 import modelRuntimeCredentialSyncSupport from "./model-runtime-credential-sync-support.ts";
-
 const { makeGate, providers, runtimes } = modelRuntimeCredentialSyncSupport;
 
 const { abortController, awaited, runTest } = testing;

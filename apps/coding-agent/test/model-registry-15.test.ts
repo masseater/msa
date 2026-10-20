@@ -2,9 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { clearApiKeyCache } from "../src/core/model-registry.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import providerComposer from "../src/core/provider-composer.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+const { clearApiKeyCache } = providerComposer;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 
@@ -15,7 +17,7 @@ let tempDir: string;
 
 let modelsJsonPath: string;
 
-let authStorage: AuthStorage;
+let authStorage: authStorageTypes.AuthStorage;
 
 const writeRawModelsJson = (providers: Record<string, unknown>) =>
   writeJsonFile(modelsJsonPath, { providers });

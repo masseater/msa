@@ -1,21 +1,14 @@
 import { Stream } from "effect";
 
-interface FakeOpenAIClientOptions {
-  apiKey: string;
-  baseURL: string;
-  dangerouslyAllowBrowser: boolean;
-  defaultHeaders?: Record<string, string>;
-}
-
-interface CapturedCompletionsPayload {
-  prompt_cache_key?: string;
-  prompt_cache_retention?: "24h" | "in-memory" | null;
-  session_id?: string;
-}
+import type openaiCompletionsPromptCacheMockTypes from "./openai-completions-prompt-cache-mock.types.ts";
 
 const mockState = {
-  lastClientOptions: undefined as FakeOpenAIClientOptions | undefined,
-  lastParams: undefined as CapturedCompletionsPayload | undefined,
+  lastClientOptions: undefined as
+    | openaiCompletionsPromptCacheMockTypes.FakeOpenAIClientOptions
+    | undefined,
+  lastParams: undefined as
+    | openaiCompletionsPromptCacheMockTypes.CapturedCompletionsPayload
+    | undefined,
 };
 
 const finalChunk = {
@@ -31,7 +24,7 @@ const finalChunk = {
 class FakeOpenAI {
   chat = {
     completions: {
-      create: (params: CapturedCompletionsPayload) => {
+      create: (params: openaiCompletionsPromptCacheMockTypes.CapturedCompletionsPayload) => {
         mockState.lastParams = params;
         const stream = {
           [Symbol.asyncIterator]() {
@@ -51,7 +44,7 @@ class FakeOpenAI {
     },
   };
 
-  constructor(options: FakeOpenAIClientOptions) {
+  constructor(options: openaiCompletionsPromptCacheMockTypes.FakeOpenAIClientOptions) {
     mockState.lastClientOptions = options;
   }
 }

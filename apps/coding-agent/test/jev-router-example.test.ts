@@ -7,12 +7,12 @@ import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import jevRouter from "../examples/extensions/jev-router.ts";
-import {
-  VIRTUAL_MODEL_STATE_ENTRY,
-  type VirtualModelStateData,
-} from "../src/core/virtual-models.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
+
+const { VIRTUAL_MODEL_STATE_ENTRY } = codingAgent;
 
 const { createProvider, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
 
@@ -130,7 +130,10 @@ function setup(complex: number, tools: agentTypes.AgentTool[]) {
           .getBranch()
           .flatMap((entry) =>
             entry.type === "custom" && entry.customType === VIRTUAL_MODEL_STATE_ENTRY
-              ? [(entry.data as VirtualModelStateData<{ phase: string }>).state.phase]
+              ? [
+                  (entry.data as codingAgentTypes.VirtualModelStateData<{ phase: string }>).state
+                    .phase,
+                ]
               : [],
           );
       return yield* awaited({ dispatched, harness, phases, respond });

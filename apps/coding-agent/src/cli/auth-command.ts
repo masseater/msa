@@ -1,56 +1,37 @@
 import type aiTypes from "@msa/ai/index.types";
-import { Data } from "effect";
 import { dual } from "effect/Function";
 
-import { APP_NAME } from "../config.ts";
-import { writeLog } from "../core/platform.ts";
-import type { Args } from "./args.ts";
+import config from "../config.ts";
+import platform from "../core/platform.ts";
+import type argsTypes from "./args.types.ts";
+import AuthCommandError from "./auth-command-error.ts";
+import type authCommandTypes from "./auth-command.types.ts";
 
-export type AuthCommandKind = "check" | "api_key" | "bearer_token";
+const { APP_NAME } = config;
+const { writeLog } = platform;
 
-export interface AuthCommand {
-  kind: AuthCommandKind;
-  args: string[];
-  json: boolean;
-  credentials: boolean;
-  noRefresh: boolean;
-  minExpiryMs?: number;
-}
-
-export class AuthCommandError extends Data.TaggedError("AuthCommandError")<{
-  readonly message: string;
-}> {
-  constructor(message: string) {
-    super({ message });
-  }
-}
-
-const AUTH_COMMAND_USAGE: Record<AuthCommandKind, string> = {
+const AUTH_COMMAND_USAGE: Record<authCommandTypes.AuthCommandKind, string> = {
   api_key: `${APP_NAME} auth print-api-key --provider <provider> [--model <model>]`,
   bearer_token: `${APP_NAME} auth print-bearer-token --provider <provider> [--model <model>] [--min-expiry <duration>]`,
   check: `${APP_NAME} auth check --provider <provider> [--json] [--credentials] [--no-refresh]`,
 };
-
-export function getAuthCommandName(kind: AuthCommandKind): string {
+function getAuthCommandName(kind: authCommandTypes.AuthCommandKind): string {
   return kind === "check"
     ? "auth check"
     : kind === "api_key"
       ? "auth print-api-key"
       : "auth print-bearer-token";
 }
-
-export function getAuthCommandUsage(kind: AuthCommandKind): string {
+function getAuthCommandUsage(kind: authCommandTypes.AuthCommandKind): string {
   return AUTH_COMMAND_USAGE[kind];
 }
-
-export function isAuthCommandHelp(args: string[]): boolean {
+function isAuthCommandHelp(args: string[]): boolean {
   return (
     args[0] === "auth" &&
     (args[1] === undefined || args[1] === "help" || args.includes("--help") || args.includes("-h"))
   );
 }
-
-export function printAuthCommandHelp(): void {
+function printAuthCommandHelp(): void {
   writeLog(`Usage:
   msa auth print-api-key [--provider <provider>] [--model <model>]
   msa auth print-bearer-token [--provider <provider>] [--model <model>] [--min-expiry <duration>]
@@ -58,8 +39,7 @@ export function printAuthCommandHelp(): void {
 
 Auth commands require at least one of --provider or --model. Checks refresh expired OAuth credentials by default; --no-refresh prevents this. --credentials emits the credential, or includes it in JSON output.`);
 }
-
-export function parseAuthCommand(args: string[]): AuthCommand | undefined {
+function parseAuthCommand(args: string[]): authCommandTypes.AuthCommand | undefined {
   if (args[0] !== "auth") return undefined;
 
   const kind =
@@ -81,14 +61,12 @@ export function parseAuthCommand(args: string[]): AuthCommand | undefined {
     ? { kind, ...parsed.flags }
     : { kind, ...parsed.flags, minExpiryMs: parsed.minExpiryMs };
 }
-
 interface AuthCommandFlags {
   args: string[];
   json: boolean;
   credentials: boolean;
   noRefresh: boolean;
 }
-
 function parseMinExpiryMs(value: string | undefined): number {
   const match = value !== undefined && value !== "" ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : null;
   if (match === null)
@@ -97,10 +75,9 @@ function parseMinExpiryMs(value: string | undefined): number {
   const unit = match[2];
   return amount * (unit === "ms" ? 1 : unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000);
 }
-
 function parseAuthCommandOptions(
   args: string[],
-  kind: AuthCommandKind,
+  kind: authCommandTypes.AuthCommandKind,
 ): { flags: AuthCommandFlags; minExpiryMs?: number } {
   const flags: AuthCommandFlags = { args: [], credentials: false, json: false, noRefresh: false };
   let minExpiryMs: number | undefined;
@@ -124,10 +101,9 @@ function parseAuthCommandOptions(
   }
   return minExpiryMs === undefined ? { flags } : { flags, minExpiryMs };
 }
-
 function validateAuthCommandArgsImpl(
-  args: Args,
-  kind: AuthCommandKind,
+  args: argsTypes.Args,
+  kind: authCommandTypes.AuthCommandKind,
 ): { provider?: string | undefined; model?: string | undefined } {
   const provider = args.provider?.trim() || undefined;
   const model = args.model?.trim() || undefined;
@@ -151,18 +127,16 @@ function validateAuthCommandArgsImpl(
   }
   return { model, provider };
 }
-
-export const validateAuthCommandArgs: {
+const validateAuthCommandArgs: {
   (
-    args: Args,
-    kind: AuthCommandKind,
+    args: argsTypes.Args,
+    kind: authCommandTypes.AuthCommandKind,
   ): { provider?: string | undefined; model?: string | undefined };
   (
-    kind: AuthCommandKind,
-  ): (args: Args) => { provider?: string | undefined; model?: string | undefined };
+    kind: authCommandTypes.AuthCommandKind,
+  ): (args: argsTypes.Args) => { provider?: string | undefined; model?: string | undefined };
 } = dual((args: IArguments) => args.length >= 2, validateAuthCommandArgsImpl);
-
-export function getAuthCredential(auth: aiTypes.AuthResult | undefined): string | undefined {
+function getAuthCredential(auth: aiTypes.AuthResult | undefined): string | undefined {
   if (auth?.auth.apiKey !== undefined && auth?.auth.apiKey !== "") return auth.auth.apiKey;
   const authorization = Object.entries(auth?.auth.headers ?? {}).find(
     ([name]) => name.toLowerCase() === "authorization",
@@ -171,3 +145,15 @@ export function getAuthCredential(auth: aiTypes.AuthResult | undefined): string 
     ? /^Bearer\s+(.+)$/iu.exec(authorization)?.[1]
     : undefined;
 }
+
+const authCommand = {
+  getAuthCommandName,
+  getAuthCommandUsage,
+  getAuthCredential,
+  isAuthCommandHelp,
+  parseAuthCommand,
+  printAuthCommandHelp,
+  validateAuthCommandArgs,
+};
+
+export default authCommand;

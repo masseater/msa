@@ -1,9 +1,11 @@
 import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ResourceDiagnostic } from "../src/core/diagnostics.ts";
-import { loadSkillsFromDir } from "../src/core/skills.ts";
+import type diagnosticsTypes from "../src/core/diagnostics.ts";
+import skillsModule from "../src/core/skills.ts";
 import skillsSupport from "./skills-support.ts";
+
+const { loadSkillsFromDir } = skillsModule;
 
 const { fixturesDir } = skillsSupport;
 
@@ -31,7 +33,7 @@ const shouldAllowNamesThatDonTMatch = () => {
   expect(skills).toHaveLength(1);
   expect(skills[0]?.name).toBe("different-name");
   expect(
-    diagnostics.some((d: ResourceDiagnostic) =>
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
       d.message.includes("does not match parent directory"),
     ),
   ).toBe(false);
@@ -45,7 +47,9 @@ const shouldWarnWhenNameContainsInvalidCharacters = () => {
 
   expect(skills).toHaveLength(1);
   expect(
-    diagnostics.some((d: ResourceDiagnostic) => d.message.includes("invalid characters")),
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("invalid characters"),
+    ),
   ).toBe(true);
 };
 
@@ -57,7 +61,9 @@ const shouldWarnWhenNameExceeds64Characters = () => {
 
   expect(skills).toHaveLength(1);
   expect(
-    diagnostics.some((d: ResourceDiagnostic) => d.message.includes("exceeds 64 characters")),
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("exceeds 64 characters"),
+    ),
   ).toBe(true);
 };
 
@@ -69,7 +75,9 @@ const shouldWarnAndSkipSkillWhenDescription = () => {
 
   expect(skills).toHaveLength(0);
   expect(
-    diagnostics.some((d: ResourceDiagnostic) => d.message.includes("description is required")),
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("description is required"),
+    ),
   ).toBe(true);
 };
 
@@ -114,7 +122,9 @@ const shouldSkipFilesWithoutFrontmatter = () => {
 
   expect(skills).toHaveLength(0);
   expect(
-    diagnostics.some((d: ResourceDiagnostic) => d.message.includes("description is required")),
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("description is required"),
+    ),
   ).toBe(true);
 };
 
@@ -125,7 +135,9 @@ const shouldWarnAndSkipSkillWhenYaml = () => {
   });
 
   expect(skills).toHaveLength(0);
-  expect(diagnostics.some((d: ResourceDiagnostic) => d.message.includes("at line"))).toBe(true);
+  expect(
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) => d.message.includes("at line")),
+  ).toBe(true);
 };
 
 const shouldPreserveMultilineDescriptionsFromYaml = () => {
@@ -148,7 +160,9 @@ const shouldWarnWhenNameContainsConsecutiveHyphens = () => {
 
   expect(skills).toHaveLength(1);
   expect(
-    diagnostics.some((d: ResourceDiagnostic) => d.message.includes("consecutive hyphens")),
+    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+      d.message.includes("consecutive hyphens"),
+    ),
   ).toBe(true);
 };
 

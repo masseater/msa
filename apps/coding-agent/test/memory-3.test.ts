@@ -2,10 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { EmbeddingClient } from "../src/core/memory/embeddings.ts";
-import { parseMemoryCommand } from "../src/core/memory/memory.ts";
+import EmbeddingClient from "../src/core/memory/embeddings.ts";
+import memoryFormat from "../src/core/memory/memory-format.ts";
 import memorySupport from "./memory-support.ts";
 
+const { parseMemoryCommand } = memoryFormat;
 const { awaited, joinPath, runTest } = testing;
 
 const { cleanup, embeddingServer, embeddingSettings, makeWorkspace, openService, settings } =

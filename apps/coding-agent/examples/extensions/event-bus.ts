@@ -1,8 +1,8 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-export default function (msa: ExtensionAPI) {
-  let currentCtx: ExtensionContext | undefined;
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  let currentCtx: codingAgentTypes.ExtensionContext | undefined;
 
   msa.on("session_start", (_event, ctx) => {
     currentCtx = ctx;

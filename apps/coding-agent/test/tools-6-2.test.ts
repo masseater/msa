@@ -2,20 +2,25 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
-import { createEditToolDefinition } from "../src/core/tools/edit.ts";
-import { createGrepToolDefinition } from "../src/core/tools/grep.ts";
-import { createReadToolDefinition } from "../src/core/tools/read.ts";
-import { createWriteToolDefinition } from "../src/core/tools/write.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import edit from "../src/core/tools/edit.ts";
+import grep from "../src/core/tools/grep.ts";
+import read from "../src/core/tools/read.ts";
+import write from "../src/core/tools/write.ts";
 import tools6Support from "./tools-6-support.ts";
+
+const { createReadToolDefinition } = read;
+const { createWriteToolDefinition } = write;
+const { createEditToolDefinition } = edit;
+const { createGrepToolDefinition } = grep;
 
 const { getTextOutput } = tools6Support;
 
 const { awaited, joinPath, makeTempDir, readTextFile, removePath, runTest, writeTextFile } =
   testing;
 
-function fakeCtx(cwd: string): ExtensionToolContext {
-  return { cwd } as ExtensionToolContext;
+function fakeCtx(cwd: string): extensionsTypesTypes.ExtensionToolContext {
+  return { cwd } as extensionsTypesTypes.ExtensionToolContext;
 }
 
 let testDir = "";

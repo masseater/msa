@@ -1,14 +1,16 @@
-import {
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Console, Effect } from "effect";
+
+const {
   DefaultResourceLoader,
-  type PromptTemplate,
   SessionManager,
   createAgentSession,
   createSyntheticSourceInfo,
   getAgentDir,
-} from "@msa/coding-agent";
-import { Console, Effect } from "effect";
+} = codingAgent;
 
-const deployTemplate: PromptTemplate = {
+const deployTemplate: codingAgentTypes.PromptTemplate = {
   content: `# Deploy Instructions
 
 1. Build: npm run build
@@ -24,21 +26,28 @@ const loader = new DefaultResourceLoader({
   agentDir: getAgentDir(),
   cwd: process.cwd(),
   promptsOverride: (current) => ({
-    prompts: [...current.prompts, deployTemplate],
     diagnostics: current.diagnostics,
+    prompts: [...current.prompts, deployTemplate],
   }),
 });
-await loader.reload();
 
-const discovered = loader.getPrompts().prompts;
-Effect.runSync(Console.log("Discovered prompt templates:"));
-for (const template of discovered) {
-  Effect.runSync(Console.log(`  /${template.name}: ${template.description}`));
-}
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => loader.reload());
 
-const { session } = await createAgentSession({
-  resourceLoader: loader,
-  sessionManager: SessionManager.inMemory(),
-});
-Effect.runSync(Console.log(`Session created with ${discovered.length + 1} prompt templates`));
-session.dispose();
+    const discovered = loader.getPrompts().prompts;
+    yield* Console.log("Discovered prompt templates:");
+    for (const template of discovered) {
+      yield* Console.log(`  /${template.name}: ${template.description}`);
+    }
+
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader: loader,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log(`Session created with ${discovered.length + 1} prompt templates`);
+    session.dispose();
+  }),
+);

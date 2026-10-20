@@ -2,12 +2,17 @@ import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { getReadmePath } from "../src/config.ts";
-import { createReadToolDefinition } from "../src/core/tools/read.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import config from "../src/config.ts";
+import read from "../src/core/tools/read.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+
+const { getReadmePath } = config;
+const { createReadToolDefinition } = read;
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { resetCapabilitiesCache } = tui;
 

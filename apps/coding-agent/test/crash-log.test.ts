@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { findExtensionStackMatches } from "../src/core/crash-log.ts";
+import crashLog from "../src/core/crash-log.ts";
+
+const { findExtensionStackMatches } = crashLog;
 
 type StackExtension = Parameters<typeof findExtensionStackMatches>[1][number];
 

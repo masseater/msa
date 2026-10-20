@@ -1,19 +1,7 @@
-import { ThemedText } from "./themed-text.ts";
+import type expandableTextTypes from "./expandable-text.types.ts";
+import ThemedText from "./themed-text.ts";
 
-export interface Expandable {
-  setExpanded(expanded: boolean): void;
-}
-
-export function isExpandable(obj: unknown): obj is Expandable {
-  return (
-    typeof obj === "object" &&
-    obj !== null &&
-    "setExpanded" in obj &&
-    typeof obj.setExpanded === "function"
-  );
-}
-
-export class ExpandableText extends ThemedText implements Expandable {
+export default class ExpandableText extends ThemedText implements expandableTextTypes.Expandable {
   private readonly state: { expanded: boolean };
 
   constructor(

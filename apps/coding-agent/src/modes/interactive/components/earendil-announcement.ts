@@ -1,12 +1,14 @@
-import * as fs from "node:fs";
-
 import tui from "@msa/tui";
 
-import { getBundledInteractiveAssetPath } from "../../../config.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
+import config from "../../../config.ts";
+import nodeFs from "../../../core/platform/node/fs.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
 
-const { Container, Image, Spacer, Text } = tui;
+const { getBundledInteractiveAssetPath } = config;
+const { theme } = themeModule;
+
+const { Image, Spacer, Text } = tui;
 
 const BLOG_URL = "https://mariozechner.at/posts/2026-04-08-ive-sold-out/";
 const IMAGE_FILENAME = "clankolas.png";
@@ -21,7 +23,7 @@ function loadImageBase64(): string | undefined {
 
   attemptedImageLoad = true;
   try {
-    cachedImageBase64 = fs
+    cachedImageBase64 = nodeFs
       .readFileSync(getBundledInteractiveAssetPath(IMAGE_FILENAME))
       .toString("base64");
   } catch {
@@ -30,7 +32,7 @@ function loadImageBase64(): string | undefined {
   return cachedImageBase64;
 }
 
-export class EarendilAnnouncementComponent extends Container {
+export default class EarendilAnnouncementComponent extends tui.Container {
   constructor() {
     super();
 

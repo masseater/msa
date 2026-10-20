@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import SessionImpl from "../src/session/session.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import sessionDocumentRetentionSupport from "./session-document-retention-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
@@ -13,7 +14,7 @@ const { defineDoc, defineDocFamily } = durable;
 
 const { awaited } = effectSupport;
 const { CounterDoc, bump, open, settleLine } = sessionDocumentRetentionSupport;
-const { ControlledStorage, context, createConversation } = sessionSupport;
+const { context, createConversation } = sessionSupport;
 const { eventually } = taskSupport;
 
 const RewindableDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({

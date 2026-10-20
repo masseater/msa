@@ -3,10 +3,9 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { DefaultPackageManager } from "../../../src/core/package-manager.ts";
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
+import DefaultPackageManager from "../../../src/core/default-package-manager.ts";
+import SettingsManager from "../../../src/core/settings-manager.ts";
 import harnessModule from "../harness.ts";
-
 const { createHarness } = harnessModule;
 
 const { joinPath, toJsonText } = testing;

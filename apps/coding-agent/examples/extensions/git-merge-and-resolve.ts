@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -35,7 +35,7 @@ const collectBlocks = (file: string, content: string): ConflictBlock[] => {
   return blocks;
 };
 
-const findConflicts = (msa: ExtensionAPI, cwd: string) =>
+const findConflicts = (msa: codingAgentTypes.ExtensionAPI, cwd: string) =>
   Effect.gen(function* () {
     const { stdout, code } = yield* Effect.promise(() =>
       msa.exec("git", ["diff", "--name-only", "--diff-filter=U"]),
@@ -71,10 +71,11 @@ function formatConflicts(ref: string, blocks: ConflictBlock[]): string {
   return lines.join("\n");
 }
 
-const git = (msa: ExtensionAPI, args: string[]) => Effect.promise(() => msa.exec("git", args));
+const git = (msa: codingAgentTypes.ExtensionAPI, args: string[]) =>
+  Effect.promise(() => msa.exec("git", args));
 
 const findMergeRef = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   ctx: { cwd: string; ui: { notify: (m: string, l: "info" | "warning") => void } },
 ) =>
   Effect.gen(function* () {
@@ -109,7 +110,7 @@ const findMergeRef = (
     return mergeCode === 0 ? undefined : ref;
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("agent_end", (_event, ctx) =>
     runtime.runPromise(
       Effect.gen(function* () {

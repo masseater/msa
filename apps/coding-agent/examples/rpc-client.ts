@@ -1,6 +1,9 @@
 import { fileURLToPath } from "node:url";
 
-import { RpcClient } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import { Effect } from "effect";
+
+const { RpcClient } = codingAgent;
 
 const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
 
@@ -19,11 +22,15 @@ const unsubscribe = client.onEvent((event) => {
   }
 });
 
-try {
-  await client.start();
-  await client.promptAndWait(prompt);
-  process.stdout.write("\n");
-} finally {
-  unsubscribe();
-  await client.stop();
-}
+void Effect.runPromise(
+  Effect.gen(function* () {
+    try {
+      yield* Effect.promise(() => client.start());
+      yield* Effect.promise(() => client.promptAndWait(prompt));
+      process.stdout.write("\n");
+    } finally {
+      unsubscribe();
+      yield* Effect.promise(() => client.stop());
+    }
+  }),
+);

@@ -1,10 +1,14 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-import { registerEffectCommands } from "./overlay-qa/commands-effects.ts";
-import { registerLayoutCommands } from "./overlay-qa/commands-layout.ts";
-import { registerOverflowCommand } from "./overlay-qa/commands-overflow.ts";
+import commandsEffects from "./overlay-qa/commands-effects.ts";
+import commandsLayout from "./overlay-qa/commands-layout.ts";
+import commandsOverflow from "./overlay-qa/commands-overflow.ts";
 
-export default function (msa: ExtensionAPI) {
+const { registerLayoutCommands } = commandsLayout;
+const { registerEffectCommands } = commandsEffects;
+const { registerOverflowCommand } = commandsOverflow;
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   registerLayoutCommands(msa);
   registerEffectCommands(msa);
   registerOverflowCommand(msa);

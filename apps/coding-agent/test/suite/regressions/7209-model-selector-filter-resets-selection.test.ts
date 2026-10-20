@@ -3,13 +3,17 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../../../src/core/keybindings.ts";
-import { ModelSelectorComponent } from "../../../src/modes/interactive/components/model-selector.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../../../src/utils/ansi.ts";
+import KeybindingsManager from "../../../src/core/keybindings-manager.ts";
+import codingAgent from "../../../src/index.ts";
+import type modelSelectorTypes from "../../../src/modes/interactive/components/model-selector.types.ts";
+import ansi from "../../../src/utils/ansi.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { ModelSelectorComponent } = codingAgent;
+const { initTheme } = codingAgent;
+
+const { stripAnsi } = ansi;
 const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;
@@ -60,7 +64,7 @@ const movesSelectionToTheFirstRow = Effect.gen(function* () {
   return yield* movesSelectionToTheFirstRowStep1(selector);
 });
 
-const movesSelectionToTheFirstRowStep1 = (selector: ModelSelectorComponent) =>
+const movesSelectionToTheFirstRowStep1 = (selector: modelSelectorTypes.ModelSelectorComponent) =>
   Effect.sync(() => {
     selector.handleInput("\x1b[B");
     expect(selectedModelId(stripAnsi(selector.render(120).join("\n")))).toBe("alpha-3");

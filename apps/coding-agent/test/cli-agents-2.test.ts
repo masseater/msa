@@ -2,7 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
+import claudeAccounts from "../src/core/cli-agents/claude-accounts.ts";
+import claudeService from "../src/core/cli-agents/claude-service.ts";
+import cliAgentsSupport from "./cli-agents-support.ts";
+
+const {
   addAccount,
   authStatus,
   blockIfUnusable,
@@ -12,9 +16,8 @@ import {
   preferAccount,
   removeAccount,
   setAutoRotation,
-} from "../src/core/cli-agents/claude-accounts.ts";
-import { claudeCodeService } from "../src/core/cli-agents/claude-service.ts";
-import cliAgentsSupport from "./cli-agents-support.ts";
+} = claudeAccounts;
+const { claudeCodeService } = claudeService;
 
 const {
   abortController,

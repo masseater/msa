@@ -2,8 +2,10 @@ import { Effect, ManagedRuntime, Schema } from "effect";
 import { FetchHttpClient, HttpBody, HttpClient, HttpClientRequest } from "effect/http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type AcmeServer,
+import acmeServer from "../evals/acme-server.ts";
+import type acmeServerTypes from "../evals/acme-server.types.ts";
+
+const {
   OPENAI_MODEL_ID,
   OPENAI_PROBE_PROMPT,
   OPENAI_PROBE_RESPONSE,
@@ -11,11 +13,11 @@ import {
   STREAM_PROBE_PROMPT,
   STREAM_PROBE_RESPONSE,
   createAcmeServer,
-} from "../evals/acme-server.ts";
+} = acmeServer;
 
 type Fixture = {
   mode: "openai" | "stream";
-  url: (server: AcmeServer) => string;
+  url: (server: acmeServerTypes.AcmeServer) => string;
   headers: Record<string, string>;
   unauthorizedHeaders: Record<string, string>;
   model: string;
@@ -54,7 +56,7 @@ const fixtures: Fixture[] = [
 ];
 
 function body(model: string, prompt: string, stream = true) {
-  return { messages: [{ role: "user", content: prompt }], model, stream };
+  return { messages: [{ content: prompt, role: "user" }], model, stream };
 }
 
 const encodeJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
@@ -112,7 +114,7 @@ function streamedText(mode: Fixture["mode"], raw: string): string {
 
 const run = (effect: Effect.Effect<void>) => Effect.runPromise(effect);
 
-function acceptanceTests(fixture: Fixture, server: AcmeServer) {
+function acceptanceTests(fixture: Fixture, server: acmeServerTypes.AcmeServer) {
   it("accepts the probe request and records it", () =>
     run(
       Effect.gen(function* () {
@@ -152,7 +154,7 @@ function acceptanceTests(fixture: Fixture, server: AcmeServer) {
     ));
 }
 
-function rejectionTests(fixture: Fixture, server: AcmeServer) {
+function rejectionTests(fixture: Fixture, server: acmeServerTypes.AcmeServer) {
   it("rejects a bad credential with 401 and does not record a probe", () =>
     run(
       Effect.gen(function* () {

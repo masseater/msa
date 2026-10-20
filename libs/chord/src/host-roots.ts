@@ -10,10 +10,10 @@ import type hostTypesModule from "./host-types.types.ts";
 import type objectTypes from "./object.types.ts";
 import type typesModule from "./types.types.ts";
 
-const { CtxImpl, errors: errorsModule, HostBase } = hostRootsKit;
+const { CtxImpl, errors: errorsModule } = hostRootsKit;
 
 const { ChordError, runAll } = errorsModule;
-export default abstract class HostRoots extends HostBase {
+export default abstract class HostRoots extends hostRootsKit.HostBase {
   readonly #local = new Set<string>();
   readonly #foreign = new Map<string, Set<connectionTypes.Connection>>();
   readonly #rootLinks = new Map<string, Set<connectionTypes.Connection>>();

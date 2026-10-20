@@ -5,12 +5,13 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession } from "../src/core/agent-session.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import type sessionKitTypes from "./session-kit.types.ts";
 import utilities from "./utilities.ts";
+
+const { AgentSession, SessionManager, SettingsManager } = codingAgent;
 
 const { createAssistantMessageEventStream, getModel } = compat;
 
@@ -161,14 +162,17 @@ const createAgentSession = Effect.fn("createAgentSession")(function* (
   return { agent, session, sessionManager, settingsManager };
 });
 
-const waitForStreaming = (session: AgentSession): Effect.Effect<void> =>
+const waitForStreaming = (session: codingAgentTypes.AgentSession): Effect.Effect<void> =>
   pollUntil(
     Effect.sync(() => session.isStreaming),
     1000,
     5,
   );
 
-const disposeWorkspace = (session: AgentSession | undefined, dir: string): Effect.Effect<void> =>
+const disposeWorkspace = (
+  session: codingAgentTypes.AgentSession | undefined,
+  dir: string,
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     session?.dispose();
     if (dir.length > 0) yield* removePath(dir);

@@ -6,6 +6,7 @@ import { Effect } from "effect";
 
 import harnessModule from "../src/harness/harness.ts";
 import session from "../src/session/session-state.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
@@ -15,7 +16,7 @@ const { contained: containedModule } = session;
 const { safeNow: safeNowModule } = harnessModule;
 
 const { awaited } = effectSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 const { aborted, deferred, openTasks } = taskSupport;
 
 const signals: string[] = [];

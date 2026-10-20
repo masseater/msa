@@ -3,13 +3,15 @@ import testing from "@msa/testing";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ToolNamespace } from "../src/core/extensions/types.ts";
-import { createCodemodeDescription } from "../src/extensions/codemode/tool.ts";
-import {
-  Bm25Ranker,
-  createToolSearchDocument,
-  tokenize,
-} from "../src/extensions/tool-search/tool.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import codemodeTool from "../src/extensions/codemode/tool.ts";
+import Bm25Ranker from "../src/extensions/tool-search/bm-25-ranker.ts";
+import tokenizeModule from "../src/extensions/tool-search/tokenize.ts";
+import toolModule from "../src/extensions/tool-search/tool.ts";
+
+const { createToolSearchDocument } = toolModule;
+const { tokenize } = tokenizeModule;
+const { createCodemodeDescription } = codemodeTool;
 
 const { awaited, runTest } = testing;
 
@@ -109,7 +111,7 @@ const docs = [
 
 const all = [plain, ...github, ...docs];
 
-const namespaces = new Map<string, ToolNamespace>([
+const namespaces = new Map<string, extensionsTypesTypes.ToolNamespace>([
   ...github.map(
     (entry) => [entry.name, { description: "GitHub server", name: "mcp__github" }] as const,
   ),

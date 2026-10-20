@@ -2,9 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { DEFAULT_HTTP_IDLE_TIMEOUT_MS } from "../src/core/http-dispatcher.ts";
-import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
+import httpDispatcher from "../src/core/http-dispatcher.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import settingsManagerSupport from "./settings-manager-support.ts";
+const { DEFAULT_HTTP_IDLE_TIMEOUT_MS } = httpDispatcher;
 
 const { readSettings, removeSettingsDirs, withSettings } = settingsManagerSupport;
 
@@ -131,7 +133,7 @@ const shouldCreateMsaFolderWhenWritingProject = () =>
   );
 
 const mapsExplicitValuesAndOmitsAutoValues = () => {
-  const getOverrides = (terminal: NonNullable<Settings["terminal"]>) =>
+  const getOverrides = (terminal: NonNullable<settingsManagerTypes.Settings["terminal"]>) =>
     SettingsManager.inMemory({ terminal }).getTerminalCapabilityOverrides();
 
   expect(getOverrides({ hyperlinks: false, images: false, trueColor: false })).toEqual({

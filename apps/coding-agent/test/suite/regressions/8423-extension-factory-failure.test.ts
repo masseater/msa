@@ -2,24 +2,24 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createEventBus } from "../../../src/core/event-bus.ts";
-import {
-  createExtensionRuntime,
-  loadExtensionFromFactory,
-} from "../../../src/core/extensions/loader.ts";
-import type { ExtensionAPI, ProviderConfig } from "../../../src/core/extensions/types.ts";
+import eventBusModule from "../../../src/core/event-bus.ts";
+import loader from "../../../src/core/extensions/loader.ts";
+import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
+
+const { createExtensionRuntime, loadExtensionFromFactory } = loader;
+const { createEventBus } = eventBusModule;
 
 const { gate } = testing;
 
 const providerConfig = {
   apiKey: "provider-test-key",
   baseUrl: "https://provider.test/v1",
-} satisfies ProviderConfig;
+} satisfies extensionsTypesTypes.ProviderConfig;
 
 const discardsRuntimeChangesAndDisablesThe = Effect.gen(function* () {
   const runtime = createExtensionRuntime();
   const eventBus = createEventBus();
-  let capturedApi: ExtensionAPI | undefined;
+  let capturedApi: extensionsTypesTypes.ExtensionAPI | undefined;
   let eventCalls = 0;
   let flagDuringLoad: boolean | string | undefined;
 

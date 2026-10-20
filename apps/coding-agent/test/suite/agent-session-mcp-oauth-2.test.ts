@@ -2,14 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
-import { runMcpCommand } from "../../src/extensions/mcp/cli.ts";
-import { McpOAuthCredentialStore } from "../../src/extensions/mcp/oauth.ts";
+import InMemoryAuthStorageBackend from "../../src/core/in-memory-auth-storage-backend.ts";
+import cli from "../../src/extensions/mcp/cli.ts";
+import McpOAuthCredentialStore from "../../src/extensions/mcp/mcp-oauth-credential-store.ts";
 import agentSessionMcpOauthHarness from "./agent-session-mcp-oauth-harness.ts";
 import agentSessionMcpOauthSupport from "./agent-session-mcp-oauth-support.ts";
 import harnessModule from "./harness.ts";
 import mcpOauthServer from "./mcp-oauth-server.ts";
 
+const { runMcpCommand } = cli;
 const { callWhoami, freePort } = agentSessionMcpOauthSupport;
 
 const { startOAuthMcpServer } = mcpOauthServer;

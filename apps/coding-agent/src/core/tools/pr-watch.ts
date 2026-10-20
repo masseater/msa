@@ -1,12 +1,17 @@
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import { readOnlyVariantOf } from "../ask.ts";
-import type { AgentToolResult, ToolDefinition } from "../extensions/types.ts";
-import type { PrWatch } from "../pr-watch/service.ts";
-import type { PrWatchTarget } from "../pr-watch/snapshot.ts";
-import { describePrWatchStatus } from "../pr-watch/summary.ts";
-import { prWatchKey, prWatchLabel } from "../pr-watch/watch.ts";
+import ask from "../ask.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type serviceTypes from "../pr-watch/service.types.ts";
+import type snapshotTypes from "../pr-watch/snapshot.types.ts";
+import summary from "../pr-watch/summary.ts";
+import watchModule from "../pr-watch/watch.ts";
+import type prWatchTypes from "./pr-watch.types.ts";
+
+const { prWatchKey, prWatchLabel } = watchModule;
+const { describePrWatchStatus } = summary;
+const { readOnlyVariantOf } = ask;
 
 const prWatchSchema = Type.Object({
   action: Type.Union([Type.Literal("watch"), Type.Literal("stop"), Type.Literal("list")], {
@@ -34,14 +39,7 @@ const prWatchReadSchema = Type.Object({
   }),
 });
 
-export type PrWatchToolInput = Static<typeof prWatchSchema>;
-
-export interface PrWatchToolDetails {
-  readonly action: string;
-  readonly watching: readonly string[];
-}
-
-export const prWatchToolSystemPromptContribution = {
+const prWatchToolSystemPromptContribution = {
   guidelines: [
     "Use pr_watch instead of polling a pull request with gh: it returns immediately and reports each change once",
   ],
@@ -51,16 +49,16 @@ export const prWatchToolSystemPromptContribution = {
 
 const MIN_INTERVAL_MS = 5_000;
 
-function targetFromInput(input: PrWatchToolInput): PrWatchTarget {
+function targetFromInput(input: prWatchTypes.PrWatchToolInput): snapshotTypes.PrWatchTarget {
   const number = input.number;
   if (number === undefined || !Number.isInteger(number) || number <= 0) {
     throw new Error(`action ${input.action} requires a pull request number`);
   }
   const repository = input.repository?.trim();
-  return repository ? { number, repository } : { number };
+  return repository !== undefined && repository !== "" ? { number, repository } : { number };
 }
 
-function intervalFromInput(input: PrWatchToolInput): number | undefined {
+function intervalFromInput(input: prWatchTypes.PrWatchToolInput): number | undefined {
   const value = input.intervalSeconds;
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value <= 0) {
@@ -73,7 +71,10 @@ function seconds(intervalMs: number): number {
   return Math.round(intervalMs / 1000);
 }
 
-function describeWatch(service: PrWatch, input: PrWatchToolInput): string {
+function describeWatch(
+  service: serviceTypes.PrWatch,
+  input: prWatchTypes.PrWatchToolInput,
+): string {
   const target = targetFromInput(input);
   const outcome = service.watch(target, intervalFromInput(input));
   const entry = outcome.entry;
@@ -83,23 +84,29 @@ function describeWatch(service: PrWatch, input: PrWatchToolInput): string {
   return `Watching ${entry.label} every ${seconds(entry.intervalMs)}s`;
 }
 
-function describeStop(service: PrWatch, input: PrWatchToolInput): string {
+function describeStop(service: serviceTypes.PrWatch, input: prWatchTypes.PrWatchToolInput): string {
   const target = targetFromInput(input);
   const label = prWatchLabel(target);
   return service.stop(target) ? `Stopped watching ${label}` : `Not watching ${label}`;
 }
 
-function describeList(service: PrWatch): string {
+function describeList(service: serviceTypes.PrWatch): string {
   return describePrWatchStatus(service.snapshot()).join("\n");
 }
 
-export function createPrWatchToolDefinition(
-  service: PrWatch,
-): ToolDefinition<typeof prWatchSchema, PrWatchToolDetails> {
-  const prWatch: ToolDefinition<typeof prWatchSchema, PrWatchToolDetails> = {
+function createPrWatchToolDefinition(
+  service: serviceTypes.PrWatch,
+): extensionsTypesTypes.ToolDefinition<typeof prWatchSchema, prWatchTypes.PrWatchToolDetails> {
+  const prWatch: extensionsTypesTypes.ToolDefinition<
+    typeof prWatchSchema,
+    prWatchTypes.PrWatchToolDetails
+  > = {
     description:
       "Watch a GitHub pull request in the background through the gh CLI and report changes to this session: CI finished, a review arrived, it was merged or closed, or it conflicts with its base. Registering returns at once, and registering the same pull request twice keeps one watch. Watches live and die with this session.",
-    execute(_toolCallId, params): Promise<AgentToolResult<PrWatchToolDetails>> {
+    execute(
+      _toolCallId,
+      params,
+    ): Promise<extensionsTypesTypes.AgentToolResult<prWatchTypes.PrWatchToolDetails>> {
       return Effect.runPromise(
         Effect.sync(() => {
           const text =
@@ -109,7 +116,7 @@ export function createPrWatchToolDefinition(
                 ? describeStop(service, params)
                 : describeWatch(service, params);
           return {
-            content: [{ type: "text" as const, text }],
+            content: [{ text, type: "text" as const }],
             details: {
               action: params.action,
               watching: service.snapshot().entries.map((entry) => prWatchKey(entry.target)),
@@ -135,3 +142,11 @@ export function createPrWatchToolDefinition(
     }),
   };
 }
+
+const prWatch = {
+  createPrWatchToolDefinition,
+  prWatchSchema,
+  prWatchToolSystemPromptContribution,
+};
+
+export default prWatch;

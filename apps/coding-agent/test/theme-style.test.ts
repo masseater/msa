@@ -5,7 +5,11 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { loadThemeFromPath, setTerminalColors } from "../src/modes/interactive/theme/theme.ts";
+import terminalColors from "../src/modes/interactive/theme/terminal-colors.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { loadThemeFromPath } = themeModule;
+const { setTerminalColors } = terminalColors;
 
 const { colorToHex, okhslColor, styleText } = tui;
 

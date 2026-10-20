@@ -1,8 +1,10 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import type { PlanRuntime } from "./state.ts";
-import { isSafeCommand } from "./utils.ts";
+import type stateTypes from "./state.types.ts";
+import utils from "./utils.ts";
+
+const { isSafeCommand } = utils;
 
 const PLAN_MODE_PROMPT = `[PLAN MODE ACTIVE]
 You are in plan mode - a read-only exploration mode for safe code analysis.
@@ -24,9 +26,7 @@ Plan:
 
 Do NOT attempt to make changes - just describe what you would do.`;
 
-export const executionPrompt = (
-  todoList: string,
-): string => `[EXECUTING PLAN - Full tool access enabled]
+const executionPrompt = (todoList: string): string => `[EXECUTING PLAN - Full tool access enabled]
 
 Remaining steps:
 ${todoList}
@@ -34,8 +34,8 @@ ${todoList}
 Execute each step in order.
 After completing a step, include a [DONE:n] tag in your response.`;
 
-export const guardBash =
-  (runtime: PlanRuntime) =>
+const guardBash =
+  (runtime: stateTypes.PlanRuntime) =>
   (toolName: string, command: string): { block: true; reason: string } | undefined => {
     if (!runtime.enabled || toolName !== "bash") return undefined;
     if (isSafeCommand(command)) return undefined;
@@ -45,8 +45,8 @@ export const guardBash =
     };
   };
 
-export const filterPlanContext =
-  (runtime: PlanRuntime) =>
+const filterPlanContext =
+  (runtime: stateTypes.PlanRuntime) =>
   (messages: agentTypes.AgentMessage[]): { messages: agentTypes.AgentMessage[] } | undefined => {
     if (runtime.enabled) return undefined;
 
@@ -71,7 +71,7 @@ export const filterPlanContext =
     };
   };
 
-export const planModeContextMessage = () => ({
+const planModeContextMessage = () => ({
   message: {
     content: PLAN_MODE_PROMPT,
     customType: "plan-mode-context",
@@ -79,10 +79,20 @@ export const planModeContextMessage = () => ({
   },
 });
 
-export const executionContextMessage = (todoList: string) => ({
+const executionContextMessage = (todoList: string) => ({
   message: {
     content: executionPrompt(todoList),
     customType: "plan-execution-context",
     display: false,
   },
 });
+
+const context = {
+  executionContextMessage,
+  executionPrompt,
+  filterPlanContext,
+  guardBash,
+  planModeContextMessage,
+};
+
+export default context;

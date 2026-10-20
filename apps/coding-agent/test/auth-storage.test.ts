@@ -2,8 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { withEnv } from "../src/core/process-env.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import processEnv from "../src/core/process-env.ts";
+const { withEnv } = processEnv;
 
 const {
   awaited,

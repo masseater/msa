@@ -1,12 +1,11 @@
 import { NodeServices } from "@effect/platform-node";
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect, ManagedRuntime, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { BaseOverlay } from "./base-overlay.ts";
-
+import BaseOverlay from "./base-overlay.ts";
 const { matchesKey, truncateToWidth, visibleWidth } = tuiModule;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -35,7 +34,7 @@ const STREAM_SCRIPT = `
 			echo "Press Esc to close"
 			`;
 
-export class StreamingOverflowComponent extends BaseOverlay {
+export default class StreamingOverflowComponent extends BaseOverlay {
   private tui: tuiTypes.TUI;
   private lines: string[] = [];
   private fiber: { interruptUnsafe: () => void } | undefined;
@@ -45,7 +44,7 @@ export class StreamingOverflowComponent extends BaseOverlay {
   private disposed = false;
   private done: () => void;
 
-  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

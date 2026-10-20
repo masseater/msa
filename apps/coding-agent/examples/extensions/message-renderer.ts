@@ -1,10 +1,10 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import { Clock, DateTime, Effect } from "effect";
 
 const { Box, Text } = tui;
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerMessageRenderer("status-update", (message, { expanded, outputPad }, theme) => {
     const details = message.details as { level: string; timestamp: number } | undefined;
     const level = details?.level ?? "info";

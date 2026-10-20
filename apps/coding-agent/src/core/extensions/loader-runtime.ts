@@ -1,6 +1,5 @@
-import { McpServerRegistry } from "../mcp-servers.ts";
-import type { ExtensionRuntime } from "./types.ts";
-
+import McpServerRegistry from "../mcp-server-registry.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 const STALE_MESSAGE =
   "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
 
@@ -58,22 +57,24 @@ const lifecycle = () => {
   };
 };
 
-const registrations = (runtime: () => ExtensionRuntime) => ({
+const registrations = (runtime: () => extensionsTypesTypes.ExtensionRuntime) => ({
   registerNativeProvider: (
     ...[provider, extensionPath = "<unknown>"]: Parameters<
-      ExtensionRuntime["registerNativeProvider"]
+      extensionsTypesTypes.ExtensionRuntime["registerNativeProvider"]
     >
   ) => {
-    runtime().pendingNativeProviderRegistrations.push({ provider, extensionPath });
+    runtime().pendingNativeProviderRegistrations.push({ extensionPath, provider });
   },
   registerProvider: (
-    ...[name, config, extensionPath = "<unknown>"]: Parameters<ExtensionRuntime["registerProvider"]>
+    ...[name, config, extensionPath = "<unknown>"]: Parameters<
+      extensionsTypesTypes.ExtensionRuntime["registerProvider"]
+    >
   ) => {
-    runtime().pendingProviderRegistrations.push({ name, config, extensionPath });
+    runtime().pendingProviderRegistrations.push({ config, extensionPath, name });
   },
   registerVirtualModel: (
     ...[definition, extensionPath = "<unknown>"]: Parameters<
-      ExtensionRuntime["registerVirtualModel"]
+      extensionsTypesTypes.ExtensionRuntime["registerVirtualModel"]
     >
   ) => {
     runtime().pendingVirtualModelRegistrations.push({ definition, extensionPath });
@@ -95,8 +96,8 @@ const registrations = (runtime: () => ExtensionRuntime) => ({
   },
 });
 
-export function createExtensionRuntime(): ExtensionRuntime {
-  const runtime: ExtensionRuntime = {
+function createExtensionRuntime(): extensionsTypesTypes.ExtensionRuntime {
+  const runtime: extensionsTypesTypes.ExtensionRuntime = {
     ...pendingActions(),
     ...lifecycle(),
     ...registrations(() => runtime),
@@ -108,3 +109,9 @@ export function createExtensionRuntime(): ExtensionRuntime {
   };
   return runtime;
 }
+
+const loaderRuntime = {
+  createExtensionRuntime,
+};
+
+export default loaderRuntime;

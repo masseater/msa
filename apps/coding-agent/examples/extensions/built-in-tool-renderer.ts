@@ -1,16 +1,13 @@
-import type {
-  BashToolDetails,
-  EditToolDetails,
-  ExtensionAPI,
-  ReadToolDetails,
-} from "@msa/coding-agent";
-import {
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import tui from "@msa/tui";
+
+const {
   createBashToolDefinition,
   createEditToolDefinition,
   createReadToolDefinition,
   createWriteToolDefinition,
-} from "@msa/coding-agent";
-import tui from "@msa/tui";
+} = codingAgent;
 
 const { Text } = tui;
 
@@ -22,7 +19,7 @@ const renderReadResult: NonNullable<ReturnType<typeof createReadToolDefinition>[
 ) => {
   if (isPartial) return new Text(theme.fg("warning", "Reading..."), 0, 0);
 
-  const details = result.details as ReadToolDetails | undefined;
+  const details = result.details as codingAgentTypes.ReadToolDetails | undefined;
   const content = result.content[0];
 
   if (content?.type === "image") {
@@ -53,7 +50,7 @@ const renderReadResult: NonNullable<ReturnType<typeof createReadToolDefinition>[
   return new Text(text, 0, 0);
 };
 
-const registerReadTool = (msa: ExtensionAPI, cwd: string): void => {
+const registerReadTool = (msa: codingAgentTypes.ExtensionAPI, cwd: string): void => {
   const originalRead = createReadToolDefinition(cwd);
   msa.registerTool({
     ...originalRead,
@@ -82,7 +79,7 @@ const renderBashResult: NonNullable<ReturnType<typeof createBashToolDefinition>[
 ) => {
   if (isPartial) return new Text(theme.fg("warning", "Running..."), 0, 0);
 
-  const details = result.details as BashToolDetails | undefined;
+  const details = result.details as codingAgentTypes.BashToolDetails | undefined;
   const content = result.content[0];
   const output = content?.type === "text" ? content.text : "";
 
@@ -115,7 +112,7 @@ const renderBashResult: NonNullable<ReturnType<typeof createBashToolDefinition>[
   return new Text(text, 0, 0);
 };
 
-const registerBashTool = (msa: ExtensionAPI, cwd: string): void => {
+const registerBashTool = (msa: codingAgentTypes.ExtensionAPI, cwd: string): void => {
   const originalBash = createBashToolDefinition(cwd);
   msa.registerTool({
     ...originalBash,
@@ -142,7 +139,7 @@ const renderEditResult: NonNullable<ReturnType<typeof createEditToolDefinition>[
 ) => {
   if (isPartial) return new Text(theme.fg("warning", "Editing..."), 0, 0);
 
-  const details = result.details as EditToolDetails | undefined;
+  const details = result.details as codingAgentTypes.EditToolDetails | undefined;
   const content = result.content[0];
 
   if (content?.type === "text" && content.text.startsWith("Error")) {
@@ -183,7 +180,7 @@ const renderEditResult: NonNullable<ReturnType<typeof createEditToolDefinition>[
   return new Text(text, 0, 0);
 };
 
-const registerEditTool = (msa: ExtensionAPI, cwd: string): void => {
+const registerEditTool = (msa: codingAgentTypes.ExtensionAPI, cwd: string): void => {
   const originalEdit = createEditToolDefinition(cwd);
   msa.registerTool({
     ...originalEdit,
@@ -211,7 +208,7 @@ const renderWriteResult: NonNullable<
   return new Text(theme.fg("success", "Written"), 0, 0);
 };
 
-const registerWriteTool = (msa: ExtensionAPI, cwd: string): void => {
+const registerWriteTool = (msa: codingAgentTypes.ExtensionAPI, cwd: string): void => {
   const originalWrite = createWriteToolDefinition(cwd);
   msa.registerTool({
     ...originalWrite,
@@ -228,7 +225,7 @@ const registerWriteTool = (msa: ExtensionAPI, cwd: string): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const cwd = process.cwd();
 
   registerReadTool(msa, cwd);

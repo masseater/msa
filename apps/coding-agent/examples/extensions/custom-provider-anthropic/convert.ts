@@ -16,10 +16,9 @@ const CLAUDE_CODE_TOOLS = [
 
 const claudeCodeLookup = new Map(CLAUDE_CODE_TOOLS.map((t) => [t.toLowerCase(), t]));
 
-export const toClaudeCodeName = (name: string): string =>
-  claudeCodeLookup.get(name.toLowerCase()) ?? name;
+const toClaudeCodeName = (name: string): string => claudeCodeLookup.get(name.toLowerCase()) ?? name;
 
-export const fromClaudeCodeName = (request: {
+const fromClaudeCodeName = (request: {
   readonly name: string;
   readonly tools?: aiTypes.Tool[];
 }): string => {
@@ -28,8 +27,7 @@ export const fromClaudeCodeName = (request: {
   return tools?.find((t) => t.name.toLowerCase() === lowerName)?.name ?? name;
 };
 
-export const sanitizeSurrogates = (text: string): string =>
-  text.replace(/[\uD800-\uDFFF]/gu, "\uFFFD");
+const sanitizeSurrogates = (text: string): string => text.replace(/[\uD800-\uDFFF]/gu, "\uFFFD");
 
 const imageBlock = (item: aiTypes.ImageContent) => ({
   source: {
@@ -40,7 +38,7 @@ const imageBlock = (item: aiTypes.ImageContent) => ({
   type: "image" as const,
 });
 
-export const convertContentBlocks = (
+const convertContentBlocks = (
   content: (aiTypes.TextContent | aiTypes.ImageContent)[],
 ): string | ContentBlockParam[] => {
   if (!content.some((c) => c.type === "image")) {
@@ -134,7 +132,7 @@ const convertToolResults = (
   return { blocks, next: index };
 };
 
-export const convertMessages = (request: {
+const convertMessages = (request: {
   readonly messages: aiTypes.Message[];
   readonly isOAuth: boolean;
 }): unknown[] => {
@@ -169,7 +167,7 @@ export const convertMessages = (request: {
   return params;
 };
 
-export const convertTools = (request: {
+const convertTools = (request: {
   readonly tools: aiTypes.Tool[];
   readonly isOAuth: boolean;
 }): unknown[] =>
@@ -183,7 +181,7 @@ export const convertTools = (request: {
     name: request.isOAuth ? toClaudeCodeName(tool.name) : tool.name,
   }));
 
-export const mapStopReason = (reason: string): aiTypes.StopReason => {
+const mapStopReason = (reason: string): aiTypes.StopReason => {
   switch (reason) {
     case "end_turn":
     case "pause_turn":
@@ -197,3 +195,15 @@ export const mapStopReason = (reason: string): aiTypes.StopReason => {
       return "error";
   }
 };
+
+const convert = {
+  convertContentBlocks,
+  convertMessages,
+  convertTools,
+  fromClaudeCodeName,
+  mapStopReason,
+  sanitizeSurrogates,
+  toClaudeCodeName,
+};
+
+export default convert;

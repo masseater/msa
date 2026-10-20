@@ -1,18 +1,17 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { BaseOverlay } from "./base-overlay.ts";
-
+import BaseOverlay from "./base-overlay.ts";
 const { matchesKey, truncateToWidth } = tuiModule;
 
-export class SidepanelComponent extends BaseOverlay {
+export default class SidepanelComponent extends BaseOverlay {
   private tui: tuiTypes.TUI;
   private items = ["Dashboard", "Messages", "Settings", "Help", "About"];
   private selectedIndex = 0;
   private done: () => void;
 
-  constructor(tui: tuiTypes.TUI, theme: Theme, done: () => void) {
+  constructor(tui: tuiTypes.TUI, theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.tui = tui;
     this.done = done;

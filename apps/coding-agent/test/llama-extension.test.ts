@@ -2,12 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createEventBus } from "../src/core/event-bus.ts";
-import { createExtensionRuntime, loadExtensionFromFactory } from "../src/core/extensions/loader.ts";
-import { normalizeLlamaServerUrl } from "../src/extensions/llama/client.ts";
+import eventBus from "../src/core/event-bus.ts";
+import loader from "../src/core/extensions/loader.ts";
+import client from "../src/extensions/llama/client.ts";
 import llamaExtension from "../src/extensions/llama/index.ts";
-import { LLAMA_PROVIDER_ID, createLlamaProvider } from "../src/extensions/llama/provider.ts";
+import providerModule from "../src/extensions/llama/provider.ts";
 import llamaExtensionSupport from "./llama-extension-support.ts";
+
+const { createExtensionRuntime, loadExtensionFromFactory } = loader;
+const { createEventBus } = eventBus;
+const { LLAMA_PROVIDER_ID, createLlamaProvider } = providerModule;
+const { normalizeLlamaServerUrl } = client;
 
 const { awaited, closeServers, runTest } = testing;
 const { createCache, refresh, serve } = llamaExtensionSupport;

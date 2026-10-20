@@ -3,14 +3,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type CacheWarmingDecision,
-  formatCacheWarmingStatus,
-  formatCacheWarmingUsage,
-} from "../src/core/cache-warmer.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import cacheWarmerSupportModule from "../src/core/cache-warmer-support.ts";
+import type cacheWarmerTypes from "../src/core/cache-warmer.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
 import cacheWarmerSupport from "./cache-warmer-support.ts";
 
+const { formatCacheWarmingStatus, formatCacheWarmingUsage } = cacheWarmerSupportModule;
 const {
   adaptiveModel,
   branchWithPrompt,
@@ -30,7 +28,7 @@ const { promptCache: _adaptivePromptCache, ...unknownModel }: aiTypes.Model<aiTy
 afterEach(() => vi.useRealTimers());
 
 const formatsStatusAndUsageEntries = () => {
-  const decision: CacheWarmingDecision = {
+  const decision: cacheWarmerTypes.CacheWarmingDecision = {
     action: "warm",
     continuationProbability: 0.6,
     economicsAvailable: true,

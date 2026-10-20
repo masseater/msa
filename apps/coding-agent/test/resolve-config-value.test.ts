@@ -4,12 +4,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import {
-  clearConfigValueCache,
-  resolveConfigValue,
-  resolveConfigValueUncached,
-} from "../src/core/resolve-config-value.ts";
-import * as shellModule from "../src/utils/shell.ts";
+import resolveConfigValueModule from "../src/core/resolve-config-value.ts";
+import shellModule from "../src/utils/shell.ts";
+
+const { clearConfigValueCache, resolveConfigValue, resolveConfigValueUncached } =
+  resolveConfigValueModule;
 
 const {
   currentTimeMillis,

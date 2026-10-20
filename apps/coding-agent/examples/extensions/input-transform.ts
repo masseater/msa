@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { DateTime } from "effect";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("input", (event, ctx) => {
     if (event.source === "extension") {
       return { action: "continue" };

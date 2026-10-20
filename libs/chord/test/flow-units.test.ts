@@ -6,6 +6,7 @@ import { describe, it } from "vite-plus/test";
 
 import type hostTypes from "../src/host.types.ts";
 import type chordTypes from "../src/index.types.ts";
+import CountingLink from "./fixtures/counting-link.ts";
 import counting from "./fixtures/counting.ts";
 import type countingTypes from "./fixtures/counting.types.ts";
 import flowUnits from "./fixtures/flow-units.ts";
@@ -16,7 +17,7 @@ const { host: hostModule, src: chord } = flowUnitsKit;
 const { createHost, hostFamily, memoryLinkPair, method, remote } = chord;
 const { HostImpl } = hostModule;
 
-const { CountingLink, stateFrames } = counting;
+const { stateFrames } = counting;
 const { Blob, client, serveBlob, until } = flowUnits;
 
 const withLargeStreamsWaitingBehindA = Effect.gen(function* () {

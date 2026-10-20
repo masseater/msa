@@ -2,17 +2,24 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { CustomEditor } from "../src/modes/interactive/components/custom-editor.ts";
-import {
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import codingAgent from "../src/index.ts";
+import statusIndicators from "../src/modes/interactive/components/status-indicators.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const {
   BranchSummaryStatusIndicator,
   CompactionStatusIndicator,
   IdleStatus,
   RetryStatusIndicator,
   WorkingStatusIndicator,
-} from "../src/modes/interactive/components/status-indicator.ts";
-import { getEditorTheme, initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+} = statusIndicators;
+
+const { CustomEditor } = codingAgent;
+
+const { getEditorTheme, initTheme, theme } = themeModule;
+const { stripAnsi } = ansi;
 
 const { visibleWidth } = tuiModule;
 

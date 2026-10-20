@@ -1,8 +1,8 @@
 import { expect } from "vite-plus/test";
 
-import { type CustomEntry, SessionManager } from "../../src/core/session-manager.ts";
+import SessionManager from "../../src/core/session-manager.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 import utilities from "../utilities.ts";
-
 const { assistantMsg, userMsg } = utilities;
 
 const appendmessageCreatesEntryWithCorrectParentid = () => {
@@ -99,7 +99,7 @@ const appendcustomentryIntegratesIntoTree = () => {
   session.appendMessage(assistantMsg("response"));
 
   const entries = session.getEntries();
-  const customEntry = entries.find((e) => e.type === "custom") as CustomEntry;
+  const customEntry = entries.find((e) => e.type === "custom") as sessionManagerTypes.CustomEntry;
   expect(customEntry).toBeDefined();
   expect(customEntry.id).toBe(customId);
   expect(customEntry.parentId).toBe(msgId);

@@ -2,11 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
-import { ENV_AGENT_DIR } from "../src/config.ts";
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import startupUi from "../src/cli/startup-ui.ts";
+import config from "../src/config.ts";
+import processEnv from "../src/core/process-env.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 
+const { deleteEnv, readEnv, writeEnv } = processEnv;
+const { ENV_AGENT_DIR } = config;
+const { shouldRunFirstTimeSetup } = startupUi;
 const { joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;
 
 const originalMsaExperimental = readEnv("MSA_EXPERIMENTAL");

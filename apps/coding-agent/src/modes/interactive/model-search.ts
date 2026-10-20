@@ -1,17 +1,20 @@
-export interface ModelSearchItem {
-  id: string;
-  provider: string;
-  name?: string;
-}
+import type modelSearchTypes from "./model-search.types.ts";
 
-export function getModelSearchText(item: ModelSearchItem): string {
+function getModelSearchText(item: modelSearchTypes.ModelSearchItem): string {
   const { id, provider } = item;
   const name = item.name !== undefined && item.name !== "" ? ` ${item.name}` : "";
   return `${id} ${provider} ${provider}/${id} ${provider} ${id}${name}`;
 }
 
-export function getModelSelectorSearchText(item: ModelSearchItem): string {
+function getModelSelectorSearchText(item: modelSearchTypes.ModelSearchItem): string {
   const { id, provider } = item;
   const name = item.name !== undefined && item.name !== "" ? ` ${item.name}` : "";
   return `${provider} ${provider}/${id} ${provider} ${id}${name}`;
 }
+
+const modelSearch = {
+  getModelSearchText,
+  getModelSelectorSearchText,
+};
+
+export default modelSearch;

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseGitUrl } from "../src/utils/git.ts";
+import git from "../src/utils/git.ts";
+
+const { parseGitUrl } = git;
 
 const shouldParseHttpsUrl = () => {
   const result = parseGitUrl("https://github.com/user/repo");

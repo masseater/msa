@@ -2,10 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, vi } from "vite-plus/test";
 
-import { runRpcMode } from "../src/modes/rpc/rpc-mode.ts";
+import rpcMode from "../src/modes/rpc/rpc-mode.ts";
 import rpcPromptResponseHost from "./rpc-prompt-response-host.ts";
 import type rpcPromptResponseHostTypes from "./rpc-prompt-response-host.types.ts";
 import type rpcPromptResponseSupportTypes from "./rpc-prompt-response-support.types.ts";
+
+const { runRpcMode } = rpcMode;
 
 const { createRuntimeHost } = rpcPromptResponseHost;
 

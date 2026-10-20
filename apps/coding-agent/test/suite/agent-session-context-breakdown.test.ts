@@ -3,10 +3,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { apportion, measureContextBreakdown } from "../../src/core/context-breakdown.ts";
-import { convertToLlm } from "../../src/core/messages.ts";
+import contextBreakdown from "../../src/core/context-breakdown.ts";
+import messagesModule from "../../src/core/messages.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { apportion, measureContextBreakdown } = contextBreakdown;
+const { convertToLlm } = messagesModule;
 
 const { fauxAssistantMessage, fauxToolCall } = compat;
 

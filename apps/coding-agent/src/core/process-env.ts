@@ -1,28 +1,28 @@
 import { ConfigProvider, Effect, Predicate } from "effect";
 import { dual } from "effect/Function";
 
-export type EnvValues = Readonly<Record<string, string | undefined>>;
+import type processEnvTypes from "./process-env.types.ts";
 
 let overrides: Readonly<Record<string, string>> = {};
 
 const liveProvider = (): ConfigProvider.ConfigProvider =>
   ConfigProvider.fromEnv({ preserveEmptyStrings: true });
 
-export const readEnv = (name: string): string | undefined => {
+const readEnv = (name: string): string | undefined => {
   const override = overrides[name];
   if (override !== undefined) return override;
   const node = Effect.runSync(liveProvider().load([name]));
   return node === undefined ? undefined : node.value;
 };
 
-export const writeEnv: {
+const writeEnv: {
   (value: string): (name: string) => void;
   (name: string, value: string): void;
 } = dual(2, (name: string, value: string): void => {
   overrides = { ...overrides, [name]: value };
 });
 
-export const deleteEnv = (name: string): void => {
+const deleteEnv = (name: string): void => {
   const { [name]: _removed, ...rest } = overrides;
   overrides = rest;
 };
@@ -52,11 +52,11 @@ const liveSnapshot = (): Record<string, string> => {
   return into;
 };
 
-export const envSnapshot = (): Record<string, string> => ({ ...liveSnapshot(), ...overrides });
+const envSnapshot = (): Record<string, string> => ({ ...liveSnapshot(), ...overrides });
 
-export const envNames = (): ReadonlyArray<string> => Object.keys(envSnapshot());
+const envNames = (): ReadonlyArray<string> => Object.keys(envSnapshot());
 
-const applyValues = (values: EnvValues): void => {
+const applyValues = (values: processEnvTypes.EnvValues): void => {
   const next: Record<string, string> = { ...overrides };
   for (const [name, value] of Object.entries(values)) {
     if (value === undefined) delete next[name];
@@ -65,8 +65,8 @@ const applyValues = (values: EnvValues): void => {
   overrides = next;
 };
 
-export const withEnv =
-  (values: EnvValues) =>
+const withEnv =
+  (values: processEnvTypes.EnvValues) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.acquireUseRelease(
       Effect.sync(() => {
@@ -80,3 +80,14 @@ export const withEnv =
           overrides = previous;
         }),
     );
+
+const processEnv = {
+  deleteEnv,
+  envNames,
+  envSnapshot,
+  readEnv,
+  withEnv,
+  writeEnv,
+};
+
+export default processEnv;

@@ -1,54 +1,16 @@
-import type aiTypes from "@msa/ai/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { dual } from "effect/Function";
 
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import oauthSelectorSupport from "./oauth-selector-support.ts";
+import type oauthSelectorTypes from "./oauth-selector.types.ts";
 
+const { theme } = themeModule;
 const { Container, Input, Spacer, TruncatedText, fuzzyFilter, getKeybindings } = tui;
+const { formatAuthSelectorProviderStatus, formatAuthSelectorProviderType } = oauthSelectorSupport;
 
-export type AuthSelectorProvider = {
-  id: string;
-  name: string;
-  authType: "oauth" | "api_key";
-  method?: aiTypes.ApiKeyAuth | aiTypes.OAuthAuth | undefined;
-  status?: aiTypes.AuthCheck | undefined;
-  subscription?: boolean | undefined;
-};
-
-export const formatAuthSelectorProviderType: {
-  (subscription?: boolean): (authType: AuthSelectorProvider["authType"]) => string;
-  (authType: AuthSelectorProvider["authType"], subscription?: boolean): string;
-} = dual(
-  (args) => typeof args[0] === "string",
-  (authType: AuthSelectorProvider["authType"], subscription?: boolean): string => {
-    if (authType === "api_key") return "API key";
-    return subscription === false ? "account" : "subscription";
-  },
-);
-
-export function formatAuthSelectorProviderStatus(provider: AuthSelectorProvider): string {
-  if (provider.status === undefined) return theme.fg("muted", " • not configured");
-  if (provider.status.type !== provider.authType) {
-    const label = `${formatAuthSelectorProviderType(provider.status.type, provider.subscription)} configured`;
-    return theme.fg("muted", " • ") + theme.fg("warning", label);
-  }
-  if (
-    provider.status.source === undefined ||
-    provider.status.source === "" ||
-    provider.status.source === "OAuth" ||
-    provider.status.source === "stored credential"
-  ) {
-    return theme.fg("success", " ✓ configured");
-  }
-  const source = /^[A-Z][A-Z0-9_]*(?:, [A-Z][A-Z0-9_]*)*$/u.test(provider.status.source)
-    ? `env: ${provider.status.source}`
-    : provider.status.source;
-  return theme.fg("success", ` ✓ ${source}`);
-}
-
-export class OAuthSelectorComponent extends Container implements tuiTypes.Focusable {
+export default class OAuthSelectorComponent extends tui.Container implements tuiTypes.Focusable {
   private searchInput: tuiTypes.Input;
 
   private focusedState = false;
@@ -61,21 +23,24 @@ export class OAuthSelectorComponent extends Container implements tuiTypes.Focusa
   }
 
   private listContainer: tuiTypes.Container;
-  private allProviders: AuthSelectorProvider[];
-  private filteredProviders: AuthSelectorProvider[];
+  private allProviders: oauthSelectorTypes.AuthSelectorProvider[];
+  private filteredProviders: oauthSelectorTypes.AuthSelectorProvider[];
   private selectedIndex: number = 0;
   private mode: "login" | "logout";
   private onSelectCallback: (
     providerId: string,
-    authType: AuthSelectorProvider["authType"],
+    authType: oauthSelectorTypes.AuthSelectorProvider["authType"],
   ) => void;
   private onCancelCallback: () => void;
   private showAuthTypeLabels: boolean;
 
   constructor(
     mode: "login" | "logout",
-    providers: AuthSelectorProvider[],
-    onSelect: (providerId: string, authType: AuthSelectorProvider["authType"]) => void,
+    providers: oauthSelectorTypes.AuthSelectorProvider[],
+    onSelect: (
+      providerId: string,
+      authType: oauthSelectorTypes.AuthSelectorProvider["authType"],
+    ) => void,
     onCancel: () => void,
     initialSearchInput?: string,
   ) {

@@ -8,10 +8,7 @@ import SettingsList from "../src/components/settings-list.ts";
 import TuiAltScreen from "../src/tui-alt-screen.ts";
 import mouseComponentsHelpers from "./mouse-components-helpers.ts";
 import SubmenuHost from "./mouse-components-submenu-host.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 const { editorTheme, settingsTheme } = mouseComponentsHelpers;
 
 describe("mouse-aware components", () => {

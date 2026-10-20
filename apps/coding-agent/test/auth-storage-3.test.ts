@@ -3,7 +3,8 @@ import { Effect, FileSystem } from "effect";
 import lockfile from "proper-lockfile";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage, FileAuthStorageBackend } from "../src/core/auth-storage.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import FileAuthStorageBackend from "../src/core/file-auth-storage-backend.ts";
 
 const {
   awaited,

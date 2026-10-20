@@ -1,10 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type TodoItem,
-  extractDoneSteps,
-  markCompletedSteps,
-} from "../examples/extensions/plan-mode/utils.ts";
+import utils from "../examples/extensions/plan-mode/utils.ts";
+import type utilsTypes from "../examples/extensions/plan-mode/utils.types.ts";
+
+const { extractDoneSteps, markCompletedSteps } = utils;
 
 const extractsSingleDoneMarker = () => {
   const message = "I've completed the first step [DONE:1]";
@@ -44,7 +43,7 @@ describe("extractDoneSteps", () => {
 });
 
 const marksMatchingItemsAsCompleted = () => {
-  const items: TodoItem[] = [
+  const items: utilsTypes.TodoItem[] = [
     { completed: false, step: 1, text: "First" },
     { completed: false, step: 2, text: "Second" },
     { completed: false, step: 3, text: "Third" },
@@ -59,14 +58,14 @@ const marksMatchingItemsAsCompleted = () => {
 };
 
 const returnsCountOfCompletedItems = () => {
-  const items: TodoItem[] = [{ completed: false, step: 1, text: "First" }];
+  const items: utilsTypes.TodoItem[] = [{ completed: false, step: 1, text: "First" }];
 
   expect(markCompletedSteps("[DONE:1]", items)).toBe(1);
   expect(markCompletedSteps("no markers", items)).toBe(0);
 };
 
 const ignoresMarkersForNonExistentSteps = () => {
-  const items: TodoItem[] = [{ completed: false, step: 1, text: "First" }];
+  const items: utilsTypes.TodoItem[] = [{ completed: false, step: 1, text: "First" }];
 
   const count = markCompletedSteps("[DONE:99]", items);
 
@@ -75,7 +74,7 @@ const ignoresMarkersForNonExistentSteps = () => {
 };
 
 const doesnTDoubleCompleteAlreadyCompletedItems = () => {
-  const items: TodoItem[] = [{ completed: true, step: 1, text: "First" }];
+  const items: utilsTypes.TodoItem[] = [{ completed: true, step: 1, text: "First" }];
 
   markCompletedSteps("[DONE:1]", items);
   expect(items[0]?.completed).toBe(true);

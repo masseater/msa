@@ -2,10 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
 import modelRuntimeAuthSupport from "./model-runtime-auth-support.ts";
-
 const { authOptions, testModel } = modelRuntimeAuthSupport;
 
 const { abortController, awaited, currentTimeMillis, runTest } = testing;

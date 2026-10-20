@@ -1,8 +1,12 @@
-import { Effect, FileSystem } from "effect";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { dual } from "effect/Function";
 
-import { normalizePath, resolvePath } from "../../utils/paths.ts";
-import { platformRuntime } from "../platform/index.ts";
+import paths from "../../utils/paths.ts";
+
+const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+
+const { normalizePath, resolvePath } = paths;
 
 const NARROW_NO_BREAK_SPACE = "\u202F";
 
@@ -16,17 +20,16 @@ const tryCurlyQuoteVariant = (filePath: string): string => filePath.replace(/'/g
 const exists = (filePath: string) =>
   FileSystem.FileSystem.use((fs) => fs.exists(filePath)).pipe(Effect.orElseSucceed(() => false));
 
-export const pathExists = (filePath: string): Promise<boolean> =>
-  platformRuntime.runPromise(exists(filePath));
+const pathExists = (filePath: string): Promise<boolean> => nodeRuntime.runPromise(exists(filePath));
 
-export function expandPath(filePath: string): string {
+function expandPath(filePath: string): string {
   return normalizePath(filePath, { normalizeUnicodeSpaces: true, stripAtPrefix: true });
 }
 
 const resolveToCwdImpl = (filePath: string, cwd: string): string =>
   resolvePath(filePath, cwd, { normalizeUnicodeSpaces: true, stripAtPrefix: true });
 
-export const resolveToCwd: {
+const resolveToCwd: {
   (cwd: string): (filePath: string) => string;
   (filePath: string, cwd: string): string;
 } = dual(2, resolveToCwdImpl);
@@ -51,11 +54,21 @@ const resolveReadPathEffect = Effect.fn("resolveReadPath")(function* (
   return resolved;
 });
 
-export const resolveReadPathAsync: {
+const resolveReadPathAsync: {
   (cwd: string): (filePath: string) => Promise<string>;
   (filePath: string, cwd: string): Promise<string>;
 } = dual(2, (filePath: string, cwd: string) =>
-  platformRuntime.runPromise(resolveReadPathEffect(filePath, cwd)),
+  nodeRuntime.runPromise(resolveReadPathEffect(filePath, cwd)),
 );
 
-export const resolveReadPath = resolveReadPathAsync;
+const resolveReadPath = resolveReadPathAsync;
+
+const pathUtils = {
+  expandPath,
+  pathExists,
+  resolveReadPath,
+  resolveReadPathAsync,
+  resolveToCwd,
+};
+
+export default pathUtils;

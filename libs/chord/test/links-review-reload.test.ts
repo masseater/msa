@@ -8,10 +8,11 @@ import chord from "../src/index.ts";
 import type chordTypes from "../src/index.types.ts";
 import linksReview from "./fixtures/links-review.ts";
 import timing from "./fixtures/timing.ts";
+import WatchedLink from "./fixtures/watched-link.ts";
 
 const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, remote } = chord;
 
-const { WatchedLink, internals, until } = linksReview;
+const { internals, until } = linksReview;
 const { latch, tick } = timing;
 
 const Greeter = remote("t.greeter", {

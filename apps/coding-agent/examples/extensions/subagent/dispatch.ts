@@ -1,54 +1,31 @@
-import type { ExtensionContext } from "@msa/coding-agent";
 import { Effect } from "effect";
 
-import type { AgentConfig, AgentScope } from "./agents.ts";
-import {
-  getFinalOutput,
-  getResultOutput,
-  isFailedResult,
-  truncateParallelOutput,
-} from "./format.ts";
-import { mapWithConcurrencyLimit, runSingleAgent } from "./runner.ts";
-import {
-  type DispatchDefaults,
-  MAX_CONCURRENCY,
-  MAX_PARALLEL_TASKS,
-  type OnUpdateCallback,
-  type SingleResult,
-  type SubagentDetails,
-} from "./types.ts";
+import type agentsTypes from "./agents.types.ts";
+import type dispatchTypes from "./dispatch.types.ts";
+import format from "./format.ts";
+import runner from "./runner.ts";
+import subagentTypes from "./types.ts";
+import type subagentTypesTypes from "./types.types.ts";
 
-export interface DispatchContext {
-  readonly ctx: ExtensionContext;
-  readonly signal: AbortSignal | undefined;
-  readonly onUpdate: OnUpdateCallback | undefined;
-  readonly agents: AgentConfig[];
-  readonly dispatchDefaults: DispatchDefaults;
-  readonly projectAgentsDir: string | null;
-  readonly makeDetails: (
-    mode: SubagentDetails["mode"],
-  ) => (results: SingleResult[]) => SubagentDetails;
-}
-
-export interface SubagentParamsValue {
-  agent?: string | undefined;
-  task?: string | undefined;
-  tasks?: { agent: string; task: string; cwd?: string | undefined }[] | undefined;
-  chain?: { agent: string; task: string; cwd?: string | undefined }[] | undefined;
-  cwd?: string | undefined;
-}
+const { MAX_CONCURRENCY, MAX_PARALLEL_TASKS } = subagentTypes;
+const { mapWithConcurrencyLimit, runSingleAgent } = runner;
+const { getFinalOutput, getResultOutput, isFailedResult, truncateParallelOutput } = format;
 
 const textResult = (
   text: string,
-  details: SubagentDetails,
+  details: subagentTypesTypes.SubagentDetails,
   isError = false,
-): { content: { type: "text"; text: string }[]; details: SubagentDetails; isError?: boolean } => ({
+): {
+  content: { type: "text"; text: string }[];
+  details: subagentTypesTypes.SubagentDetails;
+  isError?: boolean;
+} => ({
   content: [{ text, type: "text" }],
   details,
   ...(isError ? { isError: true } : {}),
 });
 
-const requestedAgentNames = (params: SubagentParamsValue): Set<string> => {
+const requestedAgentNames = (params: dispatchTypes.SubagentParamsValue): Set<string> => {
   const names = new Set<string>();
   for (const step of params.chain ?? []) names.add(step.agent);
   for (const task of params.tasks ?? []) names.add(task.agent);
@@ -57,9 +34,9 @@ const requestedAgentNames = (params: SubagentParamsValue): Set<string> => {
 };
 
 const confirmProjectAgents = (
-  context: DispatchContext,
-  params: SubagentParamsValue,
-  agentScope: AgentScope,
+  context: dispatchTypes.DispatchContext,
+  params: dispatchTypes.SubagentParamsValue,
+  agentScope: agentsTypes.AgentScope,
   confirm: boolean,
 ) =>
   Effect.gen(function* () {
@@ -68,7 +45,7 @@ const confirmProjectAgents = (
 
     const requested = Array.from(requestedAgentNames(params))
       .map((name) => context.agents.find((a) => a.name === name))
-      .filter((a): a is AgentConfig => a?.source === "project");
+      .filter((a): a is agentsTypes.AgentConfig => a?.source === "project");
     if (requested.length === 0) return true;
 
     const names = requested.map((a) => a.name).join(", ");
@@ -81,14 +58,17 @@ const confirmProjectAgents = (
     );
   });
 
-const runChainMode = (context: DispatchContext, steps: NonNullable<SubagentParamsValue["chain"]>) =>
+const runChainMode = (
+  context: dispatchTypes.DispatchContext,
+  steps: NonNullable<dispatchTypes.SubagentParamsValue["chain"]>,
+) =>
   Effect.gen(function* () {
-    const results: SingleResult[] = [];
+    const results: subagentTypesTypes.SingleResult[] = [];
     let previousOutput = "";
 
     for (const [i, step] of steps.entries()) {
       const taskWithContext = step.task.replace(/\{previous\}/gu, previousOutput);
-      const chainUpdate: OnUpdateCallback | undefined =
+      const chainUpdate: subagentTypesTypes.OnUpdateCallback | undefined =
         context.onUpdate === undefined
           ? undefined
           : (partial) => {
@@ -129,7 +109,7 @@ const runChainMode = (context: DispatchContext, steps: NonNullable<SubagentParam
     return textResult(previousOutput || "(no output)", context.makeDetails("chain")(results));
   });
 
-const emptyResult = (agent: string, task: string): SingleResult => ({
+const emptyResult = (agent: string, task: string): subagentTypesTypes.SingleResult => ({
   agent,
   agentSource: "unknown",
   exitCode: -1,
@@ -139,7 +119,7 @@ const emptyResult = (agent: string, task: string): SingleResult => ({
   usage: { cacheRead: 0, cacheWrite: 0, contextTokens: 0, cost: 0, input: 0, output: 0, turns: 0 },
 });
 
-const summarizeResults = (results: SingleResult[]): string => {
+const summarizeResults = (results: subagentTypesTypes.SingleResult[]): string => {
   const successCount = results.filter((r) => !isFailedResult(r)).length;
   const summaries = results.map((r) => {
     const output = truncateParallelOutput(getResultOutput(r));
@@ -154,7 +134,10 @@ const summarizeResults = (results: SingleResult[]): string => {
   return `Parallel: ${successCount}/${results.length} succeeded\n\n${summaries.join("\n\n---\n\n")}`;
 };
 
-const emitParallelUpdate = (context: DispatchContext, allResults: SingleResult[]): void => {
+const emitParallelUpdate = (
+  context: dispatchTypes.DispatchContext,
+  allResults: subagentTypesTypes.SingleResult[],
+): void => {
   if (context.onUpdate === undefined) return;
   const running = allResults.filter((r) => r.exitCode === -1).length;
   const done = allResults.filter((r) => r.exitCode !== -1).length;
@@ -167,9 +150,9 @@ const emitParallelUpdate = (context: DispatchContext, allResults: SingleResult[]
 };
 
 const runParallelTask = (
-  context: DispatchContext,
+  context: dispatchTypes.DispatchContext,
   task: { agent: string; task: string; cwd?: string | undefined },
-  allResults: SingleResult[],
+  allResults: subagentTypesTypes.SingleResult[],
   index: number,
   emit: () => void,
 ) =>
@@ -196,8 +179,8 @@ const runParallelTask = (
   });
 
 const runParallelMode = (
-  context: DispatchContext,
-  tasks: NonNullable<SubagentParamsValue["tasks"]>,
+  context: dispatchTypes.DispatchContext,
+  tasks: NonNullable<dispatchTypes.SubagentParamsValue["tasks"]>,
 ) =>
   Effect.gen(function* () {
     if (tasks.length > MAX_PARALLEL_TASKS) {
@@ -223,7 +206,10 @@ const runParallelMode = (
     return textResult(summarizeResults(results), context.makeDetails("parallel")(results));
   });
 
-const runSingleMode = (context: DispatchContext, params: SubagentParamsValue) =>
+const runSingleMode = (
+  context: dispatchTypes.DispatchContext,
+  params: dispatchTypes.SubagentParamsValue,
+) =>
   Effect.gen(function* () {
     const agentName = params.agent ?? "";
     const task = params.task ?? "";
@@ -255,10 +241,10 @@ const runSingleMode = (context: DispatchContext, params: SubagentParamsValue) =>
     );
   });
 
-export const dispatch = (request: {
-  readonly context: DispatchContext;
-  readonly params: SubagentParamsValue;
-  readonly agentScope: AgentScope;
+const dispatch = (request: {
+  readonly context: dispatchTypes.DispatchContext;
+  readonly params: dispatchTypes.SubagentParamsValue;
+  readonly agentScope: agentsTypes.AgentScope;
   readonly confirm: boolean;
 }) =>
   Effect.gen(function* () {
@@ -293,3 +279,9 @@ export const dispatch = (request: {
     }
     return yield* runSingleMode(context, params);
   });
+
+const dispatchModule = {
+  dispatch,
+};
+
+export default dispatchModule;

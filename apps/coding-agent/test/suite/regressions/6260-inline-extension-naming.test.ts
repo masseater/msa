@@ -3,15 +3,14 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
-import type { ExtensionAPI } from "../../../src/index.ts";
-
+import DefaultResourceLoader from "../../../src/core/default-resource-loader.ts";
+import type srcTypes from "../../../src/index.types.ts";
 const { joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-const noop: (msa: ExtensionAPI) => void = () => {};
+const noop: (msa: srcTypes.ExtensionAPI) => void = () => {};
 
 const roots: string[] = [];
 

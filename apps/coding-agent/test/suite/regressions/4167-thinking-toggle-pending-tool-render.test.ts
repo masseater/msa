@@ -5,10 +5,9 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import type { AgentSession, AgentSessionEvent } from "../../../src/core/agent-session.ts";
-import type { SessionEntry } from "../../../src/core/session-manager.ts";
-import type { ToolExecutionComponent } from "../../../src/modes/interactive/components/tool-execution.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import type codingAgentTypes from "../../../src/index.types.ts";
+import type toolExecutionTypes from "../../../src/modes/interactive/components/tool-execution.types.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import tuiKit from "../../tui-kit.ts";
 
 const { Container, Text } = tui;
@@ -17,7 +16,7 @@ const { initTheme, stripAnsi } = tuiKit;
 
 const { currentTimeMillis, nowIso } = testing;
 
-type AgentMessage = AgentSession["messages"][number];
+type AgentMessage = codingAgentTypes.AgentSession["messages"][number];
 
 const TOOL_CALL_ID = "tool-4167";
 const TOOL_NAME = "slow_tool";
@@ -44,7 +43,7 @@ type RenderSessionItems = (
 ) => void;
 
 type RenderSessionContextThis = {
-  pendingTools: Map<string, ToolExecutionComponent>;
+  pendingTools: Map<string, toolExecutionTypes.ToolExecutionComponent>;
   chatContainer: tuiTypes.Container;
   footer: { invalidate(): void };
   programStatus: { handleEvent(): void };
@@ -54,7 +53,7 @@ type RenderSessionContextThis = {
     getImageWidthCells(): number;
     getShowCacheMissNotices(): boolean;
   };
-  sessionManager: { getCwd(): string; getEntries(): SessionEntry[] };
+  sessionManager: { getCwd(): string; getEntries(): codingAgentTypes.SessionEntry[] };
   session: {
     retryAttempt: number;
     modelRegistry: { find(provider: string, modelId: string): undefined };
@@ -65,17 +64,20 @@ type RenderSessionContextThis = {
   getRegisteredToolDefinition(toolName: string): undefined;
   maybeShowAssistantDiagnostics(message: aiTypes.AssistantMessage): void;
   addMessageToChat(message: AgentMessage, options?: { populateHistory?: boolean }): void;
-  addToolExecution(component: ToolExecutionComponent): void;
+  addToolExecution(component: toolExecutionTypes.ToolExecutionComponent): void;
   renderSessionItems: RenderSessionItems;
 };
 
 type RenderSessionEntries = (
   this: RenderSessionContextThis,
-  entries: SessionEntry[],
+  entries: codingAgentTypes.SessionEntry[],
   options?: { updateFooter?: boolean; populateHistory?: boolean },
 ) => void;
 
-type HandleEvent = (this: RenderSessionContextThis, event: AgentSessionEvent) => Promise<void>;
+type HandleEvent = (
+  this: RenderSessionContextThis,
+  event: codingAgentTypes.AgentSessionEvent,
+) => Promise<void>;
 
 function createFakeInteractiveModeThis(): RenderSessionContextThis {
   const chatContainer = new Container();
@@ -89,7 +91,7 @@ function createFakeInteractiveModeThis(): RenderSessionContextThis {
     getRegisteredToolDefinition: (_toolName: string) => undefined,
     isInitialized: true,
     maybeShowAssistantDiagnostics: vi.fn(),
-    pendingTools: new Map<string, ToolExecutionComponent>(),
+    pendingTools: new Map<string, toolExecutionTypes.ToolExecutionComponent>(),
     programStatus: { handleEvent: vi.fn() },
     renderSessionItems: (
       InteractiveMode.prototype as unknown as { renderSessionItems: RenderSessionItems }
@@ -138,10 +140,10 @@ function createToolResultMessage(text: string): aiTypes.ToolResultMessage {
   };
 }
 
-function createSessionEntries(messages: AgentMessage[]): SessionEntry[] {
+function createSessionEntries(messages: AgentMessage[]): codingAgentTypes.SessionEntry[] {
   let parentId: string | null = null;
   return messages.map((message, index) => {
-    const entry: SessionEntry = {
+    const entry: codingAgentTypes.SessionEntry = {
       id: `entry-${index}`,
       message,
       parentId,
@@ -165,10 +167,12 @@ const keepsUnresolvedRenderedToolCallsRegistered = Effect.gen(function* () {
   const handleEvent = (InteractiveMode.prototype as unknown as { handleEvent: HandleEvent })
     .handleEvent;
 
+  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
   renderSessionEntries.call(fakeThis, createSessionEntries([createAssistantToolCallMessage()]));
 
   expect(fakeThis.pendingTools.has(TOOL_CALL_ID)).toBe(true);
 
+  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
   yield* Effect.promise(() =>
     handleEvent.call(fakeThis, {
       isError: false,
@@ -189,6 +193,7 @@ const doesNotKeepCompletedHistoricalTool = () => {
     InteractiveMode.prototype as unknown as { renderSessionEntries: RenderSessionEntries }
   ).renderSessionEntries;
 
+  Object.setPrototypeOf(fakeThis, InteractiveMode.prototype);
   renderSessionEntries.call(
     fakeThis,
     createSessionEntries([

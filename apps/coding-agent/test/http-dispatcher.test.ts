@@ -6,8 +6,11 @@ import { Effect } from "effect";
 import * as undici from "undici";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { applyHttpProxySettings, configureHttpDispatcher } from "../src/core/http-dispatcher.ts";
-import { readEnv } from "../src/core/process-env.ts";
+import httpDispatcher from "../src/core/http-dispatcher.ts";
+import processEnv from "../src/core/process-env.ts";
+
+const { applyHttpProxySettings, configureHttpDispatcher } = httpDispatcher;
+const { readEnv } = processEnv;
 
 const { awaited, deferredPromise, runTest } = testing;
 

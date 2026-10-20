@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { withFileMutationQueue } from "../src/core/tools/file-mutation-queue.ts";
+import fileMutationQueue from "../src/core/tools/file-mutation-queue.ts";
+
+const { withFileMutationQueue } = fileMutationQueue;
 
 const { awaited, joinPath, makeSymlink, makeTempDir, removeDirs, runTest, sleep, writeTextFile } =
   testing;

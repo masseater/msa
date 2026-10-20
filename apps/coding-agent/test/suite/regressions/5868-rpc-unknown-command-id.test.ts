@@ -2,10 +2,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { AgentSessionRuntime } from "../../../src/core/agent-session-runtime.ts";
-import { runRpcMode } from "../../../src/modes/rpc/rpc-mode.ts";
+import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
+import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { runRpcMode } = rpcMode;
 
 const { createHarness } = harnessModule;
 
@@ -17,24 +19,30 @@ const rpcIo = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-  takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-  writeRawStdout: (line: string) => {
-    rpcIo.outputLines.push(line);
+  default: {
+    flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    takeOverStdout: vi.fn(),
+    waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    writeRawStdout: (line: string) => {
+      rpcIo.outputLines.push(line);
+    },
   },
 }));
 
-vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ theme: {} }));
+vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
 vi.mock("../../../src/modes/rpc/jsonl.js", () => ({
-  attachJsonlLineReader: vi.fn((_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-    rpcIo.lineHandler = onLine;
-    return () => {
-      rpcIo.lineHandler = undefined;
-    };
-  }),
-  serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  default: {
+    attachJsonlLineReader: vi.fn(
+      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
+        rpcIo.lineHandler = onLine;
+        return () => {
+          rpcIo.lineHandler = undefined;
+        };
+      },
+    ),
+    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  },
 }));
 
 type NodeListener = Parameters<typeof process.on>[1];
@@ -78,7 +86,9 @@ function parseOutputLines(): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-function createRuntimeHost(harness: harnessTypes.Harness): AgentSessionRuntime {
+function createRuntimeHost(
+  harness: harnessTypes.Harness,
+): agentSessionRuntimeTypes.AgentSessionRuntime {
   return {
     dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
     fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
@@ -86,7 +96,7 @@ function createRuntimeHost(harness: harnessTypes.Harness): AgentSessionRuntime {
     session: harness.session,
     setRebindSession: vi.fn(),
     switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
-  } as unknown as AgentSessionRuntime;
+  } as unknown as agentSessionRuntimeTypes.AgentSessionRuntime;
 }
 
 const preservesTheRequestIdOnUnknown = Effect.gen(function* () {

@@ -2,8 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { SessionImportFileNotFoundError } from "../src/core/agent-session-runtime.ts";
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import SessionImportFileNotFoundError from "../src/core/session-import-file-not-found-error.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { awaited, runTest } = testing;
 
@@ -93,6 +93,7 @@ describe("InteractiveMode /import parsing", () => {
           showStatus,
         };
 
+        Object.setPrototypeOf(context, InteractiveMode.prototype);
         yield* awaited(
           interactiveModePrototype.handleImportCommand.call(
             context,
@@ -141,6 +142,7 @@ describe("InteractiveMode /import parsing", () => {
           showStatus,
         };
 
+        Object.setPrototypeOf(context, InteractiveMode.prototype);
         yield* awaited(
           interactiveModePrototype.handleImportCommand.call(
             context,
@@ -180,6 +182,7 @@ const missingFileContext = () => {
 
 const showsANonFatalErrorForAMissingPath = Effect.gen(function* () {
   const { context, handleFatalRuntimeError, showError, showStatus } = missingFileContext();
+  Object.setPrototypeOf(context, InteractiveMode.prototype);
   yield* awaited(
     interactiveModePrototype.handleImportCommand.call(
       context,

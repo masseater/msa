@@ -3,12 +3,13 @@ import ai from "@msa/ai";
 import type compatTypes from "@msa/ai/compat.types";
 import { Function as Fn } from "effect";
 
-import type { SessionEntry, SessionProjection } from "../session-manager.ts";
-import type { CompactionSettings } from "./compaction-types.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import type compactionTokensTypes from "./compaction-tokens.types.ts";
+import type compactionTypesTypes from "./compaction-types.types.ts";
 
 const { getCurrentSystemMessage } = ai;
 
-export function calculateContextTokens(usage: compatTypes.Usage): number {
+function calculateContextTokens(usage: compatTypes.Usage): number {
   return usage.totalTokens > 0
     ? usage.totalTokens
     : usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
@@ -29,7 +30,9 @@ function getAssistantUsage(msg: agentTypes.AgentMessage): compatTypes.Usage | un
   return undefined;
 }
 
-export function getLastAssistantUsage(entries: SessionEntry[]): compatTypes.Usage | undefined {
+function getLastAssistantUsage(
+  entries: sessionManagerTypes.SessionEntry[],
+): compatTypes.Usage | undefined {
   for (let i = entries.length - 1; i >= 0; i--) {
     const entry = entries[i];
     if (entry?.type === "message") {
@@ -38,13 +41,6 @@ export function getLastAssistantUsage(entries: SessionEntry[]): compatTypes.Usag
     }
   }
   return undefined;
-}
-
-export interface ContextUsageEstimate {
-  tokens: number;
-  usageTokens: number;
-  trailingTokens: number;
-  lastUsageIndex: number | null;
 }
 
 function getLastAssistantUsageInfo(
@@ -59,7 +55,9 @@ function getLastAssistantUsageInfo(
   return undefined;
 }
 
-export function estimateContextTokens(messages: agentTypes.AgentMessage[]): ContextUsageEstimate {
+function estimateContextTokens(
+  messages: agentTypes.AgentMessage[],
+): compactionTokensTypes.ContextUsageEstimate {
   const usageInfo = getLastAssistantUsageInfo(messages);
 
   if (usageInfo === undefined) {
@@ -90,9 +88,9 @@ export function estimateContextTokens(messages: agentTypes.AgentMessage[]): Cont
 }
 
 const estimateProjectedContextTokensImpl = (
-  projection: SessionProjection,
-  branchEntries: SessionEntry[],
-): ContextUsageEstimate => {
+  projection: sessionManagerTypes.SessionProjection,
+  branchEntries: sessionManagerTypes.SessionEntry[],
+): compactionTokensTypes.ContextUsageEstimate => {
   const estimate = estimateContextTokens(projection.messages);
   if (estimate.lastUsageIndex !== null) {
     let projectedMessageIndex = 0;
@@ -129,23 +127,37 @@ const estimateProjectedContextTokensImpl = (
   return { lastUsageIndex: null, tokens, trailingTokens: tokens, usageTokens: 0 };
 };
 
-export const estimateProjectedContextTokens: {
-  (branchEntries: SessionEntry[]): (projection: SessionProjection) => ContextUsageEstimate;
-  (projection: SessionProjection, branchEntries: SessionEntry[]): ContextUsageEstimate;
+const estimateProjectedContextTokens: {
+  (
+    branchEntries: sessionManagerTypes.SessionEntry[],
+  ): (
+    projection: sessionManagerTypes.SessionProjection,
+  ) => compactionTokensTypes.ContextUsageEstimate;
+  (
+    projection: sessionManagerTypes.SessionProjection,
+    branchEntries: sessionManagerTypes.SessionEntry[],
+  ): compactionTokensTypes.ContextUsageEstimate;
 } = Fn.dual(2, estimateProjectedContextTokensImpl);
 
 const shouldCompactImpl = (
   contextTokens: number,
   contextWindow: number,
-  settings: CompactionSettings,
+  settings: compactionTypesTypes.CompactionSettings,
 ): boolean => {
   if (!settings.enabled) return false;
   return contextTokens > contextWindow - settings.reserveTokens;
 };
 
-export const shouldCompact: {
-  (contextWindow: number, settings: CompactionSettings): (contextTokens: number) => boolean;
-  (contextTokens: number, contextWindow: number, settings: CompactionSettings): boolean;
+const shouldCompact: {
+  (
+    contextWindow: number,
+    settings: compactionTypesTypes.CompactionSettings,
+  ): (contextTokens: number) => boolean;
+  (
+    contextTokens: number,
+    contextWindow: number,
+    settings: compactionTypesTypes.CompactionSettings,
+  ): boolean;
 } = Fn.dual(3, shouldCompactImpl);
 
 const ESTIMATED_IMAGE_CHARS = 4800;
@@ -168,7 +180,7 @@ function estimateTextAndImageContentChars(
   return chars;
 }
 
-export function estimateTokens(message: agentTypes.AgentMessage): number {
+function estimateTokens(message: agentTypes.AgentMessage): number {
   let chars = 0;
 
   switch (message.role) {
@@ -218,3 +230,14 @@ export function estimateTokens(message: agentTypes.AgentMessage): number {
     }
   }
 }
+
+const compactionTokens = {
+  calculateContextTokens,
+  estimateContextTokens,
+  estimateProjectedContextTokens,
+  estimateTokens,
+  getLastAssistantUsage,
+  shouldCompact,
+};
+
+export default compactionTokens;

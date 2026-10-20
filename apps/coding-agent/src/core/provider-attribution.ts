@@ -1,8 +1,11 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import { APP_NAME } from "../config.ts";
-import type { SettingsManager } from "./settings-manager.ts";
-import { isInstallTelemetryEnabled } from "./telemetry.ts";
+import config from "../config.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
+import telemetry from "./telemetry.ts";
+
+const { isInstallTelemetryEnabled } = telemetry;
+const { APP_NAME } = config;
 
 const APP_URL = "https://github.com/masseater/msa";
 const OPENROUTER_HOST = "openrouter.ai";
@@ -22,7 +25,7 @@ function isOpenRouterModel(model: aiTypes.Model<aiTypes.Api>): boolean {
 
 function getDefaultAttributionHeaders(
   model: aiTypes.Model<aiTypes.Api>,
-  settingsManager: SettingsManager,
+  settingsManager: settingsManagerTypes.SettingsManager,
 ): Record<string, string> | undefined {
   if (!isInstallTelemetryEnabled(settingsManager)) {
     return undefined;
@@ -54,9 +57,9 @@ function getSessionHeaders(
   return { "x-opencode-client": APP_NAME, "x-opencode-session": sessionId };
 }
 
-export function mergeProviderAttributionHeaders(
+function mergeProviderAttributionHeaders(
   model: aiTypes.Model<aiTypes.Api>,
-  settingsManager: SettingsManager,
+  settingsManager: settingsManagerTypes.SettingsManager,
   sessionId: string | undefined,
   ...headerSources: Array<aiTypes.ProviderHeaders | undefined>
 ): aiTypes.ProviderHeaders | undefined {
@@ -73,3 +76,9 @@ export function mergeProviderAttributionHeaders(
 
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
+
+const providerAttribution = {
+  mergeProviderAttributionHeaders,
+};
+
+export default providerAttribution;

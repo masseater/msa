@@ -2,10 +2,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { EXTERNAL_SERVICES, findExternalService } from "../src/core/external-services.ts";
-import { readEnv } from "../src/core/process-env.ts";
-import { loginTreg, logoutTreg } from "../src/core/treg.ts";
+import externalServices from "../src/core/external-services.ts";
+import processEnv from "../src/core/process-env.ts";
+import tregModule from "../src/core/treg.ts";
 import webToolsSupport from "./web-tools-support.ts";
+
+const { EXTERNAL_SERVICES, findExternalService } = externalServices;
+const { loginTreg, logoutTreg } = tregModule;
+const { readEnv } = processEnv;
 
 const { fakeTreg } = webToolsSupport;
 

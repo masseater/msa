@@ -1,12 +1,12 @@
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
 const DEFAULT_LABEL = "Pondering...";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let label = DEFAULT_LABEL;
 
-  const applyLabel = (ctx: ExtensionContext) => {
+  const applyLabel = (ctx: codingAgentTypes.ExtensionContext) => {
     ctx.ui.setHiddenThinkingLabel(label);
   };
 

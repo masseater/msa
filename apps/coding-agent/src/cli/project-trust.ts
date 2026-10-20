@@ -1,19 +1,23 @@
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import type { ProjectTrustContext } from "../core/extensions/types.ts";
-import { writeError } from "../core/platform.ts";
-import type { AppMode } from "../core/project-trust.ts";
-import type { SettingsManager } from "../core/settings-manager.ts";
-import { showStartupInput, showStartupSelector } from "./startup-ui.ts";
+import awaitingModule from "../core/awaiting.ts";
+import type extensionsTypesTypes from "../core/extensions/types.types.ts";
+import platform from "../core/platform.ts";
+import type projectTrustTypesModule from "../core/project-trust.types.ts";
+import type settingsManagerTypes from "../core/settings-manager.types.ts";
+import startupUi from "./startup-ui.ts";
 
-export function createProjectTrustContext(options: {
+const { awaited, awaiting } = awaitingModule;
+const { showStartupInput, showStartupSelector } = startupUi;
+const { writeError } = platform;
+
+function createProjectTrustContext(options: {
   cwd: string;
-  mode: AppMode;
-  settingsManager: SettingsManager;
+  mode: projectTrustTypesModule.AppMode;
+  settingsManager: settingsManagerTypes.SettingsManager;
   hasUI: boolean;
-}): ProjectTrustContext {
+}): extensionsTypesTypes.ProjectTrustContext {
   return {
     cwd: options.cwd,
     hasUI: options.hasUI,
@@ -51,11 +55,7 @@ export function createProjectTrustContext(options: {
           }),
         ),
       notify: (message, type = "info") => {
-        if (options.mode !== "interactive") {
-          const color =
-            type === "error" ? chalk.red : type === "warning" ? chalk.yellow : chalk.cyan;
-          writeError(color(message));
-        }
+        createProjectTrustContextPart1(options, type, message);
       },
       select: (title, selectOptions) =>
         Effect.runPromise(
@@ -77,4 +77,26 @@ export function createProjectTrustContext(options: {
         ),
     },
   };
+}
+
+const projectTrust = {
+  createProjectTrustContext,
+};
+
+export default projectTrust;
+
+function createProjectTrustContextPart1(
+  options: {
+    cwd: string;
+    mode: projectTrustTypesModule.AppMode;
+    settingsManager: settingsManagerTypes.SettingsManager;
+    hasUI: boolean;
+  },
+  type: string,
+  message: string,
+) {
+  if (options.mode !== "interactive") {
+    const color = type === "error" ? chalk.red : type === "warning" ? chalk.yellow : chalk.cyan;
+    writeError(color(message));
+  }
 }

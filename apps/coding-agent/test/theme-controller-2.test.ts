@@ -3,15 +3,13 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import {
-  initTheme,
-  setTerminalColorScheme,
-  setTerminalColors,
-  theme,
-} from "../src/modes/interactive/theme/theme.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import terminalColors from "../src/modes/interactive/theme/terminal-colors.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import themeControllerSupport from "./theme-controller-support.ts";
 
+const { initTheme, theme } = themeModule;
+const { setTerminalColorScheme, setTerminalColors } = terminalColors;
 const { DARK, createController, createUi, flush } = themeControllerSupport;
 
 const { awaited, runTest } = testing;

@@ -1,6 +1,8 @@
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting, performed } from "./awaiting.ts";
+import awaitingModule from "./awaiting.ts";
+
+const { awaited, awaiting, performed } = awaitingModule;
 interface StdoutTakeoverState {
   rawStdoutWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
   rawStderrWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
@@ -49,7 +51,7 @@ function writeRawStdoutChunk(text: string): Effect.Effect<void> {
   });
 }
 
-export function takeOverStdout(): void {
+function takeOverStdout(): void {
   if (stdoutTakeoverState !== undefined) {
     return;
   }
@@ -80,7 +82,7 @@ export function takeOverStdout(): void {
   };
 }
 
-export function restoreStdout(): void {
+function restoreStdout(): void {
   if (stdoutTakeoverState === undefined) {
     return;
   }
@@ -89,11 +91,11 @@ export function restoreStdout(): void {
   stdoutTakeoverState = undefined;
 }
 
-export function isStdoutTakenOver(): boolean {
+function isStdoutTakenOver(): boolean {
   return stdoutTakeoverState !== undefined;
 }
 
-export function writeRawStdout(text: string): void {
+function writeRawStdout(text: string): void {
   if (text.length === 0) {
     return;
   }
@@ -103,7 +105,7 @@ export function writeRawStdout(text: string): void {
   });
 }
 
-export function waitForRawStdoutBackpressure(): Promise<void> {
+function waitForRawStdoutBackpressure(): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       while (true) {
@@ -117,7 +119,7 @@ export function waitForRawStdoutBackpressure(): Promise<void> {
   );
 }
 
-export function flushRawStdout(): Promise<void> {
+function flushRawStdout(): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       yield* awaited(waitForRawStdoutBackpressure());
@@ -125,3 +127,14 @@ export function flushRawStdout(): Promise<void> {
     }),
   );
 }
+
+const outputGuard = {
+  flushRawStdout,
+  isStdoutTakenOver,
+  restoreStdout,
+  takeOverStdout,
+  waitForRawStdoutBackpressure,
+  writeRawStdout,
+};
+
+export default outputGuard;

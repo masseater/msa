@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertToPng, loadPngTranscoder } from "../src/utils/image-convert.ts";
-import { formatDimensionNote, resizeImage } from "../src/utils/image-resize.ts";
+import imageConvert from "../src/utils/image-convert.ts";
+import imageResize from "../src/utils/image-resize.ts";
+
+const { convertToPng, loadPngTranscoder } = imageConvert;
+const { formatDimensionNote, resizeImage } = imageResize;
 
 const { awaited, runTest } = testing;
 

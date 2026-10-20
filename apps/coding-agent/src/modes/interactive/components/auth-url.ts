@@ -2,15 +2,21 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { awaited, awaitingWith } from "../../../core/awaiting.ts";
-import { copyToClipboard } from "../../../utils/clipboard.ts";
-import { toErrorMessage } from "../../../utils/errors.ts";
-import { theme } from "../theme/theme.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import clipboard from "../../../utils/clipboard.ts";
+import errors from "../../../utils/errors.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-const { Container, Text, hyperlink } = tuiModule;
+const { theme } = themeModule;
+const { keyHint } = keybindingHints;
+const { awaited, awaitingWith } = awaitingModule;
+const { copyToClipboard } = clipboard;
+const { toErrorMessage } = errors;
 
-export class AuthUrlComponent extends Container {
+const { Text, hyperlink } = tuiModule;
+
+export default class AuthUrlComponent extends tuiModule.Container {
   readonly url: string;
   private readonly tui: tuiTypes.TUI;
   private readonly hint: tuiTypes.Text;

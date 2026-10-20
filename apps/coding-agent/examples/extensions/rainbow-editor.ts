@@ -1,6 +1,6 @@
-import { CustomEditor, type ExtensionAPI } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, type Fiber } from "effect";
-
 const COLORS: [number, number, number][] = [
   [233, 137, 115],
   [228, 186, 103],
@@ -35,7 +35,7 @@ function colorize(text: string, shinePos: number): string {
   );
 }
 
-class RainbowEditor extends CustomEditor {
+class RainbowEditor extends codingAgent.CustomEditor {
   private animationFiber?: Fiber.Fiber<never> | undefined;
   private frame = 0;
 
@@ -78,7 +78,7 @@ class RainbowEditor extends CustomEditor {
   }
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.on("session_start", (_event, ctx) => {
     ctx.ui.setEditorComponent((tui, theme, kb) => new RainbowEditor(tui, theme, kb));
   });

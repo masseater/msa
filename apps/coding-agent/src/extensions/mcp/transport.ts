@@ -4,12 +4,12 @@ import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
 import { dual } from "effect/Function";
 
-import { join, resolve } from "../../core/platform-node.ts";
-import {
-  resolveConfigValueOrThrow,
-  resolveHeadersOrThrow,
-} from "../../core/resolve-config-value.ts";
-import type { McpServerEntry } from "./config.ts";
+import platformNode from "../../core/platform-node.ts";
+import resolveConfigValueModule from "../../core/resolve-config-value.ts";
+import type configTypes from "./config.types.ts";
+
+const { join, resolve } = platformNode;
+const { resolveConfigValueOrThrow, resolveHeadersOrThrow } = resolveConfigValueModule;
 
 const { StdioTransport, StreamableHttpTransport } = mcp;
 
@@ -22,7 +22,7 @@ function expandHome(value: string): string {
 }
 
 function createDefaultTransportImpl(
-  entry: McpServerEntry,
+  entry: configTypes.McpServerEntry,
   cwd: string,
   authProvider: mcpTypes.AuthProvider | undefined,
 ): mcpTypes.McpTransport {
@@ -48,14 +48,20 @@ function createDefaultTransportImpl(
   });
 }
 
-export const createDefaultTransport: {
+const createDefaultTransport: {
   (
-    entry: McpServerEntry,
+    entry: configTypes.McpServerEntry,
     cwd: string,
     authProvider: mcpTypes.AuthProvider | undefined,
   ): mcpTypes.McpTransport;
   (
     cwd: string,
     authProvider: mcpTypes.AuthProvider | undefined,
-  ): (entry: McpServerEntry) => mcpTypes.McpTransport;
+  ): (entry: configTypes.McpServerEntry) => mcpTypes.McpTransport;
 } = dual((args: IArguments) => args.length >= 3, createDefaultTransportImpl);
+
+const transport = {
+  createDefaultTransport,
+};
+
+export default transport;

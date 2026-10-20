@@ -2,7 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { type ToolStatus, ensureTool, getLatestVersion } from "../src/utils/tools-manager.ts";
+import toolsManager from "../src/utils/tools-manager.ts";
+import type toolsManagerTypes from "../src/utils/tools-manager.types.ts";
+
+const { ensureTool, getLatestVersion } = toolsManager;
 
 const { awaited, failure, runTest } = testing;
 
@@ -136,7 +139,7 @@ describe("getLatestVersion", () => {
 const reportsStatusThroughACallbackWithoutWriting = () =>
   runTest(
     Effect.gen(function* () {
-      const statuses: ToolStatus[] = [];
+      const statuses: toolsManagerTypes.ToolStatus[] = [];
       const consoleLog = vi.spyOn(console, "log").mockImplementation(() => {});
 
       vi.stubEnv("MSA_OFFLINE", "1");
@@ -162,7 +165,7 @@ const surfacesTheErrorCauseChainWhenA = () =>
         "fetch",
         vi.fn(() => Promise.reject(new TypeError("fetch failed", { cause }))),
       );
-      const statuses: ToolStatus[] = [];
+      const statuses: toolsManagerTypes.ToolStatus[] = [];
 
       vi.stubEnv("MSA_OFFLINE", undefined);
       const result = yield* awaited(ensureTool("fd", (status) => statuses.push(status)));

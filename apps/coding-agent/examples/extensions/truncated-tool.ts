@@ -1,17 +1,13 @@
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI, Theme } from "@msa/coding-agent";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type TruncationResult,
-  formatSize,
-  truncateHead,
-} from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Data, Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { Type } from "typebox";
+
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } = codingAgent;
 
 const { Text } = tui;
 
@@ -30,7 +26,7 @@ interface RgDetails {
   path?: string | undefined;
   glob?: string | undefined;
   matchCount: number;
-  truncation?: TruncationResult;
+  truncation?: codingAgentTypes.TruncationResult;
   fullOutputPath?: string;
 }
 
@@ -85,7 +81,10 @@ const saveFullOutput = (output: string) =>
     return tempFile;
   });
 
-const truncationNote = (truncation: TruncationResult, tempFile: string): string => {
+const truncationNote = (
+  truncation: codingAgentTypes.TruncationResult,
+  tempFile: string,
+): string => {
   const truncatedLines = truncation.totalLines - truncation.outputLines;
   const truncatedBytes = truncation.totalBytes - truncation.outputBytes;
   return (
@@ -130,7 +129,7 @@ const search = (cwd: string, params: RgParamsValue) =>
     return { content: [{ text: resultText, type: "text" as const }], details };
   });
 
-const renderCall = (args: RgParamsValue, theme: Theme): tuiTypes.Text => {
+const renderCall = (args: RgParamsValue, theme: codingAgentTypes.Theme): tuiTypes.Text => {
   let text = theme.fg("toolTitle", theme.bold("rg "));
   text += theme.fg("accent", `"${args.pattern}"`);
   if (args.path !== undefined && args.path.length > 0) {
@@ -142,7 +141,7 @@ const renderCall = (args: RgParamsValue, theme: Theme): tuiTypes.Text => {
   return new Text(text, 0, 0);
 };
 
-const expandedOutput = (text: string, theme: Theme): string => {
+const expandedOutput = (text: string, theme: codingAgentTypes.Theme): string => {
   const lines = text.split("\n").slice(0, 20);
   const shown = lines.map((line) => `\n${theme.fg("dim", line)}`).join("");
   return text.split("\n").length > 20
@@ -153,7 +152,7 @@ const expandedOutput = (text: string, theme: Theme): string => {
 const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   options: { expanded: boolean; isPartial: boolean },
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   const details = result.details as RgDetails | undefined;
 
@@ -182,7 +181,7 @@ const renderResult = (
   return new Text(text, 0, 0);
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
     description: `Search file contents using ripgrep. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${formatSize(DEFAULT_MAX_BYTES)} (whichever is hit first). If truncated, full output is saved to a temp file.`,
     execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>

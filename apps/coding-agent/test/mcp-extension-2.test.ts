@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { loadMcpConfig } from "../src/extensions/mcp/config.ts";
+import configModule from "../src/extensions/mcp/config.ts";
 import mcpExtensionSupport from "./mcp-extension-support.ts";
+
+const { loadMcpConfig } = configModule;
 
 const { removeDirs, runTest } = testing;
 

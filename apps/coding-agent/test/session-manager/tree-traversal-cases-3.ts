@@ -2,9 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { SessionManager } from "../../src/core/session-manager.ts";
+import SessionManager from "../../src/core/session-manager.ts";
 import utilities from "../utilities.ts";
-
 const { assistantMsg, readSessionFileRoles, userMsg } = utilities;
 
 const { currentTimeMillis, makeDirectory, makeTempDir, pathExists, removePath, runTest } = testing;

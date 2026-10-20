@@ -2,7 +2,7 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
 
-import type { Extension, ExtensionFactory } from "../src/core/extensions/types.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 
 declare namespace sessionKitTypes {
   interface ResponderInput {
@@ -17,8 +17,8 @@ declare namespace sessionKitTypes {
     readonly agentTools?: agentTypes.AgentTool[];
     readonly apiKey?: string | undefined;
     readonly cwd: string;
-    readonly extensionFactories?: ExtensionFactory[];
-    readonly extensions?: Extension[];
+    readonly extensionFactories?: extensionsTypesTypes.ExtensionFactory[];
+    readonly extensions?: extensionsTypesTypes.Extension[];
     readonly persistSession?: boolean;
     readonly streamFn: agentTypes.StreamFn;
     readonly systemPrompt?: string;

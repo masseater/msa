@@ -1,28 +1,25 @@
 import { dual } from "effect/Function";
 
-import type {
-  MarkdownTransformContext,
-  MarkdownTransformer,
-} from "../../../core/extensions/types.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
 
-export const createMarkdownTransform: {
+const createMarkdownTransform: {
   (
     isStreaming: boolean,
-    transformers: readonly MarkdownTransformer[],
+    transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
   ): (
-    messageType: MarkdownTransformContext["messageType"],
+    messageType: extensionsTypesTypes.MarkdownTransformContext["messageType"],
   ) => (markdown: string, availableWidth: number) => string;
   (
-    messageType: MarkdownTransformContext["messageType"],
+    messageType: extensionsTypesTypes.MarkdownTransformContext["messageType"],
     isStreaming: boolean,
-    transformers: readonly MarkdownTransformer[],
+    transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
   ): (markdown: string, availableWidth: number) => string;
 } = dual(
   3,
   (
-    messageType: MarkdownTransformContext["messageType"],
+    messageType: extensionsTypesTypes.MarkdownTransformContext["messageType"],
     isStreaming: boolean,
-    transformers: readonly MarkdownTransformer[],
+    transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
   ): ((markdown: string, availableWidth: number) => string) =>
     (markdown, availableWidth) =>
       applyMarkdownTransformers(
@@ -34,8 +31,8 @@ export const createMarkdownTransform: {
 
 function applyMarkdownTransformers(
   markdown: string,
-  context: MarkdownTransformContext,
-  transformers: readonly MarkdownTransformer[],
+  context: extensionsTypesTypes.MarkdownTransformContext,
+  transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
 ): string {
   let transformedMarkdown = markdown;
   for (const transformer of transformers) {
@@ -48,3 +45,9 @@ function applyMarkdownTransformers(
   }
   return transformedMarkdown;
 }
+
+const markdownTransform = {
+  createMarkdownTransform,
+};
+
+export default markdownTransform;

@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import agentSessionRetrySupport from "./agent-session-retry-support.ts";
 import sessionKit from "./session-kit.ts";
 
@@ -14,7 +14,7 @@ const { createRetrySession, errorMessage, scriptedStream } = agentSessionRetrySu
 
 let tempDir = "";
 
-let session: AgentSession | undefined;
+let session: agentSessionTypes.AgentSession | undefined;
 
 const echoTool = (executed: { value: boolean }): agentTypes.AgentTool => ({
   description: "Echo text back",

@@ -1,8 +1,10 @@
-import type { ExtensionAPI, ExtensionContext, Theme, ToolInfo } from "@msa/coding-agent";
-import { getSettingsListTheme } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
+
+const { getSettingsListTheme } = codingAgent;
 
 const { Container, SettingsList } = tui;
 
@@ -12,10 +14,10 @@ interface ToolsState {
 
 interface ExtensionState {
   enabledTools: Set<string>;
-  allTools: ToolInfo[];
+  allTools: codingAgentTypes.ToolInfo[];
 }
 
-const findSavedTools = (ctx: ExtensionContext): string[] | undefined => {
+const findSavedTools = (ctx: codingAgentTypes.ExtensionContext): string[] | undefined => {
   let savedTools: string[] | undefined;
   for (const entry of ctx.sessionManager.getBranch()) {
     if (entry.type === "custom" && entry.customType === "tools-config") {
@@ -29,7 +31,7 @@ const findSavedTools = (ctx: ExtensionContext): string[] | undefined => {
 };
 
 const makeToolList = (
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
   state: ExtensionState,
   applyTools: () => void,
   persistState: () => void,
@@ -78,8 +80,8 @@ const makeToolList = (
 };
 
 const registerRestoreEvents = (
-  msa: ExtensionAPI,
-  restore: (ctx: ExtensionContext) => void,
+  msa: codingAgentTypes.ExtensionAPI,
+  restore: (ctx: codingAgentTypes.ExtensionContext) => void,
 ): void => {
   msa.on("session_start", (_event, ctx) => {
     restore(ctx);
@@ -90,7 +92,7 @@ const registerRestoreEvents = (
   });
 };
 
-export default function toolsExtension(msa: ExtensionAPI) {
+export default function toolsExtension(msa: codingAgentTypes.ExtensionAPI) {
   const state: ExtensionState = { allTools: [], enabledTools: new Set() };
 
   const persistState = () => {
@@ -103,7 +105,7 @@ export default function toolsExtension(msa: ExtensionAPI) {
     msa.setActiveTools(Array.from(state.enabledTools));
   };
 
-  const restoreFromBranch = (ctx: ExtensionContext) => {
+  const restoreFromBranch = (ctx: codingAgentTypes.ExtensionContext) => {
     state.allTools = msa.getAllTools();
     const savedTools = findSavedTools(ctx);
     if (savedTools === undefined) {
@@ -115,7 +117,7 @@ export default function toolsExtension(msa: ExtensionAPI) {
     applyTools();
   };
 
-  const openToolList = (ctx: ExtensionContext) =>
+  const openToolList = (ctx: codingAgentTypes.ExtensionContext) =>
     Effect.gen(function* () {
       if (ctx.mode !== "tui") {
         ctx.ui.notify("/tools requires TUI mode", "error");

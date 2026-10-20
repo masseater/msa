@@ -3,16 +3,18 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
-import { type InlineExtension } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import toolNamesModule from "../src/core/orchestrator/tool-names.ts";
+import type sdkTypes from "../src/core/sdk.types.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import defaultToolsSettingSupport from "./default-tools-setting-support.ts";
+const { ORCHESTRATOR_TOOL_NAMES } = toolNamesModule;
 
 const { cleanupDirs, dirs, prepareDirs, resumeSession } = defaultToolsSettingSupport;
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
-const extensionTools: InlineExtension = (msa) => {
+const extensionTools: sdkTypes.InlineExtension = (msa) => {
   msa.registerTool({
     defaultActive: false,
     description: "Extension tool registered inactive",
@@ -32,7 +34,7 @@ const extensionTools: InlineExtension = (msa) => {
   });
 };
 
-function createRecordedSession(toolNames: string[]): SessionManager {
+function createRecordedSession(toolNames: string[]): sessionManagerTypes.SessionManager {
   const sessionManager = SessionManager.inMemory(dirs.tempDir);
   sessionManager.appendMessage({
     content: "",
@@ -48,7 +50,7 @@ function createRecordedSession(toolNames: string[]): SessionManager {
 }
 
 const resume = (
-  sessionManager: SessionManager,
+  sessionManager: sessionManagerTypes.SessionManager,
   options: Parameters<typeof resumeSession>[1] = {},
 ) => resumeSession(sessionManager, options, [extensionTools]);
 

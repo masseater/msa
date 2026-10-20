@@ -2,8 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultPackageManager } from "../src/core/package-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import DefaultPackageManager from "../src/core/default-package-manager.ts";
+import type packageManagerTypes from "../src/core/package-manager.types.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 
 const { joinPath, makeDirectory, makeTempDir, removeDirs, runTest } = testing;
 
@@ -12,7 +13,7 @@ const tempDirs: string[] = [];
 afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
 
 const withPackageManager = <A>(
-  use: (packageManager: DefaultPackageManager) => A,
+  use: (packageManager: packageManagerTypes.DefaultPackageManager) => A,
 ): Effect.Effect<A> =>
   Effect.gen(function* () {
     const tempDir = yield* makeTempDir("pm-ssh-test-");
@@ -27,11 +28,15 @@ const withPackageManager = <A>(
     return use(packageManager);
   });
 
-const parseSource = (packageManager: DefaultPackageManager, source: string): unknown =>
-  (packageManager as any).parseSource(source);
+const parseSource = (
+  packageManager: packageManagerTypes.DefaultPackageManager,
+  source: string,
+): unknown => (packageManager as any).parseSource(source);
 
-const identityOf = (packageManager: DefaultPackageManager, source: string): unknown =>
-  (packageManager as any).getPackageIdentity(source);
+const identityOf = (
+  packageManager: packageManagerTypes.DefaultPackageManager,
+  source: string,
+): unknown => (packageManager as any).getPackageIdentity(source);
 
 const shouldParseHttpsUrl = () =>
   runTest(

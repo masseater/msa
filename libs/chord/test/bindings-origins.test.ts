@@ -7,7 +7,7 @@ import { describe, it } from "vite-plus/test";
 import type hostTypes from "../src/host.types.ts";
 import type chordTypes from "../src/index.types.ts";
 import bindingsOriginsKit from "./bindings-origins-kit.ts";
-import counting from "./fixtures/counting.ts";
+import CountingLink from "./fixtures/counting-link.ts";
 import type countingTypes from "./fixtures/counting.types.ts";
 import timing from "./fixtures/timing.ts";
 
@@ -17,7 +17,6 @@ const { PROTOCOL_VERSION, createHost, hostFamily, memoryLinkPair, method, remote
 const { HostImpl } = hostModule;
 
 const { Notes, setup, until } = bindings;
-const { CountingLink } = counting;
 const { latch } = timing;
 
 const Counter = remote("t.e8-counter", {

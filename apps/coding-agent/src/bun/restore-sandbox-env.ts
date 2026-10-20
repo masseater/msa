@@ -1,6 +1,8 @@
-import { readFileSync } from "node:fs";
+import nodeFs from "../core/platform/node/fs.ts";
 
-export function restoreSandboxEnv(): void {
+const { readFileSync } = nodeFs;
+
+function restoreSandboxEnv(): void {
   if (process.versions?.["bun"] === undefined || process.versions?.["bun"] === "") return;
 
   if (Object.keys(process.env).length > 0) return;
@@ -15,3 +17,9 @@ export function restoreSandboxEnv(): void {
     }
   } catch {}
 }
+
+const restoreSandboxEnvModule = {
+  restoreSandboxEnv,
+};
+
+export default restoreSandboxEnvModule;

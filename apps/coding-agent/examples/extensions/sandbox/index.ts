@@ -1,11 +1,15 @@
 import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { type BashOperations, createBashTool } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Data, Effect, FileSystem, ManagedRuntime, Option, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { loadConfig, type SandboxConfig } from "./config.ts";
+import configModule from "./config.ts";
+import type configTypes from "./config.types.ts";
+
+const { createBashTool } = codingAgent;
+const { loadConfig } = configModule;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fsService = runtime.runSync(FileSystem.FileSystem);
@@ -84,12 +88,12 @@ const runSandboxed = (request: SandboxExecRequest) =>
     );
   });
 
-const createSandboxedBashOps = (): BashOperations => ({
+const createSandboxedBashOps = (): codingAgentTypes.BashOperations => ({
   exec: (command, cwd, { onData, signal, timeout }) => {
     const sandboxed = runSandboxed({ command, cwd, onData, signal, timeout });
     const effect = Effect.gen(function* () {
       if (!(yield* fsService.exists(cwd).pipe(Effect.orElseSucceed(() => false)))) {
-        return yield* Effect.fail(new Error(`Working directory does not exist: ${cwd}`));
+        return yield* new SandboxError({ message: `Working directory does not exist: ${cwd}` });
       }
       return yield* sandboxed;
     });
@@ -100,7 +104,7 @@ const createSandboxedBashOps = (): BashOperations => ({
 });
 
 const registerBashTool = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   localCwd: string,
   getSandboxed: () => boolean,
 ): void => {
@@ -118,7 +122,7 @@ const registerBashTool = (
 };
 
 const disabledReason = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   config: { enabled?: boolean | undefined },
 ): string | undefined => {
   if (msa.getFlag("no-sandbox") === true) return "Sandbox disabled via --no-sandbox";
@@ -131,7 +135,10 @@ const disabledReason = (
   return undefined;
 };
 
-const announceSandbox = (ctx: ExtensionContext, config: SandboxConfig): void => {
+const announceSandbox = (
+  ctx: codingAgentTypes.ExtensionContext,
+  config: configTypes.SandboxConfig,
+): void => {
   const networkCount = config.network?.allowedDomains?.length ?? 0;
   const writeCount = config.filesystem?.allowWrite?.length ?? 0;
   ctx.ui.setStatus(
@@ -142,8 +149,8 @@ const announceSandbox = (ctx: ExtensionContext, config: SandboxConfig): void => 
 };
 
 const initializeSandbox = (
-  msa: ExtensionAPI,
-  ctx: ExtensionContext,
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
   setEnabled: (enabled: boolean, initialized: boolean) => void,
 ) =>
   Effect.gen(function* () {
@@ -165,10 +172,10 @@ const initializeSandbox = (
         new SandboxError({ message: error instanceof Error ? error.message : String(error) }),
       try: () =>
         SandboxManager.initialize({
-          network: config.network,
+          enableWeakerNestedSandbox: extended.enableWeakerNestedSandbox,
           filesystem: config.filesystem,
           ignoreViolations: extended.ignoreViolations,
-          enableWeakerNestedSandbox: extended.enableWeakerNestedSandbox,
+          network: config.network,
         }),
     }).pipe(
       Effect.match({
@@ -184,7 +191,10 @@ const initializeSandbox = (
     );
   });
 
-const registerSandboxCommand = (msa: ExtensionAPI, getEnabled: () => boolean): void => {
+const registerSandboxCommand = (
+  msa: codingAgentTypes.ExtensionAPI,
+  getEnabled: () => boolean,
+): void => {
   msa.registerCommand("sandbox", {
     description: "Show sandbox configuration",
     handler: (_args, ctx) =>
@@ -214,7 +224,7 @@ const registerSandboxCommand = (msa: ExtensionAPI, getEnabled: () => boolean): v
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const localCwd = process.cwd();
   let sandboxEnabled = false;
   let sandboxInitialized = false;

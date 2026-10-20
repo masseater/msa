@@ -1,69 +1,31 @@
-export {
-  type BashOperations,
-  type BashSpawnContext,
-  type BashSpawnHook,
-  type BashToolDetails,
-  type BashToolInput,
-  type BashToolOptions,
-  createBashTool,
-  createBashToolDefinition,
-  createLocalBashOperations,
-} from "./bash.ts";
-export {
-  createEditTool,
-  createEditToolDefinition,
-  type EditOperations,
-  type EditToolDetails,
-  type EditToolInput,
-  type EditToolOptions,
-} from "./edit.ts";
-export {
-  createFindTool,
-  createFindToolDefinition,
-  type FindOperations,
-  type FindToolDetails,
-  type FindToolInput,
-  type FindToolOptions,
-} from "./find.ts";
-export {
-  createGrepTool,
-  createGrepToolDefinition,
-  type GrepOperations,
-  type GrepToolDetails,
-  type GrepToolInput,
-  type GrepToolOptions,
-} from "./grep.ts";
-export {
-  createLsTool,
-  createLsToolDefinition,
-  type LsOperations,
-  type LsToolDetails,
-  type LsToolInput,
-  type LsToolOptions,
-} from "./ls.ts";
-export {
-  createLocalPowerShellOperations,
-  createPowerShellTool,
-  createPowerShellToolDefinition,
-  type PowerShellOperations,
-  type PowerShellSpawnContext,
-  type PowerShellSpawnHook,
-  type PowerShellToolDetails,
-  type PowerShellToolInput,
-  type PowerShellToolOptions,
-} from "./powershell.ts";
-export {
-  createReadTool,
-  createReadToolDefinition,
-  type ReadOperations,
-  type ReadToolDetails,
-  type ReadToolInput,
-  type ReadToolOptions,
-} from "./read.ts";
-export {
-  createWriteTool,
-  createWriteToolDefinition,
-  type WriteOperations,
-  type WriteToolInput,
-  type WriteToolOptions,
-} from "./write.ts";
+import bash from "./bash.ts";
+import edit from "./edit.ts";
+import find from "./find.ts";
+import grep from "./grep.ts";
+import ls from "./ls.ts";
+import powershell from "./powershell.ts";
+import read from "./read.ts";
+import write from "./write.ts";
+
+const builtinTools = {
+  createBashTool: bash.createBashTool,
+  createBashToolDefinition: bash.createBashToolDefinition,
+  createEditTool: edit.createEditTool,
+  createEditToolDefinition: edit.createEditToolDefinition,
+  createFindTool: find.createFindTool,
+  createFindToolDefinition: find.createFindToolDefinition,
+  createGrepTool: grep.createGrepTool,
+  createGrepToolDefinition: grep.createGrepToolDefinition,
+  createLocalBashOperations: bash.createLocalBashOperations,
+  createLocalPowerShellOperations: powershell.createLocalPowerShellOperations,
+  createLsTool: ls.createLsTool,
+  createLsToolDefinition: ls.createLsToolDefinition,
+  createPowerShellTool: powershell.createPowerShellTool,
+  createPowerShellToolDefinition: powershell.createPowerShellToolDefinition,
+  createReadTool: read.createReadTool,
+  createReadToolDefinition: read.createReadToolDefinition,
+  createWriteTool: write.createWriteTool,
+  createWriteToolDefinition: write.createWriteToolDefinition,
+};
+
+export default builtinTools;

@@ -1,15 +1,15 @@
-import type { ExtensionRuntime } from "./types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
 type LoadState = "loading" | "active" | "failed";
 
-export class ExtensionApiLifecycle {
+export default class ExtensionApiLifecycle {
   readonly pendingFlagValues = new Map<string, boolean | string>();
   readonly loadingUnsubscribers: Array<() => void> = [];
   private readonly pendingRuntimeChanges: Array<() => void> = [];
   private state: LoadState = "loading";
-  private readonly runtime: ExtensionRuntime;
+  private readonly runtime: extensionsTypesTypes.ExtensionRuntime;
 
-  constructor(runtime: ExtensionRuntime) {
+  constructor(runtime: extensionsTypesTypes.ExtensionRuntime) {
     this.runtime = runtime;
   }
 

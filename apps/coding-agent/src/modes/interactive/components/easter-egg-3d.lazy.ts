@@ -8,12 +8,18 @@ function playEasterEgg3d(tui: tuiTypes.TUI): boolean {
   if (tui.hasOverlay()) return true;
   const screen = tui.getScreenLines();
   import("./easter-egg-3d.ts").then(
-    (module) => module.playEasterEgg3d(tui, screen),
+    (module) => module.default.playEasterEgg3d(tui, screen),
     () => {},
   );
   return true;
 }
 
-export function playArmin3d(tui: tuiTypes.TUI): boolean {
+function playArmin3d(tui: tuiTypes.TUI): boolean {
   return playEasterEgg3d(tui);
 }
+
+const easterEgg3dLazy = {
+  playArmin3d,
+};
+
+export default easterEgg3dLazy;

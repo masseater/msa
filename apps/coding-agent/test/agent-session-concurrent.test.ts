@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import sessionKit from "./session-kit.ts";
 
 const { awaited, runTest } = testing;
@@ -17,7 +17,7 @@ const {
 
 let tempDir = "";
 
-let session: AgentSession | undefined;
+let session: agentSessionTypes.AgentSession | undefined;
 
 const startAbortableSession = Effect.gen(function* () {
   const created = yield* createAgentSession({
@@ -30,7 +30,10 @@ const startAbortableSession = Effect.gen(function* () {
   return { firstPrompt, session: created.session };
 });
 
-const stopStreaming = (running: { session: AgentSession; firstPrompt: Promise<void> }) =>
+const stopStreaming = (running: {
+  session: agentSessionTypes.AgentSession;
+  firstPrompt: Promise<void>;
+}) =>
   Effect.gen(function* () {
     yield* awaited(running.session.abort());
     yield* awaited(running.firstPrompt.catch(() => {}));

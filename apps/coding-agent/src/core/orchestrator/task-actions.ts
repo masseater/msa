@@ -1,19 +1,30 @@
 import { Effect } from "effect";
 
-import { actionHelpers } from "./action-helpers.ts";
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-import { newId } from "./ids.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { scheduling } from "./schedule.ts";
-import { snapshots } from "./snapshot.ts";
-import { starting } from "./start.ts";
-import { store } from "./store.ts";
-import type { Note, NoteDelivery, SendNoteInput, TaskView } from "./types.ts";
+import actionHelpersModule from "./action-helpers.ts";
+import errors from "./errors.ts";
+import type errorsTypes from "./errors.types.ts";
+import ids from "./ids.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import schedule from "./schedule.ts";
+import snapshot from "./snapshot.ts";
+import start from "./start.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
+
+const { nowMillis } = runtimeModule;
+const { orchestratorError } = errors;
+const { newId } = ids;
+const { store } = storeModule;
+const { actionHelpers } = actionHelpersModule;
+const { snapshots } = snapshot;
+const { starting } = start;
+const { scheduling } = schedule;
 
 function sendNote(
-  runtime: Runtime,
-  input: SendNoteInput,
-): Effect.Effect<NoteDelivery, OrchestratorError> {
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.SendNoteInput,
+): Effect.Effect<orchestratorTypesTypes.NoteDelivery, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const database = runtime.database;
@@ -24,7 +35,7 @@ function sendNote(
     if (input.audience === "tasks" && taskIds.length === 0) {
       throw new Error("audience tasks needs taskIds");
     }
-    const note: Note = {
+    const note: orchestratorTypesTypes.Note = {
       author: "orchestrator",
       content: input.content,
       createdAt: now,
@@ -62,10 +73,10 @@ function sendNote(
 }
 
 function sendMessage(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   taskId: string,
   message: string,
-): Effect.Effect<TaskView, OrchestratorError> {
+): Effect.Effect<orchestratorTypesTypes.TaskView, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
@@ -79,7 +90,10 @@ function sendMessage(
   });
 }
 
-function stop(runtime: Runtime, taskId: string): Effect.Effect<TaskView, OrchestratorError> {
+function stop(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+): Effect.Effect<orchestratorTypesTypes.TaskView, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const database = runtime.database;
@@ -106,10 +120,10 @@ function stop(runtime: Runtime, taskId: string): Effect.Effect<TaskView, Orchest
 }
 
 function rerun(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   taskId: string,
   extra = "",
-): Effect.Effect<TaskView, OrchestratorError> {
+): Effect.Effect<orchestratorTypesTypes.TaskView, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
@@ -121,9 +135,9 @@ function rerun(
 }
 
 function setMaxConcurrent(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   value: number,
-): Effect.Effect<number, OrchestratorError> {
+): Effect.Effect<number, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     if (!Number.isInteger(value) || value < 1) {
       throw new Error("max concurrent threads must be an integer of at least 1");
@@ -138,4 +152,10 @@ function setMaxConcurrent(
   });
 }
 
-export const taskActions = { rerun, sendMessage, sendNote, setMaxConcurrent, stop };
+const taskActions = { rerun, sendMessage, sendNote, setMaxConcurrent, stop };
+
+const taskActionsModule = {
+  taskActions,
+};
+
+export default taskActionsModule;

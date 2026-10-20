@@ -5,14 +5,14 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import planModeExtension from "../examples/extensions/plan-mode/index.ts";
-import type { ExtensionAPI, ExtensionContext } from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 
 const { awaited, currentTimeMillis, runTest } = testing;
 
-type CommandHandler = (args: string, ctx: ExtensionContext) => Promise<void> | void;
+type CommandHandler = (args: string, ctx: extensionsTypes.ExtensionContext) => Promise<void> | void;
 type AgentEndHandler = (
   event: { type: "agent_end"; messages: agentTypes.AgentMessage[] },
-  ctx: ExtensionContext,
+  ctx: extensionsTypes.ExtensionContext,
 ) => Promise<void> | void;
 
 function createAssistantMessage(text: string): aiTypes.AssistantMessage {
@@ -54,7 +54,7 @@ const createPlanContext = (options: SetupOptions) =>
         strikethrough: (text: string) => text,
       },
     },
-  }) as unknown as ExtensionContext;
+  }) as unknown as extensionsTypes.ExtensionContext;
 
 type PlanState = {
   activeTools: string[];
@@ -64,10 +64,10 @@ type PlanState = {
 
 const createPlanApi = (state: PlanState) => {
   const spies = {
-    appendEntry: vi.fn<ExtensionAPI["appendEntry"]>(),
-    sendMessage: vi.fn<ExtensionAPI["sendMessage"]>(),
-    sendUserMessage: vi.fn<ExtensionAPI["sendUserMessage"]>(),
-    setActiveTools: vi.fn<ExtensionAPI["setActiveTools"]>((toolNames) => {
+    appendEntry: vi.fn<extensionsTypes.ExtensionAPI["appendEntry"]>(),
+    sendMessage: vi.fn<extensionsTypes.ExtensionAPI["sendMessage"]>(),
+    sendUserMessage: vi.fn<extensionsTypes.ExtensionAPI["sendUserMessage"]>(),
+    setActiveTools: vi.fn<extensionsTypes.ExtensionAPI["setActiveTools"]>((toolNames) => {
       state.activeTools = [...toolNames];
     }),
   };
@@ -83,7 +83,7 @@ const createPlanApi = (state: PlanState) => {
     },
     registerFlag: vi.fn(),
     registerShortcut: vi.fn(),
-  } as unknown as ExtensionAPI;
+  } as unknown as extensionsTypes.ExtensionAPI;
   return { api, spies };
 };
 

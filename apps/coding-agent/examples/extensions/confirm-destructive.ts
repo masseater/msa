@@ -1,12 +1,8 @@
-import type {
-  ExtensionAPI,
-  SessionBeforeSwitchEvent,
-  SessionMessageEntry,
-} from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-const registerBeforeSwitch = (msa: ExtensionAPI): void => {
-  msa.on("session_before_switch", (event: SessionBeforeSwitchEvent, ctx) =>
+const registerBeforeSwitch = (msa: codingAgentTypes.ExtensionAPI): void => {
+  msa.on("session_before_switch", (event: codingAgentTypes.SessionBeforeSwitchEvent, ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {
         if (!ctx.hasUI) return;
@@ -28,7 +24,8 @@ const registerBeforeSwitch = (msa: ExtensionAPI): void => {
 
         const entries = ctx.sessionManager.getEntries();
         const hasUnsavedWork = entries.some(
-          (e): e is SessionMessageEntry => e.type === "message" && e.message.role === "user",
+          (e): e is codingAgentTypes.SessionMessageEntry =>
+            e.type === "message" && e.message.role === "user",
         );
 
         if (hasUnsavedWork) {
@@ -50,7 +47,7 @@ const registerBeforeSwitch = (msa: ExtensionAPI): void => {
   );
 };
 
-const registerBeforeFork = (msa: ExtensionAPI): void => {
+const registerBeforeFork = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.on("session_before_fork", (event, ctx) =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -73,7 +70,7 @@ const registerBeforeFork = (msa: ExtensionAPI): void => {
   );
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   registerBeforeSwitch(msa);
   registerBeforeFork(msa);
 }

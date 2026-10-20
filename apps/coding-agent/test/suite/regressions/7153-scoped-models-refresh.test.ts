@@ -5,12 +5,11 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ScopedModelsSelectorComponent } from "../../../src/modes/interactive/components/scoped-models-selector.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import type scopedModelsSelectorTypes from "../../../src/modes/interactive/components/scoped-models-selector.types.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
-
 const { setKeybindings } = tui;
 
 const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
@@ -24,7 +23,7 @@ const showModelsSelector = Reflect.get(InteractiveMode.prototype, "showModelsSel
 ) => void;
 
 type SelectorFactory = (close: () => void) => {
-  component: ScopedModelsSelectorComponent;
+  component: scopedModelsSelectorTypes.ScopedModelsSelectorComponent;
   dispose?: () => void;
 };
 
@@ -35,7 +34,7 @@ function openSelector(
   let snapshot = initialModels;
   let finishRefresh: ((result: aiTypes.ModelsRefreshResult) => void) | undefined;
   let refreshSignal: AbortSignal | undefined;
-  let selector: ScopedModelsSelectorComponent | undefined;
+  let selector: scopedModelsSelectorTypes.ScopedModelsSelectorComponent | undefined;
   let dispose: (() => void) | undefined;
   const done = vi.fn();
   vi.spyOn(harness.session.modelRuntime, "getAvailableSnapshot").mockImplementation(() => snapshot);
@@ -63,6 +62,7 @@ function openSelector(
     updateAvailableProviderCount: vi.fn(),
   };
 
+  Object.setPrototypeOf(context, InteractiveMode.prototype);
   showModelsSelector.call(context);
   if (selector === undefined) throw new Error("Expected scoped-model selector to open");
   return {

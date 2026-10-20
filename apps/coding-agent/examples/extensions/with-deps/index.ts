@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Data, Effect } from "effect";
 import ms from "ms";
 import { Type } from "typebox";
@@ -7,7 +7,7 @@ class InvalidDurationError extends Data.TaggedError("InvalidDurationError")<{
   readonly message: string;
 }> {}
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
     description:
       "Parse a human-readable duration string (e.g., '2 days', '1h', '5m') to milliseconds",
@@ -21,7 +21,7 @@ export default function (msa: ExtensionAPI) {
             });
           }
           return {
-            content: [{ type: "text", text: `${params.duration} = ${result} milliseconds` }],
+            content: [{ text: `${params.duration} = ${result} milliseconds`, type: "text" }],
             details: {},
           };
         }),

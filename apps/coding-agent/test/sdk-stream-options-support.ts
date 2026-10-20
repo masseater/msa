@@ -3,14 +3,16 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import type { ExtensionFactory } from "../src/core/extensions/types.ts";
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { type Settings, SettingsManager } from "../src/core/settings-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import codingAgent from "../src/index.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { createAgentSession } = codingAgent;
+
+const { DefaultResourceLoader, SessionManager, SettingsManager } = codingAgent;
 const { createAssistantMessageEventStream, normalizeContext } = ai;
 
 const { awaited, currentTimeMillis, joinPath, makeDirectory, makeTempDir, removePath, runTest } =
@@ -107,8 +109,8 @@ const capturingProvider = (
 });
 
 const loadResources = Effect.fn("loadResources")(function* (
-  settingsManager: SettingsManager,
-  extensionFactory: ExtensionFactory | undefined,
+  settingsManager: settingsManagerTypes.SettingsManager,
+  extensionFactory: extensionsTypesTypes.ExtensionFactory | undefined,
 ) {
   const resourceLoader = new DefaultResourceLoader({
     agentDir: dirs.agentDir,
@@ -122,9 +124,9 @@ const loadResources = Effect.fn("loadResources")(function* (
 
 const captureStreamOptions = (
   api: aiTypes.Api,
-  settings: Partial<Settings>,
+  settings: Partial<settingsManagerTypes.Settings>,
   requestOptions: aiTypes.SimpleStreamOptions = {},
-  extensionFactory?: ExtensionFactory,
+  extensionFactory?: extensionsTypesTypes.ExtensionFactory,
   providerEvent?: unknown,
 ): Promise<aiTypes.SimpleStreamOptions | undefined> =>
   runTest(
@@ -178,7 +180,10 @@ const cacheWarmingModel = (): aiTypes.Model<aiTypes.Api> => ({
 });
 
 const createCacheWarmingSession = (
-  populate?: (manager: SessionManager, model: aiTypes.Model<aiTypes.Api>) => void,
+  populate?: (
+    manager: sessionManagerTypes.SessionManager,
+    model: aiTypes.Model<aiTypes.Api>,
+  ) => void,
 ) =>
   runTest(
     Effect.gen(function* () {

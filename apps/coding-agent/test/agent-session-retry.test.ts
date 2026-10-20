@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import agentSessionRetrySupport from "./agent-session-retry-support.ts";
 import sessionKit from "./session-kit.ts";
 
@@ -13,7 +13,7 @@ const { createRetrySession, delayAssistantMessageEnd, errorMessage, retryEvents,
 
 let tempDir = "";
 
-let session: AgentSession | undefined;
+let session: agentSessionTypes.AgentSession | undefined;
 
 const overloadedThenSuccess = (failCount: number) =>
   scriptedStream((call) =>

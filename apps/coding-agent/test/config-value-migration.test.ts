@@ -2,12 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { deleteEnv, readEnv, writeEnv } from "../src/core/process-env.ts";
-import { runMigrations } from "../src/migrations.ts";
+import config from "../src/config.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import processEnv from "../src/core/process-env.ts";
+import migrations from "../src/migrations.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { deleteEnv, readEnv, writeEnv } = processEnv;
+const { ENV_AGENT_DIR } = config;
+const { runMigrations } = migrations;
 const { createModelRegistry } = modelRuntimeTestUtils;
 
 const {

@@ -5,10 +5,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type ExternalEditorResult,
-  editInExternalEditor,
-} from "../src/modes/interactive/external-editor.ts";
+import externalEditor from "../src/modes/interactive/external-editor.ts";
+import type externalEditorTypes from "../src/modes/interactive/external-editor.types.ts";
+
+const { editInExternalEditor } = externalEditor;
 
 const {
   awaited,
@@ -35,7 +35,7 @@ interface EditorCapture {
 }
 
 function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
-  result: ExternalEditorResult;
+  result: externalEditorTypes.ExternalEditorResult;
   capture: EditorCapture;
 }> {
   return runTest(

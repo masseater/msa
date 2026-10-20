@@ -1,22 +1,19 @@
 import { Effect } from "effect";
 
-import { fromPromise, pathOperations } from "../platform/index.ts";
-import type { GrepOperations, RgMatch } from "./grep-support.ts";
-import { truncateLine } from "./truncate.ts";
+import platform from "../platform/index.ts";
+import type grepFormatTypes from "./grep-format.types.ts";
+import type grepSupportTypes from "./grep-support.types.ts";
+import truncate from "./truncate.ts";
 
-export interface GrepFormatterOptions {
-  ops: GrepOperations;
-  searchPath: string;
-  isDirectory: boolean;
-  contextValue: number;
-}
+const { fromPromise, pathOperations } = platform;
+const { truncateLine } = truncate;
 
-export class GrepFormatter {
+export default class GrepFormatter {
   linesTruncated = false;
   private readonly fileCache = new Map<string, string[]>();
-  private readonly options: GrepFormatterOptions;
+  private readonly options: grepFormatTypes.GrepFormatterOptions;
 
-  constructor(options: GrepFormatterOptions) {
+  constructor(options: grepFormatTypes.GrepFormatterOptions) {
     this.options = options;
   }
 
@@ -30,7 +27,7 @@ export class GrepFormatter {
     return pathOperations.basename(filePath);
   }
 
-  formatMatch(match: RgMatch): Effect.Effect<string[]> {
+  formatMatch(match: grepSupportTypes.RgMatch): Effect.Effect<string[]> {
     if (this.options.contextValue === 0 && match.lineText !== undefined) {
       const sanitized = match.lineText
         .replace(/\r\n/gu, "\n")

@@ -1,8 +1,11 @@
-import type { ExtensionContext } from "../../src/core/extensions/index.ts";
-import type { ModelRoute, ModelRouteRequest } from "../../src/core/virtual-models.ts";
+import type extensionsTypes from "../../src/core/extensions/index.types.ts";
+import type virtualModelsTypes from "../../src/core/virtual-models.types.ts";
 
 declare namespace virtualModelsSupportTypes {
-  type Route = (request: ModelRouteRequest, ctx: ExtensionContext) => ModelRoute;
+  type Route = (
+    request: virtualModelsTypes.ModelRouteRequest,
+    ctx: extensionsTypes.ExtensionContext,
+  ) => virtualModelsTypes.ModelRoute;
 }
 
 export type { virtualModelsSupportTypes as default };

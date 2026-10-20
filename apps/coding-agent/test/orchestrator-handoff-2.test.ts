@@ -2,10 +2,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { pendingHandoffs, takeHandoff } from "../src/core/orchestrator/handoff-files.ts";
-import { createOrchestratorToolDefinitions } from "../src/core/orchestrator/tools.ts";
+import handoffFiles from "../src/core/orchestrator/handoff-files.ts";
+import tools from "../src/core/orchestrator/tools.ts";
 import orchestratorHandoffSupport from "./orchestrator-handoff-support.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { createOrchestratorToolDefinitions } = tools;
+const { pendingHandoffs, takeHandoff } = handoffFiles;
 
 const {
   awaited,

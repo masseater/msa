@@ -2,9 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { FooterDataProvider } from "../src/core/footer-data-provider.ts";
+import FooterDataProvider from "../src/core/footer-data-provider.ts";
 import footerDataProviderSupport from "./footer-data-provider-support.ts";
-
 const { createPlainRepo, createReftableWorktree } = footerDataProviderSupport;
 
 const gitState = vi.hoisted(() => ({ branch: "main" }));
@@ -44,7 +43,9 @@ const childProcessMocks = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("child_process", () => childProcessMocks);
+vi.mock("child_process", (importOriginal) =>
+  importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, ...childProcessMocks })),
+);
 
 const { joinPath, makeDirectory, makeTempDir, pathExists, removePath, runTest, writeTextFile } =
   testing;

@@ -1,14 +1,13 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 
-import { BaseOverlay } from "./base-overlay.ts";
-
+import BaseOverlay from "./base-overlay.ts";
 const { matchesKey } = tui;
 
-export class EdgeTestComponent extends BaseOverlay {
+export default class EdgeTestComponent extends BaseOverlay {
   private done: () => void;
 
-  constructor(theme: Theme, done: () => void) {
+  constructor(theme: codingAgentTypes.Theme, done: () => void) {
     super(theme);
     this.done = done;
   }

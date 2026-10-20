@@ -1,12 +1,9 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import SignalShutdownExtensionCleanupSupport from "./5080-signal-shutdown-extension-cleanup-support.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import ProcessExitError from "./5080-signal-shutdown-extension-cleanup-support.ts";
 import type SignalShutdownExtensionCleanupSupportTypes from "./5080-signal-shutdown-extension-cleanup-support.types.ts";
-
-const { ProcessExitError } = SignalShutdownExtensionCleanupSupport;
-
 type InteractiveModePrivates = {
   registerSignalHandlers(this: SignalShutdownExtensionCleanupSupportTypes.HandlerContext): void;
   unregisterSignalHandlers(this: SignalShutdownExtensionCleanupSupportTypes.HandlerContext): void;

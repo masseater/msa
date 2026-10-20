@@ -1,14 +1,16 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import codingAgent from "../src/index.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import rpcPromptResponseAgent from "./rpc-prompt-response-agent.ts";
 import type rpcPromptResponseHostTypes from "./rpc-prompt-response-host.types.ts";
 import utilities from "./utilities.ts";
+
+const { AgentSession, SessionManager } = codingAgent;
 
 const { createTestResourceLoader } = utilities;
 const { createScriptedAgent } = rpcPromptResponseAgent;
@@ -17,7 +19,7 @@ const { createInMemoryModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 const { awaited, joinPath, makeTempDir, randomSuffix, removePath, toJsonText, writeTextFile } =
   testing;
 
-const stubRuntimeHost = (session: AgentSession) => ({
+const stubRuntimeHost = (session: agentSessionTypes.AgentSession) => ({
   dispose: () => Promise.resolve(),
   fork: () => Promise.resolve({ cancelled: true, selectedText: "" }),
   newSession: () => Promise.resolve({ cancelled: true }),
@@ -38,7 +40,7 @@ const prepareTempDir = Effect.fn("prepareTempDir")(function* () {
 const createRuntimeHost = (
   options: rpcPromptResponseHostTypes.RuntimeHostOptions,
 ): Effect.Effect<{
-  runtimeHost: Record<string, unknown> & { session: AgentSession };
+  runtimeHost: Record<string, unknown> & { session: agentSessionTypes.AgentSession };
   cleanup: Effect.Effect<void>;
 }> =>
   Effect.gen(function* () {

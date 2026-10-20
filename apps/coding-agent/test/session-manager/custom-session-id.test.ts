@@ -3,7 +3,7 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { SessionManager } from "../../src/core/session-manager.ts";
+import SessionManager from "../../src/core/session-manager.ts";
 
 const { basenameOf, currentTimeMillis, joinPath, nowIso, toJsonText } = testing;
 

@@ -1,8 +1,12 @@
 import { NodeServices } from "@effect/platform-node";
 import type aiTypes from "@msa/ai/index.types";
-import type { ExtensionAPI, ExtensionContext } from "@msa/coding-agent";
-import { CONFIG_DIR_NAME, getAgentDir } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Console, Effect, FileSystem, ManagedRuntime, Option, Path, Schema } from "effect";
+
+import type presetStoreTypes from "./preset-store.types.ts";
+
+const { CONFIG_DIR_NAME, getAgentDir } = codingAgent;
 
 const ThinkingLevelSchema = Schema.Literals([
   "off",
@@ -24,26 +28,16 @@ const PresetSchema = Schema.Struct({
 
 const PresetsSchema = Schema.Record(Schema.String, PresetSchema);
 
-export type Preset = typeof PresetSchema.Type;
-export type PresetsConfig = typeof PresetsSchema.Type;
-export type ThinkingLevel = typeof ThinkingLevelSchema.Type;
+type Preset = typeof PresetSchema.Type;
+
+type PresetsConfig = typeof PresetsSchema.Type;
+
+type ThinkingLevel = typeof ThinkingLevelSchema.Type;
 
 interface OriginalState {
   model: aiTypes.Model<aiTypes.Api> | undefined;
   thinkingLevel: ThinkingLevel;
   tools: string[];
-}
-
-export interface PresetStore {
-  presets: PresetsConfig;
-  activeName: string | undefined;
-  active: Preset | undefined;
-  load(cwd: string): Promise<void>;
-  apply(name: string, preset: Preset, ctx: ExtensionContext): Promise<boolean>;
-  clear(ctx: ExtensionContext): Promise<void>;
-  restoreActive(name: string): void;
-  updateStatus(ctx: ExtensionContext): void;
-  order(): string[];
 }
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -100,9 +94,9 @@ const describePreset = (preset: Preset): string => {
   return parts.join(" | ");
 };
 
-export const buildPresetDescription = describePreset;
+const buildPresetDescription = describePreset;
 
-export const presetsPathHint = (cwd: string): string =>
+const presetsPathHint = (cwd: string): string =>
   `${pathService.join(getAgentDir(), "presets.json")} or ${pathService.join(cwd, CONFIG_DIR_NAME, "presets.json")}`;
 
 interface StoreState {
@@ -112,7 +106,11 @@ interface StoreState {
   originalState: OriginalState | undefined;
 }
 
-const rememberOriginal = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionContext): void => {
+const rememberOriginal = (
+  msa: codingAgentTypes.ExtensionAPI,
+  state: StoreState,
+  ctx: codingAgentTypes.ExtensionContext,
+): void => {
   if (state.activeName !== undefined) return;
   state.originalState = {
     model: ctx.model,
@@ -121,7 +119,12 @@ const rememberOriginal = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionCo
   };
 };
 
-const applyModel = (msa: ExtensionAPI, name: string, preset: Preset, ctx: ExtensionContext) =>
+const applyModel = (
+  msa: codingAgentTypes.ExtensionAPI,
+  name: string,
+  preset: Preset,
+  ctx: codingAgentTypes.ExtensionContext,
+) =>
   Effect.gen(function* () {
     if (
       preset.provider === undefined ||
@@ -151,10 +154,10 @@ const applyModel = (msa: ExtensionAPI, name: string, preset: Preset, ctx: Extens
   });
 
 const applyTools = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   name: string,
   preset: Preset,
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
 ): void => {
   if (preset.tools === undefined || preset.tools.length === 0) return;
 
@@ -171,11 +174,11 @@ const applyTools = (
 };
 
 const apply = (
-  msa: ExtensionAPI,
+  msa: codingAgentTypes.ExtensionAPI,
   state: StoreState,
   name: string,
   preset: Preset,
-  ctx: ExtensionContext,
+  ctx: codingAgentTypes.ExtensionContext,
 ) =>
   Effect.gen(function* () {
     rememberOriginal(msa, state, ctx);
@@ -191,7 +194,11 @@ const apply = (
     return true;
   });
 
-const clearPreset = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionContext) =>
+const clearPreset = (
+  msa: codingAgentTypes.ExtensionAPI,
+  state: StoreState,
+  ctx: codingAgentTypes.ExtensionContext,
+) =>
   Effect.gen(function* () {
     state.activeName = undefined;
     state.active = undefined;
@@ -211,7 +218,7 @@ const clearPreset = (msa: ExtensionAPI, state: StoreState, ctx: ExtensionContext
     ctx.ui.notify("Preset cleared, defaults restored", "info");
   });
 
-export const createPresetStore = (msa: ExtensionAPI): PresetStore => {
+const createPresetStore = (msa: codingAgentTypes.ExtensionAPI): presetStoreTypes.PresetStore => {
   const state: StoreState = {
     active: undefined,
     activeName: undefined,
@@ -254,3 +261,14 @@ export const createPresetStore = (msa: ExtensionAPI): PresetStore => {
     },
   };
 };
+
+const presetStore = {
+  PresetSchema,
+  PresetsSchema,
+  ThinkingLevelSchema,
+  buildPresetDescription,
+  createPresetStore,
+  presetsPathHint,
+};
+
+export default presetStore;

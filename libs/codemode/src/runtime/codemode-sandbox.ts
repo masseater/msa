@@ -13,7 +13,6 @@ import sandboxBase from "./sandbox-base.ts";
 const { errorMessage } = preludeSource;
 const { RuntimeError } = bridge;
 const { loadWasm } = inline;
-const { CodemodeSandboxBase } = sandboxBase;
 
 function defaultWorkerUrl(): URL {
   return new URL(import.meta.url.endsWith(".ts") ? "./worker.ts" : "./worker.js", import.meta.url);
@@ -100,7 +99,7 @@ function workerLauncher(options: typesModule.CodemodeSandboxOptions): protocolTy
     });
 }
 
-export default class CodemodeSandbox extends CodemodeSandboxBase {
+export default class CodemodeSandbox extends sandboxBase.CodemodeSandboxBase {
   constructor(options: typesModule.CodemodeSandboxOptions = {}) {
     super(options, workerLauncher(options));
   }

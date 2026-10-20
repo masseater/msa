@@ -2,13 +2,14 @@ import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { beforeAll, beforeEach, describe, expect, test } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { SessionEntry, SessionMessageEntry } from "../src/core/session-manager.ts";
-import { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import treeSelector3Support from "./tree-selector-3-support.ts";
 import treeSelectorSupport from "./tree-selector-support.ts";
 
+const { initTheme } = themeModule;
 const { setKeybindings } = tui;
 
 const { CTRL_LEFT, CTRL_RIGHT, DOWN, buildBranchingTree } = treeSelector3Support;
@@ -25,7 +26,10 @@ beforeEach(() => {
   setKeybindings(new KeybindingsManager());
 });
 
-function toolCallOnlyAssistant(id: string, parentId: string | null): SessionMessageEntry {
+function toolCallOnlyAssistant(
+  id: string,
+  parentId: string | null,
+): sessionManagerTypes.SessionMessageEntry {
   return {
     id,
     message: {
@@ -88,7 +92,7 @@ const foldAndNavigateOnNonActiveBranch = () => {
 };
 
 const foldAndNavigateWithMultipleRoots = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     userMessage("user-1", null, "first root"),
     assistantMessage("asst-1", "user-1", "response 1"),
     userMessage("user-2", null, "second root"),
@@ -129,7 +133,7 @@ const foldAndNavigateWithMultipleRoots = () => {
 };
 
 const foldingRootHidesDescendantsEvenWhenIntermediate = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     userMessage("user-1", null, "hello"),
     toolCallOnlyAssistant("tool-asst-1", "user-1"),
     userMessage("user-2", "tool-asst-1", "follow up"),

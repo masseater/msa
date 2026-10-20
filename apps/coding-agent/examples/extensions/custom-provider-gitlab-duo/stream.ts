@@ -3,8 +3,12 @@ import type compatTypes from "@msa/ai/compat.types";
 import { Clock, Data, Effect, Stream } from "effect";
 import { dual } from "effect/Function";
 
-import { GitLabAuthError, getDirectAccessToken } from "./auth.ts";
-import { MODEL_MAP } from "./config.ts";
+import auth from "./auth.ts";
+import type authTypes from "./auth.types.ts";
+import config from "./config.ts";
+
+const { MODEL_MAP } = config;
+const { getDirectAccessToken } = auth;
 
 const { anthropicMessagesApi, createAssistantMessageEventStream, openAIResponsesApi } =
   compatModule;
@@ -111,7 +115,7 @@ const streamGitLabDuoImpl = (
     Effect.gen(function* () {
       const timestamp = yield* Clock.currentTimeMillis;
       yield* runStream(stream, model, context, options).pipe(
-        Effect.catch((error: GitLabStreamError | GitLabAuthError) =>
+        Effect.catch((error: GitLabStreamError | authTypes.GitLabAuthError) =>
           Effect.sync(() => {
             stream.push(errorEvent(model, error.message, timestamp));
             stream.end();
@@ -124,7 +128,7 @@ const streamGitLabDuoImpl = (
   return stream;
 };
 
-export const streamGitLabDuo: {
+const streamGitLabDuo: {
   (
     model: compatTypes.Model<compatTypes.Api>,
     context: compatTypes.TranscriptContext,
@@ -135,3 +139,9 @@ export const streamGitLabDuo: {
     options?: compatTypes.SimpleStreamOptions,
   ): (model: compatTypes.Model<compatTypes.Api>) => compatTypes.AssistantMessageEventStream;
 } = dual((args: IArguments) => args.length >= 2, streamGitLabDuoImpl);
+
+const stream = {
+  streamGitLabDuo,
+};
+
+export default stream;

@@ -3,11 +3,15 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { InteractiveMode, SessionManager, SettingsManager } from "../src/index.ts";
-import type { StatusIndicator } from "../src/modes/interactive/components/status-indicator.ts";
-import type { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import src from "../src/index.ts";
+import type statusIndicatorTypes from "../src/modes/interactive/components/status-indicator.types.ts";
+import type TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
+import type treeSelectorTypes from "../src/modes/interactive/components/tree-selector.types.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import utilities from "./utilities.ts";
+
+const { InteractiveMode, SessionManager, SettingsManager } = src;
+const { initTheme } = themeModule;
 
 const { Container } = tui;
 
@@ -43,15 +47,15 @@ const createTreeSession = () => {
 };
 
 type TreeSelectorFactory = (done: () => void) => {
-  component: TreeSelectorComponent;
-  focus: TreeSelectorComponent;
+  component: treeSelectorTypes.TreeSelectorComponent;
+  focus: treeSelectorTypes.TreeSelectorComponent;
 };
 
 function createTreeUI() {
   const sessionManager = SessionManager.inMemory();
   const targetId = sessionManager.appendMessage(userMsg("first"));
   sessionManager.appendMessage(assistantMsg("reply"));
-  let selector: TreeSelectorComponent | undefined;
+  let selector: treeSelectorTypes.TreeSelectorComponent | undefined;
   const onEscape = vi.fn();
   const ui = {
     chatContainer: new Container(),
@@ -74,23 +78,21 @@ function createTreeUI() {
     settingsManager: SettingsManager.inMemory(),
     showError: vi.fn(),
     showStatus: vi.fn(),
-    showStatusIndicator: vi.fn((indicator: StatusIndicator) => indicator.dispose()),
+    showStatusIndicator: vi.fn((indicator: statusIndicatorTypes.StatusIndicator) =>
+      indicator.dispose(),
+    ),
     ui: { requestRender: vi.fn(), terminal: { rows: 24, setProgress: vi.fn() } },
   };
   const showTreeSelector = Reflect.get(InteractiveMode.prototype, "showTreeSelector") as (
     this: typeof ui,
   ) => void;
+  Object.setPrototypeOf(ui, InteractiveMode.prototype);
   showTreeSelector.call(ui);
 
   return {
     onEscape,
     select() {
-      return runTest(
-        Effect.gen(function* () {
-          expect(selector).toBeDefined();
-          yield* awaited(selector!.getTreeList().onSelect!(targetId));
-        }),
-      );
+      return createTreeUIPart1(selector, targetId);
     },
     targetId,
     ui,
@@ -222,3 +224,12 @@ describe("InteractiveMode tree navigation availability", () => {
       }),
     ));
 });
+
+function createTreeUIPart1(selector: TreeSelectorComponent | undefined, targetId: string) {
+  return runTest(
+    Effect.gen(function* () {
+      expect(selector).toBeDefined();
+      yield* awaited(selector!.getTreeList().onSelect!(targetId));
+    }),
+  );
+}

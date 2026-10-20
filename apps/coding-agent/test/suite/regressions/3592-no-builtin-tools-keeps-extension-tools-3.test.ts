@@ -2,13 +2,11 @@ import compat from "@msa/ai/compat";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  createAgentSessionFromServices,
-  createAgentSessionServices,
-} from "../../../src/core/agent-session-services.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
+import agentSessionServices from "../../../src/core/agent-session-services.ts";
+import SessionManager from "../../../src/core/session-manager.ts";
+import SettingsManager from "../../../src/core/settings-manager.ts";
 import regression3592Support from "./3592-no-builtin-tools-keeps-extension-tools-support.ts";
+const { createAgentSessionFromServices, createAgentSessionServices } = agentSessionServices;
 
 const { getModel } = compat;
 

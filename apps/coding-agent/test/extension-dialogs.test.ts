@@ -3,13 +3,12 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import { ExtensionInputComponent } from "../src/modes/interactive/components/extension-input.ts";
-import { ExtensionSelectorComponent } from "../src/modes/interactive/components/extension-selector.ts";
-import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
-import { ExtensionDialogs } from "../src/modes/interactive/extension-dialogs.ts";
-import type { ProgramStatusReporter } from "../src/modes/interactive/program-status-reporter.ts";
+import ExtensionInputComponent from "../src/modes/interactive/components/extension-input.ts";
+import ExtensionSelectorComponent from "../src/modes/interactive/components/extension-selector.ts";
+import EditorSlot from "../src/modes/interactive/editor-slot.ts";
+import ExtensionDialogs from "../src/modes/interactive/extension-dialogs.ts";
+import type programStatusReporterTypes from "../src/modes/interactive/program-status-reporter.types.ts";
 import tuiKit from "./tui-kit.ts";
-
 const { Container, Editor, TuiMainScreen, setKeybindings } = tui;
 
 const { KeybindingsManager, VirtualTerminal, getEditorTheme, initTheme } = tuiKit;
@@ -31,7 +30,7 @@ function createDialogs() {
     editorSlot,
     getExternalEditorCommand: () => undefined,
     keybindings,
-    programStatus: { setBlocked } as unknown as ProgramStatusReporter,
+    programStatus: { setBlocked } as unknown as programStatusReporterTypes.ProgramStatusReporter,
     toggleToolsExpanded: () => {},
     ui,
   });

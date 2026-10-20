@@ -1,25 +1,26 @@
-import type { EventBus } from "../event-bus.ts";
-import { mcpMembers, providerMembers } from "./loader-api-providers.ts";
-import { flagMembers, rendererMembers, toolAndCommandMembers } from "./loader-api-registration.ts";
-import { eventMembers, messageMembers, stateMembers } from "./loader-api-session.ts";
-import { ExtensionApiLifecycle } from "./loader-lifecycle.ts";
-import type { ApiScope } from "./loader-scope.ts";
-import type { Extension, ExtensionAPI, ExtensionRuntime } from "./types.ts";
+import loaderApiProviders from "./loader-api-providers.ts";
+import loaderApiRegistration from "./loader-api-registration.ts";
+import loaderApiSession from "./loader-api-session.ts";
+import type loaderApiTypes from "./loader-api.types.ts";
+import ExtensionApiLifecycle from "./loader-lifecycle.ts";
+import type loaderScopeTypes from "./loader-scope.ts";
+import type extensionsTypesTypes from "./types.types.ts";
+const { eventMembers, messageMembers, stateMembers } = loaderApiSession;
+const { flagMembers, rendererMembers, toolAndCommandMembers } = loaderApiRegistration;
+const { mcpMembers, providerMembers } = loaderApiProviders;
 
-export interface ExtensionApiInput {
-  extension: Extension;
-  runtime: ExtensionRuntime;
-  cwd: string;
-  eventBus: EventBus;
-}
-
-export function createExtensionAPI({ extension, runtime, cwd, eventBus }: ExtensionApiInput): {
-  api: ExtensionAPI;
+function createExtensionAPI({
+  extension,
+  runtime,
+  cwd,
+  eventBus,
+}: loaderApiTypes.ExtensionApiInput): {
+  api: extensionsTypesTypes.ExtensionAPI;
   commit: () => void;
   discard: () => void;
 } {
   const lifecycle = new ExtensionApiLifecycle(runtime);
-  const scope: ApiScope = {
+  const scope: loaderScopeTypes.ApiScope = {
     applyRuntimeChange: (change) => lifecycle.applyRuntimeChange(change),
     assertActive: () => {
       if (lifecycle.isFailed()) {
@@ -47,7 +48,13 @@ export function createExtensionAPI({ extension, runtime, cwd, eventBus }: Extens
     ...stateMembers(scope),
     ...providerMembers(scope),
     ...mcpMembers(scope),
-  } as ExtensionAPI;
+  } as extensionsTypesTypes.ExtensionAPI;
 
   return { api, commit: () => lifecycle.commit(), discard: () => lifecycle.discard() };
 }
+
+const loaderApi = {
+  createExtensionAPI,
+};
+
+export default loaderApi;

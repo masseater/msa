@@ -1,39 +1,29 @@
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import { awaited, awaitingWith } from "../../core/awaiting.ts";
-import type { ExtensionUIDialogOptions } from "../../core/extensions/index.ts";
-import type { KeybindingsManager } from "../../core/keybindings.ts";
-import { ExtensionEditorComponent } from "./components/extension-editor.ts";
-import { ExtensionInputComponent } from "./components/extension-input.ts";
-import { ExtensionSelectorComponent } from "./components/extension-selector.ts";
-import type { EditorSlot } from "./editor-slot.ts";
-import type { BlockedStatus, ProgramStatusReporter } from "./program-status-reporter.ts";
-
+import awaitingModule from "../../core/awaiting.ts";
+import type extensionsTypes from "../../core/extensions/index.types.ts";
+import ExtensionEditorComponent from "./components/extension-editor.ts";
+import ExtensionInputComponent from "./components/extension-input.ts";
+import ExtensionSelectorComponent from "./components/extension-selector.ts";
+import type extensionDialogsTypes from "./extension-dialogs.types.ts";
+import type programStatusReporterTypes from "./program-status-reporter.types.ts";
+const { awaited, awaitingWith } = awaitingModule;
 type Dialog = tuiTypes.Component & { dispose?(): void };
 
-export interface ExtensionDialogsHost {
-  readonly ui: tuiTypes.TUI;
-  readonly editorSlot: EditorSlot;
-  readonly programStatus: ProgramStatusReporter;
-  readonly keybindings: KeybindingsManager;
-  getExternalEditorCommand(): string | undefined;
-  toggleToolsExpanded(): void;
-}
-
-export class ExtensionDialogs {
-  private readonly host: ExtensionDialogsHost;
+export default class ExtensionDialogs {
+  private readonly host: extensionDialogsTypes.ExtensionDialogsHost;
   private active: Dialog | undefined;
 
-  constructor(host: ExtensionDialogsHost) {
+  constructor(host: extensionDialogsTypes.ExtensionDialogsHost) {
     this.host = host;
   }
 
   select(
     title: string,
     options: string[],
-    opts?: ExtensionUIDialogOptions,
-    blocked: BlockedStatus = { kind: "question", message: title },
+    opts?: extensionsTypes.ExtensionUIDialogOptions,
+    blocked: programStatusReporterTypes.BlockedStatus = { kind: "question", message: title },
   ): Promise<string | undefined> {
     return this.open<string>(
       (finish) =>
@@ -53,7 +43,11 @@ export class ExtensionDialogs {
     );
   }
 
-  confirm(title: string, message: string, opts?: ExtensionUIDialogOptions): Promise<boolean> {
+  confirm(
+    title: string,
+    message: string,
+    opts?: extensionsTypes.ExtensionUIDialogOptions,
+  ): Promise<boolean> {
     return Effect.runPromise(
       awaitingWith(function* () {
         const result = yield* awaited(
@@ -70,7 +64,7 @@ export class ExtensionDialogs {
   input(
     title: string,
     placeholder?: string,
-    opts?: ExtensionUIDialogOptions,
+    opts?: extensionsTypes.ExtensionUIDialogOptions,
   ): Promise<string | undefined> {
     return this.open<string>(
       (finish) =>
@@ -109,7 +103,7 @@ export class ExtensionDialogs {
 
   private open<T>(
     create: (finish: (value: T | undefined) => void) => Dialog,
-    blocked: BlockedStatus,
+    blocked: programStatusReporterTypes.BlockedStatus,
     signal?: AbortSignal,
   ): Promise<T | undefined> {
     return Effect.runPromise(

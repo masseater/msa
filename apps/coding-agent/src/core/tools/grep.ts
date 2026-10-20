@@ -1,39 +1,41 @@
 import type agentTypes from "@msa/agent-core/index.types";
+import { Effect } from "effect";
 import type { Static } from "typebox";
 
-import type { ExtensionContext, ToolDefinition } from "../extensions/types.ts";
-import { abortedBy, nonEmptyOr, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { defaultGrepOperations, runGrep } from "./grep-run.ts";
-import {
-  DEFAULT_GREP_LIMIT,
-  type GrepOperations,
-  type GrepToolDetails,
-  grepSchema,
-} from "./grep-support.ts";
-import { resolveToCwd } from "./path-utils.ts";
-import { grepRenderers } from "./renderers/grep.ts";
-import { type CwdFactory, cwdFactory, wrapToolDefinition } from "./tool-definition-wrapper.ts";
-import { DEFAULT_MAX_BYTES, GREP_MAX_LINE_LENGTH } from "./truncate.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import grepRun from "./grep-run.ts";
+import grepSupport from "./grep-support.ts";
+import type grepSupportTypes from "./grep-support.types.ts";
+import type grepTypes from "./grep.types.ts";
+import pathUtils from "./path-utils.ts";
+import grepModule from "./renderers/grep.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+import truncate from "./truncate.ts";
 
-export { type GrepOperations, type GrepToolDetails } from "./grep-support.ts";
+const { DEFAULT_GREP_LIMIT, grepSchema } = grepSupport;
+const { defaultGrepOperations, runGrep } = grepRun;
+const { DEFAULT_MAX_BYTES, GREP_MAX_LINE_LENGTH } = truncate;
+const { abortedBy, nonEmptyOr, unwrapForeign } = platform;
+const { resolveToCwd } = pathUtils;
+const { grepRenderers } = grepModule;
+const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
-export const grepToolSystemPromptContribution = {
+const grepToolSystemPromptContribution = {
   guidelines: [],
   snippet: "Search file contents for patterns (respects .gitignore)",
 } as const;
-
-export type GrepToolInput = Static<typeof grepSchema>;
-
-export interface GrepToolOptions {
-  operations?: GrepOperations;
-}
 
 type GrepInput = Omit<Static<typeof grepSchema>, "path"> & { path?: string };
 
 const createGrepToolDefinitionImpl = (
   cwd: string,
-  options?: GrepToolOptions,
-): ToolDefinition<typeof grepSchema, GrepToolDetails | undefined> => {
+  options?: grepTypes.GrepToolOptions,
+): extensionsTypesTypes.ToolDefinition<
+  typeof grepSchema,
+  grepSupportTypes.GrepToolDetails | undefined
+> => {
   const ops = options?.operations ?? defaultGrepOperations;
   return {
     annotations: { readOnlyHint: true },
@@ -43,18 +45,18 @@ const createGrepToolDefinitionImpl = (
       { pattern, path: searchDir, glob, ignoreCase, literal, context, limit }: GrepInput,
       signal?: AbortSignal,
       _onUpdate?,
-      ctx?: ExtensionContext,
+      ctx?: extensionsTypesTypes.ExtensionContext,
     ) =>
-      platformRuntime.runPromise(
+      Effect.runPromise(
         unwrapForeign(
           runGrep(ops, {
-            pattern,
-            searchPath: resolveToCwd(nonEmptyOr(searchDir, "."), nonEmptyOr(ctx?.cwd, cwd)),
+            contextValue: context !== undefined && context > 0 ? context : 0,
+            effectiveLimit: Math.max(1, limit ?? DEFAULT_GREP_LIMIT),
             glob,
             ignoreCase,
             literal,
-            contextValue: context !== undefined && context > 0 ? context : 0,
-            effectiveLimit: Math.max(1, limit ?? DEFAULT_GREP_LIMIT),
+            pattern,
+            searchPath: resolveToCwd(nonEmptyOr(searchDir, "."), nonEmptyOr(ctx?.cwd, cwd)),
           }).pipe(abortedBy(signal)),
         ),
       ),
@@ -66,12 +68,23 @@ const createGrepToolDefinitionImpl = (
   };
 };
 
-export const createGrepToolDefinition: CwdFactory<
-  GrepToolOptions,
-  ToolDefinition<typeof grepSchema, GrepToolDetails | undefined>
+const createGrepToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
+  grepTypes.GrepToolOptions,
+  extensionsTypesTypes.ToolDefinition<
+    typeof grepSchema,
+    grepSupportTypes.GrepToolDetails | undefined
+  >
 > = cwdFactory(createGrepToolDefinitionImpl);
 
-export const createGrepTool: CwdFactory<
-  GrepToolOptions,
+const createGrepTool: toolDefinitionWrapperTypes.CwdFactory<
+  grepTypes.GrepToolOptions,
   agentTypes.AgentTool<typeof grepSchema>
 > = cwdFactory((cwd, options) => wrapToolDefinition(createGrepToolDefinitionImpl(cwd, options)));
+
+const grep = {
+  createGrepTool,
+  createGrepToolDefinition,
+  grepToolSystemPromptContribution,
+};
+
+export default grep;

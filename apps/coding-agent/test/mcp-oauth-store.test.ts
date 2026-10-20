@@ -2,8 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemoryAuthStorageBackend } from "../src/core/auth-storage.ts";
-import { McpOAuthCredentialStore } from "../src/extensions/mcp/oauth.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
+import McpOAuthCredentialStore from "../src/extensions/mcp/mcp-oauth-credential-store.ts";
 
 const { awaited, runTest } = testing;
 
@@ -13,7 +14,7 @@ function state(accessToken: string) {
   return { serverUrl: SERVER_URL, tokens: { access_token: accessToken, token_type: "Bearer" } };
 }
 
-function storedKeys(backend: InMemoryAuthStorageBackend): string[] {
+function storedKeys(backend: authStorageTypes.InMemoryAuthStorageBackend): string[] {
   return Object.keys(JSON.parse(backend.withLock((current) => ({ result: current ?? "{}" }))));
 }
 

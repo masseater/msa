@@ -3,13 +3,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createAllToolDefinitions, createAllTools } from "../src/core/tools/index.ts";
-import { wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import toolsModule from "../src/core/tools/index.ts";
+import toolDefinitionWrapper from "../src/core/tools/tool-definition-wrapper.ts";
 
+const { createAllToolDefinitions, createAllTools } = toolsModule;
+const { wrapToolDefinition } = toolDefinitionWrapper;
+const { createAgentSession } = sdk;
 const { getModel } = compat;
 
 const { awaited, joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;

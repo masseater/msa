@@ -1,14 +1,9 @@
 import env from "@msa/ai/utils/env";
-import {
-  CustomEditor,
-  type ExtensionAPI,
-  type ExtensionContext,
-  type KeybindingsManager,
-} from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect, type Fiber, Option } from "effect";
-
 const { readProcessEnv } = env;
 
 const { truncateToWidth, visibleWidth } = tuiModule;
@@ -56,7 +51,7 @@ function formatCwd(cwd: string): string {
   return cwd;
 }
 
-function formatContext(ctx: ExtensionContext): string {
+function formatContext(ctx: codingAgentTypes.ExtensionContext): string {
   const usage = ctx.getContextUsage();
   const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
   if (contextWindow === undefined || usage === undefined || usage.percent === null) {
@@ -80,18 +75,18 @@ interface StatusState {
 }
 
 interface EditorDeps {
-  readonly msa: ExtensionAPI;
-  readonly ctx: ExtensionContext;
+  readonly msa: codingAgentTypes.ExtensionAPI;
+  readonly ctx: codingAgentTypes.ExtensionContext;
   readonly state: StatusState;
 }
 
-class BorderStatusEditor extends CustomEditor {
+class BorderStatusEditor extends codingAgent.CustomEditor {
   private readonly deps: EditorDeps;
 
   constructor(
     tui: tuiTypes.TUI,
     theme: tuiTypes.EditorTheme,
-    keybindings: KeybindingsManager,
+    keybindings: codingAgentTypes.KeybindingsManager,
     deps: EditorDeps,
   ) {
     super(tui, theme, keybindings, { paddingX: 0 });
@@ -141,7 +136,11 @@ const stopSpinner = (state: StatusState) => {
   state.spinnerFiber = undefined;
 };
 
-const refreshBranch = (msa: ExtensionAPI, ctx: ExtensionContext, state: StatusState) =>
+const refreshBranch = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
+  state: StatusState,
+) =>
   Effect.runPromise(
     Effect.gen(function* () {
       const result = yield* Effect.promise(() =>
@@ -153,7 +152,7 @@ const refreshBranch = (msa: ExtensionAPI, ctx: ExtensionContext, state: StatusSt
     }),
   );
 
-const registerAgentEvents = (msa: ExtensionAPI, state: StatusState): void => {
+const registerAgentEvents = (msa: codingAgentTypes.ExtensionAPI, state: StatusState): void => {
   msa.on("agent_start", () => {
     state.isWorking = true;
     startSpinner(state);
@@ -172,7 +171,7 @@ const registerAgentEvents = (msa: ExtensionAPI, state: StatusState): void => {
   });
 };
 
-const registerSessionStart = (msa: ExtensionAPI, state: StatusState): void => {
+const registerSessionStart = (msa: codingAgentTypes.ExtensionAPI, state: StatusState): void => {
   msa.on("session_start", (_event, ctx) => {
     ctx.ui.setWorkingVisible(false);
     ctx.ui.setFooter(() => ({ invalidate: () => {}, render: () => [] }));
@@ -186,7 +185,7 @@ const registerSessionStart = (msa: ExtensionAPI, state: StatusState): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const state: StatusState = {
     activeTui: undefined,
     branch: undefined,

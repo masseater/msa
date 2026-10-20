@@ -1,14 +1,11 @@
 import type telemetryTypes from "@msa/telemetry/index.types";
 
-export interface OpenSpan {
-  readonly span: telemetryTypes.TelemetrySpan;
-  end(status?: telemetryTypes.SpanStatus): void;
-}
+import type openSpanTypes from "./open-span.types.ts";
 
-export function openSpan(
+function openSpan(
   context: telemetryTypes.TelemetryContext,
   options: telemetryTypes.SpanOptions,
-): OpenSpan {
+): openSpanTypes.OpenSpan {
   const done = Promise.withResolvers<void>();
   let opened: telemetryTypes.TelemetrySpan | undefined;
   void context.startSpan(options, (span) => {
@@ -27,3 +24,9 @@ export function openSpan(
     span,
   };
 }
+
+const openSpanModule = {
+  openSpan,
+};
+
+export default openSpanModule;

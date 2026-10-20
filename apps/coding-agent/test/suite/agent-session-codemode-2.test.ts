@@ -2,16 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { CustomEntry } from "../../src/core/session-manager.ts";
-import { createCodemodeExtension } from "../../src/extensions/codemode/index.ts";
-import {
-  CODEMODE_STORE_ENTRY_TYPE,
-  type CodemodeToolDetails,
-} from "../../src/extensions/codemode/tool.ts";
+import extension from "../../src/extensions/codemode/extension.ts";
+import tool from "../../src/extensions/codemode/tool.ts";
+import type codingAgentTypes from "../../src/index.types.ts";
 import agentSessionCodemode2Support from "./agent-session-codemode-2-support.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { createCodemodeExtension } = extension;
+
+const { CODEMODE_STORE_ENTRY_TYPE } = tool;
 
 const { harnesses3, increment, setup3 } = agentSessionCodemode2Support;
 
@@ -28,7 +29,7 @@ function storeEntries(harness: harnessTypes.Harness): unknown[] {
   return harness.sessionManager
     .getBranch()
     .filter(
-      (entry): entry is CustomEntry =>
+      (entry): entry is codingAgentTypes.CustomEntry =>
         entry.type === "custom" && entry.customType === CODEMODE_STORE_ENTRY_TYPE,
     )
     .map((entry) => entry.data);
@@ -88,7 +89,7 @@ const truncatesOutputToTheTokenBudget = Effect.gen(function* () {
       `// @options: {"max_output_tokens": 30}\nfor (let i = 0; i < 100; i++) text("row " + i);\nimage("data:image/png;base64,${TINY_PNG_BASE64}");`,
     ),
   );
-  const details = result.details as unknown as CodemodeToolDetails;
+  const details = result.details as unknown as codingAgentTypes.CodemodeToolDetails;
   const path = details.fullOutputPath;
   if (path === undefined || path === "") throw new Error("No spill file");
   try {
@@ -114,7 +115,9 @@ const truncatesOutputToTheTokenBudget = Effect.gen(function* () {
   }
 
   const small = yield* Effect.promise(() => runCodemode(harness, "return { ok: true };"));
-  expect((small.details as unknown as CodemodeToolDetails).fullOutputPath).toBeUndefined();
+  expect(
+    (small.details as unknown as codingAgentTypes.CodemodeToolDetails).fullOutputPath,
+  ).toBeUndefined();
 });
 
 const formatsOutputAtTheItemLimit = Effect.gen(function* () {
@@ -124,7 +127,9 @@ const formatsOutputAtTheItemLimit = Effect.gen(function* () {
     runCodemode(harness, 'for (let i = 0; i < 100000; i++) text("");'),
   );
   const elapsed = performance.now() - startedAt;
-  yield* removePath((result.details as unknown as CodemodeToolDetails).fullOutputPath ?? "");
+  yield* removePath(
+    (result.details as unknown as codingAgentTypes.CodemodeToolDetails).fullOutputPath ?? "",
+  );
   expect(result.isError).toBe(false);
   expect(resultText(result)).toContain("==> text 100000/100000 <==");
   expect(elapsed).toBeLessThan(5000);

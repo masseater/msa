@@ -1,10 +1,10 @@
-import type { ExtensionFactory } from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import runtimeKit from "../runtime-kit.ts";
 
 const { createFauxRuntime, disposeRuntimes } = runtimeKit;
 
 const createRuntimeForTest = (
-  extensionFactory: ExtensionFactory = () => {},
+  extensionFactory: srcTypes.ExtensionFactory = () => {},
   options: { cwd?: string; bootstrapModel?: boolean } = {},
 ) =>
   createFauxRuntime({

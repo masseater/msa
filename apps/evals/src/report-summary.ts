@@ -1,29 +1,19 @@
 import { dual } from "effect/Function";
 
-import type { DocumentationVariant } from "./plan.ts";
-import type {
-  BlockedPair,
-  EvalComparisonReport,
-  EvalObservation,
-  EvalRunIdentity,
-  EvalSetComparison,
-  ExpectedEvalRun,
-  OperationalMetricTotal,
-  PairedMetricSummary,
-  VariantTotals,
-} from "./report-types.ts";
+import type planTypes from "./plan.types.ts";
+import type reportTypesTypes from "./report-types.types.ts";
 
 const CONTROL = "without_docs";
 const TREATMENT = "with_docs";
 const VARIANTS = [CONTROL, TREATMENT] as const;
 
 type Pair = {
-  control: EvalObservation & { outcome: "scored" };
-  treatment: EvalObservation & { outcome: "scored" };
+  control: reportTypesTypes.EvalObservation & { outcome: "scored" };
+  treatment: reportTypesTypes.EvalObservation & { outcome: "scored" };
 };
-type PairGroup = Omit<EvalRunIdentity, "variant"> & {
-  expected: Map<DocumentationVariant, number>;
-  observations: Map<DocumentationVariant, EvalObservation[]>;
+type PairGroup = Omit<reportTypesTypes.EvalRunIdentity, "variant"> & {
+  expected: Map<planTypes.DocumentationVariant, number>;
+  observations: Map<planTypes.DocumentationVariant, reportTypesTypes.EvalObservation[]>;
 };
 
 function mean(values: readonly number[]): number | null {
@@ -34,25 +24,25 @@ function difference(treatment: number, control: number): number {
   return Number((treatment - control).toPrecision(15));
 }
 
-function pairKey(identity: Omit<EvalRunIdentity, "variant">): string {
+function pairKey(identity: Omit<reportTypesTypes.EvalRunIdentity, "variant">): string {
   return JSON.stringify([identity.evalSet, identity.caseId, identity.model, identity.runNumber]);
 }
 
 function groupPairs(
-  expectedRuns: readonly ExpectedEvalRun[],
-  observations: readonly EvalObservation[],
+  expectedRuns: readonly reportTypesTypes.ExpectedEvalRun[],
+  observations: readonly reportTypesTypes.EvalObservation[],
 ): PairGroup[] {
   const groups = new Map<string, PairGroup>();
-  const getGroup = (identity: EvalRunIdentity): PairGroup => {
+  const getGroup = (identity: reportTypesTypes.EvalRunIdentity): PairGroup => {
     const key = pairKey(identity);
     const existing = groups.get(key);
     if (existing !== undefined) return existing;
     const group = {
       caseId: identity.caseId,
       evalSet: identity.evalSet,
-      expected: new Map<DocumentationVariant, number>(),
+      expected: new Map<planTypes.DocumentationVariant, number>(),
       model: identity.model,
-      observations: new Map<DocumentationVariant, EvalObservation[]>(),
+      observations: new Map<planTypes.DocumentationVariant, reportTypesTypes.EvalObservation[]>(),
       runNumber: identity.runNumber,
     };
     groups.set(key, group);
@@ -77,7 +67,7 @@ function groupPairs(
   );
 }
 
-function resolvePair(group: PairGroup): { pair?: Pair; blocked?: BlockedPair } {
+function resolvePair(group: PairGroup): { pair?: Pair; blocked?: reportTypesTypes.BlockedPair } {
   const reasons: string[] = [];
   for (const variant of VARIANTS) {
     const expected = group.expected.get(variant) ?? 0;
@@ -106,16 +96,20 @@ function resolvePair(group: PairGroup): { pair?: Pair; blocked?: BlockedPair } {
   }
   return {
     pair: {
-      control: group.observations.get(CONTROL)![0] as EvalObservation & { outcome: "scored" },
-      treatment: group.observations.get(TREATMENT)![0] as EvalObservation & { outcome: "scored" },
+      control: group.observations.get(CONTROL)![0] as reportTypesTypes.EvalObservation & {
+        outcome: "scored";
+      },
+      treatment: group.observations.get(TREATMENT)![0] as reportTypesTypes.EvalObservation & {
+        outcome: "scored";
+      },
     },
   };
 }
 
 function summarizeMetric(
   pairs: readonly Pair[],
-  select: (observation: EvalObservation) => number | undefined,
-): PairedMetricSummary {
+  select: (observation: reportTypesTypes.EvalObservation) => number | undefined,
+): reportTypesTypes.PairedMetricSummary {
   const control: number[] = [];
   const treatment: number[] = [];
   for (const pair of pairs) {
@@ -139,9 +133,9 @@ function summarizeMetric(
 }
 
 function operationalTotal(
-  runs: readonly EvalObservation[],
-  select: (observation: EvalObservation) => number | undefined,
-): OperationalMetricTotal {
+  runs: readonly reportTypesTypes.EvalObservation[],
+  select: (observation: reportTypesTypes.EvalObservation) => number | undefined,
+): reportTypesTypes.OperationalMetricTotal {
   const values = runs.flatMap((run) => {
     const value = select(run);
     return value === undefined ? [] : [value];
@@ -153,9 +147,9 @@ function operationalTotal(
 }
 
 function variantTotals(
-  observations: readonly EvalObservation[],
-  variant: DocumentationVariant,
-): VariantTotals {
+  observations: readonly reportTypesTypes.EvalObservation[],
+  variant: planTypes.DocumentationVariant,
+): reportTypesTypes.VariantTotals {
   const runs = observations.filter((observation) => observation.variant === variant);
   return {
     cacheReadTokens: operationalTotal(runs, ({ cacheReadTokens }) => cacheReadTokens),
@@ -204,7 +198,7 @@ function comparisonFor(
   evalSet: string,
   totalPairs: number,
   pairs: readonly Pair[],
-): EvalSetComparison {
+): reportTypesTypes.EvalSetComparison {
   const blockedPairCount = totalPairs - pairs.length;
   const publishHeadline = blockedPairCount === 0 && pairs.length > 0;
   const controlPassRate = publishHeadline
@@ -233,7 +227,7 @@ function comparisonFor(
 }
 
 function classifyGroups(groups: readonly PairGroup[]) {
-  const blockedPairs: BlockedPair[] = [];
+  const blockedPairs: reportTypesTypes.BlockedPair[] = [];
   const pairsByEvalSet = new Map<string, Pair[]>();
   const totalsByEvalSet = new Map<string, number>();
   for (const group of groups) {
@@ -247,23 +241,23 @@ function classifyGroups(groups: readonly PairGroup[]) {
   return { blockedPairs, pairsByEvalSet, totalsByEvalSet };
 }
 
-export const summarizeEvalObservations: {
+const summarizeEvalObservations: {
   (
-    expectedRuns: readonly ExpectedEvalRun[],
-    observations: readonly EvalObservation[],
-  ): (protocolDigest: string) => EvalComparisonReport;
+    expectedRuns: readonly reportTypesTypes.ExpectedEvalRun[],
+    observations: readonly reportTypesTypes.EvalObservation[],
+  ): (protocolDigest: string) => reportTypesTypes.EvalComparisonReport;
   (
     protocolDigest: string,
-    expectedRuns: readonly ExpectedEvalRun[],
-    observations: readonly EvalObservation[],
-  ): EvalComparisonReport;
+    expectedRuns: readonly reportTypesTypes.ExpectedEvalRun[],
+    observations: readonly reportTypesTypes.EvalObservation[],
+  ): reportTypesTypes.EvalComparisonReport;
 } = dual(
   3,
   (
     protocolDigest: string,
-    expectedRuns: readonly ExpectedEvalRun[],
-    observations: readonly EvalObservation[],
-  ): EvalComparisonReport => {
+    expectedRuns: readonly reportTypesTypes.ExpectedEvalRun[],
+    observations: readonly reportTypesTypes.EvalObservation[],
+  ): reportTypesTypes.EvalComparisonReport => {
     const { blockedPairs, pairsByEvalSet, totalsByEvalSet } = classifyGroups(
       groupPairs(expectedRuns, observations),
     );
@@ -286,3 +280,9 @@ export const summarizeEvalObservations: {
     };
   },
 );
+
+const reportSummary = {
+  summarizeEvalObservations,
+};
+
+export default reportSummary;

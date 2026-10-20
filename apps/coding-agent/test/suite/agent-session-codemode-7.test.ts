@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { CodemodeToolDetails } from "../../src/extensions/codemode/tool.ts";
+import type toolTypes from "../../src/extensions/codemode/tool.types.ts";
 import agentSessionCodemodeModels from "./agent-session-codemode-models.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 
@@ -103,7 +103,7 @@ const reportsProviderErrorsAsResultsAnd = Effect.gen(function* () {
   for (const [key, message] of Object.entries(EXPECTED_MESSAGES)) {
     expect(value[key]).toContain(message);
   }
-  const details = result.details as unknown as CodemodeToolDetails;
+  const details = result.details as unknown as toolTypes.CodemodeToolDetails;
   expect(details.calls.map((call) => [call.name, call.status, call.error])).toEqual([
     ["models.classify", "error", "classifier exploded"],
     ["models.classify", "error", "Model scorer/judge does not accept image input"],

@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { awaited, runTest } = testing;
 
@@ -66,6 +66,7 @@ describe("InteractiveMode startup input", () => {
       showStatus: vi.fn(),
     };
 
+    Object.setPrototypeOf(context, InteractiveMode.prototype);
     interactiveModePrototype.handleStartupSubmit.call(context, "early prompt");
 
     expect(context.editor.setText).toHaveBeenCalledWith("early prompt");
@@ -76,6 +77,7 @@ describe("InteractiveMode startup input", () => {
     runTest(
       Effect.gen(function* () {
         const context = createSubmitContext();
+        Object.setPrototypeOf(context, InteractiveMode.prototype);
         interactiveModePrototype.setupEditorSubmitHandler.call(context);
 
         yield* awaited(context.defaultEditor.onSubmit?.(" early prompt "));
@@ -93,6 +95,7 @@ describe("InteractiveMode startup input", () => {
           pendingUserInputs: ["queued prompt"],
         };
 
+        Object.setPrototypeOf(context, InteractiveMode.prototype);
         yield* awaited(
           expect(interactiveModePrototype.getUserInput.call(context)).resolves.toBe(
             "queued prompt",

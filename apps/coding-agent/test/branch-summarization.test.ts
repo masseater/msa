@@ -5,8 +5,10 @@ import testing from "@msa/testing";
 import { DateTime, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { generateBranchSummary } from "../src/core/compaction/index.ts";
-import type { SessionEntry } from "../src/core/session-manager.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { generateBranchSummary } = compaction;
 
 const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
@@ -25,7 +27,7 @@ const model: aiTypes.Model<"anthropic-messages"> = {
   reasoning: false,
 };
 
-const entries: SessionEntry[] = [
+const entries: sessionManagerTypes.SessionEntry[] = [
   {
     id: "branch-user",
     message: { content: "Abandoned request", role: "user", timestamp: 1 },

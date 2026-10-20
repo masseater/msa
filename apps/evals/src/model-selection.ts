@@ -1,34 +1,28 @@
 import { dual } from "effect/Function";
 
-export type MsaCodingAgentModelSelection = {
-  provider: string;
-  id: string;
-};
-
-export type ModelEnvironment = {
-  MSA_PROVIDER?: string | undefined;
-  MSA_MODEL?: string | undefined;
-};
+import type modelSelectionTypes from "./model-selection.types.ts";
 
 const trimmed = (value: string | undefined): string | undefined => {
   const text = value?.trim();
   return text === undefined || text === "" ? undefined : text;
 };
 
-export const resolveModelSelection: {
+const resolveModelSelection: {
   (
-    environment: ModelEnvironment,
-  ): (explicitModel: MsaCodingAgentModelSelection | undefined) => MsaCodingAgentModelSelection;
+    environment: modelSelectionTypes.ModelEnvironment,
+  ): (
+    explicitModel: modelSelectionTypes.MsaCodingAgentModelSelection | undefined,
+  ) => modelSelectionTypes.MsaCodingAgentModelSelection;
   (
-    explicitModel: MsaCodingAgentModelSelection | undefined,
-    environment: ModelEnvironment,
-  ): MsaCodingAgentModelSelection;
+    explicitModel: modelSelectionTypes.MsaCodingAgentModelSelection | undefined,
+    environment: modelSelectionTypes.ModelEnvironment,
+  ): modelSelectionTypes.MsaCodingAgentModelSelection;
 } = dual(
   2,
   (
-    explicitModel: MsaCodingAgentModelSelection | undefined,
-    environment: ModelEnvironment,
-  ): MsaCodingAgentModelSelection => {
+    explicitModel: modelSelectionTypes.MsaCodingAgentModelSelection | undefined,
+    environment: modelSelectionTypes.ModelEnvironment,
+  ): modelSelectionTypes.MsaCodingAgentModelSelection => {
     const provider = trimmed(explicitModel?.provider ?? environment.MSA_PROVIDER);
     const id = trimmed(explicitModel?.id ?? environment.MSA_MODEL);
     if (provider === undefined || id === undefined) {
@@ -39,3 +33,9 @@ export const resolveModelSelection: {
     return { id, provider };
   },
 );
+
+const modelSelection = {
+  resolveModelSelection,
+};
+
+export default modelSelection;

@@ -4,10 +4,16 @@ import nix from "highlight.js/lib/languages/nix.js";
 import rust from "highlight.js/lib/languages/rust.js";
 import scala from "highlight.js/lib/languages/scala.js";
 
-export const otherLanguages = {
+const otherLanguages = {
   groovy,
   json,
   nix,
   rust,
   scala,
 };
+
+const highlightOther = {
+  otherLanguages,
+};
+
+export default highlightOther;

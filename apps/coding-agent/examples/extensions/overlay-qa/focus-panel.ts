@@ -1,27 +1,17 @@
-import type { Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 
-import { BaseOverlay } from "./base-overlay.ts";
-import type { FocusDemoController } from "./focus-demo-controller.ts";
-
+import BaseOverlay from "./base-overlay.ts";
+import type focusDemoControllerTypes from "./focus-demo-controller.types.ts";
+import type focusPanelTypes from "./focus-panel.types.ts";
 const { Input, matchesKey, truncateToWidth } = tui;
 
-export type FocusPanelColor = "error" | "success" | "accent";
-export type FocusPanelConfig = {
-  label: string;
-  color: FocusPanelColor;
-  options: tuiTypes.OverlayOptions;
-};
-
-export type FocusPanelEntry = { panel: FocusPanel; handle: tuiTypes.OverlayHandle };
-
-export class FocusPanel extends BaseOverlay {
+export default class FocusPanel extends BaseOverlay {
   focused = false;
   closed = false;
   readonly label: string;
-  private readonly color: FocusPanelColor;
-  private readonly controller: FocusDemoController;
+  private readonly color: focusPanelTypes.FocusPanelColor;
+  private readonly controller: focusDemoControllerTypes.FocusDemoController;
   private readonly input = new Input();
   private inputs: string[] = [];
 
@@ -30,9 +20,9 @@ export class FocusPanel extends BaseOverlay {
     config,
     controller,
   }: {
-    theme: Theme;
-    config: FocusPanelConfig;
-    controller: FocusDemoController;
+    theme: codingAgentTypes.Theme;
+    config: focusPanelTypes.FocusPanelConfig;
+    controller: focusDemoControllerTypes.FocusDemoController;
   }) {
     super(theme);
     this.label = config.label;

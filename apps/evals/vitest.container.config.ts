@@ -1,3 +1,5 @@
-import { evalConfig } from "./src/vitest-evals.ts";
+import vitestEvals from "./src/vitest-evals.ts";
+
+const { evalConfig } = vitestEvals;
 
 export default evalConfig;

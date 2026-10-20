@@ -1,20 +1,24 @@
 import tui from "@msa/tui";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { type ToolDefinition } from "../src/core/extensions/types.ts";
-import { createReadToolDefinition } from "../src/core/tools/read.ts";
-import { createWriteToolDefinition } from "../src/core/tools/write.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import read from "../src/core/tools/read.ts";
+import write from "../src/core/tools/write.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+const { stripAnsi } = ansi;
+const { createWriteToolDefinition } = write;
+const { createReadToolDefinition } = read;
+const { initTheme, theme } = themeModule;
 
 const { Text, resetCapabilitiesCache } = tui;
 
 const { createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
 
 const exposesArgsInRenderResultContext = () => {
-  const toolDefinition: ToolDefinition = {
+  const toolDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition(),
     renderCall: () => new Text("call", 0, 0),
     renderResult: (_result, _options, _theme, context) =>

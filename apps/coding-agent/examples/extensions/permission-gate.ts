@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const dangerousPatterns = [
     /\brm\s+(-rf?|--recursive)/iu,
     /\bsudo\b/iu,

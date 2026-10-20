@@ -1,22 +1,31 @@
 import { Effect } from "effect";
 
-import type { OrchestratorError } from "./errors.ts";
-import { outcomes } from "./outcome.ts";
-import { prompts } from "./prompts.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { scheduling } from "./schedule.ts";
-import { starting } from "./start.ts";
-import { store } from "./store.ts";
-import type { WorkerSession } from "./worker.ts";
-import { wrapping } from "./wrap-up.ts";
+import type errorsTypes from "./errors.types.ts";
+import outcomeModule from "./outcome.ts";
+import promptsModule from "./prompts.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import schedule from "./schedule.ts";
+import start from "./start.ts";
+import storeModule from "./store.ts";
+import type workerTypes from "./worker.ts";
+import wrapUp from "./wrap-up.ts";
+
+const { nowMillis } = runtimeModule;
+const { store } = storeModule;
+const { outcomes } = outcomeModule;
+const { wrapping } = wrapUp;
+const { starting } = start;
+const { scheduling } = schedule;
+const { prompts } = promptsModule;
 
 function settleEffect(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
   run: number,
-  worker: WorkerSession,
+  worker: workerTypes.WorkerSession,
   error: unknown,
-): Effect.Effect<void, OrchestratorError> {
+): Effect.Effect<void, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     if (runtime.runs.get(threadId) !== run) return;
     const now = yield* nowMillis;
@@ -51,16 +60,21 @@ function settleEffect(
 }
 
 function settle(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
   run: number,
-  worker: WorkerSession,
+  worker: workerTypes.WorkerSession,
   error: unknown,
 ): Promise<void> {
   return runtime.exclusive(settleEffect(runtime, threadId, run, worker, error));
 }
 
-function afterTurn(runtime: Runtime, threadId: string, run: number, worker: WorkerSession): void {
+function afterTurn(
+  runtime: runtimeTypes.Runtime,
+  threadId: string,
+  run: number,
+  worker: workerTypes.WorkerSession,
+): void {
   if (runtime.runs.get(threadId) !== run) return;
   const handled = wrapping.takeOver(runtime, threadId, worker, {
     settle: (error: unknown) => void settle(runtime, threadId, run, worker, error),
@@ -85,4 +99,10 @@ function afterTurn(runtime: Runtime, threadId: string, run: number, worker: Work
   );
 }
 
-export const settling = { afterTurn, settle };
+const settling = { afterTurn, settle };
+
+const settleModule = {
+  settling,
+};
+
+export default settleModule;

@@ -1,21 +1,18 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { theme } from "../theme/theme.ts";
-import { CountdownTimer } from "./countdown-timer.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+import themeModule from "../theme/theme.ts";
+import CountdownTimer from "./countdown-timer.ts";
+import type countdownTimerTypes from "./countdown-timer.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type extensionSelectorTypes from "./extension-selector.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { theme } = themeModule;
+const { keyHint, rawKeyHint } = keybindingHints;
 
 const { Container, Spacer, Text, getKeybindings } = tuiModule;
 
-export interface ExtensionSelectorOptions {
-  tui?: tuiTypes.TUI | undefined;
-  timeout?: number | undefined;
-  onToggleToolsExpanded?: (() => void) | undefined;
-  description?: string | undefined;
-}
-
-export class ExtensionSelectorComponent extends Container {
+export default class ExtensionSelectorComponent extends tuiModule.Container {
   private options: string[];
   private selectedIndex = 0;
   private listContainer: tuiTypes.Container;
@@ -23,7 +20,7 @@ export class ExtensionSelectorComponent extends Container {
   private onCancelCallback: () => void;
   private titleText: tuiTypes.Text;
   private baseTitle: string;
-  private countdown: CountdownTimer | undefined;
+  private countdown: countdownTimerTypes.CountdownTimer | undefined;
   private onToggleToolsExpanded: (() => void) | undefined;
 
   constructor(
@@ -31,7 +28,7 @@ export class ExtensionSelectorComponent extends Container {
     options: string[],
     onSelect: (option: string) => void,
     onCancel: () => void,
-    opts?: ExtensionSelectorOptions,
+    opts?: extensionSelectorTypes.ExtensionSelectorOptions,
   ) {
     super();
 

@@ -3,11 +3,12 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { SessionInfo } from "../src/core/session-manager.ts";
-import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import SessionSelectorComponent from "../src/modes/interactive/components/session-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 import sessionSelectorPathDeleteSupport from "./session-selector-path-delete-support.ts";
+const { initTheme } = themeModule;
 
 const { setKeybindings } = tui;
 
@@ -21,7 +22,7 @@ const doesNotSwitchScopeBackToAll = () =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       const currentSessions = [makeSession({ id: "current" })];
-      const allDeferred = deferredPromise<SessionInfo[]>();
+      const allDeferred = deferredPromise<sessionManagerTypes.SessionInfo[]>();
       let allLoadCalls = 0;
 
       const selector = new SessionSelectorComponent(
@@ -62,7 +63,7 @@ const doesNotStartRedundantAllLoadsWhen = () =>
 
       const currentSessions = [makeSession({ id: "current" })];
       const allSessions = [makeSession({ id: "all" })];
-      const allDeferred = deferredPromise<SessionInfo[]>();
+      const allDeferred = deferredPromise<sessionManagerTypes.SessionInfo[]>();
       let allLoadCalls = 0;
 
       const selector = new SessionSelectorComponent(

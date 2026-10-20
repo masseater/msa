@@ -1,8 +1,8 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-const registerQuit = (msa: ExtensionAPI): void => {
+const registerQuit = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("quit", {
     description: "Exit msa cleanly",
     handler: (_args, ctx) =>
@@ -14,7 +14,7 @@ const registerQuit = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerFinishAndExit = (msa: ExtensionAPI): void => {
+const registerFinishAndExit = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerTool({
     description: "Complete a task and exit msa",
     execute: (_toolCallId, _params, _signal, _onUpdate, ctx) =>
@@ -23,7 +23,7 @@ const registerFinishAndExit = (msa: ExtensionAPI): void => {
           ctx.shutdown();
 
           return {
-            content: [{ type: "text", text: "Shutdown requested. Exiting after this response." }],
+            content: [{ text: "Shutdown requested. Exiting after this response.", type: "text" }],
             details: {},
           };
         }),
@@ -34,25 +34,25 @@ const registerFinishAndExit = (msa: ExtensionAPI): void => {
   });
 };
 
-const registerDeployAndExit = (msa: ExtensionAPI): void => {
+const registerDeployAndExit = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerTool({
     description: "Deploy the application and exit msa",
     execute: (_toolCallId, params, _signal, onUpdate, ctx) =>
       Effect.runPromise(
         Effect.sync(() => {
           onUpdate?.({
-            content: [{ type: "text", text: `Deploying to ${params.environment}...` }],
+            content: [{ text: `Deploying to ${params.environment}...`, type: "text" }],
             details: {},
           });
 
           onUpdate?.({
-            content: [{ type: "text", text: "Deployment complete, exiting..." }],
+            content: [{ text: "Deployment complete, exiting...", type: "text" }],
             details: {},
           });
           ctx.shutdown();
 
           return {
-            content: [{ type: "text", text: "Done! Shutdown requested." }],
+            content: [{ text: "Done! Shutdown requested.", type: "text" }],
             details: { environment: params.environment },
           };
         }),
@@ -65,7 +65,7 @@ const registerDeployAndExit = (msa: ExtensionAPI): void => {
   });
 };
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   registerQuit(msa);
   registerFinishAndExit(msa);
   registerDeployAndExit(msa);

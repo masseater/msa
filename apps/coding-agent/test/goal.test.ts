@@ -2,12 +2,9 @@ import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  classifyGoalError,
-  parseGoalCommand,
-  parseGoalEvaluation,
-  pickEvaluatorModel,
-} from "../src/core/goal.ts";
+import goal from "../src/core/goal.ts";
+
+const { classifyGoalError, parseGoalCommand, parseGoalEvaluation, pickEvaluatorModel } = goal;
 
 const { fauxAssistantMessage } = ai;
 

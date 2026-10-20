@@ -2,10 +2,16 @@ import * as Effect from "effect/Effect";
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-import { spawnProcess, spawnProcessSync, waitForChildProcess } from "../utils/child-process.ts";
-import { findExecutableOnPath } from "../utils/shell.ts";
-import { awaited, awaiting } from "./awaiting.ts";
-import { envSnapshot } from "./process-env.ts";
+import childProcess from "../utils/child-process.ts";
+import shell from "../utils/shell.ts";
+import awaitingModule from "./awaiting.ts";
+import processEnv from "./process-env.ts";
+import type tregTypes from "./treg.types.ts";
+
+const { awaited, awaiting } = awaitingModule;
+const { spawnProcess, spawnProcessSync, waitForChildProcess } = childProcess;
+const { findExecutableOnPath } = shell;
+const { envSnapshot } = processEnv;
 
 const PREFERRED_VENDOR = "tinyfish";
 const MAX_COST_USD = "0.05";
@@ -13,8 +19,8 @@ const MAX_COST_USD = "0.05";
 const CliEnvelope = Schema.fromJsonString(
   Schema.Struct({
     _treg: Schema.Struct({
-      http_status: Schema.Finite,
       charged_micro: Schema.optionalKey(Schema.Finite),
+      http_status: Schema.Finite,
     }),
     result: Schema.Unknown,
   }),
@@ -27,25 +33,7 @@ const RoutedResult = Schema.Struct({
   output: Schema.Record(Schema.String, Schema.Unknown).pipe(Schema.NullOr, Schema.optionalKey),
 });
 
-export interface TregRun {
-  stdout: string;
-  stderr: string;
-  exitCode: number | null;
-}
-
-export type TregRunner = (args: string[], signal?: AbortSignal) => Promise<TregRun>;
-
-export interface TregOptions {
-  run: TregRunner;
-}
-
-export interface TregResult {
-  output: Readonly<Record<string, unknown>>;
-  servedBy?: string;
-  costMicro?: number;
-}
-
-function spawnRunner(command: string): TregRunner {
+function spawnRunner(command: string): tregTypes.TregRunner {
   return (args, signal) =>
     Effect.runPromise(
       awaiting(function* () {
@@ -80,9 +68,9 @@ function isSignedIn(command: string, env: NodeJS.ProcessEnv): boolean {
   });
 }
 
-export const TREG_INSTALL_COMMAND = "curl -fsSL https://treg.to/install.sh | sh";
+const TREG_INSTALL_COMMAND = "curl -fsSL https://treg.to/install.sh | sh";
 
-export function findTregCli(
+function findTregCli(
   find: (executable: string) => string | null = findExecutableOnPath,
   env: NodeJS.ProcessEnv = envSnapshot(),
 ): { command: string; signedIn: boolean } | undefined {
@@ -92,22 +80,17 @@ export function findTregCli(
     : undefined;
 }
 
-export function findTreg(
+function findTreg(
   find: (executable: string) => string | null = findExecutableOnPath,
   env: NodeJS.ProcessEnv = envSnapshot(),
-): TregOptions | undefined {
+): tregTypes.TregOptions | undefined {
   const cli = findTregCli(find, env);
   return cli?.signedIn === true ? { run: spawnRunner(cli.command) } : undefined;
 }
 
-export interface TregSignInPage {
-  url: string;
-  code?: string;
-}
-
-export function loginTreg(
+function loginTreg(
   command: string,
-  onPage: (page: TregSignInPage) => void,
+  onPage: (page: tregTypes.TregSignInPage) => void,
   signal?: AbortSignal,
 ): Promise<void> {
   return Effect.runPromise(
@@ -149,7 +132,7 @@ export function loginTreg(
   );
 }
 
-export function logoutTreg(command: string): Promise<void> {
+function logoutTreg(command: string): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       const child = spawnProcess(command, ["logout"], {
@@ -172,12 +155,12 @@ function describeFailure(status: number, body: unknown): string {
   return status === 401 ? `${message}. Sign in with \`treg login\` or set TREG_TOKEN.` : message;
 }
 
-export function callTreg(
-  options: TregOptions,
+function callTreg(
+  options: tregTypes.TregOptions,
   job: string,
   body: Readonly<Record<string, unknown>>,
   signal?: AbortSignal,
-): Promise<TregResult> {
+): Promise<tregTypes.TregResult> {
   return Effect.runPromise(
     awaiting(function* () {
       const { stdout, stderr, exitCode } = yield* awaited(
@@ -214,7 +197,7 @@ export function callTreg(
         );
       }
       const { output, _treg: routedMeta } = decoded.value;
-      const tregResult: TregResult = { output: output ?? {} };
+      const tregResult: tregTypes.TregResult = { output: output ?? {} };
       const servedBy = routedMeta?.served_by;
       if (servedBy !== undefined && servedBy !== null && servedBy !== "") {
         tregResult.servedBy = servedBy;
@@ -225,7 +208,7 @@ export function callTreg(
   );
 }
 
-export function pickString(row: unknown, ...keys: string[]): string | undefined {
+function pickString(row: unknown, ...keys: string[]): string | undefined {
   if (typeof row !== "object" || row === null) return undefined;
   for (const key of keys) {
     const value = (row as Record<string, unknown>)[key];
@@ -234,7 +217,20 @@ export function pickString(row: unknown, ...keys: string[]): string | undefined 
   return undefined;
 }
 
-export function rows(output: Readonly<Record<string, unknown>>, key: string): unknown[] {
+function rows(output: Readonly<Record<string, unknown>>, key: string): unknown[] {
   const value = output[key];
   return Array.isArray(value) ? value : [];
 }
+
+const treg = {
+  TREG_INSTALL_COMMAND,
+  callTreg,
+  findTreg,
+  findTregCli,
+  loginTreg,
+  logoutTreg,
+  pickString,
+  rows,
+};
+
+export default treg;

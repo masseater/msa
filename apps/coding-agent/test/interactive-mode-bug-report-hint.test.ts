@@ -2,10 +2,10 @@ import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import {
-  InteractiveMode,
-  formatCrashExtensionHint,
-} from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeSupport from "../src/modes/interactive/interactive-mode-support.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+
+const { formatCrashExtensionHint } = interactiveModeSupport;
 
 const { fauxAssistantMessage } = ai;
 

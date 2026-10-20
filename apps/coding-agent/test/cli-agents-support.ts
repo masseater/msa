@@ -3,10 +3,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
+import config from "../src/config.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
 
+const { ENV_AGENT_DIR } = config;
 const { InMemoryModelsStore } = ai;
 
 const {

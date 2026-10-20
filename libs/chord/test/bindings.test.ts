@@ -6,13 +6,14 @@ import { describe, it } from "vite-plus/test";
 
 import chord from "../src/index.ts";
 import bindings from "./fixtures/bindings.ts";
+import CountingLink from "./fixtures/counting-link.ts";
 import counting from "./fixtures/counting.ts";
 import timing from "./fixtures/timing.ts";
 
 const { createHost, hostNamed, local, memoryLinkPair, method, remote } = chord;
 
 const { NoteSchema, Notes, setup, until } = bindings;
-const { CountingLink, stateFrames } = counting;
+const { stateFrames } = counting;
 const { tick } = timing;
 
 const Panel = local("t.e8-panel", {

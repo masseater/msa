@@ -1,7 +1,7 @@
 import type agentTypes from "@msa/agent-core/index.types";
 
-export const DEFAULT_THINKING_LEVEL: agentTypes.ThinkingLevel = "medium";
-export const THINKING_LEVEL_OPTIONS: readonly agentTypes.ThinkingLevel[] = [
+const DEFAULT_THINKING_LEVEL: agentTypes.ThinkingLevel = "medium";
+const THINKING_LEVEL_OPTIONS: readonly agentTypes.ThinkingLevel[] = [
   "off",
   "minimal",
   "low",
@@ -10,3 +10,10 @@ export const THINKING_LEVEL_OPTIONS: readonly agentTypes.ThinkingLevel[] = [
   "xhigh",
   "max",
 ];
+
+const defaults = {
+  DEFAULT_THINKING_LEVEL,
+  THINKING_LEVEL_OPTIONS,
+};
+
+export default defaults;

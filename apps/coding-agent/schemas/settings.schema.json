@@ -10,8 +10,8 @@
     },
     "autocompleteMaxVisible": {
       "type": "number",
-      "description": "Maximum visible items in the autocomplete dropdown.",
-      "default": 5
+      "default": 5,
+      "description": "Maximum visible items in the autocomplete dropdown."
     },
     "branchSummary": {
       "type": "object",
@@ -43,8 +43,8 @@
           "const": "idle"
         }
       ],
-      "description": "Cache-warming profile. \"idle\" also warms between agent runs. Global only because each refresh costs money.",
-      "default": "streaming"
+      "default": "streaming",
+      "description": "Cache-warming profile. \"idle\" also warms between agent runs. Global only because each refresh costs money."
     },
     "clipboardImageCommand": {
       "type": "string",
@@ -55,9 +55,9 @@
       "properties": {
         "inlineBudget": {
           "type": "number",
-          "minimum": 0,
+          "default": 3000,
           "description": "Estimated tokens available for inline codemode tool declarations.",
-          "default": 3000
+          "minimum": 0
         },
         "mode": {
           "anyOf": [
@@ -70,15 +70,15 @@
               "const": "only"
             }
           ],
-          "description": "How codemode presents tools. \"on\" keeps direct tools declared and annotates tools callable from scripts; codemode lists only tools without direct exposure. \"only\" lists every script-callable tool in codemode and does not declare active direct tools.",
-          "default": "on"
+          "default": "on",
+          "description": "How codemode presents tools. \"on\" keeps direct tools declared and annotates tools callable from scripts; codemode lists only tools without direct exposure. \"only\" lists every script-callable tool in codemode and does not declare active direct tools."
         }
       }
     },
     "collapseChangelog": {
       "type": "boolean",
-      "description": "Show the condensed changelog after update; use /release-notes for the full changelog.",
-      "default": false
+      "default": false,
+      "description": "Show the condensed changelog after update; use /release-notes for the full changelog."
     },
     "compaction": {
       "type": "object",
@@ -140,8 +140,8 @@
           "const": "never"
         }
       ],
-      "description": "Global setting only.",
-      "default": "ask"
+      "default": "ask",
+      "description": "Global setting only."
     },
     "defaultProvider": {
       "type": "string"
@@ -175,28 +175,28 @@
           "const": "none"
         }
       ],
-      "description": "Action for double-escape with an empty editor.",
-      "default": "tree"
+      "default": "tree",
+      "description": "Action for double-escape with an empty editor."
     },
     "editorPaddingX": {
       "type": "number",
-      "description": "Horizontal padding for the input editor.",
-      "default": 0
+      "default": 0,
+      "description": "Horizontal padding for the input editor."
     },
     "enableAnalytics": {
       "type": "boolean",
-      "description": "Opt in to analytics data sharing.",
-      "default": false
+      "default": false,
+      "description": "Opt in to analytics data sharing."
     },
     "enableInstallTelemetry": {
       "type": "boolean",
-      "description": "Send attribution headers to OpenRouter.",
-      "default": true
+      "default": true,
+      "description": "Send attribution headers to OpenRouter."
     },
     "enableSkillCommands": {
       "type": "boolean",
-      "description": "Register skills as /name commands.",
-      "default": true
+      "default": true,
+      "description": "Register skills as /name commands."
     },
     "enabledModels": {
       "type": "array",
@@ -231,8 +231,8 @@
     },
     "fullscreenCopyOnSelect": {
       "type": "boolean",
-      "description": "No effect in regular TUI mode.",
-      "default": true
+      "default": true,
+      "description": "No effect in regular TUI mode."
     },
     "fullscreenExitOutput": {
       "anyOf": [
@@ -245,8 +245,8 @@
           "const": "resume-hint"
         }
       ],
-      "description": "No effect in regular TUI mode.",
-      "default": "transcript"
+      "default": "transcript",
+      "description": "No effect in regular TUI mode."
     },
     "fullscreenScrollbar": {
       "anyOf": [
@@ -263,8 +263,8 @@
           "const": "hidden"
         }
       ],
-      "description": "No effect in regular TUI mode.",
-      "default": "auto"
+      "default": "auto",
+      "description": "No effect in regular TUI mode."
     },
     "fullscreenWheelScrollLines": {
       "anyOf": [
@@ -276,8 +276,8 @@
           "const": "auto"
         }
       ],
-      "description": "Lines scrolled per wheel event in fullscreen mode; numeric values are clamped from 1 to 100.",
-      "default": "auto"
+      "default": "auto",
+      "description": "Lines scrolled per wheel event in fullscreen mode; numeric values are clamped from 1 to 100."
     },
     "goal": {
       "type": "object",
@@ -369,42 +369,42 @@
             },
             "baseUrl": {
               "type": "string",
-              "description": "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended.",
-              "default": "http://127.0.0.1:11434/v1"
+              "default": "http://127.0.0.1:11434/v1",
+              "description": "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended."
             },
             "documentPrefix": {
               "type": "string",
-              "description": "Prepended to memory text before embedding.",
-              "default": "title: none | text: "
+              "default": "title: none | text: ",
+              "description": "Prepended to memory text before embedding."
             },
             "enabled": {
               "type": "boolean",
-              "description": "Compute embeddings so memories are searchable by meaning, not only keywords.",
-              "default": true
+              "default": true,
+              "description": "Compute embeddings so memories are searchable by meaning, not only keywords."
             },
             "model": {
               "type": "string",
-              "description": "Embedding model name at that endpoint.",
-              "default": "embeddinggemma-2"
+              "default": "embeddinggemma-2",
+              "description": "Embedding model name at that endpoint."
             },
             "queryPrefix": {
               "type": "string",
-              "description": "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none.",
-              "default": "task: search result | query: "
+              "default": "task: search result | query: ",
+              "description": "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none."
             },
             "timeoutMs": {
               "type": "integer",
               "maximum": 9007199254740991,
               "minimum": 0,
-              "description": "Embedding request timeout in milliseconds.",
-              "default": 5000
+              "default": 5000,
+              "description": "Embedding request timeout in milliseconds."
             }
           }
         },
         "enabled": {
           "type": "boolean",
-          "description": "Long-term memory: the memory tool, recall, and the /memory command.",
-          "default": true
+          "default": true,
+          "description": "Long-term memory: the memory tool, recall, and the /memory command."
         },
         "recall": {
           "type": "object",
@@ -473,12 +473,10 @@
           "type": "string",
           "description": "SQLite file holding tasks, threads, reports, and notes. Default: <agent dir>/orchestrator.db."
         },
-        "workerModel": {
-          "type": "string",
-          "description": "Model of the threads the orchestrator starts, as \"provider/id\", unless create_task names one. Default: the orchestrator's model."
-        },
-        "workerThinkingLevel": {
-          "$ref": "#/$defs/ModelThinkingLevel"
+        "maxConcurrentThreads": {
+          "type": "integer",
+          "default": 4,
+          "minimum": 1
         },
         "reviewModel": {
           "type": "string",
@@ -487,10 +485,12 @@
         "reviewThinkingLevel": {
           "$ref": "#/$defs/ModelThinkingLevel"
         },
-        "maxConcurrentThreads": {
-          "type": "integer",
-          "minimum": 1,
-          "default": 4
+        "workerModel": {
+          "type": "string",
+          "description": "Model of the threads the orchestrator starts, as \"provider/id\", unless create_task names one. Default: the orchestrator's model."
+        },
+        "workerThinkingLevel": {
+          "$ref": "#/$defs/ModelThinkingLevel"
         }
       }
     },
@@ -505,8 +505,8 @@
           "const": 1
         }
       ],
-      "description": "Horizontal padding for transcript content.",
-      "default": 1
+      "default": 1,
+      "description": "Horizontal padding for transcript content."
     },
     "packages": {
       "type": "array",
@@ -593,8 +593,8 @@
           "const": "one-at-a-time"
         }
       ],
-      "description": "Legacy setting migrated to steeringMode.",
-      "deprecated": true
+      "deprecated": true,
+      "description": "Legacy setting migrated to steeringMode."
     },
     "quietStartup": {
       "anyOf": [
@@ -606,16 +606,16 @@
           "const": "header"
         }
       ],
-      "description": "When true, hide all startup output. When \"header\", keep only the startup header.",
-      "default": false
+      "default": false,
+      "description": "When true, hide all startup output. When \"header\", keep only the startup header."
     },
     "retry": {
       "type": "object",
       "properties": {
         "baseDelayMs": {
           "type": "number",
-          "description": "Exponential backoff base delay in milliseconds: 2s, 4s, 8s.",
-          "default": 2000
+          "default": 2000,
+          "description": "Exponential backoff base delay in milliseconds: 2s, 4s, 8s."
         },
         "enabled": {
           "type": "boolean",
@@ -627,8 +627,8 @@
         },
         "maxDelayMs": {
           "type": "number",
-          "description": "Legacy retry delay setting. Use provider.maxRetryDelayMs instead.",
-          "deprecated": true
+          "deprecated": true,
+          "description": "Legacy retry delay setting. Use provider.maxRetryDelayMs instead."
         },
         "maxRetries": {
           "type": "number",
@@ -643,8 +643,8 @@
             },
             "maxRetryDelayMs": {
               "type": "number",
-              "description": "Maximum server-requested delay before failing.",
-              "default": 60000
+              "default": 60000,
+              "description": "Maximum server-requested delay before failing."
             },
             "timeoutMs": {
               "type": "number",
@@ -668,8 +668,8 @@
     },
     "showCacheMissNotices": {
       "type": "boolean",
-      "description": "Show cache cost and provider recovery notices.",
-      "default": false
+      "default": false,
+      "description": "Show cache cost and provider recovery notices."
     },
     "showHardwareCursor": {
       "type": "boolean",
@@ -728,8 +728,8 @@
       "properties": {
         "clearOnShrink": {
           "type": "boolean",
-          "description": "Clear empty rows when content shrinks.",
-          "default": false
+          "default": false,
+          "description": "Clear empty rows when content shrinks."
         },
         "hyperlinks": {
           "anyOf": [
@@ -744,8 +744,8 @@
         },
         "imageWidthCells": {
           "type": "number",
-          "description": "Preferred inline image width in terminal cells.",
-          "default": 60
+          "default": 60,
+          "description": "Preferred inline image width in terminal cells."
         },
         "images": {
           "anyOf": [
@@ -769,13 +769,13 @@
         },
         "showImages": {
           "type": "boolean",
-          "description": "Show images when the terminal supports them.",
-          "default": true
+          "default": true,
+          "description": "Show images when the terminal supports them."
         },
         "showTerminalProgress": {
           "type": "boolean",
-          "description": "Show OSC 9;4 terminal progress indicators.",
-          "default": false
+          "default": false,
+          "description": "Show OSC 9;4 terminal progress indicators."
         },
         "trueColor": {
           "anyOf": [
@@ -866,8 +866,8 @@
           "const": "all"
         }
       ],
-      "description": "Default filter when opening /tree.",
-      "default": "default"
+      "default": "default",
+      "description": "Default filter when opening /tree."
     },
     "tuiMode": {
       "anyOf": [
@@ -897,8 +897,8 @@
     },
     "websockets": {
       "type": "boolean",
-      "description": "Legacy setting migrated to transport.",
-      "deprecated": true
+      "deprecated": true,
+      "description": "Legacy setting migrated to transport."
     }
   },
   "additionalProperties": true,

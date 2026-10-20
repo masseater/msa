@@ -4,8 +4,8 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import type { AutocompleteProviderFactory } from "../src/core/extensions/types.ts";
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 
 const { CombinedAutocompleteProvider } = tui;
 
@@ -16,7 +16,9 @@ const stacksWrapperFactoriesOverAFreshBasePart1 = () => {
   const customEditor = { setAutocompleteProvider: vi.fn() };
   const calls: string[] = [];
 
-  const wrap1: AutocompleteProviderFactory = (current): tuiTypes.AutocompleteProvider => ({
+  const wrap1: extensionsTypesTypes.AutocompleteProviderFactory = (
+    current,
+  ): tuiTypes.AutocompleteProvider => ({
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
       calls.push("applyCompletion:wrap1");
       return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
@@ -39,7 +41,9 @@ const stacksWrapperFactoriesOverAFreshBasePart1 = () => {
 
 const stacksWrapperFactoriesOverAFreshBase = () => {
   const { calls, customEditor, defaultEditor, wrap1 } = stacksWrapperFactoriesOverAFreshBasePart1();
-  const wrap2: AutocompleteProviderFactory = (current): tuiTypes.AutocompleteProvider => ({
+  const wrap2: extensionsTypesTypes.AutocompleteProviderFactory = (
+    current,
+  ): tuiTypes.AutocompleteProvider => ({
     applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
       calls.push("applyCompletion:wrap2");
       return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
@@ -81,7 +85,7 @@ const mergesTriggercharactersFromWrapperFactories = () => {
   const defaultEditor = { setAutocompleteProvider: vi.fn() };
   const customEditor = { setAutocompleteProvider: vi.fn() };
   const passThrough =
-    (triggerCharacters: string[]): AutocompleteProviderFactory =>
+    (triggerCharacters: string[]): extensionsTypesTypes.AutocompleteProviderFactory =>
     (current) => ({
       applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
         current.applyCompletion(lines, cursorLine, cursorCol, item, prefix),

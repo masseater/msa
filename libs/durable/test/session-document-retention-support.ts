@@ -5,6 +5,7 @@ import { Effect } from "effect";
 import nodeProcess from "../src/env/node/node-process.ts";
 import SessionImpl from "../src/session/session.ts";
 import type sessionTypes from "../src/session/session.types.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
 import sessionSupport from "./session-support.ts";
@@ -13,7 +14,7 @@ const { defineDoc } = durable;
 const { environmentVariable } = nodeProcess;
 
 const { awaited } = effectSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 
 const CounterDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   fork: "initial",

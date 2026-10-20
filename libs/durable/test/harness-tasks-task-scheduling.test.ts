@@ -3,6 +3,7 @@ import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessTasksSupport from "./harness-tasks-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -12,7 +13,7 @@ const { defineTask } = durable;
 
 const { abortController, awaited } = effectSupport;
 const { gated, markDurably, oneStep, openRoot, start, withSignal } = harnessTasksSupport;
-const { ControlledStorage, context, flush } = sessionSupport;
+const { context, flush } = sessionSupport;
 const { aborted, abortedWith, completed, deferred } = taskSupport;
 
 const pagesNewestTasks = Effect.gen(function* () {

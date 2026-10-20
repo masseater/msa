@@ -4,13 +4,16 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { ModelSelectorComponent } from "../src/modes/interactive/components/model-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import codingAgent from "../src/index.ts";
+import ansi from "../src/utils/ansi.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
 
+const { ModelSelectorComponent } = codingAgent;
+const { initTheme } = codingAgent;
+
+const { stripAnsi } = ansi;
 const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;

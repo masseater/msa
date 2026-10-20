@@ -1,58 +1,16 @@
 import { Effect, Random } from "effect";
 
-export const GAME_WIDTH = 60;
-export const GAME_HEIGHT = 24;
-export const TICK_MS = 50;
-export const PLAYER_Y = GAME_HEIGHT - 2;
+import type spaceInvadersStateTypes from "./space-invaders-state.types.ts";
+
+const GAME_WIDTH = 60;
+const GAME_HEIGHT = 24;
+const TICK_MS = 50;
+const PLAYER_Y = GAME_HEIGHT - 2;
 const ALIEN_ROWS = 5;
 const ALIEN_COLS = 11;
 const ALIEN_START_Y = 2;
 
-export type Point = { x: number; y: number };
-
-export interface Bullet extends Point {
-  direction: -1 | 1;
-}
-
-export interface Alien extends Point {
-  type: 0 | 1 | 2;
-  alive: boolean;
-}
-
-export interface Shield {
-  x: number;
-  segments: boolean[][];
-}
-
-export interface GameState {
-  player: { x: number; lives: number };
-  aliens: Alien[];
-  alienDirection: 1 | -1;
-  alienMoveCounter: number;
-  alienMoveDelay: number;
-  alienDropping: boolean;
-  bullets: Bullet[];
-  shields: Shield[];
-  score: number;
-  highScore: number;
-  level: number;
-  gameOver: boolean;
-  victory: boolean;
-  alienShootCounter: number;
-}
-
-export interface KeyState {
-  left: boolean;
-  right: boolean;
-  fire: boolean;
-}
-
-export interface Counters {
-  fireCooldown: number;
-  playerMoveCounter: number;
-}
-
-const createShields = (): Shield[] =>
+const createShields = (): spaceInvadersStateTypes.Shield[] =>
   [8, 22, 36, 50].map((x) => ({
     segments: [
       [true, true, true, true],
@@ -62,8 +20,8 @@ const createShields = (): Shield[] =>
     x,
   }));
 
-const createAliens = (): Alien[] => {
-  const aliens: Alien[] = [];
+const createAliens = (): spaceInvadersStateTypes.Alien[] => {
+  const aliens: spaceInvadersStateTypes.Alien[] = [];
   for (let row = 0; row < ALIEN_ROWS; row++) {
     const type = row === 0 ? 2 : row < 3 ? 1 : 0;
     for (let col = 0; col < ALIEN_COLS; col++) {
@@ -73,13 +31,13 @@ const createAliens = (): Alien[] => {
   return aliens;
 };
 
-export const createInitialState = (
+const createInitialState = (
   options: { readonly highScore?: number | undefined; readonly level?: number | undefined } = {},
-): GameState => ({
+): spaceInvadersStateTypes.GameState => ({
   ...initialFields(options.highScore ?? 0, options.level ?? 1),
 });
 
-const initialFields = (highScore: number, level: number): GameState => ({
+const initialFields = (highScore: number, level: number): spaceInvadersStateTypes.GameState => ({
   alienDirection: 1,
   alienDropping: false,
   alienMoveCounter: 0,
@@ -96,7 +54,11 @@ const initialFields = (highScore: number, level: number): GameState => ({
   victory: false,
 });
 
-const movePlayer = (state: GameState, keys: KeyState, counters: Counters): void => {
+const movePlayer = (
+  state: spaceInvadersStateTypes.GameState,
+  keys: spaceInvadersStateTypes.KeyState,
+  counters: spaceInvadersStateTypes.Counters,
+): void => {
   counters.playerMoveCounter++;
   if (counters.playerMoveCounter < 2) return;
 
@@ -109,7 +71,11 @@ const movePlayer = (state: GameState, keys: KeyState, counters: Counters): void 
   }
 };
 
-const shootBullet = (state: GameState, keys: KeyState, counters: Counters): void => {
+const shootBullet = (
+  state: spaceInvadersStateTypes.GameState,
+  keys: spaceInvadersStateTypes.KeyState,
+  counters: spaceInvadersStateTypes.Counters,
+): void => {
   if (counters.fireCooldown > 0) counters.fireCooldown--;
   if (!keys.fire || counters.fireCooldown !== 0) return;
 
@@ -120,14 +86,14 @@ const shootBullet = (state: GameState, keys: KeyState, counters: Counters): void
   counters.fireCooldown = 8;
 };
 
-const moveBullets = (state: GameState): void => {
+const moveBullets = (state: spaceInvadersStateTypes.GameState): void => {
   state.bullets = state.bullets.filter((bullet) => {
     bullet.y += bullet.direction;
     return bullet.y >= 0 && bullet.y < GAME_HEIGHT;
   });
 };
 
-const speedUpAliens = (state: GameState, aliveCount: number): void => {
+const speedUpAliens = (state: spaceInvadersStateTypes.GameState, aliveCount: number): void => {
   if (aliveCount <= 5) {
     state.alienMoveDelay = 1;
   } else if (aliveCount <= 10) {
@@ -137,7 +103,10 @@ const speedUpAliens = (state: GameState, aliveCount: number): void => {
   }
 };
 
-const dropAliens = (state: GameState, aliveAliens: Alien[]): void => {
+const dropAliens = (
+  state: spaceInvadersStateTypes.GameState,
+  aliveAliens: spaceInvadersStateTypes.Alien[],
+): void => {
   for (const alien of aliveAliens) {
     alien.y++;
     if (alien.y >= PLAYER_Y - 1) {
@@ -148,7 +117,7 @@ const dropAliens = (state: GameState, aliveAliens: Alien[]): void => {
   state.alienDropping = false;
 };
 
-const moveAliens = (state: GameState): void => {
+const moveAliens = (state: spaceInvadersStateTypes.GameState): void => {
   const aliveAliens = state.aliens.filter((a) => a.alive);
   if (aliveAliens.length === 0) return;
 
@@ -176,11 +145,11 @@ const moveAliens = (state: GameState): void => {
 
 const randomInt = (max: number): number => Math.floor(Effect.runSync(Random.next) * max);
 
-const alienShoot = (state: GameState): void => {
+const alienShoot = (state: spaceInvadersStateTypes.GameState): void => {
   const aliveAliens = state.aliens.filter((a) => a.alive);
   if (aliveAliens.length === 0) return;
 
-  const columns = new Map<number, Alien>();
+  const columns = new Map<number, spaceInvadersStateTypes.Alien>();
   for (const alien of aliveAliens) {
     const existing = columns.get(alien.x);
     if (existing === undefined || alien.y > existing.y) {
@@ -197,7 +166,10 @@ const alienShoot = (state: GameState): void => {
   }
 };
 
-const hitAlien = (state: GameState, bullet: Bullet): boolean => {
+const hitAlien = (
+  state: spaceInvadersStateTypes.GameState,
+  bullet: spaceInvadersStateTypes.Bullet,
+): boolean => {
   for (const alien of state.aliens) {
     if (!alien.alive || Math.abs(bullet.x - alien.x) > 1 || bullet.y !== alien.y) continue;
     alien.alive = false;
@@ -210,7 +182,10 @@ const hitAlien = (state: GameState, bullet: Bullet): boolean => {
   return false;
 };
 
-const hitPlayer = (state: GameState, bullet: Bullet): boolean => {
+const hitPlayer = (
+  state: spaceInvadersStateTypes.GameState,
+  bullet: spaceInvadersStateTypes.Bullet,
+): boolean => {
   if (bullet.direction !== 1) return false;
   if (Math.abs(bullet.x - state.player.x) > 1 || bullet.y !== PLAYER_Y) return false;
 
@@ -221,7 +196,10 @@ const hitPlayer = (state: GameState, bullet: Bullet): boolean => {
   return true;
 };
 
-const hitShield = (state: GameState, bullet: Bullet): boolean => {
+const hitShield = (
+  state: spaceInvadersStateTypes.GameState,
+  bullet: spaceInvadersStateTypes.Bullet,
+): boolean => {
   for (const shield of state.shields) {
     const relX = bullet.x - shield.x;
     const relY = bullet.y - (PLAYER_Y - 5);
@@ -236,8 +214,8 @@ const hitShield = (state: GameState, bullet: Bullet): boolean => {
   return false;
 };
 
-const checkCollisions = (state: GameState): void => {
-  const spent = new Set<Bullet>();
+const checkCollisions = (state: spaceInvadersStateTypes.GameState): void => {
+  const spent = new Set<spaceInvadersStateTypes.Bullet>();
   for (const bullet of state.bullets) {
     if (bullet.direction === -1 && hitAlien(state, bullet)) {
       spent.add(bullet);
@@ -250,10 +228,10 @@ const checkCollisions = (state: GameState): void => {
   state.bullets = state.bullets.filter((b) => !spent.has(b));
 };
 
-export const advance = (request: {
-  readonly state: GameState;
-  readonly keys: KeyState;
-  readonly counters: Counters;
+const advance = (request: {
+  readonly state: spaceInvadersStateTypes.GameState;
+  readonly keys: spaceInvadersStateTypes.KeyState;
+  readonly counters: spaceInvadersStateTypes.Counters;
 }): void => {
   const { state, keys, counters } = request;
   movePlayer(state, keys, counters);
@@ -278,3 +256,14 @@ export const advance = (request: {
     state.victory = true;
   }
 };
+
+const spaceInvadersState = {
+  GAME_HEIGHT,
+  GAME_WIDTH,
+  PLAYER_Y,
+  TICK_MS,
+  advance,
+  createInitialState,
+};
+
+export default spaceInvadersState;

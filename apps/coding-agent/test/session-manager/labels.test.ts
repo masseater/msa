@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type LabelEntry, SessionManager } from "../../src/core/session-manager.ts";
-
+import SessionManager from "../../src/core/session-manager.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 const setsAndGetsLabels = () => {
   const session = SessionManager.inMemory();
 
@@ -13,7 +13,7 @@ const setsAndGetsLabels = () => {
   expect(session.getLabel(msgId)).toBe("checkpoint");
 
   const entries = session.getEntries();
-  const labelEntry = entries.find((e) => e.type === "label") as LabelEntry;
+  const labelEntry = entries.find((e) => e.type === "label") as sessionManagerTypes.LabelEntry;
   expect(labelEntry).toBeDefined();
   expect(labelEntry.id).toBe(labelId);
   expect(labelEntry.targetId).toBe(msgId);
@@ -44,7 +44,9 @@ const lastLabelWins = () => {
   expect(session.getLabel(msgId)).toBe("third");
 
   const entries = session.getEntries();
-  const lastLabelEntry = entries.find((e) => e.id === lastLabelId) as LabelEntry;
+  const lastLabelEntry = entries.find(
+    (e) => e.id === lastLabelId,
+  ) as sessionManagerTypes.LabelEntry;
   const tree = session.getTree();
   const msgNode = tree.find((n) => n.entry.id === msgId);
   expect(msgNode?.labelTimestamp).toBe(lastLabelEntry.timestamp);
@@ -76,8 +78,12 @@ const labelsAreIncludedInTreeNodes = () => {
   const msg2LabelId = session.appendLabelChange(msg2Id, "response");
 
   const entries = session.getEntries();
-  const msg1LabelEntry = entries.find((e) => e.id === msg1LabelId) as LabelEntry;
-  const msg2LabelEntry = entries.find((e) => e.id === msg2LabelId) as LabelEntry;
+  const msg1LabelEntry = entries.find(
+    (e) => e.id === msg1LabelId,
+  ) as sessionManagerTypes.LabelEntry;
+  const msg2LabelEntry = entries.find(
+    (e) => e.id === msg2LabelId,
+  ) as sessionManagerTypes.LabelEntry;
   const tree = session.getTree();
 
   const msg1Node = tree.find((n) => n.entry.id === msg1Id);
@@ -114,8 +120,12 @@ const labelsArePreservedInCreatebranchedsession = () => {
   const msg1LabelId = session.appendLabelChange(msg1Id, "important");
   const msg2LabelId = session.appendLabelChange(msg2Id, "also-important");
   const originalEntries = session.getEntries();
-  const msg1LabelEntry = originalEntries.find((e) => e.id === msg1LabelId) as LabelEntry;
-  const msg2LabelEntry = originalEntries.find((e) => e.id === msg2LabelId) as LabelEntry;
+  const msg1LabelEntry = originalEntries.find(
+    (e) => e.id === msg1LabelId,
+  ) as sessionManagerTypes.LabelEntry;
+  const msg2LabelEntry = originalEntries.find(
+    (e) => e.id === msg2LabelId,
+  ) as sessionManagerTypes.LabelEntry;
 
   session.createBranchedSession(msg2Id);
 
@@ -123,7 +133,9 @@ const labelsArePreservedInCreatebranchedsession = () => {
   expect(session.getLabel(msg2Id)).toBe("also-important");
 
   const entries = session.getEntries();
-  const labelEntries = entries.filter((e) => e.type === "label") as LabelEntry[];
+  const labelEntries = entries.filter(
+    (e) => e.type === "label",
+  ) as sessionManagerTypes.LabelEntry[];
   expect(labelEntries).toHaveLength(2);
 
   const tree = session.getTree();

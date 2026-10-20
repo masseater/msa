@@ -1,23 +1,23 @@
 import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import { processImage } from "../../utils/image-process.ts";
-import { ToolFailure, fromPromise } from "../platform/index.ts";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type TruncationResult,
-  formatSize,
-  truncateHead,
-} from "./truncate.ts";
+import imageProcess from "../../utils/image-process.ts";
+import platform from "../platform/index.ts";
+import type readContentTypes from "./read-content.types.ts";
+import truncate from "./truncate.ts";
+import type truncateTypes from "./truncate.types.ts";
 
-export const readToolSystemPromptContribution = {
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } = truncate;
+const { ToolFailure, fromPromise } = platform;
+const { processImage } = imageProcess;
+
+const readToolSystemPromptContribution = {
   guidelines: ["Use read to examine files instead of cat or sed."],
   snippet: "Read file contents",
 } as const;
 
-export const readSchema = Type.Object({
+const readSchema = Type.Object({
   limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
   offset: Type.Optional(
     Type.Number({ description: "Line number to start reading from (1-indexed)" }),
@@ -25,9 +25,7 @@ export const readSchema = Type.Object({
   path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 });
 
-export type ReadToolInput = Static<typeof readSchema>;
-
-export const readOutputSchema = Type.Union([
+const readOutputSchema = Type.Union([
   Type.String(),
   Type.Object({
     data: Type.String(),
@@ -37,21 +35,9 @@ export const readOutputSchema = Type.Union([
   }),
 ]);
 
-export type ReadToolOutput = Static<typeof readOutputSchema>;
-
-export interface ReadToolDetails {
-  truncation?: TruncationResult;
-}
-
-export interface ReadOperations {
-  readFile: (absolutePath: string) => Promise<Buffer>;
-  access: (absolutePath: string) => Promise<void>;
-  detectImageMimeType?: (absolutePath: string) => Promise<string | null | undefined>;
-}
-
-export function toReadOutput(
+function toReadOutput(
   content: (aiTypes.TextContent | aiTypes.ImageContent)[],
-): ReadToolOutput {
+): readContentTypes.ReadToolOutput {
   const text = content.find((block) => block.type === "text")?.text ?? "";
   const image = content.find((block) => block.type === "image");
   return image === undefined
@@ -66,24 +52,11 @@ function getNonVisionImageNote(model: aiTypes.Model<aiTypes.Api> | undefined): s
   return "[Current model does not support images. The image will be omitted from this request.]";
 }
 
-export interface ReadToolOptions {
-  autoResizeImages?: boolean;
-  resizeOptions?: aiTypes.ModelImageResizeOptions;
-  operations?: ReadOperations;
-}
+const readDescription = `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`;
 
-export const readDescription = `Read the contents of a file. Supports text files and images (jpg, png, gif, webp, bmp). Images are sent as attachments. For text files, output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). Use offset/limit for large files. When you need the full file, continue with offset until complete.`;
-
-export interface ImageReadInput {
-  ops: ReadOperations;
-  absolutePath: string;
-  mimeType: string;
-  autoResizeImages: boolean;
-  resizeOptions: aiTypes.ModelImageResizeOptions | undefined;
-  model: aiTypes.Model<aiTypes.Api> | undefined;
-}
-
-export const readImageContent = Effect.fn("readImageContent")(function* (input: ImageReadInput) {
+const readImageContent = Effect.fn("readImageContent")(function* (
+  input: readContentTypes.ImageReadInput,
+) {
   const buffer = yield* fromPromise(() => input.ops.readFile(input.absolutePath));
   const processed = yield* fromPromise(() =>
     processImage(buffer, input.mimeType, {
@@ -104,15 +77,8 @@ export const readImageContent = Effect.fn("readImageContent")(function* (input: 
   ];
 });
 
-export interface TextReadInput {
-  buffer: Buffer;
-  path: string;
-  offset: number | undefined;
-  limit: number | undefined;
-}
-
 const continuationNotice = (
-  truncation: TruncationResult,
+  truncation: truncateTypes.TruncationResult,
   lines: { start: number; end: number; total: number },
 ): string => {
   const limit =
@@ -120,7 +86,9 @@ const continuationNotice = (
   return `\n\n[Showing lines ${lines.start}-${lines.end} of ${lines.total}${limit}. Use offset=${lines.end + 1} to continue.]`;
 };
 
-export const readTextContent = Effect.fn("readTextContent")(function* (input: TextReadInput) {
+const readTextContent = Effect.fn("readTextContent")(function* (
+  input: readContentTypes.TextReadInput,
+) {
   const allLines = input.buffer.toString("utf-8").split("\n");
   const startLine =
     input.offset !== undefined && input.offset !== 0 ? Math.max(0, input.offset - 1) : 0;
@@ -160,3 +128,15 @@ export const readTextContent = Effect.fn("readTextContent")(function* (input: Te
   }
   return { content: content(truncation.content), details: undefined };
 });
+
+const readContent = {
+  readDescription,
+  readImageContent,
+  readOutputSchema,
+  readSchema,
+  readTextContent,
+  readToolSystemPromptContribution,
+  toReadOutput,
+};
+
+export default readContent;

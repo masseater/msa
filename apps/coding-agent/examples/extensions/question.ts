@@ -1,15 +1,13 @@
-import type { ExtensionAPI, Theme } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
-import {
-  type DisplayOption,
-  type OptionWithDesc,
-  type QuestionAnswer,
-  askQuestion,
-} from "./question-ui.ts";
+import questionUi from "./question-ui.ts";
+import type questionUiTypes from "./question-ui.types.ts";
+
+const { askQuestion } = questionUi;
 
 const { Text } = tuiModule;
 
@@ -32,7 +30,10 @@ const QuestionParams = Type.Object({
   question: Type.String({ description: "The question to ask the user" }),
 });
 
-const unavailableResult = (params: { question: string; options: OptionWithDesc[] }) => ({
+const unavailableResult = (params: {
+  question: string;
+  options: questionUiTypes.OptionWithDesc[];
+}) => ({
   content: [
     { text: "Error: UI not available (running in non-interactive mode)", type: "text" as const },
   ],
@@ -49,8 +50,8 @@ const noOptionsResult = (params: { question: string }) => ({
 });
 
 const answerResult = (
-  params: { question: string; options: OptionWithDesc[] },
-  result: QuestionAnswer | null,
+  params: { question: string; options: questionUiTypes.OptionWithDesc[] },
+  result: questionUiTypes.QuestionAnswer | null,
 ) => {
   const simpleOptions = params.options.map((o) => o.label);
 
@@ -89,8 +90,8 @@ const answerResult = (
 };
 
 const renderCall = (
-  args: { question: string; options?: OptionWithDesc[] },
-  theme: Theme,
+  args: { question: string; options?: questionUiTypes.OptionWithDesc[] },
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   let text = theme.fg("toolTitle", theme.bold("question ")) + theme.fg("muted", args.question);
   const opts = Array.isArray(args.options) ? args.options : [];
@@ -105,7 +106,7 @@ const renderCall = (
 const renderResult = (
   result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown },
   _options: unknown,
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   const details = result.details as QuestionDetails | undefined;
   if (details === undefined) {
@@ -132,7 +133,7 @@ const renderResult = (
   return new Text(theme.fg("success", "✓ ") + theme.fg("accent", display), 0, 0);
 };
 
-export default function question(msa: ExtensionAPI) {
+export default function question(msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
     description:
       "Ask the user a question and let them pick from options. Use when you need user input to proceed.",
@@ -142,14 +143,14 @@ export default function question(msa: ExtensionAPI) {
           if (ctx.mode !== "tui") return unavailableResult(params);
           if (params.options.length === 0) return noOptionsResult(params);
 
-          const allOptions: DisplayOption[] = [
+          const allOptions: questionUiTypes.DisplayOption[] = [
             ...params.options,
-            { label: "Type something.", isOther: true },
+            { isOther: true, label: "Type something." },
           ];
 
           const result = yield* Effect.promise(() =>
-            ctx.ui.custom<QuestionAnswer | null>((tui, theme, _kb, done) =>
-              askQuestion({ tui, theme, question: params.question, options: allOptions, done }),
+            ctx.ui.custom<questionUiTypes.QuestionAnswer | null>((tui, theme, _kb, done) =>
+              askQuestion({ done, options: allOptions, question: params.question, theme, tui }),
             ),
           );
 

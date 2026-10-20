@@ -1,12 +1,10 @@
 import * as Diff from "diff";
 import { dual } from "effect/Function";
 
-export interface EditDiffResult {
-  diff: string;
-  firstChangedLine: number | undefined;
-}
+import type diffFormatTypes from "./diff-format.types.ts";
+import DiffWriter from "./diff-writer.ts";
 
-export const generateUnifiedPatch: {
+const generateUnifiedPatch: {
   (oldContent: string, newContent: string, contextLines?: number): (path: string) => string;
   (path: string, oldContent: string, newContent: string, contextLines?: number): string;
 } = dual(
@@ -17,50 +15,6 @@ export const generateUnifiedPatch: {
       headerOptions: Diff.FILE_HEADERS_ONLY,
     }),
 );
-
-class DiffWriter {
-  readonly output: string[] = [];
-  oldLineNum = 1;
-  newLineNum = 1;
-  private readonly width: number;
-
-  constructor(width: number) {
-    this.width = width;
-  }
-
-  padded(lineNum: number): string {
-    return String(lineNum).padStart(this.width, " ");
-  }
-
-  added(lines: string[]): void {
-    for (const line of lines) {
-      this.output.push(`+${this.padded(this.newLineNum)} ${line}`);
-      this.newLineNum++;
-    }
-  }
-
-  removed(lines: string[]): void {
-    for (const line of lines) {
-      this.output.push(`-${this.padded(this.oldLineNum)} ${line}`);
-      this.oldLineNum++;
-    }
-  }
-
-  context(lines: string[]): void {
-    for (const line of lines) {
-      this.output.push(` ${this.padded(this.oldLineNum)} ${line}`);
-      this.oldLineNum++;
-      this.newLineNum++;
-    }
-  }
-
-  skip(count: number): void {
-    this.output.push(` ${"".padStart(this.width, " ")} ...`);
-    this.oldLineNum += count;
-    this.newLineNum += count;
-  }
-}
-
 function writeUnchanged(
   writer: DiffWriter,
   raw: string[],
@@ -92,12 +46,11 @@ function writeUnchanged(
   writer.oldLineNum += raw.length;
   writer.newLineNum += raw.length;
 }
-
 function generateDiffStringImpl(
   oldContent: string,
   newContent: string,
   contextLines = 4,
-): EditDiffResult {
+): diffFormatTypes.EditDiffResult {
   const parts = Diff.diffLines(oldContent, newContent);
   const maxLineNum = Math.max(oldContent.split("\n").length, newContent.split("\n").length);
   const writer = new DiffWriter(String(maxLineNum).length);
@@ -122,8 +75,17 @@ function generateDiffStringImpl(
   }
   return { diff: writer.output.join("\n"), firstChangedLine };
 }
-
-export const generateDiffString: {
-  (newContent: string, contextLines?: number): (oldContent: string) => EditDiffResult;
-  (oldContent: string, newContent: string, contextLines?: number): EditDiffResult;
+const generateDiffString: {
+  (
+    newContent: string,
+    contextLines?: number,
+  ): (oldContent: string) => diffFormatTypes.EditDiffResult;
+  (oldContent: string, newContent: string, contextLines?: number): diffFormatTypes.EditDiffResult;
 } = dual((args) => typeof args[1] === "string", generateDiffStringImpl);
+
+const diffFormat = {
+  generateDiffString,
+  generateUnifiedPatch,
+};
+
+export default diffFormat;

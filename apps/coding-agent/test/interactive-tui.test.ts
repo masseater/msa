@@ -4,20 +4,18 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { FullscreenExitOutput, TuiMode } from "../src/core/settings-manager.ts";
-import {
-  InteractiveMode,
-  createInteractiveTui,
-  createInteractiveTuiReference,
-} from "../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import interactiveTuiSupport from "./interactive-tui-support.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
+import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
+import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
+import RecordingTerminal from "./interactive-tui-support.ts";
+
+const { initTheme } = codingAgent;
+
+const { createInteractiveTui, createInteractiveTuiReference } = tuiRenderer;
 
 const { ScrollView, Text, getKeybindings, isViewportTUI, setKeybindings } = tui;
-
-const { RecordingTerminal } = interactiveTuiSupport;
-
 const { awaited, runTest } = testing;
 
 const clipboardMocks = vi.hoisted(() => ({
@@ -26,7 +24,7 @@ const clipboardMocks = vi.hoisted(() => ({
   readClipboardText: vi.fn<() => Promise<string | null>>(),
 }));
 
-vi.mock("../src/utils/clipboard.ts", () => clipboardMocks);
+vi.mock("../src/utils/clipboard.ts", () => ({ default: clipboardMocks }));
 
 const showsTheConfiguredJumpToBottomShortcut = Effect.gen(function* () {
   initTheme("dark");
@@ -102,7 +100,7 @@ type SwitchContext = {
   renderer: ReturnType<typeof createInteractiveTui>;
   ui: tuiTypes.TUI;
   fullscreenLayoutRoot: tuiTypes.Component;
-  options: { tuiMode?: TuiMode };
+  options: { tuiMode?: codingAgentTypes.TuiMode };
   themeController: { rebindTui: () => void };
   extensionTerminalInputSubscriptions: Set<never>;
 };
@@ -114,7 +112,7 @@ const createSwitchContext = (
   Object.assign(Object.create(InteractiveMode.prototype), {
     extensionTerminalInputSubscriptions: new Set<never>(),
     fullscreenLayoutRoot: component,
-    options: { tuiMode: "regular" as TuiMode },
+    options: { tuiMode: "regular" as codingAgentTypes.TuiMode },
     renderer,
     runtimeHost: {
       session: {
@@ -137,7 +135,7 @@ const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
     tuiMode: "regular",
   });
   let stableUi: tuiTypes.TUI;
-  const invalidatedModes: TuiMode[] = [];
+  const invalidatedModes: codingAgentTypes.TuiMode[] = [];
   const component: tuiTypes.Component & { focused: boolean } = {
     focused: false,
     invalidate: () => invalidatedModes.push(stableUi.mode),
@@ -150,8 +148,15 @@ const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
   stableUi = createInteractiveTuiReference(() => context.renderer);
   context.ui = stableUi;
   const { stopInteractiveTui, switchTuiMode } = InteractiveMode.prototype as unknown as {
-    stopInteractiveTui(this: SwitchContext, fullscreenExitOutput: FullscreenExitOutput): void;
-    switchTuiMode(this: SwitchContext, mode: TuiMode, restoreProgress?: boolean): boolean;
+    stopInteractiveTui(
+      this: SwitchContext,
+      fullscreenExitOutput: codingAgentTypes.FullscreenExitOutput,
+    ): void;
+    switchTuiMode(
+      this: SwitchContext,
+      mode: codingAgentTypes.TuiMode,
+      restoreProgress?: boolean,
+    ): boolean;
   };
 
   renderer.start();

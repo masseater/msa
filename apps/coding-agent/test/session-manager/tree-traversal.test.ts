@@ -1,9 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { SessionManager } from "../../src/core/session-manager.ts";
+import SessionManager from "../../src/core/session-manager.ts";
 import utilities from "../utilities.ts";
 import treeTraversalCases from "./tree-traversal-cases.ts";
-
 const {
   appendcompactionIntegratesIntoTree,
   appendcustomentryIntegratesIntoTree,

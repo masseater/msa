@@ -1,24 +1,26 @@
 import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
 
-import virtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-import type { OrchestratorSnapshot, TaskSnapshot } from "../src/core/orchestrator/types.ts";
-import { viewHelpers } from "../src/modes/interactive/components/tasks-view-helpers.ts";
-import { OrchestratorPane } from "../src/modes/interactive/orchestrator-pane.ts";
-import { createInteractiveTui } from "../src/modes/interactive/tui-renderer.ts";
+import VirtualTerminal from "../../../libs/tui/test/virtual-terminal.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
+import tasksViewHelpers from "../src/modes/interactive/components/tasks-view-helpers.ts";
+import OrchestratorPane from "../src/modes/interactive/orchestrator-pane.ts";
+import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
 import tasksViewHarness from "./tasks-view-harness.ts";
 
-const { VirtualTerminal } = virtualTerminal;
-
+const { createInteractiveTui } = tuiRenderer;
+const { viewHelpers } = tasksViewHelpers;
 const { currentTimeMillis } = testing;
 
 const { task } = tasksViewHarness;
 
 const FIRST = "01a1518a-ff46-75e6-90be-7024913caa86";
 
-const orchestratorFor = (tasks: readonly TaskSnapshot[]): Orchestrator => {
-  const snapshot: OrchestratorSnapshot = {
+const orchestratorFor = (
+  tasks: readonly orchestratorTypesTypes.TaskSnapshot[],
+): orchestratorTypes.Orchestrator => {
+  const snapshot: orchestratorTypesTypes.OrchestratorSnapshot = {
     maxConcurrentThreads: 4,
     replans: [],
     rounds: [...new Set(tasks.map((entry) => entry.round))].map((id) => ({
@@ -30,10 +32,13 @@ const orchestratorFor = (tasks: readonly TaskSnapshot[]): Orchestrator => {
     tasks,
     threads: [],
   };
-  return { refresh: () => Promise.resolve(), snapshot } as unknown as Orchestrator;
+  return {
+    refresh: () => Promise.resolve(),
+    snapshot,
+  } as unknown as orchestratorTypes.Orchestrator;
 };
 
-const paneTasks = (): TaskSnapshot[] => {
+const paneTasks = (): orchestratorTypesTypes.TaskSnapshot[] => {
   const now = currentTimeMillis();
   return [
     task(FIRST, {
@@ -58,7 +63,10 @@ const paneTasks = (): TaskSnapshot[] => {
   ];
 };
 
-const createPaneUi = (options: { width?: number; orchestrator?: Orchestrator | undefined }) => {
+const createPaneUi = (options: {
+  width?: number;
+  orchestrator?: orchestratorTypes.Orchestrator | undefined;
+}) => {
   const terminal = new VirtualTerminal(options.width ?? 100, 24);
   const ui = createInteractiveTui({
     logDirectory: "/tmp",

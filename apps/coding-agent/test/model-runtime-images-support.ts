@@ -3,9 +3,9 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-
+import AuthStorage from "../src/core/auth-storage.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 const { InMemoryModelsStore } = ai;
 
 const { awaited, joinPath, makeTempDir, removeDirs, toJsonText, writeTextFile } = testing;
@@ -14,7 +14,7 @@ const tempDirs: string[] = [];
 
 const removeRuntimeDirs: Effect.Effect<void> = Effect.suspend(() => removeDirs(tempDirs.splice(0)));
 
-const createRuntime = (modelsJson?: object): Effect.Effect<ModelRuntime> =>
+const createRuntime = (modelsJson?: object): Effect.Effect<modelRuntimeTypes.ModelRuntime> =>
   Effect.gen(function* () {
     let modelsPath: string | null = null;
     if (modelsJson !== undefined) {

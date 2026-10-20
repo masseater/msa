@@ -4,7 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { store } from "../src/core/orchestrator/store.ts";
+import storeModule from "../src/core/orchestrator/store.ts";
+
+const { store } = storeModule;
 
 const { joinPath, makeTempDir, removeDirs, runTest } = testing;
 

@@ -2,17 +2,16 @@ import testing from "@msa/testing";
 import { Cause, Data, Effect, Exit, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
-import { InMemoryAuthStorageBackend } from "../../src/core/auth-storage.ts";
-import { readEnv } from "../../src/core/process-env.ts";
-import type { McpHttpServerConfig, McpServerEntry } from "../../src/extensions/mcp/config.ts";
-import type { McpSignInPrompt } from "../../src/extensions/mcp/oauth.ts";
-import {
-  McpOAuthCredentialStore,
-  McpServerConnection,
-  createDefaultTransport,
-  signInMcpServer,
-} from "../../src/extensions/mcp/runtime.ts";
+import InMemoryAuthStorageBackend from "../../src/core/in-memory-auth-storage-backend.ts";
+import processEnv from "../../src/core/process-env.ts";
+import type configTypes from "../../src/extensions/mcp/config.types.ts";
+import type oauthTypesNs from "../../src/extensions/mcp/oauth.types.ts";
+import runtimeModule from "../../src/extensions/mcp/runtime.ts";
+import type runtimeTypes from "../../src/extensions/mcp/runtime.types.ts";
 
+const { McpOAuthCredentialStore, McpServerConnection, createDefaultTransport, signInMcpServer } =
+  runtimeModule;
+const { readEnv } = processEnv;
 const { fromJsonText, tempRoot, toJsonText, writeTextFile } = testing;
 
 const MAX_SIGN_INS = 3;
@@ -43,7 +42,7 @@ const errorMessage = (error: unknown): string =>
 
 const toolCalls = (
   scenario: string,
-  connection: McpServerConnection,
+  connection: runtimeTypes.McpServerConnection,
 ): ReadonlyArray<ToolCall> | undefined => {
   if (scenario.startsWith("auth/")) return [{ arguments: {}, name: "test-tool" }];
   switch (scenario) {
@@ -98,7 +97,7 @@ const visitAuthorizationUrl = (url: URL) =>
     yield* response.text.pipe(Effect.orDie);
   });
 
-const simulatedBrowser = (): McpSignInPrompt => {
+const simulatedBrowser = (): oauthTypesNs.McpSignInPrompt => {
   let visit: Promise<void> | undefined;
   return {
     promptForRedirectUrl(signal) {
@@ -135,9 +134,9 @@ const simulatedBrowser = (): McpSignInPrompt => {
 };
 
 const signIn = (
-  connection: McpServerConnection,
-  entry: McpServerEntry,
-  credentials: McpOAuthCredentialStore,
+  connection: runtimeTypes.McpServerConnection,
+  entry: configTypes.McpServerEntry,
+  credentials: runtimeTypes.McpOAuthCredentialStore,
   signIns: { count: number },
 ) =>
   Effect.gen(function* () {
@@ -160,9 +159,9 @@ const signIn = (
   });
 
 const withSignIn = <A>(
-  connection: McpServerConnection,
-  entry: McpServerEntry,
-  credentials: McpOAuthCredentialStore,
+  connection: runtimeTypes.McpServerConnection,
+  entry: configTypes.McpServerEntry,
+  credentials: runtimeTypes.McpOAuthCredentialStore,
   signIns: { count: number },
   operation: () => Promise<A>,
 ) =>
@@ -184,9 +183,9 @@ const withSignIn = <A>(
   });
 
 const callTools = (
-  connection: McpServerConnection,
-  entry: McpServerEntry,
-  credentials: McpOAuthCredentialStore,
+  connection: runtimeTypes.McpServerConnection,
+  entry: configTypes.McpServerEntry,
+  credentials: runtimeTypes.McpOAuthCredentialStore,
   signIns: { count: number },
   scenario: string,
 ) =>
@@ -210,7 +209,10 @@ const callTools = (
 const run = (serverUrl: string, scenario: string) =>
   Effect.gen(function* () {
     const context = yield* readContext();
-    const config: McpHttpServerConfig = { timeout: REQUEST_TIMEOUT_SECONDS, url: serverUrl };
+    const config: configTypes.McpHttpServerConfig = {
+      timeout: REQUEST_TIMEOUT_SECONDS,
+      url: serverUrl,
+    };
     if (typeof context["client_id"] === "string") {
       config.oauth = {
         clientId: context["client_id"],
@@ -219,7 +221,11 @@ const run = (serverUrl: string, scenario: string) =>
           : {}),
       };
     }
-    const entry: McpServerEntry = { config, name: "conformance", source: "conformance" };
+    const entry: configTypes.McpServerEntry = {
+      config,
+      name: "conformance",
+      source: "conformance",
+    };
     const credentials = new McpOAuthCredentialStore(new InMemoryAuthStorageBackend());
     const connection = new McpServerConnection({
       createTransport: createDefaultTransport,

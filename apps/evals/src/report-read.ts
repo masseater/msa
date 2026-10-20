@@ -2,14 +2,13 @@ import type { ReportCase } from "@vitest-evals/core";
 import { readReportWorkspace, readVitestJsonReportFile } from "@vitest-evals/core/node";
 import { Effect } from "effect";
 
-import type { EvalTask } from "./plan.ts";
-import { files, pathOperations, sha256Hex } from "./platform.ts";
-import {
-  type EvalMetrics,
-  type EvalObservation,
-  type EvalRunIdentity,
-  MSA_SESSION_SNAPSHOT_ARTIFACT,
-} from "./report-types.ts";
+import type planTypes from "./plan.types.ts";
+import platform from "./platform.ts";
+import reportTypes from "./report-types.ts";
+import type reportTypesTypes from "./report-types.types.ts";
+
+const { MSA_SESSION_SNAPSHOT_ARTIFACT } = reportTypes;
+const { files, pathOperations, sha256Hex } = platform;
 
 type LoadedReport = {
   workspace: Awaited<ReturnType<typeof readReportWorkspace>>["workspace"];
@@ -17,7 +16,7 @@ type LoadedReport = {
 };
 
 type SelectedCase =
-  | { kind: "done"; observation: EvalObservation }
+  | { kind: "done"; observation: reportTypesTypes.EvalObservation }
   | {
       kind: "case";
       caseResult: ReportCase;
@@ -41,7 +40,7 @@ function validateScore(value: unknown): number | undefined {
   return value;
 }
 
-export function classifyCaseStatus(
+function classifyCaseStatus(
   status: ReportCase["status"],
 ): "errored" | "skipped" | "pending" | undefined {
   if (status === "failed") return "errored";
@@ -50,7 +49,7 @@ export function classifyCaseStatus(
   return undefined;
 }
 
-function taskIdentity(task: EvalTask): EvalRunIdentity {
+function taskIdentity(task: planTypes.EvalTask): reportTypesTypes.EvalRunIdentity {
   return {
     caseId: task.caseId,
     evalSet: task.evalSet,
@@ -60,17 +59,17 @@ function taskIdentity(task: EvalTask): EvalRunIdentity {
   };
 }
 
-export function erroredObservation(task: EvalTask): EvalObservation {
+function erroredObservation(task: planTypes.EvalTask): reportTypesTypes.EvalObservation {
   return { ...taskIdentity(task), outcome: "errored" };
 }
 
-function sessionDigestInput(task: EvalTask): string {
+function sessionDigestInput(task: planTypes.EvalTask): string {
   return JSON.stringify([task.evalSet, task.caseId, task.variant, task.model, task.runNumber]);
 }
 
 const persistSession = (
   caseResult: ReportCase,
-  task: EvalTask,
+  task: planTypes.EvalTask,
   artifactDirectory: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -90,7 +89,7 @@ const loadReport = (reportPath: string): Effect.Effect<LoadedReport | undefined>
     ),
   );
 
-function selectCase(task: EvalTask, loaded: LoadedReport): SelectedCase {
+function selectCase(task: planTypes.EvalTask, loaded: LoadedReport): SelectedCase {
   const identity = taskIdentity(task);
   const errored: SelectedCase = { kind: "done", observation: { ...identity, outcome: "errored" } };
   const reportsTask = (fullName: string): boolean =>
@@ -117,7 +116,7 @@ function selectCase(task: EvalTask, loaded: LoadedReport): SelectedCase {
   return { caseResult, kind: "case", run, statusOutcome };
 }
 
-function readMetrics(run: NonNullable<ReportCase["harness"]>["run"]): EvalMetrics {
+function readMetrics(run: NonNullable<ReportCase["harness"]>["run"]): reportTypesTypes.EvalMetrics {
   return {
     cacheReadTokens: optionalMetric(run?.usage.metadata?.["cacheReadTokens"], "cacheReadTokens"),
     cacheWriteTokens: optionalMetric(run?.usage.metadata?.["cacheWriteTokens"], "cacheWriteTokens"),
@@ -139,13 +138,13 @@ function actualModelOf(run: NonNullable<ReportCase["harness"]>["run"]): string |
 }
 
 function observeRun(
-  task: EvalTask,
+  task: planTypes.EvalTask,
   selected: Extract<SelectedCase, { kind: "case" }>,
-): EvalObservation {
+): reportTypesTypes.EvalObservation {
   const identity = taskIdentity(task);
   const { caseResult, run, statusOutcome } = selected;
   if (actualModelOf(run) !== task.model) return { ...identity, outcome: "errored" };
-  let metrics: EvalMetrics;
+  let metrics: reportTypesTypes.EvalMetrics;
   try {
     metrics = readMetrics(run);
   } catch {
@@ -164,15 +163,15 @@ function observeRun(
   return { ...identity, ...metrics, outcome: "scored", score };
 }
 
-export const readTaskObservation = ({
+const readTaskObservation = ({
   task,
   reportPath,
   artifactDirectory,
 }: {
-  task: EvalTask;
+  task: planTypes.EvalTask;
   reportPath: string;
   artifactDirectory: string;
-}): Effect.Effect<EvalObservation> =>
+}): Effect.Effect<reportTypesTypes.EvalObservation> =>
   Effect.gen(function* () {
     const loaded = yield* loadReport(reportPath);
     if (loaded === undefined) return erroredObservation(task);
@@ -181,3 +180,11 @@ export const readTaskObservation = ({
     yield* persistSession(selected.caseResult, task, artifactDirectory);
     return observeRun(task, selected);
   });
+
+const reportRead = {
+  classifyCaseStatus,
+  erroredObservation,
+  readTaskObservation,
+};
+
+export default reportRead;

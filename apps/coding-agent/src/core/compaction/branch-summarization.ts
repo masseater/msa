@@ -1,59 +1,28 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import type compatTypes from "@msa/ai/compat.types";
-import type aiTypes from "@msa/ai/index.types";
 import { Effect, Function as Fn } from "effect";
 
-import { convertToLlm } from "../messages.ts";
-import {
-  currentTimeMillis,
-  fromPromise,
-  platformRuntime,
-  unwrapForeign,
-} from "../platform/index.ts";
-import type { SessionEntry } from "../session-manager.ts";
-import { prepareBranchEntries } from "./branch-entries.ts";
-import { completeSummarization, getSummarizationFailure } from "./compaction-summary.ts";
-import {
+import messagesModule from "../messages.ts";
+import platform from "../platform/index.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import branchEntries from "./branch-entries.ts";
+import type branchSummarizationTypes from "./branch-summarization.types.ts";
+import compactionSummary from "./compaction-summary.ts";
+import utils from "./utils.ts";
+
+const { prepareBranchEntries } = branchEntries;
+const {
   SUMMARIZATION_SYSTEM_PROMPT,
   computeFileLists,
   formatFileOperations,
   serializeConversation,
-} from "./utils.ts";
+} = utils;
+const { convertToLlm } = messagesModule;
+const { currentTimeMillis, fromPromise, unwrapForeign } = platform;
+const { completeSummarization, getSummarizationFailure } = compactionSummary;
 
 const { contentText, normalizeContext } = ai;
-
-export {
-  collectEntriesForBranchSummary,
-  prepareBranchEntries,
-  type BranchPreparation,
-  type BranchSummaryDetails,
-  type CollectEntriesResult,
-} from "./branch-entries.ts";
-export type { FileOperations } from "./utils.ts";
-
-export interface BranchSummaryResult {
-  summary?: string;
-  usage?: compatTypes.Usage | undefined;
-  readFiles?: string[];
-  modifiedFiles?: string[];
-  aborted?: boolean;
-  error?: string;
-}
-
-export interface GenerateBranchSummaryOptions {
-  model: compatTypes.Model<any>;
-  apiKey?: string | undefined;
-  headers?: Record<string, string> | undefined;
-  env?: Record<string, string> | undefined;
-  signal: AbortSignal;
-  customInstructions?: string | undefined;
-  replaceInstructions?: boolean | undefined;
-  reserveTokens?: number;
-  streamFn?: agentTypes.StreamFn;
-  retry?: aiTypes.RetryPolicy;
-  callbacks?: aiTypes.RetryCallbacks;
-}
 
 const BRANCH_SUMMARY_PREAMBLE = `The user explored a different conversation branch before returning here.
 Summary of that exploration:
@@ -89,7 +58,9 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-function branchInstructions(options: GenerateBranchSummaryOptions): string {
+function branchInstructions(
+  options: branchSummarizationTypes.GenerateBranchSummaryOptions,
+): string {
   const { customInstructions, replaceInstructions } = options;
   const hasCustom = customInstructions !== undefined && customInstructions !== "";
   if (replaceInstructions === true && hasCustom) return customInstructions;
@@ -98,14 +69,17 @@ function branchInstructions(options: GenerateBranchSummaryOptions): string {
     : BRANCH_SUMMARY_PROMPT;
 }
 
-function branchContext(messages: agentTypes.AgentMessage[], options: GenerateBranchSummaryOptions) {
+function branchContext(
+  messages: agentTypes.AgentMessage[],
+  options: branchSummarizationTypes.GenerateBranchSummaryOptions,
+) {
   const conversationText = serializeConversation(convertToLlm(messages));
   const promptText = `<conversation>\n${conversationText}\n</conversation>\n\n${branchInstructions(options)}`;
   return normalizeContext({
     messages: [
       {
+        content: [{ text: promptText, type: "text" as const }],
         role: "user" as const,
-        content: [{ type: "text" as const, text: promptText }],
         timestamp: currentTimeMillis(),
       },
     ],
@@ -113,7 +87,10 @@ function branchContext(messages: agentTypes.AgentMessage[], options: GenerateBra
   });
 }
 
-const branchSummary = (entries: SessionEntry[], options: GenerateBranchSummaryOptions) =>
+const branchSummary = (
+  entries: sessionManagerTypes.SessionEntry[],
+  options: branchSummarizationTypes.GenerateBranchSummaryOptions,
+) =>
   Effect.gen(function* () {
     const { model, apiKey, headers, env, signal, reserveTokens = 16384 } = options;
     const contextWindow = model.contextWindow > 0 ? model.contextWindow : 128000;
@@ -121,20 +98,16 @@ const branchSummary = (entries: SessionEntry[], options: GenerateBranchSummaryOp
     if (messages.length === 0) {
       return {
         summary: "No content to summarize",
-      } satisfies BranchSummaryResult as BranchSummaryResult;
+      } satisfies branchSummarizationTypes.BranchSummaryResult as branchSummarizationTypes.BranchSummaryResult;
     }
     const context = branchContext(messages, options);
-    const maxTokens = Math.min(
-      4096,
-      model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
-    );
-    const requestOptions: compatTypes.SimpleStreamOptions = {
+    const requestOptions: compatTypes.SimpleStreamOptions = branchSummaryPart1(
+      model,
       apiKey,
       env,
       headers,
-      maxTokens,
       signal,
-    };
+    );
     const response = yield* fromPromise(() =>
       completeSummarization(
         model,
@@ -145,11 +118,15 @@ const branchSummary = (entries: SessionEntry[], options: GenerateBranchSummaryOp
         options.callbacks,
       ),
     );
-    if (response.stopReason === "aborted") return { aborted: true } as BranchSummaryResult;
+    if (response.stopReason === "aborted")
+      return { aborted: true } as branchSummarizationTypes.BranchSummaryResult;
     const failure = getSummarizationFailure(response, "Branch summarization");
-    if (failure !== undefined && failure !== "") return { error: failure } as BranchSummaryResult;
+    if (failure !== undefined && failure !== "")
+      return { error: failure } as branchSummarizationTypes.BranchSummaryResult;
     if (response.content.some((block) => block.type === "toolCall")) {
-      return { error: "Branch summarization attempted to call a tool" } as BranchSummaryResult;
+      return {
+        error: "Branch summarization attempted to call a tool",
+      } as branchSummarizationTypes.BranchSummaryResult;
     }
     const { readFiles, modifiedFiles } = computeFileLists(fileOps);
     const summary =
@@ -161,16 +138,53 @@ const branchSummary = (entries: SessionEntry[], options: GenerateBranchSummaryOp
       readFiles,
       summary,
       usage: response.usage,
-    } as BranchSummaryResult;
+    } as branchSummarizationTypes.BranchSummaryResult;
   });
 
-export const generateBranchSummary: {
+const generateBranchSummary: {
   (
-    options: GenerateBranchSummaryOptions,
-  ): (entries: SessionEntry[]) => Promise<BranchSummaryResult>;
-  (entries: SessionEntry[], options: GenerateBranchSummaryOptions): Promise<BranchSummaryResult>;
+    options: branchSummarizationTypes.GenerateBranchSummaryOptions,
+  ): (
+    entries: sessionManagerTypes.SessionEntry[],
+  ) => Promise<branchSummarizationTypes.BranchSummaryResult>;
+  (
+    entries: sessionManagerTypes.SessionEntry[],
+    options: branchSummarizationTypes.GenerateBranchSummaryOptions,
+  ): Promise<branchSummarizationTypes.BranchSummaryResult>;
 } = Fn.dual(
   2,
-  (entries: SessionEntry[], options: GenerateBranchSummaryOptions): Promise<BranchSummaryResult> =>
-    platformRuntime.runPromise(unwrapForeign(branchSummary(entries, options))),
+  (
+    entries: sessionManagerTypes.SessionEntry[],
+    options: branchSummarizationTypes.GenerateBranchSummaryOptions,
+  ): Promise<branchSummarizationTypes.BranchSummaryResult> =>
+    Effect.runPromise(unwrapForeign(branchSummary(entries, options))),
 );
+
+const branchSummarization = {
+  collectEntriesForBranchSummary: branchEntries.collectEntriesForBranchSummary,
+  generateBranchSummary,
+  prepareBranchEntries: branchEntries.prepareBranchEntries,
+};
+
+export default branchSummarization;
+
+function branchSummaryPart1(
+  model: compatTypes.Model<any>,
+  apiKey: string | undefined,
+  env: Record<string, string> | undefined,
+  headers: Record<string, string> | undefined,
+  signal: AbortSignal,
+) {
+  const maxTokens = Math.min(
+    4096,
+    model.maxTokens > 0 ? model.maxTokens : Number.POSITIVE_INFINITY,
+  );
+  const requestOptions: compatTypes.SimpleStreamOptions = {
+    apiKey,
+    env,
+    headers,
+    maxTokens,
+    signal,
+  };
+  return requestOptions;
+}

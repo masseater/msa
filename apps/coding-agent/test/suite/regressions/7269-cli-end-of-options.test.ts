@@ -2,9 +2,11 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { parseArgs } from "../../../src/cli/args.ts";
+import args from "../../../src/cli/args.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { parseArgs } = args;
 
 const { fauxAssistantMessage } = ai;
 

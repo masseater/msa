@@ -1,27 +1,26 @@
-import { existsSync, readFileSync } from "fs";
-
 import { dual } from "effect/Function";
 
-import { writeError } from "../core/platform.ts";
-import { posix } from "./platform-extra.ts";
+import config from "../config.ts";
+import platform from "../core/platform.ts";
+import nodeFs from "../core/platform/node/fs.ts";
+import type changelogTypes from "./changelog.types.ts";
+import platformExtra from "./platform-extra.ts";
 
-export interface ChangelogEntry {
-  major: number;
-  minor: number;
-  patch: number;
-  content: string;
-}
+const { existsSync, readFileSync } = nodeFs;
+
+const { posix } = platformExtra;
+const { writeError } = platform;
 
 const GITHUB_REPO = "masseater/msa";
 const CHANGELOG_LINK_BASE_PATH = "apps/coding-agent";
 const URL_SCHEME_RE = /^[a-z][a-z0-9+.-]*:/iu;
 const INLINE_MARKDOWN_LINK_RE = /(!?\[[^\]\n]+\]\()([^\s)]+)((?:\s+[^)]*)?\))/gu;
 
-function entryVersion(entry: ChangelogEntry): string {
+function entryVersion(entry: changelogTypes.ChangelogEntry): string {
   return `${entry.major}.${entry.minor}.${entry.patch}`;
 }
 
-function normalizeTag(version: string | ChangelogEntry): string {
+function normalizeTag(version: string | changelogTypes.ChangelogEntry): string {
   const versionString = typeof version === "string" ? version : entryVersion(version);
   return versionString.startsWith("v") ? versionString : `v${versionString}`;
 }
@@ -104,7 +103,10 @@ function normalizeChangelogLinkTarget(target: string, tag: string): string {
   return `https://github.com/${GITHUB_REPO}/${route}/${tag}/${encodeURI(repositoryPath)}${query}${fragment}`;
 }
 
-function normalizeChangelogLinksImpl(markdown: string, version: string | ChangelogEntry): string {
+function normalizeChangelogLinksImpl(
+  markdown: string,
+  version: string | changelogTypes.ChangelogEntry,
+): string {
   const tag = normalizeTag(version);
   return markdown.replace(
     INLINE_MARKDOWN_LINK_RE,
@@ -113,12 +115,12 @@ function normalizeChangelogLinksImpl(markdown: string, version: string | Changel
   );
 }
 
-export const normalizeChangelogLinks: {
-  (markdown: string, version: string | ChangelogEntry): string;
-  (version: string | ChangelogEntry): (markdown: string) => string;
+const normalizeChangelogLinks: {
+  (markdown: string, version: string | changelogTypes.ChangelogEntry): string;
+  (version: string | changelogTypes.ChangelogEntry): (markdown: string) => string;
 } = dual((args: IArguments) => args.length >= 2, normalizeChangelogLinksImpl);
 
-export function parseChangelog(changelogPath: string): ChangelogEntry[] {
+function parseChangelog(changelogPath: string): changelogTypes.ChangelogEntry[] {
   if (!existsSync(changelogPath)) {
     return [];
   }
@@ -126,7 +128,7 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
   try {
     const content = readFileSync(changelogPath, "utf-8");
     const lines = content.split("\n");
-    const entries: ChangelogEntry[] = [];
+    const entries: changelogTypes.ChangelogEntry[] = [];
 
     let currentLines: string[] = [];
     let currentVersion: { major: number; minor: number; patch: number } | null = null;
@@ -158,29 +160,43 @@ export function parseChangelog(changelogPath: string): ChangelogEntry[] {
       }
     }
 
-    if (currentVersion !== null && currentLines.length > 0) {
-      entries.push({
-        ...currentVersion,
-        content: currentLines.join("\n").trim(),
-      });
-    }
-
-    return entries;
+    return parseChangelogPart1(currentVersion, currentLines, entries);
   } catch (error) {
     writeError(`Warning: Could not parse changelog: ${error}`);
     return [];
   }
 }
 
-function compareVersions(v1: ChangelogEntry, v2: ChangelogEntry): number {
+function parseChangelogPart1(
+  currentVersion: { major: number; minor: number; patch: number } | null,
+  currentLines: string[],
+  entries: changelogTypes.ChangelogEntry[],
+) {
+  if (currentVersion !== null && currentLines.length > 0) {
+    entries.push({
+      ...currentVersion,
+      content: currentLines.join("\n").trim(),
+    });
+  }
+
+  return entries;
+}
+
+function compareVersions(
+  v1: changelogTypes.ChangelogEntry,
+  v2: changelogTypes.ChangelogEntry,
+): number {
   if (v1.major !== v2.major) return v1.major - v2.major;
   if (v1.minor !== v2.minor) return v1.minor - v2.minor;
   return v1.patch - v2.patch;
 }
 
-function getNewEntriesImpl(entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[] {
+function getNewEntriesImpl(
+  entries: changelogTypes.ChangelogEntry[],
+  lastVersion: string,
+): changelogTypes.ChangelogEntry[] {
   const parts = lastVersion.split(".").map(Number);
-  const last: ChangelogEntry = {
+  const last: changelogTypes.ChangelogEntry = {
     content: "",
     major: parts[0] || 0,
     minor: parts[1] || 0,
@@ -190,9 +206,18 @@ function getNewEntriesImpl(entries: ChangelogEntry[], lastVersion: string): Chan
   return entries.filter((entry) => compareVersions(entry, last) > 0);
 }
 
-export const getNewEntries: {
-  (entries: ChangelogEntry[], lastVersion: string): ChangelogEntry[];
-  (lastVersion: string): (entries: ChangelogEntry[]) => ChangelogEntry[];
+const getNewEntries: {
+  (entries: changelogTypes.ChangelogEntry[], lastVersion: string): changelogTypes.ChangelogEntry[];
+  (
+    lastVersion: string,
+  ): (entries: changelogTypes.ChangelogEntry[]) => changelogTypes.ChangelogEntry[];
 } = dual((args: IArguments) => args.length >= 2, getNewEntriesImpl);
 
-export { getChangelogPath } from "../config.ts";
+const changelog = {
+  getChangelogPath: config.getChangelogPath,
+  getNewEntries,
+  normalizeChangelogLinks,
+  parseChangelog,
+};
+
+export default changelog;

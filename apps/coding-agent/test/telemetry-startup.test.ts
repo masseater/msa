@@ -3,11 +3,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  describeTelemetry,
-  resolveDestination,
-  startTelemetry,
-} from "../src/core/observability/telemetry.ts";
+import telemetrySupport from "../src/core/observability/telemetry-support.ts";
+
+const { describeTelemetry, resolveDestination, startTelemetry } = telemetrySupport;
 
 const { NOOP_TELEMETRY_CONTEXT } = telemetryModule;
 

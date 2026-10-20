@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type CompactionSettings, shouldCompact } from "../src/core/compaction/index.ts";
+import compaction from "../src/core/compaction/index.ts";
+import type compactionTypes from "../src/core/compaction/index.types.ts";
+
+const { shouldCompact } = compaction;
 const shouldReturnTrueWhenContextExceedsThreshold = () => {
-  const settings: CompactionSettings = {
+  const settings: compactionTypes.CompactionSettings = {
     enabled: true,
     keepRecentTokens: 20000,
     reserveTokens: 10000,
@@ -13,7 +16,7 @@ const shouldReturnTrueWhenContextExceedsThreshold = () => {
 };
 
 const shouldReturnFalseWhenDisabled = () => {
-  const settings: CompactionSettings = {
+  const settings: compactionTypes.CompactionSettings = {
     enabled: false,
     keepRecentTokens: 20000,
     reserveTokens: 10000,

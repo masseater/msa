@@ -1,9 +1,9 @@
 import testing from "@msa/testing";
 
-import type { ExtensionActions, ExtensionContextActions } from "../src/core/extensions/types.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 const { awaited, runTest } = testing;
 
-const extensionActions: ExtensionActions = {
+const extensionActions: extensionsTypesTypes.ExtensionActions = {
   appendEntry: () => {},
   getActiveTools: () => [],
   getAllTools: () => [],
@@ -21,7 +21,7 @@ const extensionActions: ExtensionActions = {
   setThinkingLevel: () => {},
 };
 
-const extensionContextActions: ExtensionContextActions = {
+const extensionContextActions: extensionsTypesTypes.ExtensionContextActions = {
   abort: () => {},
   compact: () => {},
   getContextUsage: () => undefined,

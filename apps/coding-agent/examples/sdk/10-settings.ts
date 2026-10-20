@@ -1,5 +1,7 @@
-import { SessionManager, SettingsManager, createAgentSession } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { Console, Effect } from "effect";
+
+const { SessionManager, SettingsManager, createAgentSession } = codingAgent;
 
 const cwd = process.cwd();
 
@@ -17,31 +19,39 @@ settingsManager.applyOverrides({
   retry: { baseDelayMs: 1000, enabled: true, maxRetries: 5 },
 });
 
-const { session: customSettingsSession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  settingsManager,
-});
-Effect.runSync(Console.log("Session created with custom settings"));
-customSettingsSession.dispose();
+void Effect.runPromise(
+  Effect.gen(function* () {
+    const { session: customSettingsSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+        settingsManager,
+      }),
+    );
+    yield* Console.log("Session created with custom settings");
+    customSettingsSession.dispose();
 
-settingsManager.setDefaultThinkingLevel("low");
-await settingsManager.flush();
+    settingsManager.setDefaultThinkingLevel("low");
+    yield* Effect.promise(() => settingsManager.flush());
 
-const settingsErrors = settingsManager.drainErrors();
-if (settingsErrors.length > 0) {
-  for (const { scope, error } of settingsErrors) {
-    Effect.runSync(Console.warn(`Warning (${scope} settings): ${error.message}`));
-  }
-}
+    const settingsErrors = settingsManager.drainErrors();
+    if (settingsErrors.length > 0) {
+      for (const { scope, error } of settingsErrors) {
+        yield* Console.warn(`Warning (${scope} settings): ${error.message}`);
+      }
+    }
 
-const inMemorySettings = SettingsManager.inMemory({
-  compaction: { enabled: false },
-  retry: { enabled: false },
-});
+    const inMemorySettings = SettingsManager.inMemory({
+      compaction: { enabled: false },
+      retry: { enabled: false },
+    });
 
-const { session: testSession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  settingsManager: inMemorySettings,
-});
-Effect.runSync(Console.log("Test session created with in-memory settings"));
-testSession.dispose();
+    const { session: testSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+        settingsManager: inMemorySettings,
+      }),
+    );
+    yield* Console.log("Test session created with in-memory settings");
+    testSession.dispose();
+  }),
+);

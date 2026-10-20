@@ -1,4 +1,4 @@
-import type SignalShutdownExtensionCleanupSupport from "./5080-signal-shutdown-extension-cleanup-support.ts";
+import type ProcessExitErrorClass from "./5080-signal-shutdown-extension-cleanup-support.ts";
 
 declare namespace SignalShutdownExtensionCleanupSupportTypes {
   type HandlerContext = {
@@ -14,8 +14,7 @@ declare namespace SignalShutdownExtensionCleanupSupportTypes {
     ui: { stop: () => void };
   };
 
-  type ProcessExitError =
-    (typeof SignalShutdownExtensionCleanupSupport.ProcessExitError)["prototype"];
+  type ProcessExitError = (typeof ProcessExitErrorClass)["prototype"];
 }
 
 export type { SignalShutdownExtensionCleanupSupportTypes as default };

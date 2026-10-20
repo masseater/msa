@@ -1,31 +1,7 @@
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-export interface PrWatchTarget {
-  readonly number: number;
-  readonly repository?: string | undefined;
-}
-
-export interface PrCheckCounts {
-  readonly total: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly pending: number;
-  readonly pendingNames: readonly string[];
-}
-
-export interface PrSnapshot {
-  readonly state: string;
-  readonly mergeable: string;
-  readonly mergeStateStatus: string;
-  readonly reviewDecision: string;
-  readonly updatedAt: string;
-  readonly comments: number;
-  readonly checks: PrCheckCounts;
-  readonly baseRefName: string;
-  readonly headRefOid: string;
-  readonly behindBy: number | undefined;
-}
+import type snapshotTypes from "./snapshot.types.ts";
 
 const PENDING_NAME_LIMIT = 3;
 
@@ -77,7 +53,7 @@ function rollupOutcome(entry: RollupEntryValue): CheckOutcome {
   const status = (entry.status ?? "").toUpperCase();
   const conclusion = (entry.conclusion ?? "").toUpperCase();
   const state = (entry.state ?? "").toUpperCase();
-  if (entry.__typename === "StatusContext" || (status === "" && state !== "")) {
+  if (entry["__typename"] === "StatusContext" || (status === "" && state !== "")) {
     return statusContextOutcome(state);
   }
   return checkRunOutcome(status, conclusion);
@@ -87,7 +63,7 @@ function rollupName(entry: RollupEntryValue): string {
   return entry.name ?? entry.context ?? "";
 }
 
-function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
+function countChecks(entries: readonly RollupEntryValue[]): snapshotTypes.PrCheckCounts {
   let passed = 0;
   let failed = 0;
   let pending = 0;
@@ -103,7 +79,7 @@ function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
       case "pending": {
         pending += 1;
         const name = rollupName(entry);
-        if (name && pendingNames.length < PENDING_NAME_LIMIT) pendingNames.push(name);
+        if (name !== "" && pendingNames.length < PENDING_NAME_LIMIT) pendingNames.push(name);
         break;
       }
     }
@@ -111,7 +87,7 @@ function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
   return { failed, passed, pending, pendingNames, total: entries.length };
 }
 
-export function parsePrView(json: string): PrSnapshot | undefined {
+function parsePrView(json: string): snapshotTypes.PrSnapshot | undefined {
   const decoded = Schema.decodeOption(GhPrViewJson)(json);
   if (Option.isNone(decoded)) return undefined;
   const value = decoded.value;
@@ -129,7 +105,7 @@ export function parsePrView(json: string): PrSnapshot | undefined {
   };
 }
 
-export function describeChecks(checks: PrCheckCounts): string {
+function describeChecks(checks: snapshotTypes.PrCheckCounts): string {
   const parts: string[] = [];
   if (checks.passed > 0) parts.push(`${checks.passed} passed`);
   if (checks.failed > 0) parts.push(`${checks.failed} failed`);
@@ -137,11 +113,20 @@ export function describeChecks(checks: PrCheckCounts): string {
   return parts.length > 0 ? parts.join(", ") : "no checks";
 }
 
-export function isBehind(snapshot: PrSnapshot): boolean {
+function isBehind(snapshot: snapshotTypes.PrSnapshot): boolean {
   if (snapshot.mergeStateStatus === "BEHIND") return true;
   return (snapshot.behindBy ?? 0) > 0;
 }
 
-export function isConflicting(snapshot: PrSnapshot): boolean {
+function isConflicting(snapshot: snapshotTypes.PrSnapshot): boolean {
   return snapshot.mergeable === "CONFLICTING" || snapshot.mergeStateStatus === "DIRTY";
 }
+
+const snapshot = {
+  describeChecks,
+  isBehind,
+  isConflicting,
+  parsePrView,
+};
+
+export default snapshot;

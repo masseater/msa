@@ -8,11 +8,10 @@ import tuiModule from "../src/index.ts";
 import type tuiTypes from "../src/index.types.ts";
 import markdownHelpers from "./markdown-helpers.ts";
 import testThemes from "./test-themes.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { Markdown, TuiMainScreen, resetCapabilitiesCache, setCapabilities } = tuiModule;
 const { defaultMarkdownTheme } = testThemes;
-const { VirtualTerminal } = virtualTerminal;
 const { stripEscapeSequences, stripHyperlinkSequences, stripStyleSequences } = ansiSequences;
 
 const { getCell } = markdownHelpers;

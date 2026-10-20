@@ -5,32 +5,35 @@ import type codemodeTypes from "@msa/codemode/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { getCodemodeWorkerSpecifier, getQuickJSWasmPath } from "../../config.ts";
-import { awaited, awaiting } from "../../core/awaiting.ts";
-import type { ExtensionToolContext, ToolNamespace } from "../../core/extensions/types.ts";
-import type { SessionEntry } from "../../core/session-manager.ts";
-import { formatSize } from "../../core/tools/truncate.ts";
-import { combineUsage } from "../../core/usage-totals.ts";
-import { toErrorMessage } from "../../utils/errors.ts";
-import { callbackPromise } from "../../utils/interop.ts";
-import { writeOutputFile } from "../../utils/output-files.ts";
-import {
-  Bm25Ranker,
-  DEFAULT_TOOL_SEARCH_LIMIT,
-  createToolSearchDocument,
-} from "../tool-search/tool.ts";
-import {
+import config from "../../config.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import type typesToolsTypes from "../../core/extensions/types-tools.types.ts";
+import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import type sessionManagerTypes from "../../core/session-manager.types.ts";
+import truncate from "../../core/tools/truncate.ts";
+import usageTotals from "../../core/usage-totals.ts";
+import errors from "../../utils/errors.ts";
+import interop from "../../utils/interop.ts";
+import outputFiles from "../../utils/output-files.ts";
+import Bm25Ranker from "../tool-search/bm-25-ranker.ts";
+import toolSearchTool from "../tool-search/tool.ts";
+import toolModule from "./tool.ts";
+import type toolTypes from "./tool.types.ts";
+
+const {
   CODEMODE_DOCS_PATH,
   CODEMODE_STORE_ENTRY_TYPE,
-  type CodemodeModelRuntime,
-  type CodemodeNestedCall,
-  type CodemodeStoreEntryData,
-  type CodemodeToolDetails,
-  type CodemodeToolInput,
-  type CodemodeToolOptions,
   getCodemodeCallableTools,
   toCodemodeDeclaration,
-} from "./tool.ts";
+} = toolModule;
+const { awaited, awaiting } = awaitingModule;
+const { callbackPromise } = interop;
+const { writeOutputFile } = outputFiles;
+const { toErrorMessage } = errors;
+const { formatSize } = truncate;
+const { combineUsage } = usageTotals;
+const { getCodemodeWorkerSpecifier, getQuickJSWasmPath } = config;
+const { DEFAULT_TOOL_SEARCH_LIMIT, createToolSearchDocument } = toolSearchTool;
 
 const { CodemodeSandbox, parseCodemodeSource, renderToolSample, toCodemodeIdentifier } = codemode;
 
@@ -151,34 +154,43 @@ function checkClassifierContext(context: unknown): aiTypes.ClassifierContext {
       throw fail(`${at} must be a question object, got ${describeValue(question)}`);
     }
     const { type, instructions, criteria } = question as Record<string, unknown>;
-    if (typeof instructions !== "string") throw fail(`${at}.instructions must be a string`);
-    if (type === "choice") {
-      if (
-        typeof criteria !== "object" ||
-        criteria === null ||
-        Array.isArray(criteria) ||
-        !isStrings(Object.values(criteria))
-      ) {
-        throw fail(`${at} is a "choice" question, so criteria must map each label to its meaning`);
-      }
-    } else if (type === "score") {
-      if (!Array.isArray(criteria) || !isStrings(criteria)) {
-        throw fail(
-          `${at} is a "score" question, so criteria must list the levels as strings, lowest first`,
-        );
-      }
-    } else if (type === "bool") {
-      const labels = criteria as ScriptValue;
-      if (typeof labels?.["true"] !== "string" || typeof labels["false"] !== "string") {
-        throw fail(
-          `${at} is a "bool" question, so criteria must be { true: string, false: string }`,
-        );
-      }
-    } else {
-      throw fail(`${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(type)}`);
-    }
+    checkClassifierContextPart1(instructions, fail, at, type, criteria, isStrings);
   }
   return context as unknown as aiTypes.ClassifierContext;
+}
+
+function checkClassifierContextPart1(
+  instructions: unknown,
+  fail: (problem: string) => Error,
+  at: string,
+  type: unknown,
+  criteria: unknown,
+  isStrings: (values: unknown[]) => boolean,
+) {
+  if (typeof instructions !== "string") throw fail(`${at}.instructions must be a string`);
+  if (type === "choice") {
+    if (
+      typeof criteria !== "object" ||
+      criteria === null ||
+      Array.isArray(criteria) ||
+      !isStrings(Object.values(criteria))
+    ) {
+      throw fail(`${at} is a "choice" question, so criteria must map each label to its meaning`);
+    }
+  } else if (type === "score") {
+    if (!Array.isArray(criteria) || !isStrings(criteria)) {
+      throw fail(
+        `${at} is a "score" question, so criteria must list the levels as strings, lowest first`,
+      );
+    }
+  } else if (type === "bool") {
+    const labels = criteria as ScriptValue;
+    if (typeof labels?.["true"] !== "string" || typeof labels["false"] !== "string") {
+      throw fail(`${at} is a "bool" question, so criteria must be { true: string, false: string }`);
+    }
+  } else {
+    throw fail(`${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(type)}`);
+  }
 }
 
 function checkImagesContext(context: unknown): aiTypes.ImagesContext {
@@ -233,9 +245,9 @@ function createLimiter(limit: number): <T>(run: () => Promise<T>) => Promise<T> 
     );
 }
 
-function isStoreEntryData(data: unknown): data is CodemodeStoreEntryData {
+function isStoreEntryData(data: unknown): data is toolTypes.CodemodeStoreEntryData {
   if (typeof data !== "object" || data === null) return false;
-  const { set, delete: deleted } = data as Partial<CodemodeStoreEntryData>;
+  const { set, delete: deleted } = data as Partial<toolTypes.CodemodeStoreEntryData>;
   return (
     typeof set === "object" &&
     set !== null &&
@@ -244,7 +256,9 @@ function isStoreEntryData(data: unknown): data is CodemodeStoreEntryData {
   );
 }
 
-export function readCodemodeStore(branch: readonly SessionEntry[]): Record<string, unknown> {
+function readCodemodeStore(
+  branch: readonly sessionManagerTypes.SessionEntry[],
+): Record<string, unknown> {
   const store = new Map<string, unknown>();
   for (const entry of branch) {
     if (
@@ -326,14 +340,14 @@ function joinAdjacentText(
   return joined;
 }
 
-function formatCallSummary(calls: readonly CodemodeNestedCall[]): string {
+function formatCallSummary(calls: readonly toolTypes.CodemodeNestedCall[]): string {
   if (calls.length === 0) return "No tool calls were made.";
   return `Tool calls made before the failure (they are not undone): ${calls.map((call) => `${call.name} (${call.status})`).join(", ")}`;
 }
 
 function formatError(
   result: Extract<codemodeTypes.CodemodeResult, { ok: false }>,
-  calls: readonly CodemodeNestedCall[],
+  calls: readonly toolTypes.CodemodeNestedCall[],
 ): string {
   const { error } = result;
   const head =
@@ -456,17 +470,19 @@ function toScriptValue(
 
 function executeCodemodeImpl(
   toolCallId: string,
-  input: CodemodeToolInput,
+  input: toolTypes.CodemodeToolInput,
   signal: AbortSignal | undefined,
-  onUpdate: ((result: agentTypes.AgentToolResult<CodemodeToolDetails>) => void) | undefined,
-  ctx: ExtensionToolContext | undefined,
-  options: CodemodeToolOptions = {},
-): Promise<agentTypes.AgentToolResult<CodemodeToolDetails>> {
+  onUpdate:
+    | ((result: agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails>) => void)
+    | undefined,
+  ctx: extensionsTypesTypes.ExtensionToolContext | undefined,
+  options: toolTypes.CodemodeToolOptions = {},
+): Promise<agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails>> {
   return Effect.runPromise(
     awaiting(function* () {
       const startedAt = performance.now();
       const { code, options: sourceOptions } = parseCodemodeSource(input.code);
-      const calls: CodemodeNestedCall[] = [];
+      const calls: toolTypes.CodemodeNestedCall[] = [];
 
       let modelUsage: aiTypes.Usage | undefined;
 
@@ -478,7 +494,9 @@ function executeCodemodeImpl(
         modelUsage = modelUsage === undefined ? usage : combineUsage(modelUsage, usage);
       };
 
-      const snapshot = (): CodemodeToolDetails => ({ calls: calls.map((call) => ({ ...call })) });
+      const snapshot = (): toolTypes.CodemodeToolDetails => ({
+        calls: calls.map((call) => ({ ...call })),
+      });
       const publish = () => onUpdate?.({ content: [], details: snapshot() });
 
       publish();
@@ -500,7 +518,7 @@ function executeCodemodeImpl(
           execute: (args, { signal: callSignal }) =>
             Effect.runPromise(
               awaiting(function* () {
-                const record: CodemodeNestedCall = {
+                const record: toolTypes.CodemodeNestedCall = {
                   args: previewArgs(args),
                   id: `${toolCallId}/?`,
                   name: tool.name,
@@ -534,7 +552,6 @@ function executeCodemodeImpl(
 
       const workerUrl = getCodemodeWorkerSpecifier();
       const sandbox = new CodemodeSandbox({
-        tools: sandboxTools,
         globals: [
           ...createDiscoveryGlobals(callable, samples, options),
           ...(options.models === true && ctx !== undefined
@@ -548,8 +565,9 @@ function executeCodemodeImpl(
               )
             : []),
         ],
-        timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
         memoryLimitBytes: CODEMODE_MEMORY_LIMIT_BYTES,
+        timeoutMs: sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY,
+        tools: sandboxTools,
         wasm: codemode.loadQuickJSWasm(getQuickJSWasmPath()),
         ...(workerUrl === undefined ? {} : { workerUrl }),
         acquireWorker: () => {
@@ -622,25 +640,29 @@ function executeCodemodeImpl(
   );
 }
 
-export const executeCodemode: {
+const executeCodemode: {
   (
     toolCallId: string,
-    input: CodemodeToolInput,
+    input: toolTypes.CodemodeToolInput,
     signal: AbortSignal | undefined,
-    onUpdate: ((result: agentTypes.AgentToolResult<CodemodeToolDetails>) => void) | undefined,
-    ctx: ExtensionToolContext | undefined,
-    options?: CodemodeToolOptions,
-  ): Promise<agentTypes.AgentToolResult<CodemodeToolDetails>>;
+    onUpdate:
+      | ((result: agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails>) => void)
+      | undefined,
+    ctx: extensionsTypesTypes.ExtensionToolContext | undefined,
+    options?: toolTypes.CodemodeToolOptions,
+  ): Promise<agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails>>;
   (
-    input: CodemodeToolInput,
+    input: toolTypes.CodemodeToolInput,
     signal: AbortSignal | undefined,
-    onUpdate: ((result: agentTypes.AgentToolResult<CodemodeToolDetails>) => void) | undefined,
-    ctx: ExtensionToolContext | undefined,
-    options?: CodemodeToolOptions,
-  ): (toolCallId: string) => Promise<agentTypes.AgentToolResult<CodemodeToolDetails>>;
+    onUpdate:
+      | ((result: agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails>) => void)
+      | undefined,
+    ctx: extensionsTypesTypes.ExtensionToolContext | undefined,
+    options?: toolTypes.CodemodeToolOptions,
+  ): (toolCallId: string) => Promise<agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails>>;
 } = dual((args: IArguments) => args.length >= 5, executeCodemodeImpl);
 
-function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
+function isNamespaceName(namespace: extensionsTypesTypes.ToolNamespace, query: string): boolean {
   const queryId = toCodemodeIdentifier(query);
   return [namespace.name, ...(namespace.aliases ?? [])].some(
     (name) => name === query || toCodemodeIdentifier(name) === queryId,
@@ -650,7 +672,7 @@ function isNamespaceName(namespace: ToolNamespace, query: string): boolean {
 function createDiscoveryGlobals(
   tools: readonly agentTypes.AgentTool<any>[],
   samples: ReadonlyMap<string, string>,
-  options: CodemodeToolOptions,
+  options: toolTypes.CodemodeToolOptions,
 ): codemodeTypes.CodemodeTool[] {
   const ranker = new Bm25Ranker();
   const entry = (name: string) => ({
@@ -659,45 +681,12 @@ function createDiscoveryGlobals(
   });
   return [
     {
-      execute: (args) => {
-        const [query, searchOptions] = args as [
-          unknown,
-          { limit?: unknown; namespace?: unknown } | undefined,
-        ];
-        if (typeof query !== "string") throw new Error("searchTools() expects a query string");
-        const limit = searchOptions?.limit ?? DEFAULT_TOOL_SEARCH_LIMIT;
-        if (typeof limit !== "number" || !Number.isInteger(limit) || limit <= 0) {
-          throw new Error("searchTools() limit must be a positive integer");
-        }
-        const namespace = searchOptions?.namespace;
-        if (namespace !== undefined && namespace !== null && typeof namespace !== "string") {
-          throw new Error("searchTools() namespace must be a string");
-        }
-        const documents = tools.flatMap((tool) => {
-          const toolNamespace = options.getToolNamespace?.(tool.name);
-          if (
-            namespace !== undefined &&
-            namespace !== null &&
-            namespace !== "" &&
-            (toolNamespace === undefined || !isNamespaceName(toolNamespace, namespace))
-          )
-            return [];
-          return [createToolSearchDocument(tool, toolNamespace)];
-        });
-        return ranker.rank(query, documents, limit).map((match) => entry(match.name));
-      },
+      execute: (args) => createDiscoveryGlobalsPart1(args, tools, options, ranker, entry),
       name: "searchTools",
       spread: true,
     },
     {
-      execute: (args) => {
-        const [name] = args as unknown[];
-        if (typeof name !== "string") throw new Error("describeTool() expects a tool name");
-        const tool = tools.find(
-          (candidate) => candidate.name === name || toCodemodeIdentifier(candidate.name) === name,
-        );
-        return tool === undefined ? undefined : samples.get(tool.name);
-      },
+      execute: (args) => createDiscoveryGlobalsPart3(args, tools, samples),
       name: "describeTool",
       spread: true,
     },
@@ -706,7 +695,7 @@ function createDiscoveryGlobals(
         const [name] = args as unknown[];
         if (typeof name !== "string")
           throw new Error("describeNamespace() expects a namespace name");
-        let namespace: ToolNamespace | undefined;
+        let namespace: extensionsTypesTypes.ToolNamespace | undefined;
         const names: string[] = [];
         for (const tool of tools) {
           const toolNamespace = options.getToolNamespace?.(tool.name);
@@ -715,16 +704,7 @@ function createDiscoveryGlobals(
           names.push(toCodemodeIdentifier(tool.name));
         }
         if (namespace === undefined) return undefined;
-        return {
-          name: namespace.name,
-          ...(namespace.description !== undefined && namespace.description !== ""
-            ? { description: namespace.description }
-            : {}),
-          ...(namespace.instructions !== undefined && namespace.instructions !== ""
-            ? { instructions: namespace.instructions }
-            : {}),
-          tools: names,
-        };
+        return createDiscoveryGlobalsPart2(namespace, names);
       },
       name: "describeNamespace",
       spread: true,
@@ -732,10 +712,73 @@ function createDiscoveryGlobals(
   ];
 }
 
+function createDiscoveryGlobalsPart3(
+  args: unknown,
+  tools: readonly agentTypes.AgentTool<any, any>[],
+  samples: ReadonlyMap<string, string>,
+) {
+  const [name] = args as unknown[];
+  if (typeof name !== "string") throw new Error("describeTool() expects a tool name");
+  const tool = tools.find(
+    (candidate) => candidate.name === name || toCodemodeIdentifier(candidate.name) === name,
+  );
+  return tool === undefined ? undefined : samples.get(tool.name);
+}
+
+function createDiscoveryGlobalsPart2(
+  namespace: typesToolsTypes.ToolNamespace,
+  names: string[],
+): unknown {
+  return {
+    name: namespace.name,
+    ...(namespace.description !== undefined && namespace.description !== ""
+      ? { description: namespace.description }
+      : {}),
+    ...(namespace.instructions !== undefined && namespace.instructions !== ""
+      ? { instructions: namespace.instructions }
+      : {}),
+    tools: names,
+  };
+}
+
+function createDiscoveryGlobalsPart1(
+  args: unknown,
+  tools: readonly agentTypes.AgentTool<any, any>[],
+  options: toolTypes.CodemodeToolOptions,
+  ranker: Bm25Ranker,
+  entry: (name: string) => { description: string; name: string },
+) {
+  const [query, searchOptions] = args as [
+    unknown,
+    { limit?: unknown; namespace?: unknown } | undefined,
+  ];
+  if (typeof query !== "string") throw new Error("searchTools() expects a query string");
+  const limit = searchOptions?.limit ?? DEFAULT_TOOL_SEARCH_LIMIT;
+  if (typeof limit !== "number" || !Number.isInteger(limit) || limit <= 0) {
+    throw new Error("searchTools() limit must be a positive integer");
+  }
+  const namespace = searchOptions?.namespace;
+  if (namespace !== undefined && namespace !== null && typeof namespace !== "string") {
+    throw new Error("searchTools() namespace must be a string");
+  }
+  const documents = tools.flatMap((tool) => {
+    const toolNamespace = options.getToolNamespace?.(tool.name);
+    if (
+      namespace !== undefined &&
+      namespace !== null &&
+      namespace !== "" &&
+      (toolNamespace === undefined || !isNamespaceName(toolNamespace, namespace))
+    )
+      return [];
+    return [createToolSearchDocument(tool, toolNamespace)];
+  });
+  return ranker.rank(query, documents, limit).map((match) => entry(match.name));
+}
+
 function createModelGlobals(
-  models: CodemodeModelRuntime,
+  models: toolTypes.CodemodeModelRuntime,
   toolCallId: string,
-  calls: CodemodeNestedCall[],
+  calls: toolTypes.CodemodeNestedCall[],
   publish: () => void,
   addUsage: (usage: aiTypes.Usage) => void,
   addGeneratedImages: (count: number) => void,
@@ -758,17 +801,7 @@ function createModelGlobals(
       awaiting(function* () {
         const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
         const given = model as ScriptValue;
-        if (typeof given?.["provider"] !== "string" || typeof given["id"] !== "string") {
-          const undefinedHint =
-            model === undefined || model === null
-              ? " models.getModelOfType() returns undefined for an unknown provider or id."
-              : "";
-          throw new Error(
-            `${name}() expects ${withArticle(type)} model as its first argument, got ${describeValue(model)}.${undefinedHint} ${listHint}`,
-          );
-        }
-        const provider = given["provider"];
-        const id = given["id"];
+        const { provider, id } = runModelCallPart1(given, model, name, type, listHint);
         const ref = `${provider}/${id}`;
         const resolved = models.getModelOfType(type, provider, id);
         if (resolved === undefined) {
@@ -785,7 +818,7 @@ function createModelGlobals(
         }
         const checked = checkContext(context);
 
-        const record: CodemodeNestedCall = {
+        const record: toolTypes.CodemodeNestedCall = {
           args: `${resolved.provider}/${resolved.id}`,
           id: `${toolCallId}/${name}/${++callCount}`,
           name,
@@ -868,4 +901,32 @@ function createModelGlobals(
     name,
     spread: true,
   }));
+}
+
+const execute = {
+  executeCodemode,
+  readCodemodeStore,
+};
+
+export default execute;
+
+function runModelCallPart1(
+  given: ScriptValue,
+  model: unknown,
+  name: string,
+  type: string,
+  listHint: string,
+) {
+  if (typeof given?.["provider"] !== "string" || typeof given["id"] !== "string") {
+    const undefinedHint =
+      model === undefined || model === null
+        ? " models.getModelOfType() returns undefined for an unknown provider or id."
+        : "";
+    throw new Error(
+      `${name}() expects ${withArticle(type)} model as its first argument, got ${describeValue(model)}.${undefinedHint} ${listHint}`,
+    );
+  }
+  const provider = given["provider"];
+  const id = given["id"];
+  return { id, provider };
 }

@@ -1,7 +1,9 @@
 import tui from "@msa/tui";
 import { describe, expect, test } from "vite-plus/test";
 
-import { createChatViewport } from "../src/modes/interactive/chat-viewport.ts";
+import chatViewport from "../src/modes/interactive/chat-viewport.ts";
+
+const { createChatViewport } = chatViewport;
 
 const { Container } = tui;
 

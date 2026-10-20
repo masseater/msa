@@ -1,17 +1,16 @@
-import type { SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import { NodeServices } from "@effect/platform-node";
-import { CONFIG_DIR_NAME, getAgentDir } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { Console, Effect, FileSystem, ManagedRuntime, Option, Path, Schema } from "effect";
 
-export interface SandboxConfig extends SandboxRuntimeConfig {
-  enabled?: boolean;
-}
+import type configTypes from "./config.types.ts";
+
+const { CONFIG_DIR_NAME, getAgentDir } = codingAgent;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const pathService = runtime.runSync(Path.Path);
 const fsService = runtime.runSync(FileSystem.FileSystem);
 
-const DEFAULT_CONFIG: SandboxConfig = {
+const DEFAULT_CONFIG: configTypes.SandboxConfig = {
   enabled: true,
   filesystem: {
     allowWrite: [".", "/tmp"],
@@ -46,11 +45,14 @@ const readConfigFile = (file: string) =>
       yield* Console.error(`Warning: Could not parse ${file}`);
       return {};
     }
-    return parsed.value as Partial<SandboxConfig>;
+    return parsed.value as Partial<configTypes.SandboxConfig>;
   });
 
-const deepMerge = (base: SandboxConfig, overrides: Partial<SandboxConfig>): SandboxConfig => {
-  const result: SandboxConfig = { ...base };
+const deepMerge = (
+  base: configTypes.SandboxConfig,
+  overrides: Partial<configTypes.SandboxConfig>,
+): configTypes.SandboxConfig => {
+  const result: configTypes.SandboxConfig = { ...base };
 
   if (overrides.enabled !== undefined) result.enabled = overrides.enabled;
   if (overrides.network !== undefined) {
@@ -79,7 +81,7 @@ const deepMerge = (base: SandboxConfig, overrides: Partial<SandboxConfig>): Sand
   return result;
 };
 
-export const loadConfig = (cwd: string): Effect.Effect<SandboxConfig> =>
+const loadConfig = (cwd: string): Effect.Effect<configTypes.SandboxConfig> =>
   Effect.gen(function* () {
     const global = yield* readConfigFile(
       pathService.join(getAgentDir(), "extensions", "sandbox.json"),
@@ -87,3 +89,9 @@ export const loadConfig = (cwd: string): Effect.Effect<SandboxConfig> =>
     const project = yield* readConfigFile(pathService.join(cwd, CONFIG_DIR_NAME, "sandbox.json"));
     return deepMerge(deepMerge(DEFAULT_CONFIG, global), project);
   });
+
+const config = {
+  loadConfig,
+};
+
+export default config;

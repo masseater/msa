@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { ORCHESTRATOR_TOOL_NAMES } from "../src/core/orchestrator/tool-names.ts";
+import toolNames from "../src/core/orchestrator/tool-names.ts";
 import defaultToolsSettingSupport from "./default-tools-setting-support.ts";
+
+const { ORCHESTRATOR_TOOL_NAMES } = toolNames;
 
 const { cleanupDirs, createFileSession, createSession, prepareDirs, writeSettings } =
   defaultToolsSettingSupport;

@@ -2,7 +2,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { InMemorySettingsStorage, SettingsManager } from "../src/core/settings-manager.ts";
+import InMemorySettingsStorage from "../src/core/in-memory-settings-storage.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 
 const { awaited, runTest } = testing;
 

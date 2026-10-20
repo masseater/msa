@@ -5,12 +5,8 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type NestedToolCallHost,
-  NestedToolCallRunner,
-  type NestedToolExecutionEvent,
-} from "../src/core/nested-tool-calls.ts";
-
+import NestedToolCallRunner from "../src/core/nested-tool-call-runner.ts";
+import type nestedToolCallsTypes from "../src/core/nested-tool-calls.types.ts";
 const { awaited, runTest } = testing;
 
 function usage(input: number, cost: number): aiTypes.Usage {
@@ -25,8 +21,8 @@ function usage(input: number, cost: number): aiTypes.Usage {
 }
 
 function createRunner(tools: agentTypes.AgentTool[], options: { sequential?: boolean } = {}) {
-  const events: NestedToolExecutionEvent[] = [];
-  const host: NestedToolCallHost = {
+  const events: nestedToolCallsTypes.NestedToolExecutionEvent[] = [];
+  const host: nestedToolCallsTypes.NestedToolCallHost = {
     emit: (event) =>
       runTest(
         Effect.sync(() => {

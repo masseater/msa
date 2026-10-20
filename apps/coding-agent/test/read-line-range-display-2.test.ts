@@ -3,12 +3,15 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
 
-import { createReadToolDefinition } from "../src/core/tools/read.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { TreeSelectorComponent } from "../src/modes/interactive/components/tree-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import read from "../src/core/tools/read.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import readLineRangeSupport from "./read-line-range-support.ts";
+const { createReadToolDefinition } = read;
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { makeTempDir, removePath, runTest } = testing;
 

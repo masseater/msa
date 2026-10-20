@@ -2,19 +2,19 @@ import { parentPort } from "node:worker_threads";
 
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { toErrorMessage } from "./errors.ts";
-import {
-  IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
-  type ImageResizeOptions,
-  type ResizeImageWorkerResponse,
-  resizeImageInProcess,
-} from "./image-resize-core.ts";
+import awaitingModule from "../core/awaiting.ts";
+import errors from "./errors.ts";
+import imageResizeCore from "./image-resize-core.ts";
+import type imageResizeCoreTypes from "./image-resize-core.types.ts";
+
+const { IMAGE_RESIZE_WORKER_RESPONSE_TYPE, resizeImageInProcess } = imageResizeCore;
+const { awaited, awaiting } = awaitingModule;
+const { toErrorMessage } = errors;
 
 interface ResizeImageWorkerRequest {
   inputBytes: Uint8Array;
   mimeType: string;
-  options?: ImageResizeOptions;
+  options?: imageResizeCoreTypes.ImageResizeOptions;
 }
 
 function isResizeImageWorkerRequest(value: unknown): value is ResizeImageWorkerRequest {
@@ -39,13 +39,13 @@ port.once("message", (message: unknown) => {
           const result = yield* awaited(
             resizeImageInProcess(message.inputBytes, message.mimeType, message.options),
           );
-          const response: ResizeImageWorkerResponse = {
+          const response: imageResizeCoreTypes.ResizeImageWorkerResponse = {
             result,
             type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
           };
           port.postMessage(response);
         } catch (error) {
-          const response: ResizeImageWorkerResponse = {
+          const response: imageResizeCoreTypes.ResizeImageWorkerResponse = {
             error: toErrorMessage(error),
             type: IMAGE_RESIZE_WORKER_RESPONSE_TYPE,
           };

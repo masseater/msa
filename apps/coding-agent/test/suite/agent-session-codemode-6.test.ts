@@ -2,7 +2,7 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { type CodemodeToolDetails } from "../../src/extensions/codemode/tool.ts";
+import type toolTypes from "../../src/extensions/codemode/tool.types.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
 
@@ -62,9 +62,9 @@ const reportsScriptFailuresAsResultsThat = Effect.gen(function* () {
   );
   expect(text).toContain("codemode.js:4");
   expect(text).toContain("Tool calls made before the failure (they are not undone): echo (ok)");
-  expect((result.details as unknown as CodemodeToolDetails).calls.map((call) => call.name)).toEqual(
-    ["echo"],
-  );
+  expect(
+    (result.details as unknown as toolTypes.CodemodeToolDetails).calls.map((call) => call.name),
+  ).toEqual(["echo"]);
 });
 
 const marksWhereEachTextItemStartsAnd = () => Effect.runPromise(marksWhereEachTextItemStarts);

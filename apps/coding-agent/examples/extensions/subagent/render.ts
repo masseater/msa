@@ -1,23 +1,20 @@
-import type { Theme } from "@msa/coding-agent";
-import { getMarkdownTheme } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { AgentScope } from "./agents.ts";
-import {
-  formatToolCall,
-  formatUsageStats,
-  getDisplayItems,
-  getFinalOutput,
-  isFailedResult,
-} from "./format.ts";
-import { renderChain, renderParallel } from "./render-modes.ts";
-import {
-  COLLAPSED_ITEM_COUNT,
-  type DisplayItem,
-  type SingleResult,
-  type SubagentDetails,
-} from "./types.ts";
+import type agentsTypes from "./agents.types.ts";
+import format from "./format.ts";
+import renderItems from "./render-items.ts";
+import renderModes from "./render-modes.ts";
+import subagentTypes from "./types.ts";
+import type subagentTypesTypes from "./types.types.ts";
+
+const { getMarkdownTheme } = codingAgent;
+const { COLLAPSED_ITEM_COUNT } = subagentTypes;
+const { formatUsageStats, getDisplayItems, getFinalOutput, isFailedResult } = format;
+const { renderChain, renderParallel } = renderModes;
+const { addToolCalls, renderDisplayItems } = renderItems;
 
 const { Container, Markdown, Spacer, Text } = tui;
 
@@ -26,7 +23,7 @@ interface RenderCallArgs {
   task?: string | undefined;
   tasks?: { agent: string; task: string }[] | undefined;
   chain?: { agent: string; task: string }[] | undefined;
-  agentScope?: AgentScope | undefined;
+  agentScope?: agentsTypes.AgentScope | undefined;
 }
 
 const preview = (text: string, max: number): string =>
@@ -34,8 +31,8 @@ const preview = (text: string, max: number): string =>
 
 const renderChainCall = (
   chain: { agent: string; task: string }[],
-  scope: AgentScope,
-  theme: Theme,
+  scope: agentsTypes.AgentScope,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   let text =
     theme.fg("toolTitle", theme.bold("subagent ")) +
@@ -57,8 +54,8 @@ const renderChainCall = (
 
 const renderParallelCall = (
   tasks: { agent: string; task: string }[],
-  scope: AgentScope,
-  theme: Theme,
+  scope: agentsTypes.AgentScope,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Text => {
   let text =
     theme.fg("toolTitle", theme.bold("subagent ")) +
@@ -72,7 +69,11 @@ const renderParallelCall = (
   return new Text(text, 0, 0);
 };
 
-const renderSingleCall = (args: RenderCallArgs, scope: AgentScope, theme: Theme): tuiTypes.Text => {
+const renderSingleCall = (
+  args: RenderCallArgs,
+  scope: agentsTypes.AgentScope,
+  theme: codingAgentTypes.Theme,
+): tuiTypes.Text => {
   const agentName = args.agent || "...";
   const taskPreview =
     args.task !== undefined && args.task.length > 0 ? preview(args.task, 60) : "...";
@@ -84,12 +85,12 @@ const renderSingleCall = (args: RenderCallArgs, scope: AgentScope, theme: Theme)
   return new Text(text, 0, 0);
 };
 
-export const renderCall = (request: {
+const renderCall = (request: {
   readonly args: RenderCallArgs;
-  readonly theme: Theme;
+  readonly theme: codingAgentTypes.Theme;
 }): tuiTypes.Text => {
   const { args, theme } = request;
-  const scope: AgentScope = args.agentScope ?? "user";
+  const scope: agentsTypes.AgentScope = args.agentScope ?? "user";
   if (args.chain !== undefined && args.chain.length > 0) {
     return renderChainCall(args.chain, scope, theme);
   }
@@ -99,52 +100,10 @@ export const renderCall = (request: {
   return renderSingleCall(args, scope, theme);
 };
 
-export const renderDisplayItems = (request: {
-  readonly items: DisplayItem[];
-  readonly expanded: boolean;
-  readonly theme: Theme;
-  readonly limit?: number | undefined;
-}): string => {
-  const { items, expanded, theme, limit } = request;
-  const toShow = limit === undefined ? items : items.slice(-limit);
-  const skipped = limit === undefined || items.length <= limit ? 0 : items.length - limit;
-  let text = "";
-  if (skipped > 0) text += theme.fg("muted", `... ${skipped} earlier items\n`);
-
-  for (const item of toShow) {
-    if (item.type === "text") {
-      const previewText = expanded ? item.text : item.text.split("\n").slice(0, 3).join("\n");
-      text += `${theme.fg("toolOutput", previewText)}\n`;
-    } else {
-      const call = formatToolCall({
-        args: item.args,
-        themeFg: (color, value) => theme.fg(color, value),
-        toolName: item.name,
-      });
-      text += `${theme.fg("muted", "→ ") + call}\n`;
-    }
-  }
-  return text.trimEnd();
-};
-
-export const addToolCalls = (request: {
-  readonly container: tuiTypes.Container;
-  readonly items: DisplayItem[];
-  readonly theme: Theme;
-}): void => {
-  const { container, items, theme } = request;
-  for (const item of items) {
-    if (item.type !== "toolCall") continue;
-    const call = formatToolCall({
-      args: item.args,
-      themeFg: (color, value) => theme.fg(color, value),
-      toolName: item.name,
-    });
-    container.addChild(new Text(theme.fg("muted", "→ ") + call, 0, 0));
-  }
-};
-
-const resultHeader = (result: SingleResult, theme: Theme): string => {
+const resultHeader = (
+  result: subagentTypesTypes.SingleResult,
+  theme: codingAgentTypes.Theme,
+): string => {
   const icon = isFailedResult(result) ? theme.fg("error", "✗") : theme.fg("success", "✓");
   let header = `${icon} ${theme.fg("toolTitle", theme.bold(result.agent))}${theme.fg("muted", ` (${result.agentSource})`)}`;
   if (isFailedResult(result) && result.stopReason !== undefined && result.stopReason.length > 0) {
@@ -153,7 +112,10 @@ const resultHeader = (result: SingleResult, theme: Theme): string => {
   return header;
 };
 
-const renderSingleExpanded = (result: SingleResult, theme: Theme): tuiTypes.Container => {
+const renderSingleExpanded = (
+  result: subagentTypesTypes.SingleResult,
+  theme: codingAgentTypes.Theme,
+): tuiTypes.Container => {
   const container = new Container();
   const items = getDisplayItems(result.messages);
   const finalOutput = getFinalOutput(result.messages);
@@ -190,7 +152,10 @@ const renderSingleExpanded = (result: SingleResult, theme: Theme): tuiTypes.Cont
   return container;
 };
 
-const renderSingleCollapsed = (result: SingleResult, theme: Theme): tuiTypes.Text => {
+const renderSingleCollapsed = (
+  result: subagentTypesTypes.SingleResult,
+  theme: codingAgentTypes.Theme,
+): tuiTypes.Text => {
   const items = getDisplayItems(result.messages);
   let text = resultHeader(result, theme);
 
@@ -214,16 +179,19 @@ const renderSingleCollapsed = (result: SingleResult, theme: Theme): tuiTypes.Tex
   return new Text(text, 0, 0);
 };
 
-const renderSingle = (result: SingleResult, expanded: boolean, theme: Theme) =>
-  expanded ? renderSingleExpanded(result, theme) : renderSingleCollapsed(result, theme);
+const renderSingle = (
+  result: subagentTypesTypes.SingleResult,
+  expanded: boolean,
+  theme: codingAgentTypes.Theme,
+) => (expanded ? renderSingleExpanded(result, theme) : renderSingleCollapsed(result, theme));
 
-export const renderResult = (request: {
+const renderResult = (request: {
   readonly result: { content: ReadonlyArray<{ type: string; text?: string }>; details: unknown };
   readonly options: { expanded: boolean };
-  readonly theme: Theme;
+  readonly theme: codingAgentTypes.Theme;
 }) => {
   const { result, options, theme } = request;
-  const details = result.details as SubagentDetails | undefined;
+  const details = result.details as subagentTypesTypes.SubagentDetails | undefined;
   if (details === undefined || details.results.length === 0) {
     const content = result.content[0];
     return new Text(content?.type === "text" ? (content.text ?? "") : "(no output)", 0, 0);
@@ -243,3 +211,10 @@ export const renderResult = (request: {
   const content = result.content[0];
   return new Text(content?.type === "text" ? (content.text ?? "") : "(no output)", 0, 0);
 };
+
+const render = {
+  renderCall,
+  renderResult,
+};
+
+export default render;

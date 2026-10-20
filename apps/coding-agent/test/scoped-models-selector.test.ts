@@ -3,13 +3,19 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { ScopedModelsSelectorComponent } from "../src/modes/interactive/components/scoped-models-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import codingAgent from "../src/index.ts";
+import components from "../src/modes/interactive/components/index.ts";
+import type scopedModelsSelectorTypes from "../src/modes/interactive/components/scoped-models-selector.types.ts";
+import ansi from "../src/utils/ansi.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
 
+const { ScopedModelsSelectorComponent } = components;
+
+const { initTheme } = codingAgent;
+
+const { stripAnsi } = ansi;
 const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;
@@ -22,7 +28,10 @@ interface ModelState {
   enabled: boolean;
 }
 
-function getMarkerStates(selector: ScopedModelsSelectorComponent, models: ModelState[]): boolean[] {
+function getMarkerStates(
+  selector: scopedModelsSelectorTypes.ScopedModelsSelectorComponent,
+  models: ModelState[],
+): boolean[] {
   const lines = stripAnsi(selector.render(120).join("\n")).split("\n");
   return models.map((model) => {
     const line = lines.find((candidate) => candidate.includes(`${model.id} [`));

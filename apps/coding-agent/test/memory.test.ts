@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { cosineSimilarity, reciprocalRankFusion, segmentWords } from "../src/core/memory/store.ts";
+import storeVectors from "../src/core/memory/store-vectors.ts";
 import memorySupport from "./memory-support.ts";
+
+const { cosineSimilarity, reciprocalRankFusion, segmentWords } = storeVectors;
 
 const { vector } = memorySupport;
 

@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 
@@ -43,7 +43,7 @@ const compactionSettings = (modelOverride: boolean) =>
     : { enabled: true, keepRecentTokens: 1750, reserveTokens: 400 };
 
 const summarizingExtension =
-  (order: string[], observedSettings: unknown[]): ExtensionFactory =>
+  (order: string[], observedSettings: unknown[]): srcTypes.ExtensionFactory =>
   (msa) => {
     msa.on("session_before_compact", (event) => {
       order.push("compaction");

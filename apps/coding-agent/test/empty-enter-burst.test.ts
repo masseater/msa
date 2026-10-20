@@ -1,14 +1,16 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import {
+import emptyEnterBurst from "../src/modes/interactive/empty-enter-burst.ts";
+import type emptyEnterBurstTypes from "../src/modes/interactive/empty-enter-burst.types.ts";
+
+const {
   EMPTY_ENTER_BURST_COUNT,
   EMPTY_ENTER_BURST_IDLE,
   EMPTY_ENTER_BURST_WINDOW_MS,
-  type EmptyEnterBurst,
   registerEmptyEnter,
-} from "../src/modes/interactive/empty-enter-burst.ts";
+} = emptyEnterBurst;
 
-function press(burst: EmptyEnterBurst, times: readonly number[]) {
+function press(burst: emptyEnterBurstTypes.EmptyEnterBurst, times: readonly number[]) {
   let current = burst;
   const fires: boolean[] = [];
   for (const at of times) {

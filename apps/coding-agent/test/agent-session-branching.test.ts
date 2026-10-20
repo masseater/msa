@@ -5,18 +5,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type AgentSessionRuntime,
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionFromServices,
-  createAgentSessionRuntime,
-  createAgentSessionServices,
-} from "../src/core/agent-session-runtime.ts";
-import type { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import type agentSessionRuntimeTypes from "../src/core/agent-session-runtime.types.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import utilities from "./utilities.ts";
 
+const { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices } =
+  codingAgent;
+
+const { SessionManager } = codingAgent;
 const { getModel } = compat;
 
 const { API_KEY } = utilities;
@@ -24,13 +22,13 @@ const { API_KEY } = utilities;
 const { awaited, currentTimeMillis, joinPath, makeDirectory, pathExists, removePath, runTest } =
   testing;
 
-let session: AgentSession;
+let session: codingAgentTypes.AgentSession;
 
-let runtimeHost: AgentSessionRuntime;
+let runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime;
 
 let tempDir: string;
 
-let sessionManager: SessionManager;
+let sessionManager: codingAgentTypes.SessionManager;
 
 const createSessionPart1 = (input: { readonly noSession: boolean }) =>
   Effect.gen(function* () {
@@ -63,7 +61,7 @@ function createSession(noSession: boolean = false) {
   return runTest(
     Effect.gen(function* () {
       const { effectRunPromise, model, servicesOptions } = yield* createSessionPart1({ noSession });
-      const createRuntime: CreateAgentSessionRuntimeFactory = ({
+      const createRuntime: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = ({
         cwd,
         sessionManager: innerSessionManager,
         sessionStartEvent,

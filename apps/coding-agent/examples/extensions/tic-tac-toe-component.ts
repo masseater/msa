@@ -1,8 +1,12 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { type GameState, getCell } from "./tic-tac-toe-game.ts";
-import { centerPad, renderVisualBoard } from "./tic-tac-toe-render.ts";
+import ticTacToeGame from "./tic-tac-toe-game.ts";
+import type ticTacToeGameTypes from "./tic-tac-toe-game.types.ts";
+import ticTacToeRender from "./tic-tac-toe-render.ts";
+
+const { getCell } = ticTacToeGame;
+const { centerPad, renderVisualBoard } = ticTacToeRender;
 
 const { matchesKey, visibleWidth } = tuiModule;
 
@@ -24,7 +28,7 @@ const titleLine = (width: number): string[] => {
   ];
 };
 
-const statusLine = (state: GameState, width: number): string => {
+const statusLine = (state: ticTacToeGameTypes.GameState, width: number): string => {
   if (state.status !== "playing") {
     const text =
       state.status === "draw"
@@ -46,7 +50,7 @@ const statusLine = (state: GameState, width: number): string => {
   });
 };
 
-const footerLine = (state: GameState): string => {
+const footerLine = (state: ticTacToeGameTypes.GameState): string => {
   if (state.status !== "playing") {
     return `${bold("R")} restart  ${dim("|")}  ${bold("Q")}/${bold("ESC")} quit`;
   }
@@ -56,8 +60,8 @@ const footerLine = (state: GameState): string => {
   return dim("Agent is thinking...");
 };
 
-export class TicTacToeComponent implements tuiTypes.Component {
-  private state: GameState;
+export default class TicTacToeComponent implements tuiTypes.Component {
+  private state: ticTacToeGameTypes.GameState;
   private onClose: () => void;
   private onUserPlay: (row: number, col: number) => void;
   private tui: { requestRender: () => void };
@@ -70,7 +74,7 @@ export class TicTacToeComponent implements tuiTypes.Component {
     tui: { requestRender: () => void },
     onClose: () => void,
     onUserPlay: (row: number, col: number) => void,
-    state: GameState,
+    state: ticTacToeGameTypes.GameState,
   ) {
     this.tui = tui;
     this.onClose = onClose;
@@ -78,7 +82,7 @@ export class TicTacToeComponent implements tuiTypes.Component {
     this.state = state;
   }
 
-  updateState(state: GameState): void {
+  updateState(state: ticTacToeGameTypes.GameState): void {
     this.state = state;
     this.version++;
     this.tui.requestRender();

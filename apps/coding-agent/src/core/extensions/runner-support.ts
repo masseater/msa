@@ -2,11 +2,11 @@ import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import { Function as Fn } from "effect";
 
-import type { Extension, ExtensionEvent, UserBashEventResult } from "./types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
 const { getCurrentSystemMessage } = ai;
 
-export function isUserBashEventResult(value: unknown): value is UserBashEventResult {
+function isUserBashEventResult(value: unknown): value is extensionsTypesTypes.UserBashEventResult {
   if (typeof value !== "object" || value === null) return false;
   const candidate = value as Record<string, unknown>;
   const hasOperations = candidate["operations"] !== undefined;
@@ -33,20 +33,22 @@ export function isUserBashEventResult(value: unknown): value is UserBashEventRes
   );
 }
 
-const snapshotEventHandlersImpl = (extensions: Extension[], event: ExtensionEvent["type"]) =>
-  extensions.map((ext) => ({ ext, handlers: ext.handlers.get(event)?.slice() ?? [] }));
+const snapshotEventHandlersImpl = (
+  extensions: extensionsTypesTypes.Extension[],
+  event: extensionsTypesTypes.ExtensionEvent["type"],
+) => extensions.map((ext) => ({ ext, handlers: ext.handlers.get(event)?.slice() ?? [] }));
 
-export const snapshotEventHandlers: {
+const snapshotEventHandlers: {
   (
-    event: ExtensionEvent["type"],
-  ): (extensions: Extension[]) => ReturnType<typeof snapshotEventHandlersImpl>;
+    event: extensionsTypesTypes.ExtensionEvent["type"],
+  ): (extensions: extensionsTypesTypes.Extension[]) => ReturnType<typeof snapshotEventHandlersImpl>;
   (
-    extensions: Extension[],
-    event: ExtensionEvent["type"],
+    extensions: extensionsTypesTypes.Extension[],
+    event: extensionsTypesTypes.ExtensionEvent["type"],
   ): ReturnType<typeof snapshotEventHandlersImpl>;
 } = Fn.dual(2, snapshotEventHandlersImpl);
 
-export const sameMessages: {
+const sameMessages: {
   (right: agentTypes.AgentMessage[]): (left: agentTypes.AgentMessage[]) => boolean;
   (left: agentTypes.AgentMessage[], right: agentTypes.AgentMessage[]): boolean;
 } = Fn.dual(
@@ -55,7 +57,7 @@ export const sameMessages: {
     left.length === right.length && left.every((message, index) => message === right[index]),
 );
 
-export const restoreSystemMessages: {
+const restoreSystemMessages: {
   (
     visible: agentTypes.AgentMessage[],
     returned: agentTypes.AgentMessage[],
@@ -77,3 +79,12 @@ export const restoreSystemMessages: {
     return head === undefined ? returned : [head, ...returned];
   },
 );
+
+const runnerSupport = {
+  isUserBashEventResult,
+  restoreSystemMessages,
+  sameMessages,
+  snapshotEventHandlers,
+};
+
+export default runnerSupport;

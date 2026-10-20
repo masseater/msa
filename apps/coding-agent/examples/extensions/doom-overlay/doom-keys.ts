@@ -1,7 +1,7 @@
 import tui from "@msa/tui";
 
 const { Key, matchesKey, parseKey } = tui;
-export const DoomKeys = {
+const DoomKeys = {
   KEY_BACKSPACE: 127,
   KEY_DOWNARROW: 0xaf,
   KEY_ENTER: 13,
@@ -93,6 +93,13 @@ const mapFallbackKey = (data: string): number[] => {
   return [];
 };
 
-export function mapKeyToDoom(data: string): number[] {
+function mapKeyToDoom(data: string): number[] {
   return mapMovementKey(data) ?? mapControlKey(data) ?? mapFallbackKey(data);
 }
+
+const doomKeys = {
+  DoomKeys,
+  mapKeyToDoom,
+};
+
+export default doomKeys;

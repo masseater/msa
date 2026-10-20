@@ -3,8 +3,10 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../../../src/config.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
+import config from "../../../src/config.ts";
+import SessionManager from "../../../src/core/session-manager.ts";
+
+const { ENV_AGENT_DIR } = config;
 
 const { joinPath, toJsonText } = testing;
 

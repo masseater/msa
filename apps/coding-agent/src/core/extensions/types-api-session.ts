@@ -1,49 +1,60 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import type { EventBus } from "../event-bus.ts";
-import type { ExecOptions, ExecResult } from "../exec.ts";
-import type { CustomMessage } from "../messages.ts";
-import type { Settings } from "../settings-manager.ts";
-import type { SlashCommandInfo } from "../slash-commands.ts";
-import type { ToolInfo } from "./types-runtime.ts";
+import type eventBusTypes from "../event-bus.types.ts";
+import type execTypes from "../exec.types.ts";
+import type messagesTypes from "../messages.types.ts";
+import type settingsManagerTypes from "../settings-manager.types.ts";
+import type slashCommandsTypes from "../slash-commands.types.ts";
+import type typesRuntimeTypes from "./types-runtime.ts";
 
-export interface ExtensionSessionApi {
-  sendMessage<T = unknown>(
-    message: Pick<CustomMessage<T>, "customType" | "content" | "display" | "details">,
-    options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
-  ): void;
+declare namespace typesApiSessionTypes {
+  interface ExtensionSessionApi {
+    sendMessage<T = unknown>(
+      message: Pick<
+        messagesTypes.CustomMessage<T>,
+        "customType" | "content" | "display" | "details"
+      >,
+      options?: { triggerTurn?: boolean; deliverAs?: "steer" | "followUp" | "nextTurn" },
+    ): void;
 
-  sendUserMessage(
-    content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
-    options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
-  ): void;
+    sendUserMessage(
+      content: string | (aiTypes.TextContent | aiTypes.ImageContent)[],
+      options?: { deliverAs?: "steer" | "followUp"; expandPromptTemplates?: boolean },
+    ): void;
 
-  appendEntry<T = unknown>(customType: string, data?: T): void;
+    appendEntry<T = unknown>(customType: string, data?: T): void;
 
-  setSessionName(name: string): void;
+    setSessionName(name: string): void;
 
-  getSessionName(): string | undefined;
+    getSessionName(): string | undefined;
 
-  setLabel(entryId: string, label: string | undefined): void;
+    setLabel(entryId: string, label: string | undefined): void;
 
-  exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult>;
+    exec(
+      command: string,
+      args: string[],
+      options?: execTypes.ExecOptions,
+    ): Promise<execTypes.ExecResult>;
 
-  getActiveTools(): string[];
+    getActiveTools(): string[];
 
-  getAllTools(): ToolInfo[];
+    getAllTools(): typesRuntimeTypes.ToolInfo[];
 
-  getSettings(): Settings;
+    getSettings(): settingsManagerTypes.Settings;
 
-  setActiveTools(toolNames: string[]): void;
+    setActiveTools(toolNames: string[]): void;
 
-  getCommands(): SlashCommandInfo[];
+    getCommands(): slashCommandsTypes.SlashCommandInfo[];
 
-  setModel(model: aiTypes.Model<any>): Promise<boolean>;
+    setModel(model: aiTypes.Model<any>): Promise<boolean>;
 
-  getThinkingLevel(): agentTypes.ThinkingLevel;
+    getThinkingLevel(): agentTypes.ThinkingLevel;
 
-  setThinkingLevel(level: agentTypes.ThinkingLevel): void;
+    setThinkingLevel(level: agentTypes.ThinkingLevel): void;
 
-  events: EventBus;
+    events: eventBusTypes.EventBus;
+  }
 }
+
+export type { typesApiSessionTypes as default };

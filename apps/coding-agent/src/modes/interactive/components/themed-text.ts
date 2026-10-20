@@ -1,8 +1,6 @@
 import tui from "@msa/tui";
 
-const { Text } = tui;
-
-export class ThemedText extends Text {
+export default class ThemedText extends tui.Text {
   private readonly build: () => string;
   private stale = true;
 

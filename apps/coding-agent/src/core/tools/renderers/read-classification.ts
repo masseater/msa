@@ -1,13 +1,16 @@
-import { getReadmePath } from "../../../config.ts";
-import { formatPathRelativeToCwdOrAbsolute } from "../../../utils/paths.ts";
-import { pathOperations } from "../../platform/index.ts";
-import { resolveToCwd } from "../path-utils.ts";
-import { str } from "../render-utils.ts";
+import config from "../../../config.ts";
+import paths from "../../../utils/paths.ts";
+import platform from "../../platform/index.ts";
+import pathUtils from "../path-utils.ts";
+import renderUtils from "../render-utils.ts";
+import type readClassificationTypes from "./read-classification.types.ts";
 
-export interface CompactReadClassification {
-  kind: "docs" | "resource" | "skill";
-  label: string;
-}
+const { pathOperations } = platform;
+const { getReadmePath } = config;
+const { str } = renderUtils;
+const { resolveToCwd } = pathUtils;
+const { formatPathRelativeToCwdOrAbsolute } = paths;
+
 const COMPACT_RESOURCE_FILE_NAMES = new Set([
   "AGENTS.override.md",
   "AGENTS.md",
@@ -20,7 +23,9 @@ type ClassificationArgs = { path?: string; file_path?: string };
 function toPosixPath(filePath: string): string {
   return filePath.split(pathOperations.sep).join("/");
 }
-function getMsaDocsClassification(absolutePath: string): CompactReadClassification | undefined {
+function getMsaDocsClassification(
+  absolutePath: string,
+): readClassificationTypes.CompactReadClassification | undefined {
   const packageRoot = pathOperations.dirname(getReadmePath());
   const relativePath = pathOperations.relative(
     pathOperations.resolve(packageRoot),
@@ -41,13 +46,13 @@ function getMsaDocsClassification(absolutePath: string): CompactReadClassificati
   }
   return undefined;
 }
-export function getCompactReadClassification({
+function getCompactReadClassification({
   args,
   cwd,
 }: {
   args: ClassificationArgs | undefined;
   cwd: string;
-}): CompactReadClassification | undefined {
+}): readClassificationTypes.CompactReadClassification | undefined {
   const rawPath = str(args?.file_path ?? args?.path);
   if (rawPath === null || rawPath === "") return undefined;
 
@@ -69,3 +74,9 @@ export function getCompactReadClassification({
 
   return undefined;
 }
+
+const readClassification = {
+  getCompactReadClassification,
+};
+
+export default readClassification;

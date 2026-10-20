@@ -3,10 +3,12 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
-import { parseFrontmatter } from "../../../src/utils/frontmatter.ts";
-import { splitBom } from "../../../src/utils/text.ts";
+import SettingsManager from "../../../src/core/settings-manager.ts";
+import frontmatterModule from "../../../src/utils/frontmatter.ts";
+import textModule from "../../../src/utils/text.ts";
 
+const { splitBom } = textModule;
+const { parseFrontmatter } = frontmatterModule;
 const { joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);

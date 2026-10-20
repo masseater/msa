@@ -1,16 +1,13 @@
 import { Effect } from "effect";
 
-import { execCommand } from "../exec.ts";
-import { orchestratorError } from "./errors.ts";
+import exec from "../exec.ts";
+import errors from "./errors.ts";
+import type repoStateTypes from "./repo-state.types.ts";
 
-export interface RepoState {
-  branch: string;
-  commit: string;
-  changedFiles: number;
-  unpushedCommits: number;
-}
+const { orchestratorError } = errors;
+const { execCommand } = exec;
 
-const EMPTY: RepoState = {
+const EMPTY: repoStateTypes.RepoState = {
   branch: "-",
   changedFiles: 0,
   commit: "-",
@@ -32,7 +29,7 @@ function count(text: string | undefined): number {
   return text.split("\n").filter((line) => line.trim() !== "").length;
 }
 
-function read(cwd: string): Effect.Effect<RepoState> {
+function read(cwd: string): Effect.Effect<repoStateTypes.RepoState> {
   return Effect.gen(function* () {
     const branch = yield* git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
     const commit = yield* git(cwd, ["log", "-1", "--format=%h %s"]);
@@ -48,8 +45,14 @@ function read(cwd: string): Effect.Effect<RepoState> {
   });
 }
 
-function describe(state: RepoState): string {
+function describe(state: repoStateTypes.RepoState): string {
   return `branch ${state.branch} · commit ${state.commit} · ${state.changedFiles} changed files · ${state.unpushedCommits} unpushed commits`;
 }
 
-export const repoStates = { describe, read };
+const repoStates = { describe, read };
+
+const repoState = {
+  repoStates,
+};
+
+export default repoState;

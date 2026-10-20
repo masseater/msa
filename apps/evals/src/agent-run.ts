@@ -2,29 +2,35 @@ import transcript from "@msa/ai/utils/transcript";
 import { Effect } from "effect";
 import type { HarnessContext, JsonValue } from "vitest-evals/harness";
 
-import { assertOnlyInlineExtensions, openSession, prepareModel } from "./agent-session.ts";
-import { runSteps } from "./agent-steps.ts";
-import { collectDiagnostics } from "./diagnostics.ts";
-import type { MsaCodingAgentInput } from "./harness-types.ts";
-import type { AgentRunContext, Options, RunState } from "./run-types.ts";
-import { enterToolSandbox } from "./sandbox.ts";
-import { verifySystemPrompt } from "./system-prompt.ts";
+import agentSession from "./agent-session.ts";
+import agentSteps from "./agent-steps.ts";
+import diagnosticsModule from "./diagnostics.ts";
+import type harnessTypesTypes from "./harness-types.ts";
+import type runTypesTypes from "./run-types.ts";
+import sandbox from "./sandbox.ts";
+import systemPromptModule from "./system-prompt.ts";
+
+const { assertOnlyInlineExtensions, openSession, prepareModel } = agentSession;
+const { enterToolSandbox } = sandbox;
+const { runSteps } = agentSteps;
+const { collectDiagnostics } = diagnosticsModule;
+const { verifySystemPrompt } = systemPromptModule;
 
 const { getCurrentSystemPrompt } = transcript;
 
-export const executeAgentRun = <TOutput extends JsonValue>({
+const executeAgentRun = <TOutput extends JsonValue>({
   state,
   request,
   context,
 }: {
-  state: RunState<TOutput>;
+  state: runTypesTypes.RunState<TOutput>;
   request: {
-    input: MsaCodingAgentInput;
+    input: harnessTypesTypes.MsaCodingAgentInput;
     signal: AbortSignal | undefined;
     setArtifact: HarnessContext["setArtifact"];
-    options: Options<TOutput>;
+    options: runTypesTypes.Options<TOutput>;
   };
-  context: AgentRunContext;
+  context: runTypesTypes.AgentRunContext;
 }): Effect.Effect<void> =>
   Effect.gen(function* () {
     const { input, signal, setArtifact, options } = request;
@@ -56,3 +62,9 @@ export const executeAgentRun = <TOutput extends JsonValue>({
         : response;
     state.result = { output, ...diagnostics };
   });
+
+const agentRun = {
+  executeAgentRun,
+};
+
+export default agentRun;

@@ -1,10 +1,14 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { EvalTask } from "../src/plan.ts";
-import { files, pathOperations } from "../src/platform.ts";
-import { classifyCaseStatus, readTaskObservation } from "../src/report-read.ts";
-import { MSA_SESSION_SNAPSHOT_ARTIFACT } from "../src/report-types.ts";
+import type planTypes from "../src/plan.types.ts";
+import platform from "../src/platform.ts";
+import reportRead from "../src/report-read.ts";
+import reportTypes from "../src/report-types.ts";
+
+const { files, pathOperations } = platform;
+const { MSA_SESSION_SNAPSHOT_ARTIFACT } = reportTypes;
+const { classifyCaseStatus, readTaskObservation } = reportRead;
 
 const temporaryDirectories: string[] = [];
 afterEach(() =>
@@ -15,7 +19,7 @@ afterEach(() =>
 
 const run = (effect: Effect.Effect<void>) => Effect.runPromise(effect);
 
-const task: EvalTask = {
+const task: planTypes.EvalTask = {
   caseId: "handles the case",
   evalSet: "Example workflow",
   file: "evals/example.docs.eval.ts",
@@ -46,11 +50,11 @@ function reportJson(assertion: ReportAssertion): string {
         assertionResults: [
           {
             ancestorTitles: [task.evalSet],
+            failureMessages: [],
             fullName: `${task.evalSet} ${task.caseId}`,
+            meta: assertion.meta ?? {},
             status,
             title: task.caseId,
-            failureMessages: [],
-            meta: assertion.meta ?? {},
           },
         ],
         message: "",
@@ -91,7 +95,7 @@ function scoredMeta(overrides?: {
         },
         errors: overrides?.errors ?? [],
         output: { ok: true },
-        session: { events: [{ type: "message", role: "user", content: "prompt" }] },
+        session: { events: [{ content: "prompt", role: "user", type: "message" }] },
         timings: { totalMs: 1234 },
         usage: {
           inputTokens: 10,

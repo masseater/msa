@@ -1,23 +1,21 @@
-import { resolvePath } from "../../utils/paths.ts";
-import type { ExtensionFactory } from "./types.ts";
+import paths from "../../utils/paths.ts";
+import type loaderCacheTypes from "./loader-cache.types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
+
+const { resolvePath } = paths;
 
 let extensionCacheCwd: string | undefined;
 let extensionCacheGeneration = 0;
 
-export const extensionCache = new Map<string, ExtensionFactory>();
+const extensionCache = new Map<string, extensionsTypesTypes.ExtensionFactory>();
 
-export interface ExtensionCacheToken {
-  cwd: string;
-  generation: number;
-}
-
-export function clearExtensionCache(): void {
+function clearExtensionCache(): void {
   extensionCache.clear();
   extensionCacheCwd = undefined;
   extensionCacheGeneration++;
 }
 
-export function useExtensionCacheCwd(cwd: string): ExtensionCacheToken {
+function useExtensionCacheCwd(cwd: string): loaderCacheTypes.ExtensionCacheToken {
   const resolvedCwd = resolvePath(cwd);
   if (extensionCacheCwd !== undefined && extensionCacheCwd !== resolvedCwd) {
     clearExtensionCache();
@@ -26,12 +24,21 @@ export function useExtensionCacheCwd(cwd: string): ExtensionCacheToken {
   return { cwd: resolvedCwd, generation: extensionCacheGeneration };
 }
 
-export function isCurrentCacheToken(
-  cacheToken: ExtensionCacheToken | undefined,
-): cacheToken is ExtensionCacheToken {
+function isCurrentCacheToken(
+  cacheToken: loaderCacheTypes.ExtensionCacheToken | undefined,
+): cacheToken is loaderCacheTypes.ExtensionCacheToken {
   return (
     cacheToken !== undefined &&
     extensionCacheCwd === cacheToken.cwd &&
     extensionCacheGeneration === cacheToken.generation
   );
 }
+
+const loaderCache = {
+  clearExtensionCache,
+  extensionCache,
+  isCurrentCacheToken,
+  useExtensionCacheCwd,
+};
+
+export default loaderCache;

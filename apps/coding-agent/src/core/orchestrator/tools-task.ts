@@ -1,10 +1,12 @@
 import modelSchemaModule from "@msa/ai/providers/model-schema";
 import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import type { Orchestrator } from "./orchestrator.ts";
-import { prompts } from "./prompts.ts";
-import {
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import promptsModule from "./prompts.ts";
+import toolSupport from "./tool-support.ts";
+
+const {
   dependsSchema,
   modelChangeSchema,
   modelSchema,
@@ -12,7 +14,8 @@ import {
   taskIdObject,
   taskIdSchema,
   tool,
-} from "./tool-support.ts";
+} = toolSupport;
+const { prompts } = promptsModule;
 
 const { ModelThinkingLevelSchema } = modelSchemaModule;
 
@@ -48,7 +51,9 @@ const createSchema = Type.Object({
   title: Type.String({ description: "Short name of the work." }),
 });
 
-export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function taskToolsA(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     create_task: tool({
       description:
@@ -94,18 +99,20 @@ export function taskToolsA(orchestrator: Orchestrator): Record<string, ToolDefin
   };
 }
 
-export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function taskToolsB(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     set_task_depends: tool({
-      name: "set_task_depends",
-      label: "set task dependencies",
       description:
         "Add and drop the tasks one or more tasks wait for. A task that has not started changes freely; a running task only gains a dependency that already finished, because waiting for anything else means stopping it first. Cycles are rejected.",
-      promptSnippet: "Change what tasks wait for",
+      label: "set task dependencies",
+      name: "set_task_depends",
+      parameters: dependsSchema,
       promptGuidelines: [
         "Dependencies and states can change after creation: while a task has not started, set_task_depends and set_task_state rewrite them in place. Stop a running task before changing what it waits for or where it must end up.",
       ],
-      parameters: dependsSchema,
+      promptSnippet: "Change what tasks wait for",
       run: (params) =>
         orchestrator
           .setDepends(params)
@@ -116,24 +123,24 @@ export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefin
           ),
     }),
     set_task_model: tool({
-      name: "set_task_model",
-      label: "set task model",
       description:
         "Change the model and thinking level of a task, including one that is running. It applies to the task's next session and to the running one.",
-      promptSnippet: "Change a task's model",
+      label: "set task model",
+      name: "set_task_model",
       parameters: modelChangeSchema,
+      promptSnippet: "Change a task's model",
       run: ({ taskId, model, thinkingLevel }) =>
         orchestrator
           .setModel(taskId, model, thinkingLevel)
           .then((task) => `${task.id} now uses ${task.model} (thinking ${task.thinkingLevel}).`),
     }),
     set_task_state: tool({
-      name: "set_task_state",
-      label: "set task state",
       description:
         "Rewrite the current state or the goal state of a task that has not started. Write states, not steps: steps break once the starting state is not what you assumed. A running task is rejected: stop it first, or steer it with send_message.",
-      promptSnippet: "Rewrite the states of a task that has not started",
+      label: "set task state",
+      name: "set_task_state",
       parameters: stateSchema,
+      promptSnippet: "Rewrite the states of a task that has not started",
       run: (params) =>
         orchestrator
           .setState(params)
@@ -144,3 +151,10 @@ export function taskToolsB(orchestrator: Orchestrator): Record<string, ToolDefin
     }),
   };
 }
+
+const toolsTask = {
+  taskToolsA,
+  taskToolsB,
+};
+
+export default toolsTask;

@@ -2,7 +2,7 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import type { BuildSystemPromptOptions, ExtensionAPI } from "../../src/index.ts";
+import type srcTypes from "../../src/index.types.ts";
 import agentSessionModelExtensionCases1 from "./agent-session-model-extension-cases-1.ts";
 import harnessModule from "./harness.ts";
 
@@ -13,7 +13,7 @@ const { harnesses } = agentSessionModelExtensionCases1;
 
 const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  let extensionApi: ExtensionAPI | undefined;
+  let extensionApi: srcTypes.ExtensionAPI | undefined;
   const transformedHarness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [
@@ -60,7 +60,7 @@ const allowsExtensionInputHandlersToTransform = Effect.gen(function* () {
 });
 const allowsExtensionCommandsToInspectLive = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-  const seenOptions: BuildSystemPromptOptions[] = [];
+  const seenOptions: srcTypes.BuildSystemPromptOptions[] = [];
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [

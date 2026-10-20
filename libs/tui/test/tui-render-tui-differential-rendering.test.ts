@@ -6,10 +6,7 @@ import { Effect } from "effect";
 import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
 import TuiMainScreen from "../src/tui-main-screen.ts";
 import TestComponent from "./tui-render-test-component.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 describe("TUI differential rendering", () => {
   it("renders correctly when first line changes but rest stays same", () =>
     Effect.runPromise(

@@ -1,12 +1,12 @@
 import type compatTypes from "@msa/ai/compat.types";
 
-import { type ModelRegistry, type ProviderConfigInput } from "../src/core/model-registry.ts";
+import type modelRegistryTypes from "../src/core/model-registry.types.ts";
 
 function providerConfig(
   baseUrl: string,
   models: Array<{ id: string; name?: string }>,
   api: string = "anthropic-messages",
-): ProviderConfigInput {
+): modelRegistryTypes.ProviderConfigInput {
   return {
     api: api as compatTypes.Api,
     apiKey: "test-key",
@@ -23,7 +23,7 @@ function providerConfig(
   };
 }
 
-function getModelsForProvider(registry: ModelRegistry, provider: string) {
+function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provider: string) {
   return registry.getAll().filter((m) => m.provider === provider);
 }
 

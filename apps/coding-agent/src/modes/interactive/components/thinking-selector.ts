@@ -2,11 +2,13 @@ import type agentTypes from "@msa/agent-core/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { getSelectListTheme, theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyDisplayText } from "./keybinding-hints.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { keyDisplayText } = keybindingHints;
+const { getSelectListTheme, theme } = themeModule;
 
-const { Container, Input, SelectList, Spacer, Text, fuzzyFilter, getKeybindings } = tui;
+const { Input, SelectList, Spacer, Text, fuzzyFilter, getKeybindings } = tui;
 
 const THINKING_SELECT_LIST_LAYOUT: tuiTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
@@ -23,7 +25,7 @@ const LEVEL_DESCRIPTIONS: Record<agentTypes.ThinkingLevel, string> = {
   xhigh: "Extra-high reasoning (~32k tokens)",
 };
 
-export class ThinkingSelectorComponent extends Container implements tuiTypes.Focusable {
+export default class ThinkingSelectorComponent extends tui.Container implements tuiTypes.Focusable {
   private searchInput: tuiTypes.Input;
   private selectList: tuiTypes.SelectList;
   private selectListChildIndex: number;

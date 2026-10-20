@@ -9,13 +9,11 @@ import TuiMainScreen from "../src/tui-main-screen.ts";
 import markdownHelpers from "./markdown-helpers.ts";
 import markdownLatexMathKit from "./markdown-latex-math-kit.ts";
 import testThemes from "./test-themes.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const { ansiSequences, Markdown } = markdownLatexMathKit;
 
 const { defaultMarkdownTheme } = testThemes;
-const { VirtualTerminal } = virtualTerminal;
-
 const { stripStyleSequences } = ansiSequences;
 
 const { chalk, getCell, stripAnsi } = markdownHelpers;

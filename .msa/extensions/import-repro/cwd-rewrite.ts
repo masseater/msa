@@ -70,7 +70,7 @@ function getLocalPlatform(): Exclude<SessionPlatform, "unknown"> {
   return process.platform === "win32" ? "windows" : "unix";
 }
 
-export function getPlatformContinuationNotice(sourceCwd: string): string | undefined {
+function getPlatformContinuationNotice(sourceCwd: string): string | undefined {
   const sourcePlatform = detectSessionPlatform(sourceCwd);
   const localPlatform = getLocalPlatform();
   if (sourcePlatform === "unknown" || sourcePlatform === localPlatform) return undefined;
@@ -80,7 +80,7 @@ export function getPlatformContinuationNotice(sourceCwd: string): string | undef
   return "This session was continued on a Windows machine; paths are now Windows style.";
 }
 
-export const rewriteSessionCwd: {
+const rewriteSessionCwd: {
   (sourceCwd: string, targetCwd: string): (raw: string) => string;
   (raw: string, sourceCwd: string, targetCwd: string): string;
 } = dual(3, (raw: string, sourceCwd: string, targetCwd: string): string => {
@@ -106,3 +106,10 @@ export const rewriteSessionCwd: {
 
   return rewritten;
 });
+
+const cwdRewrite = {
+  getPlatformContinuationNotice,
+  rewriteSessionCwd,
+};
+
+export default cwdRewrite;

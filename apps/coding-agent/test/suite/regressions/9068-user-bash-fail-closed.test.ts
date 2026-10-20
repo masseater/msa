@@ -1,12 +1,14 @@
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { AgentSessionRuntime } from "../../../src/core/agent-session-runtime.ts";
-import type { ExtensionAPI, UserBashEventResult } from "../../../src/core/extensions/types.ts";
-import { runRpcMode } from "../../../src/modes/rpc/rpc-mode.ts";
+import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
+import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
+import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
+
+const { runRpcMode } = rpcMode;
 
 const { localResult } = UserBashFailClosedSupport;
 
@@ -18,31 +20,39 @@ const rpcIo = vi.hoisted(() => ({
 }));
 
 vi.mock("../../../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-  takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
-  writeRawStdout: (line: string) => {
-    rpcIo.outputLines.push(line);
+  default: {
+    flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    takeOverStdout: vi.fn(),
+    waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    writeRawStdout: (line: string) => {
+      rpcIo.outputLines.push(line);
+    },
   },
 }));
 
-vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ theme: {} }));
+vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
 vi.mock("../../../src/modes/interactive/components/bash-execution.js", () => ({
-  BashExecutionComponent: class {
-    appendOutput(): void {}
-    setComplete(): void {}
+  default: {
+    BashExecutionComponent: class {
+      appendOutput(): void {}
+      setComplete(): void {}
+    },
   },
 }));
 
 vi.mock("../../../src/modes/rpc/jsonl.js", () => ({
-  attachJsonlLineReader: vi.fn((_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-    rpcIo.lineHandler = onLine;
-    return () => {
-      rpcIo.lineHandler = undefined;
-    };
-  }),
-  serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  default: {
+    attachJsonlLineReader: vi.fn(
+      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
+        rpcIo.lineHandler = onLine;
+        return () => {
+          rpcIo.lineHandler = undefined;
+        };
+      },
+    ),
+    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  },
 }));
 
 type NodeListener = Parameters<typeof process.on>[1];
@@ -81,7 +91,9 @@ function parseOutputLines(): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-function createRuntimeHost(harness: harnessTypes.Harness): AgentSessionRuntime {
+function createRuntimeHost(
+  harness: harnessTypes.Harness,
+): agentSessionRuntimeTypes.AgentSessionRuntime {
   return {
     dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
     fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
@@ -89,10 +101,10 @@ function createRuntimeHost(harness: harnessTypes.Harness): AgentSessionRuntime {
     session: harness.session,
     setRebindSession: vi.fn(),
     switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
-  } as unknown as AgentSessionRuntime;
+  } as unknown as agentSessionRuntimeTypes.AgentSessionRuntime;
 }
 
-function startRpcHarness(extension: (msa: ExtensionAPI) => void): Promise<{
+function startRpcHarness(extension: (msa: extensionsTypesTypes.ExtensionAPI) => void): Promise<{
   harness: harnessTypes.Harness;
   send(command: Record<string, unknown>): void;
   cleanup(): void;
@@ -136,7 +148,7 @@ function startRpcHarness(extension: (msa: ExtensionAPI) => void): Promise<{
 
 const rpcCases: Array<{
   name: string;
-  extension: (msa: ExtensionAPI) => void;
+  extension: (msa: extensionsTypesTypes.ExtensionAPI) => void;
   error?: string;
   executeCount: number;
 }> = [
@@ -158,7 +170,9 @@ const rpcCases: Array<{
     error: "Invalid user_bash handler result",
     executeCount: 0,
     extension: (msa) => {
-      msa.on("user_bash", () => Promise.resolve({} as unknown as UserBashEventResult));
+      msa.on("user_bash", () =>
+        Promise.resolve({} as unknown as extensionsTypesTypes.UserBashEventResult),
+      );
     },
     name: "fails the request without executing bash when a handler returns an empty result",
   },

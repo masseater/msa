@@ -1,27 +1,18 @@
 import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
-import { awaited, awaitingWith } from "./awaiting.ts";
-import type { ModelRuntime } from "./model-runtime.ts";
-import type { AuthStatus, ProviderConfigInput } from "./provider-composer.ts";
-import type { VirtualModelDefinition } from "./virtual-models.ts";
+import awaitingModule from "./awaiting.ts";
+import type modelRegistryTypes from "./model-registry.types.ts";
+import type modelRuntimeTypes from "./model-runtime.types.ts";
+import type providerComposerTypes from "./provider-composer.types.ts";
+import type virtualModelsTypes from "./virtual-models.types.ts";
 
-export { clearApiKeyCache } from "./provider-composer.ts";
-export type { ProviderConfigInput } from "./provider-composer.ts";
-export type ResolvedRequestAuth =
-  | {
-      ok: true;
-      apiKey?: string | undefined;
-      headers?: aiTypes.ProviderHeaders | undefined;
-      baseUrl?: string | undefined;
-      env?: Record<string, string> | undefined;
-    }
-  | { ok: false; error: string };
+const { awaited, awaitingWith } = awaitingModule;
 
-export class ModelRegistry {
-  private readonly runtime: ModelRuntime;
+export default class ModelRegistry {
+  private readonly runtime: modelRuntimeTypes.ModelRuntime;
 
-  constructor(runtime: ModelRuntime) {
+  constructor(runtime: modelRuntimeTypes.ModelRuntime) {
     this.runtime = runtime;
   }
 
@@ -57,7 +48,9 @@ export class ModelRegistry {
     return this.runtime.hasConfiguredAuth(model.provider);
   }
 
-  getApiKeyAndHeaders(model: aiTypes.Model<aiTypes.Api>): Promise<ResolvedRequestAuth> {
+  getApiKeyAndHeaders(
+    model: aiTypes.Model<aiTypes.Api>,
+  ): Promise<modelRegistryTypes.ResolvedRequestAuth> {
     return Effect.runPromise(
       awaitingWith(function* () {
         try {
@@ -70,9 +63,9 @@ export class ModelRegistry {
             return { headers: compatibility.headers, ok: true };
           }
           return {
-            ok: true,
             apiKey: resolution.auth.apiKey,
             headers: resolution.auth.headers,
+            ok: true,
             ...(resolution.auth.baseUrl !== undefined && resolution.auth.baseUrl !== ""
               ? { baseUrl: resolution.auth.baseUrl }
               : {}),
@@ -98,7 +91,7 @@ export class ModelRegistry {
     );
   }
 
-  getProviderAuthStatus(provider: string): AuthStatus {
+  getProviderAuthStatus(provider: string): providerComposerTypes.AuthStatus {
     return this.runtime.getProviderAuthStatus(provider);
   }
 
@@ -194,8 +187,11 @@ export class ModelRegistry {
   }
 
   registerProvider(provider: aiTypes.Provider): void;
-  registerProvider(providerName: string, config: ProviderConfigInput): void;
-  registerProvider(providerOrName: aiTypes.Provider | string, config?: ProviderConfigInput): void {
+  registerProvider(providerName: string, config: providerComposerTypes.ProviderConfigInput): void;
+  registerProvider(
+    providerOrName: aiTypes.Provider | string,
+    config?: providerComposerTypes.ProviderConfigInput,
+  ): void {
     if (typeof providerOrName === "string") {
       if (config === undefined)
         throw new Error("Provider config is required when registering by name");
@@ -209,7 +205,7 @@ export class ModelRegistry {
     this.runtime.unregisterProvider(providerName);
   }
 
-  registerVirtualModel(definition: VirtualModelDefinition): void {
+  registerVirtualModel(definition: virtualModelsTypes.VirtualModelDefinition): void {
     this.runtime.registerVirtualModel(definition);
   }
 
@@ -217,7 +213,9 @@ export class ModelRegistry {
     this.runtime.unregisterVirtualModel(providerName, id);
   }
 
-  getRegisteredProviderConfig(providerName: string): ProviderConfigInput | undefined {
+  getRegisteredProviderConfig(
+    providerName: string,
+  ): providerComposerTypes.ProviderConfigInput | undefined {
     return this.runtime.getRegisteredProviderConfig(providerName);
   }
 

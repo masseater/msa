@@ -2,10 +2,13 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
+import themeModule from "../../../src/modes/interactive/theme/theme.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { initTheme } = themeModule;
 
 const { fauxAssistantMessage } = ai;
 
@@ -141,6 +144,7 @@ const refreshesHidethinkingblockBeforeRebuildingChatDuring = Effect.gen(function
     settingsManager: { getHideThinkingBlock: () => true },
   });
 
+  Object.setPrototypeOf(context, InteractiveMode.prototype);
   yield* Effect.promise(() => interactiveModePrototype.handleReloadCommand.call(context));
 
   expect(context.hideThinkingBlock).toBe(true);

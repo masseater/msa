@@ -3,17 +3,15 @@ import type compatTypes from "@msa/ai/compat.types";
 import textModule from "@msa/ai/utils/text";
 import type telemetryTypes from "@msa/telemetry/index.types";
 
-import type { AgentSessionEvent } from "../agent-session.ts";
-import { type OpenSpan, openSpan } from "./open-span.ts";
+import type agentSessionTypes from "../agent-session.types.ts";
+import type compactionTypes from "../compaction/index.types.ts";
+import openSpanModule from "./open-span.ts";
+import type openSpanTypes from "./open-span.types.ts";
+import type sessionTelemetryTypes from "./session-telemetry.types.ts";
+
+const { openSpan } = openSpanModule;
 
 const { contentText } = textModule;
-
-export type SessionTelemetryRole = "main" | "worker" | "reviewer";
-
-export interface SessionTelemetryOptions {
-  readonly context: telemetryTypes.TelemetryContext;
-  readonly role: SessionTelemetryRole;
-}
 
 const ERROR_TEXT_LIMIT = 300;
 
@@ -40,25 +38,28 @@ function requestOutcome(message: compatTypes.AssistantMessage): "ok" | "error" |
 }
 
 interface PendingRequest {
-  readonly span: OpenSpan;
+  readonly span: openSpanTypes.OpenSpan;
   readonly startedAt: number;
 }
 
-export class SessionTelemetry {
+export default class SessionTelemetry {
   readonly #context: telemetryTypes.TelemetryContext;
-  readonly #role: SessionTelemetryRole;
-  #turn: OpenSpan | undefined;
+  readonly #role: sessionTelemetryTypes.SessionTelemetryRole;
+  #turn: openSpanTypes.OpenSpan | undefined;
   #turnIndex = 0;
   #request: PendingRequest | undefined;
-  readonly #tools = new Map<string, OpenSpan>();
-  #compaction: OpenSpan | undefined;
+  readonly #tools = new Map<string, openSpanTypes.OpenSpan>();
+  #compaction: openSpanTypes.OpenSpan | undefined;
 
-  constructor(context: telemetryTypes.TelemetryContext, role: SessionTelemetryRole) {
+  constructor(
+    context: telemetryTypes.TelemetryContext,
+    role: sessionTelemetryTypes.SessionTelemetryRole,
+  ) {
     this.#context = context;
     this.#role = role;
   }
 
-  handle(event: AgentSessionEvent): void {
+  handle(event: agentSessionTypes.AgentSessionEvent): void {
     switch (event.type) {
       case "turn_start":
         this.#startTurn();
@@ -86,14 +87,7 @@ export class SessionTelemetry {
         });
         break;
       case "compaction_end":
-        this.#compaction?.end(
-          event.errorMessage === undefined
-            ? undefined
-            : {
-                error: { message: firstLines(event.errorMessage), name: "CompactionError" },
-                status: "error",
-              },
-        );
+        this.handlePart1(event);
         this.#compaction = undefined;
         break;
       case "auto_retry_start":
@@ -110,6 +104,24 @@ export class SessionTelemetry {
       default:
         break;
     }
+  }
+
+  private handlePart1(event: {
+    type: "compaction_end";
+    reason: "manual" | "threshold" | "overflow";
+    result: compactionTypes.CompactionResult | undefined;
+    aborted: boolean;
+    willRetry: boolean;
+    errorMessage?: string | undefined;
+  }) {
+    this.#compaction?.end(
+      event.errorMessage === undefined
+        ? undefined
+        : {
+            error: { message: firstLines(event.errorMessage), name: "CompactionError" },
+            status: "error",
+          },
+    );
   }
 
   close(): void {

@@ -9,7 +9,7 @@ const { nextTick } = effectHelpers;
 
 const XtermTerminal = xterm.Terminal;
 
-class VirtualTerminal implements terminalProtocolTypes.Terminal {
+export default class VirtualTerminal implements terminalProtocolTypes.Terminal {
   private xterm: XtermTerminalType;
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
@@ -178,9 +178,3 @@ class VirtualTerminal implements terminalProtocolTypes.Terminal {
     );
   }
 }
-
-const virtualTerminal = {
-  VirtualTerminal,
-};
-
-export default virtualTerminal;

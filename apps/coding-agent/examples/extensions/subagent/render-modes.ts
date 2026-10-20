@@ -1,21 +1,24 @@
-import type { Theme } from "@msa/coding-agent";
-import { getMarkdownTheme } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import {
-  aggregateUsage,
-  formatUsageStats,
-  getDisplayItems,
-  getFinalOutput,
-  isFailedResult,
-} from "./format.ts";
-import { addToolCalls, renderDisplayItems } from "./render.ts";
-import type { SingleResult } from "./types.ts";
+import format from "./format.ts";
+import renderItems from "./render-items.ts";
+import type subagentTypesTypes from "./types.types.ts";
+
+const { getMarkdownTheme } = codingAgent;
+const { aggregateUsage, formatUsageStats, getDisplayItems, getFinalOutput, isFailedResult } =
+  format;
+const { addToolCalls, renderDisplayItems } = renderItems;
 
 const { Container, Markdown, Spacer, Text } = tui;
 
-const stepSection = (result: SingleResult, label: string, theme: Theme): tuiTypes.Container => {
+const stepSection = (
+  result: subagentTypesTypes.SingleResult,
+  label: string,
+  theme: codingAgentTypes.Theme,
+): tuiTypes.Container => {
   const container = new Container();
   const icon = result.exitCode === 0 ? theme.fg("success", "✓") : theme.fg("error", "✗");
   const finalOutput = getFinalOutput(result.messages);
@@ -34,9 +37,9 @@ const stepSection = (result: SingleResult, label: string, theme: Theme): tuiType
 };
 
 const renderChainImpl = (
-  results: SingleResult[],
+  results: subagentTypesTypes.SingleResult[],
   expanded: boolean,
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Container | tuiTypes.Text => {
   const successCount = results.filter((r) => r.exitCode === 0).length;
   const icon = successCount === results.length ? theme.fg("success", "✓") : theme.fg("error", "✗");
@@ -76,7 +79,11 @@ const renderChainImpl = (
   return container;
 };
 
-const renderParallelCollapsed = (results: SingleResult[], title: string, theme: Theme): string => {
+const renderParallelCollapsed = (
+  results: subagentTypesTypes.SingleResult[],
+  title: string,
+  theme: codingAgentTypes.Theme,
+): string => {
   let text = title;
   for (const result of results) {
     const icon =
@@ -102,9 +109,9 @@ const renderParallelCollapsed = (results: SingleResult[], title: string, theme: 
 };
 
 const renderParallelImpl = (
-  results: SingleResult[],
+  results: subagentTypesTypes.SingleResult[],
   expanded: boolean,
-  theme: Theme,
+  theme: codingAgentTypes.Theme,
 ): tuiTypes.Container | tuiTypes.Text => {
   const running = results.filter((r) => r.exitCode === -1).length;
   const successCount = results.filter((r) => r.exitCode !== -1 && !isFailedResult(r)).length;
@@ -137,16 +144,23 @@ const renderParallelImpl = (
   return new Text(renderParallelCollapsed(results, title, theme), 0, 0);
 };
 
-export const renderChain = (request: {
-  readonly results: SingleResult[];
+const renderChain = (request: {
+  readonly results: subagentTypesTypes.SingleResult[];
   readonly expanded: boolean;
-  readonly theme: Theme;
+  readonly theme: codingAgentTypes.Theme;
 }): tuiTypes.Container | tuiTypes.Text =>
   renderChainImpl(request.results, request.expanded, request.theme);
 
-export const renderParallel = (request: {
-  readonly results: SingleResult[];
+const renderParallel = (request: {
+  readonly results: subagentTypesTypes.SingleResult[];
   readonly expanded: boolean;
-  readonly theme: Theme;
+  readonly theme: codingAgentTypes.Theme;
 }): tuiTypes.Container | tuiTypes.Text =>
   renderParallelImpl(request.results, request.expanded, request.theme);
+
+const renderModes = {
+  renderChain,
+  renderParallel,
+};
+
+export default renderModes;

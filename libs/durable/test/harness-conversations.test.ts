@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import node from "../src/storage/sqlite/node.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessConversationsSupport from "./harness-conversations-support.ts";
 import harnessSupport from "./harness-support.ts";
@@ -17,7 +18,7 @@ const { awaited } = effectSupport;
 const { NoteDoc, UUID_V7, allEntries, append, directories } = harnessConversationsSupport;
 const { addTool, openHarness, tool, user } = harnessSupport;
 const { joinPath, makeTempDir, removeDir } = platformSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 
 const sqlitePath = Effect.fn("sqlitePath")(function* () {
   const directory = yield* makeTempDir("msa-durable-harness-");

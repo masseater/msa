@@ -2,8 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test } from "vite-plus/test";
 
-import { RpcClient } from "../src/modes/rpc/rpc-client.ts";
-
+import RpcClient from "../src/modes/rpc/rpc-client.ts";
 const { awaited, joinPath, makeTempDir, removeDirs, runTest, writeTextFile } = testing;
 
 const tempDirs: string[] = [];

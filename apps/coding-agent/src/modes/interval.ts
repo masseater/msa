@@ -1,12 +1,12 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { Scheduled } from "../core/platform.ts";
+import type platformTypes from "../core/platform.types.ts";
 
-export const every: {
-  (periodMs: number): (run: () => void) => Scheduled;
-  (run: () => void, periodMs: number): Scheduled;
-} = dual(2, (run: () => void, periodMs: number): Scheduled => {
+const every: {
+  (periodMs: number): (run: () => void) => platformTypes.Scheduled;
+  (run: () => void, periodMs: number): platformTypes.Scheduled;
+} = dual(2, (run: () => void, periodMs: number): platformTypes.Scheduled => {
   const fiber = Effect.runFork(
     Effect.forever(Effect.andThen(Effect.sleep(periodMs), Effect.sync(run))),
   );
@@ -16,3 +16,9 @@ export const every: {
     },
   };
 });
+
+const interval = {
+  every,
+};
+
+export default interval;

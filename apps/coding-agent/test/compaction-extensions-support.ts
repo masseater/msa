@@ -2,18 +2,17 @@ import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import {
-  type Extension,
-  type SessionBeforeCompactEvent,
-  type SessionCompactEvent,
-  type SessionEvent,
-} from "../src/core/extensions/index.ts";
-import { readEnv } from "../src/core/process-env.ts";
-import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
-import { createCodingTools } from "../src/index.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
+import processEnv from "../src/core/process-env.ts";
+import sourceInfoModule from "../src/core/source-info.ts";
+import src from "../src/index.ts";
 import type compactionExtensionsSupportTypes from "./compaction-extensions-support.types.ts";
 import sessionKit from "./session-kit.ts";
+
+const { readEnv } = processEnv;
+const { createSyntheticSourceInfo } = sourceInfoModule;
+const { createCodingTools } = src;
 
 const { streamSimple } = compat;
 
@@ -24,15 +23,15 @@ const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY")
 
 const hasApiKey = API_KEY !== undefined && API_KEY.length > 0;
 
-const capturedEvents: SessionEvent[] = [];
+const capturedEvents: extensionsTypes.SessionEvent[] = [];
 
-const sessions: AgentSession[] = [];
+const sessions: agentSessionTypes.AgentSession[] = [];
 
 let tempDir = "";
 
 const extensionFrom = (
   handlers: Map<string, compactionExtensionsSupportTypes.Handler[]>,
-): Extension => ({
+): extensionsTypes.Extension => ({
   commands: new Map(),
   flags: new Map(),
   handlers,
@@ -46,8 +45,8 @@ const extensionFrom = (
 
 const createExtension = (
   onBeforeCompact?: compactionExtensionsSupportTypes.BeforeCompactHandler,
-  onCompact?: (event: SessionCompactEvent) => void,
-): Extension =>
+  onCompact?: (event: extensionsTypes.SessionCompactEvent) => void,
+): extensionsTypes.Extension =>
   extensionFrom(
     new Map<string, compactionExtensionsSupportTypes.Handler[]>([
       [
@@ -56,8 +55,8 @@ const createExtension = (
           (event) =>
             runTest(
               Effect.sync(() => {
-                capturedEvents.push(event as SessionBeforeCompactEvent);
-                return onBeforeCompact?.(event as SessionBeforeCompactEvent);
+                capturedEvents.push(event as extensionsTypes.SessionBeforeCompactEvent);
+                return onBeforeCompact?.(event as extensionsTypes.SessionBeforeCompactEvent);
               }),
             ),
         ],
@@ -68,8 +67,8 @@ const createExtension = (
           (event) =>
             runTest(
               Effect.sync(() => {
-                capturedEvents.push(event as SessionCompactEvent);
-                onCompact?.(event as SessionCompactEvent);
+                capturedEvents.push(event as extensionsTypes.SessionCompactEvent);
+                onCompact?.(event as extensionsTypes.SessionCompactEvent);
                 return undefined;
               }),
             ),
@@ -78,7 +77,9 @@ const createExtension = (
     ]),
   );
 
-const createSession = Effect.fn("createSession")(function* (extensions: Extension[]) {
+const createSession = Effect.fn("createSession")(function* (
+  extensions: extensionsTypes.Extension[],
+) {
   const { session, settingsManager } = yield* createAgentSession({
     agentTools: createCodingTools(process.cwd()),
     apiKey: API_KEY,

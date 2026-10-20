@@ -1,21 +1,17 @@
-import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
-import type { Theme } from "../../../modes/interactive/theme/theme.ts";
+import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+
+const { expandHint } = keybindingHints;
 
 interface ListResultInput {
   output: string;
   warnings: string[];
   expanded: boolean;
   noun: string;
-  theme: Theme;
+  theme: themeTypes.Theme;
 }
 
-export function formatListResult({
-  output,
-  warnings,
-  expanded,
-  noun,
-  theme,
-}: ListResultInput): string {
+function formatListResult({ output, warnings, expanded, noun, theme }: ListResultInput): string {
   const lines = output === "" ? [] : output.split("\n");
   if (!expanded) {
     if (lines.length === 0) return "";
@@ -28,3 +24,9 @@ export function formatListResult({
     text += `\n${theme.fg("warning", `[Truncated: ${warnings.join(", ")}]`)}`;
   return text;
 }
+
+const listOutput = {
+  formatListResult,
+};
+
+export default listOutput;

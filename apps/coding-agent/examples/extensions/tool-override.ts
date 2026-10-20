@@ -1,8 +1,11 @@
 import { NodeServices } from "@effect/platform-node";
 import type aiTypes from "@msa/ai/index.types";
-import { type ExtensionAPI, getAgentDir } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { DateTime, Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 import { Type } from "typebox";
+
+const { getAgentDir } = codingAgent;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -100,7 +103,7 @@ const readAudited = (
     };
   });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool({
     description:
       "Read the contents of a file with access logging. Some sensitive paths (.env, secrets, credentials) are blocked.",

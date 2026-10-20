@@ -2,9 +2,11 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createMcpToolName } from "../../src/extensions/mcp/tools.ts";
+import tools from "../../src/extensions/mcp/tools.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
+
+const { createMcpToolName } = tools;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

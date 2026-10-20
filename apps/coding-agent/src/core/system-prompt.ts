@@ -1,49 +1,25 @@
 import ai from "@msa/ai";
 
-import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
-import { type Skill, formatSkillsForPrompt } from "./skills.ts";
+import config from "../config.ts";
+import skillsModule from "./skills.ts";
+import type skillsTypes from "./skills.types.ts";
+import type systemPromptTypes from "./system-prompt.types.ts";
+
+const { getDocsPath, getExamplesPath, getReadmePath } = config;
+const { formatSkillsForPrompt } = skillsModule;
 
 const { getSystemMessageText } = ai;
 
-export interface BuildSystemPromptOptions {
-  customPrompt?: string | undefined;
-  forceSystemPrompt?: string | undefined;
-  selectedTools?: string[] | undefined;
-  hiddenTools?: string[] | undefined;
-  toolSnippets?: Record<string, string> | undefined;
-  toolGuidelines?: Record<string, string[]> | undefined;
-  promptGuidelines?: string[] | undefined;
-  appendSystemPrompt?: string | undefined;
-  sections?: Record<string, string> | undefined;
-  cwd: string;
-  contextFiles?: Array<{ path: string; content: string }> | undefined;
-  skills?: Skill[] | undefined;
-}
-
-export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
-  selectedTools: string[];
-  hiddenTools: string[];
-  toolSnippets: Record<string, string>;
-  toolGuidelines: Record<string, string[]>;
-  promptGuidelines: string[];
-  appendSystemPrompt: string;
-  sections: Record<string, string>;
-  contextFiles: Array<{ path: string; content: string }>;
-  skills: Skill[];
-};
-
-export type SystemPromptSections = Record<string, string>;
-
-export const ORCHESTRATOR_PREAMBLE =
+const ORCHESTRATOR_PREAMBLE =
   "You are an expert coding assistant operating inside msa, a coding agent harness. You work as an orchestrator: you break the request into tasks with create_task, give each one the state it starts from and the state it must reach, record what it depends on, and steer the threads that carry them out. You do not implement the tasks yourself; you read their reports, replan, and tell the user what the tasks produced.";
 
 const CODING_PREAMBLE =
   "You are an expert coding assistant operating inside msa, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
 
 const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/u;
-export function normalizeBuildSystemPromptOptions(
-  input: BuildSystemPromptOptions,
-): NormalizedBuildSystemPromptOptions {
+function normalizeBuildSystemPromptOptions(
+  input: systemPromptTypes.BuildSystemPromptOptions,
+): systemPromptTypes.NormalizedBuildSystemPromptOptions {
   return {
     appendSystemPrompt: input.appendSystemPrompt ?? "",
     contextFiles: (input.contextFiles ?? []).map((file) => Object.assign({}, file)),
@@ -116,7 +92,9 @@ function buildRules(
   return rules.map((rule) => `- ${rule}`).join("\n");
 }
 
-export function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromptSections {
+function buildSystemPromptSections(
+  input: systemPromptTypes.BuildSystemPromptOptions,
+): systemPromptTypes.SystemPromptSections {
   const options = normalizeBuildSystemPromptOptions(input);
   const {
     customPrompt,
@@ -140,6 +118,40 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 
   const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
   const promptSections: Record<string, string> = {};
+  const sections: systemPromptTypes.SystemPromptSections = buildSystemPromptSectionsPart1(
+    customPrompt,
+    promptSections,
+    declaredTools,
+    toolSnippets,
+    toolGuidelines,
+    promptGuidelines,
+    appendSystemPrompt,
+    contextFiles,
+    selectedTools,
+    skills,
+    cwd,
+    customSections,
+  );
+  for (const [name, content] of Object.entries(promptSections)) {
+    if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
+  }
+  return sections;
+}
+
+function buildSystemPromptSectionsPart1(
+  customPrompt: string | undefined,
+  promptSections: Record<string, string>,
+  declaredTools: string[],
+  toolSnippets: Record<string, string>,
+  toolGuidelines: Record<string, string[]>,
+  promptGuidelines: string[],
+  appendSystemPrompt: string,
+  contextFiles: { path: string; content: string }[] & { path: string; content: string }[],
+  selectedTools: string[],
+  skills: skillsTypes.Skill[],
+  cwd: string,
+  customSections: Record<string, string>,
+) {
   if (customPrompt !== undefined && customPrompt !== "") {
     promptSections["preamble"] = customPrompt;
   } else {
@@ -168,6 +180,29 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
   }
 
   if (appendSystemPrompt !== "") promptSections["addendum"] = appendSystemPrompt;
+  buildSystemPromptSectionsPart1Part1(
+    contextFiles,
+    promptSections,
+    declaredTools,
+    selectedTools,
+    skills,
+    cwd,
+    customSections,
+  );
+
+  const sections: systemPromptTypes.SystemPromptSections = { preamble: promptSections["preamble"] };
+  return sections;
+}
+
+function buildSystemPromptSectionsPart1Part1(
+  contextFiles: { path: string; content: string }[] & { path: string; content: string }[],
+  promptSections: Record<string, string>,
+  declaredTools: string[],
+  selectedTools: string[],
+  skills: skillsTypes.Skill[],
+  cwd: string,
+  customSections: Record<string, string>,
+) {
   if (contextFiles.length > 0)
     promptSections["project_context"] = renderProjectContext(contextFiles);
   const readers = ["read", "bash"] as const;
@@ -182,29 +217,23 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
   for (const [name, content] of Object.entries(customSections)) {
     if (content !== "") promptSections[name] = content;
   }
-
-  const sections: SystemPromptSections = { preamble: promptSections["preamble"] };
-  for (const [name, content] of Object.entries(promptSections)) {
-    if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
-  }
-  return sections;
 }
 
-export function buildSystemPromptState(input: BuildSystemPromptOptions): {
+function buildSystemPromptState(input: systemPromptTypes.BuildSystemPromptOptions): {
   content: string;
-  sections?: SystemPromptSections;
+  sections?: systemPromptTypes.SystemPromptSections;
 } {
   if (input.forceSystemPrompt !== undefined) return { content: input.forceSystemPrompt };
   return { content: "", sections: buildSystemPromptSections(input) };
 }
 
-export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
+function buildSystemPrompt(input: systemPromptTypes.BuildSystemPromptOptions): string {
   return getSystemMessageText({ role: "system", ...buildSystemPromptState(input), timestamp: 0 });
 }
 
-export function diffSystemPromptSections(
+function diffSystemPromptSections(
   previous: Record<string, string | null>,
-  current: SystemPromptSections,
+  current: systemPromptTypes.SystemPromptSections,
 ): Record<string, string | null> | undefined {
   const patch: Record<string, string | null> = {};
   for (const [name, text] of Object.entries(current)) {
@@ -215,3 +244,14 @@ export function diffSystemPromptSections(
   }
   return Object.keys(patch).length > 0 ? patch : undefined;
 }
+
+const systemPrompt = {
+  ORCHESTRATOR_PREAMBLE,
+  buildSystemPrompt,
+  buildSystemPromptSections,
+  buildSystemPromptState,
+  diffSystemPromptSections,
+  normalizeBuildSystemPromptOptions,
+};
+
+export default systemPrompt;

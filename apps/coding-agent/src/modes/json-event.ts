@@ -1,27 +1,9 @@
-import type aiTypes from "@msa/ai/index.types";
-
-import type { AgentSessionEvent } from "../core/agent-session.ts";
-
-type WithoutPartial<T> = T extends { partial: unknown } ? Omit<T, "partial"> : T;
-
-type ToJsonAssistantMessageEvent<T> = T extends { type: "toolcall_start"; partial: unknown }
-  ? WithoutPartial<T> & { id: string; toolName: string }
-  : WithoutPartial<T>;
-
-type MessageUpdateEvent = Extract<AgentSessionEvent, { type: "message_update" }>;
-type JsonMessageUpdateEvent = {
-  type: "message_update";
-  usage: aiTypes.Usage;
-  assistantMessageEvent: ToJsonAssistantMessageEvent<MessageUpdateEvent["assistantMessageEvent"]>;
-};
-
-export type JsonAgentSessionEvent =
-  | Exclude<AgentSessionEvent, { type: "message_update" }>
-  | JsonMessageUpdateEvent;
+import type agentSessionTypes from "../core/agent-session.types.ts";
+import type jsonEventTypes from "./json-event.types.ts";
 
 function toJsonAssistantMessageEvent(
-  event: MessageUpdateEvent["assistantMessageEvent"],
-): JsonMessageUpdateEvent["assistantMessageEvent"] {
+  event: jsonEventTypes.MessageUpdateEvent["assistantMessageEvent"],
+): jsonEventTypes.JsonMessageUpdateEvent["assistantMessageEvent"] {
   if (event.type === "toolcall_start") {
     const toolCall = event.partial.content[event.contentIndex];
     if (toolCall?.type !== "toolCall") {
@@ -39,9 +21,15 @@ function toJsonAssistantMessageEvent(
   return deltaEvent;
 }
 
-export function toJsonEvent(event: MessageUpdateEvent): JsonMessageUpdateEvent;
-export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent;
-export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent {
+function toJsonEvent(
+  event: jsonEventTypes.MessageUpdateEvent,
+): jsonEventTypes.JsonMessageUpdateEvent;
+function toJsonEvent(
+  event: agentSessionTypes.AgentSessionEvent,
+): jsonEventTypes.JsonAgentSessionEvent;
+function toJsonEvent(
+  event: agentSessionTypes.AgentSessionEvent,
+): jsonEventTypes.JsonAgentSessionEvent {
   if (event.type !== "message_update") {
     return event;
   }
@@ -55,3 +43,9 @@ export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent {
     usage: event.message.usage,
   };
 }
+
+const jsonEvent = {
+  toJsonEvent,
+};
+
+export default jsonEvent;

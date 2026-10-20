@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, type Fiber, ManagedRuntime, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
@@ -25,7 +25,7 @@ const readDarkMode = Effect.gen(function* () {
 const isDarkMode = (): Promise<boolean> =>
   runtime.runPromise(readDarkMode.pipe(Effect.orElseSucceed(() => false)));
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let fiber: Fiber.Fiber<void> | undefined;
 
   msa.on("session_start", (_event, ctx) => {

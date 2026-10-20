@@ -1,12 +1,8 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-export type SelectorFactory = (done: () => void) => {
-  component: tuiTypes.Component;
-  focus: tuiTypes.Component;
-  dispose?: () => void;
-};
+import type editorSlotTypes from "./editor-slot.types.ts";
 
-export class EditorSlot {
+export default class EditorSlot {
   private readonly container: tuiTypes.Container;
   private readonly ui: tuiTypes.TUI;
   private readonly getEditor: () => tuiTypes.Component;
@@ -34,7 +30,7 @@ export class EditorSlot {
     this.show(this.getEditor());
   }
 
-  showSelector(create: SelectorFactory): void {
+  showSelector(create: editorSlotTypes.SelectorFactory): void {
     const token = {};
     let dispose: (() => void) | undefined;
     const done = () => {

@@ -2,19 +2,17 @@ import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import {
-  type AgentSessionRuntime,
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionFromServices,
-  createAgentSessionRuntime,
-  createAgentSessionServices,
-} from "../src/core/agent-session-runtime.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import type { ExtensionAPI, ExtensionFactory } from "../src/index.ts";
+import type agentSessionRuntimeTypes from "../src/core/agent-session-runtime.types.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
+import codingAgent from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
 import type runtimeKitTypes from "./runtime-kit.types.ts";
 
+const { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices } =
+  codingAgent;
+
+const { ModelRuntime, SessionManager } = codingAgent;
 const { fauxAssistantMessage, registerFauxProvider } = compat;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removeDir, runTest } = testing;
@@ -49,13 +47,13 @@ const providerConfig = (faux: runtimeKitTypes.Faux) => ({
 const extensionFactoriesFor = (
   faux: runtimeKitTypes.Faux,
   options: runtimeKitTypes.FauxRuntimeOptions,
-): ExtensionFactory[] => {
+): srcTypes.ExtensionFactory[] => {
   const extensionFactory = options.extensionFactory ?? (() => {});
   if (options.providerViaExtension === false) {
     return [extensionFactory];
   }
   return [
-    (msa: ExtensionAPI) => {
+    (msa: srcTypes.ExtensionAPI) => {
       msa.registerProvider(faux.getModel().provider, providerConfig(faux));
       return extensionFactory(msa);
     },
@@ -79,10 +77,10 @@ const createModelRuntime = Effect.fn("createModelRuntime")(function* (
 
 const runtimeFactory = (input: {
   faux: runtimeKitTypes.Faux;
-  modelRuntime: ModelRuntime;
+  modelRuntime: modelRuntimeTypes.ModelRuntime;
   options: runtimeKitTypes.FauxRuntimeOptions;
   tempDir: string;
-}): CreateAgentSessionRuntimeFactory => {
+}): agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory => {
   const model = input.options.bootstrapModel === false ? undefined : input.faux.getModel();
   const extensionFactories = extensionFactoriesFor(input.faux, input.options);
   return ({ cwd, sessionManager, sessionStartEvent }) =>
@@ -114,7 +112,9 @@ const runtimeFactory = (input: {
     );
 };
 
-const bindRuntimeCommands = (runtime: AgentSessionRuntime): Promise<void> => {
+const bindRuntimeCommands = (
+  runtime: agentSessionRuntimeTypes.AgentSessionRuntime,
+): Promise<void> => {
   const { session } = runtime;
   return session.bindExtensions({
     commandContextActions: {
@@ -143,7 +143,7 @@ const bindRuntimeCommands = (runtime: AgentSessionRuntime): Promise<void> => {
 };
 
 const bindRuntime = Effect.fn("bindRuntime")(function* (
-  runtime: AgentSessionRuntime,
+  runtime: agentSessionRuntimeTypes.AgentSessionRuntime,
   commandActions: boolean,
 ) {
   if (!commandActions) {

@@ -16,7 +16,7 @@ const isReadable = (value: unknown): value is typesModule.Readable<unknown> =>
   typeof (value as typesModule.Readable<unknown>).subscribe === "function" &&
   "value" in value;
 
-export default class Derived<T> extends Source<T> {
+export default class Derived<T> extends cellSource.Source<T> {
   readonly sources: readonly typesModule.Readable<unknown>[];
   readonly #fn: (...values: never[]) => unknown;
   #value: T;

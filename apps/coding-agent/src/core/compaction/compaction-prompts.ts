@@ -1,4 +1,4 @@
-export const SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
+const SUMMARIZATION_PROMPT = `The messages above are a conversation to summarize. Create a structured context checkpoint summary that another LLM will use to continue the work.
 
 Use this EXACT format:
 
@@ -68,11 +68,11 @@ Use this EXACT format:
 
 Keep each section concise. Preserve exact file paths, function names, and error messages.`;
 
-export const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
+const UPDATE_SUMMARIZATION_PROMPT = `The messages above are NEW conversation messages to incorporate into the existing summary provided in <previous-summary> tags.
 
 ${UPDATE_SUMMARIZATION_INSTRUCTIONS}`;
 
-export const TURN_PREFIX_SUMMARIZATION_PROMPT = `The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
+const TURN_PREFIX_SUMMARIZATION_PROMPT = `The messages above are earlier context from an ongoing conversation. Later messages are stored separately and do not need to be reconstructed.
 
 Create a concise checkpoint of the user's request and the progress shown above. This checkpoint will be placed before the later messages so the conversation can continue with the necessary context.
 
@@ -86,3 +86,11 @@ Create a concise checkpoint of the user's request and the progress shown above. 
 - [Information from these messages needed to understand the later work]
 
 Only summarize information explicitly present above. Do not infer or recreate later messages.`;
+
+const compactionPrompts = {
+  SUMMARIZATION_PROMPT,
+  TURN_PREFIX_SUMMARIZATION_PROMPT,
+  UPDATE_SUMMARIZATION_PROMPT,
+};
+
+export default compactionPrompts;

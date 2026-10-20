@@ -1,15 +1,15 @@
 import modelSchemaModule from "@msa/ai/providers/model-schema";
 import { type Static, type TSchema, Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
 
 const { ModelThinkingLevelSchema } = modelSchemaModule;
 
-export const modelSchema = Type.String({ description: 'Model as "provider/id".' });
-export const taskIdSchema = Type.String({ description: "Task id." });
-export const taskIdObject = Type.Object({ taskId: taskIdSchema });
+const modelSchema = Type.String({ description: 'Model as "provider/id".' });
+const taskIdSchema = Type.String({ description: "Task id." });
+const taskIdObject = Type.Object({ taskId: taskIdSchema });
 
-export const dependsSchema = Type.Object({
+const dependsSchema = Type.Object({
   add: Type.Optional(
     Type.Array(taskIdSchema, {
       description:
@@ -22,7 +22,7 @@ export const dependsSchema = Type.Object({
   }),
 });
 
-export const stateSchema = Type.Object({
+const stateSchema = Type.Object({
   currentState: Type.Optional(
     Type.String({
       description: "What is true now. Replaces the task's current state. Facts, not steps.",
@@ -36,7 +36,7 @@ export const stateSchema = Type.Object({
   taskId: taskIdSchema,
 });
 
-export const modelChangeSchema = Type.Object({
+const modelChangeSchema = Type.Object({
   model: modelSchema,
   taskId: taskIdSchema,
   thinkingLevel: Type.Optional(ModelThinkingLevelSchema),
@@ -46,16 +46,31 @@ function text(value: string) {
   return { content: [{ text: value, type: "text" as const }], details: undefined };
 }
 
-export function tool<TParams extends TSchema>(
-  definition: Omit<ToolDefinition<TParams, undefined>, "execute" | "defaultActive"> & {
+function tool<TParams extends TSchema>(
+  definition: Omit<
+    extensionsTypesTypes.ToolDefinition<TParams, undefined>,
+    "execute" | "defaultActive"
+  > & {
     run: (params: Static<TParams>) => Promise<string>;
   },
-): ToolDefinition {
+): extensionsTypesTypes.ToolDefinition {
   const { run, ...rest } = definition;
-  const typed: ToolDefinition<TParams, undefined> = {
+  const typed: extensionsTypesTypes.ToolDefinition<TParams, undefined> = {
     ...rest,
     defaultActive: false,
     execute: (_toolCallId, params) => run(params).then(text),
   };
-  return typed as ToolDefinition;
+  return typed as extensionsTypesTypes.ToolDefinition;
 }
+
+const toolSupport = {
+  dependsSchema,
+  modelChangeSchema,
+  modelSchema,
+  stateSchema,
+  taskIdObject,
+  taskIdSchema,
+  tool,
+};
+
+export default toolSupport;

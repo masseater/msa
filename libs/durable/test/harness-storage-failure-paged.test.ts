@@ -3,6 +3,7 @@ import type memoryTypes from "@msa/durable/storage/memory.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -10,7 +11,7 @@ import taskSupport from "./task-support.ts";
 
 const { awaited } = effectSupport;
 const { started } = harnessStorageFailureSupport;
-const { ControlledStorage, context } = sessionSupport;
+const { context } = sessionSupport;
 const { deferred } = taskSupport;
 
 const closesBackendOnly = Effect.gen(function* () {

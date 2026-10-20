@@ -1,9 +1,9 @@
 import stack from "./stack.ts";
 import type stackTypes from "./stack.types.ts";
 
-const { Stack, allocateStackSizes, visibleStackEntries } = stack;
+const { allocateStackSizes, visibleStackEntries } = stack;
 
-export default class VStack extends Stack {
+export default class VStack extends stack.Stack {
   protected readonly layoutType = "vstack" as const;
 
   constructor(children: stackTypes.StackChild[] = [], options: stackTypes.StackOptions = {}) {

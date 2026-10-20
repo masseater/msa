@@ -1,13 +1,16 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { restoreSandboxEnv } from "../src/bun/restore-sandbox-env.ts";
-import { envNames, envSnapshot, readEnv } from "../src/core/process-env.ts";
+import restoreSandboxEnvModule from "../src/bun/restore-sandbox-env.ts";
+import processEnv from "../src/core/process-env.ts";
+
+const { envNames, envSnapshot, readEnv } = processEnv;
+const { restoreSandboxEnv } = restoreSandboxEnvModule;
 
 const readFileSync = vi.hoisted(() => vi.fn());
 
-vi.mock("node:fs", () => ({
-  readFileSync,
-}));
+vi.mock("node:fs", (importOriginal) =>
+  importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, readFileSync })),
+);
 
 const stubVersions = (versions: Record<string, string>): (() => void) => {
   const originalVersions = Object.getOwnPropertyDescriptor(process, "versions");

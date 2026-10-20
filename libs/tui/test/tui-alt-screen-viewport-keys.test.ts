@@ -6,7 +6,7 @@ import { Effect } from "effect";
 import tuiModule from "../src/index.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import InputOverlay from "./tui-alt-screen-input-overlay.ts";
-import virtualTerminal from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
 const {
   KeybindingsManager,
@@ -17,8 +17,6 @@ const {
   getKeybindings,
   setKeybindings,
 } = tuiModule;
-const { VirtualTerminal } = virtualTerminal;
-
 const { OSC133_ZONE_START, mountTranscriptWithEditor, numberedLines, trimmedViewport } =
   tuiAltScreenHelpers;
 

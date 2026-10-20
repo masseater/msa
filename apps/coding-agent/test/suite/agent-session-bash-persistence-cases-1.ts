@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import type { BashOperations } from "../../src/core/tools/bash.ts";
+import type bashTypes from "../../src/core/tools/bash.types.ts";
 import type agentSessionBashPersistenceCases1Types from "./agent-session-bash-persistence-cases-1.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
@@ -16,7 +16,7 @@ function getEntryTypes(harness: harnessTypes.Harness): string[] {
 }
 function createControlledBashOperations(
   invocations: agentSessionBashPersistenceCases1Types.ControlledBashInvocation[],
-): BashOperations {
+): bashTypes.BashOperations {
   return {
     exec: (_command, _cwd, options) => {
       const execution = deferredPromise<{ exitCode: number | null }>();

@@ -2,8 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
-import { runMigrations } from "../src/migrations.ts";
+import config from "../src/config.ts";
+import migrations from "../src/migrations.ts";
+
+const { runMigrations } = migrations;
+const { ENV_AGENT_DIR } = config;
 
 const { joinPath, makeTempDir, readJsonFile, removePath, runTest, writeJsonFile } = testing;
 

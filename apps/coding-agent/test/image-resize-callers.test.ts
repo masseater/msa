@@ -9,17 +9,22 @@ const resizeImageMock = vi.hoisted(() =>
 );
 
 vi.mock("../src/utils/image-resize.js", () => ({
-  formatDimensionNote: vi.fn(() => undefined),
-  resizeImage: resizeImageMock,
+  default: {
+    formatDimensionNote: vi.fn(() => undefined),
+    resizeImage: resizeImageMock,
+  },
 }));
 
 import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { processFileArguments } from "../src/cli/file-processor.ts";
-import type { ExtensionToolContext } from "../src/core/extensions/types.ts";
-import { createReadTool, createReadToolDefinition } from "../src/core/tools/read.ts";
+import fileProcessor from "../src/cli/file-processor.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import read from "../src/core/tools/read.ts";
+
+const { createReadTool, createReadToolDefinition } = read;
+const { processFileArguments } = fileProcessor;
 
 const { awaited, currentTimeMillis, joinPath, makeDirectory, removePath, runTest, writeBytesFile } =
   testing;
@@ -76,7 +81,7 @@ const passesTheCurrentModelResizeProfileTo = () =>
         provider: "test",
         reasoning: false,
       };
-      const ctx = { cwd: testDir, model } as unknown as ExtensionToolContext;
+      const ctx = { cwd: testDir, model } as unknown as extensionsTypesTypes.ExtensionToolContext;
 
       yield* awaited(
         createReadToolDefinition(testDir).execute(

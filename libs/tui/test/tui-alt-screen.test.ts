@@ -8,10 +8,7 @@ import Text from "../src/components/text.ts";
 import VStack from "../src/components/v-stack.ts";
 import TuiAltScreen from "../src/tui-alt-screen.ts";
 import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
-import virtualTerminal from "./virtual-terminal.ts";
-
-const { VirtualTerminal } = virtualTerminal;
-
+import VirtualTerminal from "./virtual-terminal.ts";
 const { numberedLines, trimmedViewport, viewportHas } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {

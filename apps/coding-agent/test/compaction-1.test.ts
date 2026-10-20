@@ -1,7 +1,9 @@
 import type compatTypes from "@msa/ai/compat.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import { calculateContextTokens } from "../src/core/compaction/index.ts";
+import compaction from "../src/core/compaction/index.ts";
+
+const { calculateContextTokens } = compaction;
 
 function createMockUsage(
   input: number,

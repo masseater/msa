@@ -3,11 +3,11 @@ import utils from "../utils.ts";
 import stack from "./stack.ts";
 import type stackTypes from "./stack.types.ts";
 
-const { Stack, allocateStackSizes, visibleStackEntries } = stack;
+const { allocateStackSizes, visibleStackEntries } = stack;
 const { visibleWidth } = utils;
 const { compositeTuiLine } = tuiComponent;
 
-export default class HStack extends Stack {
+export default class HStack extends stack.Stack {
   protected readonly layoutType = "hstack" as const;
 
   constructor(children: stackTypes.StackChild[] = [], options: stackTypes.StackOptions = {}) {

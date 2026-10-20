@@ -5,6 +5,7 @@ import envModule from "../src/env/index.ts";
 import type nodeTypes from "../src/env/node.types.ts";
 import image from "../src/tools/image.ts";
 import toolsModule from "../src/tools/index.ts";
+import BlockingWriteExecutionEnv from "./blocking-write-execution-env.ts";
 import support from "./support.ts";
 import diagnosticText from "./tools-cases.ts";
 import toolsSupport from "./tools-support.ts";
@@ -14,15 +15,7 @@ const { getOrThrow } = envModule;
 const { detectSupportedImageMimeType } = image;
 
 const { BACKGROUND_CONTEXT, abortController, appendTempFile, awaited, withAbortSignal } = support;
-const {
-  BlockingWriteExecutionEnv,
-  createEnv,
-  createTempDir,
-  delay,
-  removeTempDirs,
-  run,
-  textOutput,
-} = toolsSupport;
+const { createEnv, createTempDir, delay, removeTempDirs, run, textOutput } = toolsSupport;
 
 afterAll(() => Effect.runPromise(removeTempDirs));
 

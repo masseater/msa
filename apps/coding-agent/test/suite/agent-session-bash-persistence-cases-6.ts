@@ -3,7 +3,7 @@ import { Buffer } from "node:buffer";
 import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import type { BashOperations } from "../../src/core/tools/bash.ts";
+import type bashTypes from "../../src/core/tools/bash.types.ts";
 import agentSessionBashPersistenceCases1 from "./agent-session-bash-persistence-cases-1.ts";
 import harnessModule from "./harness.ts";
 
@@ -14,7 +14,7 @@ const recordsBashOutputThroughCustomOperations = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const harness = yield* Effect.promise(() => createHarness());
   harnesses.push(harness);
-  const operations: BashOperations = {
+  const operations: bashTypes.BashOperations = {
     exec: (_command, _cwd, options) =>
       runPromise(
         Effect.sync(() => {
@@ -42,7 +42,7 @@ const streamsBashOutputToTheCallback = Effect.gen(function* () {
       eventUpdates.push({ delta: event.delta, id: event.id });
     }
   });
-  const operations: BashOperations = {
+  const operations: bashTypes.BashOperations = {
     exec: (_command, _cwd, options) =>
       runPromise(
         Effect.sync(() => {
@@ -78,7 +78,7 @@ const runChunks = (entry: {
       const harness = yield* Effect.promise(() => createHarness());
       harnesses.push(harness);
       const deltas: string[] = [];
-      const operations: BashOperations = {
+      const operations: bashTypes.BashOperations = {
         exec: (_command, _cwd, options) =>
           runPromise(
             Effect.sync(() => {

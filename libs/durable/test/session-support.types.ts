@@ -1,4 +1,4 @@
-import type sessionSupport from "./session-support.ts";
+import type ControlledStorageClass from "./controlled-storage.ts";
 
 declare namespace sessionSupportTypes {
   type Gate = {
@@ -6,7 +6,7 @@ declare namespace sessionSupportTypes {
     release(): void;
   };
 
-  type ControlledStorage = (typeof sessionSupport.ControlledStorage)["prototype"];
+  type ControlledStorage = (typeof ControlledStorageClass)["prototype"];
 }
 
 export type { sessionSupportTypes as default };

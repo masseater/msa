@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { type FileEntry, migrateSessionEntries } from "../../src/core/session-manager.ts";
+import sessionManagerSupport from "../../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+
+const { migrateSessionEntries } = sessionManagerSupport;
 
 const shouldAddIdParentidToV1 = () => {
-  const entries: FileEntry[] = [
+  const entries: sessionManagerTypes.FileEntry[] = [
     { cwd: "/tmp", id: "sess-1", timestamp: "2025-01-01T00:00:00Z", type: "session" },
     {
       message: { content: "hi", role: "user", timestamp: 1 },
@@ -24,7 +27,7 @@ const shouldAddIdParentidToV1 = () => {
       timestamp: "2025-01-01T00:00:02Z",
       type: "message",
     },
-  ] as FileEntry[];
+  ] as sessionManagerTypes.FileEntry[];
 
   migrateSessionEntries(entries);
 
@@ -43,7 +46,7 @@ const shouldAddIdParentidToV1 = () => {
 };
 
 const shouldBeIdempotentSkipAlreadyMigrated = () => {
-  const entries: FileEntry[] = [
+  const entries: sessionManagerTypes.FileEntry[] = [
     { cwd: "/tmp", id: "sess-1", timestamp: "2025-01-01T00:00:00Z", type: "session", version: 2 },
     {
       id: "abc12345",
@@ -68,7 +71,7 @@ const shouldBeIdempotentSkipAlreadyMigrated = () => {
       timestamp: "2025-01-01T00:00:02Z",
       type: "message",
     },
-  ] as FileEntry[];
+  ] as sessionManagerTypes.FileEntry[];
 
   migrateSessionEntries(entries);
 

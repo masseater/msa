@@ -1,13 +1,21 @@
-import { type WriteStream, createWriteStream } from "node:fs";
 import { tmpdir } from "node:os";
 
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { join } from "../core/platform-node.ts";
-import { writeFile } from "./node-fs.ts";
-import { randomHex } from "./platform-extra.ts";
+import awaitingModule from "../core/awaiting.ts";
+import platformNode from "../core/platform-node.ts";
+import platformNodeFs from "../core/platform/node/fs.ts";
+import nodeFs from "./node-fs.ts";
+import type outputFilesTypes from "./output-files.types.ts";
+import platformExtra from "./platform-extra.ts";
+
+const { createWriteStream } = platformNodeFs;
+
+const { join } = platformNode;
+const { randomHex } = platformExtra;
+const { awaited, awaiting } = awaitingModule;
+const { writeFile } = nodeFs;
 
 const OUTPUT_FILE_MODE = 0o600;
 
@@ -30,22 +38,27 @@ function writeOutputFileImpl(
   );
 }
 
-export const writeOutputFile: {
+const writeOutputFile: {
   (prefix: string, extension: string, data: string | Uint8Array): Promise<string>;
   (extension: string, data: string | Uint8Array): (prefix: string) => Promise<string>;
 } = dual((args: IArguments) => args.length >= 3, writeOutputFileImpl);
 
-export interface OutputFileStream {
-  readonly path: string;
-  readonly stream: WriteStream;
-}
-
-function createOutputFileStreamImpl(prefix: string, extension: string): OutputFileStream {
+function createOutputFileStreamImpl(
+  prefix: string,
+  extension: string,
+): outputFilesTypes.OutputFileStream {
   const path = createOutputFilePath(prefix, extension);
   return { path, stream: createWriteStream(path, { flags: "wx", mode: OUTPUT_FILE_MODE }) };
 }
 
-export const createOutputFileStream: {
-  (prefix: string, extension: string): OutputFileStream;
-  (extension: string): (prefix: string) => OutputFileStream;
+const createOutputFileStream: {
+  (prefix: string, extension: string): outputFilesTypes.OutputFileStream;
+  (extension: string): (prefix: string) => outputFilesTypes.OutputFileStream;
 } = dual((args: IArguments) => args.length >= 2, createOutputFileStreamImpl);
+
+const outputFiles = {
+  createOutputFileStream,
+  writeOutputFile,
+};
+
+export default outputFiles;

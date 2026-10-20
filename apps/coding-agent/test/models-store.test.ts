@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import lockfile from "proper-lockfile";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import { FileModelsStore } from "../src/core/models-store.ts";
+import FileModelsStore from "../src/core/file-models-store.ts";
 
 const {
   abortController,

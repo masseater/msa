@@ -4,8 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { ToolResultContent } from "../src/utils/tool-result-images.ts";
-import { normalizeToolResultImages } from "../src/utils/tool-result-images.ts";
+import toolResultImages from "../src/utils/tool-result-images.ts";
+import type toolResultImagesTypes from "../src/utils/tool-result-images.types.ts";
+
+const { normalizeToolResultImages } = toolResultImages;
 
 const { awaited, runTest } = testing;
 
@@ -60,14 +62,16 @@ function createTinyBmp1x1Red24bpp(): Buffer {
   return buffer;
 }
 
-function imageBlock(bytes: Buffer, mimeType: string): ToolResultContent {
+function imageBlock(bytes: Buffer, mimeType: string): toolResultImagesTypes.ToolResultContent {
   return { data: bytes.toString("base64"), mimeType, type: "image" };
 }
 
 const returnsTheOriginalArrayWhenThereAre = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [{ text: "no images here", type: "text" }];
+      const content: toolResultImagesTypes.ToolResultContent[] = [
+        { text: "no images here", type: "text" },
+      ];
 
       expect(yield* awaited(normalizeToolResultImages(content))).toBe(content);
     }),
@@ -76,7 +80,7 @@ const returnsTheOriginalArrayWhenThereAre = () =>
 const returnsTheOriginalArrayWhenImagesAre = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [
+      const content: toolResultImagesTypes.ToolResultContent[] = [
         { text: "screenshot", type: "text" },
         { data: TINY_PNG_BASE64, mimeType: "image/png", type: "image" },
       ];
@@ -88,7 +92,9 @@ const returnsTheOriginalArrayWhenImagesAre = () =>
 const resizesOversizedImagesAndReportsTheOriginal = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [imageBlock(createPng(2400, 4800), "image/png")];
+      const content: toolResultImagesTypes.ToolResultContent[] = [
+        imageBlock(createPng(2400, 4800), "image/png"),
+      ];
 
       const normalized = yield* awaited(normalizeToolResultImages(content));
 
@@ -110,7 +116,9 @@ const resizesOversizedImagesAndReportsTheOriginal = () =>
 const leavesOversizedImagesAloneWhenAutoResize = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [imageBlock(createPng(2400, 4800), "image/png")];
+      const content: toolResultImagesTypes.ToolResultContent[] = [
+        imageBlock(createPng(2400, 4800), "image/png"),
+      ];
 
       const normalized = yield* awaited(
         normalizeToolResultImages(content, { autoResizeImages: false }),
@@ -123,7 +131,9 @@ const leavesOversizedImagesAloneWhenAutoResize = () =>
 const convertsUnsupportedImageFormatsEvenWhenAuto = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [imageBlock(createTinyBmp1x1Red24bpp(), "image/bmp")];
+      const content: toolResultImagesTypes.ToolResultContent[] = [
+        imageBlock(createTinyBmp1x1Red24bpp(), "image/bmp"),
+      ];
 
       const normalized = yield* awaited(
         normalizeToolResultImages(content, { autoResizeImages: false }),
@@ -141,7 +151,7 @@ const convertsUnsupportedImageFormatsEvenWhenAuto = () =>
 const keepsUndecodableImagesInsteadOfDroppingTool = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [
+      const content: toolResultImagesTypes.ToolResultContent[] = [
         { data: "bm90LWFuLWltYWdl", mimeType: "image/png", type: "image" },
       ];
 
@@ -152,7 +162,7 @@ const keepsUndecodableImagesInsteadOfDroppingTool = () =>
 const preservesSurroundingTextBlocksAndTheirOrder = () =>
   runTest(
     Effect.gen(function* () {
-      const content: ToolResultContent[] = [
+      const content: toolResultImagesTypes.ToolResultContent[] = [
         { text: "before", type: "text" },
         imageBlock(createPng(2400, 100), "image/png"),
         { text: "after", type: "text" },

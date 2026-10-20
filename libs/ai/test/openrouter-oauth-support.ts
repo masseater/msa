@@ -9,7 +9,7 @@ const { openRouterOAuth } = openrouter;
 
 const { decodeJson } = jsonCodec;
 
-const neverAbortedSignal = new AbortController().signal;
+const neverAbortedSignal: AbortSignal = new AbortController().signal;
 
 const waitForever = () => Effect.runPromise(Effect.never);
 

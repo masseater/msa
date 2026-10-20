@@ -1,27 +1,11 @@
 import type aiTypes from "@msa/ai/index.types";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Theme } from "../../modes/interactive/theme/theme.ts";
-import type { ToolRenderContext, ToolRenderers } from "../extensions/types.ts";
-import { ansiLinesToHtml } from "./ansi-to-html.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import ansiToHtmlModule from "./ansi-to-html.ts";
+import type toolRendererTypes from "./tool-renderer.types.ts";
 
-export interface ToolHtmlRendererDeps {
-  getToolRenderers: (name: string) => ToolRenderers | undefined;
-  theme: Theme;
-  cwd: string;
-  width?: number;
-}
-
-export interface ToolHtmlRenderer {
-  renderCall(toolCallId: string, toolName: string, args: unknown): string | undefined;
-  renderResult(
-    toolCallId: string,
-    toolName: string,
-    result: Array<{ type: string; text?: string; data?: string; mimeType?: string }>,
-    details: unknown,
-    isError: boolean,
-  ): { collapsed?: string; expanded?: string } | undefined;
-}
+const { ansiLinesToHtml } = ansiToHtmlModule;
 
 const ESC = String.fromCodePoint(27);
 const ANSI_ESCAPE_REGEX = new RegExp(`${ESC}\\[[\\d;]*m`, "gu");
@@ -47,15 +31,15 @@ interface RenderContextInput {
 
 type ResultBlocks = Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
 
-class HtmlToolRenderer implements ToolHtmlRenderer {
+class HtmlToolRenderer implements toolRendererTypes.ToolHtmlRenderer {
   private readonly renderedCallComponents = new Map<string, tuiTypes.Component>();
   private readonly renderedResultComponents = new Map<string, tuiTypes.Component>();
   private readonly renderedStates = new Map<string, any>();
   private readonly renderedArgs = new Map<string, unknown>();
-  private readonly deps: ToolHtmlRendererDeps;
+  private readonly deps: toolRendererTypes.ToolHtmlRendererDeps;
   private readonly width: number;
 
-  constructor(deps: ToolHtmlRendererDeps) {
+  constructor(deps: toolRendererTypes.ToolHtmlRendererDeps) {
     this.deps = deps;
     this.width = deps.width ?? 100;
   }
@@ -139,7 +123,7 @@ class HtmlToolRenderer implements ToolHtmlRenderer {
     return state;
   }
 
-  private createRenderContext(input: RenderContextInput): ToolRenderContext {
+  private createRenderContext(input: RenderContextInput): extensionsTypesTypes.ToolRenderContext {
     return {
       args: this.renderedArgs.get(input.toolCallId),
       argsComplete: true,
@@ -159,6 +143,14 @@ class HtmlToolRenderer implements ToolHtmlRenderer {
   }
 }
 
-export function createToolHtmlRenderer(deps: ToolHtmlRendererDeps): ToolHtmlRenderer {
+function createToolHtmlRenderer(
+  deps: toolRendererTypes.ToolHtmlRendererDeps,
+): toolRendererTypes.ToolHtmlRenderer {
   return new HtmlToolRenderer(deps);
 }
+
+const toolRenderer = {
+  createToolHtmlRenderer,
+};
+
+export default toolRenderer;

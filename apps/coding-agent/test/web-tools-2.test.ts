@@ -4,9 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createWebFetchToolDefinition } from "../src/core/tools/web-fetch.ts";
-import { findTreg } from "../src/core/treg.ts";
+import webFetch from "../src/core/tools/web-fetch.ts";
+import treg from "../src/core/treg.ts";
 import webToolsSupport from "./web-tools-support.ts";
+
+const { createWebFetchToolDefinition } = webFetch;
+const { findTreg } = treg;
 
 const { cli, fakeTreg, run, text } = webToolsSupport;
 

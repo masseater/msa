@@ -1,10 +1,12 @@
 import type aiTypes from "@msa/ai/index.types";
 import { dual } from "effect/Function";
 
-import type { ModelRuntime } from "../../core/model-runtime.ts";
-import { raceWithAbortSignal } from "../../utils/abort.ts";
+import type modelRuntimeTypes from "../../core/model-runtime.types.ts";
+import abortModule from "../../utils/abort.ts";
 
-type ModelCatalogRuntime = Pick<ModelRuntime, "refresh">;
+const { raceWithAbortSignal } = abortModule;
+
+type ModelCatalogRuntime = Pick<modelRuntimeTypes.ModelRuntime, "refresh">;
 
 interface ActiveModelCatalogRefresh {
   controller: AbortController;
@@ -47,7 +49,7 @@ class ModelCatalogRefreshCoordinator {
 
 const modelCatalogRefreshCoordinator = new ModelCatalogRefreshCoordinator();
 
-export const refreshModelCatalogs: {
+const refreshModelCatalogs: {
   (
     signal: AbortSignal,
   ): (modelRuntime: ModelCatalogRuntime) => Promise<aiTypes.ModelsRefreshResult>;
@@ -57,3 +59,9 @@ export const refreshModelCatalogs: {
   (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<aiTypes.ModelsRefreshResult> =>
     modelCatalogRefreshCoordinator.refresh(modelRuntime, signal),
 );
+
+const modelCatalogRefresh = {
+  refreshModelCatalogs,
+};
+
+export default modelCatalogRefresh;

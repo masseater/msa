@@ -1,40 +1,31 @@
 import { Effect } from "effect";
-import { type Static, Type } from "typebox";
+import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import { ToolFailure, fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { type TregOptions, callTreg, pickString, rows } from "../treg.ts";
-import { webFetchRenderers } from "./renderers/web.ts";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type TruncationResult,
-  formatSize,
-  truncateHead,
-} from "./truncate.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import platform from "../platform/index.ts";
+import treg from "../treg.ts";
+import type tregTypes from "../treg.types.ts";
+import web from "./renderers/web.ts";
+import truncate from "./truncate.ts";
+import type webFetchTypes from "./web-fetch.types.ts";
+
+const { callTreg, pickString, rows } = treg;
+const { ToolFailure, fromPromise, unwrapForeign } = platform;
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, formatSize, truncateHead } = truncate;
+const { webFetchRenderers } = web;
 
 const webFetchSchema = Type.Object({
   url: Type.String({ description: "URL of the page to read." }),
 });
 
-export type WebFetchToolInput = Static<typeof webFetchSchema>;
-
-export interface WebFetchToolDetails {
-  title?: string;
-  url: string;
-  servedBy?: string;
-  costMicro?: number;
-  truncation?: TruncationResult;
-}
-
 const fetchPage = Effect.fn("webFetch")(function* (
-  options: TregOptions,
+  options: tregTypes.TregOptions,
   url: string,
   signal: AbortSignal | undefined,
 ) {
   const result = yield* fromPromise(() => callTreg(options, "treg.web.extract", { url }, signal));
   const page = rows(result.output, "pages")[0];
-  const details: WebFetchToolDetails = {
+  const details: webFetchTypes.WebFetchToolDetails = {
     url: pickString(page, "final_url", "url") ?? url,
     ...(result.servedBy !== undefined && result.servedBy !== ""
       ? { servedBy: result.servedBy }
@@ -66,14 +57,14 @@ const fetchPage = Effect.fn("webFetch")(function* (
   return { content: [{ text, type: "text" as const }], details };
 });
 
-export function createWebFetchToolDefinition(
-  options: TregOptions,
-): ToolDefinition<typeof webFetchSchema, WebFetchToolDetails> {
+function createWebFetchToolDefinition(
+  options: tregTypes.TregOptions,
+): extensionsTypesTypes.ToolDefinition<typeof webFetchSchema, webFetchTypes.WebFetchToolDetails> {
   return {
     annotations: { openWorldHint: true, readOnlyHint: true },
     description: `Read a web page as Markdown. Output is truncated to ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first).`,
     execute: (_toolCallId, params, signal) =>
-      platformRuntime.runPromise(unwrapForeign(fetchPage(options, params.url, signal))),
+      Effect.runPromise(unwrapForeign(fetchPage(options, params.url, signal))),
     executionMode: "parallel",
     label: "web fetch",
     name: "web_fetch",
@@ -82,3 +73,10 @@ export function createWebFetchToolDefinition(
     ...webFetchRenderers,
   };
 }
+
+const webFetch = {
+  createWebFetchToolDefinition,
+  webFetchSchema,
+};
+
+export default webFetch;

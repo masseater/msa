@@ -1,27 +1,31 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Orchestrator } from "../../../core/orchestrator/orchestrator.ts";
-import { firstLine } from "../../../core/orchestrator/text.ts";
-import type { TaskSnapshot } from "../../../core/orchestrator/types.ts";
-import { formatAge, shortId } from "../../../utils/text.ts";
-import { theme } from "../theme/theme.ts";
-import { keyHint } from "./keybinding-hints.ts";
-import { lineWindow } from "./scroll-window.ts";
-import { taskList } from "./tasks-list.ts";
-import { taskDetail } from "./tasks-view-detail.ts";
-import { type TasksViewState, viewHelpers } from "./tasks-view-helpers.ts";
+import type orchestratorTypes from "../../../core/orchestrator/orchestrator.types.ts";
+import orchestratorText from "../../../core/orchestrator/text.ts";
+import type orchestratorTypesTypes from "../../../core/orchestrator/types.types.ts";
+import textModule from "../../../utils/text.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
+import scrollWindow from "./scroll-window.ts";
+import tasksList from "./tasks-list.ts";
+import tasksViewDetail from "./tasks-view-detail.ts";
+import tasksViewHelpers from "./tasks-view-helpers.ts";
+import type threadPaneTypes from "./thread-pane.types.ts";
+
+const { taskList } = tasksList;
+const { theme } = themeModule;
+const { keyHint } = keybindingHints;
+const { lineWindow } = scrollWindow;
+const { formatAge, shortId } = textModule;
+const { viewHelpers } = tasksViewHelpers;
+const { taskDetail } = tasksViewDetail;
+const { firstLine } = orchestratorText;
 
 const { truncateToWidth, wrapTextWithAnsi } = tui;
 
 const LABEL_WIDTH = 6;
 const ROW_LINES = 2;
-
-export interface ThreadPaneOptions {
-  orchestrator: () => Orchestrator | undefined;
-  state: TasksViewState;
-  height: () => number;
-}
 
 function wrap(text: string, width: number, limit: number): string[] {
   const wrapped = wrapTextWithAnsi(text, Math.max(1, width));
@@ -31,10 +35,10 @@ function wrap(text: string, width: number, limit: number): string[] {
   return shown;
 }
 
-export class ThreadPane implements tuiTypes.Component {
-  private readonly options: ThreadPaneOptions;
+export default class ThreadPane implements tuiTypes.Component {
+  private readonly options: threadPaneTypes.ThreadPaneOptions;
 
-  constructor(options: ThreadPaneOptions) {
+  constructor(options: threadPaneTypes.ThreadPaneOptions) {
     this.options = options;
   }
 
@@ -62,8 +66,8 @@ export class ThreadPane implements tuiTypes.Component {
   }
 
   private list(
-    tasks: readonly TaskSnapshot[],
-    selected: TaskSnapshot | undefined,
+    tasks: readonly orchestratorTypesTypes.TaskSnapshot[],
+    selected: orchestratorTypesTypes.TaskSnapshot | undefined,
     width: number,
     room: number,
   ): string[] {
@@ -85,8 +89,8 @@ export class ThreadPane implements tuiTypes.Component {
   }
 
   private detail(
-    orchestrator: Orchestrator,
-    task: TaskSnapshot | undefined,
+    orchestrator: orchestratorTypes.Orchestrator,
+    task: orchestratorTypesTypes.TaskSnapshot | undefined,
     width: number,
     room: number,
   ): string[] {
@@ -119,7 +123,10 @@ export class ThreadPane implements tuiTypes.Component {
     return lines.slice(0, room);
   }
 
-  private dependencies(orchestrator: Orchestrator, task: TaskSnapshot): string {
+  private dependencies(
+    orchestrator: orchestratorTypes.Orchestrator,
+    task: orchestratorTypesTypes.TaskSnapshot,
+  ): string {
     const byId = new Map(orchestrator.snapshot.tasks.map((entry) => [entry.id, entry]));
     return task.dependsOn
       .map((id) => {

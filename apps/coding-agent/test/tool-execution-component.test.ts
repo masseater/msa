@@ -3,12 +3,15 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { type ToolDefinition } from "../src/core/extensions/types.ts";
-import { createReadToolDefinition } from "../src/core/tools/read.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import read from "../src/core/tools/read.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+const { stripAnsi } = ansi;
+const { createReadToolDefinition } = read;
+const { initTheme } = themeModule;
 
 const { Text, resetCapabilitiesCache, setCapabilities } = tui;
 
@@ -53,7 +56,7 @@ const convertsNonPngToolImagesOnceThe = () =>
   );
 
 const stacksCustomCallAndResultRenderersLike = () => {
-  const toolDefinition: ToolDefinition = {
+  const toolDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition(),
     renderCall: () => new Text("custom call", 0, 0),
     renderResult: () => new Text("custom result", 0, 0),
@@ -85,7 +88,7 @@ const stacksCustomCallAndResultRenderersLike = () => {
 };
 
 const selfRenderedEmptyToolRowsTakeNo = () => {
-  const toolDefinition: ToolDefinition = {
+  const toolDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition(),
     renderCall: () => new Text("", 0, 0),
     renderResult: () => new Text("", 0, 0),

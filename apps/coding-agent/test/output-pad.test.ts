@@ -4,13 +4,16 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Type } from "typebox";
 import { afterAll, beforeAll, describe, expect, test } from "vite-plus/test";
 
-import type { ToolDefinition } from "../src/core/extensions/types.ts";
-import { createEditToolDefinition } from "../src/core/tools/edit.ts";
-import { BashExecutionComponent } from "../src/modes/interactive/components/bash-execution.ts";
-import { CompactionSummaryMessageComponent } from "../src/modes/interactive/components/compaction-summary-message.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import edit from "../src/core/tools/edit.ts";
+import componentsModule from "../src/modes/interactive/components/index.ts";
+import type toolExecutionTypes from "../src/modes/interactive/components/tool-execution.types.ts";
 import tuiKit from "./tui-kit.ts";
 
+const { BashExecutionComponent, CompactionSummaryMessageComponent, ToolExecutionComponent } =
+  componentsModule;
+
+const { createEditToolDefinition } = edit;
 const { TuiMainScreen } = tui;
 
 const { VirtualTerminal, initTheme, stripAnsi } = tuiKit;
@@ -19,7 +22,7 @@ const { awaited, runTest } = testing;
 
 const ui = new TuiMainScreen(new VirtualTerminal(80, 24));
 
-const tool: ToolDefinition = {
+const tool: extensionsTypesTypes.ToolDefinition = {
   description: "custom tool",
   execute: () =>
     runTest(awaited({ content: [{ text: "ok", type: "text" as const }], details: {} })),
@@ -38,9 +41,9 @@ function renderLines(component: tuiTypes.Component): string[] {
 }
 
 function createTool(
-  definition: ToolDefinition | undefined,
+  definition: extensionsTypesTypes.ToolDefinition | undefined,
   outputPad: number,
-): ToolExecutionComponent {
+): toolExecutionTypes.ToolExecutionComponent {
   const component = new ToolExecutionComponent(
     "custom_tool",
     "id",

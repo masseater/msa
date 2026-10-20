@@ -1,36 +1,23 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
-import {
-  createBranchSummaryMessage,
-  createCompactionSummaryMessage,
-  createCustomMessage,
-} from "../messages.ts";
-import type { ReadonlySessionManager, SessionEntry } from "../session-manager.ts";
-import { estimateTokens } from "./compaction-tokens.ts";
-import { type FileOperations, createFileOps, extractFileOpsFromMessage } from "./utils.ts";
+import messagesModule from "../messages.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import type branchEntriesTypes from "./branch-entries.types.ts";
+import compactionTokens from "./compaction-tokens.ts";
+import utils from "./utils.ts";
+import type utilsTypes from "./utils.types.ts";
 
-export interface BranchPreparation {
-  messages: agentTypes.AgentMessage[];
-  fileOps: FileOperations;
-  totalTokens: number;
-}
-
-export interface CollectEntriesResult {
-  entries: SessionEntry[];
-  commonAncestorId: string | null;
-}
-
-export interface BranchSummaryDetails {
-  readFiles: string[];
-  modifiedFiles: string[];
-}
+const { createBranchSummaryMessage, createCompactionSummaryMessage, createCustomMessage } =
+  messagesModule;
+const { createFileOps, extractFileOpsFromMessage } = utils;
+const { estimateTokens } = compactionTokens;
 
 const collectEntriesImpl = (
-  session: ReadonlySessionManager,
+  session: sessionManagerTypes.ReadonlySessionManager,
   oldLeafId: string | null,
   targetId: string,
-): CollectEntriesResult => {
+): branchEntriesTypes.CollectEntriesResult => {
   if (oldLeafId === null || oldLeafId === "") {
     return { commonAncestorId: null, entries: [] };
   }
@@ -47,7 +34,7 @@ const collectEntriesImpl = (
     }
   }
 
-  const entries: SessionEntry[] = [];
+  const entries: sessionManagerTypes.SessionEntry[] = [];
   let current: string | null = oldLeafId;
 
   while (current !== null && current !== "" && current !== commonAncestorId) {
@@ -62,19 +49,23 @@ const collectEntriesImpl = (
   return { commonAncestorId, entries };
 };
 
-export const collectEntriesForBranchSummary: {
+const collectEntriesForBranchSummary: {
   (
     oldLeafId: string | null,
     targetId: string,
-  ): (session: ReadonlySessionManager) => CollectEntriesResult;
+  ): (
+    session: sessionManagerTypes.ReadonlySessionManager,
+  ) => branchEntriesTypes.CollectEntriesResult;
   (
-    session: ReadonlySessionManager,
+    session: sessionManagerTypes.ReadonlySessionManager,
     oldLeafId: string | null,
     targetId: string,
-  ): CollectEntriesResult;
+  ): branchEntriesTypes.CollectEntriesResult;
 } = Fn.dual(3, collectEntriesImpl);
 
-function getMessageFromEntry(entry: SessionEntry): agentTypes.AgentMessage | undefined {
+function getMessageFromEntry(
+  entry: sessionManagerTypes.SessionEntry,
+): agentTypes.AgentMessage | undefined {
   switch (entry.type) {
     case "message":
       if (entry.message.role === "toolResult") return undefined;
@@ -106,7 +97,10 @@ function getMessageFromEntry(entry: SessionEntry): agentTypes.AgentMessage | und
   }
 }
 
-function collectPreviousFileOps(entries: SessionEntry[], fileOps: FileOperations): void {
+function collectPreviousFileOps(
+  entries: sessionManagerTypes.SessionEntry[],
+  fileOps: utilsTypes.FileOperations,
+): void {
   for (const entry of entries) {
     if (
       entry.type === "branch_summary" &&
@@ -114,7 +108,7 @@ function collectPreviousFileOps(entries: SessionEntry[], fileOps: FileOperations
       typeof entry.details === "object" &&
       entry.details !== null
     ) {
-      const details = entry.details as BranchSummaryDetails;
+      const details = entry.details as branchEntriesTypes.BranchSummaryDetails;
       if (Array.isArray(details.readFiles)) {
         for (const f of details.readFiles) fileOps.read.add(f);
       }
@@ -128,9 +122,9 @@ function collectPreviousFileOps(entries: SessionEntry[], fileOps: FileOperations
 }
 
 const prepareBranchEntriesImpl = (
-  entries: SessionEntry[],
+  entries: sessionManagerTypes.SessionEntry[],
   tokenBudget: number = 0,
-): BranchPreparation => {
+): branchEntriesTypes.BranchPreparation => {
   const messages: agentTypes.AgentMessage[] = [];
   const fileOps = createFileOps();
   let totalTokens = 0;
@@ -164,7 +158,19 @@ const prepareBranchEntriesImpl = (
   return { fileOps, messages, totalTokens };
 };
 
-export const prepareBranchEntries: {
-  (tokenBudget?: number): (entries: SessionEntry[]) => BranchPreparation;
-  (entries: SessionEntry[], tokenBudget?: number): BranchPreparation;
+const prepareBranchEntries: {
+  (
+    tokenBudget?: number,
+  ): (entries: sessionManagerTypes.SessionEntry[]) => branchEntriesTypes.BranchPreparation;
+  (
+    entries: sessionManagerTypes.SessionEntry[],
+    tokenBudget?: number,
+  ): branchEntriesTypes.BranchPreparation;
 } = Fn.dual((args) => Array.isArray(args[0]), prepareBranchEntriesImpl);
+
+const branchEntries = {
+  collectEntriesForBranchSummary,
+  prepareBranchEntries,
+};
+
+export default branchEntries;

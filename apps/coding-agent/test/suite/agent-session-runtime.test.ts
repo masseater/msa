@@ -4,19 +4,11 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { AgentSessionRuntime } from "../../src/core/agent-session-runtime.ts";
-import { AgentSession } from "../../src/core/agent-session.ts";
-import { SessionManager } from "../../src/core/session-manager.ts";
-import type {
-  AgentToolResult,
-  ExtensionAPI,
-  SessionBeforeForkEvent,
-  SessionBeforeSwitchEvent,
-  SessionShutdownEvent,
-  SessionStartEvent,
-} from "../../src/index.ts";
+import type agentSessionRuntimeTypes from "../../src/core/agent-session-runtime.types.ts";
+import type agentSessionTypes from "../../src/core/agent-session.types.ts";
+import SessionManager from "../../src/core/session-manager.ts";
+import type srcTypes from "../../src/index.types.ts";
 import agentSessionRuntimeSupport from "./agent-session-runtime-support.ts";
-
 const { fauxAssistantMessage, fauxToolCall } = compat;
 
 const { createRuntimeForTest, disposeRuntimes } = agentSessionRuntimeSupport;
@@ -34,13 +26,13 @@ const {
 } = testing;
 
 type RecordedSessionEvent =
-  | SessionBeforeSwitchEvent
-  | SessionBeforeForkEvent
-  | SessionShutdownEvent
-  | SessionStartEvent;
+  | srcTypes.SessionBeforeSwitchEvent
+  | srcTypes.SessionBeforeForkEvent
+  | srcTypes.SessionShutdownEvent
+  | srcTypes.SessionStartEvent;
 
 const persistsMessageEndAssistantReplacementsTo = Effect.gen(function* () {
-  const { runtime } = yield* createRuntimeForTest((msa: ExtensionAPI) => {
+  const { runtime } = yield* createRuntimeForTest((msa: srcTypes.ExtensionAPI) => {
     msa.on("message_end", (event) => {
       if (event.message.role !== "assistant") return;
 
@@ -82,11 +74,11 @@ const persistsMessageEndAssistantReplacementsTo = Effect.gen(function* () {
 
 const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
   const toolStartedPromise = gate();
-  const { runtime, faux } = yield* createRuntimeForTest((msa: ExtensionAPI) => {
+  const { runtime, faux } = yield* createRuntimeForTest((msa: srcTypes.ExtensionAPI) => {
     msa.registerTool({
       description: "Blocks until aborted",
       execute: (_toolCallId, _params, signal) => {
-        const aborted = deferredPromise<AgentToolResult<unknown>>();
+        const aborted = deferredPromise<srcTypes.AgentToolResult<unknown>>();
         toolStartedPromise.release();
         signal?.addEventListener("abort", () =>
           aborted.resolve({ content: [{ text: "tool aborted", type: "text" }], details: {} }),
@@ -116,9 +108,9 @@ const settlesTheActiveResponseBeforeSession = Effect.gen(function* () {
 
 const settlesTheActiveResponseBeforeSessionStep1 = (
   toolStartedPromise: Promise<void>,
-  runtime: AgentSessionRuntime,
+  runtime: agentSessionRuntimeTypes.AgentSessionRuntime,
   firstSessionFile: string,
-  outgoingSession: AgentSession,
+  outgoingSession: agentSessionTypes.AgentSession,
   promptPromise: Promise<void>,
 ) =>
   Effect.gen(function* () {
@@ -174,7 +166,7 @@ const preservesAnExistingSessionWhenImporting = Effect.gen(function* () {
 
 const emitsSessionBeforeSwitchAndSession = Effect.gen(function* () {
   const events: RecordedSessionEvent[] = [];
-  const { runtime } = yield* createRuntimeForTest((msa: ExtensionAPI) => {
+  const { runtime } = yield* createRuntimeForTest((msa: srcTypes.ExtensionAPI) => {
     msa.on("session_before_switch", (event) => {
       events.push(event);
     });
@@ -206,7 +198,7 @@ const emitsSessionBeforeSwitchAndSession = Effect.gen(function* () {
 
 const emitsSessionBeforeSwitchAndSessionStep1 = (
   events: RecordedSessionEvent[],
-  runtime: AgentSessionRuntime,
+  runtime: agentSessionRuntimeTypes.AgentSessionRuntime,
   originalSessionFile: string | undefined,
   secondSessionFile: string | undefined,
 ) =>

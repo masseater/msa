@@ -19,7 +19,7 @@ const {
   McpSessionExpiredError,
 } = streamableHttpConnectionKit;
 
-const { DEFAULT_MAX_MESSAGE_BYTES, TransportEvents } = transport;
+const { DEFAULT_MAX_MESSAGE_BYTES } = transport;
 const { McpAbortError, parseJsonRpcMessage } = jsonrpcModule;
 const { fromPromise } = foreignModule;
 const { contentType, describeHttpFailure, discard, needsAuthorization, sleepUnlessAborted } =
@@ -31,7 +31,7 @@ const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 const DEFAULT_RECONNECT_MAX_RETRIES = 5;
 
-export default abstract class StreamableHttpConnection extends TransportEvents {
+export default abstract class StreamableHttpConnection extends transport.TransportEvents {
   readonly url: URL;
   readonly options: Readonly<streamableHttpConnectionTypes.StreamableHttpTransportOptions>;
   protected fetch: authProviderTypes.McpFetch;

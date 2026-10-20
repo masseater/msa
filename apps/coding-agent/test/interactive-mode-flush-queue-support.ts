@@ -5,12 +5,13 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
+
+const { AgentSession, SessionManager, SettingsManager } = codingAgent;
 
 const { createAssistantMessageEventStream, getModel } = compat;
 
@@ -92,9 +93,9 @@ const createSession = Effect.fn("createSession")(function* (
   });
 });
 
-const collectQueueEvents = (session: AgentSession): QueueEvent[] => {
+const collectQueueEvents = (session: codingAgentTypes.AgentSession): QueueEvent[] => {
   const queueEvents: QueueEvent[] = [];
-  session.subscribe((event: AgentSessionEvent) => {
+  session.subscribe((event: codingAgentTypes.AgentSessionEvent) => {
     if (event.type === "queue_update") {
       queueEvents.push({ followUp: event.followUp, steering: event.steering });
     }
@@ -105,7 +106,10 @@ const collectQueueEvents = (session: AgentSession): QueueEvent[] => {
 const createHarness = Effect.fn("createHarness")(function* (
   tempDir: string,
   setClock: (at: number) => void,
-  attachSubmitHandler: (session: AgentSession, statuses: string[]) => SubmitHandler,
+  attachSubmitHandler: (
+    session: codingAgentTypes.AgentSession,
+    statuses: string[],
+  ) => SubmitHandler,
 ) {
   const requests: string[][] = [];
   const firstReply = gate();

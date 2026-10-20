@@ -1,5 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Clock, Effect } from "effect";
 
 function isAssistantMessage(message: unknown): message is aiTypes.AssistantMessage {
@@ -8,7 +8,7 @@ function isAssistantMessage(message: unknown): message is aiTypes.AssistantMessa
   return role === "assistant";
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let agentStartMs: number | null = null;
 
   msa.on("agent_start", () => {

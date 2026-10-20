@@ -4,8 +4,8 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
 
 const {
   awaited,

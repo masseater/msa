@@ -1,20 +1,24 @@
 import tui from "@msa/tui";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { type ToolDefinition } from "../src/core/extensions/types.ts";
-import { createReadTool, createReadToolDefinition } from "../src/core/tools/read.ts";
-import { withBuiltInRenderers } from "../src/core/tools/renderers/index.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import read from "../src/core/tools/read.ts";
+import renderers from "../src/core/tools/renderers/index.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+const { withBuiltInRenderers } = renderers;
+const { stripAnsi } = ansi;
+const { createReadTool, createReadToolDefinition } = read;
+const { initTheme } = themeModule;
 
 const { Text, resetCapabilitiesCache } = tui;
 
 const { createBaseToolDefinition, createFakeTui } = toolExecutionComponentSupport;
 
 const usesBuiltInRenderingForBuiltIn = () => {
-  const overrideDefinition: ToolDefinition = {
+  const overrideDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition("edit"),
   };
 
@@ -39,7 +43,7 @@ const usesBuiltInRenderingForBuiltIn = () => {
 };
 
 const inheritsMissingBuiltInResultRendererSlot = () => {
-  const overrideDefinition: ToolDefinition = {
+  const overrideDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition("read"),
     renderCall: () => new Text("override call", 0, 0),
   };
@@ -64,7 +68,7 @@ const inheritsMissingBuiltInResultRendererSlot = () => {
 };
 
 const inheritsMissingBuiltInCallRendererSlot = () => {
-  const overrideDefinition: ToolDefinition = {
+  const overrideDefinition: extensionsTypesTypes.ToolDefinition = {
     ...createBaseToolDefinition("read"),
     renderResult: () => new Text("override result", 0, 0),
   };

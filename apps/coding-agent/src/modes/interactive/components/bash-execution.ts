@@ -1,29 +1,31 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type TruncationResult,
-  truncateTail,
-} from "../../../core/tools/truncate.ts";
-import { stripAnsi } from "../../../utils/ansi.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, keyText } from "./keybinding-hints.ts";
-import { truncateToVisualLines } from "./visual-truncate.ts";
+import truncate from "../../../core/tools/truncate.ts";
+import type truncateTypes from "../../../core/tools/truncate.types.ts";
+import ansi from "../../../utils/ansi.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+import visualTruncate from "./visual-truncate.ts";
+
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } = truncate;
+const { theme } = themeModule;
+const { keyHint, keyText } = keybindingHints;
+const { stripAnsi } = ansi;
+const { truncateToVisualLines } = visualTruncate;
 
 const { Container, Loader, Spacer, Text } = tui;
 
 const PREVIEW_LINES = 20;
 
-export class BashExecutionComponent extends Container {
+export default class BashExecutionComponent extends tui.Container {
   private command: string;
   private outputLines: string[] = [];
   private status: "running" | "complete" | "cancelled" | "error" = "running";
   private exitCode: number | undefined = undefined;
   private loader: tuiTypes.Loader;
-  private truncationResult?: TruncationResult | undefined;
+  private truncationResult?: truncateTypes.TruncationResult | undefined;
   private fullOutputPath?: string | undefined;
   private expanded = false;
   private contentContainer: tuiTypes.Container;
@@ -91,7 +93,7 @@ export class BashExecutionComponent extends Container {
   setComplete(
     exitCode: number | undefined,
     cancelled: boolean,
-    truncationResult?: TruncationResult,
+    truncationResult?: truncateTypes.TruncationResult,
     fullOutputPath?: string,
   ): void {
     this.exitCode = exitCode;
@@ -175,7 +177,7 @@ export class BashExecutionComponent extends Container {
   private static updateDisplayPart2(
     self: BashExecutionComponent,
     hiddenLineCount: number,
-    contextTruncation: TruncationResult,
+    contextTruncation: truncateTypes.TruncationResult,
   ): void {
     if (self.status === "running") {
       self.contentContainer.addChild(self.loader);

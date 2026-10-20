@@ -1,4 +1,7 @@
+import contextModule from "@msa/chord/context";
+
 import chatSupport from "./chat-support.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessSupport from "./harness-support.ts";
 import platformSupport from "./platform-support.ts";
@@ -6,8 +9,8 @@ import sessionSupport from "./session-support.ts";
 import taskSupport from "./task-support.ts";
 
 const support = {
-  BACKGROUND_CONTEXT: sessionSupport.BACKGROUND_CONTEXT,
-  ControlledStorage: sessionSupport.ControlledStorage,
+  BACKGROUND_CONTEXT: contextModule.BACKGROUND_CONTEXT,
+  ControlledStorage: ControlledStorage,
   abortController: effectSupport.abortController,
   abortMarked: taskSupport.abortMarked,
   aborted: taskSupport.aborted,
@@ -82,7 +85,7 @@ const support = {
   unanswered: chatSupport.unanswered,
   user: harnessSupport.user,
   waitFor: chatSupport.waitFor,
-  withAbortSignal: sessionSupport.withAbortSignal,
+  withAbortSignal: contextModule.withAbortSignal,
   withTempDir: platformSupport.withTempDir,
   writeBytes: platformSupport.writeBytes,
   writeChunks: platformSupport.writeChunks,

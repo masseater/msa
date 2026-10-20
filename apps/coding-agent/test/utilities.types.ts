@@ -1,6 +1,6 @@
-import type { AgentSession } from "../src/core/agent-session.ts";
-import type { ExtensionFactory, LoadExtensionsResult } from "../src/core/extensions/index.ts";
-import type { SessionManager } from "../src/core/session-manager.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 
 declare namespace utilitiesTypes {
   interface TestSessionOptions {
@@ -12,20 +12,20 @@ declare namespace utilitiesTypes {
   }
 
   interface TestSessionContext {
-    session: AgentSession;
-    sessionManager: SessionManager;
+    session: agentSessionTypes.AgentSession;
+    sessionManager: sessionManagerTypes.SessionManager;
     tempDir: string;
     cleanup: () => void;
   }
 
   interface CreateTestExtensionsResultInput {
-    factory: ExtensionFactory;
+    factory: extensionsTypes.ExtensionFactory;
     path?: string;
   }
 
   interface CreateTestResourceLoaderOptions {
-    extensions?: LoadExtensionsResult["extensions"];
-    extensionsResult?: LoadExtensionsResult;
+    extensions?: extensionsTypes.LoadExtensionsResult["extensions"];
+    extensionsResult?: extensionsTypes.LoadExtensionsResult;
   }
 }
 

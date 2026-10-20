@@ -28,7 +28,7 @@ const processImage = vi.hoisted(() =>
   ),
 );
 
-vi.mock("../../src/utils/image-process.ts", () => ({ processImage }));
+vi.mock("../../src/utils/image-process.ts", () => ({ default: { processImage } }));
 
 const throwsWhenPromptedDuringStreamingWithout = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());

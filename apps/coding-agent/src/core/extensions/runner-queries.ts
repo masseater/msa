@@ -1,42 +1,31 @@
 import type tuiTypes from "@msa/tui/index.types";
-import { Console } from "effect";
+import { Console, Effect } from "effect";
 
-import type { ResourceDiagnostic } from "../diagnostics.ts";
-import type { ExternalService } from "../external-services.ts";
-import type { KeybindingsConfig } from "../keybindings.ts";
-import type { ModelRegistry } from "../model-registry.ts";
-import { platformRuntime } from "../platform/index.ts";
-import type { SessionManager } from "../session-manager.ts";
-import { buildBuiltinKeybindings } from "./runner-keybindings.ts";
-import type {
-  EntryRenderer,
-  Extension,
-  ExtensionFlag,
-  ExtensionRuntime,
-  ExtensionShortcut,
-  MarkdownTransformer,
-  MessageRenderer,
-  RegisteredCommand,
-  RegisteredTool,
-  ResolvedCommand,
-  ToolRenderers,
-} from "./types.ts";
+import type diagnosticsTypes from "../diagnostics.ts";
+import type externalServicesTypes from "../external-services.types.ts";
+import type keybindingsTypes from "../keybindings.types.ts";
+import type modelRegistryTypes from "../model-registry.types.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import runnerKeybindings from "./runner-keybindings.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export abstract class RunnerQueries {
-  protected extensions: Extension[];
-  protected runtime: ExtensionRuntime;
+const { buildBuiltinKeybindings } = runnerKeybindings;
+
+export default abstract class RunnerQueries {
+  protected extensions: extensionsTypesTypes.Extension[];
+  protected runtime: extensionsTypesTypes.ExtensionRuntime;
   protected cwd: string;
-  protected sessionManager: SessionManager;
-  protected modelRegistry: ModelRegistry;
-  private shortcutDiagnostics: ResourceDiagnostic[] = [];
-  private commandDiagnostics: ResourceDiagnostic[] = [];
+  protected sessionManager: sessionManagerTypes.SessionManager;
+  protected modelRegistry: modelRegistryTypes.ModelRegistry;
+  private shortcutDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
+  private commandDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
 
   constructor(
-    extensions: Extension[],
-    runtime: ExtensionRuntime,
+    extensions: extensionsTypesTypes.Extension[],
+    runtime: extensionsTypesTypes.ExtensionRuntime,
     cwd: string,
-    sessionManager: SessionManager,
-    modelRegistry: ModelRegistry,
+    sessionManager: sessionManagerTypes.SessionManager,
+    modelRegistry: modelRegistryTypes.ModelRegistry,
   ) {
     this.extensions = extensions;
     this.runtime = runtime;
@@ -51,8 +40,8 @@ export abstract class RunnerQueries {
     return this.extensions.map((e) => e.path);
   }
 
-  getAllRegisteredTools(): RegisteredTool[] {
-    const toolsByName = new Map<string, RegisteredTool>();
+  getAllRegisteredTools(): extensionsTypesTypes.RegisteredTool[] {
+    const toolsByName = new Map<string, extensionsTypesTypes.RegisteredTool>();
     for (const ext of this.extensions) {
       for (const tool of ext.tools.values()) {
         if (!toolsByName.has(tool.definition.name)) {
@@ -63,7 +52,9 @@ export abstract class RunnerQueries {
     return Array.from(toolsByName.values());
   }
 
-  getToolDefinition(toolName: string): RegisteredTool["definition"] | undefined {
+  getToolDefinition(
+    toolName: string,
+  ): extensionsTypesTypes.RegisteredTool["definition"] | undefined {
     for (const ext of this.extensions) {
       const tool = ext.tools.get(toolName);
       if (tool !== undefined) {
@@ -73,8 +64,8 @@ export abstract class RunnerQueries {
     return undefined;
   }
 
-  getFlags(): Map<string, ExtensionFlag> {
-    const allFlags = new Map<string, ExtensionFlag>();
+  getFlags(): Map<string, extensionsTypesTypes.ExtensionFlag> {
+    const allFlags = new Map<string, extensionsTypesTypes.ExtensionFlag>();
     for (const ext of this.extensions) {
       for (const [name, flag] of ext.flags) {
         if (!allFlags.has(name)) {
@@ -93,15 +84,17 @@ export abstract class RunnerQueries {
     return new Map(this.runtime.flagValues);
   }
 
-  getShortcuts(resolvedKeybindings: KeybindingsConfig): Map<tuiTypes.KeyId, ExtensionShortcut> {
+  getShortcuts(
+    resolvedKeybindings: keybindingsTypes.KeybindingsConfig,
+  ): Map<tuiTypes.KeyId, extensionsTypesTypes.ExtensionShortcut> {
     this.shortcutDiagnostics = [];
     const builtinKeybindings = buildBuiltinKeybindings(resolvedKeybindings);
-    const extensionShortcuts = new Map<tuiTypes.KeyId, ExtensionShortcut>();
+    const extensionShortcuts = new Map<tuiTypes.KeyId, extensionsTypesTypes.ExtensionShortcut>();
 
     const addDiagnostic = (message: string, extensionPath: string) => {
       this.shortcutDiagnostics.push({ message, path: extensionPath, type: "warning" });
       if (!this.hasUI()) {
-        platformRuntime.runSync(Console.warn(message));
+        Effect.runSync(Console.warn(message));
       }
     };
 
@@ -138,7 +131,7 @@ export abstract class RunnerQueries {
     return extensionShortcuts;
   }
 
-  getShortcutDiagnostics(): ResourceDiagnostic[] {
+  getShortcutDiagnostics(): diagnosticsTypes.ResourceDiagnostic[] {
     return this.shortcutDiagnostics;
   }
 
@@ -152,7 +145,7 @@ export abstract class RunnerQueries {
     return false;
   }
 
-  getMessageRenderer(customType: string): MessageRenderer | undefined {
+  getMessageRenderer(customType: string): extensionsTypesTypes.MessageRenderer | undefined {
     for (const ext of this.extensions) {
       const renderer = ext.messageRenderers.get(customType);
       if (renderer !== undefined) {
@@ -162,11 +155,11 @@ export abstract class RunnerQueries {
     return undefined;
   }
 
-  getExternalServices(): ExternalService[] {
+  getExternalServices(): externalServicesTypes.ExternalService[] {
     return this.extensions.flatMap((ext) => ext.externalServices ?? []);
   }
 
-  getMarkdownTransformers(): MarkdownTransformer[] {
+  getMarkdownTransformers(): extensionsTypesTypes.MarkdownTransformer[] {
     return this.extensions.flatMap((ext) =>
       ext.markdownTransformer === undefined ? [] : [ext.markdownTransformer],
     );
@@ -174,17 +167,17 @@ export abstract class RunnerQueries {
 
   resolveToolRenderers(
     toolName: string,
-    base: () => ToolRenderers | undefined,
-  ): ToolRenderers | undefined {
+    base: () => extensionsTypesTypes.ToolRenderers | undefined,
+  ): extensionsTypesTypes.ToolRenderers | undefined {
     const resolvers = this.extensions.flatMap((ext) => ext.toolRenderers ?? []);
-    const resolve = (index: number): ToolRenderers | undefined => {
+    const resolve = (index: number): extensionsTypesTypes.ToolRenderers | undefined => {
       const resolver = resolvers[index];
       return resolver === undefined ? base() : resolver(toolName, () => resolve(index + 1));
     };
     return resolve(0);
   }
 
-  getEntryRenderer(customType: string): EntryRenderer | undefined {
+  getEntryRenderer(customType: string): extensionsTypesTypes.EntryRenderer | undefined {
     for (const ext of this.extensions) {
       const renderer = ext.entryRenderers?.get(customType);
       if (renderer !== undefined) {
@@ -194,25 +187,25 @@ export abstract class RunnerQueries {
     return undefined;
   }
 
-  getModelRegistry(): ModelRegistry {
+  getModelRegistry(): modelRegistryTypes.ModelRegistry {
     return this.modelRegistry;
   }
 
-  getRegisteredCommands(): ResolvedCommand[] {
+  getRegisteredCommands(): extensionsTypesTypes.ResolvedCommand[] {
     this.commandDiagnostics = [];
     return this.resolveRegisteredCommands();
   }
 
-  getCommandDiagnostics(): ResourceDiagnostic[] {
+  getCommandDiagnostics(): diagnosticsTypes.ResourceDiagnostic[] {
     return this.commandDiagnostics;
   }
 
-  getCommand(name: string): ResolvedCommand | undefined {
+  getCommand(name: string): extensionsTypesTypes.ResolvedCommand | undefined {
     return this.resolveRegisteredCommands().find((command) => command.invocationName === name);
   }
 
-  private resolveRegisteredCommands(): ResolvedCommand[] {
-    const commands: RegisteredCommand[] = [];
+  private resolveRegisteredCommands(): extensionsTypesTypes.ResolvedCommand[] {
+    const commands: extensionsTypesTypes.RegisteredCommand[] = [];
     const counts = new Map<string, number>();
 
     for (const ext of this.extensions) {

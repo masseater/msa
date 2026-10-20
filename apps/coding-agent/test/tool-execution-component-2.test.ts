@@ -3,11 +3,16 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vite-plus/test";
 
-import { type BashOperations, createBashToolDefinition } from "../src/core/tools/bash.ts";
-import { ToolExecutionComponent } from "../src/modes/interactive/components/tool-execution.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import bash from "../src/core/tools/bash.ts";
+import type bashTypes from "../src/core/tools/bash.types.ts";
+import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import toolExecutionComponentSupport from "./tool-execution-component-support.ts";
+
+const { createBashToolDefinition } = bash;
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
 
 const { resetCapabilitiesCache } = tui;
 
@@ -22,7 +27,7 @@ const bashExecuteEmitsAnInitialEmptyPartial = Effect.gen(function* () {
     content: Array<{ type: string; text?: string }>;
     details?: unknown;
   }> = [];
-  const operations: BashOperations = {
+  const operations: bashTypes.BashOperations = {
     exec: () =>
       effectRunPromise(
         Effect.gen(function* () {
@@ -52,7 +57,7 @@ const bashExecuteEmitsAnInitialEmptyPartial = Effect.gen(function* () {
 const bashRendererDoesNotDuplicateFinalFull = Effect.gen(function* () {
   const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  const operations: BashOperations = {
+  const operations: bashTypes.BashOperations = {
     exec: (_command, _cwd, { onData }) =>
       effectRunPromise(
         Effect.gen(function* () {

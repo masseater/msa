@@ -1,21 +1,17 @@
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import config from "../config.ts";
+import type crashLogTypes from "./crash-log.types.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
+import platformNode from "./platform-node.ts";
+import platform from "./platform.ts";
+import nodeFs from "./platform/node/fs.ts";
+import sourceInfoModule from "./source-info.ts";
 
-import { VERSION, getAgentDir } from "../config.ts";
-import type { Extension } from "./extensions/types.ts";
-import { dirname, join } from "./platform-node.ts";
-import { nowIso, nowMs } from "./platform.ts";
-import { isSyntheticPath } from "./source-info.ts";
+const { mkdirSync, readFileSync, rmSync, writeFileSync } = nodeFs;
 
-export interface CrashRecord {
-  timestamp: string;
-  version: string;
-  kind: "uncaught_exception" | "fatal_error";
-  message: string;
-  stack: string | null;
-  sessionFile: string | null;
-  cwd: string;
-  notified?: boolean;
-}
+const { VERSION, getAgentDir } = config;
+const { dirname, join } = platformNode;
+const { isSyntheticPath } = sourceInfoModule;
+const { nowIso, nowMs } = platform;
 
 const MAX_CRASH_RECORDS = 5;
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000;
@@ -24,16 +20,16 @@ function crashLogPath(agentDir = getAgentDir()): string {
   return join(agentDir, "crashes.json");
 }
 
-export function readCrashLog(path = crashLogPath()): CrashRecord[] {
+function readCrashLog(path = crashLogPath()): crashLogTypes.CrashRecord[] {
   try {
     const records: unknown = JSON.parse(readFileSync(path, "utf8"));
     return Array.isArray(records)
       ? records.filter(
-          (record): record is CrashRecord =>
+          (record): record is crashLogTypes.CrashRecord =>
             typeof record === "object" &&
             record !== null &&
-            typeof (record as CrashRecord).timestamp === "string" &&
-            typeof (record as CrashRecord).message === "string",
+            typeof (record as crashLogTypes.CrashRecord).timestamp === "string" &&
+            typeof (record as crashLogTypes.CrashRecord).message === "string",
         )
       : [];
   } catch {
@@ -41,12 +37,15 @@ export function readCrashLog(path = crashLogPath()): CrashRecord[] {
   }
 }
 
-function writeCrashLog(records: readonly CrashRecord[], path: string): void {
+function writeCrashLog(records: readonly crashLogTypes.CrashRecord[], path: string): void {
   mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(records, null, 2)}\n`);
 }
 
-type ExtensionStackMetadata = Pick<Extension, "path" | "resolvedPath" | "sourceInfo">;
+type ExtensionStackMetadata = Pick<
+  extensionsTypesTypes.Extension,
+  "path" | "resolvedPath" | "sourceInfo"
+>;
 
 function normalizeStackPath(value: string): string {
   return value.replace(/\\/gu, "/").replace(/\/+$/u, "");
@@ -73,7 +72,7 @@ function stackContainsPath(
   return false;
 }
 
-export function findExtensionStackMatches(
+function findExtensionStackMatches(
   stack: string | undefined,
   extensions: readonly ExtensionStackMetadata[],
 ): string[] {
@@ -100,21 +99,18 @@ export function findExtensionStackMatches(
       extension.sourceInfo.origin === "package" &&
       !/^(?:npm:|git:|https?:\/\/|ssh:\/\/)/u.test(extension.sourceInfo.source) &&
       /\.[cm]?[jt]s$/u.test(extension.sourceInfo.source);
-    const packageRoot =
-      extension.sourceInfo.origin === "package" &&
-      !singleFilePackage &&
-      extension.sourceInfo.baseDir !== undefined &&
-      extension.sourceInfo.baseDir !== ""
-        ? extension.sourceInfo.baseDir
-        : undefined;
-    const slashIndex = resolvedPath.lastIndexOf("/");
-    const directoryEntry = /\/index\.[cm]?[jt]s$/u.test(resolvedPath);
-    const matched =
-      packageRoot !== undefined && packageRoot !== ""
-        ? stackContainsPath(normalizedStack, packageRoot, true)
-        : directoryEntry && slashIndex !== -1
-          ? stackContainsPath(normalizedStack, resolvedPath.slice(0, slashIndex), true)
-          : stackContainsPath(normalizedStack, resolvedPath, false);
+    const { packageRoot, directoryEntry, slashIndex } = findExtensionStackMatchesPart1(
+      extension,
+      singleFilePackage,
+      resolvedPath,
+    );
+    const matched = findExtensionStackMatchesPart4(
+      packageRoot,
+      normalizedStack,
+      directoryEntry,
+      slashIndex,
+      resolvedPath,
+    );
     if (!matched) continue;
 
     const label =
@@ -129,18 +125,81 @@ export function findExtensionStackMatches(
   return matches;
 }
 
-export function recordCrash(
+function findExtensionStackMatchesPart4(
+  packageRoot: string | undefined,
+  normalizedStack: string,
+  directoryEntry: boolean,
+  slashIndex: number,
+  resolvedPath: string,
+) {
+  return findExtensionStackMatchesPart3(
+    packageRoot,
+    normalizedStack,
+    directoryEntry,
+    slashIndex,
+    resolvedPath,
+  );
+}
+
+function findExtensionStackMatchesPart3(
+  packageRoot: string | undefined,
+  normalizedStack: string,
+  directoryEntry: boolean,
+  slashIndex: number,
+  resolvedPath: string,
+) {
+  return findExtensionStackMatchesPart2(
+    packageRoot,
+    normalizedStack,
+    directoryEntry,
+    slashIndex,
+    resolvedPath,
+  );
+}
+
+function findExtensionStackMatchesPart2(
+  packageRoot: string | undefined,
+  normalizedStack: string,
+  directoryEntry: boolean,
+  slashIndex: number,
+  resolvedPath: string,
+) {
+  return packageRoot !== undefined && packageRoot !== ""
+    ? stackContainsPath(normalizedStack, packageRoot, true)
+    : directoryEntry && slashIndex !== -1
+      ? stackContainsPath(normalizedStack, resolvedPath.slice(0, slashIndex), true)
+      : stackContainsPath(normalizedStack, resolvedPath, false);
+}
+
+function findExtensionStackMatchesPart1(
+  extension: ExtensionStackMetadata,
+  singleFilePackage: boolean,
+  resolvedPath: string,
+) {
+  const packageRoot =
+    extension.sourceInfo.origin === "package" &&
+    !singleFilePackage &&
+    extension.sourceInfo.baseDir !== undefined &&
+    extension.sourceInfo.baseDir !== ""
+      ? extension.sourceInfo.baseDir
+      : undefined;
+  const slashIndex = resolvedPath.lastIndexOf("/");
+  const directoryEntry = /\/index\.[cm]?[jt]s$/u.test(resolvedPath);
+  return { directoryEntry, packageRoot, slashIndex };
+}
+
+function recordCrash(
   crash: {
-    kind: CrashRecord["kind"];
+    kind: crashLogTypes.CrashRecord["kind"];
     error: unknown;
     sessionFile?: string | undefined;
     cwd: string;
   },
   path = crashLogPath(),
-): CrashRecord | undefined {
+): crashLogTypes.CrashRecord | undefined {
   try {
     const { error } = crash;
-    const record: CrashRecord = {
+    const record: crashLogTypes.CrashRecord = {
       cwd: crash.cwd,
       kind: crash.kind,
       message:
@@ -164,7 +223,10 @@ export function recordCrash(
   }
 }
 
-export function takeUnnotifiedCrash(path = crashLogPath(), now = nowMs()): CrashRecord | undefined {
+function takeUnnotifiedCrash(
+  path = crashLogPath(),
+  now = nowMs(),
+): crashLogTypes.CrashRecord | undefined {
   const records = readCrashLog(path);
   const crash = [...records]
     .reverse()
@@ -181,8 +243,18 @@ export function takeUnnotifiedCrash(path = crashLogPath(), now = nowMs()): Crash
   return crash;
 }
 
-export function clearCrashLog(path = crashLogPath()): void {
+function clearCrashLog(path = crashLogPath()): void {
   try {
     rmSync(path, { force: true });
   } catch {}
 }
+
+const crashLog = {
+  clearCrashLog,
+  findExtensionStackMatches,
+  readCrashLog,
+  recordCrash,
+  takeUnnotifiedCrash,
+};
+
+export default crashLog;

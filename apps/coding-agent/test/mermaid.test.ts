@@ -1,16 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { MarkdownTransformContext } from "../src/core/extensions/types.ts";
-import type { MermaidRenderingMode } from "../src/core/settings-manager.ts";
-import { createMermaidMarkdownTransformer } from "../src/modes/interactive/components/mermaid.ts";
-import type { Theme } from "../src/modes/interactive/theme/theme.ts";
+import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import mermaid from "../src/modes/interactive/components/mermaid.ts";
+import type themeTypes from "../src/modes/interactive/theme/theme.types.ts";
+
+const { createMermaidMarkdownTransformer } = mermaid;
 
 interface TransformOptions {
   maxWidth?: number;
   isStreaming?: boolean;
-  messageType?: MarkdownTransformContext["messageType"];
-  mode?: MermaidRenderingMode;
-  theme?: Theme;
+  messageType?: extensionsTypesTypes.MarkdownTransformContext["messageType"];
+  mode?: settingsManagerTypes.MermaidRenderingMode;
+  theme?: themeTypes.Theme;
 }
 
 function transformMermaid(markdown: string, options: TransformOptions = {}): string {
@@ -49,7 +51,7 @@ const mapsSemanticSpansThroughTheMsaTheme = () => {
   const theme = {
     bold: (text: string) => `<bold>${text}</bold>`,
     fg: (color: string, text: string) => `<${color}>${text}</${color}>`,
-  } as Theme;
+  } as themeTypes.Theme;
   const rendered = transformMermaid("```mermaid\nflowchart LR\n  A --> B\n```", { theme });
 
   expect(rendered).toContain("<borderMuted>");

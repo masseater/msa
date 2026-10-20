@@ -2,9 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { FooterDataProvider } from "../src/core/footer-data-provider.ts";
+import FooterDataProvider from "../src/core/footer-data-provider.ts";
+import type footerDataProviderTypes from "../src/core/footer-data-provider.types.ts";
 import footerDataProviderSupport from "./footer-data-provider-support.ts";
-
 const { createReftableWorktree } = footerDataProviderSupport;
 
 const gitState = vi.hoisted(() => ({ branch: "main" }));
@@ -44,7 +44,9 @@ const childProcessMocks = vi.hoisted(() => ({
   }),
 }));
 
-vi.mock("child_process", () => childProcessMocks);
+vi.mock("child_process", (importOriginal) =>
+  importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, ...childProcessMocks })),
+);
 
 interface WatcherHandle {
   emit(event: string, ...args: unknown[]): boolean;
@@ -62,7 +64,7 @@ const {
   writeTextFile,
 } = testing;
 
-function emitReftableChange(provider: FooterDataProvider): void {
+function emitReftableChange(provider: footerDataProviderTypes.FooterDataProvider): void {
   const { reftableWatcher } = provider as unknown as { reftableWatcher: WatcherHandle | null };
   expect(reftableWatcher).not.toBeNull();
   reftableWatcher?.emit("change", "change", "tables.list");

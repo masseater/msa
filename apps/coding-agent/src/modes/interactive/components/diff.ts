@@ -1,7 +1,10 @@
 import * as Diff from "diff";
 import { dual } from "effect/Function";
 
-import { theme } from "../theme/theme.ts";
+import themeModule from "../theme/theme.ts";
+import type diffTypes from "./diff.types.ts";
+
+const { theme } = themeModule;
 
 function parseDiffLine(line: string): { prefix: string; lineNum: string; content: string } | null {
   const match = line.match(/^([+\-\s])(\s*\d*)\s(.*)$/u);
@@ -58,16 +61,12 @@ function renderIntraLineDiff(
   return { addedLine, removedLine };
 }
 
-export interface RenderDiffOptions {
-  filePath?: string | undefined;
-}
-
-export const renderDiff: {
-  (_options?: RenderDiffOptions): (diffText: string) => string;
-  (diffText: string, _options?: RenderDiffOptions): string;
+const renderDiff: {
+  (_options?: diffTypes.RenderDiffOptions): (diffText: string) => string;
+  (diffText: string, _options?: diffTypes.RenderDiffOptions): string;
 } = dual(
   (args) => typeof args[0] === "string",
-  (diffText: string, _options: RenderDiffOptions = {}): string => {
+  (diffText: string, _options: diffTypes.RenderDiffOptions = {}): string => {
     const lines = diffText.split("\n");
     const result: string[] = [];
 
@@ -85,14 +84,7 @@ export const renderDiff: {
 
       if (parsed.prefix === "-") {
         const removedLines: { lineNum: string; content: string }[] = [];
-        while (i < lines.length) {
-          const next = lines[i];
-          if (next === undefined) break;
-          const p = parseDiffLine(next);
-          if (p === null || p.prefix !== "-") break;
-          removedLines.push({ content: p.content, lineNum: p.lineNum });
-          i++;
-        }
+        i = renderDiffPart1(i, lines, removedLines);
 
         const addedLines: { lineNum: string; content: string }[] = [];
         while (i < lines.length) {
@@ -121,6 +113,22 @@ export const renderDiff: {
     return result.join("\n");
   },
 );
+
+function renderDiffPart1(
+  i: number,
+  lines: string[],
+  removedLines: { lineNum: string; content: string }[],
+) {
+  while (i < lines.length) {
+    const next = lines[i];
+    if (next === undefined) break;
+    const p = parseDiffLine(next);
+    if (p === null || p.prefix !== "-") break;
+    removedLines.push({ content: p.content, lineNum: p.lineNum });
+    i++;
+  }
+  return i;
+}
 
 function buildPart1(
   removedLines: { lineNum: string; content: string }[],
@@ -153,3 +161,9 @@ function buildPart1(
     }
   }
 }
+
+const diff = {
+  renderDiff,
+};
+
+export default diff;

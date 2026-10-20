@@ -1,45 +1,17 @@
 import * as NodePath from "@effect/platform-node/NodePath";
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import { ModelRuntime } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Cause, Effect, Exit, Function, ManagedRuntime, Path } from "effect";
+
+import type configuredRuntimeTypes from "./configured-runtime.types.ts";
+
+const { ModelRuntime } = codingAgent;
 
 const { contentText } = ai;
 
-type ModelFields = {
-  id: string;
-  name: string;
-  provider: string;
-  reasoning: boolean;
-  input: Array<"text" | "image">;
-  cost: { input: number; output: number; cacheRead: number; cacheWrite: number };
-  contextWindow: number;
-  maxTokens: number;
-};
-
-export type ProviderRuntimeOutput = {
-  result:
-    | {
-        validRequestReceived: boolean;
-        model: ModelFields;
-        response: { text: string; stopReason: string; inputTokens: number; outputTokens: number };
-      }
-    | { error: string };
-};
-
-export type AddedModelOutput = {
-  result: { model: ModelFields; existingModelsPreserved: boolean } | { error: string };
-};
-
-export type ProviderScenario = {
-  providerId: string;
-  modelId: string;
-  createContext(): aiTypes.Context;
-  options?: aiTypes.ModelsSimpleStreamOptions;
-  validRequestReceived(): boolean;
-};
-
-function modelFields(model: aiTypes.Model<aiTypes.Api>): ModelFields {
+function modelFields(model: aiTypes.Model<aiTypes.Api>): configuredRuntimeTypes.ModelFields {
   return {
     contextWindow: model.contextWindow,
     cost: {
@@ -62,7 +34,9 @@ const errorMessage = (error: unknown): string =>
 
 const nodePath = ManagedRuntime.make(NodePath.layer).runSync(Path.Path);
 
-export const loadConfiguredModelRuntime = (agentDir: string): Effect.Effect<ModelRuntime> =>
+const loadConfiguredModelRuntime = (
+  agentDir: string,
+): Effect.Effect<codingAgentTypes.ModelRuntime> =>
   Effect.promise(() =>
     ModelRuntime.create({
       allowModelNetwork: false,
@@ -75,10 +49,10 @@ export const loadConfiguredModelRuntime = (agentDir: string): Effect.Effect<Mode
 const failure = (error: string): { result: { error: string } } => ({ result: { error } });
 
 const completeProbe = (
-  runtime: ModelRuntime,
-  scenario: ProviderScenario,
+  runtime: codingAgentTypes.ModelRuntime,
+  scenario: configuredRuntimeTypes.ProviderScenario,
   model: aiTypes.Model<aiTypes.Api>,
-): Effect.Effect<ProviderRuntimeOutput> =>
+): Effect.Effect<configuredRuntimeTypes.ProviderRuntimeOutput> =>
   Effect.promise(() =>
     runtime.completeSimple(model, scenario.createContext(), scenario.options),
   ).pipe(
@@ -101,12 +75,22 @@ const completeProbe = (
     ),
   );
 
-export const inspectProvider: {
-  (scenario: ProviderScenario): (runtime: ModelRuntime) => Effect.Effect<ProviderRuntimeOutput>;
-  (runtime: ModelRuntime, scenario: ProviderScenario): Effect.Effect<ProviderRuntimeOutput>;
+const inspectProvider: {
+  (
+    scenario: configuredRuntimeTypes.ProviderScenario,
+  ): (
+    runtime: codingAgentTypes.ModelRuntime,
+  ) => Effect.Effect<configuredRuntimeTypes.ProviderRuntimeOutput>;
+  (
+    runtime: codingAgentTypes.ModelRuntime,
+    scenario: configuredRuntimeTypes.ProviderScenario,
+  ): Effect.Effect<configuredRuntimeTypes.ProviderRuntimeOutput>;
 } = Function.dual(
   2,
-  (runtime: ModelRuntime, scenario: ProviderScenario): Effect.Effect<ProviderRuntimeOutput> =>
+  (
+    runtime: codingAgentTypes.ModelRuntime,
+    scenario: configuredRuntimeTypes.ProviderScenario,
+  ): Effect.Effect<configuredRuntimeTypes.ProviderRuntimeOutput> =>
     Effect.gen(function* () {
       yield* Effect.promise(() => runtime.refresh({ allowNetwork: false }));
       const configurationError = runtime.getError();
@@ -123,12 +107,25 @@ export const inspectProvider: {
     }),
 );
 
-export const inspectAddedModel: {
-  (providerId: string, modelId: string): (runtime: ModelRuntime) => Effect.Effect<AddedModelOutput>;
-  (runtime: ModelRuntime, providerId: string, modelId: string): Effect.Effect<AddedModelOutput>;
+const inspectAddedModel: {
+  (
+    providerId: string,
+    modelId: string,
+  ): (
+    runtime: codingAgentTypes.ModelRuntime,
+  ) => Effect.Effect<configuredRuntimeTypes.AddedModelOutput>;
+  (
+    runtime: codingAgentTypes.ModelRuntime,
+    providerId: string,
+    modelId: string,
+  ): Effect.Effect<configuredRuntimeTypes.AddedModelOutput>;
 } = Function.dual(
   3,
-  (runtime: ModelRuntime, providerId: string, modelId: string): Effect.Effect<AddedModelOutput> =>
+  (
+    runtime: codingAgentTypes.ModelRuntime,
+    providerId: string,
+    modelId: string,
+  ): Effect.Effect<configuredRuntimeTypes.AddedModelOutput> =>
     Effect.gen(function* () {
       const pristineRuntime = yield* Effect.promise(() =>
         ModelRuntime.create({ allowModelNetwork: false, modelsPath: null }),
@@ -160,3 +157,11 @@ export const inspectAddedModel: {
       };
     }),
 );
+
+const configuredRuntime = {
+  inspectAddedModel,
+  inspectProvider,
+  loadConfiguredModelRuntime,
+};
+
+export default configuredRuntime;

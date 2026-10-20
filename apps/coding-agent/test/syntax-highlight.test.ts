@@ -3,18 +3,12 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  getMarkdownTheme,
-  highlightCode,
-  initTheme,
-  theme,
-} from "../src/modes/interactive/theme/theme.ts";
-import {
-  highlight,
-  loadAllHighlightLanguages,
-  renderHighlightedHtml,
-  supportsLanguage,
-} from "../src/utils/syntax-highlight.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import syntaxHighlight from "../src/utils/syntax-highlight.ts";
+
+const { highlight, loadAllHighlightLanguages, renderHighlightedHtml, supportsLanguage } =
+  syntaxHighlight;
+const { getMarkdownTheme, highlightCode, initTheme, theme } = themeModule;
 
 const { resetCapabilitiesCache, setCapabilities } = tui;
 

@@ -2,16 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  formatMemoryList,
-  formatRecallBlock,
-  formatSearchResults,
-  resolveProjectName,
-} from "../src/core/memory/memory.ts";
-import { MemoryStore } from "../src/core/memory/store.ts";
-import { createMemoryToolDefinition } from "../src/core/tools/memory.ts";
-import { wrapToolDefinition } from "../src/core/tools/tool-definition-wrapper.ts";
+import memoryFormat from "../src/core/memory/memory-format.ts";
+import memoryProject from "../src/core/memory/memory-project.ts";
+import MemoryStore from "../src/core/memory/memory-store.ts";
+import memory from "../src/core/tools/memory.ts";
+import toolDefinitionWrapper from "../src/core/tools/tool-definition-wrapper.ts";
 import memorySupport from "./memory-support.ts";
+
+const { wrapToolDefinition } = toolDefinitionWrapper;
+const { createMemoryToolDefinition } = memory;
+const { formatMemoryList, formatRecallBlock, formatSearchResults } = memoryFormat;
+const { resolveProjectName } = memoryProject;
 
 const { awaited, basenameOf, joinPath, resolvePath, runTest } = testing;
 

@@ -4,6 +4,7 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type sessionTypes from "../src/session/session.types.ts";
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
 import sessionSupport from "./session-support.ts";
@@ -13,7 +14,7 @@ const { defineDoc } = durable;
 
 const { abortController, awaited } = effectSupport;
 const { oneStep, withSignal } = harnessLifecycleSupport;
-const { ControlledStorage, context, flush } = sessionSupport;
+const { context, flush } = sessionSupport;
 const { openTasks } = taskSupport;
 
 function unloadDocuments(harness: harnessTypes.Harness): Promise<void> {

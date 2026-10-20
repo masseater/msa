@@ -1,34 +1,22 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import {
-  bashToolSystemPromptContribution,
-  createBashToolDefinition,
-} from "../src/core/tools/bash.ts";
-import {
-  createEditToolDefinition,
-  editToolSystemPromptContribution,
-} from "../src/core/tools/edit.ts";
-import {
-  createFindToolDefinition,
-  findToolSystemPromptContribution,
-} from "../src/core/tools/find.ts";
-import {
-  createGrepToolDefinition,
-  grepToolSystemPromptContribution,
-} from "../src/core/tools/grep.ts";
-import { createLsToolDefinition, lsToolSystemPromptContribution } from "../src/core/tools/ls.ts";
-import {
-  createPowerShellToolDefinition,
-  powershellToolSystemPromptContribution,
-} from "../src/core/tools/powershell.ts";
-import {
-  createReadToolDefinition,
-  readToolSystemPromptContribution,
-} from "../src/core/tools/read.ts";
-import {
-  createWriteToolDefinition,
-  writeToolSystemPromptContribution,
-} from "../src/core/tools/write.ts";
+import bash from "../src/core/tools/bash.ts";
+import edit from "../src/core/tools/edit.ts";
+import find from "../src/core/tools/find.ts";
+import grep from "../src/core/tools/grep.ts";
+import ls from "../src/core/tools/ls.ts";
+import powershell from "../src/core/tools/powershell.ts";
+import read from "../src/core/tools/read.ts";
+import write from "../src/core/tools/write.ts";
+
+const { createReadToolDefinition, readToolSystemPromptContribution } = read;
+const { bashToolSystemPromptContribution, createBashToolDefinition } = bash;
+const { createPowerShellToolDefinition, powershellToolSystemPromptContribution } = powershell;
+const { createEditToolDefinition, editToolSystemPromptContribution } = edit;
+const { createWriteToolDefinition, writeToolSystemPromptContribution } = write;
+const { createGrepToolDefinition, grepToolSystemPromptContribution } = grep;
+const { createFindToolDefinition, findToolSystemPromptContribution } = find;
+const { createLsToolDefinition, lsToolSystemPromptContribution } = ls;
 
 interface ContributionCase {
   readonly 0: string;

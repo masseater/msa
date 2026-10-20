@@ -1,18 +1,23 @@
-import type { RunnerEmitEvent } from "./runner-types.ts";
-import type { ExtensionUIContext, UIPromptKind } from "./types.ts";
+import type runnerTypesTypes from "./runner-types.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-type UIPromptEvent = Extract<RunnerEmitEvent, { type: "ui_prompt_start" | "ui_prompt_end" }>;
+type UIPromptEvent = Extract<
+  runnerTypesTypes.RunnerEmitEvent,
+  { type: "ui_prompt_start" | "ui_prompt_end" }
+>;
 
-export class UIPromptTracker {
+export default class UIPromptTracker {
   private depth = 0;
-  private active: { kind: UIPromptKind; title?: string | undefined } | undefined;
+  private active:
+    | { kind: extensionsTypesTypes.UIPromptKind; title?: string | undefined }
+    | undefined;
   private readonly emitEvent: (event: UIPromptEvent) => void;
 
   constructor(emitEvent: (event: UIPromptEvent) => void) {
     this.emitEvent = emitEvent;
   }
 
-  wrap(ui: ExtensionUIContext): ExtensionUIContext {
+  wrap(ui: extensionsTypesTypes.ExtensionUIContext): extensionsTypesTypes.ExtensionUIContext {
     return {
       ...ui,
       confirm: (title, message, opts) =>
@@ -28,7 +33,7 @@ export class UIPromptTracker {
   }
 
   private track<T>(
-    kind: UIPromptKind,
+    kind: extensionsTypesTypes.UIPromptKind,
     title: string | undefined,
     run: () => Promise<T>,
   ): Promise<T> {
@@ -50,7 +55,7 @@ export class UIPromptTracker {
     }
   }
 
-  private finish(kind: UIPromptKind, title: string | undefined): void {
+  private finish(kind: extensionsTypesTypes.UIPromptKind, title: string | undefined): void {
     if (--this.depth > 0) return;
     this.depth = 0;
     const prompt = this.active ?? { kind, title };

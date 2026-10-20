@@ -3,15 +3,11 @@ import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import { Function as Fn } from "effect";
 
+import type utilsTypes from "./utils.types.ts";
+
 const { contentText } = ai;
 
-export interface FileOperations {
-  read: Set<string>;
-  written: Set<string>;
-  edited: Set<string>;
-}
-
-export function createFileOps(): FileOperations {
+function createFileOps(): utilsTypes.FileOperations {
   return {
     edited: new Set(),
     read: new Set(),
@@ -21,7 +17,7 @@ export function createFileOps(): FileOperations {
 
 const extractFileOpsFromMessageImpl = (
   message: agentTypes.AgentMessage,
-  fileOps: FileOperations,
+  fileOps: utilsTypes.FileOperations,
 ): void => {
   if (message.role === "toolResult") {
     for (const call of message.nestedCalls?.calls ?? [])
@@ -39,15 +35,15 @@ const extractFileOpsFromMessageImpl = (
   }
 };
 
-export const extractFileOpsFromMessage: {
-  (fileOps: FileOperations): (message: agentTypes.AgentMessage) => void;
-  (message: agentTypes.AgentMessage, fileOps: FileOperations): void;
+const extractFileOpsFromMessage: {
+  (fileOps: utilsTypes.FileOperations): (message: agentTypes.AgentMessage) => void;
+  (message: agentTypes.AgentMessage, fileOps: utilsTypes.FileOperations): void;
 } = Fn.dual(2, extractFileOpsFromMessageImpl);
 
 function addFileOp(
   toolName: string,
   args: Record<string, unknown> | undefined,
-  fileOps: FileOperations,
+  fileOps: utilsTypes.FileOperations,
 ): void {
   const path = typeof args?.["path"] === "string" ? args["path"] : undefined;
   if (path === undefined || path === "") return;
@@ -64,7 +60,7 @@ function addFileOp(
   }
 }
 
-export function computeFileLists(fileOps: FileOperations): {
+function computeFileLists(fileOps: utilsTypes.FileOperations): {
   readFiles: string[];
   modifiedFiles: string[];
 } {
@@ -86,7 +82,7 @@ const formatFileOperationsImpl = (readFiles: string[], modifiedFiles: string[]):
   return `\n\n${sections.join("\n\n")}`;
 };
 
-export const formatFileOperations: {
+const formatFileOperations: {
   (modifiedFiles: string[]): (readFiles: string[]) => string;
   (readFiles: string[], modifiedFiles: string[]): string;
 } = Fn.dual(2, formatFileOperationsImpl);
@@ -140,11 +136,22 @@ const serializeConversationImpl = (
   return parts.join("\n\n");
 };
 
-export const serializeConversation: {
+const serializeConversation: {
   (truncateToolResult?: (text: string) => string): (messages: aiTypes.Message[]) => string;
   (messages: aiTypes.Message[], truncateToolResult?: (text: string) => string): string;
 } = Fn.dual((args) => Array.isArray(args[0]), serializeConversationImpl);
 
-export const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
+const SUMMARIZATION_SYSTEM_PROMPT = `You are a context summarization assistant. Your task is to read a conversation between a user and an AI assistant, then produce a structured summary following the exact format specified.
 
 Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the structured summary.`;
+
+const utils = {
+  SUMMARIZATION_SYSTEM_PROMPT,
+  computeFileLists,
+  createFileOps,
+  extractFileOpsFromMessage,
+  formatFileOperations,
+  serializeConversation,
+};
+
+export default utils;

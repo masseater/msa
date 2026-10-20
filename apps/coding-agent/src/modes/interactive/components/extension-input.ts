@@ -1,27 +1,27 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { theme } from "../theme/theme.ts";
-import { CountdownTimer } from "./countdown-timer.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import themeModule from "../theme/theme.ts";
+import CountdownTimer from "./countdown-timer.ts";
+import type countdownTimerTypes from "./countdown-timer.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type extensionInputTypes from "./extension-input.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { theme } = themeModule;
+const { keyHint } = keybindingHints;
 
-const { Container, Input, Spacer, Text, getKeybindings } = tuiModule;
+const { Input, Spacer, Text, getKeybindings } = tuiModule;
 
-export interface ExtensionInputOptions {
-  tui?: tuiTypes.TUI | undefined;
-  timeout?: number | undefined;
-  initialValue?: string | undefined;
-  description?: string | undefined;
-}
-
-export class ExtensionInputComponent extends Container implements tuiTypes.Focusable {
+export default class ExtensionInputComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
   private input: tuiTypes.Input;
   private onSubmitCallback: (value: string) => void;
   private onCancelCallback: () => void;
   private titleText: tuiTypes.Text;
   private baseTitle: string;
-  private countdown: CountdownTimer | undefined;
+  private countdown: countdownTimerTypes.CountdownTimer | undefined;
 
   private focusedState = false;
   get focused(): boolean {
@@ -37,7 +37,7 @@ export class ExtensionInputComponent extends Container implements tuiTypes.Focus
     _placeholder: string | undefined,
     onSubmit: (value: string) => void,
     onCancel: () => void,
-    opts?: ExtensionInputOptions,
+    opts?: extensionInputTypes.ExtensionInputOptions,
   ) {
     super();
 
@@ -78,7 +78,7 @@ export class ExtensionInputComponent extends Container implements tuiTypes.Focus
 
   private static buildPart1(
     self: ExtensionInputComponent,
-    opts: ExtensionInputOptions | undefined,
+    opts: extensionInputTypes.ExtensionInputOptions | undefined,
   ): void {
     if (opts?.initialValue !== undefined && opts?.initialValue !== "")
       self.input.setValue(opts.initialValue);

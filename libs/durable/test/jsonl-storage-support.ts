@@ -103,7 +103,7 @@ const sessionDocument: {
   (id: typesModule.DocumentId, kind?: string): ReturnType<typeof sessionDocumentImpl>;
 } = dual((args) => typeof args[0] === "number", sessionDocumentImpl);
 
-class InstrumentedEnv extends NodeExecutionEnv {
+class InstrumentedEnv extends node.NodeExecutionEnv {
   readonly operations: string[] = [];
   private failure: jsonlStorageSupportTypes.Failure | undefined;
   private appendCalls = 0;

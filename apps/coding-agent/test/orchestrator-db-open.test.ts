@@ -2,7 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { db } from "../src/core/orchestrator/db.ts";
+import dbModule from "../src/core/orchestrator/db.ts";
+
+const { db } = dbModule;
 
 const { joinPath, makeTempDir, pathExists, removePath, runTest } = testing;
 

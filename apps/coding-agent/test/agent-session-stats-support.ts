@@ -4,12 +4,13 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
+
+const { AgentSession, SessionManager, SettingsManager } = codingAgent;
 
 const { getModel, streamSimple } = compat;
 
@@ -101,7 +102,10 @@ function createSession() {
   );
 }
 
-function syncAgentMessages(session: AgentSession, sessionManager: SessionManager): void {
+function syncAgentMessages(
+  session: codingAgentTypes.AgentSession,
+  sessionManager: codingAgentTypes.SessionManager,
+): void {
   session.agent.state.messages = sessionManager.buildSessionContext().messages;
 }
 

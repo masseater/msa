@@ -1,8 +1,7 @@
 import { Effect } from "effect";
 
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
-
 const interactiveModePrototype =
   InteractiveMode.prototype as unknown as SessionStartNotifySupportTypes.InteractiveModePrototype;
 

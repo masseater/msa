@@ -1,23 +1,16 @@
 import { expect } from "vite-plus/test";
 
-import {
-  type BranchSummaryEntry,
-  type CompactionEntry,
-  type CustomEntry,
-  type ModelChangeEntry,
-  type SessionEntry,
-  type SessionMessageEntry,
-  type ThinkingLevelChangeEntry,
-  buildContextEntries,
-  buildSessionContext,
-} from "../../src/core/session-manager.ts";
+import sessionManagerSupport from "../../src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+
+const { buildContextEntries, buildSessionContext } = sessionManagerSupport;
 
 const msg = (entry: {
   id: string;
   parentId: string | null;
   role: "user" | "assistant";
   text: string;
-}): SessionMessageEntry => {
+}): sessionManagerTypes.SessionMessageEntry => {
   const { id, parentId, role, text } = entry;
   const base = { id, parentId, timestamp: "2025-01-01T00:00:00Z", type: "message" as const };
   if (role === "user") {
@@ -49,7 +42,7 @@ const compaction = (entry: {
   parentId: string | null;
   summary: string;
   firstKeptEntryId: string;
-}): CompactionEntry => {
+}): sessionManagerTypes.CompactionEntry => {
   const { id, parentId, summary, firstKeptEntryId } = entry;
   return {
     firstKeptEntryId,
@@ -66,7 +59,7 @@ const branchSummary = (entry: {
   parentId: string | null;
   summary: string;
   fromId: string;
-}): BranchSummaryEntry => {
+}): sessionManagerTypes.BranchSummaryEntry => {
   const { id, parentId, summary, fromId } = entry;
   return {
     fromId,
@@ -82,7 +75,7 @@ const custom = (entry: {
   parentId: string | null;
   customType: string;
   data?: unknown;
-}): CustomEntry => {
+}): sessionManagerTypes.CustomEntry => {
   const { id, parentId, customType, data } = entry;
   return { customType, data, id, parentId, timestamp: "2025-01-01T00:00:00Z", type: "custom" };
 };
@@ -90,7 +83,7 @@ const thinkingLevel = (entry: {
   id: string;
   parentId: string | null;
   level: string;
-}): ThinkingLevelChangeEntry => {
+}): sessionManagerTypes.ThinkingLevelChangeEntry => {
   const { id, parentId, level } = entry;
   return {
     id,
@@ -105,7 +98,7 @@ const modelChange = (entry: {
   parentId: string | null;
   provider: string;
   modelId: string;
-}): ModelChangeEntry => {
+}): sessionManagerTypes.ModelChangeEntry => {
   const { id, parentId, provider, modelId } = entry;
   return {
     id,
@@ -117,7 +110,7 @@ const modelChange = (entry: {
   };
 };
 const simpleConversation = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "hi there" }),
     msg({ id: "3", parentId: "2", role: "user", text: "how are you" }),
@@ -128,7 +121,7 @@ const simpleConversation = () => {
   expect(ctx.messages.map((m) => m.role)).toEqual(["user", "assistant", "user", "assistant"]);
 };
 const tracksThinkingLevelChanges = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     thinkingLevel({ id: "2", level: "high", parentId: "1" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "thinking hard" }),
@@ -138,7 +131,7 @@ const tracksThinkingLevelChanges = () => {
   expect(ctx.messages).toHaveLength(2);
 };
 const tracksModelFromAssistantMessage = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "hi" }),
   ];
@@ -146,7 +139,7 @@ const tracksModelFromAssistantMessage = () => {
   expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic" });
 };
 const tracksModelFromModelChangeEntry = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "hello" }),
     modelChange({ id: "2", modelId: "gpt-4", parentId: "1", provider: "openai" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "hi" }),
@@ -156,7 +149,7 @@ const tracksModelFromModelChangeEntry = () => {
   expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic" });
 };
 const includesSummaryBeforeKeptMessages = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response1" }),
     msg({ id: "3", parentId: "2", role: "user", text: "second" }),
@@ -180,7 +173,7 @@ const includesSummaryBeforeKeptMessages = () => {
   expect((ctx.messages[4] as any).content[0].text).toBe("response3");
 };
 const handlesCompactionKeepingFromFirstMessage = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response" }),
     compaction({ firstKeptEntryId: "1", id: "3", parentId: "2", summary: "Empty summary" }),
@@ -192,7 +185,7 @@ const handlesCompactionKeepingFromFirstMessage = () => {
   expect((ctx.messages[0] as any).summary).toContain("Empty summary");
 };
 const multipleCompactionsUsesLatest = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "a" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "b" }),
     compaction({ firstKeptEntryId: "1", id: "3", parentId: "2", summary: "First summary" }),
@@ -207,7 +200,7 @@ const multipleCompactionsUsesLatest = () => {
   expect((ctx.messages[0] as any).summary).toContain("Second summary");
 };
 const buildcontextentriesReturnsCompactionAwareEntriesIncluding = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
     custom({ customType: "old-state", data: { hidden: true }, id: "2", parentId: "1" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "response1" }),
@@ -227,7 +220,7 @@ const buildcontextentriesReturnsCompactionAwareEntriesIncluding = () => {
   ]);
 };
 const keepsSettingsFromTheFullPath = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "first" }),
     thinkingLevel({ id: "2", level: "high", parentId: "1" }),
     msg({ id: "3", parentId: "2", role: "assistant", text: "response1" }),
@@ -240,7 +233,7 @@ const keepsSettingsFromTheFullPath = () => {
   expect(ctx.messages.map((message) => message.role)).toEqual(["compactionSummary", "user"]);
 };
 const followsPathToSpecifiedLeaf = () => {
-  const entries: SessionEntry[] = [
+  const entries: sessionManagerTypes.SessionEntry[] = [
     msg({ id: "1", parentId: null, role: "user", text: "start" }),
     msg({ id: "2", parentId: "1", role: "assistant", text: "response" }),
     msg({ id: "3", parentId: "2", role: "user", text: "branch A" }),

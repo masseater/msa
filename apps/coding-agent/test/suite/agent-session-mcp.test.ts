@@ -4,9 +4,11 @@ import testing from "@msa/testing";
 import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createMcpToolName } from "../../src/extensions/mcp/tools.ts";
+import toolsModule from "../../src/extensions/mcp/tools.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
+
+const { createMcpToolName } = toolsModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

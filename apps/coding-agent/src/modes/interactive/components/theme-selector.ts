@@ -1,17 +1,18 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import { getAvailableThemes, getSelectListTheme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
 
-const { Container, SelectList } = tui;
+const { getAvailableThemes, getSelectListTheme } = themeModule;
+const { SelectList } = tui;
 
 const THEME_SELECT_LIST_LAYOUT: tuiTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
   minPrimaryColumnWidth: 12,
 };
 
-export class ThemeSelectorComponent extends Container {
+export default class ThemeSelectorComponent extends tui.Container {
   private selectList: tuiTypes.SelectList;
   private onPreview: (themeName: string) => void;
 

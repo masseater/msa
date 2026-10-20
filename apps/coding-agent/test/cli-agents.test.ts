@@ -4,16 +4,14 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  accountEnv,
-  blockIfUnusable,
-  blockOf,
-  clearBlocks,
-  loadAccounts,
-} from "../src/core/cli-agents/claude-accounts.ts";
-import { evaluateModelPolicy, hiddenModelsByPolicy } from "../src/core/model-policy.ts";
-import { findModelUpgrades } from "../src/core/model-upgrade.ts";
+import claudeAccounts from "../src/core/cli-agents/claude-accounts.ts";
+import modelPolicy from "../src/core/model-policy.ts";
+import modelUpgrade from "../src/core/model-upgrade.ts";
 import cliAgentsSupport from "./cli-agents-support.ts";
+
+const { accountEnv, blockIfUnusable, blockOf, clearBlocks, loadAccounts } = claudeAccounts;
+const { evaluateModelPolicy, hiddenModelsByPolicy } = modelPolicy;
+const { findModelUpgrades } = modelUpgrade;
 
 const { awaited, currentTimeMillis, failure, joinPath, runTest } = testing;
 const { cleanAgentDir, createModelRuntime, currentAgentDir, prepareAgentDir, writeAccounts } =

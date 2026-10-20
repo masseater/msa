@@ -1,19 +1,19 @@
 import { Effect, Schema } from "effect";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
+import acmeServer from "../evals/acme-server.ts";
+import configuredRuntime from "../evals/configured-runtime.ts";
+import platform from "../src/platform.ts";
+
+const {
   OPENAI_MODEL_ID,
   OPENAI_PROBE_PROMPT,
   OPENAI_PROBE_RESPONSE,
   OPENAI_PROVIDER_ID,
   createAcmeServer,
-} from "../evals/acme-server.ts";
-import {
-  inspectAddedModel,
-  inspectProvider,
-  loadConfiguredModelRuntime,
-} from "../evals/configured-runtime.ts";
-import { files, pathOperations } from "../src/platform.ts";
+} = acmeServer;
+const { files, pathOperations } = platform;
+const { inspectAddedModel, inspectProvider, loadConfiguredModelRuntime } = configuredRuntime;
 
 const PROVIDER_ID = OPENAI_PROVIDER_ID;
 const MODEL = {
@@ -87,7 +87,7 @@ const acmeModelsJson = () => ({
 function probe(content: string, apiKey: string) {
   return {
     createContext: () => ({
-      messages: [{ role: "user" as const, content, timestamp: 0 }],
+      messages: [{ content, role: "user" as const, timestamp: 0 }],
     }),
     modelId: OPENAI_MODEL_ID,
     options: { env: { ACME_API_KEY: apiKey }, maxTokens: 32 },

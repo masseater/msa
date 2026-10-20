@@ -4,9 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { vi } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import type { SessionManager } from "../src/core/session-manager.ts";
-import type { SettingsManager } from "../src/core/settings-manager.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import type autoCompactionQueueSupportTypes from "./agent-session-auto-compaction-queue-support.types.ts";
 import sessionKit from "./session-kit.ts";
 
@@ -16,9 +16,9 @@ const { awaited, currentTimeMillis, runTest } = testing;
 const { createAgentSession, disposeWorkspace, prepareWorkspace } = sessionKit;
 
 const state: {
-  session: AgentSession | undefined;
-  sessionManager: SessionManager | undefined;
-  settingsManager: SettingsManager | undefined;
+  session: agentSessionTypes.AgentSession | undefined;
+  sessionManager: sessionManagerTypes.SessionManager | undefined;
+  settingsManager: settingsManagerTypes.SettingsManager | undefined;
   tempDir: string;
 } = { session: undefined, sessionManager: undefined, settingsManager: undefined, tempDir: "" };
 

@@ -2,12 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  collectSettingsDiagnostics,
-  deduplicateDiagnostics,
-} from "../src/core/settings-diagnostics.ts";
-import { SettingsManager, type SettingsStorage } from "../src/core/settings-manager.ts";
+import settingsDiagnostics from "../src/core/settings-diagnostics.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 
+const { collectSettingsDiagnostics, deduplicateDiagnostics } = settingsDiagnostics;
 const { joinPath, makeDirectory, makeTempDir, removePath, runTest, writeTextFile } = testing;
 
 const includesTheSettingsFilePathForFile = () =>
@@ -30,7 +29,7 @@ const includesTheSettingsFilePathForFile = () =>
   );
 
 const fallsBackToTheSettingsScopeFor = () => {
-  const storage: SettingsStorage = {
+  const storage: settingsManagerTypes.SettingsStorage = {
     withLock(scope, fn) {
       if (scope === "global") throw new Error("backend failed");
       fn(undefined);

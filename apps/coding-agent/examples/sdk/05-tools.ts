@@ -1,33 +1,47 @@
-import { SessionManager, createAgentSession } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
 import { Console, Effect } from "effect";
 
-const { session: readOnlySession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  tools: ["read", "grep", "find", "ls"],
-});
-Effect.runSync(Console.log("Read-only session created"));
-readOnlySession.dispose();
+const { SessionManager, createAgentSession } = codingAgent;
 
-const { session: customToolsSession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  tools: ["read", "bash", "grep"],
-});
-Effect.runSync(Console.log("Custom tools session created"));
-customToolsSession.dispose();
+void Effect.runPromise(
+  Effect.gen(function* () {
+    const { session: readOnlySession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+        tools: ["read", "grep", "find", "ls"],
+      }),
+    );
+    yield* Console.log("Read-only session created");
+    readOnlySession.dispose();
 
-const customCwd = "/path/to/project";
-const { session: customCwdSession } = await createAgentSession({
-  cwd: customCwd,
-  sessionManager: SessionManager.inMemory(customCwd),
-  tools: ["read", "bash", "edit", "write"],
-});
-Effect.runSync(Console.log("Custom cwd session created"));
-customCwdSession.dispose();
+    const { session: customToolsSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+        tools: ["read", "bash", "grep"],
+      }),
+    );
+    yield* Console.log("Custom tools session created");
+    customToolsSession.dispose();
 
-const { session: specificToolsSession } = await createAgentSession({
-  cwd: customCwd,
-  sessionManager: SessionManager.inMemory(customCwd),
-  tools: ["read", "bash", "grep"],
-});
-Effect.runSync(Console.log("Specific tools with custom cwd session created"));
-specificToolsSession.dispose();
+    const customCwd = "/path/to/project";
+    const { session: customCwdSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        cwd: customCwd,
+        sessionManager: SessionManager.inMemory(customCwd),
+        tools: ["read", "bash", "edit", "write"],
+      }),
+    );
+    yield* Console.log("Custom cwd session created");
+    customCwdSession.dispose();
+
+    const { session: specificToolsSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        cwd: customCwd,
+        sessionManager: SessionManager.inMemory(customCwd),
+        tools: ["read", "bash", "grep"],
+      }),
+    );
+    yield* Console.log("Specific tools with custom cwd session created");
+    specificToolsSession.dispose();
+  }),
+);

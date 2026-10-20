@@ -4,12 +4,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { ModelConfig } from "../src/core/model-config.ts";
-import { type ModelRegistry, clearApiKeyCache } from "../src/core/model-registry.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import type authStorageTypes from "../src/core/auth-storage.types.ts";
+import ModelConfig from "../src/core/model-config.ts";
+import providerComposer from "../src/core/provider-composer.ts";
+import type codingAgentTypes from "../src/index.types.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
+const { clearApiKeyCache } = providerComposer;
 const { createProvider } = ai;
 
 const { makeGate } = modelRegistrySupport;
@@ -31,7 +34,7 @@ let tempDir: string;
 
 let modelsJsonPath: string;
 
-let authStorage: AuthStorage;
+let authStorage: authStorageTypes.AuthStorage;
 
 function toShPath(value: string): string {
   return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
@@ -72,7 +75,7 @@ const filteredChatModel = (id: string): compatTypes.Model<"openai-completions"> 
   reasoning: false,
 });
 
-const createLimitedKeyRegistry = (): Promise<ModelRegistry> =>
+const createLimitedKeyRegistry = (): Promise<codingAgentTypes.ModelRegistry> =>
   runTest(
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -91,7 +94,10 @@ const createLimitedKeyRegistry = (): Promise<ModelRegistry> =>
     }),
   );
 
-const registerFilteredProvider = (registry: ModelRegistry, onResolve: () => void): void => {
+const registerFilteredProvider = (
+  registry: codingAgentTypes.ModelRegistry,
+  onResolve: () => void,
+): void => {
   registry.registerProvider(
     createProvider({
       api: {
@@ -128,7 +134,7 @@ const registerFilteredProvider = (registry: ModelRegistry, onResolve: () => void
   );
 };
 
-const filteredAvailableIds = (registry: ModelRegistry): string[] =>
+const filteredAvailableIds = (registry: codingAgentTypes.ModelRegistry): string[] =>
   registry
     .getAvailable()
     .filter((m) => m.provider === "filtered-provider")

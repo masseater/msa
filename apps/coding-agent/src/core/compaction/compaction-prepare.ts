@@ -1,37 +1,34 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
-import {
-  type CompactionEntry,
-  type ProjectedSessionEntry,
-  type SessionEntry,
-  buildSessionProjection,
-} from "../session-manager.ts";
-import { findProjectedCutPoint } from "./compaction-cut.ts";
-import { estimateProjectedContextTokens } from "./compaction-tokens.ts";
-import type {
-  CompactionDetails,
-  CompactionPreparation,
-  CompactionSettings,
-  CutPointResult,
-} from "./compaction-types.ts";
-import { type FileOperations, createFileOps, extractFileOpsFromMessage } from "./utils.ts";
+import sessionManagerSupport from "../session-manager-support.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import compactionCut from "./compaction-cut.ts";
+import compactionTokens from "./compaction-tokens.ts";
+import type compactionTypesTypes from "./compaction-types.types.ts";
+import utils from "./utils.ts";
+import type utilsTypes from "./utils.types.ts";
+
+const { buildSessionProjection } = sessionManagerSupport;
+const { createFileOps, extractFileOpsFromMessage } = utils;
+const { findProjectedCutPoint } = compactionCut;
+const { estimateProjectedContextTokens } = compactionTokens;
 
 function extractFileOperations(
   messages: agentTypes.AgentMessage[],
-  entries: SessionEntry[],
+  entries: sessionManagerTypes.SessionEntry[],
   prevCompactionIndex: number,
-): FileOperations {
+): utilsTypes.FileOperations {
   const fileOps = createFileOps();
 
   if (prevCompactionIndex >= 0) {
-    const prevCompaction = entries[prevCompactionIndex] as CompactionEntry;
+    const prevCompaction = entries[prevCompactionIndex] as sessionManagerTypes.CompactionEntry;
     if (
       prevCompaction.fromHook !== true &&
       typeof prevCompaction.details === "object" &&
       prevCompaction.details !== null
     ) {
-      const details = prevCompaction.details as CompactionDetails;
+      const details = prevCompaction.details as compactionTypesTypes.CompactionDetails;
       if (Array.isArray(details.readFiles)) {
         for (const f of details.readFiles) fileOps.read.add(f);
       }
@@ -49,13 +46,13 @@ function extractFileOperations(
 }
 
 function getMessagesFromProjectedEntryForCompaction(
-  entry: ProjectedSessionEntry,
+  entry: sessionManagerTypes.ProjectedSessionEntry,
 ): agentTypes.AgentMessage[] {
   if (entry.sourceEntry.type === "compaction") return [];
   return entry.messages.filter((message) => message.role !== "system");
 }
 
-function findBoundary(projectedEntries: ProjectedSessionEntry[]) {
+function findBoundary(projectedEntries: sessionManagerTypes.ProjectedSessionEntry[]) {
   const prevCompactionIndex = projectedEntries.findIndex(
     (entry) => entry.sourceEntry.type === "compaction" && entry.messages.length > 0,
   );
@@ -66,14 +63,14 @@ function findBoundary(projectedEntries: ProjectedSessionEntry[]) {
     previousSummary:
       prevCompaction === undefined
         ? undefined
-        : (prevCompaction.sourceEntry as CompactionEntry).summary,
+        : (prevCompaction.sourceEntry as sessionManagerTypes.CompactionEntry).summary,
   };
 }
 
 function collectMessages(
-  projectedEntries: ProjectedSessionEntry[],
+  projectedEntries: sessionManagerTypes.ProjectedSessionEntry[],
   boundaryStart: number,
-  cutPoint: CutPointResult,
+  cutPoint: compactionTypesTypes.CutPointResult,
 ) {
   const historyEnd = cutPoint.isSplitTurn ? cutPoint.turnStartIndex : cutPoint.firstKeptEntryIndex;
   return {
@@ -89,9 +86,9 @@ function collectMessages(
 }
 
 const prepareCompactionImpl = (
-  pathEntries: SessionEntry[],
-  settings: CompactionSettings,
-): CompactionPreparation | undefined => {
+  pathEntries: sessionManagerTypes.SessionEntry[],
+  settings: compactionTypesTypes.CompactionSettings,
+): compactionTypesTypes.CompactionPreparation | undefined => {
   if (pathEntries.at(-1)?.type === "compaction") {
     return undefined;
   }
@@ -135,9 +132,20 @@ const prepareCompactionImpl = (
   };
 };
 
-export const prepareCompaction: {
+const prepareCompaction: {
   (
-    settings: CompactionSettings,
-  ): (pathEntries: SessionEntry[]) => CompactionPreparation | undefined;
-  (pathEntries: SessionEntry[], settings: CompactionSettings): CompactionPreparation | undefined;
+    settings: compactionTypesTypes.CompactionSettings,
+  ): (
+    pathEntries: sessionManagerTypes.SessionEntry[],
+  ) => compactionTypesTypes.CompactionPreparation | undefined;
+  (
+    pathEntries: sessionManagerTypes.SessionEntry[],
+    settings: compactionTypesTypes.CompactionSettings,
+  ): compactionTypesTypes.CompactionPreparation | undefined;
 } = Fn.dual(2, prepareCompactionImpl);
+
+const compactionPrepare = {
+  prepareCompaction,
+};
+
+export default compactionPrepare;

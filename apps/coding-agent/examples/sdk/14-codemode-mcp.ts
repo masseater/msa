@@ -1,4 +1,7 @@
-import {
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
+
+const {
   DefaultResourceLoader,
   SessionManager,
   SettingsManager,
@@ -7,8 +10,7 @@ import {
   createMcpExtension,
   createToolSearchExtension,
   getAgentDir,
-} from "@msa/coding-agent";
-import { Console, Effect } from "effect";
+} = codingAgent;
 
 const cwd = process.cwd();
 
@@ -22,30 +24,39 @@ const resourceLoader = new DefaultResourceLoader({
     createMcpExtension(),
   ],
 });
-await resourceLoader.reload();
 
-const settingsManager = SettingsManager.create(cwd);
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => resourceLoader.reload());
 
-settingsManager.applyOverrides({ defaultTools: ["+codemode", "+tool_search"] });
+    const settingsManager = SettingsManager.create(cwd);
 
-const { session } = await createAgentSession({
-  resourceLoader,
-  sessionManager: SessionManager.inMemory(),
-  settingsManager,
-});
+    settingsManager.applyOverrides({ defaultTools: ["+codemode", "+tool_search"] });
 
-try {
-  await session.bindExtensions({});
-  Effect.runSync(Console.log("Active tools:", session.getActiveToolNames().join(", ")));
-  session.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      process.stdout.write(event.assistantMessageEvent.delta);
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader,
+        sessionManager: SessionManager.inMemory(),
+        settingsManager,
+      }),
+    );
+
+    try {
+      yield* Effect.promise(() => session.bindExtensions({}));
+      yield* Console.log("Active tools:", session.getActiveToolNames().join(", "));
+      session.subscribe((event) => {
+        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+          process.stdout.write(event.assistantMessageEvent.delta);
+        }
+      });
+      yield* Effect.promise(() =>
+        session.prompt(
+          "Use codemode to count the TypeScript files in src/ and list the three largest.",
+        ),
+      );
+      yield* Console.log();
+    } finally {
+      session.dispose();
     }
-  });
-  await session.prompt(
-    "Use codemode to count the TypeScript files in src/ and list the three largest.",
-  );
-  Effect.runSync(Console.log());
-} finally {
-  session.dispose();
-}
+  }),
+);

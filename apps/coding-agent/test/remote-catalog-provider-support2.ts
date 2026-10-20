@@ -1,5 +1,7 @@
-import { withRemoteCatalog } from "../src/core/remote-catalog-provider.ts";
+import remoteCatalogProvider from "../src/core/remote-catalog-provider.ts";
 import remoteCatalogProviderSupport from "./remote-catalog-provider-support.ts";
+
+const { withRemoteCatalog } = remoteCatalogProvider;
 
 const { builtinProvider } = remoteCatalogProviderSupport;
 

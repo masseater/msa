@@ -1,30 +1,31 @@
 import { Effect, Function as Fn } from "effect";
 
-import { resolvePath } from "../../utils/paths.ts";
-import { type EventBus, createEventBus } from "../event-bus.ts";
-import { fromPromise, platformRuntime, unwrapForeign } from "../platform/index.ts";
-import { useExtensionCacheCwd } from "./loader-cache.ts";
-import { discoverExtensionPaths } from "./loader-discovery.ts";
-import { initializeExtension, loadExtension } from "./loader-extension.ts";
-import { createExtensionRuntime } from "./loader-runtime.ts";
-import type {
-  Extension,
-  ExtensionFactory,
-  ExtensionRuntime,
-  LoadExtensionsResult,
-} from "./types.ts";
+import pathsModule from "../../utils/paths.ts";
+import eventBusModule from "../event-bus.ts";
+import type eventBusTypes from "../event-bus.types.ts";
+import platform from "../platform/index.ts";
+import loaderCache from "./loader-cache.ts";
+import loaderDiscovery from "./loader-discovery.ts";
+import loaderExtension from "./loader-extension.ts";
+import loaderRuntime from "./loader-runtime.ts";
+import type extensionsTypesTypes from "./types.types.ts";
 
-export { clearExtensionCache } from "./loader-cache.ts";
-export { createExtensionRuntime } from "./loader-runtime.ts";
+const { useExtensionCacheCwd } = loaderCache;
+const { createExtensionRuntime } = loaderRuntime;
+const { createEventBus } = eventBusModule;
+const { fromPromise, unwrapForeign } = platform;
+const { initializeExtension, loadExtension } = loaderExtension;
+const { resolvePath } = pathsModule;
+const { discoverExtensionPaths } = loaderDiscovery;
 
 const loadExtensionFromFactoryImpl = (
-  factory: ExtensionFactory,
+  factory: extensionsTypesTypes.ExtensionFactory,
   cwd: string,
-  eventBus: EventBus,
-  runtime: ExtensionRuntime,
+  eventBus: eventBusTypes.EventBus,
+  runtime: extensionsTypesTypes.ExtensionRuntime,
   extensionPath = "<inline>",
-): Promise<Extension> =>
-  platformRuntime.runPromise(
+): Promise<extensionsTypesTypes.Extension> =>
+  Effect.runPromise(
     unwrapForeign(
       initializeExtension({
         cwd: resolvePath(cwd),
@@ -37,30 +38,30 @@ const loadExtensionFromFactoryImpl = (
     ),
   );
 
-export const loadExtensionFromFactory: {
+const loadExtensionFromFactory: {
   (
     cwd: string,
-    eventBus: EventBus,
-    runtime: ExtensionRuntime,
+    eventBus: eventBusTypes.EventBus,
+    runtime: extensionsTypesTypes.ExtensionRuntime,
     extensionPath?: string,
-  ): (factory: ExtensionFactory) => Promise<Extension>;
+  ): (factory: extensionsTypesTypes.ExtensionFactory) => Promise<extensionsTypesTypes.Extension>;
   (
-    factory: ExtensionFactory,
+    factory: extensionsTypesTypes.ExtensionFactory,
     cwd: string,
-    eventBus: EventBus,
-    runtime: ExtensionRuntime,
+    eventBus: eventBusTypes.EventBus,
+    runtime: extensionsTypesTypes.ExtensionRuntime,
     extensionPath?: string,
-  ): Promise<Extension>;
+  ): Promise<extensionsTypesTypes.Extension>;
 } = Fn.dual((args) => typeof args[0] === "function", loadExtensionFromFactoryImpl);
 
 const loadAll = Effect.fn("loadExtensions")(function* (input: {
   paths: string[];
   cwd: string;
-  eventBus: EventBus | undefined;
-  runtime: ExtensionRuntime | undefined;
+  eventBus: eventBusTypes.EventBus | undefined;
+  runtime: extensionsTypesTypes.ExtensionRuntime | undefined;
   useCache: boolean;
 }) {
-  const extensions: Extension[] = [];
+  const extensions: extensionsTypesTypes.Extension[] = [];
   const errors: Array<{ path: string; error: string }> = [];
   const cacheToken = input.useCache ? useExtensionCacheCwd(input.cwd) : undefined;
   const cwd = cacheToken?.cwd ?? resolvePath(input.cwd);
@@ -77,34 +78,46 @@ const loadAll = Effect.fn("loadExtensions")(function* (input: {
     if (error !== null && error !== "") errors.push({ error, path: extensionPath });
     else if (extension !== null) extensions.push(extension);
   }
-  const result: LoadExtensionsResult = { errors, extensions, runtime, warnings: [] };
+  const result: extensionsTypesTypes.LoadExtensionsResult = {
+    errors,
+    extensions,
+    runtime,
+    warnings: [],
+  };
   return result;
 });
 
-type LoadRest = [cwd: string, eventBus?: EventBus, runtime?: ExtensionRuntime];
+type LoadRest = [
+  cwd: string,
+  eventBus?: eventBusTypes.EventBus,
+  runtime?: extensionsTypesTypes.ExtensionRuntime,
+];
 
 const loadExtensionsWith =
   (useCache: boolean) =>
-  (paths: string[], ...[cwd, eventBus, runtime]: LoadRest): Promise<LoadExtensionsResult> =>
-    platformRuntime.runPromise(loadAll({ cwd, eventBus, paths, runtime, useCache }));
+  (
+    paths: string[],
+    ...[cwd, eventBus, runtime]: LoadRest
+  ): Promise<extensionsTypesTypes.LoadExtensionsResult> =>
+    Effect.runPromise(loadAll({ cwd, eventBus, paths, runtime, useCache }));
 
-export const loadExtensions: {
-  (...rest: LoadRest): (paths: string[]) => Promise<LoadExtensionsResult>;
-  (paths: string[], ...rest: LoadRest): Promise<LoadExtensionsResult>;
+const loadExtensions: {
+  (...rest: LoadRest): (paths: string[]) => Promise<extensionsTypesTypes.LoadExtensionsResult>;
+  (paths: string[], ...rest: LoadRest): Promise<extensionsTypesTypes.LoadExtensionsResult>;
 } = Fn.dual((args) => Array.isArray(args[0]), loadExtensionsWith(false));
 
-export const loadExtensionsCached: {
-  (...rest: LoadRest): (paths: string[]) => Promise<LoadExtensionsResult>;
-  (paths: string[], ...rest: LoadRest): Promise<LoadExtensionsResult>;
+const loadExtensionsCached: {
+  (...rest: LoadRest): (paths: string[]) => Promise<extensionsTypesTypes.LoadExtensionsResult>;
+  (paths: string[], ...rest: LoadRest): Promise<extensionsTypesTypes.LoadExtensionsResult>;
 } = Fn.dual((args) => Array.isArray(args[0]), loadExtensionsWith(true));
 
-type DiscoverRest = [cwd: string, agentDir?: string, eventBus?: EventBus];
+type DiscoverRest = [cwd: string, agentDir?: string, eventBus?: eventBusTypes.EventBus];
 
 const discoverAndLoadImpl = (
   configuredPaths: string[],
   ...[cwd, agentDir, eventBus]: DiscoverRest
-): Promise<LoadExtensionsResult> =>
-  platformRuntime.runPromise(
+): Promise<extensionsTypesTypes.LoadExtensionsResult> =>
+  Effect.runPromise(
     unwrapForeign(
       Effect.gen(function* () {
         const { resolvedCwd, allPaths } = yield* fromPromise(() =>
@@ -119,7 +132,23 @@ const discoverAndLoadImpl = (
     ),
   );
 
-export const discoverAndLoadExtensions: {
-  (...rest: DiscoverRest): (configuredPaths: string[]) => Promise<LoadExtensionsResult>;
-  (configuredPaths: string[], ...rest: DiscoverRest): Promise<LoadExtensionsResult>;
+const discoverAndLoadExtensions: {
+  (
+    ...rest: DiscoverRest
+  ): (configuredPaths: string[]) => Promise<extensionsTypesTypes.LoadExtensionsResult>;
+  (
+    configuredPaths: string[],
+    ...rest: DiscoverRest
+  ): Promise<extensionsTypesTypes.LoadExtensionsResult>;
 } = Fn.dual((args) => Array.isArray(args[0]), discoverAndLoadImpl);
+
+const loader = {
+  clearExtensionCache: loaderCache.clearExtensionCache,
+  createExtensionRuntime: loaderRuntime.createExtensionRuntime,
+  discoverAndLoadExtensions,
+  loadExtensionFromFactory,
+  loadExtensions,
+  loadExtensionsCached,
+};
+
+export default loader;

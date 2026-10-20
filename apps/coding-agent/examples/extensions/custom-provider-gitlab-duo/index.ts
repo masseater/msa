@@ -1,12 +1,14 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-import { loginGitLab, refreshGitLabToken } from "./auth.ts";
-import { MODELS } from "./config.ts";
-import { streamGitLabDuo } from "./stream.ts";
+import auth from "./auth.ts";
+import config from "./config.ts";
+import stream from "./stream.ts";
 
-export { MODELS, streamGitLabDuo };
+const { MODELS } = config;
+const { loginGitLab, refreshGitLabToken } = auth;
+const { streamGitLabDuo } = stream;
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerProvider("gitlab-duo", {
     api: "gitlab-duo-api",
     apiKey: "$GITLAB_TOKEN",
@@ -14,7 +16,7 @@ export default function (msa: ExtensionAPI) {
     models: MODELS.map(
       ({ id, name, reasoning, thinkingLevelMap, input, cost, contextWindow, maxTokens }) =>
         Object.assign(
-          { id, name, reasoning, input, cost, contextWindow, maxTokens },
+          { contextWindow, cost, id, input, maxTokens, name, reasoning },
           thinkingLevelMap === undefined ? {} : { thinkingLevelMap },
         ),
     ),

@@ -1,24 +1,14 @@
 import { Effect } from "effect";
 
-import { platformRuntime } from "../../platform/index.ts";
-import {
-  type Edit,
-  type EditDiffError,
-  type EditDiffResult,
-  computeEditsDiff,
-} from "../edit-diff.ts";
+import editDiff from "../edit-diff.ts";
+import type editDiffTypes from "../edit-diff.types.ts";
+import type editPreviewInputTypes from "./edit-preview-input.types.ts";
 
-export type RenderableEditArgs = {
-  path?: string;
-  file_path?: string;
-  edits?: Edit[];
-  oldText?: string;
-  newText?: string;
-};
+const { computeEditsDiff } = editDiff;
 
-export function getRenderablePreviewInput(
-  args: RenderableEditArgs | undefined,
-): { path: string; edits: Edit[] } | null {
+function getRenderablePreviewInput(
+  args: editPreviewInputTypes.RenderableEditArgs | undefined,
+): { path: string; edits: editDiffTypes.Edit[] } | null {
   if (args === undefined) {
     return null;
   }
@@ -44,23 +34,28 @@ export function getRenderablePreviewInput(
   }
 
   if (typeof args.oldText === "string" && typeof args.newText === "string") {
-    return { edits: [{ oldText: args.oldText, newText: args.newText }], path };
+    return { edits: [{ newText: args.newText, oldText: args.oldText }], path };
   }
 
   return null;
 }
 
-export interface EditPreviewRequest {
-  path: string;
-  edits: Edit[];
-  cwd: string;
-  onPreview: (preview: EditDiffResult | EditDiffError) => void;
-}
-
-export function requestEditPreview({ path, edits, cwd, onPreview }: EditPreviewRequest): void {
-  platformRuntime.runFork(
+function requestEditPreview({
+  path,
+  edits,
+  cwd,
+  onPreview,
+}: editPreviewInputTypes.EditPreviewRequest): void {
+  Effect.runFork(
     Effect.promise(() => computeEditsDiff(path, edits, cwd)).pipe(
       Effect.andThen((preview) => Effect.sync(() => onPreview(preview))),
     ),
   );
 }
+
+const editPreviewInput = {
+  getRenderablePreviewInput,
+  requestEditPreview,
+};
+
+export default editPreviewInput;

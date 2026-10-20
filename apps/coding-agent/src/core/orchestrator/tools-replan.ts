@@ -1,10 +1,13 @@
 import modelSchemaModule from "@msa/ai/providers/model-schema";
 import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import type { Orchestrator } from "./orchestrator.ts";
-import { prompts } from "./prompts.ts";
-import { modelSchema, taskIdSchema, tool } from "./tool-support.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import promptsModule from "./prompts.ts";
+import toolSupport from "./tool-support.ts";
+
+const { modelSchema, taskIdSchema, tool } = toolSupport;
+const { prompts } = promptsModule;
 
 const { ModelThinkingLevelSchema } = modelSchemaModule;
 
@@ -49,7 +52,7 @@ const replanTaskSchema = Type.Object({
 
 const replanSchema = Type.Object({
   drop: Type.Optional(
-    Type.Array(Type.Object({ taskId: taskIdSchema, reason: Type.String() }), {
+    Type.Array(Type.Object({ reason: Type.String(), taskId: taskIdSchema }), {
       description: "Tasks closed without a successor.",
     }),
   ),
@@ -60,7 +63,7 @@ const replanSchema = Type.Object({
     }),
   ),
   maxConcurrentThreads: Type.Optional(
-    Type.Integer({ minimum: 1, description: "Threads that may run at the same time." }),
+    Type.Integer({ description: "Threads that may run at the same time.", minimum: 1 }),
   ),
   reason: Type.String({
     description: "Why the plan changes. Shown in the tasks view and on every task this closes.",
@@ -73,8 +76,8 @@ const replanSchema = Type.Object({
   rewire: Type.Optional(
     Type.Array(
       Type.Object({
-        taskId: taskIdSchema,
         dependsOn: Type.Array(Type.String(), { description: "Task ids or keys." }),
+        taskId: taskIdSchema,
       }),
       { description: "Replaces the dependencies of a kept task." },
     ),
@@ -88,7 +91,9 @@ const replanSchema = Type.Object({
   tasks: Type.Optional(Type.Array(replanTaskSchema, { description: "The new plan." })),
 });
 
-export function replanTools(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function replanTools(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     replan: tool({
       description:
@@ -107,3 +112,9 @@ export function replanTools(orchestrator: Orchestrator): Record<string, ToolDefi
     }),
   };
 }
+
+const toolsReplan = {
+  replanTools,
+};
+
+export default toolsReplan;

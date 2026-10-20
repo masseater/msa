@@ -1,5 +1,5 @@
 import ai from "@msa/ai";
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
@@ -21,7 +21,7 @@ const harnesses: harnessTypes.Harness[] = [];
 const treatsExtensionOriginQueuedSlashCommandStep1 = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    let extensionApi: ExtensionAPI | undefined;
+    let extensionApi: codingAgentTypes.ExtensionAPI | undefined;
     const commandRuns: string[] = [];
     const toolRelease = gate();
     const waitTool = makeWaitTool(toolRelease);

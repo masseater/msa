@@ -4,12 +4,16 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
-import { redactJsonValue, redactUrl } from "../src/core/bug-report.ts";
-import { reportBug } from "../src/modes/interactive/bug-report.ts";
-import { ExtensionEditorComponent } from "../src/modes/interactive/components/extension-editor.ts";
-import { ExtensionSelectorComponent } from "../src/modes/interactive/components/extension-selector.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import bugReportModule from "../src/core/bug-report.ts";
+import bugReport from "../src/modes/interactive/bug-report.ts";
+import components from "../src/modes/interactive/components/index.ts";
 import editorSlotUi from "./editor-slot-ui.ts";
+
+const { ExtensionEditorComponent, ExtensionSelectorComponent } = components;
+
+const { reportBug } = bugReport;
+const { redactJsonValue, redactUrl } = bugReportModule;
 
 const { stripTerminalSequences } = tui;
 
@@ -55,7 +59,7 @@ const startReport = () => {
   const session = {
     model: undefined,
     settingsManager: { getExternalEditorCommand: () => "nano" },
-  } as unknown as AgentSession;
+  } as unknown as agentSessionTypes.AgentSession;
   const showStatus = vi.fn();
   const report = reportBug({
     editorSlot,

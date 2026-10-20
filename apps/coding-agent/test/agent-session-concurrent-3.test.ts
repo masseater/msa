@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../src/core/agent-session.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import agentSessionConcurrentSupport from "./agent-session-concurrent-support.ts";
 import sessionKit from "./session-kit.ts";
 
@@ -14,7 +14,7 @@ const { dummyCall, dummyTool, installExtensionRunner, toolCallResponder } =
 
 let tempDir = "";
 
-let session: AgentSession | undefined;
+let session: agentSessionTypes.AgentSession | undefined;
 
 const shouldPersistMessageEndEventsInOrder = () =>
   runTest(

@@ -3,10 +3,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import InteractiveMode from "../../../src/modes/interactive/interactive-mode.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
-
 const { createHarness } = harnessModule;
 
 const { neverPromise } = testing;

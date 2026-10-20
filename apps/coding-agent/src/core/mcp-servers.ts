@@ -1,3 +1,5 @@
+import type mcpServersTypes from "./mcp-servers.types.ts";
+
 function toolPatternRegExp(pattern: string): RegExp {
   const source = pattern
     .split("*")
@@ -5,70 +7,33 @@ function toolPatternRegExp(pattern: string): RegExp {
     .join(".*");
   return new RegExp(`^${source}$`, "u");
 }
-
-export function createToolNameMatcher(entries: readonly string[]): (name: string) => boolean {
+function createToolNameMatcher(entries: readonly string[]): (name: string) => boolean {
   const names = new Set(entries.filter((entry) => !entry.includes("*")));
   const patterns = entries.filter((entry) => entry.includes("*")).map(toolPatternRegExp);
   return (name) => names.has(name) || patterns.some((pattern) => pattern.test(name));
 }
-
-export const LIST_MCP_RESOURCES_TOOL = "list_mcp_resources";
-export const LIST_MCP_RESOURCE_TEMPLATES_TOOL = "list_mcp_resource_templates";
-export const READ_MCP_RESOURCE_TOOL = "read_mcp_resource";
-
+const LIST_MCP_RESOURCES_TOOL = "list_mcp_resources";
+const LIST_MCP_RESOURCE_TEMPLATES_TOOL = "list_mcp_resource_templates";
+const READ_MCP_RESOURCE_TOOL = "read_mcp_resource";
 const MCP_RESOURCE_TOOLS: ReadonlySet<string> = new Set([
   LIST_MCP_RESOURCES_TOOL,
   LIST_MCP_RESOURCE_TEMPLATES_TOOL,
   READ_MCP_RESOURCE_TOOL,
 ]);
-
-export function isMcpToolName(name: string): boolean {
+function isMcpToolName(name: string): boolean {
   return name.startsWith("mcp__") || MCP_RESOURCE_TOOLS.has(name);
 }
-
-export type McpExposure = "codemode" | "deferred" | "direct" | "hidden";
-
 const MCP_EXPOSURES: readonly string[] = [
   "codemode",
   "deferred",
   "direct",
   "hidden",
-] satisfies McpExposure[];
-
-const MCP_EXPOSURE_ALIASES: Readonly<Record<string, McpExposure>> = {
+] satisfies mcpServersTypes.McpExposure[];
+const MCP_EXPOSURE_ALIASES: Readonly<Record<string, mcpServersTypes.McpExposure>> = {
   "codemode-deferred": "codemode",
 };
-
-interface McpServerConfigBase {
-  exposure?: McpExposure;
-  description?: string;
-  toolExposure?: Record<string, McpExposure>;
-  enabled?: boolean;
-  timeout?: number;
-}
-
-export interface McpStdioServerConfig extends McpServerConfigBase {
-  type?: "stdio";
-  command: string;
-  args?: string[];
-  env?: Record<string, string>;
-  cwd?: string;
-}
-
-export interface McpOAuthConfig {
-  clientId?: string;
-  clientSecret?: string;
-  callbackPort?: number;
-  callbackUrl?: string;
-  scope?: string;
-  clientName?: string;
-  clientRegistration?: "dcr" | "cimd";
-  authServerMetadataUrl?: string;
-}
-
 const LOOPBACK_HOSTS = ["localhost", "127.0.0.1", "[::1]"];
-
-export function isLoopbackRedirectUri(value: string): boolean {
+function isLoopbackRedirectUri(value: string): boolean {
   if (!URL.canParse(value)) return false;
   const url = new URL(value);
   return (
@@ -78,31 +43,16 @@ export function isLoopbackRedirectUri(value: string): boolean {
     url.hash === ""
   );
 }
-
-export interface McpHttpServerConfig extends McpServerConfigBase {
-  type?: "http";
-  url: string;
-  headers?: Record<string, string>;
-  oauth?: McpOAuthConfig;
-  auth?: { provider: string };
-}
-
-export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;
-
 const SERVER_NAME = /^[A-Za-z0-9_-]+$/u;
-
-export function mcpNamespace(server: string): string {
+function mcpNamespace(server: string): string {
   return `mcp__${server.replace(/-/gu, "_")}`;
 }
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-
 function isStringRecord(value: unknown): value is Record<string, string> {
   return isRecord(value) && Object.values(value).every((entry) => typeof entry === "string");
 }
-
 function validateOAuth(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (!isRecord(value)) return "oauth must be an object";
@@ -168,15 +118,12 @@ function validateOAuth(value: unknown): string | undefined {
   }
   return undefined;
 }
-
-function isExposure(value: unknown): value is McpExposure {
+function isExposure(value: unknown): value is mcpServersTypes.McpExposure {
   return typeof value === "string" && MCP_EXPOSURES.includes(value);
 }
-
 function resolveExposureAlias(value: unknown): unknown {
   return typeof value === "string" ? (MCP_EXPOSURE_ALIASES[value] ?? value) : value;
 }
-
 function resolveExposureAliases(value: Record<string, unknown>): Record<string, unknown> {
   const { exposure, toolExposure } = value;
   const resolved: Record<string, unknown> = { ...value };
@@ -188,8 +135,10 @@ function resolveExposureAliases(value: Record<string, unknown>): Record<string, 
   }
   return resolved;
 }
-
-export function getMcpToolExposure(config: McpServerConfig, toolName: string): McpExposure {
+function getMcpToolExposure(
+  config: mcpServersTypes.McpServerConfig,
+  toolName: string,
+): mcpServersTypes.McpExposure {
   const overrides = config.toolExposure ?? {};
   const exact = overrides[toolName];
   if (exact !== undefined) return exact;
@@ -198,8 +147,10 @@ export function getMcpToolExposure(config: McpServerConfig, toolName: string): M
   }
   return config.exposure ?? "codemode";
 }
-
-export function validateMcpServerConfig(name: string, raw: unknown): McpServerConfig | string {
+function validateMcpServerConfig(
+  name: string,
+  raw: unknown,
+): mcpServersTypes.McpServerConfig | string {
   if (!SERVER_NAME.test(name))
     return `invalid server name "${name}" (use letters, digits, "_" and "-")`;
   if (!isRecord(raw)) return `server "${name}" must be an object`;
@@ -253,7 +204,7 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
         return `server "${name}": auth requires an https URL, or http on localhost, 127.0.0.1, or [::1]`;
       }
     }
-    return value as unknown as McpHttpServerConfig;
+    return value as unknown as mcpServersTypes.McpHttpServerConfig;
   }
   if (typeof value["command"] === "string" && (type === undefined || type === "stdio")) {
     if (
@@ -266,43 +217,21 @@ export function validateMcpServerConfig(name: string, raw: unknown): McpServerCo
       return `server "${name}": env must map names to strings`;
     if (value["cwd"] !== undefined && typeof value["cwd"] !== "string")
       return `server "${name}": cwd must be a string`;
-    return value as unknown as McpStdioServerConfig;
+    return value as unknown as mcpServersTypes.McpStdioServerConfig;
   }
   return `server "${name}" needs either "command" (stdio) or "url" (streamable HTTP)`;
 }
 
-export interface RegisteredMcpServer {
-  name: string;
-  config: McpServerConfig;
-  extensionPath: string;
-}
+const mcpServers = {
+  LIST_MCP_RESOURCES_TOOL,
+  LIST_MCP_RESOURCE_TEMPLATES_TOOL,
+  READ_MCP_RESOURCE_TOOL,
+  createToolNameMatcher,
+  getMcpToolExposure,
+  isLoopbackRedirectUri,
+  isMcpToolName,
+  mcpNamespace,
+  validateMcpServerConfig,
+};
 
-export class McpServerRegistry {
-  private readonly servers = new Map<string, RegisteredMcpServer>();
-  private changeListener: (() => void) | undefined;
-
-  register(server: RegisteredMcpServer): void {
-    this.servers.set(server.name, server);
-    this.changeListener?.();
-  }
-
-  unregister(name: string, extensionPath: string): void {
-    if (this.servers.get(name)?.extensionPath !== extensionPath) return;
-    this.servers.delete(name);
-    this.changeListener?.();
-  }
-
-  get(name: string): RegisteredMcpServer | undefined {
-    return this.servers.get(name);
-  }
-
-  list(): RegisteredMcpServer[] {
-    return [...this.servers.values()].map((server) =>
-      Object.assign({}, server, { config: structuredClone(server.config) }),
-    );
-  }
-
-  setChangeListener(listener: (() => void) | undefined): void {
-    this.changeListener = listener;
-  }
-}
+export default mcpServers;

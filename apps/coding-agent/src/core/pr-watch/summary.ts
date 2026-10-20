@@ -1,8 +1,11 @@
-import type { PrWatchSnapshot } from "./service.ts";
-import { type PrSnapshot, isBehind, isConflicting } from "./snapshot.ts";
-import type { PrWatchEntry } from "./watch.ts";
+import type serviceTypes from "./service.types.ts";
+import snapshotModule from "./snapshot.ts";
+import type snapshotTypes from "./snapshot.types.ts";
+import type watchTypes from "./watch.types.ts";
 
-export const CI_STALL_MS = 10 * 60_000;
+const { isBehind, isConflicting } = snapshotModule;
+
+const CI_STALL_MS = 10 * 60_000;
 
 function formatElapsed(ms: number): string {
   const totalSeconds = Math.max(0, Math.round(ms / 1000));
@@ -25,13 +28,13 @@ function reviewLabel(reviewDecision: string): string | undefined {
   }
 }
 
-function behindLabel(snapshot: PrSnapshot): string {
+function behindLabel(snapshot: snapshotTypes.PrSnapshot): string {
   const behind = snapshot.behindBy;
   if (behind === undefined || behind === 0) return "base moved ahead";
   return `base ${behind} behind`;
 }
 
-function checksLabel(entry: PrWatchEntry, now: number): string {
+function checksLabel(entry: watchTypes.PrWatchEntry, now: number): string {
   const checks = entry.snapshot?.checks;
   if (checks === undefined || checks.total === 0) return "no checks";
   if (checks.pending > 0) {
@@ -45,7 +48,7 @@ function checksLabel(entry: PrWatchEntry, now: number): string {
   return "CI passed";
 }
 
-function isStalled(entry: PrWatchEntry, now: number): boolean {
+function isStalled(entry: watchTypes.PrWatchEntry, now: number): boolean {
   return (
     entry.pendingSince !== undefined &&
     (entry.snapshot?.checks.pending ?? 0) > 0 &&
@@ -53,7 +56,7 @@ function isStalled(entry: PrWatchEntry, now: number): boolean {
   );
 }
 
-export function describeWatchStatus(entry: PrWatchEntry, now: number): string | undefined {
+function describeWatchStatus(entry: watchTypes.PrWatchEntry, now: number): string | undefined {
   const snapshot = entry.snapshot;
   if (entry.error !== undefined) return undefined;
   if (snapshot === undefined) return "no read from gh yet";
@@ -73,7 +76,7 @@ export function describeWatchStatus(entry: PrWatchEntry, now: number): string | 
   return `${parts.join(", ")}${stalled}`;
 }
 
-export function describePrWatchState(entry: PrWatchEntry): string {
+function describePrWatchState(entry: watchTypes.PrWatchEntry): string {
   if (entry.error !== undefined) return "gh error";
   const snapshot = entry.snapshot;
   if (snapshot === undefined) return "waiting for gh";
@@ -92,7 +95,7 @@ export function describePrWatchState(entry: PrWatchEntry): string {
   return "open";
 }
 
-export function describePrWatchIndicator(snapshot: PrWatchSnapshot): string | undefined {
+function describePrWatchIndicator(snapshot: serviceTypes.PrWatchSnapshot): string | undefined {
   if (snapshot.entries.length === 0) return undefined;
   const watching = snapshot.entries
     .map((entry) => `${entry.label} ${describePrWatchState(entry)}`)
@@ -102,7 +105,7 @@ export function describePrWatchIndicator(snapshot: PrWatchSnapshot): string | un
   return `PR ${watching} · last ${last.target} ${last.change}`;
 }
 
-export function describePrWatchStatus(snapshot: PrWatchSnapshot): string[] {
+function describePrWatchStatus(snapshot: serviceTypes.PrWatchSnapshot): string[] {
   if (snapshot.entries.length === 0) return ["No pull requests watched"];
   const count = snapshot.entries.length;
   const lines = [`Watching ${count} pull request${count === 1 ? "" : "s"}`];
@@ -115,3 +118,13 @@ export function describePrWatchStatus(snapshot: PrWatchSnapshot): string[] {
   }
   return lines;
 }
+
+const summary = {
+  CI_STALL_MS,
+  describePrWatchIndicator,
+  describePrWatchState,
+  describePrWatchStatus,
+  describeWatchStatus,
+};
+
+export default summary;

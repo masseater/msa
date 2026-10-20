@@ -1,10 +1,14 @@
 import hljs from "highlight.js/lib/core.js";
 
-import { cLanguages } from "./highlight-c.ts";
-import { otherLanguages } from "./highlight-other.ts";
-import { scriptLanguages } from "./highlight-script.ts";
+import highlightC from "./highlight-c.ts";
+import highlightOther from "./highlight-other.ts";
+import highlightScript from "./highlight-script.ts";
 
-export const eagerLanguages = {
+const { cLanguages } = highlightC;
+const { scriptLanguages } = highlightScript;
+const { otherLanguages } = highlightOther;
+
+const eagerLanguages = {
   ...cLanguages,
   ...scriptLanguages,
   ...otherLanguages,
@@ -14,4 +18,11 @@ for (const [name, language] of Object.entries(eagerLanguages)) {
   hljs.registerLanguage(name, language);
 }
 
-export const highlightJs = hljs;
+const highlightJs = hljs;
+
+const highlightLanguages = {
+  eagerLanguages,
+  highlightJs,
+};
+
+export default highlightLanguages;

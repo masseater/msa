@@ -16,7 +16,9 @@ vi.mock("child_process", (importOriginal) =>
 
 import testing from "@msa/testing";
 
-import { killProcessTree } from "../../../src/utils/shell.ts";
+import shell from "../../../src/utils/shell.ts";
+
+const { killProcessTree } = shell;
 
 const { joinPath } = testing;
 

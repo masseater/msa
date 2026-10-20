@@ -3,25 +3,20 @@ import { gunzipSync } from "node:zlib";
 
 import { NodeServices } from "@effect/platform-node";
 import env from "@msa/ai/utils/env";
-import { Data, Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect";
+import { Effect, FileSystem, Layer, ManagedRuntime, Path } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
+
+import WadDownloadError from "./wad-download-error.ts";
 
 const { readProcessEnv } = env;
 
 const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, FetchHttpClient.layer));
 const pathService = runtime.runSync(Path.Path);
 const fsService = runtime.runSync(FileSystem.FileSystem);
-
 const here = fileURLToPath(new URL(".", import.meta.url));
 const BUNDLED_WAD = pathService.join(here, "doom1.wad");
 const WAD_URL = "https://www.gamers.org/pub/idgames/idstuff/doom/doom-1.8.wad.gz";
-
 const DEFAULT_WAD_PATHS = ["./doom1.wad", "./DOOM1.WAD", "~/doom1.wad", "~/.doom/doom1.wad"];
-
-class WadDownloadError extends Data.TaggedError("WadDownloadError")<{
-  readonly message: string;
-}> {}
-
 const expandHome = (path: string): string =>
   pathService.resolve(path.replace(/^~/u, readProcessEnv("HOME") || ""));
 
@@ -59,7 +54,7 @@ const downloadWad = Effect.gen(function* () {
   return BUNDLED_WAD;
 });
 
-export const ensureWadFile = (): Promise<string | null> =>
+const ensureWadFile = (): Promise<string | null> =>
   runtime.runPromise(
     Effect.gen(function* () {
       const existing = yield* findWadFile();
@@ -67,3 +62,10 @@ export const ensureWadFile = (): Promise<string | null> =>
       return yield* downloadWad.pipe(Effect.orElseSucceed(() => null));
     }),
   );
+
+const wadFinder = {
+  ensureWadFile,
+  findWadFile,
+};
+
+export default wadFinder;

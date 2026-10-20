@@ -1,7 +1,7 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-export default function pirateExtension(msa: ExtensionAPI) {
+export default function pirateExtension(msa: codingAgentTypes.ExtensionAPI) {
   let pirateMode = false;
 
   msa.registerCommand("pirate", {

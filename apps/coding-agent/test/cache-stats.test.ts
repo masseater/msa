@@ -2,17 +2,15 @@ import type aiTypes from "@msa/ai/index.types";
 import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type ModelPriceSource,
-  collectCacheMisses,
-  computeCacheWaste,
-  detectCacheMiss,
-} from "../src/core/cache-stats.ts";
-import type { SessionEntry } from "../src/core/session-manager.ts";
+import cacheStats from "../src/core/cache-stats.ts";
+import type cacheStatsTypes from "../src/core/cache-stats.types.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+
+const { collectCacheMisses, computeCacheWaste, detectCacheMiss } = cacheStats;
 
 const zeroCost = { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 };
 
-const models: ModelPriceSource = {
+const models: cacheStatsTypes.ModelPriceSource = {
   getModel: () => ({ cost: { cacheRead: 0.3 } }),
 };
 
@@ -43,11 +41,17 @@ function assistant(options: {
   } as aiTypes.AssistantMessage;
 }
 
-function entry(message: aiTypes.AssistantMessage): SessionEntry {
-  return { id: "x", message, parentId: null, timestamp: "", type: "message" } as SessionEntry;
+function entry(message: aiTypes.AssistantMessage): sessionManagerTypes.SessionEntry {
+  return {
+    id: "x",
+    message,
+    parentId: null,
+    timestamp: "",
+    type: "message",
+  } as sessionManagerTypes.SessionEntry;
 }
 
-function usageEntry(kind: string, timestamp: number): SessionEntry {
+function usageEntry(kind: string, timestamp: number): sessionManagerTypes.SessionEntry {
   return {
     id: `usage-${kind}`,
     kind,
@@ -95,7 +99,12 @@ const countsNothingForHealthySessions = () => {
 };
 
 const skipsTheTurnAfterACompactionReset = () => {
-  const reset = { id: "c", parentId: null, timestamp: "", type: "compaction" } as SessionEntry;
+  const reset = {
+    id: "c",
+    parentId: null,
+    timestamp: "",
+    type: "compaction",
+  } as sessionManagerTypes.SessionEntry;
   const afterReset = assistant({ cacheWrite: 20_000, cost: { cacheWrite: 0.075 } });
   const totals = computeCacheWaste([entry(turn1), reset, entry(afterReset)], models);
   expect(totals.missedTokens).toBe(0);

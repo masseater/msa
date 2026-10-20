@@ -3,12 +3,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { ModelRuntime } from "../../../src/core/model-runtime.ts";
+import AuthStorage from "../../../src/core/auth-storage.ts";
+import ModelRuntime from "../../../src/core/model-runtime.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import CredentialRefreshHangSupport from "./7027-credential-refresh-hang-support.ts";
-
 const { complete } = CredentialRefreshHangSupport;
 
 const { createHarness } = harnessModule;

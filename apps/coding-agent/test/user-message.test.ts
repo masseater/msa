@@ -1,8 +1,11 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { UserMessageComponent } from "../src/modes/interactive/components/user-message.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import UserMessageComponent from "../src/modes/interactive/components/user-message.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { initTheme } = themeModule;
+const { stripAnsi } = ansi;
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";

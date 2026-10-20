@@ -2,9 +2,11 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { toJsonEvent } from "../../../src/modes/json-event.ts";
+import jsonEvent from "../../../src/modes/json-event.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { toJsonEvent } = jsonEvent;
 
 const { fauxAssistantMessage } = ai;
 

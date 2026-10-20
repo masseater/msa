@@ -1,13 +1,11 @@
 import tui from "@msa/tui";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  detectColorFgBgTheme,
-  detectTerminalTheme,
-  getThemeByName,
-  parseAutoThemeSetting,
-  resolveThemeSetting,
-} from "../src/modes/interactive/theme/theme.ts";
+import terminalColors from "../src/modes/interactive/theme/terminal-colors.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { getThemeByName, parseAutoThemeSetting, resolveThemeSetting } = themeModule;
+const { detectColorFgBgTheme, detectTerminalTheme } = terminalColors;
 
 const { resetCapabilitiesCache, setCapabilities } = tui;
 

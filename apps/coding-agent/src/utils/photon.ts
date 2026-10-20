@@ -3,13 +3,14 @@ import { fileURLToPath } from "url";
 
 import * as Effect from "effect/Effect";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { dirname, join } from "../core/platform-node.ts";
+import awaitingModule from "../core/awaiting.ts";
+import platformNode from "../core/platform-node.ts";
+
+const { dirname, join } = platformNode;
+const { awaited, awaiting } = awaitingModule;
 
 const require = createRequire(import.meta.url);
 const fs = require("fs") as typeof import("fs");
-
-export type { PhotonImage as PhotonImageType } from "@silvia-odwyer/photon-node";
 
 type ReadFileSync = typeof fs.readFileSync;
 type PathOrFileDescriptor = Parameters<ReadFileSync>[0];
@@ -96,7 +97,7 @@ function patchPhotonWasmRead(): () => void {
   };
 }
 
-export function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
+function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {
   return Effect.runPromise(
     awaiting(function* () {
       if (photonModule !== null) {
@@ -127,3 +128,9 @@ export function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node"
     }),
   );
 }
+
+const photon = {
+  loadPhoton,
+};
+
+export default photon;

@@ -2,8 +2,8 @@ import type aiTypes from "@msa/ai/index.types";
 import type tuiTypes from "@msa/tui/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AgentSessionEvent } from "../src/core/agent-session.ts";
-import { ProgramStatusReporter } from "../src/modes/interactive/program-status-reporter.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import ProgramStatusReporter from "../src/modes/interactive/program-status-reporter.ts";
 
 function setup(sessionName?: string) {
   const reports: tuiTypes.ProgramStatus[] = [];
@@ -15,7 +15,7 @@ function setup(sessionName?: string) {
     () => terminal,
     () => session.name,
   );
-  const send = (...events: AgentSessionEvent[]) => {
+  const send = (...events: agentSessionTypes.AgentSessionEvent[]) => {
     for (const event of events) reporter.handleEvent(event);
   };
   const last = () => {
@@ -28,7 +28,7 @@ function setup(sessionName?: string) {
 function assistantEnd(
   stopReason: aiTypes.AssistantMessage["stopReason"],
   errorMessage?: string,
-): AgentSessionEvent {
+): agentSessionTypes.AgentSessionEvent {
   const message = {
     content: [{ text: "secret assistant output", type: "text" }],
     errorMessage,
@@ -38,12 +38,12 @@ function assistantEnd(
   return { message, type: "message_end" };
 }
 
-const settled: AgentSessionEvent = { aborted: false, type: "agent_settled" };
+const settled: agentSessionTypes.AgentSessionEvent = { aborted: false, type: "agent_settled" };
 
 const compactionEnd = (
   reason: "manual" | "threshold" | "overflow",
   options: { aborted?: boolean; errorMessage?: string } = {},
-): AgentSessionEvent => ({
+): agentSessionTypes.AgentSessionEvent => ({
   aborted: options.aborted ?? false,
   reason,
   result: undefined,
@@ -180,7 +180,7 @@ describe("ProgramStatusReporter", () => {
     const { reporter, reports, session, send, last } = setup("Old");
     send(
       { type: "agent_start" },
-      { type: "turn_start" } as AgentSessionEvent,
+      { type: "turn_start" } as agentSessionTypes.AgentSessionEvent,
       assistantEnd("toolUse"),
     );
     reporter.report();

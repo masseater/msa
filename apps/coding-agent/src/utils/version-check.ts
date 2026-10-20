@@ -2,19 +2,21 @@ import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 import { compare, valid } from "semver";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { readEnv } from "../core/platform.ts";
-import { fetchWithRetry } from "./management-http.ts";
-import { getMsaUserAgent } from "./user-agent.ts";
+import awaitingModule from "../core/awaiting.ts";
+import platform from "../core/platform.ts";
+import managementHttp from "./management-http.ts";
+import userAgent from "./user-agent.ts";
+import type versionCheckTypes from "./version-check.types.ts";
+
+const { awaited, awaiting } = awaitingModule;
+const { readEnv } = platform;
+const { fetchWithRetry } = managementHttp;
+const { getMsaUserAgent } = userAgent;
 
 const LATEST_RELEASE_URL = "https://api.github.com/repos/masseater/msa/releases/latest";
 const DEFAULT_VERSION_CHECK_TIMEOUT_MS = 10000;
 
-export interface LatestMsaRelease {
-  version: string;
-}
-
-export function formatVersionCheckError(error: unknown): string {
+function formatVersionCheckError(error: unknown): string {
   const rootMessage =
     error instanceof Error && error.message !== "" ? error.message : String(error);
   const cause = error instanceof Error ? error.cause : undefined;
@@ -49,7 +51,7 @@ function comparePackageVersionsImpl(leftVersion: string, rightVersion: string): 
   return compare(left, right);
 }
 
-export const comparePackageVersions: {
+const comparePackageVersions: {
   (leftVersion: string, rightVersion: string): number | undefined;
   (rightVersion: string): (leftVersion: string) => number | undefined;
 } = dual((args: IArguments) => args.length >= 2, comparePackageVersionsImpl);
@@ -62,7 +64,7 @@ function isNewerPackageVersionImpl(candidateVersion: string, currentVersion: str
   return candidateVersion.trim() !== currentVersion.trim();
 }
 
-export const isNewerPackageVersion: {
+const isNewerPackageVersion: {
   (candidateVersion: string, currentVersion: string): boolean;
   (currentVersion: string): (candidateVersion: string) => boolean;
 } = dual((args: IArguments) => args.length >= 2, isNewerPackageVersionImpl);
@@ -70,7 +72,7 @@ export const isNewerPackageVersion: {
 function getLatestMsaReleaseImpl(
   currentVersion: string,
   options: { timeoutMs?: number; retry?: boolean } = {},
-): Promise<LatestMsaRelease | undefined> {
+): Promise<versionCheckTypes.LatestMsaRelease | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       if (readEnv("MSA_OFFLINE") !== undefined && readEnv("MSA_OFFLINE") !== "") return undefined;
@@ -100,20 +102,20 @@ function getLatestMsaReleaseImpl(
   );
 }
 
-export const getLatestMsaRelease: {
+const getLatestMsaRelease: {
   (
     currentVersion: string,
     options?: { timeoutMs?: number; retry?: boolean },
-  ): Promise<LatestMsaRelease | undefined>;
+  ): Promise<versionCheckTypes.LatestMsaRelease | undefined>;
   (options?: {
     timeoutMs?: number;
     retry?: boolean;
-  }): (currentVersion: string) => Promise<LatestMsaRelease | undefined>;
+  }): (currentVersion: string) => Promise<versionCheckTypes.LatestMsaRelease | undefined>;
 } = dual((args: IArguments) => args.length >= 1, getLatestMsaReleaseImpl);
 
-export function checkForNewMsaVersion(
+function checkForNewMsaVersion(
   currentVersion: string,
-): Promise<LatestMsaRelease | undefined> {
+): Promise<versionCheckTypes.LatestMsaRelease | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       if (
@@ -137,3 +139,13 @@ export function checkForNewMsaVersion(
     }),
   );
 }
+
+const versionCheck = {
+  checkForNewMsaVersion,
+  comparePackageVersions,
+  formatVersionCheckError,
+  getLatestMsaRelease,
+  isNewerPackageVersion,
+};
+
+export default versionCheck;

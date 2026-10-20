@@ -1,6 +1,10 @@
 import tui from "@msa/tui";
 
-import { type Cell, type GameState, getCell, getWinLine } from "./tic-tac-toe-game.ts";
+import ticTacToeGame from "./tic-tac-toe-game.ts";
+import type ticTacToeGameTypes from "./tic-tac-toe-game.types.ts";
+import type ticTacToeRenderTypes from "./tic-tac-toe-render.types.ts";
+
+const { getCell, getWinLine } = ticTacToeGame;
 
 const { truncateToWidth, visibleWidth } = tui;
 
@@ -17,7 +21,7 @@ const GLYPH_O = "\u25ef";
 const DIM = (s: string) => `\x1b[2m${s}\x1b[22m`;
 const RESET = "\x1b[0m";
 
-export function centerPad(request: { readonly content: string; readonly width: number }): string {
+function centerPad(request: { readonly content: string; readonly width: number }): string {
   const { content, width } = request;
   const contentLen = visibleWidth(content);
   if (contentLen >= width) return truncateToWidth(content, width);
@@ -26,14 +30,14 @@ export function centerPad(request: { readonly content: string; readonly width: n
   return " ".repeat(left) + content + " ".repeat(pad - left);
 }
 
-function cellFgCode(cell: Cell, isWin: boolean): string | undefined {
+function cellFgCode(cell: ticTacToeGameTypes.Cell, isWin: boolean): string | undefined {
   if (cell === " ") return undefined;
   if (isWin) return FG_CODE_WIN;
   return cell === "X" ? FG_CODE_X : FG_CODE_O;
 }
 
 function buildCellContent(request: {
-  readonly mark: Cell;
+  readonly mark: ticTacToeGameTypes.Cell;
   readonly lineIdx: number;
   readonly isWin: boolean;
 }): string {
@@ -52,7 +56,9 @@ function buildCellContent(request: {
   return `${" ".repeat(leftPad)}\x1b[${fg};1m${glyph}${RESET}${" ".repeat(rightPad)}`;
 }
 
-function borderFgCode(adjacent: ReadonlyArray<{ cell: Cell; isWin: boolean }>): string | undefined {
+function borderFgCode(
+  adjacent: ReadonlyArray<{ cell: ticTacToeGameTypes.Cell; isWin: boolean }>,
+): string | undefined {
   const fgs = adjacent
     .map((a) => cellFgCode(a.cell, a.isWin))
     .filter((f): f is string => f !== undefined && f.length > 0);
@@ -61,15 +67,8 @@ function borderFgCode(adjacent: ReadonlyArray<{ cell: Cell; isWin: boolean }>): 
   return fgs.every((f) => f === first) ? first : undefined;
 }
 
-export interface BoardRenderOpts {
-  board: Cell[][];
-  maxWidth: number;
-
-  cursor?: { row: number; col: number; owner: "user" | "agent" } | undefined;
-}
-
 interface RenderContext {
-  readonly board: Cell[][];
+  readonly board: ticTacToeGameTypes.Cell[][];
   readonly maxWidth: number;
   readonly showCursor: boolean;
   readonly row: number;
@@ -118,7 +117,7 @@ const cornerChar = (gridR: number, gridC: number): string => {
 };
 
 const cornerAdjacent = (ctx: RenderContext, gridR: number, gridC: number) => {
-  const out: { cell: Cell; isWin: boolean }[] = [];
+  const out: { cell: ticTacToeGameTypes.Cell; isWin: boolean }[] = [];
   for (const [dr, dc] of [
     [-1, -1],
     [-1, 0],
@@ -144,7 +143,7 @@ const horizontalRow = (ctx: RenderContext, gridR: number): string => {
     );
     if (gridC >= 3) continue;
 
-    const adj: { cell: Cell; isWin: boolean }[] = [];
+    const adj: { cell: ticTacToeGameTypes.Cell; isWin: boolean }[] = [];
     if (gridR > 0) adj.push(cellAt(ctx, gridR - 1, gridC));
     if (gridR < 3) adj.push(cellAt(ctx, gridR, gridC));
     row += paintBorder(
@@ -160,7 +159,7 @@ const horizontalRow = (ctx: RenderContext, gridR: number): string => {
 const cellRows = (ctx: RenderContext, gridR: number, lineIdx: number): string => {
   let contentRow = "";
   for (let gridC = 0; gridC <= 3; gridC++) {
-    const adj: { cell: Cell; isWin: boolean }[] = [];
+    const adj: { cell: ticTacToeGameTypes.Cell; isWin: boolean }[] = [];
     if (gridC > 0) adj.push(cellAt(ctx, gridR, gridC - 1));
     if (gridC < 3) adj.push(cellAt(ctx, gridR, gridC));
     contentRow += paintBorder(ctx, "\u2502", isCursorVBorder(ctx, gridR, gridC), borderFgCode(adj));
@@ -168,14 +167,14 @@ const cellRows = (ctx: RenderContext, gridR: number, lineIdx: number): string =>
       contentRow += buildCellContent({
         isWin: ctx.winCells.has(`${gridR},${gridC}`),
         lineIdx,
-        mark: getCell({ board: ctx.board, row: gridR, col: gridC }),
+        mark: getCell({ board: ctx.board, col: gridC, row: gridR }),
       });
     }
   }
   return contentRow;
 };
 
-function renderBoard(opts: BoardRenderOpts): string[] {
+function renderBoard(opts: ticTacToeRenderTypes.BoardRenderOpts): string[] {
   const { board, maxWidth, cursor } = opts;
   const winLine = getWinLine(board);
   const ctx: RenderContext = {
@@ -200,8 +199,8 @@ function renderBoard(opts: BoardRenderOpts): string[] {
   return lines;
 }
 
-export function renderVisualBoard(request: {
-  readonly state: GameState;
+function renderVisualBoard(request: {
+  readonly state: ticTacToeGameTypes.GameState;
   readonly maxWidth: number;
 }): string[] {
   const { state, maxWidth } = request;
@@ -217,10 +216,18 @@ export function renderVisualBoard(request: {
   return renderBoard({ board: state.board, cursor, maxWidth });
 }
 
-export function renderBoardSnapshot(request: {
-  readonly board: Cell[][];
+function renderBoardSnapshot(request: {
+  readonly board: ticTacToeGameTypes.Cell[][];
   readonly maxWidth: number;
 }): string[] {
   const { board, maxWidth } = request;
   return renderBoard({ board, maxWidth });
 }
+
+const ticTacToeRender = {
+  centerPad,
+  renderBoardSnapshot,
+  renderVisualBoard,
+};
+
+export default ticTacToeRender;

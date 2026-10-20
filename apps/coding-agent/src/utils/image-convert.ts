@@ -3,9 +3,13 @@ import type tuiTypes from "@msa/tui/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import { awaited, awaiting } from "../core/awaiting.ts";
-import { applyExifOrientation } from "./exif-orientation.ts";
-import { loadPhoton } from "./photon.ts";
+import awaitingModule from "../core/awaiting.ts";
+import exifOrientation from "./exif-orientation.ts";
+import photonModule from "./photon.ts";
+
+const { loadPhoton } = photonModule;
+const { applyExifOrientation } = exifOrientation;
+const { awaited, awaiting } = awaitingModule;
 
 const { getCapabilities, setImageTranscoder } = tui;
 
@@ -26,7 +30,7 @@ function encodePng(photon: Photon, bytes: Uint8Array): Uint8Array | null {
   }
 }
 
-export function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
+function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
   return Effect.runPromise(
     awaiting(function* () {
       const photon = yield* awaited(loadPhoton());
@@ -62,12 +66,12 @@ function convertToPngImpl(
   );
 }
 
-export const convertToPng: {
+const convertToPng: {
   (base64Data: string, mimeType: string): Promise<{ data: string; mimeType: string } | null>;
   (mimeType: string): (base64Data: string) => Promise<{ data: string; mimeType: string } | null>;
 } = dual((args: IArguments) => args.length >= 2, convertToPngImpl);
 
-export function loadPngTranscoder(): Promise<tuiTypes.ImageTranscoder | undefined> {
+function loadPngTranscoder(): Promise<tuiTypes.ImageTranscoder | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
       const photon = yield* awaited(loadPhoton());
@@ -83,7 +87,7 @@ export function loadPngTranscoder(): Promise<tuiTypes.ImageTranscoder | undefine
 let pngTranscoderLoad: Promise<boolean> | undefined;
 let pngTranscoderRegistered = false;
 
-export function ensurePngTranscoder(onRegistered: () => void): void {
+function ensurePngTranscoder(onRegistered: () => void): void {
   if (pngTranscoderRegistered || getCapabilities().images !== "kitty") return;
   pngTranscoderLoad ??= loadPngTranscoder().then((transcoder) => {
     if (transcoder === undefined) return false;
@@ -96,3 +100,12 @@ export function ensurePngTranscoder(onRegistered: () => void): void {
     return undefined;
   });
 }
+
+const imageConvert = {
+  convertImageBytesToPng,
+  convertToPng,
+  ensurePngTranscoder,
+  loadPngTranscoder,
+};
+
+export default imageConvert;

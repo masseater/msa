@@ -1,18 +1,22 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { Theme } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import type { FindToolDetails } from "../find.ts";
-import { getTextOutput, invalidArgText, shortenPath, str } from "../render-utils.ts";
-import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
-import { formatListResult } from "./list-output.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import type findTypesModule from "../find.types.ts";
+import renderUtils from "../render-utils.ts";
+import truncate from "../truncate.ts";
+import listOutput from "./list-output.ts";
+
+const { getTextOutput, invalidArgText, shortenPath, str } = renderUtils;
+const { DEFAULT_MAX_BYTES, formatSize } = truncate;
+const { formatListResult } = listOutput;
 
 const { Text } = tui;
 
 function formatFindCall(
   args: { pattern: string; path?: string; limit?: number } | undefined,
-  theme: Theme,
+  theme: themeTypes.Theme,
 ): string {
   const pattern = str(args?.pattern);
   const rawPath = str(args?.path);
@@ -32,10 +36,10 @@ function formatFindCall(
 function formatFindResult(
   result: {
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-    details?: FindToolDetails;
+    details?: findTypesModule.FindToolDetails;
   },
-  options: ToolRenderResultOptions,
-  theme: Theme,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
+  theme: themeTypes.Theme,
   showImages: boolean,
 ): string {
   const resultLimit = result.details?.resultLimitReached;
@@ -48,7 +52,10 @@ function formatFindResult(
   return formatListResult({ expanded: options.expanded, noun: "files", output, theme, warnings });
 }
 
-export const findRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {
+const findRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, any>,
+  "renderCall" | "renderResult"
+> = {
   renderCall(args, theme, context) {
     const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(formatFindCall(args as any, theme));
@@ -60,3 +67,9 @@ export const findRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rende
     return text;
   },
 };
+
+const find = {
+  findRenderers,
+};
+
+export default find;

@@ -3,6 +3,7 @@ import type durableTypes from "@msa/durable/index.types";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import ControlledStorage from "./controlled-storage.ts";
 import effectSupport from "./effect-support.ts";
 import paused from "./harness-lifecycle-close-2-cases.ts";
 import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
@@ -13,7 +14,7 @@ const { defineDoc } = durable;
 
 const { awaited } = effectSupport;
 const { oneStep, start } = harnessLifecycleSupport;
-const { ControlledStorage, context, flush } = sessionSupport;
+const { context, flush } = sessionSupport;
 const { eventually, openTasks } = taskSupport;
 
 const closingWithQueuedWorkStep1 = Effect.fn("closingWithQueuedWorkStep1")(function* () {

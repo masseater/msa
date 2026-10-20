@@ -2,8 +2,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createLlamaProvider } from "../src/extensions/llama/provider.ts";
+import providerModule from "../src/extensions/llama/provider.ts";
 import llamaExtensionSupport from "./llama-extension-support.ts";
+
+const { createLlamaProvider } = providerModule;
 
 const { awaited, closeServers, runTest } = testing;
 const { createCache, refresh, serve } = llamaExtensionSupport;

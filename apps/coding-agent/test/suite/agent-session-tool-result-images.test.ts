@@ -14,7 +14,9 @@ const { createHarness } = harnessModule;
 const normalizeToolResultImages = vi.hoisted(() =>
   vi.fn((content: unknown[]) => Promise.resolve(content)),
 );
-vi.mock("../../src/utils/tool-result-images.ts", () => ({ normalizeToolResultImages }));
+vi.mock("../../src/utils/tool-result-images.ts", () => ({
+  default: { normalizeToolResultImages },
+}));
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";

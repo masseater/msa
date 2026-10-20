@@ -2,11 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { discoverAndLoadExtensions, loadExtensions } from "../src/core/extensions/loader.ts";
-import { ExtensionRunner, emitProjectTrustEvent } from "../src/core/extensions/runner.ts";
-import type { ScopedModel } from "../src/core/model-resolver.ts";
+import ExtensionRunner from "../src/core/extensions/extension-runner.ts";
+import loader from "../src/core/extensions/loader.ts";
+import runnerEvents from "../src/core/extensions/runner-events.ts";
+import type modelResolverTypes from "../src/core/model-resolver.types.ts";
 import extensionsRunnerEnv from "./extensions-runner-env.ts";
 import extensionsRunnerSupport from "./extensions-runner-support.ts";
+
+const { discoverAndLoadExtensions, loadExtensions } = loader;
+const { emitProjectTrustEvent } = runnerEvents;
 
 const { cleanupRunnerEnv, env, prepareRunnerEnv } = extensionsRunnerEnv;
 
@@ -30,7 +34,7 @@ const reflectsTheGetscopedmodelsContextActionOnCtx = () =>
 
       const scoped = [
         { model: { id: "scoped-test" }, thinkingLevel: "high" },
-      ] as unknown as ScopedModel[];
+      ] as unknown as modelResolverTypes.ScopedModel[];
       runner.bindCore(extensionActions, {
         ...extensionContextActions,
         getScopedModels: () => scoped,

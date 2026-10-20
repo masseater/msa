@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { parseArgs } from "../src/cli/args.ts";
+import args from "../src/cli/args.ts";
+
+const { parseArgs } = args;
 
 const parsesNoSessionFlag = () => {
   const result = parseArgs(["--no-session"]);

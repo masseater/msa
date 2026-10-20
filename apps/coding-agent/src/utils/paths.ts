@@ -1,28 +1,23 @@
-import { realpathSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 
 import { dual } from "effect/Function";
 
-import { join, resolve as nodeResolvePath, relative, sep } from "../core/platform-node.ts";
-import { spawnProcessSync } from "./child-process.ts";
-import { isAbsolute } from "./platform-extra.ts";
+import platformNode from "../core/platform-node.ts";
+import nodeFs from "../core/platform/node/fs.ts";
+import childProcess from "./child-process.ts";
+import type pathsTypes from "./paths.types.ts";
+import platformExtra from "./platform-extra.ts";
+
+const { realpathSync, statSync } = nodeFs;
+
+const { join, relative, resolve: nodeResolvePath, sep } = platformNode;
+const { isAbsolute } = platformExtra;
+const { spawnProcessSync } = childProcess;
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 
-export interface PathInputOptions {
-  trim?: boolean;
-
-  expandTilde?: boolean;
-
-  homeDir?: string;
-
-  stripAtPrefix?: boolean;
-
-  normalizeUnicodeSpaces?: boolean;
-}
-
-export function canonicalizePath(path: string): string {
+function canonicalizePath(path: string): string {
   try {
     return realpathSync(path);
   } catch {
@@ -30,7 +25,7 @@ export function canonicalizePath(path: string): string {
   }
 }
 
-export function getFileRevision(path: string): string | undefined {
+function getFileRevision(path: string): string | undefined {
   try {
     const stats = statSync(path, { bigint: true });
     return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}`;
@@ -39,7 +34,7 @@ export function getFileRevision(path: string): string | undefined {
   }
 }
 
-export function isLocalPath(value: string): boolean {
+function isLocalPath(value: string): boolean {
   const trimmed = value.trim();
 
   if (
@@ -56,7 +51,7 @@ export function isLocalPath(value: string): boolean {
   return true;
 }
 
-export function normalizeWindowsShellPath(filePath: string): string {
+function normalizeWindowsShellPath(filePath: string): string {
   if (!filePath.startsWith("/") || filePath.startsWith("//") || filePath.includes("\\"))
     return filePath;
   const match = filePath.match(/^\/(?:mnt\/|cygdrive\/)?([a-z])(?:\/(.*))?$/iu);
@@ -66,7 +61,7 @@ export function normalizeWindowsShellPath(filePath: string): string {
   return `${drive.toUpperCase()}:\\${suffix ?? ""}`;
 }
 
-function normalizePathImpl(input: string, options: PathInputOptions = {}): string {
+function normalizePathImpl(input: string, options: pathsTypes.PathInputOptions = {}): string {
   let normalized = options.trim === true ? input.trim() : input;
   if (options.normalizeUnicodeSpaces === true) {
     normalized = normalized.replace(UNICODE_SPACES, " ");
@@ -96,15 +91,15 @@ function normalizePathImpl(input: string, options: PathInputOptions = {}): strin
   return normalized;
 }
 
-export const normalizePath: {
-  (input: string, options?: PathInputOptions): string;
-  (options?: PathInputOptions): (input: string) => string;
+const normalizePath: {
+  (input: string, options?: pathsTypes.PathInputOptions): string;
+  (options?: pathsTypes.PathInputOptions): (input: string) => string;
 } = dual((args: IArguments) => args.length >= 1, normalizePathImpl);
 
 function resolvePathImpl(
   input: string,
   baseDir: string = process.cwd(),
-  options: PathInputOptions = {},
+  options: pathsTypes.PathInputOptions = {},
 ): string {
   const normalized = normalizePath(input, options);
   const normalizedBaseDir = normalizePath(baseDir);
@@ -113,9 +108,9 @@ function resolvePathImpl(
     : nodeResolvePath(normalizedBaseDir, normalized);
 }
 
-export const resolvePath: {
-  (input: string, baseDir?: string, options?: PathInputOptions): string;
-  (baseDir?: string, options?: PathInputOptions): (input: string) => string;
+const resolvePath: {
+  (input: string, baseDir?: string, options?: pathsTypes.PathInputOptions): string;
+  (baseDir?: string, options?: pathsTypes.PathInputOptions): (input: string) => string;
 } = dual((args: IArguments) => args.length >= 1, resolvePathImpl);
 
 function getCwdRelativePathImpl(filePath: string, cwd: string): string | undefined {
@@ -129,7 +124,7 @@ function getCwdRelativePathImpl(filePath: string, cwd: string): string | undefin
   return isInsideCwd ? (relativePath === "" ? "." : relativePath) : undefined;
 }
 
-export const getCwdRelativePath: {
+const getCwdRelativePath: {
   (filePath: string, cwd: string): string | undefined;
   (cwd: string): (filePath: string) => string | undefined;
 } = dual((args: IArguments) => args.length >= 2, getCwdRelativePathImpl);
@@ -141,7 +136,7 @@ function abbreviateHomePathImpl(filePath: string, home: string = homedir()): str
   return `~${rest}`;
 }
 
-export const abbreviateHomePath: {
+const abbreviateHomePath: {
   (filePath: string, home?: string): string;
   (home?: string): (filePath: string) => string;
 } = dual((args: IArguments) => args.length >= 1, abbreviateHomePathImpl);
@@ -151,12 +146,12 @@ function formatPathRelativeToCwdOrAbsoluteImpl(filePath: string, cwd: string): s
   return (getCwdRelativePath(absolutePath, cwd) ?? absolutePath).split(sep).join("/");
 }
 
-export const formatPathRelativeToCwdOrAbsolute: {
+const formatPathRelativeToCwdOrAbsolute: {
   (filePath: string, cwd: string): string;
   (cwd: string): (filePath: string) => string;
 } = dual((args: IArguments) => args.length >= 2, formatPathRelativeToCwdOrAbsoluteImpl);
 
-export function markPathIgnoredByCloudSync(path: string): void {
+function markPathIgnoredByCloudSync(path: string): void {
   const attrs =
     process.platform === "darwin"
       ? ["com.dropbox.ignored", "com.apple.fileprovider.ignore#P"]
@@ -175,3 +170,18 @@ export function markPathIgnoredByCloudSync(path: string): void {
     }
   }
 }
+
+const paths = {
+  abbreviateHomePath,
+  canonicalizePath,
+  formatPathRelativeToCwdOrAbsolute,
+  getCwdRelativePath,
+  getFileRevision,
+  isLocalPath,
+  markPathIgnoredByCloudSync,
+  normalizePath,
+  normalizeWindowsShellPath,
+  resolvePath,
+};
+
+export default paths;

@@ -2,7 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { AgentSession } from "../../src/core/agent-session.ts";
+import type agentSessionTypes from "../../src/core/agent-session.types.ts";
 import runtimeKit from "../runtime-kit.ts";
 import agentSessionRuntimeSupport from "./agent-session-runtime-support.ts";
 
@@ -10,7 +10,9 @@ const { awaited, runTest } = testing;
 const { createFauxRuntime, disposeRuntimes } = runtimeKit;
 const { createRuntimeForTest } = agentSessionRuntimeSupport;
 
-const userTextOf = (message: AgentSession["messages"][number]): string | undefined => {
+const userTextOf = (
+  message: agentSessionTypes.AgentSession["messages"][number],
+): string | undefined => {
   if (message.role !== "user") {
     return undefined;
   }
@@ -22,11 +24,11 @@ const userTextOf = (message: AgentSession["messages"][number]): string | undefin
         .join("");
 };
 
-const branchOf = (session: AgentSession) =>
+const branchOf = (session: agentSessionTypes.AgentSession) =>
   session.messages.map((message) => ({ role: message.role, text: userTextOf(message) }));
 
 const forkAtLeaf = Effect.fn("forkAtLeaf")(function* (
-  session: AgentSession,
+  session: agentSessionTypes.AgentSession,
   fork: (leafId: string) => Promise<unknown>,
 ) {
   yield* awaited(session.prompt("hello"));

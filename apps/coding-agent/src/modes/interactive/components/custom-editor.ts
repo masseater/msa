@@ -1,20 +1,17 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type { AppKeybinding, KeybindingsManager } from "../../../core/keybindings.ts";
-import type { StatusIndicator } from "./status-indicator.ts";
+import type keybindingsTypes from "../../../core/keybindings.types.ts";
+import type customEditorTypes from "./custom-editor.types.ts";
+import type statusIndicatorTypes from "./status-indicator.types.ts";
 
-const { Editor, visibleWidth } = tuiModule;
+const { visibleWidth } = tuiModule;
 
-export type CustomEditorOptions = tuiTypes.EditorOptions & {
-  embedWorkingStatus?: boolean;
-};
-
-export class CustomEditor extends Editor {
-  private keybindings: KeybindingsManager;
-  private workingStatusIndicator: StatusIndicator | undefined;
+export default class CustomEditor extends tuiModule.Editor {
+  private keybindings: keybindingsTypes.KeybindingsManager;
+  private workingStatusIndicator: statusIndicatorTypes.StatusIndicator | undefined;
   public readonly embedWorkingStatus: boolean;
-  public actionHandlers: Map<AppKeybinding, () => void> = new Map();
+  public actionHandlers: Map<keybindingsTypes.AppKeybinding, () => void> = new Map();
 
   public onEscape?: (() => void) | undefined;
   public onCtrlD?: () => void;
@@ -24,15 +21,15 @@ export class CustomEditor extends Editor {
   constructor(
     tui: tuiTypes.TUI,
     theme: tuiTypes.EditorTheme,
-    keybindings: KeybindingsManager,
-    options?: CustomEditorOptions,
+    keybindings: keybindingsTypes.KeybindingsManager,
+    options?: customEditorTypes.CustomEditorOptions,
   ) {
     super(tui, theme, options);
     this.keybindings = keybindings;
     this.embedWorkingStatus = options?.embedWorkingStatus ?? false;
   }
 
-  setWorkingStatusIndicator(indicator: StatusIndicator | undefined): void {
+  setWorkingStatusIndicator(indicator: statusIndicatorTypes.StatusIndicator | undefined): void {
     this.workingStatusIndicator = indicator;
   }
 
@@ -80,6 +77,10 @@ export class CustomEditor extends Editor {
 
     status = this.workingStatusIndicator.renderSpinnerInBorder(width);
     statusWidth = visibleWidth(status);
+    return this.renderTopBorderPart1(width, statusWidth, status);
+  }
+
+  private renderTopBorderPart1(width: number, statusWidth: number, status: string) {
     const prefixWidth = Math.min(3, Math.max(0, width - statusWidth));
     return (
       this.borderColor("─".repeat(prefixWidth)) +
@@ -88,7 +89,7 @@ export class CustomEditor extends Editor {
     );
   }
 
-  onAction(action: AppKeybinding, handler: () => void): void {
+  onAction(action: keybindingsTypes.AppKeybinding, handler: () => void): void {
     this.actionHandlers.set(action, handler);
   }
 

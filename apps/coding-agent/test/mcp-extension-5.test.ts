@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { MAX_SERVERS_SECTION_CHARS, renderServersSection } from "../src/extensions/mcp/index.ts";
+import extension from "../src/extensions/mcp/extension.ts";
+
+const { MAX_SERVERS_SECTION_CHARS, renderServersSection } = extension;
 
 const server2 = (
   name: string,

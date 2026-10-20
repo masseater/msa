@@ -3,9 +3,11 @@ import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { VIRTUAL_MODEL_STATE_ENTRY } from "../../src/core/virtual-models.ts";
+import virtualModels from "../../src/core/virtual-models.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 import type virtualModelsSupportTypes from "./virtual-models-support.types.ts";
+
+const { VIRTUAL_MODEL_STATE_ENTRY } = virtualModels;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

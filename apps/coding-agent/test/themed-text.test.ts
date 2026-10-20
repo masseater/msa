@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { ThemedText } from "../src/modes/interactive/components/themed-text.ts";
-import { initTheme, theme } from "../src/modes/interactive/theme/theme.ts";
+import ThemedText from "../src/modes/interactive/components/themed-text.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
 
+const { initTheme, theme } = themeModule;
 afterEach(() => {
   initTheme("dark");
 });

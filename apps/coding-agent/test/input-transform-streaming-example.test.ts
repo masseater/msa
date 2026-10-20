@@ -3,36 +3,30 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import inputTransformStreaming from "../examples/extensions/input-transform-streaming.ts";
-import type {
-  ExecResult,
-  ExtensionAPI,
-  ExtensionContext,
-  InputEvent,
-  InputEventResult,
-} from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
 
 const { awaited, runTest } = testing;
 
 type InputHandler = (
-  event: InputEvent,
-  ctx: ExtensionContext,
-) => Promise<InputEventResult | undefined>;
+  event: extensionsTypes.InputEvent,
+  ctx: extensionsTypes.ExtensionContext,
+) => Promise<extensionsTypes.InputEventResult | undefined>;
 
-function setup(execResult: ExecResult) {
+function setup(execResult: extensionsTypes.ExecResult) {
   let handler: InputHandler | undefined;
 
-  const exec = vi.fn<ExtensionAPI["exec"]>().mockResolvedValue(execResult);
+  const exec = vi.fn<extensionsTypes.ExtensionAPI["exec"]>().mockResolvedValue(execResult);
 
   const api = {
     exec,
     on: (event: string, h: InputHandler) => {
       if (event === "input") handler = h;
     },
-  } as unknown as ExtensionAPI;
+  } as unknown as extensionsTypes.ExtensionAPI;
 
   inputTransformStreaming(api);
 
-  const ctx = {} as ExtensionContext;
+  const ctx = {} as extensionsTypes.ExtensionContext;
 
   function emit(text: string, streamingBehavior?: "steer" | "followUp") {
     return handler!(
@@ -51,11 +45,21 @@ function setup(execResult: ExecResult) {
 
 const diffOutput = " src/index.ts | 5 ++---\n 1 file changed, 2 insertions(+), 3 deletions(-)";
 
-const gitSuccess: ExecResult = { code: 0, killed: false, stderr: "", stdout: diffOutput };
+const gitSuccess: extensionsTypes.ExecResult = {
+  code: 0,
+  killed: false,
+  stderr: "",
+  stdout: diffOutput,
+};
 
-const gitEmpty: ExecResult = { code: 0, killed: false, stderr: "", stdout: "" };
+const gitEmpty: extensionsTypes.ExecResult = { code: 0, killed: false, stderr: "", stdout: "" };
 
-const gitFail: ExecResult = { code: 128, killed: false, stderr: "not a git repo", stdout: "" };
+const gitFail: extensionsTypes.ExecResult = {
+  code: 128,
+  killed: false,
+  stderr: "not a git repo",
+  stdout: "",
+};
 
 const skipsExecDuringSteering = () =>
   runTest(

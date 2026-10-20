@@ -2,7 +2,9 @@ import type { RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/messages
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 
-import { fromClaudeCodeName, mapStopReason } from "./convert.ts";
+import convert from "./convert.ts";
+
+const { fromClaudeCodeName, mapStopReason } = convert;
 
 const { calculateCost } = ai;
 
@@ -154,7 +156,7 @@ const updateUsage = (
   calculateCost(model, output.usage);
 };
 
-export const handleEvent = (request: {
+const handleEvent = (request: {
   readonly stream: aiTypes.AssistantMessageEventStream;
   readonly output: aiTypes.AssistantMessage;
   readonly model: aiTypes.Model<aiTypes.Api>;
@@ -185,3 +187,9 @@ export const handleEvent = (request: {
       updateUsage(model, output, event.usage);
   }
 };
+
+const streamEvents = {
+  handleEvent,
+};
+
+export default streamEvents;

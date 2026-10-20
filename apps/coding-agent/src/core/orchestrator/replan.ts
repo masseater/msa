@@ -1,40 +1,27 @@
 import type { Deferred } from "effect";
 import { Effect } from "effect";
 
-import type { OrchestratorError } from "./errors.ts";
-import { applying } from "./replan-apply.ts";
-import { ensured, exclusive, fail, stopThreads, unique } from "./replan-support.ts";
-import type { Runtime } from "./runtime.ts";
-import { snapshots } from "./snapshot.ts";
-import { store } from "./store.ts";
-import type {
-  ReplanDropInput,
-  ReplanInput,
-  ReplanResult,
-  ReplanRewireInput,
-  ReplanTaskInput,
-  TaskView,
-} from "./types.ts";
-import { wrapping } from "./wrap-up.ts";
+import type errorsTypes from "./errors.types.ts";
+import replanApply from "./replan-apply.ts";
+import replanSupport from "./replan-support.ts";
+import type replanTypes from "./replan.types.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import snapshot from "./snapshot.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
+import wrapUp from "./wrap-up.ts";
 
-interface Entry {
-  input: ReplanTaskInput;
-  from: readonly string[];
-  key: string | null;
-}
+const { ensured, exclusive, fail, stopThreads, unique } = replanSupport;
+const { wrapping } = wrapUp;
+const { snapshots } = snapshot;
+const { store } = storeModule;
+const { applying } = replanApply;
 
-export interface Prepared {
-  input: ReplanInput;
-  entries: readonly Entry[];
-  keep: readonly string[];
-  drop: readonly ReplanDropInput[];
-  rewire: readonly ReplanRewireInput[];
-  sources: readonly string[];
-  views: ReadonlyMap<string, TaskView>;
-  memos: ReadonlyMap<string, Deferred.Deferred<string, string>>;
-}
-
-function assertKnown(views: ReadonlyMap<string, TaskView>, id: string, label: string): void {
+function assertKnown(
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
+  id: string,
+  label: string,
+): void {
   if (!views.has(id)) throw fail(`Unknown task in ${label}: ${id}`);
 }
 
@@ -43,7 +30,10 @@ function assertDisjoint(left: readonly string[], right: readonly string[], label
   if (shared.length > 0) throw fail(`${label}: ${shared.join(", ")}`);
 }
 
-function entryKeys(entries: readonly Entry[], views: ReadonlyMap<string, TaskView>): Set<string> {
+function entryKeys(
+  entries: readonly replanTypes.Entry[],
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
+): Set<string> {
   const keys = new Set<string>();
   for (const entry of entries) {
     if (entry.key === null) continue;
@@ -57,7 +47,7 @@ function entryKeys(entries: readonly Entry[], views: ReadonlyMap<string, TaskVie
 function resolveRefs(
   refs: readonly string[],
   keys: ReadonlySet<string>,
-  views: ReadonlyMap<string, TaskView>,
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
   label: string,
 ): void {
   for (const ref of refs) {
@@ -66,9 +56,9 @@ function resolveRefs(
 }
 
 function inheritedState(
-  entry: Entry,
-  views: ReadonlyMap<string, TaskView>,
-  pick: (task: TaskView) => string,
+  entry: replanTypes.Entry,
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
+  pick: (task: orchestratorTypesTypes.TaskView) => string,
 ): string {
   return entry.from
     .flatMap((id) => views.get(id) ?? [])
@@ -78,9 +68,9 @@ function inheritedState(
 }
 
 function validateEntries(
-  runtime: Runtime,
-  entries: readonly Entry[],
-  views: ReadonlyMap<string, TaskView>,
+  runtime: runtimeTypes.Runtime,
+  entries: readonly replanTypes.Entry[],
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
 ): void {
   const keys = entryKeys(entries, views);
   for (const entry of entries) {
@@ -99,9 +89,9 @@ function validateEntries(
 }
 
 function validateHandling(
-  input: ReplanInput,
-  entries: readonly Entry[],
-  views: ReadonlyMap<string, TaskView>,
+  input: orchestratorTypesTypes.ReplanInput,
+  entries: readonly replanTypes.Entry[],
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
 ): void {
   const from = entries.flatMap((entry) => entry.from);
   const keep = unique(input.keep ?? []);
@@ -118,9 +108,9 @@ function validateHandling(
 }
 
 function validateStop(
-  input: ReplanInput,
-  entries: readonly Entry[],
-  views: ReadonlyMap<string, TaskView>,
+  input: orchestratorTypesTypes.ReplanInput,
+  entries: readonly replanTypes.Entry[],
+  views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
 ): void {
   const running = [...views.values()].filter((task) => task.status === "running");
   const ids = new Set(running.map((task) => task.id));
@@ -143,7 +133,7 @@ function validateStop(
 }
 
 function register(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threads: readonly string[],
 ): Map<string, Deferred.Deferred<string, string>> {
   const memos = new Map<string, Deferred.Deferred<string, string>>();
@@ -157,7 +147,10 @@ function register(
   return memos;
 }
 
-function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, OrchestratorError> {
+function prepare(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.ReplanInput,
+): Effect.Effect<replanTypes.Prepared, errorsTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const views = new Map(
       snapshots
@@ -198,7 +191,7 @@ function prepare(runtime: Runtime, input: ReplanInput): Effect.Effect<Prepared, 
   });
 }
 
-function abortedResult(reason: string): ReplanResult {
+function abortedResult(reason: string): orchestratorTypesTypes.ReplanResult {
   return {
     aborted: reason,
     created: [],
@@ -211,7 +204,10 @@ function abortedResult(reason: string): ReplanResult {
   };
 }
 
-export function replan(runtime: Runtime, input: ReplanInput): Promise<ReplanResult> {
+function replan(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.ReplanInput,
+): Promise<orchestratorTypesTypes.ReplanResult> {
   return Effect.runPromise(
     ensured(
       runtime,
@@ -224,3 +220,9 @@ export function replan(runtime: Runtime, input: ReplanInput): Promise<ReplanResu
     ),
   );
 }
+
+const replanModule = {
+  replan,
+};
+
+export default replanModule;

@@ -4,7 +4,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import { attachJsonlLineReader, serializeJsonLine } from "../src/modes/rpc/jsonl.ts";
+import jsonl from "../src/modes/rpc/jsonl.ts";
+
+const { attachJsonlLineReader, serializeJsonLine } = jsonl;
 
 const { fromJsonText, runTest } = testing;
 

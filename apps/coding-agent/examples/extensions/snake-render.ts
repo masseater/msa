@@ -1,6 +1,10 @@
 import tui from "@msa/tui";
 
-import { GAME_HEIGHT, GAME_WIDTH, type GameState } from "./snake-state.ts";
+import type snakeRenderTypes from "./snake-render.types.ts";
+import snakeState from "./snake-state.ts";
+import type snakeStateTypes from "./snake-state.types.ts";
+
+const { GAME_HEIGHT, GAME_WIDTH } = snakeState;
 
 const { visibleWidth } = tui;
 
@@ -18,7 +22,7 @@ const red = (s: string) => `\x1b[31m${s}\x1b[0m`;
 const yellow = (s: string) => `\x1b[33m${s}\x1b[0m`;
 const bold = (s: string) => `\x1b[1m${s}\x1b[22m`;
 
-const renderRow = (state: GameState, y: number, effectiveWidth: number): string => {
+const renderRow = (state: snakeStateTypes.GameState, y: number, effectiveWidth: number): string => {
   const head = state.snake[0];
   let row = "";
   for (let x = 0; x < effectiveWidth; x++) {
@@ -39,7 +43,7 @@ const renderRow = (state: GameState, y: number, effectiveWidth: number): string 
   return row;
 };
 
-const footerText = (state: GameState, paused: boolean): string => {
+const footerText = (state: snakeStateTypes.GameState, paused: boolean): string => {
   if (paused) {
     return `${yellow(bold("PAUSED"))} Press any key to continue, ${bold("Q")} to quit`;
   }
@@ -49,13 +53,7 @@ const footerText = (state: GameState, paused: boolean): string => {
   return `↑↓←→ or WASD to move, ${bold("ESC")} pause, ${bold("Q")} quit`;
 };
 
-export interface FrameOptions {
-  readonly state: GameState;
-  readonly paused: boolean;
-  readonly width: number;
-}
-
-export function renderFrame({ state, paused, width }: FrameOptions): string[] {
+function renderFrame({ state, paused, width }: snakeRenderTypes.FrameOptions): string[] {
   const lines: string[] = [];
 
   const cellWidth = 2;
@@ -87,3 +85,9 @@ export function renderFrame({ state, paused, width }: FrameOptions): string[] {
 
   return lines;
 }
+
+const snakeRender = {
+  renderFrame,
+};
+
+export default snakeRender;

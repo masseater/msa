@@ -4,9 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import type { Skill } from "../src/core/skills.ts";
-import { createSyntheticSourceInfo } from "../src/core/source-info.ts";
+import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
+import type skillsTypes from "../src/core/skills.types.ts";
+import sourceInfoModule from "../src/core/source-info.ts";
+const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const {
   awaited,
@@ -69,7 +70,7 @@ Content`,
 });
 
 const shouldApplySkillsoverride = Effect.gen(function* () {
-  const injectedSkill: Skill = {
+  const injectedSkill: skillsTypes.Skill = {
     baseDir: "/fake",
     description: "Injected skill",
     disableModelInvocation: false,

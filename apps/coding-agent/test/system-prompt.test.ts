@@ -1,6 +1,8 @@
 import { describe, expect, test } from "vite-plus/test";
 
-import { buildSystemPrompt } from "../src/core/system-prompt.ts";
+import systemPrompt from "../src/core/system-prompt.ts";
+
+const { buildSystemPrompt } = systemPrompt;
 
 const showsNoneForEmptyToolsList = () => {
   const prompt = buildSystemPrompt({
