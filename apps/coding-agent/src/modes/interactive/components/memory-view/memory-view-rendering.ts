@@ -1,62 +1,79 @@
 import tui from "@msa/tui";
 
-import type storeTypesTypes from "../../../core/memory/store-types.types.ts";
-import type storeTypes from "../../../core/memory/store.types.ts";
-import textModule from "../../../utils/text.ts";
-import themeModule from "../theme/theme.ts";
-import keybindingHints from "./keybinding-hints.ts";
-import memoryViewHelpers from "./memory-view-helpers.ts";
-import MemoryViewLayer1 from "./memory-view-layer-1.ts";
-import type MemoryView from "./memory-view.ts";
-import scrollWindow from "./scroll-window.ts";
-import type scrollWindowTypes from "./scroll-window.types.ts";
+import type storeTypesTypes from "../../../../core/memory/store-types.types.ts";
+import type storeTypes from "../../../../core/memory/store.types.ts";
+import textModule from "../../../../utils/text.ts";
+import themeModule from "../../theme/theme.ts";
+import keybindingHints from "../keybinding-hints.ts";
+import memoryViewHelpers from "../memory-view-helpers.ts";
+import type MemoryView from "../memory-view.ts";
+import type scrollWindowTypes from "../scroll-window.types.ts";
 
-const { fitView } = scrollWindow;
+const { truncateToWidth, visibleWidth, wrapTextWithAnsi } = tui;
 const { theme } = themeModule;
 const { rawKeyHint } = keybindingHints;
-const { formatAge } = textModule;
-const { truncateToWidth, visibleWidth, wrapTextWithAnsi } = tui;
 const { firstLine, glyph, scopeLabel } = memoryViewHelpers;
+const { formatAge } = textModule;
 
-export default abstract class MemoryViewLayer2 extends MemoryViewLayer1 {
-  render(width: number): string[] {
-    const rows = this.rows();
-    const open =
-      this.openId !== undefined && this.openId !== ""
-        ? rows.find((record) => record.id === this.openId)
-        : undefined;
-    const frame =
-      open === undefined ? this.renderList(rows, width) : this.renderDetail(open, width);
-    const max = Math.max(8, this.options.maxHeight());
-    const room = Math.max(0, max - frame.header.length - frame.footer.length);
-    this.room = Math.min(room, frame.body.length);
-    const fitted = fitView(frame, width, max, this.scroll);
-    this.scroll = fitted.offset;
-    return fitted.lines;
+export default class MemoryViewRendering {
+  private readonly view: MemoryView;
+
+  constructor(view: MemoryView) {
+    this.view = view;
   }
 
-  protected renderList(
-    rows: readonly storeTypes.MemoryRecord[],
+  header(title: string, right: string, width: number): string[] {
+    const gap = Math.max(1, width - 2 - visibleWidth(title) - visibleWidth(right));
+    return [
+      "",
+      truncateToWidth(` ${theme.bold(title)}${" ".repeat(gap)}${right}`, width),
+      theme.fg("borderMuted", "─".repeat(width)),
+    ];
+  }
+
+  private describeCounts(): string {
+    const stats = this.view.options.service.stats();
+    const parts = [
+      this.view.options.service.project,
+      `${stats.total} ${stats.total === 1 ? "memory" : "memories"}`,
+      `${stats.embedded} embedded`,
+    ];
+    return theme.fg("dim", parts.join(" · "));
+  }
+
+  private renderSearchLine(
+    body: string[],
     width: number,
+    header: string[],
   ): scrollWindowTypes.ViewFrame {
+    return {
+      body,
+      footer: [
+        "",
+        ...this.view.searchInput.render(width),
+        ` ${rawKeyHint("enter", "search")}  ${rawKeyHint("esc", "cancel")}`,
+      ],
+      header,
+    };
+  }
+
+  renderList(rows: readonly storeTypes.MemoryRecord[], width: number): scrollWindowTypes.ViewFrame {
     const right =
-      this.query === undefined ? this.describeCounts() : theme.fg("dim", `search: ${this.query}`);
+      this.view.query === undefined
+        ? this.describeCounts()
+        : theme.fg("dim", `search: ${this.view.query}`);
     const header = this.header("Memory", right, width);
-    const selected = this.selected(rows);
-    let { body, cursorLine }: ReturnType<MemoryView["renderListPart1"]> = this.renderListPart1(
-      rows,
-      selected,
-      width,
-    );
-    if (this.inputMode === "search") {
-      return this.renderListPart2(body, width, header);
+    const selected = this.view.selected(rows);
+    let { body, cursorLine } = this.renderRecordRows(rows, selected, width);
+    if (this.view.inputMode === "search") {
+      return this.renderSearchLine(body, width, header);
     }
-    if (this.inputMode === "add") {
+    if (this.view.inputMode === "add") {
       return {
         body,
         footer: [
           "",
-          ...this.addInput.render(width),
+          ...this.view.addInput.render(width),
           ` ${rawKeyHint("enter", "save")}  ${rawKeyHint("esc", "cancel")}`,
         ],
         header,
@@ -82,19 +99,19 @@ export default abstract class MemoryViewLayer2 extends MemoryViewLayer1 {
     };
   }
 
-  protected renderListPart1(
+  private renderRecordRows(
     rows: readonly storeTypesTypes.MemoryRecord[],
     selected: storeTypesTypes.MemoryRecord | undefined,
     width: number,
   ) {
     const body: string[] = [];
     let cursorLine: number | undefined;
-    if (this.busy && rows.length === 0) {
+    if (this.view.busy && rows.length === 0) {
       body.push("", ` ${theme.fg("muted", "searching…")}`);
     } else if (rows.length === 0) {
       body.push(
         "",
-        ` ${theme.fg("muted", this.query === undefined ? "No memories stored yet." : "No matching memories.")}`,
+        ` ${theme.fg("muted", this.view.query === undefined ? "No memories stored yet." : "No matching memories.")}`,
       );
     } else {
       let group: string | undefined;
@@ -119,10 +136,7 @@ export default abstract class MemoryViewLayer2 extends MemoryViewLayer1 {
     return { body, cursorLine };
   }
 
-  protected renderDetail(
-    record: storeTypes.MemoryRecord,
-    width: number,
-  ): scrollWindowTypes.ViewFrame {
+  renderDetail(record: storeTypes.MemoryRecord, width: number): scrollWindowTypes.ViewFrame {
     const header = this.header(
       `${glyph(record)} ${firstLine(record.content)}`,
       theme.fg("dim", `${record.kind} · ${scopeLabel(record)} · ${formatAge(record.updatedAt)}`),
