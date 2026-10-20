@@ -14,14 +14,14 @@ const grandchild = crossSpawn(
 Effect.runSync(Console.error(`grandchild ${grandchild.pid}`));
 Effect.runFork(Effect.forever(Effect.sleep("1 second")));
 
-const lines = createInterface({ input: process.stdin, crlfDelay: Infinity });
+const lines = createInterface({ crlfDelay: Infinity, input: process.stdin });
 lines.on("line", (line) => {
   const message = JSON.parse(line);
   if (message.method !== "initialize") return;
   const result = {
-    protocolVersion: "2025-06-18",
     capabilities: {},
+    protocolVersion: "2025-06-18",
     serverInfo: { name: "stubborn-fixture", version: "1.0.0" },
   };
-  process.stdout.write(`${JSON.stringify({ jsonrpc: "2.0", id: message.id, result })}\n`);
+  process.stdout.write(`${JSON.stringify({ id: message.id, jsonrpc: "2.0", result })}\n`);
 });
