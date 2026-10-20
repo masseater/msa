@@ -2,131 +2,191 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
 import type settingsManagerTypes from "../../../core/settings-manager.types.ts";
+import themeModule from "../theme/theme.ts";
 import type configSelectorTypes from "./config-selector.types.ts";
 import type resourceListInternalTypes from "./resource-list-internal.types.ts";
-import ResourceListLayer3 from "./resource-list-layer-3.ts";
+import ResourceListView from "./resource-list/resource-list-view.ts";
+import ResourceOverrides from "./resource-list/resource-overrides.ts";
+import ResourcePatterns from "./resource-list/resource-patterns.ts";
+import ResourceToggling from "./resource-list/resource-toggling.ts";
 
-const { Input } = tui;
+const { theme } = themeModule;
+const { truncateToWidth, getKeybindings, matchesKey, Input } = tui;
 
-export default class ResourceList
-  extends ResourceListLayer3
-  implements tuiTypes.Component, tuiTypes.Focusable
-{
-  static togglePackageResourceScope(
-    self: ResourceList,
-    item: resourceListInternalTypes.ResourceItem,
-    enabled: boolean,
-  ):
-    | { done: true; value: void }
-    | {
-        done: false;
-        value: {
-          scope: "user" | "project";
-          packages: (
-            | string
-            | {
-                extensions?: string[];
-                skills?: string[];
-                prompts?: string[];
-                themes?: string[];
-                autoload?: boolean;
-                source: string;
-              }
-          )[];
-        };
-      } {
-    const scope = item.metadata.scope as "user" | "project";
-    const settings =
-      scope === "project"
-        ? self.settingsManager.getProjectSettings()
-        : self.settingsManager.getGlobalSettings();
+export default class ResourceList {
+  readonly patterns: ResourcePatterns;
+  readonly overrides: ResourceOverrides;
+  readonly toggling: ResourceToggling;
+  readonly view: ResourceListView;
 
-    const packages = [...(settings.packages ?? [])] as settingsManagerTypes.PackageSource[];
-    const pkgIndex = packages.findIndex((pkg) => {
-      const source = typeof pkg === "string" ? pkg : pkg.source;
-      return source === item.metadata.source;
-    });
+  private groupsByScope!: Record<
+    configSelectorTypes.ConfigWriteScope,
+    resourceListInternalTypes.ResourceGroup[]
+  >;
 
-    let pkg = packages[pkgIndex];
-    if (pkg === undefined) return { done: true, value: undefined };
+  flatItems: resourceListInternalTypes.FlatEntry[] = [];
 
-    if (typeof pkg === "string") {
-      pkg = { source: pkg };
-      packages[pkgIndex] = pkg;
-    }
+  filteredItems: resourceListInternalTypes.FlatEntry[] = [];
 
-    ResourceList.togglePackageResourceScopePart1(item, pkg, self, enabled, packages, pkgIndex);
-    return { done: false, value: { packages, scope } };
+  selectedIndex = 0;
+
+  private searchInput!: tuiTypes.Input;
+
+  private maxVisible!: number;
+
+  settingsManager!: settingsManagerTypes.SettingsManager;
+
+  cwd!: string;
+
+  agentDir!: string;
+
+  writeScope!: configSelectorTypes.ConfigWriteScope;
+
+  inheritedEnabledByKey!: Map<string, boolean>;
+
+  onCancel?: () => void;
+
+  onExit?: () => void;
+
+  onToggle?: (item: resourceListInternalTypes.ResourceItem, newEnabled: boolean) => void;
+
+  onSwitchMode?: () => void;
+
+  private focusedState = false;
+
+  get focused(): boolean {
+    return this.focusedState;
   }
 
-  static togglePackageResourceScopePart1(
-    item: resourceListInternalTypes.ResourceItem,
-    pkg: {
-      autoload?: boolean;
-      extensions?: string[];
-      prompts?: string[];
-      skills?: string[];
-      themes?: string[];
-      source: string;
-    },
-    self: ResourceList,
-    enabled: boolean,
-    packages: (
-      | string
-      | {
-          autoload?: boolean;
-          extensions?: string[];
-          prompts?: string[];
-          skills?: string[];
-          themes?: string[];
-          source: string;
+  set focused(value: boolean) {
+    this.focusedState = value;
+    this.searchInput.focused = value;
+  }
+
+  setWriteScope(writeScope: configSelectorTypes.ConfigWriteScope): void {
+    this.writeScope = writeScope;
+    this.view.buildFlatList();
+    this.view.filterItems(this.searchInput.getValue());
+  }
+
+  get groups(): resourceListInternalTypes.ResourceGroup[] {
+    return this.groupsByScope[this.writeScope];
+  }
+
+  updateItem(item: resourceListInternalTypes.ResourceItem, enabled: boolean): void {
+    item.enabled = enabled;
+    for (const group of this.groups) {
+      for (const subgroup of group.subgroups) {
+        const found = subgroup.items.find(
+          (i) => i.path === item.path && i.resourceType === item.resourceType,
+        );
+        if (found !== undefined) {
+          found.enabled = enabled;
+          return;
         }
-    )[],
-    pkgIndex: number,
-  ) {
-    const { current, pattern, enablePattern, disablePattern, arrayKey } =
-      ResourceList.togglePackageResourceScopePart1Part1(item, pkg, self);
-
-    const updated = current.filter((p) => {
-      const stripped = p.startsWith("!") || p.startsWith("+") || p.startsWith("-") ? p.slice(1) : p;
-      return stripped !== pattern;
-    });
-
-    if (enabled) {
-      updated.push(enablePattern);
-    } else {
-      updated.push(disablePattern);
-    }
-
-    (pkg as Record<string, unknown>)[arrayKey] = updated.length > 0 ? updated : undefined;
-
-    const hasFilters = ["extensions", "skills", "prompts", "themes"].some(
-      (k) => (pkg as Record<string, unknown>)[k] !== undefined,
-    );
-    if (!hasFilters) {
-      packages[pkgIndex] = (pkg as { source: string }).source;
+      }
     }
   }
 
-  static togglePackageResourceScopePart1Part1(
-    item: resourceListInternalTypes.ResourceItem,
-    pkg: {
-      autoload?: boolean;
-      extensions?: string[];
-      prompts?: string[];
-      skills?: string[];
-      themes?: string[];
-      source: string;
-    },
-    self: ResourceList,
-  ) {
-    const arrayKey = item.resourceType as "extensions" | "skills" | "prompts" | "themes";
-    const current = (pkg[arrayKey] ?? []) as string[];
+  invalidate(): void {}
 
-    const pattern = self.getPackageResourcePattern(item);
-    const disablePattern = `-${pattern}`;
-    const enablePattern = `+${pattern}`;
-    return { arrayKey, current, disablePattern, enablePattern, pattern };
+  render(width: number): string[] {
+    const lines: string[] = [];
+
+    lines.push(...this.searchInput.render(width));
+    lines.push("");
+
+    if (this.filteredItems.length === 0) {
+      lines.push(theme.fg("muted", "  No resources found"));
+      return lines;
+    }
+
+    const startIndex = Math.max(
+      0,
+      Math.min(
+        this.selectedIndex - Math.floor(this.maxVisible / 2),
+        this.filteredItems.length - this.maxVisible,
+      ),
+    );
+    const endIndex = Math.min(startIndex + this.maxVisible, this.filteredItems.length);
+
+    for (const [offset, entry] of this.filteredItems.slice(startIndex, endIndex).entries()) {
+      const isSelected = startIndex + offset === this.selectedIndex;
+
+      if (entry.type === "group") {
+        const inherited = this.writeScope === "project" && entry.group.scope === "user";
+        const label = theme.bold(`${entry.group.label}${inherited ? " · inherited global" : ""}`);
+        const groupLine = theme.fg(inherited ? "dim" : "accent", label);
+        lines.push(truncateToWidth(`  ${groupLine}`, width, ""));
+      } else if (entry.type === "subgroup") {
+        const color =
+          this.writeScope === "project" && entry.group.scope === "user" ? "dim" : "muted";
+        const subgroupLine = theme.fg(color, entry.subgroup.label);
+        lines.push(truncateToWidth(`    ${subgroupLine}`, width, ""));
+      } else {
+        this.view.renderItem(entry, isSelected, lines, width);
+      }
+    }
+
+    if (startIndex > 0 || endIndex < this.filteredItems.length) {
+      const itemCount = this.filteredItems.filter((e) => e.type === "item").length;
+      const currentItemIndex =
+        this.filteredItems.slice(0, this.selectedIndex).filter((e) => e.type === "item").length + 1;
+      lines.push(theme.fg("dim", `  (${currentItemIndex}/${itemCount})`));
+    }
+
+    return lines;
+  }
+
+  handleInput(data: string): void {
+    const kb = getKeybindings();
+
+    if (kb.matches(data, "tui.select.up")) {
+      this.selectedIndex = this.view.findNextItem(this.selectedIndex, -1);
+      return;
+    }
+    if (kb.matches(data, "tui.select.down")) {
+      this.selectedIndex = this.view.findNextItem(this.selectedIndex, 1);
+      return;
+    }
+    if (kb.matches(data, "tui.select.pageUp")) {
+      let target = Math.max(0, this.selectedIndex - this.maxVisible);
+      while (target < this.filteredItems.length && this.filteredItems[target]?.type !== "item") {
+        target++;
+      }
+      if (target < this.filteredItems.length) {
+        this.selectedIndex = target;
+      }
+      return;
+    }
+    if (kb.matches(data, "tui.select.pageDown")) {
+      let target = Math.min(this.filteredItems.length - 1, this.selectedIndex + this.maxVisible);
+      while (target >= 0 && this.filteredItems[target]?.type !== "item") {
+        target--;
+      }
+      if (target >= 0) {
+        this.selectedIndex = target;
+      }
+      return;
+    }
+    if (kb.matches(data, "tui.select.cancel")) {
+      this.onCancel?.();
+      return;
+    }
+    if (matchesKey(data, "ctrl+c")) {
+      this.onExit?.();
+      return;
+    }
+    if (kb.matches(data, "tui.input.tab")) {
+      this.onSwitchMode?.();
+      return;
+    }
+    if (data === " " || kb.matches(data, "tui.select.confirm")) {
+      return this.toggling.toggleSelected();
+    }
+
+    this.searchInput.handleInput(data);
+    this.view.filterItems(this.searchInput.getValue());
   }
 
   constructor(
@@ -140,17 +200,20 @@ export default class ResourceList
     terminalHeight?: number,
     writeScope: configSelectorTypes.ConfigWriteScope = "global",
   ) {
-    super();
+    this.patterns = new ResourcePatterns(this);
+    this.overrides = new ResourceOverrides(this);
+    this.toggling = new ResourceToggling(this);
+    this.view = new ResourceListView(this);
     this.groupsByScope = groupsByScope;
     this.settingsManager = settingsManager;
     this.cwd = cwd;
     this.agentDir = agentDir;
     this.writeScope = writeScope;
-    this.inheritedEnabledByKey = this.buildInheritedEnabledMap(groupsByScope.global);
+    this.inheritedEnabledByKey = this.overrides.buildInheritedEnabledMap(groupsByScope.global);
     this.searchInput = new Input();
     const chrome = 8;
     this.maxVisible = Math.max(5, (terminalHeight ?? 24) - chrome);
-    this.buildFlatList();
+    this.view.buildFlatList();
     this.filteredItems = [...this.flatItems];
   }
 }
