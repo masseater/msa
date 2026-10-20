@@ -56,7 +56,7 @@ export default class BuiltinCommandRouter {
       "/fork": after(() => this.mode.selectors.fork.showUserMessageSelector()),
       "/help": after(() => this.mode.commands.info.handleHelpCommand()),
       "/keybindings": after(() => this.mode.commands.info.handleHotkeysCommand()),
-      "/logout": after(() => void this.mode.models.login.loginFlow.logout()),
+      "/logout": after(() => void this.mode.models.login.loginFlow.logouts.logout()),
       "/memory": after(() => this.mode.selectors.views.showMemoryView()),
       "/release-notes": after(() => this.mode.commands.info.handleChangelogCommand()),
       "/resume": after(() => this.mode.selectors.sessions.showSessionSelector()),

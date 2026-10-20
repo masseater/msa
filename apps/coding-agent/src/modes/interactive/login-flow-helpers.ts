@@ -1,17 +1,9 @@
 import type compatTypes from "@msa/ai/compat.types";
 import type aiTypes from "@msa/ai/index.types";
-import { Effect } from "effect";
 
-import config from "../../config.ts";
-import awaitingModule from "../../core/awaiting.ts";
 import modelResolver from "../../core/model-resolver.ts";
 import type loginDialogTypes from "./components/login-dialog.types.ts";
-import type loginFlowTypes from "./login-flow.types.ts";
-
 const { defaultModelPerProvider } = modelResolver;
-const { awaited, awaiting } = awaitingModule;
-const { getAuthPath } = config;
-
 const LOGIN_CANCELLED = "Login cancelled";
 
 const CREDENTIAL_TIMEOUT_MS = 15_000;
@@ -37,23 +29,6 @@ function llamaCppPostLoginGuidance(actionLabel: string, loadedModelCount: number
     : `${actionLabel}. Use /model to select a loaded llama.cpp model, or /llama to manage models.`;
 }
 
-function completeProviderAuthenticationPart2(
-  deferSelection: boolean,
-  host: loginFlowTypes.LoginFlowHost,
-  actionLabel: string,
-  finishAuthentication: () => Promise<void>,
-): Effect.Effect<void> {
-  return awaiting(function* () {
-    if (deferSelection) {
-      host.showStatus(
-        `${actionLabel}. Credentials saved to ${getAuthPath()}. Refreshing model catalog…`,
-      );
-    } else {
-      yield* awaited(finishAuthentication());
-    }
-  });
-}
-
 function notifyAuthDialog(
   dialog: loginDialogTypes.LoginDialogComponent,
   event: aiTypes.AuthEvent,
@@ -73,7 +48,6 @@ function notifyAuthDialog(
 const loginFlowHelpers = {
   CREDENTIAL_TIMEOUT_MS,
   LOGIN_CANCELLED,
-  completeProviderAuthenticationPart2,
   hasDefaultModelProvider,
   isUnknownModel,
   llamaCppPostLoginGuidance,

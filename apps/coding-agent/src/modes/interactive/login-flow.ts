@@ -1,83 +1,70 @@
-import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
-import type agentSessionTypes from "../../core/agent-session.types.ts";
-import modelResolver from "../../core/model-resolver.ts";
-import ExtensionSelectorComponent from "./components/extension-selector.ts";
-import type oauthSelectorTypes from "./components/oauth-selector.types.ts";
-import loginFlowHelpers from "./login-flow-helpers.ts";
-import LoginFlowLayer8 from "./login-flow-layer-8.ts";
+import awaitingModule from "../../core/awaiting.ts";
 import type loginFlowTypes from "./login-flow.types.ts";
+import LoginPrompts from "./login-flow/login-prompts.ts";
+import LogoutFlow from "./login-flow/logout-flow.ts";
+import ProviderAuthentication from "./login-flow/provider-authentication.ts";
+import ProviderLogin from "./login-flow/provider-login.ts";
+import LoginProviderOptions from "./login-flow/provider-options.ts";
+import ProviderSelection from "./login-flow/provider-selection.ts";
+import ServiceLogin from "./login-flow/service-login.ts";
 
-const { defaultModelPerProvider } = modelResolver;
-const { hasDefaultModelProvider, isUnknownModel } = loginFlowHelpers;
+const { awaitingWith, performed } = awaitingModule;
 
-export default class LoginFlow extends LoginFlowLayer8 {
-  static showAuthTypeSelectorPart1(
-    self: LoginFlow,
-    host: loginFlowTypes.LoginFlowHost,
-    serviceLabel: "Sign in to a service" | undefined,
-    subscriptionLabel: string,
-    providerOptions: oauthSelectorTypes.AuthSelectorProvider[] | undefined,
-    title: string,
-    options: string[],
-  ): void {
-    host.editorSlot.showSelector((done) => {
-      const onSelect = (option: string) => {
-        done();
-        if (option === serviceLabel) {
-          void Effect.runFork(self.showServiceSelector());
+export default class LoginFlow {
+  readonly providers: LoginProviderOptions;
+  readonly prompts: LoginPrompts;
+  readonly logouts: LogoutFlow;
+  readonly services: ServiceLogin;
+  readonly providerLogin: ProviderLogin;
+  readonly selection: ProviderSelection;
+  readonly authentication: ProviderAuthentication;
+
+  host!: loginFlowTypes.LoginFlowHost;
+
+  login(providerRef?: string): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const normalizedRef = providerRef?.trim().toLowerCase();
+        if (normalizedRef === undefined || normalizedRef === "") {
+          this.selection.showAuthTypeSelector();
           return;
         }
-        const authType = option === subscriptionLabel ? "oauth" : "api_key";
-        if (providerOptions === undefined) {
-          self.showProviderSelector(authType);
+        const service = this.services.serviceByRef(normalizedRef);
+        if (service !== undefined) {
+          yield* performed(this.services.loginService(service));
           return;
         }
-        const providerOption = providerOptions.find((provider) => provider.authType === authType);
-        if (providerOption !== undefined) {
-          void Effect.runFork(
-            self.startProviderLogin(providerOption, () =>
-              self.showAuthTypeSelector(providerOptions),
-            ),
+
+        const providerOptions = this.providers
+          .getProviderOptions()
+          .filter(
+            (provider) =>
+              provider.id.toLowerCase() === normalizedRef ||
+              provider.name.toLowerCase() === normalizedRef,
           );
+        if (providerOptions.length === 1) {
+          yield* performed(this.providerLogin.startProviderLogin(providerOptions[0]!));
+          return;
         }
-      };
-      const onCancel = () => {
-        done();
-        host.ui.requestRender();
-      };
-      const selector = new ExtensionSelectorComponent(title, options, onSelect, onCancel);
-      return { component: selector, dispose: () => selector.dispose(), focus: selector };
-    });
+        if (new Set(providerOptions.map((provider) => provider.id)).size === 1) {
+          this.selection.showAuthTypeSelector(providerOptions);
+          return;
+        }
+        this.selection.showProviderSelector(undefined, providerRef);
+      }, this),
+    );
   }
 
-  static completeProviderAuthenticationHost(
-    self: LoginFlow,
-    authType: "oauth" | "api_key",
-    providerName: string,
-    previousModel: compatTypes.Model<any> | undefined,
-    providerId: string,
-  ): {
-    host: loginFlowTypes.LoginFlowHost;
-    actionLabel: string;
-    deferSelection: boolean;
-    session: agentSessionTypes.AgentSession;
-  } {
-    const { host } = self;
-    const actionLabel =
-      authType === "oauth" ? `Logged in to ${providerName}` : `Saved API key for ${providerName}`;
-
-    const session = host.session;
-    const deferSelection =
-      isUnknownModel(previousModel) &&
-      hasDefaultModelProvider(providerId) &&
-      !session.models.selection.modelRuntime
-        .getAvailableSnapshot()
-        .some(
-          (model) =>
-            model.provider === providerId && model.id === defaultModelPerProvider[providerId],
-        );
-    return { actionLabel, deferSelection, host, session };
+  constructor(host: loginFlowTypes.LoginFlowHost) {
+    this.providers = new LoginProviderOptions(this);
+    this.prompts = new LoginPrompts(this);
+    this.logouts = new LogoutFlow(this);
+    this.services = new ServiceLogin(this);
+    this.providerLogin = new ProviderLogin(this);
+    this.selection = new ProviderSelection(this);
+    this.authentication = new ProviderAuthentication(this);
+    this.host = host;
   }
 }

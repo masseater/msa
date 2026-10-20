@@ -86,7 +86,7 @@ export default class AutocompleteSetup {
         prefix: string,
       ): tuiTypes.AutocompleteItem[] | null => {
         const providers = getLoginProviderCompletionOptions(
-          this.mode.models.login.loginFlow.getProviderOptions(),
+          this.mode.models.login.loginFlow.providers.getProviderOptions(),
         );
         const items = [
           ...providers.map((provider) => ({

@@ -81,7 +81,9 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
     skillCommands: Map<string, string>;
     sessionManager: { getCwd: () => string };
     fdPath: null;
-    loginFlow: { getProviderOptions: () => oauthSelectorTypes.AuthSelectorProvider[] };
+    loginFlow: {
+      providers: { getProviderOptions: () => oauthSelectorTypes.AuthSelectorProvider[] };
+    };
   };
   const createBaseAutocompleteProvider = (
     InteractiveMode as unknown as {
@@ -93,12 +95,14 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
   const fakeThis: LoginCommandMode = {
     fdPath: null,
     loginFlow: {
-      getProviderOptions: () => [
-        { authType: "oauth", id: "anthropic", name: "Anthropic", subscription: true },
-        { authType: "api_key", id: "anthropic", name: "Anthropic", subscription: true },
-        { authType: "api_key", id: "openai", name: "OpenAI" },
-        { authType: "oauth", id: "openrouter", name: "OpenRouter", subscription: false },
-      ],
+      providers: {
+        getProviderOptions: () => [
+          { authType: "oauth", id: "anthropic", name: "Anthropic", subscription: true },
+          { authType: "api_key", id: "anthropic", name: "Anthropic", subscription: true },
+          { authType: "api_key", id: "openai", name: "OpenAI" },
+          { authType: "oauth", id: "openrouter", name: "OpenRouter", subscription: false },
+        ],
+      },
     },
     session: {
       extensions: { binding: { extensionRunner: { getRegisteredCommands: () => [] } } },

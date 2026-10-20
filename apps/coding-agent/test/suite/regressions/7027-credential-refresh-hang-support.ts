@@ -10,7 +10,9 @@ function complete(
   authType: "oauth" | "api_key",
   previousModel: aiTypes.Model<aiTypes.Api>,
 ): Promise<void> {
-  return new LoginFlow(host as loginFlowTypes.LoginFlowHost).completeProviderAuthentication(
+  return new LoginFlow(
+    host as loginFlowTypes.LoginFlowHost,
+  ).authentication.completeProviderAuthentication(
     providerId,
     providerName,
     authType,

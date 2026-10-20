@@ -44,7 +44,7 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
     },
   } as unknown as loginFlowTypes.LoginFlowHost);
 
-  const apiKeyOptions = loginFlow.getProviderOptions("api_key");
+  const apiKeyOptions = loginFlow.providers.getProviderOptions("api_key");
   expect(apiKeyOptions).toMatchObject([
     {
       authType: "api_key",
@@ -59,7 +59,7 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
       name: "OpenCode Zen",
     },
   ]);
-  expect(loginFlow.getProviderOptions("oauth")).toMatchObject([
+  expect(loginFlow.providers.getProviderOptions("oauth")).toMatchObject([
     { authType: "oauth", id: "anthropic", name: "Anthropic" },
   ]);
 };
