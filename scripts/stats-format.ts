@@ -33,4 +33,13 @@ const quantile: {
 
 const median = (numbers: ReadonlyArray<number | null>): number | null => quantile(numbers, 0.5);
 
-export { formatInt, formatIsoMillis, formatPercent, median, quantile, ratio };
+const statsFormat = {
+  formatInt,
+  formatIsoMillis,
+  formatPercent,
+  median,
+  quantile,
+  ratio,
+};
+
+export default statsFormat;

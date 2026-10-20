@@ -2,49 +2,11 @@ import { Buffer } from "node:buffer";
 
 import { Array as Arr, Predicate } from "effect";
 
-import type { HostShape } from "./host.ts";
-import { median } from "./stats-format.ts";
+import type editReplacementTypes from "./edit-replacement.types.ts";
+import type hostTypes from "./host.types.ts";
+import statsFormat from "./stats-format.ts";
 
-type EditMode = "multi" | "single";
-
-interface Replacement {
-  readonly oldBytes: number;
-  readonly newBytes: number;
-  readonly totalEditBytes: number;
-  readonly sharedPrefixBytes: number;
-  readonly sharedSuffixBytes: number;
-  readonly sharedContextBytes: number;
-  readonly coreOldBytes: number;
-  readonly coreNewBytes: number;
-  readonly coreBytes: number;
-  readonly wrapperPayloadBytes: number;
-  readonly inflationRatio: number | null;
-  readonly noCoreChange: boolean;
-}
-
-interface EditAnalysis {
-  readonly path: string;
-  readonly extension: string;
-  readonly mode: EditMode;
-  readonly argStyle: string;
-  readonly editsCount: number;
-  readonly oldBytes: number;
-  readonly newBytes: number;
-  readonly totalEditBytes: number;
-  readonly sharedPrefixBytes: number;
-  readonly sharedSuffixBytes: number;
-  readonly sharedContextBytes: number;
-  readonly coreOldBytes: number;
-  readonly coreNewBytes: number;
-  readonly coreBytes: number;
-  readonly wrapperPayloadBytes: number;
-  readonly noCoreChange?: boolean;
-  readonly noCoreChangeCount?: number;
-  readonly inflationRatio: number | null;
-  readonly medianEditInflationRatio: number | null;
-  readonly maxEditInflationRatio: number | null;
-  readonly perEdit: ReadonlyArray<Replacement>;
-}
+const { median } = statsFormat;
 
 const utf8Bytes = (value: string): number => Buffer.byteLength(value, "utf8");
 
@@ -64,7 +26,7 @@ const commonSuffixLength = (left: string, right: string): number => {
   return index;
 };
 
-const analyzeReplacement = (oldText: string, newText: string): Replacement => {
+const analyzeReplacement = (oldText: string, newText: string): editReplacementTypes.Replacement => {
   const prefixChars = commonPrefixLength(oldText, newText);
   const oldRemainder = oldText.slice(prefixChars);
   const newRemainder = newText.slice(prefixChars);
@@ -80,25 +42,25 @@ const analyzeReplacement = (oldText: string, newText: string): Replacement => {
   const coreBytes = coreOldBytes + coreNewBytes;
   const totalEditBytes = oldBytes + newBytes;
   return {
-    oldBytes,
+    coreBytes,
+    coreNewBytes,
+    coreOldBytes,
+    inflationRatio: coreBytes === 0 ? null : totalEditBytes / coreBytes,
     newBytes,
-    totalEditBytes,
+    noCoreChange: coreBytes === 0,
+    oldBytes,
+    sharedContextBytes: sharedPrefixBytes + sharedSuffixBytes,
     sharedPrefixBytes,
     sharedSuffixBytes,
-    sharedContextBytes: sharedPrefixBytes + sharedSuffixBytes,
-    coreOldBytes,
-    coreNewBytes,
-    coreBytes,
+    totalEditBytes,
     wrapperPayloadBytes: totalEditBytes - coreBytes,
-    inflationRatio: coreBytes === 0 ? null : totalEditBytes / coreBytes,
-    noCoreChange: coreBytes === 0,
   };
 };
 
 const dotfileExtension = (base: string): string =>
   base.startsWith(".") && !base.slice(1).includes(".") ? base.toLowerCase() : "[no_ext]";
 
-const pathExtension = (host: HostShape, filePath: string): string => {
+const pathExtension = (host: hostTypes.HostShape, filePath: string): string => {
   if (filePath.length === 0) return "[unknown]";
   const extension = host.extname(filePath).toLowerCase();
   return extension === "" ? dotfileExtension(host.basename(filePath)) : extension;
@@ -140,33 +102,33 @@ const argStyleOf = (args: unknown): string =>
 const stringFieldOr = (args: unknown, primary: string, fallback: string): string =>
   stringField(args, primary) ?? stringField(args, fallback) ?? "";
 
-const sumReplacements = (perEdit: ReadonlyArray<Replacement>) =>
+const sumReplacements = (perEdit: ReadonlyArray<editReplacementTypes.Replacement>) =>
   perEdit.reduce(
     (totals, edit) => ({
-      oldBytes: totals.oldBytes + edit.oldBytes,
+      coreBytes: totals.coreBytes + edit.coreBytes,
+      coreNewBytes: totals.coreNewBytes + edit.coreNewBytes,
+      coreOldBytes: totals.coreOldBytes + edit.coreOldBytes,
       newBytes: totals.newBytes + edit.newBytes,
-      totalEditBytes: totals.totalEditBytes + edit.totalEditBytes,
+      noCoreChangeCount: totals.noCoreChangeCount + (edit.noCoreChange ? 1 : 0),
+      oldBytes: totals.oldBytes + edit.oldBytes,
+      sharedContextBytes: totals.sharedContextBytes + edit.sharedContextBytes,
       sharedPrefixBytes: totals.sharedPrefixBytes + edit.sharedPrefixBytes,
       sharedSuffixBytes: totals.sharedSuffixBytes + edit.sharedSuffixBytes,
-      sharedContextBytes: totals.sharedContextBytes + edit.sharedContextBytes,
-      coreOldBytes: totals.coreOldBytes + edit.coreOldBytes,
-      coreNewBytes: totals.coreNewBytes + edit.coreNewBytes,
-      coreBytes: totals.coreBytes + edit.coreBytes,
+      totalEditBytes: totals.totalEditBytes + edit.totalEditBytes,
       wrapperPayloadBytes: totals.wrapperPayloadBytes + edit.wrapperPayloadBytes,
-      noCoreChangeCount: totals.noCoreChangeCount + (edit.noCoreChange ? 1 : 0),
     }),
     {
-      oldBytes: 0,
+      coreBytes: 0,
+      coreNewBytes: 0,
+      coreOldBytes: 0,
       newBytes: 0,
-      totalEditBytes: 0,
+      noCoreChangeCount: 0,
+      oldBytes: 0,
+      sharedContextBytes: 0,
       sharedPrefixBytes: 0,
       sharedSuffixBytes: 0,
-      sharedContextBytes: 0,
-      coreOldBytes: 0,
-      coreNewBytes: 0,
-      coreBytes: 0,
+      totalEditBytes: 0,
       wrapperPayloadBytes: 0,
-      noCoreChangeCount: 0,
     },
   );
 
@@ -175,7 +137,7 @@ const multiAnalysis = (options: {
   readonly edits: ReadonlyArray<unknown>;
   readonly extension: string;
   readonly path: string;
-}): EditAnalysis => {
+}): editReplacementTypes.EditAnalysis => {
   const perEdit = options.edits.map((edit) =>
     analyzeReplacement(stringField(edit, "oldText") ?? "", stringField(edit, "newText") ?? ""),
   );
@@ -184,23 +146,23 @@ const multiAnalysis = (options: {
   );
   const totals = sumReplacements(perEdit);
   return {
-    path: options.path,
-    extension: options.extension,
-    mode: "multi",
     argStyle: options.argStyle,
     editsCount: options.edits.length,
+    extension: options.extension,
+    mode: "multi",
+    path: options.path,
     ...totals,
     inflationRatio: totals.coreBytes === 0 ? null : totals.totalEditBytes / totals.coreBytes,
-    medianEditInflationRatio: median(inflations),
     maxEditInflationRatio: inflations.length > 0 ? Math.max(...inflations) : null,
+    medianEditInflationRatio: median(inflations),
     perEdit,
   };
 };
 
 const analyzeEditArguments = (options: {
   readonly args: unknown;
-  readonly host: HostShape;
-}): EditAnalysis => {
+  readonly host: hostTypes.HostShape;
+}): editReplacementTypes.EditAnalysis => {
   const { args } = options;
   const path = stringField(args, "path") ?? "";
   const extension = pathExtension(options.host, path);
@@ -212,17 +174,20 @@ const analyzeEditArguments = (options: {
     stringFieldOr(args, "newText", "new_string"),
   );
   return {
-    path,
-    extension,
-    mode: "single",
     argStyle,
     editsCount: 1,
+    extension,
+    mode: "single",
+    path,
     ...replacement,
-    medianEditInflationRatio: replacement.inflationRatio,
     maxEditInflationRatio: replacement.inflationRatio,
+    medianEditInflationRatio: replacement.inflationRatio,
     perEdit: [replacement],
   };
 };
 
-export type { EditAnalysis, EditMode, Replacement };
-export { analyzeEditArguments };
+const editReplacement = {
+  analyzeEditArguments,
+};
+
+export default editReplacement;

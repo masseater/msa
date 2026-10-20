@@ -3,10 +3,15 @@ import { homedir } from "node:os";
 import { NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path } from "effect";
 
-import { captureProcess, processRunnerLayer, runInherit } from "./capture-process.ts";
-import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
-import { RELEASE_PLATFORMS, archiveFileNameFor, hostPlatformName } from "./release-platforms.ts";
-import { runMainWith } from "./run-main.ts";
+import captureProcessModule from "./capture-process.ts";
+import codingAgentPackage from "./coding-agent-package.ts";
+import releasePlatforms from "./release-platforms.ts";
+import runMain from "./run-main.ts";
+
+const { Workspace, workspaceLayer } = codingAgentPackage;
+const { RELEASE_PLATFORMS, archiveFileNameFor, hostPlatformName } = releasePlatforms;
+const { captureProcess, processRunnerLayer, runInherit } = captureProcessModule;
+const { runMainWith } = runMain;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 

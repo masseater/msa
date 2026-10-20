@@ -1,67 +1,33 @@
 import { Effect, Predicate, Schema } from "effect";
 
-import type { SinceFilter } from "./auto-since.ts";
-import { analyzeEditArguments } from "./edit-replacement.ts";
-import type { EditAnalysis } from "./edit-replacement.ts";
-import type { HostShape } from "./host.ts";
-import {
-  collectSessionRecords,
-  emptySessionFileCounts,
-  forEachDecodedLine,
-  messageOf,
-} from "./sessions.ts";
-import {
-  callOriginOf,
-  contentBlocks,
-  toolCallEntrySchema,
-  toolCallIdOf,
-  toolCallsOf,
-} from "./tool-calls.ts";
-import type { Block, CallOrigin } from "./tool-calls.ts";
+import type autoSinceTypes from "./auto-since.types.ts";
+import editReplacement from "./edit-replacement.ts";
+import type editToolScanTypes from "./edit-tool-scan.types.ts";
+import type hostTypes from "./host.types.ts";
+import sessions from "./sessions.ts";
+import toolCalls from "./tool-calls.ts";
+import type toolCallsTypes from "./tool-calls.types.ts";
+
+const { callOriginOf, contentBlocks, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
+const { analyzeEditArguments } = editReplacement;
+const { collectSessionRecords, emptySessionFileCounts, forEachDecodedLine, messageOf } = sessions;
 
 const MULTIPLE_OCCURRENCES = /^found \d+ occurrences/mu;
 
-interface EditRecord extends EditAnalysis {
-  readonly sessionFile: string;
-  readonly assistantEntryId: string | undefined;
-  readonly toolCallId: string;
-  readonly timestamp: string | undefined;
-  readonly api: string | null;
-  readonly provider: string;
-  readonly model: string;
-  readonly providerModel: string;
-  success: boolean | null;
-  errorKind: string | null;
-  errorText: string;
-  resultSummary: string;
-  matchedResult: boolean;
-}
-
-interface EditScanMeta {
-  sessionsDir: string;
-  sessionFilesScanned: number;
-  sessionFilesIncluded: number;
-  sessionFilesSkippedOlderThanSince: number;
-  sessionFilesWithEditCalls: number;
-  since: SinceFilter | null;
-  malformedLines: number;
-  unmatchedToolResults: number;
-}
-
 const EntrySchema = toolCallEntrySchema({
-  toolName: Schema.optional(Schema.String),
-  toolCallId: Schema.optional(Schema.String),
   isError: Schema.optional(Schema.Boolean),
+  toolCallId: Schema.optional(Schema.String),
+  toolName: Schema.optional(Schema.String),
 });
 
 type Entry = typeof EntrySchema.Type;
 type Message = NonNullable<Entry["message"]>;
 
 interface FileScan {
-  readonly host: HostShape;
-  readonly meta: EditScanMeta;
-  readonly pending: Map<string, EditRecord>;
-  readonly records: Array<EditRecord>;
+  readonly host: hostTypes.HostShape;
+  readonly meta: editToolScanTypes.EditScanMeta;
+  readonly pending: Map<string, editToolScanTypes.EditRecord>;
+  readonly records: Array<editToolScanTypes.EditRecord>;
   readonly sessionFile: string;
 }
 
@@ -103,20 +69,24 @@ const errorKindOf = (options: {
   return options.isError ? classifyErrorText(options.text) : null;
 };
 
-const editRecordOf = (origin: CallOrigin, block: Block, host: HostShape): EditRecord => ({
-  sessionFile: origin.sessionFile,
-  assistantEntryId: origin.assistantEntryId,
-  toolCallId: toolCallIdOf(block),
-  timestamp: origin.timestamp,
+const editRecordOf = (
+  origin: toolCallsTypes.CallOrigin,
+  block: toolCallsTypes.Block,
+  host: hostTypes.HostShape,
+): editToolScanTypes.EditRecord => ({
   api: origin.api,
-  provider: origin.provider,
-  model: origin.model,
-  providerModel: origin.providerModel,
-  success: null,
+  assistantEntryId: origin.assistantEntryId,
   errorKind: null,
   errorText: "",
-  resultSummary: "",
   matchedResult: false,
+  model: origin.model,
+  provider: origin.provider,
+  providerModel: origin.providerModel,
+  resultSummary: "",
+  sessionFile: origin.sessionFile,
+  success: null,
+  timestamp: origin.timestamp,
+  toolCallId: toolCallIdOf(block),
   ...analyzeEditArguments({ args: block["arguments"], host }),
 });
 
@@ -129,7 +99,7 @@ const trackEditCalls = (scan: FileScan, entry: Entry, message: Message): void =>
   }
 };
 
-const resolveRecord = (record: EditRecord, message: Message): void => {
+const resolveRecord = (record: editToolScanTypes.EditRecord, message: Message): void => {
   const text = textContentOf(message.content);
   const isError = message.isError === true;
   record.matchedResult = true;
@@ -160,15 +130,15 @@ const applyEntry = (scan: FileScan, entry: Entry): void => {
   if (isEditResult(message)) applyToolResult(scan, message);
 };
 
-const markUnresolved = (record: EditRecord): void => {
+const markUnresolved = (record: editToolScanTypes.EditRecord): void => {
   record.matchedResult = false;
   record.success = null;
   record.errorKind = errorKindOf({ isError: false, matchedResult: false, text: "" });
 };
 
 const scanFile = (options: {
-  readonly host: HostShape;
-  readonly meta: EditScanMeta;
+  readonly host: hostTypes.HostShape;
+  readonly meta: editToolScanTypes.EditScanMeta;
   readonly sessionFile: string;
 }) =>
   Effect.gen(function* () {
@@ -188,18 +158,18 @@ const scanFile = (options: {
   });
 
 const scanEditCalls = (options: {
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly sessionsDir: string;
-  readonly since: SinceFilter | null;
+  readonly since: autoSinceTypes.SinceFilter | null;
 }) =>
   Effect.gen(function* () {
     const { host } = options;
-    const meta: EditScanMeta = {
+    const meta: editToolScanTypes.EditScanMeta = {
       sessionsDir: options.sessionsDir,
       ...emptySessionFileCounts(),
+      malformedLines: 0,
       sessionFilesWithEditCalls: 0,
       since: options.since,
-      malformedLines: 0,
       unmatchedToolResults: 0,
     };
     const records = yield* collectSessionRecords({
@@ -210,5 +180,8 @@ const scanEditCalls = (options: {
     return { meta, records };
   });
 
-export type { EditRecord, EditScanMeta };
-export { scanEditCalls };
+const editToolScan = {
+  scanEditCalls,
+};
+
+export default editToolScan;

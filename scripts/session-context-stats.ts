@@ -2,16 +2,24 @@ import { homedir } from "node:os";
 
 import { Console, Data, DateTime, Effect, Option, Schema } from "effect";
 
-import { flagOption, parseCommandLine, requiredOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { IndentedJson } from "./json.ts";
-import { REPORT_TIME_ZONE, reportZone } from "./report-zone.ts";
-import { buildHtmlReport, buildTextReport } from "./session-context-report.ts";
-import { scanSessions } from "./session-context-scan.ts";
-import { buildSummary } from "./session-context-summary.ts";
-import { loadContextWindows } from "./session-context-windows.ts";
+import cliOptions from "./cli-options.ts";
+import hostModule from "./host.ts";
+import jsonModule from "./json.ts";
+import reportZoneModule from "./report-zone.ts";
+import sessionContextReport from "./session-context-report.ts";
+import sessionContextScan from "./session-context-scan.ts";
+import type sessionContextStatsTypes from "./session-context-stats.types.ts";
+import sessionContextSummary from "./session-context-summary.ts";
+import sessionContextWindows from "./session-context-windows.ts";
+
+const { IndentedJson } = jsonModule;
+const { Host, runScript } = hostModule;
+const { flagOption, parseCommandLine, requiredOption } = cliOptions;
+const { buildSummary } = sessionContextSummary;
+const { buildHtmlReport, buildTextReport } = sessionContextReport;
+const { REPORT_TIME_ZONE, reportZone } = reportZoneModule;
+const { loadContextWindows } = sessionContextWindows;
+const { scanSessions } = sessionContextScan;
 
 const HELP = `Usage: node scripts/session-context-stats.ts [options]
 
@@ -48,7 +56,7 @@ class SessionContextStatsError extends Data.TaggedError("SessionContextStatsErro
 
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
-const defaultArgs = (host: HostShape): Args => ({
+const defaultArgs = (host: sessionContextStatsTypes.HostShape): Args => ({
   allSessions: false,
   bashContains: [],
   cwd: process.cwd(),
@@ -65,7 +73,7 @@ const fail = (message: string) => new SessionContextStatsError({ message });
 const requiredValue = (
   name: string,
   set: (parsed: Args, value: string) => void,
-): readonly [string, CliOption<Args, SessionContextStatsError>] =>
+): readonly [string, sessionContextStatsTypes.CliOption<Args, SessionContextStatsError>] =>
   requiredOption({
     apply: (parsed, value) => Effect.sync(() => set(parsed, value)),
     missing: (option) => fail(`Missing value for argument: ${option}`),
@@ -75,9 +83,14 @@ const requiredValue = (
 const flag = (
   name: string,
   set: (parsed: Args) => void,
-): readonly [string, CliOption<Args, SessionContextStatsError>] => [name, flagOption(set)];
+): readonly [string, sessionContextStatsTypes.CliOption<Args, SessionContextStatsError>] => [
+  name,
+  flagOption(set),
+];
 
-const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, SessionContextStatsError>]> = [
+const OPTIONS: ReadonlyArray<
+  readonly [string, sessionContextStatsTypes.CliOption<Args, SessionContextStatsError>]
+> = [
   requiredValue("--sessions-dir", (parsed, value) => {
     parsed.sessionsDir = value;
   }),
@@ -113,7 +126,7 @@ const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, SessionContextSta
   }),
 ];
 
-const parseArgs = (host: HostShape) =>
+const parseArgs = (host: sessionContextStatsTypes.HostShape) =>
   parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
 
 const sinceMillisOf = (since: string | undefined) =>

@@ -3,15 +3,18 @@ import { styleText } from "node:util";
 
 import { Console, Effect, Predicate } from "effect";
 
-import {
-  type FileEntry,
-  parseSessionEntries,
-  type SessionMessageEntry,
-} from "../apps/coding-agent/src/core/session-manager.ts";
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { runSubagent } from "./session-transcripts-agent.ts";
-import { aggregationPrompt, analysisPrompt } from "./session-transcripts-prompts.ts";
+import sessionManagerSupport from "../apps/coding-agent/src/core/session-manager-support.ts";
+import type sessionManagerTypes from "../apps/coding-agent/src/core/session-manager.types.ts";
+import hostModule from "./host.ts";
+import type hostTypes from "./host.types.ts";
+import sessionTranscriptsAgent from "./session-transcripts-agent.ts";
+import sessionTranscriptsPrompts from "./session-transcripts-prompts.ts";
+
+const { Host, runScript } = hostModule;
+const { runSubagent } = sessionTranscriptsAgent;
+const { aggregationPrompt, analysisPrompt } = sessionTranscriptsPrompts;
+
+const { parseSessionEntries } = sessionManagerSupport;
 
 const MAX_CHARS_PER_FILE = 100_000;
 
@@ -21,7 +24,7 @@ interface Args {
   readonly outputDir: string;
 }
 
-const cwdToSessionDir = (host: HostShape, cwd: string): string =>
+const cwdToSessionDir = (host: hostTypes.HostShape, cwd: string): string =>
   `--${host.resolve(cwd).replaceAll("/", "-").slice(1)}--`;
 
 const isTextBlock = (block: unknown): boolean =>
@@ -43,9 +46,9 @@ const extractTextContent = (content: unknown): string => {
 const isConversationRole = (role: string | undefined): role is "assistant" | "user" =>
   role === "user" || role === "assistant";
 
-const transcriptMessage = (entry: FileEntry): ReadonlyArray<string> => {
+const transcriptMessage = (entry: sessionManagerTypes.FileEntry): ReadonlyArray<string> => {
   if (entry.type !== "message") return [];
-  const { role, content } = (entry as SessionMessageEntry).message as {
+  const { role, content } = (entry as sessionManagerTypes.SessionMessageEntry).message as {
     role?: string;
     content?: unknown;
   };
@@ -54,7 +57,7 @@ const transcriptMessage = (entry: FileEntry): ReadonlyArray<string> => {
   return text.trim() === "" ? [] : [`[${role.toUpperCase()}]\n${text}`];
 };
 
-const parseSession = (host: HostShape, filePath: string) =>
+const parseSession = (host: hostTypes.HostShape, filePath: string) =>
   Effect.map(host.readText(filePath), (text) =>
     parseSessionEntries(text).flatMap(transcriptMessage),
   );
@@ -71,10 +74,10 @@ const positionalCwd = (args: ReadonlyArray<string>, outputIndex: number): string
   return args.find((arg, index) => !options.has(index) && !arg.startsWith("--") && arg !== "");
 };
 
-const outputDirOf = (host: HostShape, value: string | undefined): string =>
+const outputDirOf = (host: hostTypes.HostShape, value: string | undefined): string =>
   value === undefined || value === "" ? host.resolve("./session-transcripts") : host.resolve(value);
 
-const parseArgs = (host: HostShape): Args => {
+const parseArgs = (host: hostTypes.HostShape): Args => {
   const args = process.argv.slice(2);
   const outputIndex = args.indexOf("--output");
   return {
@@ -87,7 +90,7 @@ const parseArgs = (host: HostShape): Args => {
 const transcriptFileName = (index: number): string =>
   `session-transcripts-${String(index).padStart(3, "0")}.txt`;
 
-const collectTranscripts = (host: HostShape, sessionDir: string) =>
+const collectTranscripts = (host: hostTypes.HostShape, sessionDir: string) =>
   Effect.gen(function* () {
     const names = yield* host.readDirectory(sessionDir);
     const sessionFiles = [...names.filter((name) => name.endsWith(".jsonl"))].sort();
@@ -130,7 +133,7 @@ const chunkTranscripts = (transcripts: ReadonlyArray<string>): ReadonlyArray<Tra
 
 const writeChunk = (options: {
   readonly chunk: TranscriptChunk;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly index: number;
   readonly outputDir: string;
 }) =>
@@ -144,7 +147,7 @@ const writeChunk = (options: {
   });
 
 const writeTranscriptFiles = (
-  host: HostShape,
+  host: hostTypes.HostShape,
   outputDir: string,
   transcripts: ReadonlyArray<string>,
 ) =>
@@ -156,7 +159,7 @@ const writeTranscriptFiles = (
     return outputFiles;
   });
 
-const agentsMdSectionFor = (host: HostShape, cwd: string) =>
+const agentsMdSectionFor = (host: hostTypes.HostShape, cwd: string) =>
   Effect.gen(function* () {
     const candidates = [host.join(homedir(), ".msa/agent/AGENTS.md"), host.join(cwd, "AGENTS.md")];
     const agentsMdFiles = yield* Effect.filter(candidates, (file) => host.exists(file));
@@ -169,7 +172,7 @@ const agentsMdSectionFor = (host: HostShape, cwd: string) =>
 
 const reportOutcome = (options: {
   readonly failed: string;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly missing: string;
   readonly output: string;
   readonly success: boolean;
@@ -186,7 +189,7 @@ const reportOutcome = (options: {
 
 const analyzeFile = (options: {
   readonly file: string;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly outputDir: string;
   readonly prompt: string;
 }) =>
@@ -215,7 +218,7 @@ const analyzeFile = (options: {
 
 const aggregate = (options: {
   readonly agentsMdFiles: ReadonlyArray<string>;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly outputDir: string;
 }) =>
   Effect.gen(function* () {

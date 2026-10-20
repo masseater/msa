@@ -11,4 +11,8 @@ const getOrCreate: {
   return created;
 });
 
-export { getOrCreate };
+const maps = {
+  getOrCreate,
+};
+
+export default maps;

@@ -1,16 +1,10 @@
 import { Array as Arr, Effect, Schema, pipe } from "effect";
 
-import {
-  blockWhen,
-  localBin,
-  projectRoot,
-  readHookInput,
-  runCommand,
-  runHook,
-  writeJson,
-} from "./env.ts";
-import { HookPlatform } from "./platform.ts";
-import type { CommandResult } from "./platform.ts";
+import env from "./env.ts";
+import HookPlatform from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
+
+const { blockWhen, localBin, projectRoot, readHookInput, runCommand, runHook, writeJson } = env;
 
 const PostToolUseInput = Schema.Struct({
   tool_input: Schema.Struct({ file_path: Schema.optional(Schema.String) }),
@@ -18,8 +12,8 @@ const PostToolUseInput = Schema.Struct({
 
 const PostToolUseOutput = Schema.Struct({
   hookSpecificOutput: Schema.Struct({
-    hookEventName: Schema.Literal("PostToolUse"),
     additionalContext: Schema.String,
+    hookEventName: Schema.Literal("PostToolUse"),
   }),
 });
 
@@ -60,7 +54,7 @@ const runFallow = Effect.fn("runFallow")(function* runFallow(
 });
 
 const reportDuplication = (
-  runs: readonly CommandResult[],
+  runs: readonly platformTypes.CommandResult[],
 ): Effect.Effect<void, never, HookPlatform> => {
   const duplication = Arr.dedupe(
     runs
@@ -72,11 +66,11 @@ const reportDuplication = (
   }
   return writeJson(PostToolUseOutput, {
     hookSpecificOutput: {
-      hookEventName: "PostToolUse",
       additionalContext: [
         "fallow が重複を検出した。共通化すべきか判断すること。",
         ...duplication,
       ].join("\n"),
+      hookEventName: "PostToolUse",
     },
   });
 };

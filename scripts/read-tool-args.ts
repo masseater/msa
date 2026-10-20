@@ -2,10 +2,14 @@ import { homedir } from "node:os";
 
 import { Data, Effect } from "effect";
 
-import { flagOption, parseCommandLine, valueOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
-import type { HostShape } from "./host.ts";
-import { scanOptions } from "./scan-options.ts";
+import cliOptions from "./cli-options.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import type hostTypes from "./host.types.ts";
+import type readToolArgsTypes from "./read-tool-args.types.ts";
+import scanOptionsModule from "./scan-options.ts";
+
+const { flagOption, parseCommandLine, valueOption } = cliOptions;
+const { scanOptions } = scanOptionsModule;
 
 const DEFAULT_TOP = 20;
 
@@ -25,24 +29,11 @@ Options:
   -h, --help             Show this help
 `;
 
-interface Args {
-  allSessions: boolean;
-  autoSincePath: string | undefined;
-  bucket: "day" | "week";
-  includeRecords: boolean;
-  json: boolean;
-  modelFilter: string | undefined;
-  sessionsDir: string;
-  since: string | undefined;
-  text: boolean;
-  top: number;
-}
-
 class ReadToolStatsError extends Data.TaggedError("ReadToolStatsError")<{
   readonly message: string;
 }> {}
 
-const defaultArgs = (host: HostShape): Args => ({
+const defaultArgs = (host: hostTypes.HostShape): readToolArgsTypes.Args => ({
   allSessions: false,
   autoSincePath: host.join(
     process.cwd(),
@@ -67,13 +58,15 @@ const fail = (message: string) => new ReadToolStatsError({ message });
 
 const parseBucket = (
   value: string | undefined,
-): Effect.Effect<Args["bucket"], ReadToolStatsError> =>
+): Effect.Effect<readToolArgsTypes.Args["bucket"], ReadToolStatsError> =>
   value === "day" || value === "week"
     ? Effect.succeed(value)
     : Effect.fail(fail("--bucket must be day or week"));
 
-const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, ReadToolStatsError>]> = [
-  ...scanOptions<Args, ReadToolStatsError>(fail),
+const OPTIONS: ReadonlyArray<
+  readonly [string, cliOptionsTypes.CliOption<readToolArgsTypes.Args, ReadToolStatsError>]
+> = [
+  ...scanOptions<readToolArgsTypes.Args, ReadToolStatsError>(fail),
   [
     "--bucket",
     valueOption((parsed, value) =>
@@ -90,8 +83,12 @@ const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, ReadToolStatsErro
   ],
 ];
 
-const parseArgs = (host: HostShape) =>
+const parseArgs = (host: hostTypes.HostShape) =>
   parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
 
-export type { Args };
-export { parseArgs, ReadToolStatsError };
+const readToolArgs = {
+  ReadToolStatsError,
+  parseArgs,
+};
+
+export default readToolArgs;

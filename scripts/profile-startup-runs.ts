@@ -1,36 +1,22 @@
 import { Console, Effect, Ref, Stream } from "effect";
 
-import type { CommandOptions, HostShape } from "./host.ts";
-import { fail } from "./profile-startup-args.ts";
-import type { Mode, ProfileOptions, Runtime } from "./profile-startup-args.ts";
-import { formatMs, nowMs, parseStartupTimings } from "./profile-startup-report.ts";
-import type { RunResult } from "./profile-startup-report.ts";
-import { getStateRequest, handleLine, rpcElapsed } from "./profile-startup-rpc.ts";
-import type { LineContext, RpcState } from "./profile-startup-rpc.ts";
+import type hostTypes from "./host.types.ts";
+import profileStartupArgs from "./profile-startup-args.ts";
+import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
+import profileStartupReport from "./profile-startup-report.ts";
+import type profileStartupReportTypes from "./profile-startup-report.types.ts";
+import profileStartupRpc from "./profile-startup-rpc.ts";
+import type profileStartupRpcTypes from "./profile-startup-rpc.types.ts";
+import type profileStartupRunsTypes from "./profile-startup-runs.types.ts";
 
-interface Paths {
-  readonly bundledDistCli: string;
-  readonly distCli: string;
-  readonly packageDir: string;
-  readonly repoRoot: string;
-  readonly srcCli: string;
-}
-
-interface RunParams {
-  readonly host: HostShape;
-  readonly measuredIndex: number | undefined;
-  readonly options: ProfileOptions & { readonly label: string };
-  readonly paths: Paths;
-  readonly profileDir: string;
-  readonly runIndex: number;
-  readonly runtime: Runtime;
-}
+const { formatMs, nowMs, parseStartupTimings } = profileStartupReport;
+const { fail } = profileStartupArgs;
+const { getStateRequest, handleLine, rpcElapsed } = profileStartupRpc;
 
 const isWindows = process.platform === "win32";
 
 const BUILD_COMMANDS = (bundle: boolean) => [
   {
-    label: "Dependency build",
     args: [
       "run",
       "build",
@@ -43,10 +29,11 @@ const BUILD_COMMANDS = (bundle: boolean) => [
       "--workspace",
       "libs/agent",
     ],
+    label: "Dependency build",
   },
   {
-    label: "Coding-agent build",
     args: ["run", bundle ? "build" : "build:unbundled", "--workspace", "apps/coding-agent"],
+    label: "Coding-agent build",
   },
 ];
 
@@ -54,7 +41,7 @@ const withoutTrailingNewline = (text: string) => (text.endsWith("\n") ? text.sli
 
 const runBuild = (options: {
   readonly bundle: boolean;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly repoRoot: string;
 }) =>
   Effect.gen(function* () {
@@ -83,22 +70,29 @@ const runBuild = (options: {
     yield* Console.log(`Build completed in ${formatMs((yield* nowMs) - startedAt)}`);
   });
 
-const benchmarkArgsOf = (mode: Mode): ReadonlyArray<string> =>
+const benchmarkArgsOf = (mode: profileStartupArgsTypes.Mode): ReadonlyArray<string> =>
   mode === "rpc" ? ["--no-session", "--mode", "rpc"] : ["--no-session"];
 
-const profileArgsOf = (params: RunParams, profileName: string): ReadonlyArray<string> =>
+const profileArgsOf = (
+  params: profileStartupRunsTypes.RunParams,
+  profileName: string,
+): ReadonlyArray<string> =>
   params.options.cpuProfile
     ? ["--cpu-prof", `--cpu-prof-dir=${params.profileDir}`, `--cpu-prof-name=${profileName}`]
     : [];
 
-const runtimeCommand = (params: RunParams, mode: Mode, profileName: string) => {
+const runtimeCommand = (
+  params: profileStartupRunsTypes.RunParams,
+  mode: profileStartupArgsTypes.Mode,
+  profileName: string,
+) => {
   const benchmarkArgs = benchmarkArgsOf(mode);
   const profileArgs = profileArgsOf(params, profileName);
   if (params.runtime === "bun") {
-    return { command: "bun", args: [...profileArgs, params.paths.srcCli, ...benchmarkArgs] };
+    return { args: [...profileArgs, params.paths.srcCli, ...benchmarkArgs], command: "bun" };
   }
   const entry = params.options.bundle ? params.paths.bundledDistCli : params.paths.distCli;
-  return { command: process.execPath, args: [...profileArgs, entry, ...benchmarkArgs] };
+  return { args: [...profileArgs, entry, ...benchmarkArgs], command: process.execPath };
 };
 
 const OFFLINE_ENV: Readonly<Record<string, string>> = {
@@ -110,7 +104,7 @@ const agentDirEnv = (agentDir: string | undefined): Readonly<Record<string, stri
   agentDir === undefined ? {} : { MSA_CODING_AGENT_DIR: agentDir };
 
 const benchmarkEnv = (
-  params: RunParams,
+  params: profileStartupRunsTypes.RunParams,
   isolatedAgentDir: string | undefined,
 ): Readonly<Record<string, string>> => {
   const { options } = params;
@@ -125,12 +119,15 @@ const benchmarkEnv = (
 const CHILD_IO = {
   rpc: { stdin: "pipe", stdout: "pipe" },
   tui: { stdin: "inherit", stdout: "inherit" },
-} as const satisfies Record<Mode, Pick<CommandOptions, "stdin" | "stdout">>;
+} as const satisfies Record<
+  profileStartupArgsTypes.Mode,
+  Pick<hostTypes.CommandOptions, "stdin" | "stdout">
+>;
 
 const spawnBenchmark = (options: {
   readonly isolatedAgentDir: string | undefined;
-  readonly mode: Mode;
-  readonly params: RunParams;
+  readonly mode: profileStartupArgsTypes.Mode;
+  readonly params: profileStartupRunsTypes.RunParams;
   readonly profileName: string;
 }) => {
   const { params } = options;
@@ -145,7 +142,7 @@ const spawnBenchmark = (options: {
 };
 
 const withAgentDir = <A, E, R>(
-  params: RunParams,
+  params: profileStartupRunsTypes.RunParams,
   use: (isolatedAgentDir: string | undefined) => Effect.Effect<A, E, R>,
 ) => {
   if (!params.options.isolatedAgentDir) return use(undefined);
@@ -163,7 +160,7 @@ const withAgentDir = <A, E, R>(
 };
 
 const finishRun = (
-  params: RunParams,
+  params: profileStartupRunsTypes.RunParams,
   profileName: string,
   result: { readonly elapsedMs: number; readonly stderr: string },
 ) =>
@@ -178,16 +175,16 @@ const finishRun = (
       elapsedMs: result.elapsedMs,
       profilePath,
       timings: parseStartupTimings(result.stderr),
-    } satisfies RunResult;
+    } satisfies profileStartupReportTypes.RunResult;
   });
 
 const exitFailure = (stderr: string, exitCode: number) =>
   fail(stderr.trim() === "" ? `Benchmark child exited with code ${exitCode}` : stderr.trim());
 
-const profileNameOf = (params: RunParams) =>
+const profileNameOf = (params: profileStartupRunsTypes.RunParams) =>
   `${params.options.label}-${String(params.runIndex + 1).padStart(3, "0")}.cpuprofile`;
 
-const runTui = (params: RunParams) =>
+const runTui = (params: profileStartupRunsTypes.RunParams) =>
   withAgentDir(params, (isolatedAgentDir) =>
     Effect.scoped(
       Effect.gen(function* () {
@@ -204,19 +201,24 @@ const runTui = (params: RunParams) =>
     ),
   );
 
-const runRpc = (params: RunParams) =>
+const runRpc = (params: profileStartupRunsTypes.RunParams) =>
   withAgentDir(params, (isolatedAgentDir) =>
     Effect.scoped(
       Effect.gen(function* () {
         const profileName = profileNameOf(params);
         const child = yield* spawnBenchmark({ isolatedAgentDir, mode: "rpc", params, profileName });
         const requestId = `startup-benchmark-${params.runIndex + 1}`;
-        const state = yield* Ref.make<RpcState>({
+        const state = yield* Ref.make<profileStartupRpcTypes.RpcState>({
           readyElapsedMs: undefined,
           responseError: undefined,
         });
         const startedAt = yield* nowMs;
-        const context: LineContext = { onReady: child.endInput, requestId, startedAt, state };
+        const context: profileStartupRpcTypes.LineContext = {
+          onReady: child.endInput,
+          requestId,
+          startedAt,
+          state,
+        };
         const consumeStdout = Stream.runForEach(child.stdoutLines, handleLine(context));
         yield* child.write(yield* getStateRequest(requestId));
         const [, stderr, exitCode] = yield* Effect.all(
@@ -230,5 +232,10 @@ const runRpc = (params: RunParams) =>
     ),
   );
 
-export type { Paths, RunParams };
-export { runBuild, runRpc, runTui };
+const profileStartupRuns = {
+  runBuild,
+  runRpc,
+  runTui,
+};
+
+export default profileStartupRuns;

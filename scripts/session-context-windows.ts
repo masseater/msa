@@ -2,15 +2,11 @@ import { homedir } from "node:os";
 
 import { Effect, Option, Predicate, Schema } from "effect";
 
-import type { HostShape } from "./host.ts";
+import type hostTypes from "./host.types.ts";
+import type sessionContextWindowsTypes from "./session-context-windows.types.ts";
 
 const PROVIDER_ENTRY = /\n\t"([^"]+)": \{([\s\S]*?\n\t)\},/gu;
 const MODEL_ENTRY = /\n\t\t"([^"]+)": \{[\s\S]*?contextWindow: (\d+),/gu;
-
-interface ContextWindows {
-  readonly sources: ReadonlyArray<string>;
-  readonly windows: Map<string, number>;
-}
 
 const UnknownRecord = Schema.Record(Schema.String, Schema.Unknown);
 
@@ -58,10 +54,10 @@ const overrideWindows = (
   return [...overrides, ...models];
 };
 
-const generatedPath = (host: HostShape): string =>
+const generatedPath = (host: hostTypes.HostShape): string =>
   host.join(process.cwd(), "libs", "ai", "src", "models.generated.ts");
 
-const configPath = (host: HostShape): string =>
+const configPath = (host: hostTypes.HostShape): string =>
   host.join(homedir(), ".msa", "agent", "models.json");
 
 interface WindowSource {
@@ -69,7 +65,7 @@ interface WindowSource {
   readonly source: string;
 }
 
-const readGeneratedWindows = (host: HostShape): Effect.Effect<WindowSource | null> =>
+const readGeneratedWindows = (host: hostTypes.HostShape): Effect.Effect<WindowSource | null> =>
   Effect.gen(function* () {
     const generated = generatedPath(host);
     if (!(yield* host.exists(generated))) return null;
@@ -81,7 +77,7 @@ const configuredWindows = (
 ): ReadonlyArray<readonly [string, number]> =>
   Object.entries(providers ?? {}).flatMap(([provider, entry]) => overrideWindows(provider, entry));
 
-const readConfigWindows = (host: HostShape): Effect.Effect<WindowSource | null> =>
+const readConfigWindows = (host: hostTypes.HostShape): Effect.Effect<WindowSource | null> =>
   Effect.gen(function* () {
     const config = configPath(host);
     if (!(yield* host.exists(config))) return null;
@@ -91,7 +87,9 @@ const readConfigWindows = (host: HostShape): Effect.Effect<WindowSource | null> 
       : null;
   });
 
-const loadContextWindows = (host: HostShape): Effect.Effect<ContextWindows> =>
+const loadContextWindows = (
+  host: hostTypes.HostShape,
+): Effect.Effect<sessionContextWindowsTypes.ContextWindows> =>
   Effect.gen(function* () {
     const found = [yield* readGeneratedWindows(host), yield* readConfigWindows(host)].filter(
       Predicate.isNotNull,
@@ -102,5 +100,8 @@ const loadContextWindows = (host: HostShape): Effect.Effect<ContextWindows> =>
     };
   });
 
-export type { ContextWindows };
-export { loadContextWindows };
+const sessionContextWindows = {
+  loadContextWindows,
+};
+
+export default sessionContextWindows;

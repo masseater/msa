@@ -1,11 +1,9 @@
-import type {
-  GroupStats,
-  NormalizedStats,
-  ProviderStats,
-  ReadSummary,
-} from "./read-tool-summary.ts";
-import { REPORT_TIME_ZONE } from "./report-zone.ts";
-import { formatInt, formatPercent } from "./stats-format.ts";
+import type readToolSummaryTypes from "./read-tool-summary.types.ts";
+import reportZoneModule from "./report-zone.ts";
+import statsFormat from "./stats-format.ts";
+
+const { formatInt, formatPercent } = statsFormat;
+const { REPORT_TIME_ZONE } = reportZoneModule;
 
 const CHART_WIDTH = 40;
 
@@ -17,13 +15,13 @@ const bar = (part: number, total: number): string => {
   return `${"█".repeat(filled)}${"░".repeat(CHART_WIDTH - filled)}`;
 };
 
-const groupLine = (group: GroupStats, indent: string): string =>
+const groupLine = (group: readToolSummaryTypes.GroupStats, indent: string): string =>
   `${indent}${group.key} reads=${formatInt(group.reads).padStart(5)} full=${formatPercent(group.full, group.reads).padStart(6)} partial=${formatPercent(group.partial, group.reads).padStart(6)} ${bar(group.partial, group.reads)}`;
 
-const normalizedLine = (group: NormalizedStats, indent: string): string =>
+const normalizedLine = (group: readToolSummaryTypes.NormalizedStats, indent: string): string =>
   `${indent}${group.key} sessions=${formatInt(group.sessions).padStart(4)} reads/session=${formatRate(group.readsPerSession).padStart(5)} full/session=${formatRate(group.fullPerSession).padStart(5)} partial/session=${formatRate(group.partialPerSession).padStart(5)} medianSessionPartial=${group.medianSessionPartialRate === null ? "n/a" : formatPercent(group.medianSessionPartialRate, 1).padStart(6)} ${bar(group.medianSessionPartialRate ?? 0, 1)}`;
 
-const headerLines = (summary: ReadSummary): ReadonlyArray<string> => {
+const headerLines = (summary: readToolSummaryTypes.ReadSummary): ReadonlyArray<string> => {
   const { counts, filters, scan } = summary;
   return [
     `Scanned ${formatInt(scan.sessionFilesIncluded)} session files in ${scan.sessionsDir}`,
@@ -45,7 +43,10 @@ const headerLines = (summary: ReadSummary): ReadonlyArray<string> => {
   ];
 };
 
-const providerLines = (provider: ProviderStats, bucket: string): ReadonlyArray<string> => [
+const providerLines = (
+  provider: readToolSummaryTypes.ProviderStats,
+  bucket: string,
+): ReadonlyArray<string> => [
   "",
   provider.providerModel,
   `  total reads=${formatInt(provider.reads)} assistantMessages=${formatInt(provider.assistantMessages)}`,
@@ -61,7 +62,7 @@ const providerLines = (provider: ProviderStats, bucket: string): ReadonlyArray<s
   ...provider.normalizedTimeOfDayStats.map((group) => normalizedLine(group, "    ")),
 ];
 
-const reportLines = (summary: ReadSummary): ReadonlyArray<string> => {
+const reportLines = (summary: readToolSummaryTypes.ReadSummary): ReadonlyArray<string> => {
   const bucket = summary.filters.bucket;
   return [
     ...headerLines(summary),
@@ -89,9 +90,10 @@ const reportLines = (summary: ReadSummary): ReadonlyArray<string> => {
 const escapeHtml = (text: string): string =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-const buildReadTextReport = (summary: ReadSummary): string => reportLines(summary).join("\n");
+const buildReadTextReport = (summary: readToolSummaryTypes.ReadSummary): string =>
+  reportLines(summary).join("\n");
 
-const buildReadHtmlReport = (summary: ReadSummary): string => `<!doctype html>
+const buildReadHtmlReport = (summary: readToolSummaryTypes.ReadSummary): string => `<!doctype html>
 <meta charset="utf-8">
 <title>Read tool stats</title>
 <style>
@@ -100,4 +102,9 @@ pre { font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; 
 </style>
 <pre>${escapeHtml(`${buildReadTextReport(summary)}\n`)}</pre>`;
 
-export { buildReadHtmlReport, buildReadTextReport };
+const readToolReport = {
+  buildReadHtmlReport,
+  buildReadTextReport,
+};
+
+export default readToolReport;

@@ -1,18 +1,18 @@
 import { Console, DateTime, Effect, Option, Stream } from "effect";
 
-import { helpOptions, ignoreUnknown, parseOptions, valueOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { getOrCreate } from "./maps.ts";
-import {
-  assistantMessageOf,
-  defaultSessionsBase,
-  encodeSessionDir,
-  jsonlFiles,
-  sessionEntries,
-} from "./sessions.ts";
-import type { Cost, SessionEntry } from "./sessions.ts";
+import cliOptions from "./cli-options.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import hostModule from "./host.ts";
+import type hostTypes from "./host.types.ts";
+import maps from "./maps.ts";
+import sessions from "./sessions.ts";
+import type sessionsTypes from "./sessions.types.ts";
+
+const { assistantMessageOf, defaultSessionsBase, encodeSessionDir, jsonlFiles, sessionEntries } =
+  sessions;
+const { helpOptions, ignoreUnknown, parseOptions, valueOption } = cliOptions;
+const { getOrCreate } = maps;
+const { Host, runScript } = hostModule;
 
 interface DayCost {
   total: number;
@@ -41,17 +41,17 @@ const HELP = `Usage: cost.ts -d <path> -n <days>
 const FILE_TIMESTAMP = /^(\d{4}-\d{2}-\d{2})T(\d{2})-(\d{2})-(\d{2})-(\d{3})Z$/u;
 
 const createDayCost = (): DayCost => ({
-  total: 0,
-  input: 0,
-  output: 0,
   cacheRead: 0,
   cacheWrite: 0,
+  input: 0,
+  output: 0,
   requests: 0,
+  total: 0,
 });
 
 const COST_FIELDS = ["total", "input", "output", "cacheRead", "cacheWrite"] as const;
 
-const addCost = (target: DayCost, cost: Cost): void => {
+const addCost = (target: DayCost, cost: sessionsTypes.Cost): void => {
   for (const field of COST_FIELDS) target[field] += cost[field] ?? 0;
   target.requests += 1;
 };
@@ -77,7 +77,7 @@ const daysOption = valueOption<RawArgs>((parsed, value) =>
   }),
 );
 
-const OPTIONS = new Map<string, CliOption<RawArgs, never>>([
+const OPTIONS = new Map<string, cliOptionsTypes.CliOption<RawArgs, never>>([
   ["--dir", directoryOption],
   ["-d", directoryOption],
   ["--days", daysOption],
@@ -119,11 +119,13 @@ const fileInstant = (file: string): Option.Option<DateTime.Utc> => {
 const describeCost = (label: string, cost: DayCost): string =>
   `  ${label.padEnd(15)} $${cost.total.toFixed(4).padStart(8)}  (${cost.requests} reqs, in: $${cost.input.toFixed(4)}, out: $${cost.output.toFixed(4)}, cache: $${(cost.cacheRead + cost.cacheWrite).toFixed(4)})`;
 
-const entryCost = (entry: SessionEntry): Cost | undefined => assistantMessageOf(entry)?.usage?.cost;
+const entryCost = (entry: sessionsTypes.SessionEntry): sessionsTypes.Cost | undefined =>
+  assistantMessageOf(entry)?.usage?.cost;
 
-const entryInstant = (entry: SessionEntry) => DateTime.make(entry.timestamp ?? 0);
+const entryInstant = (entry: sessionsTypes.SessionEntry) => DateTime.make(entry.timestamp ?? 0);
 
-const providerOf = (entry: SessionEntry): string => entry.message?.provider ?? "undefined";
+const providerOf = (entry: sessionsTypes.SessionEntry): string =>
+  entry.message?.provider ?? "undefined";
 
 const dayCostOf = (stats: Map<string, Map<string, DayCost>>, day: string, provider: string) =>
   getOrCreate(
@@ -132,14 +134,17 @@ const dayCostOf = (stats: Map<string, Map<string, DayCost>>, day: string, provid
     createDayCost,
   );
 
-const recordEntryCost = (stats: Map<string, Map<string, DayCost>>, entry: SessionEntry): void => {
+const recordEntryCost = (
+  stats: Map<string, Map<string, DayCost>>,
+  entry: sessionsTypes.SessionEntry,
+): void => {
   const cost = entryCost(entry);
   const instant = entryInstant(entry);
   if (cost === undefined || Option.isNone(instant)) return;
   addCost(dayCostOf(stats, DateTime.formatIsoDateUtc(instant.value), providerOf(entry)), cost);
 };
 
-const collect = (host: HostShape, sessionsDir: string, cutoff: DateTime.Zoned) =>
+const collect = (host: hostTypes.HostShape, sessionsDir: string, cutoff: DateTime.Zoned) =>
   Effect.gen(function* () {
     const stats = new Map<string, Map<string, DayCost>>();
     const files = yield* jsonlFiles({ directory: sessionsDir, host });

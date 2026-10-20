@@ -2,16 +2,21 @@ import { homedir, tmpdir } from "node:os";
 
 import { Console, Data, DateTime, Effect } from "effect";
 
-import { openBrowser } from "../apps/coding-agent/src/utils/open-browser.ts";
-import { helpOptions, ignoreUnknown, parseOptions, valueOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { jsonlFilesRecursive, requireSessionsDir } from "./sessions.ts";
-import { renderReport } from "./tool-stats-report.ts";
-import type { HistogramRow } from "./tool-stats-report.ts";
-import { scanToolUsage } from "./tool-stats-scan.ts";
-import type { BashCommandStats, ToolStats } from "./tool-stats-scan.ts";
+import openBrowserModule from "../apps/coding-agent/src/utils/open-browser.ts";
+import cliOptions from "./cli-options.ts";
+import hostModule from "./host.ts";
+import sessions from "./sessions.ts";
+import toolStatsReport from "./tool-stats-report.ts";
+import toolStatsScan from "./tool-stats-scan.ts";
+import type toolStatsTypes from "./tool-stats.types.ts";
+
+const { helpOptions, ignoreUnknown, parseOptions, valueOption } = cliOptions;
+const { Host, runScript } = hostModule;
+const { scanToolUsage } = toolStatsScan;
+const { renderReport } = toolStatsReport;
+const { jsonlFilesRecursive, requireSessionsDir } = sessions;
+
+const { openBrowser } = openBrowserModule;
 
 interface Args {
   output: string;
@@ -39,18 +44,22 @@ const BUCKETS: ReadonlyArray<number> = [
 
 const HELP = "Usage: scripts/tool-stats.ts [--sessions-dir <dir>] [--output <file.html>]";
 
-const nonEmptyValue = (set: (parsed: Args, value: string) => void): CliOption<Args, never> =>
+const nonEmptyValue = (
+  set: (parsed: Args, value: string) => void,
+): toolStatsTypes.CliOption<Args, never> =>
   valueOption((parsed, value) =>
     Effect.sync(() => {
       if (value !== undefined && value !== "") set(parsed, value);
     }),
   );
 
-const toolStatsOptions = (host: HostShape): ReadonlyMap<string, CliOption<Args, never>> => {
+const toolStatsOptions = (
+  host: toolStatsTypes.HostShape,
+): ReadonlyMap<string, toolStatsTypes.CliOption<Args, never>> => {
   const output = nonEmptyValue((parsed, value) => {
     parsed.output = host.resolve(value);
   });
-  return new Map<string, CliOption<Args, never>>([
+  return new Map<string, toolStatsTypes.CliOption<Args, never>>([
     [
       "--sessions-dir",
       nonEmptyValue((parsed, value) => {
@@ -63,7 +72,7 @@ const toolStatsOptions = (host: HostShape): ReadonlyMap<string, CliOption<Args, 
   ]);
 };
 
-const parseArgs = (host: HostShape) =>
+const parseArgs = (host: toolStatsTypes.HostShape) =>
   parseOptions({
     args: process.argv.slice(2),
     options: toolStatsOptions(host),
@@ -90,29 +99,33 @@ const bucketLabels = (): ReadonlyArray<string> =>
     return max !== undefined && Number.isFinite(max) ? `${min}-${max}` : `${min}+`;
   });
 
-const toolRowsOf = (tools: Map<string, ToolStats>): ReadonlyArray<HistogramRow> =>
+const toolRowsOf = (
+  tools: Map<string, toolStatsTypes.ToolStats>,
+): ReadonlyArray<toolStatsTypes.HistogramRow> =>
   [...tools.entries()]
     .map(([name, stats]) => ({
-      name,
-      calls: stats.calls,
-      results: stats.results,
-      estimatedTokens: stats.estimatedTokens,
-      samples: stats.samples,
-      errors: stats.errors,
       avg: stats.results > 0 ? stats.estimatedTokens / stats.results : 0,
+      calls: stats.calls,
+      errors: stats.errors,
+      estimatedTokens: stats.estimatedTokens,
       histogram: bucketCounts(stats.samples),
+      name,
+      results: stats.results,
+      samples: stats.samples,
     }))
     .sort((left, right) => right.estimatedTokens - left.estimatedTokens);
 
-const bashRowsOf = (bashCommands: Map<string, BashCommandStats>): ReadonlyArray<HistogramRow> =>
+const bashRowsOf = (
+  bashCommands: Map<string, toolStatsTypes.BashCommandStats>,
+): ReadonlyArray<toolStatsTypes.HistogramRow> =>
   [...bashCommands.entries()]
     .map(([name, stats]) => ({
-      name,
+      avg: stats.samples.length > 0 ? stats.estimatedTokens / stats.samples.length : 0,
       calls: stats.calls,
       estimatedTokens: stats.estimatedTokens,
-      samples: stats.samples,
-      avg: stats.samples.length > 0 ? stats.estimatedTokens / stats.samples.length : 0,
       histogram: bucketCounts(stats.samples),
+      name,
+      samples: stats.samples,
     }))
     .sort((left, right) => right.estimatedTokens - left.estimatedTokens)
     .slice(0, 50);

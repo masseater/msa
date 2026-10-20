@@ -1,40 +1,48 @@
 import { Console, Effect, Schema } from "effect";
 
-import { Host, runScript } from "./host.ts";
-import { IndentedJson } from "./json.ts";
-import { parseArgs, ReadToolStatsError } from "./read-tool-args.ts";
-import type { Args } from "./read-tool-args.ts";
-import { buildReadHtmlReport, buildReadTextReport } from "./read-tool-report.ts";
-import { scanReadCalls } from "./read-tool-scan.ts";
-import type { ReadRecord } from "./read-tool-scan.ts";
-import { buildReadSummary } from "./read-tool-summary.ts";
-import { reportZone } from "./report-zone.ts";
-import { matchesModelFilter, resolveScanScope } from "./scan-options.ts";
+import hostModule from "./host.ts";
+import jsonModule from "./json.ts";
+import readToolArgs from "./read-tool-args.ts";
+import readToolReport from "./read-tool-report.ts";
+import readToolScan from "./read-tool-scan.ts";
+import type readToolStatsTypes from "./read-tool-stats.types.ts";
+import readToolSummary from "./read-tool-summary.ts";
+import reportZoneModule from "./report-zone.ts";
+import scanOptionsModule from "./scan-options.ts";
+
+const { IndentedJson } = jsonModule;
+const { ReadToolStatsError, parseArgs } = readToolArgs;
+const { reportZone } = reportZoneModule;
+const { scanReadCalls } = readToolScan;
+const { buildReadSummary } = readToolSummary;
+const { buildReadHtmlReport, buildReadTextReport } = readToolReport;
+const { Host, runScript } = hostModule;
+const { matchesModelFilter, resolveScanScope } = scanOptionsModule;
 
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
-const bucketKeys = (args: Args) =>
+const bucketKeys = (args: readToolStatsTypes.Args) =>
   Effect.gen(function* () {
     const zone = yield* reportZone;
     const inBucket = args.bucket === "day" ? zone.day : zone.week;
     return {
-      bucketOf: (record: ReadRecord): string =>
+      bucketOf: (record: readToolStatsTypes.ReadRecord): string =>
         Number.isFinite(record.timestampMs) ? inBucket(record.timestampMs) : "[unknown]",
-      hourOf: (record: ReadRecord): string =>
+      hourOf: (record: readToolStatsTypes.ReadRecord): string =>
         Number.isFinite(record.timestampMs) ? zone.hour(record.timestampMs) : "[unknown]",
     };
   });
 
 const printReport = (options: {
-  readonly args: Args;
-  readonly records: ReadonlyArray<ReadRecord>;
+  readonly args: readToolStatsTypes.Args;
+  readonly records: ReadonlyArray<readToolStatsTypes.ReadRecord>;
   readonly summary: ReturnType<typeof buildReadSummary>;
 }) =>
   Effect.gen(function* () {
     const { args, records, summary } = options;
     if (args.json) {
       return yield* Console.log(
-        yield* encodeIndentedJson(args.includeRecords ? { summary, records } : { summary }),
+        yield* encodeIndentedJson(args.includeRecords ? { records, summary } : { summary }),
       );
     }
     if (args.text) return yield* Console.log(buildReadTextReport(summary));

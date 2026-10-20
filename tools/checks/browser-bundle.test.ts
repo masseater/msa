@@ -4,7 +4,9 @@ import { build } from "esbuild";
 import type { BuildOptions, Metafile, Plugin } from "esbuild";
 import { expect, it } from "vite-plus/test";
 
-import { EsbuildFilter } from "../../scripts/esbuild-filter.ts";
+import esbuildFilter from "../../scripts/esbuild-filter.ts";
+
+const { EsbuildFilter } = esbuildFilter;
 
 const DURABLE_REQUIRED_INPUTS = [
   "libs/durable/src/index.ts",

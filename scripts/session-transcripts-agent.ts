@@ -2,24 +2,24 @@ import { styleText } from "node:util";
 
 import { Console, Effect, Predicate, Ref, Result, Schema, Stream } from "effect";
 
-import type { HostShape } from "./host.ts";
+import type hostTypes from "./host.types.ts";
 
 const MAX_DISPLAY_WIDTH = 100;
 
 const EventSchema = Schema.Struct({
-  type: Schema.String,
-  assistantMessageEvent: Schema.optional(
-    Schema.Struct({ type: Schema.String, delta: Schema.optional(Schema.String) }),
-  ),
-  toolName: Schema.optional(Schema.String),
   args: Schema.optional(
     Schema.Struct({
-      path: Schema.optional(Schema.String),
-      offset: Schema.optional(Schema.Finite),
-      limit: Schema.optional(Schema.Finite),
       content: Schema.optional(Schema.String),
+      limit: Schema.optional(Schema.Finite),
+      offset: Schema.optional(Schema.Finite),
+      path: Schema.optional(Schema.String),
     }),
   ),
+  assistantMessageEvent: Schema.optional(
+    Schema.Struct({ delta: Schema.optional(Schema.String), type: Schema.String }),
+  ),
+  toolName: Schema.optional(Schema.String),
+  type: Schema.String,
 });
 
 type AgentEvent = typeof EventSchema.Type;
@@ -92,7 +92,7 @@ const handleEvent = (event: AgentEvent, buffer: Ref.Ref<string>): Effect.Effect<
 
 const runSubagent = (options: {
   readonly cwd: string;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly prompt: string;
 }): Effect.Effect<boolean> =>
   Effect.scoped(
@@ -140,4 +140,8 @@ const runSubagent = (options: {
     ),
   );
 
-export { runSubagent };
+const sessionTranscriptsAgent = {
+  runSubagent,
+};
+
+export default sessionTranscriptsAgent;

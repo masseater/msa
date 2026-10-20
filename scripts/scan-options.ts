@@ -1,21 +1,15 @@
 import { Effect } from "effect";
 
-import { resolveSince } from "./auto-since.ts";
-import { flagOption, stringOption, valueOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
-import type { HostShape } from "./host.ts";
-import { requireSessionsDir } from "./sessions.ts";
+import autoSince from "./auto-since.ts";
+import cliOptions from "./cli-options.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import type hostTypes from "./host.types.ts";
+import type scanOptionsTypes from "./scan-options.types.ts";
+import sessions from "./sessions.ts";
 
-interface ScanArgs {
-  allSessions: boolean;
-  autoSincePath: string | undefined;
-  includeRecords: boolean;
-  json: boolean;
-  modelFilter: string | undefined;
-  sessionsDir: string;
-  since: string | undefined;
-  top: number;
-}
+const { flagOption, stringOption, valueOption } = cliOptions;
+const { requireSessionsDir } = sessions;
+const { resolveSince } = autoSince;
 
 const parseTop = <E>(value: string, error: (message: string) => E): Effect.Effect<number, E> => {
   const top = Number.parseInt(value, 10);
@@ -24,8 +18,8 @@ const parseTop = <E>(value: string, error: (message: string) => E): Effect.Effec
     : Effect.succeed(top);
 };
 
-const stringOptions = <A extends ScanArgs>(): ReadonlyArray<
-  readonly [string, CliOption<A, never>]
+const stringOptions = <A extends scanOptionsTypes.ScanArgs>(): ReadonlyArray<
+  readonly [string, cliOptionsTypes.CliOption<A, never>]
 > => [
   [
     "--sessions-dir",
@@ -53,8 +47,8 @@ const stringOptions = <A extends ScanArgs>(): ReadonlyArray<
   ],
 ];
 
-const flagOptions = <A extends ScanArgs>(): ReadonlyArray<
-  readonly [string, CliOption<A, never>]
+const flagOptions = <A extends scanOptionsTypes.ScanArgs>(): ReadonlyArray<
+  readonly [string, cliOptionsTypes.CliOption<A, never>]
 > => [
   [
     "--json",
@@ -76,9 +70,9 @@ const flagOptions = <A extends ScanArgs>(): ReadonlyArray<
   ],
 ];
 
-const scanOptions = <A extends ScanArgs, E>(
+const scanOptions = <A extends scanOptionsTypes.ScanArgs, E>(
   error: (message: string) => E,
-): ReadonlyArray<readonly [string, CliOption<A, E>]> => [
+): ReadonlyArray<readonly [string, cliOptionsTypes.CliOption<A, E>]> => [
   ...stringOptions<A>(),
   [
     "--top",
@@ -100,9 +94,9 @@ const matchesModelFilter = (options: {
 };
 
 const resolveScanScope = <E>(options: {
-  readonly args: ScanArgs;
+  readonly args: scanOptionsTypes.ScanArgs;
   readonly fail: (message: string) => E;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
 }) =>
   Effect.gen(function* () {
     const { args, host } = options;
@@ -117,5 +111,10 @@ const resolveScanScope = <E>(options: {
     return { host, sessionsDir, since };
   });
 
-export type { ScanArgs };
-export { matchesModelFilter, resolveScanScope, scanOptions };
+const scanOptionsModule = {
+  matchesModelFilter,
+  resolveScanScope,
+  scanOptions,
+};
+
+export default scanOptionsModule;

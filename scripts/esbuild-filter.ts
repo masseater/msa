@@ -4,4 +4,8 @@ class EsbuildFilter extends RegExp {
   }
 }
 
-export { EsbuildFilter };
+const esbuildFilter = {
+  EsbuildFilter,
+};
+
+export default esbuildFilter;

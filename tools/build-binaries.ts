@@ -3,18 +3,23 @@ import { Console, Crypto, Data, Effect, FileSystem, Layer, Path } from "effect";
 import type { PlatformError } from "effect";
 import { Hex } from "effect/encoding";
 
-import { captureProcess, processRunnerLayer, runInherit } from "./capture-process.ts";
-import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
-import {
+import captureProcessModule from "./capture-process.ts";
+import codingAgentPackage from "./coding-agent-package.ts";
+import releasePlatforms from "./release-platforms.ts";
+import type releasePlatformsTypes from "./release-platforms.types.ts";
+import runMain from "./run-main.ts";
+
+const {
   ARCHIVE_FLAGS,
   DIST_ENTRIES,
   RELEASE_PLATFORMS,
-  type ReleasePlatform,
   archiveFileNameFor,
   archiveRootFor,
   hostPlatformName,
-} from "./release-platforms.ts";
-import { runMainWith } from "./run-main.ts";
+} = releasePlatforms;
+const { Workspace, workspaceLayer } = codingAgentPackage;
+const { captureProcess, processRunnerLayer, runInherit } = captureProcessModule;
+const { runMainWith } = runMain;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 const SKIP_BUILD_FLAG = "--skip-build";
@@ -88,15 +93,15 @@ const copyTree: (
     yield* context.fs.copyFile(source, destination);
   });
 
-const workDirFor = (context: Context, platform: ReleasePlatform) =>
+const workDirFor = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) =>
   context.path.join(context.outDir, "work", platform.name);
 
-const payloadDirFor = (context: Context, platform: ReleasePlatform) => {
+const payloadDirFor = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) => {
   const workDir = workDirFor(context, platform);
   return platform.archive === "zip" ? workDir : context.path.join(workDir, "msa");
 };
 
-const archivePathFor = (context: Context, platform: ReleasePlatform) =>
+const archivePathFor = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) =>
   context.path.join(context.outDir, archiveFileNameFor(platform));
 
 const prepareWorkspace = (context: Context) =>
@@ -118,7 +123,11 @@ const prepareWorkspace = (context: Context) =>
     });
   });
 
-const copyPayload = (context: Context, platform: ReleasePlatform, payloadDir: string) =>
+const copyPayload = (
+  context: Context,
+  platform: releasePlatformsTypes.ReleasePlatform,
+  payloadDir: string,
+) =>
   Effect.gen(function* () {
     for (const entry of DIST_ENTRIES) {
       yield* copyTree(
@@ -134,7 +143,7 @@ const copyPayload = (context: Context, platform: ReleasePlatform, payloadDir: st
     );
   });
 
-const buildPlatformArtifact = (context: Context, platform: ReleasePlatform) =>
+const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes.ReleasePlatform) =>
   Effect.gen(function* () {
     const payloadDir = payloadDirFor(context, platform);
     yield* context.fs.remove(workDirFor(context, platform), { force: true, recursive: true });

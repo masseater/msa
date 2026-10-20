@@ -1,49 +1,8 @@
-import { matchesModelFilter } from "./scan-options.ts";
-import type { ScanMeta, SessionRecord } from "./session-context-scan.ts";
+import scanOptionsModule from "./scan-options.ts";
+import type sessionContextScanTypes from "./session-context-scan.types.ts";
+import type sessionContextSummaryTypes from "./session-context-summary.types.ts";
 
-interface GroupSummary {
-  readonly key: string;
-  readonly sessions: number;
-  readonly contextWindows: ReadonlyArray<number>;
-  readonly assistantMessages: number;
-  readonly avgTurns: number;
-  readonly avgDurationMinutes: number;
-  readonly avgMaxPromptTokens: number | null;
-  readonly medianMaxPromptTokens: number | null;
-  readonly avgMaxContextUsagePercent: number | null;
-  readonly medianMaxContextUsagePercent: number | null;
-  readonly medianPreFirstCompactionUsagePercent: number | null;
-  readonly contextKnownSessions: number;
-  readonly sessionsWithCompaction: number;
-  readonly totalCompactions: number;
-  readonly compactionRate: number;
-  readonly over80: number;
-  readonly over90: number;
-  readonly over100: number;
-}
-
-interface ModelSummary extends GroupSummary {
-  readonly byDay: ReadonlyArray<GroupSummary>;
-}
-
-interface SummaryFilters {
-  readonly bashContains: ReadonlyArray<string>;
-  readonly cwd: string | null;
-  readonly model: string | null;
-  readonly modelPrefixes: ReadonlyArray<string>;
-}
-
-interface Summary {
-  readonly filters: SummaryFilters;
-  readonly scan: ScanMeta & {
-    readonly contextWindowSources: ReadonlyArray<string>;
-    readonly timezone: string;
-  };
-  readonly totals: GroupSummary;
-  readonly byDay: ReadonlyArray<GroupSummary>;
-  readonly byModel: ReadonlyArray<GroupSummary>;
-  readonly byModelDay: ReadonlyArray<ModelSummary>;
-}
+const { matchesModelFilter } = scanOptionsModule;
 
 const average = (values: ReadonlyArray<number>): number | null =>
   values.length === 0 ? null : values.reduce((sum, value) => sum + value, 0) / values.length;
@@ -64,7 +23,10 @@ const median = (values: ReadonlyArray<number | null>): number | null =>
     ),
   );
 
-const summarizeSessionGroup = (key: string, group: ReadonlyArray<SessionRecord>): GroupSummary => {
+const summarizeSessionGroup = (
+  key: string,
+  group: ReadonlyArray<sessionContextScanTypes.SessionRecord>,
+): sessionContextSummaryTypes.GroupSummary => {
   const usage = group.flatMap((session) =>
     session.maxContextUsagePercent === null ? [] : [session.maxContextUsagePercent],
   );
@@ -73,42 +35,42 @@ const summarizeSessionGroup = (key: string, group: ReadonlyArray<SessionRecord>)
   );
   const compacted = group.filter((session) => session.compactions > 0).length;
   return {
-    key,
-    sessions: group.length,
-    contextWindows: [
-      ...new Set(
-        group.flatMap((session) => (session.contextWindow === null ? [] : [session.contextWindow])),
-      ),
-    ].sort((left, right) => left - right),
     assistantMessages: group.reduce((sum, session) => sum + session.assistantMessages, 0),
-    avgTurns: group.reduce((sum, session) => sum + session.userMessages, 0) / group.length,
     avgDurationMinutes:
       group.reduce(
         (sum, session) => sum + Math.max(0, session.endMs - session.startMs) / 60_000,
         0,
       ) / group.length,
-    avgMaxPromptTokens: average(tokens),
-    medianMaxPromptTokens: median(tokens),
     avgMaxContextUsagePercent: average(usage),
+    avgMaxPromptTokens: average(tokens),
+    avgTurns: group.reduce((sum, session) => sum + session.userMessages, 0) / group.length,
+    compactionRate: (compacted / group.length) * 100,
+    contextKnownSessions: usage.length,
+    contextWindows: [
+      ...new Set(
+        group.flatMap((session) => (session.contextWindow === null ? [] : [session.contextWindow])),
+      ),
+    ].sort((left, right) => left - right),
+    key,
     medianMaxContextUsagePercent: median(usage),
+    medianMaxPromptTokens: median(tokens),
     medianPreFirstCompactionUsagePercent: median(
       group.map((session) => session.preFirstCompactionUsagePercent),
     ),
-    contextKnownSessions: usage.length,
-    sessionsWithCompaction: compacted,
-    totalCompactions: group.reduce((sum, session) => sum + session.compactions, 0),
-    compactionRate: (compacted / group.length) * 100,
+    over100: group.filter((session) => session.over100).length,
     over80: group.filter((session) => session.over80).length,
     over90: group.filter((session) => session.over90).length,
-    over100: group.filter((session) => session.over100).length,
+    sessions: group.length,
+    sessionsWithCompaction: compacted,
+    totalCompactions: group.reduce((sum, session) => sum + session.compactions, 0),
   };
 };
 
 const summarizeGroups = (
-  sessions: ReadonlyArray<SessionRecord>,
-  keyOf: (session: SessionRecord) => string,
-): ReadonlyArray<GroupSummary> => {
-  const groups = new Map<string, Array<SessionRecord>>();
+  sessions: ReadonlyArray<sessionContextScanTypes.SessionRecord>,
+  keyOf: (session: sessionContextScanTypes.SessionRecord) => string,
+): ReadonlyArray<sessionContextSummaryTypes.GroupSummary> => {
+  const groups = new Map<string, Array<sessionContextScanTypes.SessionRecord>>();
   for (const session of sessions) {
     const key = keyOf(session);
     const group = groups.get(key) ?? [];
@@ -120,12 +82,17 @@ const summarizeGroups = (
     .sort((left, right) => left.key.localeCompare(right.key));
 };
 
-const byModelOrder = (sessions: ReadonlyArray<SessionRecord>): ReadonlyArray<GroupSummary> =>
+const byModelOrder = (
+  sessions: ReadonlyArray<sessionContextScanTypes.SessionRecord>,
+): ReadonlyArray<sessionContextSummaryTypes.GroupSummary> =>
   [...summarizeGroups(sessions, (session) => session.providerModel)].sort(
     (left, right) => right.sessions - left.sessions || left.key.localeCompare(right.key),
   );
 
-const withByDay = (model: GroupSummary, byDay: ReadonlyArray<GroupSummary>): ModelSummary => ({
+const withByDay = (
+  model: sessionContextSummaryTypes.GroupSummary,
+  byDay: ReadonlyArray<sessionContextSummaryTypes.GroupSummary>,
+): sessionContextSummaryTypes.ModelSummary => ({
   ...model,
   byDay,
 });
@@ -146,7 +113,7 @@ const matchesBash = (
 };
 
 const matchesFilters = (
-  session: SessionRecord,
+  session: sessionContextScanTypes.SessionRecord,
   options: {
     readonly bashContains: ReadonlyArray<string>;
     readonly modelFilter: string | undefined;
@@ -163,19 +130,11 @@ const buildSummary = (options: {
   readonly day: (ms: number) => string;
   readonly modelFilter: string | undefined;
   readonly modelPrefixes: ReadonlyArray<string>;
-  readonly scan: Summary["scan"];
-  readonly sessions: ReadonlyArray<SessionRecord>;
-}): Summary => {
+  readonly scan: sessionContextSummaryTypes.Summary["scan"];
+  readonly sessions: ReadonlyArray<sessionContextScanTypes.SessionRecord>;
+}): sessionContextSummaryTypes.Summary => {
   const filtered = options.sessions.filter((session) => matchesFilters(session, options));
   return {
-    filters: {
-      model: options.modelFilter ?? null,
-      modelPrefixes: options.modelPrefixes,
-      bashContains: options.bashContains,
-      cwd: options.cwd,
-    },
-    scan: options.scan,
-    totals: summarizeSessionGroup("total", filtered),
     byDay: summarizeGroups(filtered, (session) => options.day(session.startMs)),
     byModel: byModelOrder(filtered),
     byModelDay: byModelOrder(filtered).map((model) =>
@@ -187,8 +146,19 @@ const buildSummary = (options: {
         ),
       ),
     ),
+    filters: {
+      bashContains: options.bashContains,
+      cwd: options.cwd,
+      model: options.modelFilter ?? null,
+      modelPrefixes: options.modelPrefixes,
+    },
+    scan: options.scan,
+    totals: summarizeSessionGroup("total", filtered),
   };
 };
 
-export type { GroupSummary, ModelSummary, Summary, SummaryFilters };
-export { buildSummary };
+const sessionContextSummary = {
+  buildSummary,
+};
+
+export default sessionContextSummary;

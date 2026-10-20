@@ -1,42 +1,20 @@
 import { Effect, Predicate, Schema } from "effect";
 
-import type { SinceFilter } from "./auto-since.ts";
-import type { HostShape } from "./host.ts";
-import {
+import type autoSinceTypes from "./auto-since.types.ts";
+import type hostTypes from "./host.types.ts";
+import type readToolScanTypes from "./read-tool-scan.types.ts";
+import sessions from "./sessions.ts";
+import toolCalls from "./tool-calls.ts";
+import type toolCallsTypes from "./tool-calls.types.ts";
+
+const { callOriginOf, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
+const {
   collectSessionRecords,
   emptySessionFileCounts,
   forEachDecodedLine,
   messageOf,
   timestampMillis,
-} from "./sessions.ts";
-import { callOriginOf, toolCallEntrySchema, toolCallIdOf, toolCallsOf } from "./tool-calls.ts";
-import type { Block, CallOrigin } from "./tool-calls.ts";
-
-interface ReadRecord {
-  readonly sessionFile: string;
-  readonly assistantEntryId: string | undefined;
-  readonly toolCallId: string;
-  readonly timestamp: string | undefined;
-  readonly timestampMs: number;
-  readonly api: string | null;
-  readonly provider: string;
-  readonly model: string;
-  readonly providerModel: string;
-  readonly path: string;
-  readonly offset: unknown;
-  readonly limit: unknown;
-  readonly mode: "full" | "partial";
-}
-
-interface ReadScanMeta {
-  sessionsDir: string;
-  sessionFilesScanned: number;
-  sessionFilesIncluded: number;
-  sessionFilesSkippedOlderThanSince: number;
-  sessionFilesWithReadCalls: number;
-  since: SinceFilter | null;
-  malformedLines: number;
-}
+} = sessions;
 
 const EntrySchema = toolCallEntrySchema({});
 
@@ -52,25 +30,31 @@ const readPathOf = (args: unknown): string => {
   return Predicate.isString(target) ? target : "";
 };
 
-const readModeOf = (offset: unknown, limit: unknown): ReadRecord["mode"] =>
+const readModeOf = (offset: unknown, limit: unknown): readToolScanTypes.ReadRecord["mode"] =>
   offset === null && limit === null ? "full" : "partial";
 
-const classifyRead = (args: unknown): Pick<ReadRecord, "limit" | "mode" | "offset" | "path"> => {
+const classifyRead = (
+  args: unknown,
+): Pick<readToolScanTypes.ReadRecord, "limit" | "mode" | "offset" | "path"> => {
   const offset = readField(args, "offset") ?? null;
   const limit = readField(args, "limit") ?? null;
-  return { path: readPathOf(args), offset, limit, mode: readModeOf(offset, limit) };
+  return { limit, mode: readModeOf(offset, limit), offset, path: readPathOf(args) };
 };
 
-const readRecordOf = (origin: CallOrigin, timestampMs: number, block: Block): ReadRecord => ({
-  sessionFile: origin.sessionFile,
+const readRecordOf = (
+  origin: toolCallsTypes.CallOrigin,
+  timestampMs: number,
+  block: toolCallsTypes.Block,
+): readToolScanTypes.ReadRecord => ({
+  api: origin.api,
   assistantEntryId: origin.assistantEntryId,
-  toolCallId: toolCallIdOf(block),
+  model: origin.model,
+  provider: origin.provider,
+  providerModel: origin.providerModel,
+  sessionFile: origin.sessionFile,
   timestamp: origin.timestamp,
   timestampMs,
-  api: origin.api,
-  provider: origin.provider,
-  model: origin.model,
-  providerModel: origin.providerModel,
+  toolCallId: toolCallIdOf(block),
   ...classifyRead(block["arguments"]),
 });
 
@@ -78,7 +62,7 @@ const readRecords = (options: {
   readonly entry: Entry;
   readonly sessionFile: string;
   readonly sessionMillis: number | null;
-}): ReadonlyArray<ReadRecord> => {
+}): ReadonlyArray<readToolScanTypes.ReadRecord> => {
   const { entry, sessionFile } = options;
   const message = messageOf(entry);
   if (message === undefined) return [];
@@ -90,14 +74,14 @@ const readRecords = (options: {
 };
 
 const scanFile = (options: {
-  readonly host: HostShape;
-  readonly meta: ReadScanMeta;
+  readonly host: hostTypes.HostShape;
+  readonly meta: readToolScanTypes.ReadScanMeta;
   readonly sessionFile: string;
   readonly sessionMillis: number | null;
 }) =>
   Effect.gen(function* () {
     const { host, meta, sessionFile, sessionMillis } = options;
-    const records: Array<ReadRecord> = [];
+    const records: Array<readToolScanTypes.ReadRecord> = [];
     yield* forEachDecodedLine({
       decode: decodeEntry,
       file: sessionFile,
@@ -114,18 +98,18 @@ const scanFile = (options: {
   });
 
 const scanReadCalls = (options: {
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly sessionsDir: string;
-  readonly since: SinceFilter | null;
+  readonly since: autoSinceTypes.SinceFilter | null;
 }) =>
   Effect.gen(function* () {
     const { host } = options;
-    const meta: ReadScanMeta = {
+    const meta: readToolScanTypes.ReadScanMeta = {
       sessionsDir: options.sessionsDir,
       ...emptySessionFileCounts(),
+      malformedLines: 0,
       sessionFilesWithReadCalls: 0,
       since: options.since,
-      malformedLines: 0,
     };
     const records = yield* collectSessionRecords({
       ...options,
@@ -136,5 +120,8 @@ const scanReadCalls = (options: {
     return { meta, records };
   });
 
-export type { ReadRecord, ReadScanMeta };
-export { scanReadCalls };
+const readToolScan = {
+  scanReadCalls,
+};
+
+export default readToolScan;

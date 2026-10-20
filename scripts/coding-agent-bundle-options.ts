@@ -1,6 +1,8 @@
 import type { BuildOptions, Plugin } from "esbuild";
 
-import { EsbuildFilter } from "./esbuild-filter.ts";
+import esbuildFilter from "./esbuild-filter.ts";
+
+const { EsbuildFilter } = esbuildFilter;
 
 const ALLOWED_EXTERNAL_PACKAGES = new Set([
   "@silvia-odwyer/photon-node",
@@ -64,4 +66,10 @@ const commonBuildOptions = (repoRoot: string): BuildOptions => ({
   banner: BANNER,
 });
 
-export { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions, unbannedBuildOptions };
+const codingAgentBundleOptions = {
+  ALLOWED_EXTERNAL_PACKAGES,
+  commonBuildOptions,
+  unbannedBuildOptions,
+};
+
+export default codingAgentBundleOptions;

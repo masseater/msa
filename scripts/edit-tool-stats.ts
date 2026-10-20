@@ -2,16 +2,22 @@ import { homedir } from "node:os";
 
 import { Console, Data, Effect, Schema } from "effect";
 
-import { flagOption, parseCommandLine, stringOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
-import { buildEditTextReport } from "./edit-tool-report.ts";
-import { scanEditCalls } from "./edit-tool-scan.ts";
-import type { EditRecord } from "./edit-tool-scan.ts";
-import { buildEditSummary } from "./edit-tool-summary.ts";
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { IndentedJson } from "./json.ts";
-import { matchesModelFilter, resolveScanScope, scanOptions } from "./scan-options.ts";
+import cliOptions from "./cli-options.ts";
+import editToolReport from "./edit-tool-report.ts";
+import editToolScan from "./edit-tool-scan.ts";
+import type editToolStatsTypes from "./edit-tool-stats.types.ts";
+import editToolSummary from "./edit-tool-summary.ts";
+import hostModule from "./host.ts";
+import jsonModule from "./json.ts";
+import scanOptionsModule from "./scan-options.ts";
+
+const { IndentedJson } = jsonModule;
+const { Host, runScript } = hostModule;
+const { flagOption, parseCommandLine, stringOption } = cliOptions;
+const { matchesModelFilter, resolveScanScope, scanOptions } = scanOptionsModule;
+const { scanEditCalls } = editToolScan;
+const { buildEditSummary } = editToolSummary;
+const { buildEditTextReport } = editToolReport;
 
 const DEFAULT_TOP = 20;
 
@@ -50,7 +56,7 @@ class EditToolStatsError extends Data.TaggedError("EditToolStatsError")<{
 
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
-const defaultArgs = (host: HostShape): Args => ({
+const defaultArgs = (host: editToolStatsTypes.HostShape): Args => ({
   allSessions: false,
   autoSincePath: host.join(homedir(), ".msa", "agent", "extensions", "edit.ts"),
   extFilter: undefined,
@@ -65,7 +71,9 @@ const defaultArgs = (host: HostShape): Args => ({
 
 const fail = (message: string) => new EditToolStatsError({ message });
 
-const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, EditToolStatsError>]> = [
+const OPTIONS: ReadonlyArray<
+  readonly [string, editToolStatsTypes.CliOption<Args, EditToolStatsError>]
+> = [
   ...scanOptions<Args, EditToolStatsError>(fail),
   [
     "--ext",
@@ -81,13 +89,15 @@ const OPTIONS: ReadonlyArray<readonly [string, CliOption<Args, EditToolStatsErro
   ],
 ];
 
-const parseArgs = (host: HostShape) =>
+const parseArgs = (host: editToolStatsTypes.HostShape) =>
   parseCommandLine({ defaults: defaultArgs(host), fail, help: HELP, options: OPTIONS });
 
-const matchesExtension = (record: EditRecord, extFilter: string | undefined): boolean =>
-  extFilter === undefined || extFilter === "" || record.extension === extFilter;
+const matchesExtension = (
+  record: editToolStatsTypes.EditRecord,
+  extFilter: string | undefined,
+): boolean => extFilter === undefined || extFilter === "" || record.extension === extFilter;
 
-const matchesFilters = (record: EditRecord, args: Args): boolean =>
+const matchesFilters = (record: editToolStatsTypes.EditRecord, args: Args): boolean =>
   matchesModelFilter({ modelFilter: args.modelFilter, providerModel: record.providerModel }) &&
   matchesExtension(record, args.extFilter) &&
   !(args.failedOnly && record.success !== false);
@@ -107,7 +117,7 @@ const program = Effect.gen(function* () {
   });
   if (args.json) {
     return yield* Console.log(
-      yield* encodeIndentedJson(args.includeRecords ? { summary, records: filtered } : { summary }),
+      yield* encodeIndentedJson(args.includeRecords ? { records: filtered, summary } : { summary }),
     );
   }
   return yield* Console.log(buildEditTextReport(summary));

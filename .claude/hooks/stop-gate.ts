@@ -1,6 +1,8 @@
 import { Effect, Schema } from "effect";
 
-import { localBin, runCommand, runHook, writeJson } from "./env.ts";
+import env from "./env.ts";
+
+const { localBin, runCommand, runHook, writeJson } = env;
 
 const REPORTED_OUTPUT_LENGTH = 6000;
 

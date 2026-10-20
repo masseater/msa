@@ -1,7 +1,9 @@
 import { Predicate } from "effect";
 
-import type { EditGroupStats, EditSummary } from "./edit-tool-summary.ts";
-import { formatInt, formatPercent } from "./stats-format.ts";
+import type editToolSummaryTypes from "./edit-tool-summary.types.ts";
+import statsFormat from "./stats-format.ts";
+
+const { formatInt, formatPercent } = statsFormat;
 
 const ratioDigits = (value: number): number => {
   if (value >= 100) return 0;
@@ -25,18 +27,20 @@ const rate = (part: number, total: number, value: number | null): string =>
 
 const isPresent = (value: string | null): value is string => value !== null && value !== "";
 
-const FILTER_PARTS: ReadonlyArray<(filters: EditSummary["filters"]) => string | undefined> = [
+const FILTER_PARTS: ReadonlyArray<
+  (filters: editToolSummaryTypes.EditSummary["filters"]) => string | undefined
+> = [
   (filters) => (isPresent(filters.model) ? `model contains "${filters.model}"` : undefined),
   (filters) => (isPresent(filters.extension) ? `extension = ${filters.extension}` : undefined),
   (filters) => (filters.failedOnly ? "failed only" : undefined),
 ];
 
-const filterLine = (summary: EditSummary): ReadonlyArray<string> => {
+const filterLine = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const parts = FILTER_PARTS.map((part) => part(summary.filters)).filter(Predicate.isNotUndefined);
   return parts.length === 0 ? [] : [`Filters: ${parts.join(", ")}`];
 };
 
-const headerLines = (summary: EditSummary): ReadonlyArray<string> => {
+const headerLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const { counts, scan } = summary;
   return [
     `Scanned ${formatInt(scan.sessionFilesIncluded)} session files in ${scan.sessionsDir}`,
@@ -60,7 +64,7 @@ const headerLines = (summary: EditSummary): ReadonlyArray<string> => {
   ];
 };
 
-const modeLines = (summary: EditSummary): ReadonlyArray<string> => [
+const modeLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => [
   "",
   "Failures by edit type",
   ...summary.modeStats.map(
@@ -81,7 +85,7 @@ const modeLines = (summary: EditSummary): ReadonlyArray<string> => [
   ),
 ];
 
-const providerBlock = (group: EditGroupStats): string =>
+const providerBlock = (group: editToolSummaryTypes.EditGroupStats): string =>
   [
     `  ${group.key}`,
     `    calls: ${formatInt(group.calls)}`,
@@ -91,17 +95,17 @@ const providerBlock = (group: EditGroupStats): string =>
     `    p95 inflation: ${formatRatio(group.p95Inflation)}`,
   ].join("\n");
 
-const extensionLine = (group: EditGroupStats): string =>
+const extensionLine = (group: editToolSummaryTypes.EditGroupStats): string =>
   `  ${group.key.padEnd(10)} calls=${formatInt(group.calls).padStart(6)}  success=${group.successRate === null ? "n/a" : formatPercent(group.success, group.resolved).padStart(6)}  medianInflation=${formatRatio(group.medianInflation)}`;
 
 const groupTable = (
   title: string,
-  groups: ReadonlyArray<EditGroupStats>,
-  formatter: (group: EditGroupStats) => string,
+  groups: ReadonlyArray<editToolSummaryTypes.EditGroupStats>,
+  formatter: (group: editToolSummaryTypes.EditGroupStats) => string,
 ): ReadonlyArray<string> =>
   groups.length === 0 ? [] : ["", title, ...groups.map((group) => formatter(group))];
 
-const inflationLines = (summary: EditSummary): ReadonlyArray<string> => {
+const inflationLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const { counts, inflation } = summary;
   return [
     "",
@@ -126,7 +130,7 @@ const inflationLines = (summary: EditSummary): ReadonlyArray<string> => {
   ];
 };
 
-const clusterLines = (summary: EditSummary): ReadonlyArray<string> => {
+const clusterLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const clusters = summary.sameFileClusters;
   const ratio = clusters.ratioClusterAssistantMessagesToMultiEditAssistantMessages;
   return [
@@ -141,7 +145,7 @@ const clusterLines = (summary: EditSummary): ReadonlyArray<string> => {
   ];
 };
 
-const failureLines = (summary: EditSummary): ReadonlyArray<string> => [
+const failureLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => [
   "",
   "Failures by kind",
   ...(summary.failureKinds.length === 0
@@ -157,7 +161,7 @@ const failureLines = (summary: EditSummary): ReadonlyArray<string> => [
   ),
 ];
 
-const exampleLines = (summary: EditSummary): ReadonlyArray<string> => [
+const exampleLines = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => [
   "",
   `Worst ${formatInt(summary.worstExamples.length)} examples`,
   ...summary.worstExamples.flatMap((example, index) => [
@@ -167,7 +171,7 @@ const exampleLines = (summary: EditSummary): ReadonlyArray<string> => [
   ]),
 ];
 
-const parserNotes = (summary: EditSummary): ReadonlyArray<string> => {
+const parserNotes = (summary: editToolSummaryTypes.EditSummary): ReadonlyArray<string> => {
   const { scan } = summary;
   const notes = [
     ...(scan.malformedLines > 0
@@ -180,7 +184,7 @@ const parserNotes = (summary: EditSummary): ReadonlyArray<string> => {
   return notes.length === 0 ? [] : ["", "Parser notes", ...notes];
 };
 
-const buildEditTextReport = (summary: EditSummary): string =>
+const buildEditTextReport = (summary: editToolSummaryTypes.EditSummary): string =>
   [
     ...headerLines(summary),
     ...modeLines(summary),
@@ -193,4 +197,8 @@ const buildEditTextReport = (summary: EditSummary): string =>
     ...parserNotes(summary),
   ].join("\n");
 
-export { buildEditTextReport };
+const editToolReport = {
+  buildEditTextReport,
+};
+
+export default editToolReport;

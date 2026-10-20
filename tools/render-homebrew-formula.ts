@@ -3,9 +3,13 @@ import { parseArgs } from "node:util";
 import { NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
-import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
-import { RELEASE_PLATFORMS, archiveFileNameFor } from "./release-platforms.ts";
-import { runMainWith } from "./run-main.ts";
+import codingAgentPackage from "./coding-agent-package.ts";
+import releasePlatforms from "./release-platforms.ts";
+import runMain from "./run-main.ts";
+
+const { Workspace, workspaceLayer } = codingAgentPackage;
+const { RELEASE_PLATFORMS, archiveFileNameFor } = releasePlatforms;
+const { runMainWith } = runMain;
 
 const DEFAULT_SUMS = [".artifacts", "binaries", "SHA256SUMS"];
 const DEFAULT_OUT = [".artifacts", "homebrew", "msa.rb"];

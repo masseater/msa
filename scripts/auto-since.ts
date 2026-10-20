@@ -1,19 +1,16 @@
-import { Data, DateTime, Effect, Option } from "effect";
+import { DateTime, Effect, Option } from "effect";
 
-import type { HostShape } from "./host.ts";
-import { formatIsoMillis } from "./stats-format.ts";
+import type autoSinceTypes from "./auto-since.types.ts";
+import type hostTypes from "./host.types.ts";
+import SinceError from "./since-error.ts";
+import statsFormat from "./stats-format.ts";
 
-interface SinceFilter {
-  readonly ms: number;
-  readonly source: string;
-}
-
-class SinceError extends Data.TaggedError("SinceError")<{ readonly message: string }> {}
+const { formatIsoMillis } = statsFormat;
 
 const isPositiveFinite = (ms: number | undefined): ms is number =>
   ms !== undefined && Number.isFinite(ms) && ms > 0;
 
-const fileSince = (host: HostShape, autoSincePath: string) =>
+const fileSince = (host: hostTypes.HostShape, autoSincePath: string) =>
   Effect.gen(function* () {
     if (!(yield* host.exists(autoSincePath))) return null;
     const info = yield* host.stat(autoSincePath);
@@ -24,7 +21,7 @@ const fileSince = (host: HostShape, autoSincePath: string) =>
 const isNonEmpty = (value: string | undefined): value is string =>
   value !== undefined && value !== "";
 
-const explicitSince = (since: string): Effect.Effect<SinceFilter, SinceError> => {
+const explicitSince = (since: string): Effect.Effect<autoSinceTypes.SinceFilter, SinceError> => {
   const parsed = DateTime.make(since);
   return Option.isNone(parsed)
     ? Effect.fail(new SinceError({ message: `Invalid --since value: ${since}` }))
@@ -34,9 +31,9 @@ const explicitSince = (since: string): Effect.Effect<SinceFilter, SinceError> =>
 const resolveSince = (options: {
   readonly allSessions: boolean;
   readonly autoSincePath: string | undefined;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly since: string | undefined;
-}): Effect.Effect<SinceFilter | null, SinceError> =>
+}): Effect.Effect<autoSinceTypes.SinceFilter | null, SinceError> =>
   Effect.gen(function* () {
     if (options.allSessions) return null;
     if (isNonEmpty(options.since)) return yield* explicitSince(options.since);
@@ -45,9 +42,14 @@ const resolveSince = (options: {
   });
 
 const describeSince = (
-  since: SinceFilter | null,
+  since: autoSinceTypes.SinceFilter | null,
 ): { readonly ms: number; readonly iso: string; readonly source: string } | null =>
-  since === null ? null : { ms: since.ms, iso: formatIsoMillis(since.ms), source: since.source };
+  since === null ? null : { iso: formatIsoMillis(since.ms), ms: since.ms, source: since.source };
 
-export type { SinceFilter };
-export { describeSince, resolveSince, SinceError };
+const autoSince = {
+  SinceError,
+  describeSince,
+  resolveSince,
+};
+
+export default autoSince;

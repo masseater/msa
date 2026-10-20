@@ -1,22 +1,12 @@
 import { Effect, Predicate, Schema } from "effect";
 
-import type { HostShape } from "./host.ts";
-import { getOrCreate } from "./maps.ts";
-import { forEachDecodedLine, messageOf } from "./sessions.ts";
+import type hostTypes from "./host.types.ts";
+import maps from "./maps.ts";
+import sessions from "./sessions.ts";
+import type toolStatsScanTypes from "./tool-stats-scan.types.ts";
 
-interface ToolStats {
-  calls: number;
-  results: number;
-  estimatedTokens: number;
-  samples: Array<number>;
-  errors: number;
-}
-
-interface BashCommandStats {
-  calls: number;
-  estimatedTokens: number;
-  samples: Array<number>;
-}
+const { getOrCreate } = maps;
+const { forEachDecodedLine, messageOf } = sessions;
 
 interface ToolCallInfo {
   readonly bashCommand: string | undefined;
@@ -24,25 +14,25 @@ interface ToolCallInfo {
 }
 
 interface Aggregate {
-  readonly bashCommands: Map<string, BashCommandStats>;
+  readonly bashCommands: Map<string, toolStatsScanTypes.BashCommandStats>;
   readonly callsById: Map<string, ToolCallInfo>;
   parseErrors: number;
-  readonly tools: Map<string, ToolStats>;
+  readonly tools: Map<string, toolStatsScanTypes.ToolStats>;
 }
 
 const ContentBlock = Schema.Record(Schema.String, Schema.Unknown);
 
 const EntrySchema = Schema.Struct({
-  type: Schema.optional(Schema.String),
   message: Schema.optional(
     Schema.Struct({
-      role: Schema.optional(Schema.String),
       content: Schema.optional(Schema.Union([Schema.String, Schema.Array(ContentBlock)])),
+      isError: Schema.optional(Schema.Boolean),
+      role: Schema.optional(Schema.String),
       toolCallId: Schema.optional(Schema.String),
       toolName: Schema.optional(Schema.String),
-      isError: Schema.optional(Schema.Boolean),
     }),
   ),
+  type: Schema.optional(Schema.String),
 });
 
 type Entry = typeof EntrySchema.Type;
@@ -54,15 +44,19 @@ const decodeEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(EntrySchema
 const COMMAND_SEPARATOR = /\n|&&|\|\||;|\|/u;
 const COMMAND_SHAPE = /^(?:\w+=\S+\s+)*(?:sudo\s+)?(\S+)(?:\s+(\S+))?/u;
 
-const createToolStats = (): ToolStats => ({
+const createToolStats = (): toolStatsScanTypes.ToolStats => ({
   calls: 0,
-  results: 0,
-  estimatedTokens: 0,
-  samples: [],
   errors: 0,
+  estimatedTokens: 0,
+  results: 0,
+  samples: [],
 });
 
-const createBashStats = (): BashCommandStats => ({ calls: 0, estimatedTokens: 0, samples: [] });
+const createBashStats = (): toolStatsScanTypes.BashCommandStats => ({
+  calls: 0,
+  estimatedTokens: 0,
+  samples: [],
+});
 
 const estimateTokenCount = (text: string): number => Math.ceil(text.length / 4);
 
@@ -129,7 +123,7 @@ const recordToolCalls = (aggregate: Aggregate, content: ReadonlyArray<Block>): v
   }
 };
 
-const addResult = (stats: ToolStats, tokens: number, isError: boolean): void => {
+const addResult = (stats: toolStatsScanTypes.ToolStats, tokens: number, isError: boolean): void => {
   stats.results += 1;
   stats.estimatedTokens += tokens;
   stats.samples.push(tokens);
@@ -177,14 +171,14 @@ const scanToolUsage = ({
   host,
 }: {
   readonly files: ReadonlyArray<string>;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
 }) =>
   Effect.gen(function* () {
     const aggregate: Aggregate = {
-      bashCommands: new Map<string, BashCommandStats>(),
+      bashCommands: new Map<string, toolStatsScanTypes.BashCommandStats>(),
       callsById: new Map<string, ToolCallInfo>(),
       parseErrors: 0,
-      tools: new Map<string, ToolStats>(),
+      tools: new Map<string, toolStatsScanTypes.ToolStats>(),
     };
     yield* Effect.forEach(files, (file) =>
       forEachDecodedLine({
@@ -200,5 +194,8 @@ const scanToolUsage = ({
     return aggregate;
   });
 
-export type { BashCommandStats, ToolStats };
-export { scanToolUsage };
+const toolStatsScan = {
+  scanToolUsage,
+};
+
+export default toolStatsScan;

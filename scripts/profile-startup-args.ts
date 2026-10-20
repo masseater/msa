@@ -1,28 +1,11 @@
-import { Data, Effect, Function } from "effect";
+import { Effect, Function } from "effect";
 
-import { flagOption, parseOptions, requiredOption } from "./cli-options.ts";
-import type { CliOption } from "./cli-options.ts";
+import cliOptions from "./cli-options.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import ProfileError from "./profile-error.ts";
+import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
 
-type Mode = "rpc" | "tui";
-type Runtime = "bun" | "node";
-
-interface ProfileOptions {
-  agentDir: string | undefined;
-  build: boolean;
-  bundle: boolean;
-  cpuProfile: boolean;
-  help: boolean;
-  isolatedAgentDir: boolean;
-  label: string | undefined;
-  mode: Mode;
-  offline: boolean;
-  profileDir: string | undefined;
-  runs: number;
-  runtime: Runtime | "auto";
-  warmup: number;
-}
-
-class ProfileError extends Data.TaggedError("ProfileError")<{ readonly message: string }> {}
+const { flagOption, parseOptions, requiredOption } = cliOptions;
 
 const HELP = `Usage:
   node scripts/profile-coding-agent-node.ts [options]
@@ -65,17 +48,19 @@ const parseIntegerFlag = (value: string, name: string) => {
     : Effect.succeed(parsed);
 };
 
-const parseRuntime = (value: string): Effect.Effect<Runtime | "auto", ProfileError> =>
+const parseRuntime = (
+  value: string,
+): Effect.Effect<profileStartupArgsTypes.Runtime | "auto", ProfileError> =>
   value === "auto" || value === "node" || value === "bun"
     ? Effect.succeed(value)
     : Effect.fail(fail(`Invalid --runtime: ${value}`));
 
-const parseMode = (value: string): Effect.Effect<Mode, ProfileError> =>
+const parseMode = (value: string): Effect.Effect<profileStartupArgsTypes.Mode, ProfileError> =>
   value === "tui" || value === "rpc"
     ? Effect.succeed(value)
     : Effect.fail(fail(`Invalid --mode: ${value}`));
 
-const defaultOptions = (): ProfileOptions => ({
+const defaultOptions = (): profileStartupArgsTypes.ProfileOptions => ({
   agentDir: undefined,
   build: true,
   bundle: false,
@@ -93,14 +78,22 @@ const defaultOptions = (): ProfileOptions => ({
 
 const flag = (
   name: string,
-  set: (options: ProfileOptions) => void,
-): readonly [string, CliOption<ProfileOptions, ProfileError>] => [name, flagOption(set)];
+  set: (options: profileStartupArgsTypes.ProfileOptions) => void,
+): readonly [
+  string,
+  cliOptionsTypes.CliOption<profileStartupArgsTypes.ProfileOptions, ProfileError>,
+] => [name, flagOption(set)];
 
 const valueFlag = (
   name: string,
-  apply: (options: ProfileOptions, value: string) => Effect.Effect<void, ProfileError>,
-): readonly [string, CliOption<ProfileOptions, ProfileError>] =>
-  requiredOption({ apply, missing: (option) => fail(`Missing value for ${option}`), name });
+  apply: (
+    options: profileStartupArgsTypes.ProfileOptions,
+    value: string,
+  ) => Effect.Effect<void, ProfileError>,
+): readonly [
+  string,
+  cliOptionsTypes.CliOption<profileStartupArgsTypes.ProfileOptions, ProfileError>,
+] => requiredOption({ apply, missing: (option) => fail(`Missing value for ${option}`), name });
 
 const assign = <A>(parse: Effect.Effect<A, ProfileError>, set: (value: A) => void) =>
   Effect.map(parse, set);
@@ -169,17 +162,21 @@ const valueOptions = (resolve: (path: string) => string) => [
 
 const profileOptions = (
   resolve: (path: string) => string,
-): ReadonlyMap<string, CliOption<ProfileOptions, ProfileError>> =>
-  new Map([...FLAG_OPTIONS, ...valueOptions(resolve)]);
+): ReadonlyMap<
+  string,
+  cliOptionsTypes.CliOption<profileStartupArgsTypes.ProfileOptions, ProfileError>
+> => new Map([...FLAG_OPTIONS, ...valueOptions(resolve)]);
 
 const parseArgs: {
   (
     resolve: (path: string) => string,
-  ): (argv: ReadonlyArray<string>) => Effect.Effect<ProfileOptions, ProfileError>;
+  ): (
+    argv: ReadonlyArray<string>,
+  ) => Effect.Effect<profileStartupArgsTypes.ProfileOptions, ProfileError>;
   (
     argv: ReadonlyArray<string>,
     resolve: (path: string) => string,
-  ): Effect.Effect<ProfileOptions, ProfileError>;
+  ): Effect.Effect<profileStartupArgsTypes.ProfileOptions, ProfileError>;
 } = Function.dual(2, (argv: ReadonlyArray<string>, resolve: (path: string) => string) =>
   parseOptions({
     args: argv,
@@ -189,5 +186,11 @@ const parseArgs: {
   }),
 );
 
-export type { Mode, ProfileOptions, Runtime };
-export { fail, HELP, ProfileError, parseArgs };
+const profileStartupArgs = {
+  HELP,
+  ProfileError,
+  fail,
+  parseArgs,
+};
+
+export default profileStartupArgs;

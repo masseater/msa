@@ -1,18 +1,15 @@
 import { Console, Effect } from "effect";
 
-interface CliOption<A, E> {
-  readonly apply: (parsed: A, value: string | undefined) => Effect.Effect<void, E>;
-  readonly takesValue: boolean;
-}
+import type cliOptionsTypes from "./cli-options.types.ts";
 
-type CliOptions<A, E> = ReadonlyMap<string, CliOption<A, E>>;
-
-const flagOption = <A>(set: (parsed: A) => void): CliOption<A, never> => ({
+const flagOption = <A>(set: (parsed: A) => void): cliOptionsTypes.CliOption<A, never> => ({
   apply: (parsed) => Effect.sync(() => set(parsed)),
   takesValue: false,
 });
 
-const valueOption = <A, E = never>(apply: CliOption<A, E>["apply"]): CliOption<A, E> => ({
+const valueOption = <A, E = never>(
+  apply: cliOptionsTypes.CliOption<A, E>["apply"],
+): cliOptionsTypes.CliOption<A, E> => ({
   apply,
   takesValue: true,
 });
@@ -21,18 +18,22 @@ const requiredOption = <A, E>(option: {
   readonly apply: (parsed: A, value: string) => Effect.Effect<void, E>;
   readonly missing: (name: string) => E;
   readonly name: string;
-}): readonly [string, CliOption<A, E>] => [
+}): readonly [string, cliOptionsTypes.CliOption<A, E>] => [
   option.name,
   valueOption((parsed, value) =>
     value === undefined ? Effect.fail(option.missing(option.name)) : option.apply(parsed, value),
   ),
 ];
 
-const stringOption = <A>(set: (parsed: A, value: string) => void): CliOption<A, never> =>
+const stringOption = <A>(
+  set: (parsed: A, value: string) => void,
+): cliOptionsTypes.CliOption<A, never> =>
   valueOption((parsed, value) => Effect.sync(() => set(parsed, value ?? "")));
 
-const helpOptions = (help: string): ReadonlyArray<readonly [string, CliOption<unknown, never>]> => {
-  const option: CliOption<unknown, never> = {
+const helpOptions = (
+  help: string,
+): ReadonlyArray<readonly [string, cliOptionsTypes.CliOption<unknown, never>]> => {
+  const option: cliOptionsTypes.CliOption<unknown, never> = {
     apply: () => Console.log(help).pipe(Effect.andThen(Effect.sync(() => process.exit(0)))),
     takesValue: false,
   };
@@ -45,7 +46,7 @@ const helpOptions = (help: string): ReadonlyArray<readonly [string, CliOption<un
 const optionAt = <A, E>(
   args: ReadonlyArray<string>,
   index: number,
-  options: CliOptions<A, E>,
+  options: cliOptionsTypes.CliOptions<A, E>,
 ): readonly [arg: string, value: string | undefined, next: number] => {
   const arg = args[index] ?? "";
   return options.get(arg)?.takesValue === true
@@ -55,7 +56,7 @@ const optionAt = <A, E>(
 
 const optionPairs = <A, E>(
   args: ReadonlyArray<string>,
-  options: CliOptions<A, E>,
+  options: cliOptionsTypes.CliOptions<A, E>,
 ): ReadonlyArray<readonly [arg: string, value: string | undefined]> => {
   const pairs: Array<readonly [string, string | undefined]> = [];
   let index = 0;
@@ -69,7 +70,7 @@ const optionPairs = <A, E>(
 
 const parseOptions = <A, E>(config: {
   readonly args: ReadonlyArray<string>;
-  readonly options: CliOptions<A, E>;
+  readonly options: cliOptionsTypes.CliOptions<A, E>;
   readonly parsed: A;
   readonly unknown: (arg: string) => Effect.Effect<void, E>;
 }): Effect.Effect<A, E> =>
@@ -86,7 +87,7 @@ const parseCommandLine = <A, E>(config: {
   readonly defaults: A;
   readonly fail: (message: string) => E;
   readonly help: string;
-  readonly options: ReadonlyArray<readonly [string, CliOption<A, E>]>;
+  readonly options: ReadonlyArray<readonly [string, cliOptionsTypes.CliOption<A, E>]>;
 }): Effect.Effect<A, E> =>
   parseOptions({
     args: process.argv.slice(2),
@@ -97,8 +98,7 @@ const parseCommandLine = <A, E>(config: {
 
 const ignoreUnknown = (): Effect.Effect<void> => Effect.void;
 
-export type { CliOption, CliOptions };
-export {
+const cliOptions = {
   flagOption,
   helpOptions,
   ignoreUnknown,
@@ -108,3 +108,5 @@ export {
   stringOption,
   valueOption,
 };
+
+export default cliOptions;

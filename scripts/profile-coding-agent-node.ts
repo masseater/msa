@@ -1,15 +1,20 @@
 import { Config, Console, Effect, Option } from "effect";
 
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { fail, HELP, parseArgs } from "./profile-startup-args.ts";
-import type { ProfileOptions, Runtime } from "./profile-startup-args.ts";
-import { buildReport } from "./profile-startup-report.ts";
-import type { RunResult } from "./profile-startup-report.ts";
-import { runBuild, runRpc, runTui } from "./profile-startup-runs.ts";
-import type { Paths, RunParams } from "./profile-startup-runs.ts";
+import hostModule from "./host.ts";
+import type hostTypes from "./host.types.ts";
+import profileStartupArgs from "./profile-startup-args.ts";
+import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
+import profileStartupReport from "./profile-startup-report.ts";
+import type profileStartupReportTypes from "./profile-startup-report.types.ts";
+import profileStartupRuns from "./profile-startup-runs.ts";
+import type profileStartupRunsTypes from "./profile-startup-runs.types.ts";
 
-const makePaths = (host: HostShape): Paths => {
+const { Host, runScript } = hostModule;
+const { runBuild, runRpc, runTui } = profileStartupRuns;
+const { HELP, fail, parseArgs } = profileStartupArgs;
+const { buildReport } = profileStartupReport;
+
+const makePaths = (host: hostTypes.HostShape): profileStartupRunsTypes.Paths => {
   const repoRoot = host.resolve(import.meta.dirname, "..");
   const packageDir = host.join(repoRoot, "apps", "coding-agent");
   return {
@@ -21,14 +26,14 @@ const makePaths = (host: HostShape): Paths => {
   };
 };
 
-const resolveRuntime = (requested: ProfileOptions["runtime"]) =>
+const resolveRuntime = (requested: profileStartupArgsTypes.ProfileOptions["runtime"]) =>
   Effect.gen(function* () {
     if (requested !== "auto") return requested;
     const userAgent = yield* Config.option(Config.String("npm_config_user_agent"));
     return Option.getOrElse(userAgent, () => "").startsWith("bun/") ? "bun" : "node";
   });
 
-const displayPath = (host: HostShape, repoRoot: string) => (path: string) => {
+const displayPath = (host: hostTypes.HostShape, repoRoot: string) => (path: string) => {
   const relativePath = host.relative(repoRoot, path);
   return relativePath !== "" && !relativePath.startsWith("..")
     ? relativePath.replaceAll("\\", "/")
@@ -40,7 +45,10 @@ const isInteractiveTerminal = (): boolean =>
 
 const VALIDATIONS: ReadonlyArray<{
   readonly message: string;
-  readonly violated: (options: ProfileOptions, runtime: Runtime) => boolean;
+  readonly violated: (
+    options: profileStartupArgsTypes.ProfileOptions,
+    runtime: profileStartupArgsTypes.Runtime,
+  ) => boolean;
 }> = [
   {
     message: "--agent-dir and --isolated-agent-dir cannot be combined",
@@ -56,27 +64,42 @@ const VALIDATIONS: ReadonlyArray<{
   },
 ];
 
-const validate = (options: ProfileOptions, runtime: Runtime) => {
+const validate = (
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+) => {
   const violation = VALIDATIONS.find((validation) => validation.violated(options, runtime));
   return violation === undefined ? Effect.void : Effect.fail(fail(violation.message));
 };
 
-const usesUnbundledDist = (options: ProfileOptions, runtime: Runtime): boolean =>
-  runtime === "node" && !options.bundle && !options.build;
+const usesUnbundledDist = (
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+): boolean => runtime === "node" && !options.bundle && !options.build;
 
-const isBundledFacade = (host: HostShape, distCli: string) =>
+const isBundledFacade = (host: hostTypes.HostShape, distCli: string) =>
   Effect.gen(function* () {
     if (!(yield* host.exists(distCli))) return false;
     return (yield* host.readText(distCli)).includes('import "./bundle/cli.js";');
   });
 
-const nodeEntryPath = (paths: Paths, options: ProfileOptions): string =>
-  options.bundle ? paths.bundledDistCli : paths.distCli;
+const nodeEntryPath = (
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+): string => (options.bundle ? paths.bundledDistCli : paths.distCli);
 
-const entryPathOf = (paths: Paths, options: ProfileOptions, runtime: Runtime): string =>
-  runtime === "bun" ? paths.srcCli : nodeEntryPath(paths, options);
+const entryPathOf = (
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+): string => (runtime === "bun" ? paths.srcCli : nodeEntryPath(paths, options));
 
-const checkEntry = (host: HostShape, paths: Paths, options: ProfileOptions, runtime: Runtime) =>
+const checkEntry = (
+  host: hostTypes.HostShape,
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+) =>
   Effect.gen(function* () {
     if (usesUnbundledDist(options, runtime) && (yield* isBundledFacade(host, paths.distCli))) {
       return yield* fail(
@@ -89,10 +112,15 @@ const checkEntry = (host: HostShape, paths: Paths, options: ProfileOptions, runt
     }
   });
 
-const bunEntry = (mode: ProfileOptions["mode"]): string =>
+const bunEntry = (mode: profileStartupArgsTypes.ProfileOptions["mode"]): string =>
   mode === "rpc" ? "apps/coding-agent/src/cli.ts --mode rpc" : "apps/coding-agent/src/cli.ts";
 
-const prepare = (host: HostShape, paths: Paths, options: ProfileOptions, runtime: Runtime) =>
+const prepare = (
+  host: hostTypes.HostShape,
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+) =>
   Effect.gen(function* () {
     if (runtime === "node" && options.build)
       yield* runBuild({ bundle: options.bundle, host, repoRoot: paths.repoRoot });
@@ -106,7 +134,7 @@ const measuredIndexOf = (runIndex: number, warmup: number): number | undefined =
 const runLabel = (runIndex: number, measuredIndex: number | undefined): string =>
   measuredIndex === undefined ? `warmup ${runIndex + 1}` : `run ${measuredIndex}`;
 
-const runAll = (base: Omit<RunParams, "measuredIndex" | "runIndex">) =>
+const runAll = (base: Omit<profileStartupRunsTypes.RunParams, "measuredIndex" | "runIndex">) =>
   Effect.gen(function* () {
     const { runs, warmup } = base.options;
     const indices = Array.from({ length: warmup + runs }, (_, index) => index);
@@ -121,14 +149,16 @@ const runAll = (base: Omit<RunParams, "measuredIndex" | "runIndex">) =>
         return measuredIndex === undefined ? undefined : result;
       }),
     );
-    return results.filter((result): result is RunResult => result !== undefined);
+    return results.filter(
+      (result): result is profileStartupReportTypes.RunResult => result !== undefined,
+    );
   });
 
 const profileDirOf = (options: {
-  readonly host: HostShape;
-  readonly paths: Paths;
+  readonly host: hostTypes.HostShape;
+  readonly paths: profileStartupRunsTypes.Paths;
   readonly profileDir: string | undefined;
-  readonly runtime: Runtime;
+  readonly runtime: profileStartupArgsTypes.Runtime;
 }): string =>
   options.profileDir ??
   options.host.join(
@@ -136,7 +166,7 @@ const profileDirOf = (options: {
     options.runtime === "bun" ? "profiles-bun" : "profiles-node",
   );
 
-const runtimeLabel = (runtime: Runtime, bundle: boolean): string =>
+const runtimeLabel = (runtime: profileStartupArgsTypes.Runtime, bundle: boolean): string =>
   `${runtime}${bundle ? " (bundle)" : ""}`;
 
 const main = Effect.gen(function* () {
