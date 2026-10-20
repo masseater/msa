@@ -6,12 +6,15 @@ import openCodeModels from "./models-dev-opencode.ts";
 import modelsDev from "./models-dev.ts";
 import remoteCatalogs from "./remote-catalogs.ts";
 import upstream from "./upstream.ts";
+import type upstreamTypes from "./upstream.types.ts";
 
 const { createModelsDevSource } = modelsDev;
 const { fetchModelsDevCatalog } = remoteCatalogs;
 const { withFallback } = upstream;
 
-const loadModelsDevModels = (strict: boolean) =>
+const loadModelsDevModels = (
+  strict: boolean,
+): Effect.Effect<modelsDevCatalogTypes.ModelsDevModels, upstreamTypes.UpstreamError> =>
   Effect.gen(function* () {
     const data = yield* fetchModelsDevCatalog;
     const { source, reasoning } = createModelsDevSource(data);

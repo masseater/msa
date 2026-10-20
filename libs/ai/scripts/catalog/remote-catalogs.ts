@@ -3,6 +3,7 @@ import { Console, Effect } from "effect";
 import buildOpenRouterCatalog from "../openrouter-catalog.ts";
 import type openrouterCatalogTypes from "../openrouter-catalog.types.ts";
 import type modelsDevTypes from "./models-dev.types.ts";
+import type remoteCatalogsTypes from "./remote-catalogs.types.ts";
 import upstream from "./upstream.ts";
 
 const { UpstreamError, fetchJson, withFallback } = upstream;
@@ -54,7 +55,7 @@ const fetchOpenRouterModels = (strict: boolean) =>
     }),
   );
 
-const remoteCatalogs = {
+const remoteCatalogs: remoteCatalogsTypes.RemoteCatalogs = {
   fetchModelsDevCatalog,
   fetchOpenRouterModels,
 };
