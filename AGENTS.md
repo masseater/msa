@@ -112,6 +112,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 - PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
 - マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってから自分でマージする。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
+- コミットの subject が英字の固有名詞や識別子で始まるときは、`` `Effect` `` のようにバッククォートで囲む（commitlint の subject-case は囲んだ部分を判定しない）。
+- squash マージの本文は手で書き直さない（`--body` を渡さない）。PR で検査済みのコミットメッセージがそのまま main に入る。
 
 ## 公開先
 
