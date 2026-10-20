@@ -1,6 +1,14 @@
 import type DefaultPackageManagerClass from "./default-package-manager.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
 
 declare namespace packageManagerTypes {
+  interface PackageManagerOptions {
+    cwd: string;
+    agentDir: string;
+    settingsManager: settingsManagerTypes.SettingsManager;
+    builtinExtensions?: string[];
+  }
+
   interface PathMetadata {
     source: string;
     scope: SourceScope;
@@ -48,21 +56,29 @@ declare namespace packageManagerTypes {
   }
 
   interface PackageManager {
-    resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths>;
-    install(source: string, options?: { local?: boolean }): Promise<void>;
-    installAndPersist(source: string, options?: { local?: boolean }): Promise<void>;
-    remove(source: string, options?: { local?: boolean }): Promise<void>;
-    removeAndPersist(source: string, options?: { local?: boolean }): Promise<boolean>;
-    update(source?: string): Promise<void>;
-    listConfiguredPackages(): ConfiguredPackage[];
-    resolveExtensionSources(
-      sources: string[],
-      options?: { local?: boolean; temporary?: boolean },
-    ): Promise<ResolvedPaths>;
-    addSourceToSettings(source: string, options?: { local?: boolean }): boolean;
-    removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean;
-    setProgressCallback(callback: ProgressCallback | undefined): void;
-    getInstalledPath(source: string, scope: "user" | "project"): string | undefined;
+    readonly resolution: {
+      resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths>;
+      resolveExtensionSources(
+        sources: string[],
+        options?: { local?: boolean; temporary?: boolean },
+      ): Promise<ResolvedPaths>;
+    };
+    readonly operations: {
+      readonly install: {
+        install(source: string, options?: { local?: boolean }): Promise<void>;
+        installAndPersist(source: string, options?: { local?: boolean }): Promise<void>;
+        remove(source: string, options?: { local?: boolean }): Promise<void>;
+        removeAndPersist(source: string, options?: { local?: boolean }): Promise<boolean>;
+      };
+      readonly updates: { update(source?: string): Promise<void> };
+    };
+    readonly configured: {
+      listConfiguredPackages(): ConfiguredPackage[];
+      addSourceToSettings(source: string, options?: { local?: boolean }): boolean;
+      removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean;
+      getInstalledPath(source: string, scope: "user" | "project"): string | undefined;
+    };
+    readonly progress: { setProgressCallback(callback: ProgressCallback | undefined): void };
   }
 
   type SourceScope = "user" | "project" | "temporary";

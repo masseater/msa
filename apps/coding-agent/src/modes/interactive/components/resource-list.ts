@@ -13,7 +13,7 @@ import ResourceToggling from "./resource-list/resource-toggling.ts";
 const { theme } = themeModule;
 const { truncateToWidth, getKeybindings, matchesKey, Input } = tui;
 
-export default class ResourceList {
+export default class ResourceList implements tuiTypes.Component, tuiTypes.Focusable {
   readonly patterns: ResourcePatterns;
   readonly overrides: ResourceOverrides;
   readonly toggling: ResourceToggling;

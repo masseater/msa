@@ -2,16 +2,8 @@ import type ignore from "ignore";
 
 import type gitTypes from "../utils/git.types.ts";
 import type packageManagerTypes from "./package-manager.types.ts";
-import type settingsManagerTypes from "./settings-manager.types.ts";
 
 declare namespace defaultPackageManagerInternalTypes {
-  interface PackageManagerOptions {
-    cwd: string;
-    agentDir: string;
-    settingsManager: settingsManagerTypes.SettingsManager;
-    builtinExtensions?: string[];
-  }
-
   type NpmSource = {
     type: "npm";
     spec: string;

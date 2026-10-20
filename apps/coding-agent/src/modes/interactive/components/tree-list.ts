@@ -1,5 +1,6 @@
+import type tuiTypes from "@msa/tui/index.types";
+
 import platform from "../../../core/platform.ts";
-import type sessionManagerTypes from "../../../core/session-manager.types.ts";
 import type treeListInternalTypes from "./tree-list-internal.types.ts";
 import TreeEntryText from "./tree-list/tree-entry-text.ts";
 import TreeFilter from "./tree-list/tree-filter.ts";
@@ -11,7 +12,9 @@ import type treeSelectorTypes from "./tree-selector.types.ts";
 
 const { nowIso } = platform;
 
-export default class TreeList {
+type TreeNode = treeListInternalTypes.FlatNode["node"];
+
+export default class TreeList implements tuiTypes.Component {
   readonly flattening: TreeFlattening;
   readonly filter: TreeFilter;
   readonly layout: TreeLayout;
@@ -63,7 +66,7 @@ export default class TreeList {
     return this.searchQuery;
   }
 
-  getSelectedNode(): sessionManagerTypes.SessionTreeNode | undefined {
+  getSelectedNode(): TreeNode | undefined {
     return this.filteredNodes[this.selectedIndex]?.node;
   }
 
@@ -92,7 +95,7 @@ export default class TreeList {
   }
 
   constructor(
-    tree: sessionManagerTypes.SessionTreeNode[],
+    tree: TreeNode[],
     currentLeafId: string | null,
     maxVisibleLines: number,
     initialSelectedId?: string,

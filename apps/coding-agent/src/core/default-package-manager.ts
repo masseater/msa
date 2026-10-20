@@ -1,5 +1,5 @@
 import pathsModule from "../utils/paths.ts";
-import type defaultPackageManagerInternalTypes from "./default-package-manager-internal.types.ts";
+import type packageManagerTypes from "./package-manager.types.ts";
 import ConfiguredPackages from "./package-manager/configured-packages.ts";
 import GitPackages from "./package-manager/git.ts";
 import NpmPackages from "./package-manager/npm.ts";
@@ -11,9 +11,9 @@ import PackageResources from "./package-manager/resources.ts";
 
 const { resolvePath } = pathsModule;
 
-type Options = defaultPackageManagerInternalTypes.PackageManagerOptions;
+type Options = packageManagerTypes.PackageManagerOptions;
 
-export default class DefaultPackageManager {
+export default class DefaultPackageManager implements packageManagerTypes.PackageManager {
   readonly cwd: string;
   readonly agentDir: string;
   readonly settingsManager: Options["settingsManager"];
