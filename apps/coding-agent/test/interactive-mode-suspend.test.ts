@@ -27,6 +27,7 @@ const interactiveModePrototype = InteractiveMode.prototype as unknown;
 describe("InteractiveMode.handleCtrlZ", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   test("shows a status message and skips suspend on Windows", () => {
@@ -71,8 +72,7 @@ const partPart1 = () => {
     stop: vi.fn(),
   };
   const context: HandleCtrlZThis = { ui };
-  const keepAliveHandle = {} as ReturnType<typeof setInterval>;
-  return { context, keepAliveHandle, ui };
+  return { context, ui };
 };
 
 const captureSignalHandlers = () => {
@@ -96,15 +96,11 @@ const captureSignalHandlers = () => {
 
 const partPart2 = (input: {
   readonly context: HandleCtrlZThis;
-  readonly keepAliveHandle: NodeJS.Timeout;
   readonly ui: FakeUi;
 }) => {
-  const { context, keepAliveHandle, ui } = input;
+  const { context, ui } = input;
 
-  const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockReturnValue(keepAliveHandle);
-  const clearIntervalSpy = vi
-    .spyOn(globalThis, "clearInterval")
-    .mockImplementation(() => undefined);
+  vi.useFakeTimers();
   const { handlers, processOnSpy, processOnceSpy } = captureSignalHandlers();
   const removeListenerSpy = vi
     .spyOn(process, "removeListener")
@@ -115,7 +111,7 @@ const partPart2 = (input: {
 
   callHandleCtrlZ(context);
 
-  expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 2 ** 30);
+  expect(vi.getTimerCount()).toBe(1);
   expect(processOnSpy).toHaveBeenCalledWith("SIGINT", expect.any(Function));
   expect(processOnceSpy).toHaveBeenCalledWith("SIGCONT", expect.any(Function));
   expect(ui.stop).toHaveBeenCalledTimes(1);
@@ -125,19 +121,20 @@ const partPart2 = (input: {
 
   handlers.sigcont?.();
 
-  expect(clearIntervalSpy).toHaveBeenCalledWith(keepAliveHandle);
+  expect(vi.getTimerCount()).toBe(0);
   expect(removeListenerSpy).toHaveBeenCalledWith("SIGINT", handlers.sigint);
 };
 
 describe("InteractiveMode.handleCtrlZ", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   test("keeps the process alive while suspended and restores the TUI on SIGCONT", () => {
-    const { context, keepAliveHandle, ui } = partPart1();
+    const { context, ui } = partPart1();
 
-    partPart2({ context, keepAliveHandle, ui });
+    partPart2({ context, ui });
     expect(ui.start).toHaveBeenCalledTimes(1);
     expect(ui.requestRender).toHaveBeenCalledWith(true);
   });
@@ -146,6 +143,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
 describe("InteractiveMode.handleCtrlZ", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   test("cleans up the temporary handlers if suspension fails", () => {
@@ -155,13 +153,9 @@ describe("InteractiveMode.handleCtrlZ", () => {
       stop: vi.fn(),
     };
     const context: HandleCtrlZThis = { ui };
-    const keepAliveHandle = {} as ReturnType<typeof setInterval>;
     const suspendError = new Error("suspend failed");
 
-    const setIntervalSpy = vi.spyOn(globalThis, "setInterval").mockReturnValue(keepAliveHandle);
-    const clearIntervalSpy = vi
-      .spyOn(globalThis, "clearInterval")
-      .mockImplementation(() => undefined);
+    vi.useFakeTimers();
     vi.spyOn(process, "on").mockImplementation(
       ((_event: string, _listener: () => void) => process) as typeof process.on,
     );
@@ -179,8 +173,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
 
     expect(() => callHandleCtrlZ(context)).toThrow(suspendError);
     expect(ui.stop).toHaveBeenCalledTimes(1);
-    expect(setIntervalSpy).toHaveBeenCalledTimes(1);
-    expect(clearIntervalSpy).toHaveBeenCalledWith(keepAliveHandle);
+    expect(vi.getTimerCount()).toBe(0);
     expect(removeListenerSpy).toHaveBeenCalledWith("SIGINT", expect.any(Function));
     expect(ui.start).not.toHaveBeenCalled();
     expect(ui.requestRender).not.toHaveBeenCalled();
