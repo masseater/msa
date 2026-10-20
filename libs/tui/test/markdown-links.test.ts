@@ -4,8 +4,10 @@ import { afterEach, describe, it } from "node:test";
 import { stripHyperlinkSequences, stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
-import { stripAnsi } from "./markdown-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
+
+const { stripAnsi } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Links", () => {
@@ -13,7 +15,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should use OSC 8 for mailto links when terminal supports hyperlinks", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: null, trueColor: false });
       const markdown = new Markdown(
         "[Email me](mailto:test@example.com)",
         0,
@@ -39,7 +41,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should use OSC 8 for bare URLs when terminal supports hyperlinks", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: null, trueColor: false });
       const markdown = new Markdown(
         "Visit https://example.com for more",
         0,
@@ -108,28 +110,28 @@ describe("Markdown component", () => {
     it("stabilizes partial closing fence rendering", () => {
       const cases = [
         {
-          input: "```ts\nconst x = 1;\n``",
           expected: ["```ts", "  const x = 1;", "```"],
+          input: "```ts\nconst x = 1;\n``",
         },
         {
-          input: "```md\nnot a closing fence:\n``\n```",
           expected: ["```md", "  not a closing fence:", "  ``", "```"],
+          input: "```md\nnot a closing fence:\n``\n```",
         },
         {
-          input: "```ts\n``",
           expected: ["```ts", "", "```"],
+          input: "```ts\n``",
         },
         {
+          expected: ["```", "", "```"],
           input: "````\n```",
-          expected: ["```", "", "```"],
         },
         {
+          expected: ["```", "", "```"],
           input: "~~~~~\n~~~~",
-          expected: ["```", "", "```"],
         },
         {
-          input: "```md\nnot a closing fence:\n``\n```\n\nafter",
           expected: ["```md", "  not a closing fence:", "  ``", "```", "", "after"],
+          input: "```md\nnot a closing fence:\n``\n```\n\nafter",
         },
       ];
 

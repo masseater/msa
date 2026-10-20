@@ -4,9 +4,11 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { ScrollView, Text, TuiAltScreen, VStack } from "../src/index.ts";
-import { someWriteSince, viewportHas } from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { someWriteSince, viewportHas } = tuiAltScreenHelpers;
 
 const openSearch = (fixture: ReturnType<typeof createSearchFixture>): Effect.Effect<void> =>
   Effect.gen(function* () {
@@ -158,8 +160,8 @@ function usesConfiguredStylesCurrentNon(): void {
       Effect.gen(function* () {
         const terminal = new RecordingTerminal(60, 4);
         const tui = new TuiAltScreen(terminal, undefined, undefined, {
-          searchMatchStyle: (text) => `\x1b[41m${text}\x1b[49m`,
           searchCurrentMatchStyle: (text) => `\x1b[42m${text}\x1b[49m`,
+          searchMatchStyle: (text) => `\x1b[41m${text}\x1b[49m`,
         });
         tui.addChild(new Text("needle first\nmiddle\nneedle second\nend", 0, 0));
         tui.start();
@@ -206,16 +208,16 @@ function createSearchFixture() {
   const editorInputs: string[] = [];
   const editor = {
     focused: false,
-    render: () => ["editor"],
-    invalidate: () => {},
     handleInput: (data: string) => editorInputs.push(data),
+    invalidate: () => {},
+    render: () => ["editor"],
   };
   tui.setLayoutRoot(
     new VStack([
-      { component: transcript, basis: 0, grow: 1, minSize: 1 },
-      { component: editor, basis: 1, shrink: 0 },
+      { basis: 0, component: transcript, grow: 1, minSize: 1 },
+      { basis: 1, component: editor, shrink: 0 },
     ]),
   );
   tui.setFocus(editor);
-  return { terminal, tui, transcript, editorInputs };
+  return { editorInputs, terminal, transcript, tui };
 }

@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
-import { stripAnsi } from "./markdown-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
+
+const { stripAnsi } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Transforms", () => {
@@ -12,7 +14,7 @@ describe("Markdown component", () => {
       const calls: Array<{ source: string; availableWidth: number }> = [];
       const markdown = new Markdown("source", 2, 0, defaultMarkdownTheme, undefined, {
         transform: (source, availableWidth) => {
-          calls.push({ source, availableWidth });
+          calls.push({ availableWidth, source });
           return `${source} ${availableWidth}`;
         },
       });
@@ -27,8 +29,8 @@ describe("Markdown component", () => {
         ["source 56"],
       );
       assert.deepStrictEqual(calls, [
-        { source: "source", availableWidth: 76 },
-        { source: "source", availableWidth: 56 },
+        { availableWidth: 76, source: "source" },
+        { availableWidth: 56, source: "source" },
       ]);
 
       markdown.setText("updated");
@@ -36,11 +38,11 @@ describe("Markdown component", () => {
         markdown.render(60).map((line) => stripAnsi(line).trim()),
         ["updated 56"],
       );
-      assert.deepStrictEqual(calls.at(-1), { source: "updated", availableWidth: 56 });
+      assert.deepStrictEqual(calls.at(-1), { availableWidth: 56, source: "updated" });
 
       markdown.invalidate();
       markdown.render(60);
-      assert.deepStrictEqual(calls.at(-1), { source: "updated", availableWidth: 56 });
+      assert.deepStrictEqual(calls.at(-1), { availableWidth: 56, source: "updated" });
       assert.strictEqual(calls.length, 4);
     });
   });

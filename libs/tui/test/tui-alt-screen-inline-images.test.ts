@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { TuiAltScreen, Image } from "../src/index.ts";
+import { Image, TuiAltScreen } from "../src/index.ts";
 import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
-import { someWriteSince, withCapabilities } from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { someWriteSince, withCapabilities } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   doesNotEmitKittyGraphics();
@@ -18,13 +20,13 @@ function doesNotEmitKittyGraphics(): void {
   it("does not emit Kitty graphics commands or OSC 133 zones in iTerm2", () =>
     Effect.runPromise(
       withCapabilities(
-        { images: "iterm2", trueColor: true, hyperlinks: true },
+        { hyperlinks: true, images: "iterm2", trueColor: true },
         Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 3);
           const tui = new TuiAltScreen(terminal);
           tui.addChild({
-            render: () => ["\x1b]133;B\x07\x1b]133;C\x07\x1b]133;A\x07content"],
             invalidate: () => {},
+            render: () => ["\x1b]133;B\x07\x1b]133;C\x07\x1b]133;A\x07content"],
           });
           tui.addChild(
             new Image(
@@ -32,7 +34,7 @@ function doesNotEmitKittyGraphics(): void {
               "image/png",
               { fallbackColor: (value) => value },
               { filename: "example.png" },
-              { widthPx: 10, heightPx: 10 },
+              { heightPx: 10, widthPx: 10 },
             ),
           );
           tui.start();
@@ -63,14 +65,14 @@ function clearsStaleITerm2ImagePlacements(): void {
   it("clears stale iTerm2 image placements when they leave the viewport", () =>
     Effect.runPromise(
       withCapabilities(
-        { images: "iterm2", trueColor: true, hyperlinks: true },
+        { hyperlinks: true, images: "iterm2", trueColor: true },
         Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 3);
           const tui = new TuiAltScreen(terminal);
           const imageLine = "\x1b]1337;File=inline=1;width=2;height=auto:AAAA\x07";
           tui.addChild({
-            render: () => [imageLine, "", "", "after", "more", "end"],
             invalidate: () => {},
+            render: () => [imageLine, "", "", "after", "more", "end"],
           });
           tui.start();
           yield* Effect.promise(() => terminal.waitForRender());
@@ -98,11 +100,11 @@ function cropsKittyImageWhoseFirst(): void {
         const terminal = new RecordingTerminal(20, 3);
         const tui = new TuiAltScreen(terminal);
         const imageId = 123;
-        const imageLine = encodeKitty("AAAA", { columns: 2, rows: 3, imageId, moveCursor: false });
-        registerKittyImageMetadata({ imageId, columns: 2, rows: 3, widthPx: 100, heightPx: 100 });
+        const imageLine = encodeKitty("AAAA", { columns: 2, imageId, moveCursor: false, rows: 3 });
+        registerKittyImageMetadata({ columns: 2, heightPx: 100, imageId, rows: 3, widthPx: 100 });
         tui.addChild({
-          render: () => ["before", imageLine, "", "", "after", "end"],
           invalidate: () => {},
+          render: () => ["before", imageLine, "", "", "after", "end"],
         });
         tui.start();
         yield* Effect.promise(() => terminal.waitForRender());

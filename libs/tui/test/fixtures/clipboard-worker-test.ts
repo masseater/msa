@@ -2,11 +2,13 @@ import assert from "node:assert/strict";
 import { once } from "node:events";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
-import { isMainThread, parentPort, Worker, workerData } from "node:worker_threads";
+import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 import { Cause, Console, Effect } from "effect";
 
-import { readFileBytes } from "../test-platform.ts";
+import testPlatform from "../test-platform.ts";
+
+const { readFileBytes } = testPlatform;
 
 interface WorkerTestHelper {
   getText(): Promise<string | undefined>;

@@ -19,33 +19,7 @@ import { dual } from "effect/Function";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import { pathOperations } from "../src/platform.ts";
-
-export interface CommandRequest {
-  readonly file: string;
-  readonly args: ReadonlyArray<string>;
-  readonly env?: Record<string, string | undefined> | undefined;
-  readonly input?: Uint8Array | undefined;
-  readonly timeout?: number | undefined;
-  readonly ignoreOutput?: boolean | undefined;
-}
-
-export interface CommandOutput {
-  readonly exitCode: number;
-  readonly stdout: string;
-  readonly stderr: string;
-}
-
-export interface ProcessRequest {
-  readonly command: string;
-  readonly args: ReadonlyArray<string>;
-  readonly env?: Record<string, string | undefined> | undefined;
-}
-
-export interface RunningProcess {
-  readonly nextStdout: Effect.Effect<string>;
-  readonly kill: (signal: "SIGKILL" | "SIGTERM") => Effect.Effect<void>;
-  readonly close: Effect.Effect<void>;
-}
+import type testPlatformTypes from "./test-platform.types.ts";
 
 const testServices = Layer.mergeAll(
   NodeFileSystem.layer,
@@ -64,16 +38,16 @@ const run = <A, E>(effect: Effect.Effect<A, E, TestServices>): Effect.Effect<A> 
 
 const fileSystem = Effect.service(FileSystem.FileSystem);
 
-export const makeTempDirectory = (prefix: string): Effect.Effect<string> =>
+const makeTempDirectory = (prefix: string): Effect.Effect<string> =>
   run(Effect.flatMap(fileSystem, (fs) => fs.makeTempDirectory({ prefix })));
 
-export const removeRecursive = (path: string): Effect.Effect<void> =>
-  run(Effect.flatMap(fileSystem, (fs) => fs.remove(path, { recursive: true, force: true })));
+const removeRecursive = (path: string): Effect.Effect<void> =>
+  run(Effect.flatMap(fileSystem, (fs) => fs.remove(path, { force: true, recursive: true })));
 
-export const makeDirectory = (path: string): Effect.Effect<void> =>
+const makeDirectory = (path: string): Effect.Effect<void> =>
   run(Effect.flatMap(fileSystem, (fs) => fs.makeDirectory(path, { recursive: true })));
 
-export const writeFileString: {
+const writeFileString: {
   (path: string, contents: string): Effect.Effect<void>;
   (contents: string): (path: string) => Effect.Effect<void>;
 } = dual(2, (path: string, contents: string): Effect.Effect<void> =>
@@ -87,20 +61,20 @@ export const writeFileString: {
   ),
 );
 
-export const readFileString = (path: string): Effect.Effect<string> =>
+const readFileString = (path: string): Effect.Effect<string> =>
   run(Effect.flatMap(fileSystem, (fs) => fs.readFileString(path)));
 
-export const readFileBytes = (path: string): Effect.Effect<Uint8Array> =>
+const readFileBytes = (path: string): Effect.Effect<Uint8Array> =>
   run(Effect.flatMap(fileSystem, (fs) => fs.readFile(path)));
 
-export const symlink: {
+const symlink: {
   (target: string, path: string): Effect.Effect<void>;
   (path: string): (target: string) => Effect.Effect<void>;
 } = dual(2, (target: string, path: string): Effect.Effect<void> =>
   run(Effect.flatMap(fileSystem, (fs) => fs.symlink(target, path))),
 );
 
-export const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> =>
+const sha256Hex = (bytes: Uint8Array): Effect.Effect<string> =>
   run(
     Effect.flatMap(Effect.service(Crypto.Crypto), (crypto) => crypto.digest("SHA-256", bytes)).pipe(
       Effect.map(Hex.encode),
@@ -119,21 +93,21 @@ const makeCommand = (request: {
     detached: false,
     env: request.env,
     killSignal: request.killSignal ?? "SIGTERM",
+    stderr: request.ignoreOutput === true ? "ignore" : "pipe",
     stdin: request.input === undefined ? "ignore" : Stream.make(request.input),
     stdout: request.ignoreOutput === true ? "ignore" : "pipe",
-    stderr: request.ignoreOutput === true ? "ignore" : "pipe",
   });
 
 const spawner = Effect.service(ChildProcessSpawner.ChildProcessSpawner);
 
-const collectCommand = (request: CommandRequest) =>
+const collectCommand = (request: testPlatformTypes.CommandRequest) =>
   Effect.scoped(
     Effect.gen(function* () {
       const handle = yield* Effect.flatMap(spawner, (service) =>
         service.spawn(makeCommand(request)),
       );
       if (request.ignoreOutput === true) {
-        return { exitCode: yield* handle.exitCode, stdout: "", stderr: "" };
+        return { exitCode: yield* handle.exitCode, stderr: "", stdout: "" };
       }
       const [stdout, stderr, exitCode] = yield* Effect.all(
         [
@@ -143,11 +117,13 @@ const collectCommand = (request: CommandRequest) =>
         ],
         { concurrency: 3 },
       );
-      return { exitCode, stdout, stderr };
+      return { exitCode, stderr, stdout };
     }),
   );
 
-export const runCommand = (request: CommandRequest): Effect.Effect<CommandOutput> =>
+const runCommand = (
+  request: testPlatformTypes.CommandRequest,
+): Effect.Effect<testPlatformTypes.CommandOutput> =>
   run(
     request.timeout === undefined
       ? collectCommand(request)
@@ -159,7 +135,9 @@ export const runCommand = (request: CommandRequest): Effect.Effect<CommandOutput
         ),
   );
 
-export const runCommandChecked = (request: CommandRequest): Effect.Effect<CommandOutput> =>
+const runCommandChecked = (
+  request: testPlatformTypes.CommandRequest,
+): Effect.Effect<testPlatformTypes.CommandOutput> =>
   runCommand(request).pipe(
     Effect.filterOrElse(
       (output) => output.exitCode === 0,
@@ -167,15 +145,15 @@ export const runCommandChecked = (request: CommandRequest): Effect.Effect<Comman
     ),
   );
 
-const spawnInScope = (request: ProcessRequest, scope: Scope.Closeable) =>
+const spawnInScope = (request: testPlatformTypes.ProcessRequest, scope: Scope.Closeable) =>
   Effect.gen(function* () {
     const service = yield* spawner;
     const handle = yield* Scope.provide(
       service.spawn(
         makeCommand({
-          file: request.command,
           args: request.args,
           env: request.env,
+          file: request.command,
           killSignal: "SIGKILL",
         }),
       ),
@@ -195,12 +173,30 @@ const spawnInScope = (request: ProcessRequest, scope: Scope.Closeable) =>
       ),
     );
     return {
-      nextStdout: run(Effect.raceFirst(Queue.take(chunks), exited)),
+      close: Scope.close(scope, Exit.void),
       kill: (signal: "SIGKILL" | "SIGTERM") =>
         run(handle.kill({ killSignal: signal }).pipe(Effect.ignore)),
-      close: Scope.close(scope, Exit.void),
+      nextStdout: run(Effect.raceFirst(Queue.take(chunks), exited)),
     };
   });
 
-export const startProcess = (request: ProcessRequest): Effect.Effect<RunningProcess> =>
+const startProcess = (
+  request: testPlatformTypes.ProcessRequest,
+): Effect.Effect<testPlatformTypes.RunningProcess> =>
   run(Effect.flatMap(Scope.make(), (scope) => spawnInScope(request, scope)));
+
+const testPlatform = {
+  makeDirectory,
+  makeTempDirectory,
+  readFileBytes,
+  readFileString,
+  removeRecursive,
+  runCommand,
+  runCommandChecked,
+  sha256Hex,
+  startProcess,
+  symlink,
+  writeFileString,
+};
+
+export default testPlatform;

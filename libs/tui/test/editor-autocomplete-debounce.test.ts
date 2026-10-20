@@ -5,8 +5,10 @@ import { Effect } from "effect";
 
 import type { AutocompleteProvider, AutocompleteSuggestions } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
@@ -26,15 +28,15 @@ function debouncesAutocompleteWhileTyping(): void {
         let suggestionCalls = 0;
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             suggestionCalls += 1;
             const text = (lines[0] || "").slice(0, cursorCol);
             return Promise.resolve({
-              items: [{ value: "@main.ts", label: "main.ts" }],
+              items: [{ label: "main.ts", value: "@main.ts" }],
               prefix: text,
             });
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -61,15 +63,15 @@ function debouncesAutocompleteWhileTyping2(): void {
         let suggestionCalls = 0;
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             suggestionCalls += 1;
             const text = (lines[0] || "").slice(0, cursorCol);
             return Promise.resolve({
-              items: [{ value: "#2983", label: "#2983" }],
+              items: [{ label: "#2983", value: "#2983" }],
               prefix: text,
             });
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -96,16 +98,16 @@ function debouncesCustomTriggerCharactersAutocompleteWhile(): void {
         let suggestionCalls = 0;
 
         editor.setAutocompleteProvider({
-          triggerCharacters: ["$"],
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             suggestionCalls += 1;
             const prefix = (lines[0] || "").slice(0, cursorCol);
             return Promise.resolve({
-              items: [{ value: "$skill-name", label: "skill-name" }],
+              items: [{ label: "skill-name", value: "$skill-name" }],
               prefix,
             });
           },
-          applyCompletion,
+          triggerCharacters: ["$"],
         });
 
         typeText(editor, "$sk");
@@ -128,23 +130,23 @@ function resetsCustomTriggerCharactersProviderChanges(): void {
         let suggestionCalls = 0;
 
         editor.setAutocompleteProvider({
-          triggerCharacters: ["$"],
+          applyCompletion,
           getSuggestions: () =>
             Promise.resolve({
-              items: [{ value: "$skill-name", label: "skill-name" }],
+              items: [{ label: "skill-name", value: "$skill-name" }],
               prefix: "$",
             }),
-          applyCompletion,
+          triggerCharacters: ["$"],
         });
         editor.setAutocompleteProvider({
+          applyCompletion,
           getSuggestions: () => {
             suggestionCalls += 1;
             return Promise.resolve({
-              items: [{ value: "$skill-name", label: "skill-name" }],
+              items: [{ label: "skill-name", value: "$skill-name" }],
               prefix: "$",
             });
           },
-          applyCompletion,
         });
 
         editor.handleInput("$");
@@ -183,11 +185,12 @@ function abortsActiveAutocompleteTypingContinues(): void {
 
 function abortableProvider(onAbort: () => void): AutocompleteProvider {
   return {
+    applyCompletion,
     getSuggestions: (_lines, _cursorLine, _cursorCol, options) =>
       Effect.runPromise(
         Effect.sleep(500).pipe(
           Effect.as<AutocompleteSuggestions | null>({
-            items: [{ value: "@main.ts", label: "main.ts" }],
+            items: [{ label: "main.ts", value: "@main.ts" }],
             prefix: "@main",
           }),
           Effect.race(
@@ -204,6 +207,5 @@ function abortableProvider(onAbort: () => void): AutocompleteProvider {
           ),
         ),
       ),
-    applyCompletion,
   };
 }

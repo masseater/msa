@@ -4,12 +4,10 @@ import { describe, test } from "node:test";
 import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import {
-  getSuggestions,
-  setupFolder,
-  useTempDirectory,
-  type TempWorkspace,
-} from "./autocomplete-helpers.ts";
+import autocompleteHelpers from "./autocomplete-helpers.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
+
+const { getSuggestions, setupFolder, useTempDirectory } = autocompleteHelpers;
 
 describe("CombinedAutocompleteProvider", () => {
   describe("dot-slash path completion", () => {
@@ -24,7 +22,7 @@ describe("CombinedAutocompleteProvider", () => {
   });
 });
 
-function completesQuotedPathsAfterOpening(ws: TempWorkspace): void {
+function completesQuotedPathsAfterOpening(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("completes quoted paths after opening wrappers", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -46,7 +44,7 @@ function completesQuotedPathsAfterOpening(ws: TempWorkspace): void {
     Effect.runPromise(
       Effect.gen(function* () {
         yield* setupFolder(ws.baseDir, {
-          files: { "[slug]/page.tsx": "x", "(group)/layout.tsx": "x" },
+          files: { "(group)/layout.tsx": "x", "[slug]/page.tsx": "x" },
         });
         const provider = new CombinedAutocompleteProvider([], ws.baseDir);
         for (const [prefix, value] of [
@@ -69,7 +67,7 @@ function completesQuotedPathsAfterOpening(ws: TempWorkspace): void {
     ));
 }
 
-function quotesPathsContainingWhitespaceCJK(ws: TempWorkspace): void {
+function quotesPathsContainingWhitespaceCJK(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("quotes paths containing whitespace or CJK punctuation for direct completion", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -114,14 +112,14 @@ function quotesPathsContainingWhitespaceCJK(ws: TempWorkspace): void {
     ));
 }
 
-function continuesCompletionInsideQuotedPaths(ws: TempWorkspace): void {
+function continuesCompletionInsideQuotedPaths(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("continues completion inside quoted paths", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         yield* setupFolder(ws.baseDir, {
           files: {
-            "my folder/test.txt": "content",
             "my folder/other.txt": "content",
+            "my folder/test.txt": "content",
           },
         });
 
@@ -139,7 +137,9 @@ function continuesCompletionInsideQuotedPaths(ws: TempWorkspace): void {
     ));
 }
 
-function appliesQuotedCompletionWithoutDuplicating(ws: TempWorkspace): void {
+function appliesQuotedCompletionWithoutDuplicating(
+  ws: autocompleteHelpersTypes.TempWorkspace,
+): void {
   test("applies quoted completion without duplicating closing quote", () =>
     Effect.runPromise(
       Effect.gen(function* () {

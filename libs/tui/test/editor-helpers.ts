@@ -5,13 +5,14 @@ import type { AutocompleteProvider, AutocompleteSuggestions } from "../src/autoc
 import { Editor } from "../src/components/editor.ts";
 import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
+import type editorHelpersTypes from "./editor-helpers.types.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export function createTestTUI(cols = 80): TUI {
+function createTestTUI(cols = 80): TUI {
   return new TuiMainScreen(new VirtualTerminal(cols, 24));
 }
 
-export const applyCompletion: {
+const applyCompletion: {
   (
     lines: string[],
     cursorLine: number,
@@ -40,14 +41,14 @@ export const applyCompletion: {
     const newLines = [...lines];
     newLines[cursorLine] = before + item.value + after;
     return {
-      lines: newLines,
-      cursorLine,
       cursorCol: cursorCol - prefix.length + item.value.length,
+      cursorLine,
+      lines: newLines,
     };
   },
 );
 
-export const flushAutocomplete: Effect.Effect<void> = Effect.promise(() => Promise.resolve()).pipe(
+const flushAutocomplete: Effect.Effect<void> = Effect.promise(() => Promise.resolve()).pipe(
   Effect.andThen(
     Effect.callback<void>((resume) => {
       setImmediate(() => resume(Effect.void));
@@ -55,7 +56,7 @@ export const flushAutocomplete: Effect.Effect<void> = Effect.promise(() => Promi
   ),
 );
 
-export const positionCursor: {
+const positionCursor: {
   (editor: Editor, line: number, col: number): void;
   (line: number, col: number): (editor: Editor) => void;
 } = dual(3, (editor: Editor, line: number, col: number): void => {
@@ -65,40 +66,35 @@ export const positionCursor: {
   for (let i = 0; i < col; i++) editor.handleInput("\x1b[C");
 });
 
-export function pasteWithMarker(editor: Editor): string {
+function pasteWithMarker(editor: Editor): string {
   const bigContent = "line\n".repeat(20).trimEnd();
   editor.handleInput(`\x1b[200~${bigContent}\x1b[201~`);
   return editor.getText();
 }
 
-export function bigPaste(tag: string): string {
+function bigPaste(tag: string): string {
   return Array.from({ length: 12 }, (_, i) => `${tag}${i}`).join("\n");
 }
 
-export const typeText: {
+const typeText: {
   (target: { handleInput(data: string): void }, text: string): void;
   (text: string): (target: { handleInput(data: string): void }) => void;
 } = dual(2, (target: { handleInput(data: string): void }, text: string): void => {
   for (const char of text) target.handleInput(char);
 });
 
-export interface SettlingProvider {
-  readonly provider: AutocompleteProvider;
-  readonly settled: Effect.Effect<void>;
-}
-
-export function settlingProvider(provider: AutocompleteProvider): SettlingProvider {
+function settlingProvider(provider: AutocompleteProvider): editorHelpersTypes.SettlingProvider {
   let pending: Promise<AutocompleteSuggestions | null> = Promise.resolve(null);
   const tracked: AutocompleteProvider = {
     ...(provider.triggerCharacters === undefined
       ? {}
       : { triggerCharacters: provider.triggerCharacters }),
+    applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+      provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
     getSuggestions: (lines, cursorLine, cursorCol, options) => {
       pending = provider.getSuggestions(lines, cursorLine, cursorCol, options);
       return pending;
     },
-    applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
-      provider.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
   };
   const settled = flushAutocomplete.pipe(
     Effect.andThen(Effect.promise(() => pending)),
@@ -106,3 +102,16 @@ export function settlingProvider(provider: AutocompleteProvider): SettlingProvid
   );
   return { provider: tracked, settled };
 }
+
+const editorHelpers = {
+  applyCompletion,
+  bigPaste,
+  createTestTUI,
+  flushAutocomplete,
+  pasteWithMarker,
+  positionCursor,
+  settlingProvider,
+  typeText,
+};
+
+export default editorHelpers;

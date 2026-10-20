@@ -4,22 +4,20 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import {
+  KeybindingsManager,
   ScrollView,
+  TUI_KEYBINDINGS,
   Text,
   TuiAltScreen,
   getKeybindings,
-  KeybindingsManager,
   setKeybindings,
-  TUI_KEYBINDINGS,
 } from "../src/index.ts";
-import {
-  trimmedViewport,
-  OSC133_ZONE_START,
-  numberedLines,
-  mountTranscriptWithEditor,
-} from "./tui-alt-screen-helpers.ts";
-import { InputOverlay } from "./tui-alt-screen-input-overlay.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import InputOverlay from "./tui-alt-screen-input-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { OSC133_ZONE_START, mountTranscriptWithEditor, numberedLines, trimmedViewport } =
+  tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   scrollsTranscriptHalfPageCustom();
@@ -39,8 +37,8 @@ function scrollsTranscriptHalfPageCustom(): void {
         const tui = new TuiAltScreen(terminal);
         setKeybindings(
           new KeybindingsManager(TUI_KEYBINDINGS, {
-            "tui.altScreen.halfPageUp": "ctrl+u",
             "tui.altScreen.halfPageDown": "ctrl+d",
+            "tui.altScreen.halfPageUp": "ctrl+u",
           }),
         );
         yield* Effect.gen(function* () {
@@ -83,8 +81,8 @@ function scrollsTranscriptOneLineCustom(): void {
         const tui = new TuiAltScreen(terminal);
         setKeybindings(
           new KeybindingsManager(TUI_KEYBINDINGS, {
-            "tui.altScreen.lineUp": "ctrl+y",
             "tui.altScreen.lineDown": "ctrl+e",
+            "tui.altScreen.lineUp": "ctrl+y",
           }),
         );
         yield* Effect.gen(function* () {

@@ -7,9 +7,9 @@ import { dual } from "effect/Function";
 import { overrideEnv } from "../src/env.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
+const MAX_RENDER_WRITE_CHARS = 1024 * 1024;
 
-export const withEnv: {
+const withEnv: {
   <A, E, R>(
     updates: Readonly<Record<string, string | undefined>>,
     effect: Effect.Effect<A, E, R>,
@@ -30,7 +30,7 @@ export const withEnv: {
     ),
 );
 
-export const getCellItalic: {
+const getCellItalic: {
   (terminal: VirtualTerminal, row: number, col: number): number;
   (row: number, col: number): (terminal: VirtualTerminal) => number;
 } = dual(3, (terminal: VirtualTerminal, row: number, col: number): number => {
@@ -42,3 +42,11 @@ export const getCellItalic: {
   assert.ok(cell, `Missing cell at row ${row} col ${col}`);
   return cell.isItalic();
 });
+
+const tuiRenderHelpers = {
+  MAX_RENDER_WRITE_CHARS,
+  getCellItalic,
+  withEnv,
+};
+
+export default tuiRenderHelpers;

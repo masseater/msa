@@ -1,5 +1,5 @@
 import { TuiMainScreen } from "../../src/index.ts";
-import { TestComponent } from "../tui-render-test-component.ts";
+import TestComponent from "../tui-render-test-component.ts";
 import { VirtualTerminal } from "../virtual-terminal.ts";
 
 const logDirectory = process.argv[2];

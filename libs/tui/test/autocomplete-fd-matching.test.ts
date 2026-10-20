@@ -3,37 +3,36 @@ import { describe, test } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider, type AutocompleteSuggestions } from "../src/autocomplete.ts";
+import { type AutocompleteSuggestions, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { pathOperations } from "../src/platform.ts";
-import {
-  getSuggestions,
-  isFdInstalled,
-  requireFdPath,
-  setupFolder,
-  useTempWorkspace,
-  type TempWorkspace,
-} from "./autocomplete-helpers.ts";
-import { makeDirectory } from "./test-platform.ts";
+import autocompleteHelpers from "./autocomplete-helpers.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
+import testPlatform from "./test-platform.ts";
+
+const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =
+  autocompleteHelpers;
+const { makeDirectory } = testPlatform;
 
 const { join } = pathOperations;
 
 describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    const ws = useTempWorkspace();
-    matchesFileExtensionQuery(ws);
-    filtersAreCaseInsensitive(ws);
-    ranksDirectoriesBeforeFiles(ws);
-    returnsNestedFilePaths(ws);
-    matchesDeeplyNestedPaths(ws);
-    matchesDirectoryMiddlePathFull(ws);
-    scopesFuzzySearchRelativeDirectories(ws);
-    ranksShallowerSameScoreMatches(ws);
-    includesScopedDirectChildrenRecursive(ws);
-    returnsSameSuggestionsCwdPath(ws);
-  });
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      const ws = useTempWorkspace();
+      matchesFileExtensionQuery(ws);
+      filtersAreCaseInsensitive(ws);
+      ranksDirectoriesBeforeFiles(ws);
+      returnsNestedFilePaths(ws);
+      matchesDeeplyNestedPaths(ws);
+      matchesDirectoryMiddlePathFull(ws);
+      scopesFuzzySearchRelativeDirectories(ws);
+      ranksShallowerSameScoreMatches(ws);
+      includesScopedDirectChildrenRecursive(ws);
+      returnsSameSuggestionsCwdPath(ws);
+    }));
 });
 
-function matchesFileExtensionQuery(ws: TempWorkspace): void {
+function matchesFileExtensionQuery(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("matches file with extension in query", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -55,7 +54,7 @@ function matchesFileExtensionQuery(ws: TempWorkspace): void {
     ));
 }
 
-function filtersAreCaseInsensitive(ws: TempWorkspace): void {
+function filtersAreCaseInsensitive(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("filters are case insensitive", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -78,7 +77,7 @@ function filtersAreCaseInsensitive(ws: TempWorkspace): void {
     ));
 }
 
-function ranksDirectoriesBeforeFiles(ws: TempWorkspace): void {
+function ranksDirectoriesBeforeFiles(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("ranks directories before files", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -103,7 +102,7 @@ function ranksDirectoriesBeforeFiles(ws: TempWorkspace): void {
     ));
 }
 
-function returnsNestedFilePaths(ws: TempWorkspace): void {
+function returnsNestedFilePaths(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("returns nested file paths", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -125,14 +124,14 @@ function returnsNestedFilePaths(ws: TempWorkspace): void {
     ));
 }
 
-function matchesDeeplyNestedPaths(ws: TempWorkspace): void {
+function matchesDeeplyNestedPaths(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("matches deeply nested paths", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         yield* setupFolder(ws.baseDir, {
           files: {
-            "libs/tui/src/autocomplete.ts": "export {};",
             "libs/ai/src/autocomplete.ts": "export {};",
+            "libs/tui/src/autocomplete.ts": "export {};",
           },
         });
 
@@ -149,7 +148,7 @@ function matchesDeeplyNestedPaths(ws: TempWorkspace): void {
     ));
 }
 
-function matchesDirectoryMiddlePathFull(ws: TempWorkspace): void {
+function matchesDirectoryMiddlePathFull(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("matches directory in middle of path with --full-path", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -173,7 +172,7 @@ function matchesDirectoryMiddlePathFull(ws: TempWorkspace): void {
     ));
 }
 
-function scopesFuzzySearchRelativeDirectories(ws: TempWorkspace): void {
+function scopesFuzzySearchRelativeDirectories(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("scopes fuzzy search to relative directories and searches recursively", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -199,7 +198,7 @@ function scopesFuzzySearchRelativeDirectories(ws: TempWorkspace): void {
     ));
 }
 
-function ranksShallowerSameScoreMatches(ws: TempWorkspace): void {
+function ranksShallowerSameScoreMatches(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("ranks shallower same-score @ matches before deeper matches", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -222,7 +221,7 @@ function ranksShallowerSameScoreMatches(ws: TempWorkspace): void {
     ));
 }
 
-function includesScopedDirectChildrenRecursive(ws: TempWorkspace): void {
+function includesScopedDirectChildrenRecursive(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("includes scoped direct children when recursive @ matches are flooded", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -251,7 +250,7 @@ function includesScopedDirectChildrenRecursive(ws: TempWorkspace): void {
     ));
 }
 
-function returnsSameSuggestionsCwdPath(ws: TempWorkspace): void {
+function returnsSameSuggestionsCwdPath(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("returns the same @ suggestions when the cwd path contains the query", () =>
     Effect.runPromise(
       Effect.gen(function* () {

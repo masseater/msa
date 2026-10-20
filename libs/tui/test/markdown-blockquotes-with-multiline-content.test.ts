@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
-import { chalk } from "./markdown-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
+
+const { chalk } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Blockquotes with multiline content", () => {

@@ -1,23 +1,21 @@
-import { afterEach, beforeEach } from "node:test";
+import { afterEach, beforeEach, it } from "node:test";
 
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { type AutocompleteSuggestions, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { pathOperations } from "../src/platform.ts";
-import {
-  makeDirectory,
-  makeTempDirectory,
-  removeRecursive,
-  runCommand,
-  writeFileString,
-} from "./test-platform.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
+import testPlatform from "./test-platform.ts";
+
+const { makeDirectory, makeTempDirectory, removeRecursive, runCommand, writeFileString } =
+  testPlatform;
 
 const { join } = pathOperations;
 
 const locateFd = runCommand({
-  file: process.platform === "win32" ? "where" : "which",
   args: ["fd"],
+  file: process.platform === "win32" ? "where" : "which",
 }).pipe(
   Effect.map(({ exitCode, stdout }) => {
     if (exitCode !== 0 || stdout === "") {
@@ -29,17 +27,15 @@ const locateFd = runCommand({
   Effect.catchDefect(() => Effect.succeed(null)),
 );
 
-export type FolderStructure = {
-  dirs?: string[];
-  files?: Record<string, string>;
-};
-
-export const setupFolder: {
-  (baseDir: string, structure?: FolderStructure): Effect.Effect<void>;
-  (structure?: FolderStructure): (baseDir: string) => Effect.Effect<void>;
+const setupFolder: {
+  (baseDir: string, structure?: autocompleteHelpersTypes.FolderStructure): Effect.Effect<void>;
+  (structure?: autocompleteHelpersTypes.FolderStructure): (baseDir: string) => Effect.Effect<void>;
 } = dual(
   (args) => typeof args[0] === "string",
-  (baseDir: string, structure: FolderStructure = {}): Effect.Effect<void> =>
+  (
+    baseDir: string,
+    structure: autocompleteHelpersTypes.FolderStructure = {},
+  ): Effect.Effect<void> =>
     Effect.gen(function* () {
       yield* Effect.forEach(structure.dirs ?? [], (dir) => makeDirectory(join(baseDir, dir)));
       yield* Effect.forEach(Object.entries(structure.files ?? {}), ([filePath, contents]) =>
@@ -48,14 +44,12 @@ export const setupFolder: {
     }),
 );
 
-export interface TempWorkspace {
-  rootDir: string;
-  baseDir: string;
-  outsideDir: string;
-}
-
-export const useTempDirectory = (prefix: string): TempWorkspace => {
-  const workspace: TempWorkspace = { rootDir: "", baseDir: "", outsideDir: "" };
+const useTempDirectory = (prefix: string): autocompleteHelpersTypes.TempWorkspace => {
+  const workspace: autocompleteHelpersTypes.TempWorkspace = {
+    baseDir: "",
+    outsideDir: "",
+    rootDir: "",
+  };
   beforeEach(() =>
     Effect.runPromise(
       Effect.map(makeTempDirectory(prefix), (directory) => {
@@ -68,8 +62,12 @@ export const useTempDirectory = (prefix: string): TempWorkspace => {
   return workspace;
 };
 
-export const useTempWorkspace = (): TempWorkspace => {
-  const workspace: TempWorkspace = { rootDir: "", baseDir: "", outsideDir: "" };
+const useTempWorkspace = (): autocompleteHelpersTypes.TempWorkspace => {
+  const workspace: autocompleteHelpersTypes.TempWorkspace = {
+    baseDir: "",
+    outsideDir: "",
+    rootDir: "",
+  };
   beforeEach(() =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -85,18 +83,26 @@ export const useTempWorkspace = (): TempWorkspace => {
   return workspace;
 };
 
-export const fdPath = await Effect.runPromise(locateFd);
+const located: { fdPath: string | null } = { fdPath: null };
 
-export const isFdInstalled = Boolean(fdPath);
+const withFd = (register: () => void): Promise<void> =>
+  Effect.runPromise(
+    Effect.map(locateFd, (fdPath) => {
+      located.fdPath = fdPath;
+      if (fdPath === null || fdPath === "")
+        it("needs fd", { skip: "fd is not installed" }, () => {});
+      else register();
+    }),
+  );
 
-export const requireFdPath = (): string => {
-  if (fdPath === null || fdPath === "") {
+const requireFdPath = (): string => {
+  if (located.fdPath === null || located.fdPath === "") {
     throw new Error("fd is not available");
   }
-  return fdPath;
+  return located.fdPath;
 };
 
-export const getSuggestions: {
+const getSuggestions: {
   (
     provider: CombinedAutocompleteProvider,
     lines: string[],
@@ -120,7 +126,18 @@ export const getSuggestions: {
     force: boolean = false,
   ): Promise<AutocompleteSuggestions | null> =>
     provider.getSuggestions(lines, cursorLine, cursorCol, {
-      signal: new AbortController().signal,
       force,
+      signal: new AbortController().signal,
     }),
 );
+
+const autocompleteHelpers = {
+  getSuggestions,
+  requireFdPath,
+  setupFolder,
+  useTempDirectory,
+  useTempWorkspace,
+  withFd,
+};
+
+export default autocompleteHelpers;

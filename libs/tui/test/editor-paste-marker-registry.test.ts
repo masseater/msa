@@ -2,8 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI, bigPaste, pasteWithMarker } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { bigPaste, createTestTUI, pasteWithMarker } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Paste marker atomic behavior", () => {

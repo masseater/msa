@@ -7,9 +7,9 @@ import { dual } from "effect/Function";
 import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export const chalk = new Chalk({ level: 3 });
+const chalk = new Chalk({ level: 3 });
 
-export const getCell: {
+const getCell: {
   (terminal: VirtualTerminal, row: number, col: number): import("@xterm/headless").IBufferCell;
   (row: number, col: number): (terminal: VirtualTerminal) => import("@xterm/headless").IBufferCell;
 } = dual(
@@ -25,6 +25,14 @@ export const getCell: {
   },
 );
 
-export function stripAnsi(line: string): string {
+function stripAnsi(line: string): string {
   return stripStyleSequences(line);
 }
+
+const markdownHelpers = {
+  chalk,
+  getCell,
+  stripAnsi,
+};
+
+export default markdownHelpers;

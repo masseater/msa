@@ -6,11 +6,11 @@ import { Effect } from "effect";
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 
 const commands = [
-  { name: "skill:deep-research", description: "Multi-agent deep research" },
-  { name: "skill:research-idea", description: "Refine a raw idea into a falsifiable seed" },
-  { name: "skill:to-sidecar", description: "Route work to a sidecar" },
-  { name: "skill:brainstorm", description: "Generate ideas" },
-  { name: "model", description: "Select the active model" },
+  { description: "Multi-agent deep research", name: "skill:deep-research" },
+  { description: "Refine a raw idea into a falsifiable seed", name: "skill:research-idea" },
+  { description: "Route work to a sidecar", name: "skill:to-sidecar" },
+  { description: "Generate ideas", name: "skill:brainstorm" },
+  { description: "Select the active model", name: "model" },
 ];
 
 function suggestionsFor(prefix: string): Promise<string[]> {
@@ -90,11 +90,11 @@ describe("CombinedAutocompleteProvider slash-command filter", () => {
         const provider = new CombinedAutocompleteProvider(
           [
             {
-              name: "model",
               getArgumentCompletions: (prefix: string) => {
                 assert.equal(prefix, "son");
-                return [{ value: "sonnet", label: "sonnet" }];
+                return [{ label: "sonnet", value: "sonnet" }];
               },
+              name: "model",
             },
           ],
           process.cwd(),

@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
-import { stripAnsi } from "./markdown-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
+
+const { stripAnsi } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Lists", () => {

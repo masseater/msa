@@ -7,8 +7,11 @@ import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { type Component, Container, CURSOR_MARKER } from "../src/tui-component.ts";
-import { COLUMNS, NullTerminal, ROWS } from "./render-churn-null-terminal.ts";
+import { CURSOR_MARKER, type Component, Container } from "../src/tui-component.ts";
+import renderChurnNullTerminal from "./render-churn-null-terminal.ts";
+import type renderChurnNullTerminalTypes from "./render-churn-null-terminal.types.ts";
+
+const { COLUMNS, NullTerminal, ROWS } = renderChurnNullTerminal;
 
 const WARMUP_FRAMES = 20;
 const FRAMES = 300;
@@ -78,7 +81,7 @@ interface ScenarioResult {
 
 function runScenario(
   session: Session,
-  terminal: NullTerminal,
+  terminal: renderChurnNullTerminalTypes.NullTerminal,
   tui: TuiAltScreen,
   frame: (index: number) => void,
 ): Effect.Effect<ScenarioResult> {
@@ -86,9 +89,9 @@ function runScenario(
     const writtenBefore = terminal.bytesWritten;
     yield* Effect.promise(() =>
       session.post("HeapProfiler.startSampling", {
-        samplingInterval: SAMPLING_INTERVAL,
         includeObjectsCollectedByMajorGC: true,
         includeObjectsCollectedByMinorGC: true,
+        samplingInterval: SAMPLING_INTERVAL,
       }),
     );
     const start = performance.now();
@@ -100,8 +103,8 @@ function runScenario(
     const { profile } = yield* Effect.promise(() => session.post("HeapProfiler.stopSampling"));
     return {
       allocatedBytes: sumProfile(profile.head as SamplingNode),
-      elapsedMs,
       bytesWritten: terminal.bytesWritten - writtenBefore,
+      elapsedMs,
     };
   });
 }
@@ -128,20 +131,20 @@ function main(): Promise<void> {
       const editor = new EditorSim();
       const scrollView = new ScrollView(transcript, {
         follow: "end",
-        primary: true,
         overscroll: "chain",
+        primary: true,
         scrollbar: "auto",
       });
       const status = new Text("\x1b[2mstatus: idle\x1b[22m", 1, 0);
       const footer = new Text("\x1b[2m~/workspaces/msa  main  100k tokens\x1b[22m", 1, 0);
       const dock = new VStack([
-        { component: status, shrink: 1, minSize: 0 },
-        { component: editor, shrink: 1, minSize: 3 },
-        { component: footer, shrink: 1, minSize: 1 },
+        { component: status, minSize: 0, shrink: 1 },
+        { component: editor, minSize: 3, shrink: 1 },
+        { component: footer, minSize: 1, shrink: 1 },
       ]);
       const root = new VStack([
-        { component: scrollView, basis: 0, grow: 1, shrink: 1, minSize: 1 },
-        { component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
+        { basis: 0, component: scrollView, grow: 1, minSize: 1, shrink: 1 },
+        { basis: "auto", component: dock, grow: 0, minSize: 1, shrink: 1 },
       ]);
       tui.setLayoutRoot(root);
       tui.start();
@@ -168,4 +171,4 @@ function main(): Promise<void> {
   );
 }
 
-await main();
+void main();

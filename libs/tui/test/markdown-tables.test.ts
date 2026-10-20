@@ -118,7 +118,7 @@ function shouldWrapLongCellContent(): void {
 
 function shouldWrapLongUnbrokenTokens(): void {
   it("should wrap long unbroken tokens inside table cells (not only at line start)", () => {
-    setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+    setCapabilities({ hyperlinks: false, images: null, trueColor: false });
     const url = "https://example.com/this/is/a/very/long/url/that/should/wrap";
     const markdown = new Markdown(
       `| Value |

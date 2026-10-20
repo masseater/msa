@@ -4,8 +4,8 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { overrideEnv } from "../src/env.ts";
-import { ScrollView, Text, TuiAltScreen, MouseRegion } from "../src/index.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import { MouseRegion, ScrollView, Text, TuiAltScreen } from "../src/index.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TuiAltScreen", () => {
@@ -34,11 +34,11 @@ function usesButtonMotionTrackingInside(): void {
       directTui.stop();
 
       const multiplexers = [
-        { name: "tmux environment", environment: { TMUX: "/tmp/tmux/default,1,0" } },
-        { name: "tmux TERM", environment: { TERM: "tmux-256color" } },
-        { name: "Zellij environment", environment: { ZELLIJ: "0" } },
-        { name: "Screen environment", environment: { STY: "123.session" } },
-        { name: "Screen TERM", environment: { TERM: "screen-256color" } },
+        { environment: { TMUX: "/tmp/tmux/default,1,0" }, name: "tmux environment" },
+        { environment: { TERM: "tmux-256color" }, name: "tmux TERM" },
+        { environment: { ZELLIJ: "0" }, name: "Zellij environment" },
+        { environment: { STY: "123.session" }, name: "Screen environment" },
+        { environment: { TERM: "screen-256color" }, name: "Screen TERM" },
       ];
       for (const { name, environment } of multiplexers) {
         overrideEnv({ ...cleared, ...environment });

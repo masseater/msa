@@ -13,45 +13,45 @@ const segmentMap = new Map<string, Intl.SegmentData[]>([
   [
     text,
     [
-      { segment: "hello", index: 0, input: text, isWordLike: true },
-      { segment: " ", index: 5, input: text, isWordLike: false },
-      { segment: marker, index: 6, input: text, isWordLike: true },
-      { segment: " ", index: 25, input: text, isWordLike: false },
-      { segment: "world", index: 26, input: text, isWordLike: true },
+      { index: 0, input: text, isWordLike: true, segment: "hello" },
+      { index: 5, input: text, isWordLike: false, segment: " " },
+      { index: 6, input: text, isWordLike: true, segment: marker },
+      { index: 25, input: text, isWordLike: false, segment: " " },
+      { index: 26, input: text, isWordLike: true, segment: "world" },
     ],
   ],
   [
     text.slice(0, text.length),
     [
-      { segment: "hello", index: 0, input: text, isWordLike: true },
-      { segment: " ", index: 5, input: text, isWordLike: false },
-      { segment: marker, index: 6, input: text, isWordLike: true },
-      { segment: " ", index: 25, input: text, isWordLike: false },
-      { segment: "world", index: 26, input: text, isWordLike: true },
+      { index: 0, input: text, isWordLike: true, segment: "hello" },
+      { index: 5, input: text, isWordLike: false, segment: " " },
+      { index: 6, input: text, isWordLike: true, segment: marker },
+      { index: 25, input: text, isWordLike: false, segment: " " },
+      { index: 26, input: text, isWordLike: true, segment: "world" },
     ],
   ],
   [
     text.slice(0, 26),
     [
-      { segment: "hello", index: 0, input: text, isWordLike: true },
-      { segment: " ", index: 5, input: text, isWordLike: false },
-      { segment: marker, index: 6, input: text, isWordLike: true },
-      { segment: " ", index: 25, input: text, isWordLike: false },
+      { index: 0, input: text, isWordLike: true, segment: "hello" },
+      { index: 5, input: text, isWordLike: false, segment: " " },
+      { index: 6, input: text, isWordLike: true, segment: marker },
+      { index: 25, input: text, isWordLike: false, segment: " " },
     ],
   ],
   [
     text.slice(6),
     [
-      { segment: marker, index: 0, input: text, isWordLike: true },
-      { segment: " ", index: 19, input: text, isWordLike: false },
-      { segment: "world", index: 20, input: text, isWordLike: true },
+      { index: 0, input: text, isWordLike: true, segment: marker },
+      { index: 19, input: text, isWordLike: false, segment: " " },
+      { index: 20, input: text, isWordLike: true, segment: "world" },
     ],
   ],
 ]);
 
 const opts = {
-  segment: (input: string) => segmentMap.get(input) ?? [],
   isAtomicSegment: isAtomic,
+  segment: (input: string) => segmentMap.get(input) ?? [],
 };
 
 describe("findWordBackward", () => {

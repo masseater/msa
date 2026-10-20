@@ -1,119 +1,120 @@
-import { after, before, type TestContext } from "node:test";
+import { type TestContext, after, before, it } from "node:test";
 import { fileURLToPath } from "node:url";
 
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
 import { pathOperations } from "../src/platform.ts";
-import {
-  makeTempDirectory,
-  removeRecursive,
-  runCommand,
-  runCommandChecked,
-  type RunningProcess,
-  startProcess,
-} from "./test-platform.ts";
+import type nativeClipboardLinuxHelpersTypes from "./native-clipboard-linux-helpers.types.ts";
+import testPlatform from "./test-platform.ts";
+import type testPlatformTypes from "./test-platform.types.ts";
+
+const { makeTempDirectory, removeRecursive, runCommand, runCommandChecked, startProcess } =
+  testPlatform;
 
 const { join } = pathOperations;
 
-export interface ExecRequest {
-  file: string;
-  args: readonly string[];
-  env: NodeJS.ProcessEnv;
-  timeout?: number;
-}
+const exec = (
+  request: nativeClipboardLinuxHelpersTypes.ExecRequest,
+): Effect.Effect<{ stdout: string; stderr: string }> => runCommandChecked(request);
 
-export interface ServerRequest {
-  t: TestContext;
-  command: string;
-  args: string[];
-  env: NodeJS.ProcessEnv;
-}
+const fixtures = fileURLToPath(new URL("./fixtures/", import.meta.url));
 
-export const exec = (request: ExecRequest): Effect.Effect<{ stdout: string; stderr: string }> =>
-  runCommandChecked(request);
+const native = fileURLToPath(new URL("../native/linux/", import.meta.url));
 
-export const fixtures = fileURLToPath(new URL("./fixtures/", import.meta.url));
-
-export const native = fileURLToPath(new URL("../native/linux/", import.meta.url));
-
-export const supported = process.platform === "linux" && ["arm64", "x64"].includes(process.arch);
+const supported = process.platform === "linux" && ["arm64", "x64"].includes(process.arch);
 
 const probeDependencies = runCommand({
-  file: "sh",
   args: ["-c", "command -v cc && command -v Xvfb && command -v xclip && pkg-config --exists xcb"],
+  file: "sh",
 }).pipe(Effect.map(({ exitCode }) => exitCode === 0));
 
-export const dependenciesAvailable =
-  supported && (await Effect.runPromise(probeDependencies.pipe(Effect.orElseSucceed(() => false))));
+const withDependencies = (register: () => void): Promise<void> =>
+  Effect.runPromise(
+    Effect.map(
+      supported ? probeDependencies.pipe(Effect.orElseSucceed(() => false)) : Effect.succeed(false),
+      (available) => {
+        if (available) register();
+        else it("needs Xvfb, xclip, cc and xcb", { skip: "dependencies are missing" }, () => {});
+      },
+    ),
+  );
 
-export interface ReaderResult {
-  ok: boolean;
-  value?: string | null;
-  unavailable?: boolean;
-  length?: number;
-  hash?: string;
-  error?: string;
-}
-
-export const startServer = ({
+const startServer = ({
   t,
   command,
   args,
   env,
-}: ServerRequest): Effect.Effect<{ server: RunningProcess; ready: string }> =>
+}: nativeClipboardLinuxHelpersTypes.ServerRequest): Effect.Effect<{
+  server: testPlatformTypes.RunningProcess;
+  ready: string;
+}> =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context());
-    const server = yield* startProcess({ command, args, env });
+    const server = yield* startProcess({ args, command, env });
     t.after(() => runPromise(server.close));
     const ready = yield* server.nextStdout;
-    return { server, ready: ready.trim() };
+    return { ready: ready.trim(), server };
   });
 
-export const readClipboard: {
-  (method: string, env: NodeJS.ProcessEnv): Effect.Effect<ReaderResult>;
-  (env: NodeJS.ProcessEnv): (method: string) => Effect.Effect<ReaderResult>;
-} = dual(2, (method: string, env: NodeJS.ProcessEnv): Effect.Effect<ReaderResult> =>
-  exec({
-    file: process.execPath,
-    args: [
-      join(fixtures, "clipboard-reader.ts"),
-      join(native, "prebuilds", `linux-${process.arch}`, "linux-platform-x11.node"),
-      method,
-    ],
-    env,
-    timeout: 6000,
-  }).pipe(Effect.map(({ stdout }) => JSON.parse(stdout) as ReaderResult)),
+const readClipboard: {
+  (
+    method: string,
+    env: NodeJS.ProcessEnv,
+  ): Effect.Effect<nativeClipboardLinuxHelpersTypes.ReaderResult>;
+  (
+    env: NodeJS.ProcessEnv,
+  ): (method: string) => Effect.Effect<nativeClipboardLinuxHelpersTypes.ReaderResult>;
+} = dual(
+  2,
+  (
+    method: string,
+    env: NodeJS.ProcessEnv,
+  ): Effect.Effect<nativeClipboardLinuxHelpersTypes.ReaderResult> =>
+    exec({
+      args: [
+        join(fixtures, "clipboard-reader.ts"),
+        join(native, "prebuilds", `linux-${process.arch}`, "linux-platform-x11.node"),
+        method,
+      ],
+      env,
+      file: process.execPath,
+      timeout: 6000,
+    }).pipe(
+      Effect.map(
+        ({ stdout }) => JSON.parse(stdout) as nativeClipboardLinuxHelpersTypes.ReaderResult,
+      ),
+    ),
 );
 
-export const startX11 = (
+const startX11 = (
   t: TestContext,
-): Effect.Effect<{ server: RunningProcess; env: NodeJS.ProcessEnv }> =>
+): Effect.Effect<{ server: testPlatformTypes.RunningProcess; env: NodeJS.ProcessEnv }> =>
   startServer({
-    t,
-    command: "Xvfb",
     args: ["-displayfd", "1", "-screen", "0", "640x480x24", "-nolisten", "tcp"],
+    command: "Xvfb",
     env: process.env,
+    t,
   }).pipe(
     Effect.map(({ server, ready }) => ({
-      server,
       env: { ...process.env, DISPLAY: `:${ready}` },
+      server,
     })),
   );
 
-export const setClipboard = (request: {
+const setClipboard = (request: {
   env: NodeJS.ProcessEnv;
   target: string;
   input: Uint8Array;
 }): Effect.Effect<void> =>
   Effect.asVoid(
     runCommandChecked({
-      file: "xclip",
       args: ["-selection", "clipboard", "-in", "-t", request.target],
       env: request.env,
+      file: "xclip",
+      ignoreOutput: true,
       input: request.input,
       timeout: 5000,
-      ignoreOutput: true,
     }),
   );
 
@@ -129,7 +130,6 @@ const compilerFlags = [
 const compileFixtures = (directory: string): Effect.Effect<void> =>
   Effect.gen(function* () {
     yield* runCommandChecked({
-      file: "cc",
       args: [
         ...compilerFlags,
         join(fixtures, "clipboard-x11-test.c"),
@@ -138,9 +138,9 @@ const compileFixtures = (directory: string): Effect.Effect<void> =>
         "-o",
         join(directory, "x11-test"),
       ],
+      file: "cc",
     });
     yield* runCommandChecked({
-      file: "cc",
       args: [
         ...compilerFlags,
         "-shared",
@@ -153,14 +153,11 @@ const compileFixtures = (directory: string): Effect.Effect<void> =>
         "-o",
         join(directory, "worker-test.node"),
       ],
+      file: "cc",
     });
   });
 
-export interface CompiledFixtures {
-  readonly directory: () => string;
-}
-
-export const useCompiledFixtures = (): CompiledFixtures => {
+const useCompiledFixtures = (): nativeClipboardLinuxHelpersTypes.CompiledFixtures => {
   let directory = "";
   before(() =>
     Effect.runPromise(
@@ -173,3 +170,18 @@ export const useCompiledFixtures = (): CompiledFixtures => {
   after(() => (directory === "" ? undefined : Effect.runPromise(removeRecursive(directory))));
   return { directory: () => directory };
 };
+
+const nativeClipboardLinuxHelpers = {
+  exec,
+  fixtures,
+  native,
+  readClipboard,
+  setClipboard,
+  startServer,
+  startX11,
+  supported,
+  useCompiledFixtures,
+  withDependencies,
+};
+
+export default nativeClipboardLinuxHelpers;

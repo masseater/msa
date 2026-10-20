@@ -5,10 +5,10 @@ import { Effect } from "effect";
 
 import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { CursorTrackingTerminal } from "./overlay-options-cursor-tracking-terminal.ts";
-import { EmptyContent } from "./overlay-options-empty-content.ts";
-import { renderAndFlush } from "./overlay-options-helpers.ts";
-import { StaticOverlay } from "./overlay-options-static-overlay.ts";
+import CursorTrackingTerminal from "./overlay-options-cursor-tracking-terminal.ts";
+import EmptyContent from "./overlay-options-empty-content.ts";
+import renderAndFlush from "./overlay-options-helpers.ts";
+import StaticOverlay from "./overlay-options-static-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI overlay options", () => {

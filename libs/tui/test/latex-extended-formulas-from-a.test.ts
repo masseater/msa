@@ -2,9 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { renderLatex } from "../src/index.ts";
-import { defineCases, type LatexCase } from "./latex-helpers.ts";
+import defineCases from "./latex-helpers.ts";
+import type latexHelpersTypes from "./latex-helpers.types.ts";
 
-const sessionCases1: readonly LatexCase[] = [
+const sessionCases1: readonly latexHelpersTypes.LatexCase[] = [
   [String.raw`e^{i\pi}+1=0`, "e^(iπ)+1 = 0"],
   [
     String.raw`\boxed{

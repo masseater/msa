@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { parseTerminalColorSchemeReport, type TerminalColors } from "../src/index.ts";
+import { type TerminalColors, parseTerminalColorSchemeReport } from "../src/index.ts";
 import { StdinBuffer } from "../src/stdin-buffer.ts";
 import { parseOscColorResponse } from "../src/terminal-colors.ts";
-import { BLACK, DA1, PALETTE_REPLIES, WHITE, setup, wait } from "./terminal-colors-helpers.ts";
+import terminalColorsHelpers from "./terminal-colors-helpers.ts";
+
+const { BLACK, DA1, PALETTE_REPLIES, WHITE, setup, wait } = terminalColorsHelpers;
 
 describe("parseTerminalColorSchemeReport", () => {
   it("parses color scheme reports", () => {
@@ -29,16 +31,16 @@ describe("parseTerminalColorSchemeReport", () => {
 describe("parseOscColorResponse", () => {
   it("parses OSC 10, 11, and 4 replies", () => {
     assert.deepStrictEqual(parseOscColorResponse("\x1b]10;rgb:ffff/ffff/ffff\x07"), {
+      rgb: { b: 255, g: 255, r: 255 },
       target: "foreground",
-      rgb: { r: 255, g: 255, b: 255 },
     });
     assert.deepStrictEqual(parseOscColorResponse("\x1b]4;13;#ff0080\x1b\\"), {
+      rgb: { b: 128, g: 0, r: 255 },
       target: 13,
-      rgb: { r: 255, g: 0, b: 128 },
     });
     assert.deepStrictEqual(parseOscColorResponse("\x1b]4;1;bogus\x07"), {
-      target: 1,
       rgb: undefined,
+      target: 1,
     });
     assert.strictEqual(parseOscColorResponse("\x1b]12;#ffffff\x07"), undefined);
   });
@@ -62,8 +64,8 @@ describe("TUI.queryTerminalColors", () => {
           terminal.sendInput("\x1b]11;rgb:0000/0000/0000\x1b\\");
           for (const reply of PALETTE_REPLIES) terminal.sendInput(reply);
           assert.deepStrictEqual(yield* Effect.promise(() => query), {
-            foreground: WHITE,
             background: BLACK,
+            foreground: WHITE,
             palette: Array.from({ length: 16 }, () => BLACK),
           });
           terminal.sendInput(DA1);
@@ -93,8 +95,8 @@ describe("TUI.queryTerminalColors", () => {
           t.mock.timers.tick(100);
           buffer.process(`6c/6d6d\x07${DA1}`);
           assert.deepStrictEqual(yield* Effect.promise(() => query), {
-            foreground: undefined,
             background: undefined,
+            foreground: undefined,
             palette: undefined,
           });
           assert.deepStrictEqual(component.inputs, []);
@@ -127,13 +129,13 @@ describe("TUI.queryTerminalColors", () => {
           terminal.sendInput(DA1);
 
           assert.deepStrictEqual(yield* Effect.promise(() => first), {
-            foreground: undefined,
             background: BLACK,
+            foreground: undefined,
             palette: undefined,
           });
           assert.deepStrictEqual(yield* Effect.promise(() => second), {
-            foreground: undefined,
             background: undefined,
+            foreground: undefined,
             palette: undefined,
           });
         }).pipe(
@@ -155,8 +157,8 @@ describe("TUI.queryTerminalColors", () => {
         yield* Effect.gen(function* () {
           const late: TerminalColors[] = [];
           const query = tui.queryTerminalColors({
-            timeoutMs: 1,
             onLateReply: (colors) => late.push(colors),
+            timeoutMs: 1,
           });
           yield* wait(5);
           assert.strictEqual((yield* Effect.promise(() => query)).background, undefined);
@@ -164,7 +166,7 @@ describe("TUI.queryTerminalColors", () => {
           terminal.sendInput("\x1b]11;#ffffff\x07");
           terminal.sendInput(DA1);
           assert.deepStrictEqual(late, [
-            { foreground: undefined, background: WHITE, palette: undefined },
+            { background: WHITE, foreground: undefined, palette: undefined },
           ]);
           assert.deepStrictEqual(component.inputs, []);
 

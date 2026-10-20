@@ -5,8 +5,10 @@ import { Effect } from "effect";
 
 import type { AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, typeText, flushAutocomplete } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Undo", () => {
@@ -96,18 +98,18 @@ function undoesAutocomplete(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const prefix = text.slice(0, cursorCol);
             if (prefix === "di") {
               return Promise.resolve({
-                items: [{ value: "dist/", label: "dist/" }],
+                items: [{ label: "dist/", value: "dist/" }],
                 prefix: "di",
               });
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);

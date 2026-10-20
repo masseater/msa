@@ -2,8 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Prompt history navigation", () => {
@@ -32,11 +34,11 @@ describe("Editor component", () => {
 
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "older entry");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
     });
   });
 });
@@ -56,7 +58,7 @@ describe("Editor component", () => {
 
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 2 });
 
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "newer entry");
@@ -72,15 +74,15 @@ describe("Editor component", () => {
       editor.addToHistory("line1\nline2\nline3");
 
       editor.handleInput("\x1b[A");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 1 });
 
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
     });
   });
 });
@@ -90,14 +92,14 @@ describe("Editor component", () => {
     it("returns cursor position", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
       typeText(editor, "abc");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
       editor.handleInput("\x1b[D");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 2, line: 0 });
     });
 
     it("returns lines as a defensive copy", () => {

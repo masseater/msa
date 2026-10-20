@@ -5,7 +5,7 @@ import type { TUI } from "../src/tui-interface.ts";
 import { nextTick } from "./effect-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export const renderAndFlush: {
+const renderAndFlush: {
   (tui: TUI, terminal: VirtualTerminal): Effect.Effect<void>;
   (terminal: VirtualTerminal): (tui: TUI) => Effect.Effect<void>;
 } = dual(2, (tui: TUI, terminal: VirtualTerminal): Effect.Effect<void> =>
@@ -13,3 +13,5 @@ export const renderAndFlush: {
     tui.requestRender(true);
   }).pipe(Effect.andThen(nextTick), Effect.andThen(Effect.promise(() => terminal.waitForRender()))),
 );
+
+export default renderAndFlush;

@@ -16,8 +16,8 @@ describe("Editor prompt history keybindings", () => {
   it("browses history directly without first moving the cursor", () => {
     setKeybindings(
       new KeybindingsManager(TUI_KEYBINDINGS, {
-        "tui.editor.historyPrevious": "ctrl+p",
         "tui.editor.historyNext": "ctrl+n",
+        "tui.editor.historyPrevious": "ctrl+p",
       }),
     );
     const editor = new Editor(new TuiMainScreen(new VirtualTerminal()), defaultEditorTheme);
@@ -29,17 +29,17 @@ describe("Editor prompt history keybindings", () => {
 
     editor.handleInput("\x10");
     assert.strictEqual(editor.getText(), "newer\nmultiline prompt");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
     editor.handleInput("\x10");
     assert.strictEqual(editor.getText(), "older prompt");
 
     editor.handleInput("\x0e");
     assert.strictEqual(editor.getText(), "newer\nmultiline prompt");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 16 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 16, line: 1 });
 
     editor.handleInput("\x0e");
     assert.strictEqual(editor.getText(), "draft");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
   });
 });

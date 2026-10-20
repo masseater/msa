@@ -8,7 +8,9 @@ import {
   setCapabilityOverrides,
 } from "../src/terminal-capabilities.ts";
 import { isImageLine } from "../src/terminal-image-kitty.ts";
-import { withEnv } from "./terminal-image-helpers.ts";
+import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { withEnv } = terminalImageHelpers;
 
 describe("isImageLine", () => {
   describe("iTerm2 image protocol", () => {
@@ -162,19 +164,19 @@ describe("detectCapabilities", () => {
       withEnv({ MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty", MSA_TRUE_COLOR: "1" }, () =>
         detectCapabilities(),
       ),
-      { images: "kitty", trueColor: true, hyperlinks: true },
+      { hyperlinks: true, images: "kitty", trueColor: true },
     );
     assert.deepStrictEqual(
       withEnv(
         {
-          TERM_PROGRAM: "iterm.app",
           MSA_HYPERLINKS: "0",
           MSA_IMAGE_PROTOCOL: "none",
           MSA_TRUE_COLOR: "0",
+          TERM_PROGRAM: "iterm.app",
         },
         () => detectCapabilities(),
       ),
-      { images: null, trueColor: false, hyperlinks: false },
+      { hyperlinks: false, images: null, trueColor: false },
     );
   });
 
@@ -182,14 +184,14 @@ describe("detectCapabilities", () => {
     assert.deepStrictEqual(
       withEnv(
         {
-          TERM_PROGRAM: "ghostty",
           MSA_HYPERLINKS: "auto",
           MSA_IMAGE_PROTOCOL: "auto",
           MSA_TRUE_COLOR: "auto",
+          TERM_PROGRAM: "ghostty",
         },
         () => detectCapabilities(),
       ),
-      { images: "kitty", trueColor: true, hyperlinks: true },
+      { hyperlinks: true, images: "kitty", trueColor: true },
     );
   });
 });
@@ -197,18 +199,18 @@ describe("detectCapabilities", () => {
 describe("detectCapabilities", () => {
   it("applies and clears programmatic overrides", () => {
     withEnv({ MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty", MSA_TRUE_COLOR: "1" }, () => {
-      setCapabilityOverrides({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilityOverrides({ hyperlinks: false, images: null, trueColor: false });
       try {
         assert.deepStrictEqual(getCapabilities(), {
+          hyperlinks: false,
           images: null,
           trueColor: false,
-          hyperlinks: false,
         });
         setCapabilityOverrides({});
         assert.deepStrictEqual(getCapabilities(), {
+          hyperlinks: true,
           images: "kitty",
           trueColor: true,
-          hyperlinks: true,
         });
       } finally {
         setCapabilityOverrides({});
@@ -220,7 +222,7 @@ describe("detectCapabilities", () => {
   it("bypasses the tmux probe when hyperlinks are overridden", () => {
     let probed = false;
     const caps = withEnv(
-      { TMUX: "/tmp/tmux-1000/default,1234,0", MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty" },
+      { MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty", TMUX: "/tmp/tmux-1000/default,1234,0" },
       () =>
         detectCapabilities(() => {
           probed = true;

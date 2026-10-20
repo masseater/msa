@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
 import { visibleWidth } from "../src/utils.ts";
-import { createTestTUI, pasteWithMarker } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI, pasteWithMarker } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Paste marker atomic behavior", () => {
@@ -31,17 +33,17 @@ function createsPasteMarkerLargePastes(): void {
     editor.handleInput("B");
 
     editor.handleInput("\x01");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1, line: 0 });
 
     editor.handleInput("\x1b[C");
     const marker = editor.getText().match(/\[paste #\d+ \+\d+ lines\]/u)![0];
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1 + marker.length, line: 0 });
 
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length + 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1 + marker.length + 1, line: 0 });
   });
 }
 
@@ -55,13 +57,13 @@ function treatsPasteMarkerSingleUnit(): void {
     editor.handleInput("\x1b[D");
     const text = editor.getText();
     const marker = text.match(/\[paste #\d+ \+\d+ lines\]/u)![0];
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1 + marker.length, line: 0 });
 
     editor.handleInput("\x1b[D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1, line: 0 });
 
     editor.handleInput("\x1b[D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
   });
 }
 
@@ -78,11 +80,11 @@ function treatsPasteMarkerSingleUnit2(): void {
     editor.handleInput("\x01");
     editor.handleInput("\x1b[C");
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 + marker.length });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1 + marker.length, line: 0 });
 
     editor.handleInput("\x7f");
     assert.strictEqual(editor.getText(), "AB");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1, line: 0 });
   });
 }
 
@@ -98,7 +100,7 @@ function treatsPasteMarkerSingleUnit3(): void {
 
     editor.handleInput("\x1b[3~");
     assert.strictEqual(editor.getText(), "AB");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1, line: 0 });
   });
 }
 
@@ -117,10 +119,10 @@ function treatsPasteMarkerSingleUnit4(): void {
     editor.handleInput("\x01");
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 + marker.length });
+    assert.deepStrictEqual(editor.getCursor(), { col: 2 + marker.length, line: 0 });
   });
 }
 
@@ -138,15 +140,15 @@ function handlesMultiplePasteMarkersSame(): void {
     editor.handleInput("\x01");
 
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: markers[0]![0].length });
+    assert.deepStrictEqual(editor.getCursor(), { col: markers[0]![0].length, line: 0 });
 
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: markers[0]![0].length + 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: markers[0]![0].length + 1, line: 0 });
 
     editor.handleInput("\x1b[C");
     assert.deepStrictEqual(editor.getCursor(), {
-      line: 0,
       col: markers[0]![0].length + 1 + markers[1]![0].length,
+      line: 0,
     });
   });
 }
@@ -161,7 +163,7 @@ function doesNotTreatManuallyTyped(): void {
 
     editor.handleInput("\x01");
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 1 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 1, line: 0 });
   });
   it("does not crash when paste marker is wider than terminal width", () => {
     const tui = createTestTUI();

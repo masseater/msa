@@ -5,16 +5,18 @@ import { Effect } from "effect";
 
 import {
   HStack,
+  MouseRegion,
   ScrollView,
   SelectList,
   Text,
   TuiAltScreen,
   VStack,
-  MouseRegion,
 } from "../src/index.ts";
-import { trimmedViewport } from "./tui-alt-screen-helpers.ts";
-import { InputOverlay } from "./tui-alt-screen-input-overlay.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import InputOverlay from "./tui-alt-screen-input-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { trimmedViewport } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   routesWheelInputScrollView();
@@ -41,8 +43,8 @@ function routesWheelInputScrollView(): void {
         });
         tui.setLayoutRoot(
           new HStack([
-            { component: left, basis: 10, shrink: 0 },
-            { component: right, basis: 10, shrink: 0 },
+            { basis: 10, component: left, shrink: 0 },
+            { basis: 10, component: right, shrink: 0 },
           ]),
         );
         tui.start();
@@ -96,16 +98,16 @@ function doesNotVerticallyRedispatchMisses(): void {
         let selections = 0;
         const list = new SelectList(
           [
-            { value: "a", label: "A" },
-            { value: "b", label: "B" },
+            { label: "A", value: "a" },
+            { label: "B", value: "b" },
           ],
           2,
           {
+            description: (text) => text,
+            noMatch: (text) => text,
+            scrollInfo: (text) => text,
             selectedPrefix: (text) => text,
             selectedText: (text) => text,
-            description: (text) => text,
-            scrollInfo: (text) => text,
-            noMatch: (text) => text,
           },
         );
         list.onSelect = () => {
@@ -113,8 +115,8 @@ function doesNotVerticallyRedispatchMisses(): void {
         };
         tui.setLayoutRoot(
           new HStack([
-            { component: list, basis: 10 },
-            { component: new Text("plain", 0, 0), basis: 10 },
+            { basis: 10, component: list },
+            { basis: 10, component: new Text("plain", 0, 0) },
           ]),
         );
         tui.start();
@@ -171,7 +173,7 @@ function chainsUnusedWheelDeltaOuter(): void {
         const inner = new ScrollView(new Text("i1\ni2\ni3\ni4\ni5\ni6", 0, 0));
         const outer = new ScrollView(
           new VStack([
-            { component: inner, basis: 2 },
+            { basis: 2, component: inner },
             new Text("tail1\ntail2\ntail3\ntail4\ntail5", 0, 0),
           ]),
           { primary: true },

@@ -3,17 +3,15 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider, type AutocompleteProvider } from "../src/autocomplete.ts";
+import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
 import { pathOperations } from "../src/platform.ts";
-import {
-  applyCompletion,
-  createTestTUI,
-  flushAutocomplete,
-  settlingProvider,
-} from "./editor-helpers.ts";
-import { makeTempDirectory, removeRecursive, writeFileString } from "./test-platform.ts";
+import editorHelpers from "./editor-helpers.ts";
+import testPlatform from "./test-platform.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, flushAutocomplete, settlingProvider } = editorHelpers;
+const { makeTempDirectory, removeRecursive, writeFileString } = testPlatform;
 
 const { join } = pathOperations;
 
@@ -46,12 +44,12 @@ function triggersDebouncesSymbolCompletionAfter(): void {
             const editor = new Editor(createTestTUI(), defaultEditorTheme);
             const requests: string[] = [];
             editor.setAutocompleteProvider({
-              triggerCharacters: ["$", "-"],
+              applyCompletion,
               getSuggestions: (lines, cursorLine, cursorCol) => {
                 requests.push(lines[cursorLine]!.slice(0, cursorCol));
                 return Promise.resolve(null);
               },
-              applyCompletion,
+              triggerCharacters: ["$", "-"],
             });
             editor.setText(before);
             editor.handleInput(trigger);
@@ -84,11 +82,11 @@ function doesNotAutoTriggerAfter(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
         let requests = 0;
         editor.setAutocompleteProvider({
+          applyCompletion,
           getSuggestions: () => {
             requests++;
             return Promise.resolve(null);
           },
-          applyCompletion,
         });
         for (const text of [
           "user@example.com",
@@ -132,11 +130,11 @@ function requestsPathCompletionAfterCJK(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
         const requests: Array<{ text: string; force: boolean | undefined }> = [];
         editor.setAutocompleteProvider({
+          applyCompletion,
           getSuggestions: (lines, cursorLine, cursorCol, options) => {
-            requests.push({ text: lines[cursorLine]!.slice(0, cursorCol), force: options.force });
+            requests.push({ force: options.force, text: lines[cursorLine]!.slice(0, cursorCol) });
             return Promise.resolve(null);
           },
-          applyCompletion,
         });
         const text = "查看，/path/";
         for (const char of text) editor.handleInput(char);
@@ -145,7 +143,7 @@ function requestsPathCompletionAfterCJK(): void {
         assert.deepStrictEqual(requests, []);
         editor.handleInput("\t");
         yield* flushAutocomplete;
-        assert.deepStrictEqual(requests, [{ text, force: true }]);
+        assert.deepStrictEqual(requests, [{ force: true, text }]);
       }),
     ));
 }
@@ -174,7 +172,7 @@ function completesChinesePathPrefixesAfter(): void {
           editor.handleInput("\t");
           yield* settled;
           assert.strictEqual(editor.getText(), `${before}文档/说明.md`);
-          assert.deepStrictEqual(editor.getCursor(), { line: 0, col: editor.getText().length });
+          assert.deepStrictEqual(editor.getCursor(), { col: editor.getText().length, line: 0 });
         }
       }),
     ));
@@ -191,17 +189,17 @@ function endsUnquotedTriggerDebounceContexts(): void {
             const requests: string[] = [];
             const prefix = `${trigger}src`;
             editor.setAutocompleteProvider({
-              triggerCharacters: ["$"],
+              applyCompletion,
               getSuggestions: (lines, cursorLine, cursorCol) => {
                 const text = lines[cursorLine]!.slice(0, cursorCol);
                 requests.push(text);
                 return Promise.resolve(
                   text === prefix
-                    ? { prefix, items: [{ value: `${prefix}/`, label: "src/" }] }
+                    ? { items: [{ label: "src/", value: `${prefix}/` }], prefix }
                     : null,
                 );
               },
-              applyCompletion,
+              triggerCharacters: ["$"],
             });
             editor.setText(`${trigger}sr`);
             editor.handleInput("c");
@@ -260,7 +258,7 @@ function reTriggersCJKPathCompletion(): void {
 
           editor.handleInput("\t");
           assert.strictEqual(editor.getText(), `查看：${fileValue} `);
-          assert.deepStrictEqual(editor.getCursor(), { line: 0, col: editor.getText().length });
+          assert.deepStrictEqual(editor.getCursor(), { col: editor.getText().length, line: 0 });
         }
       }),
     ));
@@ -281,20 +279,20 @@ function cjkPathCompletion(
   const fileValue = quoted ? `@"${directory}/说明.md"` : `@${directory}/说明.md`;
   const filePrefix = quoted ? `@"${directory}/说` : `@${directory}/说`;
   const autocomplete: AutocompleteProvider = {
+    applyCompletion: (...args) => provider.applyCompletion(...args),
     getSuggestions: (lines, cursorLine, cursorCol) => {
       const before = lines[cursorLine]!.slice(0, cursorCol);
       const prefix = before.slice(before.indexOf("@"));
       if (prefix === initial) {
         return Promise.resolve({
+          items: [{ label: `${directory}/`, value: directoryValue }],
           prefix,
-          items: [{ value: directoryValue, label: `${directory}/` }],
         });
       }
       return Promise.resolve(
-        prefix === filePrefix ? { prefix, items: [{ value: fileValue, label: "说明.md" }] } : null,
+        prefix === filePrefix ? { items: [{ label: "说明.md", value: fileValue }], prefix } : null,
       );
     },
-    applyCompletion: (...args) => provider.applyCompletion(...args),
   };
-  return { initial, directoryValue, fileValue, autocomplete };
+  return { autocomplete, directoryValue, fileValue, initial };
 }

@@ -1,11 +1,13 @@
 import assert from "node:assert";
-import { afterEach, beforeEach, describe, it, type TestContext } from "node:test";
+import { type TestContext, afterEach, beforeEach, describe, it } from "node:test";
 
 import { Effect } from "effect";
 
 import { matchesKey } from "../src/keys.ts";
 import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { replies, wait } from "./stdin-buffer-helpers.ts";
+import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { replies, wait } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
   let buffer: StdinBuffer;

@@ -8,7 +8,7 @@ import type { TUI } from "../src/tui-interface.ts";
 import { nextTick } from "./effect-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export const getCellItalic: {
+const getCellItalic: {
   (terminal: VirtualTerminal, row: number, col: number): number;
   (row: number, col: number): (terminal: VirtualTerminal) => number;
 } = dual(3, (terminal: VirtualTerminal, row: number, col: number): number => {
@@ -21,7 +21,7 @@ export const getCellItalic: {
   return cell.isItalic();
 });
 
-export const renderAndFlush: {
+const renderAndFlush: {
   (tui: TUI, terminal: VirtualTerminal): Effect.Effect<void>;
   (terminal: VirtualTerminal): (tui: TUI) => Effect.Effect<void>;
 } = dual(2, (tui: TUI, terminal: VirtualTerminal): Effect.Effect<void> =>
@@ -29,3 +29,10 @@ export const renderAndFlush: {
     tui.requestRender(true);
   }).pipe(Effect.andThen(nextTick), Effect.andThen(Effect.promise(() => terminal.waitForRender()))),
 );
+
+const tuiOverlayStyleLeakHelpers = {
+  getCellItalic,
+  renderAndFlush,
+};
+
+export default tuiOverlayStyleLeakHelpers;

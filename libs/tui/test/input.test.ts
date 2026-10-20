@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 
 import { Input } from "../src/components/input.ts";
 import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
-import { typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
+
+const { typeText } = editorHelpers;
 
 describe("Input component", () => {
   it("submits value including backslash on Enter", () => {
@@ -45,9 +47,9 @@ describe("Input component", () => {
   describe("render", () => {
     it("supports a custom prompt and styled placeholder", () => {
       const input = new Input({
-        prompt: "",
         placeholder: "Find transcript",
         placeholderStyle: (text) => `\x1b[2m${text}\x1b[22m`,
+        prompt: "",
       });
       input.focused = true;
 

@@ -7,8 +7,10 @@ import { ScrollView } from "../src/components/scroll-view.ts";
 import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { numberedLines, trimmedViewport, viewportHas } from "./tui-alt-screen-helpers.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { numberedLines, trimmedViewport, viewportHas } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   it("renders a terminal-height viewport and preserves manual scroll position", () =>
@@ -58,8 +60,8 @@ describe("TuiAltScreen", () => {
         );
         tui.setLayoutRoot(
           new VStack([
-            { component: transcript, basis: 0, grow: 1, minSize: 1 },
-            { component: new Text("editor\nfooter", 0, 0), basis: "auto", minSize: 1 },
+            { basis: 0, component: transcript, grow: 1, minSize: 1 },
+            { basis: "auto", component: new Text("editor\nfooter", 0, 0), minSize: 1 },
           ]),
         );
         tui.start();
@@ -150,8 +152,8 @@ describe("TuiAltScreen", () => {
         );
         tui.setLayoutRoot(
           new VStack([
-            { component: transcript, basis: 0, grow: 1, minSize: 1 },
-            { component: new Text("editor\nfooter", 0, 0), basis: "auto", minSize: 1 },
+            { basis: 0, component: transcript, grow: 1, minSize: 1 },
+            { basis: "auto", component: new Text("editor\nfooter", 0, 0), minSize: 1 },
           ]),
         );
         tui.start();
@@ -218,8 +220,8 @@ function tuialtscreenCases1(): void {
         const dock = new VStack([new Text("editor", 0, 0), new Text("footer", 0, 0)]);
         tui.setLayoutRoot(
           new VStack([
-            { component: transcript, basis: 0, grow: 1, minSize: 1 },
-            { component: dock, basis: "auto", minSize: 1 },
+            { basis: 0, component: transcript, grow: 1, minSize: 1 },
+            { basis: "auto", component: dock, minSize: 1 },
           ]),
         );
         tui.start();

@@ -6,7 +6,9 @@ import {
   normalizeNativeShiftEnterInput,
   resolveEscapeTimeoutMs,
 } from "../src/terminal-protocol.ts";
-import { setupNegotiation, withOverride, working } from "./terminal-helpers.ts";
+import terminalHelpers from "./terminal-helpers.ts";
+
+const { setupNegotiation, withOverride, working } = terminalHelpers;
 
 describe("resolveEscapeTimeoutMs", () => {
   it("uses MSA_TUI_ESC_TIMEOUT when configured", () => {
@@ -184,7 +186,7 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
       withOverride(undefined, () => {
         const harness = setupNegotiation();
         try {
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
           assert.equal(harness.writes.includes(working), false);
 
           harness.send("\x1b]7501;?\x1b\\");
@@ -206,7 +208,7 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
         try {
           harness.send("\x1b[?62;4;52c");
           harness.send("\x1b]7501;?\x07");
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
 
           assert.equal(harness.getInput(), undefined);
           assert.equal(
@@ -228,7 +230,7 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
         const harness = setupNegotiation();
         try {
           assert.equal(harness.writes[0], "\x1b[>7u\x1b[?u\x1b[c");
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
           assert.equal(harness.writes.at(-1), working);
         } finally {
           harness.cleanup();
@@ -238,7 +240,7 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
         const harness = setupNegotiation();
         try {
           assert.equal(harness.writes[0], "\x1b[>7u\x1b[?u\x1b[c");
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
           assert.equal(harness.writes.includes(working), false);
         } finally {
           harness.cleanup();

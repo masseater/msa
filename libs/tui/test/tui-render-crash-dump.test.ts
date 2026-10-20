@@ -4,15 +4,17 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { pathOperations } from "../src/platform.ts";
-import { makeTempDirectory, readFileString, removeRecursive, runCommand } from "./test-platform.ts";
+import testPlatform from "./test-platform.ts";
+
+const { makeTempDirectory, readFileString, removeRecursive, runCommand } = testPlatform;
 
 const fixture = pathOperations.join(import.meta.dirname, "fixtures", "overwide-render-crash.ts");
 
 const crashInChildProcess = (options: { tmpDir: string; logDirectory: string }) =>
   runCommand({
-    file: process.execPath,
     args: [fixture, options.logDirectory],
-    env: { TMPDIR: options.tmpDir, TMP: options.tmpDir, TEMP: options.tmpDir },
+    env: { TEMP: options.tmpDir, TMP: options.tmpDir, TMPDIR: options.tmpDir },
+    file: process.execPath,
     timeout: 30000,
   });
 
@@ -24,8 +26,8 @@ describe("TUI crash dump", () => {
         const crashLogPath = pathOperations.join(crashDir, "msa-tui-crash.log");
         yield* Effect.gen(function* () {
           const { exitCode, stderr } = yield* crashInChildProcess({
-            tmpDir: crashDir,
             logDirectory: "",
+            tmpDir: crashDir,
           });
           assert.notStrictEqual(exitCode, 0);
           assert.match(stderr, /exceeds terminal width \(60 > 40\)/u);
@@ -43,8 +45,8 @@ describe("TUI crash dump", () => {
         const crashLogPath = pathOperations.join(logDirectory, "msa-tui-crash.log");
         yield* Effect.gen(function* () {
           const { exitCode, stderr } = yield* crashInChildProcess({
-            tmpDir: rootDir,
             logDirectory,
+            tmpDir: rootDir,
           });
           assert.notStrictEqual(exitCode, 0);
           assert.ok(stderr.includes(crashLogPath), `stderr should reference ${crashLogPath}`);

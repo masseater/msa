@@ -28,9 +28,9 @@ class InputRecorder implements Component {
 
 function withImageTerminal<T>(fn: () => T): T {
   const restoreEnv = overrideEnv({
-    TERM_PROGRAM: "ghostty",
-    TERM: undefined,
     GHOSTTY_RESOURCES_DIR: undefined,
+    TERM: undefined,
+    TERM_PROGRAM: "ghostty",
   });
   resetCapabilitiesCache();
 
@@ -61,7 +61,7 @@ describe("TUI cell size responses", () => {
 
   it("consumes cell size responses and still forwards later user input", () => {
     withImageTerminal(() => {
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
 
       const terminal = new VirtualTerminal(80, 24);
       const tui: TUI = new TuiMainScreen(terminal);
@@ -72,7 +72,7 @@ describe("TUI cell size responses", () => {
 
       terminal.sendInput("\x1b[6;20;10t");
       assert.deepStrictEqual(recorder.inputs, []);
-      assert.deepStrictEqual(getCellDimensions(), { widthPx: 10, heightPx: 20 });
+      assert.deepStrictEqual(getCellDimensions(), { heightPx: 20, widthPx: 10 });
 
       terminal.sendInput("q");
       assert.deepStrictEqual(recorder.inputs, ["q"]);

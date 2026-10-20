@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import type { Terminal } from "../src/terminal-protocol.ts";
 
-export class BoundedWriteTerminal implements Terminal {
+class BoundedWriteTerminal implements Terminal {
   readonly writes: string[] = [];
   columns = 80;
   rows = 24;
@@ -26,3 +26,5 @@ export class BoundedWriteTerminal implements Terminal {
   setProgress(_active: boolean): void {}
   setProgramStatus(): void {}
 }
+
+export default BoundedWriteTerminal;

@@ -16,18 +16,18 @@ const COMPONENT_COUNT = 2_500;
 const WARMUP_FRAMES = 20;
 
 const theme: MarkdownTheme = {
-  heading: (text) => text,
-  link: (text) => text,
-  linkUrl: (text) => text,
+  bold: (text) => text,
   code: (text) => text,
   codeBlock: (text) => text,
   codeBlockBorder: (text) => text,
+  heading: (text) => text,
+  hr: (text) => text,
+  italic: (text) => text,
+  link: (text) => text,
+  linkUrl: (text) => text,
+  listBullet: (text) => text,
   quote: (text) => text,
   quoteBorder: (text) => text,
-  hr: (text) => text,
-  listBullet: (text) => text,
-  bold: (text) => text,
-  italic: (text) => text,
   strikethrough: (text) => text,
   underline: (text) => text,
 };
@@ -117,8 +117,8 @@ document.addChild(chat);
 const transcript = new ScrollView(document, { follow: "none", primary: true });
 const dock = new VStack([new Text("editor\nfooter", 0, 0)]);
 const root = new VStack([
-  { component: transcript, basis: 0, grow: 1, minSize: 1 },
-  { component: dock, basis: "auto", minSize: 1 },
+  { basis: 0, component: transcript, grow: 1, minSize: 1 },
+  { basis: "auto", component: dock, minSize: 1 },
 ]);
 const terminal = new NullTerminal();
 const tui = new TuiAltScreen(terminal, false, "/tmp/msa-tui-bench");

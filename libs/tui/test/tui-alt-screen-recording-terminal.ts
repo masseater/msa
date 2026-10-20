@@ -1,6 +1,6 @@
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export class RecordingTerminal extends VirtualTerminal {
+class RecordingTerminal extends VirtualTerminal {
   readonly events: Array<{ type: "write"; data: string } | { type: "start" } | { type: "stop" }> =
     [];
 
@@ -10,7 +10,7 @@ export class RecordingTerminal extends VirtualTerminal {
   }
 
   override write(data: string): void {
-    this.events.push({ type: "write", data });
+    this.events.push({ data, type: "write" });
     super.write(data);
   }
 
@@ -19,3 +19,5 @@ export class RecordingTerminal extends VirtualTerminal {
     super.stop();
   }
 }
+
+export default RecordingTerminal;

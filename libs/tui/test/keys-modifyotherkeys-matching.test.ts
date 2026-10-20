@@ -2,7 +2,9 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { matchesKey, parseKey, setKittyProtocolActive } from "../src/keys.ts";
-import { withEnv, withEnvVars } from "./keys-helpers.ts";
+import keysHelpers from "./keys-helpers.ts";
+
+const { withEnv, withEnvVars } = keysHelpers;
 
 describe("matchesKey", () => {
   describe("modifyOtherKeys matching", () => {
@@ -157,10 +159,10 @@ describe("matchesKey", () => {
       setKittyProtocolActive(false);
       withEnvVars(
         {
-          WT_SESSION: "test-session",
-          SSH_CONNECTION: undefined,
           SSH_CLIENT: undefined,
+          SSH_CONNECTION: undefined,
           SSH_TTY: undefined,
+          WT_SESSION: "test-session",
         },
         () => {
           assert.strictEqual(matchesKey("\x08", "ctrl+backspace"), true);
@@ -179,10 +181,10 @@ describe("matchesKey", () => {
       setKittyProtocolActive(false);
       withEnvVars(
         {
-          WT_SESSION: "test-session",
-          SSH_CONNECTION: "1 2 3 4",
           SSH_CLIENT: "1 2 3",
+          SSH_CONNECTION: "1 2 3 4",
           SSH_TTY: "/dev/pts/1",
+          WT_SESSION: "test-session",
         },
         () => {
           assert.strictEqual(matchesKey("\x08", "ctrl+backspace"), false);

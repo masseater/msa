@@ -8,7 +8,9 @@ import {
   setCellDimensions,
 } from "../src/terminal-capabilities.ts";
 import { hyperlink } from "../src/terminal-image.ts";
-import { jpeg, png, render } from "./terminal-image-helpers.ts";
+import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { jpeg, png, render } = terminalImageHelpers;
 
 describe("Image transcoding", () => {
   let calls: string[];
@@ -18,13 +20,13 @@ describe("Image transcoding", () => {
   };
   beforeEach(() => {
     calls = [];
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
   });
   afterEach(() => {
     setImageTranscoder(undefined);
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   it("sends converted PNG data sized from the PNG", () => {
     setImageTranscoder(transcode);
@@ -53,13 +55,13 @@ describe("Image transcoding", () => {
   };
   beforeEach(() => {
     calls = [];
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
   });
   afterEach(() => {
     setImageTranscoder(undefined);
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   it("converts each image once", () => {
     setImageTranscoder(transcode);
@@ -75,7 +77,7 @@ describe("Image transcoding", () => {
   it("does not convert PNG data or iTerm2 output", () => {
     setImageTranscoder(transcode);
     assert.ok(render(png, "image/png")[0]?.includes(`;${png}\x1b\\`));
-    setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
+    setCapabilities({ hyperlinks: true, images: "iterm2", trueColor: true });
     assert.ok(render(jpeg, "image/jpeg").at(-1)?.endsWith(`:${jpeg}\x07`));
     assert.deepStrictEqual(calls, []);
   });

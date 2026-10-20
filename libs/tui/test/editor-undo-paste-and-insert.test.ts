@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import type { AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Undo", () => {
@@ -53,11 +55,11 @@ function doesNotTriggerAutocompleteDuring(): void {
     let suggestionCalls = 0;
 
     const mockProvider: AutocompleteProvider = {
+      applyCompletion,
       getSuggestions: () => {
         suggestionCalls += 1;
         return Promise.resolve(null);
       },
-      applyCompletion,
     };
 
     editor.setAutocompleteProvider(mockProvider);

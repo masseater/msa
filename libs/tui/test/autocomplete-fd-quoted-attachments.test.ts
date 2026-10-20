@@ -4,27 +4,25 @@ import { describe, test } from "node:test";
 import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import {
-  getSuggestions,
-  isFdInstalled,
-  requireFdPath,
-  setupFolder,
-  useTempWorkspace,
-  type TempWorkspace,
-} from "./autocomplete-helpers.ts";
+import autocompleteHelpers from "./autocomplete-helpers.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
+
+const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =
+  autocompleteHelpers;
 
 describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    const ws = useTempWorkspace();
-    completesQuotedCJKAttachmentsAfter(ws);
-    doesNotInterpretEmailAddresses(ws);
-    quotesPathsContainingWhitespaceCJK(ws);
-    continuesAutocompleteInsideQuotedPaths(ws);
-    appliesQuotedCompletionWithoutDuplicating(ws);
-  });
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      const ws = useTempWorkspace();
+      completesQuotedCJKAttachmentsAfter(ws);
+      doesNotInterpretEmailAddresses(ws);
+      quotesPathsContainingWhitespaceCJK(ws);
+      continuesAutocompleteInsideQuotedPaths(ws);
+      appliesQuotedCompletionWithoutDuplicating(ws);
+    }));
 });
 
-function completesQuotedCJKAttachmentsAfter(ws: TempWorkspace): void {
+function completesQuotedCJKAttachmentsAfter(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("completes quoted CJK attachments after prose without losing path segments or quotes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -59,7 +57,7 @@ function completesQuotedCJKAttachmentsAfter(ws: TempWorkspace): void {
     ));
 }
 
-function doesNotInterpretEmailAddresses(ws: TempWorkspace): void {
+function doesNotInterpretEmailAddresses(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("does not interpret email addresses or @ after ASCII or CJK letters as attachment prefixes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -93,7 +91,7 @@ function doesNotInterpretEmailAddresses(ws: TempWorkspace): void {
     ));
 }
 
-function quotesPathsContainingWhitespaceCJK(ws: TempWorkspace): void {
+function quotesPathsContainingWhitespaceCJK(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("quotes paths containing whitespace or CJK punctuation for @ suggestions", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -119,14 +117,14 @@ function quotesPathsContainingWhitespaceCJK(ws: TempWorkspace): void {
     ));
 }
 
-function continuesAutocompleteInsideQuotedPaths(ws: TempWorkspace): void {
+function continuesAutocompleteInsideQuotedPaths(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("continues autocomplete inside quoted @ paths", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         yield* setupFolder(ws.baseDir, {
           files: {
-            "my folder/test.txt": "content",
             "my folder/other.txt": "content",
+            "my folder/test.txt": "content",
           },
         });
 
@@ -144,7 +142,9 @@ function continuesAutocompleteInsideQuotedPaths(ws: TempWorkspace): void {
     ));
 }
 
-function appliesQuotedCompletionWithoutDuplicating(ws: TempWorkspace): void {
+function appliesQuotedCompletionWithoutDuplicating(
+  ws: autocompleteHelpersTypes.TempWorkspace,
+): void {
   test("applies quoted @ completion without duplicating closing quote", () =>
     Effect.runPromise(
       Effect.gen(function* () {

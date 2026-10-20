@@ -2,7 +2,7 @@ import { dual } from "effect/Function";
 
 import { overrideEnv } from "../src/env.ts";
 
-export const withEnv: {
+const withEnv: {
   (name: string, value: string | undefined, fn: () => void): void;
   (value: string | undefined, fn: () => void): (name: string) => void;
 } = dual(3, (name: string, value: string | undefined, fn: () => void): void => {
@@ -14,7 +14,7 @@ export const withEnv: {
   }
 });
 
-export const withEnvVars: {
+const withEnvVars: {
   (vars: Record<string, string | undefined>, fn: () => void): void;
   (fn: () => void): (vars: Record<string, string | undefined>) => void;
 } = dual(2, (vars: Record<string, string | undefined>, fn: () => void): void => {
@@ -29,3 +29,10 @@ export const withEnvVars: {
   };
   run(0);
 });
+
+const keysHelpers = {
+  withEnv,
+  withEnvVars,
+};
+
+export default keysHelpers;

@@ -4,13 +4,11 @@ import { describe, test } from "node:test";
 import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import {
-  getSuggestions,
-  setupFolder,
-  useTempDirectory,
-  type TempWorkspace,
-} from "./autocomplete-helpers.ts";
+import autocompleteHelpers from "./autocomplete-helpers.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
 import { toJson } from "./effect-helpers.ts";
+
+const { getSuggestions, setupFolder, useTempDirectory } = autocompleteHelpers;
 
 const assertQuotedBoundary = (
   provider: CombinedAutocompleteProvider,
@@ -56,12 +54,12 @@ describe("CombinedAutocompleteProvider", () => {
   });
 });
 
-function completesChinesePathPrefixesAfter(ws: TempWorkspace): void {
+function completesChinesePathPrefixesAfter(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("completes Chinese path prefixes after whitespace or CJK punctuation on Tab", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         yield* setupFolder(ws.baseDir, {
-          files: { "说明.md": "file", "文档/说明.md": "nested file" },
+          files: { "文档/说明.md": "nested file", "说明.md": "file" },
         });
         const provider = new CombinedAutocompleteProvider([], ws.baseDir);
         const completions = [
@@ -105,7 +103,7 @@ function completesChinesePathPrefixesAfter(ws: TempWorkspace): void {
     ));
 }
 
-function treatsUnquotedSeparatorsBoundariesEven(ws: TempWorkspace): void {
+function treatsUnquotedSeparatorsBoundariesEven(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("treats unquoted separators as boundaries even when a matching literal path exists", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -132,7 +130,7 @@ function treatsUnquotedSeparatorsBoundariesEven(ws: TempWorkspace): void {
     ));
 }
 
-function handlesEmptyPrefixAfterWhitespace(ws: TempWorkspace): void {
+function handlesEmptyPrefixAfterWhitespace(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("handles an empty prefix after whitespace or CJK punctuation consistently", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -157,7 +155,7 @@ function handlesEmptyPrefixAfterWhitespace(ws: TempWorkspace): void {
     ));
 }
 
-function completesPathsAfterOpeningWrappers(ws: TempWorkspace): void {
+function completesPathsAfterOpeningWrappers(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("completes paths after opening wrappers like ( [ { < and backticks", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -191,7 +189,7 @@ function completesPathsAfterOpeningWrappers(ws: TempWorkspace): void {
     ));
 }
 
-function preservesCJKCharactersUnprefixedTab(ws: TempWorkspace): void {
+function preservesCJKCharactersUnprefixedTab(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("preserves CJK characters in unprefixed Tab completions", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -235,7 +233,7 @@ function preservesCJKCharactersUnprefixedTab(ws: TempWorkspace): void {
     ));
 }
 
-function preservesPrefixDirectoryCompletions(ws: TempWorkspace): void {
+function preservesPrefixDirectoryCompletions(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("preserves ./ prefix for directory completions", () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -5,11 +5,13 @@ import { Effect } from "effect";
 
 import { type TUI, TuiMainScreen } from "../src/index.ts";
 import { nextTick } from "./effect-helpers.ts";
-import { BoundedWriteTerminal } from "./tui-render-bounded-write-terminal.ts";
-import { MAX_RENDER_WRITE_CHARS } from "./tui-render-helpers.ts";
-import { InputComponent } from "./tui-render-input-component.ts";
-import { TestComponent } from "./tui-render-test-component.ts";
+import BoundedWriteTerminal from "./tui-render-bounded-write-terminal.ts";
+import tuiRenderHelpers from "./tui-render-helpers.ts";
+import InputComponent from "./tui-render-input-component.ts";
+import TestComponent from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { MAX_RENDER_WRITE_CHARS } = tuiRenderHelpers;
 
 describe("TUI render scheduling", () => {
   it("renders keyboard input without waiting for a throttled frame", () =>

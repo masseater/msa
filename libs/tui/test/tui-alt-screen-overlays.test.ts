@@ -4,9 +4,11 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Text, TuiAltScreen } from "../src/index.ts";
-import { viewportHas } from "./tui-alt-screen-helpers.ts";
-import { InputOverlay } from "./tui-alt-screen-input-overlay.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import InputOverlay from "./tui-alt-screen-input-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { viewportHas } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   invalidatesOverlaysExplicitLayoutRoot();

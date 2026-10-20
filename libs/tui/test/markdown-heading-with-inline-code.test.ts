@@ -10,14 +10,16 @@ import {
 } from "../src/ansi-sequences.ts";
 import {
   Markdown,
-  resetCapabilitiesCache,
-  setCapabilities,
   type TUI,
   TuiMainScreen,
+  resetCapabilitiesCache,
+  setCapabilities,
 } from "../src/index.ts";
-import { getCell } from "./markdown-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { getCell } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Heading with inline code", () => {
@@ -123,7 +125,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should not duplicate URL for autolinked emails", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "Contact user@example.com for help",
         0,
@@ -150,7 +152,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should not duplicate URL for bare URLs", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "Visit https://example.com for more",
         0,
@@ -167,7 +169,7 @@ describe("Markdown component", () => {
     });
 
     it("should show URL in parentheses when hyperlinks are not supported", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "[click here](https://example.com)",
         0,
@@ -191,7 +193,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should show mailto URL in parentheses when hyperlinks are not supported", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "[Email me](mailto:test@example.com)",
         0,
@@ -218,7 +220,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should emit OSC 8 hyperlink sequence when terminal supports hyperlinks", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: null, trueColor: false });
       const markdown = new Markdown(
         "[click here](https://example.com)",
         0,

@@ -2,7 +2,9 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Input } from "../src/components/input.ts";
-import { typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
+
+const { typeText } = editorHelpers;
 
 describe("Input component", () => {
   describe("Undo", () => {

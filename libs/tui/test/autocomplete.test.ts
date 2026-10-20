@@ -4,13 +4,10 @@ import { describe, it, test } from "node:test";
 import { Console, Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
-import {
-  getSuggestions,
-  isFdInstalled,
-  requireFdPath,
-  setupFolder,
-  useTempWorkspace,
-} from "./autocomplete-helpers.ts";
+import autocompleteHelpers from "./autocomplete-helpers.ts";
+
+const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =
+  autocompleteHelpers;
 
 describe("CombinedAutocompleteProvider", () => {
   describe("extractPathPrefix", () => {
@@ -96,35 +93,37 @@ describe("CombinedAutocompleteProvider", () => {
 });
 
 describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    const ws = useTempWorkspace();
-    test("returns all files and folders for empty @ query", () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* setupFolder(ws.baseDir, {
-            dirs: ["src"],
-            files: {
-              "README.md": "readme",
-            },
-          });
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      const ws = useTempWorkspace();
+      test("returns all files and folders for empty @ query", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* setupFolder(ws.baseDir, {
+              dirs: ["src"],
+              files: {
+                "README.md": "readme",
+              },
+            });
 
-          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
-          const line = "@";
-          const result = yield* Effect.promise(() =>
-            getSuggestions(provider, [line], 0, line.length),
-          );
+            const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
+            const line = "@";
+            const result = yield* Effect.promise(() =>
+              getSuggestions(provider, [line], 0, line.length),
+            );
 
-          const values = result?.items.map((item) => item.value).sort();
-          assert.deepStrictEqual(values, ["@README.md", "@src/"].sort());
-        }),
-      ));
-  });
+            const values = result?.items.map((item) => item.value).sort();
+            assert.deepStrictEqual(values, ["@README.md", "@src/"].sort());
+          }),
+        ));
+    }));
 });
 
 describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    fdFileSuggestionsCases1();
-  });
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      fdFileSuggestionsCases1();
+    }));
 });
 
 function fdFileSuggestionsCases1(): void {
@@ -166,65 +165,67 @@ function fdFileSuggestionsCases1(): void {
 }
 
 describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    const ws = useTempWorkspace();
-    test("recognizes @ after opening wrappers like ( and backticks", () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* setupFolder(ws.baseDir, { files: { "README.md": "readme" } });
-          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
-          for (const before of ["(", "see (", "[", "`", "<", "{"]) {
-            const line = `${before}@REA`;
-            const result = yield* Effect.promise(() =>
-              getSuggestions(provider, [line], 0, line.length),
-            );
-            assert.ok(result, line);
-            assert.strictEqual(result.prefix, "@REA");
-            const applied = provider.applyCompletion(
-              [line],
-              0,
-              line.length,
-              result.items[0]!,
-              result.prefix,
-            );
-            assert.strictEqual(applied.lines[0], `${before}@README.md `);
-          }
-          const embedded = "foo(@REA";
-          assert.strictEqual(
-            yield* Effect.promise(() => getSuggestions(provider, [embedded], 0, embedded.length)),
-            null,
-          );
-        }),
-      ));
-  });
-});
-
-describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    const ws = useTempWorkspace();
-    test("preserves CJK characters and embedded @ in attachment paths", () =>
-      Effect.runPromise(
-        Effect.gen(function* () {
-          yield* setupFolder(ws.baseDir, {
-            files: { "文档/说明.md": "text", "文档@备份/说明.md": "backup" },
-          });
-          const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
-          for (const before of ["", "查看，"]) {
-            for (const directory of ["文档", "文档@备份"]) {
-              const prefix = `@${directory}/说`;
-              const line = before + prefix;
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      const ws = useTempWorkspace();
+      test("recognizes @ after opening wrappers like ( and backticks", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* setupFolder(ws.baseDir, { files: { "README.md": "readme" } });
+            const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
+            for (const before of ["(", "see (", "[", "`", "<", "{"]) {
+              const line = `${before}@REA`;
               const result = yield* Effect.promise(() =>
                 getSuggestions(provider, [line], 0, line.length),
               );
               assert.ok(result, line);
-              assert.strictEqual(result.prefix, prefix);
-              assert.deepStrictEqual(
-                result.items.map((item) => item.value),
-                [`@${directory}/说明.md`],
+              assert.strictEqual(result.prefix, "@REA");
+              const applied = provider.applyCompletion(
+                [line],
+                0,
+                line.length,
+                result.items[0]!,
+                result.prefix,
               );
+              assert.strictEqual(applied.lines[0], `${before}@README.md `);
             }
-          }
-        }),
-      ));
-  });
+            const embedded = "foo(@REA";
+            assert.strictEqual(
+              yield* Effect.promise(() => getSuggestions(provider, [embedded], 0, embedded.length)),
+              null,
+            );
+          }),
+        ));
+    }));
+});
+
+describe("CombinedAutocompleteProvider", () => {
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      const ws = useTempWorkspace();
+      test("preserves CJK characters and embedded @ in attachment paths", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* setupFolder(ws.baseDir, {
+              files: { "文档/说明.md": "text", "文档@备份/说明.md": "backup" },
+            });
+            const provider = new CombinedAutocompleteProvider([], ws.baseDir, requireFdPath());
+            for (const before of ["", "查看，"]) {
+              for (const directory of ["文档", "文档@备份"]) {
+                const prefix = `@${directory}/说`;
+                const line = before + prefix;
+                const result = yield* Effect.promise(() =>
+                  getSuggestions(provider, [line], 0, line.length),
+                );
+                assert.ok(result, line);
+                assert.strictEqual(result.prefix, prefix);
+                assert.deepStrictEqual(
+                  result.items.map((item) => item.value),
+                  [`@${directory}/说明.md`],
+                );
+              }
+            }
+          }),
+        ));
+    }));
 });

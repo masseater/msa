@@ -3,11 +3,13 @@ import { describe, it } from "node:test";
 
 import { detectCapabilities } from "../src/terminal-capabilities.ts";
 import { encodeITerm2 } from "../src/terminal-image.ts";
-import { withEnv } from "./terminal-image-helpers.ts";
+import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { withEnv } = terminalImageHelpers;
 
 describe("detectCapabilities", () => {
   it("enables hyperlinks under tmux when the client forwards them", () => {
-    withEnv({ TMUX: "/tmp/tmux-1000/default,1234,0", TERM_PROGRAM: "ghostty" }, () => {
+    withEnv({ TERM_PROGRAM: "ghostty", TMUX: "/tmp/tmux-1000/default,1234,0" }, () => {
       const caps = detectCapabilities(() => true);
       assert.strictEqual(caps.hyperlinks, true);
       assert.strictEqual(caps.images, null);
@@ -15,7 +17,7 @@ describe("detectCapabilities", () => {
   });
 
   it("disables hyperlinks under tmux when the client does not forward them", () => {
-    withEnv({ TMUX: "/tmp/tmux-1000/default,1234,0", TERM_PROGRAM: "ghostty" }, () => {
+    withEnv({ TERM_PROGRAM: "ghostty", TMUX: "/tmp/tmux-1000/default,1234,0" }, () => {
       const caps = detectCapabilities(() => false);
       assert.strictEqual(caps.hyperlinks, false);
       assert.strictEqual(caps.images, null);
@@ -46,10 +48,10 @@ describe("detectCapabilities", () => {
   it("enables hyperlinks and Kitty images for Herdr", () => {
     withEnv(
       {
-        TERM_PROGRAM: "herdr",
-        TERM: "xterm-256color",
         COLORTERM: "truecolor",
         KITTY_WINDOW_ID: "1",
+        TERM: "xterm-256color",
+        TERM_PROGRAM: "herdr",
       },
       () => {
         const caps = detectCapabilities();
@@ -58,7 +60,7 @@ describe("detectCapabilities", () => {
         assert.strictEqual(caps.trueColor, true);
       },
     );
-    withEnv({ TERM_PROGRAM: "herdr", MSA_HYPERLINKS: "0" }, () => {
+    withEnv({ MSA_HYPERLINKS: "0", TERM_PROGRAM: "herdr" }, () => {
       assert.strictEqual(detectCapabilities().hyperlinks, false);
     });
   });
@@ -71,7 +73,7 @@ describe("detectCapabilities", () => {
   });
 
   it("does not disable Ghostty images solely because cmux is present", () => {
-    withEnv({ TERM_PROGRAM: "ghostty", CMUX_WORKSPACE_ID: "workspace" }, () => {
+    withEnv({ CMUX_WORKSPACE_ID: "workspace", TERM_PROGRAM: "ghostty" }, () => {
       const caps = detectCapabilities();
       assert.strictEqual(caps.images, "kitty");
       assert.strictEqual(caps.hyperlinks, true);
@@ -126,9 +128,9 @@ describe("detectCapabilities", () => {
   it("disables images for Warp inside tmux", () => {
     withEnv(
       {
+        TERM: "tmux-256color",
         TERM_PROGRAM: "WarpTerminal",
         TMUX: "/tmp/tmux-1000/default,1234,0",
-        TERM: "tmux-256color",
       },
       () => {
         const caps = detectCapabilities(() => true);
@@ -155,9 +157,9 @@ describe("detectCapabilities", () => {
   it("enables Alacritty capabilities for Zed", () => {
     withEnv({ TERM_PROGRAM: "zed" }, () => {
       assert.deepStrictEqual(detectCapabilities(), {
+        hyperlinks: true,
         images: null,
         trueColor: true,
-        hyperlinks: true,
       });
     });
   });
@@ -165,7 +167,7 @@ describe("detectCapabilities", () => {
 
 describe("detectCapabilities", () => {
   it("enables truecolor and hyperlinks for Windows Terminal outside multiplexers", () => {
-    withEnv({ WT_SESSION: "session", TERM: "xterm-256color" }, () => {
+    withEnv({ TERM: "xterm-256color", WT_SESSION: "session" }, () => {
       const caps = detectCapabilities();
       assert.strictEqual(caps.trueColor, true);
       assert.strictEqual(caps.hyperlinks, true);
@@ -174,7 +176,7 @@ describe("detectCapabilities", () => {
   });
 
   it("enables truecolor without hyperlinks for JetBrains terminal", () => {
-    withEnv({ TERMINAL_EMULATOR: "JetBrains-JediTerm", TERM: "xterm-256color" }, () => {
+    withEnv({ TERM: "xterm-256color", TERMINAL_EMULATOR: "JetBrains-JediTerm" }, () => {
       const caps = detectCapabilities();
       assert.strictEqual(caps.trueColor, true);
       assert.strictEqual(caps.hyperlinks, false);
@@ -184,7 +186,7 @@ describe("detectCapabilities", () => {
 
   it("does not inherit Windows Terminal truecolor through tmux", () => {
     withEnv(
-      { WT_SESSION: "session", TMUX: "/tmp/tmux-1000/default,1234,0", TERM: "tmux-256color" },
+      { TERM: "tmux-256color", TMUX: "/tmp/tmux-1000/default,1234,0", WT_SESSION: "session" },
       () => {
         const caps = detectCapabilities(() => false);
         assert.strictEqual(caps.trueColor, false);
@@ -196,7 +198,7 @@ describe("detectCapabilities", () => {
 
   it("trusts explicit truecolor hints through tmux", () => {
     withEnv(
-      { COLORTERM: "truecolor", TMUX: "/tmp/tmux-1000/default,1234,0", TERM: "tmux-256color" },
+      { COLORTERM: "truecolor", TERM: "tmux-256color", TMUX: "/tmp/tmux-1000/default,1234,0" },
       () => {
         const caps = detectCapabilities(() => false);
         assert.strictEqual(caps.trueColor, true);
@@ -217,7 +219,7 @@ describe("detectCapabilities", () => {
 
 describe("iTerm2 image encoding", () => {
   it("includes the decoded payload size in OSC 1337 metadata", () => {
-    const sequence = encodeITerm2("AAAA", { width: 2, height: "auto" });
+    const sequence = encodeITerm2("AAAA", { height: "auto", width: 2 });
     assert.strictEqual(sequence, "\x1b]1337;File=inline=1;size=3;width=2;height=auto:AAAA\x07");
   });
 });

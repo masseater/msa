@@ -2,8 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Prompt history navigation", () => {
@@ -64,14 +66,14 @@ describe("Editor component", () => {
 
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "draft");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "prompt");
 
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "draft");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
     });
   });
 });

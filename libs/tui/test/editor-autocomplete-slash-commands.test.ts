@@ -4,10 +4,12 @@ import { stripVTControlCharacters } from "node:util";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider, type AutocompleteProvider } from "../src/autocomplete.ts";
+import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
@@ -62,13 +64,14 @@ function hidesAutocompleteBackspacingSlashCommand(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const prefix = text.slice(0, cursorCol);
             if (prefix.startsWith("/")) {
               const commands = [
-                { value: "/model", label: "model", description: "Change model" },
-                { value: "/help", label: "help", description: "Show help" },
+                { description: "Change model", label: "model", value: "/model" },
+                { description: "Show help", label: "help", value: "/help" },
               ];
               const query = prefix.slice(1);
               const filtered = commands.filter((c) => c.value.startsWith(query));
@@ -78,7 +81,6 @@ function hidesAutocompleteBackspacingSlashCommand(): void {
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -103,11 +105,11 @@ function doesNotShowArgumentCompletions(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
         const provider = new CombinedAutocompleteProvider(
           [
-            { name: "help", description: "Show help" },
+            { description: "Show help", name: "help" },
             {
-              name: "model",
               description: "Switch model",
-              getArgumentCompletions: () => [{ value: "claude-opus", label: "claude-opus" }],
+              getArgumentCompletions: () => [{ label: "claude-opus", value: "claude-opus" }],
+              name: "model",
             },
           ],
           process.cwd(),
@@ -127,21 +129,21 @@ function doesNotShowArgumentCompletions(): void {
 
 function commandArgumentProvider(): AutocompleteProvider {
   return {
+    applyCompletion,
     getSuggestions: (lines, _cursorLine, cursorCol) => {
       const before = (lines[0] || "").slice(0, cursorCol);
       if (!before.startsWith("/")) return Promise.resolve(null);
       if (before.includes(" ")) {
         return Promise.resolve({
           items: [
-            { value: "repo", label: "repo" },
-            { value: "message", label: "message" },
-            { value: "help", label: "help" },
+            { label: "repo", value: "repo" },
+            { label: "message", value: "message" },
+            { label: "help", value: "help" },
           ],
           prefix: before.slice(before.indexOf(" ") + 1),
         });
       }
-      return Promise.resolve({ items: [{ value: "cmd", label: "cmd" }], prefix: before });
+      return Promise.resolve({ items: [{ label: "cmd", value: "cmd" }], prefix: before });
     },
-    applyCompletion,
   };
 }

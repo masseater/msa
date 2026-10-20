@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
 import { visibleWidth } from "../src/utils.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Paste marker atomic behavior", () => {
@@ -87,13 +89,13 @@ function snapsPasteMarkerStartNavigating(): void {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x01");
     for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 0 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 1 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 6 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 6, line: 2 });
   });
 }
 
@@ -114,19 +116,19 @@ function preservesStickyColumnNavigatingThrough(): void {
     for (let i = 0; i < 4; i++) editor.handleInput("\x1b[A");
     editor.handleInput("\x01");
     for (let i = 0; i < 10; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 0 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 1 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 2 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 3, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 3 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 4, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 4 });
   });
 }
 
@@ -154,20 +156,20 @@ function doesNotGetStuckMoving(): void {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x01");
     for (let i = 0; i < 6; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 6, line: 0 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: markerStart });
+    assert.deepStrictEqual(editor.getCursor(), { col: markerStart, line: 0 });
 
     editor.handleInput("\x1b[B");
     assert.strictEqual(editor.getCursor().line, 0);
     assert.strictEqual(editor.getCursor().col, markerEnd);
 
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: markerStart });
+    assert.deepStrictEqual(editor.getCursor(), { col: markerStart, line: 0 });
 
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 6, line: 0 });
   });
 }
 
@@ -187,17 +189,17 @@ function skipsMarkerContinuationVLsPreferred(): void {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x01");
     for (let i = 0; i < 3; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
     editor.handleInput("\x1b[B");
     assert.strictEqual(editor.getCursor().col, 8);
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 1 });
 
     editor.handleInput("\x1b[A");
     assert.strictEqual(editor.getCursor().col, 8);
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
   });
 }

@@ -1,8 +1,9 @@
 import { describe } from "node:test";
 
-import { defineCases, type LatexCase } from "./latex-helpers.ts";
+import defineCases from "./latex-helpers.ts";
+import type latexHelpersTypes from "./latex-helpers.types.ts";
 
-const sessionCases1: readonly LatexCase[] = [
+const sessionCases1: readonly latexHelpersTypes.LatexCase[] = [
   [String.raw`\mathbb{C}^3 \to \mathbb{C}^3`, "ℂ³ → ℂ³"],
   [
     String.raw`\{3x+2y,\; 27x^2-4z-1,\; x(x-1)(x+1)\} \quad\Rightarrow\quad x \in \{0, \pm 1\},`,
@@ -51,7 +52,7 @@ const sessionCases1: readonly LatexCase[] = [
   ["4+3xy", "4+3xy"],
 ];
 
-const sessionCases2: readonly LatexCase[] = [
+const sessionCases2: readonly latexHelpersTypes.LatexCase[] = [
   [
     String.raw`E \approx \frac{0.1\ \text{lux}}{100\ \text{lm/W}} = 0.001\ \text{W/m}^2`,
     "E ≈ (0.1 lux)/(100 lm/W) = 0.001 W/m²",
@@ -81,7 +82,7 @@ const sessionCases2: readonly LatexCase[] = [
   ],
 ];
 
-const sessionCases3: readonly LatexCase[] = [
+const sessionCases3: readonly latexHelpersTypes.LatexCase[] = [
   [
     String.raw`\det\!\left(\frac{\partial(F_1,F_2,F_3)}{\partial(x,y,z)}\right)=-2.`,
     "det((∂(F₁,F₂,F₃))/(∂(x,y,z))) = -2.",
@@ -99,7 +100,7 @@ F(-1,\tfrac32,\tfrac{13}2)&=(-\tfrac14,0,0).
   ["3", "3"],
 ];
 
-const sessionCases4: readonly LatexCase[] = [
+const sessionCases4: readonly latexHelpersTypes.LatexCase[] = [
   [
     String.raw`J = \begin{pmatrix}
 \frac{\partial f_1}{\partial x} & \frac{\partial f_1}{\partial y} & \frac{\partial f_1}{\partial z} \\

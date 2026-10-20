@@ -5,10 +5,13 @@ import { Effect } from "effect";
 
 import { type MarkdownTheme } from "../src/components/markdown.ts";
 import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-capabilities.ts";
-import { getCell } from "./markdown-helpers.ts";
-import { findViewportRow, renderMarkdownInTerminal } from "./markdown-terminal-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
+import markdownTerminalHelpers from "./markdown-terminal-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 import type { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { getCell } = markdownHelpers;
+const { findViewportRow, renderMarkdownInTerminal } = markdownTerminalHelpers;
 
 const wrappedLinkSource = `| Link | Plain |
 | --- | --- |
@@ -53,8 +56,8 @@ const quoteColor = 0x123456;
 
 const quoteTheme: MarkdownTheme = {
   ...defaultMarkdownTheme,
-  quote: (text) => `\x1b[38;2;18;52;86m${text}\x1b[39m`,
   link: (text) => `\x1b[38;2;129;162;190m${text}\x1b[39m`,
+  quote: (text) => `\x1b[38;2;18;52;86m${text}\x1b[39m`,
 };
 
 const quotedLinkSource = `> | Link | Plain |
@@ -107,9 +110,9 @@ describe("Markdown component", () => {
         Effect.forEach(
           [true, false],
           (hyperlinks) => {
-            setCapabilities({ images: null, trueColor: false, hyperlinks });
+            setCapabilities({ hyperlinks, images: null, trueColor: false });
             return renderMarkdownInTerminal(
-              { source: wrappedLinkSource, theme: defaultMarkdownTheme, width: 24, height: 16 },
+              { height: 16, source: wrappedLinkSource, theme: defaultMarkdownTheme, width: 24 },
               (terminal) =>
                 Effect.andThen(
                   assertWrappedLinkRow(terminal),
@@ -124,9 +127,9 @@ describe("Markdown component", () => {
     it("should restore the enclosing style after a wrapped table link", () =>
       Effect.runPromise(
         Effect.suspend(() => {
-          setCapabilities({ images: null, trueColor: true, hyperlinks: true });
+          setCapabilities({ hyperlinks: true, images: null, trueColor: true });
           return renderMarkdownInTerminal(
-            { source: quotedLinkSource, theme: quoteTheme, width: 28, height: 10 },
+            { height: 10, source: quotedLinkSource, theme: quoteTheme, width: 28 },
             (terminal) =>
               Effect.andThen(assertQuotedLinkRow(terminal), assertQuotedFinalRow(terminal)),
           );

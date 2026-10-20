@@ -18,8 +18,8 @@ function searchesNormalizedRenderedTranscriptText(): void {
       [
         {
           segments: [
-            { row: 0, startCol: 6, endCol: 11 },
-            { row: 1, startCol: 0, endCol: 5 },
+            { endCol: 11, row: 0, startCol: 6 },
+            { endCol: 5, row: 1, startCol: 0 },
           ],
         },
       ],
@@ -31,9 +31,9 @@ function searchesNormalizedRenderedTranscriptText(): void {
       [
         {
           segments: [
-            { row: 0, startCol: 1, endCol: 3 },
-            { row: 0, startCol: 5, endCol: 8 },
-            { row: 1, startCol: 0, endCol: 6 },
+            { endCol: 3, row: 0, startCol: 1 },
+            { endCol: 8, row: 0, startCol: 5 },
+            { endCol: 6, row: 1, startCol: 0 },
           ],
         },
       ],
@@ -55,7 +55,7 @@ function reusesIndexedTranscriptMatchesUntil(): void {
     const changedQuery = index.search(["alpha needle", "omega"], "omega");
     assert.strictEqual(changedQuery.changed, true);
     assert.notStrictEqual(changedQuery.matches, initial.matches);
-    assert.deepStrictEqual(changedQuery.matches[0]?.segments, [{ row: 1, startCol: 0, endCol: 5 }]);
+    assert.deepStrictEqual(changedQuery.matches[0]?.segments, [{ endCol: 5, row: 1, startCol: 0 }]);
 
     const changedLines = index.search(["alpha needle", "no match"], "omega");
     assert.strictEqual(changedLines.changed, true);

@@ -6,8 +6,10 @@ import { Effect } from "effect";
 import { Text, TuiAltScreen } from "../src/index.ts";
 import { renderFakeCursor } from "../src/tui-component.ts";
 import { toJson } from "./effect-helpers.ts";
-import { someWriteSince, writesSince } from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { someWriteSince, writesSince } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   keepsSelectionHighlightAfterFake();

@@ -5,9 +5,11 @@ import { Effect } from "effect";
 
 import { Text, TuiAltScreen } from "../src/index.ts";
 import { toJson } from "./effect-helpers.ts";
-import { someWriteSince, viewportHas } from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { someWriteSince, viewportHas } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   selectsVisibleTextMouseCopies();

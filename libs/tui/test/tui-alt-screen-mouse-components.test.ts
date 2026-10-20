@@ -3,11 +3,13 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { Text, TuiAltScreen, MouseRegion, type TuiMouseEvent } from "../src/index.ts";
+import { MouseRegion, Text, TuiAltScreen, type TuiMouseEvent } from "../src/index.ts";
 import { hyperlink } from "../src/terminal-image.ts";
-import { someWriteSince } from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { someWriteSince } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   opensOSC8HyperlinkSpecific();
@@ -106,14 +108,14 @@ function focusesCapturesDragGesturesMouse(): void {
         const tui = new TuiAltScreen(terminal);
         const events: string[] = [];
         const component = {
-          render: () => ["control"],
-          invalidate: () => {},
           handleMouse: (event: TuiMouseEvent) => {
             events.push(event.type);
             return event.type === "press"
-              ? { handled: true, capture: true, focus: true }
+              ? { capture: true, focus: true, handled: true }
               : { handled: true };
           },
+          invalidate: () => {},
+          render: () => ["control"],
         };
         tui.addChild(component);
         tui.start();
@@ -139,8 +141,6 @@ function reportsConsecutiveClickCountsComponent(): void {
         const tui = new TuiAltScreen(terminal);
         const clickCounts: number[] = [];
         tui.addChild({
-          render: () => ["control"],
-          invalidate: () => {},
           handleMouse: (event) => {
             if (event.type === "press") return { handled: true };
             if (event.type === "click") {
@@ -149,6 +149,8 @@ function reportsConsecutiveClickCountsComponent(): void {
             }
             return undefined;
           },
+          invalidate: () => {},
+          render: () => ["control"],
         });
         tui.start();
         yield* Effect.promise(() => terminal.waitForRender());
@@ -172,12 +174,12 @@ function doesNotRerenderHandledNo(): void {
         const tui = new TuiAltScreen(terminal);
         let renderCount = 0;
         tui.addChild({
+          handleMouse: (event) => (event.type === "move" ? { handled: true } : undefined),
+          invalidate: () => {},
           render: () => {
             renderCount += 1;
             return ["hover target"];
           },
-          invalidate: () => {},
-          handleMouse: (event) => (event.type === "move" ? { handled: true } : undefined),
         });
         tui.start();
         yield* Effect.promise(() => terminal.waitForRender());

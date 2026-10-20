@@ -1,6 +1,6 @@
-import { TestComponent } from "./tui-render-test-component.ts";
+import TestComponent from "./tui-render-test-component.ts";
 
-export class InputComponent extends TestComponent {
+class InputComponent extends TestComponent {
   renderCount = 0;
 
   override render(width: number): string[] {
@@ -12,3 +12,5 @@ export class InputComponent extends TestComponent {
     this.lines = [data];
   }
 }
+
+export default InputComponent;

@@ -5,10 +5,12 @@ import { Effect } from "effect";
 
 import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { getCellItalic, renderAndFlush } from "./tui-overlay-style-leak-helpers.ts";
-import { StaticLines } from "./tui-overlay-style-leak-static-lines.ts";
-import { StaticOverlay } from "./tui-overlay-style-leak-static-overlay.ts";
+import tuiOverlayStyleLeakHelpers from "./tui-overlay-style-leak-helpers.ts";
+import StaticLines from "./tui-overlay-style-leak-static-lines.ts";
+import StaticOverlay from "./tui-overlay-style-leak-static-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { getCellItalic, renderAndFlush } = tuiOverlayStyleLeakHelpers;
 
 describe("TUI overlay compositing", () => {
   it("should not leak styles when a trailing reset sits beyond the last visible column (no overlay)", () =>
@@ -37,7 +39,7 @@ describe("TUI overlay compositing", () => {
         const tui: TUI = new TuiMainScreen(terminal);
         tui.addChild(new StaticLines([baseLine, "INPUT"]));
 
-        tui.showOverlay(new StaticOverlay("OVR"), { row: 0, col: 5, width: 3 });
+        tui.showOverlay(new StaticOverlay("OVR"), { col: 5, row: 0, width: 3 });
         tui.start();
         yield* renderAndFlush(tui, terminal);
 

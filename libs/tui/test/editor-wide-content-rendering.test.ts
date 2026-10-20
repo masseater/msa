@@ -5,8 +5,10 @@ import { stripVTControlCharacters } from "node:util";
 import { wordWrapLine } from "../src/components/editor-wrap.ts";
 import { Editor } from "../src/components/editor.ts";
 import { visibleWidth } from "../src/utils.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Word wrapping", () => {
@@ -25,8 +27,8 @@ function splitsOversizedAtomicSegmentStart(): void {
     const marker = "[paste #1 +20 lines]";
     const line = `${marker}B`;
     const segments: Intl.SegmentData[] = [
-      { segment: marker, index: 0, input: line },
-      { segment: "B", index: marker.length, input: line },
+      { index: 0, input: line, segment: marker },
+      { index: marker.length, input: line, segment: "B" },
     ];
 
     const chunks = wordWrapLine(line, 10, segments);
@@ -43,8 +45,8 @@ function splitsOversizedAtomicSegmentStart(): void {
     const marker = "[paste #1 +20 lines]";
     const line = `A${marker}`;
     const segments: Intl.SegmentData[] = [
-      { segment: "A", index: 0, input: line },
-      { segment: marker, index: 1, input: line },
+      { index: 0, input: line, segment: "A" },
+      { index: 1, input: line, segment: marker },
     ];
 
     const chunks = wordWrapLine(line, 10, segments);
@@ -65,8 +67,8 @@ function splitsConsecutiveOversizedAtomicSegments(): void {
     const m2 = "[paste #2 +30 lines]";
     const line = `${m1}${m2}`;
     const segments: Intl.SegmentData[] = [
-      { segment: m1, index: 0, input: line },
-      { segment: m2, index: m1.length, input: line },
+      { index: 0, input: line, segment: m1 },
+      { index: m1.length, input: line, segment: m2 },
     ];
 
     const chunks = wordWrapLine(line, 10, segments);
@@ -88,19 +90,19 @@ function wrapsNormallyAfterOversizedAtomic(): void {
     const marker = "[paste #1 +20 lines]";
     const line = `${marker} hello world`;
     const segments: Intl.SegmentData[] = [
-      { segment: marker, index: 0, input: line },
-      { segment: " ", index: marker.length, input: line },
-      { segment: "h", index: marker.length + 1, input: line },
-      { segment: "e", index: marker.length + 2, input: line },
-      { segment: "l", index: marker.length + 3, input: line },
-      { segment: "l", index: marker.length + 4, input: line },
-      { segment: "o", index: marker.length + 5, input: line },
-      { segment: " ", index: marker.length + 6, input: line },
-      { segment: "w", index: marker.length + 7, input: line },
-      { segment: "o", index: marker.length + 8, input: line },
-      { segment: "r", index: marker.length + 9, input: line },
-      { segment: "l", index: marker.length + 10, input: line },
-      { segment: "d", index: marker.length + 11, input: line },
+      { index: 0, input: line, segment: marker },
+      { index: marker.length, input: line, segment: " " },
+      { index: marker.length + 1, input: line, segment: "h" },
+      { index: marker.length + 2, input: line, segment: "e" },
+      { index: marker.length + 3, input: line, segment: "l" },
+      { index: marker.length + 4, input: line, segment: "l" },
+      { index: marker.length + 5, input: line, segment: "o" },
+      { index: marker.length + 6, input: line, segment: " " },
+      { index: marker.length + 7, input: line, segment: "w" },
+      { index: marker.length + 8, input: line, segment: "o" },
+      { index: marker.length + 9, input: line, segment: "r" },
+      { index: marker.length + 10, input: line, segment: "l" },
+      { index: marker.length + 11, input: line, segment: "d" },
     ];
 
     const chunks = wordWrapLine(line, 10, segments);
@@ -124,9 +126,9 @@ function splitsOversizedAtomicSegmentAcross(): void {
     const marker = "[paste #1 +20 lines]";
     const line = `A${marker}B`;
     const segments: Intl.SegmentData[] = [
-      { segment: "A", index: 0, input: line },
-      { segment: marker, index: 1, input: line },
-      { segment: "B", index: 1 + marker.length, input: line },
+      { index: 0, input: line, segment: "A" },
+      { index: 1, input: line, segment: marker },
+      { index: 1 + marker.length, input: line, segment: "B" },
     ];
 
     const chunks = wordWrapLine(line, 10, segments);

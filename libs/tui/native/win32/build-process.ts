@@ -1,27 +1,14 @@
 import { Console, Data, Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { BuildHost } from "./build-host-service.ts";
+import BuildHost from "./build-host-service.ts";
+import type buildProcessTypes from "./build-process.types.ts";
 
-export interface Win32Target {
-  readonly arch: "x64" | "arm64";
-  readonly msvcArch: string;
-  readonly mingwTarget: string;
-  readonly prefixedCompilers: ReadonlyArray<string>;
-  readonly envCompiler: "CC_X64" | "CC_ARM64";
-}
-
-export interface BuildContext {
-  readonly scriptDir: string;
-  readonly sourceFile: string;
-  readonly temporaryDir: string;
-}
-
-export class Win32BuildError extends Data.TaggedError("Win32BuildError")<{
+class Win32BuildError extends Data.TaggedError("Win32BuildError")<{
   readonly message: string;
 }> {}
 
-export const runInherited: {
+const runInherited: {
   (
     command: string,
     args: ReadonlyArray<string>,
@@ -40,7 +27,7 @@ export const runInherited: {
   ): Effect.Effect<void, Win32BuildError, BuildHost> =>
     Effect.gen(function* () {
       const host = yield* BuildHost;
-      const exitCode = yield* host.exitCode({ command, args, cwd, stdio: "inherit" });
+      const exitCode = yield* host.exitCode({ args, command, cwd, stdio: "inherit" });
       if (exitCode !== 0) {
         return yield* new Win32BuildError({
           message: `${command} failed with exit code ${exitCode}`,
@@ -49,26 +36,26 @@ export const runInherited: {
     }),
 );
 
-export function quoteBatch(value: string): string {
+function quoteBatch(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
 }
 
-export const installOutput: {
+const installOutput: {
   (
-    context: BuildContext,
+    context: buildProcessTypes.BuildContext,
     temporaryOutput: string,
-    target: Win32Target,
+    target: buildProcessTypes.Win32Target,
   ): Effect.Effect<void, Win32BuildError, BuildHost>;
   (
     temporaryOutput: string,
-    target: Win32Target,
-  ): (context: BuildContext) => Effect.Effect<void, Win32BuildError, BuildHost>;
+    target: buildProcessTypes.Win32Target,
+  ): (context: buildProcessTypes.BuildContext) => Effect.Effect<void, Win32BuildError, BuildHost>;
 } = dual(
   3,
   (
-    context: BuildContext,
+    context: buildProcessTypes.BuildContext,
     temporaryOutput: string,
-    target: Win32Target,
+    target: buildProcessTypes.Win32Target,
   ): Effect.Effect<void, Win32BuildError, BuildHost> =>
     Effect.gen(function* () {
       const host = yield* BuildHost;
@@ -79,3 +66,12 @@ export const installOutput: {
       yield* Console.log(`Built ${host.relative(process.cwd(), output)}`);
     }),
 );
+
+const buildProcess = {
+  Win32BuildError,
+  installOutput,
+  quoteBatch,
+  runInherited,
+};
+
+export default buildProcess;

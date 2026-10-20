@@ -9,7 +9,7 @@ import { Text } from "../src/components/text.ts";
 import { VStack } from "../src/components/v-stack.ts";
 import { renderLayoutFrame } from "../src/layout.ts";
 import { stripTerminalSequences } from "../src/utils.ts";
-import { visibleLines } from "./layout-helpers.ts";
+import visibleLines from "./layout-helpers.ts";
 
 const sourceLines = [
   "abcd界",
@@ -45,9 +45,9 @@ const verifyScrollSequence = (content: Text): Effect.Effect<void> =>
   Effect.gen(function* () {
     const scrollView = new ScrollView(content, {
       scrollbar: "auto",
-      scrollbarTrackStyle,
-      scrollbarThumbStyle,
       scrollbarHideDelayMs: 10,
+      scrollbarThumbStyle,
+      scrollbarTrackStyle,
     });
     const render = () => renderLayoutFrame(scrollView, 6, 4, () => {}).lines;
 
@@ -84,8 +84,8 @@ function verifyFollowedGrowth(): void {
   const followed = new ScrollView(followedContent, {
     follow: "end",
     scrollbar: "auto",
-    scrollbarTrackStyle,
     scrollbarThumbStyle,
+    scrollbarTrackStyle,
   });
   renderLayoutFrame(followed, 6, 4, () => {});
   assert.strictEqual(followed.scrollTop, 4);
@@ -119,8 +119,8 @@ function verifyFittingContent(): void {
 function verifyAlwaysOverflowing(content: Text): void {
   const alwaysOverflowing = new ScrollView(content, {
     scrollbar: "always",
-    scrollbarTrackStyle,
     scrollbarThumbStyle,
+    scrollbarTrackStyle,
   });
   const frame = renderLayoutFrame(alwaysOverflowing, 6, 4, () => {});
   assert.strictEqual(frame.root.children[0]?.rect.width, 5);
@@ -173,17 +173,17 @@ describe("viewport layout", () => {
     const background = "\x1b[42m";
     const borderForeground = "\x1b[31m";
     const content = {
+      invalidate: () => {},
       render: (width: number) =>
         Array.from(
           { length: 8 },
           () => `${background}${"x".repeat(width - 1)}${borderForeground}│\x1b[39m\x1b[49m`,
         ),
-      invalidate: () => {},
     };
     const scrollView = new ScrollView(content, {
       scrollbar: "auto",
-      scrollbarTrackStyle: (text) => text,
       scrollbarThumbStyle: (text) => text,
+      scrollbarTrackStyle: (text) => text,
     });
     renderLayoutFrame(scrollView, 6, 4, () => {});
     scrollView.scrollBy(1);
@@ -221,7 +221,7 @@ describe("viewport layout", () => {
   it("measures nested scroll content from constrained child geometry", () => {
     const inner = new ScrollView(new Text("1\n2\n3\n4\n5\n6", 0, 0));
     const outer = new ScrollView(
-      new VStack([{ component: inner, basis: 2 }, new Text("tail", 0, 0)]),
+      new VStack([{ basis: 2, component: inner }, new Text("tail", 0, 0)]),
     );
     renderLayoutFrame(outer, 10, 2, () => {});
 

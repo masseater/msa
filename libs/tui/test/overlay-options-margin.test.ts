@@ -5,9 +5,9 @@ import { Effect } from "effect";
 
 import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { EmptyContent } from "./overlay-options-empty-content.ts";
-import { renderAndFlush } from "./overlay-options-helpers.ts";
-import { StaticOverlay } from "./overlay-options-static-overlay.ts";
+import EmptyContent from "./overlay-options-empty-content.ts";
+import renderAndFlush from "./overlay-options-helpers.ts";
+import StaticOverlay from "./overlay-options-static-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI overlay options", () => {
@@ -22,8 +22,8 @@ describe("TUI overlay options", () => {
           tui.addChild(new EmptyContent());
           tui.showOverlay(overlay, {
             anchor: "top-left",
+            margin: { bottom: 0, left: -10, right: 0, top: -5 },
             width: 12,
-            margin: { top: -5, left: -10, right: 0, bottom: 0 },
           });
           tui.start();
           yield* renderAndFlush(tui, terminal);
@@ -49,7 +49,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["MARGIN"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { anchor: "top-left", width: 10, margin: 5 });
+          tui.showOverlay(overlay, { anchor: "top-left", margin: 5, width: 10 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 
@@ -80,8 +80,8 @@ describe("TUI overlay options", () => {
           tui.addChild(new EmptyContent());
           tui.showOverlay(overlay, {
             anchor: "top-left",
+            margin: { bottom: 0, left: 3, right: 0, top: 2 },
             width: 10,
-            margin: { top: 2, left: 3, right: 0, bottom: 0 },
           });
           tui.start();
           yield* renderAndFlush(tui, terminal);
@@ -109,7 +109,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["OFFSET"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { anchor: "top-left", width: 10, offsetX: 10, offsetY: 5 });
+          tui.showOverlay(overlay, { anchor: "top-left", offsetX: 10, offsetY: 5, width: 10 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 
@@ -136,7 +136,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["PCT"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { width: 10, row: "50%", col: "50%" });
+          tui.showOverlay(overlay, { col: "50%", row: "50%", width: 10 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 
@@ -161,7 +161,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["TOP"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { width: 10, row: "0%" });
+          tui.showOverlay(overlay, { row: "0%", width: 10 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 
@@ -183,7 +183,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["BOTTOM"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { width: 10, row: "100%" });
+          tui.showOverlay(overlay, { row: "100%", width: 10 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 
@@ -271,7 +271,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["ABSOLUTE"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { anchor: "bottom-right", row: 3, col: 5, width: 10 });
+          tui.showOverlay(overlay, { anchor: "bottom-right", col: 5, row: 3, width: 10 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 

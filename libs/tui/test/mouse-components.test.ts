@@ -4,10 +4,12 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Input, SelectList, SettingsList, TuiAltScreen } from "../src/index.ts";
-import { mouseAwareComponentsCases1 } from "./mouse-components-cases-helpers.ts";
-import { mouse, selectTheme, settingsTheme } from "./mouse-components-helpers.ts";
-import { InputOverlay } from "./mouse-components-input-overlay.ts";
+import mouseAwareComponentsCases1 from "./mouse-components-cases-helpers.ts";
+import mouseComponentsHelpers from "./mouse-components-helpers.ts";
+import InputOverlay from "./mouse-components-input-overlay.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { mouse, selectTheme, settingsTheme } = mouseComponentsHelpers;
 
 describe("mouse-aware components", () => {
   it("positions a single-line input cursor on press", () => {
@@ -23,11 +25,11 @@ describe("mouse-aware components", () => {
   it("selects and activates list rows", () => {
     const list = new SelectList(
       [
-        { value: "a", label: "A" },
-        { value: "b", label: "B" },
-        { value: "c", label: "C" },
-        { value: "d", label: "D" },
-        { value: "e", label: "E" },
+        { label: "A", value: "a" },
+        { label: "B", value: "b" },
+        { label: "C", value: "c" },
+        { label: "D", value: "d" },
+        { label: "E", value: "e" },
       ],
       3,
       selectTheme,
@@ -49,10 +51,10 @@ describe("mouse-aware components", () => {
     const changes: Array<{ id: string; value: string }> = [];
     const list = new SettingsList(
       [
-        { id: "mode", label: "Mode", currentValue: "one", values: ["one", "two"] },
-        { id: "other", label: "Other", currentValue: "off", values: ["off", "on"] },
-        { id: "third", label: "Third", currentValue: "low", values: ["low", "high"] },
-        { id: "fourth", label: "Fourth", currentValue: "x", values: ["x", "y"] },
+        { currentValue: "one", id: "mode", label: "Mode", values: ["one", "two"] },
+        { currentValue: "off", id: "other", label: "Other", values: ["off", "on"] },
+        { currentValue: "low", id: "third", label: "Third", values: ["low", "high"] },
+        { currentValue: "x", id: "fourth", label: "Fourth", values: ["x", "y"] },
       ],
       3,
       settingsTheme,

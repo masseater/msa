@@ -1,11 +1,15 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
 import { Console, Effect, Layer } from "effect";
 
-import { BuildHost } from "./build-host-service.ts";
-import { buildHostLayer } from "./build-host.ts";
-import { buildWithMingw } from "./build-mingw.ts";
-import { buildWithMsvc, canUseMsvc, findVisualStudioDevCmd } from "./build-msvc.ts";
-import { type BuildContext, Win32BuildError, type Win32Target } from "./build-process.ts";
+import BuildHost from "./build-host-service.ts";
+import buildHostLayer from "./build-host.ts";
+import buildWithMingw from "./build-mingw.ts";
+import buildMsvc from "./build-msvc.ts";
+import buildProcess from "./build-process.ts";
+import type buildProcessTypes from "./build-process.types.ts";
+
+const { buildWithMsvc, canUseMsvc, findVisualStudioDevCmd } = buildMsvc;
+const { Win32BuildError } = buildProcess;
 
 const USAGE = `Usage: npm --prefix libs/tui run build:native:win32
 
@@ -17,20 +21,20 @@ Environment:
   CC_ARM64=/path/to/aarch64-w64-mingw32-gcc
   CC=/path/to/clang`;
 
-const TARGETS: ReadonlyArray<Win32Target> = [
+const TARGETS: ReadonlyArray<buildProcessTypes.Win32Target> = [
   {
     arch: "x64",
-    msvcArch: "x64",
-    mingwTarget: "x86_64-w64-windows-gnu",
-    prefixedCompilers: ["x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-clang"],
     envCompiler: "CC_X64",
+    mingwTarget: "x86_64-w64-windows-gnu",
+    msvcArch: "x64",
+    prefixedCompilers: ["x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-clang"],
   },
   {
     arch: "arm64",
-    msvcArch: "arm64",
-    mingwTarget: "aarch64-w64-windows-gnu",
-    prefixedCompilers: ["aarch64-w64-mingw32-gcc", "aarch64-w64-mingw32-clang"],
     envCompiler: "CC_ARM64",
+    mingwTarget: "aarch64-w64-windows-gnu",
+    msvcArch: "arm64",
+    prefixedCompilers: ["aarch64-w64-mingw32-gcc", "aarch64-w64-mingw32-clang"],
   },
 ];
 
@@ -55,7 +59,7 @@ const makeContext = Effect.gen(function* () {
     scriptDir: import.meta.dirname,
     sourceFile: host.join(import.meta.dirname, "src", "win32-platform.c"),
     temporaryDir: yield* host.makeTemporaryDirectory("msa-tui-win32-"),
-  } satisfies BuildContext;
+  } satisfies buildProcessTypes.BuildContext;
 });
 
 const build = Effect.gen(function* () {

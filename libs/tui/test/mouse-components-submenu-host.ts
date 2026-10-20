@@ -1,12 +1,14 @@
 import { SelectList } from "../src/components/select-list.ts";
 import { Container } from "../src/tui-component.ts";
-import { selectTheme } from "./mouse-components-helpers.ts";
+import mouseComponentsHelpers from "./mouse-components-helpers.ts";
 
-export class SubmenuHost extends Container {
+const { selectTheme } = mouseComponentsHelpers;
+
+class SubmenuHost extends Container {
   readonly list = new SelectList(
     [
-      { value: "first", label: "First" },
-      { value: "second", label: "Second" },
+      { label: "First", value: "first" },
+      { label: "Second", value: "second" },
     ],
     5,
     selectTheme,
@@ -23,3 +25,5 @@ export class SubmenuHost extends Container {
     this.list.handleInput(data);
   }
 }
+
+export default SubmenuHost;

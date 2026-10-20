@@ -8,8 +8,8 @@ import {
   Loader,
   Markdown,
   ProcessTerminal,
-  Text,
   type TUI,
+  Text,
   TuiMainScreen,
 } from "../src/index.ts";
 import { defaultEditorTheme, defaultMarkdownTheme } from "./test-themes.ts";
@@ -28,8 +28,8 @@ const editor = new Editor(tui, defaultEditorTheme);
 
 const autocompleteProvider = new CombinedAutocompleteProvider(
   [
-    { name: "delete", description: "Delete the last message" },
-    { name: "clear", description: "Clear all messages" },
+    { description: "Delete the last message", name: "delete" },
+    { description: "Clear all messages", name: "clear" },
   ],
   process.cwd(),
 );

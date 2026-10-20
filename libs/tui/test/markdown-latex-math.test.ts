@@ -7,9 +7,11 @@ import { stripStyleSequences } from "../src/ansi-sequences.ts";
 import { Markdown } from "../src/components/markdown.ts";
 import type { Component } from "../src/tui-component.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { chalk, getCell, stripAnsi } from "./markdown-helpers.ts";
+import markdownHelpers from "./markdown-helpers.ts";
 import { defaultMarkdownTheme } from "./test-themes.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { chalk, getCell, stripAnsi } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("LaTeX math", () => {

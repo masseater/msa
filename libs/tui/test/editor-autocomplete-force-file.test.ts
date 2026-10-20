@@ -5,8 +5,10 @@ import { Effect } from "effect";
 
 import type { AutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
@@ -23,6 +25,7 @@ function autoAppliesSingleForceFile(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol, options) => {
             if (options.force !== true) {
               return Promise.resolve(null);
@@ -31,13 +34,12 @@ function autoAppliesSingleForceFile(): void {
             const prefix = text.slice(0, cursorCol);
             if (prefix === "Work") {
               return Promise.resolve({
-                items: [{ value: "Workspace/", label: "Workspace/" }],
+                items: [{ label: "Workspace/", value: "Workspace/" }],
                 prefix: "Work",
               });
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -63,6 +65,7 @@ function showsMenuForceFileHas(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol, options) => {
             if (options.force !== true) {
               return Promise.resolve(null);
@@ -72,15 +75,14 @@ function showsMenuForceFileHas(): void {
             if (prefix === "src") {
               return Promise.resolve({
                 items: [
-                  { value: "src/", label: "src/" },
-                  { value: "src.txt", label: "src.txt" },
+                  { label: "src/", value: "src/" },
+                  { label: "src.txt", value: "src.txt" },
                 ],
                 prefix: "src",
               });
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -132,13 +134,14 @@ function keepsSuggestionsOpenTypingForce(): void {
 
 function forceModeFileProvider(): AutocompleteProvider {
   const allFiles = [
-    { value: "readme.md", label: "readme.md" },
-    { value: "package.json", label: "package.json" },
-    { value: "src/", label: "src/" },
-    { value: "dist/", label: "dist/" },
+    { label: "readme.md", value: "readme.md" },
+    { label: "package.json", value: "package.json" },
+    { label: "src/", value: "src/" },
+    { label: "dist/", value: "dist/" },
   ];
 
   return {
+    applyCompletion,
     getSuggestions: (lines, _cursorLine, cursorCol, options) => {
       const text = lines[0] || "";
       const prefix = text.slice(0, cursorCol);
@@ -154,6 +157,5 @@ function forceModeFileProvider(): AutocompleteProvider {
       }
       return Promise.resolve(null);
     },
-    applyCompletion,
   };
 }

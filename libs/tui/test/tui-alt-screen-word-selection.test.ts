@@ -4,8 +4,10 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Text, TuiAltScreen } from "../src/index.ts";
-import { someWriteSince } from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { someWriteSince } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   doesNotAppendWhitespaceDouble();

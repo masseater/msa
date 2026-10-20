@@ -6,22 +6,19 @@ import { Effect } from "effect";
 import { overrideEnv } from "../src/env.ts";
 import {
   HStack,
+  Image,
   ScrollView,
   Text,
   TuiAltScreen,
   VStack,
   resetCapabilitiesCache,
   setCapabilities,
-  Image,
 } from "../src/index.ts";
 import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image-kitty.ts";
-import {
-  someWriteSince,
-  writesSince,
-  withCapabilities,
-  scrollLineByLine,
-} from "./tui-alt-screen-helpers.ts";
-import { RecordingTerminal } from "./tui-alt-screen-recording-terminal.ts";
+import tuiAltScreenHelpers from "./tui-alt-screen-helpers.ts";
+import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
+
+const { scrollLineByLine, someWriteSince, withCapabilities, writesSince } = tuiAltScreenHelpers;
 
 describe("TuiAltScreen", () => {
   redrawsWezTermKittyImagesAfter();
@@ -37,22 +34,22 @@ function redrawsWezTermKittyImagesAfter(): void {
       Effect.gen(function* () {
         let tui: TuiAltScreen | undefined;
         const restoreEnv = overrideEnv({ WEZTERM_PANE: "1" });
-        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+        setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
         yield* Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 4);
           const imageId = 10319;
           const imageLine = encodeKitty("AAAA", {
             columns: 2,
-            rows: 3,
             imageId,
             moveCursor: false,
+            rows: 3,
           });
-          registerKittyImageMetadata({ imageId, columns: 2, rows: 3, widthPx: 100, heightPx: 100 });
+          registerKittyImageMetadata({ columns: 2, heightPx: 100, imageId, rows: 3, widthPx: 100 });
           let coveredLine = "";
           tui = new TuiAltScreen(terminal);
           tui.setLayoutRoot({
-            render: () => [imageLine, coveredLine, "", "after"],
             invalidate: () => {},
+            render: () => [imageLine, coveredLine, "", "after"],
           });
           tui.start();
           yield* Effect.promise(() => terminal.waitForRender());
@@ -83,7 +80,7 @@ function cases(): void {
   it("reuses moved Kitty images without dropping HStack siblings", () =>
     Effect.runPromise(
       withCapabilities(
-        { images: "kitty", trueColor: true, hyperlinks: true },
+        { hyperlinks: true, images: "kitty", trueColor: true },
         Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 6);
           const tui = new TuiAltScreen(terminal);
@@ -117,23 +114,23 @@ function retainsRecentlyOffscreenKittyImages(): void {
   it("retains recently offscreen Kitty images for placement-only reuse", () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+        setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
         yield* Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 1);
           const tui = new TuiAltScreen(terminal);
           const imageId = 321;
           const imageLine = encodeKitty("AAAA", {
             columns: 2,
-            rows: 1,
             imageId,
             moveCursor: false,
+            rows: 1,
           });
-          registerKittyImageMetadata({ imageId, columns: 2, rows: 1, widthPx: 100, heightPx: 50 });
+          registerKittyImageMetadata({ columns: 2, heightPx: 50, imageId, rows: 1, widthPx: 100 });
           tui.setLayoutRoot(
             new ScrollView(
               {
-                render: () => [imageLine, "after"],
                 invalidate: () => {},
+                render: () => [imageLine, "after"],
               },
               { primary: true },
             ),
@@ -167,7 +164,7 @@ function cases2(): void {
   it("evicts the least recently visible Kitty image when the cache is full", () =>
     Effect.runPromise(
       withCapabilities(
-        { images: "kitty", trueColor: true, hyperlinks: true },
+        { hyperlinks: true, images: "kitty", trueColor: true },
         Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 1);
           const tui = new TuiAltScreen(terminal);
@@ -175,19 +172,19 @@ function cases2(): void {
           const imageLines = Array.from({ length: 18 }, (_, index) => {
             const imageId = firstImageId + index;
             registerKittyImageMetadata({
-              imageId,
               columns: 2,
+              heightPx: 50,
+              imageId,
               rows: 1,
               widthPx: 100,
-              heightPx: 50,
             });
-            return encodeKitty("AAAA", { columns: 2, rows: 1, imageId, moveCursor: false });
+            return encodeKitty("AAAA", { columns: 2, imageId, moveCursor: false, rows: 1 });
           });
           tui.setLayoutRoot(
             new ScrollView(
               {
-                render: () => imageLines,
                 invalidate: () => {},
+                render: () => imageLines,
               },
               { primary: true },
             ),
@@ -212,7 +209,7 @@ function evictsOffscreenKittyImagesDecoded(): void {
   it("evicts offscreen Kitty images when decoded raster memory exceeds the cache quota", () =>
     Effect.runPromise(
       withCapabilities(
-        { images: "kitty", trueColor: true, hyperlinks: true },
+        { hyperlinks: true, images: "kitty", trueColor: true },
         Effect.gen(function* () {
           const terminal = new RecordingTerminal(20, 1);
           const tui = new TuiAltScreen(terminal);
@@ -220,19 +217,19 @@ function evictsOffscreenKittyImagesDecoded(): void {
           const imageLines = Array.from({ length: 4 }, (_, index) => {
             const imageId = firstImageId + index;
             registerKittyImageMetadata({
-              imageId,
               columns: 2,
+              heightPx: 2160,
+              imageId,
               rows: 1,
               widthPx: 3840,
-              heightPx: 2160,
             });
-            return encodeKitty("AAAA", { columns: 2, rows: 1, imageId, moveCursor: false });
+            return encodeKitty("AAAA", { columns: 2, imageId, moveCursor: false, rows: 1 });
           });
           tui.setLayoutRoot(
             new ScrollView(
               {
-                render: () => imageLines,
                 invalidate: () => {},
+                render: () => imageLines,
               },
               { primary: true },
             ),
@@ -254,18 +251,18 @@ function mountImageRow(tui: TuiAltScreen): { label: Text; header: Text } {
     "image/png",
     { fallbackColor: (value) => value },
     {},
-    { widthPx: 100, heightPx: 100 },
+    { heightPx: 100, widthPx: 100 },
   );
   const header = new Text("header", 0, 0);
   const row = new HStack([
-    { component: label, basis: 10 },
-    { component: image, basis: 10 },
+    { basis: 10, component: label },
+    { basis: 10, component: image },
   ]);
   tui.setLayoutRoot(
     new VStack([
-      { component: header, basis: "auto" },
-      { component: row, basis: 4 },
+      { basis: "auto", component: header },
+      { basis: 4, component: row },
     ]),
   );
-  return { label, header };
+  return { header, label };
 }

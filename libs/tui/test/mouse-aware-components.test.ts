@@ -6,9 +6,11 @@ import { Effect } from "effect";
 import { Editor } from "../src/components/editor.ts";
 import { SettingsList } from "../src/components/settings-list.ts";
 import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { editorTheme, settingsTheme } from "./mouse-components-helpers.ts";
-import { SubmenuHost } from "./mouse-components-submenu-host.ts";
+import mouseComponentsHelpers from "./mouse-components-helpers.ts";
+import SubmenuHost from "./mouse-components-submenu-host.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { editorTheme, settingsTheme } = mouseComponentsHelpers;
 
 describe("mouse-aware components", () => {
   selectsCopiesEditorTextDrag();
@@ -57,12 +59,12 @@ function keepsSettingsListFocusedClick(): void {
         const list = new SettingsList(
           [
             {
+              currentValue: "first",
               id: "theme",
               label: "Theme",
-              currentValue: "first",
               submenu: (_value, done) => new SubmenuHost(done),
             },
-            { id: "other", label: "Other", currentValue: "off", values: ["off", "on"] },
+            { currentValue: "off", id: "other", label: "Other", values: ["off", "on"] },
           ],
           5,
           settingsTheme,

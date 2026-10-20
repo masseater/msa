@@ -6,10 +6,13 @@ import { Effect } from "effect";
 import { flushBackgroundFileWrites } from "../src/file-log.ts";
 import { type TUI, TuiMainScreen } from "../src/index.ts";
 import { pathOperations } from "../src/platform.ts";
-import { makeTempDirectory, readFileString, removeRecursive } from "./test-platform.ts";
-import { withEnv } from "./tui-render-helpers.ts";
-import { TestComponent } from "./tui-render-test-component.ts";
+import testPlatform from "./test-platform.ts";
+import tuiRenderHelpers from "./tui-render-helpers.ts";
+import TestComponent from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { makeTempDirectory, readFileString, removeRecursive } = testPlatform;
+const { withEnv } = tuiRenderHelpers;
 
 describe("TUI debug logging", () => {
   it("writes redraw logs to the provided directory", () =>

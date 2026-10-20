@@ -3,7 +3,9 @@ import { createRequire } from "node:module";
 
 import { Cause, Console, Effect, Fiber, Schedule, Schema } from "effect";
 
-import { readFileString, sha256Hex } from "../test-platform.ts";
+import testPlatform from "../test-platform.ts";
+
+const { readFileString, sha256Hex } = testPlatform;
 
 type ClipboardValue = string | Buffer | null | undefined;
 
@@ -22,17 +24,17 @@ const read = Effect.gen(function* () {
   const hash = bytes === undefined ? undefined : yield* sha256Hex(bytes);
   yield* Console.log(
     yield* toJson({
+      hash,
+      length: bytes?.length,
       ok: true,
+      unavailable: value === undefined || undefined,
       value:
         value === null || (typeof value === "string" && value.length <= 100) ? value : undefined,
-      unavailable: value === undefined || undefined,
-      length: bytes?.length,
-      hash,
     }),
   );
 }).pipe(
   Effect.catchCause((cause) =>
-    toJson({ ok: false, error: String(Cause.squash(cause)) }).pipe(Effect.flatMap(Console.log)),
+    toJson({ error: String(Cause.squash(cause)), ok: false }).pipe(Effect.flatMap(Console.log)),
   ),
 );
 

@@ -8,19 +8,19 @@ import {
 } from "../src/components/settings-list.ts";
 
 const testTheme: SettingsListTheme = {
+  cursor: "> ",
+  description: (text) => text,
+  hint: (text) => text,
   label: (text) => text,
   value: (text) => text,
-  description: (text) => text,
-  cursor: "> ",
-  hint: (text) => text,
 };
 
 function createItems(): SettingItem[] {
   return [
     {
+      currentValue: "regular",
       id: "tui-mode",
       label: "TUI mode",
-      currentValue: "regular",
       values: ["regular", "fullscreen"],
     },
   ];

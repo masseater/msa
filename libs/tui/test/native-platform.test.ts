@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { createRequire, Module } from "node:module";
+import { Module, createRequire } from "node:module";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -7,7 +7,9 @@ import { Effect } from "effect";
 
 import { overrideEnv, readEnv } from "../src/env.ts";
 import { getNativeClipboard, getNativePlatformHelper } from "../src/native-platform.ts";
-import { readFileBytes } from "./test-platform.ts";
+import testPlatform from "./test-platform.ts";
+
+const { readFileBytes } = testPlatform;
 
 test("Linux ARM64 prebuild supports 64 KB system pages", () =>
   Effect.runPromise(
@@ -112,8 +114,8 @@ test(
         assert.equal(getNativeClipboard(), undefined);
         let available = false;
         const helper = {
-          getText: t.mock.fn(() => Promise.resolve(available ? "X11" : undefined)),
           getImage: t.mock.fn(() => Promise.resolve(null)),
+          getText: t.mock.fn(() => Promise.resolve(available ? "X11" : undefined)),
         };
         const module = new Module(modulePath);
         module.exports = helper;

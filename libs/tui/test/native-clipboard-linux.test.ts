@@ -1,24 +1,27 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createServer, type Server, type Socket } from "node:net";
-import { describe, it, type TestContext } from "node:test";
+import { type Server, type Socket, createServer } from "node:net";
+import { type TestContext, describe, it } from "node:test";
 
 import { Effect, Fiber } from "effect";
 
 import { runAfter } from "../src/delay.ts";
 import { pathOperations } from "../src/platform.ts";
-import {
-  type CompiledFixtures,
-  dependenciesAvailable,
+import nativeClipboardLinuxHelpers from "./native-clipboard-linux-helpers.ts";
+import type nativeClipboardLinuxHelpersTypes from "./native-clipboard-linux-helpers.types.ts";
+import testPlatform from "./test-platform.ts";
+
+const {
+  withDependencies,
   exec,
   fixtures,
   readClipboard,
   setClipboard,
+  startServer,
   startX11,
   useCompiledFixtures,
-  startServer,
-} from "./native-clipboard-linux-helpers.ts";
-import { sha256Hex } from "./test-platform.ts";
+} = nativeClipboardLinuxHelpers;
+const { sha256Hex } = testPlatform;
 
 const { join } = pathOperations;
 
@@ -38,17 +41,19 @@ const listenStalledServer = (t: TestContext) =>
     yield* Effect.promise(() => once(server, "listening"));
     const address = server.address();
     assert.ok(address && typeof address !== "string" && address.port > 6000);
-    return { sockets, state, port: address.port };
+    return { port: address.port, sockets, state };
   });
 
-describe("native Linux clipboard", { skip: !dependenciesAvailable, timeout: 60000 }, () => {
-  const compiled = useCompiledFixtures();
-  x11ProtocolCases(compiled);
-  x11ReadCases(compiled);
-  x11PartialTransferCases(compiled);
-});
+describe("native Linux clipboard", { timeout: 60000 }, () =>
+  withDependencies(() => {
+    const compiled = useCompiledFixtures();
+    x11ProtocolCases(compiled);
+    x11ReadCases(compiled);
+    x11PartialTransferCases(compiled);
+  }),
+);
 
-function x11ProtocolCases(compiled: CompiledFixtures): void {
+function x11ProtocolCases(compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures): void {
   metadataCase(compiled);
   ["concurrent", "process-exit", "worker-exit"].forEach((mode) => {
     privateWorkCase(compiled, mode);
@@ -59,7 +64,7 @@ function x11ProtocolCases(compiled: CompiledFixtures): void {
   latin1Case();
 }
 
-function x11ReadCases(compiled: CompiledFixtures): void {
+function x11ReadCases(compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures): void {
   refusedTargetsCase(compiled);
   emptyClipboardCase();
   unicodeTransferCase();
@@ -68,7 +73,9 @@ function x11ReadCases(compiled: CompiledFixtures): void {
   });
 }
 
-function x11PartialTransferCases(compiled: CompiledFixtures): void {
+function x11PartialTransferCases(
+  compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures,
+): void {
   ["text", "image"].forEach((content) => {
     invalidMetadataCase(compiled, content);
     partialTransferCase(compiled, content);
@@ -92,32 +99,35 @@ function closeServer({
   );
 }
 
-function metadataCase(compiled: CompiledFixtures): void {
+function metadataCase(compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures): void {
   it("validates X11 incremental property metadata before accumulating bytes", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { stdout } = yield* exec({
-          file: join(compiled.directory(), "x11-test"),
           args: ["metadata"],
           env: process.env,
+          file: join(compiled.directory(), "x11-test"),
         });
         assert.equal(stdout.trim(), "validated");
       }),
     ));
 }
 
-function privateWorkCase(compiled: CompiledFixtures, mode: string): void {
+function privateWorkCase(
+  compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures,
+  mode: string,
+): void {
   it(`bounds private clipboard work and preserves cleanup: ${mode}`, () =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { stdout } = yield* exec({
-          file: process.execPath,
           args: [
             join(fixtures, "clipboard-worker-test.ts"),
             join(compiled.directory(), "worker-test.node"),
             mode,
           ],
           env: { ...process.env, UV_THREADPOOL_SIZE: "2" },
+          file: process.execPath,
           timeout: 10000,
         });
         assert.equal(stdout.trim(), "passed");
@@ -149,7 +159,7 @@ function latin1Case(): void {
     Effect.runPromise(
       Effect.gen(function* () {
         const { env } = yield* startX11(t);
-        yield* setClipboard({ env, target: "STRING", input: Buffer.from("café £ÿ", "latin1") });
+        yield* setClipboard({ env, input: Buffer.from("café £ÿ", "latin1"), target: "STRING" });
         const result = yield* readClipboard("getText", env);
         assert.equal(result.ok, true, result.error);
         assert.equal(result.value, "café £ÿ");
@@ -157,13 +167,13 @@ function latin1Case(): void {
     ));
 }
 
-function refusedTargetsCase(compiled: CompiledFixtures): void {
+function refusedTargetsCase(compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures): void {
   it("reads UTF8_STRING when X11 TARGETS is refused", (t) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { env } = yield* startX11(t);
         const command = join(compiled.directory(), "x11-test");
-        yield* startServer({ t, command, args: ["direct-text"], env });
+        yield* startServer({ args: ["direct-text"], command, env, t });
         const result = yield* readClipboard("getText", env);
         assert.equal(result.ok, true, result.error);
         assert.equal(result.value, "café 日本語");
@@ -178,7 +188,7 @@ function emptyClipboardCase(): void {
         const { env } = yield* startX11(t);
         assert.deepEqual(yield* readClipboard("getText", env), { ok: true, value: null });
         assert.deepEqual(yield* readClipboard("getImage", env), { ok: true, value: null });
-        yield* setClipboard({ env, target: "UTF8_STRING", input: Buffer.from("text only") });
+        yield* setClipboard({ env, input: Buffer.from("text only"), target: "UTF8_STRING" });
         assert.deepEqual(yield* readClipboard("getImage", env), { ok: true, value: null });
       }),
     ));
@@ -196,7 +206,7 @@ function unicodeTransferCase(): void {
         ] as const;
         yield* Effect.forEach(transfers, ([target, method, bytes]) =>
           Effect.gen(function* () {
-            yield* setClipboard({ env, target, input: bytes });
+            yield* setClipboard({ env, input: bytes, target });
             const result = yield* readClipboard(method, env);
             assert.equal(result.ok, true, result.error);
             assert.equal(result.length, bytes.length);
@@ -207,13 +217,16 @@ function unicodeTransferCase(): void {
     ));
 }
 
-function transferFailureCase(compiled: CompiledFixtures, mode: string): void {
+function transferFailureCase(
+  compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures,
+  mode: string,
+): void {
   it(`reports X11 transfer ${mode} as an exception, not an unavailable display`, (t) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const x11 = yield* startX11(t);
         const command = join(compiled.directory(), "x11-test");
-        const owner = yield* startServer({ t, command, args: ["idle"], env: x11.env });
+        const owner = yield* startServer({ args: ["idle"], command, env: x11.env, t });
         const started = performance.now();
         const reader = yield* Effect.forkChild(readClipboard("getText", x11.env));
         yield* owner.server.nextStdout;
@@ -229,26 +242,32 @@ function transferFailureCase(compiled: CompiledFixtures, mode: string): void {
     ));
 }
 
-function invalidMetadataCase(compiled: CompiledFixtures, content: string): void {
+function invalidMetadataCase(
+  compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures,
+  content: string,
+): void {
   it(`frees partially received X11 ${content} after invalid metadata`, (t) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { env } = yield* startX11(t);
         const command = join(compiled.directory(), "x11-test");
-        yield* startServer({ t, command, args: ["invalid"], env });
-        const { stdout } = yield* exec({ file: command, args: [content], env, timeout: 6000 });
+        yield* startServer({ args: ["invalid"], command, env, t });
+        const { stdout } = yield* exec({ args: [content], env, file: command, timeout: 6000 });
         assert.equal(stdout.trim(), "clean");
       }),
     ));
 }
 
-function partialTransferCase(compiled: CompiledFixtures, content: string): void {
+function partialTransferCase(
+  compiled: nativeClipboardLinuxHelpersTypes.CompiledFixtures,
+  content: string,
+): void {
   it(`times out stalled X11 ${content} after a partial transfer without blocking JS`, (t) =>
     Effect.runPromise(
       Effect.gen(function* () {
         const { env } = yield* startX11(t);
         const command = join(compiled.directory(), "x11-test");
-        yield* startServer({ t, command, args: ["partial"], env });
+        yield* startServer({ args: ["partial"], command, env, t });
         const started = performance.now();
         const result = yield* readClipboard(content === "text" ? "getText" : "getImage", env);
         assert.equal(result.ok, false);

@@ -7,9 +7,9 @@ import { extractSegments, sliceWithWidth } from "../src/text-slice.ts";
 import type { TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
 import { normalizeTerminalOutput, visibleWidth } from "../src/utils.ts";
-import { CapturingVirtualTerminal } from "./tab-width-capturing-virtual-terminal.ts";
-import { FullViewportContent } from "./tab-width-full-viewport-content.ts";
-import { TabStatusOverlay } from "./tab-width-tab-status-overlay.ts";
+import CapturingVirtualTerminal from "./tab-width-capturing-virtual-terminal.ts";
+import FullViewportContent from "./tab-width-full-viewport-content.ts";
+import TabStatusOverlay from "./tab-width-tab-status-overlay.ts";
 
 describe("tab width accounting", () => {
   it("keeps slice helper widths consistent with visible width", () => {
@@ -58,7 +58,7 @@ describe("tab width accounting", () => {
         const terminal = new CapturingVirtualTerminal(16, 3);
         const tui: TUI = new TuiMainScreen(terminal);
         tui.addChild(new FullViewportContent());
-        tui.showOverlay(new TabStatusOverlay(), { width: 4, row: 1, col: 4 });
+        tui.showOverlay(new TabStatusOverlay(), { col: 4, row: 1, width: 4 });
         tui.start();
 
         yield* Effect.gen(function* () {

@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import { type Terminal } from "../src/index.ts";
 
-export class TestTerminal implements Terminal {
+class TestTerminal implements Terminal {
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
   private readonly columnCount: number;
@@ -69,3 +69,5 @@ export class TestTerminal implements Terminal {
     this.resizeHandler?.();
   }
 }
+
+export default TestTerminal;

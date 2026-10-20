@@ -1,15 +1,11 @@
 import { Effect, Option } from "effect";
 import { dual } from "effect/Function";
 
-import { BuildHost } from "./build-host-service.ts";
-import {
-  type BuildContext,
-  installOutput,
-  quoteBatch,
-  runInherited,
-  type Win32BuildError,
-  type Win32Target,
-} from "./build-process.ts";
+import BuildHost from "./build-host-service.ts";
+import buildProcess from "./build-process.ts";
+import type buildProcessTypes from "./build-process.types.ts";
+
+const { installOutput, quoteBatch, runInherited } = buildProcess;
 
 const VISUAL_STUDIO_EDITIONS = ["BuildTools", "Community", "Professional", "Enterprise"];
 
@@ -49,8 +45,8 @@ const vswhereCandidates = (
       .map((installationPath) => host.join(installationPath, "Common7", "Tools", "VsDevCmd.bat"));
   });
 
-export const findVisualStudioDevCmd: Effect.Effect<string | undefined, never, BuildHost> =
-  Effect.gen(function* () {
+const findVisualStudioDevCmd: Effect.Effect<string | undefined, never, BuildHost> = Effect.gen(
+  function* () {
     const host = yield* BuildHost;
     const programFilesX86 = yield* host.env("ProgramFiles(x86)");
     const programFiles = yield* host.env("ProgramFiles");
@@ -73,39 +69,50 @@ export const findVisualStudioDevCmd: Effect.Effect<string | undefined, never, Bu
     }
     const found = yield* Effect.findFirst(candidates, (candidate) => host.exists(candidate));
     return Option.getOrUndefined(found);
-  });
+  },
+);
 
-export const canUseMsvc: {
-  (context: BuildContext, vsDevCmd: string): Effect.Effect<boolean, never, BuildHost>;
-  (vsDevCmd: string): (context: BuildContext) => Effect.Effect<boolean, never, BuildHost>;
-} = dual(2, (context: BuildContext, vsDevCmd: string): Effect.Effect<boolean, never, BuildHost> =>
-  Effect.gen(function* () {
-    const host = yield* BuildHost;
-    const probeDir = host.join(context.temporaryDir, "msvc-probe");
-    yield* host.makeDirectory(probeDir);
-    const batchFile = host.join(probeDir, "probe.cmd");
-    yield* host.writeFile(
-      batchFile,
-      [
-        "@echo off",
-        `call ${quoteBatch(vsDevCmd)} -no_logo -arch=x64 -host_arch=${msvcHostArch()} >nul`,
-        "if errorlevel 1 exit /b %errorlevel%",
-        "where cl.exe >nul 2>nul",
-      ].join("\r\n"),
-    );
-    const exitCode = yield* host.exitCode({
-      command: "cmd.exe",
-      args: ["/d", "/s", "/c", batchFile],
-      cwd: probeDir,
-      stdio: "ignore",
-    });
-    return exitCode === 0;
-  }).pipe(Effect.orElseSucceed(() => false)),
+const canUseMsvc: {
+  (
+    context: buildProcessTypes.BuildContext,
+    vsDevCmd: string,
+  ): Effect.Effect<boolean, never, BuildHost>;
+  (
+    vsDevCmd: string,
+  ): (context: buildProcessTypes.BuildContext) => Effect.Effect<boolean, never, BuildHost>;
+} = dual(
+  2,
+  (
+    context: buildProcessTypes.BuildContext,
+    vsDevCmd: string,
+  ): Effect.Effect<boolean, never, BuildHost> =>
+    Effect.gen(function* () {
+      const host = yield* BuildHost;
+      const probeDir = host.join(context.temporaryDir, "msvc-probe");
+      yield* host.makeDirectory(probeDir);
+      const batchFile = host.join(probeDir, "probe.cmd");
+      yield* host.writeFile(
+        batchFile,
+        [
+          "@echo off",
+          `call ${quoteBatch(vsDevCmd)} -no_logo -arch=x64 -host_arch=${msvcHostArch()} >nul`,
+          "if errorlevel 1 exit /b %errorlevel%",
+          "where cl.exe >nul 2>nul",
+        ].join("\r\n"),
+      );
+      const exitCode = yield* host.exitCode({
+        args: ["/d", "/s", "/c", batchFile],
+        command: "cmd.exe",
+        cwd: probeDir,
+        stdio: "ignore",
+      });
+      return exitCode === 0;
+    }).pipe(Effect.orElseSucceed(() => false)),
 );
 
 function msvcBuildScript(
-  context: BuildContext,
-  options: { vsDevCmd: string; target: Win32Target; temporaryOutput: string },
+  context: buildProcessTypes.BuildContext,
+  options: { vsDevCmd: string; target: buildProcessTypes.Win32Target; temporaryOutput: string },
 ): string {
   const compile = [
     "cl",
@@ -135,23 +142,25 @@ function msvcBuildScript(
   ].join("\r\n");
 }
 
-export const buildWithMsvc: {
+const buildWithMsvc: {
   (
-    context: BuildContext,
-    target: Win32Target,
+    context: buildProcessTypes.BuildContext,
+    target: buildProcessTypes.Win32Target,
     vsDevCmd: string,
-  ): Effect.Effect<void, Win32BuildError, BuildHost>;
+  ): Effect.Effect<void, buildProcessTypes.Win32BuildError, BuildHost>;
   (
-    target: Win32Target,
+    target: buildProcessTypes.Win32Target,
     vsDevCmd: string,
-  ): (context: BuildContext) => Effect.Effect<void, Win32BuildError, BuildHost>;
+  ): (
+    context: buildProcessTypes.BuildContext,
+  ) => Effect.Effect<void, buildProcessTypes.Win32BuildError, BuildHost>;
 } = dual(
   3,
   (
-    context: BuildContext,
-    target: Win32Target,
+    context: buildProcessTypes.BuildContext,
+    target: buildProcessTypes.Win32Target,
     vsDevCmd: string,
-  ): Effect.Effect<void, Win32BuildError, BuildHost> =>
+  ): Effect.Effect<void, buildProcessTypes.Win32BuildError, BuildHost> =>
     Effect.gen(function* () {
       const host = yield* BuildHost;
       const buildDir = host.join(context.temporaryDir, `msvc-${target.arch}`);
@@ -160,9 +169,17 @@ export const buildWithMsvc: {
       const batchFile = host.join(buildDir, "build.cmd");
       yield* host.writeFile(
         batchFile,
-        msvcBuildScript(context, { vsDevCmd, target, temporaryOutput }),
+        msvcBuildScript(context, { target, temporaryOutput, vsDevCmd }),
       );
       yield* runInherited("cmd.exe", ["/d", "/s", "/c", batchFile], buildDir);
       yield* installOutput(context, temporaryOutput, target);
     }),
 );
+
+const buildMsvc = {
+  buildWithMsvc,
+  canUseMsvc,
+  findVisualStudioDevCmd,
+};
+
+export default buildMsvc;

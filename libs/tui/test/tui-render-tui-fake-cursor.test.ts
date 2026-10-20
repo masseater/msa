@@ -8,8 +8,8 @@ import { sliceByColumn } from "../src/text-slice.ts";
 import { CURSOR_MARKER, renderFakeCursor } from "../src/tui-component.ts";
 import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
-import { TestComponent } from "./tui-render-test-component.ts";
+import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
+import TestComponent from "./tui-render-test-component.ts";
 
 describe("TUI fake cursor", () => {
   it("draws the focused fake cursor in reverse video and omits it when the hardware cursor is shown", () =>
@@ -79,7 +79,7 @@ describe("TUI fake cursor", () => {
           tui.addChild(base);
           const overlay = new TestComponent();
           overlay.lines = ["XXX"];
-          tui.showOverlay(overlay, { row: 0, col: 0, width: 3 });
+          tui.showOverlay(overlay, { col: 0, row: 0, width: 3 });
           tui.start();
           yield* Effect.promise(() => terminal.waitForRender());
 

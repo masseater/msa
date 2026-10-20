@@ -3,9 +3,11 @@ import { it } from "node:test";
 
 import { SelectList } from "../src/components/select-list.ts";
 import { SettingsList } from "../src/components/settings-list.ts";
-import { mouse, selectTheme, settingsTheme } from "./mouse-components-helpers.ts";
+import mouseComponentsHelpers from "./mouse-components-helpers.ts";
 
-export function mouseAwareComponentsCases1(): void {
+const { mouse, selectTheme, settingsTheme } = mouseComponentsHelpers;
+
+function mouseAwareComponentsCases1(): void {
   for (const row of [0, 4]) {
     it(`ignores hover and clicks visible select-list row ${row} after scrolling`, () => {
       selectListScrollCase(row);
@@ -19,7 +21,7 @@ export function mouseAwareComponentsCases1(): void {
 
 function selectListScrollCase(row: number): void {
   const list = new SelectList(
-    Array.from({ length: 12 }, (_, i) => ({ value: `item-${i}`, label: `Item ${i}` })),
+    Array.from({ length: 12 }, (_, i) => ({ label: `Item ${i}`, value: `item-${i}` })),
     5,
     selectTheme,
   );
@@ -55,10 +57,10 @@ function settingsListScrollCase(row: number): void {
   const changes: Array<{ id: string; value: string }> = [];
   const list = new SettingsList(
     Array.from({ length: 12 }, (_, i) => ({
+      currentValue: "off",
+      description: `Description ${i}`,
       id: `item-${i}`,
       label: `Item ${i}`,
-      description: `Description ${i}`,
-      currentValue: "off",
       values: ["off", "on"],
     })),
     5,
@@ -84,3 +86,5 @@ function settingsListScrollCase(row: number): void {
   list.handleMouse(mouse("click", 1, row + 2));
   assert.deepStrictEqual(changes, [{ id: `item-${4 + row}`, value: "on" }]);
 }
+
+export default mouseAwareComponentsCases1;

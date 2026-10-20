@@ -5,38 +5,37 @@ import { Effect } from "effect";
 
 import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { pathOperations } from "../src/platform.ts";
-import {
-  getSuggestions,
-  isFdInstalled,
-  requireFdPath,
-  setupFolder,
-  useTempWorkspace,
-  type TempWorkspace,
-} from "./autocomplete-helpers.ts";
-import { symlink } from "./test-platform.ts";
+import autocompleteHelpers from "./autocomplete-helpers.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
+import testPlatform from "./test-platform.ts";
+
+const { getSuggestions, withFd, requireFdPath, setupFolder, useTempWorkspace } =
+  autocompleteHelpers;
+const { symlink } = testPlatform;
 
 const { join } = pathOperations;
 
 describe("CombinedAutocompleteProvider", () => {
-  describe("fd @ file suggestions", { skip: !isFdInstalled }, () => {
-    const ws = useTempWorkspace();
-    includesHiddenPathsButExcludes(ws);
-    followsSymlinkedDirectoriesFuzzySearch(ws);
-    returnsSymlinkedDirectoriesMatchingTheir(ws);
-    returnsSymlinkedFilesWithoutRequiring(ws);
-  });
+  describe("fd @ file suggestions", () =>
+    withFd(() => {
+      const ws = useTempWorkspace();
+      includesHiddenPathsButExcludes(ws);
+      followsSymlinkedDirectoriesFuzzySearch(ws);
+      returnsSymlinkedDirectoriesMatchingTheir(ws);
+      returnsSymlinkedFilesWithoutRequiring(ws);
+    }));
 });
 
-function includesHiddenPathsButExcludes(ws: TempWorkspace): void {
+function includesHiddenPathsButExcludes(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("includes hidden paths but excludes .git", () =>
     Effect.runPromise(
       Effect.gen(function* () {
         yield* setupFolder(ws.baseDir, {
           dirs: [".msa", ".github", ".git"],
           files: {
-            ".msa/config.json": "{}",
-            ".github/workflows/ci.yml": "name: ci",
             ".git/config": "[core]",
+            ".github/workflows/ci.yml": "name: ci",
+            ".msa/config.json": "{}",
           },
         });
 
@@ -54,7 +53,7 @@ function includesHiddenPathsButExcludes(ws: TempWorkspace): void {
     ));
 }
 
-function followsSymlinkedDirectoriesFuzzySearch(ws: TempWorkspace): void {
+function followsSymlinkedDirectoriesFuzzySearch(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("follows symlinked directories for fuzzy @ search", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -83,7 +82,9 @@ function followsSymlinkedDirectoriesFuzzySearch(ws: TempWorkspace): void {
     ));
 }
 
-function returnsSymlinkedDirectoriesMatchingTheir(ws: TempWorkspace): void {
+function returnsSymlinkedDirectoriesMatchingTheir(
+  ws: autocompleteHelpersTypes.TempWorkspace,
+): void {
   test("returns symlinked directories when matching their name", () =>
     Effect.runPromise(
       Effect.gen(function* () {
@@ -106,7 +107,7 @@ function returnsSymlinkedDirectoriesMatchingTheir(ws: TempWorkspace): void {
     ));
 }
 
-function returnsSymlinkedFilesWithoutRequiring(ws: TempWorkspace): void {
+function returnsSymlinkedFilesWithoutRequiring(ws: autocompleteHelpersTypes.TempWorkspace): void {
   test("returns symlinked files without requiring type l", () =>
     Effect.runPromise(
       Effect.gen(function* () {

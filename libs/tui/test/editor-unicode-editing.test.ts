@@ -2,8 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Unicode text editing behavior", () => {
@@ -25,43 +27,43 @@ function navigatesWordsCorrectlyCtrlLeft(): void {
     editor.setText("foo bar... baz");
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 11, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 4, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 14 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 14, line: 0 });
 
     editor.setText("   foo bar");
     editor.handleInput("\x01");
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 6, line: 0 });
 
     editor.setText("foo.bar baz");
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 4, line: 0 });
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
     editor.handleInput("\x01");
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 4 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 4, line: 0 });
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
   });
 }
 
@@ -72,22 +74,22 @@ function stopsFullwidthChinesePunctuationIssue(): void {
     editor.setText("你好，世界");
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 2, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 2, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
   });
 }
 
@@ -98,34 +100,34 @@ function handlesMixedCJKASCIIWord(): void {
     editor.setText("hello你好，world世界");
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 13 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 13, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 13 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 13, line: 0 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 15 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 15, line: 0 });
   });
 }
 

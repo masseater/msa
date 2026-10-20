@@ -13,10 +13,10 @@ describe("formatProgramStatus", () => {
   it("encodes state, app, kind, and a base64 message", () => {
     assert.equal(
       formatProgramStatus({
-        state: "blocked",
         app: "msa",
         kind: "permission",
         message: "Allow bash?",
+        state: "blocked",
       }),
       `\x1b]7501;state=blocked:app=msa:kind=permission:msg=${Buffer.from("Allow bash?").toString("base64")}\x1b\\`,
     );
@@ -25,27 +25,27 @@ describe("formatProgramStatus", () => {
 
   it("omits kind outside blocked, invalid app names, and empty messages", () => {
     assert.equal(
-      formatProgramStatus({ state: "working", app: "my app", kind: "auth", message: " \n " }),
+      formatProgramStatus({ app: "my app", kind: "auth", message: " \n ", state: "working" }),
       "\x1b]7501;state=working\x1b\\",
     );
-    const padded = formatProgramStatus({ state: "idle", app: "a".repeat(32) });
+    const padded = formatProgramStatus({ app: "a".repeat(32), state: "idle" });
     assert.equal(parseEscapeSequence(padded)?.body, `7501;state=idle:app=${"a".repeat(32)}`);
-    assert.doesNotMatch(formatProgramStatus({ state: "idle", app: "a".repeat(33) }), /app=/u);
+    assert.doesNotMatch(formatProgramStatus({ app: "a".repeat(33), state: "idle" }), /app=/u);
   });
 
   it("replaces control characters, which make terminals discard the report", () => {
     const sequence = formatProgramStatus({
-      state: "error",
       message: "first\nsecond\x1b[31m\u009bthird\t",
+      state: "error",
     });
     assert.equal(decodeMessage(sequence), "first second [31m third");
   });
 
   it("cuts long messages at a UTF-8 boundary within the spec limits", () => {
     const sequence = formatProgramStatus({
-      state: "working",
       app: "msa",
       message: "é".repeat(2000),
+      state: "working",
     });
     const message = decodeMessage(sequence)!;
     assert.equal(message, "é".repeat(1024));

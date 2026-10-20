@@ -3,7 +3,7 @@ import { dual } from "effect/Function";
 import { Image } from "../src/components/image.ts";
 import { overrideEnv } from "../src/env.ts";
 
-export const ENV_KEYS = [
+const ENV_KEYS = [
   "TERM",
   "TERM_PROGRAM",
   "TERMINAL_EMULATOR",
@@ -22,7 +22,7 @@ export const ENV_KEYS = [
   "MSA_TRUE_COLOR",
 ] as const;
 
-export const withEnv: {
+const withEnv: {
   <T>(overrides: Record<string, string | undefined>, fn: () => T): T;
   <T>(fn: () => T): (overrides: Record<string, string | undefined>) => T;
 } = dual(2, <T>(overrides: Record<string, string | undefined>, fn: () => T): T => {
@@ -37,13 +37,13 @@ export const withEnv: {
   }
 });
 
-export const jpeg = Buffer.from("jpeg").toString("base64");
+const jpeg = Buffer.from("jpeg").toString("base64");
 
-export const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000280000000a", "hex").toString(
+const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000280000000a", "hex").toString(
   "base64",
 );
 
-export const render: {
+const render: {
   (data: string, mimeType: string): string[];
   (mimeType: string): (data: string) => string[];
 } = dual(2, (data: string, mimeType: string): string[] =>
@@ -52,6 +52,16 @@ export const render: {
     mimeType,
     { fallbackColor: (value) => value },
     {},
-    { widthPx: 20, heightPx: 20 },
+    { heightPx: 20, widthPx: 20 },
   ).render(20),
 );
+
+const terminalImageHelpers = {
+  ENV_KEYS,
+  jpeg,
+  png,
+  render,
+  withEnv,
+};
+
+export default terminalImageHelpers;

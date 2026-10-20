@@ -1,4 +1,4 @@
-export class InputOverlay {
+class InputOverlay {
   focused = false;
   wantsViewportKeys = false;
   inputs: string[] = [];
@@ -13,3 +13,5 @@ export class InputOverlay {
 
   invalidate(): void {}
 }
+
+export default InputOverlay;

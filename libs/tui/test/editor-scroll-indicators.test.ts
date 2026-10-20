@@ -5,8 +5,10 @@ import { stripVTControlCharacters } from "node:util";
 import { Editor } from "../src/components/editor.ts";
 import { FAKE_CURSOR_START, renderFakeCursor } from "../src/tui-component.ts";
 import { stripTerminalSequences, visibleWidth } from "../src/utils.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Scroll indicators", () => {

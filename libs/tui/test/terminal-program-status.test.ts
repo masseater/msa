@@ -3,7 +3,9 @@ import { describe, it, mock } from "node:test";
 
 import { overrideEnv } from "../src/env.ts";
 import { ProcessTerminal } from "../src/terminal.ts";
-import { clear, setupNegotiation, withOverride, working } from "./terminal-helpers.ts";
+import terminalHelpers from "./terminal-helpers.ts";
+
+const { clear, setupNegotiation, withOverride, working } = terminalHelpers;
 
 describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
   describe("program status (OSC 7501)", () => {
@@ -11,7 +13,7 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
       withOverride(undefined, () => {
         const harness = setupNegotiation();
         try {
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
           harness.terminal.stop();
           (
             harness.terminal as unknown as { queryAndEnableKittyProtocol(): void }
@@ -36,13 +38,13 @@ describe("ProcessTerminal Kitty keyboard protocol negotiation", () => {
       withOverride(undefined, () => {
         const harness = setupNegotiation();
         try {
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
           harness.send("\x1b]7501;?\x1b\\");
           harness.terminal.stop();
           assert.ok(harness.writes.includes(clear));
 
           const writesBeforeRestart = harness.writes.length;
-          harness.terminal.setProgramStatus({ state: "working", app: "msa" });
+          harness.terminal.setProgramStatus({ app: "msa", state: "working" });
           assert.equal(harness.writes.length, writesBeforeRestart);
 
           (
@@ -105,8 +107,8 @@ describe("ProcessTerminal dimensions", () => {
     const restoreEnv = overrideEnv({ COLUMNS: "123", LINES: "45" });
 
     try {
-      Object.defineProperty(process.stdout, "columns", { value: undefined, configurable: true });
-      Object.defineProperty(process.stdout, "rows", { value: undefined, configurable: true });
+      Object.defineProperty(process.stdout, "columns", { configurable: true, value: undefined });
+      Object.defineProperty(process.stdout, "rows", { configurable: true, value: undefined });
 
       const terminal = new ProcessTerminal();
 

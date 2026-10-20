@@ -2,8 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI, positionCursor } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI, positionCursor } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Sticky column", () => {
@@ -25,19 +27,19 @@ function handlesMultipleConsecutiveUpDown(): void {
 
     editor.handleInput("\x01");
     for (let i = 0; i < 7; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 4, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 4 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 4, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 4 });
   });
 }
 
@@ -49,7 +51,7 @@ function movesCorrectlyThroughWrappedVisual(): void {
     editor.setText("short\n123456789012345678901234567890");
     editor.render(15);
 
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 30 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 30, line: 1 });
 
     editor.handleInput("\x1b[A");
     assert.strictEqual(editor.getCursor().line, 1);
@@ -71,18 +73,18 @@ function setsPreferredVisualColPressingRightEnd(): void {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
     editor.handleInput("\x05");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 20 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 20, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 2 });
 
     editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 2 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 0 });
   });
 }
 
@@ -98,7 +100,7 @@ function handlesEditorResizesPreferredVisualColSame(): void {
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 15 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 15, line: 0 });
 
     editor.render(12);
 
@@ -117,23 +119,23 @@ function handlesEditorResizesPreferredVisualColDifferent(): void {
 
     editor.handleInput("\x01");
     for (let i = 0; i < 15; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 15 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 15, line: 1 });
 
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
 
     editor.render(10);
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 1 });
 
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
 
     editor.render(80);
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 15 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 15, line: 1 });
   });
 }
 
@@ -144,19 +146,19 @@ function rewrappedLinesTargetFitsCurrent(): void {
     editor.setText("abcdefghijklmnopqr\n123456789012345678");
 
     positionCursor(editor, 0, 18);
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 18 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 18, line: 0 });
 
     editor.render(10);
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 1 });
 
     editor.render(80);
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 1 });
   });
 }
 
@@ -167,18 +169,18 @@ function rewrappedLinesTargetShorterThan(): void {
     editor.setText("abcdefghijklmnopqr\n123456789012345678\nab");
 
     positionCursor(editor, 0, 18);
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 18 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 18, line: 0 });
 
     editor.render(10);
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 1 });
 
     editor.render(80);
 
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 2 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 2, line: 2 });
 
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 1 });
   });
 }

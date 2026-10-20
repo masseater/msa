@@ -1,6 +1,6 @@
 import type { Component } from "../src/tui-component.ts";
 
-export class StaticOverlay implements Component {
+class StaticOverlay implements Component {
   private lines: string[];
   requestedWidth?: number | undefined;
 
@@ -16,3 +16,5 @@ export class StaticOverlay implements Component {
 
   invalidate(): void {}
 }
+
+export default StaticOverlay;

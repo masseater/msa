@@ -5,7 +5,9 @@ import { Effect } from "effect";
 
 import { matchesKey } from "../src/keys.ts";
 import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { wait } from "./stdin-buffer-helpers.ts";
+import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { wait } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
   let buffer: StdinBuffer;

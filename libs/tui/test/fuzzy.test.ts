@@ -94,9 +94,9 @@ describe("fuzzyFilter", () => {
 
   it("works with custom getText function", () => {
     const items = [
-      { name: "foo", id: 1 },
-      { name: "bar", id: 2 },
-      { name: "foobar", id: 3 },
+      { id: 1, name: "foo" },
+      { id: 2, name: "bar" },
+      { id: 3, name: "foobar" },
     ];
     const result = fuzzyFilter(items, "foo", (item: { name: string; id: number }) => item.name);
 

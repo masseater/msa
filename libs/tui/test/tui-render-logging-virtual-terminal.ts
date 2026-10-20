@@ -1,6 +1,6 @@
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
-export class LoggingVirtualTerminal extends VirtualTerminal {
+class LoggingVirtualTerminal extends VirtualTerminal {
   private writes: string[] = [];
 
   override write(data: string): void {
@@ -16,3 +16,5 @@ export class LoggingVirtualTerminal extends VirtualTerminal {
     this.writes = [];
   }
 }
+
+export default LoggingVirtualTerminal;

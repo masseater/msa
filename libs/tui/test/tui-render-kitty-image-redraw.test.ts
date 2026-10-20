@@ -4,11 +4,14 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { Image, type TUI, TuiMainScreen } from "../src/index.ts";
-import { withEnv } from "./tui-render-helpers.ts";
-import { withKittyCells, renderKittyTestImage } from "./tui-render-kitty-helpers.ts";
-import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
-import { TestComponent } from "./tui-render-test-component.ts";
+import tuiRenderHelpers from "./tui-render-helpers.ts";
+import tuiRenderKittyHelpers from "./tui-render-kitty-helpers.ts";
+import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
+import TestComponent from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { withEnv } = tuiRenderHelpers;
+const { renderKittyTestImage, withKittyCells } = tuiRenderKittyHelpers;
 
 describe("TUI Kitty image cleanup", () => {
   cases();
@@ -77,7 +80,7 @@ function fallsBackFullRedrawKitty(): void {
             "image/png",
             { fallbackColor: (value) => value },
             { maxWidthCells: 3 },
-            { widthPx: 30, heightPx: 30 },
+            { heightPx: 30, widthPx: 30 },
           );
           component.lines = ["before", ...image.render(40), "after"];
           tui.requestRender();

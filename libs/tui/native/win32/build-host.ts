@@ -2,10 +2,13 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Config, Effect, FileSystem, Layer, Option, Path, Predicate } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { BuildHost } from "./build-host-service.ts";
-import { Win32BuildError } from "./build-process.ts";
+import BuildHost from "./build-host-service.ts";
+import buildProcess from "./build-process.ts";
+import type buildProcessTypes from "./build-process.types.ts";
 
-const toBuildError = (error: { readonly message: string }): Win32BuildError =>
+const { Win32BuildError } = buildProcess;
+
+const toBuildError = (error: { readonly message: string }): buildProcessTypes.Win32BuildError =>
   new Win32BuildError({ message: error.message });
 
 const processOperations = (
@@ -15,15 +18,15 @@ const processOperations = (
     spawner
       .exitCode(
         ChildProcess.make(command, ["--version"], {
+          stderr: "ignore",
           stdin: "ignore",
           stdout: "ignore",
-          stderr: "ignore",
         }),
       )
       .pipe(
         Effect.match({
-          onSuccess: () => true,
           onFailure: (error) => !Predicate.isTagged(error.reason, "NotFound"),
+          onSuccess: () => true,
         }),
       ),
   exitCode: ({ command, args, cwd, stdio }) =>
@@ -31,9 +34,9 @@ const processOperations = (
       .exitCode(
         ChildProcess.make(command, [...args], {
           cwd,
+          stderr: stdio,
           stdin: stdio,
           stdout: stdio,
-          stderr: stdio,
         }),
       )
       .pipe(Effect.mapError(toBuildError)),
@@ -44,22 +47,22 @@ const makeBuildHost = Effect.gen(function* () {
   const path = yield* Path.Path;
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
   return BuildHost.of({
-    join: (...segments) => path.join(...segments),
-    relative: (from, to) => path.relative(from, to),
     env: (name) =>
       Config.option(Config.NonEmptyString(name)).pipe(
         Effect.map(Option.getOrUndefined),
         Effect.orElseSucceed(() => undefined),
       ),
     exists: (file) => fs.exists(file).pipe(Effect.orElseSucceed(() => false)),
-    makeDirectory: (dir) =>
-      fs.makeDirectory(dir, { recursive: true }).pipe(Effect.mapError(toBuildError)),
-    writeFile: (file, contents) =>
-      fs.writeFileString(file, contents).pipe(Effect.mapError(toBuildError)),
     installExecutable: (from, to) =>
       fs
         .copyFile(from, to)
         .pipe(Effect.andThen(fs.chmod(to, 0o755)), Effect.mapError(toBuildError)),
+    join: (...segments) => path.join(...segments),
+    makeDirectory: (dir) =>
+      fs.makeDirectory(dir, { recursive: true }).pipe(Effect.mapError(toBuildError)),
+    relative: (from, to) => path.relative(from, to),
+    writeFile: (file, contents) =>
+      fs.writeFileString(file, contents).pipe(Effect.mapError(toBuildError)),
     ...processOperations(spawner),
     makeTemporaryDirectory: (prefix) =>
       fs.makeTempDirectoryScoped({ prefix }).pipe(Effect.mapError(toBuildError)),
@@ -68,6 +71,8 @@ const makeBuildHost = Effect.gen(function* () {
   });
 });
 
-export const buildHostLayer: Layer.Layer<BuildHost> = Layer.effect(BuildHost, makeBuildHost).pipe(
+const buildHostLayer: Layer.Layer<BuildHost> = Layer.effect(BuildHost, makeBuildHost).pipe(
   Layer.provide(NodeServices.layer),
 );
+
+export default buildHostLayer;

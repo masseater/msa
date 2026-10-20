@@ -2,8 +2,10 @@ import assert from "node:assert";
 import { describe, it } from "node:test";
 
 import { Editor } from "../src/components/editor.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Sticky column", () => {
@@ -28,27 +30,27 @@ function resetsStickyColumnUndo(): void {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x01");
     for (let i = 0; i < 8; i++) editor.handleInput("\x1b[C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 2 });
 
     editor.handleInput("X");
     assert.strictEqual(editor.getText(), "1234567890\n\n12345678X90");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 9 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 9, line: 2 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 9 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 9, line: 0 });
 
     editor.handleInput("\x1b[45;5u");
     assert.strictEqual(editor.getText(), "1234567890\n\n1234567890");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 2 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
   });
 }
 
@@ -63,11 +65,11 @@ function handlesSetTextResettingStickyColumn(): void {
     editor.handleInput("\x1b[A");
 
     editor.setText("abcdefghij\n\nabcdefghij");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 2 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 10 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 10, line: 0 });
   });
 }
 
@@ -82,14 +84,14 @@ function resetsStickyColumnTyping(): void {
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
 
     editor.handleInput("X");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 9 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 9, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 9 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 9, line: 2 });
   });
 }
 
@@ -104,14 +106,14 @@ function resetsStickyColumnBackspace(): void {
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 8 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 8, line: 0 });
 
     editor.handleInput("\x7f");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 7 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 7, line: 2 });
   });
 }
 
@@ -127,10 +129,10 @@ function resetsStickyColumnCtrlMove(): void {
     editor.handleInput("\x1b[A");
 
     editor.handleInput("\x01");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 1 });
 
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
   });
 }
 
@@ -145,14 +147,14 @@ function resetsStickyColumnCtrlE(): void {
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
     editor.handleInput("\x05");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 2 });
   });
 }
 
@@ -162,18 +164,18 @@ function resetsStickyColumnWordMovement(): void {
 
     editor.setText("hello world\n\nhello world");
 
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 11 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 11, line: 2 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 11 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 11, line: 0 });
 
     editor.handleInput("\x1b[1;5D");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 6 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 6, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 6 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 6, line: 2 });
   });
 }
 
@@ -186,17 +188,17 @@ function resetsStickyColumnWordMovement2(): void {
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
     editor.handleInput("\x01");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
     editor.handleInput("\x1b[B");
     editor.handleInput("\x1b[B");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 2 });
 
     editor.handleInput("\x1b[1;5C");
-    assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 2 });
 
     editor.handleInput("\x1b[A");
     editor.handleInput("\x1b[A");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 5 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 0 });
   });
 }

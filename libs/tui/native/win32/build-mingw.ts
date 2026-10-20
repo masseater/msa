@@ -1,14 +1,11 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { BuildHost } from "./build-host-service.ts";
-import {
-  type BuildContext,
-  installOutput,
-  runInherited,
-  Win32BuildError,
-  type Win32Target,
-} from "./build-process.ts";
+import BuildHost from "./build-host-service.ts";
+import buildProcess from "./build-process.ts";
+import type buildProcessTypes from "./build-process.types.ts";
+
+const { Win32BuildError, installOutput, runInherited } = buildProcess;
 
 interface MingwCompiler {
   readonly command: string;
@@ -16,7 +13,7 @@ interface MingwCompiler {
 }
 
 const resolveMingwCompiler = (
-  target: Win32Target,
+  target: buildProcessTypes.Win32Target,
 ): Effect.Effect<MingwCompiler | undefined, never, BuildHost> =>
   Effect.gen(function* () {
     const host = yield* BuildHost;
@@ -32,8 +29,12 @@ const resolveMingwCompiler = (
   });
 
 function mingwArgs(
-  context: BuildContext,
-  options: { compiler: MingwCompiler; target: Win32Target; temporaryOutput: string },
+  context: buildProcessTypes.BuildContext,
+  options: {
+    compiler: MingwCompiler;
+    target: buildProcessTypes.Win32Target;
+    temporaryOutput: string;
+  },
 ): Array<string> {
   return [
     ...(options.compiler.useTargetFlag ? [`--target=${options.target.mingwTarget}`] : []),
@@ -54,12 +55,22 @@ function mingwArgs(
   ];
 }
 
-export const buildWithMingw: {
-  (context: BuildContext, target: Win32Target): Effect.Effect<void, Win32BuildError, BuildHost>;
-  (target: Win32Target): (context: BuildContext) => Effect.Effect<void, Win32BuildError, BuildHost>;
+const buildWithMingw: {
+  (
+    context: buildProcessTypes.BuildContext,
+    target: buildProcessTypes.Win32Target,
+  ): Effect.Effect<void, buildProcessTypes.Win32BuildError, BuildHost>;
+  (
+    target: buildProcessTypes.Win32Target,
+  ): (
+    context: buildProcessTypes.BuildContext,
+  ) => Effect.Effect<void, buildProcessTypes.Win32BuildError, BuildHost>;
 } = dual(
   2,
-  (context: BuildContext, target: Win32Target): Effect.Effect<void, Win32BuildError, BuildHost> =>
+  (
+    context: buildProcessTypes.BuildContext,
+    target: buildProcessTypes.Win32Target,
+  ): Effect.Effect<void, buildProcessTypes.Win32BuildError, BuildHost> =>
     Effect.gen(function* () {
       const compiler = yield* resolveMingwCompiler(target);
       if (compiler === undefined) {
@@ -79,3 +90,5 @@ export const buildWithMingw: {
       yield* installOutput(context, temporaryOutput, target);
     }),
 );
+
+export default buildWithMingw;

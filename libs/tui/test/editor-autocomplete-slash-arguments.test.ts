@@ -3,10 +3,12 @@ import { describe, it } from "node:test";
 
 import { Effect } from "effect";
 
-import { CombinedAutocompleteProvider, type AutocompleteProvider } from "../src/autocomplete.ts";
+import { type AutocompleteProvider, CombinedAutocompleteProvider } from "../src/autocomplete.ts";
 import { Editor } from "../src/components/editor.ts";
-import { applyCompletion, createTestTUI, flushAutocomplete, typeText } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { applyCompletion, createTestTUI, flushAutocomplete, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Autocomplete", () => {
@@ -27,6 +29,7 @@ function appliesExactTypedSlashArgument(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const beforeCursor = text.slice(0, cursorCol);
@@ -35,9 +38,9 @@ function appliesExactTypedSlashArgument(): void {
             if (argtestMatch !== null) {
               const argumentText = argtestMatch[1]!;
               const allArguments = [
-                { value: "one", label: "one" },
-                { value: "two", label: "two" },
-                { value: "three", label: "three" },
+                { label: "one", value: "one" },
+                { label: "two", value: "two" },
+                { label: "three", value: "three" },
               ];
               const filtered = allArguments.filter((arg) => arg.value.startsWith(argumentText));
               if (filtered.length > 0) {
@@ -46,7 +49,6 @@ function appliesExactTypedSlashArgument(): void {
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -71,6 +73,7 @@ function selectsFirstPrefixMatchEnter(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const beforeCursor = text.slice(0, cursorCol);
@@ -79,9 +82,9 @@ function selectsFirstPrefixMatchEnter(): void {
             if (argtestMatch !== null) {
               const argumentText = argtestMatch[1]!;
               const allArguments = [
-                { value: "two", label: "two" },
-                { value: "three", label: "three" },
-                { value: "twelve", label: "twelve" },
+                { label: "two", value: "two" },
+                { label: "three", value: "three" },
+                { label: "twelve", value: "twelve" },
               ];
               const filtered = allArguments.filter((arg) => arg.value.startsWith(argumentText));
               if (filtered.length > 0) {
@@ -90,7 +93,6 @@ function selectsFirstPrefixMatchEnter(): void {
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -113,6 +115,7 @@ function highlightsUniquePrefixMatchUser(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const beforeCursor = text.slice(0, cursorCol);
@@ -121,15 +124,14 @@ function highlightsUniquePrefixMatchUser(): void {
             if (argtestMatch !== null) {
               const argumentText = argtestMatch[1]!;
               const allArguments = [
-                { value: "one", label: "one" },
-                { value: "two", label: "two" },
-                { value: "three", label: "three" },
+                { label: "one", value: "one" },
+                { label: "two", value: "two" },
+                { label: "three", value: "three" },
               ];
               return Promise.resolve({ items: allArguments, prefix: argumentText });
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -153,6 +155,7 @@ function selectsFirstPrefixMatchMultiple(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const beforeCursor = text.slice(0, cursorCol);
@@ -161,15 +164,14 @@ function selectsFirstPrefixMatchMultiple(): void {
             if (argtestMatch !== null) {
               const argumentText = argtestMatch[1]!;
               const allArguments = [
-                { value: "one", label: "one" },
-                { value: "two", label: "two" },
-                { value: "three", label: "three" },
+                { label: "one", value: "one" },
+                { label: "two", value: "two" },
+                { label: "three", value: "three" },
               ];
               return Promise.resolve({ items: allArguments, prefix: argumentText });
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -192,6 +194,7 @@ function worksBuiltStyleCommandArgument(): void {
         const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
         const mockProvider: AutocompleteProvider = {
+          applyCompletion,
           getSuggestions: (lines, _cursorLine, cursorCol) => {
             const text = lines[0] || "";
             const beforeCursor = text.slice(0, cursorCol);
@@ -200,9 +203,9 @@ function worksBuiltStyleCommandArgument(): void {
             if (modelMatch !== null) {
               const modelText = modelMatch[1]!;
               const allModels = [
-                { value: "gpt-4o", label: "gpt-4o" },
-                { value: "gpt-4o-mini", label: "gpt-4o-mini" },
-                { value: "claude-sonnet", label: "claude-sonnet" },
+                { label: "gpt-4o", value: "gpt-4o" },
+                { label: "gpt-4o-mini", value: "gpt-4o-mini" },
+                { label: "claude-sonnet", value: "claude-sonnet" },
               ];
               const filtered = allModels.filter((m) => m.value.startsWith(modelText));
               if (filtered.length > 0) {
@@ -211,7 +214,6 @@ function worksBuiltStyleCommandArgument(): void {
             }
             return Promise.resolve(null);
           },
-          applyCompletion,
         };
 
         editor.setAutocompleteProvider(mockProvider);
@@ -237,10 +239,10 @@ function awaitsAsyncSlashCommandArgument(): void {
         const provider = new CombinedAutocompleteProvider(
           [
             {
-              name: "load-skills",
               description: "Load skills",
               getArgumentCompletions: (prefix) =>
-                prefix.startsWith("s") ? [{ value: "skill-a", label: "skill-a" }] : null,
+                prefix.startsWith("s") ? [{ label: "skill-a", value: "skill-a" }] : null,
+              name: "load-skills",
             },
           ],
           process.cwd(),
@@ -267,11 +269,11 @@ function ignoresInvalidSlashCommandArgument(): void {
         const provider = new CombinedAutocompleteProvider(
           [
             {
-              name: "load-skills",
               description: "Load skills",
               getArgumentCompletions: (() => "not-an-array") as unknown as (
                 argumentPrefix: string,
               ) => Promise<{ value: string; label: string }[] | null>,
+              name: "load-skills",
             },
           ],
           process.cwd(),

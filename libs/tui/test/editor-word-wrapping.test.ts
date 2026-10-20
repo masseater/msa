@@ -5,8 +5,10 @@ import { stripVTControlCharacters } from "node:util";
 import { wordWrapLine } from "../src/components/editor-wrap.ts";
 import { Editor } from "../src/components/editor.ts";
 import { visibleWidth } from "../src/utils.ts";
-import { createTestTUI } from "./editor-helpers.ts";
+import editorHelpers from "./editor-helpers.ts";
 import { defaultEditorTheme } from "./test-themes.ts";
+
+const { createTestTUI } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Word wrapping", () => {

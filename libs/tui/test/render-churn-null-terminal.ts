@@ -2,10 +2,10 @@ import { Effect } from "effect";
 
 import type { Terminal } from "../src/terminal-protocol.ts";
 
-export const COLUMNS = 100;
-export const ROWS = 30;
+const COLUMNS = 100;
+const ROWS = 30;
 
-export class NullTerminal implements Terminal {
+class NullTerminal implements Terminal {
   bytesWritten = 0;
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
@@ -34,3 +34,11 @@ export class NullTerminal implements Terminal {
   setProgress(_active: boolean): void {}
   setProgramStatus(): void {}
 }
+
+const renderChurnNullTerminal = {
+  COLUMNS,
+  NullTerminal,
+  ROWS,
+};
+
+export default renderChurnNullTerminal;

@@ -4,11 +4,11 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { type TUI, TuiMainScreen } from "../src/index.ts";
-import { EmptyContent } from "./overlay-options-empty-content.ts";
-import { renderAndFlush } from "./overlay-options-helpers.ts";
-import { HyperlinkContent } from "./overlay-options-hyperlink-content.ts";
-import { StaticOverlay } from "./overlay-options-static-overlay.ts";
-import { StyledContent } from "./overlay-options-styled-content.ts";
+import EmptyContent from "./overlay-options-empty-content.ts";
+import renderAndFlush from "./overlay-options-helpers.ts";
+import HyperlinkContent from "./overlay-options-hyperlink-content.ts";
+import StaticOverlay from "./overlay-options-static-overlay.ts";
+import StyledContent from "./overlay-options-styled-content.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
 
 describe("TUI overlay options", () => {
@@ -68,7 +68,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["OVERLAY"]);
 
           tui.addChild(new StyledContent());
-          tui.showOverlay(overlay, { width: 20, anchor: "center" });
+          tui.showOverlay(overlay, { anchor: "center", width: 20 });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 
@@ -172,7 +172,7 @@ describe("TUI overlay options", () => {
           const overlay = new StaticOverlay(["test"]);
 
           tui.addChild(new EmptyContent());
-          tui.showOverlay(overlay, { width: "10%", minWidth: 30 });
+          tui.showOverlay(overlay, { minWidth: 30, width: "10%" });
           tui.start();
           yield* renderAndFlush(tui, terminal);
 

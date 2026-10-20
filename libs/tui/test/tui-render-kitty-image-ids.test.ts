@@ -4,8 +4,8 @@ import { describe, it } from "node:test";
 import { Effect } from "effect";
 
 import { type TUI, TuiMainScreen, deleteKittyImage, encodeKitty } from "../src/index.ts";
-import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
-import { TestComponent } from "./tui-render-test-component.ts";
+import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
+import TestComponent from "./tui-render-test-component.ts";
 
 describe("TUI Kitty image cleanup", () => {
   deletesChangedImageIdsBefore();
@@ -24,9 +24,9 @@ function deletesChangedImageIdsBefore(): void {
 
         const oldImage = encodeKitty("AAAA", {
           columns: 2,
-          rows: 2,
           imageId: 42,
           moveCursor: false,
+          rows: 2,
         });
         component.lines = ["top", oldImage];
         tui.start();
@@ -35,9 +35,9 @@ function deletesChangedImageIdsBefore(): void {
 
         const newImage = encodeKitty("BBBB", {
           columns: 2,
-          rows: 1,
           imageId: 42,
           moveCursor: false,
+          rows: 1,
         });
         component.lines = [newImage, ""];
         tui.requestRender();
@@ -67,7 +67,7 @@ function redrawsImageLinesEarlierReserved(): void {
         const component = new TestComponent();
         tui.addChild(component);
 
-        const image = encodeKitty("AAAA", { columns: 2, rows: 2, imageId: 88, moveCursor: false });
+        const image = encodeKitty("AAAA", { columns: 2, imageId: 88, moveCursor: false, rows: 2 });
         component.lines = ["", image];
         tui.start();
         yield* Effect.promise(() => terminal.waitForRender());
@@ -109,7 +109,7 @@ function deletesPreviouslyRenderedImageIds(): void {
         tui.addChild(component);
 
         component.lines = [
-          encodeKitty("AAAA", { columns: 2, rows: 2, imageId: 77, moveCursor: false }),
+          encodeKitty("AAAA", { columns: 2, imageId: 77, moveCursor: false, rows: 2 }),
         ];
         tui.start();
         yield* Effect.promise(() => terminal.waitForRender());

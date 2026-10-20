@@ -5,10 +5,12 @@ import { Effect } from "effect";
 
 import { type TUI } from "../src/tui-interface.ts";
 import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { getCellItalic, withEnv } from "./tui-render-helpers.ts";
-import { LoggingVirtualTerminal } from "./tui-render-logging-virtual-terminal.ts";
-import { TestComponent } from "./tui-render-test-component.ts";
+import tuiRenderHelpers from "./tui-render-helpers.ts";
+import LoggingVirtualTerminal from "./tui-render-logging-virtual-terminal.ts";
+import TestComponent from "./tui-render-test-component.ts";
 import { VirtualTerminal } from "./virtual-terminal.ts";
+
+const { getCellItalic, withEnv } = tuiRenderHelpers;
 
 describe("TUI resize handling", () => {
   it("skips full re-render on height changes in Termux", () =>
