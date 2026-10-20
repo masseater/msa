@@ -2,8 +2,6 @@ import { Effect } from "effect";
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
 import {
-  createTypedSpanStarter,
-  defineTelemetrySchema,
   InMemoryTelemetryContext,
   NOOP_TELEMETRY_CONTEXT,
   type SchemaTelemetrySpan,
@@ -13,8 +11,10 @@ import {
   type TelemetrySchemaSpanStartAttributes,
   type TelemetrySpan,
   type TypedSpanStarter,
+  createTypedSpanStarter,
+  defineTelemetrySchema,
 } from "../src/index.ts";
-import { rejectsWithSameValue, rejectWith } from "../src/testing/support.ts";
+import { rejectWith, rejectsWithSameValue } from "../src/testing/support.ts";
 
 type Accepts<Callable, Args extends readonly unknown[]> = Callable extends (
   ...args: Args
@@ -39,73 +39,73 @@ function unreadable<T extends object>(value: T): T {
 }
 
 const operationDefinition = {
-  version: 1,
   spans: {
     operation: {
       description: "Test operation",
-      parents: { kind: "any" },
-      startAttributes: {
-        kind: {
-          type: "string",
-          required: true,
-          values: ["read", "write"],
-          description: "Kind",
-        },
-      },
       endAttributes: {},
       events: {
         result: {
-          description: "Result",
           attributes: {
             outcome: {
-              type: "string",
-              required: true,
-              values: ["ok", "error"],
               description: "Outcome",
+              required: true,
+              type: "string",
+              values: ["ok", "error"],
             },
           },
+          description: "Result",
+        },
+      },
+      parents: { kind: "any" },
+      startAttributes: {
+        kind: {
+          description: "Kind",
+          required: true,
+          type: "string",
+          values: ["read", "write"],
         },
       },
       status: { default: "ok", errorWhen: "The operation fails" },
     },
   },
+  version: 1,
 } as const;
 
 const rootOperationSchema = defineTelemetrySchema({
-  version: 1,
   spans: {
     operation: {
       description: "Operation",
+      endAttributes: {},
       parents: { kind: "root_or_external" },
       startAttributes: {
         kind: {
-          type: "string",
-          required: true,
-          values: ["read", "write"],
           description: "Kind",
+          required: true,
+          type: "string",
+          values: ["read", "write"],
         },
       },
-      endAttributes: {},
       status: { default: "ok", errorWhen: "The operation fails" },
     },
   },
+  version: 1,
 } as const);
 
 const requestSchema = defineTelemetrySchema({
-  version: 3,
   spans: {
     request: {
       description: "Request",
+      endAttributes: {
+        response: { description: "Response kind", type: "string" },
+      },
       parents: { kind: "spans", spans: ["operation"] },
       startAttributes: {
-        provider: { type: "string", required: true, description: "Provider" },
-      },
-      endAttributes: {
-        response: { type: "string", description: "Response kind" },
+        provider: { description: "Provider", required: true, type: "string" },
       },
       status: { default: "ok", errorWhen: "The request fails" },
     },
   },
+  version: 3,
 } as const);
 
 type OperationSpan = SchemaTelemetrySpan<typeof operationDefinition, "operation">;
@@ -259,8 +259,8 @@ const preservesNoopRejections = Effect.gen(function* () {
 
 function ignoreNoopPayloads(): Promise<void> {
   const options = unreadable<SpanOptions>({
-    name: "operation",
     attributes: { secret: "prompt content" },
+    name: "operation",
   });
   return NOOP_TELEMETRY_CONTEXT.startSpan(options, (span) => {
     const attributes = unreadable<SpanAttributes>({ secret: "content" });

@@ -838,6 +838,9 @@ importers:
         specifier: 4.0.2
         version: 4.0.2
     devDependencies:
+      '@effect/platform-node':
+        specifier: 'catalog:'
+        version: 4.0.2(effect@4.0.2)(redis@6.3.0)
       '@effect/vitest':
         specifier: catalog:stack
         version: 4.0.2(effect@4.0.2)(vitest@5.0.3)
