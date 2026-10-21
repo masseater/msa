@@ -3,17 +3,14 @@ import type tuiTypes from "@msa/tui/index.types";
 
 import platform from "../../../core/platform.ts";
 import type sessionManagerTypes from "../../../core/session-manager.types.ts";
-import themeModule from "../theme/theme.ts";
 import DynamicBorder from "./dynamic-border.ts";
 import LabelInput from "./label-input.ts";
-import SearchLine from "./search-line.ts";
-import TreeHelp from "./tree-help.ts";
 import TreeList from "./tree-list.ts";
+import TreeSelectorHeader from "./tree-selector-header.ts";
 import type treeSelectorTypes from "./tree-selector.types.ts";
 
 const { schedule } = platform;
-const { theme } = themeModule;
-const { Container, Spacer, Text } = tui;
+const { Container, Spacer } = tui;
 
 export default class TreeSelectorComponent extends tui.Container implements tuiTypes.Focusable {
   private treeList: TreeList;
@@ -69,13 +66,7 @@ export default class TreeSelectorComponent extends tui.Container implements tuiT
 
     this.labelInputContainer = new Container();
 
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
-    this.addChild(new Text(theme.bold("  Session Tree"), 1, 0));
-    this.addChild(new TreeHelp());
-    this.addChild(new SearchLine(this.treeList));
-    this.addChild(new DynamicBorder());
-    this.addChild(new Spacer(1));
+    this.addChild(new TreeSelectorHeader(this.treeList));
     this.addChild(this.treeContainer);
     this.addChild(this.labelInputContainer);
     this.addChild(new Spacer(1));

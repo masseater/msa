@@ -1,17 +1,14 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type orchestratorTypes from "../../../core/orchestrator/orchestrator.types.ts";
-import orchestratorText from "../../../core/orchestrator/text.ts";
-import type orchestratorTypesTypes from "../../../core/orchestrator/types.types.ts";
 import textModule from "../../../utils/text.ts";
 import themeModule from "../theme/theme.ts";
 import keybindingHints from "./keybinding-hints.ts";
 import scrollWindow from "./scroll-window.ts";
 import tasksList from "./tasks-list.ts";
-import tasksViewDetail from "./tasks-view-detail.ts";
 import tasksViewHelpers from "./tasks-view-helpers.ts";
 import type threadPaneTypes from "./thread-pane.types.ts";
+import threadTaskSummary from "./thread-task-summary.ts";
 
 const { taskList } = tasksList;
 const { theme } = themeModule;
@@ -19,21 +16,12 @@ const { keyHint } = keybindingHints;
 const { lineWindow } = scrollWindow;
 const { formatAge, shortId } = textModule;
 const { viewHelpers } = tasksViewHelpers;
-const { taskDetail } = tasksViewDetail;
-const { firstLine } = orchestratorText;
 
-const { truncateToWidth, wrapTextWithAnsi } = tui;
+const { truncateToWidth } = tui;
 
-const LABEL_WIDTH = 6;
+type Task = ReturnType<typeof taskList.shownTasks>[number];
+
 const ROW_LINES = 2;
-
-function wrap(text: string, width: number, limit: number): string[] {
-  const wrapped = wrapTextWithAnsi(text, Math.max(1, width));
-  if (wrapped.length <= limit) return wrapped;
-  const shown = wrapped.slice(0, Math.max(1, limit));
-  shown[shown.length - 1] = truncateToWidth(`${shown.at(-1) ?? ""}…`, Math.max(1, width));
-  return shown;
-}
 
 export default class ThreadPane implements tuiTypes.Component {
   private readonly options: threadPaneTypes.ThreadPaneOptions;
@@ -59,15 +47,20 @@ export default class ThreadPane implements tuiTypes.Component {
     const room = Math.max(0, height - header.length - footer.length);
     const listRoom = Math.min(tasks.length, Math.floor(room / 2 / ROW_LINES)) * ROW_LINES;
     const list = this.list(tasks, selected, safeWidth, listRoom);
-    const detail = this.detail(orchestrator, selected, safeWidth, room - list.length);
+    const detail = threadTaskSummary.taskSummary(
+      orchestrator,
+      selected,
+      safeWidth,
+      room - list.length,
+    );
     const body = [...header, ...list, ...detail];
     const gap = Math.max(0, height - body.length - footer.length);
     return [...body, ...Array.from({ length: gap }, () => ""), ...footer].slice(0, height);
   }
 
   private list(
-    tasks: readonly orchestratorTypesTypes.TaskSnapshot[],
-    selected: orchestratorTypesTypes.TaskSnapshot | undefined,
+    tasks: readonly Task[],
+    selected: Task | undefined,
     width: number,
     room: number,
   ): string[] {
@@ -86,68 +79,5 @@ export default class ThreadPane implements tuiTypes.Component {
         truncateToWidth(`     ${theme.fg("dim", meta.join(" · "))}`, width),
       ];
     });
-  }
-
-  private detail(
-    orchestrator: orchestratorTypes.Orchestrator,
-    task: orchestratorTypesTypes.TaskSnapshot | undefined,
-    width: number,
-    room: number,
-  ): string[] {
-    if (task === undefined || room < 2) return [];
-    const status = viewHelpers.STATUS_LABEL[task.status].toLowerCase();
-    const lines = [
-      theme.fg("borderMuted", "─".repeat(width)),
-      truncateToWidth(` ${viewHelpers.glyph(task)} ${status} · ${task.round}`, width),
-    ];
-    if (task.waitingReason !== null || (task.status === "running" && task.assignments.length > 0)) {
-      const reason = taskDetail.reasonLine(orchestrator, task);
-      lines.push(
-        ...wrap(reason, width - 3, 2).map((line) =>
-          truncateToWidth(`   ${theme.fg("muted", line)}`, width),
-        ),
-      );
-    }
-    lines.push(...this.field("now", firstLine(task.currentState), width, 2));
-    lines.push(...this.field("goal", firstLine(task.goalState), width, 2));
-    if (task.dependsOn.length > 0) {
-      lines.push(...this.field("deps", this.dependencies(orchestrator, task), width, 2));
-    }
-    const report = task.reports.at(-1);
-    if (report !== undefined && report.status !== "stopped") {
-      const age = theme.fg("dim", formatAge(report.createdAt));
-      lines.push(
-        ...this.field("report", `${age} ${report.role}: ${firstLine(report.content)}`, width, 3),
-      );
-    }
-    return lines.slice(0, room);
-  }
-
-  private dependencies(
-    orchestrator: orchestratorTypes.Orchestrator,
-    task: orchestratorTypesTypes.TaskSnapshot,
-  ): string {
-    const byId = new Map(orchestrator.snapshot.tasks.map((entry) => [entry.id, entry]));
-    return task.dependsOn
-      .map((id) => {
-        const dependency = byId.get(id);
-        return dependency === undefined
-          ? shortId(id)
-          : `${viewHelpers.glyph(dependency)} ${dependency.title}`;
-      })
-      .join("  ");
-  }
-
-  private field(label: string, text: string, width: number, limit: number): string[] {
-    if (text.trim() === "") return [];
-    const contentWidth = Math.max(1, width - LABEL_WIDTH - 2);
-    return wrap(text, contentWidth, limit).map((line, index) =>
-      truncateToWidth(
-        index === 0
-          ? ` ${theme.fg("dim", label.padEnd(LABEL_WIDTH))} ${line}`
-          : ` ${" ".repeat(LABEL_WIDTH)} ${line}`,
-        width,
-      ),
-    );
   }
 }
