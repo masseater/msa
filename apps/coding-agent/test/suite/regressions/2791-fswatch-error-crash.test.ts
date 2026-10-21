@@ -13,6 +13,9 @@ const { fromJsonText, joinPath, toJsonText } = testing;
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
+const sourceResolverUrl = new URL("../../../src/experimental/source-resolver.ts", import.meta.url)
+  .href;
+
 let tempRoot: string;
 
 const watcherScript = (themeModulePath: string, agentDir: string): string =>
@@ -78,12 +81,16 @@ const processShouldSurviveAnErrorEvent = () =>
       let exitCode: number;
       const childExit = yield* Effect.exit(
         Effect.gen(function* () {
-          const handle = yield* ChildProcess.make(process.execPath, [scriptPath], {
-            env: { ...envSnapshot(), MSA_CODING_AGENT_DIR: agentDir },
-            stderr: "pipe",
-            stdin: "ignore",
-            stdout: "pipe",
-          });
+          const handle = yield* ChildProcess.make(
+            process.execPath,
+            ["--import", sourceResolverUrl, scriptPath],
+            {
+              env: { ...envSnapshot(), MSA_CODING_AGENT_DIR: agentDir },
+              stderr: "pipe",
+              stdin: "ignore",
+              stdout: "pipe",
+            },
+          );
           const [stderrText, code] = yield* Effect.all(
             [handle.stderr.pipe(Stream.decodeText(), Stream.mkString), handle.exitCode],
             { concurrency: 2 },
