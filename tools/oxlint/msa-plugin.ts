@@ -77,6 +77,8 @@ const noBuiltinRequire = defineRule({
     });
     return {
       CallExpression: (node) => flow.fromMemberCall(node),
+      ExportAllDeclaration: (node) => flow.fromReExport(node),
+      ExportNamedDeclaration: (node) => flow.fromReExport(node),
       ImportDeclaration: (node) => flow.fromImport(node),
       ImportExpression: (node) => flow.fromDynamicImport(node),
       MemberExpression: (node) => flow.fromFactoryName(node),

@@ -11,15 +11,17 @@ type Outcome = flowTypes.Outcome<Kind>;
 const MODULE_SPECIFIERS: ReadonlySet<string> = new Set(["module", "node:module"]);
 const INDIRECT_CALLS: readonly string[] = ["apply", "bind", "call"];
 const FACTORY = "createRequire";
+const LOADER_METHODS: ReadonlySet<string> = new Set(["_load", "require"]);
 
-const MODULE_MEMBERS: Readonly<Record<string, Kind>> = {
-  Module: "module",
-  _load: "loader",
-  createRequire: "factory",
-  default: "module",
-  prototype: "module",
-  require: "loader",
-};
+const MODULE_MEMBERS: ReadonlyMap<string, Kind> = new Map([
+  ["Module", "module"],
+  ["_load", "loader"],
+  ["constructor", "module"],
+  ["createRequire", "factory"],
+  ["default", "module"],
+  ["prototype", "module"],
+  ["require", "loader"],
+]);
 
 const moduleBase = (specifier: string): string =>
   specifier.replace(/^node:/u, "").split("/")[0] ?? specifier;
@@ -35,14 +37,17 @@ const anyName = (key: flowTypes.Key, names: readonly string[]): boolean =>
 const functionMember = (key: flowTypes.Key): Outcome =>
   anyName(key, INDIRECT_CALLS) ? "unknown" : "ok";
 
-const moduleMemberNamed = (name: string): Outcome => MODULE_MEMBERS[name] ?? "ok";
+const moduleMemberNamed = (name: string): Outcome => MODULE_MEMBERS.get(name) ?? "ok";
 
 const moduleMember = (key: flowTypes.Key): Outcome => {
   if (key.name !== undefined) return moduleMemberNamed(key.name);
-  return anyName(key, Object.keys(MODULE_MEMBERS)) ? "unknown" : "ok";
+  return anyName(key, [...MODULE_MEMBERS.keys()]) ? "unknown" : "ok";
 };
 
 const isKind = (outcome: Outcome): outcome is Kind => outcome !== "ok" && outcome !== "unknown";
+
+const exportedLocalName = (specifier: ESTree.ExportSpecifier): string | undefined =>
+  specifier.local.type === "Identifier" ? specifier.local.name : specifier.local.value;
 
 const importedName = (specifier: ESTree.ImportDeclarationSpecifier): string =>
   specifier.type === "ImportSpecifier" && specifier.imported.type === "Identifier"
@@ -89,13 +94,24 @@ class RequireFlow {
       for (const specifier of node.specifiers) this.#bindImported(specifier);
   }
 
+  fromReExport(node: ESTree.ExportAllDeclaration | ESTree.ExportNamedDeclaration): void {
+    if (node.source === null) return;
+    if (this.#specifier(node.source, node) !== "module") return;
+    if (node.type === "ExportAllDeclaration") this.#report.unknown(node);
+    else
+      for (const specifier of node.specifiers)
+        if (MODULE_MEMBERS.has(exportedLocalName(specifier) ?? "")) this.#report.unknown(specifier);
+  }
+
   fromGlobals(): void {
     for (const identifier of scopeLookup.globalReferences(this.#context, "require"))
       this.#values.track(identifier, "loader");
+    for (const identifier of scopeLookup.globalReferences(this.#context, "module"))
+      this.#values.track(identifier, "module");
   }
 
   fromMemberCall(node: ESTree.CallExpression): void {
-    if (scopeLookup.staticMemberName(node.callee) === "require")
+    if (LOADER_METHODS.has(scopeLookup.staticMemberName(node.callee) ?? ""))
       this.#reportUnknown(this.#specifier(node.arguments[0], node), node);
   }
 

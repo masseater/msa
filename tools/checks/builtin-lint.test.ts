@@ -71,6 +71,18 @@ const cases: readonly (readonly [statement: string, expected: string | undefined
   ['void require("node:path/posix");', REQUIRE],
   ['void module.require("crypto");', REQUIRE],
   ['void import("node:fs/promises");', REQUIRE],
+  ['void (module.constructor as { _load(id: string): unknown })._load("fs");', REQUIRE],
+  ['void Module._load("node:fs");', REQUIRE],
+  ['{ const Loader = module.constructor; void Loader._load("path"); }', REQUIRE],
+  ["void module.exports;", undefined],
+  ['void Module.toString().startsWith("fs");', undefined],
+  ['export { default } from "node:path";', REQUIRE],
+  ['export * from "node:path";', REQUIRE],
+  ['export * as cp from "node:child_process";', REQUIRE],
+  ['export { readFile } from "fs";', REQUIRE],
+  ['export { createRequire as factoryExport } from "node:module";', REQUIRE],
+  ['export * from "node:module";', REQUIRE],
+  ['export { platform } from "node:os";', undefined],
   ["void import(dynamicKey);", REQUIRE],
   ['void load("node:os");', undefined],
   ['void load.resolve("node:fs");', undefined],
@@ -89,11 +101,7 @@ const HEADER = [
   "const dynamicKey = String(Date.now());",
 ];
 
-const bypassProbe = [
-  ...HEADER,
-  ...cases.map(([statement]) => statement),
-  "export default undefined;",
-].join("\n");
+const bypassProbe = [...HEADER, ...cases.map(([statement]) => statement)].join("\n");
 
 const importedBases = builtinModuleBases.filter((base) => !base.startsWith("_"));
 
