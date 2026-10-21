@@ -134,7 +134,7 @@ const sendsTheProviderTokenAndAsksFor = () =>
         providerToken: (provider) => Promise.resolve(provider === "openrouter" ? "tok" : undefined),
       });
       try {
-        expect(connection.oauthUrl).toBeUndefined();
+        expect(connection.auth.oauthUrl).toBeUndefined();
         yield* awaited(
           expect(connection.getClient()).rejects.toThrow(
             'MCP server "openrouter" requires sign-in. Run /login openrouter to sign in.',
@@ -200,7 +200,7 @@ const resolvesTheOauthClientSecretLazily = () =>
       expect(yield* awaited(connection.callTool("echo", {}, {}))).toEqual({
         content: [{ text: "ok", type: "text" }],
       });
-      expect(() => connection.oauthSettings()).toThrow("oauth.clientSecret");
+      expect(() => connection.auth.oauthSettings()).toThrow("oauth.clientSecret");
       yield* awaited(connection.close());
     }),
   );

@@ -82,7 +82,7 @@ function runMcpCommandImpl(args: string[], options: cliTypes.McpCommandOptions):
             return 1;
           }
           const connection = createConnection(entry, options, credentials);
-          const url = connection.oauthUrl;
+          const url = connection.auth.oauthUrl;
           if (url === undefined || url === "") {
             error(
               `MCP server "${name}" does not use OAuth. Only HTTP servers without an Authorization header do.`,

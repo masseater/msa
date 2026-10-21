@@ -140,8 +140,8 @@ const signIn = (
   signIns: { count: number },
 ) =>
   Effect.gen(function* () {
-    const url = connection.oauthUrl;
-    const scope = connection.challenge?.scope;
+    const url = connection.auth.oauthUrl;
+    const scope = connection.auth.challenge?.scope;
     signIns.count += 1;
     log(
       `sign-in ${signIns.count}${scope !== undefined && scope !== "" ? ` (scope: ${scope})` : ""}`,
@@ -149,13 +149,15 @@ const signIn = (
     yield* Effect.promise(() =>
       signInMcpServer({
         serverUrl: url ?? "",
-        settings: connection.oauthSettings(),
+        settings: connection.auth.oauthSettings(),
         store: credentials.forServer(entry.name, url ?? ""),
-        ...(connection.challenge === undefined ? {} : { challenge: connection.challenge }),
+        ...(connection.auth.challenge === undefined
+          ? {}
+          : { challenge: connection.auth.challenge }),
         prompt: simulatedBrowser(),
       }),
     );
-    connection.challenge = undefined;
+    connection.auth.challenge = undefined;
   });
 
 const withSignIn = <A>(
@@ -170,7 +172,7 @@ const withSignIn = <A>(
       const exit = yield* Effect.exit(Effect.promise(operation));
       if (Exit.isSuccess(exit)) return exit.value;
       const error = Cause.squash(exit.cause);
-      const url = connection.oauthUrl;
+      const url = connection.auth.oauthUrl;
       if (connection.state !== "needs-auth" || url === undefined || url === "")
         return yield* toConformanceError(error);
       if (signIns.count >= MAX_SIGN_INS)

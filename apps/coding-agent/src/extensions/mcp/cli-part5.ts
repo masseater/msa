@@ -49,7 +49,7 @@ function login(
       } catch (signInError) {
         return loginPart1(error, signInError, name, timeoutMs);
       }
-      connection.challenge = undefined;
+      connection.auth.challenge = undefined;
       try {
         yield* awaited(connection.reconnect());
       } catch (connectError) {
@@ -80,7 +80,7 @@ function* loginPart2(
 ) {
   yield* awaited(
     signInMcpServer({
-      challenge: connection.challenge,
+      challenge: connection.auth.challenge,
       prompt: {
         promptForRedirectUrl: (signal) => waitForRedirectUrl(signal, interactive),
         showAuthorizationUrl: (authorizationUrl) => {
@@ -89,7 +89,7 @@ function* loginPart2(
         },
       },
       serverUrl: url,
-      settings: connection.oauthSettings(),
+      settings: connection.auth.oauthSettings(),
       signal: AbortSignal.timeout(timeoutMs),
       store: credentials.forServer(name, url),
     }),

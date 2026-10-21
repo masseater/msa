@@ -340,7 +340,7 @@ function createMcpExtension(
 
     const tokensAtSignIn = new Map<runtimeTypes.McpServerConnection, string>();
     const storedTokens = (connection: runtimeTypes.McpServerConnection): string => {
-      const url = connection.oauthUrl;
+      const url = connection.auth.oauthUrl;
       return url !== undefined && url !== "" && credentials !== undefined
         ? JSON.stringify(credentials.tokens(connection.name, url) ?? null)
         : "null";
@@ -509,7 +509,7 @@ function createMcpExtension(
       Effect.runPromise(
         awaiting(function* () {
           const connection = server.connection;
-          const url = connection?.oauthUrl;
+          const url = connection?.auth.oauthUrl;
           if (connection === undefined || url === undefined || url === "")
             return `MCP server "${server.entry.name}" does not use OAuth.`;
           const runtime = yield* awaited(loadMcpRuntime());
@@ -519,10 +519,10 @@ function createMcpExtension(
             yield* awaited(
               track(
                 runtime.signInMcpServer({
-                  challenge: connection.challenge,
+                  challenge: connection.auth.challenge,
                   prompt,
                   serverUrl: url,
-                  settings: connection.oauthSettings(),
+                  settings: connection.auth.oauthSettings(),
                   signal,
                   store: getCredentials(runtime).forServer(server.entry.name, url),
                 }),
@@ -533,7 +533,7 @@ function createMcpExtension(
             return `Sign-in failed: ${toErrorMessage(error)}`;
           }
 
-          connection.challenge = undefined;
+          connection.auth.challenge = undefined;
           try {
             yield* awaited(connection.reconnect());
           } catch (error) {
@@ -547,7 +547,7 @@ function createMcpExtension(
       Effect.runPromise(
         awaiting(function* () {
           const connection = server.connection;
-          const url = connection?.oauthUrl;
+          const url = connection?.auth.oauthUrl;
           if (connection === undefined || url === undefined || url === "") return false;
           const removed = getCredentials(yield* awaited(loadMcpRuntime())).remove(
             server.entry.name,
@@ -707,8 +707,8 @@ function createMcpExtension(
         }
         if (
           state === "connected" &&
-          connection?.oauthUrl !== undefined &&
-          connection?.oauthUrl !== ""
+          connection?.auth.oauthUrl !== undefined &&
+          connection?.auth.oauthUrl !== ""
         ) {
           items.push({
             description: "deletes the stored credentials",
@@ -997,7 +997,7 @@ function createMcpExtension(
       );
 
     const usesOAuth = (server: extensionInternalTypes.McpServer) =>
-      server.connection?.oauthUrl !== undefined;
+      server.connection?.auth.oauthUrl !== undefined;
     const oauthPick = {
       eligible: usesOAuth,
       none: "No enabled MCP server uses OAuth. Only HTTP servers without an Authorization header do.",
