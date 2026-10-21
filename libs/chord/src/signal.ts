@@ -1,9 +1,12 @@
-import { Cause, Duration, Effect } from "effect";
+import { Cause, Effect } from "effect";
 import { dual } from "effect/Function";
 
 import type coreTypes from "./core.types.ts";
 import errorsModule from "./errors.ts";
 import type errorsTypes from "./errors.types.ts";
+import unrefSleepModule from "./unref-sleep.ts";
+
+const { unrefSleep } = unrefSleepModule;
 
 const { ChordError } = errorsModule;
 
@@ -53,7 +56,7 @@ const raceSignal: {
 
 const readyTimeout = (ref: coreTypes.RefCore, ms: number): Effect.Effect<never> =>
   Number.isFinite(ms)
-    ? Effect.flatMap(Effect.sleep(Duration.millis(ms)), () =>
+    ? Effect.flatMap(unrefSleep(ms), () =>
         Effect.die(
           new ChordError("unavailable", `${ref.address} was not ready after ${ms} ms`, {
             reason: "ready_timeout",

@@ -17,6 +17,8 @@ const {
   fakeRuntime,
   request,
   response,
+  useFakeTimers,
+  useRealTimers,
   warmUsage,
 } = cacheWarmerSupport;
 
@@ -25,7 +27,7 @@ const { awaited, gate, runTest } = testing;
 const { promptCache: _adaptivePromptCache, ...unknownModel }: aiTypes.Model<aiTypes.Api> =
   adaptiveModel;
 
-afterEach(() => vi.useRealTimers());
+afterEach(useRealTimers);
 
 const formatsStatusAndUsageEntries = () => {
   const decision: cacheWarmerTypes.CacheWarmingDecision = {
@@ -63,7 +65,7 @@ const formatsStatusAndUsageEntries = () => {
 const stopsForUnsupportedRequestsContextChangesAnd = () =>
   runTest(
     Effect.gen(function* () {
-      vi.useFakeTimers();
+      useFakeTimers();
       const unsupported = fakeRuntime();
       unsupported.state.mode = "off";
       unsupported.warmer.start(request(), current);
@@ -105,7 +107,7 @@ const abortsReplacedRequestsAndDoesNotRecord = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      vi.useFakeTimers();
+      useFakeTimers();
       const held = gate();
       const pending = fakeRuntime({
         result: (model) => held.then(() => response(model)),

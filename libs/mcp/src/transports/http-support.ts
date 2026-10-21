@@ -61,6 +61,10 @@ function isRetryable(failure: unknown): boolean {
 
 const abortedBy = (signal: AbortSignal): Effect.Effect<boolean> =>
   Effect.callback<boolean>((resume) => {
+    if (signal.aborted) {
+      resume(Effect.succeed(false));
+      return undefined;
+    }
     const onAbort = () => {
       resume(Effect.succeed(false));
     };
@@ -70,10 +74,20 @@ const abortedBy = (signal: AbortSignal): Effect.Effect<boolean> =>
     });
   });
 
+const elapsed = (ms: number): Effect.Effect<boolean> =>
+  Effect.callback<boolean>((resume) => {
+    const timer = AbortSignal.timeout(Math.max(0, Math.ceil(ms)));
+    const onTimeout = () => {
+      resume(Effect.succeed(true));
+    };
+    timer.addEventListener("abort", onTimeout, { once: true });
+    return Effect.sync(() => {
+      timer.removeEventListener("abort", onTimeout);
+    });
+  });
+
 const sleepFor = (ms: number, signal: AbortSignal): Effect.Effect<boolean> =>
-  signal.aborted
-    ? Effect.succeed(false)
-    : Effect.race(Effect.as(Effect.sleep(ms), true), abortedBy(signal));
+  Effect.race(elapsed(ms), abortedBy(signal));
 
 const sleepUnlessAborted: {
   (signal: AbortSignal): (ms: number) => Effect.Effect<boolean>;

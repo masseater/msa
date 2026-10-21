@@ -24,6 +24,37 @@ const schedule: {
   };
 });
 
+const MAX_TIMER_MS = 2 ** 31 - 1;
+
+const unrefSleep = (delayMs: number): Effect.Effect<void> => {
+  const wait = Math.max(0, Math.ceil(delayMs));
+  if (wait > MAX_TIMER_MS) {
+    return Effect.andThen(unrefSleep(MAX_TIMER_MS), unrefSleep(wait - MAX_TIMER_MS));
+  }
+  return Effect.callback<void>((resume) => {
+    const signal = AbortSignal.timeout(wait);
+    const fire = (): void => {
+      resume(Effect.void);
+    };
+    signal.addEventListener("abort", fire, { once: true });
+    return Effect.sync(() => {
+      signal.removeEventListener("abort", fire);
+    });
+  });
+};
+
+const scheduleUnref: {
+  (delayMs: number): (run: () => void) => platformTypes.Scheduled;
+  (run: () => void, delayMs: number): platformTypes.Scheduled;
+} = Fn.dual(2, (run: () => void, delayMs: number): platformTypes.Scheduled => {
+  const fiber = Effect.runFork(Effect.andThen(unrefSleep(delayMs), Effect.sync(run)));
+  return {
+    cancel: () => {
+      fiber.interruptUnsafe();
+    },
+  };
+});
+
 const makeLatch = (): platformTypes.Latch => {
   const gate = Deferred.makeUnsafe<void>();
   return {
@@ -70,6 +101,7 @@ const platformTime = {
   nowIso,
   nowMs,
   schedule,
+  scheduleUnref,
   sleepFor,
   toDate,
   toEpochMs,

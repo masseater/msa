@@ -7,7 +7,7 @@ import layoutModule from "./layout.ts";
 
 const { visibleRows } = altScreenSelectionText;
 const { getScrollViewBox } = layoutModule;
-const { runEvery } = delay;
+const { runEveryUnref } = delay;
 const { scrollSelectionPoint } = altScreenSelectionPoints;
 
 const AUTO_SCROLL_INTERVAL_MS = 50;
@@ -40,7 +40,7 @@ export default class SelectionAutoScroll {
       return;
     }
     if (this.cancel !== undefined) return;
-    this.cancel = runEvery(AUTO_SCROLL_INTERVAL_MS, () => this.tick());
+    this.cancel = runEveryUnref(AUTO_SCROLL_INTERVAL_MS, () => this.tick());
   }
 
   stop(): void {

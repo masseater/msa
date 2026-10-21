@@ -6,6 +6,9 @@ import managerChild from "./manager-child.ts";
 import managerFork from "./manager-fork.ts";
 import managerLock from "./manager-lock.ts";
 import type managerTypesModule from "./manager-types.types.ts";
+import unrefSleepModule from "./unref-sleep.ts";
+
+const { unrefSleep } = unrefSleepModule;
 
 const { ChordError } = errorsModule;
 
@@ -156,7 +159,7 @@ function startKeepAlive(state: ManagerState): void {
       void serialized(state, doStop(state));
   });
   state.keepAlive = Effect.runFork(
-    Effect.forever(Effect.delay(check, state.options.checkInterval ?? 1000)),
+    Effect.forever(Effect.andThen(unrefSleep(state.options.checkInterval ?? 1000), check)),
   );
 }
 

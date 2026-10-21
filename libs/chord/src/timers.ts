@@ -1,4 +1,8 @@
-import { Duration, Effect, Fiber, FiberSet, Scope } from "effect";
+import { Effect, Fiber, FiberSet, Scope } from "effect";
+
+import unrefSleepModule from "./unref-sleep.ts";
+
+const { unrefSleep } = unrefSleepModule;
 
 export default class HostTimers {
   readonly #fibers: FiberSet.FiberSet<void>;
@@ -8,11 +12,11 @@ export default class HostTimers {
   }
 
   after(ms: number, fire: () => void): () => void {
-    return this.#run(Effect.delay(Effect.sync(fire), Duration.millis(ms)));
+    return this.#run(Effect.andThen(unrefSleep(ms), Effect.sync(fire)));
   }
 
   every(ms: number, tick: () => void): () => void {
-    return this.#run(Effect.forever(Effect.delay(Effect.sync(tick), Duration.millis(ms))));
+    return this.#run(Effect.forever(Effect.andThen(unrefSleep(ms), Effect.sync(tick))));
   }
 
   #run(effect: Effect.Effect<void>): () => void {

@@ -1,4 +1,4 @@
-import { Cause, Duration, Effect, Exit } from "effect";
+import { Cause, Effect, Exit } from "effect";
 
 import activationKit from "./activation-kit.ts";
 import type coreTypes from "./core.types.ts";
@@ -10,7 +10,9 @@ import SelfImpl from "./self.ts";
 import serviceModule from "./service.ts";
 import type serviceTypes from "./service.types.ts";
 
-const { cell: cellModule, errors: errorsModule } = activationKit;
+const { cell: cellModule, errors: errorsModule, unrefSleep: unrefSleepModule } = activationKit;
+
+const { unrefSleep } = unrefSleepModule;
 
 const { ChordError, invalid, runAll } = errorsModule;
 const { validateImplementation } = serviceModule;
@@ -73,7 +75,7 @@ export default class ObjectActivation {
     const ms = object.host.readyTimeout;
     const settled = Effect.promise(() => work);
     if (!Number.isFinite(ms)) return settled;
-    const timedOut = Effect.flatMap(Effect.sleep(Duration.millis(ms)), () => {
+    const timedOut = Effect.flatMap(unrefSleep(ms), () => {
       const list = waiting();
       return Effect.die(
         new ChordError(

@@ -16,7 +16,7 @@ const {
   getPromptCacheTtlMs,
   isReplayable,
 } = cacheWarmerSupport;
-const { nowMs, schedule } = platform;
+const { nowMs, scheduleUnref } = platform;
 const { awaited, awaitingWith } = awaitingModule;
 const {
   IDLE_CONTINUATION_PROBABILITY,
@@ -156,7 +156,7 @@ export default class CacheWarmer {
       );
       return;
     }
-    run.timer = schedule(() => void this.refresh(run), Math.max(0, run.nextWarmAt - nowMs()));
+    run.timer = scheduleUnref(() => void this.refresh(run), Math.max(0, run.nextWarmAt - nowMs()));
   }
 
   private refresh(run: cacheWarmerInternalTypes.ActiveRun): Promise<void> {

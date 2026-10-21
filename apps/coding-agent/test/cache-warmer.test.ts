@@ -11,7 +11,16 @@ const { getCacheWarmingDelayMs, getPromptCacheTtlMs, isReplayable } = cacheWarme
 
 const { getBuiltinModel } = all;
 
-const { adaptiveModel, budgetModel, current, fakeRuntime, request, warmUsage } = cacheWarmerSupport;
+const {
+  adaptiveModel,
+  budgetModel,
+  current,
+  fakeRuntime,
+  request,
+  useFakeTimers,
+  useRealTimers,
+  warmUsage,
+} = cacheWarmerSupport;
 
 const { abortController, awaited, runTest } = testing;
 
@@ -23,7 +32,7 @@ const openaiModel: aiTypes.Model<aiTypes.Api> = {
 const { promptCache: _adaptivePromptCache, ...unknownModel }: aiTypes.Model<aiTypes.Api> =
   adaptiveModel;
 
-afterEach(() => vi.useRealTimers());
+afterEach(useRealTimers);
 
 const derivesEligibilityAndTimingFromRetentionAnd = () => {
   expect([
@@ -59,7 +68,7 @@ const replaysProfitableRequestsAndPreservesOptionsAcross = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      vi.useFakeTimers();
+      useFakeTimers();
       const { warmer, calls, events, appendUsage, warmedEntries } = fakeRuntime();
       const signal = abortController().signal;
       const transformHeaders = () => effectRunPromise(awaited({}));

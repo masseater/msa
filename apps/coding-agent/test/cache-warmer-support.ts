@@ -130,6 +130,29 @@ function request(
 
 const current = () => true;
 
+const timeoutSignalOnFakeClock = (delayMs: number): AbortSignal => {
+  const controller = new AbortController();
+  Effect.runFork(
+    Effect.delay(
+      Effect.sync(() => {
+        controller.abort(new DOMException("The operation timed out.", "TimeoutError"));
+      }),
+      delayMs,
+    ),
+  );
+  return controller.signal;
+};
+
+const useFakeTimers = (): void => {
+  vi.useFakeTimers();
+  vi.spyOn(AbortSignal, "timeout").mockImplementation(timeoutSignalOnFakeClock);
+};
+
+const useRealTimers = (): void => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+};
+
 const cacheWarmerSupport = {
   adaptiveModel,
   branchWithPrompt,
@@ -138,6 +161,8 @@ const cacheWarmerSupport = {
   fakeRuntime,
   request,
   response,
+  useFakeTimers,
+  useRealTimers,
   warmUsage,
 };
 

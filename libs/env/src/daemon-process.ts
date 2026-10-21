@@ -6,9 +6,12 @@ import remoteError from "./remote-error.ts";
 import type remoteErrorTypes from "./remote-error.types.ts";
 import Session from "./session.ts";
 import type sessionTypes from "./session.types.ts";
+import unrefSleepModule from "./unref-sleep.ts";
 
 const { RemoteError, lost } = remoteError;
 const { randomHex, spawnProcess } = platform;
+
+const { unrefSleep } = unrefSleepModule;
 
 const PING_INTERVAL_MS = 5000;
 
@@ -44,9 +47,14 @@ const sessionTasks = (
       launch.onLost(session);
     }),
   ),
-  Effect.sync(() => {
-    launch.onTick(session);
-  }).pipe(Effect.delay(PING_INTERVAL_MS), Effect.forever),
+  unrefSleep(PING_INTERVAL_MS).pipe(
+    Effect.andThen(
+      Effect.sync(() => {
+        launch.onTick(session);
+      }),
+    ),
+    Effect.forever,
+  ),
 ];
 
 const launchDaemon = (

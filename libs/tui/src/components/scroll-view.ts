@@ -5,7 +5,7 @@ import type layoutNodeTypes from "../layout-node.types.ts";
 import tuiComponent from "../tui-component.ts";
 import type tuiComponentTypes from "../tui-component.types.ts";
 import type scrollViewTypes from "./scroll-view.types.ts";
-const { runAfter } = delay;
+const { runAfterUnref } = delay;
 const { LAYOUT_NODE } = layoutNode;
 
 export default class ScrollView extends tuiComponent.Container {
@@ -96,7 +96,7 @@ export default class ScrollView extends tuiComponent.Container {
       this.cancelScrollbarHide = undefined;
     }
     if (this.scrollbarActive) return;
-    this.cancelScrollbarHide = runAfter(this.scrollbarHideDelayMs, () => {
+    this.cancelScrollbarHide = runAfterUnref(this.scrollbarHideDelayMs, () => {
       this.cancelScrollbarHide = undefined;
       this.transientScrollbarVisible = false;
       this.requestRenderCallback?.();

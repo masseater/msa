@@ -4,16 +4,17 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import cacheWarmerSupport from "./cache-warmer-support.ts";
 
-const { branchWithPrompt, current, fakeRuntime, request } = cacheWarmerSupport;
+const { branchWithPrompt, current, fakeRuntime, request, useFakeTimers, useRealTimers } =
+  cacheWarmerSupport;
 
 const { awaited, runTest } = testing;
 
-afterEach(() => vi.useRealTimers());
+afterEach(useRealTimers);
 
 const doesNotIssueRefreshesAfterTheirSafe = () =>
   runTest(
     Effect.gen(function* () {
-      vi.useFakeTimers();
+      useFakeTimers();
       vi.setSystemTime(0);
       const { warmer, calls } = fakeRuntime();
       warmer.start(request(), current);
@@ -40,7 +41,7 @@ const rechecksTheDeadlineAfterAnExtensionDecision = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      vi.useFakeTimers();
+      useFakeTimers();
       vi.setSystemTime(0);
       const { warmer, calls } = fakeRuntime({
         decide: () =>
@@ -81,7 +82,7 @@ describe("cache warming", () => {
 const appliesEconomicDecisionsAndExtensionOverrides = () =>
   runTest(
     Effect.gen(function* () {
-      vi.useFakeTimers();
+      useFakeTimers();
       const unprofitable = fakeRuntime({ branch: branchWithPrompt(5_000) });
       unprofitable.warmer.start(request(), current);
       yield* awaited(vi.advanceTimersByTimeAsync(270_000));
