@@ -419,7 +419,7 @@ function startThemeWatcher(): void {
 
   const scheduleReload = startThemeWatcherScheduleReload(watchedThemeName, themeFile);
 
-  startThemeWatcherPart2(customThemesDir, watchedThemeName, scheduleReload, watchedFileName);
+  watchThemesDir(customThemesDir, watchedThemeName, scheduleReload, watchedFileName);
 }
 
 function startThemeWatcherScheduleReload(watchedThemeName: string, themeFile: string): () => void {
@@ -451,7 +451,7 @@ function startThemeWatcherScheduleReload(watchedThemeName: string, themeFile: st
   return scheduleReload;
 }
 
-function startThemeWatcherPart2(
+function watchThemesDir(
   customThemesDir: string,
   watchedThemeName: string,
   scheduleReload: () => void,

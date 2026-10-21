@@ -105,7 +105,7 @@ function convertToLlm(messages: agentTypes.AgentMessage[]): aiTypes.Message[] {
             timestamp: m.timestamp,
           };
         case "custom": {
-          return convertToLlmPart1(m);
+          return customMessageToUser(m);
         }
         case "branchSummary":
           return {
@@ -156,7 +156,7 @@ const messages = {
 
 export default messages;
 
-function convertToLlmPart1(m: messagesTypes.CustomMessage<unknown>): aiTypes.Message | undefined {
+function customMessageToUser(m: messagesTypes.CustomMessage<unknown>): aiTypes.Message | undefined {
   const content =
     typeof m.content === "string" ? [{ text: m.content, type: "text" as const }] : m.content;
   return {

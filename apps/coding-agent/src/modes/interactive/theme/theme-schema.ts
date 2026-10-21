@@ -128,7 +128,7 @@ const validateThemeJson: {
 
     let errorMessage = `Invalid theme "${label}":\n`;
     if (missingColors.size > 0) {
-      errorMessage = validateThemeJsonPart1(errorMessage, missingColors);
+      errorMessage = missingColorsMessage(errorMessage, missingColors);
       errorMessage += "\nSee the built-in themes (dark.json, light.json) for reference values.";
     }
     if (otherErrors.length > 0) {
@@ -149,7 +149,7 @@ const themeSchema = {
 
 export default themeSchema;
 
-function validateThemeJsonPart1(errorMessage: string, missingColors: Set<string>) {
+function missingColorsMessage(errorMessage: string, missingColors: Set<string>) {
   errorMessage += "\nMissing required color tokens:\n";
   errorMessage += Array.from(missingColors)
     .sort()

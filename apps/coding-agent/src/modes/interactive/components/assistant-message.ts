@@ -161,7 +161,7 @@ export default class AssistantMessageComponent extends tui.Container {
       const content = contentBlocks[i];
       if (content === undefined) continue;
       if (content.type === "text" && content.text.trim() !== "") {
-        AssistantMessageComponent.updateContentPart2(this, content);
+        AssistantMessageComponent.addTextBlock(this, content);
       } else if (content.type === "thinking") {
         const thinkingBlocks: string[] = [];
         for (; i < contentBlocks.length; i++) {
@@ -189,7 +189,7 @@ export default class AssistantMessageComponent extends tui.Container {
 
         const runIndex = thinkingRunIndex++;
         const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
-        AssistantMessageComponent.updateContentPart3(
+        AssistantMessageComponent.addThinkingBlock(
           this,
           hidden,
           thinkingBlocks,
@@ -199,10 +199,10 @@ export default class AssistantMessageComponent extends tui.Container {
       }
     }
 
-    AssistantMessageComponent.updateContentPart4(this, message);
+    AssistantMessageComponent.addStopNotices(this, message);
   }
 
-  private static updateContentPart2(
+  private static addTextBlock(
     self: AssistantMessageComponent,
     content: compatTypes.TextContent,
   ): void {
@@ -217,7 +217,7 @@ export default class AssistantMessageComponent extends tui.Container {
     );
   }
 
-  private static updateContentPart3(
+  private static addThinkingBlock(
     self: AssistantMessageComponent,
     hidden: boolean,
     thinkingBlocks: string[],
@@ -260,7 +260,7 @@ export default class AssistantMessageComponent extends tui.Container {
     }
   }
 
-  private static updateContentPart4(
+  private static addStopNotices(
     self: AssistantMessageComponent,
     message: aiTypes.AssistantMessage,
   ): void {

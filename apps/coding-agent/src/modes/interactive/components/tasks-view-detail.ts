@@ -59,7 +59,7 @@ function sections(
   width: number,
 ): string[] {
   const lines: string[] = [];
-  const { section, related, body } = sectionsPart1(task, lines, width, orchestrator);
+  const { section, related, body } = detailWriters(task, lines, width, orchestrator);
   if (task.dependsOn.length > 0) {
     section("Depends on");
     related(task.dependsOn);
@@ -101,7 +101,7 @@ function sections(
   return lines;
 }
 
-function sectionsPart1(
+function detailWriters(
   task: orchestratorTypesTypes.TaskSnapshot,
   lines: string[],
   width: number,

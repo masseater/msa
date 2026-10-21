@@ -66,10 +66,10 @@ export default class ExtensionSelectorComponent extends tuiModule.Container {
     this.listContainer = new Container();
     this.addChild(this.listContainer);
     this.addChild(new Spacer(1));
-    ExtensionSelectorComponent.buildPart1(this);
+    ExtensionSelectorComponent.addHintsAndBorder(this);
   }
 
-  private static buildPart1(self: ExtensionSelectorComponent): void {
+  private static addHintsAndBorder(self: ExtensionSelectorComponent): void {
     self.addChild(
       new Text(
         rawKeyHint("↑↓", "navigate") +

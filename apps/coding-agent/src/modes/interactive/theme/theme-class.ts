@@ -103,7 +103,7 @@ export default class Theme {
       (isBackground ? concreteBackgrounds : concreteForegrounds).push(color);
       return isBackground ? backgroundAnsi(color, mode) : foregroundAnsi(color, mode);
     };
-    this.constructPart1(foregrounds, addToken);
+    this.addForegrounds(foregrounds, addToken);
     for (const [token, value] of Object.entries(backgrounds) as [
       themeTokensTypes.ThemeBg,
       string | number,
@@ -114,7 +114,7 @@ export default class Theme {
       options.appearance ?? detectAppearance(concreteForegrounds, concreteBackgrounds);
   }
 
-  private constructPart1(
+  private addForegrounds(
     foregrounds: Record<themeTokensTypes.ThemeColor, string | number>,
     addToken: (
       token: themeTokensTypes.ThemeToken,

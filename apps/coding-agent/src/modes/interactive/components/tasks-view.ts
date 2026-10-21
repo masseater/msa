@@ -148,7 +148,7 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
     const tasks = this.tasks();
     const inRound = roundTasks(tasks, round.id);
     if (inRound.length === 0) return { lines: [] };
-    const lines = this.renderRoundPart1(inRound, round);
+    const lines = this.roundHeader(inRound, round);
     const byId = new Map(inRound.map((task) => [task.id, task]));
     const shown = inRound.filter((task) => this.state.showFinished || !finished(task));
     const done = inRound.filter((task) => task.status === "completed").length;
@@ -188,7 +188,7 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
     return { cursor, lines };
   }
 
-  private renderRoundPart1(
+  private roundHeader(
     inRound: orchestratorTypesTypes.TaskSnapshot[],
     round: { id: string; title: string },
   ) {
@@ -281,7 +281,7 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
       this.options.requestRender();
       return;
     }
-    const { kb, page, half, shown, selected } = this.handleInputPart1();
+    const { kb, page, half, shown, selected } = this.navigationContext();
     if (kb.matches(data, "tui.select.cancel")) {
       if (this.openId === undefined) this.options.onClose();
       else this.openDetail(undefined);
@@ -350,7 +350,7 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
     this.options.requestRender();
   }
 
-  private handleInputPart1() {
+  private navigationContext() {
     const kb = getKeybindings();
     const shown = this.shownTasks();
     const selected = this.selected();

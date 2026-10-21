@@ -84,7 +84,7 @@ const renderDiff: {
 
       if (parsed.prefix === "-") {
         const removedLines: { lineNum: string; content: string }[] = [];
-        i = renderDiffPart1(i, lines, removedLines);
+        i = collectRemovedLines(i, lines, removedLines);
 
         const addedLines: { lineNum: string; content: string }[] = [];
         while (i < lines.length) {
@@ -98,7 +98,7 @@ const renderDiff: {
 
         const [onlyRemoved] = removedLines;
         const [onlyAdded] = addedLines;
-        buildPart1(removedLines, addedLines, onlyRemoved, onlyAdded, result);
+        pushChangedBlock(removedLines, addedLines, onlyRemoved, onlyAdded, result);
       } else if (parsed.prefix === "+") {
         result.push(theme.fg("toolDiffAdded", `+${parsed.lineNum} ${replaceTabs(parsed.content)}`));
         i++;
@@ -114,7 +114,7 @@ const renderDiff: {
   },
 );
 
-function renderDiffPart1(
+function collectRemovedLines(
   i: number,
   lines: string[],
   removedLines: { lineNum: string; content: string }[],
@@ -130,7 +130,7 @@ function renderDiffPart1(
   return i;
 }
 
-function buildPart1(
+function pushChangedBlock(
   removedLines: { lineNum: string; content: string }[],
   addedLines: { lineNum: string; content: string }[],
   onlyRemoved: { lineNum: string; content: string } | undefined,

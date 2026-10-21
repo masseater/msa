@@ -132,7 +132,7 @@ export default function llamaExtension(msa: extensionsTypesTypes.ExtensionAPI): 
         }
 
         try {
-          const result = yield* loadModelPart1(ui, client, target);
+          const result = yield* loadWithProgress(ui, client, target);
           if (result.cancelled) {
             if (replace) yield* awaited(restoreLoaded());
             return;
@@ -215,7 +215,7 @@ export default function llamaExtension(msa: extensionsTypesTypes.ExtensionAPI): 
           quantization = details.quantizations[options.indexOf(choice)]?.name;
           if (quantization === undefined || quantization === "") return;
         }
-        const { result, model } = yield* downloadModelPart1(quantization, details, ui, client);
+        const { result, model } = yield* downloadWithProgress(quantization, details, ui, client);
         if (result.cancelled) return;
         yield* awaited(syncCatalog(ctx, client, result.value));
         ctx.ui.notify(`Downloaded ${model}`);
@@ -263,7 +263,7 @@ export default function llamaExtension(msa: extensionsTypesTypes.ExtensionAPI): 
                     if (action.type === "close") return;
                     let actionError: unknown;
                     try {
-                      yield* handlerPart1(
+                      yield* runModelAction(
                         action,
                         downloadModel,
                         ctx,
@@ -292,7 +292,7 @@ export default function llamaExtension(msa: extensionsTypesTypes.ExtensionAPI): 
   });
 }
 
-function* downloadModelPart1(
+function* downloadWithProgress(
   quantization: string | undefined,
   details: huggingfaceTypes.HuggingFaceModelDetails,
   ui: uiTypes.LlamaUi,
@@ -316,7 +316,7 @@ function* downloadModelPart1(
   return { model, result };
 }
 
-function* handlerPart1(
+function* runModelAction(
   action: { type: "model"; model: clientTypes.LlamaModelInfo } | { type: "download" },
   downloadModel: (
     ctx: extensionsTypesTypes.ExtensionCommandContext,
@@ -348,7 +348,7 @@ function* handlerPart1(
   else ctx.ui.notify(`${action.model.id} is ${action.model.status.value}`, "warning");
 }
 
-function* loadModelPart1(
+function* loadWithProgress(
   ui: uiTypes.LlamaUi,
   client: LlamaClient,
   target: clientTypes.LlamaModelInfo,

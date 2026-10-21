@@ -118,7 +118,7 @@ function buildSystemPromptSections(
 
   const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
   const promptSections: Record<string, string> = {};
-  const sections: systemPromptTypes.SystemPromptSections = buildSystemPromptSectionsPart1(
+  const sections: systemPromptTypes.SystemPromptSections = fillPromptSections(
     customPrompt,
     promptSections,
     declaredTools,
@@ -138,7 +138,7 @@ function buildSystemPromptSections(
   return sections;
 }
 
-function buildSystemPromptSectionsPart1(
+function fillPromptSections(
   customPrompt: string | undefined,
   promptSections: Record<string, string>,
   declaredTools: string[],
@@ -180,7 +180,7 @@ function buildSystemPromptSectionsPart1(
   }
 
   if (appendSystemPrompt !== "") promptSections["addendum"] = appendSystemPrompt;
-  buildSystemPromptSectionsPart1Part1(
+  fillContextSections(
     contextFiles,
     promptSections,
     declaredTools,
@@ -194,7 +194,7 @@ function buildSystemPromptSectionsPart1(
   return sections;
 }
 
-function buildSystemPromptSectionsPart1Part1(
+function fillContextSections(
   contextFiles: { path: string; content: string }[] & { path: string; content: string }[],
   promptSections: Record<string, string>,
   declaredTools: string[],

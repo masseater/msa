@@ -86,7 +86,7 @@ function runWithProgressImpl<T>(
         if (outcome === "settled") break;
         const stop = yield* awaited(ui.confirm(options.cancelTitle, options.cancelMessage));
         if (!stop || progress.completed) continue;
-        yield* awaited(runWithProgressImplPart1<T>(options, controller, settled));
+        yield* awaited(cancelRun<T>(options, controller, settled));
         return { cancelled: true };
       }
 
@@ -127,7 +127,7 @@ const ui = {
 
 export default ui;
 
-function* runWithProgressImplPart1<T>(
+function* cancelRun<T>(
   options: {
     title: string;
     model: string;

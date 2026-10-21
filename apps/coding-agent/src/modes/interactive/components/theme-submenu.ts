@@ -207,7 +207,7 @@ export default class ThemeSubmenu extends tui.Container {
       },
     ];
 
-    ThemeSubmenu.showAutomaticMenuPart2(this, items, content);
+    ThemeSubmenu.mountSettingsList(this, items, content);
   }
 
   private static showAutomaticMenuContent(self: ThemeSubmenu): tuiTypes.Container {
@@ -225,7 +225,7 @@ export default class ThemeSubmenu extends tui.Container {
     return content;
   }
 
-  private static showAutomaticMenuPart2(
+  private static mountSettingsList(
     self: ThemeSubmenu,
     items: tuiTypes.SettingItem[],
     content: tuiTypes.Container,

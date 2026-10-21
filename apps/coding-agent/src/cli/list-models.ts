@@ -37,7 +37,7 @@ function listModelsImpl(
 ): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
-      const models = yield* listModelsImplPart2(modelRuntime, signal);
+      const models = yield* loadAvailableModels(modelRuntime, signal);
 
       if (models.length === 0) {
         writeLog(formatNoModelsAvailableMessage());
@@ -69,7 +69,7 @@ function listModelsImpl(
         thinking: m.reasoning ? "yes" : "no",
       }));
 
-      listModelsImplPart1(rows);
+      printModelTable(rows);
 
       const policy = modelRuntime.getModelPolicy();
       const hidden = hiddenModelsByPolicy(policy, modelRuntime.getCatalogModels());
@@ -104,7 +104,7 @@ const listModelsModule = {
 
 export default listModelsModule;
 
-function* listModelsImplPart2(modelRuntime: ModelRuntime, signal: AbortSignal | undefined) {
+function* loadAvailableModels(modelRuntime: ModelRuntime, signal: AbortSignal | undefined) {
   const loadError = modelRuntime.getError();
   if (loadError !== undefined && loadError !== "") {
     writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
@@ -118,7 +118,7 @@ function* listModelsImplPart2(modelRuntime: ModelRuntime, signal: AbortSignal | 
   return models;
 }
 
-function listModelsImplPart1(
+function printModelTable(
   rows: {
     context: string;
     images: string;

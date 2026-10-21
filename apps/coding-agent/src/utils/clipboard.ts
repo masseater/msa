@@ -125,7 +125,7 @@ function copyToClipboard(text: string): Promise<void> {
         } catch {}
       }
       let osc52Emitted;
-      ({ osc52Emitted, copied } = yield* copyToClipboardPart1(copied, p, env, text));
+      ({ osc52Emitted, copied } = yield* copyWithFallbacks(copied, p, env, text));
 
       const headless =
         p === "linux" &&
@@ -167,7 +167,7 @@ const clipboard = {
 
 export default clipboard;
 
-function* copyToClipboardPart1(copied: boolean, p: string, env: NodeJS.ProcessEnv, text: string) {
+function* copyWithFallbacks(copied: boolean, p: string, env: NodeJS.ProcessEnv, text: string) {
   if (!copied) {
     const commands: [string, string[]][] = [];
     if (p === "darwin") commands.push(["pbcopy", []]);

@@ -117,7 +117,7 @@ function shareViaGist(tmpFile: string, context: SessionShareContext): Effect.Eff
     };
 
     try {
-      const result = yield* shareViaGistPart1();
+      const result = yield* createGist();
 
       if (loader.signal.aborted) return;
       restoreEditor(loader, context);
@@ -147,7 +147,7 @@ function shareViaGist(tmpFile: string, context: SessionShareContext): Effect.Eff
       }
     }
 
-    function* shareViaGistPart1() {
+    function* createGist() {
       return yield* performed(
         Effect.callback<{ stdout: string; stderr: string; code: number | null }>((resume) => {
           proc = spawn("gh", ["gist", "create", "--public=false", tmpFile]);

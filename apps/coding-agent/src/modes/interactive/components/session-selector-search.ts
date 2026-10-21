@@ -49,7 +49,7 @@ function parseSearchQuery(query: string): sessionSelectorSearchTypes.ParsedSearc
   }
 
   const tokens: { kind: "fuzzy" | "phrase"; value: string }[] = [];
-  let { inQuote, hadUnclosedQuote, flush } = parseSearchQueryPart1(tokens, trimmed);
+  let { inQuote, hadUnclosedQuote, flush } = tokenizeQuery(tokens, trimmed);
 
   if (inQuote) {
     hadUnclosedQuote = true;
@@ -190,10 +190,7 @@ const sessionSelectorSearch = {
 
 export default sessionSelectorSearch;
 
-function parseSearchQueryPart1(
-  tokens: { kind: "fuzzy" | "phrase"; value: string }[],
-  trimmed: string,
-) {
+function tokenizeQuery(tokens: { kind: "fuzzy" | "phrase"; value: string }[], trimmed: string) {
   let buf = "";
   let inQuote = false;
   let hadUnclosedQuote = false;

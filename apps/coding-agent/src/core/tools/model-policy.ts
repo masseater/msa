@@ -92,7 +92,7 @@ function createModelPolicyToolDefinition(
           const before = target.modelRuntime.getModelPolicy();
 
           if (params.action === "list") {
-            const { lines, hidden } = createModelPolicyToolDefinitionPart2(target, before, catalog);
+            const { lines, hidden } = listPolicy(target, before, catalog);
             return yield* awaited({
               content: [{ text: lines.join("\n"), type: "text" }],
               details: {
@@ -108,10 +108,8 @@ function createModelPolicyToolDefinition(
           if (pattern === undefined || pattern === "")
             throw new Error(`action ${params.action} requires pattern`);
 
-          const { lines, saved, hidden } = executePart1(params, before, pattern, target, catalog);
-          return yield* awaited(
-            createModelPolicyToolDefinitionPart1(lines, params, saved, hidden, pattern),
-          );
+          const { lines, saved, hidden } = changePolicy(params, before, pattern, target, catalog);
+          return yield* awaited(policyChangeResult(lines, params, saved, hidden, pattern));
         }),
       );
     },
@@ -141,7 +139,7 @@ const modelPolicy = {
 
 export default modelPolicy;
 
-function createModelPolicyToolDefinitionPart2(
+function listPolicy(
   target: modelPolicyTypes.ModelPolicyToolTarget,
   before: modelPolicyTypesModule.ModelPolicy,
   catalog: readonly aiTypes.Model<aiTypes.Api>[],
@@ -161,7 +159,7 @@ function createModelPolicyToolDefinitionPart2(
   return { hidden, lines };
 }
 
-function createModelPolicyToolDefinitionPart1(
+function policyChangeResult(
   lines: string[],
   params: { pattern?: string; action: never },
   saved: modelPolicyTypesModule.ModelPolicy,
@@ -185,7 +183,7 @@ function createModelPolicyToolDefinitionPart1(
   };
 }
 
-function executePart1(
+function changePolicy(
   params: { pattern?: string; action: never },
   before: modelPolicyTypesModule.ModelPolicy,
   pattern: string,

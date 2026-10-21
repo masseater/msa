@@ -75,10 +75,10 @@ export default class TrustSelectorComponent extends tui.Container {
     this.listContainer = new Container();
     this.addChild(this.listContainer);
     this.addChild(new Spacer(1));
-    TrustSelectorComponent.buildPart1(this);
+    TrustSelectorComponent.addHintsAndBorder(this);
   }
 
-  private static buildPart1(self: TrustSelectorComponent): void {
+  private static addHintsAndBorder(self: TrustSelectorComponent): void {
     self.addChild(
       new Text(
         rawKeyHint("↑↓", "navigate") +

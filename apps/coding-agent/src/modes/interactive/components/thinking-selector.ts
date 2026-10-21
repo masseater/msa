@@ -82,12 +82,12 @@ export default class ThinkingSelectorComponent extends tui.Container implements 
 
     this.selectList = this.buildSelectList(this.allItems, currentLevel);
     this.selectListChildIndex = this.children.length;
-    ThinkingSelectorComponent.buildPart1(this);
+    ThinkingSelectorComponent.addListWithHints(this);
 
     this.addChild(new DynamicBorder());
   }
 
-  private static buildPart1(self: ThinkingSelectorComponent): void {
+  private static addListWithHints(self: ThinkingSelectorComponent): void {
     self.addChild(self.selectList);
     self.addChild(new Spacer(1));
     self.addChild(

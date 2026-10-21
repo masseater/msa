@@ -163,7 +163,7 @@ function parseGitUrl(source: string): gitTypes.GitSource | null {
       if (split.ref !== undefined && split.ref !== "" && info.project?.includes("@")) {
         continue;
       }
-      return parseGitUrlPart1(split, info);
+      return hostedGitSource(split, info);
     }
   }
 
@@ -195,7 +195,7 @@ const git = {
 
 export default git;
 
-function parseGitUrlPart1(split: { repo: string; ref?: string }, info: hostedGitInfo) {
+function hostedGitSource(split: { repo: string; ref?: string }, info: hostedGitInfo) {
   const useHttpsPrefix =
     !split.repo.startsWith("http://") &&
     !split.repo.startsWith("https://") &&

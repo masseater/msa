@@ -57,7 +57,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
   for (const [name, value] of Object.entries(parsed["mcpServers"] ?? {})) {
     if (scope === "project" && isRecord(value) && isOverride(value)) {
       const base = servers.get(name);
-      readConfigFilePart1(value, base, errors, path, name, servers);
+      applyOverride(value, base, errors, path, name, servers);
       continue;
     }
     const config = validateMcpServerConfig(name, value);
@@ -81,7 +81,7 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
   }
 }
 
-function readConfigFilePart1(
+function applyOverride(
   value: Record<string, unknown>,
   base: configTypes.McpServerEntry | undefined,
   errors: string[],

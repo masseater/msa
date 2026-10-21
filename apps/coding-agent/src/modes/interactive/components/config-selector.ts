@@ -82,7 +82,7 @@ function buildGroups(
   ) => {
     for (const res of resources) {
       const { path, enabled, metadata } = res;
-      const { group, groupKey, subgroupKey } = buildGroupsPart3(
+      const { group, groupKey, subgroupKey } = groupForResource(
         metadata,
         groupMap,
         agentDir,
@@ -101,7 +101,7 @@ function buildGroups(
 
       const fileName = basename(path);
       const parentFolder = basename(dirname(path));
-      let displayName: string = buildGroupsPart4(
+      let displayName: string = resourceDisplayName(
         metadata,
         path,
         resourceType,
@@ -120,7 +120,7 @@ function buildGroups(
     }
   };
 
-  return buildGroupsPart1(addToGroup, resolved, groupMap);
+  return sortedGroups(addToGroup, resolved, groupMap);
 }
 export default class ConfigSelectorComponent extends tui.Container implements tuiTypes.Focusable {
   private header: ConfigSelectorHeader;
@@ -196,16 +196,7 @@ export default class ConfigSelectorComponent extends tui.Container implements tu
     return this.resourceList;
   }
 }
-function buildGroupsPart4(
-  metadata: packageManagerTypes.PathMetadata,
-  path: string,
-  resourceType: string,
-  parentFolder: string,
-  fileName: string,
-): string {
-  return buildGroupsPart2(metadata, path, resourceType, parentFolder, fileName);
-}
-function buildGroupsPart3(
+function groupForResource(
   metadata: packageManagerTypes.PathMetadata,
   groupMap: Map<string, ResourceGroup>,
   agentDir: string,
@@ -213,13 +204,13 @@ function buildGroupsPart3(
 ) {
   const groupKey = `${metadata.origin}:${metadata.scope}:${metadata.source}:${metadata.baseDir ?? ""}`;
 
-  addToGroupPart1(groupMap, groupKey, metadata, agentDir);
+  ensureGroup(groupMap, groupKey, metadata, agentDir);
 
   const group = groupMap.get(groupKey)!;
   const subgroupKey = `${groupKey}:${resourceType}`;
   return { group, groupKey, subgroupKey };
 }
-function buildGroupsPart2(
+function resourceDisplayName(
   metadata: packageManagerTypes.PathMetadata,
   path: string,
   resourceType: string,
@@ -238,7 +229,7 @@ function buildGroupsPart2(
   }
   return displayName;
 }
-function addToGroupPart1(
+function ensureGroup(
   groupMap: Map<string, ResourceGroup>,
   groupKey: string,
   metadata: packageManagerTypes.PathMetadata,
@@ -255,7 +246,7 @@ function addToGroupPart1(
     });
   }
 }
-function buildGroupsPart1(
+function sortedGroups(
   addToGroup: (
     resources: packageManagerTypes.ResolvedResource[],
     resourceType: ResourceType,

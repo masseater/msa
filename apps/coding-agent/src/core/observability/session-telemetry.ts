@@ -87,7 +87,7 @@ export default class SessionTelemetry {
         });
         break;
       case "compaction_end":
-        this.handlePart1(event);
+        this.endCompaction(event);
         this.#compaction = undefined;
         break;
       case "auto_retry_start":
@@ -106,7 +106,7 @@ export default class SessionTelemetry {
     }
   }
 
-  private handlePart1(event: {
+  private endCompaction(event: {
     type: "compaction_end";
     reason: "manual" | "threshold" | "overflow";
     result: compactionTypes.CompactionResult | undefined;

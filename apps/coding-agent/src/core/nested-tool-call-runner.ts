@@ -41,7 +41,7 @@ export default class NestedToolCallRunner {
         let toolCall: agentTypes.AgentToolCall | undefined;
         let release: (() => void) | undefined;
         let record;
-        ({ toolCall, release, record, scope } = yield* this.executePart1(
+        ({ toolCall, release, record, scope } = yield* this.startNestedCall(
           scope,
           callerId,
           args,
@@ -91,7 +91,7 @@ export default class NestedToolCallRunner {
     );
   }
 
-  private *executePart1(
+  private *startNestedCall(
     scope: CallScope | undefined,
     callerId: string,
     args: unknown,

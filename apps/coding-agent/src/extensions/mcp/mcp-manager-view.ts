@@ -170,7 +170,7 @@ export default class McpManagerView
       signal.addEventListener("abort", onAbort, { once: true });
       const input = new Input();
       const link = new AuthUrlComponent(this.tui, authorizationUrl);
-      const body: tuiTypes.Component[] = this.redirectUrlPart1(link, input);
+      const body: tuiTypes.Component[] = this.authUrlPrompt(link, input);
       this.setContent(
         frame(
           this.theme,
@@ -199,7 +199,7 @@ export default class McpManagerView
     });
   }
 
-  private redirectUrlPart1(link: AuthUrlComponent, input: tuiTypes.Input): tuiTypes.Component[] {
+  private authUrlPrompt(link: AuthUrlComponent, input: tuiTypes.Input): tuiTypes.Component[] {
     return [
       new Spacer(1),
       new Text(

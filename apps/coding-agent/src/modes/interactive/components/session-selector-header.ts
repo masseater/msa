@@ -97,9 +97,9 @@ export default class SessionSelectorHeader implements tuiTypes.Component {
   invalidate(): void {}
 
   render(width: number): string[] {
-    const { sortLabel, leftText } = this.renderPart4();
-    let { scopeText, nameText, sortText }: ReturnType<SessionSelectorHeader["renderPart2"]> =
-      this.renderPart2(sortLabel);
+    const { sortLabel, leftText } = this.titleAndSortLabel();
+    let { scopeText, nameText, sortText }: ReturnType<SessionSelectorHeader["filterSummary"]> =
+      this.filterSummary(sortLabel);
 
     const rightText = truncateToWidth(`${scopeText}  ${nameText}  ${sortText}`, width, "");
     const availableLeft = Math.max(0, width - visibleWidth(rightText) - 1);
@@ -140,7 +140,7 @@ export default class SessionSelectorHeader implements tuiTypes.Component {
     return [`${left}${" ".repeat(spacing)}${rightText}`, hintLine1, hintLine2];
   }
 
-  private renderPart4() {
+  private titleAndSortLabel() {
     const title =
       this.scope === "current" ? "Resume Session (Current Folder)" : "Resume Session (All)";
     const leftText = theme.bold(title);
@@ -150,7 +150,7 @@ export default class SessionSelectorHeader implements tuiTypes.Component {
     return { leftText, sortLabel };
   }
 
-  private renderPart2(sortLabel: string) {
+  private filterSummary(sortLabel: string) {
     const sortText = theme.fg("muted", "Sort: ") + theme.fg("accent", sortLabel);
 
     const nameLabel = this.nameFilter === "all" ? "All" : "Named";

@@ -55,7 +55,7 @@ function createProjectTrustContext(options: {
           }),
         ),
       notify: (message, type = "info") => {
-        createProjectTrustContextPart1(options, type, message);
+        notifyOutsideInteractive(options, type, message);
       },
       select: (title, selectOptions) =>
         Effect.runPromise(
@@ -85,7 +85,7 @@ const projectTrust = {
 
 export default projectTrust;
 
-function createProjectTrustContextPart1(
+function notifyOutsideInteractive(
   options: {
     cwd: string;
     mode: projectTrustTypesModule.AppMode;

@@ -160,14 +160,14 @@ function parseChangelog(changelogPath: string): changelogTypes.ChangelogEntry[] 
       }
     }
 
-    return parseChangelogPart1(currentVersion, currentLines, entries);
+    return flushEntry(currentVersion, currentLines, entries);
   } catch (error) {
     writeError(`Warning: Could not parse changelog: ${error}`);
     return [];
   }
 }
 
-function parseChangelogPart1(
+function flushEntry(
   currentVersion: { major: number; minor: number; patch: number } | null,
   currentLines: string[],
   entries: changelogTypes.ChangelogEntry[],

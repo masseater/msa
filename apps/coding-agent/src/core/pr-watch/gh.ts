@@ -114,7 +114,7 @@ function makeGh(options: ghTypes.PrWatchGhOptions): ghTypes.PrWatchGh {
         Effect.flatMap((result) => {
           const behindBy = Number.parseInt(result.stdout.trim(), 10);
           if (Number.isFinite(behindBy)) return Effect.succeed(behindBy);
-          return makeGhPart1();
+          return missingBehindByCount();
         }),
       ),
     view: (target) =>
@@ -143,7 +143,7 @@ const gh = {
 
 export default gh;
 
-function makeGhPart1(): Effect.Effect<number, PrWatchGhError, never> {
+function missingBehindByCount(): Effect.Effect<number, PrWatchGhError, never> {
   return Effect.fail(
     new PrWatchGhError({
       kind: "other",

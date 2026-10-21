@@ -132,12 +132,12 @@ export default class BashExecutionComponent extends tui.Container {
     );
     this.contentContainer.addChild(header);
 
-    BashExecutionComponent.updateDisplayPart1(this, availableLines, previewLogicalLines);
+    BashExecutionComponent.addOutputLines(this, availableLines, previewLogicalLines);
 
-    BashExecutionComponent.updateDisplayPart2(this, hiddenLineCount, contextTruncation);
+    BashExecutionComponent.addStatusLine(this, hiddenLineCount, contextTruncation);
   }
 
-  private static updateDisplayPart1(
+  private static addOutputLines(
     self: BashExecutionComponent,
     availableLines: string[],
     previewLogicalLines: string[],
@@ -174,7 +174,7 @@ export default class BashExecutionComponent extends tui.Container {
     }
   }
 
-  private static updateDisplayPart2(
+  private static addStatusLine(
     self: BashExecutionComponent,
     hiddenLineCount: number,
     contextTruncation: truncateTypes.TruncationResult,

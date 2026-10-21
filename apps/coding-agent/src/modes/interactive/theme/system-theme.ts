@@ -686,7 +686,7 @@ function generateSystemThemeColorsPaint(
   const extreme = lighter ? 1 : 0;
   const backgroundL = oklabLightness(background);
 
-  const paint = generateSystemThemeColorsPaintPart1(palette, saturation);
+  const paint = paintToken(palette, saturation);
 
   const target = (level: Level, surfaceL: number, t: number): number | undefined => {
     const reached = levelTarget(level, appearance, surfaceL);
@@ -707,10 +707,7 @@ function generateSystemThemeColorsPaint(
   return { appearance, backgroundL, lighter, paint, readable, target };
 }
 
-function generateSystemThemeColorsPaintPart1(
-  palette: SourceColor[] | undefined,
-  saturation: number,
-) {
+function paintToken(palette: SourceColor[] | undefined, saturation: number) {
   return (token: themeTypes.ThemeToken, oklabL: number): tuiTypes.RgbColor => {
     const lightness = oklabToOkhslLightness(oklabL);
     const family: Family = FAMILIES[TOKEN_FAMILIES[token]];
@@ -792,7 +789,7 @@ function generateSystemThemeColorsColors(
   solve: (t: number) => Map<Surface | themeTypes.ThemeToken, tuiTypes.RgbColor> | undefined;
   relaxation: number;
 } {
-  const limitPanel = generateSystemThemeColorsColorsPart1(paint, readable, backgroundL);
+  const limitPanel = readableColor(paint, readable, backgroundL);
 
   const solve = (
     t: number,
@@ -824,7 +821,7 @@ function generateSystemThemeColorsColors(
   return { colors, relaxation, solve };
 }
 
-function generateSystemThemeColorsColorsPart1(
+function readableColor(
   paint: (token: themeTypes.ThemeToken, oklabL: number) => tuiTypes.RgbColor,
   readable: (color: tuiTypes.RgbColor) => boolean,
   backgroundL: number,

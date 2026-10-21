@@ -71,12 +71,12 @@ export default class ExtensionInputComponent
     }
 
     this.input = new Input();
-    ExtensionInputComponent.buildPart1(this, opts);
+    ExtensionInputComponent.addInputWithHints(this, opts);
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder());
   }
 
-  private static buildPart1(
+  private static addInputWithHints(
     self: ExtensionInputComponent,
     opts: extensionInputTypes.ExtensionInputOptions | undefined,
   ): void {

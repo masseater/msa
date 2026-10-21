@@ -154,12 +154,12 @@ function checkClassifierContext(context: unknown): aiTypes.ClassifierContext {
       throw fail(`${at} must be a question object, got ${describeValue(question)}`);
     }
     const { type, instructions, criteria } = question as Record<string, unknown>;
-    checkClassifierContextPart1(instructions, fail, at, type, criteria, isStrings);
+    checkClassifierQuestion(instructions, fail, at, type, criteria, isStrings);
   }
   return context as unknown as aiTypes.ClassifierContext;
 }
 
-function checkClassifierContextPart1(
+function checkClassifierQuestion(
   instructions: unknown,
   fail: (problem: string) => Error,
   at: string,
@@ -681,12 +681,12 @@ function createDiscoveryGlobals(
   });
   return [
     {
-      execute: (args) => createDiscoveryGlobalsPart1(args, tools, options, ranker, entry),
+      execute: (args) => searchTools(args, tools, options, ranker, entry),
       name: "searchTools",
       spread: true,
     },
     {
-      execute: (args) => createDiscoveryGlobalsPart3(args, tools, samples),
+      execute: (args) => describeTool(args, tools, samples),
       name: "describeTool",
       spread: true,
     },
@@ -704,7 +704,7 @@ function createDiscoveryGlobals(
           names.push(toCodemodeIdentifier(tool.name));
         }
         if (namespace === undefined) return undefined;
-        return createDiscoveryGlobalsPart2(namespace, names);
+        return describeNamespace(namespace, names);
       },
       name: "describeNamespace",
       spread: true,
@@ -712,7 +712,7 @@ function createDiscoveryGlobals(
   ];
 }
 
-function createDiscoveryGlobalsPart3(
+function describeTool(
   args: unknown,
   tools: readonly agentTypes.AgentTool<any, any>[],
   samples: ReadonlyMap<string, string>,
@@ -725,10 +725,7 @@ function createDiscoveryGlobalsPart3(
   return tool === undefined ? undefined : samples.get(tool.name);
 }
 
-function createDiscoveryGlobalsPart2(
-  namespace: typesToolsTypes.ToolNamespace,
-  names: string[],
-): unknown {
+function describeNamespace(namespace: typesToolsTypes.ToolNamespace, names: string[]): unknown {
   return {
     name: namespace.name,
     ...(namespace.description !== undefined && namespace.description !== ""
@@ -741,7 +738,7 @@ function createDiscoveryGlobalsPart2(
   };
 }
 
-function createDiscoveryGlobalsPart1(
+function searchTools(
   args: unknown,
   tools: readonly agentTypes.AgentTool<any, any>[],
   options: toolTypes.CodemodeToolOptions,
@@ -801,7 +798,7 @@ function createModelGlobals(
       awaiting(function* () {
         const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
         const given = model as ScriptValue;
-        const { provider, id } = runModelCallPart1(given, model, name, type, listHint);
+        const { provider, id } = modelReference(given, model, name, type, listHint);
         const ref = `${provider}/${id}`;
         const resolved = models.getModelOfType(type, provider, id);
         if (resolved === undefined) {
@@ -910,7 +907,7 @@ const execute = {
 
 export default execute;
 
-function runModelCallPart1(
+function modelReference(
   given: ScriptValue,
   model: unknown,
   name: string,

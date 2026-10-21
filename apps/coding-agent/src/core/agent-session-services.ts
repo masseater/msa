@@ -90,7 +90,7 @@ function createAgentSessionServices(
         diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[];
         resourceLoader: DefaultResourceLoader;
         settingsManager: SettingsManager;
-      } = yield* createAgentSessionServicesPart1(options, agentDir, cwd);
+      } = yield* loadServices(options, agentDir, cwd);
       for (const { provider, extensionPath } of extensionsResult.runtime
         .pendingNativeProviderRegistrations) {
         try {
@@ -132,7 +132,7 @@ function createAgentSessionServices(
   );
 }
 
-function* createAgentSessionServicesPart1(
+function* loadServices(
   options: agentSessionServicesTypes.CreateAgentSessionServicesOptions,
   agentDir: string,
   cwd: string,

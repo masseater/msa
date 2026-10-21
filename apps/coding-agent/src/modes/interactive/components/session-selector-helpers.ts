@@ -15,7 +15,7 @@ function deleteSessionFile(
     Effect.gen(function* () {
       const fileSystem = yield* FileSystem.FileSystem;
       const trashArgs = sessionPath.startsWith("-") ? ["--", sessionPath] : [sessionPath];
-      const trashResult = yield* deleteSessionFilePart2(trashArgs);
+      const trashResult = yield* runTrash(trashArgs);
 
       const getTrashErrorHint = (): string | null => {
         const parts: string[] = [];
@@ -38,7 +38,7 @@ function deleteSessionFile(
       return yield* fileSystem.remove(sessionPath).pipe(
         Effect.as({ method: "unlink" as const, ok: true }),
         Effect.catch((err) => {
-          const error = deleteSessionFilePart1(err, getTrashErrorHint);
+          const error = deleteErrorMessage(err, getTrashErrorHint);
           return Effect.succeed({ error, method: "unlink" as const, ok: false });
         }),
       );
@@ -46,7 +46,7 @@ function deleteSessionFile(
   );
 }
 
-function* deleteSessionFilePart2(trashArgs: string[]) {
+function* runTrash(trashArgs: string[]) {
   return yield* Effect.scoped(
     Effect.gen(function* () {
       const handle = yield* ChildProcess.make("trash", trashArgs, {
@@ -66,7 +66,7 @@ function* deleteSessionFilePart2(trashArgs: string[]) {
   );
 }
 
-function deleteSessionFilePart1(err: unknown, getTrashErrorHint: () => string | null) {
+function deleteErrorMessage(err: unknown, getTrashErrorHint: () => string | null) {
   const unlinkError = toErrorMessage(err);
   const trashErrorHint = getTrashErrorHint();
   const error =

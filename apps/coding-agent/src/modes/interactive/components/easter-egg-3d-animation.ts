@@ -454,7 +454,7 @@ export default class EasterEgg3dAnimation implements tuiTypes.Component {
           emit(star?.text ?? " ", star?.fg, cellBg);
           continue;
         }
-        renderPart5(dotCount, cell, frame, textFade, dust, emit, background, cellBg);
+        emitDissolvingCell(dotCount, cell, frame, textFade, dust, emit, background, cellBg);
       }
       lines.push(`${line}\x1b[0m`);
     }
@@ -970,7 +970,7 @@ export default class EasterEgg3dAnimation implements tuiTypes.Component {
     return value;
   }
 }
-function renderPart5(
+function emitDissolvingCell(
   dotCount: number,
   cell: ScreenCell,
   frame: number,

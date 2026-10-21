@@ -101,7 +101,7 @@ const branchSummary = (
       } satisfies branchSummarizationTypes.BranchSummaryResult as branchSummarizationTypes.BranchSummaryResult;
     }
     const context = branchContext(messages, options);
-    const requestOptions: compatTypes.SimpleStreamOptions = branchSummaryPart1(
+    const requestOptions: compatTypes.SimpleStreamOptions = summaryRequestOptions(
       model,
       apiKey,
       env,
@@ -168,7 +168,7 @@ const branchSummarization = {
 
 export default branchSummarization;
 
-function branchSummaryPart1(
+function summaryRequestOptions(
   model: compatTypes.Model<any>,
   apiKey: string | undefined,
   env: Record<string, string> | undefined,

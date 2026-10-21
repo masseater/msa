@@ -178,13 +178,13 @@ export default class ModelRuntime implements aiTypes.Models {
           refreshFromNetwork && options.modelRefreshTimeoutMs !== undefined
             ? new AbortController()
             : undefined;
-        yield* ModelRuntime.createPart1(controller, options, runtime, refreshFromNetwork);
+        yield* ModelRuntime.initialRefresh(controller, options, runtime, refreshFromNetwork);
         return runtime;
       }),
     );
   }
 
-  private static *createPart1(
+  private static *initialRefresh(
     controller: AbortController | undefined,
     options: modelRuntimeTypes.CreateModelRuntimeOptions,
     runtime: ModelRuntime,
@@ -1073,7 +1073,7 @@ export default class ModelRuntime implements aiTypes.Models {
           ...options,
           allowNetwork: options.allowNetwork ?? this.modelNetworkEnabled,
         };
-        const { errors, result } = yield* this.refreshPart1(refreshOptions);
+        const { errors, result } = yield* this.refreshModels(refreshOptions);
         this.updateModelSnapshot();
         if (options.providers === undefined) {
           try {
@@ -1111,7 +1111,7 @@ export default class ModelRuntime implements aiTypes.Models {
     );
   }
 
-  private *refreshPart1(refreshOptions: {
+  private *refreshModels(refreshOptions: {
     allowNetwork: boolean;
     providers?: readonly string[];
     force?: boolean;

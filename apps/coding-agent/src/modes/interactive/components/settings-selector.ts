@@ -70,6 +70,30 @@ function modelItemLabel(model: aiTypes.Model<any>): string {
   return `${model.id} ${theme.fg("muted", `[${model.provider}]`)}`;
 }
 
+function selectionContext(config: settingsSelectorTypes.SettingsConfig) {
+  const supportsImages = getCapabilities().images;
+  const followUpKey = keyDisplayText("app.message.followUp");
+  const cycleThinkingKey = keyDisplayText("app.thinking.cycle");
+  const currentModelThinkingLevels = { ...config.modelThinkingLevels };
+  const defaultModelByValue = new Map(
+    config.availableDefaultModels.map((model) => [modelSettingKey(model), model]),
+  );
+  const currentDefaultModelKey = defaultModelByValue.has(config.defaultModel)
+    ? config.defaultModel
+    : undefined;
+  const currentModelKey =
+    config.currentModel === undefined ? undefined : modelSettingKey(config.currentModel);
+  return {
+    currentDefaultModelKey,
+    currentModelKey,
+    currentModelThinkingLevels,
+    cycleThinkingKey,
+    defaultModelByValue,
+    followUpKey,
+    supportsImages,
+  };
+}
+
 export default class SettingsSelectorComponent extends tui.Container {
   private settingsList: tuiTypes.SettingsList;
 
@@ -87,7 +111,7 @@ export default class SettingsSelectorComponent extends tui.Container {
       currentDefaultModelKey,
       defaultModelByValue,
       supportsImages,
-    } = this.constructPart20(config);
+    } = selectionContext(config);
 
     const items: tuiTypes.SettingItem[] = [
       {
@@ -205,7 +229,7 @@ export default class SettingsSelectorComponent extends tui.Container {
         id: "model-thinking",
         label: "Default thinking level per model",
         submenu: (_currentValue, done) =>
-          this.constructPart4(
+          this.modelThinkingSubmenu(
             config,
             currentModelKey,
             currentDefaultModelKey,
@@ -275,8 +299,9 @@ export default class SettingsSelectorComponent extends tui.Container {
       },
     ];
 
-    const outputPaddingIndex = this.constructPart2(supportsImages, items, config);
-    SettingsSelectorComponent.buildPart5(this, items, outputPaddingIndex, config);
+    const outputPaddingIndex = insertImageItems(supportsImages, items, config);
+    insertTerminalItems(items, outputPaddingIndex, config);
+    this.addChild(new DynamicBorder());
 
     this.settingsList = new SettingsList(
       items,
@@ -406,287 +431,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     this.addChild(new DynamicBorder());
   }
 
-  private constructPart20(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart19(config);
-  }
-
-  private constructPart19(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart18(config);
-  }
-
-  private constructPart18(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart17(config);
-  }
-
-  private constructPart17(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart16(config);
-  }
-
-  private constructPart16(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart15(config);
-  }
-
-  private constructPart15(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart14(config);
-  }
-
-  private constructPart14(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart13(config);
-  }
-
-  private constructPart13(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart12(config);
-  }
-
-  private constructPart12(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart11(config);
-  }
-
-  private constructPart11(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart10(config);
-  }
-
-  private constructPart10(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart9(config);
-  }
-
-  private constructPart9(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart8(config);
-  }
-
-  private constructPart8(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart7(config);
-  }
-
-  private constructPart7(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart6(config);
-  }
-
-  private constructPart6(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart5(config);
-  }
-
-  private constructPart5(config: settingsSelectorTypes.SettingsConfig): {
-    followUpKey: any;
-    currentModelThinkingLevels: any;
-    cycleThinkingKey: any;
-    currentModelKey: any;
-    currentDefaultModelKey: any;
-    defaultModelByValue: any;
-    supportsImages: any;
-  } {
-    return this.constructPart3(config);
-  }
-
-  private constructPart4(
-    config: settingsSelectorTypes.SettingsConfig,
-    currentModelKey: string | undefined,
-    currentDefaultModelKey: string | undefined,
-    currentModelThinkingLevels: { [x: string]: agentTypes.ThinkingLevel },
-    defaultModelByValue: Map<string, aiTypes.Model<any>>,
-    callbacks: settingsSelectorTypes.SettingsCallbacks,
-    done: (selectedValue?: string, options?: { navigateTo?: string }) => void,
-  ): tuiTypes.Component {
-    return this.constructPart1(
-      config,
-      currentModelKey,
-      currentDefaultModelKey,
-      currentModelThinkingLevels,
-      defaultModelByValue,
-      callbacks,
-      done,
-    );
-  }
-
-  private constructPart3(config: settingsSelectorTypes.SettingsConfig) {
-    const supportsImages = getCapabilities().images;
-    const followUpKey = keyDisplayText("app.message.followUp");
-    const cycleThinkingKey = keyDisplayText("app.thinking.cycle");
-    const currentModelThinkingLevels = { ...config.modelThinkingLevels };
-    const defaultModelByValue = new Map(
-      config.availableDefaultModels.map((model) => [modelSettingKey(model), model]),
-    );
-    const currentDefaultModelKey = defaultModelByValue.has(config.defaultModel)
-      ? config.defaultModel
-      : undefined;
-    const currentModelKey =
-      config.currentModel === undefined ? undefined : modelSettingKey(config.currentModel);
-    return {
-      currentDefaultModelKey,
-      currentModelKey,
-      currentModelThinkingLevels,
-      cycleThinkingKey,
-      defaultModelByValue,
-      followUpKey,
-      supportsImages,
-    };
-  }
-
-  private constructPart2(
-    supportsImages: string | null,
-    items: tuiTypes.SettingItem[],
-    config: settingsSelectorTypes.SettingsConfig,
-  ) {
-    if (supportsImages !== null) {
-      items.splice(1, 0, {
-        currentValue: config.showImages ? "true" : "false",
-        description: "Render images inline in terminal",
-        id: "show-images",
-        label: "Show images",
-        values: ["true", "false"],
-      });
-      items.splice(2, 0, {
-        currentValue: String(config.imageWidthCells),
-        description: "Preferred inline image width in terminal cells",
-        id: "image-width-cells",
-        label: "Image width",
-        values: ["60", "80", "120"],
-      });
-    }
-
-    items.splice(supportsImages === null ? 1 : 3, 0, {
-      currentValue: config.autoResizeImages ? "true" : "false",
-      description: "Resize large images to 2000x2000 max for better model compatibility",
-      id: "auto-resize-images",
-      label: "Auto-resize images",
-      values: ["true", "false"],
-    });
-
-    const autoResizeIndex = items.findIndex((item) => item.id === "auto-resize-images");
-    items.splice(autoResizeIndex + 1, 0, {
-      currentValue: config.blockImages ? "true" : "false",
-      description: "Prevent images from being sent to LLM providers",
-      id: "block-images",
-      label: "Block images",
-      values: ["true", "false"],
-    });
-
-    const blockImagesIndex = items.findIndex((item) => item.id === "block-images");
-    const outputPaddingIndex = buildOutputPaddingIndex(items, blockImagesIndex, config);
-    return outputPaddingIndex;
-  }
-
-  private constructPart1(
+  private modelThinkingSubmenu(
     config: settingsSelectorTypes.SettingsConfig,
     currentModelKey: string | undefined,
     currentDefaultModelKey: string | undefined,
@@ -695,7 +440,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     callbacks: settingsSelectorTypes.SettingsCallbacks,
     done: (selectedValue?: string, options?: { navigateTo?: string }) => void,
   ) {
-    const steps: settingsSubmenuTypes.SteppedSubmenuStep[] = this.constructPart1Part2(
+    const steps: settingsSubmenuTypes.SteppedSubmenuStep[] = this.modelThinkingSteps(
       config,
       currentModelKey,
       currentDefaultModelKey,
@@ -703,7 +448,7 @@ export default class SettingsSelectorComponent extends tui.Container {
       defaultModelByValue,
     );
 
-    return this.submenuPart1(
+    return this.steppedThinkingSubmenu(
       currentModelThinkingLevels,
       steps,
       defaultModelByValue,
@@ -712,7 +457,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     );
   }
 
-  private constructPart1Part2(
+  private modelThinkingSteps(
     config: settingsSelectorTypes.SettingsConfig,
     currentModelKey: string | undefined,
     currentDefaultModelKey: string | undefined,
@@ -725,7 +470,7 @@ export default class SettingsSelectorComponent extends tui.Container {
         key: "model",
         layout: MODEL_PICKER_LAYOUT,
         options: () =>
-          this.submenuPart2(
+          this.modelPickerItems(
             config,
             currentModelKey,
             currentDefaultModelKey,
@@ -743,7 +488,7 @@ export default class SettingsSelectorComponent extends tui.Container {
           if (modelKey === undefined) return [];
           const model = defaultModelByValue.get(modelKey);
           if (model === undefined) return [];
-          return this.constructPart1Part1(model, currentModelThinkingLevels, modelKey, config);
+          return this.thinkingLevelItems(model, currentModelThinkingLevels, modelKey, config);
         },
         preselect: (ctx) => {
           const modelKey = ctx["model"];
@@ -758,7 +503,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     ];
   }
 
-  private constructPart1Part1(
+  private thinkingLevelItems(
     model: aiTypes.Model<any>,
     currentModelThinkingLevels: { [x: string]: agentTypes.ThinkingLevel },
     modelKey: string,
@@ -767,7 +512,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     const levels = (
       model.reasoning ? getSupportedThinkingLevels(model) : ["off"]
     ) as agentTypes.ThinkingLevel[];
-    const levelItems: tuiTypes.SelectItem[] = this.submenuPart3(
+    const levelItems: tuiTypes.SelectItem[] = this.thinkingLevelChoices(
       currentModelThinkingLevels,
       modelKey,
       levels,
@@ -776,7 +521,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     return levelItems;
   }
 
-  private submenuPart3(
+  private thinkingLevelChoices(
     currentModelThinkingLevels: { [x: string]: agentTypes.ThinkingLevel },
     modelKey: string,
     levels: agentTypes.ThinkingLevel[],
@@ -798,7 +543,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     return levelItems;
   }
 
-  private submenuPart2(
+  private modelPickerItems(
     config: settingsSelectorTypes.SettingsConfig,
     currentModelKey: string | undefined,
     currentDefaultModelKey: string | undefined,
@@ -830,7 +575,7 @@ export default class SettingsSelectorComponent extends tui.Container {
     return modelItems;
   }
 
-  private submenuPart1(
+  private steppedThinkingSubmenu(
     currentModelThinkingLevels: { [x: string]: agentTypes.ThinkingLevel },
     steps: settingsSubmenuTypes.SteppedSubmenuStep[],
     defaultModelByValue: Map<string, aiTypes.Model<any>>,
@@ -865,47 +610,55 @@ export default class SettingsSelectorComponent extends tui.Container {
     );
   }
 
-  private static buildPart5(
-    self: SettingsSelectorComponent,
-    items: tuiTypes.SettingItem[],
-    outputPaddingIndex: number,
-    config: settingsSelectorTypes.SettingsConfig,
-  ): void {
-    items.splice(outputPaddingIndex + 1, 0, {
-      currentValue: String(config.autocompleteMaxVisible),
-      description: "Max visible items in autocomplete dropdown (3-20)",
-      id: "autocomplete-max-visible",
-      label: "Autocomplete max items",
-      values: ["3", "5", "7", "10", "15", "20"],
-    });
-
-    const autocompleteIndex = items.findIndex((item) => item.id === "autocomplete-max-visible");
-    items.splice(autocompleteIndex + 1, 0, {
-      currentValue: config.clearOnShrink ? "true" : "false",
-      description: "Clear empty rows when content shrinks (may cause flicker)",
-      id: "clear-on-shrink",
-      label: "Clear on shrink",
-      values: ["true", "false"],
-    });
-
-    const clearOnShrinkIndex = items.findIndex((item) => item.id === "clear-on-shrink");
-    items.splice(clearOnShrinkIndex + 1, 0, {
-      currentValue: config.showTerminalProgress ? "true" : "false",
-      description: "Show OSC 9;4 progress indicators in the terminal tab bar",
-      id: "terminal-progress",
-      label: "Terminal progress",
-      values: ["true", "false"],
-    });
-
-    self.addChild(new DynamicBorder());
-  }
-
   getSettingsList(): tuiTypes.SettingsList {
     return this.settingsList;
   }
 }
 
-function buildOutputPaddingIndex(
+function insertImageItems(
+  supportsImages: string | null,
+  items: tuiTypes.SettingItem[],
+  config: settingsSelectorTypes.SettingsConfig,
+) {
+  if (supportsImages !== null) {
+    items.splice(1, 0, {
+      currentValue: config.showImages ? "true" : "false",
+      description: "Render images inline in terminal",
+      id: "show-images",
+      label: "Show images",
+      values: ["true", "false"],
+    });
+    items.splice(2, 0, {
+      currentValue: String(config.imageWidthCells),
+      description: "Preferred inline image width in terminal cells",
+      id: "image-width-cells",
+      label: "Image width",
+      values: ["60", "80", "120"],
+    });
+  }
+
+  items.splice(supportsImages === null ? 1 : 3, 0, {
+    currentValue: config.autoResizeImages ? "true" : "false",
+    description: "Resize large images to 2000x2000 max for better model compatibility",
+    id: "auto-resize-images",
+    label: "Auto-resize images",
+    values: ["true", "false"],
+  });
+
+  const autoResizeIndex = items.findIndex((item) => item.id === "auto-resize-images");
+  items.splice(autoResizeIndex + 1, 0, {
+    currentValue: config.blockImages ? "true" : "false",
+    description: "Prevent images from being sent to LLM providers",
+    id: "block-images",
+    label: "Block images",
+    values: ["true", "false"],
+  });
+
+  const blockImagesIndex = items.findIndex((item) => item.id === "block-images");
+  return insertEditorItems(items, blockImagesIndex, config);
+}
+
+function insertEditorItems(
   items: tuiTypes.SettingItem[],
   blockImagesIndex: number,
   config: settingsSelectorTypes.SettingsConfig,
@@ -947,4 +700,36 @@ function buildOutputPaddingIndex(
 
   const outputPaddingIndex = items.findIndex((item) => item.id === "output-padding");
   return outputPaddingIndex;
+}
+
+function insertTerminalItems(
+  items: tuiTypes.SettingItem[],
+  outputPaddingIndex: number,
+  config: settingsSelectorTypes.SettingsConfig,
+): void {
+  items.splice(outputPaddingIndex + 1, 0, {
+    currentValue: String(config.autocompleteMaxVisible),
+    description: "Max visible items in autocomplete dropdown (3-20)",
+    id: "autocomplete-max-visible",
+    label: "Autocomplete max items",
+    values: ["3", "5", "7", "10", "15", "20"],
+  });
+
+  const autocompleteIndex = items.findIndex((item) => item.id === "autocomplete-max-visible");
+  items.splice(autocompleteIndex + 1, 0, {
+    currentValue: config.clearOnShrink ? "true" : "false",
+    description: "Clear empty rows when content shrinks (may cause flicker)",
+    id: "clear-on-shrink",
+    label: "Clear on shrink",
+    values: ["true", "false"],
+  });
+
+  const clearOnShrinkIndex = items.findIndex((item) => item.id === "clear-on-shrink");
+  items.splice(clearOnShrinkIndex + 1, 0, {
+    currentValue: config.showTerminalProgress ? "true" : "false",
+    description: "Show OSC 9;4 progress indicators in the terminal tab bar",
+    id: "terminal-progress",
+    label: "Terminal progress",
+    values: ["true", "false"],
+  });
 }

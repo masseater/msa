@@ -147,7 +147,7 @@ function withVirtualModels(
       streamSimple: unroutedStream,
     };
   }
-  const { physical, virtual } = withVirtualModelsPart1(virtualModels);
+  const { physical, virtual } = modelFilters(virtualModels);
   const { filterModels, filterAllModels } = provider;
   return {
     ...provider,
@@ -190,7 +190,7 @@ const virtualModels = {
 
 export default virtualModels;
 
-function withVirtualModelsPart1(virtualModelList: readonly aiTypes.Model<aiTypes.Api>[]) {
+function modelFilters(virtualModelList: readonly aiTypes.Model<aiTypes.Api>[]) {
   const ids = new Set(virtualModelList.map((model) => model.id));
   const physical = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]) =>
     models.filter(

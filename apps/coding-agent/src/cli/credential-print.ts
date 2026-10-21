@@ -78,7 +78,7 @@ function resolveCredentialForPrintImpl(
       }
 
       const credentials: Array<{ providerId: string; value: string }> = [];
-      yield* resolveCredentialForPrintImplPart2(
+      yield* collectCredentials(
         providers,
         credentialTypes,
         kind,
@@ -90,13 +90,7 @@ function resolveCredentialForPrintImpl(
 
       const [onlyCredential] = credentials;
       if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
-      resolveCredentialForPrintImplPart1(
-        credentials,
-        providers,
-        credentialTypes,
-        cliProvider,
-        kind,
-      );
+      assertCredentialFound(credentials, providers, credentialTypes, cliProvider, kind);
       throw new AuthCommandError(
         `Multiple configured providers matched (${credentials.map(({ providerId }) => providerId).join(", ")}). Specify --provider.`,
       );
@@ -126,7 +120,7 @@ const credentialPrint = {
 
 export default credentialPrint;
 
-function* resolveCredentialForPrintImplPart2(
+function* collectCredentials(
   providers: { id: string; model?: aiTypes.Model<aiTypes.Api> }[],
   credentialTypes: Map<string, "api_key" | "oauth">,
   kind: string,
@@ -154,7 +148,7 @@ function* resolveCredentialForPrintImplPart2(
   }
 }
 
-function resolveCredentialForPrintImplPart1(
+function assertCredentialFound(
   credentials: { providerId: string; value: string }[],
   providers: { id: string; model?: aiTypes.Model<aiTypes.Api> }[],
   credentialTypes: Map<string, "api_key" | "oauth">,

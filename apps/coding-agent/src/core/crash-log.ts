@@ -99,12 +99,12 @@ function findExtensionStackMatches(
       extension.sourceInfo.origin === "package" &&
       !/^(?:npm:|git:|https?:\/\/|ssh:\/\/)/u.test(extension.sourceInfo.source) &&
       /\.[cm]?[jt]s$/u.test(extension.sourceInfo.source);
-    const { packageRoot, directoryEntry, slashIndex } = findExtensionStackMatchesPart1(
+    const { packageRoot, directoryEntry, slashIndex } = extensionStackLocation(
       extension,
       singleFilePackage,
       resolvedPath,
     );
-    const matched = findExtensionStackMatchesPart4(
+    const matched = stackMentionsExtension(
       packageRoot,
       normalizedStack,
       directoryEntry,
@@ -125,39 +125,7 @@ function findExtensionStackMatches(
   return matches;
 }
 
-function findExtensionStackMatchesPart4(
-  packageRoot: string | undefined,
-  normalizedStack: string,
-  directoryEntry: boolean,
-  slashIndex: number,
-  resolvedPath: string,
-) {
-  return findExtensionStackMatchesPart3(
-    packageRoot,
-    normalizedStack,
-    directoryEntry,
-    slashIndex,
-    resolvedPath,
-  );
-}
-
-function findExtensionStackMatchesPart3(
-  packageRoot: string | undefined,
-  normalizedStack: string,
-  directoryEntry: boolean,
-  slashIndex: number,
-  resolvedPath: string,
-) {
-  return findExtensionStackMatchesPart2(
-    packageRoot,
-    normalizedStack,
-    directoryEntry,
-    slashIndex,
-    resolvedPath,
-  );
-}
-
-function findExtensionStackMatchesPart2(
+function stackMentionsExtension(
   packageRoot: string | undefined,
   normalizedStack: string,
   directoryEntry: boolean,
@@ -171,7 +139,7 @@ function findExtensionStackMatchesPart2(
       : stackContainsPath(normalizedStack, resolvedPath, false);
 }
 
-function findExtensionStackMatchesPart1(
+function extensionStackLocation(
   extension: ExtensionStackMetadata,
   singleFilePackage: boolean,
   resolvedPath: string,

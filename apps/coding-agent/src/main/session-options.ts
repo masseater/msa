@@ -24,8 +24,8 @@ function buildSessionOptions(
   cliThinkingFromModel: boolean;
   diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[];
 } {
-  let { diagnostics, options, cliThinkingFromModel }: ReturnType<typeof buildSessionOptionsPart2> =
-    buildSessionOptionsPart2(parsed);
+  let { diagnostics, options, cliThinkingFromModel }: ReturnType<typeof cliModelOptions> =
+    cliModelOptions(parsed);
   if (parsed.model !== undefined && parsed.model !== "") {
     const resolved = resolveCliModel({
       cliModel: parsed.model,
@@ -51,7 +51,7 @@ function buildSessionOptions(
   }
 
   const firstScopedModel = scopedModels[0];
-  return buildSessionOptionsPart3(
+  return completeSessionOptions(
     options,
     firstScopedModel,
     hasExistingSession,
@@ -64,7 +64,7 @@ function buildSessionOptions(
   );
 }
 
-function buildSessionOptionsPart1(
+function applyScopedModelDefault(
   options: sdkTypes.CreateAgentSessionOptions,
   firstScopedModel: modelResolverTypes.ScopedModel | undefined,
   hasExistingSession: boolean,
@@ -103,7 +103,7 @@ function buildSessionOptionsPart1(
     }
   }
 
-  buildSessionOptionsPart1Part1(parsed, options, scopedModels);
+  applyThinkingAndScope(parsed, options, scopedModels);
 
   if (parsed.noTools === true) {
     options.noTools = "all";
@@ -112,7 +112,7 @@ function buildSessionOptionsPart1(
   }
 }
 
-function buildSessionOptionsPart1Part1(
+function applyThinkingAndScope(
   parsed: argsTypes.Args,
   options: sdkTypes.CreateAgentSessionOptions,
   scopedModels: modelResolverTypes.ScopedModel[],
@@ -129,7 +129,7 @@ function buildSessionOptionsPart1Part1(
   }
 }
 
-function buildSessionOptionsPart2(parsed: argsTypes.Args) {
+function cliModelOptions(parsed: argsTypes.Args) {
   const options: sdkTypes.CreateAgentSessionOptions = {};
   const diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[] = [];
   let cliThinkingFromModel = false;
@@ -147,7 +147,7 @@ function buildSessionOptionsPart2(parsed: argsTypes.Args) {
   return { cliThinkingFromModel, diagnostics, options };
 }
 
-function buildSessionOptionsPart3(
+function completeSessionOptions(
   options: sdkTypes.CreateAgentSessionOptions,
   firstScopedModel: modelResolverTypes.ScopedModel | undefined,
   hasExistingSession: boolean,
@@ -162,7 +162,7 @@ function buildSessionOptionsPart3(
   cliThinkingFromModel: boolean;
   diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[];
 } {
-  buildSessionOptionsPart1(
+  applyScopedModelDefault(
     options,
     firstScopedModel,
     hasExistingSession,

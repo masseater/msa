@@ -66,7 +66,7 @@ function createModelUpgradeToolDefinition(
     execute(_toolCallId, params) {
       return Effect.runPromise(
         awaiting(function* () {
-          const { upgrades, candidates } = executePart2(target, params);
+          const { upgrades, candidates } = selectUpgrades(target, params);
           if (upgrades.length === 0) {
             return {
               content: [{ text: "No model upgrades found.", type: "text" }],
@@ -123,7 +123,7 @@ function createModelUpgradeToolDefinition(
           }
 
           const replacements = createUpgradeReplacements(applicable);
-          const count = yield* executePart1(target, replacements, lines);
+          const count = yield* applyUpgrades(target, replacements, lines);
           return {
             content: [{ text: lines.join("\n"), type: "text" }],
             details: {
@@ -142,7 +142,7 @@ function createModelUpgradeToolDefinition(
     promptGuidelines: [...modelUpgradeToolSystemPromptContribution.guidelines],
     promptSnippet: modelUpgradeToolSystemPromptContribution.snippet,
   };
-  return createModelUpgradeToolDefinitionPart1(modelUpgrade);
+  return withReadOnlyVariant(modelUpgrade);
 }
 
 const modelUpgrade = {
@@ -153,7 +153,7 @@ const modelUpgrade = {
 
 export default modelUpgrade;
 
-function createModelUpgradeToolDefinitionPart1(
+function withReadOnlyVariant(
   definition: extensionsTypesTypes.ToolDefinition<
     Type.TObject<{
       action: Type.TUnion<[Type.TLiteral<"list">, Type.TLiteral<"apply">]>;
@@ -182,7 +182,7 @@ function createModelUpgradeToolDefinitionPart1(
   };
 }
 
-function executePart2(
+function selectUpgrades(
   target: modelUpgradeTypes.ModelUpgradeToolTarget,
   params: { model?: string; action: "list" | "apply" },
 ) {
@@ -198,7 +198,7 @@ function executePart2(
   return { candidates, upgrades };
 }
 
-function* executePart1(
+function* applyUpgrades(
   target: modelUpgradeTypes.ModelUpgradeToolTarget,
   replacements: Map<string, string>,
   lines: string[],

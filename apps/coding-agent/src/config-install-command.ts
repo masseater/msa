@@ -105,7 +105,7 @@ function getSelfUpdateCommandForMethod(
     case "bun-binary":
       return undefined;
     case "pnpm":
-      return getSelfUpdateCommandForMethodPart1(target, installedPackageName);
+      return pnpmSelfUpdateCommand(target, installedPackageName);
     case "yarn":
       return makeSelfUpdateCommand(
         makeSelfUpdateCommandStep("yarn", [
@@ -133,7 +133,7 @@ function getSelfUpdateCommandForMethod(
       );
     case "npm": {
       const [command = "npm", ...npmArgs] = npmCommand ?? [];
-      const { installStep, uninstallStep } = getSelfUpdateCommandForMethodPart5(
+      const { installStep, uninstallStep } = npmSelfUpdateSteps(
         npmCommand,
         npmArgs,
         command,
@@ -147,55 +147,7 @@ function getSelfUpdateCommandForMethod(
   }
 }
 
-function getSelfUpdateCommandForMethodPart5(
-  npmCommand: string[] | undefined,
-  npmArgs: string[],
-  command: string,
-  target: { packageName: string; installSpec: string },
-  installedPackageName: string,
-): { installStep: any; uninstallStep: any } {
-  return getSelfUpdateCommandForMethodPart4(
-    npmCommand,
-    npmArgs,
-    command,
-    target,
-    installedPackageName,
-  );
-}
-
-function getSelfUpdateCommandForMethodPart4(
-  npmCommand: string[] | undefined,
-  npmArgs: string[],
-  command: string,
-  target: { packageName: string; installSpec: string },
-  installedPackageName: string,
-): { installStep: any; uninstallStep: any } {
-  return getSelfUpdateCommandForMethodPart3(
-    npmCommand,
-    npmArgs,
-    command,
-    target,
-    installedPackageName,
-  );
-}
-
-function getSelfUpdateCommandForMethodPart3(
-  npmCommand: string[] | undefined,
-  npmArgs: string[],
-  command: string,
-  target: { packageName: string; installSpec: string },
-  installedPackageName: string,
-): { installStep: any; uninstallStep: any } {
-  return getSelfUpdateCommandForMethodPart2(
-    npmCommand,
-    npmArgs,
-    command,
-    target,
-    installedPackageName,
-  );
-}
-
-function getSelfUpdateCommandForMethodPart2(
+function npmSelfUpdateSteps(
   npmCommand: string[] | undefined,
   npmArgs: string[],
   command: string,
@@ -228,35 +180,33 @@ function getSelfUpdateCommandForMethodPart2(
   return { installStep, uninstallStep };
 }
 
-function getSelfUpdateCommandForMethodPart1(
+function pnpmSelfUpdateCommand(
   target: { packageName: string; installSpec: string },
   installedPackageName: string,
 ) {
-  {
-    const globalRoot = readCommandOutput("pnpm", ["root", "-g"]);
-    const match =
-      globalRoot !== undefined && globalRoot !== ""
-        ? undefined
-        : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/u.exec(getPackageDir());
-    const globalDir = match?.[1];
-    const binDirArgs =
-      globalDir === undefined
-        ? []
-        : [`--config.global-bin-dir=${readEnv("PNPM_HOME") || dirname(dirname(globalDir))}`];
-    return makeSelfUpdateCommand(
-      makeSelfUpdateCommandStep("pnpm", [
-        "install",
-        "-g",
-        "--ignore-scripts",
-        "--config.minimumReleaseAge=0",
-        ...binDirArgs,
-        target.installSpec,
-      ]),
-      target.packageName === installedPackageName
-        ? undefined
-        : makeSelfUpdateCommandStep("pnpm", ["remove", "-g", ...binDirArgs, installedPackageName]),
-    );
-  }
+  const globalRoot = readCommandOutput("pnpm", ["root", "-g"]);
+  const match =
+    globalRoot !== undefined && globalRoot !== ""
+      ? undefined
+      : /^(.*[\\/]global[\\/][^\\/]+)[\\/]\.pnpm[\\/]/u.exec(getPackageDir());
+  const globalDir = match?.[1];
+  const binDirArgs =
+    globalDir === undefined
+      ? []
+      : [`--config.global-bin-dir=${readEnv("PNPM_HOME") || dirname(dirname(globalDir))}`];
+  return makeSelfUpdateCommand(
+    makeSelfUpdateCommandStep("pnpm", [
+      "install",
+      "-g",
+      "--ignore-scripts",
+      "--config.minimumReleaseAge=0",
+      ...binDirArgs,
+      target.installSpec,
+    ]),
+    target.packageName === installedPackageName
+      ? undefined
+      : makeSelfUpdateCommandStep("pnpm", ["remove", "-g", ...binDirArgs, installedPackageName]),
+  );
 }
 
 function readCommandOutput(

@@ -46,7 +46,7 @@ export default class FirstTimeSetupComponent extends tui.Container {
   }
 
   private update(): void {
-    FirstTimeSetupComponent.updatePart1(this);
+    FirstTimeSetupComponent.renderWelcome(this);
 
     this.addChild(new Spacer(1));
     this.addChild(
@@ -64,7 +64,7 @@ export default class FirstTimeSetupComponent extends tui.Container {
     this.addChild(new DynamicBorder());
   }
 
-  private static updatePart1(self: FirstTimeSetupComponent): void {
+  private static renderWelcome(self: FirstTimeSetupComponent): void {
     self.clear();
     self.addChild(new DynamicBorder());
     self.addChild(new Spacer(1));

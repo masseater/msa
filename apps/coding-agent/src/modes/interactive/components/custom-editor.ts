@@ -77,10 +77,10 @@ export default class CustomEditor extends tuiModule.Editor {
 
     status = this.workingStatusIndicator.renderSpinnerInBorder(width);
     statusWidth = visibleWidth(status);
-    return this.renderTopBorderPart1(width, statusWidth, status);
+    return this.borderWithStatus(width, statusWidth, status);
   }
 
-  private renderTopBorderPart1(width: number, statusWidth: number, status: string) {
+  private borderWithStatus(width: number, statusWidth: number, status: string) {
     const prefixWidth = Math.min(3, Math.max(0, width - statusWidth));
     return (
       this.borderColor("─".repeat(prefixWidth)) +

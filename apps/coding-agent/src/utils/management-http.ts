@@ -24,7 +24,7 @@ function fetchWithRetryImpl(
           : Math.max(0, Math.floor(options.maxRetries));
       const retryOnStatus = options.retryOnStatus ?? true;
       const parentSignal = init?.signal ?? undefined;
-      const { timeoutSignal, attemptTimeoutMs } = fetchWithRetryImplPart2(options);
+      const { timeoutSignal, attemptTimeoutMs } = retryTimeouts(options);
 
       for (let attempt = 0; ; attempt++) {
         parentSignal?.throwIfAborted();
@@ -53,14 +53,7 @@ function fetchWithRetryImpl(
             attemptTimeoutSignal?.aborted === true &&
             parentSignal?.aborted !== true &&
             timeoutSignal?.aborted !== true;
-          fetchWithRetryImplPart1(
-            parentSignal,
-            timeoutSignal,
-            error,
-            attemptTimedOut,
-            attempt,
-            maxRetries,
-          );
+          rethrowIfFinal(parentSignal, timeoutSignal, error, attemptTimedOut, attempt, maxRetries);
         }
       }
     }),
@@ -85,7 +78,7 @@ const managementHttp = {
 
 export default managementHttp;
 
-function fetchWithRetryImplPart2(options: managementHttpTypes.FetchRetryOptions) {
+function retryTimeouts(options: managementHttpTypes.FetchRetryOptions) {
   const timeoutSignal =
     options.timeoutMs !== undefined && options.timeoutMs > 0
       ? AbortSignal.timeout(options.timeoutMs)
@@ -97,7 +90,7 @@ function fetchWithRetryImplPart2(options: managementHttpTypes.FetchRetryOptions)
   return { attemptTimeoutMs, timeoutSignal };
 }
 
-function fetchWithRetryImplPart1(
+function rethrowIfFinal(
   parentSignal: any,
   timeoutSignal: AbortSignal | undefined,
   error: unknown,

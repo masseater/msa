@@ -73,10 +73,13 @@ export default class ExtensionEditorComponent
     this.addChild(new Spacer(1));
 
     this.editor = new Editor(tui, getEditorTheme(), editorOptions);
-    ExtensionEditorComponent.buildPart1(this, prefill);
+    ExtensionEditorComponent.addEditorWithHints(this, prefill);
   }
 
-  private static buildPart1(self: ExtensionEditorComponent, prefill: string | undefined): void {
+  private static addEditorWithHints(
+    self: ExtensionEditorComponent,
+    prefill: string | undefined,
+  ): void {
     if (prefill !== undefined && prefill !== "") {
       self.editor.setText(prefill);
     }

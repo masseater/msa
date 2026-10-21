@@ -35,7 +35,7 @@ function processFileArgumentsImpl(
       const images: aiTypes.ImageContent[] = [];
 
       for (const fileArg of fileArgs) {
-        const { size, absolutePath } = yield* processFileArgumentsImplPart1(fileArg);
+        const { size, absolutePath } = yield* statFileArgument(fileArg);
         if (size === 0) {
           continue;
         }
@@ -96,7 +96,7 @@ const fileProcessor = {
 
 export default fileProcessor;
 
-function* processFileArgumentsImplPart1(fileArg: string) {
+function* statFileArgument(fileArg: string) {
   const absolutePath = resolve(yield* awaited(resolveReadPath(fileArg, process.cwd())));
 
   try {
