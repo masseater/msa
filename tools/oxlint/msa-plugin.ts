@@ -7,12 +7,28 @@ const LOOKUP_MESSAGE =
 const REQUIRE_MESSAGE =
   "require や動的 import で組み込みを読まない。Effect の API か platform 層を通して使う";
 
+const literalString = (node: Extract<ESTree.Node, { type: "Literal" }>): string | undefined =>
+  typeof node.value === "string" ? node.value : undefined;
+
+const templateString = (node: ESTree.TemplateLiteral): string | undefined =>
+  node.expressions.length === 0 ? (node.quasis[0]?.value.cooked ?? undefined) : undefined;
+
 const staticString = (node: ESTree.Node | null | undefined): string | undefined => {
-  if (node?.type === "Literal" && typeof node.value === "string") return node.value;
-  if (node?.type === "TemplateLiteral" && node.expressions.length === 0)
-    return node.quasis[0]?.value.cooked ?? undefined;
-  return undefined;
+  switch (node?.type) {
+    case "Literal":
+      return literalString(node);
+    case "TemplateLiteral":
+      return templateString(node);
+    default:
+      return undefined;
+  }
 };
+
+const isRequireMember = (callee: ESTree.Node): boolean =>
+  callee.type === "MemberExpression" &&
+  !callee.computed &&
+  callee.property.type === "Identifier" &&
+  callee.property.name === "require";
 
 const moduleBase = (specifier: string): string =>
   specifier.replace(/^node:/u, "").split("/")[0] ?? specifier;
@@ -53,13 +69,10 @@ const noBuiltinRequire = defineRule({
       const specifier = staticString(node);
       return specifier !== undefined && modules.has(moduleBase(specifier));
     };
+    const isRequireName = (callee: ESTree.Node): boolean =>
+      callee.type === "Identifier" && requireNames.has(callee.name);
     const isRequire = (callee: ESTree.Node): boolean =>
-      (callee.type === "Identifier" && requireNames.has(callee.name)) ||
-      isCreateRequireCall(callee) ||
-      (callee.type === "MemberExpression" &&
-        !callee.computed &&
-        callee.property.type === "Identifier" &&
-        callee.property.name === "require");
+      isRequireName(callee) || isCreateRequireCall(callee) || isRequireMember(callee);
     const report = (node: ESTree.Node): void => context.report({ message: REQUIRE_MESSAGE, node });
     return {
       CallExpression(node) {
