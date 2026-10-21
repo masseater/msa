@@ -1,6 +1,6 @@
 import ids from "./ids.ts";
 import type replanApplyInternalTypes from "./replan-apply-internal.types.ts";
-import replanApplyPart1 from "./replan-apply-part1.ts";
+import replanHandoffs from "./replan-handoffs.ts";
 import replanSupport from "./replan-support.ts";
 import type replanTypes from "./replan.types.ts";
 import roundsModule from "./rounds.ts";
@@ -8,11 +8,86 @@ import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
-const { store } = storeModule;
-const { rounds } = roundsModule;
 const { fail, unique } = replanSupport;
+const { rounds } = roundsModule;
 const { newId } = ids;
-const { memoBlock, newTask, writeReport } = replanApplyPart1;
+const { store } = storeModule;
+const { writeReport } = replanHandoffs;
+
+function detachReview(runtime: runtimeTypes.Runtime, task: orchestratorTypesTypes.Task): void {
+  const review = store.reviewTaskOfRound(runtime.database, runtime.options.project, task.round);
+  if (review !== undefined) store.removeDependency(runtime.database, review.id, task.id);
+}
+
+function closeDropped(
+  runtime: runtimeTypes.Runtime,
+  prepared: replanTypes.Prepared,
+  replanId: string,
+  now: number,
+): orchestratorTypesTypes.ReplanDropped[] {
+  const database = runtime.database;
+  const dropped: orchestratorTypesTypes.ReplanDropped[] = [];
+  for (const item of prepared.drop) {
+    const task = store.getTask(database, item.taskId);
+    if (task === undefined) continue;
+    detachReview(runtime, task);
+    store.setTaskStatus(database, task.id, "stopped", now);
+    writeReport(runtime, task.id, "replan", `dropped by replan ${replanId}: ${item.reason}`, now);
+    dropped.push({ reason: item.reason, taskId: task.id, title: task.title });
+  }
+  for (const entry of prepared.entries) {
+    for (const id of entry.from) {
+      const task = store.getTask(database, id);
+      if (task === undefined) continue;
+      detachReview(runtime, task);
+      store.setTaskStatus(database, id, "stopped", now);
+    }
+  }
+  return dropped;
+}
+
+function inherited(
+  sources: readonly orchestratorTypesTypes.Task[],
+  pick: (task: orchestratorTypesTypes.Task) => string,
+): string {
+  return sources
+    .map(pick)
+    .filter((value) => value.trim() !== "")
+    .join("\n\n");
+}
+
+function roundFor(
+  input: orchestratorTypesTypes.ReplanTaskInput,
+  sources: readonly orchestratorTypesTypes.Task[],
+): string {
+  if (input.round !== undefined) return input.round;
+  if (sources.length === 1) return sources[0]!.round;
+  return "main";
+}
+
+function newTask(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.ReplanTaskInput,
+  sources: readonly orchestratorTypesTypes.Task[],
+  now: number,
+): orchestratorTypesTypes.Task {
+  return {
+    condition: null,
+    createdAt: now,
+    currentState: input.currentState ?? inherited(sources, (source) => source.currentState),
+    cwd: input.cwd ?? sources[0]?.cwd ?? runtime.options.cwd,
+    goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
+    id: newId("t"),
+    kind: "work",
+    model: input.model ?? null,
+    project: runtime.options.project,
+    round: roundFor(input, sources),
+    status: "waiting",
+    thinkingLevel: input.thinkingLevel ?? null,
+    title: input.title,
+    updatedAt: now,
+  };
+}
 
 function createTasks(
   runtime: runtimeTypes.Runtime,
@@ -82,39 +157,6 @@ function keep(runtime: runtimeTypes.Runtime, prepared: replanTypes.Prepared, now
   }
 }
 
-function writeHandoffs(
-  runtime: runtimeTypes.Runtime,
-  prepared: replanTypes.Prepared,
-  handoffs: readonly replanApplyInternalTypes.Handoff[],
-  replanId: string,
-  now: number,
-  inheritors: ReadonlyMap<string, readonly string[]>,
-): void {
-  for (const handoff of handoffs) {
-    const content = memoBlock(replanId, prepared.input.reason, handoff);
-    writeReport(runtime, handoff.taskId, handoff.threadId, content, now);
-    const targets = prepared.keep.includes(handoff.taskId)
-      ? [handoff.taskId]
-      : [...(inheritors.get(handoff.taskId) ?? [])];
-    if (targets.length === 0) continue;
-    for (const target of targets) writeReport(runtime, target, handoff.threadId, content, now);
-    store.insertNote(runtime.database, {
-      author: "replan",
-      content,
-      createdAt: now,
-      id: newId("note"),
-      project: runtime.options.project,
-      round: null,
-      taskIds: targets,
-    });
-  }
-}
+const replanTasks = { closeDropped, createTasks, keep, rewire };
 
-const replanApplyPart2 = {
-  createTasks,
-  keep,
-  rewire,
-  writeHandoffs,
-};
-
-export default replanApplyPart2;
+export default replanTasks;

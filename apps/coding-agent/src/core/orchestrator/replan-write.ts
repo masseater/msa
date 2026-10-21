@@ -1,16 +1,16 @@
 import type replanApplyInternalTypes from "./replan-apply-internal.types.ts";
-import replanApplyPart1 from "./replan-apply-part1.ts";
-import replanApplyPart2 from "./replan-apply-part2.ts";
+import replanHandoffs from "./replan-handoffs.ts";
 import replanStoreModule from "./replan-store.ts";
+import replanTasks from "./replan-tasks.ts";
 import type replanTypes from "./replan.types.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
-const { store } = storeModule;
 const { replanStore } = replanStoreModule;
-const { closeDropped } = replanApplyPart1;
-const { createTasks, keep, rewire, writeHandoffs } = replanApplyPart2;
+const { store } = storeModule;
+const { writeHandoffs } = replanHandoffs;
+const { keep, rewire, createTasks, closeDropped } = replanTasks;
 
 function write(
   runtime: runtimeTypes.Runtime,
@@ -55,8 +55,6 @@ function write(
   });
 }
 
-const replanApplyPart3 = {
-  write,
-};
+const replanWrite = { write };
 
-export default replanApplyPart3;
+export default replanWrite;

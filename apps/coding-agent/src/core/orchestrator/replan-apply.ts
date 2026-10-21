@@ -1,9 +1,51 @@
-import replanApplyPart5 from "./replan-apply-part5.ts";
+import { Effect } from "effect";
 
-const { applying } = replanApplyPart5;
+import type errorsTypes from "./errors.types.ts";
+import ids from "./ids.ts";
+import replanHandoffs from "./replan-handoffs.ts";
+import replanWrite from "./replan-write.ts";
+import type replanTypes from "./replan.types.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import schedule from "./schedule.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
-const replanApply = {
-  applying,
-};
+const { scheduling } = schedule;
+const { newId } = ids;
+const { nowMillis } = runtimeModule;
+const { collect } = replanHandoffs;
+const { write } = replanWrite;
+
+function apply(
+  runtime: runtimeTypes.Runtime,
+  prepared: replanTypes.Prepared,
+  memos: ReadonlyMap<string, string>,
+): Effect.Effect<orchestratorTypesTypes.ReplanResult, errorsTypes.OrchestratorError> {
+  return Effect.gen(function* () {
+    const now = yield* nowMillis;
+    const replanId = newId("rp");
+    const handoffs = yield* collect(runtime, memos);
+    const changes = yield* Effect.sync(() => write(runtime, prepared, handoffs, replanId, now));
+    runtime.replanning = false;
+    yield* Effect.sync(() => runtime.publish());
+    const started =
+      prepared.input.resume === false ? [] : yield* scheduling.scheduleEffect(runtime);
+    yield* Effect.sync(() => runtime.publish());
+    return {
+      aborted: null,
+      created: changes.created,
+      dropped: changes.dropped,
+      kept: changes.kept,
+      replanId,
+      rewired: changes.rewired,
+      started,
+      stopped: changes.stopped,
+    };
+  });
+}
+
+const applying = { apply };
+
+const replanApply = { applying };
 
 export default replanApply;
