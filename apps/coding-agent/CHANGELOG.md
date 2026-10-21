@@ -5,7 +5,7 @@
 ### Added
 
 - A task can carry checks: commands with the exit code, and optionally the output, they must give. `create_task`, `replan`, and `set_task_state` take them. When the worker ends its turn, the harness runs them in the worker's working directory before the reviewer starts and sends failing results back to the worker; after three such rounds the task fails. `orchestrator.db` moves to schema 2, so an older msa stops with "Update msa" instead of running tasks without their checks ([docs](docs/cli.md#tools))
-- In a git repository each work task runs in its own worktree and branch, which the harness creates next to the main checkout before the first thread of the task starts; the worker, its reviewer, a rerun, and the goal's checks all use it, and it stays when the thread ends. `create_task` and `replan` take `mergeInto`, another work task whose branch this task branches from and merges into instead of opening its own pull request ([docs](docs/cli.md#tools))
+- In a git repository each work task runs in its own worktree and branch, which the harness creates next to the main checkout before the first thread of the task starts; the worker, its reviewer, a rerun, and the goal's checks all use it, and it stays when the thread ends. `create_task` and `replan` take `mergeInto`, another work task whose branch this task branches from and merges into instead of opening its own pull request; the harness makes that task depend on it. `orchestrator.db` moves to schema 3, so an older msa stops with "Update msa" instead of running every task in the main checkout ([docs](docs/cli.md#tools))
 
 ### Changed
 

@@ -141,8 +141,7 @@ function sourcesOf(
   task: orchestratorTypesTypes.Task,
 ): orchestratorTypesTypes.WorkspaceSource[] {
   return store
-    .listTasks(runtime.database, runtime.options.project)
-    .filter((candidate) => candidate.mergeInto === task.id)
+    .mergeSourcesOf(runtime.database, runtime.options.project, task.id)
     .map((source) => ({ branch: branchOf(source.id), task: source }));
 }
 

@@ -46,7 +46,7 @@ const replanTaskSchema = Type.Object({
   mergeInto: Type.Optional(
     Type.String({
       description:
-        "Existing work task whose branch this task's branch merges into. Default: the merge target of the first task it replaces.",
+        "Existing work task that has not started and whose branch this task's branch merges into; the harness makes it depend on this task. Default: the merge target of the first task it replaces. Tasks that merged into a replaced task merge into the first task that replaces it.",
     }),
   ),
   model: Type.Optional(modelSchema),

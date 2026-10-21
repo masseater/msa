@@ -2,55 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
+import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, makeTempDir, removePath } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
-const { runCommand } = orchestratorCallbacks;
-
-const GIT = "git -c user.name=t -c user.email=t@example.invalid";
-
-function sh(command: string, cwd: string): Effect.Effect<string> {
-  return Effect.flatMap(
-    Effect.promise((signal) => runCommand(command, cwd, 30_000, signal)),
-    (result) =>
-      result.exitCode === 0
-        ? Effect.succeed(result.output.trim())
-        : Effect.die(new Error(`${command} in ${cwd}: ${result.output}`)),
-  );
-}
-
-function commitOnBranch(repository: string, branch: string, message: string) {
-  return sh(
-    `git branch ${branch} && ${GIT} commit-tree -m ${message} -p ${branch} ${branch}^{tree} | xargs git update-ref refs/heads/${branch}`,
-    repository,
-  );
-}
-
-function withRepository<A, E>(body: (repository: string) => Effect.Effect<A, E>) {
-  return Effect.acquireUseRelease(
-    makeTempDir("msa-worktree-"),
-    (parent) =>
-      Effect.gen(function* () {
-        const repository = joinPath(parent, "repo");
-        yield* sh(
-          `mkdir -p repo/app && echo app > repo/app/README && git -C repo init -q -b main`,
-          parent,
-        );
-        yield* sh(`git add . && ${GIT} commit -q -m init`, repository);
-        return yield* body(repository);
-      }),
-    (parent) => removePath(parent),
-  );
-}
-
-function shortId(taskId: string): string {
-  return taskId.replace(/^t-/u, "");
-}
+const { commitOnBranch, gatedTarget, read, runCommand, sh, shortId, withRepository } =
+  worktreeSupport;
 
 const startsTheWorkerInAWorktreeAndChecksThere = () =>
   Effect.runPromise(
@@ -111,17 +72,7 @@ const branchesFromTheMergeTarget = () =>
     withRepository((repository) =>
       Effect.gen(function* () {
         const { orchestrator, workers } = setup({ cwd: repository, runCommand });
-        const gate = yield* create(orchestrator, {
-          currentState: "a",
-          goalState: "b",
-          title: "gate",
-        });
-        const target = yield* create(orchestrator, {
-          currentState: "the parts are on their own branches",
-          dependsOn: [gate.id],
-          goalState: "one pull request carries every part",
-          title: "integrate",
-        });
+        const { gate, target } = yield* gatedTarget(orchestrator);
         const targetBranch = `task/${shortId(target.id)}`;
         yield* commitOnBranch(repository, targetBranch, "target");
         const part = yield* create(orchestrator, {
@@ -138,11 +89,21 @@ const branchesFromTheMergeTarget = () =>
           `This work merges into task ${target.id} "integrate" on branch ${targetBranch}, which opens the pull request. Commit and push ${partBranch}; do not open a pull request.`,
         );
 
+        expect((yield* read(orchestrator, target.id)).dependsOn).toEqual(
+          [gate.id, part.id].toSorted(),
+        );
         workers[0]!.complete("gate done");
         yield* waitFor(() => workers.length === 3);
         workers[2]!.complete("acceptable");
+        yield* waitFor(() => taskStatus(orchestrator, gate.id) === "completed");
+        expect(taskStatus(orchestrator, target.id)).toBe("waiting");
+        expect(workers).toHaveLength(3);
+
+        partWorker.complete("part pushed");
         yield* waitFor(() => workers.length === 4);
-        const targetWorker = workers[3]!;
+        workers[3]!.complete("acceptable");
+        yield* waitFor(() => workers.length === 5);
+        const targetWorker = workers[4]!;
         expect(yield* sh("git rev-parse --abbrev-ref HEAD", targetWorker.cwd)).toBe(targetBranch);
         expect(yield* sh("git log -1 --format=%s", targetWorker.cwd)).toBe("target");
         expect(targetWorker.prompts[0]).toContain(
@@ -156,7 +117,7 @@ const branchesFromTheMergeTarget = () =>
   );
 
 it(
-  "branches a task that merges into another from that task's branch, and lists it to the target",
+  "branches a task that merges into another from that task's branch, makes the target wait for it, and lists it to the target",
   branchesFromTheMergeTarget,
 );
 

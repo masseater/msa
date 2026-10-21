@@ -98,6 +98,7 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
         for (const dependency of input.dependsOn ?? []) {
           store.addDependency(database, project, id, dependency);
         }
+        if (mergeInto !== null) store.linkMergeSources(database, project, mergeInto);
         rounds.attachReview(runtime, review, id, now);
       });
     });

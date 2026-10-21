@@ -72,6 +72,7 @@ const PATCH_COLUMNS: Readonly<Record<string, string>> = {
   condition: "condition",
   currentState: "current_state",
   goalState: "goal_state",
+  mergeInto: "merge_into",
   model: "model",
   status: "status",
   thinkingLevel: "thinking_level",
@@ -90,6 +91,7 @@ function updateTask(
       | "checks"
       | "status"
       | "condition"
+      | "mergeInto"
       | "model"
       | "thinkingLevel"
     >

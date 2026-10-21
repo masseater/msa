@@ -19,10 +19,11 @@ function collect(
     const database = runtime.database;
     const handoffs: replanApplyInternalTypes.Handoff[] = [];
     for (const [threadId, memo] of memos) {
+      const thread = store.getThread(database, threadId);
       for (const assignment of store.assignmentsOfThread(database, threadId)) {
         const task = store.getTask(database, assignment.taskId);
         if (task === undefined) continue;
-        const repo = yield* repoStates.read(task.cwd);
+        const repo = yield* repoStates.read(thread?.cwd ?? task.cwd);
         handoffs.push({ memo, repo, taskId: task.id, threadId, title: task.title });
       }
     }

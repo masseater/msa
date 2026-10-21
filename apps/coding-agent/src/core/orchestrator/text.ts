@@ -83,6 +83,11 @@ function requireMergeTarget(
   if (target.kind !== "work") {
     throw new Error(`${mergeInto} is a review task; merge into a work task.`);
   }
+  if (target.status !== "waiting") {
+    throw new Error(
+      `${mergeInto} is ${target.status}; merge only into a task that has not started, since it merges the branches when it starts.`,
+    );
+  }
   return target.id;
 }
 

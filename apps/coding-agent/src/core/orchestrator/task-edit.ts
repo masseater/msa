@@ -51,6 +51,11 @@ function dependencyEdit(
     throw new Error("Pass the dependencies to add or remove");
   }
   const tasks = taskIds.map((id) => taskOf(runtime, id, "taskIds"));
+  for (const task of tasks) {
+    for (const id of remove) {
+      store.guardMergeDependency(runtime.database, runtime.options.project, task.id, id);
+    }
+  }
   const dependencies = add.map((id) => taskOf(runtime, id, "add"));
   for (const task of tasks) {
     for (const dependency of dependencies) {
