@@ -1,80 +1,111 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 
-import type messagesTypes from "./messages.types.ts";
-import platformNode from "./platform-node.ts";
-import platform from "./platform.ts";
-import sessionManagerHelpers from "./session-manager-helpers.ts";
-import SessionManagerLayer1 from "./session-manager-layer-1.ts";
-import sessionManagerSupport from "./session-manager-support.ts";
-import type sessionManagerTypes from "./session-manager.types.ts";
+import type messagesTypes from "../messages.types.ts";
+import platform from "../platform.ts";
+import sessionManagerSupport from "../session-manager-support.ts";
+import type SessionManager from "../session-manager.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
 
-const { CURRENT_SESSION_VERSION, assertValidSessionId, generateId, migrateToCurrentVersion } =
-  sessionManagerSupport;
+const { generateId } = sessionManagerSupport;
 const { nowIso, toEpochMs } = platform;
-const { join } = platformNode;
 const { getCurrentSystemMessage } = ai;
-const { createSessionId } = sessionManagerHelpers;
 
-export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 {
-  newSession(options?: sessionManagerTypes.NewSessionOptions): string | undefined {
-    if (options?.id !== undefined) {
-      assertValidSessionId(options.id);
-    }
-    this.sessionId = options?.id ?? createSessionId();
-    const timestamp = nowIso();
-    const header: sessionManagerTypes.SessionHeader = {
-      cwd: this.cwd,
-      id: this.sessionId,
-      parentSession: options?.parentSession,
-      timestamp,
-      type: "session",
-      version: CURRENT_SESSION_VERSION,
-    };
-    this.fileEntries = [header];
-    this.byId.clear();
-    this.labelsById.clear();
-    this.labelTimestampsById.clear();
-    this.leafId = null;
-    this.flushed = false;
+export default class SessionAppends {
+  private readonly manager: SessionManager;
 
-    if (this.persist) {
-      const fileTimestamp = timestamp.replace(/[:.]/gu, "-");
-      this.sessionFile = join(this.getSessionDir(), `${fileTimestamp}_${this.sessionId}.jsonl`);
-    }
-    return this.sessionFile;
+  constructor(manager: SessionManager) {
+    this.manager = manager;
   }
 
-  protected loadEntries(
-    entries: sessionManagerTypes.FileEntry[],
-    options?: sessionManagerTypes.NewSessionOptions,
-  ): void {
-    const header = entries.find((e) => e.type === "session") as
-      | sessionManagerTypes.SessionHeader
-      | undefined;
+  private appendEntry(entry: sessionManagerTypes.SessionEntry): void {
+    this.manager.tree.fileEntries.push(entry);
+    this.manager.tree.byId.set(entry.id, entry);
+    this.manager.tree.leafId = entry.id;
+    this.manager.storage.persistInternal(entry);
+  }
 
-    if (header === undefined) {
-      this.newSession(options);
-      this.fileEntries = this.fileEntries.concat(entries);
-    } else {
-      this.fileEntries = entries;
-      this.sessionId = header.id;
+  appendThinkingLevelChange(thinkingLevel: string): string {
+    const entry: sessionManagerTypes.ThinkingLevelChangeEntry = {
+      id: generateId(this.manager.tree.byId),
+      parentId: this.manager.tree.leafId,
+      thinkingLevel,
+      timestamp: nowIso(),
+      type: "thinking_level_change",
+    };
+    this.appendEntry(entry);
+    return entry.id;
+  }
 
-      if (migrateToCurrentVersion(this.fileEntries)) {
-        this.rewriteFile();
-      }
+  appendModelChange(provider: string, modelId: string): string {
+    const entry: sessionManagerTypes.ModelChangeEntry = {
+      id: generateId(this.manager.tree.byId),
+      modelId,
+      parentId: this.manager.tree.leafId,
+      provider,
+      timestamp: nowIso(),
+      type: "model_change",
+    };
+    this.appendEntry(entry);
+    return entry.id;
+  }
+
+  appendCustomEntry(customType: string, data?: unknown): string {
+    const entry: sessionManagerTypes.CustomEntry = {
+      customType,
+      data,
+      id: generateId(this.manager.tree.byId),
+      parentId: this.manager.tree.leafId,
+      timestamp: nowIso(),
+      type: "custom",
+    };
+    this.appendEntry(entry);
+    return entry.id;
+  }
+
+  appendSessionInfo(name: string): string {
+    const sanitizedName = name.replace(/[\r\n]+/gu, " ").trim();
+    const entry: sessionManagerTypes.SessionInfoEntry = {
+      id: generateId(this.manager.tree.byId),
+      name: sanitizedName,
+      parentId: this.manager.tree.leafId,
+      timestamp: nowIso(),
+      type: "session_info",
+    };
+    this.appendEntry(entry);
+    return entry.id;
+  }
+
+  appendLabelChange(targetId: string, label: string | undefined): string {
+    if (!this.manager.tree.byId.has(targetId)) {
+      throw new Error(`Entry ${targetId} not found`);
     }
-
-    this.buildIndex();
+    const entry: sessionManagerTypes.LabelEntry = {
+      id: generateId(this.manager.tree.byId),
+      label,
+      parentId: this.manager.tree.leafId,
+      targetId,
+      timestamp: nowIso(),
+      type: "label",
+    };
+    this.appendEntry(entry);
+    if (label !== undefined && label !== "") {
+      this.manager.tree.labelsById.set(targetId, label);
+      this.manager.tree.labelTimestampsById.set(targetId, entry.timestamp);
+    } else {
+      this.manager.tree.labelsById.delete(targetId);
+      this.manager.tree.labelTimestampsById.delete(targetId);
+    }
+    return entry.id;
   }
 
   appendMessage(
     message: aiTypes.Message | messagesTypes.CustomMessage | messagesTypes.BashExecutionMessage,
   ): string {
     const entry: sessionManagerTypes.SessionMessageEntry = {
-      id: generateId(this.byId),
+      id: generateId(this.manager.tree.byId),
       message,
-      parentId: this.leafId,
+      parentId: this.manager.tree.leafId,
       timestamp: nowIso(),
       type: "message",
     };
@@ -90,10 +121,10 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
     note?: string,
   ): sessionManagerTypes.UsageEntry {
     const entry: sessionManagerTypes.UsageEntry = {
-      id: generateId(this.byId),
+      id: generateId(this.manager.tree.byId),
       kind,
       model,
-      parentId: this.leafId,
+      parentId: this.manager.tree.leafId,
       provider,
       timestamp: nowIso(),
       type: "usage",
@@ -113,14 +144,16 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
     usage?: aiTypes.Usage,
   ): string {
     const timestamp = nowIso();
-    const systemMessage = getCurrentSystemMessage(this.buildSessionProjection().messages);
-    const id = generateId(this.byId);
+    const systemMessage = getCurrentSystemMessage(
+      this.manager.tree.buildSessionProjection().messages,
+    );
+    const id = generateId(this.manager.tree.byId);
     const entry: sessionManagerTypes.CompactionEntry<T> = {
       details,
       firstKeptEntryId: firstKeptEntryId ?? id,
       fromHook,
       id,
-      parentId: this.leafId,
+      parentId: this.manager.tree.leafId,
       summary,
       timestamp,
       tokensBefore,
@@ -145,8 +178,8 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
       customType,
       details,
       display,
-      id: generateId(this.byId),
-      parentId: this.leafId,
+      id: generateId(this.manager.tree.byId),
+      parentId: this.manager.tree.leafId,
       timestamp: nowIso(),
       type: "custom_message",
     };
@@ -166,9 +199,9 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
     ) {
       throw new Error("Context edit replacement must be null or contain string/array content");
     }
-    const target = this.byId.get(targetId);
+    const target = this.manager.tree.byId.get(targetId);
     if (target === undefined) throw new Error(`Entry ${targetId} not found`);
-    if (!this.getBranch().some((entry) => entry.id === targetId)) {
+    if (!this.manager.tree.getBranch().some((entry) => entry.id === targetId)) {
       throw new Error(`Entry ${targetId} is not on the active branch`);
     }
     const editable =
@@ -186,8 +219,8 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
         ? { content: [{ text: replacement.content, type: "text" as const }] }
         : replacement;
     const entry: sessionManagerTypes.ContextEditEntry = {
-      id: generateId(this.byId),
-      parentId: this.leafId,
+      id: generateId(this.manager.tree.byId),
+      parentId: this.manager.tree.leafId,
       replacement: normalizedReplacement,
       targetId,
       timestamp: nowIso(),
@@ -197,41 +230,6 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
     return entry.id;
   }
 
-  getTree(): sessionManagerTypes.SessionTreeNode[] {
-    const entries = this.getEntries();
-    const nodeMap = new Map<string, sessionManagerTypes.SessionTreeNode>();
-    const roots: sessionManagerTypes.SessionTreeNode[] = [];
-
-    for (const entry of entries) {
-      const label = this.labelsById.get(entry.id);
-      const labelTimestamp = this.labelTimestampsById.get(entry.id);
-      nodeMap.set(entry.id, { children: [], entry, label, labelTimestamp });
-    }
-
-    for (const entry of entries) {
-      const node = nodeMap.get(entry.id)!;
-      if (entry.parentId === null || entry.parentId === entry.id) {
-        roots.push(node);
-      } else {
-        const parent = nodeMap.get(entry.parentId);
-        if (parent === undefined) {
-          roots.push(node);
-        } else {
-          parent.children.push(node);
-        }
-      }
-    }
-
-    const stack: sessionManagerTypes.SessionTreeNode[] = [...roots];
-    while (stack.length > 0) {
-      const node = stack.pop()!;
-      node.children.sort((a, b) => toEpochMs(a.entry.timestamp) - toEpochMs(b.entry.timestamp));
-      stack.push(...node.children);
-    }
-
-    return roots;
-  }
-
   branchWithSummary(
     branchFromId: string | null,
     summary: string,
@@ -239,16 +237,16 @@ export default abstract class SessionManagerLayer2 extends SessionManagerLayer1 
     fromHook?: boolean,
     usage?: aiTypes.Usage,
   ): string {
-    if (branchFromId !== null && !this.byId.has(branchFromId)) {
+    if (branchFromId !== null && !this.manager.tree.byId.has(branchFromId)) {
       throw new Error(`Entry ${branchFromId} not found`);
     }
-    const fromId = this.leafId ?? "root";
-    this.leafId = branchFromId;
+    const fromId = this.manager.tree.leafId ?? "root";
+    this.manager.tree.leafId = branchFromId;
     const entry: sessionManagerTypes.BranchSummaryEntry = {
       details,
       fromHook,
       fromId,
-      id: generateId(this.byId),
+      id: generateId(this.manager.tree.byId),
       parentId: branchFromId,
       summary,
       timestamp: nowIso(),
