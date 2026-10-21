@@ -98,6 +98,11 @@ declare namespace settingsSelectorTypes {
   }
 
   type SettingsSelectorComponent = (typeof SettingsSelectorComponentClass)["prototype"];
+
+  interface SettingEntry {
+    item: tuiTypes.SettingItem;
+    apply?: (value: string, callbacks: SettingsCallbacks) => void;
+  }
 }
 
 export type { settingsSelectorTypes as default };
