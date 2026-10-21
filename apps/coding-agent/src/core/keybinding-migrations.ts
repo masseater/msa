@@ -1,8 +1,8 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import keybindingsPart1 from "./keybindings-part1.ts";
+import keybindingDefinitions from "./keybinding-definitions.ts";
 
-const { KEYBINDINGS } = keybindingsPart1;
+const { KEYBINDINGS } = keybindingDefinitions;
 
 const KEYBINDING_NAME_MIGRATIONS = {
   clear: "app.clear",
@@ -110,8 +110,8 @@ function orderKeybindingsConfig(config: Record<string, unknown>): Record<string,
   return ordered;
 }
 
-const keybindingsPart2 = {
+const keybindingMigrations = {
   migrateKeybindingsConfig,
 };
 
-export default keybindingsPart2;
+export default keybindingMigrations;

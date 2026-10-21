@@ -245,10 +245,10 @@ const KEYBINDINGS = {
   ...APP_KEYBINDINGS,
 } as const satisfies tuiTypes.KeybindingDefinitions;
 
-const keybindingsPart1 = {
+const keybindingDefinitions = {
   APP_KEYBINDINGS,
   KEYBINDINGS,
   useWindowsKeybindings,
 };
 
-export default keybindingsPart1;
+export default keybindingDefinitions;

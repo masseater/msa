@@ -1,9 +1,9 @@
-import keybindingsPart1 from "./keybindings-part1.ts";
-import keybindingsPart2 from "./keybindings-part2.ts";
+import keybindingDefinitions from "./keybinding-definitions.ts";
+import keybindingMigrations from "./keybinding-migrations.ts";
 import type keybindingsTypes from "./keybindings.types.ts";
 
-const { APP_KEYBINDINGS, KEYBINDINGS, useWindowsKeybindings } = keybindingsPart1;
-const { migrateKeybindingsConfig } = keybindingsPart2;
+const { APP_KEYBINDINGS, KEYBINDINGS, useWindowsKeybindings } = keybindingDefinitions;
+const { migrateKeybindingsConfig } = keybindingMigrations;
 
 declare global {
   interface MsaTuiKeybindings extends keybindingsTypes.AppKeybindings {}
