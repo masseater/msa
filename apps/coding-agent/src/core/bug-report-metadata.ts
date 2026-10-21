@@ -1,24 +1,74 @@
 import ai from "@msa/ai";
+import type compatTypes from "@msa/ai/compat.types";
 
-import zip from "../utils/zip.ts";
+import bugReportEnvironment from "./bug-report-environment.ts";
 import type bugReportInternalTypes from "./bug-report-internal.types.ts";
-import bugReportPart1 from "./bug-report-part1.ts";
-import type bugReportTypes from "./bug-report.types.ts";
+import bugReportRedaction from "./bug-report-redaction.ts";
 import type crashLogTypes from "./crash-log.types.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
+import type modelRuntimeTypes from "./model-runtime.types.ts";
 import platformModule from "./platform.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 
-const { nowIso } = platformModule;
+const { redactSettings, redactJsonValue, redactUrl } = bugReportRedaction;
 const { uuidv7 } = ai;
-const { writeZipArchive } = zip;
-const {
-  BUG_REPORT_SCHEMA_VERSION,
-  collectEnvironment,
-  describeExtension,
-  describeModel,
-  describeProvider,
-  redactSettings,
-} = bugReportPart1;
+const { nowIso } = platformModule;
+const { collectEnvironment } = bugReportEnvironment;
+
+const BUG_REPORT_CUSTOM_ENTRY_TYPE = "msa.bug-report";
+
+const BUG_REPORT_SCHEMA_VERSION = 1;
+
+function describeModel(model: compatTypes.Model<compatTypes.Api>) {
+  return {
+    api: model.api,
+    baseUrl: redactUrl(model.baseUrl),
+    compat: model.compat === undefined ? null : redactJsonValue(model.compat),
+    contextWindow: model.contextWindow,
+    headerNames: Object.keys(model.headers ?? {}).sort(),
+    id: model.id,
+    input: model.input,
+    maxTokens: model.maxTokens,
+    name: model.name,
+    provider: model.provider,
+    reasoning: model.reasoning,
+    samplingParams:
+      model.samplingParams === undefined ? null : redactJsonValue(model.samplingParams),
+    thinkingLevelMap: model.thinkingLevelMap ?? null,
+  };
+}
+
+function describeProvider(
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
+  provider: compatTypes.Provider,
+) {
+  const authTypes: Array<"api_key" | "oauth"> = [];
+  if (provider.auth.apiKey !== undefined) authTypes.push("api_key");
+  if (provider.auth.oauth !== undefined) authTypes.push("oauth");
+  return {
+    authStatus: modelRuntime.getProviderAuthStatus(provider.id),
+    authTypes,
+    baseUrl:
+      provider.baseUrl !== undefined && provider.baseUrl !== ""
+        ? redactUrl(provider.baseUrl)
+        : null,
+    headerNames: Object.keys(provider.headers ?? {}).sort(),
+    id: provider.id,
+    name: provider.name,
+    registeredByExtension: modelRuntime.getRegisteredProviderIds().includes(provider.id),
+    usingOAuth: modelRuntime.isUsingOAuth(provider.id),
+  };
+}
+
+function describeExtension(extension: extensionsTypesTypes.Extension) {
+  return {
+    hidden: extension.hidden === true,
+    origin: extension.sourceInfo.origin,
+    path: extension.path,
+    scope: extension.sourceInfo.scope,
+    source: redactUrl(extension.sourceInfo.source),
+  };
+}
 
 function collectBugReportMetadata(options: bugReportInternalTypes.CollectBugReportMetadataOptions) {
   const hint = options.hint?.trim() || null;
@@ -93,76 +143,10 @@ function collectBugReportDiagnostics(
   };
 }
 
-function bugReportFiles(
-  bundle: bugReportTypes.BugReportBundle,
-): bugReportInternalTypes.BugReportFile[] {
-  const files: bugReportInternalTypes.BugReportFile[] = [
-    {
-      contentType: "application/json",
-      data: `${JSON.stringify(bundle.metadata, null, 2)}\n`,
-      name: "report.json",
-    },
-    {
-      contentType: "application/json",
-      data: `${JSON.stringify(bundle.diagnostics, null, 2)}\n`,
-      name: "diagnostics.json",
-    },
-  ];
-  if (bundle.sessionJsonl !== undefined) {
-    files.push({
-      contentType: "application/x-ndjson",
-      data: bundle.sessionJsonl,
-      name: "session.jsonl",
-    });
-  }
-  if (bundle.summary !== undefined) {
-    files.push({
-      contentType: "text/markdown",
-      data: bundle.summary.endsWith("\n") ? bundle.summary : `${bundle.summary}\n`,
-      name: "summary.md",
-    });
-  }
-  return files;
-}
-
-function writeBugReportArchive(
-  bundle: bugReportTypes.BugReportBundle,
-  filePath: string,
-): Promise<void> {
-  return writeZipArchive(filePath, bugReportFiles(bundle));
-}
-
-function bugReportArchiveFileName(id: string): string {
-  return `msa-bug-report-${id}.zip`;
-}
-
-const BUG_SUMMARY_SYSTEM_PROMPT = `You are helping a user file a bug report about msa, the coding agent they are talking to. You will be shown the conversation transcript. Write a report for the msa developers describing what the user was doing and what went wrong.
-
-Do NOT continue the conversation. Do NOT respond to any questions in the conversation. ONLY output the report.`;
-
-const BUG_SUMMARY_INSTRUCTIONS = `Write the bug report in Markdown with these sections:
-
-## What the user was doing
-One short paragraph.
-
-## What went wrong
-Concrete description of the failure: wrong output, errors, hangs, tool failures, unexpected behavior. Quote error messages and tool output verbatim where they exist.
-
-## Steps to reproduce
-Numbered list, as specific as the transcript allows.
-
-## Relevant details
-Tool calls involved, files touched, model behavior, anything else that helps a developer reproduce or locate the problem.
-
-Do not include file contents, secrets, or credentials from the transcript; refer to files by path only. Keep the report factual and concise.`;
-
-const bugReportPart2 = {
-  BUG_SUMMARY_INSTRUCTIONS,
-  BUG_SUMMARY_SYSTEM_PROMPT,
-  bugReportArchiveFileName,
+const bugReportMetadata = {
+  BUG_REPORT_CUSTOM_ENTRY_TYPE,
   collectBugReportDiagnostics,
   collectBugReportMetadata,
-  writeBugReportArchive,
 };
 
-export default bugReportPart2;
+export default bugReportMetadata;
