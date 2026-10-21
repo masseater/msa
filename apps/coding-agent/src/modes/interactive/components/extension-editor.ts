@@ -2,20 +2,16 @@ import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
-import awaitingModule from "../../../core/awaiting.ts";
 import type keybindingsTypes from "../../../core/keybindings.types.ts";
-import processEnv from "../../../core/process-env.ts";
 import externalEditor from "../external-editor.ts";
 import themeModule from "../theme/theme.ts";
 import DynamicBorder from "./dynamic-border.ts";
 import type extensionEditorTypes from "./extension-editor.types.ts";
 import keybindingHints from "./keybinding-hints.ts";
 
-const { readEnv } = processEnv;
 const { getEditorTheme, theme } = themeModule;
 const { keyHint } = keybindingHints;
-const { awaited, awaitingWith } = awaitingModule;
-const { editInExternalEditor } = externalEditor;
+const { editWhileSuspended } = externalEditor;
 
 const { Editor, Spacer, Text, getKeybindings } = tuiModule;
 
@@ -46,18 +42,14 @@ export default class ExtensionEditorComponent
     prefill: string | undefined,
     onSubmit: (value: string) => void,
     onCancel: () => void,
-    options?: extensionEditorTypes.ExtensionEditorOptions,
-    externalEditorCommand?: string,
+    options: extensionEditorTypes.ExtensionEditorOptions | undefined,
+    externalEditorCommand: string,
   ) {
     super();
 
     this.tui = tui;
     this.keybindings = keybindings;
-    this.externalEditorCommand =
-      externalEditorCommand ||
-      readEnv("VISUAL") ||
-      readEnv("EDITOR") ||
-      (process.platform === "win32" ? "notepad" : "nano");
+    this.externalEditorCommand = externalEditorCommand;
     this.onSubmitCallback = onSubmit;
     this.onCancelCallback = onCancel;
     const { description, ...editorOptions } = options ?? {};
@@ -120,23 +112,10 @@ export default class ExtensionEditorComponent
   }
 
   private handleOpenExternalEditor(): Effect.Effect<void> {
-    return awaitingWith(function* () {
-      const content = this.editor.getText();
-      this.tui.stop();
-      try {
-        const result = yield* awaited(
-          editInExternalEditor({
-            command: this.externalEditorCommand,
-            content,
-          }),
-        );
-        if (result.status === "complete") {
-          this.editor.setText(result.content);
-        }
-      } finally {
-        this.tui.start();
-        this.tui.requestRender(true);
-      }
-    }, this);
+    return editWhileSuspended(
+      this.tui,
+      { command: this.externalEditorCommand, content: this.editor.getText() },
+      (content) => this.editor.setText(content),
+    );
   }
 }

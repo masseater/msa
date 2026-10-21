@@ -11,7 +11,7 @@ declare namespace extensionDialogsTypes {
     readonly editorSlot: editorSlotTypes.EditorSlot;
     readonly programStatus: programStatusReporterTypes.ProgramStatusReporter;
     readonly keybindings: keybindingsTypes.KeybindingsManager;
-    getExternalEditorCommand(): string | undefined;
+    getExternalEditorCommand(): string;
     toggleToolsExpanded(): void;
   }
 

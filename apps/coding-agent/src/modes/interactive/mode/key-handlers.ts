@@ -11,7 +11,7 @@ const { theme } = themeModule;
 const { awaited, awaitingWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { nowMs, schedule } = platformModule;
-const { editInExternalEditor } = externalEditor;
+const { editWhileSuspended } = externalEditor;
 
 export default class KeyHandlers {
   private readonly mode: InteractiveMode;
@@ -103,25 +103,15 @@ export default class KeyHandlers {
   }
 
   private handleOpenExternalEditor(): Effect.Effect<void> {
-    return awaitingWith(function* () {
-      const editorCmd = this.mode.settingsManager.terminal.getExternalEditorCommand();
-      const content = this.mode.editor.getExpandedText?.() ?? this.mode.editor.getText();
-      this.mode.ui.stop();
-      try {
-        const result = yield* awaited(
-          editInExternalEditor({
-            command: editorCmd,
-            content,
-          }),
-        );
-        if (result.status === "complete") {
-          this.mode.editor.setText(result.content);
-        }
-      } finally {
-        this.mode.ui.start();
-        this.mode.ui.requestRender(true);
-      }
-    }, this);
+    const { editor, settingsManager, ui } = this.mode;
+    return editWhileSuspended(
+      ui,
+      {
+        command: settingsManager.terminal.getExternalEditorCommand(),
+        content: editor.getExpandedText?.() ?? editor.getText(),
+      },
+      (content) => editor.setText(content),
+    );
   }
 
   handleCtrlC(): void {

@@ -28,7 +28,7 @@ function createDialogs() {
   const setBlocked = vi.fn();
   const dialogs = new ExtensionDialogs({
     editorSlot,
-    getExternalEditorCommand: () => undefined,
+    getExternalEditorCommand: () => "nano",
     keybindings,
     programStatus: { setBlocked } as unknown as programStatusReporterTypes.ProgramStatusReporter,
     toggleToolsExpanded: () => {},

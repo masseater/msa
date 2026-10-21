@@ -4,6 +4,12 @@ declare namespace externalEditorTypes {
     content: string;
   }
 
+  interface SuspendableUi {
+    stop(): void;
+    start(): void;
+    requestRender(force?: boolean): void;
+  }
+
   type ExternalEditorResult = { status: "complete"; content: string } | { status: "failed" };
 }
 

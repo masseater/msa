@@ -44,8 +44,30 @@ function editInExternalEditor(
   );
 }
 
+function editWhileSuspended(
+  ui: externalEditorTypes.SuspendableUi,
+  options: externalEditorTypes.ExternalEditorOptions,
+  applyEdit: (content: string) => void,
+): Effect.Effect<void> {
+  const edit = Effect.promise(() => editInExternalEditor(options)).pipe(
+    Effect.flatMap((result) =>
+      Effect.sync(() => {
+        if (result.status === "complete") applyEdit(result.content);
+      }),
+    ),
+    Effect.ensuring(
+      Effect.sync(() => {
+        ui.start();
+        ui.requestRender(true);
+      }),
+    ),
+  );
+  return Effect.sync(() => ui.stop()).pipe(Effect.andThen(edit));
+}
+
 const externalEditor = {
   editInExternalEditor,
+  editWhileSuspended,
 };
 
 export default externalEditor;
