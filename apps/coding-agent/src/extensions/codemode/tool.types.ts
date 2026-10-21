@@ -51,6 +51,12 @@ declare namespace toolTypes {
 
   type CodemodeRenderContext = extensionsTypesTypes.ToolRenderContext;
 
+  type CodemodeRunResult = extensionsTypesTypes.AgentToolResult<CodemodeToolDetails>;
+
+  type CodemodeRunContext = extensionsTypesTypes.ExtensionToolContext;
+
+  type CodemodeUsage = NonNullable<CodemodeRunResult["usage"]>;
+
   interface CodemodeToolDetails {
     calls: CodemodeNestedCall[];
 
