@@ -2,6 +2,10 @@ import type clientTypes from "./client.types.ts";
 import type huggingfaceTypes from "./huggingface.types.ts";
 
 declare namespace uiTypes {
+  type LlamaModelInfo = clientTypes.LlamaModelInfo;
+
+  type HuggingFaceModel = huggingfaceTypes.HuggingFaceModel;
+
   type LlamaManagerAction =
     | { type: "model"; model: clientTypes.LlamaModelInfo }
     | { type: "download" }

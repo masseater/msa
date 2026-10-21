@@ -1,52 +1,26 @@
 import tuiModule from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { Effect } from "effect";
 
-import awaitingModule from "../../core/awaiting.ts";
 import type keybindingsTypes from "../../core/keybindings.types.ts";
 import keybindingHints from "../../modes/interactive/components/keybinding-hints.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 import interop from "../../utils/interop.ts";
-import type clientTypes from "./client.types.ts";
 import HuggingFaceSearch from "./huggingface-search.ts";
-import type huggingfaceTypes from "./huggingface.types.ts";
+import llamaViewContent from "./llama-view-content.ts";
 import uiFrame from "./ui-frame.ts";
 import type uiTypes from "./ui.types.ts";
 
 const { frame, selectTheme } = uiFrame;
+const { DOWNLOAD_VALUE, modelListItems, progressBody } = llamaViewContent;
 const { callbackPromise } = interop;
 const { keyHint } = keybindingHints;
-const { awaited, awaitingWith } = awaitingModule;
 const { SelectList, Spacer, Text, truncateToWidth, visibleWidth } = tuiModule;
 
-const DOWNLOAD_VALUE = "\0download";
-function contextLabel(model: clientTypes.LlamaModelInfo): string | undefined {
-  const context = model.meta?.n_ctx ?? model.meta?.n_ctx_train;
-  if (context !== undefined && context !== 0)
-    return context >= 1000 ? `${Math.round(context / 1000)}k` : String(context);
-  const args = model.status.args ?? [];
-  for (let index = 0; index < args.length - 1; index++) {
-    if (args[index] !== "--ctx-size" && args[index] !== "-c" && args[index] !== "-ctx") continue;
-    const value = Number(args[index + 1]);
-    if (Number.isFinite(value) && value > 0)
-      return value >= 1000 ? `${Math.round(value / 1000)}k` : String(value);
-  }
-  return undefined;
-}
-function modelDescription(model: clientTypes.LlamaModelInfo): string {
-  const details: string[] = [];
-  const loaded = model.status.value === "loaded" || model.status.value === "sleeping";
-  if (loaded) details.push("loaded");
-  else if (model.status.value !== "unloaded") details.push(model.status.value);
-  const context = loaded ? contextLabel(model) : undefined;
-  if (context !== undefined && context !== "") details.push(`${context} context`);
-  return details.join(" · ");
-}
 export default class LlamaView implements uiTypes.LlamaUi, tuiTypes.Focusable {
   private readonly tui: tuiTypes.TUI;
   private readonly theme: themeTypes.Theme;
   private readonly keybindings: keybindingsTypes.KeybindingsManager;
-  private readonly searchCache = new Map<string, huggingfaceTypes.HuggingFaceModel[]>();
+  private readonly searchCache = new Map<string, uiTypes.HuggingFaceModel[]>();
   private content: tuiTypes.Container;
   private inputHandler: { handleInput?(data: string): void } | undefined;
   private inputTarget: tuiTypes.Focusable | undefined;
@@ -95,26 +69,9 @@ export default class LlamaView implements uiTypes.LlamaUi, tuiTypes.Focusable {
 
   showModels(
     serverUrl: string,
-    models: clientTypes.LlamaModelInfo[],
+    models: uiTypes.LlamaModelInfo[],
   ): Promise<uiTypes.LlamaManagerAction> {
-    const sorted = [...models].sort((left, right) => {
-      const loaded =
-        Number(right.status.value === "loaded") - Number(left.status.value === "loaded");
-      return loaded || left.id.localeCompare(right.id);
-    });
-    const byId = new Map(sorted.map((model) => [model.id, model]));
-    const items: tuiTypes.SelectItem[] = [
-      ...sorted.map((model) => ({
-        description: modelDescription(model),
-        label: model.id,
-        value: model.id,
-      })),
-      {
-        description: "Hugging Face owner/repository[:quant]",
-        label: "Download model…",
-        value: DOWNLOAD_VALUE,
-      },
-    ];
+    const { byId, items } = modelListItems(models);
     return callbackPromise((resolve) => {
       const list = new SelectList(items, Math.min(items.length, 12), selectTheme(this.theme), {
         maxPrimaryColumnWidth: 56,
@@ -162,26 +119,18 @@ export default class LlamaView implements uiTypes.LlamaUi, tuiTypes.Focusable {
   }
 
   confirm(title: string, message: string): Promise<boolean> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        return (yield* awaited(this.select(`${title}\n${message}`, ["Yes", "No"]))) === "Yes";
-      }, this),
-    );
+    return this.select(`${title}\n${message}`, ["Yes", "No"]).then((choice) => choice === "Yes");
   }
 
   connectionError(serverUrl: string, message: string): Promise<"retry" | "close"> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const choice = yield* awaited(
-          this.select(`llama.cpp unavailable\n${serverUrl}\n\n${message}`, ["Retry", "Close"]),
-        );
-        return choice === "Retry" ? "retry" : "close";
-      }, this),
-    );
+    return this.select(`llama.cpp unavailable\n${serverUrl}\n\n${message}`, [
+      "Retry",
+      "Close",
+    ]).then((choice) => (choice === "Retry" ? "retry" : "close"));
   }
 
   searchModels(
-    search: (query: string, signal: AbortSignal) => Promise<huggingfaceTypes.HuggingFaceModel[]>,
+    search: (query: string, signal: AbortSignal) => Promise<uiTypes.HuggingFaceModel[]>,
   ): Promise<string | undefined> {
     return callbackPromise((resolve) => {
       const component = new HuggingFaceSearch(
@@ -224,27 +173,7 @@ export default class LlamaView implements uiTypes.LlamaUi, tuiTypes.Focusable {
 
   updateProgress(state: uiTypes.ProgressState): void {
     if (!this.showingProgress) return;
-    const body = [
-      new Text(this.theme.fg("text", state.model), 1, 0),
-      new Spacer(1),
-      new Text(this.theme.fg("muted", state.message), 1, 0),
-    ];
-    if (state.ratio !== undefined) {
-      const available = 40;
-      const filled = Math.round(Math.max(0, Math.min(1, state.ratio)) * available);
-      body.push(
-        new Text(
-          this.theme.fg(
-            "accent",
-            `${"█".repeat(filled)}${"─".repeat(available - filled)} ${Math.round(state.ratio * 100)}%`,
-          ),
-          1,
-          0,
-        ),
-      );
-    }
-    if (state.detail !== undefined && state.detail !== "")
-      body.push(new Text(this.theme.fg("dim", state.detail), 1, 0));
+    const body = progressBody(this.theme, state);
     this.content = frame(this.theme, state.title, body, keyHint("tui.select.cancel", "stop"));
     this.inputHandler = undefined;
     this.tui.requestRender();

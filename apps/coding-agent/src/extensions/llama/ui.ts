@@ -42,6 +42,39 @@ const showLlamaUi: {
     run: (ui: uiTypes.LlamaUi) => Promise<void>,
   ): (ctx: extensionsTypesTypes.ExtensionCommandContext) => Promise<void>;
 } = dual((args: IArguments) => args.length >= 2, showLlamaUiImpl);
+interface ProgressOptions<T> {
+  title: string;
+  model: string;
+  initialMessage: string;
+  cancelTitle: string;
+  cancelMessage: string;
+  run(signal: AbortSignal, update: (progress: clientTypes.LlamaProgress) => void): Promise<T>;
+  cancel(): Promise<void>;
+}
+
+function startProgressRun<T>(ui: uiTypes.LlamaUi, options: ProgressOptions<T>) {
+  const controller = new AbortController();
+  const state: uiTypes.ProgressState = {
+    message: options.initialMessage,
+    model: options.model,
+    title: options.title,
+  };
+  const settled = options
+    .run(controller.signal, (progress) => {
+      Object.assign(state, progress);
+      ui.updateProgress(state);
+    })
+    .then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ error, ok: false as const }),
+    );
+  const progress = { completed: false };
+  settled.finally(() => {
+    progress.completed = true;
+  });
+  return { controller, progress, settled, state };
+}
+
 function runWithProgressImpl<T>(
   ui: uiTypes.LlamaUi,
   options: {
@@ -56,25 +89,7 @@ function runWithProgressImpl<T>(
 ): Promise<{ cancelled: true } | { cancelled: false; value: T }> {
   return Effect.runPromise(
     awaiting(function* () {
-      const controller = new AbortController();
-      const state: uiTypes.ProgressState = {
-        message: options.initialMessage,
-        model: options.model,
-        title: options.title,
-      };
-      const settled = options
-        .run(controller.signal, (progress) => {
-          Object.assign(state, progress);
-          ui.updateProgress(state);
-        })
-        .then(
-          (value) => ({ ok: true as const, value }),
-          (error: unknown) => ({ error, ok: false as const }),
-        );
-      const progress = { completed: false };
-      settled.finally(() => {
-        progress.completed = true;
-      });
+      const { controller, progress, settled, state } = startProgressRun(ui, options);
 
       while (!progress.completed) {
         const outcome = yield* awaited(
