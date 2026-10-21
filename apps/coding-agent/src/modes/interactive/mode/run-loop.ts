@@ -13,7 +13,7 @@ import tmuxKeyboard from "./tmux-keyboard.ts";
 const { APP_NAME } = config;
 const { takeUnnotifiedCrash } = crashLog;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { toDate } = platform;
+const { formatLocalDateTime } = platform;
 const { offerHandoff } = handoffResume;
 const { checkTmuxKeyboardSetup } = tmuxKeyboard;
 
@@ -67,7 +67,7 @@ export default class ModeRunLoop {
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       if (crash !== undefined) {
-        const when = toDate(crash.timestamp).toLocaleString();
+        const when = formatLocalDateTime(crash.timestamp);
         this.mode.display.status.showWarning(
           `${APP_NAME} crashed on ${when} (${crash.message}). Run /bug to report it; the crash details are attached automatically.`,
         );

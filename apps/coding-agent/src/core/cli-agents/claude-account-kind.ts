@@ -6,7 +6,7 @@ import platform from "../platform/index.ts";
 import claudeAccountsModule from "./claude-accounts.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 
-const { toDate } = platform;
+const { formatLocalDateTime } = platform;
 const {
   addAccount,
   authStatus,
@@ -58,7 +58,7 @@ function describeAccount(
   const state =
     block === undefined
       ? "available"
-      : `blocked until ${toDate(block.until).toLocaleString()} (${block.reason})`;
+      : `blocked until ${formatLocalDateTime(block.until)} (${block.reason})`;
   const rotation = account.auto === false ? "  (not in rotation)" : "";
   return `${index + 1}. ${account.name}  ${authLabel(account)}  ${loginText}  ${state}${rotation}`;
 }

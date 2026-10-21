@@ -13,6 +13,21 @@ const toEpochMs = (value: string | number): number =>
 const toDate = (value: string | number): Date =>
   DateTime.toDate(Option.getOrElse(DateTime.make(value), () => DateTime.makeUnsafe(0)));
 
+const localZoned = (value: string | number): DateTime.Zoned =>
+  DateTime.makeZonedUnsafe(toDate(value), { timeZone: DateTime.zoneMakeLocal() });
+
+const localTimeZone = (): platformTypes.LocalTimeZone => ({
+  name: DateTime.zoneToString(DateTime.zoneMakeLocal()),
+  offset: DateTime.zonedOffsetIso(localZoned(nowMs())),
+});
+
+const pad = (value: number): string => String(value).padStart(2, "0");
+
+const formatLocalDateTime = (value: string | number): string => {
+  const parts = DateTime.toParts(localZoned(value));
+  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)} ${pad(parts.hour)}:${pad(parts.minute)}`;
+};
+
 const schedule: {
   (delayMs: number): (run: () => void) => platformTypes.Scheduled;
   (run: () => void, delayMs: number): platformTypes.Scheduled;
@@ -81,6 +96,8 @@ const sleepFor: {
 );
 
 const platformTime = {
+  formatLocalDateTime,
+  localTimeZone,
   makeLatch,
   nowIso,
   nowMs,

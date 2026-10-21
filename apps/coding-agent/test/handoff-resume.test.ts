@@ -5,13 +5,13 @@ import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
 import handoffFiles from "../src/core/orchestrator/handoff-files.ts";
-import handoffRender from "../src/core/orchestrator/handoff-render.ts";
+import platform from "../src/core/platform/index.ts";
 import handoffResume from "../src/modes/interactive/handoff-resume.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 
 const { pendingHandoffs } = handoffFiles;
 const { handoffResumePrompt } = handoffResume;
-const { formatDateTime } = handoffRender;
+const { formatLocalDateTime } = platform;
 
 const { awaited, joinPath, makeTempDir, pathExists, readTextFile, removePath, runTest } = testing;
 
@@ -75,7 +75,7 @@ it("asks once about the only handoff, and takes it when the answer is yes", () =
       const prompt = yield* awaited(handoffResumePrompt(handoffDirectory, dialogs));
 
       expect(dialogs.asked).toEqual([
-        `引き継ぎ\n${pending?.name}（${formatDateTime(pending?.createdAt ?? 0)}、タスク ${pending?.tasks} 本）を読んで再開しますか`,
+        `引き継ぎ\n${pending?.name}（${formatLocalDateTime(pending?.createdAt ?? 0)}、タスク ${pending?.tasks} 本）を読んで再開しますか`,
       ]);
       expect(prompt).toContain(yield* readTextFile(written[0]?.path ?? ""));
       expect(yield* awaited(pendingHandoffs(handoffDirectory))).toEqual([]);
