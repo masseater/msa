@@ -7,12 +7,12 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import sessionExport from "../src/core/session-export.ts";
 import src from "../src/index.ts";
 import type srcTypes from "../src/index.types.ts";
-import sessionShare from "../src/modes/interactive/session-share.ts";
+import shareTrailingEntries from "../src/modes/interactive/share-trailing-entries.ts";
 import utilities from "./utilities.ts";
 
 const { SessionManager, SettingsManager, createAgentSession, defineTool } = src;
 const { serializeSessionBranch } = sessionExport;
-const { createShareTrailingEntries } = sessionShare;
+const { createShareTrailingEntries } = shareTrailingEntries;
 
 const { getModel } = compat;
 

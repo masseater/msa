@@ -8,7 +8,7 @@ import crashLog from "../../../core/crash-log.ts";
 import sessionExport from "../../../core/session-export.ts";
 import pathModule from "../../path.ts";
 import type bugReportInternalTypes from "../bug-report-internal.types.ts";
-import sessionShare from "../session-share.ts";
+import shareTrailingEntries from "../share-trailing-entries.ts";
 
 const {
   writeBugReportArchive,
@@ -20,7 +20,7 @@ const {
 const { awaited, awaiting } = awaitingModule;
 const { join } = pathModule;
 const { clearCrashLog, readCrashLog } = crashLog;
-const { createShareTrailingEntries } = sessionShare;
+const { createShareTrailingEntries } = shareTrailingEntries;
 const { serializeSessionBranch } = sessionExport;
 
 function errorMessage(error: unknown): string {
