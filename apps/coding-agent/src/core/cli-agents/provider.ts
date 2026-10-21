@@ -1,10 +1,10 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 
-import nodeFs from "../platform/node/fs.ts";
+import platform from "../platform/index.ts";
 import type providerTypes from "./provider.types.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 
 const { createProvider } = ai;
 
@@ -31,10 +31,9 @@ function cliAgentProvider(input: {
         name: `${input.name} login`,
         resolve: () => {
           const executable = input.executable();
-          return Promise.resolve(
-            executable !== undefined && executable !== "" && existsSync(executable)
-              ? { auth: {}, source: executable }
-              : undefined,
+          if (executable === undefined || executable === "") return Promise.resolve(undefined);
+          return exists(executable).then((found) =>
+            found ? { auth: {}, source: executable } : undefined,
           );
         },
       },

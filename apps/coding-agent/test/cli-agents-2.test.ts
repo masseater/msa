@@ -62,51 +62,61 @@ function interaction(answers: { select?: string; prompts: string[] }) {
   };
 }
 
-const keepsTheImplicitDefaultAccountWhenThe = () => {
-  addAccount("work");
-  expect(loadAccounts()).toEqual([
-    { name: "default" },
-    { configDir: managed("work"), name: "work" },
-  ]);
-};
+const keepsTheImplicitDefaultAccountWhenThe = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* Effect.promise(() => addAccount("work"));
+      expect(yield* Effect.promise(() => loadAccounts())).toEqual([
+        { name: "default" },
+        { configDir: managed("work"), name: "work" },
+      ]);
+    }),
+  );
 
-const addsATokencommandAccountAndRejectsBad = () => {
-  addAccount("token", "op read op://vault/claude");
-  expect(loadAccounts().at(-1)).toEqual({
-    name: "token",
-    tokenCommand: "op read op://vault/claude",
-  });
-  expect(() => addAccount("token")).toThrow(/already exists/u);
-  expect(() => addAccount("Bad Name")).toThrow(/must be lowercase/u);
-};
+const addsATokencommandAccountAndRejectsBad = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* Effect.promise(() => addAccount("token", "op read op://vault/claude"));
+      expect((yield* Effect.promise(() => loadAccounts())).at(-1)).toEqual({
+        name: "token",
+        tokenCommand: "op read op://vault/claude",
+      });
+      yield* awaited(expect(addAccount("token")).rejects.toThrow(/already exists/u));
+      yield* awaited(expect(addAccount("Bad Name")).rejects.toThrow(/must be lowercase/u));
+    }),
+  );
 
 const reordersTogglesRotationAndRemovesAccountsKeeping = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeAccounts([{ configDir: "~/claude-main", name: "main" }, { name: "sub" }]);
-      preferAccount("sub");
-      setAutoRotation("main", false);
+      yield* Effect.promise(() => preferAccount("sub"));
+      yield* Effect.promise(() => setAutoRotation("main", false));
       expect(yield* readJsonFile(accountsFile())).toEqual({
         accounts: [{ name: "sub" }, { auto: false, configDir: "~/claude-main", name: "main" }],
       });
-      setAutoRotation("main", true);
-      expect(loadAccounts()[1]?.auto).toBeUndefined();
-      removeAccount("sub");
-      expect(loadAccounts().map((account) => account.name)).toEqual(["main"]);
-      expect(() => removeAccount("main")).toThrow(/must remain/u);
-      expect(() => preferAccount("nope")).toThrow(/No Claude account/u);
+      yield* Effect.promise(() => setAutoRotation("main", true));
+      expect((yield* Effect.promise(() => loadAccounts()))[1]?.auto).toBeUndefined();
+      yield* Effect.promise(() => removeAccount("sub"));
+      expect((yield* Effect.promise(() => loadAccounts())).map((account) => account.name)).toEqual([
+        "main",
+      ]);
+      yield* awaited(expect(removeAccount("main")).rejects.toThrow(/must remain/u));
+      yield* awaited(expect(preferAccount("nope")).rejects.toThrow(/No Claude account/u));
     }),
   );
 
 const deletesTheConfigDirMsaMadeFor = () =>
   runTest(
     Effect.gen(function* () {
-      const account = addAccount("work");
+      const account = yield* Effect.promise(() => addAccount("work"));
       yield* makeDirectory(account.configDir!);
-      blockIfUnusable(account, { cause: "usage_limit", error: "You've hit your limit" });
-      removeAccount("work");
+      yield* Effect.promise(() =>
+        blockIfUnusable(account, { cause: "usage_limit", error: "You've hit your limit" }),
+      );
+      yield* Effect.promise(() => removeAccount("work"));
       expect(yield* pathExists(managed("work"))).toBe(false);
-      expect(blockOf(account)).toBeUndefined();
+      expect(yield* Effect.promise(() => blockOf(account))).toBeUndefined();
     }),
   );
 
@@ -126,9 +136,11 @@ const signsAnAccountInWithTheCode = () =>
           `printf %s "$code" > "$CLAUDE_CONFIG_DIR/token"`,
         ].join("\n"),
       );
-      const account = addAccount("work");
+      const account = yield* Effect.promise(() => addAccount("work"));
       expect(yield* awaited(authStatus(account))).toEqual({ loggedIn: false });
-      blockIfUnusable(account, { error: "Not logged in · Please run /login" });
+      yield* Effect.promise(() =>
+        blockIfUnusable(account, { error: "Not logged in · Please run /login" }),
+      );
       let shown = "";
       yield* awaited(
         loginAccount(account, {
@@ -147,7 +159,7 @@ const signsAnAccountInWithTheCode = () =>
         email: "a@example.com",
         loggedIn: true,
       });
-      expect(blockOf(account)).toBeUndefined();
+      expect(yield* Effect.promise(() => blockOf(account))).toBeUndefined();
     }),
   );
 
@@ -155,7 +167,7 @@ const cancelsTheLoginWhenTheUserGives = () =>
   runTest(
     Effect.gen(function* () {
       yield* fakeClaude(`echo "visit: https://claude.com/oauth"\nread code\nexit 1`);
-      const account = addAccount("work");
+      const account = yield* Effect.promise(() => addAccount("work"));
       yield* awaited(
         expect(
           loginAccount(account, {
@@ -220,7 +232,10 @@ const addsANewAccountFromLogin = () =>
         "sub",
         "Add a new account",
       ]);
-      expect(loadAccounts().at(-1)).toEqual({ configDir: managed("work"), name: "work" });
+      expect((yield* Effect.promise(() => loadAccounts())).at(-1)).toEqual({
+        configDir: managed("work"),
+        name: "work",
+      });
       expect(yield* readTextFile(joinPath(managed("work"), "token"))).toBe("the-code");
     }),
   );

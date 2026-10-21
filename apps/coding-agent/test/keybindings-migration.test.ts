@@ -24,9 +24,9 @@ const createAgentDir = Effect.fn("createAgentDir")(function* (config: Record<str
 });
 
 const migrate = (agentDir: string): Effect.Effect<void> =>
-  Effect.sync(() => {
-    runMigrations(agentDir);
-  }).pipe(withEnv({ [ENV_AGENT_DIR]: agentDir }));
+  Effect.asVoid(
+    Effect.promise(() => runMigrations(agentDir)).pipe(withEnv({ [ENV_AGENT_DIR]: agentDir })),
+  );
 
 const migratedBindings = (agentDir: string): Effect.Effect<unknown> =>
   readJsonFile(joinPath(agentDir, "keybindings.json"));

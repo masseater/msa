@@ -1,31 +1,31 @@
 import { valid, validRange } from "semver";
 
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import nodeOs from "../platform/node/os.ts";
+import processEnviron from "../platform/node/process-environ.ts";
 
 const { homedir } = nodeOs;
 
 const { envNames, envSnapshot, readEnv } = platformModule;
-const { readFileSync } = nodeFs;
+const { readProcessEnvironFile } = processEnviron;
+
+function parseEnviron(data: string): NodeJS.ProcessEnv {
+  const env: NodeJS.ProcessEnv = {};
+  for (const entry of data.split("\0")) {
+    const idx = entry.indexOf("=");
+    if (idx > 0) {
+      env[entry.slice(0, idx)] = entry.slice(idx + 1);
+    }
+  }
+  return env;
+}
 
 function getEnv(): NodeJS.ProcessEnv {
   if (process.platform !== "linux" || envNames().length > 0) {
     return envSnapshot();
   }
-  try {
-    const data = readFileSync("/proc/self/environ", "utf-8");
-    const env: NodeJS.ProcessEnv = {};
-    for (const entry of data.split("\0")) {
-      const idx = entry.indexOf("=");
-      if (idx > 0) {
-        env[entry.slice(0, idx)] = entry.slice(idx + 1);
-      }
-    }
-    return env;
-  } catch {
-    return envSnapshot();
-  }
+  const data = readProcessEnvironFile();
+  return data === undefined ? envSnapshot() : parseEnviron(data);
 }
 
 const NETWORK_TIMEOUT_MS = 10000;

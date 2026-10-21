@@ -102,7 +102,7 @@ export default class PackageSourceResources {
         const installMissing = () => this.installMissing(source, onMissing);
         if (parsed.type === "npm") {
           const { installs, paths } = this.manager.npm;
-          const installedPath = paths.getNpmInstallPath(parsed, resolvedScope);
+          const installedPath = yield* awaited(paths.getNpmInstallPath(parsed, resolvedScope));
           const current =
             (yield* awaited(exists(installedPath))) &&
             (yield* performed(
@@ -110,7 +110,7 @@ export default class PackageSourceResources {
             ));
           if (current) return installedPath;
           if (!(yield* awaited(installMissing()))) return undefined;
-          return paths.getNpmInstallPath(parsed, resolvedScope);
+          return yield* awaited(paths.getNpmInstallPath(parsed, resolvedScope));
         }
         const installedPath = this.manager.git.paths.getGitInstallPath(parsed, resolvedScope);
         if (!(yield* awaited(exists(installedPath)))) {

@@ -1,11 +1,10 @@
 import configModule from "../config.ts";
 import platformModule from "../core/platform/index.ts";
-import nodeFs from "../core/platform/node/fs.ts";
 import text from "../utils/text.ts";
 
 const { join } = platformModule;
 const { getAgentDir } = configModule;
-const { writeFileSync, readFileSync, existsSync } = nodeFs;
+const { readText, writeFile } = platformModule.files;
 const { stripBom } = text;
 
 function renamedProviderId(id: string): string | undefined {
@@ -46,37 +45,50 @@ function renameKeys(record: Record<string, unknown>): boolean {
   return changed;
 }
 
-function rewriteJson(path: string, update: (data: Record<string, unknown>) => boolean): void {
-  if (!existsSync(path)) return;
-  try {
-    const data = JSON.parse(stripBom(readFileSync(path, "utf-8"))) as Record<string, unknown>;
-    if (update(data)) writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
-  } catch {}
+function rewriteJson(
+  path: string,
+  update: (data: Record<string, unknown>) => boolean,
+): Promise<void> {
+  return readText(path)
+    .then((content) => {
+      const data = JSON.parse(stripBom(content)) as Record<string, unknown>;
+      return update(data)
+        ? writeFile({ data: `${JSON.stringify(data, null, 2)}\n`, path })
+        : undefined;
+    })
+    .catch(() => undefined);
 }
 
-function migrateRenamedProviders(): void {
-  const agentDir = getAgentDir();
-  rewriteJson(join(agentDir, "auth.json"), (data) => {
-    const anthropic = data["anthropic"] as { type?: unknown } | undefined;
-    if (anthropic?.type === "oauth") delete data["anthropic"];
-    return renameKeys(data) || anthropic?.type === "oauth";
-  });
-  rewriteJson(join(agentDir, "models.json"), (data) =>
-    data["providers"] !== null && typeof data["providers"] === "object"
-      ? renameKeys(data["providers"] as Record<string, unknown>)
-      : false,
-  );
-  rewriteJson(join(agentDir, "settings.json"), (data) => {
-    const before = JSON.stringify(data);
-    const renamed = renameProviderRefsIn(data) as Record<string, unknown>;
-    const provider = renamed["defaultProvider"];
-    if (typeof provider === "string")
-      renamed["defaultProvider"] = renamedProviderId(provider) ?? provider;
-    if (JSON.stringify(renamed) === before) return false;
-    for (const key of Object.keys(data)) delete data[key];
-    Object.assign(data, renamed);
-    return true;
-  });
+function migrateRenamedProviders(agentDir: string = getAgentDir()): Promise<void> {
+  return Promise.all([
+    rewriteJson(join(agentDir, "auth.json"), renameAuthProviders),
+    rewriteJson(join(agentDir, "models.json"), renameModelProviders),
+    rewriteJson(join(agentDir, "settings.json"), renameSettingsProviders),
+  ]).then(() => undefined);
+}
+
+function renameAuthProviders(data: Record<string, unknown>): boolean {
+  const anthropic = data["anthropic"] as { type?: unknown } | undefined;
+  if (anthropic?.type === "oauth") delete data["anthropic"];
+  return renameKeys(data) || anthropic?.type === "oauth";
+}
+
+function renameModelProviders(data: Record<string, unknown>): boolean {
+  return data["providers"] !== null && typeof data["providers"] === "object"
+    ? renameKeys(data["providers"] as Record<string, unknown>)
+    : false;
+}
+
+function renameSettingsProviders(data: Record<string, unknown>): boolean {
+  const before = JSON.stringify(data);
+  const renamed = renameProviderRefsIn(data) as Record<string, unknown>;
+  const provider = renamed["defaultProvider"];
+  if (typeof provider === "string")
+    renamed["defaultProvider"] = renamedProviderId(provider) ?? provider;
+  if (JSON.stringify(renamed) === before) return false;
+  for (const key of Object.keys(data)) delete data[key];
+  Object.assign(data, renamed);
+  return true;
 }
 
 const providerRenames = { migrateRenamedProviders };

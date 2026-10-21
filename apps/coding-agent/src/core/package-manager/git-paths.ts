@@ -3,11 +3,29 @@ import type gitTypes from "../../utils/git.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 
 const { basename, dirname, join, resolve } = platformModule;
-const { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } = nodeFs;
+const { exists, makeDirectory, readDirectory, remove, writeFile } = platformModule.files;
 const { CONFIG_DIR_NAME } = config;
+
+const removeIfEmpty = (dir: string): Promise<boolean> =>
+  readDirectory(dir).then((entries) =>
+    entries.length > 0
+      ? false
+      : remove({ force: true, path: dir, recursive: true }).then(
+          () => true,
+          () => false,
+        ),
+  );
+
+const pruneEmptyParents = (current: string, resolvedRoot: string): Promise<void> => {
+  if (!current.startsWith(resolvedRoot) || current === resolvedRoot) return Promise.resolve();
+  return exists(current)
+    .then((found) => (found ? removeIfEmpty(current) : true))
+    .then((continueUp) =>
+      continueUp ? pruneEmptyParents(dirname(current), resolvedRoot) : undefined,
+    );
+};
 
 export default class GitPaths {
   private readonly manager: DefaultPackageManager;
@@ -20,36 +38,18 @@ export default class GitPaths {
     return join(dirname(targetDir), `.${basename(targetDir)}.msa-update-incomplete`);
   }
 
-  pruneEmptyGitParents(targetDir: string, installRoot: string | undefined): void {
-    if (installRoot === undefined || installRoot === "") return;
-    const resolvedRoot = resolve(installRoot);
-    let current = dirname(targetDir);
-    while (current.startsWith(resolvedRoot) && current !== resolvedRoot) {
-      if (!existsSync(current)) {
-        current = dirname(current);
-        continue;
-      }
-      const entries = readdirSync(current);
-      if (entries.length > 0) {
-        break;
-      }
-      try {
-        rmSync(current, { force: true, recursive: true });
-      } catch {
-        break;
-      }
-      current = dirname(current);
-    }
+  pruneEmptyGitParents(targetDir: string, installRoot: string | undefined): Promise<void> {
+    if (installRoot === undefined || installRoot === "") return Promise.resolve();
+    return pruneEmptyParents(dirname(targetDir), resolve(installRoot));
   }
 
-  ensureGitIgnore(dir: string): void {
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+  ensureGitIgnore(dir: string): Promise<void> {
     const ignorePath = join(dir, ".gitignore");
-    if (!existsSync(ignorePath)) {
-      writeFileSync(ignorePath, "*\n!.gitignore\n", "utf-8");
-    }
+    return makeDirectory({ path: dir })
+      .then(() => exists(ignorePath))
+      .then((found) =>
+        found ? undefined : writeFile({ data: "*\n!.gitignore\n", path: ignorePath }),
+      );
   }
 
   getGitInstallRoot(scope: packageManagerTypes.SourceScope): string | undefined {

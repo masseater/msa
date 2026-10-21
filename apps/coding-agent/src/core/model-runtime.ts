@@ -12,7 +12,7 @@ const { isVirtualModel } = virtualModelsModule;
 const { awaited, awaiting } = awaitingModule;
 const { createRuntimeComponents } = runtimeComponents;
 const { loadRuntimeParts } = runtimeParts;
-const { refreshRuntime, refreshSignal } = runtimeRefresh;
+const { refreshCliAgentAccounts, refreshRuntime, refreshSignal } = runtimeRefresh;
 
 type Model = aiTypes.Model<aiTypes.Api>;
 type Options = aiTypes.AuthOperationOptions;
@@ -37,6 +37,7 @@ export default class ModelRuntime implements aiTypes.Models {
   static create(options: modelRuntimeTypes.CreateModelRuntimeOptions = {}): Promise<ModelRuntime> {
     return Effect.runPromise(
       awaiting(function* () {
+        yield* awaited(refreshCliAgentAccounts());
         const runtime = new ModelRuntime(yield* awaited(loadRuntimeParts(options)));
         if (options.refreshOnCreate === false) return runtime;
         const allowNetwork =

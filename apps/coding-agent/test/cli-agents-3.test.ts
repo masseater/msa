@@ -45,6 +45,7 @@ const completesKindsThenTheKindSActions = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeAccounts([{ name: "main" }, { name: "sub" }]);
+      yield* awaited(loadAccounts());
       const complete = completeAccountsArgument;
       expect((yield* awaited(complete("cl")))?.map((item) => item.value)).toEqual(["claude "]);
       expect((yield* awaited(complete("claude lo")))?.map((item) => item.value)).toEqual([
@@ -63,7 +64,10 @@ const routesToTheKindAndRebuildsThe = () =>
       vi.stubEnv("CLAUDE_BIN", "/bin/false");
       const { ctx, notes, refreshes } = context2();
       yield* awaited(runAccountsCommand("claude add token printf tok", ctx));
-      expect(loadAccounts().map((account) => account.name)).toEqual(["default", "token"]);
+      expect((yield* Effect.promise(() => loadAccounts())).map((account) => account.name)).toEqual([
+        "default",
+        "token",
+      ]);
       expect(refreshes()).toBe(1);
       yield* awaited(runAccountsCommand("", ctx));
       expect(notes.at(-1)).toMatch(/^claude:\n1\. default .*\n2\. token /u);

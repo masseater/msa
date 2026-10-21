@@ -24,8 +24,8 @@ function updateTargetIncludesExtensions(
 }
 
 type Options = packageManagerCliInternalTypes.PackageCommandOptions;
-type ConfiguredPackage = ReturnType<
-  DefaultPackageManager["configured"]["listConfiguredPackages"]
+type ConfiguredPackage = Awaited<
+  ReturnType<DefaultPackageManager["configured"]["listConfiguredPackages"]>
 >[number];
 
 function installPackage(packageManager: DefaultPackageManager, source: string, local: boolean) {
@@ -60,8 +60,11 @@ function printPackage(pkg: ConfiguredPackage): void {
   }
 }
 
-function listPackages(packageManager: DefaultPackageManager): void {
-  const configuredPackages = packageManager.configured.listConfiguredPackages();
+function listPackages(packageManager: DefaultPackageManager): Promise<void> {
+  return packageManager.configured.listConfiguredPackages().then(printPackages);
+}
+
+function printPackages(configuredPackages: ConfiguredPackage[]): void {
   if (configuredPackages.length === 0) {
     writeLog(chalk.dim("No packages installed."));
     return;
@@ -124,8 +127,7 @@ function runOperation(
     case "remove":
       return removePackage(packageManager, source, options.local);
     case "list":
-      listPackages(packageManager);
-      return Promise.resolve();
+      return listPackages(packageManager);
     case "update":
       return updatePackages(packageManager, options, selfUpdateNpmCommand);
   }

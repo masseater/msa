@@ -73,10 +73,10 @@ declare namespace packageManagerTypes {
       readonly updates: { update(source?: string): Promise<void> };
     };
     readonly configured: {
-      listConfiguredPackages(): ConfiguredPackage[];
+      listConfiguredPackages(): Promise<ConfiguredPackage[]>;
       addSourceToSettings(source: string, options?: { local?: boolean }): boolean;
       removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean;
-      getInstalledPath(source: string, scope: "user" | "project"): string | undefined;
+      getInstalledPath(source: string, scope: "user" | "project"): Promise<string | undefined>;
     };
     readonly progress: { setProgressCallback(callback: ProgressCallback | undefined): void };
   }

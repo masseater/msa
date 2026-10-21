@@ -4,7 +4,6 @@ import * as Effect from "effect/Effect";
 import configModule from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
 import platform from "../core/platform/index.ts";
-import nodeFs from "../core/platform/node/fs.ts";
 import interop from "../utils/interop.ts";
 import legacyLayout from "./legacy-layout.ts";
 
@@ -12,7 +11,7 @@ const { callbackPromise } = interop;
 const { awaited, awaiting } = awaitingModule;
 const { join, writeLog } = platform;
 const { CONFIG_DIR_NAME, getAgentDir } = configModule;
-const { readdirSync, existsSync } = nodeFs;
+const { exists, readDirectory } = platform.files;
 const { migrateCommandsToPrompts } = legacyLayout;
 
 const MIGRATION_GUIDE_URL =
@@ -21,52 +20,47 @@ const MIGRATION_GUIDE_URL =
 const EXTENSIONS_DOC_URL =
   "https://github.com/masseater/msa/blob/main/apps/coding-agent/docs/extensions.md";
 
-function checkDeprecatedExtensionDirs(baseDir: string, label: string): string[] {
-  const hooksDir = join(baseDir, "hooks");
-  const toolsDir = join(baseDir, "tools");
-  const warnings: string[] = [];
+const isCustomTool = (entry: string): boolean => {
+  const lower = entry.toLowerCase();
+  return (
+    lower !== "fd" &&
+    lower !== "rg" &&
+    lower !== "fd.exe" &&
+    lower !== "rg.exe" &&
+    !entry.startsWith(".")
+  );
+};
 
-  if (existsSync(hooksDir)) {
-    warnings.push(`${label} hooks/ directory found. Hooks have been renamed to extensions.`);
-  }
-
-  if (existsSync(toolsDir)) {
-    try {
-      const entries = readdirSync(toolsDir);
-      const customTools = entries.filter((e) => {
-        const lower = e.toLowerCase();
-        return (
-          lower !== "fd" &&
-          lower !== "rg" &&
-          lower !== "fd.exe" &&
-          lower !== "rg.exe" &&
-          !e.startsWith(".")
-        );
-      });
-      if (customTools.length > 0) {
-        warnings.push(
+function checkDeprecatedExtensionDirs(baseDir: string, label: string): Promise<string[]> {
+  return Promise.all([
+    exists(join(baseDir, "hooks")),
+    readDirectory(join(baseDir, "tools")).then(
+      (entries) => entries.some(isCustomTool),
+      () => false,
+    ),
+  ]).then(([hasHooks, hasCustomTools]) => [
+    ...(hasHooks
+      ? [`${label} hooks/ directory found. Hooks have been renamed to extensions.`]
+      : []),
+    ...(hasCustomTools
+      ? [
           `${label} tools/ directory contains custom tools. Custom tools have been merged into extensions.`,
-        );
-      }
-    } catch {}
-  }
-
-  return warnings;
+        ]
+      : []),
+  ]);
 }
 
-function migrateExtensionSystem(cwd: string): string[] {
-  const agentDir = getAgentDir();
+function migrateExtensionSystem(cwd: string, agentDir: string = getAgentDir()): Promise<string[]> {
   const projectDir = join(cwd, CONFIG_DIR_NAME);
-
-  migrateCommandsToPrompts(agentDir, "Global");
-  migrateCommandsToPrompts(projectDir, "Project");
-
-  const warnings = [
-    ...checkDeprecatedExtensionDirs(agentDir, "Global"),
-    ...checkDeprecatedExtensionDirs(projectDir, "Project"),
-  ];
-
-  return warnings;
+  return migrateCommandsToPrompts(agentDir, "Global")
+    .then(() => migrateCommandsToPrompts(projectDir, "Project"))
+    .then(() =>
+      Promise.all([
+        checkDeprecatedExtensionDirs(agentDir, "Global"),
+        checkDeprecatedExtensionDirs(projectDir, "Project"),
+      ]),
+    )
+    .then((warnings) => warnings.flat());
 }
 
 function showDeprecationWarnings(warnings: string[]): Promise<void> {

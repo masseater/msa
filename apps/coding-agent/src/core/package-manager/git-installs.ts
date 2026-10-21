@@ -3,15 +3,16 @@ import * as Effect from "effect/Effect";
 import type gitTypes from "../../utils/git.types.ts";
 import awaitingModule from "../awaiting.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
+import packageManager from "../package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import commandRunner from "./command-runner.ts";
 import gitRemote from "./git-remote.ts";
 import packageEnv from "./package-env.ts";
 
 const { dirname, join } = platformModule;
-const { existsSync, mkdirSync, rmSync, writeFileSync } = nodeFs;
+const { exists, makeDirectory, remove, writeFile } = platformModule.files;
+const { ensureExtensionTempFolder } = packageManager;
 const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 
@@ -26,15 +27,13 @@ export default class GitInstalls {
     source: gitTypes.GitSource,
     scope: packageManagerTypes.SourceScope,
   ): Effect.Effect<void> {
-    return Effect.sync(() => {
-      const targetDir = this.manager.git.paths.getGitInstallPath(source, scope);
-      rmSync(targetDir, { force: true, recursive: true });
-      rmSync(this.manager.git.paths.getGitUpdateMarkerPath(targetDir), { force: true });
-      this.manager.git.paths.pruneEmptyGitParents(
-        targetDir,
-        this.manager.git.paths.getGitInstallRoot(scope),
-      );
-    });
+    return awaitingWith(function* () {
+      const { paths } = this.manager.git;
+      const targetDir = paths.getGitInstallPath(source, scope);
+      yield* awaited(remove({ force: true, path: targetDir, recursive: true }));
+      yield* awaited(remove({ force: true, path: paths.getGitUpdateMarkerPath(targetDir) }));
+      yield* awaited(paths.pruneEmptyGitParents(targetDir, paths.getGitInstallRoot(scope)));
+    }, this);
   }
 
   private ensureGitRef(targetDir: string, fetchArgs: string[], ref: string): Effect.Effect<void> {
@@ -56,7 +55,7 @@ export default class GitInstalls {
       );
       const markerPath = this.manager.git.paths.getGitUpdateMarkerPath(targetDir);
       if (localHead.trim() === targetHead.trim()) {
-        if (existsSync(markerPath)) {
+        if (yield* awaited(exists(markerPath))) {
           yield* performed(
             this.manager.git.dependencies.cleanAndInstallGitDependencies(targetDir, markerPath),
           );
@@ -66,7 +65,7 @@ export default class GitInstalls {
         return;
       }
 
-      writeFileSync(markerPath, "", "utf-8");
+      yield* awaited(writeFile({ data: "", path: markerPath }));
       yield* awaited(
         commandRunner.runCommand("git", ["reset", "--hard", commitRef], { cwd: targetDir }),
       );
@@ -76,29 +75,47 @@ export default class GitInstalls {
     }, this);
   }
 
+  private updateExistingGit(targetDir: string, source: gitTypes.GitSource): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      if (source.ref !== undefined && source.ref !== "") {
+        yield* performed(
+          this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD"),
+        );
+        return;
+      }
+      const target = yield* awaited(gitRemote.getLocalGitUpdateTarget(targetDir));
+      yield* performed(this.ensureGitRef(targetDir, target.fetchArgs, target.ref));
+    }, this);
+  }
+
+  private prepareClone(
+    targetDir: string,
+    scope: packageManagerTypes.SourceScope,
+    gitRoot: string | undefined,
+  ): Promise<void> {
+    const { paths } = this.manager.git;
+    return (
+      gitRoot === undefined || gitRoot === "" ? Promise.resolve() : paths.ensureGitIgnore(gitRoot)
+    )
+      .then(() =>
+        scope === "temporary" ? ensureExtensionTempFolder(this.manager.agentDir) : undefined,
+      )
+      .then(() => makeDirectory({ path: dirname(targetDir) }))
+      .then(() => remove({ force: true, path: paths.getGitUpdateMarkerPath(targetDir) }));
+  }
+
   installGit(
     source: gitTypes.GitSource,
     scope: packageManagerTypes.SourceScope,
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       const targetDir = this.manager.git.paths.getGitInstallPath(source, scope);
-      if (existsSync(targetDir)) {
-        if (source.ref !== undefined && source.ref !== "") {
-          yield* performed(
-            this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD"),
-          );
-          return;
-        }
-        const target = yield* awaited(gitRemote.getLocalGitUpdateTarget(targetDir));
-        yield* performed(this.ensureGitRef(targetDir, target.fetchArgs, target.ref));
+      if (yield* awaited(exists(targetDir))) {
+        yield* performed(this.updateExistingGit(targetDir, source));
         return;
       }
       const gitRoot = this.manager.git.paths.getGitInstallRoot(scope);
-      if (gitRoot !== undefined && gitRoot !== "") {
-        this.manager.git.paths.ensureGitIgnore(gitRoot);
-      }
-      mkdirSync(dirname(targetDir), { recursive: true });
-      rmSync(this.manager.git.paths.getGitUpdateMarkerPath(targetDir), { force: true });
+      yield* awaited(this.prepareClone(targetDir, scope, gitRoot));
 
       try {
         yield* awaited(commandRunner.runCommand("git", ["clone", source.repo, targetDir]));
@@ -108,7 +125,7 @@ export default class GitInstalls {
           );
         }
         const packageJsonPath = join(targetDir, "package.json");
-        if (existsSync(packageJsonPath)) {
+        if (yield* awaited(exists(packageJsonPath))) {
           yield* performed(
             this.manager.npm.tool.runNpmCommand(
               this.manager.npm.tool.getGitDependencyInstallArgs(),
@@ -117,8 +134,8 @@ export default class GitInstalls {
           );
         }
       } catch (error) {
-        rmSync(targetDir, { force: true, recursive: true });
-        this.manager.git.paths.pruneEmptyGitParents(targetDir, gitRoot);
+        yield* awaited(remove({ force: true, path: targetDir, recursive: true }));
+        yield* awaited(this.manager.git.paths.pruneEmptyGitParents(targetDir, gitRoot));
         throw error;
       }
     }, this);
@@ -128,20 +145,11 @@ export default class GitInstalls {
     return Effect.runPromise(
       awaitingWith(function* () {
         const targetDir = this.manager.git.paths.getGitInstallPath(source, scope);
-        if (!existsSync(targetDir)) {
+        if (!(yield* awaited(exists(targetDir)))) {
           yield* performed(this.installGit(source, scope));
           return;
         }
-
-        if (source.ref !== undefined && source.ref !== "") {
-          yield* performed(
-            this.ensureGitRef(targetDir, ["fetch", "origin", source.ref], "FETCH_HEAD"),
-          );
-          return;
-        }
-
-        const target = yield* awaited(gitRemote.getLocalGitUpdateTarget(targetDir));
-        yield* performed(this.ensureGitRef(targetDir, target.fetchArgs, target.ref));
+        yield* performed(this.updateExistingGit(targetDir, source));
       }, this),
     );
   }

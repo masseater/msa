@@ -4,13 +4,28 @@ import text from "../../utils/text.ts";
 import awaitingModule from "../awaiting.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import commandRunner from "./command-runner.ts";
 
 const { join, resolve, sep } = platformModule;
-const { existsSync, readFileSync, rmSync } = nodeFs;
+const { exists, readText, remove } = platformModule.files;
 const { stripBom } = text;
 const { awaited, awaitingWith, performed } = awaitingModule;
+
+const dependencyNames = (content: string): string[] => {
+  const manifest = JSON.parse(stripBom(content)) as { dependencies?: unknown };
+  const { dependencies } = manifest;
+  return typeof dependencies === "object" && dependencies !== null && !Array.isArray(dependencies)
+    ? Object.keys(dependencies)
+    : [];
+};
+
+const anyDependencyMissing = (nodeModulesDir: string, names: string[]): Promise<boolean> =>
+  Promise.all(
+    names
+      .map((name) => resolve(nodeModulesDir, name))
+      .filter((dependencyPath) => dependencyPath.startsWith(`${nodeModulesDir}${sep}`))
+      .map((dependencyPath) => exists(dependencyPath)),
+  ).then((found) => found.some((present) => !present));
 
 export default class GitDependencies {
   private readonly manager: DefaultPackageManager;
@@ -19,36 +34,17 @@ export default class GitDependencies {
     this.manager = manager;
   }
 
-  private hasMissingGitDependencies(targetDir: string): boolean {
+  private hasMissingGitDependencies(targetDir: string): Promise<boolean> {
     const packageJsonPath = join(targetDir, "package.json");
-    if (!existsSync(packageJsonPath)) return false;
-
-    try {
-      const manifest = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8"))) as {
-        dependencies?: unknown;
-      };
-      if (
-        typeof manifest.dependencies !== "object" ||
-        manifest.dependencies === null ||
-        Array.isArray(manifest.dependencies)
-      ) {
-        return false;
-      }
-
-      const nodeModulesDir = resolve(targetDir, "node_modules");
-      return Object.keys(manifest.dependencies).some((name) => {
-        const dependencyPath = resolve(nodeModulesDir, name);
-        if (!dependencyPath.startsWith(`${nodeModulesDir}${sep}`)) return false;
-        return !existsSync(dependencyPath);
-      });
-    } catch {
-      return false;
-    }
+    return exists(packageJsonPath)
+      .then((found) => (found ? readText(packageJsonPath).then(dependencyNames) : []))
+      .then((names) => anyDependencyMissing(resolve(targetDir, "node_modules"), names))
+      .catch(() => false);
   }
 
   repairMissingGitDependencies(targetDir: string): Effect.Effect<void> {
     return awaitingWith(function* () {
-      if (!this.hasMissingGitDependencies(targetDir)) return;
+      if (!(yield* awaited(this.hasMissingGitDependencies(targetDir)))) return;
       yield* performed(
         this.manager.npm.tool.runNpmCommand(this.manager.npm.tool.getGitDependencyInstallArgs(), {
           cwd: targetDir,
@@ -69,14 +65,14 @@ export default class GitDependencies {
       }
 
       const packageJsonPath = join(targetDir, "package.json");
-      if (existsSync(packageJsonPath)) {
+      if (yield* awaited(exists(packageJsonPath))) {
         yield* performed(
           this.manager.npm.tool.runNpmCommand(this.manager.npm.tool.getGitDependencyInstallArgs(), {
             cwd: targetDir,
           }),
         );
       }
-      rmSync(markerPath, { force: true });
+      yield* awaited(remove({ force: true, path: markerPath }));
     }, this);
   }
 }

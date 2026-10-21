@@ -39,8 +39,16 @@ const shouldPlaceTemporaryNpmPackagesUnderThe = Effect.gen(function* () {
     throw new Error("Expected npm source");
   }
 
-  const installPath = packageManager.npm.paths.getNpmInstallPath(source, "temporary");
+  const installPath = yield* Effect.promise(() =>
+    packageManager.npm.paths.getNpmInstallPath(source, "temporary"),
+  );
   const tempRoot = joinPath(agentDir, "tmp", "extensions");
+  yield* Effect.promise(() =>
+    packageManager.npm.paths.ensureNpmProject(
+      packageManager.npm.paths.getNpmInstallRoot("temporary", true),
+      true,
+    ),
+  );
 
   expect(packagePaths.pathEndsWith(installPath, "node_modules/left-pad")).toBe(true);
   expect(relativePath(tempRoot, installPath).startsWith("..")).toBe(false);

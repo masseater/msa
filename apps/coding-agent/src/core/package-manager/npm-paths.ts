@@ -3,13 +3,14 @@ import pathsModule from "../../utils/paths.ts";
 import text from "../../utils/text.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
+import packageManager from "../package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 
 const { markPathIgnoredByCloudSync } = pathsModule;
 const { join } = platformModule;
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
+const { exists, makeDirectory, readText, writeFile } = platformModule.files;
+const { ensureExtensionTempFolder } = packageManager;
 const { stripBom } = text;
 const { CONFIG_DIR_NAME } = config;
 
@@ -20,16 +21,11 @@ export default class NpmPaths {
     this.manager = manager;
   }
 
-  getInstalledNpmVersion(installedPath: string): string | undefined {
-    const packageJsonPath = join(installedPath, "package.json");
-    if (!existsSync(packageJsonPath)) return undefined;
-    try {
-      const content = readFileSync(packageJsonPath, "utf-8");
-      const pkg = JSON.parse(stripBom(content)) as { version?: string };
-      return pkg.version;
-    } catch {
-      return undefined;
-    }
+  getInstalledNpmVersion(installedPath: string): Promise<string | undefined> {
+    return readText(join(installedPath, "package.json")).then(
+      (content) => (JSON.parse(stripBom(content)) as { version?: string }).version,
+      () => undefined,
+    );
   }
 
   parseNpmSpec(spec: string): { name: string; version?: string } {
@@ -67,17 +63,23 @@ export default class NpmPaths {
     return join(this.manager.agentDir, "npm", "node_modules", source.name);
   }
 
-  ensureNpmProject(installRoot: string): void {
-    if (!existsSync(installRoot)) {
-      mkdirSync(installRoot, { recursive: true });
-    }
-    markPathIgnoredByCloudSync(installRoot);
-    this.manager.git.paths.ensureGitIgnore(installRoot);
+  ensureNpmProject(installRoot: string, temporary: boolean): Promise<void> {
     const packageJsonPath = join(installRoot, "package.json");
-    if (!existsSync(packageJsonPath)) {
-      const pkgJson = { name: "msa-extensions", private: true };
-      writeFileSync(packageJsonPath, JSON.stringify(pkgJson, null, 2), "utf-8");
-    }
+    return (temporary ? ensureExtensionTempFolder(this.manager.agentDir) : Promise.resolve())
+      .then(() => makeDirectory({ path: installRoot }))
+      .then(() => {
+        markPathIgnoredByCloudSync(installRoot);
+        return this.manager.git.paths.ensureGitIgnore(installRoot);
+      })
+      .then(() => exists(packageJsonPath))
+      .then((found) =>
+        found
+          ? undefined
+          : writeFile({
+              data: JSON.stringify({ name: "msa-extensions", private: true }, null, 2),
+              path: packageJsonPath,
+            }),
+      );
   }
 
   private getLegacyGlobalNpmInstallPath(
@@ -96,14 +98,15 @@ export default class NpmPaths {
   getNpmInstallPath(
     source: defaultPackageManagerInternalTypes.NpmSource,
     scope: packageManagerTypes.SourceScope,
-  ): string {
+  ): Promise<string> {
     const managedPath = this.getManagedNpmInstallPath(source, scope);
-    if (scope !== "user" || existsSync(managedPath)) {
-      return managedPath;
-    }
-    const legacyPath = this.getLegacyGlobalNpmInstallPath(source);
-    return legacyPath !== undefined && legacyPath !== "" && existsSync(legacyPath)
-      ? legacyPath
-      : managedPath;
+    if (scope !== "user") return Promise.resolve(managedPath);
+    return exists(managedPath).then((found) => {
+      if (found) return managedPath;
+      const legacyPath = this.getLegacyGlobalNpmInstallPath(source);
+      return legacyPath === undefined || legacyPath === ""
+        ? managedPath
+        : exists(legacyPath).then((legacyFound) => (legacyFound ? legacyPath : managedPath));
+    });
   }
 }

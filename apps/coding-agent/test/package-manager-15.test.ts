@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Effect } from "effect";
+import { Deferred, Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
@@ -29,6 +29,9 @@ let agentDir: string;
 let settingsManager: settingsManagerTypes.SettingsManager;
 
 let packageManager: packageManagerTypes.DefaultPackageManager;
+
+const installedUserPath = (source: string) =>
+  Effect.promise(() => packageManager.configured.getInstalledPath(source, "user"));
 
 let previousOfflineEnv: string | undefined;
 
@@ -72,13 +75,13 @@ const shouldMigrateLegacyUserNpmInstallsInto = Effect.gen(function* () {
       ),
     );
 
-  expect(packageManager.configured.getInstalledPath("npm:legacy-pkg", "user")).toBe(legacyPath);
+  expect(yield* installedUserPath("npm:legacy-pkg")).toBe(legacyPath);
 
   yield* awaited(packageManager.operations.updates.update("npm:legacy-pkg"));
 
   expect(runCommandCaptureSpy).not.toHaveBeenCalled();
   expect(runCommandSpy).toHaveBeenCalledTimes(1);
-  expect(packageManager.configured.getInstalledPath("npm:legacy-pkg", "user")).toBe(managedPath);
+  expect(yield* installedUserPath("npm:legacy-pkg")).toBe(managedPath);
 });
 
 const seedInstalledNpmPackages = Effect.gen(function* () {
@@ -137,12 +140,14 @@ const lookUpLatestVersion = (...callArgs: unknown[]) => {
 
 const concurrencyProbe = () => {
   const counts = { active: 0, max: 0 };
+  const overlapped = Deferred.makeUnsafe<void>();
   const run = () =>
     Effect.runPromise(
       Effect.gen(function* () {
         counts.active += 1;
         counts.max = Math.max(counts.max, counts.active);
-        yield* Effect.sleep(20);
+        if (counts.active > 1) yield* Deferred.succeed(overlapped, undefined);
+        yield* Effect.race(Deferred.await(overlapped), Effect.sleep(1000));
         counts.active -= 1;
       }),
     );
@@ -180,14 +185,12 @@ const shouldBatchNpmUpdatesPerScopeAnd = Effect.gen(function* () {
 
   expect(runCommandCaptureSpy).toHaveBeenCalledTimes(5);
   expect(runCommandSpy).toHaveBeenCalledTimes(2);
-  expect(runCommandSpy).toHaveBeenNthCalledWith(
-    1,
+  expect(runCommandSpy).toHaveBeenCalledWith(
     "npm",
     npmInstallArgs(["user-old", "user-unknown"], joinPath(agentDir, "npm")),
     undefined,
   );
-  expect(runCommandSpy).toHaveBeenNthCalledWith(
-    2,
+  expect(runCommandSpy).toHaveBeenCalledWith(
     "npm",
     npmInstallArgs(["project-old", "project-missing"], joinPath(tempDir, ".msa", "npm")),
     undefined,

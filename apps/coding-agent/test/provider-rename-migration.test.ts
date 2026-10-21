@@ -34,7 +34,7 @@ const movesAnthropicToAnthropicApiAndClaude = Effect.gen(function* () {
     enabledModels: ["anthropic/claude-*", "claude-code-work/sonnet", "openrouter/anthropic/x"],
   });
 
-  runMigrations(agentDir);
+  yield* Effect.promise(() => runMigrations(agentDir));
 
   expect(yield* read("auth.json")).toEqual({
     "anthropic-api": { key: "sk-ant", type: "api_key" },
@@ -58,7 +58,7 @@ const dropsAClaudeProMaxSignIn = Effect.gen(function* () {
   yield* write("auth.json", {
     anthropic: { access: "a", expires: 0, refresh: "r", type: "oauth" },
   });
-  runMigrations(agentDir);
+  yield* Effect.promise(() => runMigrations(agentDir));
   expect(yield* read("auth.json")).toEqual({});
 });
 
@@ -67,7 +67,7 @@ const keepsACredentialAlreadyStoredUnderThe = Effect.gen(function* () {
     anthropic: { key: "old", type: "api_key" },
     "anthropic-api": { key: "new", type: "api_key" },
   });
-  runMigrations(agentDir);
+  yield* Effect.promise(() => runMigrations(agentDir));
   expect(yield* read("auth.json")).toEqual({ "anthropic-api": { key: "new", type: "api_key" } });
 });
 

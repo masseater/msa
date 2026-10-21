@@ -5,9 +5,9 @@ import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import nodeFs from "../platform/node/fs.ts";
-const { existsSync } = nodeFs;
-const { awaitingWith, performed } = awaitingModule;
+import platform from "../platform/index.ts";
+const { exists } = platform.files;
+const { awaited, awaitingWith, performed } = awaitingModule;
 
 export default class NpmInstalls {
   private readonly manager: DefaultPackageManager;
@@ -20,15 +20,17 @@ export default class NpmInstalls {
     source: defaultPackageManagerInternalTypes.NpmSource,
     installedPath: string,
   ): Effect.Effect<boolean> {
-    return Effect.sync(() => {
-      const installedVersion = this.manager.npm.paths.getInstalledNpmVersion(installedPath);
+    return awaitingWith(function* () {
+      const installedVersion = yield* awaited(
+        this.manager.npm.paths.getInstalledNpmVersion(installedPath),
+      );
       if (installedVersion === undefined || installedVersion === "") {
         return false;
       }
       return source.range !== undefined && source.range !== ""
         ? satisfies(installedVersion, source.range)
         : true;
-    });
+    }, this);
   }
 
   updateNpmBatch(
@@ -71,7 +73,7 @@ export default class NpmInstalls {
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       const installRoot = this.manager.npm.paths.getNpmInstallRoot(scope, false);
-      this.manager.npm.paths.ensureNpmProject(installRoot);
+      yield* awaited(this.manager.npm.paths.ensureNpmProject(installRoot, false));
       yield* performed(
         this.manager.npm.tool.runNpmCommand(
           this.manager.npm.tool.getNpmInstallArgs(specs, installRoot),
@@ -87,7 +89,7 @@ export default class NpmInstalls {
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       const installRoot = this.manager.npm.paths.getNpmInstallRoot(scope, temporary);
-      this.manager.npm.paths.ensureNpmProject(installRoot);
+      yield* awaited(this.manager.npm.paths.ensureNpmProject(installRoot, temporary));
       yield* performed(
         this.manager.npm.tool.runNpmCommand(
           this.manager.npm.tool.getNpmInstallArgs([source.spec], installRoot),
@@ -102,7 +104,7 @@ export default class NpmInstalls {
   ): Effect.Effect<void> {
     return awaitingWith(function* () {
       const installRoot = this.manager.npm.paths.getNpmInstallRoot(scope, false);
-      if (!existsSync(installRoot)) {
+      if (!(yield* awaited(exists(installRoot)))) {
         return;
       }
       const packageManagerName = this.manager.npm.tool.getPackageManagerName();

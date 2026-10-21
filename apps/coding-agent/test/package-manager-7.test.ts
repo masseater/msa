@@ -30,6 +30,9 @@ let settingsManager: settingsManagerTypes.SettingsManager;
 
 let packageManager: packageManagerTypes.DefaultPackageManager;
 
+const installedUserPath = (source: string) =>
+  Effect.promise(() => packageManager.configured.getInstalledPath(source, "user"));
+
 let previousOfflineEnv: string | undefined;
 
 const shouldDisablePeerInstallationThroughWrappedPnpmStep1 = () =>
@@ -144,9 +147,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
       throw new Error(`unexpected args ${args.join(" ")}`);
     });
 
-  expect(packageManager.configured.getInstalledPath("npm:@scope/pkg", "user")).toBe(
-    joinPath(root20, "@scope", "pkg"),
-  );
+  expect(yield* installedUserPath("npm:@scope/pkg")).toBe(joinPath(root20, "@scope", "pkg"));
   expect(runCommandSyncSpy).toHaveBeenNthCalledWith(1, "mise", [
     "exec",
     "node@20",
@@ -158,7 +159,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
 
   settingsManager.resources.setNpmCommand(["mise", "exec", "node@22", "--", "npm"]);
 
-  expect(packageManager.configured.getInstalledPath("npm:@scope/pkg", "user")).toBeUndefined();
+  expect(yield* installedUserPath("npm:@scope/pkg")).toBeUndefined();
   expect(runCommandSyncSpy).toHaveBeenNthCalledWith(2, "mise", [
     "exec",
     "node@22",
@@ -237,7 +238,7 @@ const shouldInstallUserNpmPackagesIntoThe = () =>
         ),
       ).toBe(true);
       expect(runCommandSpy).toHaveBeenCalledTimes(1);
-      expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+      expect(yield* installedUserPath("npm:pnpm-pkg")).toBe(packagePath);
     }),
   );
 

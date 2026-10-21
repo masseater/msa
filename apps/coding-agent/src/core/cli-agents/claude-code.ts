@@ -7,7 +7,7 @@ import claudeCodeStream from "./claude-code-stream.ts";
 import providerModule from "./provider.ts";
 import type providerTypes from "./provider.types.ts";
 
-const { claudeExecutable, loadAccounts } = claudeAccounts;
+const { cachedAccounts, claudeExecutable } = claudeAccounts;
 const { PROVIDER_ID } = claudeCodeAttach;
 const { streamFor } = claudeCodeStream;
 const { cliAgentProvider } = providerModule;
@@ -43,7 +43,7 @@ function provider(
 }
 
 function claudeCodeProviders(): compatTypes.Provider[] {
-  const accounts = loadAccounts();
+  const accounts = cachedAccounts();
   const perAccount =
     accounts.length > 1
       ? accounts.map((account) =>

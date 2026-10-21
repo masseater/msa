@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 
 import abortModule from "../../utils/abort.ts";
 import awaitingModule from "../awaiting.ts";
+import cliAgents from "../cli-agents/index.ts";
 import ModelConfig from "../model-config.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
 import platform from "../platform/index.ts";
@@ -49,6 +50,7 @@ const refreshRuntime = (
   Effect.runPromise(
     awaiting(function* () {
       target.catalog.config = yield* awaited(ModelConfig.load(target.modelsPath));
+      yield* awaited(refreshCliAgentAccounts());
       if (options.providers === undefined) target.catalog.rebuild();
       else
         for (const providerId of new Set(options.providers)) target.catalog.recompose(providerId);
@@ -85,6 +87,8 @@ function refreshSignal(
   return { cancel: () => timeout.cancel(), signal };
 }
 
-const runtimeRefresh = { refreshRuntime, refreshSignal };
+const { refreshCliAgentAccounts } = cliAgents;
+
+const runtimeRefresh = { refreshCliAgentAccounts, refreshRuntime, refreshSignal };
 
 export default runtimeRefresh;

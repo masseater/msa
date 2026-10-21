@@ -1,7 +1,6 @@
 import platform from "../../core/platform/index.ts";
-import nodeFs from "../../core/platform/node/fs.ts";
 
-const { appendFileSync, mkdirSync, renameSync, statSync } = nodeFs;
+const { appendText, fileSize, makeDirectory, rename } = platform.files;
 
 const { dirname, nowMs, toDate } = platform;
 
@@ -34,6 +33,7 @@ function formatMcpLogMessage(server: string, params: unknown, now: Date = toDate
 export default class McpServerLog {
   readonly path: string;
   private size: number | undefined;
+  private pending: Promise<void> = Promise.resolve();
 
   constructor(path: string) {
     this.path = path;
@@ -41,25 +41,38 @@ export default class McpServerLog {
 
   write(server: string, params: unknown): void {
     const line = formatMcpLogMessage(server, params);
-    try {
-      if (this.size === undefined) {
-        mkdirSync(dirname(this.path), { recursive: true });
-        this.size = this.currentSize();
-      }
-      if (this.size > MAX_LOG_BYTES) {
-        if (this.currentSize() > MAX_LOG_BYTES) renameSync(this.path, `${this.path}.1`);
-        this.size = this.currentSize();
-      }
-      appendFileSync(this.path, line);
-      this.size += Buffer.byteLength(line);
-    } catch {}
+    this.pending = this.pending.then(() => this.append(line)).catch(() => undefined);
   }
 
-  private currentSize(): number {
-    try {
-      return statSync(this.path).size;
-    } catch {
-      return 0;
-    }
+  flush(): Promise<void> {
+    return this.pending;
+  }
+
+  private append(line: string): Promise<void> {
+    return this.knownSize()
+      .then((size) => (size > MAX_LOG_BYTES ? this.rotate() : size))
+      .then((size) =>
+        appendText({ data: line, path: this.path }).then(() => {
+          this.size = size + Buffer.byteLength(line);
+          return undefined;
+        }),
+      );
+  }
+
+  private knownSize(): Promise<number> {
+    if (this.size !== undefined) return Promise.resolve(this.size);
+    return makeDirectory({ path: dirname(this.path) }).then(() => this.currentSize());
+  }
+
+  private rotate(): Promise<number> {
+    return this.currentSize()
+      .then((size) =>
+        size > MAX_LOG_BYTES ? rename({ from: this.path, to: `${this.path}.1` }) : undefined,
+      )
+      .then(() => this.currentSize());
+  }
+
+  private currentSize(): Promise<number> {
+    return fileSize(this.path).catch(() => 0);
   }
 }

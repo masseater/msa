@@ -30,12 +30,33 @@ interface AccountFailure {
   readonly failure: claudeAccountsTypes.RunFailure;
 }
 
-function noAccountMessage(failures: readonly string[]): string {
+const rotationAccounts = (): Promise<claudeAccountsTypes.Account[]> =>
+  loadAccounts().then((accounts) => accounts.filter((account) => account.auto !== false));
+
+const usableAccounts = (
+  fixed: claudeAccountsTypes.Account | undefined,
+): Promise<claudeAccountsTypes.Account[]> =>
+  fixed === undefined
+    ? rotationAccounts().then((accounts) =>
+        Promise.all(accounts.map((account) => blockOf(account))).then((blocks) =>
+          accounts.filter((_account, index) => blocks[index] === undefined),
+        ),
+      )
+    : Promise.resolve([fixed]);
+
+function noAccountMessage(failures: readonly string[]): Promise<string> {
   const failed = new Set(failures.map((line) => line.slice(0, line.indexOf(":"))));
-  const blocked = loadAccounts()
-    .filter((candidate) => candidate.auto !== false && !failed.has(candidate.name))
-    .map((candidate) => `${candidate.name}: ${blockOf(candidate)?.reason ?? "?"}`);
-  return `No Claude account available.\n${[...failures, ...blocked].join("\n")}`;
+  return rotationAccounts()
+    .then((accounts) =>
+      Promise.all(
+        accounts
+          .filter((candidate) => !failed.has(candidate.name))
+          .map((candidate) =>
+            blockOf(candidate).then((block) => `${candidate.name}: ${block?.reason ?? "?"}`),
+          ),
+      ),
+    )
+    .then((blocked) => `No Claude account available.\n${[...failures, ...blocked].join("\n")}`);
 }
 
 const runAccount = (request: RunRequest, state: RunState, account: claudeAccountsTypes.Account) =>
@@ -61,13 +82,13 @@ const runAccounts = (request: RunRequest, state: RunState) =>
     while (true) {
       const account = config.accounts[0];
       if (account === undefined) {
-        reply.fail("error", noAccountMessage(failures));
+        reply.fail("error", yield* Effect.promise(() => noAccountMessage(failures)));
         return;
       }
       const outcome = yield* runAccount(request, state, account);
       if (outcome === undefined) return;
       const { failed, failure } = outcome;
-      const blocked = blockIfUnusable(failed, failure);
+      const blocked = yield* Effect.promise(() => blockIfUnusable(failed, failure));
       const detail = `${failed.name}: ${failure.error}`;
       failures.push(detail);
       if (request.fixed !== undefined || !blocked || reply.hasContent) {
@@ -101,7 +122,17 @@ const run = (request: RunRequest): Effect.Effect<void> => {
   const signal = options?.signal;
   if (signal?.aborted === true) return Effect.sync(onAbort);
   signal?.addEventListener("abort", onAbort, { once: true });
-  return Effect.andThen(notifyPayload(request), runAccounts(request, state)).pipe(
+  const assignAccounts = Effect.flatMap(
+    Effect.promise(() => usableAccounts(request.fixed)),
+    (accounts) =>
+      Effect.sync(() => {
+        request.config.accounts = accounts;
+      }),
+  );
+  return Effect.andThen(
+    Effect.andThen(assignAccounts, notifyPayload(request)),
+    runAccounts(request, state),
+  ).pipe(
     Effect.catchCause((cause) =>
       Effect.sync(() => {
         const error = Cause.squash(cause);

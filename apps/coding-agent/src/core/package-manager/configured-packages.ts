@@ -1,9 +1,9 @@
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import nodeFs from "../platform/node/fs.ts";
+import platform from "../platform/index.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 
 export default class ConfiguredPackages {
   private readonly manager: DefaultPackageManager;
@@ -69,50 +69,46 @@ export default class ConfiguredPackages {
     return true;
   }
 
-  getInstalledPath(source: string, scope: "user" | "project"): string | undefined {
+  private candidateInstalledPath(
+    source: string,
+    scope: "user" | "project",
+  ): Promise<string | undefined> {
     const parsed = this.manager.sources.parseSource(source);
-    if (parsed.type === "npm") {
-      const path = this.manager.npm.paths.getNpmInstallPath(parsed, scope);
-      return existsSync(path) ? path : undefined;
-    }
+    if (parsed.type === "npm") return this.manager.npm.paths.getNpmInstallPath(parsed, scope);
     if (parsed.type === "git") {
-      const path = this.manager.git.paths.getGitInstallPath(parsed, scope);
-      return existsSync(path) ? path : undefined;
+      return Promise.resolve(this.manager.git.paths.getGitInstallPath(parsed, scope));
     }
-    if (parsed.type === "local") {
-      const baseDir = this.manager.sources.getBaseDirForScope(scope);
-      const path = this.manager.sources.resolvePathFromBase(parsed.path, baseDir);
-      return existsSync(path) ? path : undefined;
-    }
-    return undefined;
+    if (parsed.type !== "local") return Promise.resolve(undefined);
+    const baseDir = this.manager.sources.getBaseDirForScope(scope);
+    return Promise.resolve(this.manager.sources.resolvePathFromBase(parsed.path, baseDir));
   }
 
-  listConfiguredPackages(): packageManagerTypes.ConfiguredPackage[] {
-    const globalSettings = this.manager.settingsManager.getGlobalSettings();
-    const projectSettings = this.manager.settingsManager.getProjectSettings();
-    const configuredPackages: packageManagerTypes.ConfiguredPackage[] = [];
+  getInstalledPath(source: string, scope: "user" | "project"): Promise<string | undefined> {
+    return this.candidateInstalledPath(source, scope).then((path) =>
+      path === undefined ? undefined : exists(path).then((found) => (found ? path : undefined)),
+    );
+  }
 
-    for (const pkg of globalSettings.packages ?? []) {
-      const source = typeof pkg === "string" ? pkg : pkg.source;
-      configuredPackages.push({
-        filtered: typeof pkg === "object",
-        installedPath: this.getInstalledPath(source, "user"),
-        scope: "user",
-        source,
-      });
-    }
+  private configuredEntry(
+    pkg: settingsManagerTypes.PackageSource,
+    scope: "user" | "project",
+  ): Promise<packageManagerTypes.ConfiguredPackage> {
+    const source = typeof pkg === "string" ? pkg : pkg.source;
+    return this.getInstalledPath(source, scope).then((installedPath) => ({
+      filtered: typeof pkg === "object",
+      installedPath,
+      scope,
+      source,
+    }));
+  }
 
-    for (const pkg of projectSettings.packages ?? []) {
-      const source = typeof pkg === "string" ? pkg : pkg.source;
-      configuredPackages.push({
-        filtered: typeof pkg === "object",
-        installedPath: this.getInstalledPath(source, "project"),
-        scope: "project",
-        source,
-      });
-    }
-
-    return configuredPackages;
+  listConfiguredPackages(): Promise<packageManagerTypes.ConfiguredPackage[]> {
+    const globalPackages = this.manager.settingsManager.getGlobalSettings().packages ?? [];
+    const projectPackages = this.manager.settingsManager.getProjectSettings().packages ?? [];
+    return Promise.all([
+      ...globalPackages.map((pkg) => this.configuredEntry(pkg, "user")),
+      ...projectPackages.map((pkg) => this.configuredEntry(pkg, "project")),
+    ]);
   }
 
   findAutoloadDeltaBase(

@@ -25,7 +25,9 @@ function prepareStartup(args: string[], boot: Boot) {
     awaiting(function* () {
       const { cwd, agentDir } = boot;
       const { appMode, parsed } = yield* parseCliArgs(args);
-      const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
+      const { migratedAuthProviders: migratedProviders, deprecationWarnings } = yield* awaited(
+        runMigrations(cwd),
+      );
       time("runMigrations");
       const startupSettingsManager = yield* awaited(SettingsManager.create(cwd, agentDir));
       const startupSettingsDiagnostics = collectSettingsDiagnostics(startupSettingsManager);

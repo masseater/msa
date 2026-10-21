@@ -21,52 +21,84 @@ beforeEach(() => runTest(prepareAgentDir));
 
 afterEach(() => runTest(cleanAgentDir));
 
-const usesMsaSEnvironmentWhenNoAccounts = () => {
-  expect(loadAccounts()).toEqual([{ name: "default" }]);
-};
+const usesMsaSEnvironmentWhenNoAccounts = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(yield* Effect.promise(() => loadAccounts())).toEqual([{ name: "default" }]);
+    }),
+  );
 
 const expandsInConfigdir = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeAccounts([{ configDir: "~/claude-main", name: "main" }]);
-      expect(loadAccounts()).toEqual([
+      expect(yield* Effect.promise(() => loadAccounts())).toEqual([
         { configDir: joinPath(homedir(), "claude-main"), name: "main" },
       ]);
     }),
   );
 
-const blocksAnAccountThatHitItsUsage = () => {
-  const account = { name: "main" };
-  const resetsAt = currentTimeMillis() + 3_600_000;
-  expect(
-    blockIfUnusable(account, {
-      cause: "usage_limit",
-      error: "You've hit your weekly limit",
-      resetsAt,
+const blocksAnAccountThatHitItsUsage = () =>
+  runTest(
+    Effect.gen(function* () {
+      const account = { name: "main" };
+      const resetsAt = currentTimeMillis() + 3_600_000;
+      expect(
+        yield* Effect.promise(() =>
+          blockIfUnusable(account, {
+            cause: "usage_limit",
+            error: "You've hit your weekly limit",
+            resetsAt,
+          }),
+        ),
+      ).toBe(true);
+      expect((yield* Effect.promise(() => blockOf(account, resetsAt - 60_000)))?.reason).toContain(
+        "weekly limit",
+      );
+      expect(yield* Effect.promise(() => blockOf(account, resetsAt + 60_000))).toBeUndefined();
+      yield* Effect.promise(() => clearBlocks());
+      expect(yield* Effect.promise(() => blockOf(account, resetsAt - 60_000))).toBeUndefined();
     }),
-  ).toBe(true);
-  expect(blockOf(account, resetsAt - 60_000)?.reason).toContain("weekly limit");
-  expect(blockOf(account, resetsAt + 60_000)).toBeUndefined();
-  clearBlocks();
-  expect(blockOf(account, resetsAt - 60_000)).toBeUndefined();
-};
+  );
 
-const blocksAnAccountByTheErrorClaude = () => {
-  const now = currentTimeMillis();
-  const account = { name: "main" };
-  expect(blockIfUnusable(account, { cause: "authentication_failed", error: "401" })).toBe(true);
-  expect(blockOf(account, now + 60_000)).toBeDefined();
-  expect(blockOf(account, now + 11 * 60_000)).toBeUndefined();
-  expect(blockIfUnusable(account, { cause: "account_on_hold", error: "on hold" })).toBe(true);
-  expect(blockOf(account, now + 23 * 60 * 60_000)).toBeDefined();
-};
+const blocksAnAccountByTheErrorClaude = () =>
+  runTest(
+    Effect.gen(function* () {
+      const now = currentTimeMillis();
+      const account = { name: "main" };
+      expect(
+        yield* Effect.promise(() =>
+          blockIfUnusable(account, { cause: "authentication_failed", error: "401" }),
+        ),
+      ).toBe(true);
+      expect(yield* Effect.promise(() => blockOf(account, now + 60_000))).toBeDefined();
+      expect(yield* Effect.promise(() => blockOf(account, now + 11 * 60_000))).toBeUndefined();
+      expect(
+        yield* Effect.promise(() =>
+          blockIfUnusable(account, { cause: "account_on_hold", error: "on hold" }),
+        ),
+      ).toBe(true);
+      expect(yield* Effect.promise(() => blockOf(account, now + 23 * 60 * 60_000))).toBeDefined();
+    }),
+  );
 
-const doesNotBlockAnAccountForAn = () => {
-  const account = { name: "main" };
-  expect(blockIfUnusable(account, { cause: "overloaded", error: "overloaded" })).toBe(false);
-  expect(blockIfUnusable(account, { cause: "rate_limit", error: "429" })).toBe(false);
-  expect(blockOf(account)).toBeUndefined();
-};
+const doesNotBlockAnAccountForAn = () =>
+  runTest(
+    Effect.gen(function* () {
+      const account = { name: "main" };
+      expect(
+        yield* Effect.promise(() =>
+          blockIfUnusable(account, { cause: "overloaded", error: "overloaded" }),
+        ),
+      ).toBe(false);
+      expect(
+        yield* Effect.promise(() =>
+          blockIfUnusable(account, { cause: "rate_limit", error: "429" }),
+        ),
+      ).toBe(false);
+      expect(yield* Effect.promise(() => blockOf(account))).toBeUndefined();
+    }),
+  );
 
 const givesTheTokenPrintedByTokencommandOnly = () =>
   runTest(
@@ -91,7 +123,7 @@ const blocksAnAccountWhoseTokencommandFails = () =>
       const error = yield* failure(awaited(accountEnv(account)));
       const message = error instanceof Error ? error.message : String(error);
       expect(message).toMatch(/^tokenCommand .*: nope$/u);
-      expect(blockIfUnusable(account, { error: message })).toBe(true);
+      expect(yield* Effect.promise(() => blockIfUnusable(account, { error: message }))).toBe(true);
     }),
   );
 

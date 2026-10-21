@@ -15,17 +15,17 @@ const { runMigrations } = migrations;
 const { createHarness } = harnessModule;
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { fromJsonText, joinPath, toJsonText } = testing;
+const { awaited, fromJsonText, joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 const cleanups: Array<() => void> = [];
 
-function withAgentDir(agentDir: string, fn: () => void): void {
+function withAgentDir<T>(agentDir: string, fn: () => T): T {
   vi.stubEnv(ENV_AGENT_DIR, agentDir);
   try {
-    fn();
+    return fn();
   } finally {
     vi.unstubAllEnvs();
   }
@@ -54,7 +54,7 @@ const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
       },
     })}\n`,
   );
-  withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir));
+  yield* awaited(withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir)));
   const migrated = (yield* fromJsonText(yield* fs.readFileString(modelsPath))) as {
     providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
   };

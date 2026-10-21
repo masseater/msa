@@ -33,11 +33,11 @@ const createAgentDir = Effect.fn("createAgentDir")(function* () {
   return agentDir;
 });
 
-function withAgentDir(agentDir: string, fn: () => void): void {
+function withAgentDir<T>(agentDir: string, fn: () => T): T {
   const previousAgentDir = readEnv(ENV_AGENT_DIR);
   writeEnv(ENV_AGENT_DIR, agentDir);
   try {
-    fn();
+    return fn();
   } finally {
     if (previousAgentDir === undefined) {
       deleteEnv(ENV_AGENT_DIR);
@@ -101,7 +101,7 @@ const leavesUppercaseAuthJsonApiKeyValues = Effect.gen(function* () {
   const agentDir = yield* createAgentDir();
   yield* writeTextFile(joinPath(agentDir, "auth.json"), `${yield* toJsonText(AUTH_FIXTURE)}\n`);
   const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-  withAgentDir(agentDir, () => runMigrations(agentDir));
+  yield* awaited(withAgentDir(agentDir, () => runMigrations(agentDir)));
   const migrated = (yield* readMigrated(joinPath(agentDir, "auth.json"))) as Record<
     string,
     Record<string, unknown>
@@ -153,7 +153,7 @@ const leavesUppercaseModelsJsonApiKeyAnd = withEnvKeys(
     const modelsPath = joinPath(agentDir, "models.json");
     yield* writeTextFile(modelsPath, `${yield* toJsonText(MODELS_FIXTURE)}\n`);
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
-    withAgentDir(agentDir, () => runMigrations(agentDir));
+    yield* awaited(withAgentDir(agentDir, () => runMigrations(agentDir)));
     const migrated = (yield* readMigrated(modelsPath)) as {
       providers: Record<string, MigratedProvider>;
     };
@@ -184,7 +184,9 @@ describe("config value env var syntax migration", () => {
         const modelsPath = joinPath(agentDir, "models.json");
         yield* writeTextFile(modelsPath, content);
 
-        withAgentDir(agentDir, () => expect(() => runMigrations(agentDir)).not.toThrow());
+        yield* awaited(
+          expect(withAgentDir(agentDir, () => runMigrations(agentDir))).resolves.toBeDefined(),
+        );
 
         expect(yield* readTextFile(modelsPath)).toBe(content);
         const registry = yield* awaited(

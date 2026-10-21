@@ -4,13 +4,13 @@ import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import nodeFs from "../platform/node/fs.ts";
+import platform from "../platform/index.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import concurrency from "./concurrency.ts";
 import gitRemote from "./git-remote.ts";
 import packageEnv from "./package-env.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 const { isOfflineModeEnabled, UPDATE_CHECK_CONCURRENCY } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { runWithConcurrency } = concurrency;
@@ -83,8 +83,8 @@ export default class PackageUpdateCheck {
     source: string,
   ): Effect.Effect<Update> {
     return awaitingWith(function* () {
-      const installedPath = this.manager.npm.paths.getNpmInstallPath(parsed, scope);
-      if (!existsSync(installedPath)) {
+      const installedPath = yield* awaited(this.manager.npm.paths.getNpmInstallPath(parsed, scope));
+      if (!(yield* awaited(exists(installedPath)))) {
         return undefined;
       }
       const hasUpdate = yield* performed(
@@ -102,11 +102,8 @@ export default class PackageUpdateCheck {
     source: string,
   ): Promise<Update> {
     const installedPath = this.manager.git.paths.getGitInstallPath(parsed, scope);
-    if (!existsSync(installedPath)) {
-      return Promise.resolve(undefined);
-    }
-    return gitRemote
-      .gitHasAvailableUpdate(installedPath)
+    return exists(installedPath)
+      .then((found) => (found ? gitRemote.gitHasAvailableUpdate(installedPath) : false))
       .then((hasUpdate) =>
         hasUpdate
           ? { displayName: `${parsed.host}/${parsed.path}`, scope, source, type: "git" as const }

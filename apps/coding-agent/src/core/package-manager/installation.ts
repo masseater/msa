@@ -3,9 +3,9 @@ import * as Effect from "effect/Effect";
 import awaitingModule from "../awaiting.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import nodeFs from "../platform/node/fs.ts";
+import platform from "../platform/index.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 const { awaited, awaitingWith, performed } = awaitingModule;
 
 export default class PackageInstallation {
@@ -74,7 +74,7 @@ export default class PackageInstallation {
                 }
                 if (parsed.type === "local") {
                   const resolved = this.manager.sources.resolvePath(parsed.path);
-                  if (!existsSync(resolved)) {
+                  if (!(yield* awaited(exists(resolved)))) {
                     throw new Error(`Path does not exist: ${resolved}`);
                   }
                   return;

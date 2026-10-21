@@ -28,9 +28,9 @@ interface LabeledAccount {
 
 const present = (value: string | undefined) => value !== undefined && value !== "";
 
-function loginAccounts(): claudeAccountsTypes.Account[] {
-  return loadAccounts().filter(
-    (account) => present(account.configDir) || !present(account.tokenCommand),
+function loginAccounts(): Promise<claudeAccountsTypes.Account[]> {
+  return loadAccounts().then((accounts) =>
+    accounts.filter((account) => present(account.configDir) || !present(account.tokenCommand)),
   );
 }
 
@@ -59,12 +59,12 @@ const chooseAccount = (interaction: Interaction, accounts: LabeledAccount[]) =>
     const name = yield* Effect.promise(() =>
       interaction.prompt("Name for the new account", "work"),
     );
-    return addAccount(name.trim());
+    return yield* Effect.promise(() => addAccount(name.trim()));
   });
 
 const login = (interaction: Interaction) =>
   Effect.gen(function* () {
-    const labeled = yield* Effect.promise(() => withLabels(loginAccounts()));
+    const labeled = yield* Effect.promise(() => loginAccounts().then(withLabels));
     const account = yield* chooseAccount(interaction, labeled);
     if (account === undefined) throw new Error("No Claude account to sign in");
     yield* Effect.promise(() =>
@@ -81,7 +81,7 @@ const login = (interaction: Interaction) =>
 
 const logout = (interaction: externalServicesTypes.ServiceLogoutInteraction) =>
   Effect.gen(function* () {
-    const labeled = yield* Effect.promise(() => withLabels(loginAccounts()));
+    const labeled = yield* Effect.promise(() => loginAccounts().then(withLabels));
     const accounts = labeled.filter((entry) => entry.loggedIn);
     const choice =
       accounts.length === 1
@@ -99,10 +99,12 @@ const logout = (interaction: externalServicesTypes.ServiceLogoutInteraction) =>
 const status = (): Promise<externalServicesTypes.ServiceStatus> => {
   if ((claudeExecutable() ?? "") === "")
     return Promise.resolve({ install: INSTALL_COMMAND, installed: false });
-  return withLabels(loginAccounts()).then((accounts) => ({
-    installed: true,
-    signedIn: accounts.some((entry) => entry.loggedIn),
-  }));
+  return loginAccounts()
+    .then(withLabels)
+    .then((accounts) => ({
+      installed: true,
+      signedIn: accounts.some((entry) => entry.loggedIn),
+    }));
 };
 
 const claudeCodeService: externalServicesTypes.ExternalService = {

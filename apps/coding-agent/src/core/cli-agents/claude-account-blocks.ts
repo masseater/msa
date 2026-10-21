@@ -1,11 +1,10 @@
 import config from "../../config.ts";
 import platform from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 
 const { getAgentDir } = config;
 const { nowMs } = platform;
-const { mkdirSync, readFileSync, writeFileSync } = nodeFs;
+const { makeDirectory, readText, writeFile } = platform.files;
 const { dirname, join } = platform;
 
 const blocksFile = () => join(getAgentDir(), "state", "claude-code-blocks.json");
@@ -19,39 +18,41 @@ const DISABLED_CAUSES = new Set<claudeAccountsTypes.RunFailure["cause"]>([
   "billing_error",
 ]);
 
-function loadBlocks(): Record<string, claudeAccountsTypes.AccountBlock> {
-  try {
-    return JSON.parse(readFileSync(blocksFile(), "utf8")) as Record<
-      string,
-      claudeAccountsTypes.AccountBlock
-    >;
-  } catch {
-    return {};
-  }
+type Blocks = Record<string, claudeAccountsTypes.AccountBlock>;
+
+function loadBlocks(): Promise<Blocks> {
+  return readText(blocksFile()).then(
+    (raw) => JSON.parse(raw) as Blocks,
+    () => ({}),
+  );
 }
 
-function saveBlocks(blocks: Record<string, claudeAccountsTypes.AccountBlock>): void {
+function saveBlocks(blocks: Blocks): Promise<void> {
   const file = blocksFile();
-  mkdirSync(dirname(file), { recursive: true });
-  writeFileSync(file, JSON.stringify(blocks, null, 2));
+  return makeDirectory({ path: dirname(file) }).then(() =>
+    writeFile({ data: JSON.stringify(blocks, null, 2), path: file }),
+  );
 }
 
 function blockOf(
   account: claudeAccountsTypes.Account,
   now = nowMs(),
-): claudeAccountsTypes.AccountBlock | undefined {
-  const block = loadBlocks()[account.name];
-  return block !== undefined && block.until > now ? block : undefined;
+): Promise<claudeAccountsTypes.AccountBlock | undefined> {
+  return loadBlocks().then((blocks) => {
+    const block = blocks[account.name];
+    return block !== undefined && block.until > now ? block : undefined;
+  });
 }
 
-function clearBlocks(): void {
-  saveBlocks({});
+function clearBlocks(): Promise<void> {
+  return saveBlocks({});
 }
 
-function clearBlock(name: string): void {
-  const blocks = loadBlocks();
-  delete blocks[name];
-  saveBlocks(blocks);
+function clearBlock(name: string): Promise<void> {
+  return loadBlocks().then((blocks) => {
+    delete blocks[name];
+    return saveBlocks(blocks);
+  });
 }
 
 function blockedUntil(failure: claudeAccountsTypes.RunFailure): number | undefined {
@@ -70,13 +71,15 @@ function blockedUntil(failure: claudeAccountsTypes.RunFailure): number | undefin
 function blockIfUnusable(
   account: claudeAccountsTypes.Account,
   failure: claudeAccountsTypes.RunFailure,
-): boolean {
+): Promise<boolean> {
   const until = blockedUntil(failure);
-  if (until === undefined) return false;
-  const blocks = loadBlocks();
-  blocks[account.name] = { reason: failure.error.split("\n")[0]!.slice(0, 200), until };
-  saveBlocks(blocks);
-  return true;
+  if (until === undefined) return Promise.resolve(false);
+  return loadBlocks()
+    .then((blocks) => {
+      blocks[account.name] = { reason: failure.error.split("\n")[0]!.slice(0, 200), until };
+      return saveBlocks(blocks);
+    })
+    .then(() => true);
 }
 
 const claudeAccountBlocks = { blockIfUnusable, blockOf, clearBlock, clearBlocks };

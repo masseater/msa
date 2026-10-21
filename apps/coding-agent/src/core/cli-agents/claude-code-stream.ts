@@ -2,13 +2,11 @@ import compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
-import claudeAccounts from "./claude-accounts.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 import claudeCodeRun from "./claude-code-run.ts";
 import type claudeCodeSessionTypes from "./claude-code-session.types.ts";
 import replyModule from "./reply.ts";
 
-const { blockOf, loadAccounts } = claudeAccounts;
 const { run } = claudeCodeRun;
 const { createReply } = replyModule;
 const { getCurrentSystemPrompt, getCurrentTools } = compat;
@@ -22,11 +20,6 @@ const EFFORT: Record<string, claudeCodeSessionTypes.Effort> = {
   xhigh: "xhigh",
 };
 
-const usableAccounts = (fixed: claudeAccountsTypes.Account | undefined) =>
-  fixed === undefined
-    ? loadAccounts().filter((account) => account.auto !== false && blockOf(account) === undefined)
-    : [fixed];
-
 const streamFor =
   (fixed?: claudeAccountsTypes.Account) =>
   (
@@ -37,7 +30,7 @@ const streamFor =
     const reply = createReply(model);
     const { messages } = context;
     const config: claudeCodeSessionTypes.SessionConfig = {
-      accounts: usableAccounts(fixed),
+      accounts: fixed === undefined ? [] : [fixed],
       effort: options?.reasoning === undefined ? undefined : EFFORT[options.reasoning],
       model: model.id,
       systemPrompt: getCurrentSystemPrompt(messages),

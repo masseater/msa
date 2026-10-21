@@ -11,6 +11,7 @@ const {
   addAccount,
   authStatus,
   blockOf,
+  cachedAccounts,
   clearBlocks,
   describeLogin,
   loadAccounts,
@@ -43,13 +44,17 @@ function authLabel(account: Account): string {
   return present(account.tokenCommand) ? "tokenCommand" : "msa environment";
 }
 
-function describeAccount(account: Account, status: claudeAccountsTypes.AuthStatus, index: number) {
+function describeAccount(
+  account: Account,
+  status: claudeAccountsTypes.AuthStatus,
+  block: claudeAccountsTypes.AccountBlock | undefined,
+  index: number,
+) {
   const loggedIn = describeLogin(status);
   const loginText =
     loggedIn === ""
       ? `not logged in${present(status.detail) ? ` (${status.detail})` : ""}`
       : loggedIn;
-  const block = blockOf(account);
   const state =
     block === undefined
       ? "available"
@@ -59,9 +64,16 @@ function describeAccount(account: Account, status: claudeAccountsTypes.AuthStatu
 }
 
 const describeAccounts = (): Promise<string> =>
-  withAuthStatus(loadAccounts()).then((rows) =>
-    rows.map(({ account, status }, index) => describeAccount(account, status, index)).join("\n"),
-  );
+  loadAccounts()
+    .then(withAuthStatus)
+    .then((rows) =>
+      Promise.all(
+        rows.map(({ account, status }, index) =>
+          blockOf(account).then((block) => describeAccount(account, status, block, index)),
+        ),
+      ),
+    )
+    .then((lines) => lines.join("\n"));
 
 const login = (account: Account, ctx: Context) =>
   Effect.gen(function* () {
@@ -81,18 +93,23 @@ const login = (account: Account, ctx: Context) =>
     );
   });
 
-function named(name: string | undefined): Account {
-  if (!present(name)) throw new Error("Give an account name");
-  const account = loadAccounts().find((candidate) => candidate.name === name);
-  if (account === undefined) throw new Error(`No Claude account named "${name}"`);
-  return account;
+function named(name: string | undefined): Effect.Effect<Account> {
+  return Effect.gen(function* () {
+    if (!present(name)) throw new Error("Give an account name");
+    const accounts = yield* Effect.promise(loadAccounts);
+    const account = accounts.find((candidate) => candidate.name === name);
+    if (account === undefined) throw new Error(`No Claude account named "${name}"`);
+    return account;
+  });
 }
 
 const addAndLogin = (name: string | undefined, rest: string[], ctx: Context) =>
   Effect.gen(function* () {
     if (!present(name)) throw new Error(`Usage: /accounts claude ${ACTIONS["add"]}`);
     const tokenCommand = rest.join(" ");
-    const account = addAccount(name, tokenCommand === "" ? undefined : tokenCommand);
+    const account = yield* Effect.promise(() =>
+      addAccount(name, tokenCommand === "" ? undefined : tokenCommand),
+    );
     if (present(account.tokenCommand)) return;
     yield* login(account, ctx).pipe(
       Effect.catchDefect((error) =>
@@ -103,11 +120,11 @@ const addAndLogin = (name: string | undefined, rest: string[], ctx: Context) =>
 
 const removeNamed = (name: string | undefined, _rest: string[], ctx: Context) =>
   Effect.gen(function* () {
-    const account = named(name);
+    const account = yield* named(name);
     const confirmed = yield* Effect.promise(() =>
       ctx.ui.confirm("Remove Claude account", `Forget "${account.name}" and its login?`),
     );
-    if (confirmed) removeAccount(account.name);
+    if (confirmed) yield* Effect.promise(() => removeAccount(account.name));
     return confirmed;
   });
 
@@ -116,13 +133,21 @@ type Handler = (name: string | undefined, rest: string[], ctx: Context) => Effec
 const HANDLERS: Record<string, Handler> = {
   "": () => Effect.void,
   add: addAndLogin,
-  clear: () => Effect.sync(clearBlocks),
-  disable: (name) => Effect.sync(() => setAutoRotation(named(name).name, false)),
-  enable: (name) => Effect.sync(() => setAutoRotation(named(name).name, true)),
-  login: (name, _rest, ctx) => Effect.suspend(() => login(named(name), ctx)),
-  logout: (name) => Effect.promise(() => logoutAccount(named(name))),
+  clear: () => Effect.promise(clearBlocks),
+  disable: (name) =>
+    Effect.flatMap(named(name), (account) =>
+      Effect.promise(() => setAutoRotation(account.name, false)),
+    ),
+  enable: (name) =>
+    Effect.flatMap(named(name), (account) =>
+      Effect.promise(() => setAutoRotation(account.name, true)),
+    ),
+  login: (name, _rest, ctx) => Effect.flatMap(named(name), (account) => login(account, ctx)),
+  logout: (name) =>
+    Effect.flatMap(named(name), (account) => Effect.promise(() => logoutAccount(account))),
   remove: removeNamed,
-  use: (name) => Effect.sync(() => preferAccount(named(name).name)),
+  use: (name) =>
+    Effect.flatMap(named(name), (account) => Effect.promise(() => preferAccount(account.name))),
 };
 
 const run = (args: string, ctx: Context): Promise<void> =>
@@ -132,12 +157,13 @@ const run = (args: string, ctx: Context): Promise<void> =>
       const handler = Object.hasOwn(HANDLERS, action) ? HANDLERS[action] : undefined;
       if (handler === undefined)
         throw new Error(`Unknown action "${action}".\n${Object.values(ACTIONS).join("\n")}`);
-      const before = loadAccounts().length;
+      const before = (yield* Effect.promise(loadAccounts)).length;
       const outcome = yield* handler(name, rest, ctx);
       if (outcome === false) return;
       const description = yield* Effect.promise(describeAccounts);
       ctx.ui.notify(description, "info");
-      if (loadAccounts().length !== before) yield* Effect.promise(() => ctx.refreshProviders());
+      if ((yield* Effect.promise(loadAccounts)).length !== before)
+        yield* Effect.promise(() => ctx.refreshProviders());
     }),
   );
 
@@ -150,7 +176,7 @@ function completions(prefix: string): tuiTypes.AutocompleteItem[] | null {
   }
   if (rest.length > 0 || action === "add" || action === "clear" || !(action in ACTIONS))
     return null;
-  return loadAccounts()
+  return cachedAccounts()
     .filter((account) => account.name.startsWith(name))
     .map((account) => ({ label: account.name, value: `${action} ${account.name}` }));
 }

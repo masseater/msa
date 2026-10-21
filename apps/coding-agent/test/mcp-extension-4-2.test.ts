@@ -155,11 +155,8 @@ const appendsServerLogMessagesToTheLog = () =>
       const dir = yield* makeTempDir("msa-mcp-log-");
       try {
         const path = joinPath(dir, "mcp.log");
-        const { connection } = connect(
-          STDIO_ENTRY,
-          [() => createTransport()],
-          new McpServerLog(path),
-        );
+        const log = new McpServerLog(path);
+        const { connection } = connect(STDIO_ENTRY, [() => createTransport()], log);
         yield* awaited(connection.getClient());
         const server = fakeServers.at(-1);
         yield* awaited(
@@ -177,6 +174,7 @@ const appendsServerLogMessagesToTheLog = () =>
           }),
         );
         yield* sleep("0 millis");
+        yield* awaited(log.flush());
         const lines = (yield* readTextFile(path)).replace(/^\S+ /gmu, "");
         expect(lines).toBe('[fake] warning db: slow\n    query\n[fake] error {"code":7}\n');
         yield* awaited(connection.close());

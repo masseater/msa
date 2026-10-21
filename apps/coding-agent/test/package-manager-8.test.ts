@@ -29,6 +29,9 @@ let settingsManager: settingsManagerTypes.SettingsManager;
 
 let packageManager: packageManagerTypes.DefaultPackageManager;
 
+const installedUserPath = (source: string) =>
+  Effect.promise(() => packageManager.configured.getInstalledPath(source, "user"));
+
 let previousOfflineEnv: string | undefined;
 
 const usePnpmCommand = () =>
@@ -86,7 +89,7 @@ const shouldLoadLegacyPnpmGlobalPackagePaths = () =>
         ),
       ).toBe(true);
       expect(runCommandSpy).not.toHaveBeenCalled();
-      expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+      expect(yield* installedUserPath("npm:pnpm-pkg")).toBe(packagePath);
     }),
   );
 
@@ -115,10 +118,10 @@ const shouldResolveWrappedPnpmGlobalPackagePaths = Effect.gen(function* () {
     throw new Error(`unexpected args ${args.join(" ")}`);
   });
 
-  expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBe(packagePath);
+  expect(yield* installedUserPath("npm:pnpm-pkg")).toBe(packagePath);
 });
 
-const shouldIgnoreMalformedLegacyPnpmGlobalPackage = () => {
+const shouldIgnoreMalformedLegacyPnpmGlobalPackage = Effect.gen(function* () {
   settingsManager = SettingsManager.inMemory({
     npmCommand: ["pnpm"],
   });
@@ -130,8 +133,8 @@ const shouldIgnoreMalformedLegacyPnpmGlobalPackage = () => {
 
   vi.spyOn(commandRunner, "runCommandSync").mockReturnValue("not json");
 
-  expect(packageManager.configured.getInstalledPath("npm:pnpm-pkg", "user")).toBeUndefined();
-};
+  expect(yield* installedUserPath("npm:pnpm-pkg")).toBeUndefined();
+});
 
 const beforeEachHook = () =>
   runTest(
@@ -172,9 +175,7 @@ describe("DefaultPackageManager", () => {
     it("should resolve wrapped pnpm global package paths from pnpm list output", () =>
       runTest(shouldResolveWrappedPnpmGlobalPackagePaths));
 
-    it(
-      "should ignore malformed legacy pnpm global package lists",
-      shouldIgnoreMalformedLegacyPnpmGlobalPackage,
-    );
+    it("should ignore malformed legacy pnpm global package lists", () =>
+      runTest(shouldIgnoreMalformedLegacyPnpmGlobalPackage));
   });
 });
