@@ -1,16 +1,9 @@
 import chalk from "chalk";
 
-import configModule from "../../config.ts";
-import platformNode from "../../core/platform-node.ts";
-import type cliInternalTypes from "./cli-internal.types.ts";
-import type cliTypes from "./cli.types.ts";
-import type configTypes from "./config.types.ts";
-import runtime from "./runtime.ts";
-import type runtimeTypes from "./runtime.types.ts";
+import configModule from "../../../config.ts";
+import type cliInternalTypes from "../cli-internal.types.ts";
 
 const { APP_NAME, CONFIG_DIR_NAME } = configModule;
-const { McpServerConnection, McpServerLog, createDefaultTransport } = runtime;
-const { join } = platformNode;
 
 const HELP = `${chalk.bold("Usage:")}
   ${APP_NAME} mcp add <server> [options] -- <command> [args...]
@@ -55,28 +48,6 @@ Other options:
   --timeout <seconds>     Time limit for the whole sign-in (default: 300)`;
 
 const HELP_HINT = chalk.dim(`Use "${APP_NAME} mcp --help" for usage.`);
-
-const DEFAULT_LOGIN_TIMEOUT_SECONDS = 300;
-
-function describeTransport(entry: configTypes.McpServerEntry): string {
-  const { config } = entry;
-  return "url" in config ? config.url : [config.command, ...(config.args ?? [])].join(" ");
-}
-
-function createConnection(
-  entry: configTypes.McpServerEntry,
-  options: cliTypes.McpCommandOptions,
-  credentials: runtimeTypes.McpOAuthCredentialStore,
-) {
-  return new McpServerConnection({
-    createTransport: createDefaultTransport,
-    credentials,
-    cwd: options.cwd,
-    entry,
-    log: new McpServerLog(join(options.agentDir, "mcp.log")),
-    onTools: () => {},
-  });
-}
 
 const OPTION_ALIASES = new Map([["-l", "--local"]]);
 
@@ -136,65 +107,6 @@ function parsePairs(option: string, pairs: string[] | undefined, error: (line: s
   return record;
 }
 
-function addPart2(
-  values: Map<string, string | true>,
-  url: string | boolean | undefined,
-  lists: Map<string, string[]>,
-) {
-  const value = (option: string) => {
-    const found = values.get(option);
-    return typeof found === "string" ? found : undefined;
-  };
-  const exposure = value("exposure");
-  const httpOnly = [
-    "header",
-    "bearer-token-env-var",
-    "oauth-client-id",
-    "oauth-client-secret",
-    "oauth-callback-port",
-    "oauth-client-name",
-  ];
-  const stdioOnly = ["env", "cwd"];
-  const misplaced = (url === undefined ? httpOnly : stdioOnly).find(
-    (option) => values.has(option) || lists.has(option),
-  );
-  return { exposure, misplaced, value };
-}
+const cliOptions = { HELP, HELP_HINT, parseOptions, parsePairs };
 
-function addPart1(args: string[], error: (line: string) => void) {
-  const usage = `Usage: ${APP_NAME} mcp add <server> [options] (--url <url> | -- <command> [args...])\n${HELP_HINT}`;
-  const parsed = parseOptions(
-    args,
-    {
-      "bearer-token-env-var": "value",
-      cwd: "value",
-      description: "value",
-      env: "list",
-      exposure: "value",
-      header: "list",
-      local: "flag",
-      "oauth-callback-port": "value",
-      "oauth-client-id": "value",
-      "oauth-client-name": "value",
-      "oauth-client-secret": "value",
-      url: "value",
-    },
-    error,
-    2,
-  );
-  return { parsed, usage };
-}
-
-const cliPart1 = {
-  DEFAULT_LOGIN_TIMEOUT_SECONDS,
-  HELP,
-  HELP_HINT,
-  addPart1,
-  addPart2,
-  createConnection,
-  describeTransport,
-  parseOptions,
-  parsePairs,
-};
-
-export default cliPart1;
+export default cliOptions;
