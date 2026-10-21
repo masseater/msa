@@ -1,4 +1,5 @@
 import config from "../config.ts";
+import html from "../utils/html.ts";
 import paths from "../utils/paths.ts";
 import awaitingModule from "./awaiting.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
@@ -7,6 +8,7 @@ import skillDirectory from "./skill-directory.ts";
 import skillFile from "./skill-file.ts";
 import type skillsTypes from "./skills.types.ts";
 
+const { escapeXml } = html;
 const { exists, stat } = platformModule.files;
 const { awaited, promised } = awaitingModule;
 const { canonicalizePath, isPathWithin, resolvePath } = paths;
@@ -197,15 +199,6 @@ function formatSkillsForPrompt(
   lines.push("</available_skills>");
 
   return lines.join("\n");
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/gu, "&amp;")
-    .replace(/</gu, "&lt;")
-    .replace(/>/gu, "&gt;")
-    .replace(/"/gu, "&quot;")
-    .replace(/'/gu, "&apos;");
 }
 
 const skillsModule = { formatSkillsForPrompt, loadSkills };

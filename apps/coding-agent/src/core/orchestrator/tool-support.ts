@@ -32,7 +32,7 @@ const checksSchema = Type.Array(
   }),
   {
     description:
-      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the worker's working directory before the reviewer starts; if one gives another result, the worker gets the results back and keeps working, and after 3 such rounds the task fails. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only.",
+      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the worker's working directory before the reviewer starts; if one gives another result, the worker gets the results back and keeps working, and after 3 such rounds in a row the task fails. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only.",
   },
 );
 

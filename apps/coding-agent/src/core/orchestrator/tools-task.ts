@@ -63,6 +63,7 @@ const CREATE_TASK_GUIDELINES = [
   "Answer simple questions yourself; put new work into tasks with create_task, one task per independent piece.",
   "Write currentState and goalState only. Never list steps; say what holds now and what must hold at the end.",
   "Give every part of the goal that a command can measure as a check: a command and the exit code or output it must give, such as a lint count of 0, a config with no override for a path, or a search for a workaround pattern that finds nothing. The harness runs them when the worker reports and sends a failing result back to the worker, so the reviewer only judges what a command cannot.",
+  "Checks run in the worker's worktree, on the task's branch, so write them against that checkout: `vp lint` there inspects the worker's changes.",
   "Set dependencies strictly. Finishing tasks one at a time and reliably matters more than running them in parallel: parallel tasks on the same area rebase onto each other, conflict, and duplicate each other's pull requests.",
   "Chain tasks with dependsOn when they touch the same area, the same branch, or the same precondition, such as a red main. Run tasks in parallel only when you can say that neither depends on the other's result; files that do not overlap are not enough.",
   "When main's verify is red, create exactly one task that fixes main and make every other work task wait for it with dependsOn. Tell workers not to put main fixes such as dependency updates into their own pull requests.",
