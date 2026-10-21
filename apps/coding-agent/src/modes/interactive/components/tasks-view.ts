@@ -1,77 +1,49 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type orchestratorTypesTypes from "../../../core/orchestrator/types.types.ts";
 import errors from "../../../utils/errors.ts";
-import textModule from "../../../utils/text.ts";
-import themeModule from "../theme/theme.ts";
-import DynamicBorder from "./dynamic-border.ts";
-import keybindingHints from "./keybinding-hints.ts";
 import scrollWindow from "./scroll-window.ts";
-import type scrollWindowTypes from "./scroll-window.types.ts";
+import TaskComposer from "./task-composer.ts";
 import tasksList from "./tasks-list.ts";
-import tasksViewDetail from "./tasks-view-detail.ts";
+import tasksViewFrames from "./tasks-view-frames.ts";
 import tasksViewHelpers from "./tasks-view-helpers.ts";
 import type tasksViewHelpersTypes from "./tasks-view-helpers.types.ts";
 import type tasksViewTypes from "./tasks-view.types.ts";
 
 const { viewHelpers } = tasksViewHelpers;
 const { taskList } = tasksList;
-const { theme } = themeModule;
-const { shortId } = textModule;
-const { fitView } = scrollWindow;
-const { keyHint } = keybindingHints;
-const { taskDetail } = tasksViewDetail;
-const { toErrorMessage } = errors;
+const { getKeybindings, matchesKey } = tui;
+const { stoppable } = viewHelpers;
 
-const { Input, Spacer, getKeybindings, matchesKey, truncateToWidth, visibleWidth } = tui;
+type Task = tasksViewTypes.TasksViewOptions["orchestrator"]["snapshot"]["tasks"][number];
+type Keybindings = ReturnType<typeof getKeybindings>;
 
-const { STATUS_LABEL, glyph, finished, stoppable, modelName, depthOf, roundTasks } = viewHelpers;
-const { describeReplan } = viewHelpers;
-
-type StateField = "currentState" | "goalState";
-
-type Composing =
-  | { kind: "message"; taskId: string }
-  | { kind: "note"; round: string }
-  | { kind: "depends"; taskId: string }
-  | { kind: "state"; taskId: string; field: StateField };
-
-function composerLabel(composing: Composing): string {
-  switch (composing.kind) {
-    case "message":
-      return "Message to this task";
-    case "note":
-      return `Shared note to round ${composing.round}`;
-    case "depends":
-      return `Dependencies of ${composing.taskId}  +id  -id`;
-    case "state":
-      return `${composing.field === "currentState" ? "Current state" : "Goal state"} of ${composing.taskId}`;
-  }
+interface Step {
+  matches: (kb: Keybindings, data: string) => boolean;
+  lines: (page: number, half: number) => number;
+  single: boolean;
 }
 
-function parseDepends(text: string): { add: string[]; remove: string[] } {
-  const add: string[] = [];
-  const remove: string[] = [];
-  for (const token of text.split(/[\s,]+/u).filter(Boolean)) {
-    const id = token.replace(/^[+-]/u, "");
-    if (id === "") continue;
-    if (token.startsWith("-")) remove.push(id);
-    else add.push(id);
-  }
-  return { add, remove };
-}
+const STEPS: Step[] = [
+  { lines: () => -1, matches: (kb, d) => kb.matches(d, "tui.select.up"), single: true },
+  { lines: () => 1, matches: (kb, d) => kb.matches(d, "tui.select.down"), single: true },
+  { lines: (page) => -page, matches: (kb, d) => kb.matches(d, "tui.select.pageUp"), single: false },
+  {
+    lines: (page) => page,
+    matches: (kb, d) => kb.matches(d, "tui.select.pageDown"),
+    single: false,
+  },
+  { lines: (_page, half) => -half, matches: (_kb, d) => matchesKey(d, "ctrl+u"), single: false },
+  { lines: (_page, half) => half, matches: (_kb, d) => matchesKey(d, "ctrl+d"), single: false },
+];
 
 export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable {
   readonly wantsViewportKeys = true;
   private readonly options: tasksViewTypes.TasksViewOptions;
-  private openId: string | undefined;
-  private readonly input = new Input({ prompt: "› " });
   private readonly state: tasksViewHelpersTypes.TasksViewState;
-  private composing: Composing | undefined;
-
+  private readonly composer: TaskComposer;
+  private openId: string | undefined;
   private scroll = 0;
-
   private room = 0;
   private isFocused = false;
 
@@ -79,8 +51,7 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
     this.options = options;
     this.state = options.state ?? viewHelpers.createTasksViewState();
     if (initialId !== undefined) this.state.selectedId = initialId;
-    this.input.onSubmit = (value) => this.submit(value);
-    this.input.onEscape = () => this.stopComposing();
+    this.composer = new TaskComposer(options);
   }
 
   get focused(): boolean {
@@ -89,331 +60,120 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
 
   set focused(value: boolean) {
     this.isFocused = value;
-    this.input.focused = value && this.composing !== undefined;
+    this.composer.setFocused(value);
   }
 
   invalidate(): void {}
 
-  private tasks(): readonly orchestratorTypesTypes.TaskSnapshot[] {
-    return this.options.orchestrator.snapshot.tasks;
-  }
-
-  private shownTasks(): orchestratorTypesTypes.TaskSnapshot[] {
-    return taskList.shownTasks(this.options.orchestrator, this.state);
-  }
-
-  private selected(): orchestratorTypesTypes.TaskSnapshot | undefined {
+  private selected(): Task | undefined {
     return taskList.selectedTask(this.options.orchestrator, this.state);
-  }
-
-  private header(title: string, right: string, width: number): string[] {
-    const gap = Math.max(1, width - 2 - visibleWidth(title) - visibleWidth(right));
-    return [
-      ...new Spacer(1).render(width),
-      truncateToWidth(` ${theme.bold(title)}${" ".repeat(gap)}${right}`, width),
-      ...new DynamicBorder((line) => theme.fg("borderMuted", line)).render(width),
-    ];
-  }
-
-  private rowLine(
-    task: orchestratorTypesTypes.TaskSnapshot,
-    selected: boolean,
-    width: number,
-  ): string {
-    return taskList.taskRow(task, {
-      meta: (entry) =>
-        [shortId(entry.id), modelName(entry.model ?? "default")].filter(Boolean).join("  "),
-      selected,
-      width,
-    });
   }
 
   render(width: number): string[] {
     const open =
-      this.openId === undefined ? undefined : this.tasks().find((task) => task.id === this.openId);
-    const frame = open === undefined ? this.renderList(width) : this.renderDetail(open, width);
+      this.openId === undefined
+        ? undefined
+        : this.options.orchestrator.snapshot.tasks.find((task) => task.id === this.openId);
+    const context = {
+      composer: this.composer,
+      orchestrator: this.options.orchestrator,
+      state: this.state,
+      width,
+    };
+    const frame =
+      open === undefined
+        ? tasksViewFrames.listFrame(context, this.selected())
+        : tasksViewFrames.detailFrame(context, open);
     const max = Math.max(8, this.options.maxHeight());
     const room = Math.max(0, max - frame.header.length - frame.footer.length);
     this.room = Math.min(room, frame.body.length);
-    const fitted = fitView(frame, width, max, this.scroll);
+    const fitted = scrollWindow.fitView(frame, width, max, this.scroll);
     this.scroll = fitted.offset;
     return fitted.lines;
   }
 
-  private renderRound(
-    round: { id: string; title: string },
-    selected: orchestratorTypesTypes.TaskSnapshot | undefined,
-    width: number,
-  ): { lines: string[]; cursor?: { start: number; end: number } | undefined } {
-    const tasks = this.tasks();
-    const inRound = roundTasks(tasks, round.id);
-    if (inRound.length === 0) return { lines: [] };
-    const lines = this.roundHeader(inRound, round);
-    const byId = new Map(inRound.map((task) => [task.id, task]));
-    const shown = inRound.filter((task) => this.state.showFinished || !finished(task));
-    const done = inRound.filter((task) => task.status === "completed").length;
-    const stopped = inRound.filter((task) => task.status === "stopped").length;
-    if (done + stopped > 0) {
-      const counts = [
-        done > 0 ? `${theme.fg("success", "✓")} ${done} done` : undefined,
-        stopped > 0 ? `${theme.fg("dim", "■")} ${stopped} stopped` : undefined,
-      ]
-        .filter(Boolean)
-        .join("  ");
-      lines.push(
-        truncateToWidth(
-          `   ${counts}  ${keyHint("app.orchestrator.toggleFinished", this.state.showFinished ? "hide" : "show")}`,
-          width,
-        ),
-      );
-    }
-
-    const cursorTop = shown[0]?.id === selected?.id ? 0 : undefined;
-    let cursor: { start: number; end: number } | undefined;
-    for (const task of shown) {
-      const depth = depthOf(task, byId);
-      const start = lines.length;
-      lines.push(
-        truncateToWidth(
-          `${"  ".repeat(depth)}${this.rowLine(task, task.id === selected?.id, width - depth * 2)}`,
-          width,
-        ),
-      );
-      const reason = taskDetail.reasonLine(this.options.orchestrator, task);
-      if (reason !== "") {
-        lines.push(truncateToWidth(`${"  ".repeat(depth)}     ${theme.fg("dim", reason)}`, width));
-      }
-      if (task.id === selected?.id) cursor = { end: lines.length - 1, start: cursorTop ?? start };
-    }
-    return { cursor, lines };
-  }
-
-  private roundHeader(
-    inRound: orchestratorTypesTypes.TaskSnapshot[],
-    round: { id: string; title: string },
-  ) {
-    const review = inRound.find((task) => task.kind === "review");
-    const lines = [
-      theme.fg(
-        "muted",
-        ` ${round.title}${review === undefined ? "" : `  ${glyph(review)} review ${review.status}`}`,
-      ),
-    ];
-    return lines;
-  }
-
-  private renderList(width: number): scrollWindowTypes.ViewFrame {
-    const tasks = this.tasks();
-    const header = this.header("Tasks", viewHelpers.describeTaskCounts(tasks) ?? "", width);
-    const replan = this.options.orchestrator.snapshot.replans[0];
-    if (replan !== undefined) {
-      header.push(truncateToWidth(` ${theme.fg("muted", describeReplan(replan))}`, width));
-    }
-    const borderIndex = header.length - 1 - (replan === undefined ? 0 : 1);
-    if (tasks.length === 0) {
-      return {
-        body: [],
-        borderIndex,
-        footer: ["", ` ${keyHint("tui.select.cancel", "close")}`],
-        header,
-      };
-    }
-    const selected = this.selected();
-    const body: string[] = [];
-    let cursorLine: number | undefined;
-    let cursorEnd: number | undefined;
-    for (const round of this.options.orchestrator.snapshot.rounds) {
-      const drawn = this.renderRound(round, selected, width);
-      if (drawn.cursor !== undefined) {
-        cursorLine = body.length + drawn.cursor.start;
-        cursorEnd = body.length + drawn.cursor.end;
-      }
-      body.push(...drawn.lines);
-    }
-    if (this.composing !== undefined) {
-      return {
-        body,
-        borderIndex,
-        cursorEnd,
-        cursorLine,
-        footer: ["", ...this.renderComposer(width)],
-        header,
-      };
-    }
-    return {
-      body,
-      borderIndex,
-      cursorEnd,
-      cursorLine,
-      footer: ["", taskDetail.listHints(this.state.showFinished, selected)],
-      header,
-    };
-  }
-
-  private renderDetail(
-    task: orchestratorTypesTypes.TaskSnapshot,
-    width: number,
-  ): scrollWindowTypes.ViewFrame {
-    const right = theme.fg("dim", `${STATUS_LABEL[task.status].toLowerCase()} · ${task.round}`);
-    return {
-      body: taskDetail.sections(this.options.orchestrator, task, width),
-      footer: [
-        "",
-        ...(this.composing === undefined ? [taskDetail.hints(task)] : this.renderComposer(width)),
-      ],
-      header: this.header(`${glyph(task)} ${task.title}`, right, width),
-    };
-  }
-
-  private renderComposer(width: number): string[] {
-    const composing = this.composing;
-    if (composing === undefined) return [];
-    return [
-      truncateToWidth(` ${theme.fg("accent", composerLabel(composing))}`, width),
-      ...this.input.render(width),
-      ` ${keyHint("tui.input.submit", composing.kind === "message" || composing.kind === "note" ? "send" : "set")}  ${keyHint("tui.select.cancel", "cancel")}`,
-    ];
-  }
-
   handleInput(data: string): void {
-    if (this.composing !== undefined) {
-      this.input.handleInput(data);
-      this.options.requestRender();
+    if (this.composer.active) {
+      this.composer.handleInput(data);
       return;
     }
-    const { kb, page, half, shown, selected } = this.navigationContext();
+    const kb = getKeybindings();
+    const selected = this.selected();
     if (kb.matches(data, "tui.select.cancel")) {
       if (this.openId === undefined) this.options.onClose();
       else this.openDetail(undefined);
     } else if (kb.matches(data, "app.orchestrator.back")) {
       this.options.onClose();
-    } else if (this.openId !== undefined && kb.matches(data, "tui.select.up")) {
-      this.scrollBy(-1);
-    } else if (this.openId !== undefined && kb.matches(data, "tui.select.down")) {
-      this.scrollBy(1);
-    } else if (this.openId !== undefined && kb.matches(data, "tui.select.pageUp")) {
-      this.scrollBy(-page);
-    } else if (this.openId !== undefined && kb.matches(data, "tui.select.pageDown")) {
-      this.scrollBy(page);
-    } else if (this.openId !== undefined && matchesKey(data, "ctrl+u")) {
-      this.scrollBy(-half);
-    } else if (this.openId !== undefined && matchesKey(data, "ctrl+d")) {
-      this.scrollBy(half);
-    } else if (this.openId === undefined && kb.matches(data, "tui.select.up")) {
-      this.move(shown, -1);
-    } else if (this.openId === undefined && kb.matches(data, "tui.select.down")) {
-      this.move(shown, 1);
-    } else if (this.openId === undefined && kb.matches(data, "tui.select.pageUp")) {
-      this.moveBy(shown, -page);
-    } else if (this.openId === undefined && kb.matches(data, "tui.select.pageDown")) {
-      this.moveBy(shown, page);
-    } else if (this.openId === undefined && matchesKey(data, "ctrl+u")) {
-      this.moveBy(shown, -half);
-    } else if (this.openId === undefined && matchesKey(data, "ctrl+d")) {
-      this.moveBy(shown, half);
-    } else if (kb.matches(data, "app.orchestrator.toggleFinished")) {
-      this.state.showFinished = !this.state.showFinished;
-    } else if (kb.matches(data, "tui.select.confirm") && selected !== undefined) {
-      this.openDetail(this.openId === undefined ? selected.id : undefined);
-    } else if (kb.matches(data, "app.orchestrator.message") && selected !== undefined) {
-      this.startComposing({ kind: "message", taskId: selected.id });
-    } else if (kb.matches(data, "app.orchestrator.note") && selected !== undefined) {
-      this.startComposing({ kind: "note", round: selected.round });
-    } else if (kb.matches(data, "app.orchestrator.depends") && selected !== undefined) {
-      this.startComposing({ kind: "depends", taskId: selected.id });
-    } else if (kb.matches(data, "app.orchestrator.currentState") && selected !== undefined) {
-      this.startComposing(
-        { field: "currentState", kind: "state", taskId: selected.id },
-        selected.currentState,
-      );
-    } else if (kb.matches(data, "app.orchestrator.goalState") && selected !== undefined) {
-      this.startComposing(
-        { field: "goalState", kind: "state", taskId: selected.id },
-        selected.goalState,
-      );
-    } else if (
-      kb.matches(data, "app.orchestrator.stop") &&
-      selected !== undefined &&
-      stoppable(selected)
-    ) {
-      this.options.orchestrator.stop(selected.id).catch((error: unknown) => {
-        this.options.onError(toErrorMessage(error));
-      });
-    } else if (kb.matches(data, "app.orchestrator.rerun") && selected !== undefined) {
-      this.options.orchestrator.rerun(selected.id).catch((error: unknown) => {
-        this.options.onError(toErrorMessage(error));
-      });
-    } else if (kb.matches(data, "app.orchestrator.model") && selected !== undefined) {
-      this.options.onPickModel(selected.id);
+    } else if (!this.applyStep(kb, data) && !this.applyListAction(kb, data, selected)) {
       return;
     }
     this.options.requestRender();
   }
 
-  private navigationContext() {
-    const kb = getKeybindings();
-    const shown = this.shownTasks();
-    const selected = this.selected();
+  private applyListAction(kb: Keybindings, data: string, selected: Task | undefined): boolean {
+    if (kb.matches(data, "app.orchestrator.toggleFinished")) {
+      this.state.showFinished = !this.state.showFinished;
+      return true;
+    }
+    return selected === undefined || this.applyTaskAction(kb, data, selected);
+  }
+
+  private applyStep(kb: Keybindings, data: string): boolean {
+    const step = STEPS.find((candidate) => candidate.matches(kb, data));
+    if (step === undefined) return false;
     const page = Math.max(1, this.room - 1);
     const half = Math.max(1, Math.floor(this.room / 2));
-    return { half, kb, page, selected, shown };
+    const lines = step.lines(page, half);
+    if (this.openId !== undefined) {
+      this.scroll = Math.max(0, this.scroll + lines);
+      return true;
+    }
+    const shown = taskList.shownTasks(this.options.orchestrator, this.state);
+    if (step.single) taskList.moveSelection(this.state, shown, lines);
+    else taskList.moveSelectionBy(this.state, shown, lines);
+    return true;
   }
 
-  private move(tasks: readonly orchestratorTypesTypes.TaskSnapshot[], step: number): void {
-    taskList.moveSelection(this.state, tasks, step);
+  private applyTaskAction(kb: Keybindings, data: string, selected: Task): boolean {
+    if (kb.matches(data, "tui.select.confirm")) {
+      this.openDetail(this.openId === undefined ? selected.id : undefined);
+    } else if (kb.matches(data, "app.orchestrator.message")) {
+      this.composer.start({ kind: "message", taskId: selected.id });
+    } else if (kb.matches(data, "app.orchestrator.note")) {
+      this.composer.start({ kind: "note", round: selected.round });
+    } else if (kb.matches(data, "app.orchestrator.depends")) {
+      this.composer.start({ kind: "depends", taskId: selected.id });
+    } else if (kb.matches(data, "app.orchestrator.currentState")) {
+      this.composer.start(
+        { field: "currentState", kind: "state", taskId: selected.id },
+        selected.currentState,
+      );
+    } else if (kb.matches(data, "app.orchestrator.goalState")) {
+      this.composer.start(
+        { field: "goalState", kind: "state", taskId: selected.id },
+        selected.goalState,
+      );
+    } else {
+      return this.applyRunAction(kb, data, selected);
+    }
+    return true;
   }
 
-  private moveBy(tasks: readonly orchestratorTypesTypes.TaskSnapshot[], step: number): void {
-    taskList.moveSelectionBy(this.state, tasks, step);
-  }
-
-  private scrollBy(lines: number): void {
-    this.scroll = Math.max(0, this.scroll + lines);
+  private applyRunAction(kb: Keybindings, data: string, selected: Task): boolean {
+    const failed = (error: unknown) => this.options.onError(errors.toErrorMessage(error));
+    if (kb.matches(data, "app.orchestrator.stop") && stoppable(selected)) {
+      this.options.orchestrator.stop(selected.id).catch(failed);
+    } else if (kb.matches(data, "app.orchestrator.rerun")) {
+      this.options.orchestrator.rerun(selected.id).catch(failed);
+    } else if (kb.matches(data, "app.orchestrator.model")) {
+      this.options.onPickModel(selected.id);
+      return false;
+    }
+    return true;
   }
 
   private openDetail(id: string | undefined): void {
     this.openId = id;
     this.scroll = 0;
-  }
-
-  private startComposing(composing: Composing, initial = ""): void {
-    this.composing = composing;
-    this.input.setValue(initial);
-    this.input.focused = this.isFocused;
-  }
-
-  private stopComposing(): void {
-    this.composing = undefined;
-    this.input.focused = false;
-    this.options.requestRender();
-  }
-
-  private submit(value: string): void {
-    const composing = this.composing;
-    const text = value.trim();
-    this.stopComposing();
-    if (composing === undefined || text === "") return;
-    const failed = (error: unknown) => {
-      this.options.onError(toErrorMessage(error));
-    };
-    if (composing.kind === "note") {
-      this.options.orchestrator
-        .sendNote({ audience: "round", content: text, round: composing.round })
-        .catch(failed);
-      return;
-    }
-    if (composing.kind === "depends") {
-      this.options.orchestrator
-        .setDepends({ taskIds: [composing.taskId], ...parseDepends(text) })
-        .catch(failed);
-      return;
-    }
-    if (composing.kind === "state") {
-      this.options.orchestrator
-        .setState({ taskId: composing.taskId, [composing.field]: text })
-        .catch(failed);
-      return;
-    }
-    this.options.orchestrator.sendMessage(composing.taskId, text).catch(failed);
   }
 }
