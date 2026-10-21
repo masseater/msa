@@ -72,12 +72,8 @@ function stackContainsPath(
   return false;
 }
 
-function findExtensionStackMatches(
-  stack: string | undefined,
-  extensions: readonly ExtensionStackMetadata[],
-): string[] {
-  if (stack === undefined || stack === "") return [];
-  const normalizedStack = stack
+function normalizeStackFrames(stack: string): string {
+  return stack
     .split("\n")
     .slice(1)
     .filter((line) => /^\s+at\s/u.test(line))
@@ -90,18 +86,30 @@ function findExtensionStackMatches(
     })
     .join("\n")
     .replace(/\\/gu, "/");
+}
+
+function isSingleFilePackage(extension: ExtensionStackMetadata): boolean {
+  return (
+    extension.sourceInfo.origin === "package" &&
+    !/^(?:npm:|git:|https?:\/\/|ssh:\/\/)/u.test(extension.sourceInfo.source) &&
+    /\.[cm]?[jt]s$/u.test(extension.sourceInfo.source)
+  );
+}
+
+function findExtensionStackMatches(
+  stack: string | undefined,
+  extensions: readonly ExtensionStackMetadata[],
+): string[] {
+  if (stack === undefined || stack === "") return [];
+  const normalizedStack = normalizeStackFrames(stack);
   const matches: string[] = [];
   const seen = new Set<string>();
 
   for (const extension of extensions) {
     const resolvedPath = normalizeStackPath(extension.resolvedPath);
-    const singleFilePackage =
-      extension.sourceInfo.origin === "package" &&
-      !/^(?:npm:|git:|https?:\/\/|ssh:\/\/)/u.test(extension.sourceInfo.source) &&
-      /\.[cm]?[jt]s$/u.test(extension.sourceInfo.source);
     const { packageRoot, directoryEntry, slashIndex } = extensionStackLocation(
       extension,
-      singleFilePackage,
+      isSingleFilePackage(extension),
       resolvedPath,
     );
     const matched = stackMentionsExtension(

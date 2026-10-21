@@ -4,7 +4,6 @@ import { Effect } from "effect";
 
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 import claudeCodeContent from "./claude-code-content.ts";
-import claudeCodeFailureSupport from "./claude-code-failure-support.ts";
 import ClaudeCodeFailure from "./claude-code-failure.ts";
 import claudeCodeQuery from "./claude-code-query.ts";
 import claudeCodeSdk from "./claude-code-sdk.ts";
@@ -12,7 +11,6 @@ import type claudeCodeSessionTypes from "./claude-code-session.types.ts";
 import type replyTypes from "./reply.types.ts";
 
 const { replyKey } = claudeCodeContent;
-const { failureMessage } = claudeCodeFailureSupport;
 const { loadSdk } = claudeCodeSdk;
 const { SERVER } = claudeCodeQuery;
 
@@ -104,7 +102,7 @@ const onResult = (state: PumpState, event: Extract<SDKMessage, { type: "result" 
     }
     const error = event.subtype === "success" ? event.result : event.errors.join("\n");
     const { usageLimitPrefixes } = yield* Effect.tryPromise({
-      catch: (cause) => new ClaudeCodeFailure({ cause, message: failureMessage(cause) }),
+      catch: (cause) => ClaudeCodeFailure.fromCause(cause),
       try: loadSdk,
     });
     const limited =
@@ -151,7 +149,7 @@ const pump = (
     };
     while (true) {
       const next = yield* Effect.tryPromise({
-        catch: (cause) => new ClaudeCodeFailure({ cause, message: failureMessage(cause) }),
+        catch: (cause) => ClaudeCodeFailure.fromCause(cause),
         try: () => session.next(),
       });
       if (next.done === true) {

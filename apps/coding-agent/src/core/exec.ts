@@ -4,14 +4,54 @@ import childProcess from "../utils/child-process.ts";
 import awaitingModule from "./awaiting.ts";
 import type execTypes from "./exec.types.ts";
 import platform from "./platform.ts";
-import type platformTypes from "./platform.types.ts";
 import nodeChildProcess from "./platform/node/child-process.ts";
+import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
 
 const { spawn } = nodeChildProcess;
 
 const { awaiting, performed } = awaitingModule;
 const { schedule } = platform;
 const { waitForChildProcess } = childProcess;
+
+function stopOnAbortOrTimeout(
+  proc: nodeChildProcessTypes.ChildProcess,
+  options: execTypes.ExecOptions | undefined,
+) {
+  let killed = false;
+  const kill = () => {
+    if (killed) return;
+    killed = true;
+    proc.kill("SIGTERM");
+    schedule(() => {
+      if (!proc.killed) proc.kill("SIGKILL");
+    }, 5000);
+  };
+  const signal = options?.signal;
+  if (signal?.aborted === true) kill();
+  else signal?.addEventListener("abort", kill, { once: true });
+  const timeout =
+    options?.timeout !== undefined && options.timeout > 0
+      ? schedule(kill, options.timeout)
+      : undefined;
+  return {
+    dispose: () => {
+      timeout?.cancel();
+      signal?.removeEventListener("abort", kill);
+    },
+    killed: () => killed,
+  };
+}
+
+function collectOutput(proc: nodeChildProcessTypes.ChildProcess) {
+  const output = { stderr: "", stdout: "" };
+  proc.stdout?.on("data", (data) => {
+    output.stdout += data.toString();
+  });
+  proc.stderr?.on("data", (data) => {
+    output.stderr += data.toString();
+  });
+  return output;
+}
 
 function execCommand(
   command: string,
@@ -28,62 +68,16 @@ function execCommand(
             shell: false,
             stdio: ["ignore", "pipe", "pipe"],
           });
-
-          let stdout = "";
-          let stderr = "";
-          let killed = false;
-          let timeoutId: platformTypes.Scheduled | undefined;
-
-          const killProcess = () => {
-            if (!killed) {
-              killed = true;
-              proc.kill("SIGTERM");
-              schedule(() => {
-                if (!proc.killed) {
-                  proc.kill("SIGKILL");
-                }
-              }, 5000);
-            }
-          };
-
-          if (options?.signal !== undefined) {
-            if (options.signal.aborted) {
-              killProcess();
-            } else {
-              options.signal.addEventListener("abort", killProcess, { once: true });
-            }
-          }
-
-          if (options?.timeout !== undefined && options?.timeout !== 0 && options.timeout > 0) {
-            timeoutId = schedule(() => {
-              killProcess();
-            }, options.timeout);
-          }
-
-          proc.stdout?.on("data", (data) => {
-            stdout += data.toString();
-          });
-
-          proc.stderr?.on("data", (data) => {
-            stderr += data.toString();
-          });
-
+          const stop = stopOnAbortOrTimeout(proc, options);
+          const output = collectOutput(proc);
           const finish = (code: number) => {
-            if (timeoutId !== undefined) timeoutId.cancel();
-            if (options?.signal !== undefined) {
-              options.signal.removeEventListener("abort", killProcess);
-            }
-            resume(Effect.succeed({ code, killed, stderr, stdout }));
+            stop.dispose();
+            resume(Effect.succeed({ code, killed: stop.killed(), ...output }));
+            return undefined;
           };
           waitForChildProcess(proc).then(
-            (code) => {
-              finish(code ?? 0);
-              return undefined;
-            },
-            () => {
-              finish(1);
-              return undefined;
-            },
+            (code) => finish(code ?? 0),
+            () => finish(1),
           );
         }),
       );

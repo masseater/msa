@@ -2,23 +2,15 @@ import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
 import platform from "../platform.ts";
-import claudeAccounts from "./claude-accounts.ts";
 import claudeCodeContent from "./claude-code-content.ts";
-import claudeCodeFailureSupport from "./claude-code-failure-support.ts";
-import ClaudeCodeFailure from "./claude-code-failure.ts";
-import claudeCodeSdk from "./claude-code-sdk.ts";
-import Session from "./claude-code-session.ts";
+import claudeCodeSessionOpen from "./claude-code-session-open.ts";
 import type claudeCodeSessionTypes from "./claude-code-session.types.ts";
 import claudeCodeSessions from "./claude-code-sessions.ts";
-import transcript from "./transcript.ts";
 
 const { nowMs } = platform;
-const { accountEnv } = claudeAccounts;
 const { replyKey, toAnthropicContent, toCallToolResult } = claudeCodeContent;
-const { failureMessage } = claudeCodeFailureSupport;
-const { loadSdk } = claudeCodeSdk;
+const { openSession } = claudeCodeSessionOpen;
 const { sessions } = claudeCodeSessions;
-const { flattenTranscript } = transcript;
 
 const PROVIDER_ID = "claude-subs";
 const MAX_IDLE_SESSIONS = 2;
@@ -97,37 +89,6 @@ function evictStale(messages: readonly compatTypes.Message[]): void {
     .sort((a, b) => b.lastUsed - a.lastUsed);
   for (const session of idle.slice(MAX_IDLE_SESSIONS - 1)) session.close();
 }
-
-const transcriptPrompt = (messages: readonly compatTypes.Message[]) =>
-  [
-    "The transcript below is the conversation so far. Continue it as the assistant.",
-    "",
-    "----- conversation transcript -----",
-    "",
-    flattenTranscript(messages),
-    "",
-    "----- end of transcript -----",
-    "",
-    "Reply now as the assistant to the last message.",
-  ].join("\n");
-
-const openSession = (messages: readonly compatTypes.Message[], config: Config) =>
-  Effect.gen(function* () {
-    const account = config.accounts[0];
-    if (account === undefined)
-      return yield* new ClaudeCodeFailure({ message: "No Claude account available" });
-    const failure = (cause: unknown) =>
-      new ClaudeCodeFailure({ cause, message: failureMessage(cause) });
-    const sdk = yield* Effect.tryPromise({ catch: failure, try: loadSdk });
-    const env = yield* Effect.tryPromise({ catch: failure, try: () => accountEnv(account) });
-    const session = yield* Effect.try({
-      catch: failure,
-      try: () => new Session(sdk, config, account, env),
-    });
-    session.busy = true;
-    session.send([{ text: transcriptPrompt(messages), type: "text" }]);
-    return session;
-  });
 
 const attach = (messages: readonly compatTypes.Message[], config: Config) =>
   Effect.gen(function* () {
