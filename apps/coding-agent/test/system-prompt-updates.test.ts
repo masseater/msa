@@ -48,6 +48,7 @@ const declaresThePromptAndToolsOnceAnd = () =>
           "rules",
           "docs",
           "cwd",
+          "timezone",
         ]);
         expect(head.toolsAdded?.map((tool) => tool.name)).toEqual([
           "read",

@@ -1,6 +1,7 @@
 import ai from "@msa/ai";
 
 import config from "../config.ts";
+import platform from "./platform/index.ts";
 import skillsModule from "./skills.ts";
 import type skillsTypes from "./skills.types.ts";
 import type systemPromptTypes from "./system-prompt.types.ts";
@@ -9,6 +10,16 @@ const { getDocsPath, getExamplesPath, getReadmePath } = config;
 const { formatSkillsForPrompt } = skillsModule;
 
 const { getSystemMessageText } = ai;
+const { localTimeZone } = platform;
+
+function timeZoneSection(): string {
+  const { name, offset } = localTimeZone();
+  return [
+    `The user's time zone is ${name} (UTC${offset}).`,
+    "Write every date and time you show the user in this time zone, as YYYY-MM-DD HH:MM, and never in UTC.",
+    "Tools and logs often print UTC timestamps (ending in Z or +00:00); convert them before you quote them.",
+  ].join("\n");
+}
 
 const ORCHESTRATOR_PREAMBLE =
   "You are an expert coding assistant operating inside msa, a coding agent harness. You work as an orchestrator: you break the request into tasks with create_task, give each one the state it starts from and the state it must reach, record what it depends on, and steer the threads that carry them out. You do not implement the tasks yourself; you read their reports, replan, and tell the user what the tasks produced.";
@@ -234,6 +245,7 @@ function fillContextSections(
     if (skillsPrompt !== "") promptSections["skills"] = skillsPrompt;
   }
   promptSections["cwd"] = cwd.replace(/\\/gu, "/");
+  promptSections["timezone"] = timeZoneSection();
   for (const [name, content] of Object.entries(customSections)) {
     if (content !== "") promptSections[name] = content;
   }

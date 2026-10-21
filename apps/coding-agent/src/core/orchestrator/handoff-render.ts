@@ -1,5 +1,4 @@
-import { DateTime } from "effect";
-
+import platform from "../platform/index.ts";
 import type handoffRenderTypes from "./handoff-render.types.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
@@ -11,16 +10,7 @@ const HANDOFF_GUIDE = [
   "読んだら、達成したい状態の順に create_task で依存を張って立て直す。",
 ];
 
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
-function formatDateTime(millis: number): string {
-  const parts = DateTime.toParts(
-    DateTime.makeZonedUnsafe(millis, { timeZone: DateTime.zoneMakeLocal() }),
-  );
-  return `${parts.year}-${pad(parts.month)}-${pad(parts.day)} ${pad(parts.hour)}:${pad(parts.minute)}`;
-}
+const { formatLocalDateTime } = platform;
 
 function quote(text: string, indent = ""): string {
   return text
@@ -52,7 +42,7 @@ function items(
 function header(data: handoffRenderTypes.HandoffData): string {
   const { environment } = data;
   return [
-    `# 引き継ぎ（${formatDateTime(data.createdAt)}）`,
+    `# 引き継ぎ（${formatLocalDateTime(data.createdAt)}）`,
     "",
     `- msa: ${environment.version}`,
     `- リポジトリ: ${environment.repository ?? "-"}`,
@@ -151,7 +141,7 @@ function notesSection(notes: readonly orchestratorTypesTypes.Note[]): string {
     notes
       .map(
         (note) =>
-          `### ${note.id}（${formatDateTime(note.createdAt)}、${note.author}、${noteAudience(note)}）\n\n${quote(note.content)}`,
+          `### ${note.id}（${formatLocalDateTime(note.createdAt)}、${note.author}、${noteAudience(note)}）\n\n${quote(note.content)}`,
       )
       .join("\n\n"),
   ].join("\n");
@@ -161,7 +151,7 @@ function replanBlock(replan: orchestratorTypesTypes.ReplanView): string {
   const titles = (label: string, list: readonly { title: string }[]) =>
     list.length > 0 ? [`- ${label}: ${list.map((item) => item.title).join(", ")}`] : [];
   return [
-    `### ${replan.id}（${formatDateTime(replan.createdAt)}）`,
+    `### ${replan.id}（${formatLocalDateTime(replan.createdAt)}）`,
     "",
     `- 理由: ${replan.reason}`,
     ...titles("止めた", replan.stopped),
@@ -201,7 +191,6 @@ function renderHandoff(data: handoffRenderTypes.HandoffData): string {
 
 const handoffRender = {
   HANDOFF_GUIDE,
-  formatDateTime,
   handoffMarker,
   renderHandoff,
   runningNotice,

@@ -4,18 +4,18 @@ import type agentSessionTypes from "../../core/agent-session.types.ts";
 import awaitingModule from "../../core/awaiting.ts";
 import handoffFiles from "../../core/orchestrator/handoff-files.ts";
 import type handoffFilesTypes from "../../core/orchestrator/handoff-files.types.ts";
-import handoffRender from "../../core/orchestrator/handoff-render.ts";
+import platform from "../../core/platform/index.ts";
 import type extensionDialogsTypes from "./extension-dialogs.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
 
 const { pendingHandoffs, takeHandoff } = handoffFiles;
-const { formatDateTime } = handoffRender;
+const { formatLocalDateTime } = platform;
 
 type Dialogs = Pick<extensionDialogsTypes.ExtensionDialogs, "select" | "confirm">;
 
 function describe(handoff: handoffFilesTypes.PendingHandoff): string {
-  return `${handoff.name}（${formatDateTime(handoff.createdAt)}、タスク ${handoff.tasks} 本）`;
+  return `${handoff.name}（${formatLocalDateTime(handoff.createdAt)}、タスク ${handoff.tasks} 本）`;
 }
 
 function choose(
