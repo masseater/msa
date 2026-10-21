@@ -94,54 +94,45 @@ export default class CustomEditor extends tuiModule.Editor {
   }
 
   override handleInput(data: string): void {
-    if (this.onExtensionShortcut?.(data) === true) {
-      return;
-    }
+    if (this.handleEditorShortcut(data)) return;
+    const handler = this.isHistoryKey(data) ? undefined : this.registeredActionFor(data);
+    if (handler === undefined) super.handleInput(data);
+    else handler();
+  }
 
+  private handleEditorShortcut(data: string): boolean {
+    if (this.onExtensionShortcut?.(data) === true) return true;
     if (this.keybindings.matches(data, "app.clipboard.pasteImage")) {
       this.onPasteImage?.();
-      return;
+      return true;
     }
-
     if (this.keybindings.matches(data, "app.interrupt")) {
-      if (!this.isShowingAutocomplete()) {
-        const handler = this.onEscape ?? this.actionHandlers.get("app.interrupt");
-        if (handler !== undefined) {
-          handler();
-          return;
-        }
-      }
-      super.handleInput(data);
-      return;
+      const handler = this.isShowingAutocomplete()
+        ? undefined
+        : (this.onEscape ?? this.actionHandlers.get("app.interrupt"));
+      if (handler === undefined) super.handleInput(data);
+      else handler();
+      return true;
     }
-
-    if (this.keybindings.matches(data, "app.exit")) {
-      if (this.getText().length === 0) {
-        const handler = this.onCtrlD ?? this.actionHandlers.get("app.exit");
-        if (handler !== undefined) handler();
-        return;
-      }
+    if (this.keybindings.matches(data, "app.exit") && this.getText().length === 0) {
+      (this.onCtrlD ?? this.actionHandlers.get("app.exit"))?.();
+      return true;
     }
+    return false;
+  }
 
-    if (
+  private isHistoryKey(data: string): boolean {
+    return (
       this.keybindings.matches(data, "tui.editor.historyPrevious") ||
       this.keybindings.matches(data, "tui.editor.historyNext")
-    ) {
-      super.handleInput(data);
-      return;
-    }
+    );
+  }
 
+  private registeredActionFor(data: string): (() => void) | undefined {
     for (const [action, handler] of this.actionHandlers) {
-      if (
-        action !== "app.interrupt" &&
-        action !== "app.exit" &&
-        this.keybindings.matches(data, action)
-      ) {
-        handler();
-        return;
-      }
+      if (action === "app.interrupt" || action === "app.exit") continue;
+      if (this.keybindings.matches(data, action)) return handler;
     }
-
-    super.handleInput(data);
+    return undefined;
   }
 }

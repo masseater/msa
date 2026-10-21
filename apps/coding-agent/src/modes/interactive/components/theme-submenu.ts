@@ -155,42 +155,8 @@ export default class ThemeSubmenu extends tui.Container {
     const content = ThemeSubmenu.showAutomaticMenuContent(this);
 
     const items: tuiTypes.SettingItem[] = [
-      {
-        currentValue: this.lightTheme,
-        description: "Theme to use in automatic mode when the terminal is light",
-        id: "light-theme",
-        label: "Light theme",
-        submenu: (currentValue, done) =>
-          this.createThemeSelect(
-            "Light Theme",
-            "Select the theme to use for light terminal appearance",
-            currentValue,
-            done,
-            (value) => {
-              this.lightTheme = value;
-              this.callbacks.onThemePreview?.(this.getThemeSetting());
-              done(value);
-            },
-          ),
-      },
-      {
-        currentValue: this.darkTheme,
-        description: "Theme to use in automatic mode when the terminal is dark",
-        id: "dark-theme",
-        label: "Dark theme",
-        submenu: (currentValue, done) =>
-          this.createThemeSelect(
-            "Dark Theme",
-            "Select the theme to use for dark terminal appearance",
-            currentValue,
-            done,
-            (value) => {
-              this.darkTheme = value;
-              this.callbacks.onThemePreview?.(this.getThemeSetting());
-              done(value);
-            },
-          ),
-      },
+      this.appearanceThemeItem("light"),
+      this.appearanceThemeItem("dark"),
       {
         currentValue: "save and go back",
         description: "Save and go back",
@@ -208,6 +174,29 @@ export default class ThemeSubmenu extends tui.Container {
     ];
 
     ThemeSubmenu.mountSettingsList(this, items, content);
+  }
+
+  private appearanceThemeItem(appearance: "light" | "dark"): tuiTypes.SettingItem {
+    const name = appearance === "light" ? "Light" : "Dark";
+    return {
+      currentValue: appearance === "light" ? this.lightTheme : this.darkTheme,
+      description: `Theme to use in automatic mode when the terminal is ${appearance}`,
+      id: `${appearance}-theme`,
+      label: `${name} theme`,
+      submenu: (currentValue, done) =>
+        this.createThemeSelect(
+          `${name} Theme`,
+          `Select the theme to use for ${appearance} terminal appearance`,
+          currentValue,
+          done,
+          (value) => {
+            if (appearance === "light") this.lightTheme = value;
+            else this.darkTheme = value;
+            this.callbacks.onThemePreview?.(this.getThemeSetting());
+            done(value);
+          },
+        ),
+    };
   }
 
   private static showAutomaticMenuContent(self: ThemeSubmenu): tuiTypes.Container {

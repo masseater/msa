@@ -16,6 +16,27 @@ const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
+function isVisibleBlock(block: aiTypes.AssistantMessage["content"][number]): boolean {
+  if (block.type === "text") return block.text.trim() !== "";
+  if (block.type === "thinking") return block.thinking.trim() !== "";
+  return false;
+}
+
+function thinkingRunAt(
+  blocks: aiTypes.AssistantMessage["content"],
+  start: number,
+): { texts: string[]; end: number } {
+  const texts: string[] = [];
+  let end = start;
+  for (; end < blocks.length; end++) {
+    const block = blocks[end];
+    if (block?.type !== "thinking") break;
+    const thinking = block.thinking.trim();
+    if (thinking !== "") texts.push(thinking);
+  }
+  return { end, texts };
+}
+
 export default class AssistantMessageComponent extends tui.Container {
   private contentContainer: tuiTypes.Container;
   private hideThinkingBlock: boolean;
@@ -147,59 +168,40 @@ export default class AssistantMessageComponent extends tui.Container {
         : message.content.filter((c) => c.type !== "thinking");
 
     this.contentContainer.clear();
-
-    const hasVisibleContent = contentBlocks.some(
-      (c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
-    );
-
-    if (hasVisibleContent) {
+    if (contentBlocks.some(isVisibleBlock)) {
       this.contentContainer.addChild(new Spacer(1));
     }
-
-    let thinkingRunIndex = 0;
-    for (let i = 0; i < contentBlocks.length; i++) {
-      const content = contentBlocks[i];
-      if (content === undefined) continue;
-      if (content.type === "text" && content.text.trim() !== "") {
-        AssistantMessageComponent.addTextBlock(this, content);
-      } else if (content.type === "thinking") {
-        const thinkingBlocks: string[] = [];
-        for (; i < contentBlocks.length; i++) {
-          const thinkingContent = contentBlocks[i];
-          if (thinkingContent?.type !== "thinking") {
-            break;
-          }
-          const thinking = thinkingContent.thinking.trim();
-          if (thinking !== "") {
-            thinkingBlocks.push(thinking);
-          }
-        }
-        i--;
-
-        if (thinkingBlocks.length === 0) {
-          continue;
-        }
-
-        const hasVisibleContentAfter = contentBlocks
-          .slice(i + 1)
-          .some(
-            (c) =>
-              (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
-          );
-
-        const runIndex = thinkingRunIndex++;
-        const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
-        AssistantMessageComponent.addThinkingBlock(
-          this,
-          hidden,
-          thinkingBlocks,
-          runIndex,
-          hasVisibleContentAfter,
-        );
-      }
-    }
+    this.addContentBlocks(contentBlocks);
 
     AssistantMessageComponent.addStopNotices(this, message);
+  }
+
+  private addContentBlocks(contentBlocks: aiTypes.AssistantMessage["content"]): void {
+    let thinkingRunIndex = 0;
+    let index = 0;
+    while (index < contentBlocks.length) {
+      const content = contentBlocks[index];
+      if (content?.type !== "thinking") {
+        if (content?.type === "text" && content.text.trim() !== "") {
+          AssistantMessageComponent.addTextBlock(this, content);
+        }
+        index++;
+        continue;
+      }
+      const run = thinkingRunAt(contentBlocks, index);
+      index = run.end;
+      if (run.texts.length === 0) continue;
+      const runIndex = thinkingRunIndex++;
+      const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
+      const hasVisibleContentAfter = contentBlocks.slice(run.end).some(isVisibleBlock);
+      AssistantMessageComponent.addThinkingBlock(
+        this,
+        hidden,
+        run.texts,
+        runIndex,
+        hasVisibleContentAfter,
+      );
+    }
   }
 
   private static addTextBlock(
