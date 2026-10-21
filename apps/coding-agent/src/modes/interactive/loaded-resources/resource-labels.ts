@@ -1,38 +1,12 @@
-import { dual } from "effect/Function";
-
-import type settingsManagerTypes from "../../core/settings-manager.types.ts";
-import type sourceInfoTypes from "../../core/source-info.types.ts";
-import git from "../../utils/git.ts";
-import pathsModule from "../../utils/paths.ts";
-import pathModule from "../path.ts";
-import type loadedResourcesInternalTypes from "./loaded-resources-internal.types.ts";
-import type loadedResourcesTypes from "./loaded-resources.types.ts";
-import themeModule from "./theme/theme.ts";
+import type sourceInfoTypes from "../../../core/source-info.types.ts";
+import git from "../../../utils/git.ts";
+import pathsModule from "../../../utils/paths.ts";
+import pathModule from "../../path.ts";
+import type loadedResourcesTypes from "../loaded-resources.types.ts";
 
 const { abbreviateHomePath, getCwdRelativePath } = pathsModule;
 const { isAbsolute, posixParse, posixRelative, relative, resolve } = pathModule;
 const { parseGitUrl } = git;
-const { theme } = themeModule;
-
-const getStartupVisibility: {
-  (verbose: boolean): (quietStartup: settingsManagerTypes.QuietStartup | undefined) => {
-    header: boolean;
-    details: boolean;
-  };
-  (
-    quietStartup: settingsManagerTypes.QuietStartup | undefined,
-    verbose: boolean,
-  ): { header: boolean; details: boolean };
-} = dual(
-  2,
-  (
-    quietStartup: settingsManagerTypes.QuietStartup | undefined,
-    verbose: boolean,
-  ): { header: boolean; details: boolean } => ({
-    details: verbose || quietStartup === false,
-    header: verbose || quietStartup !== true,
-  }),
-);
 
 const toPosix = (p: string): string => p.replace(/\\/gu, "/");
 
@@ -191,105 +165,19 @@ function getSourceLabel(sourceInfo: sourceInfoTypes.SourceInfo): string {
     : source;
 }
 
-function getScopeName(
-  sourceInfo?: sourceInfoTypes.SourceInfo,
-): loadedResourcesInternalTypes.ScopeName {
-  const source = sourceInfo?.source ?? "local";
-  const scope = sourceInfo?.scope ?? "project";
-  if (source === "cli" || scope === "temporary") return "path";
-  if (scope === "user") return "user";
-  if (scope === "project") return "project";
-  return "path";
-}
-
-function buildScopeGroups(
-  items: readonly loadedResourcesTypes.ResourceItem[],
-): loadedResourcesInternalTypes.ScopeGroup[] {
-  const groups: Record<
-    loadedResourcesInternalTypes.ScopeName,
-    loadedResourcesInternalTypes.ScopeGroup
-  > = {
-    path: { packages: new Map(), paths: [], scope: "path" },
-    project: { packages: new Map(), paths: [], scope: "project" },
-    user: { packages: new Map(), paths: [], scope: "user" },
-  };
-
-  for (const item of items) {
-    const group = groups[getScopeName(item.sourceInfo)];
-    if (isPackageSource(item.sourceInfo)) {
-      const source = item.sourceInfo?.source ?? "local";
-      const list = group.packages.get(source) ?? [];
-      list.push(item);
-      group.packages.set(source, list);
-    } else {
-      group.paths.push(item);
-    }
-  }
-
-  return [groups.project, groups.user, groups.path].filter(
-    (group) => group.paths.length > 0 || group.packages.size > 0,
-  );
-}
-
-const byPath = (
-  a: loadedResourcesTypes.ResourceItem,
-  b: loadedResourcesTypes.ResourceItem,
-): number => a.path.localeCompare(b.path);
-
-function formatScopeGroups(
-  groups: readonly loadedResourcesInternalTypes.ScopeGroup[],
-  formatPath: (item: loadedResourcesTypes.ResourceItem) => string,
-  formatPackagePath: (item: loadedResourcesTypes.ResourceItem) => string,
-): string {
-  const lines: string[] = [];
-  for (const group of groups) {
-    lines.push(`  ${theme.fg("accent", group.scope)}`);
-    for (const item of [...group.paths].sort(byPath)) {
-      lines.push(theme.fg("dim", `    ${formatPath(item)}`));
-    }
-    const packages = [...group.packages].sort(([a], [b]) => a.localeCompare(b));
-    for (const [source, items] of packages) {
-      lines.push(`    ${theme.fg("mdLink", source)}`);
-      for (const item of [...items].sort(byPath)) {
-        lines.push(theme.fg("dim", `      ${formatPackagePath(item)}`));
-      }
-    }
-  }
-  return lines.join("\n");
-}
-
-function findSourceInfoForPath(
-  p: string,
-  sourceInfos: ReadonlyMap<string, sourceInfoTypes.SourceInfo>,
-): sourceInfoTypes.SourceInfo | undefined {
-  let current = p;
-  while (true) {
-    const match = sourceInfos.get(current);
-    if (match !== undefined) return match;
-    const parentEnd = current.lastIndexOf("/");
-    if (parentEnd === -1) return undefined;
-    current = current.substring(0, parentEnd);
-  }
-}
-
-function formatPathWithSource(
-  p: string,
-  sourceInfos: ReadonlyMap<string, sourceInfoTypes.SourceInfo>,
-): string {
-  const sourceInfo = findSourceInfoForPath(p, sourceInfos);
-  if (sourceInfo === undefined) return abbreviateHomePath(p);
-  return `${getSourceLabel(sourceInfo)} ${getShortPath(p, sourceInfo)}`;
-}
-
-const loadedResourcesPart1 = {
-  buildScopeGroups,
+const resourceLabels = {
   formatContextPath,
   formatExtensionDisplayPath,
-  formatPathWithSource,
-  formatScopeGroups,
   getCompactExtensionLabels,
+  getCompactPackageExtensionLabel,
+  getCompactPackageSourceLabel,
+  getCompactPathLabel,
   getShortPath,
-  getStartupVisibility,
+  getSourceLabel,
+  getUniqueSuffixLabel,
+  isPackageSource,
+  pathSegments,
+  toPosix,
 };
 
-export default loadedResourcesPart1;
+export default resourceLabels;
