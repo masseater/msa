@@ -1,6 +1,5 @@
 import chalk from "chalk";
 
-import type agentSessionRuntimeSupport from "../core/agent-session-runtime-support.ts";
 import authGuidance from "../core/auth-guidance.ts";
 import telemetrySupport from "../core/observability/telemetry-support.ts";
 import platformModule from "../core/platform.ts";
@@ -8,7 +7,8 @@ import processEnv from "../core/process-env.ts";
 import settingsDiagnostics from "../core/settings-diagnostics.ts";
 import timings from "../core/timings.ts";
 import cliInput from "./cli-input.ts";
-import type startupModule from "./startup.ts";
+import diagnosticsModule from "./diagnostics.ts";
+import type mainInternalTypes from "./main-internal.types.ts";
 
 const { formatNoModelsAvailableMessage } = authGuidance;
 const { describeTelemetry } = telemetrySupport;
@@ -16,12 +16,11 @@ const { writeError } = platformModule;
 const { readEnv } = processEnv;
 const { deduplicateDiagnostics } = settingsDiagnostics;
 const { time } = timings;
-const { EXTENSION_LOAD_FAILURE_HINT, isTruthyEnvFlag, reportDiagnostics } = cliInput;
+const { isTruthyEnvFlag } = cliInput;
+const { EXTENSION_LOAD_FAILURE_HINT, reportDiagnostics } = diagnosticsModule;
 
-type Startup = Awaited<ReturnType<(typeof startupModule)["prepareStartup"]>>;
-type Runtime = Awaited<
-  ReturnType<(typeof agentSessionRuntimeSupport)["createAgentSessionRuntime"]>
->;
+type Startup = mainInternalTypes.Startup;
+type Runtime = mainInternalTypes.Runtime;
 
 function startupDiagnostics(startup: Startup, runtime: Runtime) {
   const { telemetry } = startup;

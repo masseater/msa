@@ -6,10 +6,8 @@ import timings from "../core/timings.ts";
 import modes from "../modes/index.ts";
 import themeModule from "../modes/interactive/theme/theme.ts";
 import interop from "../utils/interop.ts";
-import cliInput from "./cli-input.ts";
-import type runSession from "./run-session.ts";
-import type startupChecks from "./startup-checks.ts";
-import type startupModule from "./startup.ts";
+import appModeModule from "./app-mode.ts";
+import type mainInternalTypes from "./main-internal.types.ts";
 
 const { awaited, awaiting, performed } = awaitingModule;
 const { restoreStdout } = outputGuard;
@@ -17,12 +15,12 @@ const { printTimings, time } = timings;
 const { runPrintMode, InteractiveMode, runRpcMode } = modes;
 const { stopThemeWatcher } = themeModule;
 const { callbackPromise } = interop;
-const { toPrintOutputMode } = cliInput;
+const { toPrintOutputMode } = appModeModule;
 
-type Startup = Awaited<ReturnType<(typeof startupModule)["prepareStartup"]>>;
-type Runtime = Awaited<ReturnType<(typeof runSession)["startRuntime"]>>;
-type Input = Awaited<ReturnType<(typeof runSession)["prepareInput"]>>;
-type Checks = ReturnType<(typeof startupChecks)["checkStartup"]>;
+type Startup = mainInternalTypes.Startup;
+type Runtime = mainInternalTypes.Runtime;
+type Input = mainInternalTypes.Input;
+type Checks = mainInternalTypes.Checks;
 
 function drain(stream: NodeJS.WriteStream): Promise<void> {
   if (stream.writableLength === 0) return Promise.resolve();

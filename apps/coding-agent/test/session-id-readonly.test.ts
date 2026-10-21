@@ -6,9 +6,9 @@ import type argsTypes from "../src/cli/args.types.ts";
 import SessionManager from "../src/core/session-manager.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
-import mainModule from "../src/main.ts";
+import sessionOpen from "../src/main/session-open.ts";
 import cliProcess from "./cli-process.ts";
-const { createSessionManager } = mainModule;
+const { createSessionManager } = sessionOpen;
 
 const {
   awaited,

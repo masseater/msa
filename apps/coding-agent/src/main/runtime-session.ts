@@ -7,9 +7,11 @@ import ModelRuntime from "../core/model-runtime.ts";
 import type telemetryTypesNs from "../core/observability/telemetry.types.ts";
 import type sdkTypes from "../core/sdk.types.ts";
 import SessionManager from "../core/session-manager.ts";
+import sessionOptionsModule from "./session-options.ts";
 
 const { createAgentSessionFromServices } = agentSessionServices;
 const { awaited } = awaitingModule;
+const { buildSessionOptions } = sessionOptionsModule;
 
 function* applyCliApiKey(
   parsed: argsTypes.Args,
@@ -73,6 +75,39 @@ function* createSessionFromServices(
   };
 }
 
-const runtimeSession = { createSessionFromServices };
+function* sessionFromServices(
+  parsed: argsTypes.Args,
+  services: agentSessionServicesTypes.AgentSessionServices,
+  scopedModels: Parameters<typeof buildSessionOptions>[1],
+  diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[],
+  args: {
+    sessionManager: SessionManager;
+    sessionStartEvent: typesSessionEventsTypes.SessionStartEvent | undefined;
+    telemetry: telemetryTypesNs.TelemetryHandle | undefined;
+  },
+) {
+  const { modelRuntime, settingsManager } = services;
+  const built = buildSessionOptions(
+    parsed,
+    scopedModels,
+    args.sessionManager.buildSessionContext().messages.length > 0,
+    modelRuntime,
+    settingsManager,
+  );
+  return yield* createSessionFromServices(
+    diagnostics,
+    built.diagnostics,
+    parsed,
+    built.options,
+    modelRuntime,
+    services,
+    args.sessionManager,
+    args.sessionStartEvent,
+    args.telemetry,
+    built.cliThinkingFromModel,
+  );
+}
+
+const runtimeSession = { sessionFromServices };
 
 export default runtimeSession;

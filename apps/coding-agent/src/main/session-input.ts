@@ -1,57 +1,26 @@
-import tui from "@msa/tui";
 import { Effect } from "effect";
 
 import argsModule from "../cli/args.ts";
 import listModelsModule from "../cli/list-models.ts";
-import agentSessionRuntimeSupport from "../core/agent-session-runtime-support.ts";
 import awaitingModule from "../core/awaiting.ts";
-import httpDispatcher from "../core/http-dispatcher.ts";
 import timings from "../core/timings.ts";
 import migrations from "../migrations.ts";
 import themeModule from "../modes/interactive/theme/theme.ts";
 import cliInput from "./cli-input.ts";
-import RuntimeFactory from "./runtime-factory.ts";
-import type startupModule from "./startup.ts";
+import diagnosticsModule from "./diagnostics.ts";
+import type mainInternalTypes from "./main-internal.types.ts";
 
-const { setCapabilityOverrides, primeTerminalCapabilities } = tui;
 const { printHelp } = argsModule;
 const { listModels } = listModelsModule;
-const { createAgentSessionRuntime } = agentSessionRuntimeSupport;
 const { awaited, awaiting } = awaitingModule;
-const { configureHttpDispatcher, applyHttpProxySettings } = httpDispatcher;
 const { time } = timings;
 const { showDeprecationWarnings } = migrations;
 const { initTheme } = themeModule;
-const { prepareInitialMessage, readPipedStdin, reportDiagnostics } = cliInput;
+const { prepareInitialMessage, readPipedStdin } = cliInput;
+const { reportDiagnostics } = diagnosticsModule;
 
-type Startup = Awaited<ReturnType<(typeof startupModule)["prepareStartup"]>>;
-type Runtime = Awaited<ReturnType<typeof createAgentSessionRuntime>>;
-
-function startRuntime(startup: Startup): Promise<Runtime> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const factory = new RuntimeFactory(startup);
-      time("createRuntime");
-      const { agentDir, sessionManager, telemetry } = startup;
-      const runtime = yield* awaited(
-        createAgentSessionRuntime(factory.create, {
-          agentDir,
-          cwd: sessionManager.getCwd(),
-          sessionManager,
-          ...(telemetry === undefined ? {} : { telemetry }),
-        }),
-      );
-      time("createAgentSessionRuntime");
-      const { settingsManager } = runtime.services;
-      setCapabilityOverrides(settingsManager.terminal.getTerminalCapabilityOverrides());
-      if (startup.appMode === "interactive")
-        yield* awaited(Effect.runPromise(primeTerminalCapabilities));
-      applyHttpProxySettings(settingsManager.getGlobalSettings().httpProxy);
-      configureHttpDispatcher(settingsManager.session.getHttpIdleTimeoutMs());
-      return runtime;
-    }),
-  );
-}
+type Startup = mainInternalTypes.Startup;
+type Runtime = mainInternalTypes.Runtime;
 
 function exitForMetadataCommands(startup: Startup, runtime: Runtime): Promise<void> {
   return Effect.runPromise(
@@ -102,6 +71,6 @@ function prepareInput(startup: Startup, runtime: Runtime) {
   );
 }
 
-const runSession = { exitForMetadataCommands, prepareInput, startRuntime };
+const sessionInput = { exitForMetadataCommands, prepareInput };
 
-export default runSession;
+export default sessionInput;

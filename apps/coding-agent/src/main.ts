@@ -5,16 +5,16 @@ import awaitingModule from "./core/awaiting.ts";
 import type mainTypes from "./main.types.ts";
 import bootstrapModule from "./main/bootstrap.ts";
 import runModes from "./main/run-modes.ts";
-import runSession from "./main/run-session.ts";
-import sessionSetup from "./main/session-setup.ts";
+import runtimeStart from "./main/runtime-start.ts";
+import sessionInput from "./main/session-input.ts";
 import startupChecks from "./main/startup-checks.ts";
 import startupModule from "./main/startup.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { bootstrap } = bootstrapModule;
 const { runMode } = runModes;
-const { exitForMetadataCommands, prepareInput, startRuntime } = runSession;
-const { createSessionManager } = sessionSetup;
+const { startRuntime } = runtimeStart;
+const { exitForMetadataCommands, prepareInput } = sessionInput;
 const { checkStartup } = startupChecks;
 const { prepareStartup } = startupModule;
 
@@ -39,6 +39,6 @@ const main: {
   (options?: mainTypes.MainOptions): (args: string[]) => Promise<undefined>;
 } = dual((args: IArguments) => args.length >= 1, mainImpl);
 
-const mainModule = { createSessionManager, main };
+const mainModule = { main };
 
 export default mainModule;
