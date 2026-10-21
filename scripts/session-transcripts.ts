@@ -3,8 +3,8 @@ import { styleText } from "node:util";
 
 import { Console, Effect, Predicate } from "effect";
 
-import sessionManagerSupport from "../apps/coding-agent/src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../apps/coding-agent/src/core/session-manager.types.ts";
+import sessionFormat from "../apps/coding-agent/src/core/session-manager/session-format.ts";
 import hostModule from "./host.ts";
 import type hostTypes from "./host.types.ts";
 import sessionTranscriptsAgent from "./session-transcripts-agent.ts";
@@ -14,7 +14,7 @@ const { Host, runScript } = hostModule;
 const { runSubagent } = sessionTranscriptsAgent;
 const { aggregationPrompt, analysisPrompt } = sessionTranscriptsPrompts;
 
-const { parseSessionEntries } = sessionManagerSupport;
+const { parseSessionEntries } = sessionFormat;
 
 const MAX_CHARS_PER_FILE = 100_000;
 
