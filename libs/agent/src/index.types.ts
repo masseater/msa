@@ -1,49 +1,54 @@
 import type aiTypes from "@msa/ai/index.types";
 import type { TSchema } from "typebox";
 
-import type agentTypesPart1 from "./index-part1.types.ts";
-import type agentTypesPart2 from "./index-part2.types.ts";
+import type agentLoopTypes from "./agent-loop.types.ts";
+import type agentOptionsTypes from "./agent-options.ts";
+import type agentStateTypes from "./agent-state.types.ts";
+import type agentClassTypes from "./agent.types.ts";
+import type agentProxyKitTypes from "./index-kit/proxy.types.ts";
+import type loopRunTypes from "./loop-run.types.ts";
+import type toolCallTypes from "./tool-call.types.ts";
 import type typesModule from "./types.ts";
 
 declare namespace agentTypes {
-  type AgentOptions = agentTypesPart1.AgentOptions;
-  type AgentInitialState = agentTypesPart1.AgentInitialState;
-  type QueueMode = agentTypesPart1.QueueMode;
-  type AgentEventSink = agentTypesPart1.AgentEventSink;
-  type ToolCallHooks = agentTypesPart1.ToolCallHooks;
-  type RunToolCallOptions = agentTypesPart1.RunToolCallOptions;
-  type ProxyAssistantMessageEvent = agentTypesPart1.ProxyAssistantMessageEvent;
-  type ProxyStreamOptions = agentTypesPart1.ProxyStreamOptions;
-  type StreamFn = agentTypesPart1.StreamFn;
-  type ToolExecutionMode = agentTypesPart1.ToolExecutionMode;
-  type AgentToolCall = agentTypesPart1.AgentToolCall;
-  type BeforeToolCallResult = agentTypesPart1.BeforeToolCallResult;
-  type AfterToolCallResult = agentTypesPart1.AfterToolCallResult;
-  type BeforeToolCallContext = agentTypesPart1.BeforeToolCallContext;
-  type AfterToolCallContext = agentTypesPart1.AfterToolCallContext;
-  type AgentTurnContext = agentTypesPart1.AgentTurnContext;
-  type AgentTurnDecision = agentTypesPart1.AgentTurnDecision;
-  type FinishTurn = agentTypesPart1.FinishTurn;
-  type AgentLoopTurnUpdate = agentTypesPart1.AgentLoopTurnUpdate;
-  type PrepareRequestContext = agentTypesPart1.PrepareRequestContext;
-  type AgentRequestUpdate = agentTypesPart1.AgentRequestUpdate;
-  type PrepareRequest = agentTypesPart1.PrepareRequest;
-  type PrepareNextTurnContext = agentTypesPart1.PrepareNextTurnContext;
-  type AgentLoopConfig = agentTypesPart1.AgentLoopConfig;
-  type ThinkingLevel = agentTypesPart1.ThinkingLevel;
-  type CustomAgentMessages = agentTypesPart1.CustomAgentMessages;
-  type AgentMessage = agentTypesPart1.AgentMessage;
-  type AgentState = agentTypesPart1.AgentState;
+  type AgentOptions = agentOptionsTypes.AgentOptions;
+  type AgentInitialState = agentStateTypes.AgentInitialState;
+  type QueueMode = typesModule.QueueMode;
+  type AgentEventSink = loopRunTypes.AgentEventSink;
+  type ToolCallHooks = toolCallTypes.ToolCallHooks;
+  type RunToolCallOptions = agentLoopTypes.RunToolCallOptions;
+  type ProxyAssistantMessageEvent = agentProxyKitTypes.ProxyAssistantMessageEvent;
+  type ProxyStreamOptions = agentProxyKitTypes.ProxyStreamOptions;
+  type StreamFn = typesModule.StreamFn;
+  type ToolExecutionMode = typesModule.ToolExecutionMode;
+  type AgentToolCall = typesModule.AgentToolCall;
+  type BeforeToolCallResult = typesModule.BeforeToolCallResult;
+  type AfterToolCallResult = typesModule.AfterToolCallResult;
+  type BeforeToolCallContext = typesModule.BeforeToolCallContext;
+  type AfterToolCallContext = typesModule.AfterToolCallContext;
+  type AgentTurnContext = typesModule.AgentTurnContext;
+  type AgentTurnDecision = typesModule.AgentTurnDecision;
+  type FinishTurn = typesModule.FinishTurn;
+  type AgentLoopTurnUpdate = typesModule.AgentLoopTurnUpdate;
+  type PrepareRequestContext = typesModule.PrepareRequestContext;
+  type AgentRequestUpdate = typesModule.AgentRequestUpdate;
+  type PrepareRequest = typesModule.PrepareRequest;
+  type PrepareNextTurnContext = typesModule.PrepareNextTurnContext;
+  type AgentLoopConfig = typesModule.AgentLoopConfig;
+  type ThinkingLevel = typesModule.ThinkingLevel;
+  type CustomAgentMessages = typesModule.CustomAgentMessages;
+  type AgentMessage = typesModule.AgentMessage;
+  type AgentState = typesModule.AgentState;
   type AgentToolResult<T = aiTypes.JsonValue | undefined> = typesModule.AgentToolResult<T>;
-  type AgentToolCallOutcome = agentTypesPart1.AgentToolCallOutcome;
-  type AgentToolUpdateCallback<T = any> = agentTypesPart1.AgentToolUpdateCallback<T>;
+  type AgentToolCallOutcome = typesModule.AgentToolCallOutcome;
+  type AgentToolUpdateCallback<T = any> = typesModule.AgentToolUpdateCallback<T>;
   type AgentTool<TParameters extends TSchema = TSchema, TDetails = any> = typesModule.AgentTool<
     TParameters,
     TDetails
   >;
-  type AgentContext = agentTypesPart1.AgentContext;
-  type AgentEvent = agentTypesPart1.AgentEvent;
-  type Agent = agentTypesPart2.Agent;
+  type AgentContext = typesModule.AgentContext;
+  type AgentEvent = typesModule.AgentEvent;
+  type Agent = agentClassTypes.Agent;
 }
 
 export type { agentTypes as default };

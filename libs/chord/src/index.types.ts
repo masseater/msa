@@ -1,17 +1,18 @@
 import type contractShapesTypes from "./contract-shapes.ts";
 import type contractTypes from "./contract.types.ts";
-import type chordTypesPart1 from "./index-part1.types.ts";
-import type chordTypesPart2 from "./index-part2.types.ts";
+import type chordCoreKitTypes from "./index-kit/core.types.ts";
+import type chordLinksKitTypes from "./index-kit/links.types.ts";
+import type chordStateKitTypes from "./index-kit/state.types.ts";
 import type serviceTypes from "./service.types.ts";
 
 declare namespace chordTypes {
-  type AcceptOptions<P = unknown> = chordTypesPart1.AcceptOptions<P>;
+  type AcceptOptions<P = unknown> = chordLinksKitTypes.AcceptOptions<P>;
 
-  type LinkOptions = chordTypesPart1.LinkOptions;
+  type LinkOptions = chordLinksKitTypes.LinkOptions;
 
-  type Context = chordTypesPart1.Context;
+  type Context = chordCoreKitTypes.Context;
 
-  type ContextKey<T> = chordTypesPart1.ContextKey<T>;
+  type ContextKey<T> = chordCoreKitTypes.ContextKey<T>;
 
   type Accepts = contractTypes.Accepts;
 
@@ -42,59 +43,59 @@ declare namespace chordTypes {
   type RemoteContract<D extends contractTypes.RemoteDef = contractTypes.RemoteDef> =
     contractTypes.RemoteContract<D>;
 
-  type EventOf<S> = chordTypesPart1.EventOf<S>;
+  type EventOf<S> = chordCoreKitTypes.EventOf<S>;
 
-  type Resource<T> = chordTypesPart1.Resource<T>;
+  type Resource<T> = chordCoreKitTypes.Resource<T>;
 
-  type ResourceDeclaration<T> = chordTypesPart1.ResourceDeclaration<T>;
+  type ResourceDeclaration<T> = chordCoreKitTypes.ResourceDeclaration<T>;
 
-  type Subscribable<E> = chordTypesPart1.Subscribable<E>;
+  type Subscribable<E> = chordCoreKitTypes.Subscribable<E>;
 
-  type ValueOf<S> = chordTypesPart1.ValueOf<S>;
+  type ValueOf<S> = chordCoreKitTypes.ValueOf<S>;
 
-  type Draft<T, Depth extends readonly unknown[] = []> = chordTypesPart1.Draft<T, Depth>;
+  type Draft<T, Depth extends readonly unknown[] = []> = chordStateKitTypes.Draft<T, Depth>;
 
-  type ChordErrorCode = chordTypesPart1.ChordErrorCode;
+  type ChordErrorCode = chordCoreKitTypes.ChordErrorCode;
 
-  type ConnectOptions<P = unknown> = chordTypesPart1.ConnectOptions<P>;
+  type ConnectOptions<P = unknown> = chordCoreKitTypes.ConnectOptions<P>;
 
-  type PrincipalMatch<P = unknown> = chordTypesPart1.PrincipalMatch<P>;
+  type PrincipalMatch<P = unknown> = chordCoreKitTypes.PrincipalMatch<P>;
 
-  type PrincipalPattern<P> = chordTypesPart1.PrincipalPattern<P>;
+  type PrincipalPattern<P> = chordCoreKitTypes.PrincipalPattern<P>;
 
-  type Route<P = unknown> = chordTypesPart1.Route<P>;
+  type Route<P = unknown> = chordCoreKitTypes.Route<P>;
 
-  type Facet<P = unknown> = chordTypesPart1.Facet<P>;
+  type Facet<P = unknown> = chordCoreKitTypes.Facet<P>;
 
-  type FacetApi<P = unknown> = chordTypesPart1.FacetApi<P>;
+  type FacetApi<P = unknown> = chordCoreKitTypes.FacetApi<P>;
 
-  type FacetDefinition<P = unknown> = chordTypesPart1.FacetDefinition<P>;
+  type FacetDefinition<P = unknown> = chordCoreKitTypes.FacetDefinition<P>;
 
-  type FacetLoader = chordTypesPart1.FacetLoader;
+  type FacetLoader = chordCoreKitTypes.FacetLoader;
 
-  type Host<P = unknown> = chordTypesPart1.Host<P>;
+  type Host<P = unknown> = chordCoreKitTypes.Host<P>;
 
-  type HostOptions<P = unknown> = chordTypesPart1.HostOptions<P>;
+  type HostOptions<P = unknown> = chordCoreKitTypes.HostOptions<P>;
 
-  type LoadOptions = chordTypesPart1.LoadOptions;
+  type LoadOptions = chordCoreKitTypes.LoadOptions;
 
-  type PluginRef<P = unknown> = chordTypesPart1.PluginRef<P>;
+  type PluginRef<P = unknown> = chordCoreKitTypes.PluginRef<P>;
 
-  type RootOptions<P = unknown> = chordTypesPart1.RootOptions<P>;
+  type RootOptions<P = unknown> = chordCoreKitTypes.RootOptions<P>;
 
-  type CopyJsonOptions = chordTypesPart1.CopyJsonOptions;
+  type CopyJsonOptions = chordCoreKitTypes.CopyJsonOptions;
 
-  type JsonRepresentation<T> = chordTypesPart1.JsonRepresentation<T>;
+  type JsonRepresentation<T> = chordCoreKitTypes.JsonRepresentation<T>;
 
-  type JsonValue = chordTypesPart1.JsonValue;
+  type JsonValue = chordCoreKitTypes.JsonValue;
 
-  type IpcChannel = chordTypesPart1.IpcChannel;
+  type IpcChannel = chordLinksKitTypes.IpcChannel;
 
-  type Link = chordTypesPart1.Link;
+  type Link = chordLinksKitTypes.Link;
 
-  type WebSocketLike = chordTypesPart2.WebSocketLike;
+  type WebSocketLike = chordLinksKitTypes.WebSocketLike;
 
-  type WebSocketLinkOptions = chordTypesPart2.WebSocketLinkOptions;
+  type WebSocketLinkOptions = chordLinksKitTypes.WebSocketLinkOptions;
 
   type Factory<C extends contractTypes.AnyContract, P = unknown> = serviceTypes.Factory<C, P>;
 
@@ -114,56 +115,56 @@ declare namespace chordTypes {
 
   type StateOptions<T> = serviceTypes.StateOptions<T>;
 
-  type Registry<V> = chordTypesPart2.Registry<V>;
+  type Registry<V> = chordStateKitTypes.Registry<V>;
 
-  type RegistryTable<V> = chordTypesPart2.RegistryTable<V>;
+  type RegistryTable<V> = chordStateKitTypes.RegistryTable<V>;
 
-  type RegistryView<V> = chordTypesPart2.RegistryView<V>;
+  type RegistryView<V> = chordStateKitTypes.RegistryView<V>;
 
-  type ReloadOptions = chordTypesPart2.ReloadOptions;
+  type ReloadOptions = chordStateKitTypes.ReloadOptions;
 
-  type ReloadReport = chordTypesPart2.ReloadReport;
+  type ReloadReport = chordStateKitTypes.ReloadReport;
 
-  type AttachedReplicatedState<T> = chordTypesPart2.AttachedReplicatedState<T>;
+  type AttachedReplicatedState<T> = chordStateKitTypes.AttachedReplicatedState<T>;
 
-  type MutableReplicatedState<T extends object> = chordTypesPart2.MutableReplicatedState<T>;
+  type MutableReplicatedState<T extends object> = chordStateKitTypes.MutableReplicatedState<T>;
 
-  type ReplicatedState<T> = chordTypesPart2.ReplicatedState<T>;
+  type ReplicatedState<T> = chordStateKitTypes.ReplicatedState<T>;
 
-  type ReplicatedStateDelivery = chordTypesPart2.ReplicatedStateDelivery;
+  type ReplicatedStateDelivery = chordStateKitTypes.ReplicatedStateDelivery;
 
-  type ReplicatedStateSource<T> = chordTypesPart2.ReplicatedStateSource<T>;
+  type ReplicatedStateSource<T> = chordStateKitTypes.ReplicatedStateSource<T>;
 
-  type ReplicatedStateSourceAttachment<T> = chordTypesPart2.ReplicatedStateSourceAttachment<T>;
+  type ReplicatedStateSourceAttachment<T> = chordStateKitTypes.ReplicatedStateSourceAttachment<T>;
 
-  type ReplicatedStateSourceFrame<T> = chordTypesPart2.ReplicatedStateSourceFrame<T>;
+  type ReplicatedStateSourceFrame<T> = chordStateKitTypes.ReplicatedStateSourceFrame<T>;
 
-  type ReplicatedStateSourceOptions = chordTypesPart2.ReplicatedStateSourceOptions;
+  type ReplicatedStateSourceOptions = chordStateKitTypes.ReplicatedStateSourceOptions;
 
-  type Ctx<P = unknown> = chordTypesPart2.Ctx<P>;
+  type Ctx<P = unknown> = chordCoreKitTypes.Ctx<P>;
 
-  type GetOptions<P = unknown> = chordTypesPart2.GetOptions<P>;
+  type GetOptions<P = unknown> = chordCoreKitTypes.GetOptions<P>;
 
-  type Readable<T> = chordTypesPart2.Readable<T>;
+  type Readable<T> = chordCoreKitTypes.Readable<T>;
 
-  type RefStatus = chordTypesPart2.RefStatus;
+  type RefStatus = chordCoreKitTypes.RefStatus;
 
-  type Shape = chordTypesPart2.Shape;
+  type Shape = chordCoreKitTypes.Shape;
 
-  type StateEvent<T> = chordTypesPart2.StateEvent<T>;
+  type StateEvent<T> = chordCoreKitTypes.StateEvent<T>;
 
-  type WebSocketAcceptOptions<Request, P = unknown> = chordTypesPart2.WebSocketAcceptOptions<
+  type WebSocketAcceptOptions<Request, P = unknown> = chordLinksKitTypes.WebSocketAcceptOptions<
     Request,
     P
   >;
 
-  type WebSocketServerLike<Request> = chordTypesPart2.WebSocketServerLike<Request>;
+  type WebSocketServerLike<Request> = chordLinksKitTypes.WebSocketServerLike<Request>;
 
-  type Frame = chordTypesPart2.Frame;
+  type Frame = chordLinksKitTypes.Frame;
 
-  type Cell<T> = chordTypesPart2.Cell<T>;
+  type Cell<T> = chordStateKitTypes.Cell<T>;
 
-  type ChordError = chordTypesPart1.ChordError;
+  type ChordError = chordCoreKitTypes.ChordError;
 }
 
 export type { chordTypes as default };

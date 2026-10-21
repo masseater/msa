@@ -1,6 +1,5 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
-import type typesModulePart1 from "@msa/ai/types-part1.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
 
@@ -145,7 +144,7 @@ export default modelPolicy;
 function createModelPolicyToolDefinitionPart2(
   target: modelPolicyTypes.ModelPolicyToolTarget,
   before: modelPolicyTypesModule.ModelPolicy,
-  catalog: readonly aiTypes.Model<typesModulePart1.Api>[],
+  catalog: readonly aiTypes.Model<aiTypes.Api>[],
 ) {
   const current = target.currentModel();
   const denial = current === undefined ? undefined : describeModelPolicyDenial(before, current);
@@ -166,7 +165,7 @@ function createModelPolicyToolDefinitionPart1(
   lines: string[],
   params: { pattern?: string; action: never },
   saved: modelPolicyTypesModule.ModelPolicy,
-  hidden: modelPolicyTypesModule.PolicyHiddenModel<aiTypes.Model<typesModulePart1.Api>>[],
+  hidden: modelPolicyTypesModule.PolicyHiddenModel<aiTypes.Model<aiTypes.Api>>[],
   pattern: string | undefined,
 ):
   | agentTypes.AgentToolResult<Record<string, unknown>>
@@ -191,7 +190,7 @@ function executePart1(
   before: modelPolicyTypesModule.ModelPolicy,
   pattern: string,
   target: modelPolicyTypes.ModelPolicyToolTarget,
-  catalog: readonly aiTypes.Model<typesModulePart1.Api>[],
+  catalog: readonly aiTypes.Model<aiTypes.Api>[],
 ) {
   const next =
     params.action === "remove"

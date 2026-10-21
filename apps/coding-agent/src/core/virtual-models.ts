@@ -1,7 +1,6 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import type typesModulePart1 from "@msa/ai/types-part1.types";
 import * as Effect from "effect/Effect";
 
 import type sessionManagerTypes from "./session-manager.types.ts";
@@ -191,7 +190,7 @@ const virtualModels = {
 
 export default virtualModels;
 
-function withVirtualModelsPart1(virtualModelList: readonly aiTypes.Model<typesModulePart1.Api>[]) {
+function withVirtualModelsPart1(virtualModelList: readonly aiTypes.Model<aiTypes.Api>[]) {
   const ids = new Set(virtualModelList.map((model) => model.id));
   const physical = <TModel extends aiTypes.AnyModel>(models: readonly TModel[]) =>
     models.filter(
