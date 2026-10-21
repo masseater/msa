@@ -5,62 +5,75 @@ import scopeLookup from "./scope-lookup.ts";
 
 type Node = flowTypes.Node;
 
-type Visited = Set<Node>;
+type Walk = {
+  readonly visited: Set<Node>;
+  readonly functionsCount: boolean;
+};
 
-type DefinitionCheck = (context: Context, def: Definition, visited: Visited) => boolean;
+type DefinitionCheck = (context: Context, def: Definition, walk: Walk) => boolean;
 
 const isRelative = (specifier: string): boolean => specifier.startsWith(".");
 
 const fromImport: DefinitionCheck = (_context, def) =>
   isRelative((def.parent as ESTree.ImportDeclaration).source.value);
 
-const fromVariable: DefinitionCheck = (context, def, visited) => {
+const fromVariable: DefinitionCheck = (context, def, walk) => {
   const init = def.node.type === "VariableDeclarator" ? def.node.init : null;
-  return init !== null && declaredIn(context, init, visited);
+  return init !== null && declaredIn(context, init, walk);
 };
 
 const DEFINITIONS: Readonly<Partial<Record<Definition["type"], DefinitionCheck>>> = {
   ClassName: () => true,
-  FunctionName: () => true,
+  FunctionName: (_context, _def, walk) => walk.functionsCount,
   ImportBinding: fromImport,
   Variable: fromVariable,
 };
 
-const fromIdentifier = (context: Context, node: Node, visited: Visited): boolean =>
+const fromIdentifier = (context: Context, node: Node, walk: Walk): boolean =>
   scopeLookup
     .variableOf(context, node)
-    ?.defs.some((def) => DEFINITIONS[def.type]?.(context, def, visited) === true) === true;
+    ?.defs.some((def) => DEFINITIONS[def.type]?.(context, def, walk) === true) === true;
 
-const fromCall = (context: Context, node: ESTree.CallExpression, visited: Visited): boolean =>
-  [node.callee, ...node.arguments].some((part) =>
-    declaredIn(context, part.type === "SpreadElement" ? part.argument : part, visited),
+const fromCall = (context: Context, node: ESTree.CallExpression, walk: Walk): boolean => {
+  const asClass = { ...walk, functionsCount: false };
+  return (
+    declaredIn(context, node.callee, { ...walk, functionsCount: true }) ||
+    node.arguments.some((argument) =>
+      declaredIn(
+        context,
+        argument.type === "SpreadElement" ? argument.argument : argument,
+        asClass,
+      ),
+    )
   );
+};
 
-type NodeCheck = (context: Context, node: Node, visited: Visited) => boolean;
+type NodeCheck = (context: Context, node: Node, walk: Walk) => boolean;
 
 const local: NodeCheck = () => true;
 
+const localFunction: NodeCheck = (_context, _node, walk) => walk.functionsCount;
+
 const NODES: Readonly<Partial<Record<Node["type"], NodeCheck>>> = {
-  ArrowFunctionExpression: local,
-  CallExpression: (context, node, visited) =>
-    fromCall(context, node as ESTree.CallExpression, visited),
+  ArrowFunctionExpression: localFunction,
+  CallExpression: (context, node, walk) => fromCall(context, node as ESTree.CallExpression, walk),
   ClassExpression: local,
-  FunctionExpression: local,
+  FunctionExpression: localFunction,
   Identifier: fromIdentifier,
-  MemberExpression: (context, node, visited) =>
-    declaredIn(context, (node as ESTree.MemberExpression).object, visited),
-  TSInstantiationExpression: (context, node, visited) =>
-    declaredIn(context, (node as ESTree.TSInstantiationExpression).expression, visited),
+  MemberExpression: (context, node, walk) =>
+    declaredIn(context, (node as ESTree.MemberExpression).object, walk),
+  TSInstantiationExpression: (context, node, walk) =>
+    declaredIn(context, (node as ESTree.TSInstantiationExpression).expression, walk),
 };
 
-function declaredIn(context: Context, node: Node, visited: Visited): boolean {
-  if (visited.has(node)) return false;
-  visited.add(node);
-  return NODES[node.type]?.(context, node, visited) === true;
+function declaredIn(context: Context, node: Node, walk: Walk): boolean {
+  if (walk.visited.has(node)) return false;
+  walk.visited.add(node);
+  return NODES[node.type]?.(context, node, walk) === true;
 }
 
 const declaredInPackage = (context: Context, node: Node): boolean =>
-  declaredIn(context, node, new Set());
+  declaredIn(context, node, { functionsCount: true, visited: new Set() });
 
 const classOrigin = { declaredInPackage };
 
