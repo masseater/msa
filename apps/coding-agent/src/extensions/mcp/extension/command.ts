@@ -31,12 +31,12 @@ export default class McpCommand {
     Effect.runPromise(
       awaitingWith(function* () {
         if (name !== undefined && name !== "") {
-          const server = this.host.findServer(name);
+          const server = this.host.state.findServer(name);
           if (server === undefined) ctx.ui.notify(`No MCP server named "${name}".`, "error");
           else if (!criteria.eligible(server)) ctx.ui.notify(criteria.none, "error");
           return server !== undefined && criteria.eligible(server) ? server : undefined;
         }
-        const candidates = this.host.servers.filter(criteria.eligible);
+        const candidates = this.host.state.servers.filter(criteria.eligible);
         if (candidates.length === 0) {
           ctx.ui.notify(criteria.none, "info");
           return undefined;
@@ -78,7 +78,7 @@ export default class McpCommand {
         ),
       showAuthorizationUrl: (url) => {
         ctx.ui.notify(`Sign in to MCP server "${name}" in your browser:\n${url.href}`, "info");
-        this.host.openUrl(url.href);
+        this.host.state.openUrl(url.href);
       },
     });
   }
@@ -107,7 +107,7 @@ export default class McpCommand {
           ctx.ui.notify(`Signing in to MCP server "${name}" requires interactive mode.`, "error");
           return;
         }
-        const { signal } = this.host.session;
+        const { signal } = this.host.state.session;
         const failure = yield* awaited(
           ctx.mode === "tui" ? this.signInWithManager(server, ctx) : this.signInInline(server, ctx),
         );
@@ -133,7 +133,7 @@ export default class McpCommand {
         .map((item) => ({ label: item, value: `${item} ` }));
     }
     if (action !== "login" && action !== "logout" && action !== "reconnect") return null;
-    const items = this.host.servers
+    const items = this.host.state.servers
       .filter((candidate) =>
         action === "reconnect" ? candidate.connection !== undefined : this.usesOAuth(candidate),
       )
@@ -215,7 +215,7 @@ export default class McpCommand {
           if (ctx.mode === "tui")
             yield* awaited(showMcpManager(ctx, (ui) => this.host.menus.manage(ui, ctx)));
           else {
-            yield* awaited(this.host.pending);
+            yield* awaited(this.host.state.pending);
             ctx.ui.notify(this.host.menus.formatStatus(), "info");
           }
           return;
@@ -224,7 +224,7 @@ export default class McpCommand {
           ctx.ui.notify(MCP_USAGE, "warning");
           return;
         }
-        yield* awaited(this.host.pending);
+        yield* awaited(this.host.state.pending);
         if (action === "login") yield* awaited(this.loginAction(name, ctx));
         else if (action === "logout") yield* awaited(this.logoutAction(name, ctx));
         else if (action === "reconnect") yield* awaited(this.reconnectAction(name, ctx));

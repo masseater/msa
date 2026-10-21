@@ -18,7 +18,7 @@ export default class McpToolDiscovery {
 
   readonly ensureDiscoveryActive = (ctx: extensionsTypesTypes.ExtensionContext) => {
     const exposures = new Set<configTypes.McpExposure>();
-    for (const server of this.host.servers) {
+    for (const server of this.host.state.servers) {
       if (isEnabled(server))
         for (const exposure of configuredExposures(server.entry)) exposures.add(exposure);
     }
@@ -26,17 +26,17 @@ export default class McpToolDiscovery {
     const needsToolSearch = exposures.has("deferred");
     if (!needsCodemode && !needsToolSearch) return;
 
-    const tools = this.host.msa.getAllTools();
+    const tools = this.host.state.msa.getAllTools();
     const hasReachingTool = (name: string) =>
       tools.some((tool) => tool.name === name && tool.reachesTools);
     const hasCodemode = hasReachingTool(CODEMODE_TOOL_NAME);
     const hasToolSearch = hasReachingTool(TOOL_SEARCH_TOOL_NAME);
-    const active = this.host.msa.getActiveTools();
+    const active = this.host.state.msa.getActiveTools();
     const activate: string[] = [];
     if (
       needsCodemode &&
       hasCodemode &&
-      this.host.autoEnableCodemode &&
+      this.host.state.autoEnableCodemode &&
       !active.includes(CODEMODE_TOOL_NAME)
     ) {
       activate.push(CODEMODE_TOOL_NAME);
@@ -44,14 +44,14 @@ export default class McpToolDiscovery {
     if (needsToolSearch && hasToolSearch && !active.includes(TOOL_SEARCH_TOOL_NAME)) {
       activate.push(TOOL_SEARCH_TOOL_NAME);
     }
-    if (activate.length > 0) this.host.msa.setActiveTools([...active, ...activate]);
+    if (activate.length > 0) this.host.state.msa.setActiveTools([...active, ...activate]);
     const reachable = [...active, ...activate];
     if (hasCodemode && reachable.includes(CODEMODE_TOOL_NAME)) return;
     if (hasToolSearch && reachable.includes(TOOL_SEARCH_TOOL_NAME)) return;
-    if (this.host.warnedUnreachable) return;
-    this.host.warnedUnreachable = true;
+    if (this.host.state.warnedUnreachable) return;
+    this.host.state.warnedUnreachable = true;
     const reason =
-      needsCodemode && hasCodemode && !this.host.autoEnableCodemode
+      needsCodemode && hasCodemode && !this.host.state.autoEnableCodemode
         ? " (autoEnableCodemode is false)"
         : "";
     ctx.ui.notify(

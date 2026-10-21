@@ -26,14 +26,14 @@ export default class McpServerActions {
     patch: configTypes.McpServerConfigPatch,
     inProject = false,
   ): Promise<string | undefined> => {
-    const override = inProject ? this.host.projectConfig : server.entry.override;
+    const override = inProject ? this.host.state.projectConfig : server.entry.override;
     const entry =
       override !== undefined && override !== "" ? { ...server.entry, override } : server.entry;
     const saved =
       entry.scope === "extension"
         ? Promise.resolve()
         : Promise.resolve()
-            .then(() => this.host.updateConfig(entry, patch))
+            .then(() => this.host.state.updateConfig(entry, patch))
             .then(() => undefined);
     return saved.then(
       () => {
@@ -59,11 +59,11 @@ export default class McpServerActions {
         const runtime = yield* awaited(loadMcpRuntime());
         const signal =
           cancel === undefined
-            ? this.host.session.signal
-            : AbortSignal.any([this.host.session.signal, cancel]);
+            ? this.host.state.session.signal
+            : AbortSignal.any([this.host.state.session.signal, cancel]);
         try {
           yield* awaited(
-            this.host.track(
+            this.host.state.track(
               runtime.signInMcpServer({
                 challenge: connection.auth.challenge,
                 prompt,
@@ -147,7 +147,7 @@ export default class McpServerActions {
           }
           const closing = server.closing;
           this.host.tools.hideTools(server.entry.name);
-          this.host.emitChange();
+          this.host.state.emitChange();
           try {
             yield* awaited(closing);
           } finally {
@@ -173,16 +173,18 @@ export default class McpServerActions {
     this.host.tools.resourceTools.syncResourceTools();
 
     const indirect = new Set(
-      this.host.msa
+      this.host.state.msa
         .getAllTools()
         .filter((tool) => tool.exposure !== "direct")
         .map((tool) => tool.name),
     );
     const tools = this.host.tools.serverTools.get(server.entry.name) ?? new Set<string>();
-    this.host.msa.setActiveTools(
-      this.host.msa.getActiveTools().filter((name) => !tools.has(name) || !indirect.has(name)),
+    this.host.state.msa.setActiveTools(
+      this.host.state.msa
+        .getActiveTools()
+        .filter((name) => !tools.has(name) || !indirect.has(name)),
     );
-    this.host.emitChange();
+    this.host.state.emitChange();
     return undefined;
   };
 
@@ -208,7 +210,7 @@ export default class McpServerActions {
           ),
         showAuthorizationUrl: (url) => {
           authorizationUrl = url.href;
-          this.host.openUrl(url.href);
+          this.host.state.openUrl(url.href);
         },
       },
       cancel.signal,
@@ -222,14 +224,16 @@ export default class McpServerActions {
   ) => {
     const ready = operation();
     const attempt = server.attempt;
-    const { signal } = this.host.session;
+    const { signal } = this.host.state.session;
     const finish = (message: string | undefined) => {
-      if (signal.aborted || server.attempt !== attempt || !this.host.servers.includes(server))
+      if (signal.aborted || server.attempt !== attempt || !this.host.state.servers.includes(server))
         return;
       server.message = message;
       this.host.tools.discovery.ensureDiscoveryActive(ctx);
-      this.host.emitChange();
+      this.host.state.emitChange();
     };
-    void this.host.track(ready.then(finish, (error: unknown) => finish(toErrorMessage(error))));
+    void this.host.state.track(
+      ready.then(finish, (error: unknown) => finish(toErrorMessage(error))),
+    );
   };
 }

@@ -27,7 +27,9 @@ export default class McpServerWaits {
       awaitingWith(function* () {
         const readyOf = () =>
           waiting.flatMap((server) =>
-            isEnabled(server) && this.host.servers.includes(server) && server.ready !== undefined
+            isEnabled(server) &&
+            this.host.state.servers.includes(server) &&
+            server.ready !== undefined
               ? [{ ready: server.ready, server }]
               : [],
           );
@@ -35,7 +37,7 @@ export default class McpServerWaits {
           ready.every(
             (attempt) =>
               !isEnabled(attempt.server) ||
-              !this.host.servers.includes(attempt.server) ||
+              !this.host.state.servers.includes(attempt.server) ||
               attempt.ready === attempt.server.ready,
           );
         for (;;) {
@@ -60,9 +62,9 @@ export default class McpServerWaits {
   readonly waitForDirectServers = (ctx: extensionsTypesTypes.ExtensionContext) =>
     Effect.runPromise(
       awaitingWith(function* () {
-        if (this.host.waitedForStartup) return;
-        this.host.waitedForStartup = true;
-        const ready = this.host.servers.flatMap((server) =>
+        if (this.host.state.waitedForStartup) return;
+        this.host.state.waitedForStartup = true;
+        const ready = this.host.state.servers.flatMap((server) =>
           isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
             ? [server.ready]
             : [],
@@ -71,7 +73,7 @@ export default class McpServerWaits {
         const finished = Option.isSome(
           yield* performed(
             Effect.promise(() => Promise.all(ready)).pipe(
-              Effect.timeoutOption(this.host.startupWaitMs),
+              Effect.timeoutOption(this.host.state.startupWaitMs),
             ),
           ),
         );

@@ -9,11 +9,11 @@ import themeModule from "../src/modes/interactive/theme/theme.ts";
 import ansi from "../src/utils/ansi.ts";
 
 const {
-  BranchSummaryStatusIndicator,
-  CompactionStatusIndicator,
+  createBranchSummaryStatusIndicator,
+  createCompactionStatusIndicator,
   IdleStatus,
-  RetryStatusIndicator,
-  WorkingStatusIndicator,
+  createRetryStatusIndicator,
+  createWorkingStatusIndicator,
 } = statusIndicators;
 
 const { CustomEditor } = codingAgent;
@@ -38,7 +38,7 @@ const keepsTheTopBorderUnchangedUnlessThe = () => {
     terminal: { rows: 10 },
   } as unknown as tuiTypes.TUI;
   const editor = new CustomEditor(tui, getEditorTheme(), KeybindingsManager.create());
-  const indicator = new WorkingStatusIndicator(tui, "Working");
+  const indicator = createWorkingStatusIndicator({ message: "Working", ui: tui });
   editor.setWorkingStatusIndicator(indicator);
 
   expect(stripAnsi(editor.render(20)[0]!)).toBe("─".repeat(20));
@@ -59,9 +59,11 @@ const embedsTheWorkingIndicatorWhenTheEditor = () => {
   });
   expect(editor.embedWorkingStatus).toBe(true);
   editor.borderColor = theme.getThinkingBorderColor("high");
-  const indicator = new WorkingStatusIndicator(tui, "Working", undefined, (text) =>
-    editor.borderColor(text),
-  );
+  const indicator = createWorkingStatusIndicator({
+    colorFn: (text) => editor.borderColor(text),
+    message: "Working",
+    ui: tui,
+  });
   editor.setWorkingStatusIndicator(indicator);
 
   const topBorder = editor.render(20)[0]!;
@@ -79,11 +81,11 @@ const embedsCompactionSummaryAndRetryLabelsWithin = () => {
     embedWorkingStatus: true,
   });
   const indicators = [
-    new CompactionStatusIndicator(tui, "manual"),
-    new CompactionStatusIndicator(tui, "threshold"),
-    new CompactionStatusIndicator(tui, "overflow"),
-    new BranchSummaryStatusIndicator(tui),
-    new RetryStatusIndicator(tui, 1, 3, 3000),
+    createCompactionStatusIndicator({ reason: "manual", ui: tui }),
+    createCompactionStatusIndicator({ reason: "threshold", ui: tui }),
+    createCompactionStatusIndicator({ reason: "overflow", ui: tui }),
+    createBranchSummaryStatusIndicator(tui),
+    createRetryStatusIndicator({ attempt: 1, delayMs: 3000, maxAttempts: 3, ui: tui }),
   ];
   try {
     for (const indicator of indicators) {
@@ -108,7 +110,12 @@ const disposesRetryCountdownUpdates = () => {
   vi.useFakeTimers();
   const requestRender = vi.fn();
   const tui = { requestRender } as unknown as tuiTypes.TUI;
-  const indicator = new RetryStatusIndicator(tui, 1, 3, 1000);
+  const indicator = createRetryStatusIndicator({
+    attempt: 1,
+    delayMs: 1000,
+    maxAttempts: 3,
+    ui: tui,
+  });
   const callsBeforeDispose = requestRender.mock.calls.length;
 
   indicator.dispose();

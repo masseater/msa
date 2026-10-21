@@ -23,8 +23,8 @@ export default class McpMenus {
   }
 
   readonly notices = () => [
-    ...this.host.configErrors.map((error) => `config: ${error}`),
-    ...this.host.overridden.map((line) => `overridden: ${line}`),
+    ...this.host.state.configErrors.map((error) => `config: ${error}`),
+    ...this.host.state.overridden.map((line) => `overridden: ${line}`),
   ];
 
   readonly serversMenu = (): uiTypes.McpMenu => ({
@@ -32,7 +32,7 @@ export default class McpMenus {
     confirmLabel: "manage",
     empty: noServersMessage(),
     error: this.notices().join("\n") || undefined,
-    items: [...this.host.servers]
+    items: [...this.host.state.servers]
       .sort(
         (a, b) => attentionRank(a) - attentionRank(b) || a.entry.name.localeCompare(b.entry.name),
       )
@@ -45,7 +45,11 @@ export default class McpMenus {
   });
 
   readonly serverMenu = (name: string): uiTypes.McpMenu =>
-    buildServerMenu(this.host.findServer(name), name, this.host.projectConfig !== undefined);
+    buildServerMenu(
+      this.host.state.findServer(name),
+      name,
+      this.host.state.projectConfig !== undefined,
+    );
 
   readonly showTools = (ui: uiTypes.McpUi, server: extensionInternalTypes.McpServer) =>
     Effect.runPromise(
@@ -161,12 +165,12 @@ export default class McpMenus {
   ) =>
     Effect.runPromise(
       awaitingWith(function* () {
-        const { signal } = this.host.session;
+        const { signal } = this.host.state.session;
         const message = yield* awaited(this.performAction(ui, ctx, server, action));
         if (signal.aborted) return;
         server.message = message;
         this.host.tools.discovery.ensureDiscoveryActive(ctx);
-        this.host.emitChange();
+        this.host.state.emitChange();
       }, this),
     );
 
@@ -174,13 +178,13 @@ export default class McpMenus {
     Effect.runPromise(
       awaitingWith(function* () {
         for (;;) {
-          const name = yield* awaited(ui.menu(this.serversMenu, this.host.subscribe));
+          const name = yield* awaited(ui.menu(this.serversMenu, this.host.state.subscribe));
           if (name === undefined || name === "") return;
           for (;;) {
             const action = yield* awaited(
-              ui.menu(() => this.serverMenu(name), this.host.subscribe),
+              ui.menu(() => this.serverMenu(name), this.host.state.subscribe),
             );
-            const server = this.host.findServer(name);
+            const server = this.host.state.findServer(name);
             if (action === undefined || action === "" || server === undefined) break;
             yield* awaited(this.runAction(ui, ctx, server, action));
           }
@@ -188,5 +192,5 @@ export default class McpMenus {
       }, this),
     );
 
-  readonly formatStatus = (): string => formatStatus(this.host);
+  readonly formatStatus = (): string => formatStatus(this.host.state);
 }

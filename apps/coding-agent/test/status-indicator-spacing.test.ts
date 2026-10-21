@@ -11,10 +11,10 @@ import interactiveModeFake from "./interactive-mode-fake.ts";
 const { bindModeFake } = interactiveModeFake;
 
 const {
-  BranchSummaryStatusIndicator,
-  CompactionStatusIndicator,
-  RetryStatusIndicator,
-  WorkingStatusIndicator,
+  createBranchSummaryStatusIndicator,
+  createCompactionStatusIndicator,
+  createRetryStatusIndicator,
+  createWorkingStatusIndicator,
 } = statusIndicators;
 
 const { initTheme } = codingAgent;
@@ -64,12 +64,12 @@ describe("clear-on-shrink status spacing", () => {
         ui: { getClearOnShrink: () => true },
       };
       const indicators = [
-        new WorkingStatusIndicator(tui, "Working"),
-        new CompactionStatusIndicator(tui, "manual"),
-        new CompactionStatusIndicator(tui, "threshold"),
-        new CompactionStatusIndicator(tui, "overflow"),
-        new BranchSummaryStatusIndicator(tui),
-        new RetryStatusIndicator(tui, 1, 3, 1000),
+        createWorkingStatusIndicator({ message: "Working", ui: tui }),
+        createCompactionStatusIndicator({ reason: "manual", ui: tui }),
+        createCompactionStatusIndicator({ reason: "threshold", ui: tui }),
+        createCompactionStatusIndicator({ reason: "overflow", ui: tui }),
+        createBranchSummaryStatusIndicator(tui),
+        createRetryStatusIndicator({ attempt: 1, delayMs: 1000, maxAttempts: 3, ui: tui }),
       ];
       try {
         for (const indicator of indicators) {

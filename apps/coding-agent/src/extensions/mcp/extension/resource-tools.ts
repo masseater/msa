@@ -16,7 +16,7 @@ export default class McpResourceTools {
   }
 
   readonly serversWithResources = (): extensionInternalTypes.McpServer[] =>
-    this.host.servers.filter(
+    this.host.state.servers.filter(
       (server) =>
         server.connection?.hasResources &&
         isEnabled(server) &&
@@ -49,11 +49,11 @@ export default class McpResourceTools {
       exposure: next,
       servers: this.resourceServers,
     });
-    for (const definition of resourceDefinitions) this.host.msa.registerTool(definition);
+    for (const definition of resourceDefinitions) this.host.state.msa.registerTool(definition);
     if (wasDirect) {
       const names = new Set(resourceDefinitions.map((definition) => definition.name));
-      this.host.msa.setActiveTools(
-        this.host.msa.getActiveTools().filter((name) => !names.has(name)),
+      this.host.state.msa.setActiveTools(
+        this.host.state.msa.getActiveTools().filter((name) => !names.has(name)),
       );
     }
   };

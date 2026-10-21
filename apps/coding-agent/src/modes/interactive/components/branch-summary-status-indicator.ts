@@ -7,14 +7,13 @@ import StatusIndicator from "./status-indicator.ts";
 const { theme } = themeModule;
 const { keyText } = keybindingHints;
 
-export default class BranchSummaryStatusIndicator extends StatusIndicator {
-  constructor(ui: tuiTypes.TUI) {
-    super(
-      "branchSummary",
-      ui,
-      (spinner) => theme.fg("accent", spinner),
-      (text) => theme.fg("muted", text),
-      `Summarizing branch... (${keyText("app.interrupt")} to cancel)`,
-    );
-  }
-}
+const createBranchSummaryStatusIndicator = (ui: tuiTypes.TUI): StatusIndicator =>
+  new StatusIndicator(
+    "branchSummary",
+    ui,
+    (spinner) => theme.fg("accent", spinner),
+    (text) => theme.fg("muted", text),
+    `Summarizing branch... (${keyText("app.interrupt")} to cancel)`,
+  );
+
+export default createBranchSummaryStatusIndicator;

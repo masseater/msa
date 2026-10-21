@@ -31,8 +31,8 @@ export default class McpConnections {
 
   readonly storedTokens = (connection: runtimeTypes.McpServerConnection): Promise<string> => {
     const url = connection.auth.oauthUrl;
-    return url !== undefined && url !== "" && this.host.credentials !== undefined
-      ? this.host.credentials
+    return url !== undefined && url !== "" && this.host.state.credentials !== undefined
+      ? this.host.state.credentials
           .tokens(connection.name, url)
           .then((tokens) => JSON.stringify(tokens ?? null))
       : Promise.resolve("null");
@@ -55,7 +55,7 @@ export default class McpConnections {
         return undefined;
       });
     }
-    this.host.emitChange();
+    this.host.state.emitChange();
   };
 
   readonly reconnectSignedIn = (ctx: extensionsTypesTypes.ExtensionContext) =>
@@ -94,9 +94,10 @@ export default class McpConnections {
         const runtime = yield* awaited(loadMcpRuntime());
         if (!isCurrent()) return undefined;
         const connection = new runtime.McpServerConnection({
-          createTransport: this.host.options.createTransport ?? runtime.createDefaultTransport,
+          createTransport:
+            this.host.state.options.createTransport ?? runtime.createDefaultTransport,
           credentials: this.resources.getCredentials(runtime),
-          cwd: this.host.sessionCwd,
+          cwd: this.host.state.sessionCwd,
           entry: server.entry,
           log: this.resources.getServerLog(runtime),
           onChange: (serverConnection) => {
@@ -109,12 +110,14 @@ export default class McpConnections {
           providerToken: (provider) =>
             Effect.runPromise(
               awaitingWith(function* () {
-                return yield* awaited(this.host.modelRegistry?.getApiKeyForProvider(provider));
+                return yield* awaited(
+                  this.host.state.modelRegistry?.getApiKeyForProvider(provider),
+                );
               }, this),
             ),
         });
         server.connection = connection;
-        this.host.emitChange();
+        this.host.state.emitChange();
         return connection;
       }, this),
     );
@@ -123,14 +126,14 @@ export default class McpConnections {
     server: extensionInternalTypes.McpServer,
     after?: Promise<unknown>,
   ): Promise<void> => {
-    const { signal } = this.host.session;
+    const { signal } = this.host.state.session;
     const attempt = Symbol("connection attempt");
     server.attempt = attempt;
     const isCurrent = () =>
       !signal.aborted &&
       server.attempt === attempt &&
       isEnabled(server) &&
-      this.host.servers.includes(server);
+      this.host.state.servers.includes(server);
     const ready = (() =>
       Effect.runPromise(
         awaitingWith(function* () {
@@ -150,8 +153,8 @@ export default class McpConnections {
     only?: readonly extensionInternalTypes.McpServer[],
   ) => {
     const lines =
-      only === undefined ? this.host.configErrors.map((error) => `config: ${error}`) : [];
-    for (const server of only ?? this.host.servers) {
+      only === undefined ? this.host.state.configErrors.map((error) => `config: ${error}`) : [];
+    for (const server of only ?? this.host.state.servers) {
       const state = server.connection?.state;
       if (state === "needs-auth" || state === "failed")
         lines.push(`${server.entry.name}: ${describeState(server)}`);

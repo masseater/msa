@@ -26,7 +26,7 @@ export default class McpSessionEvents {
   }
 
   onSessionStart(ctx: extensionsTypesTypes.ExtensionContext): Promise<void> {
-    return Promise.resolve((this.host.options.loadConfig ?? defaultLoadConfig)(ctx)).then(
+    return Promise.resolve((this.host.state.options.loadConfig ?? defaultLoadConfig)(ctx)).then(
       (loaded) => this.startSession(loaded, ctx),
     );
   }
@@ -35,30 +35,33 @@ export default class McpSessionEvents {
     loaded: Awaited<ReturnType<typeof defaultLoadConfig>>,
     ctx: extensionsTypesTypes.ExtensionContext,
   ): void {
-    this.host.configErrors = loaded.errors;
-    this.host.projectConfig = loaded.projectConfig;
-    this.host.autoEnableCodemode = loaded.autoEnableCodemode ?? true;
-    this.host.warnedUnreachable = false;
-    this.host.waitedForStartup = false;
-    this.host.sessionCwd = ctx.cwd;
-    this.host.modelRegistry = ctx.modelRegistry;
-    this.host.session = new AbortController();
-    const { signal } = this.host.session;
-    this.host.configuredEntries = loaded.servers;
-    const registered = this.host.registeredServers();
-    this.host.overridden = registered.overridden;
-    this.host.servers = [...loaded.servers.map((entry) => ({ entry })), ...registered.servers];
-    this.host.emitChange();
+    this.host.state.configErrors = loaded.errors;
+    this.host.state.projectConfig = loaded.projectConfig;
+    this.host.state.autoEnableCodemode = loaded.autoEnableCodemode ?? true;
+    this.host.state.warnedUnreachable = false;
+    this.host.state.waitedForStartup = false;
+    this.host.state.sessionCwd = ctx.cwd;
+    this.host.state.modelRegistry = ctx.modelRegistry;
+    this.host.state.session = new AbortController();
+    const { signal } = this.host.state.session;
+    this.host.state.configuredEntries = loaded.servers;
+    const registered = this.host.state.registeredServers();
+    this.host.state.overridden = registered.overridden;
+    this.host.state.servers = [
+      ...loaded.servers.map((entry) => ({ entry })),
+      ...registered.servers,
+    ];
+    this.host.state.emitChange();
 
     this.host.tools.discovery.ensureDiscoveryActive(ctx);
-    const enabled = this.host.servers.filter(isEnabled);
+    const enabled = this.host.state.servers.filter(isEnabled);
     if (enabled.length === 0) {
       this.host.connections.reportProblems(ctx);
       return;
     }
 
     const runtime = Effect.runPromise(Effect.sleep(0)).then(() => loadMcpRuntime());
-    this.host.pending = Promise.all(
+    this.host.state.pending = Promise.all(
       enabled.map((server) => this.host.connections.startConnection(server, runtime)),
     )
       .then(() => {
@@ -80,7 +83,7 @@ export default class McpSessionEvents {
       awaitingWith(function* () {
         yield* awaited(this.host.connections.waits.waitForDirectServers(ctx));
         const { sections } = event.systemPromptOptions;
-        const section = renderServersSection(this.host.servers);
+        const section = renderServersSection(this.host.state.servers);
         if (section !== undefined && section !== "") sections[MCP_SERVERS_SECTION] = section;
         else delete sections[MCP_SERVERS_SECTION];
       }, this),
@@ -93,12 +96,12 @@ export default class McpSessionEvents {
   ): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const tool = this.host.msa
+        const tool = this.host.state.msa
           .getAllTools()
           .find((candidate) => candidate.name === event.toolName);
         if (tool === undefined) return;
 
-        const readyServers = this.host.servers.filter(
+        const readyServers = this.host.state.servers.filter(
           (server) => isEnabled(server) && server.ready,
         );
         if (readyServers.length === 0) return;
@@ -127,24 +130,26 @@ export default class McpSessionEvents {
   onServersChange(ctx: extensionsTypesTypes.ExtensionContext): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const { signal } = this.host.session;
+        const { signal } = this.host.state.session;
         if (signal.aborted) return;
-        const registered = this.host.registeredServers();
-        this.host.overridden = registered.overridden;
+        const registered = this.host.state.registeredServers();
+        this.host.state.overridden = registered.overridden;
         const next = new Map(registered.servers.map((server) => [server.entry.name, server]));
 
-        const removed = this.host.servers.filter(
+        const removed = this.host.state.servers.filter(
           (server) =>
             server.entry.scope === "extension" &&
             next.get(server.entry.name)?.registeredConfig !== server.registeredConfig,
         );
-        this.host.servers = this.host.servers.filter((server) => !removed.includes(server));
+        this.host.state.servers = this.host.state.servers.filter(
+          (server) => !removed.includes(server),
+        );
         for (const server of removed) this.host.tools.hideTools(server.entry.name);
         const added = registered.servers.filter(
-          (server) => this.host.findServer(server.entry.name) === undefined,
+          (server) => this.host.state.findServer(server.entry.name) === undefined,
         );
-        this.host.servers.push(...added);
-        this.host.emitChange();
+        this.host.state.servers.push(...added);
+        this.host.state.emitChange();
         this.host.tools.discovery.ensureDiscoveryActive(ctx);
         yield* awaited(Promise.all(removed.map((server) => server.connection?.close())));
         const connecting = added.filter(isEnabled);
@@ -170,13 +175,13 @@ export default class McpSessionEvents {
   onSessionShutdown(): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        this.host.session.abort();
-        const closing = this.host.openConnections();
-        this.host.servers = [];
-        this.host.emitChange();
+        this.host.state.session.abort();
+        const closing = this.host.state.openConnections();
+        this.host.state.servers = [];
+        this.host.state.emitChange();
         yield* awaited(
           Promise.all([
-            ...this.host.backgroundActions,
+            ...this.host.state.backgroundActions,
             ...closing.map((connection) => connection.close()),
           ]),
         );

@@ -16,13 +16,13 @@ export default class McpRuntimeResources {
   }
 
   readonly getCredentials = (runtime: typeof McpRuntime): oauthTypesNs.McpOAuthCredentialStore => {
-    const credentials = (this.host.credentials ??= new runtime.McpOAuthCredentialStore());
+    const credentials = (this.host.state.credentials ??= new runtime.McpOAuthCredentialStore());
     return credentials;
   };
 
   readonly getServerLog = (runtime: typeof McpRuntime): runtimeTypes.McpServerLog => {
-    const log = (this.host.serverLog ??= new runtime.McpServerLog(
-      this.host.options.logPath ?? join(getAgentDir(), "mcp.log"),
+    const log = (this.host.state.serverLog ??= new runtime.McpServerLog(
+      this.host.state.options.logPath ?? join(getAgentDir(), "mcp.log"),
     ));
     return log;
   };

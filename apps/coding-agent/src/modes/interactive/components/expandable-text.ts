@@ -1,8 +1,11 @@
+import type tuiTypes from "@msa/tui/index.types";
+
 import type expandableTextTypes from "./expandable-text.types.ts";
 import ThemedText from "./themed-text.ts";
 
-export default class ExpandableText extends ThemedText implements expandableTextTypes.Expandable {
-  private readonly state: { expanded: boolean };
+export default class ExpandableText implements tuiTypes.Component, expandableTextTypes.Expandable {
+  private expanded: boolean;
+  private readonly text: ThemedText;
 
   constructor(
     getCollapsedText: () => string,
@@ -11,13 +14,24 @@ export default class ExpandableText extends ThemedText implements expandableText
     paddingX = 0,
     paddingY = 0,
   ) {
-    const state = { expanded };
-    super(() => (state.expanded ? getExpandedText() : getCollapsedText()), paddingX, paddingY);
-    this.state = state;
+    this.expanded = expanded;
+    this.text = new ThemedText(
+      () => (this.expanded ? getExpandedText() : getCollapsedText()),
+      paddingX,
+      paddingY,
+    );
   }
 
   setExpanded(expanded: boolean): void {
-    this.state.expanded = expanded;
-    this.invalidate();
+    this.expanded = expanded;
+    this.text.invalidate();
+  }
+
+  render(width: number): string[] {
+    return this.text.render(width);
+  }
+
+  invalidate(): void {
+    this.text.invalidate();
   }
 }

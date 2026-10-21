@@ -53,7 +53,7 @@ export default class McpToolRegistry {
   private resolveClient(server: string, tool: string): Promise<runtimeTypes.McpServerConnection> {
     return Effect.runPromise(
       Effect.sync(() => {
-        const resolved = this.host.findServer(server);
+        const resolved = this.host.state.findServer(server);
         if (resolved === undefined || !isEnabled(resolved))
           throw new Error(`MCP server "${server}" is disabled.`);
         const client = resolved.connection;
@@ -71,7 +71,7 @@ export default class McpToolRegistry {
 
   readonly registerTools = (connection: runtimeTypes.McpServerConnection) => {
     const server = connection.entry.name;
-    const entry = this.host.findServer(server)?.entry ?? connection.entry;
+    const entry = this.host.state.findServer(server)?.entry ?? connection.entry;
     const namespace = this.toolNamespace(connection, entry);
     const previous = this.serverTools.get(server) ?? new Set<string>();
     const current = new Set<string>();
@@ -104,13 +104,13 @@ export default class McpToolRegistry {
         tool,
       });
       this.definitions.set(definition.name, definition);
-      this.host.msa.registerTool(definition);
+      this.host.state.msa.registerTool(definition);
     }
     this.serverTools.set(server, current);
     for (const name of previous) {
       const definition = this.definitions.get(name);
       if (!current.has(name) && definition !== undefined)
-        this.host.msa.registerTool({ ...definition, exposure: "hidden" });
+        this.host.state.msa.registerTool({ ...definition, exposure: "hidden" });
     }
     this.resourceTools.syncResourceTools();
   };
@@ -119,7 +119,7 @@ export default class McpToolRegistry {
     for (const name of this.serverTools.get(server) ?? []) {
       const definition = this.definitions.get(name);
       if (definition !== undefined)
-        this.host.msa.registerTool({ ...definition, exposure: "hidden" });
+        this.host.state.msa.registerTool({ ...definition, exposure: "hidden" });
     }
     this.serverTools.set(server, new Set());
     this.resourceTools.syncResourceTools();

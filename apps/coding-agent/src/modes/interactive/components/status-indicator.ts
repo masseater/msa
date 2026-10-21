@@ -7,6 +7,7 @@ const { truncateToWidth } = tui;
 
 export default class StatusIndicator extends tui.Loader {
   readonly kind: statusIndicatorTypes.StatusIndicatorKind;
+  private readonly disposers: (() => void)[] = [];
 
   constructor(
     kind: statusIndicatorTypes.StatusIndicatorKind,
@@ -33,7 +34,12 @@ export default class StatusIndicator extends tui.Loader {
     return truncateToWidth(this.getRenderedIndicator(), width, "");
   }
 
+  onDispose(disposer: () => void): void {
+    this.disposers.push(disposer);
+  }
+
   dispose(): void {
+    for (const disposer of this.disposers.splice(0)) disposer();
     this.stop();
   }
 }

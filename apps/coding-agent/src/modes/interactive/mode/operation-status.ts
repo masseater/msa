@@ -6,8 +6,11 @@ import ThemedText from "../components/themed-text.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
 
-const { BranchSummaryStatusIndicator, CompactionStatusIndicator, RetryStatusIndicator } =
-  statusIndicators;
+const {
+  createBranchSummaryStatusIndicator,
+  createCompactionStatusIndicator,
+  createRetryStatusIndicator,
+} = statusIndicators;
 const { theme } = themeModule;
 const { Spacer } = tuiModule;
 
@@ -41,11 +44,11 @@ export default class OperationStatusEvents {
       this.mode.session.compaction.manual.abortCompaction();
     };
     this.mode.display.indicator.showStatusIndicator(
-      new CompactionStatusIndicator(
-        this.mode.ui,
+      createCompactionStatusIndicator({
+        colorFn: this.mode.display.indicator.compactionStatusColor(),
         reason,
-        this.mode.display.indicator.compactionStatusColor(),
-      ),
+        ui: this.mode.ui,
+      }),
     );
     this.mode.ui.requestRender();
   }
@@ -67,7 +70,7 @@ export default class OperationStatusEvents {
 
   showRetryStatus(attempt: number, maxAttempts: number, delayMs: number): void {
     this.mode.display.indicator.showStatusIndicator(
-      new RetryStatusIndicator(this.mode.ui, attempt, maxAttempts, delayMs),
+      createRetryStatusIndicator({ attempt, delayMs, maxAttempts, ui: this.mode.ui }),
     );
     this.mode.ui.requestRender();
   }
@@ -81,15 +84,15 @@ export default class OperationStatusEvents {
     this.mode.display.indicator.clearStatusIndicator("retry");
     if (event.source === "branchSummary")
       this.mode.display.indicator.showStatusIndicator(
-        new BranchSummaryStatusIndicator(this.mode.ui),
+        createBranchSummaryStatusIndicator(this.mode.ui),
       );
     else
       this.mode.display.indicator.showStatusIndicator(
-        new CompactionStatusIndicator(
-          this.mode.ui,
-          event.reason,
-          this.mode.display.indicator.compactionStatusColor(),
-        ),
+        createCompactionStatusIndicator({
+          colorFn: this.mode.display.indicator.compactionStatusColor(),
+          reason: event.reason,
+          ui: this.mode.ui,
+        }),
       );
     this.mode.ui.requestRender();
   }

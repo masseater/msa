@@ -9,7 +9,7 @@ import statusIndicators from "../components/status-indicators.ts";
 import TreeSelectorComponent from "../components/tree-selector.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
-const { BranchSummaryStatusIndicator } = statusIndicators;
+const { createBranchSummaryStatusIndicator } = statusIndicators;
 const { Spacer } = tuiModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { copyToClipboard } = clipboard;
@@ -72,7 +72,7 @@ export default class TreeNavigation {
       };
       this.mode.layout.chatContainer.addChild(new Spacer(1));
       this.mode.display.indicator.showStatusIndicator(
-        new BranchSummaryStatusIndicator(this.mode.ui),
+        createBranchSummaryStatusIndicator(this.mode.ui),
       );
       showingSummaryIndicator = true;
       this.mode.ui.requestRender();

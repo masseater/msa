@@ -5,7 +5,7 @@ import interactiveModeHelpers from "../interactive-mode-helpers.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
 
-const { IdleStatus, WorkingStatusIndicator } = statusIndicators;
+const { IdleStatus, createWorkingStatusIndicator } = statusIndicators;
 const { theme } = themeModule;
 const { isEmbeddedStatus } = interactiveModeHelpers;
 
@@ -105,12 +105,12 @@ export default class WorkingIndicator {
           )(text)
       : undefined;
     this.showStatusIndicator(
-      new WorkingStatusIndicator(
-        this.mode.ui,
-        this.workingMessage ?? this.defaultWorkingMessage,
-        this.workingIndicatorOptions,
+      createWorkingStatusIndicator({
         colorFn,
-      ),
+        indicator: this.workingIndicatorOptions,
+        message: this.workingMessage ?? this.defaultWorkingMessage,
+        ui: this.mode.ui,
+      }),
     );
   }
 

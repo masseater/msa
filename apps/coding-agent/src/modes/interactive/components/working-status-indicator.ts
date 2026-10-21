@@ -6,20 +6,24 @@ import StatusIndicator from "./status-indicator.ts";
 
 const { theme } = themeModule;
 
-export default class WorkingStatusIndicator extends StatusIndicator {
-  constructor(
-    ui: tuiTypes.TUI,
-    message: string,
-    indicator?: extensionsTypes.WorkingIndicatorOptions,
-    colorFn?: (text: string) => string,
-  ) {
-    super(
-      "working",
-      ui,
-      colorFn ?? ((text) => theme.fg("accent", text)),
-      colorFn ?? ((text) => theme.fg("muted", text)),
-      message,
-      indicator,
-    );
-  }
-}
+const createWorkingStatusIndicator = ({
+  ui,
+  message,
+  indicator,
+  colorFn,
+}: {
+  readonly ui: tuiTypes.TUI;
+  readonly message: string;
+  readonly indicator?: extensionsTypes.WorkingIndicatorOptions | undefined;
+  readonly colorFn?: ((text: string) => string) | undefined;
+}): StatusIndicator =>
+  new StatusIndicator(
+    "working",
+    ui,
+    colorFn ?? ((text) => theme.fg("accent", text)),
+    colorFn ?? ((text) => theme.fg("muted", text)),
+    message,
+    indicator,
+  );
+
+export default createWorkingStatusIndicator;
