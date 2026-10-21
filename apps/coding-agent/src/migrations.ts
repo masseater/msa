@@ -1,10 +1,28 @@
-import migrationsPart1 from "./migrations-part1.ts";
-import migrationsPart2 from "./migrations-part2.ts";
-import migrationsPart3 from "./migrations-part3.ts";
+import extensionSystem from "./migrations/extension-system.ts";
+import legacyLayout from "./migrations/legacy-layout.ts";
+import providerRenames from "./migrations/provider-renames.ts";
 
-const { migrateAuthToAuthJson, migrateSessionsFromAgentRoot } = migrationsPart1;
-const { runMigrations } = migrationsPart3;
-const { showDeprecationWarnings } = migrationsPart2;
+const { migrateExtensionSystem, showDeprecationWarnings } = extensionSystem;
+const { migrateRenamedProviders } = providerRenames;
+const {
+  migrateKeybindingsConfigFile,
+  migrateToolsToBin,
+  migrateSessionsFromAgentRoot,
+  migrateAuthToAuthJson,
+} = legacyLayout;
+
+function runMigrations(cwd: string): {
+  migratedAuthProviders: string[];
+  deprecationWarnings: string[];
+} {
+  const migratedAuthProviders = migrateAuthToAuthJson();
+  migrateSessionsFromAgentRoot();
+  migrateToolsToBin();
+  migrateKeybindingsConfigFile();
+  migrateRenamedProviders();
+  const deprecationWarnings = migrateExtensionSystem(cwd);
+  return { deprecationWarnings, migratedAuthProviders };
+}
 
 const migrations = {
   migrateAuthToAuthJson,
