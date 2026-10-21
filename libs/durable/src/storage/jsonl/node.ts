@@ -1,24 +1,44 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect, Function } from "effect";
 
-import { NodeExecutionEnv } from "../../env/node.ts";
-import { promiseTry } from "../../promise-try.ts";
-import { JsonlStorage, type JsonlStorageOptions } from "./storage.ts";
+import nodeModule from "../../env/node.ts";
+import JsonlStorage from "./storage.ts";
+import type storageTypes from "./storage.types.ts";
 
-/**
- * Open or create a JSONL storage directory using the local Node filesystem.
- * @param {string} directory - The storage directory.
- * @param {Context} context - The caller's context.
- * @param {JsonlStorageOptions} options - The storage options.
- * @returns {Promise<JsonlStorage>} The storage.
- */
-export function openNodeJsonlStorage(
-  directory: string,
-  context: Context,
-  options: JsonlStorageOptions = {},
-): Promise<JsonlStorage> {
-  return promiseTry(() =>
-    JsonlStorage.open(directory, new NodeExecutionEnv({ cwd: process.cwd() }), context, options),
-  );
-}
+const { NodeExecutionEnv } = nodeModule;
 
-export { JsonlStorage, type JsonlStorageOptions } from "./storage.ts";
+const openNodeJsonlStorage: {
+  (
+    context: chordTypes.Context,
+    options?: storageTypes.JsonlStorageOptions,
+  ): (directory: string) => Promise<storageTypes.JsonlStorage>;
+  (
+    directory: string,
+    context: chordTypes.Context,
+    options?: storageTypes.JsonlStorageOptions,
+  ): Promise<storageTypes.JsonlStorage>;
+} = Function.dual(
+  (args: IArguments) => typeof args[0] === "string",
+  (
+    directory: string,
+    context: chordTypes.Context,
+    options: storageTypes.JsonlStorageOptions = {},
+  ): Promise<storageTypes.JsonlStorage> =>
+    Effect.runPromise(
+      Effect.promise(() =>
+        JsonlStorage.open(
+          directory,
+          new NodeExecutionEnv({ cwd: process.cwd() }),
+          context,
+          options,
+        ),
+      ),
+    ),
+);
+
+const node = {
+  JsonlStorage: JsonlStorage,
+  openNodeJsonlStorage,
+};
+
+export default node;

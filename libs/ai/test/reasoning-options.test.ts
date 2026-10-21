@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getEffortThinkingLevelMap } from "../scripts/models-dev-reasoning-options.ts";
+import getEffortThinkingLevelMap from "../scripts/models-dev-reasoning-options.ts";
 
 describe("getEffortThinkingLevelMap", () => {
   it("exposes only verified effort values and none", () => {
@@ -10,26 +10,26 @@ describe("getEffortThinkingLevelMap", () => {
         { type: "effort", values: ["none", "low", "high", "max"] },
       ]),
     ).toEqual({
-      off: "none",
-      minimal: null,
-      low: "low",
-      medium: null,
       high: "high",
-      xhigh: null,
+      low: "low",
       max: "max",
+      medium: null,
+      minimal: null,
+      off: "none",
+      xhigh: null,
     });
   });
 
   it("does not infer thinking-off from an effort list", () => {
     expect(getEffortThinkingLevelMap([{ type: "effort", values: ["low", "high", "max"] }])).toEqual(
       {
-        off: null,
-        minimal: null,
-        low: "low",
-        medium: null,
         high: "high",
-        xhigh: null,
+        low: "low",
         max: "max",
+        medium: null,
+        minimal: null,
+        off: null,
+        xhigh: null,
       },
     );
   });
@@ -37,7 +37,7 @@ describe("getEffortThinkingLevelMap", () => {
   it("leaves toggle and budget controls for their adapter-specific implementations", () => {
     expect(getEffortThinkingLevelMap([{ type: "toggle" }])).toBeUndefined();
     expect(
-      getEffortThinkingLevelMap([{ type: "budget_tokens", min: 1024, max: 32000 }]),
+      getEffortThinkingLevelMap([{ max: 32000, min: 1024, type: "budget_tokens" }]),
     ).toBeUndefined();
     expect(
       getEffortThinkingLevelMap([{ type: "effort", values: [null, "default"] }]),

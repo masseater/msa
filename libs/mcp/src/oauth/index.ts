@@ -1,70 +1,49 @@
-export {
-  type OAuthCallback,
-  type OAuthCallbackPage,
-  OAuthCallbackServer,
-  type OAuthCallbackServerOptions,
-} from "./callback.ts";
-export {
-  type AuthorizationServerDiscoveryOptions,
-  buildAuthorizationServerDiscoveryUrls,
-  discoverAuthorizationServerMetadata,
-  discoverOAuthServerInfo,
-  discoverProtectedResourceMetadata,
-  type OAuthServerInfoDiscoveryOptions,
-  parseWwwAuthenticate,
-  type ProtectedResourceDiscoveryOptions,
-  resourceUrlFromServerUrl,
-  selectResource,
-} from "./discovery.ts";
-export {
+import OAuthInsecureEndpointError from "./errors/insecure-endpoint-error.ts";
+import OAuthIssuerMismatchError from "./errors/issuer-mismatch-error.ts";
+import OAuthError from "./errors/oauth-error.ts";
+import OAuthRegistrationError from "./errors/registration-error.ts";
+import flow from "./flow.ts";
+import indexKit from "./index-kit.ts";
+import MemoryOAuthStateStore from "./memory-store.ts";
+import provider from "./provider.ts";
+import resourceModule from "./resource.ts";
+import token from "./token.ts";
+
+const {
+  adapter,
+  authorization,
   McpOAuthAuthorizationRequiredError,
+  OAuthCallbackServer,
   OAuthCallbackError,
-  OAuthError,
+  discovery,
   OAuthFlowError,
-  OAuthInsecureEndpointError,
-  OAuthIssuerMismatchError,
-  OAuthRegistrationError,
-} from "./errors.ts";
-export {
-  type AuthorizationRequest,
-  type AuthorizationStart,
-  type ClientRegistrationRequest,
-  registerClient,
-  startAuthorization,
-} from "./authorization.ts";
-export { adaptOAuthProvider } from "./adapter.ts";
-export { authorizeMcp, type OAuthFlowFailure, stepUpScope } from "./flow.ts";
-export type {
-  AddClientAuthentication,
-  OAuthClientMetadataDocument,
-  OAuthClientProvider,
-  OAuthFlowOptions,
-  OAuthFlowResult,
-  TokenRequestOptions,
-} from "./flow-types.ts";
-export {
-  type AuthorizationCodeExchange,
-  exchangeAuthorizationCode,
-  type RefreshRequest,
-  refreshAuthorization,
-  type TokenRequestError,
-} from "./token.ts";
-export {
-  McpOAuthProvider,
-  type McpOAuthProviderOptions,
-  type McpOAuthState,
-  type McpOAuthStateStore,
-  MemoryOAuthStateStore,
-} from "./provider.ts";
-export type {
-  AuthorizationServerMetadata,
-  OAuthChallenge,
-  OAuthClientInformation,
-  OAuthClientInformationFull,
-  OAuthClientInformationMixed,
-  OAuthClientMetadata,
-  OAuthDiscoveryState,
-  OAuthProtectedResourceMetadata,
-  OAuthServerInfo,
-  OAuthTokens,
-} from "./types.ts";
+} = indexKit;
+
+const oauth = {
+  McpOAuthAuthorizationRequiredError: McpOAuthAuthorizationRequiredError,
+  McpOAuthProvider: provider.McpOAuthProvider,
+  MemoryOAuthStateStore: MemoryOAuthStateStore,
+  OAuthCallbackError: OAuthCallbackError,
+  OAuthCallbackServer: OAuthCallbackServer,
+  OAuthError: OAuthError,
+  OAuthFlowError: OAuthFlowError,
+  OAuthInsecureEndpointError: OAuthInsecureEndpointError,
+  OAuthIssuerMismatchError: OAuthIssuerMismatchError,
+  OAuthRegistrationError: OAuthRegistrationError,
+  adaptOAuthProvider: adapter.adaptOAuthProvider,
+  authorizeMcp: flow.authorizeMcp,
+  buildAuthorizationServerDiscoveryUrls: discovery.buildAuthorizationServerDiscoveryUrls,
+  discoverAuthorizationServerMetadata: discovery.discoverAuthorizationServerMetadata,
+  discoverOAuthServerInfo: discovery.discoverOAuthServerInfo,
+  discoverProtectedResourceMetadata: discovery.discoverProtectedResourceMetadata,
+  exchangeAuthorizationCode: token.exchangeAuthorizationCode,
+  parseWwwAuthenticate: discovery.parseWwwAuthenticate,
+  refreshAuthorization: token.refreshAuthorization,
+  registerClient: authorization.registerClient,
+  resourceUrlFromServerUrl: resourceModule.resourceUrlFromServerUrl,
+  selectResource: resourceModule.selectResource,
+  startAuthorization: authorization.startAuthorization,
+  stepUpScope: flow.stepUpScope,
+};
+
+export default oauth;

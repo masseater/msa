@@ -1,20 +1,16 @@
 import { NodeServices } from "@effect/platform-node";
 import { Context, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
+import type codingAgentPackageTypes from "./coding-agent-package.types.ts";
+
 const VERSION_PATTERN = /^\d+\.\d+\.\d+$/u;
 
 const packageJsonJson = Schema.fromJsonString(Schema.Struct({ version: Schema.String }));
 
-interface PackageInfo {
-  readonly packageJsonText: string;
-  readonly repoRoot: string;
-  readonly version: string;
-}
-
 class Workspace extends Context.Service<
   Workspace,
   {
-    readonly loadCodingAgentPackage: Effect.Effect<PackageInfo>;
+    readonly loadCodingAgentPackage: Effect.Effect<codingAgentPackageTypes.PackageInfo>;
   }
 >()("msa-monorepo/tools/coding-agent-package/Workspace") {}
 
@@ -39,5 +35,9 @@ const workspaceLayer: Layer.Layer<Workspace> = Layer.effect(
   }),
 ).pipe(Layer.provide(NodeServices.layer));
 
-export type { PackageInfo };
-export { Workspace, workspaceLayer };
+const codingAgentPackage = {
+  Workspace,
+  workspaceLayer,
+};
+
+export default codingAgentPackage;

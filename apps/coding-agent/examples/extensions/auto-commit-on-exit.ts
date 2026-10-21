@@ -1,48 +1,45 @@
-/**
- * Auto-Commit on Exit Extension
- *
- * Automatically commits changes when the agent exits.
- * Uses the last assistant message to generate a commit message.
- */
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.on("session_shutdown", (_event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { stdout: status, code } = yield* Effect.promise(() =>
+          msa.exec("git", ["status", "--porcelain"]),
+        );
 
-export default function (msa: ExtensionAPI) {
-  msa.on("session_shutdown", async (_event, ctx) => {
-    // Check for uncommitted changes
-    const { stdout: status, code } = await msa.exec("git", ["status", "--porcelain"]);
-
-    if (code !== 0 || status.trim().length === 0) {
-      // Not a git repo or no changes
-      return;
-    }
-
-    // Find the last assistant message for commit context
-    const entries = ctx.sessionManager.getEntries();
-    let lastAssistantText = "";
-    for (const entry of entries.toReversed()) {
-      if (entry.type === "message" && entry.message.role === "assistant") {
-        const content = entry.message.content;
-        if (Array.isArray(content)) {
-          lastAssistantText = content
-            .filter((c): c is { type: "text"; text: string } => c.type === "text")
-            .map((c) => c.text)
-            .join("\n");
+        if (code !== 0 || status.trim().length === 0) {
+          return;
         }
-        break;
-      }
-    }
 
-    // Generate a simple commit message
-    const firstLine = lastAssistantText.split("\n")[0] || "Work in progress";
-    const commitMessage = `[msa] ${firstLine.slice(0, 50)}${firstLine.length > 50 ? "..." : ""}`;
+        const entries = ctx.sessionManager.getEntries();
+        let lastAssistantText = "";
+        for (const entry of entries.toReversed()) {
+          if (entry.type === "message" && entry.message.role === "assistant") {
+            const content = entry.message.content;
+            if (Array.isArray(content)) {
+              lastAssistantText = content
+                .filter((c): c is { type: "text"; text: string } => c.type === "text")
+                .map((c) => c.text)
+                .join("\n");
+            }
+            break;
+          }
+        }
 
-    // Stage and commit
-    await msa.exec("git", ["add", "-A"]);
-    const { code: commitCode } = await msa.exec("git", ["commit", "-m", commitMessage]);
+        const firstLine = lastAssistantText.split("\n")[0] || "Work in progress";
+        const commitMessage = `[msa] ${firstLine.slice(0, 50)}${firstLine.length > 50 ? "..." : ""}`;
 
-    if (commitCode === 0 && ctx.hasUI) {
-      ctx.ui.notify(`Auto-committed: ${commitMessage}`, "info");
-    }
-  });
+        yield* Effect.promise(() => msa.exec("git", ["add", "-A"]));
+        const { code: commitCode } = yield* Effect.promise(() =>
+          msa.exec("git", ["commit", "-m", commitMessage]),
+        );
+
+        if (commitCode === 0 && ctx.hasUI) {
+          ctx.ui.notify(`Auto-committed: ${commitMessage}`, "info");
+        }
+      }),
+    ),
+  );
 }

@@ -1,35 +1,48 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import type { AgentSessionRuntime } from "../../../src/core/agent-session-runtime.ts";
-import { runRpcMode } from "../../../src/modes/rpc/rpc-mode.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import type agentSessionRuntimeTypes from "../../../src/core/agent-session-runtime.types.ts";
+import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-// Regression for https://github.com/earendil-works/pi/issues/5868
+const { runRpcMode } = rpcMode;
+
+const { createHarness } = harnessModule;
+
+const { toJsonText } = testing;
 
 const rpcIo = vi.hoisted(() => ({
-  outputLines: [] as string[],
   lineHandler: undefined as ((line: string) => void) | undefined,
+  outputLines: [] as string[],
 }));
 
 vi.mock("../../../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(async () => {}),
-  takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(async () => {}),
-  writeRawStdout: (line: string) => {
-    rpcIo.outputLines.push(line);
+  default: {
+    flushRawStdout: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    takeOverStdout: vi.fn(),
+    waitForRawStdoutBackpressure: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    writeRawStdout: (line: string) => {
+      rpcIo.outputLines.push(line);
+    },
   },
 }));
 
-vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ theme: {} }));
+vi.mock("../../../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
 vi.mock("../../../src/modes/rpc/jsonl.js", () => ({
-  attachJsonlLineReader: vi.fn((_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-    rpcIo.lineHandler = onLine;
-    return () => {
-      rpcIo.lineHandler = undefined;
-    };
-  }),
-  serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  default: {
+    attachJsonlLineReader: vi.fn(
+      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
+        rpcIo.lineHandler = onLine;
+        return () => {
+          rpcIo.lineHandler = undefined;
+        };
+      },
+    ),
+    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  },
 }));
 
 type NodeListener = Parameters<typeof process.on>[1];
@@ -43,10 +56,10 @@ function takeListenerSnapshot(): ListenerSnapshot {
   const signals: NodeJS.Signals[] =
     process.platform === "win32" ? ["SIGTERM"] : ["SIGTERM", "SIGHUP"];
   return {
-    stdinEnd: process.stdin.listeners("end") as NodeListener[],
     signals: new Map(
       signals.map((signal) => [signal, process.listeners(signal) as NodeListener[]]),
     ),
+    stdinEnd: process.stdin.listeners("end") as NodeListener[],
   };
 }
 
@@ -73,45 +86,53 @@ function parseOutputLines(): Array<Record<string, unknown>> {
     .map((line) => JSON.parse(line) as Record<string, unknown>);
 }
 
-function createRuntimeHost(harness: Harness): AgentSessionRuntime {
+function createRuntimeHost(
+  harness: harnessTypes.Harness,
+): agentSessionRuntimeTypes.AgentSessionRuntime {
   return {
+    dispose: vi.fn(() => Effect.runPromise(Effect.sync(() => {}))),
+    fork: vi.fn(() => Promise.resolve({ cancelled: true, selectedText: "" })),
+    newSession: vi.fn(() => Promise.resolve({ cancelled: true })),
     session: harness.session,
-    newSession: vi.fn(async () => ({ cancelled: true })),
-    switchSession: vi.fn(async () => ({ cancelled: true })),
-    fork: vi.fn(async () => ({ cancelled: true, selectedText: "" })),
-    dispose: vi.fn(async () => {}),
     setRebindSession: vi.fn(),
-  } as unknown as AgentSessionRuntime;
+    switchSession: vi.fn(() => Promise.resolve({ cancelled: true })),
+  } as unknown as agentSessionRuntimeTypes.AgentSessionRuntime;
 }
+
+const preservesTheRequestIdOnUnknown = Effect.gen(function* () {
+  const listenerSnapshot = takeListenerSnapshot();
+  const harness = yield* Effect.promise(() => createHarness());
+
+  try {
+    void runRpcMode(createRuntimeHost(harness));
+    yield* Effect.promise(() => vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined()));
+
+    rpcIo.lineHandler?.(yield* toJsonText({ id: "test", type: "foobar" }));
+
+    yield* Effect.promise(() =>
+      vi.waitFor(() => {
+        expect(parseOutputLines()).toContainEqual({
+          command: "foobar",
+          error: "Unknown command: foobar",
+          id: "test",
+          success: false,
+          type: "response",
+        });
+      }),
+    );
+  } finally {
+    harness.cleanup();
+    restoreListeners(listenerSnapshot);
+  }
+});
+
+const preservesTheRequestIdOnUnknownCommand = () =>
+  Effect.runPromise(preservesTheRequestIdOnUnknown);
 
 describe("RPC unknown command responses (#5868)", () => {
   afterEach(() => {
     rpcIo.outputLines = [];
     rpcIo.lineHandler = undefined;
   });
-
-  test("preserves the request id on unknown command errors", async () => {
-    const listenerSnapshot = takeListenerSnapshot();
-    const harness = await createHarness();
-
-    try {
-      void runRpcMode(createRuntimeHost(harness));
-      await vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined());
-
-      rpcIo.lineHandler?.(JSON.stringify({ id: "test", type: "foobar" }));
-
-      await vi.waitFor(() => {
-        expect(parseOutputLines()).toContainEqual({
-          id: "test",
-          type: "response",
-          command: "foobar",
-          success: false,
-          error: "Unknown command: foobar",
-        });
-      });
-    } finally {
-      harness.cleanup();
-      restoreListeners(listenerSnapshot);
-    }
-  });
+  test("preserves the request id on unknown command errors", preservesTheRequestIdOnUnknownCommand);
 });

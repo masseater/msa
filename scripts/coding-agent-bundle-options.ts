@@ -1,5 +1,9 @@
 import type { BuildOptions, Plugin } from "esbuild";
 
+import esbuildFilter from "./esbuild-filter.ts";
+
+const { EsbuildFilter } = esbuildFilter;
+
 const ALLOWED_EXTERNAL_PACKAGES = new Set([
   "@silvia-odwyer/photon-node",
   "jiti",
@@ -25,26 +29,22 @@ export function createJiti(...args) {
 }
 `;
 
-const goRegExp = (pattern: RegExp): RegExp =>
-  new RegExp(pattern.source, pattern.flags.replace("u", ""));
-
 const lazyJitiPlugin: Plugin = {
   name: "lazy-jiti-transform",
   setup(esbuild) {
-    esbuild.onResolve({ filter: goRegExp(/^jiti\/static$/u) }, () => ({
+    esbuild.onResolve({ filter: new EsbuildFilter(/^jiti\/static$/u) }, () => ({
       namespace: "lazy-jiti",
       path: "jiti/static",
     }));
-    esbuild.onLoad({ filter: goRegExp(/.*/u), namespace: "lazy-jiti" }, () => ({
+    esbuild.onLoad({ filter: new EsbuildFilter(/.*/u), namespace: "lazy-jiti" }, () => ({
       contents: LAZY_JITI_SOURCE,
       loader: "js",
     }));
   },
 };
 
-const commonBuildOptions = (repoRoot: string): BuildOptions => ({
+const unbannedBuildOptions = (repoRoot: string): BuildOptions => ({
   absWorkingDir: repoRoot,
-  banner: BANNER,
   bundle: true,
   define: { MSA_BUNDLED_NODE: "true" },
   external: ["@silvia-odwyer/photon-node"],
@@ -61,4 +61,15 @@ const commonBuildOptions = (repoRoot: string): BuildOptions => ({
   tsconfigRaw: { compilerOptions: {} },
 });
 
-export { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions };
+const commonBuildOptions = (repoRoot: string): BuildOptions => ({
+  ...unbannedBuildOptions(repoRoot),
+  banner: BANNER,
+});
+
+const codingAgentBundleOptions = {
+  ALLOWED_EXTERNAL_PACKAGES,
+  commonBuildOptions,
+  unbannedBuildOptions,
+};
+
+export default codingAgentBundleOptions;

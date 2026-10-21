@@ -1,6 +1,6 @@
-import type { Component } from "../src/tui.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-export class StaticLines implements Component {
+class StaticLines implements tuiComponentTypes.Component {
   private readonly lines: string[];
 
   constructor(lines: string[]) {
@@ -13,3 +13,5 @@ export class StaticLines implements Component {
 
   invalidate(): void {}
 }
+
+export default StaticLines;

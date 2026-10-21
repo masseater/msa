@@ -1,31 +1,24 @@
-export { createExpectAssertions, type ExpectLike } from "./assertions.ts";
-export { createEnvConformance } from "./env-conformance.ts";
-export {
-  registerEnvConformance,
-  registerStorageConformance,
-  type StorageConformanceRunner,
-} from "./runner.ts";
-export {
-  STORAGE_MEMORY_SCALES,
-  STORAGE_READ_BENCHMARKS,
-  STORAGE_WRITE_BENCHMARKS,
-  type StorageBenchmarkDataset,
-  type StorageBenchmarkScale,
-  type StorageReadBenchmark,
-  type StorageWriteBenchmark,
-  seedStorageBenchmark,
-  seedStorageWriteBenchmark,
-  storageBenchmarkPrimaryRecordCount,
-  TIMING_SCALE,
-} from "./storage-benchmark.ts";
-export { createStorageConformance } from "./storage-conformance.ts";
-export type {
-  EnvConformanceAssertions,
-  EnvConformanceCase,
-  EnvConformanceOptions,
-  EnvConformanceProvider,
-  StorageConformanceAssertions,
-  StorageConformanceCase,
-  StorageConformanceOptions,
-  StorageConformanceProvider,
-} from "./types.ts";
+import assertions from "./assertions.ts";
+import envConformance from "./env-conformance.ts";
+import runnerModule from "./runner.ts";
+import storageBenchmarkRuns from "./storage-benchmark-runs.ts";
+import storageBenchmarkSeed from "./storage-benchmark-seed.ts";
+import storageBenchmark from "./storage-benchmark.ts";
+import storageConformance from "./storage-conformance.ts";
+
+const testing = {
+  STORAGE_MEMORY_SCALES: storageBenchmark.STORAGE_MEMORY_SCALES,
+  STORAGE_READ_BENCHMARKS: storageBenchmarkRuns.STORAGE_READ_BENCHMARKS,
+  STORAGE_WRITE_BENCHMARKS: storageBenchmarkRuns.STORAGE_WRITE_BENCHMARKS,
+  TIMING_SCALE: storageBenchmark.TIMING_SCALE,
+  createEnvConformance: envConformance.createEnvConformance,
+  createExpectAssertions: assertions.createExpectAssertions,
+  createStorageConformance: storageConformance.createStorageConformance,
+  registerEnvConformance: runnerModule.registerEnvConformance,
+  registerStorageConformance: runnerModule.registerStorageConformance,
+  seedStorageBenchmark: storageBenchmarkSeed.seedStorageBenchmark,
+  seedStorageWriteBenchmark: storageBenchmarkSeed.seedStorageWriteBenchmark,
+  storageBenchmarkPrimaryRecordCount: storageBenchmark.storageBenchmarkPrimaryRecordCount,
+};
+
+export default testing;

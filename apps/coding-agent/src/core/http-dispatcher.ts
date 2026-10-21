@@ -1,12 +1,14 @@
-import { EventEmitter } from "node:events";
-
 import * as undici from "undici";
 
-export const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
-// Node's 250ms default can terminate valid connection attempts on high-latency routes.
+import platform from "./platform/index.ts";
+import EventEmitter from "./platform/node/events.ts";
+
+const { readEnv } = platform;
+
+const DEFAULT_HTTP_IDLE_TIMEOUT_MS = 300_000;
 const DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS = 2_000;
 
-export const HTTP_IDLE_TIMEOUT_CHOICES = [
+const HTTP_IDLE_TIMEOUT_CHOICES = [
   { label: "30 sec", timeoutMs: 30_000 },
   { label: "1 min", timeoutMs: 60_000 },
   { label: "2 min", timeoutMs: 120_000 },
@@ -17,7 +19,7 @@ export const HTTP_IDLE_TIMEOUT_CHOICES = [
 const originalGlobalFetch = globalThis.fetch;
 let installedGlobalFetch: typeof globalThis.fetch | undefined;
 
-export function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
+function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (trimmed.toLowerCase() === "disabled") {
@@ -35,26 +37,23 @@ export function parseHttpIdleTimeoutMs(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
-export function formatHttpIdleTimeoutMs(timeoutMs: number): string {
+function formatHttpIdleTimeoutMs(timeoutMs: number): string {
   const choice = HTTP_IDLE_TIMEOUT_CHOICES.find((item) => item.timeoutMs === timeoutMs);
-  if (choice) {
+  if (choice !== undefined) {
     return choice.label;
   }
   return `${timeoutMs / 1000} sec`;
 }
 
-export function applyHttpProxySettings(httpProxy: string | undefined): void {
+function applyHttpProxySettings(httpProxy: string | undefined): void {
   const proxy = httpProxy?.trim();
-  if (!proxy) return;
-  process.env["HTTP_PROXY"] ??= proxy;
-  process.env["HTTPS_PROXY"] ??= proxy;
+  if (proxy === undefined || proxy === "") return;
+  if (readEnv("HTTP_PROXY") === undefined) Reflect.set(process.env, "HTTP_PROXY", proxy);
+  if (readEnv("HTTPS_PROXY") === undefined) Reflect.set(process.env, "HTTPS_PROXY", proxy);
 }
 
 const ignoreUndiciDispatcherError = (_error: unknown): void => {};
 
-// Undici can emit an internal Client "error" while terminating a mid-stream
-// fetch body. The body stream still rejects through reader.read(); this listener
-// only prevents EventEmitter's unhandled "error" special case from crashing msa.
 function withUndiciErrorListener<T extends undici.Dispatcher>(dispatcher: T): T {
   if (dispatcher instanceof EventEmitter) {
     EventEmitter.prototype.on.call(dispatcher, "error", ignoreUndiciDispatcherError);
@@ -79,7 +78,7 @@ function createUndiciOriginDispatcher(origin: string | URL, options: object): un
   );
 }
 
-export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
+function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TIMEOUT_MS): void {
   const normalizedTimeoutMs = parseHttpIdleTimeoutMs(timeoutMs);
   if (normalizedTimeoutMs === undefined) {
     throw new Error(`Invalid HTTP idle timeout: ${String(timeoutMs)}`);
@@ -87,22 +86,17 @@ export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TI
   const dispatcher = withUndiciErrorListener(
     new undici.EnvHttpProxyAgent({
       allowH2: false,
-      // Keep HTTP origins on CONNECT tunnels as they were before Undici 8.7.
-      proxyTunnel: true,
       bodyTimeout: normalizedTimeoutMs,
+      clientFactory: createUndiciClient,
       connect: {
         autoSelectFamilyAttemptTimeout: DEFAULT_AUTO_SELECT_FAMILY_ATTEMPT_TIMEOUT_MS,
       },
-      headersTimeout: normalizedTimeoutMs,
-      clientFactory: createUndiciClient,
       factory: createUndiciOriginDispatcher,
+      headersTimeout: normalizedTimeoutMs,
+      proxyTunnel: true,
     }),
   );
   undici.setGlobalDispatcher(dispatcher);
-  // Keep fetch and the dispatcher on the same undici implementation. Node 26.0's
-  // bundled fetch can otherwise consume compressed responses through npm undici's
-  // dispatcher without decompressing them, causing response.json() failures.
-  // If a caller replaced fetch after module load, preserve that deliberate override.
   const shouldInstallGlobals =
     installedGlobalFetch === undefined
       ? globalThis.fetch === originalGlobalFetch
@@ -112,3 +106,14 @@ export function configureHttpDispatcher(timeoutMs: number = DEFAULT_HTTP_IDLE_TI
     installedGlobalFetch = globalThis.fetch;
   }
 }
+
+const httpDispatcher = {
+  DEFAULT_HTTP_IDLE_TIMEOUT_MS,
+  HTTP_IDLE_TIMEOUT_CHOICES,
+  applyHttpProxySettings,
+  configureHttpDispatcher,
+  formatHttpIdleTimeoutMs,
+  parseHttpIdleTimeoutMs,
+};
+
+export default httpDispatcher;

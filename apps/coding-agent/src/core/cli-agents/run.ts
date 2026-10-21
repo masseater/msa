@@ -1,183 +1,205 @@
-/**
- * Runs a coding-agent CLI as the model behind an msa provider: spawns it per
- * request, feeds the prompt on stdin, and turns its JSON-lines output into the
- * reply. A backend only builds the command and reads events.
- */
-import type { ChildProcess } from "node:child_process";
-import { createInterface } from "node:readline";
+import type compatTypes from "@msa/ai/compat.types";
+import { Effect, Option, Schema, Stream } from "effect";
 
-import type { Model, SimpleStreamOptions, TranscriptContext } from "@msa/ai/compat";
+import childProcess from "../../utils/child-process.ts";
+import platformModule from "../platform/index.ts";
+import type nodeChildProcessTypes from "../platform/node/child-process.types.ts";
+import nodeReadline from "../platform/node/readline.ts";
+import replyModule from "./reply.ts";
+import type replyTypes from "./reply.types.ts";
+import type runTypes from "./run.types.ts";
 
-import { spawnProcess, waitForChildProcess } from "../../utils/child-process.ts";
-import { createReply, type ReplyBuilder } from "./reply.ts";
+const { createInterface } = nodeReadline;
+
+const { createReply } = replyModule;
+const { spawnProcess, waitForChildProcess } = childProcess;
+const { envSnapshot } = platformModule;
 
 const SPAWN_ATTEMPTS = 3;
-const RETRY_DELAY_MS = 1_500;
-const KILL_GRACE_MS = 3_000;
+const RETRY_DELAY_MS = 1500;
+const KILL_GRACE_MS = 3000;
 
-export interface CliCommand {
-  bin: string;
-  args: string[];
-  stdin: string;
-  env?: NodeJS.ProcessEnv;
+interface Attempt<Event> {
+  readonly backend: runTypes.CliBackend<Event>;
+  readonly model: compatTypes.Model<string>;
+  readonly context: compatTypes.TranscriptContext;
+  readonly options: compatTypes.SimpleStreamOptions | undefined;
+  readonly cwd: string;
+  readonly sink: runTypes.EventSink;
+  readonly state: { aborted: boolean; failed: boolean; reportedFailure: string };
 }
 
-export type EventSink = Pick<
-  ReplyBuilder,
-  "setText" | "appendText" | "appendThinking" | "addUsage"
-> & {
-  /** The CLI reported a failed run even if it exits 0; an empty message falls back to stderr. */
-  fail(message: string): void;
+interface AttemptResult {
+  readonly ok: boolean;
+  readonly detail: string;
+}
+
+const decodeJsonLine = Schema.decodeUnknownOption(Schema.fromJsonString(Schema.Unknown));
+
+const ignoreFailure = (run: () => unknown) =>
+  Effect.ignore(Effect.tryPromise(() => Promise.resolve(run())));
+
+const prepareCommand = <Event>(attempt: Attempt<Event>) =>
+  Effect.gen(function* () {
+    const { backend, cwd, model, options } = attempt;
+    let command = backend.command(model, attempt.context, cwd);
+    const payload = {
+      args: command.args,
+      cwd,
+      model: model.id,
+      prompt: command.stdin,
+      provider: backend.providerId,
+    };
+    const replaced = yield* Effect.tryPromise(() =>
+      Promise.resolve(options?.onPayload?.(payload, model)),
+    ).pipe(Effect.orElseSucceed(() => undefined));
+    const prompt = (replaced as { prompt?: unknown } | undefined)?.prompt;
+    if (typeof prompt === "string") command = { ...command, stdin: prompt };
+    return command;
+  });
+
+const readEvents = <Event>(attempt: Attempt<Event>, child: nodeChildProcessTypes.ChildProcess) => {
+  const lines = createInterface({ input: child.stdout! });
+  return Stream.fromAsyncIterable(lines, (cause) => cause).pipe(
+    Stream.takeWhile(() => !attempt.state.aborted),
+    Stream.runForEach((line) =>
+      Effect.gen(function* () {
+        const decoded = decodeJsonLine(line);
+        if (Option.isNone(decoded)) return;
+        const event = decoded.value as Event;
+        yield* ignoreFailure(() => attempt.options?.onProviderStreamEvent?.(event, attempt.model));
+        attempt.backend.handleEvent(event, attempt.sink);
+      }),
+    ),
+    Effect.ignore,
+    Effect.ensuring(Effect.sync(() => lines.close())),
+  );
 };
 
-export interface CliBackend<Event> {
-  providerId: string;
-  command(model: Model<string>, context: TranscriptContext, cwd: string): CliCommand;
-  /** One parsed JSON line of the CLI's output. */
-  handleEvent(event: Event, sink: EventSink): void;
-  /** Whether a failed attempt that streamed no content should be run again. */
-  shouldRetry(detail: string): boolean;
-}
+const awaitExit = (
+  finished: Promise<number | null>,
+  child: nodeChildProcessTypes.ChildProcess,
+  aborted: boolean,
+) =>
+  Effect.gen(function* () {
+    if (!aborted) return yield* Effect.promise(() => finished);
+    child.kill("SIGTERM");
+    const exited = yield* Effect.promise(() => finished).pipe(Effect.timeoutOption(KILL_GRACE_MS));
+    if (Option.isSome(exited)) return exited.value;
+    child.kill("SIGKILL");
+    return yield* Effect.promise(() => finished);
+  });
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
+const superviseChild = <Event>(
+  attempt: Attempt<Event>,
+  command: runTypes.CliCommand,
+  child: nodeChildProcessTypes.ChildProcess,
+) =>
+  Effect.gen(function* () {
+    const { state } = attempt;
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      stderr = (stderr + String(chunk)).slice(-8000);
+    });
+    child.stdin?.on("error", () => undefined);
+    child.stdin?.end(command.stdin);
+    let spawnError = "";
+    const finished = waitForChildProcess(child).catch((error: unknown) => {
+      spawnError = String(error);
+      return -1;
+    });
+    yield* readEvents(attempt, child);
+    const exitCode = yield* awaitExit(finished, child, state.aborted);
+    if (state.aborted) return { detail: "aborted", ok: false };
+    if (spawnError !== "") return { detail: spawnError, ok: false };
+    if (exitCode === 0 && !state.failed) return { detail: "", ok: true };
+    const tail = stderr.trim().slice(-2000);
+    const fallback = tail === "" ? `${command.bin} exited with code ${exitCode}` : tail;
+    return { detail: state.reportedFailure === "" ? fallback : state.reportedFailure, ok: false };
+  });
 
-export function streamViaCli<Event>(
-  backend: CliBackend<Event>,
-  model: Model<string>,
-  context: TranscriptContext,
-  options?: SimpleStreamOptions,
-): ReplyBuilder["stream"] {
+const runAttempt = <Event>(attempt: Attempt<Event>): Effect.Effect<AttemptResult> =>
+  Effect.gen(function* () {
+    attempt.state.failed = false;
+    attempt.state.reportedFailure = "";
+    const command = yield* prepareCommand(attempt);
+    return yield* Effect.try({
+      catch: (error) => String(error),
+      try: () =>
+        spawnProcess(command.bin, command.args, {
+          cwd: attempt.cwd,
+          env: command.env ?? envSnapshot(),
+          stdio: ["pipe", "pipe", "pipe"],
+        }),
+    }).pipe(
+      Effect.matchEffect({
+        onFailure: (detail) => Effect.succeed({ detail, ok: false }),
+        onSuccess: (child) => superviseChild(attempt, command, child),
+      }),
+    );
+  });
+
+const runAttempts = <Event>(attempt: Attempt<Event>, reply: replyTypes.ReplyBuilder) =>
+  Effect.gen(function* () {
+    let failure = "";
+    for (let index = 1; index <= SPAWN_ATTEMPTS && !attempt.state.aborted; index += 1) {
+      const result = yield* runAttempt(attempt);
+      if (result.ok) return { failure: "", ok: true };
+      failure = result.detail;
+      if (attempt.state.aborted || reply.hasContent || !attempt.backend.shouldRetry(failure)) break;
+      yield* Effect.sleep(RETRY_DELAY_MS);
+    }
+    return { failure, ok: false };
+  });
+
+function streamViaCli<Event>(
+  backend: runTypes.CliBackend<Event>,
+  model: compatTypes.Model<string>,
+  context: compatTypes.TranscriptContext,
+  options?: compatTypes.SimpleStreamOptions,
+): replyTypes.ReplyBuilder["stream"] {
   const reply = createReply(model);
-  const cwd = process.cwd();
-  let failed = false;
-  let reportedFailure = "";
-  const sink: EventSink = {
-    setText: reply.setText,
+  const state = { aborted: options?.signal?.aborted === true, failed: false, reportedFailure: "" };
+  const sink: runTypes.EventSink = {
+    addUsage: reply.addUsage,
     appendText: reply.appendText,
     appendThinking: reply.appendThinking,
-    addUsage: reply.addUsage,
     fail(failure) {
-      failed = true;
-      reportedFailure = failure;
+      state.failed = true;
+      state.reportedFailure = failure;
     },
+    setText: reply.setText,
   };
-
-  void (async () => {
-    let aborted = options?.signal?.aborted === true;
-    const onAbort = () => {
-      aborted = true;
-    };
-    options?.signal?.addEventListener("abort", onAbort, { once: true });
-
-    const runAttempt = async () => {
-      failed = false;
-      reportedFailure = "";
-      let command = backend.command(model, context, cwd);
-      try {
-        const replaced = await options?.onPayload?.(
-          {
-            provider: backend.providerId,
-            model: model.id,
-            cwd,
-            args: command.args,
-            prompt: command.stdin,
-          },
-          model,
-        );
-        const prompt = (replaced as { prompt?: unknown } | undefined)?.prompt;
-        if (typeof prompt === "string") command = { ...command, stdin: prompt };
-      } catch {
-        // Inspection hooks must not break the request.
-      }
-
-      let child: ChildProcess;
-      try {
-        child = spawnProcess(command.bin, command.args, {
-          cwd,
-          env: command.env ?? process.env,
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-      } catch (error) {
-        return { ok: false, detail: String(error) };
-      }
-
-      let stderr = "";
-      child.stderr?.on("data", (chunk: Buffer) => {
-        stderr = (stderr + String(chunk)).slice(-8_000);
-      });
-      child.stdin?.on("error", () => {});
-      child.stdin?.end(command.stdin);
-
-      let exitCode: number | null = null;
-      let spawnError = "";
-      const finished = waitForChildProcess(child).then(
-        (code) => {
-          exitCode = code;
-        },
-        (error: unknown) => {
-          spawnError = String(error);
-          exitCode = -1;
-        },
-      );
-
-      const lines = createInterface({ input: child.stdout! });
-      try {
-        for await (const line of lines) {
-          if (aborted) break;
-          let event: Event;
-          try {
-            event = JSON.parse(line) as Event;
-          } catch {
-            continue;
-          }
-          try {
-            await options?.onProviderStreamEvent?.(event, model);
-          } catch {
-            // Observation hooks must not break the stream.
-          }
-          backend.handleEvent(event, sink);
-        }
-      } finally {
-        lines.close();
-      }
-
-      if (aborted) {
-        child.kill("SIGTERM");
-        setTimeout(() => child.kill("SIGKILL"), KILL_GRACE_MS).unref?.();
-      }
-      await finished;
-      if (aborted) return { ok: false, detail: "aborted" };
-      if (spawnError) return { ok: false, detail: spawnError };
-      if (exitCode === 0 && !failed) return { ok: true, detail: "" };
-      return {
-        ok: false,
-        detail:
-          reportedFailure ||
-          stderr.trim().slice(-2_000) ||
-          `${command.bin} exited with code ${exitCode}`,
-      };
-    };
-
-    let ok = false;
-    let failure = "";
-    for (let attempt = 1; attempt <= SPAWN_ATTEMPTS && !aborted; attempt += 1) {
-      const result = await runAttempt();
-      if (result.ok) {
-        ok = true;
-        break;
-      }
-      failure = result.detail;
-      if (aborted || reply.hasContent || !backend.shouldRetry(failure)) break;
-      await sleep(RETRY_DELAY_MS);
-    }
-
-    options?.signal?.removeEventListener("abort", onAbort);
-    if (aborted) reply.fail("aborted", "aborted");
-    else if (!ok) reply.fail("error", failure || `${backend.providerId} failed`);
-    else reply.done("stop");
-  })();
-
+  const onAbort = () => {
+    state.aborted = true;
+  };
+  options?.signal?.addEventListener("abort", onAbort, { once: true });
+  const attempt: Attempt<Event> = {
+    backend,
+    context,
+    cwd: process.cwd(),
+    model,
+    options,
+    sink,
+    state,
+  };
+  Effect.runFork(
+    runAttempts(attempt, reply).pipe(
+      Effect.tap(({ failure, ok }) =>
+        Effect.sync(() => {
+          options?.signal?.removeEventListener("abort", onAbort);
+          if (state.aborted) reply.fail("aborted", "aborted");
+          else if (ok) reply.done("stop");
+          else reply.fail("error", failure === "" ? `${backend.providerId} failed` : failure);
+        }),
+      ),
+    ),
+  );
   return reply.stream;
 }
+
+const run = {
+  streamViaCli,
+};
+
+export default run;

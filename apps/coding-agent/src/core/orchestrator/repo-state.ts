@@ -1,26 +1,23 @@
 import { Effect } from "effect";
 
-import { execCommand } from "../exec.ts";
-import { orchestratorError } from "./errors.ts";
+import exec from "../exec.ts";
+import errors from "./errors.ts";
+import type repoStateTypes from "./repo-state.types.ts";
 
-export interface RepoState {
-  branch: string;
-  commit: string;
-  changedFiles: number;
-  unpushedCommits: number;
-}
+const { orchestratorError } = errors;
+const { execCommand } = exec;
 
-const EMPTY: RepoState = {
+const EMPTY: repoStateTypes.RepoState = {
   branch: "-",
-  commit: "-",
   changedFiles: 0,
+  commit: "-",
   unpushedCommits: 0,
 };
 
 function git(cwd: string, args: readonly string[]): Effect.Effect<string | undefined> {
   return Effect.tryPromise({
-    try: () => execCommand("git", [...args], cwd, { timeout: 5_000 }),
     catch: orchestratorError,
+    try: () => execCommand("git", [...args], cwd, { timeout: 5_000 }),
   }).pipe(
     Effect.map((result) => (result.code === 0 ? result.stdout.trim() : undefined)),
     Effect.orElseSucceed(() => undefined),
@@ -32,7 +29,7 @@ function count(text: string | undefined): number {
   return text.split("\n").filter((line) => line.trim() !== "").length;
 }
 
-function read(cwd: string): Effect.Effect<RepoState> {
+function read(cwd: string): Effect.Effect<repoStateTypes.RepoState> {
   return Effect.gen(function* () {
     const branch = yield* git(cwd, ["rev-parse", "--abbrev-ref", "HEAD"]);
     const commit = yield* git(cwd, ["log", "-1", "--format=%h %s"]);
@@ -41,15 +38,21 @@ function read(cwd: string): Effect.Effect<RepoState> {
     if (branch === undefined && commit === undefined) return EMPTY;
     return {
       branch: branch === undefined || branch === "" ? "-" : branch,
-      commit: commit === undefined || commit === "" ? "-" : commit,
       changedFiles: count(status),
+      commit: commit === undefined || commit === "" ? "-" : commit,
       unpushedCommits: Number.parseInt(unpushed ?? "0", 10) || 0,
     };
   });
 }
 
-function describe(state: RepoState): string {
+function describe(state: repoStateTypes.RepoState): string {
   return `branch ${state.branch} · commit ${state.commit} · ${state.changedFiles} changed files · ${state.unpushedCommits} unpushed commits`;
 }
 
-export const repoStates = { read, describe };
+const repoStates = { describe, read };
+
+const repoState = {
+  repoStates,
+};
+
+export default repoState;

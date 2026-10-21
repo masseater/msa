@@ -1,4 +1,4 @@
-import type { GroupSummary, Summary } from "./session-context-summary.ts";
+import type sessionContextSummaryTypes from "./session-context-summary.types.ts";
 
 const CHART_WIDTH = 40;
 
@@ -22,7 +22,7 @@ const optionalInt = (value: number | null, width: number): string =>
 const optionalPercent = (value: number | null, width: number): string =>
   value === null ? "n/a" : formatPercent(value).padStart(width);
 
-const groupCells = (group: GroupSummary): ReadonlyArray<string> => [
+const groupCells = (group: sessionContextSummaryTypes.GroupSummary): ReadonlyArray<string> => [
   `sessions=${formatInt(group.sessions).padStart(4)}`,
   `avgTurns=${formatNumber(group.avgTurns).padStart(5)}`,
   `avgMin=${formatNumber(group.avgDurationMinutes).padStart(6)}`,
@@ -35,29 +35,36 @@ const groupCells = (group: GroupSummary): ReadonlyArray<string> => [
   bar(group.medianMaxContextUsagePercent ?? 0),
 ];
 
-const lineForGroup = (group: GroupSummary, indent = "  "): string =>
+const lineForGroup = (group: sessionContextSummaryTypes.GroupSummary, indent = "  "): string =>
   `${indent}${group.key} ${groupCells(group).join(" ")}`;
 
 const METHOD_NOTE =
   "Context usage parses full session JSONL files. max context uses max assistant usage.totalTokens per session, falling back to input + output + cacheRead + cacheWrite, plus compaction tokensBefore. medPreCompactCtx uses the last assistant usage before the first compaction, or the first compaction tokensBefore when present, divided by model contextWindow from libs/ai/src/models.generated.ts when known.";
 
-const filterLines = (summary: Summary): ReadonlyArray<string> => {
-  const lines: Array<string> = [];
-  const { filters } = summary;
-  if (filters.model !== null && filters.model !== "") {
-    lines.push(`Filters: model contains "${filters.model}"`);
-  }
-  if (filters.modelPrefixes.length > 0) {
-    lines.push(`Filters: model prefixes = ${filters.modelPrefixes.join(", ")}`);
-  }
-  if (filters.bashContains.length > 0) {
-    lines.push(`Filters: bash contains any of = ${filters.bashContains.join(", ")}`);
-  }
-  if (filters.cwd !== null && filters.cwd !== "") lines.push(`Filters: cwd = ${filters.cwd}`);
-  return lines;
-};
+const isPresent = (value: string | null): value is string => value !== null && value !== "";
 
-const modelDayLines = (summary: Summary): ReadonlyArray<string> =>
+const FILTER_LINES: ReadonlyArray<
+  (filters: sessionContextSummaryTypes.Summary["filters"]) => string | null
+> = [
+  (filters) => (isPresent(filters.model) ? `Filters: model contains "${filters.model}"` : null),
+  (filters) =>
+    filters.modelPrefixes.length > 0
+      ? `Filters: model prefixes = ${filters.modelPrefixes.join(", ")}`
+      : null,
+  (filters) =>
+    filters.bashContains.length > 0
+      ? `Filters: bash contains any of = ${filters.bashContains.join(", ")}`
+      : null,
+  (filters) => (isPresent(filters.cwd) ? `Filters: cwd = ${filters.cwd}` : null),
+];
+
+const filterLines = (summary: sessionContextSummaryTypes.Summary): ReadonlyArray<string> =>
+  FILTER_LINES.flatMap((line) => {
+    const text = line(summary.filters);
+    return text === null ? [] : [text];
+  });
+
+const modelDayLines = (summary: sessionContextSummaryTypes.Summary): ReadonlyArray<string> =>
   summary.byModelDay.flatMap((model) => [
     "",
     `${model.key} contextWindow=${
@@ -69,7 +76,7 @@ const modelDayLines = (summary: Summary): ReadonlyArray<string> =>
     ...model.byDay.map((group) => lineForGroup(group)),
   ]);
 
-const buildTextReport = (summary: Summary): string => {
+const buildTextReport = (summary: sessionContextSummaryTypes.Summary): string => {
   const lines: Array<string> = [
     `Scanned ${formatInt(summary.scan.sessionFilesIncluded)} session files in ${summary.scan.sessionsDir}`,
     `Report timezone: ${summary.scan.timezone} (CET/CEST)`,
@@ -98,7 +105,7 @@ const buildTextReport = (summary: Summary): string => {
 const escapeHtml = (text: string): string =>
   text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 
-const buildHtmlReport = (summary: Summary): string => `<!doctype html>
+const buildHtmlReport = (summary: sessionContextSummaryTypes.Summary): string => `<!doctype html>
 <meta charset="utf-8">
 <title>Session context stats</title>
 <style>
@@ -107,4 +114,9 @@ pre { font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; 
 </style>
 <pre>${escapeHtml(buildTextReport(summary))}</pre>`;
 
-export { buildHtmlReport, buildTextReport };
+const sessionContextReport = {
+  buildHtmlReport,
+  buildTextReport,
+};
+
+export default sessionContextReport;

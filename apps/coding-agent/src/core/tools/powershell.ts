@@ -1,40 +1,25 @@
-import { getPowerShellConfig } from "../../utils/shell.ts";
-import {
-  type BashOperations,
-  type BashSpawnContext,
-  type BashSpawnHook,
-  type BashToolDetails,
-  type BashToolInput,
-  type BashToolOptions,
-  type createBashTool,
-  createLocalShellOperations,
-  createShellToolDefinition,
-  type ShellToolConfig,
-} from "./bash.ts";
-import { wrapToolDefinition } from "./tool-definition-wrapper.ts";
+import shell from "../../utils/shell.ts";
+import bash from "./bash.ts";
+import type bashTypes from "./bash.types.ts";
+import type powershellTypes from "./powershell.types.ts";
+import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
+import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+
+const { createLocalShellOperations, createShellToolDefinition } = bash;
+const { getPowerShellConfig } = shell;
+const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
 const UTF8_OUTPUT_PREFIX =
   "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n";
 
-export const powershellToolSystemPromptContribution = {
-  snippet: "Execute PowerShell commands",
+const powershellToolSystemPromptContribution = {
   guidelines: [
     "You can inspect MSA_* environment variables for current model and session details.",
   ],
+  snippet: "Execute PowerShell commands",
 } as const;
 
-export type PowerShellOperations = BashOperations;
-export type PowerShellSpawnContext = BashSpawnContext;
-export type PowerShellSpawnHook = BashSpawnHook;
-export type PowerShellToolDetails = BashToolDetails;
-export type PowerShellToolInput = BashToolInput;
-
-export interface PowerShellToolOptions extends Pick<
-  BashToolOptions,
-  "operations" | "exposeSessionEnvironment" | "spawnHook"
-> {}
-
-export function createLocalPowerShellOperations(): PowerShellOperations {
+function createLocalPowerShellOperations(): powershellTypes.PowerShellOperations {
   const operations = createLocalShellOperations("PowerShell", getPowerShellConfig);
   return {
     exec: (command, cwd, options) =>
@@ -42,35 +27,44 @@ export function createLocalPowerShellOperations(): PowerShellOperations {
   };
 }
 
-const powershellToolConfig: ShellToolConfig = {
-  name: "powershell",
+const powershellToolConfig: bashTypes.ShellToolConfig = {
   label: "powershell",
-  shellName: "PowerShell",
+  name: "powershell",
   prompt: "PS>",
-  promptSnippet: powershellToolSystemPromptContribution.snippet,
   promptGuidelines: powershellToolSystemPromptContribution.guidelines,
+  promptSnippet: powershellToolSystemPromptContribution.snippet,
+  shellName: "PowerShell",
   tempFilePrefix: "msa-powershell",
 };
 
-export function createPowerShellToolDefinition(
-  cwd: string,
-  options?: PowerShellToolOptions,
-): ReturnType<typeof createShellToolDefinition> {
-  return createShellToolDefinition(cwd, powershellToolConfig, {
+const createPowerShellToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
+  powershellTypes.PowerShellToolOptions,
+  ReturnType<typeof createShellToolDefinition>
+> = cwdFactory((cwd, options) =>
+  createShellToolDefinition(cwd, powershellToolConfig, {
     ...options,
     operations: options?.operations ?? createLocalPowerShellOperations(),
-  });
-}
+  }),
+);
 
-export function createPowerShellTool(
-  cwd: string,
-  options?: PowerShellToolOptions,
-): ReturnType<typeof createBashTool> {
+const createPowerShellTool: toolDefinitionWrapperTypes.CwdFactory<
+  powershellTypes.PowerShellToolOptions,
+  ReturnType<typeof bash.createBashTool>
+> = cwdFactory((cwd, options) => {
   const definition = createPowerShellToolDefinition(cwd, options);
   const tool = wrapToolDefinition(definition);
   Object.assign(tool, {
-    promptSnippet: definition.promptSnippet,
     promptGuidelines: definition.promptGuidelines,
+    promptSnippet: definition.promptSnippet,
   });
   return tool;
-}
+});
+
+const powershell = {
+  createLocalPowerShellOperations,
+  createPowerShellTool,
+  createPowerShellToolDefinition,
+  powershellToolSystemPromptContribution,
+};
+
+export default powershell;

@@ -1,96 +1,52 @@
-import { Container, getKeybindings, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
 
-import { APP_NAME } from "../../../config.ts";
-import { SYSTEM_THEME_NAME } from "../theme/system-theme.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+import config from "../../../config.ts";
+import systemTheme from "../theme/system-theme.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type firstTimeSetupTypes from "./first-time-setup.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-export interface FirstTimeSetupResult {
-  theme: string;
-  shareAnalytics: boolean;
-}
+const { SYSTEM_THEME_NAME } = systemTheme;
+const { keyHint, rawKeyHint } = keybindingHints;
+const { theme } = themeModule;
+const { APP_NAME } = config;
 
-export interface FirstTimeSetupOptions {
-  onThemePreview: (themeName: string) => void;
-  onSubmit: (result: FirstTimeSetupResult) => void;
-  onCancel: () => void;
-}
+const { Spacer, Text, getKeybindings } = tui;
 
 const THEME_OPTIONS: Array<{ value: string; label: string }> = [
-  { value: SYSTEM_THEME_NAME, label: "System (matches your terminal colors)" },
-  { value: "dark", label: "Dark" },
-  { value: "light", label: "Light" },
+  { label: "System (matches your terminal colors)", value: SYSTEM_THEME_NAME },
+  { label: "Dark", value: "dark" },
+  { label: "Light", value: "light" },
 ];
 
 const ANALYTICS_OPTIONS: Array<{ value: boolean; label: string }> = [
-  { value: true, label: "Share anonymous usage data" },
-  { value: false, label: "Don't share" },
+  { label: "Share anonymous usage data", value: true },
+  { label: "Don't share", value: false },
 ];
 
 const SETUP_LOGO_LINES = ["██████", "██  ██", "████  ██", "██    ██"];
 
-/** First-time setup dialog: theme choice and analytics opt-in. */
-export class FirstTimeSetupComponent extends Container {
+export default class FirstTimeSetupComponent extends tui.Container {
   private step: "theme" | "analytics" = "theme";
   private themeIndex: number;
   private analyticsIndex = 0;
-  private readonly options: FirstTimeSetupOptions;
+  private readonly options: firstTimeSetupTypes.FirstTimeSetupOptions;
 
-  constructor(options: FirstTimeSetupOptions) {
+  constructor(options: firstTimeSetupTypes.FirstTimeSetupOptions) {
     super();
     this.options = options;
     this.themeIndex = 0;
     this.update();
   }
 
-  /** Rebuild on theme changes, e.g. when the system theme receives the terminal's colors. */
   override invalidate(): void {
     this.update();
     super.invalidate();
   }
 
-  // Rebuild the whole dialog on every change so theme previews recolor all text.
   private update(): void {
-    this.clear();
-    this.addChild(new DynamicBorder());
-    this.addChild(new Spacer(1));
-    this.addChild(new Text(theme.fg("accent", SETUP_LOGO_LINES.join("\n")), 1, 0));
-    this.addChild(new Spacer(1));
-    this.addChild(
-      new Text(
-        theme.fg("accent", theme.bold(`Welcome to ${APP_NAME}, the minimal coding agent.`)),
-        1,
-        0,
-      ),
-    );
-    this.addChild(new Spacer(1));
-
-    if (this.step === "theme") {
-      this.addChild(new Text(theme.fg("text", "Pick a theme."), 1, 0));
-      this.addChild(new Spacer(1));
-      this.addOptionList(
-        THEME_OPTIONS.map((option) => option.label),
-        this.themeIndex,
-      );
-    } else {
-      this.addChild(new Text(theme.fg("text", "Opt-in to anonymous usage data sharing?"), 1, 0));
-      this.addChild(
-        new Text(
-          theme.fg(
-            "muted",
-            "Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within msa. You can observe what is shared using /privacy and make\nchanges anytime in settings.json.",
-          ),
-          1,
-          0,
-        ),
-      );
-      this.addChild(new Spacer(1));
-      this.addOptionList(
-        ANALYTICS_OPTIONS.map((option) => option.label),
-        this.analyticsIndex,
-      );
-    }
+    FirstTimeSetupComponent.renderWelcome(this);
 
     this.addChild(new Spacer(1));
     this.addChild(
@@ -106,6 +62,48 @@ export class FirstTimeSetupComponent extends Container {
     );
     this.addChild(new Spacer(1));
     this.addChild(new DynamicBorder());
+  }
+
+  private static renderWelcome(self: FirstTimeSetupComponent): void {
+    self.clear();
+    self.addChild(new DynamicBorder());
+    self.addChild(new Spacer(1));
+    self.addChild(new Text(theme.fg("accent", SETUP_LOGO_LINES.join("\n")), 1, 0));
+    self.addChild(new Spacer(1));
+    self.addChild(
+      new Text(
+        theme.fg("accent", theme.bold(`Welcome to ${APP_NAME}, the minimal coding agent.`)),
+        1,
+        0,
+      ),
+    );
+    self.addChild(new Spacer(1));
+
+    if (self.step === "theme") {
+      self.addChild(new Text(theme.fg("text", "Pick a theme."), 1, 0));
+      self.addChild(new Spacer(1));
+      self.addOptionList(
+        THEME_OPTIONS.map((option) => option.label),
+        self.themeIndex,
+      );
+    } else {
+      self.addChild(new Text(theme.fg("text", "Opt-in to anonymous usage data sharing?"), 1, 0));
+      self.addChild(
+        new Text(
+          theme.fg(
+            "muted",
+            "Opting in stores a tracking identifier in settings.json and enables anonymous\nusage analytics. This helps us to better debug, reproduce, and resolve issues\nand bugs within msa. You can observe what is shared using /privacy and make\nchanges anytime in settings.json.",
+          ),
+          1,
+          0,
+        ),
+      );
+      self.addChild(new Spacer(1));
+      self.addOptionList(
+        ANALYTICS_OPTIONS.map((option) => option.label),
+        self.analyticsIndex,
+      );
+    }
   }
 
   private addOptionList(labels: string[], selectedIndex: number): void {
@@ -149,8 +147,8 @@ export class FirstTimeSetupComponent extends Container {
         const analyticsOption = ANALYTICS_OPTIONS[this.analyticsIndex];
         if (themeOption === undefined || analyticsOption === undefined) return;
         this.options.onSubmit({
-          theme: themeOption.value,
           shareAnalytics: analyticsOption.value,
+          theme: themeOption.value,
         });
       }
     } else if (kb.matches(keyData, "tui.select.cancel")) {

@@ -1,75 +1,94 @@
-import { execFileSync } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import { Effect } from "effect";
 
-import { codingAgentName } from "../../../scripts/coding-agent-smoke.ts";
-import { installConsumer } from "../../../scripts/local-package-install.mjs";
-import { produceArtifactSet } from "../../../scripts/package-artifacts.mjs";
+import platform from "../src/platform.ts";
 
-const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
-const outputDirectory = process.argv[2];
-if (!outputDirectory || process.argv.length !== 3) {
-  throw new Error("Usage: node apps/evals/docker/install-runtime.mjs <output-directory>");
-}
+const { files, pathOperations, runCommand } = platform;
 
-const evalPackage = JSON.parse(
-  readFileSync(join(repositoryRoot, "apps/evals/package.json"), "utf8"),
-);
-const artifactSet = produceArtifactSet({
-  build: false,
-  outDir: join(outputDirectory, "artifacts"),
-  repoRoot: repositoryRoot,
-  // Docker build contexts may omit Git metadata; this artifact set is consumed only within this image build.
-  source: null,
-});
-const artifactNames = new Set(artifactSet.packages.map((pkg) => pkg.name));
-const evaluatorDependencies = Object.entries(evalPackage.devDependencies).filter(
-  ([name]) => !artifactNames.has(name),
-);
-const installDirectory = join(outputDirectory, "install");
-installConsumer({ artifactSet, directory: installDirectory, packageNames: [codingAgentName] });
-execFileSync(
-  "npm",
-  [
-    "install",
-    "--ignore-scripts",
-    "--omit=dev",
-    "--no-audit",
-    "--no-fund",
-    "--no-save",
-    ...evaluatorDependencies.map(([name, version]) => `${name}@${version}`),
-  ],
-  { cwd: installDirectory, stdio: "inherit" },
-);
+const codingAgentName = "@msa/coding-agent";
+const repositoryRoot = pathOperations.resolve(import.meta.dirname, "../../..");
+const codingAgentEntry = pathOperations.basename(codingAgentName);
+const VISIBLE_DIRECTORIES = ["docs", "examples", "src", "test", "tests"];
+const VISIBLE_FILES = /^(?:readme|changelog)(?:\..+)?$/iu;
 
-for (const packageName of artifactNames) {
-  if (packageName === codingAgentName) continue;
-  const packageDirectory = join(installDirectory, "node_modules", ...packageName.split("/"));
-  if (!existsSync(packageDirectory)) continue;
-  for (const entry of readdirSync(packageDirectory, { withFileTypes: true })) {
-    if (
-      (entry.isDirectory() && ["docs", "examples", "src", "test", "tests"].includes(entry.name)) ||
-      (entry.isFile() && /^(?:readme|changelog)(?:\..+)?$/i.test(entry.name))
-    ) {
-      rmSync(join(packageDirectory, entry.name), { force: true, recursive: true });
+const die = (message) => Effect.die(new Error(message));
+
+const removeModelVisibleFiles = (installDirectory) =>
+  Effect.gen(function* () {
+    const scope = pathOperations.join(installDirectory, "node_modules", "@msa");
+    if (!(yield* files.exists(scope))) return;
+    for (const packageName of yield* files.readDirectory(scope)) {
+      if (packageName === codingAgentEntry) continue;
+      const packageDirectory = pathOperations.join(scope, packageName);
+      if ((yield* files.kind(packageDirectory)) !== "directory") continue;
+      for (const name of yield* files.readDirectory(packageDirectory)) {
+        const path = pathOperations.join(packageDirectory, name);
+        const kind = yield* files.kind(path);
+        if (
+          (kind === "directory" && VISIBLE_DIRECTORIES.includes(name)) ||
+          (kind === "file" && VISIBLE_FILES.test(name))
+        ) {
+          yield* files.remove(path);
+        }
+      }
     }
-  }
-}
-
-const runtimeRoot = join(outputDirectory, "root");
-const runtimeEvalRoot = join(runtimeRoot, "apps/evals");
-mkdirSync(join(runtimeEvalRoot, "docker"), { recursive: true });
-cpSync(join(repositoryRoot, "package.json"), join(runtimeRoot, "package.json"));
-for (const file of ["package.json", "vitest.container.config.ts"]) {
-  cpSync(join(repositoryRoot, "apps/evals", file), join(runtimeEvalRoot, file));
-}
-for (const directory of ["src", "evals"]) {
-  cpSync(join(repositoryRoot, "apps/evals", directory), join(runtimeEvalRoot, directory), {
-    recursive: true,
   });
-}
-cpSync(
-  join(repositoryRoot, "apps/evals/docker/entrypoint.ts"),
-  join(runtimeEvalRoot, "docker/entrypoint.ts"),
-);
+
+const stageRuntime = (outputDirectory) =>
+  Effect.gen(function* () {
+    const runtimeRoot = pathOperations.join(outputDirectory, "root");
+    const runtimeEvalRoot = pathOperations.join(runtimeRoot, "apps/evals");
+    yield* files.makeDirectory(pathOperations.join(runtimeEvalRoot, "docker"));
+    yield* files.copy(
+      pathOperations.join(repositoryRoot, "package.json"),
+      pathOperations.join(runtimeRoot, "package.json"),
+    );
+    for (const file of ["package.json", "vitest.container.config.ts"]) {
+      yield* files.copy(
+        pathOperations.join(repositoryRoot, "apps/evals", file),
+        pathOperations.join(runtimeEvalRoot, file),
+      );
+    }
+    for (const directory of ["src", "evals"]) {
+      yield* files.copy(
+        pathOperations.join(repositoryRoot, "apps/evals", directory),
+        pathOperations.join(runtimeEvalRoot, directory),
+      );
+    }
+    yield* files.copy(
+      pathOperations.join(repositoryRoot, "apps/evals/docker/entrypoint.ts"),
+      pathOperations.join(runtimeEvalRoot, "docker/entrypoint.ts"),
+    );
+  });
+
+const deployRuntime = (installDirectory) =>
+  Effect.gen(function* () {
+    const { status } = yield* runCommand(
+      "pnpm",
+      [
+        "--filter",
+        "@msa/evals",
+        "deploy",
+        "--legacy",
+        "--config.node-linker=hoisted",
+        "--ignore-scripts",
+        installDirectory,
+      ],
+      { cwd: repositoryRoot, output: "inherit" },
+    );
+    if (status !== 0) return yield* die(`pnpm deploy exited with status ${status}.`);
+  });
+
+const program = Effect.gen(function* () {
+  const outputDirectory = process.argv[2];
+  if (outputDirectory === undefined || outputDirectory === "" || process.argv.length !== 3) {
+    return yield* die("Usage: node apps/evals/docker/install-runtime.mjs <output-directory>");
+  }
+  const installDirectory = pathOperations.join(outputDirectory, "install");
+  yield* files.makeDirectory(installDirectory);
+  yield* deployRuntime(installDirectory);
+  yield* removeModelVisibleFiles(installDirectory);
+  yield* stageRuntime(outputDirectory);
+});
+
+NodeRuntime.runMain(program);

@@ -1,34 +1,29 @@
-#!/usr/bin/env node
-
-import { mkdirSync, writeFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
-
 import { createCanvas } from "canvas";
+import { Console, Effect, ManagedRuntime } from "effect";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+import scriptFiles from "./script-files.ts";
 
-// Create a 200x200 canvas
-const canvas = createCanvas(200, 200);
-const ctx = canvas.getContext("2d");
+const { ScriptFiles, scriptFilesLayer } = scriptFiles;
 
-// Fill background with white
-ctx.fillStyle = "white";
-ctx.fillRect(0, 0, 200, 200);
+const renderRedCircle = (): Uint8Array => {
+  const canvas = createCanvas(200, 200);
+  const ctx = canvas.getContext("2d");
+  ctx.fillStyle = "white";
+  ctx.fillRect(0, 0, 200, 200);
+  ctx.fillStyle = "red";
+  ctx.beginPath();
+  ctx.arc(100, 100, 50, 0, Math.PI * 2);
+  ctx.fill();
+  return canvas.toBuffer("image/png");
+};
 
-// Draw a red circle in the center
-ctx.fillStyle = "red";
-ctx.beginPath();
-ctx.arc(100, 100, 50, 0, Math.PI * 2);
-ctx.fill();
-
-// Save the image
-const buffer = canvas.toBuffer("image/png");
-const outputPath = join(__dirname, "..", "test", "data", "red-circle.png");
-
-// Ensure the directory exists
-mkdirSync(join(__dirname, "..", "test", "data"), { recursive: true });
-
-writeFileSync(outputPath, buffer);
-console.log(`Generated test image at: ${outputPath}`);
+ManagedRuntime.make(scriptFilesLayer).runFork(
+  Effect.gen(function* () {
+    const files = yield* ScriptFiles;
+    const dataDir = files.join(import.meta.dirname, "..", "test", "data");
+    const outputPath = files.join(dataDir, "red-circle.png");
+    yield* files.makeDirectory(dataDir);
+    yield* files.writeBytes({ content: renderRedCircle(), path: outputPath });
+    yield* Console.log(`Generated test image at: ${outputPath}`);
+  }),
+);

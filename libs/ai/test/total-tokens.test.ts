@@ -1,297 +1,53 @@
-/**
- * Test totalTokens field across all providers.
- *
- * totalTokens represents the total number of tokens processed by the LLM,
- * including input (with cache) and output (with thinking). This is the
- * base for calculating context size for the next request.
- *
- * - OpenAI Completions: Uses native total_tokens field
- * - OpenAI Responses: Uses native total_tokens field
- * - Google: Uses native totalTokenCount field
- * - Anthropic: Computed as input + output + cacheRead + cacheWrite
- * - Other OpenAI-compatible providers: Uses native total_tokens field
- */
-
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { complete, getModel } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions, Usage } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+import totalTokensSupport from "./total-tokens-support.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { expectTotalTokens } = totalTokensSupport;
+const { hasEnv, readEnv } = env;
+const { chooseModel, usesApi } = modelChoice;
 
-import { resolveApiKey } from "./oauth.ts";
+const retried = { retry: 3, timeout: 60000 };
 
-// Resolve OAuth tokens at module level (async, runs before tests)
-const openaiCodexToken = await resolveApiKey("openai-codex");
-
-// Generate a long system prompt to trigger caching (>2k bytes for most providers)
-const LONG_SYSTEM_PROMPT = `You are a helpful assistant. Be concise in your responses.
-
-Here is some additional context that makes this system prompt long enough to trigger caching:
-
-${Array(50)
-  .fill(
-    "Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.",
-  )
-  .join("\n\n")}
-
-Remember: Always be helpful and concise.`;
-
-async function testTotalTokensWithCache<TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-): Promise<{ first: Usage; second: Usage }> {
-  // First request - no cache
-  const context1: Context = {
-    systemPrompt: LONG_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: "user",
-        content: "What is 2 + 2? Reply with just the number.",
-        timestamp: Date.now(),
-      },
-    ],
-  };
-
-  const response1 = await complete(llm, context1, options);
-  expect(response1.stopReason).toBe("stop");
-
-  // Second request - should trigger cache read (same system prompt, add conversation)
-  const context2: Context = {
-    systemPrompt: LONG_SYSTEM_PROMPT,
-    messages: [
-      ...context1.messages,
-      // Include previous assistant response
-      response1,
-      {
-        role: "user",
-        content: "What is 3 + 3? Reply with just the number.",
-        timestamp: Date.now(),
-      },
-    ],
-  };
-
-  const response2 = await complete(llm, context2, options);
-  expect(response2.stopReason).toBe("stop");
-
-  return { first: response1.usage, second: response2.usage };
-}
-
-function logUsage(label: string, usage: Usage) {
-  const computed = usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
-  console.log(`  ${label}:`);
-  console.log(
-    `    input: ${usage.input}, output: ${usage.output}, cacheRead: ${usage.cacheRead}, cacheWrite: ${usage.cacheWrite}`,
+const anthropicReportsCachedTotals = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const model = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
+      const { first, second } = yield* expectTotalTokens("Anthropic", model, {
+        apiKey: yield* readEnv("ANTHROPIC_API_KEY"),
+      });
+      expect(second.cacheRead > 0 || second.cacheWrite > 0 || first.cacheWrite > 0).toBe(true);
+    }),
   );
-  console.log(`    totalTokens: ${usage.totalTokens}, computed: ${computed}`);
-}
 
-function assertTotalTokensEqualsComponents(usage: Usage) {
-  const computed = usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
-  expect(usage.totalTokens).toBe(computed);
-}
+const openAICompletionsModel = (): typesModule.Model<"openai-completions"> => {
+  const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
+  return { ...baseModel, api: "openai-completions" };
+};
 
 describe("totalTokens field", () => {
-  // =========================================================================
-  // Anthropic
-  // =========================================================================
-
-  describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic (API Key)", () => {
-    it(
-      "claude-sonnet-4-5 - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("anthropic-api", "claude-sonnet-4-5");
-
-        console.log(`\nAnthropic / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["ANTHROPIC_API_KEY"],
-        });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-
-        // Anthropic should have cache activity
-        const hasCache = second.cacheRead > 0 || second.cacheWrite > 0 || first.cacheWrite > 0;
-        expect(hasCache).toBe(true);
-      },
-    );
-  });
-
-  // =========================================================================
-  // OpenAI
-  // =========================================================================
-
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Completions", () => {
-    it(
-      "gpt-4o-mini - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
-        void _compat;
-        const llm: Model<"openai-completions"> = {
-          ...baseModel,
-          api: "openai-completions",
-        };
-
-        console.log(`\nOpenAI Completions / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm);
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
-
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Responses", () => {
-    it(
-      "claude-haiku-4.5 - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openai", "gpt-4o");
-
-        console.log(`\nOpenAI Responses / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm);
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
-
-  // =========================================================================
-  // OpenRouter - Multiple backend providers
-  // =========================================================================
-
-  describe.skipIf(!process.env["OPENROUTER_API_KEY"])("OpenRouter", () => {
-    it(
-      "anthropic/claude-sonnet-4.5 - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openrouter", "anthropic/claude-sonnet-4.5");
-
-        console.log(`\nOpenRouter / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["OPENROUTER_API_KEY"],
-        });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-
-    it(
-      "deepseek/deepseek-chat - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openrouter", "deepseek/deepseek-chat");
-
-        console.log(`\nOpenRouter / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["OPENROUTER_API_KEY"],
-        });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-
-    it(
-      "mistralai/mistral-small-3.2-24b-instruct - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openrouter", "mistralai/mistral-small-3.2-24b-instruct");
-
-        console.log(`\nOpenRouter / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["OPENROUTER_API_KEY"],
-        });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-
-    it(
-      "google/gemini-2.5-flash - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openrouter", "google/gemini-2.5-flash");
-
-        console.log(`\nOpenRouter / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["OPENROUTER_API_KEY"],
-        });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-
-    it(
-      "deepseek/deepseek-chat - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openrouter", "deepseek/deepseek-chat");
-
-        console.log(`\nOpenRouter / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, {
-          apiKey: process.env["OPENROUTER_API_KEY"],
-        });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
-
-  // =========================================================================
-  // =========================================================================
-
-  // =========================================================================
-  // OpenAI Codex (OAuth)
-  // =========================================================================
-
-  describe("OpenAI Codex (OAuth)", () => {
-    it.skipIf(!openaiCodexToken)(
-      "gpt-5.5 - should return totalTokens equal to sum of components",
-      { retry: 3, timeout: 60000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-
-        console.log(`\nOpenAI Codex / ${llm.id}:`);
-        const { first, second } = await testTotalTokensWithCache(llm, { apiKey: openaiCodexToken });
-
-        logUsage("First request", first);
-        logUsage("Second request", second);
-
-        assertTotalTokensEqualsComponents(first);
-        assertTotalTokensEqualsComponents(second);
-      },
-    );
-  });
+  it.skipIf(!hasEnv("ANTHROPIC_API_KEY"))(
+    "Anthropic returns totalTokens equal to sum of components",
+    retried,
+    anthropicReportsCachedTotals,
+  );
+  it.skipIf(!hasEnv("OPENAI_API_KEY"))(
+    "OpenAI Completions returns totalTokens equal to sum of components",
+    retried,
+    () => Effect.runPromise(expectTotalTokens("OpenAI Completions", openAICompletionsModel())),
+  );
+  it.skipIf(!hasEnv("OPENAI_API_KEY"))(
+    "OpenAI Responses returns totalTokens equal to sum of components",
+    retried,
+    () =>
+      Effect.runPromise(
+        expectTotalTokens(
+          "OpenAI Responses",
+          chooseModel("openai", "Responses", usesApi("openai-responses")),
+        ),
+      ),
+  );
 });

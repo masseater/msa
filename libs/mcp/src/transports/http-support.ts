@@ -1,28 +1,27 @@
+import sleep from "@msa/chord/sleep";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { McpForeignError } from "../foreign.ts";
-import { McpHttpError } from "./errors/http-error.ts";
+import foreignModule from "../foreign.ts";
+import McpHttpError from "./errors/http-error.ts";
+import type httpSupportTypes from "./http-support.types.ts";
+
+const { McpForeignError } = foreignModule;
+const { unrefSleep } = sleep;
 
 const ERROR_MESSAGE_BODY_CHARS = 500;
 
-export interface StreamCursor {
-  lastEventId: string | undefined;
-  retryMs: number | undefined;
-  received: boolean;
-}
-
-export const newCursor = (): StreamCursor => ({
+const newCursor = (): httpSupportTypes.StreamCursor => ({
   lastEventId: undefined,
-  retryMs: undefined,
   received: false,
+  retryMs: undefined,
 });
 
-export function contentType(response: Response): string | undefined {
+function contentType(response: Response): string | undefined {
   return response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
 }
 
-export function needsAuthorization(response: Response): boolean {
+function needsAuthorization(response: Response): boolean {
   if (response.status === 401) return true;
   if (response.status !== 403) return false;
   return /(?:^|[\s,])error="?insufficient_scope"?/iu.test(
@@ -34,7 +33,7 @@ function isTransientStatus(status: number): boolean {
   return status === 408 || status === 429 || status >= 500;
 }
 
-export const discard = (response: Response): Effect.Effect<void> =>
+const discard = (response: Response): Effect.Effect<void> =>
   Effect.promise(() => response.body?.cancel().catch(() => undefined) ?? Promise.resolve());
 
 const describe = (status: number, body: string): string => {
@@ -46,15 +45,15 @@ const describe = (status: number, body: string): string => {
   return `MCP HTTP request failed with status ${status}${snippet === "" ? "" : `: ${snippet}`}`;
 };
 
-export const describeHttpFailure: {
+const describeHttpFailure: {
   (body: string): (status: number) => string;
   (status: number, body: string): string;
 } = dual(2, describe);
 
-export const unwrapCause = (error: unknown): unknown =>
+const unwrapCause = (error: unknown): unknown =>
   error instanceof McpForeignError ? error.cause : error;
 
-export function isRetryable(failure: unknown): boolean {
+function isRetryable(failure: unknown): boolean {
   const error = unwrapCause(failure);
   if (error instanceof McpHttpError) return isTransientStatus(error.status);
   if (error instanceof TypeError) return true;
@@ -62,30 +61,38 @@ export function isRetryable(failure: unknown): boolean {
   return typeof code === "string" && (code.startsWith("E") || code.startsWith("UND_ERR"));
 }
 
-const unrefTimer = (ms: number, onTimeout: () => void): (() => void) => {
-  const timer = setTimeout(onTimeout, ms);
-  timer.unref?.();
-  return () => clearTimeout(timer);
-};
-
-const sleepFor = (ms: number, signal: AbortSignal): Effect.Effect<boolean> =>
+const abortedBy = (signal: AbortSignal): Effect.Effect<boolean> =>
   Effect.callback<boolean>((resume) => {
     if (signal.aborted) {
       resume(Effect.succeed(false));
-      return;
+      return undefined;
     }
     const onAbort = () => {
-      cancel();
       resume(Effect.succeed(false));
     };
-    const cancel = unrefTimer(ms, () => {
-      signal.removeEventListener("abort", onAbort);
-      resume(Effect.succeed(true));
-    });
     signal.addEventListener("abort", onAbort, { once: true });
+    return Effect.sync(() => {
+      signal.removeEventListener("abort", onAbort);
+    });
   });
 
-export const sleepUnlessAborted: {
+const sleepFor = (ms: number, signal: AbortSignal): Effect.Effect<boolean> =>
+  Effect.race(Effect.as(unrefSleep(ms), true), abortedBy(signal));
+
+const sleepUnlessAborted: {
   (signal: AbortSignal): (ms: number) => Effect.Effect<boolean>;
   (ms: number, signal: AbortSignal): Effect.Effect<boolean>;
 } = dual(2, sleepFor);
+
+const httpSupport = {
+  contentType,
+  describeHttpFailure,
+  discard,
+  isRetryable,
+  needsAuthorization,
+  newCursor,
+  sleepUnlessAborted,
+  unwrapCause,
+};
+
+export default httpSupport;

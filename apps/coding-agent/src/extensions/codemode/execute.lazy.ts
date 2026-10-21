@@ -1,2 +1,7 @@
-/** Loads the codemode sandbox runtime on the first script (see execute.ts). */
-export const loadCodemodeExecutor = () => import("./execute.ts");
+const loadCodemodeExecutor = () => import("./execute.ts").then((module) => module.default);
+
+const executeLazy = {
+  loadCodemodeExecutor,
+};
+
+export default executeLazy;

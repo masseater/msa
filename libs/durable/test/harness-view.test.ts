@@ -1,24 +1,23 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  fauxAssistantMessage,
-  fauxText,
-} from "@msa/ai";
-import { type Conversation, type Harness, LiveDoc, MemoryStorage } from "@msa/durable";
+import type aiTypes from "@msa/ai/index.types";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup, openChat, waitFor } from "./chat-support.ts";
-import { committed, replay, type Frame, drained, record, fresh } from "./harness-view-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
+import harnessViewCases from "./harness-view-cases.ts";
+import harnessViewSupport from "./harness-view-support.ts";
+import support from "./support.ts";
 
-const MOUNTED = ["msa.agent", "msa.inbox", "msa.live", "msa.provider", "msa.usage"];
+const { MemoryStorage } = memory;
 
-function answer(text: string): AssistantMessage {
-  return fauxAssistantMessage([fauxText(text)]);
-}
+const { MOUNTED, answer } = harnessViewCases;
+const { committed, drained, fresh, record, replay } = harnessViewSupport;
+const { aborted, allEntries, awaited, chatSetup, context, deferred, openChat, waitFor } = support;
 
-function touches(harness: Harness, conversation: Conversation): { count: number } {
+function touches(
+  harness: durableTypes.Harness,
+  conversation: durableTypes.Conversation,
+): { count: number } {
   const counter = { count: 0 };
   harness.subscribeCommits((publication) => {
     const touched = publication.changes.some(
@@ -34,221 +33,182 @@ function touches(harness: Harness, conversation: Conversation): { count: number 
   return counter;
 }
 
-describe("conversation view", () => {
-  it("hydrates the active entries and the built-in documents", async () => {
-    const setup = chatSetup();
-    setup.faux.setResponses([answer("hello")]);
-    const { harness, root } = await openChat(new MemoryStorage(), setup);
-    await (await root.submit({ type: "input", content: "hi" }, context)).wait(context);
-    const view = await fresh(root);
-    expect(view.conversation).toEqual({ id: root.id });
-    expect(view.entries).toEqual(await allEntries(root));
-    expect(Object.keys(view.docs).sort()).toEqual(MOUNTED);
-    expect(view.docs["msa.live"]).toEqual({});
-    expect(view.docs["msa.inbox"]).toEqual({ items: [] });
-    await harness.close(context);
-  });
+const hydratesActiveEntries = Effect.gen(function* () {
+  const setup = chatSetup();
+  setup.faux.setResponses([answer("hello")]);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "hi", type: "input" }, context))).wait(context),
+  );
+  const view = yield* fresh(root);
+  expect(view.conversation).toEqual({ id: root.id });
+  expect(view.entries).toEqual(yield* allEntries(root));
+  expect(Object.keys(view.docs).sort()).toEqual(MOUNTED);
+  expect(view.docs["msa.live"]).toEqual({});
+  expect(view.docs["msa.inbox"]).toEqual({ items: [] });
+  yield* awaited(harness.close(context));
 });
 
 describe("conversation view", () => {
-  it("publishes one frame per touching commit, whose operations rebuild every revision", async () => {
-    const setup = chatSetup();
-    const release = deferred();
-    const step: FauxResponseStep = async (_request, options) => {
-      await Promise.race([release.promise, aborted(options!.signal!)]);
-      return answer("a longer answer");
-    };
-    setup.faux.setResponses([step]);
-    const { harness, root } = await openChat(new MemoryStorage(), setup);
-    const { initial, frames, stop } = await record(root);
-    const touching = touches(harness, root);
-    const submission = await root.submit({ type: "input", content: "hi" }, context);
-    await waitFor(() =>
-      frames.some((frame) => (frame.value.docs["msa.live"] as { generation?: unknown }).generation),
+  it("hydrates the active entries and the built-in documents", () =>
+    Effect.runPromise(hydratesActiveEntries));
+});
+
+const publishesOneFrame = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const setup = chatSetup();
+  const release = deferred();
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
+    runPromise(
+      Effect.gen(function* () {
+        yield* awaited(Promise.race([release.promise, aborted(options!.signal!)]));
+        return answer("a longer answer");
+      }),
     );
-    release.resolve();
-    await submission.wait(context);
-    await harness.waitForIdle(context);
-    await drained();
-    expect(frames).toHaveLength(touching.count);
-    expect(replay(initial, frames)).toEqual(await committed(harness, root, initial.conversation));
-    expect(frames[0]!.ops).toContainEqual([
-      "p",
-      ["entries"],
-      0,
-      0,
-      [expect.objectContaining({ kind: "msa.user" })],
-    ]);
-    // Document operations keep their exact shape under the mount path.
-    expect(frames.flatMap((frame) => frame.ops)).toContainEqual([
-      "s",
-      ["docs", "msa.live", "generation"],
-      { attempt: 1 },
-    ]);
-    await stop();
-    await harness.close(context);
-  });
+  setup.faux.setResponses([step]);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  const { initial, frames, stop } = yield* awaited(record(root));
+  const touching = touches(harness, root);
+  const submission = yield* awaited(root.submit({ content: "hi", type: "input" }, context));
+  yield* waitFor(() =>
+    frames.some((frame) => (frame.value.docs["msa.live"] as { generation?: unknown }).generation),
+  );
+  release.resolve();
+  yield* awaited(submission.wait(context));
+  yield* awaited(harness.waitForIdle(context));
+  yield* drained();
+  expect(frames).toHaveLength(touching.count);
+  expect(replay(initial, frames)).toEqual(yield* committed(harness, root, initial.conversation));
+  expect(frames[0]!.ops).toContainEqual([
+    "p",
+    ["entries"],
+    0,
+    0,
+    [expect.objectContaining({ kind: "msa.user" })],
+  ]);
+  expect(frames.flatMap((frame) => frame.ops)).toContainEqual([
+    "s",
+    ["docs", "msa.live", "generation"],
+    { attempt: 1 },
+  ]);
+  yield* awaited(stop());
+  yield* awaited(harness.close(context));
 });
 
 describe("conversation view", () => {
-  it("shares unchanged parts between revisions and skips commits that touch nothing mounted", async () => {
-    const setup = chatSetup();
-    const { harness, root } = await openChat(new MemoryStorage(), setup);
-    const other = await harness.createConversation({ ownership: { kind: "ownerless" } }, context);
-    const { initial, frames, stop } = await record(root);
-    await other.commit((tx) => tx.appendEntry(other.id, { kind: "note" }), context);
-    await root.configure({ thinkingLevel: "high" }, context);
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context);
-    await drained();
-    expect(frames).toHaveLength(2);
-    expect(frames[0]!.ops).toEqual([["s", ["docs", "msa.agent", "thinkingLevel"], "high"]]);
-    expect(frames[0]!.value.entries).toBe(initial.entries);
-    expect(frames[0]!.value.docs["msa.live"]).toBe(initial.docs["msa.live"]);
-    expect(frames[1]!.value.docs).toBe(frames[0]!.value.docs);
-    await stop();
-    await harness.close(context);
-  });
+  it("publishes one frame per touching commit, whose operations rebuild every revision", () =>
+    Effect.runPromise(publishesOneFrame));
+});
 
-  it("cuts the entries at a head marker, keeping the entries from its head", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const note = (kind: string) => root.commit((tx) => tx.appendEntry(root.id, { kind }), context);
-    await note("a");
-    const b = await note("b");
-    await note("c");
-    const { initial, frames, stop } = await record(root);
-    const summary = await root.commit(
-      (tx) => tx.appendEntry(root.id, { kind: "summary", head: b.id }),
-      context,
-    );
-    await note("d");
-    await root.reset(undefined, context);
-    await drained();
-    const kinds = frames.map((frame) => frame.value.entries.map((entry) => entry.kind));
-    expect(kinds).toEqual([["summary", "b", "c"], ["summary", "b", "c", "d"], ["msa.reset"]]);
-    expect(frames[0]!.ops).toEqual([["p", ["entries"], 0, 1, [summary]]]);
-    expect(replay(initial, frames)).toEqual(await committed(harness, root, initial.conversation));
-    await stop();
-    await harness.close(context);
-  });
+const sharesUnchangedParts = Effect.gen(function* () {
+  const setup = chatSetup();
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  const other = yield* awaited(
+    harness.createConversation({ ownership: { kind: "ownerless" } }, context),
+  );
+  const { initial, frames, stop } = yield* awaited(record(root));
+  yield* awaited(other.commit((tx) => tx.appendEntry(other.id, { kind: "note" }), context));
+  yield* awaited(root.configure({ thinkingLevel: "high" }, context));
+  yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context));
+  yield* drained();
+  expect(frames).toHaveLength(2);
+  expect(frames[0]!.ops).toEqual([["s", ["docs", "msa.agent", "thinkingLevel"], "high"]]);
+  expect(frames[0]!.value.entries).toBe(initial.entries);
+  expect(frames[0]!.value.docs["msa.live"]).toBe(initial.docs["msa.live"]);
+  expect(frames[1]!.value.docs).toBe(frames[0]!.value.docs);
+  yield* awaited(stop());
+  yield* awaited(harness.close(context));
+});
+
+const cutsEntriesHead = Effect.gen(function* () {
+  const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
+  const note = (kind: string) => root.commit((tx) => tx.appendEntry(root.id, { kind }), context);
+  yield* awaited(note("a"));
+  const b = yield* awaited(note("b"));
+  yield* awaited(note("c"));
+  const { initial, frames, stop } = yield* awaited(record(root));
+  const summary = yield* awaited(
+    root.commit((tx) => tx.appendEntry(root.id, { head: b.id, kind: "summary" }), context),
+  );
+  yield* awaited(note("d"));
+  yield* awaited(root.reset(undefined, context));
+  yield* drained();
+  const kinds = frames.map((frame) => frame.value.entries.map((entry) => entry.kind));
+  expect(kinds).toEqual([["summary", "b", "c"], ["summary", "b", "c", "d"], ["msa.reset"]]);
+  expect(frames[0]!.ops).toEqual([["p", ["entries"], 0, 1, [summary]]]);
+  expect(replay(initial, frames)).toEqual(yield* committed(harness, root, initial.conversation));
+  yield* awaited(stop());
+  yield* awaited(harness.close(context));
 });
 
 describe("conversation view", () => {
-  it("keeps only mounted entries for a raw head write that targets before the active range", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const old = await root.commit((tx) => tx.appendEntry(root.id, { kind: "old" }), context);
-    await root.reset(undefined, context);
-    const { frames, stop } = await record(root);
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "summary", head: old.id }), context);
-    await drained();
-    // Model context now starts at `old` again, but the mount never held it (spec §12); a rebuilt mount shows it.
-    expect(frames[0]!.value.entries.map((entry) => entry.kind)).toEqual(["summary"]);
-    await stop();
-    expect((await fresh(root)).entries.map((entry) => entry.kind)).toEqual(["summary", "old"]);
-    await harness.close(context);
-  });
+  it("shares unchanged parts between revisions and skips commits that touch nothing mounted", () =>
+    Effect.runPromise(sharesUnchangedParts));
 
-  it("cuts a fork's view into its inherited entries", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const a = await root.commit((tx) => tx.appendEntry(root.id, { kind: "a" }), context);
-    const b = await root.commit((tx) => tx.appendEntry(root.id, { kind: "b" }), context);
-    const fork = await root.fork(b.id, { ownership: { kind: "ownerless" } }, context);
-    const { initial, frames, stop } = await record(fork);
-    await fork.commit((tx) => tx.appendEntry(fork.id, { kind: "summary", head: b.id }), context);
-    await drained();
-    expect(initial.entries.map((entry) => entry.id)).toEqual([a.id, b.id]);
-    expect(frames[0]!.value.entries.map((entry) => entry.kind)).toEqual(["summary", "b"]);
-    expect(frames[0]!.value).toEqual(await committed(harness, fork, initial.conversation));
-    await stop();
-    await harness.close(context);
-  });
+  it("cuts the entries at a head marker, keeping the entries from its head", () =>
+    Effect.runPromise(cutsEntriesHead));
+});
 
-  it("shows a fork's inherited entries and follows only the fork's own commits", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const first = await root.commit((tx) => tx.appendEntry(root.id, { kind: "first" }), context);
-    const fork = await root.fork(first.id, { ownership: { kind: "ownerless" } }, context);
-    const { initial, frames, stop } = await record(fork);
-    expect(initial.entries.map((entry) => entry.kind)).toEqual(["first"]);
-    expect(initial.conversation.parent).toEqual({ conversationId: root.id, at: first.id });
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "parent" }), context);
-    await fork.commit((tx) => tx.appendEntry(fork.id, { kind: "child" }), context);
-    await drained();
-    expect(frames.map((frame) => frame.value.entries.map((entry) => entry.kind))).toEqual([
-      ["first", "child"],
-    ]);
-    await stop();
-    await harness.close(context);
-  });
+const keepsOnlyMounted = Effect.gen(function* () {
+  const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
+  const old = yield* awaited(
+    root.commit((tx) => tx.appendEntry(root.id, { kind: "old" }), context),
+  );
+  yield* awaited(root.reset(undefined, context));
+  const { frames, stop } = yield* awaited(record(root));
+  yield* awaited(
+    root.commit((tx) => tx.appendEntry(root.id, { head: old.id, kind: "summary" }), context),
+  );
+  yield* drained();
+  expect(frames[0]!.value.entries.map((entry) => entry.kind)).toEqual(["summary"]);
+  yield* awaited(stop());
+  expect((yield* fresh(root)).entries.map((entry) => entry.kind)).toEqual(["summary", "old"]);
+  yield* awaited(harness.close(context));
+});
+
+const cutsForkView = Effect.gen(function* () {
+  const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
+  const a = yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "a" }), context));
+  const b = yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "b" }), context));
+  const fork = yield* awaited(root.fork(b.id, { ownership: { kind: "ownerless" } }, context));
+  const { initial, frames, stop } = yield* awaited(record(fork));
+  yield* awaited(
+    fork.commit((tx) => tx.appendEntry(fork.id, { head: b.id, kind: "summary" }), context),
+  );
+  yield* drained();
+  expect(initial.entries.map((entry) => entry.id)).toEqual([a.id, b.id]);
+  expect(frames[0]!.value.entries.map((entry) => entry.kind)).toEqual(["summary", "b"]);
+  expect(frames[0]!.value).toEqual(yield* committed(harness, fork, initial.conversation));
+  yield* awaited(stop());
+  yield* awaited(harness.close(context));
+});
+
+const showsForkInherited = Effect.gen(function* () {
+  const { harness, root } = yield* openChat(new MemoryStorage(), chatSetup());
+  const first = yield* awaited(
+    root.commit((tx) => tx.appendEntry(root.id, { kind: "first" }), context),
+  );
+  const fork = yield* awaited(root.fork(first.id, { ownership: { kind: "ownerless" } }, context));
+  const { initial, frames, stop } = yield* awaited(record(fork));
+  expect(initial.entries.map((entry) => entry.kind)).toEqual(["first"]);
+  expect(initial.conversation.parent).toEqual({ at: first.id, conversationId: root.id });
+  yield* awaited(root.commit((tx) => tx.appendEntry(root.id, { kind: "parent" }), context));
+  yield* awaited(fork.commit((tx) => tx.appendEntry(fork.id, { kind: "child" }), context));
+  yield* drained();
+  expect(frames.map((frame) => frame.value.entries.map((entry) => entry.kind))).toEqual([
+    ["first", "child"],
+  ]);
+  yield* awaited(stop());
+  yield* awaited(harness.close(context));
 });
 
 describe("conversation view", () => {
-  it("unmounts a retired document and mounts its recreation whole", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const { frames, stop } = await record(root);
-    await root.commit((tx) => tx.retireDoc(LiveDoc, root.id), context);
-    await root.commit(async (tx) => {
-      (await tx.doc(LiveDoc, root.id)).tools = [];
-    }, context);
-    await drained();
-    expect(frames.map((frame) => frame.ops)).toEqual([
-      [["d", ["docs", "msa.live"]]],
-      [["s", ["docs", "msa.live"], { tools: [] }]],
-    ]);
-    expect(frames[0]!.value.docs["msa.live"]).toBeUndefined();
-    await stop();
-    await harness.close(context);
-  });
+  it("keeps only mounted entries for a raw head write that targets before the active range", () =>
+    Effect.runPromise(keepsOnlyMounted));
 
-  it("replaces undelivered frames with the newest view after 100 pending frames", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const watch = await root.watch(context);
-    for await (const _ of Array.from({ length: 101 })) {
-      await root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context);
-    }
-    const frames: Frame[] = [];
-    watch.start((value, ops) => {
-      frames.push({ value, ops });
+  it("cuts a fork's view into its inherited entries", () => Effect.runPromise(cutsForkView));
 
-      return Promise.resolve();
-    });
-    await drained();
-    expect(frames).toHaveLength(1);
-    expect(frames[0]!.ops).toEqual([["r", frames[0]!.value]]);
-    expect(frames[0]!.value.entries).toHaveLength(101);
-    await watch.stop();
-    await harness.close(context);
-  });
-});
-
-describe("conversation view", () => {
-  it("keeps states and watches of one conversation independent and remounts after the last one detaches", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const state = await root.viewState(context);
-    const { frames, stop } = await record(root);
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "one" }), context);
-    await drained();
-    expect(state.value.entries.map((entry) => entry.kind)).toEqual(["one"]);
-    await stop();
-    expect(frames).toHaveLength(1);
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "two" }), context);
-    await drained();
-    expect(state.value.entries.map((entry) => entry.kind)).toEqual(["one", "two"]);
-    const last = state.value;
-    state.dispose();
-    // No observer is left, so the mount was dropped: a new observer builds a new revision from committed state.
-    const rebuilt = await fresh(root);
-    expect(rebuilt).toEqual(last);
-    expect(rebuilt).not.toBe(last);
-    await harness.close(context);
-  });
-
-  it("ends states and watches at close and rejects later acquisition", async () => {
-    const { harness, root } = await openChat(new MemoryStorage(), chatSetup());
-    const watch = await root.watch(context);
-    const state = await root.viewState(context);
-    await harness.close(context);
-    expect(await watch.closed).toEqual({ reason: "session_closed" });
-    expect(state.value.entries).toEqual([]);
-    await expect(root.watch(context)).rejects.toThrow();
-    await expect(root.viewState(context)).rejects.toThrow();
-  });
+  it("shows a fork's inherited entries and follows only the fork's own commits", () =>
+    Effect.runPromise(showsForkInherited));
 });

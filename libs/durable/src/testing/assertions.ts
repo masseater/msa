@@ -1,6 +1,5 @@
-import type { StorageConformanceAssertions } from "./types.ts";
-
-export type ExpectLike = (actual: unknown, message?: string) => unknown;
+import type assertionsTypes from "./assertions.types.ts";
+import type typesModule from "./types.ts";
 
 type ExpectResult = {
   toBe(expected: unknown): unknown;
@@ -13,32 +12,37 @@ type ExpectResult = {
   };
 };
 
-/**
- * Adapts a Vitest/Jest-compatible `expect` function without importing either runner.
- * @param {ExpectLike} expect - The runner's `expect`.
- * @returns {StorageConformanceAssertions} The assertions.
- */
-export function createExpectAssertions(expect: ExpectLike): StorageConformanceAssertions {
+function createExpectAssertions(
+  expect: assertionsTypes.ExpectLike,
+): typesModule.StorageConformanceAssertions {
   const result = (actual: unknown, message?: string): ExpectResult =>
     expect(actual, message) as ExpectResult;
   return {
-    ok(value, message) {
-      result(value, message).toBeTruthy();
-    },
-    strictEqual(actual, expected) {
-      result(actual).toBe(expected);
-    },
     deepEqual(actual, expected) {
       result(actual).toEqual(expected);
-    },
-    partialDeepEqual(actual, expected) {
-      result(actual).toMatchObject(expected);
     },
     greaterThan(actual, expected) {
       result(actual).toBeGreaterThan(expected);
     },
-    async rejects(operation, messageIncludes) {
-      await result(operation).rejects.toThrow(messageIncludes);
+    ok(value, message) {
+      result(value, message).toBeTruthy();
+    },
+    partialDeepEqual(actual, expected) {
+      result(actual).toMatchObject(expected);
+    },
+    rejects(operation, messageIncludes) {
+      return Promise.resolve(result(operation).rejects.toThrow(messageIncludes)).then(
+        () => undefined,
+      );
+    },
+    strictEqual(actual, expected) {
+      result(actual).toBe(expected);
     },
   };
 }
+
+const assertions = {
+  createExpectAssertions,
+};
+
+export default assertions;

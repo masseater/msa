@@ -1,40 +1,27 @@
-/**
- * Input Transform Example - demonstrates the `input` event for intercepting user input.
- *
- * Start msa with this extension:
- *   msa -e ./examples/extensions/input-transform.ts
- *
- * Then type these inside msa:
- *   ?quick What is TypeScript?  → "Respond briefly: What is TypeScript?"
- *   ping                        → "pong" (instant, no LLM)
- *   time                        → current time (instant, no LLM)
- */
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { DateTime } from "effect";
 
-export default function (msa: ExtensionAPI) {
-  msa.on("input", async (event, ctx) => {
-    // Source-based logic: skip processing for extension-injected messages
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.on("input", (event, ctx) => {
     if (event.source === "extension") {
       return { action: "continue" };
     }
 
-    // Transform: ?quick prefix for brief responses
     if (event.text.startsWith("?quick ")) {
       const query = event.text.slice(7).trim();
-      if (!query) {
+      if (query.length === 0) {
         ctx.ui.notify("Usage: ?quick <question>", "warning");
         return { action: "handled" };
       }
       return { action: "transform", text: `Respond briefly in 1-2 sentences: ${query}` };
     }
 
-    // Handle: instant responses without LLM (extension shows its own feedback)
     if (event.text.toLowerCase() === "ping") {
       ctx.ui.notify("pong", "info");
       return { action: "handled" };
     }
     if (event.text.toLowerCase() === "time") {
-      ctx.ui.notify(new Date().toLocaleString(), "info");
+      ctx.ui.notify(DateTime.formatLocal(DateTime.nowUnsafe()), "info");
       return { action: "handled" };
     }
 

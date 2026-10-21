@@ -1,94 +1,54 @@
-/**
- * Process @file CLI arguments into text content and image attachments
- */
+import type aiTypes from "@msa/ai/index.types";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
-import { access, readFile, stat } from "node:fs/promises";
-import { resolve } from "path";
+import awaitingModule from "../core/awaiting.ts";
+import mime from "../utils/mime.ts";
+import fileArgument from "./file-argument.ts";
+import type fileProcessorTypes from "./file-processor.types.ts";
 
-import type { ImageContent } from "@msa/ai";
-import chalk from "chalk";
+const { awaited, awaiting } = awaitingModule;
+const { detectSupportedImageMimeTypeFromFile } = mime;
+const { readImageArgument, readTextArgument, statFileArgument } = fileArgument;
 
-import { resolveReadPath } from "../core/tools/path-utils.ts";
-import { toErrorMessage } from "../utils/errors.ts";
-import { processImage } from "../utils/image-process.ts";
-import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.ts";
-import { stripBom } from "../utils/text.ts";
-
-export interface ProcessedFiles {
-  text: string;
-  images: ImageContent[];
-}
-
-export interface ProcessFileOptions {
-  /** Whether to auto-resize images. Default: true */
-  autoResizeImages?: boolean;
-}
-
-/** Process @file arguments into text content and image attachments */
-export async function processFileArguments(
+function processFileArgumentsImpl(
   fileArgs: string[],
-  options?: ProcessFileOptions,
-): Promise<ProcessedFiles> {
-  const autoResizeImages = options?.autoResizeImages ?? true;
-  let text = "";
-  const images: ImageContent[] = [];
-
-  for (const fileArg of fileArgs) {
-    // Expand and resolve path (handles ~ expansion and macOS screenshot Unicode spaces)
-    const absolutePath = resolve(resolveReadPath(fileArg, process.cwd()));
-
-    // Check if file exists
-    try {
-      await access(absolutePath);
-    } catch {
-      console.error(chalk.red(`Error: File not found: ${absolutePath}`));
-      process.exit(1);
-    }
-
-    // Check if file is empty
-    const stats = await stat(absolutePath);
-    if (stats.size === 0) {
-      // Skip empty files
-      continue;
-    }
-
-    const mimeType = await detectSupportedImageMimeTypeFromFile(absolutePath);
-
-    if (mimeType) {
-      // Handle image file
-      const content = await readFile(absolutePath);
-      const processed = await processImage(content, mimeType, { autoResizeImages });
-
-      if (!processed.ok) {
-        text += `<file name="${absolutePath}">${processed.message}</file>\n`;
-        continue;
+  options?: fileProcessorTypes.ProcessFileOptions,
+): Promise<fileProcessorTypes.ProcessedFiles> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const autoResizeImages = options?.autoResizeImages ?? true;
+      let text = "";
+      const images: aiTypes.ImageContent[] = [];
+      for (const fileArg of fileArgs) {
+        const { size, absolutePath } = yield* statFileArgument(fileArg);
+        if (size === 0) continue;
+        const mimeType = yield* awaited(detectSupportedImageMimeTypeFromFile(absolutePath));
+        if (mimeType === null || mimeType === "") {
+          text += yield* readTextArgument(absolutePath);
+          continue;
+        }
+        const read = yield* readImageArgument(absolutePath, mimeType, autoResizeImages);
+        if (read.image !== undefined) images.push(read.image);
+        text += read.text;
       }
-
-      const attachment: ImageContent = {
-        type: "image",
-        mimeType: processed.mimeType,
-        data: processed.data,
-      };
-      images.push(attachment);
-
-      // Add text reference to image with optional processing hints
-      if (processed.hints.length > 0) {
-        text += `<file name="${absolutePath}">${processed.hints.join("\n")}</file>\n`;
-      } else {
-        text += `<file name="${absolutePath}"></file>\n`;
-      }
-    } else {
-      // Handle text file
-      try {
-        const content = stripBom(await readFile(absolutePath, "utf-8"));
-        text += `<file name="${absolutePath}">\n${content}\n</file>\n`;
-      } catch (error: unknown) {
-        const message = toErrorMessage(error);
-        console.error(chalk.red(`Error: Could not read file ${absolutePath}: ${message}`));
-        process.exit(1);
-      }
-    }
-  }
-
-  return { text, images };
+      return { images, text };
+    }),
+  );
 }
+
+const processFileArguments: {
+  (
+    fileArgs: string[],
+    options?: fileProcessorTypes.ProcessFileOptions,
+  ): Promise<fileProcessorTypes.ProcessedFiles>;
+  (
+    options?: fileProcessorTypes.ProcessFileOptions,
+  ): (fileArgs: string[]) => Promise<fileProcessorTypes.ProcessedFiles>;
+} = dual((args: IArguments) => args.length >= 1, processFileArgumentsImpl);
+
+const fileProcessor = {
+  processFileArguments,
+};
+
+export default fileProcessor;

@@ -1,161 +1,112 @@
-import { copyJson, type JsonValue } from "@msa/chord";
-import type { Op } from "@msa/chord/delta";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
+import { Function } from "effect";
 
-import { idFromNumber } from "./ids.ts";
-import type {
-  CheckpointInfo,
-  CommonDocDefinition,
-  ConversationDocFamilyToken,
-  ConversationDocToken,
-  ConversationId,
-  DocDefinition,
-  DocFamilyDefinition,
-  DocFamilyToken,
-  DocToken,
-  DocumentAddress,
-  DocumentCreate,
-  DocumentId,
-  DocumentRecord,
-  DocumentSemantics,
-  Id,
-  JsonObject,
-  LatestConversationSemantics,
-  RewindableConversationDocFamilyToken,
-  RewindableConversationDocToken,
-  RewindableConversationSemantics,
-  SessionDocFamilyToken,
-  SessionDocToken,
-  StoredDocument,
-  TaskDocFamilyToken,
-  TaskDocToken,
-  TaskId,
-} from "./types.ts";
+import type documentsTypes from "./documents.types.ts";
+import type dualTypes from "./dual.ts";
+import ids from "./ids.ts";
+import type typesModule from "./types.types.ts";
 
-type FamilyInput<T extends JsonObject, I extends JsonValue> = Omit<
-  CommonDocDefinition<T>,
+const { copyJson } = json;
+
+const { idFromNumber } = ids;
+
+type FamilyInput<T extends typesModule.JsonObject, I extends chordTypes.JsonValue> = Omit<
+  typesModule.CommonDocDefinition<T>,
   "initial"
 > & {
   readonly family: true;
   initial(seed: I): T;
 };
 
-/** Define a Session-scoped singleton document. */
-export function defineDoc<T extends JsonObject>(
-  definition: CommonDocDefinition<T> & { readonly scope: "session" },
-): SessionDocToken<T>;
-/** Define a latest-only conversation singleton document. */
-export function defineDoc<T extends JsonObject>(
-  definition: CommonDocDefinition<T> & LatestConversationSemantics,
-): ConversationDocToken<T>;
-/** Define a rewindable conversation singleton document. */
-export function defineDoc<T extends JsonObject>(
-  definition: CommonDocDefinition<T> & RewindableConversationSemantics,
-): RewindableConversationDocToken<T>;
-/** Define a task-scoped singleton document. */
-export function defineDoc<T extends JsonObject>(
-  definition: CommonDocDefinition<T> & { readonly scope: "task" },
-): TaskDocToken<T>;
-export function defineDoc<T extends JsonObject>(
-  definition: DocDefinition<T>,
-): DocToken<T, DocDefinition<T>> {
+function defineDoc<T extends typesModule.JsonObject>(
+  definition: typesModule.CommonDocDefinition<T> & { readonly scope: "session" },
+): typesModule.SessionDocToken<T>;
+function defineDoc<T extends typesModule.JsonObject>(
+  definition: typesModule.CommonDocDefinition<T> & typesModule.LatestConversationSemantics,
+): typesModule.ConversationDocToken<T>;
+function defineDoc<T extends typesModule.JsonObject>(
+  definition: typesModule.CommonDocDefinition<T> & typesModule.RewindableConversationSemantics,
+): typesModule.RewindableConversationDocToken<T>;
+function defineDoc<T extends typesModule.JsonObject>(
+  definition: typesModule.CommonDocDefinition<T> & { readonly scope: "task" },
+): typesModule.TaskDocToken<T>;
+function defineDoc<T extends typesModule.JsonObject>(
+  definition: typesModule.DocDefinition<T>,
+): typesModule.DocToken<T, typesModule.DocDefinition<T>> {
   validateDefinition(definition);
   return { definition };
 }
 
-/** Define a Session-scoped document family. */
-export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: FamilyInput<T, I> & { readonly scope: "session" },
-): SessionDocFamilyToken<T, I>;
-/** Define a latest-only conversation document family. */
-export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
-  definition: FamilyInput<T, I> & LatestConversationSemantics,
-): ConversationDocFamilyToken<T, I>;
-/** Define a rewindable conversation document family. */
-export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
-  definition: FamilyInput<T, I> & RewindableConversationSemantics,
-): RewindableConversationDocFamilyToken<T, I>;
-/** Define a task-scoped document family. */
-export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
+): typesModule.SessionDocFamilyToken<T, I>;
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
+  definition: FamilyInput<T, I> & typesModule.LatestConversationSemantics,
+): typesModule.ConversationDocFamilyToken<T, I>;
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
+  definition: FamilyInput<T, I> & typesModule.RewindableConversationSemantics,
+): typesModule.RewindableConversationDocFamilyToken<T, I>;
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
   definition: FamilyInput<T, I> & { readonly scope: "task" },
-): TaskDocFamilyToken<T, I>;
-export function defineDocFamily<T extends JsonObject, I extends JsonValue>(
-  definition: DocFamilyDefinition<T, I>,
-): DocFamilyToken<T, I, DocFamilyDefinition<T, I>> {
+): typesModule.TaskDocFamilyToken<T, I>;
+function defineDocFamily<T extends typesModule.JsonObject, I extends chordTypes.JsonValue>(
+  definition: typesModule.DocFamilyDefinition<T, I>,
+): typesModule.DocFamilyToken<T, I, typesModule.DocFamilyDefinition<T, I>> {
   validateDefinition(definition);
   return { definition };
 }
 
-/** Erased definition shape used by the Session after overload resolution. */
-export type AnyDocDefinition = DocumentSemantics & {
-  readonly kind: string;
-  readonly version: number;
-  readonly family?: true;
-  initial(seed?: JsonValue): JsonObject;
-  migrate?(value: JsonObject, fromVersion: number): JsonObject;
-  checkpointWhen?(value: Readonly<JsonObject>, ops: readonly Op[], info: CheckpointInfo): boolean;
-};
-
-/** Erased singleton or family token. */
-export type AnyDocToken = { readonly definition: AnyDocDefinition };
-
-function validateDefinition(definition: AnyDocDefinition): void {
+function validateDefinition(definition: documentsTypes.AnyDocDefinition): void {
   if (!Number.isSafeInteger(definition.version) || definition.version < 1) {
     throw new TypeError(`Document ${definition.kind} version must be a positive integer`);
   }
 }
 
-/** Logical address plus its string identity for maps. */
-export type ResolvedAddress = {
-  readonly address: DocumentAddress;
-  readonly id: string;
-  readonly nextArgument: number;
-};
+const resolveAddress: dualTypes.Dual2<
+  documentsTypes.AnyDocDefinition,
+  readonly unknown[],
+  documentsTypes.ResolvedAddress
+> = Function.dual(
+  2,
+  (
+    definition: documentsTypes.AnyDocDefinition,
+    args: readonly unknown[],
+  ): documentsTypes.ResolvedAddress => {
+    let index = 0;
+    let scope: typesModule.DocumentAddress["scope"];
+    switch (definition.scope) {
+      case "session":
+        scope = { kind: "session" };
+        break;
+      case "conversation":
+        scope = {
+          conversationId: ownerId<typesModule.ConversationId>(args[index++], definition),
+          kind: "conversation",
+        };
+        break;
+      case "task":
+        scope = { kind: "task", taskId: ownerId<typesModule.TaskId>(args[index++], definition) };
+        break;
+    }
+    const key = definition.family === true ? (args[index++] as string) : undefined;
+    const address: typesModule.DocumentAddress =
+      key === undefined ? { kind: definition.kind, scope } : { key, kind: definition.kind, scope };
+    return { address, id: addressId(address), nextArgument: index };
+  },
+);
 
-/**
- * Resolve an overloaded argument list and return the index after the owner and family key.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {readonly unknown[]} args - The arguments.
- * @returns {ResolvedAddress} The address and the next index.
- */
-export function resolveAddress(
-  definition: AnyDocDefinition,
-  args: readonly unknown[],
-): ResolvedAddress {
-  let index = 0;
-  let scope: DocumentAddress["scope"];
-  switch (definition.scope) {
-    case "session":
-      scope = { kind: "session" };
-      break;
-    case "conversation":
-      scope = {
-        kind: "conversation",
-        conversationId: ownerId<ConversationId>(args[index++], definition),
-      };
-      break;
-    case "task":
-      scope = { kind: "task", taskId: ownerId<TaskId>(args[index++], definition) };
-      break;
-  }
-  const key = definition.family === true ? (args[index++] as string) : undefined;
-  const address: DocumentAddress =
-    key === undefined ? { kind: definition.kind, scope } : { kind: definition.kind, scope, key };
-  return { address, id: addressId(address), nextArgument: index };
-}
-
-function ownerId<I extends Id<string>>(value: unknown, definition: AnyDocDefinition): I {
+function ownerId<I extends typesModule.Id<string>>(
+  value: unknown,
+  definition: documentsTypes.AnyDocDefinition,
+): I {
   if (typeof value !== "number" || !Number.isSafeInteger(value)) {
     throw new TypeError(`Document ${definition.kind} requires a ${definition.scope} ID`);
   }
   return idFromNumber<I>(value);
 }
 
-/**
- * Stable string identity of one logical address.
- * @param {DocumentAddress} address - The address.
- * @returns {string} The identity.
- */
-export function addressId(address: DocumentAddress): string {
+function addressId(address: typesModule.DocumentAddress): string {
   const owner =
     address.scope.kind === "session"
       ? null
@@ -165,108 +116,128 @@ export function addressId(address: DocumentAddress): string {
   return JSON.stringify([address.kind, address.scope.kind, owner, address.key ?? null]);
 }
 
-/**
- * Build the storage create record for a new incarnation at an address.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentAddress} address - The address.
- * @param {DocumentId} id - The incarnation's ID.
- * @returns {DocumentCreate} The create record.
- */
-export function documentCreate(
-  definition: AnyDocDefinition,
-  address: DocumentAddress,
-  id: DocumentId,
-): DocumentCreate {
-  const key = address.key === undefined ? {} : { key: address.key };
-  switch (address.scope.kind) {
-    case "session":
-      return { id, kind: address.kind, ...key, scope: address.scope };
-    case "task":
-      return { id, kind: address.kind, ...key, scope: address.scope };
-    case "conversation":
-      return {
-        id,
-        kind: address.kind,
-        ...key,
-        scope: address.scope,
-        history: definition.history!,
-        fork: definition.fork!,
-      } as DocumentCreate;
-  }
-}
+const documentCreate: dualTypes.Dual3<
+  documentsTypes.AnyDocDefinition,
+  typesModule.DocumentAddress,
+  typesModule.DocumentId,
+  typesModule.DocumentCreate
+> = Function.dual(
+  3,
+  (
+    definition: documentsTypes.AnyDocDefinition,
+    address: typesModule.DocumentAddress,
+    id: typesModule.DocumentId,
+  ): typesModule.DocumentCreate => {
+    const key = address.key === undefined ? {} : { key: address.key };
+    switch (address.scope.kind) {
+      case "session":
+        return { id, kind: address.kind, ...key, scope: address.scope };
+      case "task":
+        return { id, kind: address.kind, ...key, scope: address.scope };
+      case "conversation":
+        return {
+          id,
+          kind: address.kind,
+          ...key,
+          fork: definition.fork!,
+          history: definition.history!,
+          scope: address.scope,
+        } as typesModule.DocumentCreate;
+    }
+  },
+);
 
-/**
- * Reject typed access whose token disagrees with the persisted scope, history, or fork semantics.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentCreate | DocumentRecord} record - The persisted record.
- */
-export function checkRecordScope(
-  definition: AnyDocDefinition,
-  record: DocumentCreate | DocumentRecord,
-): void {
-  if (
-    record.scope.kind !== definition.scope ||
-    (record.scope.kind === "conversation" &&
-      (record.history !== definition.history || record.fork !== definition.fork))
-  ) {
-    throw new TypeError(
-      `Document ${record.id} (${record.kind}) does not match the supplied definition semantics`,
-    );
-  }
-}
+const checkRecordScope: dualTypes.Dual2<
+  documentsTypes.AnyDocDefinition,
+  typesModule.DocumentCreate | typesModule.DocumentRecord,
+  void
+> = Function.dual(
+  2,
+  (
+    definition: documentsTypes.AnyDocDefinition,
+    record: typesModule.DocumentCreate | typesModule.DocumentRecord,
+  ): void => {
+    if (
+      record.scope.kind !== definition.scope ||
+      (record.scope.kind === "conversation" &&
+        (record.history !== definition.history || record.fork !== definition.fork))
+    ) {
+      throw new TypeError(
+        `Document ${record.id} (${record.kind}) does not match the supplied definition semantics`,
+      );
+    }
+  },
+);
 
-/**
- * Reject typed access to a stored version the supplied definition cannot use.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentCreate | DocumentRecord} record - The persisted record.
- * @param {number} version - The stored version.
- */
-export function checkRecordVersion(
-  definition: AnyDocDefinition,
-  record: DocumentCreate | DocumentRecord,
-  version: number,
-): void {
-  if (version > definition.version) {
-    throw new Error(
-      `Document ${record.id} (${record.kind}) has newer version ${version} than ${definition.version}`,
-    );
-  }
-  if (version < definition.version && definition.migrate === undefined) {
-    throw new Error(
-      `Document ${record.id} (${record.kind}) requires migration from version ${version}`,
-    );
-  }
-}
+const checkRecordVersion: dualTypes.Dual3<
+  documentsTypes.AnyDocDefinition,
+  typesModule.DocumentCreate | typesModule.DocumentRecord,
+  number,
+  void
+> = Function.dual(
+  3,
+  (
+    definition: documentsTypes.AnyDocDefinition,
+    record: typesModule.DocumentCreate | typesModule.DocumentRecord,
+    version: number,
+  ): void => {
+    if (version > definition.version) {
+      throw new Error(
+        `Document ${record.id} (${record.kind}) has newer version ${version} than ${definition.version}`,
+      );
+    }
+    if (version < definition.version && definition.migrate === undefined) {
+      throw new Error(
+        `Document ${record.id} (${record.kind}) requires migration from version ${version}`,
+      );
+    }
+  },
+);
 
-/**
- * Validate and materialize a detached stored value for typed access.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {StoredDocument} stored - The stored document.
- * @returns {JsonObject} The value.
- */
-export function materializeDocument(
-  definition: AnyDocDefinition,
-  stored: StoredDocument,
-): JsonObject {
-  return materializeDocumentValue(definition, stored.record, stored.version, stored.value);
-}
+const materializeDocument: dualTypes.Dual2<
+  documentsTypes.AnyDocDefinition,
+  typesModule.StoredDocument,
+  typesModule.JsonObject
+> = Function.dual(
+  2,
+  (
+    definition: documentsTypes.AnyDocDefinition,
+    stored: typesModule.StoredDocument,
+  ): typesModule.JsonObject =>
+    materializeDocumentValue(definition, stored.record, stored.version, stored.value),
+);
 
-/**
- * Validate and materialize one detached value before its first persisted incarnation.
- * @param {AnyDocDefinition} definition - The document definition.
- * @param {DocumentCreate | DocumentRecord} record - The record.
- * @param {number} version - The value's version.
- * @param {JsonObject} value - The value.
- * @returns {JsonObject} The materialized value.
- */
-export function materializeDocumentValue(
-  definition: AnyDocDefinition,
-  record: DocumentCreate | DocumentRecord,
-  version: number,
-  value: JsonObject,
-): JsonObject {
-  checkRecordScope(definition, record);
-  checkRecordVersion(definition, record, version);
-  if (version === definition.version) return value;
-  return copyJson(definition.migrate!(value, version)) as JsonObject;
-}
+const materializeDocumentValue: dualTypes.Dual4<
+  documentsTypes.AnyDocDefinition,
+  typesModule.DocumentCreate | typesModule.DocumentRecord,
+  number,
+  typesModule.JsonObject,
+  typesModule.JsonObject
+> = Function.dual(
+  4,
+  (
+    definition: documentsTypes.AnyDocDefinition,
+    record: typesModule.DocumentCreate | typesModule.DocumentRecord,
+    version: number,
+    value: typesModule.JsonObject,
+  ): typesModule.JsonObject => {
+    checkRecordScope(definition, record);
+    checkRecordVersion(definition, record, version);
+    if (version === definition.version) return value;
+    return copyJson(definition.migrate!(value, version)) as typesModule.JsonObject;
+  },
+);
+
+const documents = {
+  addressId,
+  checkRecordScope,
+  checkRecordVersion,
+  defineDoc,
+  defineDocFamily,
+  documentCreate,
+  materializeDocument,
+  materializeDocumentValue,
+  resolveAddress,
+};
+
+export default documents;

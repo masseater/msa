@@ -1,12 +1,23 @@
-import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
-import { googleGenerativeAIApi } from "../api/google-generative-ai.lazy.ts";
-import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
-import { openAIResponsesApi } from "../api/openai-responses.lazy.ts";
-import { typesafeSystemOneApi } from "../api/typesafe-system-one.lazy.ts";
-import { envApiKeyAuth } from "../auth/helpers.ts";
-import { createProvider, type Provider } from "../models.ts";
-import { withOpenCodeSessionHeader } from "./opencode-headers.ts";
-import { OPENCODE_CLASSIFIER_MODELS, OPENCODE_MODELS } from "./opencode.models.ts";
+import anthropicMessagesLazy from "../api/anthropic-messages.lazy.ts";
+import googleGenerativeAiLazy from "../api/google-generative-ai.lazy.ts";
+import openaiCompletionsLazy from "../api/openai-completions.lazy.ts";
+import openaiResponsesLazy from "../api/openai-responses.lazy.ts";
+import typesafeSystemOneLazy from "../api/typesafe-system-one.lazy.ts";
+import helpers from "../auth/helpers.ts";
+import modelsModule from "../models.ts";
+import type modelsTypes from "../models.types.ts";
+import opencodeHeaders from "./opencode-headers.ts";
+import opencodeModels from "./opencode.models.ts";
+
+const { createProvider } = modelsModule;
+const { withOpenCodeSessionHeader } = opencodeHeaders;
+const { anthropicMessagesApi } = anthropicMessagesLazy;
+const { googleGenerativeAIApi } = googleGenerativeAiLazy;
+const { openAICompletionsApi } = openaiCompletionsLazy;
+const { openAIResponsesApi } = openaiResponsesLazy;
+const { envApiKeyAuth } = helpers;
+const { typesafeSystemOneApi } = typesafeSystemOneLazy;
+const { OPENCODE_CLASSIFIER_MODELS, OPENCODE_MODELS } = opencodeModels;
 
 type OpenCodeApi =
   | "anthropic-messages"
@@ -14,19 +25,24 @@ type OpenCodeApi =
   | "openai-completions"
   | "openai-responses";
 
-export function opencodeProvider(): Provider<OpenCodeApi> {
+function opencodeProvider(): modelsTypes.Provider<OpenCodeApi> {
   return createProvider<OpenCodeApi>({
-    id: "opencode",
-    name: "OpenCode Zen",
-    auth: { apiKey: envApiKeyAuth("OpenCode API key", ["OPENCODE_API_KEY"]) },
-    models: [...Object.values(OPENCODE_MODELS), ...Object.values(OPENCODE_CLASSIFIER_MODELS)],
     api: {
       "anthropic-messages": withOpenCodeSessionHeader(anthropicMessagesApi()),
       "google-generative-ai": withOpenCodeSessionHeader(googleGenerativeAIApi()),
       "openai-completions": withOpenCodeSessionHeader(openAICompletionsApi()),
       "openai-responses": withOpenCodeSessionHeader(openAIResponsesApi()),
     },
-    // OpenCode Zen serves TypeSafe's System One protocol at /zen/v1/systemone.
+    auth: { apiKey: envApiKeyAuth("OpenCode API key", ["OPENCODE_API_KEY"]) },
     classifiers: { "typesafe-system-one": typesafeSystemOneApi() },
+    id: "opencode",
+    models: [...Object.values(OPENCODE_MODELS), ...Object.values(OPENCODE_CLASSIFIER_MODELS)],
+    name: "OpenCode Zen",
   });
 }
+
+const opencode = {
+  opencodeProvider,
+};
+
+export default opencode;

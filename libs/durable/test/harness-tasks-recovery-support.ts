@@ -1,118 +1,204 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import type chordTypes from "@msa/chord/index.types";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import type { Context, JsonValue } from "@msa/chord";
-import {
-  createRegistry,
-  defineTask,
-  MemoryStorage,
-  type Task,
-  type TaskId,
-  type TaskRuntime,
-} from "@msa/durable";
+import type harnessTasksRecoverySupportTypes from "./harness-tasks-recovery-support.types.ts";
+import support from "./support.ts";
 
-import { addTask } from "./harness-support.ts";
-import { context, flush } from "./session-support.ts";
-import { abortedWith, completed, eventually, openTasks } from "./task-support.ts";
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
+const { createRegistry } = harnessModule;
 
-export const directories = new Set<string>();
+const {
+  abortedWith,
+  addTask,
+  awaited,
+  completed,
+  context,
+  eventually,
+  flush,
+  joinPath,
+  makeTempDir,
+  openTasks,
+} = support;
 
-export async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-tasks-"));
+const directories = new Set<string>();
+
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const directory = yield* makeTempDir("msa-durable-tasks-");
   directories.add(directory);
-  return join(directory, "session.sqlite");
-}
+  return joinPath(directory, "session.sqlite");
+});
 
-export type OpenHarness = Awaited<ReturnType<typeof openTasks>>["harness"];
-
-export async function createIn<S extends { phase: string }, R>(
-  harness: OpenHarness,
-  task: Task<null, S, R, object>,
-): Promise<TaskId<R>> {
-  const root = await harness.root(context);
-  return root.commit(
-    (tx) => tx.createTask(task, null, { ownership: { kind: "conversation" } }),
-    context,
+const createIn = Effect.fn("createIn")(function* <S extends { phase: string }, R>(
+  harness: harnessTasksRecoverySupportTypes.OpenHarness,
+  task: durableTypes.Task<null, S, R, object>,
+) {
+  const root = yield* awaited(harness.root(context));
+  return yield* awaited(
+    root.commit(
+      (tx) => tx.createTask(task, null, { ownership: { kind: "conversation" } }),
+      context,
+    ),
   );
-}
+});
 
-export type Step = { phase: "run" };
-
-// A versioned one-phase task that completes with `result`, optionally migrating older records.
-export function versioned(
+function versionedImpl(
   version: number,
   result: string,
   migrate?: (
-    input: JsonValue,
-    checkpoint: JsonValue,
+    input: chordTypes.JsonValue,
+    checkpoint: chordTypes.JsonValue,
     fromVersion: number,
-  ) => { input: null; checkpoint: Step },
+  ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
 ) {
-  return defineTask<null, Step, JsonValue>({
-    name: "test.versioned",
-    version,
-    initial: () => ({ phase: "run" }),
-    phases: { run: (_task, runtime, ctx) => runtime.commit(() => completed(result), ctx) },
+  return defineTask<null, harnessTasksRecoverySupportTypes.Step, chordTypes.JsonValue>({
     abort: (_task, runtime, ctx) => runtime.commit(() => abortedWith(result), ctx),
+    initial: () => ({ phase: "run" }),
+    name: "test.versioned",
+    phases: { run: (_task, runtime, ctx) => runtime.commit(() => completed(result), ctx) },
+    version,
     ...(migrate === undefined ? {} : { migrate }),
   });
 }
 
-export type Handover = { phase: "a" } | { phase: "b" } | { phase: "c" };
+const versioned: {
+  (
+    result: string,
+    migrate?: (
+      input: chordTypes.JsonValue,
+      checkpoint: chordTypes.JsonValue,
+      fromVersion: number,
+    ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
+  ): (version: number) => ReturnType<typeof versionedImpl>;
+  (
+    version: number,
+    result: string,
+    migrate?: (
+      input: chordTypes.JsonValue,
+      checkpoint: chordTypes.JsonValue,
+      fromVersion: number,
+    ) => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Step },
+  ): ReturnType<typeof versionedImpl>;
+} = dual((args) => typeof args[0] === "number", versionedImpl);
 
-export type Gates = {
-  readonly a?: Promise<void>;
-  readonly b?: Promise<void>;
-  readonly onEnd?: () => void;
-};
+const handoverPhase =
+  (step: {
+    readonly gates: harnessTasksRecoverySupportTypes.Gates | undefined;
+    readonly label: string;
+    readonly log: string[];
+    readonly next: harnessTasksRecoverySupportTypes.Handover;
+    readonly phase: "a" | "b";
+  }) =>
+  (
+    _task: unknown,
+    runtime: durableTypes.TaskRuntime<
+      null,
+      harnessTasksRecoverySupportTypes.Handover,
+      null,
+      object
+    >,
+    ctx: chordTypes.Context,
+  ) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        step.log.push(`${step.label}:${step.phase} start`);
+        yield* awaited(step.gates?.[step.phase]);
+        yield* awaited(runtime.commit(() => ({ checkpoint: step.next, status: "running" }), ctx));
+        yield* flush;
+        step.gates?.onEnd?.();
+        step.log.push(`${step.label}:${step.phase} end`);
+      }),
+    );
 
-export function handoverTask(
+function handoverTaskImpl(
   label: string,
   version: number,
   log: string[],
   options: {
-    readonly gates?: Gates;
-    readonly migrate?: () => { input: null; checkpoint: Handover };
+    readonly gates?: harnessTasksRecoverySupportTypes.Gates;
+    readonly migrate?: () => { input: null; checkpoint: harnessTasksRecoverySupportTypes.Handover };
   } = {},
 ) {
-  const advance =
-    (phase: "a" | "b", next: Handover) =>
-    async (_task: unknown, runtime: TaskRuntime<null, Handover, null, object>, ctx: Context) => {
-      log.push(`${label}:${phase} start`);
-      await options.gates?.[phase];
-      await runtime.commit(() => ({ status: "running", checkpoint: next }), ctx);
-      // Leave room for a wrongly dispatched successor before this invocation ends.
-      await flush();
-      options.gates?.onEnd?.();
-      log.push(`${label}:${phase} end`);
-    };
-  return defineTask<null, Handover, null>({
-    name: "test.handover",
-    version,
+  const advance = (phase: "a" | "b", next: harnessTasksRecoverySupportTypes.Handover) =>
+    handoverPhase({ gates: options.gates, label, log, next, phase });
+  return defineTask<null, harnessTasksRecoverySupportTypes.Handover, null>({
+    abort: (_task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          log.push(`${label}:abort`);
+          yield* awaited(runtime.commit(() => abortedWith(label), ctx));
+        }),
+      ),
     initial: () => ({ phase: "a" }),
+    name: "test.handover",
     phases: {
       a: advance("a", { phase: "b" }),
       b: advance("b", { phase: "c" }),
-      c: async (_task, runtime, ctx) => {
-        log.push(`${label}:c`);
-        await runtime.commit(() => completed(null), ctx);
-      },
+      c: (_task, runtime, ctx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            log.push(`${label}:c`);
+            yield* awaited(runtime.commit(() => completed(null), ctx));
+          }),
+        ),
     },
-    abort: async (_task, runtime, ctx) => {
-      log.push(`${label}:abort`);
-      await runtime.commit(() => abortedWith(label), ctx);
-    },
+    version,
     ...(options.migrate === undefined ? {} : { migrate: options.migrate }),
   });
 }
 
-export async function startHandover(log: string[], gates: Gates, storage = new MemoryStorage()) {
+const handoverTask: {
+  (
+    version: number,
+    log: string[],
+    options?: {
+      readonly gates?: harnessTasksRecoverySupportTypes.Gates;
+      readonly migrate?: () => {
+        input: null;
+        checkpoint: harnessTasksRecoverySupportTypes.Handover;
+      };
+    },
+  ): (label: string) => ReturnType<typeof handoverTaskImpl>;
+  (
+    label: string,
+    version: number,
+    log: string[],
+    options?: {
+      readonly gates?: harnessTasksRecoverySupportTypes.Gates;
+      readonly migrate?: () => {
+        input: null;
+        checkpoint: harnessTasksRecoverySupportTypes.Handover;
+      };
+    },
+  ): ReturnType<typeof handoverTaskImpl>;
+} = dual((args) => typeof args[0] === "string", handoverTaskImpl);
+
+const startHandover = Effect.fn("startHandover")(function* (
+  log: string[],
+  gates: harnessTasksRecoverySupportTypes.Gates,
+  storage = new MemoryStorage(),
+) {
   const registry = createRegistry();
   const old = addTask(registry, handoverTask("old", 1, log, { gates }));
-  const opened = await openTasks(storage, [], { registry });
-  const id = await createIn(opened.harness, handoverTask("old", 1, log));
+  const opened = yield* openTasks(storage, [], { registry });
+  const id = yield* createIn(opened.harness, handoverTask("old", 1, log));
   opened.harness.resume();
-  await eventually(() => log.length === 1);
-  return { ...opened, old, id };
-}
+  yield* eventually(() => log.length === 1);
+  return { ...opened, id, old };
+});
+
+const harnessTasksRecoverySupport = {
+  createIn,
+  directories,
+  handoverTask,
+  sqlitePath,
+  startHandover,
+  versioned,
+};
+
+export default harnessTasksRecoverySupport;

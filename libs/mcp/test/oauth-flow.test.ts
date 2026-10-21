@@ -1,21 +1,25 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { McpClient, StreamableHttpTransport } from "../src/index.ts";
-import {
-  adaptOAuthProvider,
-  authorizeMcp,
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+import oauth from "../src/oauth/index.ts";
+import type oauthTypes from "../src/oauth/index.types.ts";
+import oauthSupport from "./oauth-support.ts";
+import type oauthSupportTypes from "./oauth-support.types.ts";
+import webFetch from "./web-fetch.ts";
+
+const { McpClient, StreamableHttpTransport } = mcp;
+const {
   McpOAuthAuthorizationRequiredError,
   OAuthCallbackServer,
-} from "../src/oauth/index.ts";
-import { closeServers, listen, readBody, readMessage } from "./helpers.ts";
-import {
-  authorizationServerMetadata,
-  endWith,
-  sendJson,
-  TestOAuthProvider,
-} from "./oauth-support.ts";
-import { webFetch } from "./web-fetch.ts";
+  adaptOAuthProvider,
+  authorizeMcp,
+} = oauth;
+
+const { closeServers, listen, readBody, readMessage } = testing;
+const { TestOAuthProvider, authorizationServerMetadata, endWith, sendJson } = oauthSupport;
 
 interface FlowState {
   expectedChallenge: string | undefined;
@@ -33,7 +37,7 @@ const redirectWithCode = (url: URL, state: FlowState) =>
     const redirect = new URL(url.searchParams.get("redirect_uri") ?? "");
     redirect.searchParams.set("code", "test-code");
     redirect.searchParams.set("state", url.searchParams.get("state") ?? "");
-    return new Response(null, { status: 302, headers: { location: redirect.href } });
+    return new Response(null, { headers: { location: redirect.href }, status: 302 });
   });
 
 const issueToken = (request: Request, state: FlowState) =>
@@ -43,9 +47,9 @@ const issueToken = (request: Request, state: FlowState) =>
       state.refreshes++;
       return yield* sendJson(200, {
         access_token: "refreshed-token",
-        token_type: "Bearer",
-        refresh_token: "",
         expires_in: null,
+        refresh_token: "",
+        token_type: "Bearer",
       });
     }
     const challenge = yield* sha256(params.get("code_verifier") ?? "");
@@ -54,8 +58,8 @@ const issueToken = (request: Request, state: FlowState) =>
     return yield* sendJson(200, {
       access_token: "first-token",
       refresh_token: "refresh-token",
-      token_type: "Bearer",
       scope: "",
+      token_type: "Bearer",
     });
   });
 
@@ -67,10 +71,10 @@ const serveMcp = (request: Request, origin: string) =>
     if (token !== "Bearer first-token" && token !== "Bearer refreshed-token") {
       yield* readBody(request);
       return new Response("Unauthorized", {
-        status: 401,
         headers: {
           "www-authenticate": `Bearer resource_metadata="${origin}/.well-known/oauth-protected-resource/mcp", scope=""`,
         },
+        status: 401,
       });
     }
     const message = yield* readMessage(request);
@@ -78,12 +82,12 @@ const serveMcp = (request: Request, origin: string) =>
     const result =
       message["method"] === "initialize"
         ? {
-            protocolVersion: "2025-06-18",
             capabilities: { tools: {} },
+            protocolVersion: "2025-06-18",
             serverInfo: { name: "oauth-test", version: "1.0.0" },
           }
-        : { tools: [{ name: "issues", inputSchema: { type: "object" } }] };
-    return yield* sendJson(200, { jsonrpc: "2.0", id: message["id"], result });
+        : { tools: [{ inputSchema: { type: "object" }, name: "issues" }] };
+    return yield* sendJson(200, { id: message["id"], jsonrpc: "2.0", result });
   });
 
 const register = (request: Request) =>
@@ -98,17 +102,17 @@ const flowServer = (state: FlowState) => (request: Request, origin: string) => {
   switch (url.pathname) {
     case "/.well-known/oauth-protected-resource/mcp":
       return sendJson(200, {
-        resource: `${origin}/mcp`,
         authorization_servers: [origin],
+        resource: `${origin}/mcp`,
         scopes_supported: ["org:read"],
       });
     case "/.well-known/oauth-authorization-server":
       return sendJson(200, {
         ...authorizationServerMetadata(origin),
-        registration_endpoint: `${origin}/register`,
-        grant_types_supported: ["authorization_code", "refresh_token"],
-        token_endpoint_auth_methods_supported: ["none"],
         code_challenge_methods_supported: ["S256"],
+        grant_types_supported: ["authorization_code", "refresh_token"],
+        registration_endpoint: `${origin}/register`,
+        token_endpoint_auth_methods_supported: ["none"],
       });
     case "/register":
       return register(request);
@@ -123,25 +127,32 @@ const flowServer = (state: FlowState) => (request: Request, origin: string) => {
   }
 };
 
-const connectPromise = (origin: string, provider: TestOAuthProvider, client: McpClient) =>
+const connectPromise = (
+  origin: string,
+  provider: oauthSupportTypes.TestOAuthProvider,
+  client: mcpTypes.McpClient,
+) =>
   client.connect(
     new StreamableHttpTransport({
-      url: `${origin}/mcp`,
-      headers: { Authorization: "Bearer caller-supplied-stale-token" },
       authProvider: adaptOAuthProvider(provider),
+      headers: { Authorization: "Bearer caller-supplied-stale-token" },
       openGetStream: false,
+      url: `${origin}/mcp`,
     }),
   );
 
-const connectClient = (origin: string, provider: TestOAuthProvider, client: McpClient) =>
-  Effect.promise(() => connectPromise(origin, provider, client));
+const connectClient = (
+  origin: string,
+  provider: oauthSupportTypes.TestOAuthProvider,
+  client: mcpTypes.McpClient,
+) => Effect.promise(() => connectPromise(origin, provider, client));
 
 const newClient = () => new McpClient({ name: "oauth-test", version: "1.0.0" });
 
 const completeAuthorization = (
   origin: string,
-  provider: TestOAuthProvider,
-  callback: OAuthCallbackServer,
+  provider: oauthSupportTypes.TestOAuthProvider,
+  callback: oauthTypes.OAuthCallbackServer,
 ) =>
   Effect.gen(function* () {
     const callbackResult = callback.waitForCallback("expected-state");
@@ -153,7 +164,7 @@ const completeAuthorization = (
     );
     const { code } = yield* Effect.promise(() => callbackResult);
     expect(
-      yield* authorizeMcp(provider, { serverUrl: `${origin}/mcp`, authorizationCode: code, fetch }),
+      yield* authorizeMcp(provider, { authorizationCode: code, fetch, serverUrl: `${origin}/mcp` }),
     ).toBe("AUTHORIZED");
   });
 
@@ -173,7 +184,7 @@ const authorizesAndRefreshes = Effect.gen(function* () {
   const client = newClient();
   yield* connectClient(origin, provider, client);
   expect(yield* Effect.promise(() => client.listTools())).toEqual([
-    { name: "issues", inputSchema: { type: "object" } },
+    { inputSchema: { type: "object" }, name: "issues" },
   ]);
   yield* Effect.promise(() => client.close());
   provider.tokenSet = { ...provider.tokenSet!, access_token: "stale-token" };
@@ -182,8 +193,8 @@ const authorizesAndRefreshes = Effect.gen(function* () {
   expect(provider.tokenSet).toEqual({
     access_token: "refreshed-token",
     refresh_token: "refresh-token",
-    token_type: "Bearer",
     scope: "org:read",
+    token_type: "Bearer",
   });
   expect(state.refreshes).toBe(1);
   yield* Effect.promise(() => refreshedClient.close());

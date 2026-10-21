@@ -1,107 +1,136 @@
-import type { Context } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect, Function } from "effect";
 
-import { addressId } from "../documents.ts";
-import type {
-  ConversationId,
-  Cursor,
-  DocumentCopySource,
-  DocumentCreate,
-  DocumentId,
-  DocumentPoint,
-  DocumentRecord,
-  EntryId,
-  Storage,
-} from "../types.ts";
+import documents from "../documents.ts";
+import type dualTypes from "../dual.ts";
+import type typesModule from "../types.types.ts";
+import type forksTypes from "./forks.types.ts";
+
+const { addressId } = documents;
 
 const SCAN_PAGE_SIZE = 256;
 
 type ForkPolicy = "asOf" | "current";
 
-/** One definition-free document copy to create with a forked conversation. */
-export type ForkDocumentCopy = {
-  readonly record: DocumentCreate;
-  readonly source: DocumentCopySource;
+type CopyCollection = {
+  readonly storage: typesModule.Storage;
+  readonly childConversationId: typesModule.ConversationId;
+  readonly copies: forksTypes.ForkDocumentCopy[];
+  readonly copiedAddresses: Set<string>;
+  readonly context: chordTypes.Context;
 };
 
-/**
- * Select every persisted conversation document copied by one fork.
- * @param {Storage} storage - The storage backend.
- * @param {ConversationId} parentConversationId - The forked conversation.
- * @param {EntryId} at - The fork point.
- * @param {ConversationId} childConversationId - The fork.
- * @param {Context} context - The caller's context.
- * @returns {Promise<readonly ForkDocumentCopy[]>} The copies.
- */
-export async function prepareForkDocumentCopies(
-  storage: Storage,
-  parentConversationId: ConversationId,
-  at: EntryId,
-  childConversationId: ConversationId,
-  context: Context,
-): Promise<readonly ForkDocumentCopy[]> {
-  const entry = await storage.entry(parentConversationId, at, context);
-  if (entry === undefined)
-    throw new Error(`Entry ${at} is not visible from conversation ${parentConversationId}`);
+type ConversationScope = Extract<
+  typesModule.DocumentRecord["scope"],
+  { readonly kind: "conversation" }
+>;
+type ConversationDocument = Extract<
+  typesModule.DocumentRecord,
+  { readonly scope: ConversationScope }
+>;
 
-  const copies: ForkDocumentCopy[] = [];
-  const copiedAddresses = new Set<string>();
-  await collectCopies(
-    storage,
-    { kind: "conversation", conversationId: entry.entry.conversationId },
-    entry.commitSeq,
-    "asOf",
-    childConversationId,
-    copies,
-    copiedAddresses,
-    context,
-  );
-  await collectCopies(
-    storage,
-    { kind: "conversation", conversationId: parentConversationId },
-    "current",
-    "current",
-    childConversationId,
-    copies,
-    copiedAddresses,
-    context,
-  );
-  return copies;
-}
+const isConversationDocument = (
+  record: typesModule.DocumentRecord,
+): record is ConversationDocument => record.scope.kind === "conversation";
 
-async function collectCopies(
-  storage: Storage,
-  scope: Extract<DocumentRecord["scope"], { readonly kind: "conversation" }>,
-  at: DocumentPoint,
+const copyRecord = (
+  source: ConversationDocument,
+  id: typesModule.DocumentId,
+  child: typesModule.ConversationId,
+) => {
+  const identity = {
+    id,
+    kind: source.kind,
+    ...(source.key === undefined ? {} : { key: source.key }),
+    scope: { conversationId: child, kind: "conversation" as const },
+  };
+  const record: typesModule.DocumentCreate =
+    source.history === "latest"
+      ? { ...identity, fork: source.fork, history: "latest" }
+      : { ...identity, fork: source.fork, history: "rewindable" };
+  return record;
+};
+
+const scanPage = (
+  collection: CopyCollection,
+  scope: ConversationScope,
+  at: typesModule.DocumentPoint,
+  cursor: typesModule.Cursor | undefined,
+) =>
+  Effect.promise(() =>
+    collection.storage.scanDocuments({ at, scope }, SCAN_PAGE_SIZE, cursor, collection.context),
+  );
+
+const collectCopies = Effect.fnUntraced(function* (
+  collection: CopyCollection,
+  scope: ConversationScope,
+  at: typesModule.DocumentPoint,
   policy: ForkPolicy,
-  childConversationId: ConversationId,
-  copies: ForkDocumentCopy[],
-  copiedAddresses: Set<string>,
-  context: Context,
-): Promise<void> {
-  const copyPage = async (cursor: Cursor | undefined): Promise<void> => {
-    const page = await storage.scanDocuments({ scope, at }, SCAN_PAGE_SIZE, cursor, context);
-    for await (const source of page.items) {
-      if (source.scope.kind !== "conversation" || source.fork !== policy) continue;
-      const id = await storage.mintId<DocumentId>();
-      const identity = {
-        id,
-        kind: source.kind,
-        ...(source.key === undefined ? {} : { key: source.key }),
-        scope: { kind: "conversation" as const, conversationId: childConversationId },
-      };
-      const record: DocumentCreate =
-        source.history === "latest"
-          ? { ...identity, history: "latest", fork: source.fork }
-          : { ...identity, history: "rewindable", fork: source.fork };
+) {
+  const { storage } = collection;
+  let cursor: typesModule.Cursor | undefined;
+  do {
+    const page = yield* scanPage(collection, scope, at, cursor);
+    for (const source of page.items) {
+      if (!isConversationDocument(source) || source.fork !== policy) continue;
+      const id = yield* Effect.promise(() => storage.mintId<typesModule.DocumentId>());
+      const record = copyRecord(source, id, collection.childConversationId);
       const copyAddress = addressId(record);
-      if (copiedAddresses.has(copyAddress)) {
+      if (collection.copiedAddresses.has(copyAddress)) {
         const member = record.key === undefined ? record.kind : `${record.kind}/${record.key}`;
         throw new Error(`Fork selects multiple source documents for ${member}`);
       }
-      copiedAddresses.add(copyAddress);
-      copies.push({ record, source: { id: source.id, at } });
+      collection.copiedAddresses.add(copyAddress);
+      collection.copies.push({ record, source: { at, id: source.id } });
     }
-    if (page.next !== undefined) await copyPage(page.next);
-  };
-  await copyPage(undefined);
-}
+    cursor = page.next;
+  } while (cursor !== undefined);
+});
+
+const prepareForkDocumentCopies: dualTypes.Dual5<
+  typesModule.Storage,
+  typesModule.ConversationId,
+  typesModule.EntryId,
+  typesModule.ConversationId,
+  chordTypes.Context,
+  Effect.Effect<readonly forksTypes.ForkDocumentCopy[]>
+> = Function.dual(
+  5,
+  Effect.fnUntraced(function* (
+    storage: typesModule.Storage,
+    parentConversationId: typesModule.ConversationId,
+    at: typesModule.EntryId,
+    childConversationId: typesModule.ConversationId,
+    context: chordTypes.Context,
+  ) {
+    const entry = yield* Effect.promise(() => storage.entry(parentConversationId, at, context));
+    if (entry === undefined)
+      throw new Error(`Entry ${at} is not visible from conversation ${parentConversationId}`);
+    const collection: CopyCollection = {
+      childConversationId,
+      context,
+      copiedAddresses: new Set(),
+      copies: [],
+      storage,
+    };
+    yield* collectCopies(
+      collection,
+      { conversationId: entry.entry.conversationId, kind: "conversation" },
+      entry.commitSeq,
+      "asOf",
+    );
+    yield* collectCopies(
+      collection,
+      { conversationId: parentConversationId, kind: "conversation" },
+      "current",
+      "current",
+    );
+    return collection.copies;
+  }),
+);
+
+const forks = {
+  prepareForkDocumentCopies,
+};
+
+export default forks;

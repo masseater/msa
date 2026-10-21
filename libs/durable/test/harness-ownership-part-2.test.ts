@@ -1,222 +1,279 @@
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import {
-  directories,
-  status,
-  waitUntil,
-  open,
-  gates,
-  ownedChild,
-  Hold,
-  runs,
-  openHarness,
-  busy,
-} from "./harness-ownership-support.ts";
-import { context } from "./session-support.ts";
-import { settled } from "./task-support.ts";
+import node from "../src/storage/sqlite/node.ts";
+import effectSupport from "./effect-support.ts";
+import harnessOwnershipSupport from "./harness-ownership-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-afterEach(async () => {
-  gates.clear();
-  runs.clear();
-  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
-  directories.clear();
-});
+const { openNodeSqliteStorage } = node;
 
-// A write that affects model context, so it queues while busy; a data-only write would be appended at once.
+const { awaited } = effectSupport;
+const { Hold, busy, directories, gates, open, openHarness, ownedChild, runs, status, waitUntil } =
+  harnessOwnershipSupport;
+const { joinPath, makeTempDir, removeDir } = platformSupport;
+const { context } = sessionSupport;
+const { settled } = taskSupport;
+
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      gates.clear();
+      runs.clear();
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
+
 function queuedNote(text: string) {
-  return { kind: "note", model: [{ role: "user", content: text, timestamp: 0 }] } as const;
+  return { kind: "note", model: [{ content: text, role: "user", timestamp: 0 }] } as const;
 }
 
-describe("ownership", () => {
-  it("stops idle traversal at a background owner", async () => {
-    const { harness, root } = await openHarness();
-    const tree = await ownedChild(root, "background", { background: true });
-    await root.waitForIdle(context);
-    await harness.waitForIdle(context);
-    // The background child is its own scope.
-    const child = (await harness.conversation(tree.child, context))!;
-    expect(await settled(child.waitForIdle(context))).toBe(false);
-    await child.abort(context);
-    await harness.close(context);
-  });
+const stopsIdleTraversal = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(ownedChild(root, "background", { background: true }));
+  yield* awaited(root.waitForIdle(context));
+  yield* awaited(harness.waitForIdle(context));
+  const child = (yield* awaited(harness.conversation(tree.child, context)))!;
+  expect(yield* settled(child.waitForIdle(context))).toBe(false);
+  yield* awaited(child.abort(context));
+  yield* awaited(harness.close(context));
+});
 
-  it("cascades an abort mark to the owned foreground subtree and withdraws its queued inputs", async () => {
-    const { harness, root } = await openHarness();
-    const tree = await ownedChild(root, "owner");
-    const nested = await harness.conversation(tree.child, context);
-    const deeper = await ownedChild(nested!, "deeper");
-    const shielded = await ownedChild(nested!, "shielded", { background: true });
-    // Busy conversations queue submissions; the inner task stands in for the child's run.
-    await busy(nested!, tree.inner);
-    const queued = (await nested!.submit({ type: "input", content: "later" }, context)).id;
-    expect(await harness.abortTask(tree.owner, context)).toBe("marked");
-    for await (const id of [tree.owner, tree.inner, deeper.owner, deeper.inner]) {
-      expect((await harness.waitForTask(id, context)).state.outcome.status).toBe("aborted");
-    }
-    // A nested background owner is a boundary.
-    expect((await status(harness, shielded.owner)).status).not.toBe("terminal");
-    expect((await status(harness, shielded.inner)).status).not.toBe("terminal");
-    expect(await (await harness.submission(queued, context))!.status(context)).toMatchObject({
-      status: "unanswered",
-      reason: "aborted",
-    });
-    await harness.abortTask(shielded.owner, context);
-    await harness.close(context);
+const cascadesAbortMark = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(ownedChild(root, "owner"));
+  const nested = yield* awaited(harness.conversation(tree.child, context));
+  const deeper = yield* awaited(ownedChild(nested!, "deeper"));
+  const shielded = yield* awaited(ownedChild(nested!, "shielded", { background: true }));
+  yield* busy(nested!, tree.inner);
+  const queued = (yield* awaited(nested!.submit({ content: "later", type: "input" }, context))).id;
+  expect(yield* awaited(harness.abortTask(tree.owner, context))).toBe("marked");
+  for (const id of [tree.owner, tree.inner, deeper.owner, deeper.inner]) {
+    expect((yield* awaited(harness.waitForTask(id, context))).state.outcome.status).toBe("aborted");
+  }
+  expect((yield* status(harness, shielded.owner)).status).not.toBe("terminal");
+  expect((yield* status(harness, shielded.inner)).status).not.toBe("terminal");
+  expect(
+    yield* awaited((yield* awaited(harness.submission(queued, context)))!.status(context)),
+  ).toMatchObject({
+    reason: "aborted",
+    status: "unanswered",
   });
+  yield* awaited(harness.abortTask(shielded.owner, context));
+  yield* awaited(harness.close(context));
 });
 
 describe("ownership", () => {
-  it("cascades a failed owner but not a completed one", async () => {
-    const { harness, root } = await openHarness();
-    const failed = await ownedChild(root, "failed");
-    const completedTree = await ownedChild(root, "done");
-    open("failed", "failed");
-    open("done", "completed");
-    expect((await harness.waitForTask(failed.inner, context)).state.outcome.status).toBe("aborted");
-    expect((await harness.waitForTask(failed.owner, context)).state.outcome.status).toBe("failed");
-    await waitUntil(
-      async () => (await status(harness, completedTree.owner)).status === "completing",
-    );
-    expect((await status(harness, completedTree.inner)).status).not.toBe("terminal");
-    open("done.inner", "completed");
-    expect((await harness.waitForTask(completedTree.owner, context)).state.outcome.status).toBe(
-      "completed",
-    );
-    await harness.close(context);
-  });
+  it("stops idle traversal at a background owner", () => Effect.runPromise(stopsIdleTraversal));
 
-  it("aborts a background task directly with its ordinary subtree", async () => {
-    const { harness, root } = await openHarness();
-    const tree = await ownedChild(root, "background", { background: true });
-    await harness.abortTask(tree.owner, context);
-    expect((await harness.waitForTask(tree.inner, context)).state.outcome.status).toBe("aborted");
-    await harness.close(context);
-  });
+  it("cascades an abort mark to the owned foreground subtree and withdraws its queued inputs", () =>
+    Effect.runPromise(cascadesAbortMark));
+});
+
+const cascadesFailedOwner = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const failed = yield* awaited(ownedChild(root, "failed"));
+  const completedTree = yield* awaited(ownedChild(root, "done"));
+  open("failed", "failed");
+  open("done", "completed");
+  expect((yield* awaited(harness.waitForTask(failed.inner, context))).state.outcome.status).toBe(
+    "aborted",
+  );
+  expect((yield* awaited(harness.waitForTask(failed.owner, context))).state.outcome.status).toBe(
+    "failed",
+  );
+  yield* waitUntil(
+    Effect.gen(function* () {
+      return (yield* status(harness, completedTree.owner)).status === "completing";
+    }),
+  );
+  expect((yield* status(harness, completedTree.inner)).status).not.toBe("terminal");
+  open("done.inner", "completed");
+  expect(
+    (yield* awaited(harness.waitForTask(completedTree.owner, context))).state.outcome.status,
+  ).toBe("completed");
+  yield* awaited(harness.close(context));
+});
+
+const abortsBackgroundTask = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(ownedChild(root, "background", { background: true }));
+  yield* awaited(harness.abortTask(tree.owner, context));
+  expect((yield* awaited(harness.waitForTask(tree.inner, context))).state.outcome.status).toBe(
+    "aborted",
+  );
+  yield* awaited(harness.close(context));
 });
 
 describe("ownership", () => {
-  it("aborts a conversation: queued inputs withdrawn, writes kept, foreground work aborted, background kept", async () => {
-    const { harness, root } = await openHarness();
-    const foreground = await ownedChild(root, "foreground");
-    const background = await ownedChild(root, "background", { background: true });
-    await busy(root, foreground.owner);
-    const input = (await root.submit({ type: "input", content: "later" }, context)).id;
-    const write = (await root.submit({ type: "write", entry: queuedNote("w") }, context)).id;
-    await root.abort(context);
-    for await (const id of [foreground.owner, foreground.inner]) {
-      expect((await status(harness, id)).status).toBe("terminal");
-    }
-    expect((await status(harness, background.owner)).status).not.toBe("terminal");
-    expect((await status(harness, background.inner)).status).not.toBe("terminal");
-    expect(await (await harness.submission(input, context))!.status(context)).toMatchObject({
-      reason: "aborted",
-    });
-    expect((await (await harness.submission(write, context))!.status(context)).status).toBe(
-      "queued",
-    );
-    await harness.abortTask(background.owner, context);
-    await harness.close(context);
-  });
+  it("cascades a failed owner but not a completed one", () =>
+    Effect.runPromise(cascadesFailedOwner));
 
-  it("aborts work created below a held failed owner, but not below a terminal one", async () => {
-    const { harness, root } = await openHarness();
-    const tree = await ownedChild(root, "owner", { slowInner: true });
-    open("owner", "failed");
-    await waitUntil(async () => (await harness.getTask(tree.inner, context))!.abortRequested);
-    expect((await status(harness, tree.owner)).status).toBe("completing");
-    const child = (await harness.conversation(tree.child, context))!;
-    const create = (name: string) =>
-      child.commit(
-        (tx) => tx.createTask(Hold, { name }, { ownership: { kind: "conversation" } }),
-        context,
-      );
-    const during = await create("during");
-    expect((await harness.waitForTask(during, context)).state.outcome.status).toBe("aborted");
-    open("abort.owner.inner", "completed");
-    expect((await harness.waitForTask(tree.owner, context)).state.outcome.status).toBe("failed");
-    // A terminal owner never cascades: interrogating its conversation runs normally.
-    const after = await create("after");
-    open("after", "completed");
-    expect((await harness.waitForTask(after, context)).state.outcome.status).toBe("completed");
-    await harness.close(context);
+  it("aborts a background task directly with its ordinary subtree", () =>
+    Effect.runPromise(abortsBackgroundTask));
+});
+
+const abortsConversationQueued = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const foreground = yield* awaited(ownedChild(root, "foreground"));
+  const background = yield* awaited(ownedChild(root, "background", { background: true }));
+  yield* busy(root, foreground.owner);
+  const input = (yield* awaited(root.submit({ content: "later", type: "input" }, context))).id;
+  const write = (yield* awaited(root.submit({ entry: queuedNote("w"), type: "write" }, context)))
+    .id;
+  yield* awaited(root.abort(context));
+  for (const id of [foreground.owner, foreground.inner]) {
+    expect((yield* status(harness, id)).status).toBe("terminal");
+  }
+  expect((yield* status(harness, background.owner)).status).not.toBe("terminal");
+  expect((yield* status(harness, background.inner)).status).not.toBe("terminal");
+  expect(
+    yield* awaited((yield* awaited(harness.submission(input, context)))!.status(context)),
+  ).toMatchObject({
+    reason: "aborted",
   });
+  expect(
+    (yield* awaited((yield* awaited(harness.submission(write, context)))!.status(context))).status,
+  ).toBe("queued");
+  yield* awaited(harness.abortTask(background.owner, context));
+  yield* awaited(harness.close(context));
+});
+
+const abortsWorkCreated = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(ownedChild(root, "owner", { slowInner: true }));
+  open("owner", "failed");
+  yield* waitUntil(
+    Effect.gen(function* () {
+      return (yield* awaited(harness.getTask(tree.inner, context)))!.abortRequested;
+    }),
+  );
+  expect((yield* status(harness, tree.owner)).status).toBe("completing");
+  const child = (yield* awaited(harness.conversation(tree.child, context)))!;
+  const create = (name: string) =>
+    child.commit(
+      (tx) => tx.createTask(Hold, { name }, { ownership: { kind: "conversation" } }),
+      context,
+    );
+  const during = yield* awaited(create("during"));
+  expect((yield* awaited(harness.waitForTask(during, context))).state.outcome.status).toBe(
+    "aborted",
+  );
+  open("abort.owner.inner", "completed");
+  expect((yield* awaited(harness.waitForTask(tree.owner, context))).state.outcome.status).toBe(
+    "failed",
+  );
+  const after = yield* awaited(create("after"));
+  open("after", "completed");
+  expect((yield* awaited(harness.waitForTask(after, context))).state.outcome.status).toBe(
+    "completed",
+  );
+  yield* awaited(harness.close(context));
 });
 
 describe("ownership", () => {
-  it("withdraws queued inputs below the aborted task but keeps its own conversation's queue and queued writes", async () => {
-    const { harness, root } = await openHarness();
-    const tree = await ownedChild(root, "owner");
-    const child = (await harness.conversation(tree.child, context))!;
-    await busy(root, tree.owner);
-    await busy(child, tree.inner);
-    const own = (await root.submit({ type: "input", content: "own" }, context)).id;
-    const below = (await child.submit({ type: "input", content: "below" }, context)).id;
-    const write = (await child.submit({ type: "write", entry: queuedNote("w") }, context)).id;
-    await harness.abortTask(tree.owner, context);
-    await harness.waitForTask(tree.inner, context);
-    const statusOf = async (id: typeof own) =>
-      (await (await harness.submission(id, context))!.status(context)).status;
-    expect(await statusOf(own)).toBe("queued");
-    expect(await statusOf(below)).toBe("unanswered");
-    expect(await statusOf(write)).toBe("queued");
-    await harness.close(context);
-  });
+  it("aborts a conversation: queued inputs withdrawn, writes kept, foreground work aborted, background kept", () =>
+    Effect.runPromise(abortsConversationQueued));
 
-  it("keeps a nested background owner's subtree when its cancelled background owner is aborted", async () => {
-    const { harness, root } = await openHarness();
-    const outer = await ownedChild(root, "outer", { background: true });
-    const inner = await ownedChild((await harness.conversation(outer.child, context))!, "inner", {
+  it("aborts work created below a held failed owner, but not below a terminal one", () =>
+    Effect.runPromise(abortsWorkCreated));
+});
+
+const withdrawsQueuedInputs = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root } = yield* openHarness();
+  const tree = yield* awaited(ownedChild(root, "owner"));
+  const child = (yield* awaited(harness.conversation(tree.child, context)))!;
+  yield* busy(root, tree.owner);
+  yield* busy(child, tree.inner);
+  const own = (yield* awaited(root.submit({ content: "own", type: "input" }, context))).id;
+  const below = (yield* awaited(child.submit({ content: "below", type: "input" }, context))).id;
+  const write = (yield* awaited(child.submit({ entry: queuedNote("w"), type: "write" }, context)))
+    .id;
+  yield* awaited(harness.abortTask(tree.owner, context));
+  yield* awaited(harness.waitForTask(tree.inner, context));
+  const statusOf = (id: typeof own) =>
+    runPromise(
+      Effect.gen(function* () {
+        return (yield* awaited((yield* awaited(harness.submission(id, context)))!.status(context)))
+          .status;
+      }),
+    );
+  expect(yield* awaited(statusOf(own))).toBe("queued");
+  expect(yield* awaited(statusOf(below))).toBe("unanswered");
+  expect(yield* awaited(statusOf(write))).toBe("queued");
+  yield* awaited(harness.close(context));
+});
+
+const keepsNestedBackground = Effect.gen(function* () {
+  const { harness, root } = yield* openHarness();
+  const outer = yield* awaited(ownedChild(root, "outer", { background: true }));
+  const inner = yield* awaited(
+    ownedChild((yield* awaited(harness.conversation(outer.child, context)))!, "inner", {
       background: true,
-    });
-    await harness.abortTask(outer.owner, context);
-    expect((await harness.waitForTask(outer.inner, context)).state.outcome.status).toBe("aborted");
-    expect((await status(harness, inner.owner)).status).not.toBe("terminal");
-    expect((await status(harness, inner.inner)).status).not.toBe("terminal");
-    await harness.abortTask(inner.owner, context);
-    await harness.close(context);
-  });
+    }),
+  );
+  yield* awaited(harness.abortTask(outer.owner, context));
+  expect((yield* awaited(harness.waitForTask(outer.inner, context))).state.outcome.status).toBe(
+    "aborted",
+  );
+  expect((yield* status(harness, inner.owner)).status).not.toBe("terminal");
+  expect((yield* status(harness, inner.inner)).status).not.toBe("terminal");
+  yield* awaited(harness.abortTask(inner.owner, context));
+  yield* awaited(harness.close(context));
 });
 
 describe("ownership", () => {
-  it("decides idle after reopen from owner edges it has to load first", async () => {
-    const directory = await mkdtemp(join(tmpdir(), "msa-durable-ownership-"));
-    directories.add(directory);
-    const path = join(directory, "session.sqlite");
-    let opened = await openHarness(await openNodeSqliteStorage(path));
-    const foreground = await ownedChild(opened.root, "fg");
-    const deeper = await ownedChild(
-      (await opened.harness.conversation(foreground.child, context))!,
-      "fg2",
-    );
-    const background = await ownedChild(opened.root, "bg", { background: true });
-    open("fg", "completed");
-    open("fg2", "completed");
-    // Both owners hold their outcomes while the work below them runs.
-    await waitUntil(
-      async () => (await status(opened.harness, foreground.owner)).status === "completing",
-    );
-    await waitUntil(
-      async () => (await status(opened.harness, deeper.owner)).status === "completing",
-    );
-    await opened.harness.close(context);
+  it("withdraws queued inputs below the aborted task but keeps its own conversation's queue and queued writes", () =>
+    Effect.runPromise(withdrawsQueuedInputs));
 
-    opened = await openHarness(await openNodeSqliteStorage(path));
-    // Two levels below completed foreground owners, the inner tasks keep the root busy.
-    expect(await settled(opened.root.waitForIdle(context))).toBe(false);
-    expect(await settled(opened.harness.waitForIdle(context))).toBe(false);
-    open("fg.inner", "completed");
-    open("fg2.inner", "completed");
-    // The background subtree does not count.
-    await opened.root.waitForIdle(context);
-    await opened.harness.waitForIdle(context);
-    expect((await status(opened.harness, foreground.owner)).status).toBe("terminal");
-    expect((await status(opened.harness, background.inner)).status).not.toBe("terminal");
-    await opened.harness.abortTask(background.owner, context);
-    await opened.harness.close(context);
-  });
+  it("keeps a nested background owner's subtree when its cancelled background owner is aborted", () =>
+    Effect.runPromise(keepsNestedBackground));
+});
+
+const decidesIdleReopen = Effect.gen(function* () {
+  const directory = yield* makeTempDir("msa-durable-ownership-");
+  directories.add(directory);
+  const path = joinPath(directory, "session.sqlite");
+  let opened = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)));
+  const foreground = yield* awaited(ownedChild(opened.root, "fg"));
+  const deeper = yield* awaited(
+    ownedChild((yield* awaited(opened.harness.conversation(foreground.child, context)))!, "fg2"),
+  );
+  const background = yield* awaited(ownedChild(opened.root, "bg", { background: true }));
+  open("fg", "completed");
+  open("fg2", "completed");
+  yield* waitUntil(
+    Effect.gen(function* () {
+      return (yield* status(opened.harness, foreground.owner)).status === "completing";
+    }),
+  );
+  yield* waitUntil(
+    Effect.gen(function* () {
+      return (yield* status(opened.harness, deeper.owner)).status === "completing";
+    }),
+  );
+  yield* awaited(opened.harness.close(context));
+
+  opened = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)));
+  expect(yield* settled(opened.root.waitForIdle(context))).toBe(false);
+  expect(yield* settled(opened.harness.waitForIdle(context))).toBe(false);
+  open("fg.inner", "completed");
+  open("fg2.inner", "completed");
+  yield* awaited(opened.root.waitForIdle(context));
+  yield* awaited(opened.harness.waitForIdle(context));
+  expect((yield* status(opened.harness, foreground.owner)).status).toBe("terminal");
+  expect((yield* status(opened.harness, background.inner)).status).not.toBe("terminal");
+  yield* awaited(opened.harness.abortTask(background.owner, context));
+  yield* awaited(opened.harness.close(context));
+});
+
+describe("ownership", () => {
+  it("decides idle after reopen from owner edges it has to load first", () =>
+    Effect.runPromise(decidesIdleReopen));
 });

@@ -96,4 +96,9 @@ ${AGGREGATION_OUTPUT_FORMAT}
 
 Write the final summary to ${options.finalSummaryPath}`;
 
-export { aggregationPrompt, analysisPrompt };
+const sessionTranscriptsPrompts = {
+  aggregationPrompt,
+  analysisPrompt,
+};
+
+export default sessionTranscriptsPrompts;

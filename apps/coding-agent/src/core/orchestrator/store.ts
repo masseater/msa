@@ -1,10 +1,16 @@
-import { db } from "./db.ts";
-import { noteStore } from "./note-store.ts";
-import { recovery, stateStore } from "./state-store.ts";
-import { taskStore } from "./task-store.ts";
-import { threadStore } from "./thread-store.ts";
+import dbModule from "./db.ts";
+import noteStoreModule from "./note-store.ts";
+import stateStoreModule from "./state-store.ts";
+import taskStoreModule from "./task-store.ts";
+import threadStoreModule from "./thread-store.ts";
 
-export const store = {
+const { db } = dbModule;
+const { taskStore } = taskStoreModule;
+const { threadStore } = threadStoreModule;
+const { noteStore } = noteStoreModule;
+const { recovery, stateStore } = stateStoreModule;
+
+const store = {
   ...db,
   ...taskStore,
   ...threadStore,
@@ -12,3 +18,9 @@ export const store = {
   ...stateStore,
   ...recovery,
 };
+
+const storeModule = {
+  store,
+};
+
+export default storeModule;

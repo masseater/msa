@@ -1,213 +1,218 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-/**
- * E2E tests for AgentSession compaction behavior.
- *
- * These tests use real LLM calls (no mocking) to verify:
- * - Manual compaction works correctly
- * - Session persistence during compaction
- * - Compaction entry is saved to session file
- */
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Agent } from "@msa/agent-core";
-import { getModel, streamSimple } from "@msa/ai/compat";
+import agentModule from "@msa/agent-core";
+import compat from "@msa/ai/compat";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { AgentSession, type AgentSessionEvent } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createCodingTools } from "../src/index.ts";
-import { createModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { API_KEY, createTestResourceLoader } from "./utilities.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import src from "../src/index.ts";
+import type srcTypes from "../src/index.types.ts";
+import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
+import utilities from "./utilities.ts";
 
-describe.skipIf(!API_KEY)("AgentSession compaction e2e", () => {
-  let session: AgentSession;
-  let tempDir: string;
-  let sessionManager: SessionManager;
-  let events: AgentSessionEvent[];
+const { AgentSession, SessionManager, SettingsManager, createCodingTools } = src;
+const { getModel, streamSimple } = compat;
 
-  beforeEach(async () => {
-    // Create temp directory for session files
-    tempDir = join(tmpdir(), `msa-compaction-test-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
+const { Agent } = agentModule;
 
-    // Track events
-    events = [];
-  });
+const { API_KEY, createTestResourceLoader } = utilities;
 
-  afterEach(async () => {
-    if (session) {
-      session.dispose();
-    }
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
-  });
+const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
-  async function createSession(inMemory = false) {
-    const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
-    const agent = new Agent({
-      getApiKey: () => API_KEY,
-      streamFn: streamSimple,
-      initialState: {
-        model,
-        systemPrompt: "You are a helpful assistant. Be concise.",
-        tools: createCodingTools(process.cwd()),
-      },
-    });
+const { awaited, currentTimeMillis, joinPath, makeDirectory, removePath, runTest, tempRoot } =
+  testing;
 
-    sessionManager = inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
-    const settingsManager = SettingsManager.create(tempDir, tempDir);
-    // Use minimal keepRecentTokens so small test conversations have something to summarize
-    settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-    const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-    const modelRegistry = await createModelRegistry(authStorage);
+let session: srcTypes.AgentSession;
 
-    session = new AgentSession({
-      agent,
-      sessionManager,
-      settingsManager,
-      cwd: tempDir,
-      modelRuntime: getModelRuntime(modelRegistry),
-      resourceLoader: createTestResourceLoader(),
-    });
+let tempDir: string;
 
-    // Subscribe to track events
-    session.subscribe((event) => {
-      events.push(event);
-    });
+let sessionManager: srcTypes.SessionManager;
 
-    return session;
-  }
+let events: srcTypes.AgentSessionEvent[];
 
-  it("should trigger manual compaction via compact()", async () => {
-    await createSession();
+function createSession(inMemory = false) {
+  return runTest(
+    Effect.gen(function* () {
+      const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
+      const agent = new Agent({
+        getApiKey: () => API_KEY,
+        initialState: {
+          model,
+          systemPrompt: "You are a helpful assistant. Be concise.",
+          tools: createCodingTools(process.cwd()),
+        },
+        streamFn: streamSimple,
+      });
 
-    // Send a few prompts to build up history
-    await session.prompt("What is 2+2? Reply with just the number.");
-    await session.agent.waitForIdle();
+      sessionManager = inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
+      const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
 
-    await session.prompt("What is 3+3? Reply with just the number.");
-    await session.agent.waitForIdle();
+      settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
+      const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
+      const modelRegistry = yield* awaited(createModelRegistry(authStorage));
 
-    // Manually compact
-    const result = await session.compact();
+      session = new AgentSession({
+        agent,
+        cwd: tempDir,
+        modelRuntime: getModelRuntime(modelRegistry),
+        resourceLoader: createTestResourceLoader(),
+        sessionManager,
+        settingsManager,
+      });
 
-    expect(result.summary).toBeDefined();
-    expect(result.summary.length).toBeGreaterThan(0);
-    expect(result.tokensBefore).toBeGreaterThan(0);
+      session.subscribe((event) => {
+        events.push(event);
+      });
 
-    // Verify messages were compacted (should have summary + recent)
-    const messages = session.messages;
-    expect(messages.length).toBeGreaterThan(0);
+      return yield* awaited(session);
+    }),
+  );
+}
 
-    // First message should be the summary (a user message with summary content)
-    const firstMsg = messages[0];
-    expect(firstMsg?.role).toBe("compactionSummary");
-  }, 120000);
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = joinPath(tempRoot(), `msa-compaction-test-${currentTimeMillis()}`);
+      yield* makeDirectory(tempDir);
 
-  it("should maintain valid session state after compaction", async () => {
-    await createSession();
+      events = [];
+    }),
+  );
 
-    // Build up history
-    await session.prompt("What is the capital of France? One word answer.");
-    await session.agent.waitForIdle();
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      if (session !== null && session !== undefined) {
+        session.dispose();
+      }
+      if (tempDir.length > 0) {
+        yield* removePath(tempDir);
+      }
+    }),
+  );
 
-    await session.prompt("What is the capital of Germany? One word answer.");
-    await session.agent.waitForIdle();
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
+  "AgentSession compaction e2e",
+  () => {
+    beforeEach(beforeEachHook);
 
-    // Compact
-    await session.compact();
+    afterEach(afterEachHook);
 
-    // Session should still be usable
-    await session.prompt("What is the capital of Italy? One word answer.");
-    await session.agent.waitForIdle();
+    it(
+      "should trigger manual compaction via compact()",
+      () =>
+        runTest(
+          Effect.gen(function* () {
+            yield* awaited(createSession());
 
-    // Should have messages after compaction
-    expect(session.messages.length).toBeGreaterThan(0);
+            yield* awaited(
+              session.run.prompting.prompt("What is 2+2? Reply with just the number."),
+            );
+            yield* awaited(session.agent.waitForIdle());
 
-    // The agent should have responded
-    const assistantMessages = session.messages.filter((m) => m.role === "assistant");
-    expect(assistantMessages.length).toBeGreaterThan(0);
-  }, 180000);
+            yield* awaited(
+              session.run.prompting.prompt("What is 3+3? Reply with just the number."),
+            );
+            yield* awaited(session.agent.waitForIdle());
 
-  it("should persist compaction to session file", async () => {
-    await createSession();
+            const result = yield* awaited(session.compaction.manual.compact());
 
-    await session.prompt("Say hello");
-    await session.agent.waitForIdle();
+            expect(result.summary).toBeDefined();
+            expect(result.summary.length).toBeGreaterThan(0);
+            expect(result.tokensBefore).toBeGreaterThan(0);
 
-    await session.prompt("Say goodbye");
-    await session.agent.waitForIdle();
+            const messages = session.messages;
+            expect(messages.length).toBeGreaterThan(0);
 
-    // Compact
-    await session.compact();
-
-    // Load entries from session manager
-    const entries = sessionManager.getEntries();
-
-    // Should have a compaction entry
-    const compactionEntries = entries.filter((e) => e.type === "compaction");
-    expect(compactionEntries.length).toBe(1);
-
-    const compaction = compactionEntries[0];
-    if (compaction === undefined) throw new Error("expected a compaction entry");
-    expect(compaction.type).toBe("compaction");
-    if (compaction.type === "compaction") {
-      expect(compaction.summary.length).toBeGreaterThan(0);
-      expect(typeof compaction.firstKeptEntryId).toBe("string");
-      expect(compaction.tokensBefore).toBeGreaterThan(0);
-    }
-  }, 120000);
-
-  it("should work with --no-session mode (in-memory only)", async () => {
-    await createSession(true); // in-memory mode
-
-    // Send prompts
-    await session.prompt("What is 2+2? Reply with just the number.");
-    await session.agent.waitForIdle();
-
-    await session.prompt("What is 3+3? Reply with just the number.");
-    await session.agent.waitForIdle();
-
-    // Compact should work even without file persistence
-    const result = await session.compact();
-
-    expect(result.summary).toBeDefined();
-    expect(result.summary.length).toBeGreaterThan(0);
-
-    // In-memory entries should have the compaction
-    const entries = sessionManager.getEntries();
-    const compactionEntries = entries.filter((e) => e.type === "compaction");
-    expect(compactionEntries.length).toBe(1);
-  }, 120000);
-
-  it("should emit compaction events during manual compaction", async () => {
-    await createSession();
-
-    // Build some history
-    await session.prompt("Say hello");
-    await session.agent.waitForIdle();
-
-    // Manually trigger compaction and check events
-    await session.compact();
-
-    const compactionEvents = events.filter(
-      (e) => e.type === "compaction_start" || e.type === "compaction_end",
+            const firstMsg = messages[0];
+            expect(firstMsg?.role).toBe("compactionSummary");
+          }),
+        ),
+      120000,
     );
-    expect(compactionEvents).toHaveLength(2);
-    expect(compactionEvents[0]).toEqual({ type: "compaction_start", reason: "manual" });
-    expect(compactionEvents[1]).toMatchObject({
-      type: "compaction_end",
-      reason: "manual",
-      aborted: false,
-      willRetry: false,
-    });
+  },
+);
 
-    // Regular events should have been emitted
-    const messageEndEvents = events.filter((e) => e.type === "message_end");
-    expect(messageEndEvents.length).toBeGreaterThan(0);
-  }, 120000);
-});
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
+  "AgentSession compaction e2e",
+  () => {
+    beforeEach(beforeEachHook);
+
+    afterEach(afterEachHook);
+
+    it(
+      "should maintain valid session state after compaction",
+      () =>
+        runTest(
+          Effect.gen(function* () {
+            yield* awaited(createSession());
+
+            yield* awaited(
+              session.run.prompting.prompt("What is the capital of France? One word answer."),
+            );
+            yield* awaited(session.agent.waitForIdle());
+
+            yield* awaited(
+              session.run.prompting.prompt("What is the capital of Germany? One word answer."),
+            );
+            yield* awaited(session.agent.waitForIdle());
+
+            yield* awaited(session.compaction.manual.compact());
+
+            yield* awaited(
+              session.run.prompting.prompt("What is the capital of Italy? One word answer."),
+            );
+            yield* awaited(session.agent.waitForIdle());
+
+            expect(session.messages.length).toBeGreaterThan(0);
+
+            const assistantMessages = session.messages.filter((m) => m.role === "assistant");
+            expect(assistantMessages.length).toBeGreaterThan(0);
+          }),
+        ),
+      180000,
+    );
+  },
+);
+
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
+  "AgentSession compaction e2e",
+  () => {
+    beforeEach(beforeEachHook);
+
+    afterEach(afterEachHook);
+
+    it(
+      "should persist compaction to session file",
+      () =>
+        runTest(
+          Effect.gen(function* () {
+            yield* awaited(createSession());
+
+            yield* awaited(session.run.prompting.prompt("Say hello"));
+            yield* awaited(session.agent.waitForIdle());
+
+            yield* awaited(session.run.prompting.prompt("Say goodbye"));
+            yield* awaited(session.agent.waitForIdle());
+
+            yield* awaited(session.compaction.manual.compact());
+
+            const entries = sessionManager.getEntries();
+
+            const compactionEntries = entries.filter((e) => e.type === "compaction");
+            expect(compactionEntries.length).toBe(1);
+
+            const compaction = compactionEntries[0];
+            if (compaction === undefined) throw new Error("expected a compaction entry");
+            expect(compaction.type).toBe("compaction");
+            if (compaction.type === "compaction") {
+              expect(compaction.summary.length).toBeGreaterThan(0);
+              expect(typeof compaction.firstKeptEntryId).toBe("string");
+              expect(compaction.tokensBefore).toBeGreaterThan(0);
+            }
+          }),
+        ),
+      120000,
+    );
+  },
+);

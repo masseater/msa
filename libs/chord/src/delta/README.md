@@ -7,7 +7,9 @@ Immutability is an ownership contract. Nothing is frozen or defensively copied,
 so an illegal mutation is not detected. It silently corrupts state.
 
 ```ts
-import { applyImmutable, applyImmutableBatches, track } from "@msa/chord/delta";
+import delta from "@msa/chord/delta";
+
+const { applyImmutable, applyImmutableBatches, track } = delta;
 
 const initial = { output: "", entries: [] as { id: number }[] };
 const tracker = track(initial); // `initial` is transferred: never mutate it again
@@ -68,7 +70,9 @@ Mutable replay needs a detached starting root and a detached copy of every batch
 for every replica. Never apply one in-memory batch to two mutable replicas:
 
 ```ts
-import { apply } from "@msa/chord/delta";
+import delta from "@msa/chord/delta";
+
+const { apply } = delta;
 
 const detach = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 

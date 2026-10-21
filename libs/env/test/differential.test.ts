@@ -1,11 +1,15 @@
-import type { ToolExecutionApi } from "@msa/durable";
-import type { ExecutionEnv } from "@msa/durable/env";
-import { createBashTool, createReadTool } from "@msa/durable/tools";
+import type envTypes from "@msa/durable/env.types";
+import type durableTypes from "@msa/durable/index.types";
+import toolsModule from "@msa/durable/tools";
 import { Effect, Schema } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { context, normalize, pairs, random } from "./differential-support.ts";
-import { randomOperation } from "./random-operation.ts";
+import differentialSupport from "./differential-support.ts";
+import randomOperation from "./random-operation.ts";
+
+const { createBashTool, createReadTool } = toolsModule;
+
+const { context, normalize, pairs, random } = differentialSupport;
 
 const environments = pairs();
 afterAll(environments.close);
@@ -13,7 +17,7 @@ afterAll(environments.close);
 const randomSequences = Effect.gen(function* () {
   for (let seed = 1; seed <= 60; seed++) {
     const next = random(seed);
-    const { local, remote, roots } = environments.pair();
+    const { local, remote, roots } = yield* environments.pair;
     for (let step = 0; step < 25; step++) {
       const operation = randomOperation(next);
       const expected = normalize(yield* Effect.promise(() => operation.run(local)), roots[0]);
@@ -37,7 +41,7 @@ const FILES: [string, string | Uint8Array][] = [
 
 const toolCases = (): [Tool, object][] => [
   [createReadTool(), { path: "text.txt" }],
-  [createReadTool(), { path: "text.txt", offset: 2, limit: 1 }],
+  [createReadTool(), { limit: 1, offset: 2, path: "text.txt" }],
   [createReadTool(), { path: "big.txt" }],
   [createReadTool(), { path: "long.txt" }],
   [createReadTool(), { path: "bom.txt" }],
@@ -49,18 +53,18 @@ const toolCases = (): [Tool, object][] => [
   [createBashTool(), { command: "printf 'a\\nb'; ls" }],
 ];
 
-const api = (env: ExecutionEnv, output: string[]): ToolExecutionApi =>
+const api = (env: envTypes.ExecutionEnv, output: string[]): durableTypes.ToolExecutionApi =>
   ({
-    env,
-    outputWindow: undefined,
-    output: (chunk: string | Uint8Array) => output.push(String(chunk)),
-    retainedOutput: () => ({ text: output.join(""), truncated: false }),
-    diagnostic: () => undefined,
     details: () => Promise.resolve(),
-  }) as unknown as ToolExecutionApi;
+    diagnostic: () => undefined,
+    env,
+    output: (chunk: string | Uint8Array) => output.push(String(chunk)),
+    outputWindow: undefined,
+    retainedOutput: () => ({ text: output.join(""), truncated: false }),
+  }) as unknown as durableTypes.ToolExecutionApi;
 
 interface ToolRun {
-  readonly env: ExecutionEnv;
+  readonly env: envTypes.ExecutionEnv;
   readonly tool: Tool;
   readonly args: object;
 }
@@ -68,7 +72,7 @@ interface ToolRun {
 const runTool = ({ env, tool, args }: ToolRun): Effect.Effect<unknown> => {
   const output: string[] = [];
   return Effect.tryPromise(() => tool.execute(args as never, api(env, output), context)).pipe(
-    Effect.map((result) => ({ result, output: output.join("") })),
+    Effect.map((result) => ({ output: output.join(""), result })),
     Effect.catch((failure) =>
       Effect.succeed({ error: (failure.cause as Error).message, output: output.join("") }),
     ),
@@ -76,14 +80,14 @@ const runTool = ({ env, tool, args }: ToolRun): Effect.Effect<unknown> => {
 };
 
 const toolResults = Effect.gen(function* () {
-  const { local, remote, roots } = environments.pair();
+  const { local, remote, roots } = yield* environments.pair;
   for (const [path, content] of FILES) {
     yield* Effect.promise(() => local.writeFile(path, content, context));
     yield* Effect.promise(() => remote.writeFile(path, content, context));
   }
   for (const [tool, args] of toolCases()) {
-    const expected = normalize(yield* runTool({ env: local, tool, args }), roots[0]);
-    const actual = normalize(yield* runTool({ env: remote, tool, args }), roots[1]);
+    const expected = normalize(yield* runTool({ args, env: local, tool }), roots[0]);
+    const actual = normalize(yield* runTool({ args, env: remote, tool }), roots[1]);
     expect(actual, yield* toJson(args)).toEqual(expected);
   }
 });

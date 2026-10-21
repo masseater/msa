@@ -1,62 +1,56 @@
-/**
- * The Message types require `content` to always be present, but untyped
- * callers (custom tools, hand-built histories, old session files) can violate
- * that contract. `transformMessages` is the choke point before every provider
- * request and is intentionally lax: it normalizes null/missing content to an
- * empty array (issues #6259, #6276).
- */
-
 import { describe, expect, it } from "vite-plus/test";
 
-import { transformMessages } from "../src/api/transform-messages.ts";
-import type { Message, Model } from "../src/types.ts";
+import transformMessagesModule from "../src/api/transform-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 
-// Text-only model so the image downgrade path (replaceImagesWithPlaceholder) runs,
-// which was the primary crash site for null tool result content.
-function makeTextOnlyModel(): Model<"openai-completions"> {
+const { currentTimeMillis } = clock;
+const { transformMessages } = transformMessagesModule;
+
+function makeTextOnlyModel(): typesModule.Model<"openai-completions"> {
   return {
-    id: "test-model",
-    name: "Test Model",
     api: "openai-completions",
-    provider: "openai",
     baseUrl: "https://example.invalid/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "test-model",
+    input: ["text"],
     maxTokens: 16000,
+    name: "Test Model",
+    provider: "openai",
+    reasoning: false,
   };
 }
 
 describe("lax message content handling", () => {
   it("normalizes null/missing content to an empty array instead of crashing", () => {
     const messages = [
-      { role: "user", content: null, timestamp: Date.now() },
+      { content: null, role: "user", timestamp: currentTimeMillis() },
       {
-        role: "assistant",
-        content: null,
         api: "openai-completions",
-        provider: "openai",
+        content: null,
         model: "test-model",
+        provider: "openai",
+        role: "assistant",
+        stopReason: "stop",
+        timestamp: currentTimeMillis(),
         usage: {
-          input: 0,
-          output: 0,
           cacheRead: 0,
           cacheWrite: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+          input: 0,
+          output: 0,
           totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
         },
-        stopReason: "stop",
-        timestamp: Date.now(),
       },
       {
+        isError: false,
         role: "toolResult",
+        timestamp: currentTimeMillis(),
         toolCallId: "call_1",
         toolName: "web_search",
-        isError: false,
-        timestamp: Date.now(),
       },
-    ] as unknown as Message[];
+    ] as unknown as typesModule.Message[];
 
     const result = transformMessages(messages, makeTextOnlyModel());
 

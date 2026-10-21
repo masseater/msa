@@ -1,0 +1,117 @@
+import testing from "@msa/testing";
+import { Clock, Duration, Effect, Fiber } from "effect";
+import { TestClock } from "effect/testing";
+
+import type ghTypes from "../src/core/pr-watch/gh.types.ts";
+import PrWatchGhError from "../src/core/pr-watch/pr-watch-gh-error.ts";
+import type snapshotTypes from "../src/core/pr-watch/snapshot.types.ts";
+import watch from "../src/core/pr-watch/watch.ts";
+import type watchTypes from "../src/core/pr-watch/watch.types.ts";
+import type prWatchLoopSupportTypes from "./pr-watch-loop-support.types.ts";
+const { createPrWatchEntry, prWatchLoop } = watch;
+
+const { runTest } = testing;
+
+const INTERVAL_MS = 45_000;
+
+const STATUS_INTERVAL_MS = 300_000;
+
+const snapshotOf = (
+  overrides: Partial<snapshotTypes.PrSnapshot> = {},
+): snapshotTypes.PrSnapshot => ({
+  baseRefName: "main",
+  behindBy: undefined,
+  checks: { failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  comments: 0,
+  headRefOid: "head-oid",
+  mergeStateStatus: "CLEAN",
+  mergeable: "MERGEABLE",
+  reviewDecision: "REVIEW_REQUIRED",
+  state: "OPEN",
+  updatedAt: "2024-05-01T00:00:00Z",
+  ...overrides,
+});
+
+const pendingChecks = snapshotOf();
+
+const scriptedGh = (
+  steps: ReadonlyArray<snapshotTypes.PrSnapshot | ghTypes.PrWatchGhError>,
+  behindBy?: number,
+): prWatchLoopSupportTypes.ScriptedGh => {
+  const calls = { count: 0 };
+  const behindCalls = { count: 0 };
+  return {
+    behindCalls,
+    calls,
+    gh: {
+      behind: () => {
+        behindCalls.count += 1;
+        return behindBy === undefined
+          ? Effect.fail(new PrWatchGhError({ kind: "other", message: "no compare" }))
+          : Effect.succeed(behindBy);
+      },
+      view: () => {
+        const step = steps[Math.min(calls.count, steps.length - 1)]!;
+        calls.count += 1;
+        return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+      },
+    },
+  };
+};
+
+const runPolls = (
+  script: prWatchLoopSupportTypes.ScriptedGh,
+  advances: readonly number[],
+): Promise<prWatchLoopSupportTypes.RunResult> =>
+  runTest(
+    Effect.gen(function* () {
+      const notifications: watchTypes.PrNotification[] = [];
+      const changes = { count: 0 };
+      const entry = createPrWatchEntry({ number: 12 }, INTERVAL_MS, STATUS_INTERVAL_MS);
+      yield* Effect.scoped(
+        Effect.gen(function* () {
+          const clock = yield* TestClock.make();
+          const fiber = yield* prWatchLoop({
+            entry,
+            gh: script.gh,
+            host: {
+              changed: () => {
+                changes.count += 1;
+              },
+              notify: (notification) => {
+                notifications.push(notification);
+              },
+            },
+          }).pipe(Effect.provideService(Clock.Clock, clock), Effect.forkChild);
+          yield* Effect.yieldNow;
+          for (const advance of advances) {
+            yield* clock.adjust(Duration.millis(advance));
+            yield* Effect.yieldNow;
+          }
+          yield* Fiber.interrupt(fiber);
+        }),
+      );
+      return {
+        behindCalls: script.behindCalls.count,
+        calls: script.calls.count,
+        changes: changes.count,
+        entry,
+        notifications,
+      };
+    }),
+  );
+
+const seen = (result: prWatchLoopSupportTypes.RunResult) =>
+  result.notifications.map(({ label, text }) => ({ label, text }));
+
+const prWatchLoopSupport = {
+  INTERVAL_MS,
+  STATUS_INTERVAL_MS,
+  pendingChecks,
+  runPolls,
+  scriptedGh,
+  seen,
+  snapshotOf,
+};
+
+export default prWatchLoopSupport;

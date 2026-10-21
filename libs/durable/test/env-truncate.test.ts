@@ -1,9 +1,16 @@
-import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { formatSize, truncateHead } from "../src/truncate.ts";
+import truncate from "../src/truncate.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { formatSize, truncateHead } = truncate;
+
+const { fromJsonText, toJsonText } = effectSupport;
+const { runCommandOrFail } = platformSupport;
 
 const encoder = new TextEncoder();
 
@@ -22,39 +29,37 @@ describe("truncate utilities", () => {
     expect(result.totalBytes).toBe(9);
   });
 
-  it("counts UTF-8 bytes and truncates correctly in a runtime without Buffer", () => {
-    const inputs = [
-      "",
-      "ascii",
-      "é",
-      "中",
-      "🙂",
-      "\ud83d",
-      "\ude42",
-      "a\ud83d\ude42b",
-      "\u07ff\u0800\uffff",
-    ];
-    const output = execFileSync(
-      process.execPath,
-      [
-        // Workspace packages from source, as the test runner resolves them, not from a possibly stale build.
-        "--conditions=source",
-        "--import",
-        new URL("./fixtures/delete-buffer.ts", import.meta.url).href,
-        fileURLToPath(new URL("./fixtures/utf8-byte-length-without-buffer.ts", import.meta.url)),
-        JSON.stringify(inputs),
-      ],
-      { encoding: "utf8" },
-    );
-    const result = JSON.parse(output) as {
-      bufferAvailable: boolean;
-      lengths: number[];
-      head: { content: string; outputBytes: number; truncatedBy: string | null };
-    };
-    expect(result.bufferAvailable).toBe(false);
-    expect(result.lengths).toEqual(inputs.map(byteLength));
-    expect(result.head).toMatchObject({ content: "aé🙂", outputBytes: 7, truncatedBy: "bytes" });
-  });
+  it("counts UTF-8 bytes and truncates correctly in a runtime without Buffer", () =>
+    Effect.runPromise(countsWithoutBuffer));
+});
+
+const countsWithoutBuffer = Effect.gen(function* () {
+  const inputs = [
+    "",
+    "ascii",
+    "é",
+    "中",
+    "🙂",
+    "\ud83d",
+    "\ude42",
+    "a\ud83d\ude42b",
+    "\u07ff\u0800\uffff",
+  ];
+  const output = yield* runCommandOrFail(process.execPath, [
+    "--conditions=source",
+    "--import",
+    new URL("./fixtures/delete-buffer.ts", import.meta.url).href,
+    fileURLToPath(new URL("./fixtures/utf8-byte-length-without-buffer.ts", import.meta.url)),
+    yield* toJsonText(inputs),
+  ]);
+  const result = (yield* fromJsonText(output)) as {
+    bufferAvailable: boolean;
+    lengths: number[];
+    head: { content: string; outputBytes: number; truncatedBy: string | null };
+  };
+  expect(result.bufferAvailable).toBe(false);
+  expect(result.lengths).toEqual(inputs.map(byteLength));
+  expect(result.head).toMatchObject({ content: "aé🙂", outputBytes: 7, truncatedBy: "bytes" });
 });
 
 describe("truncate utilities", () => {
@@ -62,27 +67,27 @@ describe("truncate utilities", () => {
     const content = `${Array.from({ length: 3 }, () => "line").join("\n")}\n`;
     const head = truncateHead(content, { maxBytes: 100, maxLines: 3 });
 
-    expect(head).toMatchObject({ truncated: false, totalLines: 3, outputLines: 3 });
+    expect(head).toMatchObject({ outputLines: 3, totalLines: 3, truncated: false });
   });
 
   it("truncates head by line limits", () => {
     const content = "one\ntwo\nthree\nfour";
     expect(truncateHead(content, { maxBytes: 100, maxLines: 2 })).toMatchObject({
       content: "one\ntwo",
+      outputLines: 2,
+      totalLines: 4,
       truncated: true,
       truncatedBy: "lines",
-      totalLines: 4,
-      outputLines: 2,
     });
   });
 
   it("reports bytes when only a trailing newline exceeds limits at the line cap", () => {
     expect(truncateHead("hello\nworld\n", { maxBytes: 11, maxLines: 2 })).toMatchObject({
       content: "hello\nworld",
+      outputLines: 2,
+      totalLines: 2,
       truncated: true,
       truncatedBy: "bytes",
-      totalLines: 2,
-      outputLines: 2,
     });
   });
 

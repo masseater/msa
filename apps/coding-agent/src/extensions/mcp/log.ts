@@ -1,11 +1,8 @@
-/**
- * Log messages MCP servers send with `notifications/message`, appended to `mcp.log` in the agent
- * directory. Several msa processes may write to the same file, so every message is one synchronous
- * append. The file is rotated to `mcp.log.1` once it grows past `MAX_LOG_BYTES`.
- */
+import platform from "../../core/platform/index.ts";
 
-import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
-import { dirname } from "node:path";
+const { appendText, fileSize, makeDirectory, rename } = platform.files;
+
+const { dirname, nowMs, toDate } = platform;
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 
@@ -22,24 +19,21 @@ function formatData(data: unknown): string {
   }
 }
 
-/** Format one `notifications/message` from `server` as a log line; continuation lines are indented. */
-export function formatMcpLogMessage(
-  server: string,
-  params: unknown,
-  now: Date = new Date(),
-): string {
+function formatMcpLogMessage(server: string, params: unknown, now: Date = toDate(nowMs())): string {
   const message = isRecord(params) ? params : { data: params };
   const level = typeof message["level"] === "string" ? message["level"] : "info";
   const logger =
-    typeof message["logger"] === "string" && message["logger"] ? ` ${message["logger"]}:` : "";
-  const text = formatData(message["data"]).replace(/\r?\n/g, "\n    ");
+    typeof message["logger"] === "string" && message["logger"] !== ""
+      ? ` ${message["logger"]}:`
+      : "";
+  const text = formatData(message["data"]).replace(/\r?\n/gu, "\n    ");
   return `${now.toISOString()} [${server}] ${level}${logger} ${text}\n`;
 }
 
-/** Appends server log messages to one file. Write errors are ignored: logging must not break tools. */
-export class McpServerLog {
+export default class McpServerLog {
   readonly path: string;
   private size: number | undefined;
+  private pending: Promise<void> = Promise.resolve();
 
   constructor(path: string) {
     this.path = path;
@@ -47,28 +41,38 @@ export class McpServerLog {
 
   write(server: string, params: unknown): void {
     const line = formatMcpLogMessage(server, params);
-    try {
-      if (this.size === undefined) {
-        mkdirSync(dirname(this.path), { recursive: true });
-        this.size = this.currentSize();
-      }
-      if (this.size > MAX_LOG_BYTES) {
-        // Another process may have rotated it already; check before renaming.
-        if (this.currentSize() > MAX_LOG_BYTES) renameSync(this.path, `${this.path}.1`);
-        this.size = this.currentSize();
-      }
-      appendFileSync(this.path, line);
-      this.size += Buffer.byteLength(line);
-    } catch {
-      // Ignore: the log is best effort.
-    }
+    this.pending = this.pending.then(() => this.append(line)).catch(() => undefined);
   }
 
-  private currentSize(): number {
-    try {
-      return statSync(this.path).size;
-    } catch {
-      return 0;
-    }
+  flush(): Promise<void> {
+    return this.pending;
+  }
+
+  private append(line: string): Promise<void> {
+    return this.knownSize()
+      .then((size) => (size > MAX_LOG_BYTES ? this.rotate() : size))
+      .then((size) =>
+        appendText({ data: line, path: this.path }).then(() => {
+          this.size = size + Buffer.byteLength(line);
+          return undefined;
+        }),
+      );
+  }
+
+  private knownSize(): Promise<number> {
+    if (this.size !== undefined) return Promise.resolve(this.size);
+    return makeDirectory({ path: dirname(this.path) }).then(() => this.currentSize());
+  }
+
+  private rotate(): Promise<number> {
+    return this.currentSize()
+      .then((size) =>
+        size > MAX_LOG_BYTES ? rename({ from: this.path, to: `${this.path}.1` }) : undefined,
+      )
+      .then(() => this.currentSize());
+  }
+
+  private currentSize(): Promise<number> {
+    return fileSize(this.path).catch(() => 0);
   }
 }

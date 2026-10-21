@@ -1,82 +1,114 @@
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { validateThemeJson } from "../src/modes/interactive/theme/theme-schema.ts";
-import { loadThemeFromPath, setThemeJsonValidator } from "../src/modes/interactive/theme/theme.ts";
+import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { loadThemeFromPath, setThemeJsonValidator } = themeModule;
+const { validateThemeJson } = themeSchema;
+
+const { joinPath, makeTempDir, readJsonFile, removeDirs, runTest, writeJsonFile } = testing;
 
 setThemeJsonValidator(validateThemeJson);
 
 const tempDirs: string[] = [];
 
-function loadDarkTheme(): { name: string; colors: Record<string, string | number> } {
-  return JSON.parse(
-    readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf8"),
-  ) as {
-    name: string;
-    colors: Record<string, string | number>;
-  };
+interface Theme {
+  name: string;
+  colors: Record<string, string | number>;
 }
 
-function writeTheme(theme: { name: string; colors: Record<string, string | number> }): string {
-  const testDir = mkdtempSync(join(tmpdir(), "msa-scrollbar-theme-"));
-  tempDirs.push(testDir);
-  const themePath = join(testDir, `${theme.name}.json`);
-  writeFileSync(themePath, JSON.stringify(theme));
-  return themePath;
-}
-
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
+const loadDarkTheme = Effect.gen(function* () {
+  return (yield* readJsonFile(
+    fileURLToPath(new URL("../src/modes/interactive/theme/dark.json", import.meta.url)),
+  )) as Theme;
 });
+
+const writeTheme = Effect.fn("writeTheme")(function* (theme: Theme) {
+  const testDir = yield* makeTempDir("msa-scrollbar-theme-");
+  tempDirs.push(testDir);
+  const themePath = joinPath(testDir, `${theme.name}.json`);
+  yield* writeJsonFile(themePath, theme);
+  return themePath;
+});
+
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
+
+const usesExplicitlyConfiguredScrollbarColors = () =>
+  runTest(
+    Effect.gen(function* () {
+      const themeJson = yield* loadDarkTheme;
+      themeJson.name = "custom-scrollbar-theme";
+      themeJson.colors["scrollbarTrack"] = "#654321";
+      themeJson.colors["scrollbarThumb"] = "#123456";
+
+      const themePath = yield* writeTheme(themeJson);
+      const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
+      expect(loadedTheme.getFgAnsi("scrollbarTrack")).toBe("\x1b[38;2;101;67;33m");
+      expect(loadedTheme.getFgAnsi("scrollbarThumb")).toBe("\x1b[38;2;18;52;86m");
+    }),
+  );
+
+const fallsBackToExistingSelectionAndText = () =>
+  runTest(
+    Effect.gen(function* () {
+      const themeJson = yield* loadDarkTheme;
+      themeJson.name = "legacy-search-theme";
+      delete themeJson.colors["searchMatchBg"];
+      delete themeJson.colors["searchMatchText"];
+
+      const themePath = yield* writeTheme(themeJson);
+      const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
+      expect(loadedTheme.getBgAnsi("searchMatchBg")).toBe(loadedTheme.getBgAnsi("selectedBg"));
+      expect(loadedTheme.getFgAnsi("searchMatchText")).toBe(loadedTheme.getFgAnsi("text"));
+    }),
+  );
+
+const usesExplicitlyConfiguredSearchHighlightColors = () =>
+  runTest(
+    Effect.gen(function* () {
+      const themeJson = yield* loadDarkTheme;
+      themeJson.name = "custom-search-theme";
+      themeJson.colors["searchMatchBg"] = "#112233";
+      themeJson.colors["searchMatchText"] = "#223344";
+
+      const themePath = yield* writeTheme(themeJson);
+      const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
+      expect(loadedTheme.getBgAnsi("searchMatchBg")).toBe("\x1b[48;2;17;34;51m");
+      expect(loadedTheme.getFgAnsi("searchMatchText")).toBe("\x1b[38;2;34;51;68m");
+    }),
+  );
 
 describe("fullscreen theme colors", () => {
   it.each([
     ["scrollbarTrack", "muted"],
     ["scrollbarThumb", "text"],
-  ] as const)("falls back to %s when omitted", (token, fallback) => {
-    const themeJson = loadDarkTheme();
-    themeJson.name = `missing-${token}-theme`;
-    delete themeJson.colors[token];
+  ] as const)("falls back to %s when omitted", (token, fallback) =>
+    runTest(
+      Effect.gen(function* () {
+        const themeJson = yield* loadDarkTheme;
+        themeJson.name = `missing-${token}-theme`;
+        delete themeJson.colors[token];
 
-    const loadedTheme = loadThemeFromPath(writeTheme(themeJson), "truecolor");
-    expect(loadedTheme.getFgAnsi(token)).toBe(loadedTheme.getFgAnsi(fallback));
-  });
+        const themePath = yield* writeTheme(themeJson);
+        const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
+        expect(loadedTheme.getFgAnsi(token)).toBe(loadedTheme.getFgAnsi(fallback));
+      }),
+    ),
+  );
 
-  it("uses explicitly configured scrollbar colors", () => {
-    const themeJson = loadDarkTheme();
-    themeJson.name = "custom-scrollbar-theme";
-    themeJson.colors["scrollbarTrack"] = "#654321";
-    themeJson.colors["scrollbarThumb"] = "#123456";
+  it("uses explicitly configured scrollbar colors", usesExplicitlyConfiguredScrollbarColors);
 
-    const loadedTheme = loadThemeFromPath(writeTheme(themeJson), "truecolor");
-    expect(loadedTheme.getFgAnsi("scrollbarTrack")).toBe("\x1b[38;2;101;67;33m");
-    expect(loadedTheme.getFgAnsi("scrollbarThumb")).toBe("\x1b[38;2;18;52;86m");
-  });
+  it(
+    "falls back to existing selection and text colors for search highlights",
+    fallsBackToExistingSelectionAndText,
+  );
 
-  it("falls back to existing selection and text colors for search highlights", () => {
-    const themeJson = loadDarkTheme();
-    themeJson.name = "legacy-search-theme";
-    delete themeJson.colors["searchMatchBg"];
-    delete themeJson.colors["searchMatchText"];
-
-    const loadedTheme = loadThemeFromPath(writeTheme(themeJson), "truecolor");
-    expect(loadedTheme.getBgAnsi("searchMatchBg")).toBe(loadedTheme.getBgAnsi("selectedBg"));
-    expect(loadedTheme.getFgAnsi("searchMatchText")).toBe(loadedTheme.getFgAnsi("text"));
-  });
-
-  it("uses explicitly configured search highlight colors", () => {
-    const themeJson = loadDarkTheme();
-    themeJson.name = "custom-search-theme";
-    themeJson.colors["searchMatchBg"] = "#112233";
-    themeJson.colors["searchMatchText"] = "#223344";
-
-    const loadedTheme = loadThemeFromPath(writeTheme(themeJson), "truecolor");
-    expect(loadedTheme.getBgAnsi("searchMatchBg")).toBe("\x1b[48;2;17;34;51m");
-    expect(loadedTheme.getFgAnsi("searchMatchText")).toBe("\x1b[38;2;34;51;68m");
-  });
+  it(
+    "uses explicitly configured search highlight colors",
+    usesExplicitlyConfiguredSearchHighlightColors,
+  );
 });

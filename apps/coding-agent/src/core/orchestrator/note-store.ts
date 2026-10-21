@@ -1,7 +1,8 @@
-import type { DatabaseSync } from "node:sqlite";
+import type DatabaseSync from "../platform/node/sqlite.ts";
+import dbModule from "./db.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
-import { db } from "./db.ts";
-import type { Note } from "./types.ts";
+const { db } = dbModule;
 
 interface NoteRow {
   id: string;
@@ -19,19 +20,19 @@ function targetsOf(database: DatabaseSync, noteId: string): string[] {
   return rows.map((row) => row.task_id);
 }
 
-function toNote(database: DatabaseSync, row: NoteRow): Note {
+function toNote(database: DatabaseSync, row: NoteRow): orchestratorTypesTypes.Note {
   return {
+    author: row.author,
+    content: row.content,
+    createdAt: row.created_at,
     id: row.id,
     project: row.project,
     round: row.round,
     taskIds: targetsOf(database, row.id),
-    content: row.content,
-    author: row.author,
-    createdAt: row.created_at,
   };
 }
 
-function insertNote(database: DatabaseSync, note: Note): void {
+function insertNote(database: DatabaseSync, note: orchestratorTypesTypes.Note): void {
   db.transaction(database, () => {
     database
       .prepare(
@@ -46,7 +47,7 @@ function insertNote(database: DatabaseSync, note: Note): void {
   });
 }
 
-function listNotes(database: DatabaseSync, project: string): Note[] {
+function listNotes(database: DatabaseSync, project: string): orchestratorTypesTypes.Note[] {
   const rows = database
     .prepare("SELECT * FROM notes WHERE project = ? ORDER BY created_at, id")
     .all(project) as unknown as NoteRow[];
@@ -58,7 +59,7 @@ function unreadNotes(
   project: string,
   taskId: string,
   threadId: string,
-): Note[] {
+): orchestratorTypesTypes.Note[] {
   const rows = database
     .prepare(
       `SELECT n.* FROM notes n
@@ -96,11 +97,17 @@ function deleteNote(database: DatabaseSync, noteId: string): void {
   database.prepare("DELETE FROM notes WHERE id = ?").run(noteId);
 }
 
-export const noteStore = {
+const noteStore = {
+  deleteNote,
   insertNote,
   listNotes,
-  unreadNotes,
   markNoteRead,
   noteRead,
-  deleteNote,
+  unreadNotes,
 };
+
+const noteStoreModule = {
+  noteStore,
+};
+
+export default noteStoreModule;

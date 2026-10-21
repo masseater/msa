@@ -1,108 +1,100 @@
-/**
- * Shared command execution utilities for extensions and custom tools.
- */
+import * as Effect from "effect/Effect";
 
-import { spawn } from "node:child_process";
+import childProcess from "../utils/child-process.ts";
+import awaitingModule from "./awaiting.ts";
+import type execTypes from "./exec.types.ts";
+import platform from "./platform/index.ts";
+import type platformTypes from "./platform/index.types.ts";
+import nodeChildProcess from "./platform/node/child-process.ts";
+import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
 
-import { waitForChildProcess } from "../utils/child-process.ts";
+const { spawn } = nodeChildProcess;
 
-/**
- * Options for executing shell commands.
- */
-export interface ExecOptions {
-  /** AbortSignal to cancel the command */
-  signal?: AbortSignal;
-  /** Timeout in milliseconds */
-  timeout?: number;
-  /** Working directory */
-  cwd?: string;
+const { awaiting, performed } = awaitingModule;
+const { schedule, scheduleUnref } = platform;
+
+const KILL_GRACE_MS = 5000;
+
+const running = (proc: nodeChildProcessTypes.ChildProcess): boolean =>
+  proc.exitCode === null && proc.signalCode === null;
+const { waitForChildProcess } = childProcess;
+
+function stopOnAbortOrTimeout(
+  proc: nodeChildProcessTypes.ChildProcess,
+  options: execTypes.ExecOptions | undefined,
+) {
+  let killed = false;
+  let escalation: platformTypes.Scheduled | undefined;
+  const kill = () => {
+    if (killed) return;
+    killed = true;
+    proc.kill("SIGTERM");
+    escalation = scheduleUnref(() => {
+      if (running(proc)) proc.kill("SIGKILL");
+    }, KILL_GRACE_MS);
+  };
+  const signal = options?.signal;
+  if (signal?.aborted === true) kill();
+  else signal?.addEventListener("abort", kill, { once: true });
+  const timeout =
+    options?.timeout !== undefined && options.timeout > 0
+      ? schedule(kill, options.timeout)
+      : undefined;
+  return {
+    dispose: () => {
+      timeout?.cancel();
+      escalation?.cancel();
+      signal?.removeEventListener("abort", kill);
+    },
+    killed: () => killed,
+  };
 }
 
-/**
- * Result of executing a shell command.
- */
-export interface ExecResult {
-  stdout: string;
-  stderr: string;
-  code: number;
-  killed: boolean;
+function collectOutput(proc: nodeChildProcessTypes.ChildProcess) {
+  const output = { stderr: "", stdout: "" };
+  proc.stdout?.on("data", (data) => {
+    output.stdout += data.toString();
+  });
+  proc.stderr?.on("data", (data) => {
+    output.stderr += data.toString();
+  });
+  return output;
 }
 
-/**
- * Execute a shell command and return stdout/stderr/code.
- * Supports timeout and abort signal.
- */
-export async function execCommand(
+function execCommand(
   command: string,
   args: string[],
   cwd: string,
-  options?: ExecOptions,
-): Promise<ExecResult> {
-  return new Promise((resolve) => {
-    const proc = spawn(command, args, {
-      cwd,
-      shell: false,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-
-    let stdout = "";
-    let stderr = "";
-    let killed = false;
-    let timeoutId: NodeJS.Timeout | undefined;
-
-    const killProcess = () => {
-      if (!killed) {
-        killed = true;
-        proc.kill("SIGTERM");
-        // Force kill after 5 seconds if SIGTERM doesn't work
-        setTimeout(() => {
-          if (!proc.killed) {
-            proc.kill("SIGKILL");
-          }
-        }, 5000);
-      }
-    };
-
-    // Handle abort signal
-    if (options?.signal) {
-      if (options.signal.aborted) {
-        killProcess();
-      } else {
-        options.signal.addEventListener("abort", killProcess, { once: true });
-      }
-    }
-
-    // Handle timeout
-    if (options?.timeout && options.timeout > 0) {
-      timeoutId = setTimeout(() => {
-        killProcess();
-      }, options.timeout);
-    }
-
-    proc.stdout?.on("data", (data) => {
-      stdout += data.toString();
-    });
-
-    proc.stderr?.on("data", (data) => {
-      stderr += data.toString();
-    });
-
-    // Wait for process termination without hanging on inherited stdio handles
-    // held open by detached descendants.
-    waitForChildProcess(proc)
-      .then((code) => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (options?.signal) {
-          options.signal.removeEventListener("abort", killProcess);
-        }
-        resolve({ stdout, stderr, code: code ?? 0, killed });
-      })
-      .catch((_err) => {
-        if (timeoutId) clearTimeout(timeoutId);
-        if (options?.signal) {
-          options.signal.removeEventListener("abort", killProcess);
-        }
-        resolve({ stdout, stderr, code: 1, killed });
-      });
-  });
+  options?: execTypes.ExecOptions,
+): Promise<execTypes.ExecResult> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      return yield* performed(
+        Effect.callback<execTypes.ExecResult>((resume) => {
+          const proc = spawn(command, args, {
+            cwd,
+            shell: false,
+            stdio: ["ignore", "pipe", "pipe"],
+          });
+          const stop = stopOnAbortOrTimeout(proc, options);
+          const output = collectOutput(proc);
+          const finish = (code: number) => {
+            stop.dispose();
+            resume(Effect.succeed({ code, killed: stop.killed(), ...output }));
+            return undefined;
+          };
+          waitForChildProcess(proc).then(
+            (code) => finish(code ?? 0),
+            () => finish(1),
+          );
+        }),
+      );
+    }),
+  );
 }
+
+const exec = {
+  execCommand,
+};
+
+export default exec;

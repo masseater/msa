@@ -1,8 +1,10 @@
-import type { ExtensionAPI } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import tuiModule from "@msa/tui";
 import { Effect } from "effect";
 
-export default function (msa: ExtensionAPI) {
+const { Text } = tuiModule;
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("tui", {
     description: "Show TUI stats",
     handler: (_args, ctx) =>

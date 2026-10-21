@@ -1,53 +1,17 @@
-import { Effect, Predicate, Result, Schema, Stream } from "effect";
+import { Effect, Predicate, Schema } from "effect";
 
-import type { SinceFilter } from "./auto-since.ts";
-import type { HostShape } from "./host.ts";
-import { jsonlFilesRecursive, parseMillis, sessionFileMillis } from "./sessions.ts";
+import type hostTypes from "./host.types.ts";
+import type readToolScanTypes from "./read-tool-scan.types.ts";
+import type scanOptionsTypes from "./scan-options.types.ts";
+import sessions from "./sessions.ts";
+import toolCalls from "./tool-calls.ts";
+import type toolCallsTypes from "./tool-calls.types.ts";
 
-type ReadMode = "full" | "partial";
+const { callOriginOf, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
+const { collectSessionRecords, forEachDecodedLine, messageOf, sessionScanMeta, timestampMillis } =
+  sessions;
 
-interface ReadRecord {
-  readonly sessionFile: string;
-  readonly assistantEntryId: string | undefined;
-  readonly toolCallId: string;
-  readonly timestamp: string | undefined;
-  readonly timestampMs: number;
-  readonly api: string | null;
-  readonly provider: string;
-  readonly model: string;
-  readonly providerModel: string;
-  readonly path: string;
-  readonly offset: unknown;
-  readonly limit: unknown;
-  readonly mode: ReadMode;
-}
-
-interface ReadScanMeta {
-  sessionsDir: string;
-  sessionFilesScanned: number;
-  sessionFilesIncluded: number;
-  sessionFilesSkippedOlderThanSince: number;
-  sessionFilesWithReadCalls: number;
-  since: SinceFilter | null;
-  malformedLines: number;
-}
-
-const ContentBlock = Schema.Record(Schema.String, Schema.Unknown);
-
-const EntrySchema = Schema.Struct({
-  type: Schema.optional(Schema.String),
-  id: Schema.optional(Schema.String),
-  timestamp: Schema.optional(Schema.String),
-  message: Schema.optional(
-    Schema.Struct({
-      role: Schema.optional(Schema.String),
-      api: Schema.optional(Schema.String),
-      provider: Schema.optional(Schema.String),
-      model: Schema.optional(Schema.String),
-      content: Schema.optional(Schema.Union([Schema.String, Schema.Array(ContentBlock)])),
-    }),
-  ),
-});
+const EntrySchema = toolCallEntrySchema({});
 
 type Entry = typeof EntrySchema.Type;
 
@@ -56,119 +20,96 @@ const decodeEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(EntrySchema
 const readField = (args: unknown, key: "limit" | "offset" | "path"): unknown =>
   Predicate.hasProperty(key)(args) ? args[key] : undefined;
 
+const readPathOf = (args: unknown): string => {
+  const target = readField(args, "path");
+  return Predicate.isString(target) ? target : "";
+};
+
+const readModeOf = (offset: unknown, limit: unknown): readToolScanTypes.ReadRecord["mode"] =>
+  offset === null && limit === null ? "full" : "partial";
+
 const classifyRead = (
   args: unknown,
-): {
-  readonly path: string;
-  readonly offset: unknown;
-  readonly limit: unknown;
-  readonly mode: ReadMode;
-} => {
-  const offset = readField(args, "offset");
-  const limit = readField(args, "limit");
-  const target = readField(args, "path");
-  const hasOffset = offset !== undefined && offset !== null;
-  const hasLimit = limit !== undefined && limit !== null;
-  return {
-    path: Predicate.isString(target) ? target : "",
-    offset: hasOffset ? offset : null,
-    limit: hasLimit ? limit : null,
-    mode: hasOffset || hasLimit ? "partial" : "full",
-  };
+): Pick<readToolScanTypes.ReadRecord, "limit" | "mode" | "offset" | "path"> => {
+  const offset = readField(args, "offset") ?? null;
+  const limit = readField(args, "limit") ?? null;
+  return { limit, mode: readModeOf(offset, limit), offset, path: readPathOf(args) };
 };
+
+const readRecordOf = (
+  origin: toolCallsTypes.CallOrigin,
+  timestampMs: number,
+  block: toolCallsTypes.Block,
+): readToolScanTypes.ReadRecord => ({
+  api: origin.api,
+  assistantEntryId: origin.assistantEntryId,
+  model: origin.model,
+  provider: origin.provider,
+  providerModel: origin.providerModel,
+  sessionFile: origin.sessionFile,
+  timestamp: origin.timestamp,
+  timestampMs,
+  toolCallId: toolCallIdOf(block),
+  ...classifyRead(block["arguments"]),
+});
 
 const readRecords = (options: {
   readonly entry: Entry;
   readonly sessionFile: string;
   readonly sessionMillis: number | null;
-}): ReadonlyArray<ReadRecord> => {
-  const { entry, sessionFile, sessionMillis } = options;
-  const message = entry.message;
-  if (entry.type !== "message" || message === undefined) return [];
-  const content = message.content;
-  if (message.role !== "assistant" || content === undefined || Predicate.isString(content)) {
-    return [];
-  }
-  const provider = message.provider ?? "[unknown]";
-  const model = message.model ?? "[unknown]";
-  const entryMillis = entry.timestamp === undefined ? null : parseMillis(entry.timestamp);
-  return content.flatMap((block) => {
-    if (block.type !== "toolCall" || block.name !== "read") return [];
-    return [
-      {
-        sessionFile,
-        assistantEntryId: entry.id,
-        toolCallId: Predicate.isString(block.id) ? block.id : "",
-        timestamp: entry.timestamp,
-        timestampMs: entryMillis ?? sessionMillis ?? 0,
-        api: message.api ?? null,
-        provider,
-        model,
-        providerModel: `${provider}/${model}`,
-        ...classifyRead(block.arguments),
-      },
-    ];
-  });
+}): ReadonlyArray<readToolScanTypes.ReadRecord> => {
+  const { entry, sessionFile } = options;
+  const message = messageOf(entry);
+  if (message === undefined) return [];
+  const origin = callOriginOf({ entry, message, sessionFile });
+  const timestampMs = timestampMillis(entry.timestamp) ?? options.sessionMillis ?? 0;
+  return toolCallsOf({ message, name: "read" }).map((block) =>
+    readRecordOf(origin, timestampMs, block),
+  );
 };
 
 const scanFile = (options: {
-  readonly host: HostShape;
-  readonly meta: ReadScanMeta;
+  readonly host: hostTypes.HostShape;
+  readonly meta: readToolScanTypes.ReadScanMeta;
   readonly sessionFile: string;
   readonly sessionMillis: number | null;
 }) =>
   Effect.gen(function* () {
     const { host, meta, sessionFile, sessionMillis } = options;
-    const records: Array<ReadRecord> = [];
-    yield* host.lines(sessionFile).pipe(
-      Stream.filter((line) => line.trim() !== ""),
-      Stream.runForEach((line) =>
-        Effect.gen(function* () {
-          const parsed = yield* Effect.result(decodeEntry(line));
-          if (!Result.isSuccess(parsed)) {
-            meta.malformedLines += 1;
-            return;
-          }
-          records.push(...readRecords({ entry: parsed.success, sessionFile, sessionMillis }));
-        }),
-      ),
-    );
+    const records: Array<readToolScanTypes.ReadRecord> = [];
+    yield* forEachDecodedLine({
+      decode: decodeEntry,
+      file: sessionFile,
+      host,
+      onEntry: (entry) => {
+        records.push(...readRecords({ entry, sessionFile, sessionMillis }));
+      },
+      onMalformed: () => {
+        meta.malformedLines += 1;
+      },
+    });
     if (records.length > 0) meta.sessionFilesWithReadCalls += 1;
     return records;
   });
 
-const scanReadCalls = (options: {
-  readonly host: HostShape;
-  readonly sessionsDir: string;
-  readonly since: SinceFilter | null;
-}) =>
+const scanReadCalls = (options: scanOptionsTypes.SessionScanRequest) =>
   Effect.gen(function* () {
-    const { host, sessionsDir, since } = options;
-    const meta: ReadScanMeta = {
-      sessionsDir,
-      sessionFilesScanned: 0,
-      sessionFilesIncluded: 0,
-      sessionFilesSkippedOlderThanSince: 0,
+    const { host } = options;
+    const meta: readToolScanTypes.ReadScanMeta = {
+      ...sessionScanMeta(options),
       sessionFilesWithReadCalls: 0,
-      since,
-      malformedLines: 0,
     };
-    const records: Array<ReadRecord> = [];
-    const files = yield* jsonlFilesRecursive({ directory: sessionsDir, host });
-    yield* Effect.forEach(files, (sessionFile) =>
-      Effect.gen(function* () {
-        meta.sessionFilesScanned += 1;
-        const sessionMillis = sessionFileMillis({ file: sessionFile, host });
-        if (since !== null && sessionMillis !== null && sessionMillis < since.ms) {
-          meta.sessionFilesSkippedOlderThanSince += 1;
-          return;
-        }
-        meta.sessionFilesIncluded += 1;
-        records.push(...(yield* scanFile({ host, meta, sessionFile, sessionMillis })));
-      }),
-    );
+    const records = yield* collectSessionRecords({
+      ...options,
+      counts: meta,
+      scanFile: ({ sessionFile, sessionMillis }) =>
+        scanFile({ host, meta, sessionFile, sessionMillis }),
+    });
     return { meta, records };
   });
 
-export type { ReadRecord, ReadScanMeta };
-export { scanReadCalls };
+const readToolScan = {
+  scanReadCalls,
+};
+
+export default readToolScan;

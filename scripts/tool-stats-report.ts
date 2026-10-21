@@ -1,26 +1,9 @@
 import { Effect, Schema } from "effect";
 
-import { Json } from "./json.ts";
+import json from "./json.ts";
+import type toolStatsReportTypes from "./tool-stats-report.types.ts";
 
-interface HistogramRow {
-  readonly avg: number;
-  readonly calls: number;
-  readonly estimatedTokens: number;
-  readonly histogram: ReadonlyArray<number>;
-  readonly name: string;
-  readonly results?: number;
-  readonly samples: ReadonlyArray<number>;
-}
-
-interface ReportData {
-  readonly bashCommands: ReadonlyArray<HistogramRow>;
-  readonly bucketLabels: ReadonlyArray<string>;
-  readonly files: number;
-  readonly generatedAt: string;
-  readonly parseErrors: number;
-  readonly sessionsDir: string;
-  readonly tools: ReadonlyArray<HistogramRow>;
-}
+const { Json } = json;
 
 const HEAD = `<!doctype html>
 <html>
@@ -31,7 +14,9 @@ const HEAD = `<!doctype html>
 	<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.9/dist/chart.umd.min.js"></script>
 </head>`;
 
-const markup = (data: ReportData): string => `<body class="bg-zinc-950 text-zinc-100 p-6">
+const markup = (
+  data: toolStatsReportTypes.ReportData,
+): string => `<body class="bg-zinc-950 text-zinc-100 p-6">
 	<main class="max-w-7xl mx-auto space-y-6">
 		<h1 class="text-3xl font-bold">msa Tool Stats</h1>
 		<p class="text-zinc-400">${data.files} session files from <code>${data.sessionsDir}</code>. Generated ${data.generatedAt}.</p>
@@ -96,7 +81,7 @@ const chartScript = (serialized: string): string => `	<script>
 		new Chart(document.getElementById('calls'),{type:'bar',data:{labels:data.tools.map(r=>r.name),datasets:[{label:'calls',data:data.tools.map(r=>r.calls)}]},options:{plugins:{legend:{display:false}}}});
 	</script>`;
 
-const renderReport = (data: ReportData) =>
+const renderReport = (data: toolStatsReportTypes.ReportData) =>
   Effect.gen(function* () {
     const serialized = yield* Schema.encodeEffect(Json)(data);
     return `${HEAD}
@@ -106,5 +91,8 @@ ${chartScript(serialized)}
 </html>`;
   });
 
-export type { HistogramRow, ReportData };
-export { renderReport };
+const toolStatsReport = {
+  renderReport,
+};
+
+export default toolStatsReport;

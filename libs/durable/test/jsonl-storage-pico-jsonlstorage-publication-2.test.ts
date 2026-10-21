@@ -1,251 +1,268 @@
-import { readdir, rm } from "node:fs/promises";
-import { join } from "node:path";
-
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import type { DocumentId, TaskId } from "../src/types.ts";
-import {
-  fileExists,
-  terminalTask,
-  readLines,
-  sessionDocument,
-  pendingTask,
-  createRoot,
+import node from "../src/env/node.ts";
+import type typesModule from "../src/types.types.ts";
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { NodeExecutionEnv } = node;
+
+const { awaited } = effectSupport;
+const {
+  InstrumentedEnv,
   context,
+  createRoot,
+  fileExists,
   openStorage,
   openStorages,
+  pendingTask,
+  readLines,
+  sessionDocument,
   tempDirectories,
   tempDirectory,
-  InstrumentedEnv,
-} from "./jsonl-storage-support.ts";
+  terminalTask,
+} = jsonlStorageSupport;
+const { joinPath, listDirectory, removeDir } = platformSupport;
 
-afterEach(async () => {
-  for await (const storage of openStorages) await storage.close(context);
-  openStorages.clear();
-  for await (const directory of tempDirectories)
-    await rm(directory, { recursive: true, force: true });
-  tempDirectories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
 
-async function instrumentedDocument() {
-  const directory = await tempDirectory();
+const instrumentedDocument = Effect.fn("instrumentedDocument")(function* () {
+  const directory = yield* tempDirectory();
   const env = new InstrumentedEnv({ cwd: directory });
-  const storage = await openStorage(directory, env, { fsync: true });
-  await createRoot(storage);
-  const id = await storage.mintId<DocumentId>();
-  await storage.commit(
-    [
-      {
-        type: "document.create",
-        record: sessionDocument(id),
-        content: { kind: "base", version: 1, value: { count: 0 } },
-      },
-    ],
-    context,
-  );
-  return { directory, env, storage, id };
-}
-
-async function fsyncedDocument() {
-  const directory = await tempDirectory();
-  const env = new InstrumentedEnv({ cwd: directory });
-  const storage = await openStorage(directory, env, { fsync: true });
-  await createRoot(storage);
-  const id = await storage.mintId<DocumentId>();
-  await storage.commit(
-    [
-      {
-        type: "document.create",
-        record: sessionDocument(id),
-        content: { kind: "base", version: 1, value: { count: 0 } },
-      },
-    ],
-    context,
-  );
-  return { directory, env, storage, id };
-}
-
-describe("Pico JsonlStorage publication and recovery", () => {
-  for (const mode of ["before", "after"] as const) {
-    it(`recovers document-retirement reclamation across remove ${mode}`, async () => {
-      const directory = await tempDirectory();
-      const env = new InstrumentedEnv({ cwd: directory });
-      const storage = await openStorage(directory, env);
-      await createRoot(storage);
-      const taskId = await storage.mintId<TaskId<JsonValue>>();
-      const id = await storage.mintId<DocumentId>();
-      await storage.commit(
-        [
-          { type: "task", value: pendingTask(taskId) },
-          {
-            type: "document.create",
-            record: { id, kind: "task.document", scope: { kind: "task", taskId } },
-            content: { kind: "base", version: 1, value: { count: 1 } },
-          },
-        ],
-        context,
-      );
-      env.fail({ operation: "remove", call: 1, mode });
-      await expect(storage.commit([{ type: "document.retire", id }], context)).resolves.toBe(3);
-      expect(await storage.document(id, "current", context)).toBeUndefined();
-      await storage.close(context);
-
-      const reopened = await openStorage(directory);
-      expect(await reopened.document(id, "current", context)).toBeUndefined();
-      expect(await reopened.task(taskId, context)).toEqual(pendingTask(taskId));
-      expect(await fileExists(join(directory, `doc-${id}.jsonl`))).toBe(false);
-      expect((await readdir(directory)).filter((name) => name.endsWith(".reclaim"))).toEqual([]);
-    });
-  }
-});
-
-describe("Pico JsonlStorage publication and recovery", () => {
-  for (const mode of ["before", "after"] as const) {
-    it(`defers reclamation after authorizing-main flush ${mode} failure`, async () => {
-      const { directory, env, storage, id } = await instrumentedDocument();
-      env.fail({ operation: "flush", call: 2, mode });
-      await expect(
-        storage.commit(
-          [
-            {
-              type: "document.change",
-              id,
-              content: { kind: "base", version: 1, value: { count: 2 } },
-            },
-          ],
-          context,
-        ),
-      ).resolves.toBe(3);
-      expect(env.operations).toEqual([
-        `append:doc-${id}.jsonl`,
-        `flush:doc-${id}.jsonl`,
-        "append:main.jsonl",
-        "flush:main.jsonl",
-      ]);
-      expect((await storage.document(id, "current", context))?.value).toEqual({ count: 2 });
-      expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(2);
-      await storage.close(context);
-
-      const recoveryEnv = new InstrumentedEnv({ cwd: directory });
-      recoveryEnv.fail({ operation: "flush", call: 1, mode });
-      const deferred = await openStorage(directory, recoveryEnv, { fsync: true });
-      expect((await deferred.document(id, "current", context))?.value).toEqual({ count: 2 });
-      expect(recoveryEnv.operations).toEqual(["flush:main.jsonl"]);
-      expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(2);
-      await deferred.close(context);
-
-      const reclaimed = await openStorage(directory, new NodeExecutionEnv({ cwd: directory }), {
-        fsync: true,
-      });
-      expect((await reclaimed.document(id, "current", context))?.value).toEqual({ count: 2 });
-      expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(1);
-    });
-  }
-});
-
-describe("Pico JsonlStorage publication and recovery", () => {
-  for (const mode of ["before", "after"] as const) {
-    it(`keeps a committed base usable after reclaim-temp flush ${mode} failure`, async () => {
-      const { directory, env, storage, id } = await fsyncedDocument();
-      env.fail({ operation: "flush", call: 3, mode });
-      await expect(
-        storage.commit(
-          [
-            {
-              type: "document.change",
-              id,
-              content: { kind: "base", version: 1, value: { count: 2 } },
-            },
-          ],
-          context,
-        ),
-      ).resolves.toBe(3);
-      env.clear();
-      await storage.commit(
-        [
-          {
-            type: "document.change",
-            id,
-            content: { kind: "delta", version: 1, ops: [["s", ["count"], 3]] },
-          },
-        ],
-        context,
-      );
-      await storage.close(context);
-
-      const reopened = await openStorage(directory, new NodeExecutionEnv({ cwd: directory }), {
-        fsync: true,
-      });
-      expect((await reopened.document(id, "current", context))?.value).toEqual({ count: 3 });
-      expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(2);
-    });
-  }
-});
-
-describe("Pico JsonlStorage publication and recovery", () => {
-  for (const mode of ["before", "after"] as const) {
-    it(`recovers terminal-task reclamation across remove ${mode}`, async () => {
-      const directory = await tempDirectory();
-      const env = new InstrumentedEnv({ cwd: directory });
-      const storage = await openStorage(directory, env);
-      await createRoot(storage);
-      const id = await storage.mintId<TaskId<JsonValue>>();
-      await storage.commit([{ type: "task", value: pendingTask(id) }], context);
-      env.fail({ operation: "remove", call: 1, mode });
-      await expect(
-        storage.commit([{ type: "task", value: terminalTask(id) }], context),
-      ).resolves.toBe(3);
-      expect(await storage.task(id, context)).toEqual(terminalTask(id));
-      await storage.close(context);
-
-      const reopened = await openStorage(directory);
-      expect(await reopened.task(id, context)).toEqual(terminalTask(id));
-      expect(await fileExists(join(directory, `task-${id}.jsonl`))).toBe(false);
-      expect((await readdir(directory)).filter((name) => name.endsWith(".reclaim"))).toEqual([]);
-    });
-  }
-});
-
-describe("Pico JsonlStorage publication and recovery", () => {
-  it("appends later deltas to the replacement sidecar after a current-only base", async () => {
-    const directory = await tempDirectory();
-    const storage = await openStorage(directory);
-    await createRoot(storage);
-    const id = await storage.mintId<DocumentId>();
-    await storage.commit(
+  const storage = yield* openStorage(directory, env, { fsync: true });
+  yield* createRoot(storage);
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record: sessionDocument(id),
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
-    );
-    await storage.commit(
+    ),
+  );
+  return { directory, env, id, storage };
+});
+
+const fsyncedDocument = Effect.fn("fsyncedDocument")(function* () {
+  const directory = yield* tempDirectory();
+  const env = new InstrumentedEnv({ cwd: directory });
+  const storage = yield* openStorage(directory, env, { fsync: true });
+  yield* createRoot(storage);
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
         {
-          type: "document.change",
-          id,
-          content: { kind: "base", version: 1, value: { count: 10 } },
+          content: { kind: "base", value: { count: 0 }, version: 1 },
+          record: sessionDocument(id),
+          type: "document.create",
         },
       ],
       context,
-    );
-    await storage.commit(
+    ),
+  );
+  return { directory, env, id, storage };
+});
+
+const recoversDocumentRetirementCases = ["before", "after"] as const;
+
+const recoversDocumentRetirement = Effect.fn("recoversDocumentRetirement")(function* (
+  mode: (typeof recoversDocumentRetirementCases)[number],
+) {
+  const directory = yield* tempDirectory();
+  const env = new InstrumentedEnv({ cwd: directory });
+  const storage = yield* openStorage(directory, env);
+  yield* createRoot(storage);
+  const taskId = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  yield* awaited(
+    storage.commit(
       [
+        { type: "task", value: pendingTask(taskId) },
         {
-          type: "document.change",
-          id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], 11]] },
+          content: { kind: "base", value: { count: 1 }, version: 1 },
+          record: { id, kind: "task.document", scope: { kind: "task", taskId } },
+          type: "document.create",
         },
       ],
       context,
-    );
-    expect(await readLines(join(directory, `doc-${id}.jsonl`))).toHaveLength(2);
-    const reopened = await openStorage(directory);
-    expect((await reopened.document(id, "current", context))?.value).toEqual({ count: 11 });
+    ),
+  );
+  env.fail({ call: 1, mode, operation: "remove" });
+  yield* awaited(
+    expect(storage.commit([{ id, type: "document.retire" }], context)).resolves.toBe(3),
+  );
+  expect(yield* awaited(storage.document(id, "current", context))).toBeUndefined();
+  yield* awaited(storage.close(context));
+
+  const reopened = yield* openStorage(directory);
+  expect(yield* awaited(reopened.document(id, "current", context))).toBeUndefined();
+  expect(yield* awaited(reopened.task(taskId, context))).toEqual(pendingTask(taskId));
+  expect(yield* fileExists(joinPath(directory, `doc-${id}.jsonl`))).toBe(false);
+  expect((yield* listDirectory(directory)).filter((name) => name.endsWith(".reclaim"))).toEqual([]);
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  for (const mode of recoversDocumentRetirementCases) {
+    it(`recovers document-retirement reclamation across remove ${mode}`, () =>
+      Effect.runPromise(recoversDocumentRetirement(mode)));
+  }
+});
+
+const defersReclamationAuthorizingCases = ["before", "after"] as const;
+
+const defersReclamationAuthorizing = Effect.fn("defersReclamationAuthorizing")(function* (
+  mode: (typeof defersReclamationAuthorizingCases)[number],
+) {
+  const { directory, env, storage, id } = yield* instrumentedDocument();
+  env.fail({ call: 2, mode, operation: "flush" });
+  yield* awaited(
+    expect(
+      storage.commit(
+        [
+          {
+            content: { kind: "base", value: { count: 2 }, version: 1 },
+            id,
+            type: "document.change",
+          },
+        ],
+        context,
+      ),
+    ).resolves.toBe(3),
+  );
+  expect(env.operations).toEqual([
+    `append:doc-${id}.jsonl`,
+    `flush:doc-${id}.jsonl`,
+    "append:main.jsonl",
+    "flush:main.jsonl",
+  ]);
+  expect((yield* awaited(storage.document(id, "current", context)))?.value).toEqual({
+    count: 2,
   });
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(2);
+  yield* awaited(storage.close(context));
+
+  const recoveryEnv = new InstrumentedEnv({ cwd: directory });
+  recoveryEnv.fail({ call: 1, mode, operation: "flush" });
+  const deferred = yield* openStorage(directory, recoveryEnv, { fsync: true });
+  expect((yield* awaited(deferred.document(id, "current", context)))?.value).toEqual({
+    count: 2,
+  });
+  expect(recoveryEnv.operations).toEqual(["flush:main.jsonl"]);
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(2);
+  yield* awaited(deferred.close(context));
+
+  const reclaimed = yield* openStorage(directory, new NodeExecutionEnv({ cwd: directory }), {
+    fsync: true,
+  });
+  expect((yield* awaited(reclaimed.document(id, "current", context)))?.value).toEqual({
+    count: 2,
+  });
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(1);
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  for (const mode of defersReclamationAuthorizingCases) {
+    it(`defers reclamation after authorizing-main flush ${mode} failure`, () =>
+      Effect.runPromise(defersReclamationAuthorizing(mode)));
+  }
+});
+
+const keepsCommittedBaseCases = ["before", "after"] as const;
+
+const keepsCommittedBase = Effect.fn("keepsCommittedBase")(function* (
+  mode: (typeof keepsCommittedBaseCases)[number],
+) {
+  const { directory, env, storage, id } = yield* fsyncedDocument();
+  env.fail({ call: 3, mode, operation: "flush" });
+  yield* awaited(
+    expect(
+      storage.commit(
+        [
+          {
+            content: { kind: "base", value: { count: 2 }, version: 1 },
+            id,
+            type: "document.change",
+          },
+        ],
+        context,
+      ),
+    ).resolves.toBe(3),
+  );
+  env.clear();
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          content: { kind: "delta", ops: [["s", ["count"], 3]], version: 1 },
+          id,
+          type: "document.change",
+        },
+      ],
+      context,
+    ),
+  );
+  yield* awaited(storage.close(context));
+
+  const reopened = yield* openStorage(directory, new NodeExecutionEnv({ cwd: directory }), {
+    fsync: true,
+  });
+  expect((yield* awaited(reopened.document(id, "current", context)))?.value).toEqual({
+    count: 3,
+  });
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(2);
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  for (const mode of keepsCommittedBaseCases) {
+    it(`keeps a committed base usable after reclaim-temp flush ${mode} failure`, () =>
+      Effect.runPromise(keepsCommittedBase(mode)));
+  }
+});
+
+const recoversTerminalTaskCases = ["before", "after"] as const;
+
+const recoversTerminalTask = Effect.fn("recoversTerminalTask")(function* (
+  mode: (typeof recoversTerminalTaskCases)[number],
+) {
+  const directory = yield* tempDirectory();
+  const env = new InstrumentedEnv({ cwd: directory });
+  const storage = yield* openStorage(directory, env);
+  yield* createRoot(storage);
+  const id = yield* awaited(storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>());
+  yield* awaited(storage.commit([{ type: "task", value: pendingTask(id) }], context));
+  env.fail({ call: 1, mode, operation: "remove" });
+  yield* awaited(
+    expect(storage.commit([{ type: "task", value: terminalTask(id) }], context)).resolves.toBe(3),
+  );
+  expect(yield* awaited(storage.task(id, context))).toEqual(terminalTask(id));
+  yield* awaited(storage.close(context));
+
+  const reopened = yield* openStorage(directory);
+  expect(yield* awaited(reopened.task(id, context))).toEqual(terminalTask(id));
+  expect(yield* fileExists(joinPath(directory, `task-${id}.jsonl`))).toBe(false);
+  expect((yield* listDirectory(directory)).filter((name) => name.endsWith(".reclaim"))).toEqual([]);
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  for (const mode of recoversTerminalTaskCases) {
+    it(`recovers terminal-task reclamation across remove ${mode}`, () =>
+      Effect.runPromise(recoversTerminalTask(mode)));
+  }
 });

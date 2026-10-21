@@ -1,389 +1,242 @@
-/**
- * Runs the official MCP client conformance suite against msa (client.ts) and compares every check with
- * the committed baseline (baseline.json). Fails when a check that passed in the baseline no longer
- * passes, or when a check fails that the baseline does not list. Known failures stay visible in the
- * output. See README.md.
- */
-
-import { spawn } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readdirSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 
-/** The pinned upstream suite. Bumping it requires reviewing and regenerating the baseline. */
-const CONFORMANCE_PACKAGE = "@modelcontextprotocol/conformance@0.2.0-alpha.11";
-/** Protocol versions msa negotiates. 2026-07-28 is a different (stateless) protocol msa does not speak. */
-const MODES = ["2025-03-26", "2025-06-18", "2025-11-25"] as const;
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
+
+import command from "./command.ts";
+import report from "./report.ts";
+import type reportTypes from "./report.types.ts";
+
+const {
+  CONFORMANCE_PACKAGE,
+  IGNORED_STATUSES,
+  MODES,
+  evaluate,
+  loadBaselineJson,
+  log,
+  logError,
+  makeTempDir,
+  pathExists,
+  printResults,
+  readJson,
+  record,
+  removeDir,
+  scopeBaseline,
+  toBaseline,
+  usage,
+  writeJson,
+} = report;
+
+const { conformanceEnv, findFile, prepareLauncher, runCommand } = command;
+
 const SCENARIO_TIMEOUT_MS = 30_000;
-/** Checks that are part of the suite's HTTP trace, not assertions. */
-const IGNORED_STATUSES = new Set(["INFO", "SKIPPED"]);
 
-const here = fileURLToPath(new URL(".", import.meta.url));
-const baselinePath = join(here, "baseline.json");
-const clientPath = join(here, "client.ts");
-const resolverUrl = pathToFileURL(join(here, "../../src/experimental/source-resolver.ts")).href;
+const baselinePath = fileURLToPath(new URL("baseline.json", import.meta.url));
 
-type CheckStatus = "pass" | "fail";
-
-interface ScenarioResult {
-  mode: string;
-  scenario: string;
-  /** Check id to status. Repeated ids pass only when every instance passes. */
-  checks: Map<string, CheckStatus>;
-  /** Failure messages by check id, for the report. */
-  messages: Map<string, string>;
-}
-
-interface BaselineScenario {
-  passing: string[];
-  failing: string[];
-}
-
-interface Baseline {
-  conformance: string;
-  modes: Record<string, Record<string, BaselineScenario>>;
-}
-
-interface RawCheck {
-  id?: unknown;
-  name?: unknown;
-  status?: unknown;
-  description?: unknown;
-  errorMessage?: unknown;
-}
-
-function runCommand(
-  command: string,
-  args: string[],
-  options: { cwd: string; env?: NodeJS.ProcessEnv; timeoutMs?: number },
-): Promise<{ code: number; stdout: string; stderr: string }> {
-  return new Promise((resolve, reject) => {
-    const child = spawn(command, args, {
-      cwd: options.cwd,
-      env: options.env ?? process.env,
-      detached: true,
-    });
-    let stdout = "";
-    let stderr = "";
-    child.stdout.on("data", (data: Buffer) => {
-      stdout += data.toString();
-    });
-    child.stderr.on("data", (data: Buffer) => {
-      stderr += data.toString();
-    });
-    const timer =
-      options.timeoutMs === undefined
-        ? undefined
-        : setTimeout(() => {
-            // The runner spawns the client and scenario servers; end the whole group.
-            if (child.pid !== undefined) {
-              try {
-                process.kill(-child.pid, "SIGKILL");
-              } catch {}
-            }
-          }, options.timeoutMs);
-    child.on("error", reject);
-    child.on("close", (code, signal) => {
-      if (timer) clearTimeout(timer);
-      resolve({ code: code ?? (signal ? 128 : 1), stdout, stderr });
-    });
+const listScenarios = (mode: string, workDir: string) =>
+  Effect.gen(function* () {
+    const result = yield* runCommand(
+      "npx",
+      ["--yes", CONFORMANCE_PACKAGE, "list", "--client", "--spec-version", mode],
+      { cwd: workDir, env: conformanceEnv() },
+    );
+    if (result.code !== 0)
+      throw new Error(`Listing ${mode} scenarios failed:\n${result.stderr || result.stdout}`);
+    return [...result.stdout.matchAll(/^\s+- (\S+)/gmu)].flatMap((match) => match[1] ?? []);
   });
-}
 
-function conformanceEnv(): NodeJS.ProcessEnv {
-  // The suite comes from npm with prebuilt files; nothing needs install scripts.
-  return { ...process.env, npm_config_ignore_scripts: "true", npm_config_yes: "true" };
-}
+const runScenarioSetup = (input: {
+  readonly launcher: string;
+  readonly mode: string;
+  readonly scenario: string;
+  readonly workDir: string;
+}) =>
+  Effect.gen(function* () {
+    const { workDir, mode, scenario, launcher } = input;
+    const path = yield* Path.Path;
+    const scenarioDir = path.join(workDir, mode, scenario.replace(/[^A-Za-z0-9_.-]+/gu, "-"));
+    yield* Effect.orDie(
+      Effect.flatMap(FileSystem.FileSystem, (fs) =>
+        fs.makeDirectory(scenarioDir, { recursive: true }),
+      ),
+    );
+    const reportPath = path.join(scenarioDir, "msa-client.json");
+    const result: reportTypes.ScenarioResult = {
+      checks: new Map(),
+      messages: new Map(),
+      mode,
+      scenario,
+    };
+    const run = yield* runCommand(
+      "npx",
+      [
+        "--yes",
+        CONFORMANCE_PACKAGE,
+        "client",
+        "--command",
+        launcher,
+        "--scenario",
+        scenario,
+        "--spec-version",
+        mode,
+        "--timeout",
+        String(SCENARIO_TIMEOUT_MS),
+        "--output-dir",
+        scenarioDir,
+      ],
+      {
+        cwd: workDir,
+        env: { ...conformanceEnv(), MSA_MCP_CONFORMANCE_REPORT: reportPath },
+        timeoutMs: SCENARIO_TIMEOUT_MS + 30_000,
+      },
+    );
+    return { reportPath, result, run, scenarioDir };
+  });
 
-async function listScenarios(mode: string, workDir: string): Promise<string[]> {
-  const result = await runCommand(
-    "npx",
-    ["--yes", CONFORMANCE_PACKAGE, "list", "--client", "--spec-version", mode],
-    {
-      cwd: workDir,
-      env: conformanceEnv(),
-    },
-  );
-  if (result.code !== 0)
-    throw new Error(`Listing ${mode} scenarios failed:\n${result.stderr || result.stdout}`);
-  return [...result.stdout.matchAll(/^\s+- (\S+)/gm)].flatMap((match) => match[1] ?? []);
-}
-
-function findFile(dir: string, name: string): string | undefined {
-  if (!existsSync(dir)) return undefined;
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const path = join(dir, entry.name);
-    if (entry.isFile() && entry.name === name) return path;
-    if (entry.isDirectory()) {
-      const found = findFile(path, name);
-      if (found) return found;
-    }
-  }
-  return undefined;
-}
-
-function record(result: ScenarioResult, id: string, status: CheckStatus, message?: string): void {
-  if (result.checks.get(id) !== "fail") result.checks.set(id, status);
-  if (status === "fail" && message && !result.messages.has(id)) result.messages.set(id, message);
-}
-
-async function runScenario(
+const runScenario = (
   mode: string,
   scenario: string,
   launcher: string,
   workDir: string,
   verbose: boolean,
-): Promise<ScenarioResult> {
-  const scenarioDir = join(workDir, mode, scenario.replace(/[^A-Za-z0-9_.-]+/g, "-"));
-  mkdirSync(scenarioDir, { recursive: true });
-  const reportPath = join(scenarioDir, "msa-client.json");
-  const result: ScenarioResult = { mode, scenario, checks: new Map(), messages: new Map() };
-  const run = await runCommand(
-    "npx",
-    [
-      "--yes",
-      CONFORMANCE_PACKAGE,
-      "client",
-      "--command",
+) =>
+  Effect.gen(function* () {
+    const { reportPath, result, run, scenarioDir } = yield* runScenarioSetup({
       launcher,
-      "--scenario",
-      scenario,
-      "--spec-version",
       mode,
-      "--timeout",
-      String(SCENARIO_TIMEOUT_MS),
-      "--output-dir",
-      scenarioDir,
-    ],
-    {
-      cwd: workDir,
-      env: { ...conformanceEnv(), MSA_MCP_CONFORMANCE_REPORT: reportPath },
-      timeoutMs: SCENARIO_TIMEOUT_MS + 30_000,
-    },
-  );
-  if (verbose) process.stderr.write(run.stderr);
+      scenario,
+      workDir,
+    });
+    if (verbose) process.stderr.write(run.stderr);
 
-  const checksPath = findFile(scenarioDir, "checks.json");
-  if (!checksPath) {
-    record(
+    const checksPath = yield* findFile(scenarioDir, "checks.json");
+    if (checksPath === undefined || checksPath === "") {
+      record({
+        id: "runner",
+        message: `No checks.json (runner exit ${run.code}): ${run.stderr.trim().slice(-2000)}`,
+        result,
+        status: "fail",
+      });
+      return result;
+    }
+    const checks = (yield* readJson(checksPath)) as ReadonlyArray<reportTypes.RawCheck>;
+    for (const check of checks) {
+      const status = String(check.status ?? "FAILURE").toUpperCase();
+      if (IGNORED_STATUSES.has(status)) continue;
+      const id = String(check.id ?? check.name ?? "unnamed");
+      const message = String(check.errorMessage ?? check.description ?? "");
+      record({ id, message, result, status: status === "SUCCESS" ? "pass" : "fail" });
+    }
+
+    let client: { success?: unknown; error?: unknown } = { error: "client.ts wrote no report" };
+    if (yield* pathExists(reportPath)) client = (yield* readJson(reportPath)) as typeof client;
+    record({
+      id: "msa-client",
+      message: String(client.error ?? ""),
       result,
-      "runner",
-      "fail",
-      `No checks.json (runner exit ${run.code}): ${run.stderr.trim().slice(-2000)}`,
-    );
+      status: client.success === true ? "pass" : "fail",
+    });
     return result;
-  }
-  const checks = JSON.parse(readFileSync(checksPath, "utf8")) as RawCheck[];
-  for (const check of checks) {
-    const status = String(check.status ?? "FAILURE").toUpperCase();
-    if (IGNORED_STATUSES.has(status)) continue;
-    const id = String(check.id ?? check.name ?? "unnamed");
-    const message = String(check.errorMessage ?? check.description ?? "");
-    record(result, id, status === "SUCCESS" ? "pass" : "fail", message);
-  }
-  // Whether msa completed the scenario. Some scenarios expect the client to give up, so this is
-  // baselined like any other check.
-  let client: { success?: unknown; error?: unknown } = { error: "client.ts wrote no report" };
-  if (existsSync(reportPath))
-    client = JSON.parse(readFileSync(reportPath, "utf8")) as typeof client;
-  record(
-    result,
-    "msa-client",
-    client.success === true ? "pass" : "fail",
-    String(client.error ?? ""),
-  );
-  return result;
-}
-
-function loadBaseline(): Baseline | undefined {
-  if (!existsSync(baselinePath)) return undefined;
-  return JSON.parse(readFileSync(baselinePath, "utf8")) as Baseline;
-}
-
-function toBaseline(results: ScenarioResult[]): Baseline {
-  const baseline: Baseline = { conformance: CONFORMANCE_PACKAGE, modes: {} };
-  for (const result of results) {
-    const ids = [...result.checks.keys()].sort();
-    const scenarios = (baseline.modes[result.mode] ??= {});
-    scenarios[result.scenario] = {
-      passing: ids.filter((id) => result.checks.get(id) === "pass"),
-      failing: ids.filter((id) => result.checks.get(id) === "fail"),
-    };
-  }
-  return baseline;
-}
-
-/** Compare with the baseline. Returns whether there is no regression. */
-function evaluate(results: ScenarioResult[], baseline: Baseline): boolean {
-  const regressions: string[] = [];
-  const fixed: string[] = [];
-  for (const result of results) {
-    const expected = baseline.modes[result.mode]?.[result.scenario];
-    const label = `${result.mode} ${result.scenario}`;
-    for (const [id, status] of result.checks) {
-      const message = result.messages.get(id);
-      if (status === "fail" && !expected?.failing.includes(id)) {
-        regressions.push(`${label}: ${id} fails${message ? `: ${message}` : ""}`);
-      }
-      if (status === "pass" && expected?.failing.includes(id)) fixed.push(`${label}: ${id}`);
-    }
-    for (const id of expected?.passing ?? []) {
-      if (!result.checks.has(id)) regressions.push(`${label}: ${id} was not reported`);
-    }
-  }
-  for (const [mode, scenarios] of Object.entries(baseline.modes)) {
-    for (const scenario of Object.keys(scenarios)) {
-      if (!results.some((result) => result.mode === mode && result.scenario === scenario)) {
-        regressions.push(`${mode} ${scenario}: scenario did not run`);
-      }
-    }
-  }
-  if (fixed.length > 0) {
-    console.log(
-      `\nFixed since the baseline (run with --update-baseline):\n${fixed.map((line) => `  ${line}`).join("\n")}`,
-    );
-  }
-  if (regressions.length > 0) {
-    console.log(`\nRegressions:\n${regressions.map((line) => `  ${line}`).join("\n")}`);
-    return false;
-  }
-  console.log("\nNo regressions against the baseline.");
-  return true;
-}
-
-function printResults(results: ScenarioResult[]): void {
-  for (const mode of MODES) {
-    const modeResults = results.filter((result) => result.mode === mode);
-    if (modeResults.length === 0) continue;
-    console.log(`\n${mode}`);
-    for (const result of modeResults) {
-      const statuses = [...result.checks.values()];
-      const failed = statuses.filter((status) => status === "fail").length;
-      const passed = statuses.length - failed;
-      console.log(
-        `  ${failed === 0 ? "pass" : "FAIL"} ${result.scenario} (${passed} passed, ${failed} failed)`,
-      );
-      for (const [id, status] of result.checks) {
-        if (status !== "fail") continue;
-        const message = result.messages.get(id)?.replace(/\s+/g, " ").slice(0, 300);
-        console.log(`         ${id}${message ? `: ${message}` : ""}`);
-      }
-    }
-  }
-}
-
-async function main(): Promise<number> {
-  const { values } = parseArgs({
-    options: {
-      mode: { type: "string", multiple: true },
-      scenario: { type: "string", multiple: true },
-      "update-baseline": { type: "boolean", default: false },
-      "keep-results": { type: "boolean", default: false },
-      verbose: { type: "boolean", default: false },
-      help: { type: "boolean", short: "h", default: false },
-    },
   });
-  if (values.help) {
-    console.log(`Usage: node apps/coding-agent/test/mcp-conformance/run.ts [options]
 
-Options:
-  --mode <version>     Only run this protocol version (repeatable): ${MODES.join(", ")}
-  --scenario <name>    Only run this scenario (repeatable)
-  --update-baseline    Write the results to baseline.json instead of comparing
-  --keep-results       Keep the upstream checks.json and client output
-  --verbose            Print the upstream runner output`);
-    return 0;
+const loadBaseline = (): Effect.Effect<reportTypes.Baseline | undefined> =>
+  loadBaselineJson(baselinePath);
+
+const parseOptions = () =>
+  parseArgs({
+    options: {
+      help: { default: false, short: "h", type: "boolean" },
+      "keep-results": { default: false, type: "boolean" },
+      mode: { multiple: true, type: "string" },
+      scenario: { multiple: true, type: "string" },
+      "update-baseline": { default: false, type: "boolean" },
+      verbose: { default: false, type: "boolean" },
+    },
+  }).values;
+
+type Options = ReturnType<typeof parseOptions>;
+
+const optionError = (values: Options, modes: readonly string[]): string | undefined => {
+  if (process.platform === "win32") return "The conformance runner needs a POSIX shell.";
+  const unsupported = modes.find((mode) => !(MODES as ReadonlyArray<string>).includes(mode));
+  if (unsupported !== undefined)
+    return `Unsupported mode ${unsupported}. Supported: ${MODES.join(", ")}`;
+  const partial = values.mode !== undefined || values.scenario !== undefined;
+  if (values["update-baseline"] === true && partial)
+    return "--update-baseline needs a full run, without --mode or --scenario.";
+  return undefined;
+};
+
+const runScenarios = Effect.fn("runScenarios")(function* (
+  values: Options,
+  modes: readonly string[],
+  workDir: string,
+) {
+  const launcher = yield* prepareLauncher(workDir);
+  const results: reportTypes.ScenarioResult[] = [];
+  for (const mode of modes) {
+    const scenarios = (yield* listScenarios(mode, workDir)).filter(
+      (scenario) => values.scenario === undefined || values.scenario.includes(scenario),
+    );
+    for (const scenario of scenarios) {
+      process.stderr.write(`${mode} ${scenario}\n`);
+      results.push(yield* runScenario(mode, scenario, launcher, workDir, values.verbose === true));
+    }
   }
-  if (process.platform === "win32") {
-    console.error("The conformance runner needs a POSIX shell.");
+  return results;
+});
+
+const compareWithBaseline = Effect.fn("compareWithBaseline")(function* (
+  values: Options,
+  modes: readonly string[],
+  results: reportTypes.ScenarioResult[],
+) {
+  const baseline = yield* loadBaseline();
+  if (baseline === undefined) {
+    logError("\nNo baseline.json. Run with --update-baseline and review it.");
     return 1;
   }
-  const modes = values.mode ?? [...MODES];
-  for (const mode of modes) {
-    if (!(MODES as readonly string[]).includes(mode)) {
-      console.error(`Unsupported mode ${mode}. Supported: ${MODES.join(", ")}`);
-      return 1;
-    }
+  if (baseline.conformance !== CONFORMANCE_PACKAGE) {
+    logError(
+      `\nbaseline.json is for ${baseline.conformance}, not ${CONFORMANCE_PACKAGE}. Regenerate it.`,
+    );
+    return 1;
   }
   const partial = values.mode !== undefined || values.scenario !== undefined;
-  if (values["update-baseline"] && partial) {
-    console.error("--update-baseline needs a full run, without --mode or --scenario.");
-    return 1;
-  }
+  const scoped = scopeBaseline({ baseline, modes, partial, scenarios: values.scenario });
+  return evaluate({ baseline: scoped, results }) ? 0 : 1;
+});
 
-  const workDir = mkdtempSync(join(tmpdir(), "msa-mcp-conformance-"));
-  try {
-    // The upstream runner splits --command on spaces, so use a launcher path without any.
-    const launcher = join(workDir, "msa-client");
-    writeFileSync(
-      launcher,
-      `#!/bin/sh\nexec ${JSON.stringify(process.execPath)} --import ${JSON.stringify(resolverUrl)} ${JSON.stringify(clientPath)} "$@"\n`,
-    );
-    chmodSync(launcher, 0o755);
-
-    const results: ScenarioResult[] = [];
-    for (const mode of modes) {
-      const scenarios = (await listScenarios(mode, workDir)).filter(
-        (scenario) => !values.scenario || values.scenario.includes(scenario),
-      );
-      for (const scenario of scenarios) {
-        process.stderr.write(`${mode} ${scenario}\n`);
-        results.push(await runScenario(mode, scenario, launcher, workDir, values.verbose));
-      }
+const main = () =>
+  Effect.gen(function* () {
+    const values = parseOptions();
+    if (values.help === true) {
+      log(usage());
+      return 0;
     }
+    const modes = values.mode ?? [...MODES];
+    const error = optionError(values, modes);
+    if (error !== undefined) {
+      logError(error);
+      return 1;
+    }
+    const workDir = yield* makeTempDir("msa-mcp-conformance-");
+    const results = yield* runScenarios(values, modes, workDir);
+    if (values["keep-results"] === true) log(`\nResults kept in ${workDir}`);
+    else yield* removeDir(workDir);
     if (results.length === 0) {
-      console.error("No scenarios matched.");
+      logError("No scenarios matched.");
       return 1;
     }
     printResults(results);
+    if (values["update-baseline"] !== true)
+      return yield* compareWithBaseline(values, modes, results);
+    yield* writeJson({ path: baselinePath, value: toBaseline(results) });
+    log(`\nWrote ${baselinePath}`);
+    return 0;
+  });
 
-    if (values["update-baseline"]) {
-      writeFileSync(baselinePath, `${JSON.stringify(toBaseline(results), null, "\t")}\n`);
-      console.log(`\nWrote ${baselinePath}`);
-      return 0;
-    }
-    const baseline = loadBaseline();
-    if (!baseline) {
-      console.error("\nNo baseline.json. Run with --update-baseline and review it.");
-      return 1;
-    }
-    if (baseline.conformance !== CONFORMANCE_PACKAGE) {
-      console.error(
-        `\nbaseline.json is for ${baseline.conformance}, not ${CONFORMANCE_PACKAGE}. Regenerate it.`,
-      );
-      return 1;
-    }
-    const scoped: Baseline = partial
-      ? {
-          conformance: baseline.conformance,
-          modes: Object.fromEntries(
-            modes.map((mode) => [
-              mode,
-              Object.fromEntries(
-                Object.entries(baseline.modes[mode] ?? {}).filter(
-                  ([scenario]) => !values.scenario || values.scenario.includes(scenario),
-                ),
-              ),
-            ]),
-          ),
-        }
-      : baseline;
-    return evaluate(results, scoped) ? 0 : 1;
-  } finally {
-    if (values["keep-results"]) console.log(`\nResults kept in ${workDir}`);
-    else rmSync(workDir, { recursive: true, force: true });
-  }
-}
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
-process.exit(await main());
+void runtime.runPromise(main()).then((code) => process.exit(code));

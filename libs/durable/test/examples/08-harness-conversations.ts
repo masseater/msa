@@ -1,43 +1,64 @@
-import { createModels } from "@msa/ai/models";
-// Conversation handles, typed entries, created conversations, and forks.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/08-harness-conversations.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import modelsModule from "@msa/ai/models";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import { createRegistry, defineEntry, Harness, MemoryStorage } from "../../src/index.ts";
+import harnessModule from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import memory from "../../src/storage/memory.ts";
+import effectSupport from "../effect-support.ts";
+
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+const { defineEntry } = durable;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models: createModels(), registry: createRegistry() },
-  context,
-);
-const root = await harness.root(context);
-await root.configure({ thinkingLevel: "high" }, context);
 
-// Conversation handles are stateless; compare them by id. They bind commits
-// to their conversation. An entry token types an entry kind's `data`.
-const Message = defineEntry<{ from: string }>("message");
-const hello = await root.commit(
-  (tx) =>
-    tx.appendEntry(Message, root.id, {
-      data: { from: "example" },
-      model: [{ role: "user", content: "hello", timestamp: 1 }],
-    }),
-  context,
-);
-console.log("typed entry:", Message.is(hello), hello.data.from);
+const main = Effect.gen(function* () {
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      { models: createModels(), registry: createRegistry() },
+      context,
+    ),
+  );
+  const root = yield* awaited(harness.root(context));
+  yield* awaited(root.configure({ thinkingLevel: "high" }, context));
 
-// createConversation() and fork() apply `agent` and run `init` in the
-// creating commit. A fork starts with the agent the parent had at the fork
-// entry.
-const helper = await harness.createConversation(
-  { ownership: { kind: "ownerless" }, agent: { thinkingLevel: "minimal" } },
-  context,
-);
-const retry = await root.fork(hello.id, { ownership: { kind: "ownerless" } }, context);
-console.log("helper thinking:", (await helper.agent(context)).thinkingLevel);
-console.log("fork thinking:", (await retry.agent(context)).thinkingLevel);
-console.log("lookup:", (await harness.conversation(retry.id, context))?.id === retry.id);
+  const Message = defineEntry<{ from: string }>("message");
+  const hello = yield* awaited(
+    root.commit(
+      (tx) =>
+        tx.appendEntry(Message, root.id, {
+          data: { from: "example" },
+          model: [{ content: "hello", role: "user", timestamp: 1 }],
+        }),
+      context,
+    ),
+  );
+  yield* Console.log("typed entry:", Message.is(hello), hello.data.from);
 
-await harness.close(context);
+  const helper = yield* awaited(
+    harness.createConversation(
+      { agent: { thinkingLevel: "minimal" }, ownership: { kind: "ownerless" } },
+      context,
+    ),
+  );
+  const retry = yield* awaited(root.fork(hello.id, { ownership: { kind: "ownerless" } }, context));
+  yield* Console.log("helper thinking:", (yield* awaited(helper.agent(context))).thinkingLevel);
+  yield* Console.log("fork thinking:", (yield* awaited(retry.agent(context))).thinkingLevel);
+  yield* Console.log(
+    "lookup:",
+    (yield* awaited(harness.conversation(retry.id, context)))?.id === retry.id,
+  );
+
+  yield* awaited(harness.close(context));
+});
+
+NodeRuntime.runMain(main);

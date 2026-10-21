@@ -1,42 +1,40 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import inputTransformStreaming from "../examples/extensions/input-transform-streaming.ts";
-import type {
-  ExecResult,
-  ExtensionAPI,
-  ExtensionContext,
-  InputEvent,
-  InputEventResult,
-} from "../src/core/extensions/index.ts";
+import type extensionsTypes from "../src/core/extensions/index.types.ts";
+
+const { awaited, runTest } = testing;
 
 type InputHandler = (
-  event: InputEvent,
-  ctx: ExtensionContext,
-) => Promise<InputEventResult | undefined>;
+  event: extensionsTypes.InputEvent,
+  ctx: extensionsTypes.ExtensionContext,
+) => Promise<extensionsTypes.InputEventResult | undefined>;
 
-function setup(execResult: ExecResult) {
+function setup(execResult: extensionsTypes.ExecResult) {
   let handler: InputHandler | undefined;
 
-  const exec = vi.fn<ExtensionAPI["exec"]>().mockResolvedValue(execResult);
+  const exec = vi.fn<extensionsTypes.ExtensionAPI["exec"]>().mockResolvedValue(execResult);
 
   const api = {
+    exec,
     on: (event: string, h: InputHandler) => {
       if (event === "input") handler = h;
     },
-    exec,
-  } as unknown as ExtensionAPI;
+  } as unknown as extensionsTypes.ExtensionAPI;
 
   inputTransformStreaming(api);
 
-  const ctx = {} as ExtensionContext;
+  const ctx = {} as extensionsTypes.ExtensionContext;
 
   function emit(text: string, streamingBehavior?: "steer" | "followUp") {
     return handler!(
       {
-        type: "input",
-        text,
         source: "interactive",
-        ...(streamingBehavior !== undefined ? { streamingBehavior } : {}),
+        text,
+        type: "input" as const,
+        ...(streamingBehavior === undefined ? {} : { streamingBehavior }),
       },
       ctx,
     );
@@ -45,52 +43,95 @@ function setup(execResult: ExecResult) {
   return { emit, exec };
 }
 
+const diffOutput = " src/index.ts | 5 ++---\n 1 file changed, 2 insertions(+), 3 deletions(-)";
+
+const gitSuccess: extensionsTypes.ExecResult = {
+  code: 0,
+  killed: false,
+  stderr: "",
+  stdout: diffOutput,
+};
+
+const gitEmpty: extensionsTypes.ExecResult = { code: 0, killed: false, stderr: "", stdout: "" };
+
+const gitFail: extensionsTypes.ExecResult = {
+  code: 128,
+  killed: false,
+  stderr: "not a git repo",
+  stdout: "",
+};
+
+const skipsExecDuringSteering = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { emit, exec } = setup(gitSuccess);
+      const result = yield* awaited(emit("what changes did I make?", "steer"));
+      expect(result).toEqual({ action: "continue" });
+      expect(exec).not.toHaveBeenCalled();
+    }),
+  );
+
+const transformsWhenIdleAndTextMatchesTrigger = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { emit, exec } = setup(gitSuccess);
+      const result = yield* awaited(emit("review my changes"));
+      expect(exec).toHaveBeenCalledWith("git", ["diff", "--stat"]);
+      expect(result).toMatchObject({ action: "transform" });
+      const text = (result as { text: string }).text;
+      expect(text).toContain("review my changes");
+      expect(text).toContain("src/index.ts");
+    }),
+  );
+
+const transformsWhenQueuedAsFollowUp = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { emit, exec } = setup(gitSuccess);
+      const result = yield* awaited(emit("show me the diff", "followUp"));
+      expect(exec).toHaveBeenCalled();
+      expect(result).toMatchObject({ action: "transform" });
+    }),
+  );
+
+const continuesWhenTextDoesNotMatchTrigger = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { emit, exec } = setup(gitSuccess);
+      const result = yield* awaited(emit("explain this function"));
+      expect(result).toEqual({ action: "continue" });
+      expect(exec).not.toHaveBeenCalled();
+    }),
+  );
+
+const continuesWhenGitDiffIsEmpty = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { emit } = setup(gitEmpty);
+      const result = yield* awaited(emit("any changes?"));
+      expect(result).toEqual({ action: "continue" });
+    }),
+  );
+
+const continuesWhenGitFails = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { emit } = setup(gitFail);
+      const result = yield* awaited(emit("show modified files"));
+      expect(result).toEqual({ action: "continue" });
+    }),
+  );
+
 describe("input-transform-streaming example", () => {
-  const diffOutput = " src/index.ts | 5 ++---\n 1 file changed, 2 insertions(+), 3 deletions(-)";
-  const gitSuccess: ExecResult = { stdout: diffOutput, stderr: "", code: 0, killed: false };
-  const gitEmpty: ExecResult = { stdout: "", stderr: "", code: 0, killed: false };
-  const gitFail: ExecResult = { stdout: "", stderr: "not a git repo", code: 128, killed: false };
+  it("skips exec during steering", skipsExecDuringSteering);
 
-  it("skips exec during steering", async () => {
-    const { emit, exec } = setup(gitSuccess);
-    const result = await emit("what changes did I make?", "steer");
-    expect(result).toEqual({ action: "continue" });
-    expect(exec).not.toHaveBeenCalled();
-  });
+  it("transforms when idle and text matches trigger", transformsWhenIdleAndTextMatchesTrigger);
 
-  it("transforms when idle and text matches trigger", async () => {
-    const { emit, exec } = setup(gitSuccess);
-    const result = await emit("review my changes");
-    expect(exec).toHaveBeenCalledWith("git", ["diff", "--stat"]);
-    expect(result).toMatchObject({ action: "transform" });
-    const text = (result as { text: string }).text;
-    expect(text).toContain("review my changes");
-    expect(text).toContain("src/index.ts");
-  });
+  it("transforms when queued as follow-up", transformsWhenQueuedAsFollowUp);
 
-  it("transforms when queued as follow-up", async () => {
-    const { emit, exec } = setup(gitSuccess);
-    const result = await emit("show me the diff", "followUp");
-    expect(exec).toHaveBeenCalled();
-    expect(result).toMatchObject({ action: "transform" });
-  });
+  it("continues when text does not match trigger", continuesWhenTextDoesNotMatchTrigger);
 
-  it("continues when text does not match trigger", async () => {
-    const { emit, exec } = setup(gitSuccess);
-    const result = await emit("explain this function");
-    expect(result).toEqual({ action: "continue" });
-    expect(exec).not.toHaveBeenCalled();
-  });
+  it("continues when git diff is empty", continuesWhenGitDiffIsEmpty);
 
-  it("continues when git diff is empty", async () => {
-    const { emit } = setup(gitEmpty);
-    const result = await emit("any changes?");
-    expect(result).toEqual({ action: "continue" });
-  });
-
-  it("continues when git fails", async () => {
-    const { emit } = setup(gitFail);
-    const result = await emit("show modified files");
-    expect(result).toEqual({ action: "continue" });
-  });
+  it("continues when git fails", continuesWhenGitFails);
 });

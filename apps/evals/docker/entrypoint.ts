@@ -1,189 +1,233 @@
-import { spawnSync } from "node:child_process";
-import {
-  chownSync,
-  copyFileSync,
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  statSync,
-} from "node:fs";
 import { createRequire } from "node:module";
-import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
-const packageRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const variant = process.env["MSA_EVAL_VARIANT"];
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import { Data, Effect, Runtime } from "effect";
 
-function parseId(name: string): number {
-  const value = Number(process.env[name]);
-  if (!Number.isSafeInteger(value) || value < 1)
+import platform from "../src/platform.ts";
+import sandbox from "../src/sandbox.ts";
+
+const { files, pathOperations, readEnv, runCommand } = platform;
+const { chownTree } = sandbox;
+
+class ChildExit extends Data.TaggedError("ChildExit")<{ readonly status: number }> {
+  override readonly [Runtime.errorExitCode] = this.status;
+}
+
+const packageRoot = pathOperations.resolve(import.meta.dirname, "..");
+const evalRoot = "/repo/apps/evals/evals";
+const codingAgentDir = "/repo/node_modules/@msa/coding-agent";
+const internalScope = "/repo/node_modules/@msa";
+const authSource = "/run/msa-eval-secrets/auth.json";
+const agentDir = "/tmp/msa-eval-host-agent";
+const bootstrapHome = "/tmp/msa-eval-bootstrap";
+const childEnvironment = {
+  HOME: bootstrapHome,
+  MSA_CODING_AGENT_DIR: agentDir,
+  MSA_EVAL_CONTAINER: "1",
+  USERPROFILE: bootstrapHome,
+};
+const VISIBLE_DIRECTORIES = ["docs", "examples", "src", "test", "tests"];
+const VISIBLE_FILES = /^(?:readme|changelog)(?:\..+)?$/iu;
+
+const die = (message: string): Effect.Effect<never> => Effect.die(new Error(message));
+
+const parseId = (name: string): number => {
+  const value = Number(readEnv(name));
+  if (!Number.isSafeInteger(value) || value < 1) {
     throw new Error(`${name} must be a positive integer.`);
-  return value;
-}
-
-const sandboxUid = parseId("MSA_EVAL_SANDBOX_UID");
-const sandboxGid = parseId("MSA_EVAL_SANDBOX_GID");
-
-function assertDirectoryEntries(path: string, expectedEntries: readonly string[]): void {
-  const actual = readdirSync(path).sort();
-  const expected = [...expectedEntries].sort();
-  if (JSON.stringify(actual) !== JSON.stringify(expected)) {
-    throw new Error(`Unexpected eval image contents in ${path}: ${actual.join(", ")}`);
   }
-}
+  return value;
+};
 
-function assertWorkspace(): void {
-  assertDirectoryEntries("/repo", ["apps", "node_modules", "package.json"]);
-  assertDirectoryEntries("/repo/apps", ["evals"]);
-  assertDirectoryEntries("/repo/apps/evals", [
+const assertDirectoryEntries = (
+  path: string,
+  expectedEntries: readonly string[],
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const actual = (yield* files.readDirectory(path)).sort();
+    const expected = [...expectedEntries].sort();
+    if (actual.join("\n") !== expected.join("\n")) {
+      return yield* die(`Unexpected eval image contents in ${path}: ${actual.join(", ")}`);
+    }
+  });
+
+const assertInternalDocumentationHidden = Effect.gen(function* () {
+  for (const packageName of yield* files.readDirectory(internalScope)) {
+    if (packageName === "coding-agent") continue;
+    const packageDirectory = pathOperations.join(internalScope, packageName);
+    for (const name of yield* files.readDirectory(packageDirectory)) {
+      const kind = yield* files.kind(pathOperations.join(packageDirectory, name));
+      const visible =
+        (kind === "directory" && VISIBLE_DIRECTORIES.includes(name)) ||
+        (kind === "file" && VISIBLE_FILES.test(name));
+      if (visible) {
+        return yield* die(
+          `Internal dependency documentation is model-visible: ${packageName}/${name}`,
+        );
+      }
+    }
+  }
+});
+
+const assertDocumentation = (variant: string | undefined): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    if (variant === "without_docs") {
+      for (const name of ["README.md", "CHANGELOG.md", "docs", "examples"]) {
+        if (yield* files.exists(pathOperations.join(codingAgentDir, name))) {
+          return yield* die(`without_docs contains coding-agent ${name}.`);
+        }
+      }
+      return;
+    }
+    if (variant !== "with_docs") return yield* die("Eval image has no valid MSA_EVAL_VARIANT.");
+    for (const name of ["README.md", "CHANGELOG.md", "docs/models.md", "examples/README.md"]) {
+      const path = pathOperations.join(codingAgentDir, name);
+      if (!(yield* files.exists(path)) || (yield* files.readFileString(path)).length === 0) {
+        return yield* die(`Missing documentation: ${path}`);
+      }
+    }
+  });
+
+const assertWorkspace = Effect.gen(function* () {
+  yield* assertDirectoryEntries("/repo", ["apps", "node_modules", "package.json"]);
+  yield* assertDirectoryEntries("/repo/apps", ["evals"]);
+  yield* assertDirectoryEntries("/repo/apps/evals", [
     "docker",
     "evals",
     "package.json",
     "src",
     "vitest.container.config.ts",
   ]);
-  const codingAgentDir = "/repo/node_modules/@msa/coding-agent";
   for (const name of ["package.json", "dist/index.js"]) {
-    if (!existsSync(join(codingAgentDir, name)))
-      throw new Error(`Installed coding-agent is missing ${name}.`);
-  }
-  const internalScope = "/repo/node_modules/@msa";
-  for (const packageName of readdirSync(internalScope)) {
-    if (packageName === "coding-agent") continue;
-    const packageDirectory = join(internalScope, packageName);
-    for (const entry of readdirSync(packageDirectory, { withFileTypes: true })) {
-      if (
-        (entry.isDirectory() &&
-          ["docs", "examples", "src", "test", "tests"].includes(entry.name)) ||
-        (entry.isFile() && /^(?:readme|changelog)(?:\..+)?$/i.test(entry.name))
-      ) {
-        throw new Error(
-          `Internal dependency documentation is model-visible: ${packageName}/${entry.name}`,
-        );
-      }
+    if (!(yield* files.exists(pathOperations.join(codingAgentDir, name)))) {
+      return yield* die(`Installed coding-agent is missing ${name}.`);
     }
   }
-  if (variant === "without_docs") {
-    for (const name of ["README.md", "CHANGELOG.md", "docs", "examples"]) {
-      if (existsSync(join(codingAgentDir, name)))
-        throw new Error(`without_docs contains coding-agent ${name}.`);
-    }
-    return;
-  }
-  if (variant !== "with_docs") throw new Error("Eval image has no valid MSA_EVAL_VARIANT.");
-  for (const path of [
-    join(codingAgentDir, "README.md"),
-    join(codingAgentDir, "CHANGELOG.md"),
-    join(codingAgentDir, "docs/models.md"),
-    join(codingAgentDir, "examples/README.md"),
-  ]) {
-    if (!existsSync(path) || readFileSync(path).length === 0)
-      throw new Error(`Missing documentation: ${path}`);
-  }
-}
-
-function chownTree(path: string, uid: number, gid: number): void {
-  const stats = lstatSync(path);
-  if (stats.isDirectory() && !stats.isSymbolicLink()) {
-    for (const entry of readdirSync(path)) chownTree(join(path, entry), uid, gid);
-  }
-  chownSync(path, uid, gid);
-}
-
-function assertRootOnly(path: string): void {
-  const stats = statSync(path);
-  if (stats.uid !== 0 || (stats.mode & 0o077) !== 0) {
-    throw new Error(`Evaluator source must be readable only by root: ${path}`);
-  }
-}
-
-function assertSandboxCannotRead(path: string): void {
-  const method = statSync(path).isDirectory() ? "readdirSync" : "readFileSync";
-  const probe = spawnSync(
-    process.execPath,
-    ["--eval", `require("node:fs").${method}(${JSON.stringify(path)})`],
-    {
-      uid: sandboxUid,
-      gid: sandboxGid,
-      stdio: "ignore",
-    },
-  );
-  if (probe.status === 0)
-    throw new Error(`The model-facing user can read evaluator source: ${path}`);
-}
-
-assertWorkspace();
-const evalRoot = "/repo/apps/evals/evals";
-for (const path of [
-  evalRoot,
-  "/repo/apps/evals/src",
-  "/repo/apps/evals/docker",
-  "/repo/apps/evals/vitest.container.config.ts",
-]) {
-  assertRootOnly(path);
-  assertSandboxCannotRead(path);
-}
-const codingAgentEntry = fileURLToPath(import.meta.resolve("@msa/coding-agent"));
-if (codingAgentEntry !== "/repo/node_modules/@msa/coding-agent/dist/index.js") {
-  throw new Error(`Eval does not resolve @msa/coding-agent from dist: ${codingAgentEntry}`);
-}
-
-const agentDir = "/tmp/msa-eval-host-agent";
-mkdirSync(agentDir, { recursive: true });
-const authSource = "/run/msa-eval-secrets/auth.json";
-if (existsSync(authSource)) copyFileSync(authSource, join(agentDir, "auth.json"));
-chownTree(agentDir, sandboxUid, sandboxGid);
-chownTree("/artifacts", sandboxUid, sandboxGid);
-process.env["HOME"] = "/tmp/msa-eval-bootstrap";
-process.env["USERPROFILE"] = process.env["HOME"];
-process.env["MSA_CODING_AGENT_DIR"] = agentDir;
-process.env["MSA_EVAL_CONTAINER"] = "1";
-process.umask(0o022);
-
-const require = createRequire(import.meta.url);
-const vitestCli = resolve(dirname(require.resolve("vitest/package.json")), "vitest.mjs");
-const inputArgs = process.argv.slice(2);
-const discover = inputArgs.includes("--discover");
-const vitestArgs = inputArgs.filter((argument) => argument !== "--discover");
-const evalFiles = vitestArgs.filter((argument) => argument.endsWith(".eval.ts"));
-if (evalFiles.length === 0) throw new Error("The container runner requires an explicit eval file.");
-
-for (const evalFile of evalFiles) {
-  assertRootOnly(evalFile);
-  assertSandboxCannotRead(evalFile);
-}
-
-const commandArgs = discover
-  ? [
-      vitestCli,
-      "list",
-      "--config",
-      "vitest.container.config.ts",
-      ...vitestArgs,
-      "--json=/artifacts/discovered-tests.json",
-    ]
-  : [
-      vitestCli,
-      "run",
-      "--config",
-      "vitest.container.config.ts",
-      ...vitestArgs,
-      "--reporter=vitest-evals/reporter",
-      "--reporter=json",
-      "--outputFile=/artifacts/vitest.json",
-    ];
-const result = spawnSync(process.execPath, commandArgs, {
-  cwd: packageRoot,
-  stdio: "inherit",
-  env: process.env,
+  yield* assertInternalDocumentationHidden;
+  yield* assertDocumentation(readEnv("MSA_EVAL_VARIANT"));
 });
-if (result.error) throw result.error;
 
-const artifactUid = process.env["MSA_EVAL_ARTIFACT_UID"];
-const artifactGid = process.env["MSA_EVAL_ARTIFACT_GID"];
-if (artifactUid !== undefined && artifactGid !== undefined) {
-  chownTree("/artifacts", parseId("MSA_EVAL_ARTIFACT_UID"), parseId("MSA_EVAL_ARTIFACT_GID"));
-}
-process.exit(result.status ?? 1);
+const exitCodeOf = (command: string, args: readonly string[], cwd: string) =>
+  Effect.map(runCommand(command, args, { cwd, output: "ignore" }), ({ status }) => status);
+
+const assertRootOnly = (path: string) =>
+  Effect.gen(function* () {
+    const { uid, mode } = yield* files.ownership(path);
+    if (uid !== 0 || (mode & 0o077) !== 0) {
+      return yield* die(`Evaluator source must be readable only by root: ${path}`);
+    }
+  });
+
+const probeScript = (path: string, method: string, uid: number, gid: number): string =>
+  `process.setgroups([]);process.setgid(${gid});process.setuid(${uid});require("node:fs").promises.${method}(${JSON.stringify(path)})`;
+
+const assertSandboxCannotRead = (path: string, uid: number, gid: number) =>
+  Effect.gen(function* () {
+    const method = (yield* files.kind(path)) === "directory" ? "readdir" : "readFile";
+    const status = yield* exitCodeOf(
+      process.execPath,
+      ["--eval", probeScript(path, method, uid, gid)],
+      packageRoot,
+    );
+    if (status === 0) return yield* die(`The model-facing user can read evaluator source: ${path}`);
+  });
+
+const protectEvaluatorSources = (uid: number, gid: number) =>
+  Effect.forEach(
+    [
+      evalRoot,
+      "/repo/apps/evals/src",
+      "/repo/apps/evals/docker",
+      "/repo/apps/evals/vitest.container.config.ts",
+    ],
+    (path) => Effect.andThen(assertRootOnly(path), assertSandboxCannotRead(path, uid, gid)),
+    { discard: true },
+  );
+
+const prepareAgentDirectory = (identity: { uid: number; gid: number }) =>
+  Effect.gen(function* () {
+    yield* files.makeDirectory(agentDir);
+    if (yield* files.exists(authSource)) {
+      yield* files.copyFile(authSource, pathOperations.join(agentDir, "auth.json"));
+    }
+    yield* chownTree(agentDir, identity);
+    yield* chownTree("/artifacts", identity);
+  });
+
+const vitestArguments = (
+  discover: boolean,
+  vitestCli: string,
+  vitestArgs: readonly string[],
+): string[] =>
+  discover
+    ? [
+        vitestCli,
+        "list",
+        "--config",
+        "vitest.container.config.ts",
+        ...vitestArgs,
+        "--json=/artifacts/discovered-tests.json",
+      ]
+    : [
+        vitestCli,
+        "run",
+        "--config",
+        "vitest.container.config.ts",
+        ...vitestArgs,
+        "--reporter=vitest-evals/reporter",
+        "--reporter=json",
+        "--outputFile=/artifacts/vitest.json",
+      ];
+
+const runVitest = (args: readonly string[]) =>
+  Effect.map(
+    runCommand(process.execPath, args, {
+      cwd: packageRoot,
+      env: childEnvironment,
+      output: "inherit",
+    }),
+    ({ status }) => status,
+  );
+
+const program = Effect.gen(function* () {
+  const sandboxUid = parseId("MSA_EVAL_SANDBOX_UID");
+  const sandboxGid = parseId("MSA_EVAL_SANDBOX_GID");
+  yield* assertWorkspace;
+  yield* protectEvaluatorSources(sandboxUid, sandboxGid);
+  const codingAgentEntry = fileURLToPath(import.meta.resolve("@msa/coding-agent"));
+  if (codingAgentEntry !== `${codingAgentDir}/dist/index.js`) {
+    return yield* die(`Eval does not resolve @msa/coding-agent from dist: ${codingAgentEntry}`);
+  }
+  yield* prepareAgentDirectory({ gid: sandboxGid, uid: sandboxUid });
+  process.umask(0o022);
+
+  const vitestCli = pathOperations.resolve(
+    pathOperations.dirname(createRequire(import.meta.url).resolve("vitest/package.json")),
+    "vitest.mjs",
+  );
+  const inputArgs = process.argv.slice(2);
+  const vitestArgs = inputArgs.filter((argument) => argument !== "--discover");
+  const evalFiles = vitestArgs.filter((argument) => argument.endsWith(".eval.ts"));
+  if (evalFiles.length === 0)
+    return yield* die("The container runner requires an explicit eval file.");
+  for (const evalFile of evalFiles) {
+    yield* assertRootOnly(evalFile);
+    yield* assertSandboxCannotRead(evalFile, sandboxUid, sandboxGid);
+  }
+  const status = yield* runVitest(
+    vitestArguments(inputArgs.includes("--discover"), vitestCli, vitestArgs),
+  );
+
+  const artifactUid = readEnv("MSA_EVAL_ARTIFACT_UID");
+  const artifactGid = readEnv("MSA_EVAL_ARTIFACT_GID");
+  if (artifactUid !== undefined && artifactGid !== undefined) {
+    yield* chownTree("/artifacts", {
+      gid: parseId("MSA_EVAL_ARTIFACT_GID"),
+      uid: parseId("MSA_EVAL_ARTIFACT_UID"),
+    });
+  }
+  if (status !== 0) return yield* new ChildExit({ status });
+});
+
+NodeRuntime.runMain(program);

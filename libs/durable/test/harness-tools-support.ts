@@ -1,77 +1,105 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  type ToolResultMessage,
-  Type,
-} from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
-import {
-  type Conversation,
-  defineTool,
-  type EntryRecord,
-  type Harness,
-  MemoryStorage,
-  type ToolRegistration,
-  ToolResultEntry,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import type chordTypes from "@msa/chord/index.types";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
-import { context } from "./session-support.ts";
+import harnessToolsSupportKit from "./harness-tools-support-kit.ts";
+import type harnessToolsSupportTypes from "./harness-tools-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export const EchoParameters = Type.Object({ text: Type.Optional(Type.String()) });
+const { chatSupport, effectSupport } = harnessToolsSupportKit;
 
-export type Echo = ToolRegistration<typeof EchoParameters>;
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
-export type Execute = Echo["execute"];
+const { ToolResultEntry, defineTool } = durable;
+const { MemoryStorage } = memory;
 
-export function tool(name: string, execute: Execute, extra: Partial<Echo> = {}): Echo {
+const { allEntries, openChat } = chatSupport;
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+
+const EchoParameters = Type.Object({ text: Type.Optional(Type.String()) });
+
+function toolImpl(
+  name: string,
+  execute: harnessToolsSupportTypes.Execute,
+  extra: Partial<harnessToolsSupportTypes.Echo> = {},
+): harnessToolsSupportTypes.Echo {
   return defineTool({
-    name,
     description: `The ${name} tool`,
-    parameters: EchoParameters,
     execute,
+    name,
+    parameters: EchoParameters,
     ...extra,
   });
 }
 
-// A tool-calling answer with one call per `[name, args, id]`.
-export function calls(
-  ...list: readonly (readonly [string, Record<string, JsonValue>, string])[]
-): AssistantMessage {
+const tool: {
+  (
+    execute: harnessToolsSupportTypes.Execute,
+    extra?: Partial<harnessToolsSupportTypes.Echo>,
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (
+    name: string,
+    execute: harnessToolsSupportTypes.Execute,
+    extra?: Partial<harnessToolsSupportTypes.Echo>,
+  ): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
+function calls(
+  ...list: readonly (readonly [string, Record<string, chordTypes.JsonValue>, string])[]
+): aiTypes.AssistantMessage {
   return fauxAssistantMessage(
     list.map(([name, args, id]) => fauxToolCall(name, args, { id })),
     { stopReason: "toolUse" },
   );
 }
 
-export const DONE = fauxAssistantMessage([fauxText("done")]);
+const DONE = fauxAssistantMessage([fauxText("done")]);
 
-export async function run(
-  setup: ChatSetup,
-  responses: FauxResponseStep[],
-  prepare?: (harness: Harness, root: Conversation) => Promise<void>,
+const run = Effect.fn("run")(function* (
+  setup: ReturnType<typeof chatSupport.chatSetup>,
+  responses: aiTypes.FauxResponseStep[],
+  prepare?: (
+    harness: harnessToolsSupportTypes.Harness,
+    root: harnessToolsSupportTypes.Conversation,
+  ) => Promise<void>,
   options: Parameters<typeof openChat>[2] = {},
-): Promise<{ harness: Harness; root: Conversation; entries: EntryRecord[]; status: string }> {
+) {
   setup.faux.setResponses(responses);
-  const { harness, root } = await openChat(new MemoryStorage(), setup, options);
-  await prepare?.(harness, root);
-  const settled = await (
-    await root.submit({ type: "input", content: "go" }, context)
-  ).wait(context);
-  return { harness, root, entries: await allEntries(root), status: settled.status };
-}
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup, options);
+  yield* awaited(prepare?.(harness, root));
+  const settled = yield* awaited(
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+  );
+  return { entries: yield* allEntries(root), harness, root, status: settled.status };
+});
 
-export function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
+function results(
+  entries: readonly harnessToolsSupportTypes.EntryRecord[],
+): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
-export function resultText(message: ToolResultMessage): string {
+function resultText(message: aiTypes.ToolResultMessage): string {
   return message.content
     .map((item) => (item.type === "text" ? item.text : `[${item.type}]`))
     .join("|");
 }
+
+const harnessToolsSupport = {
+  DONE,
+  EchoParameters,
+  calls,
+  resultText,
+  results,
+  run,
+  tool,
+};
+
+export default harnessToolsSupport;

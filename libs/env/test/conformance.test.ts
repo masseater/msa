@@ -1,12 +1,19 @@
-import { registerEnvConformance } from "@msa/durable/testing";
+import testing from "@msa/durable/testing";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { Connection } from "../src/connection.ts";
-import { LocalExecutionEnv } from "../src/list-files.ts";
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { daemon } from "./daemon.ts";
-import { optionalEnv, windows } from "./environment.ts";
-import { gitBash, withTempDir } from "./temp-dir.ts";
+import connectionModule from "../src/connection.ts";
+import LocalExecutionEnv from "../src/local-execution-env.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
+import daemon from "./daemon.ts";
+import environment from "./environment.ts";
+import tempDir from "./temp-dir.ts";
+
+const { registerEnvConformance } = testing;
+
+const { Connection } = connectionModule;
+
+const { optionalEnv, windows } = environment;
+const { gitBash, withTempDir } = tempDir;
 
 const connection = new Connection({ command: [daemon] });
 afterAll(() => {
@@ -14,7 +21,7 @@ afterAll(() => {
 });
 
 const options = windows
-  ? { shell: [gitBash(optionalEnv("ProgramFiles")), "-c"], symlinks: false, listFiles: true }
+  ? { listFiles: true, shell: [gitBash(optionalEnv("ProgramFiles")), "-c"], symlinks: false }
   : { listFiles: true };
 
 registerEnvConformance(
@@ -27,8 +34,8 @@ registerEnvConformance(
         use(
           new RemoteExecutionEnv({
             connection,
-            id: "msa-env:test",
             cwd,
+            id: "msa-env:test",
             watch: { pollIntervalMs: 100 },
           }),
         ),

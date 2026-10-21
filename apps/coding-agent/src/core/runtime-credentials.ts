@@ -1,11 +1,15 @@
-import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import * as Effect from "effect/Effect";
 
-/** Async credential store overlay for non-persistent runtime API keys. */
-export class RuntimeCredentials implements CredentialStore {
-  private readonly store: CredentialStore;
+import awaitingModule from "./awaiting.ts";
+
+const { awaited, awaitingWith } = awaitingModule;
+
+export default class RuntimeCredentials implements aiTypes.CredentialStore {
+  private readonly store: aiTypes.CredentialStore;
   private readonly overrides = new Map<string, string>();
 
-  constructor(store: CredentialStore) {
+  constructor(store: aiTypes.CredentialStore) {
     this.store = store;
   }
 
@@ -21,34 +25,53 @@ export class RuntimeCredentials implements CredentialStore {
     return this.overrides.has(providerId);
   }
 
-  async read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
-    options?.signal?.throwIfAborted();
-    const override = this.overrides.get(providerId);
-    return override ? { type: "api_key", key: override } : this.store.read(providerId, options);
+  read(
+    providerId: string,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        options?.signal?.throwIfAborted();
+        const override = this.overrides.get(providerId);
+        return yield* awaited(
+          override !== undefined && override !== ""
+            ? { key: override, type: "api_key" }
+            : this.store.read(providerId, options),
+        );
+      }, this),
+    );
   }
 
-  async list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
-    const entries = new Map(
-      (await this.store.list(options)).map((entry) => [entry.providerId, entry]),
+  list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const entries = new Map(
+          (yield* awaited(this.store.list(options))).map((entry) => [entry.providerId, entry]),
+        );
+        options?.signal?.throwIfAborted();
+        for (const providerId of this.overrides.keys()) {
+          entries.set(providerId, { providerId, type: "api_key" });
+        }
+        return [...entries.values()];
+      }, this),
     );
-    options?.signal?.throwIfAborted();
-    for (const providerId of this.overrides.keys()) {
-      entries.set(providerId, { providerId, type: "api_key" });
-    }
-    return [...entries.values()];
   }
 
   modify(
     providerId: string,
-    fn: (current: Credential | undefined) => Promise<Credential | undefined>,
-    options?: AuthOperationOptions,
-  ): Promise<Credential | undefined> {
+    fn: (current: aiTypes.Credential | undefined) => Promise<aiTypes.Credential | undefined>,
+    options?: aiTypes.AuthOperationOptions,
+  ): Promise<aiTypes.Credential | undefined> {
     return this.store.modify(providerId, fn, options);
   }
 
-  async delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
-    options?.signal?.throwIfAborted();
-    await this.store.delete(providerId, options);
-    this.overrides.delete(providerId);
+  delete(providerId: string, options?: aiTypes.AuthOperationOptions): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        options?.signal?.throwIfAborted();
+        yield* awaited(this.store.delete(providerId, options));
+        this.overrides.delete(providerId);
+      }, this),
+    );
   }
 }

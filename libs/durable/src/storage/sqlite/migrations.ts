@@ -1,11 +1,8 @@
-import type { SqliteDatabase } from "./database.ts";
+import { Effect, Function } from "effect";
 
-export type SqliteMigration = {
-  readonly version: number;
-  readonly statements: readonly string[];
-};
+import type databaseTypes from "./database.ts";
+import type migrationsTypes from "./migrations.types.ts";
 
-// next_id is TEXT because node:sqlite rejects INTEGER results outside JavaScript's safe integer range.
 const INITIAL_SCHEMA: readonly string[] = [
   `CREATE TABLE durable_metadata (
 		singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
@@ -84,55 +81,95 @@ const INITIAL_SCHEMA: readonly string[] = [
   "CREATE INDEX document_revisions_by_kind ON document_revisions (document_id, kind, seq DESC)",
 ];
 
-/** Immutable, ordered schema history. Append new migrations after the initial schema ships. */
-export const SQLITE_MIGRATIONS: readonly SqliteMigration[] = [
-  { version: 1, statements: INITIAL_SCHEMA },
+const SQLITE_MIGRATIONS: readonly migrationsTypes.SqliteMigration[] = [
+  { statements: INITIAL_SCHEMA, version: 1 },
 ];
 
-export const CURRENT_SQLITE_SCHEMA_VERSION = SQLITE_MIGRATIONS.at(-1)?.version ?? 0;
+const CURRENT_SQLITE_SCHEMA_VERSION = SQLITE_MIGRATIONS.at(-1)?.version ?? 0;
 
 type SchemaRow = { readonly version: number };
 
-/**
- * Apply all pending schema migrations atomically.
- * @param {SqliteDatabase} database - The database.
- * @param {readonly SqliteMigration[]} migrations - Every migration, in order.
- */
-export async function applySqliteMigrations(
-  database: SqliteDatabase,
-  migrations: readonly SqliteMigration[] = SQLITE_MIGRATIONS,
-): Promise<void> {
+const SCHEMA_TABLE = `CREATE TABLE IF NOT EXISTS durable_schema (
+			singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
+			version INTEGER NOT NULL CHECK (version >= 0)
+		) STRICT`;
+
+const checkContiguous = (migrations: readonly migrationsTypes.SqliteMigration[]): void => {
   for (let index = 0; index < migrations.length; index++) {
     if (migrations[index]?.version !== index + 1) {
       throw new Error("Durable SQLite migrations must have contiguous versions starting at 1");
     }
   }
+};
 
-  await database.transaction(async (transaction) => {
-    await transaction.exec(`CREATE TABLE IF NOT EXISTS durable_schema (
-			singleton INTEGER PRIMARY KEY CHECK (singleton = 1),
-			version INTEGER NOT NULL CHECK (version >= 0)
-		) STRICT`);
-    await transaction.run(
-      "INSERT OR IGNORE INTO durable_schema (singleton, version) VALUES (1, 0)",
+const migrate = Effect.fnUntraced(function* (
+  transaction: databaseTypes.SqliteExecutor,
+  migrations: readonly migrationsTypes.SqliteMigration[],
+) {
+  yield* Effect.promise(() => transaction.exec(SCHEMA_TABLE));
+  yield* Effect.promise(() =>
+    transaction.run("INSERT OR IGNORE INTO durable_schema (singleton, version) VALUES (1, 0)"),
+  );
+  const row = yield* Effect.promise(() =>
+    transaction.get<SchemaRow>("SELECT version FROM durable_schema WHERE singleton = 1"),
+  );
+  if (row === undefined) throw new Error("Durable SQLite schema metadata is missing");
+  const currentVersion = migrations.at(-1)?.version ?? 0;
+  if (row.version > currentVersion) {
+    throw new Error(
+      `Durable SQLite schema version ${row.version} is newer than supported version ${currentVersion}`,
     );
-    const row = await transaction.get<SchemaRow>(
-      "SELECT version FROM durable_schema WHERE singleton = 1",
-    );
-    if (row === undefined) throw new Error("Durable SQLite schema metadata is missing");
-    const currentVersion = migrations.at(-1)?.version ?? 0;
-    if (row.version > currentVersion) {
-      throw new Error(
-        `Durable SQLite schema version ${row.version} is newer than supported version ${currentVersion}`,
+  }
+  const pending = migrations.filter((migration) => migration.version > row.version);
+  yield* Effect.forEach(pending, (migration) =>
+    Effect.gen(function* () {
+      yield* Effect.forEach(migration.statements, (statement) =>
+        Effect.promise(() => transaction.exec(statement)),
       );
-    }
-    for await (const migration of migrations) {
-      if (migration.version <= row.version) continue;
-      for await (const statement of migration.statements) await transaction.exec(statement);
-      await transaction.run(
-        "UPDATE durable_schema SET version = ? WHERE singleton = 1",
-        migration.version,
+      yield* Effect.promise(() =>
+        transaction.run(
+          "UPDATE durable_schema SET version = ? WHERE singleton = 1",
+          migration.version,
+        ),
       );
-    }
-  });
-}
+    }),
+  );
+});
+
+const isDatabase = (value: unknown): boolean =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const applySqliteMigrations: {
+  (
+    migrations?: readonly migrationsTypes.SqliteMigration[],
+  ): (database: databaseTypes.SqliteDatabase) => Promise<void>;
+  (
+    database: databaseTypes.SqliteDatabase,
+    migrations?: readonly migrationsTypes.SqliteMigration[],
+  ): Promise<void>;
+} = Function.dual(
+  (args: IArguments) => isDatabase(args[0]),
+  (
+    database: databaseTypes.SqliteDatabase,
+    migrations: readonly migrationsTypes.SqliteMigration[] = SQLITE_MIGRATIONS,
+  ): Promise<void> =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        checkContiguous(migrations);
+        const services = yield* Effect.context<never>();
+        yield* Effect.promise(() =>
+          database.transaction((transaction) =>
+            Effect.runPromiseWith(services)(migrate(transaction, migrations)),
+          ),
+        );
+      }),
+    ),
+);
+
+const migrationsModule = {
+  CURRENT_SQLITE_SCHEMA_VERSION,
+  SQLITE_MIGRATIONS,
+  applySqliteMigrations,
+};
+
+export default migrationsModule;

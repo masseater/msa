@@ -1,64 +1,57 @@
-/**
- * A provider whose requests another coding agent's CLI or SDK serves under that agent's own login,
- * so msa holds no key for it.
- */
-import { existsSync } from "node:fs";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
-import {
-  createProvider,
-  type AssistantMessageEventStream,
-  type Model,
-  type Provider,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-} from "@msa/ai";
+import platform from "../platform/index.ts";
+import type providerTypes from "./provider.types.ts";
 
-export interface CliAgentModel {
+const { exists } = platform.files;
+
+const { createProvider } = ai;
+
+function cliAgentProvider(input: {
   id: string;
   name: string;
-  reasoning: boolean;
-  input: ("text" | "image")[];
-  contextWindow: number;
-  maxTokens: number;
-}
+  models: readonly providerTypes.CliAgentModel[];
 
-export function cliAgentProvider(input: {
-  id: string;
-  name: string;
-  models: readonly CliAgentModel[];
-  /** The agent's executable, or undefined when it is not installed; the provider is unavailable then. */
   executable(): string | undefined;
   streamSimple(
-    model: Model<string>,
-    context: TranscriptContext,
-    options?: SimpleStreamOptions,
-  ): AssistantMessageEventStream;
-}): Provider {
+    model: aiTypes.Model<string>,
+    context: aiTypes.TranscriptContext,
+    options?: aiTypes.SimpleStreamOptions,
+  ): aiTypes.AssistantMessageEventStream;
+}): aiTypes.Provider {
   const api = input.id;
   return createProvider({
-    id: input.id,
-    name: input.name,
-    auth: {
-      apiKey: {
-        name: `${input.name} login`,
-        resolve: async () => {
-          const executable = input.executable();
-          return executable && existsSync(executable)
-            ? { auth: {}, source: executable }
-            : undefined;
-        },
-      },
-    },
-    models: input.models.map((model) => ({
-      ...model,
-      api,
-      provider: input.id,
-      baseUrl: "",
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    })),
     api: {
       stream: (model, context, options) => input.streamSimple(model, context, options),
       streamSimple: (model, context, options) => input.streamSimple(model, context, options),
     },
+    auth: {
+      apiKey: {
+        name: `${input.name} login`,
+        resolve: () => {
+          const executable = input.executable();
+          if (executable === undefined || executable === "") return Promise.resolve(undefined);
+          return exists(executable).then((found) =>
+            found ? { auth: {}, source: executable } : undefined,
+          );
+        },
+      },
+    },
+    id: input.id,
+    models: input.models.map((model) => ({
+      ...model,
+      api,
+      baseUrl: "",
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+      provider: input.id,
+    })),
+    name: input.name,
   });
 }
+
+const provider = {
+  cliAgentProvider,
+};
+
+export default provider;

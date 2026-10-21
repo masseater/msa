@@ -1,38 +1,49 @@
 import type { ResponseOutputMessage } from "openai/resources/responses/responses.js";
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertResponsesMessages } from "../src/api/openai-responses-shared.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
-import type { AssistantMessage, Usage } from "../src/types.ts";
+import openaiResponsesMessages from "../src/api/openai-responses-messages.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
 
-const usage: Usage = {
-  input: 0,
-  output: 0,
+const { currentTimeMillis } = clock;
+const { normalizeContext } = compat;
+const { convertResponsesMessages } = openaiResponsesMessages;
+
+const { chooseModel } = modelChoice;
+
+const usage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
 describe("OpenAI Responses message ID conversion", () => {
   it("generates unique fallback message IDs for multiple text blocks in one assistant turn", () => {
-    const model = getModel("openai-codex", "gpt-5.5");
-    const assistant: AssistantMessage = {
-      role: "assistant",
-      content: [
-        { type: "thinking", thinking: "private reasoning" },
-        { type: "text", text: "visible answer" },
-      ],
+    const model = chooseModel("openai-codex", "Codex");
+    const assistant: typesModule.AssistantMessage = {
       api: "anthropic-messages",
-      provider: "anthropic-api",
+      content: [
+        { thinking: "private reasoning", type: "thinking" },
+        { text: "visible answer", type: "text" },
+      ],
       model: "claude-opus-4-8",
-      usage,
+      provider: "anthropic-api",
+      role: "assistant",
       stopReason: "stop",
-      timestamp: Date.now() - 1000,
+      timestamp: currentTimeMillis() - 1000,
+      usage,
     };
     const context = normalizeContext({
+      messages: [
+        { content: "hello", role: "user", timestamp: currentTimeMillis() - 2000 },
+        assistant,
+      ],
       systemPrompt: "You are concise.",
-      messages: [{ role: "user", content: "hello", timestamp: Date.now() - 2000 }, assistant],
     });
 
     const input = convertResponsesMessages(

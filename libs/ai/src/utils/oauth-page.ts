@@ -1,33 +1,7 @@
+import { Function } from "effect";
 const LOGO_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800" aria-hidden="true"><path fill="#F09082" d="M165.29 165.29H517.36V400H400V282.65H165.29Z"/><path fill="#4D9ABF" d="M165.29 282.65H282.65V400H400V517.36H282.65V634.72H165.29Z"/><path fill="#F1BE58" d="M517.36 400H634.72V634.72H517.36Z"/></svg>`;
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function renderPage(options: {
-  title: string;
-  heading: string;
-  message: string;
-  details?: string | undefined;
-}): string {
-  const title = escapeHtml(options.title);
-  const heading = escapeHtml(options.heading);
-  const message = escapeHtml(options.message);
-  const details = options.details ? escapeHtml(options.details) : undefined;
-
-  return `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
-  <style>
-    :root {
+const PAGE_STYLE = `    :root {
       --text: #fafafa;
       --text-dim: #a1a1aa;
       --page-bg: #09090b;
@@ -82,7 +56,39 @@ function renderPage(options: {
       color: var(--text-dim);
       white-space: pre-wrap;
       word-break: break-word;
-    }
+    }`;
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+function renderPage(options: {
+  title: string;
+  heading: string;
+  message: string;
+  details?: string | undefined;
+}): string {
+  const title = escapeHtml(options.title);
+  const heading = escapeHtml(options.heading);
+  const message = escapeHtml(options.message);
+  const details =
+    options.details !== undefined && options.details !== ""
+      ? escapeHtml(options.details)
+      : undefined;
+
+  return `<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${title}</title>
+  <style>
+${PAGE_STYLE}
   </style>
 </head>
 <body>
@@ -90,25 +96,35 @@ function renderPage(options: {
     <div class="logo">${LOGO_SVG}</div>
     <h1>${heading}</h1>
     <p>${message}</p>
-    ${details ? `<div class="details">${details}</div>` : ""}
+    ${details !== undefined && details !== "" ? `<div class="details">${details}</div>` : ""}
   </main>
 </body>
 </html>`;
 }
 
-export function oauthSuccessHtml(message: string): string {
+function oauthSuccessHtml(message: string): string {
   return renderPage({
-    title: "Authentication successful",
     heading: "Authentication successful",
     message,
+    title: "Authentication successful",
   });
 }
 
-export function oauthErrorHtml(message: string, details?: string): string {
+const oauthErrorHtml: {
+  (details: string | undefined): (message: string) => string;
+  (message: string, details: string | undefined): string;
+} = Function.dual(2, function (message: string, details: string | undefined): string {
   return renderPage({
-    title: "Authentication failed",
+    details,
     heading: "Authentication failed",
     message,
-    details,
+    title: "Authentication failed",
   });
-}
+});
+
+const oauthPage = {
+  oauthErrorHtml,
+  oauthSuccessHtml,
+};
+
+export default oauthPage;

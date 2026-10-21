@@ -1,7 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModels, getProviders } from "../src/compat.ts";
-import type { Api, Model } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { getModels, getProviders } = compatModule;
 
 const EXPECTED_CURRENT_ADAPTIVE_THINKING_MODELS = [
   "anthropic-api/claude-fable-5",
@@ -13,14 +15,19 @@ const EXPECTED_CURRENT_ADAPTIVE_THINKING_MODELS = [
   "opencode/claude-opus-5",
 ];
 
-function getAllModels(): Model<Api>[] {
-  return getProviders().flatMap((provider) => getModels(provider) as Model<Api>[]);
+function getAllModels(): typesModule.Model<typesModule.Api>[] {
+  return getProviders().flatMap(
+    (provider) => getModels(provider) as typesModule.Model<typesModule.Api>[],
+  );
 }
 
 describe("Anthropic adaptive thinking model metadata", () => {
   it("marks built-in Anthropic Messages models that use adaptive thinking", () => {
     const flaggedModels = getAllModels()
-      .filter((model): model is Model<"anthropic-messages"> => model.api === "anthropic-messages")
+      .filter(
+        (model): model is typesModule.Model<"anthropic-messages"> =>
+          model.api === "anthropic-messages",
+      )
       .filter((model) => model.compat?.forceAdaptiveThinking === true)
       .map((model) => `${model.provider}/${model.id}`)
       .sort();

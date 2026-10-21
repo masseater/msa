@@ -1,123 +1,105 @@
-import { createModels } from "@msa/ai";
-import {
-  type AnyTask,
-  createRegistry,
-  defineExtension,
-  Harness,
-  type HarnessSettings,
-  type Registry,
-  type RegistryReader,
-  type Storage,
-  type TaskId,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type harnessTypes from "@msa/durable/harness.types";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 
-import { context, flush } from "./session-support.ts";
+import clockModule from "../src/clock.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
 
-export type Deferred<T = void> = {
-  readonly promise: Promise<T>;
-  resolve(value: T): void;
-  reject(error: unknown): void;
-};
+const { createModels } = ai;
 
-export function deferred<T = void>(): Deferred<T> {
-  let resolve!: (value: T) => void;
-  let reject!: (error: unknown) => void;
-  const promise = new Promise<T>((done, fail) => {
-    resolve = done;
-    reject = fail;
-  });
-  return { promise, resolve, reject };
+const { currentTimeMillis } = clockModule;
+const { Harness, createRegistry } = harnessModule;
+const { defineExtension } = durable;
+
+const { awaited } = effectSupport;
+const { context, flush } = sessionSupport;
+
+const deferred = <T = void>(): PromiseWithResolvers<T> => Promise.withResolvers<T>();
+
+function aborted(signal: AbortSignal): Promise<never> {
+  const { promise, reject } = Promise.withResolvers<never>();
+  if (signal.aborted) reject(signal.reason);
+  signal.addEventListener("abort", () => reject(signal.reason), { once: true });
+  return promise;
 }
 
-// Reject with the signal's reason once it aborts; for handlers that block until cancelled.
-export function aborted(signal: AbortSignal): Promise<never> {
-  return new Promise((_, reject) => {
-    if (signal.aborted) reject(signal.reason);
-    signal.addEventListener("abort", () => reject(signal.reason), { once: true });
-  });
-}
-
-// Flush macrotask turns until `check` holds. The budget is wall clock, so a loaded machine
-// (parallel test runs, cold caches) cannot exhaust it with a few hundred turns.
-export async function eventually(
+const eventually = Effect.fn("eventually")(function* (
   check: () => boolean | Promise<boolean>,
   timeoutMs = 4_000,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  const poll = async (): Promise<void> => {
-    if (await check()) return;
-    if (Date.now() >= deadline) throw new Error("Condition was not reached");
-    await flush();
-    await poll();
-  };
-  await poll();
-}
+) {
+  const deadline = currentTimeMillis() + timeoutMs;
+  while (!(yield* awaited(check()))) {
+    if (currentTimeMillis() >= deadline) throw new Error("Condition was not reached");
+    yield* flush;
+  }
+});
 
-// Flush until the abort mark of task `id` is durable.
-export async function abortMarked(harness: Harness, id: TaskId): Promise<void> {
-  if ((await harness.getTask(id, context))?.abortRequested) return;
-  await flush();
-  await abortMarked(harness, id);
-}
+const abortMarked = Effect.fn("abortMarked")(function* (
+  harness: harnessTypes.Harness,
+  id: durableTypes.TaskId,
+) {
+  while ((yield* awaited(harness.getTask(id, context)))?.abortRequested !== true) yield* flush;
+});
 
-// Whether `promise` has settled after pending work flushes.
-export async function settled(promise: Promise<unknown>): Promise<boolean> {
+const settled = Effect.fn("settled")(function* (promise: Promise<unknown>) {
   let done = false;
   promise.then(
     () => {
       done = true;
+      return undefined;
     },
     () => {
       done = true;
+      return undefined;
     },
   );
-  await flush();
+  yield* flush;
   return done;
-}
+});
 
-// Open a Harness whose registry holds `tasks`; failures passed to `onReport` are collected.
-export async function openTasks(
-  storage: Storage,
-  tasks: readonly AnyTask[],
+const openTasks = Effect.fn("openTasks")(function* (
+  storage: durableTypes.Storage,
+  tasks: readonly durableTypes.AnyTask[],
   options: {
-    readonly registry?: Registry;
+    readonly registry?: durableTypes.Registry;
     readonly now?: () => number;
-    readonly settings?: HarnessSettings;
+    readonly settings?: durableTypes.HarnessSettings;
   } = {},
-): Promise<{
-  readonly harness: Harness;
-  readonly registry: Registry;
-  readonly reports: unknown[];
-}> {
+) {
   const registry = options.registry ?? createRegistry();
   if (tasks.length > 0) registry.install(defineExtension({ name: "tasks", tasks }));
   const reports: unknown[] = [];
-  const harness = await Harness.open(
-    storage,
-    {
-      models: createModels(),
-      registry,
-      onReport: (error) => reports.push(error),
-      ...(options.now === undefined ? {} : { now: options.now }),
-      ...(options.settings === undefined ? {} : { settings: options.settings }),
-    },
-    context,
+  const harness = yield* awaited(
+    Harness.open(
+      storage,
+      {
+        models: createModels(),
+        onReport: (error) => reports.push(error),
+        registry,
+        ...(options.now === undefined ? {} : { now: options.now }),
+        ...(options.settings === undefined ? {} : { settings: options.settings }),
+      },
+      context,
+    ),
   );
   return { harness, registry, reports };
+});
+
+function completed<R>(result: R) {
+  return { outcome: { result, status: "completed" }, status: "terminal" } as const;
 }
 
-// Next state that completes a task with `result`.
-export function completed<R>(result: R) {
-  return { status: "terminal", outcome: { status: "completed", result } } as const;
+function abortedWith(reason: string) {
+  return { outcome: { reason, status: "aborted" }, status: "terminal" } as const;
 }
 
-// Next state that aborts a task.
-export function abortedWith(reason: string) {
-  return { status: "terminal", outcome: { status: "aborted", reason } } as const;
-}
-
-// Registry reader that counts live subscriptions.
-export function countingReader(registry: Registry): RegistryReader & { subscriptions(): number } {
+function countingReader(
+  registry: durableTypes.Registry,
+): durableTypes.RegistryReader & { subscriptions(): number } {
   let count = 0;
   return {
     snapshot: () => registry.snapshot(),
@@ -135,3 +117,17 @@ export function countingReader(registry: Registry): RegistryReader & { subscript
     subscriptions: () => count,
   };
 }
+
+const taskSupport = {
+  abortMarked,
+  aborted,
+  abortedWith,
+  completed,
+  countingReader,
+  deferred,
+  eventually,
+  openTasks,
+  settled,
+};
+
+export default taskSupport;

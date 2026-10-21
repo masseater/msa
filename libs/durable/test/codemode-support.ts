@@ -1,90 +1,97 @@
-import { type AssistantMessage, fauxAssistantMessage, fauxText, fauxToolCall } from "@msa/ai";
-import {
-  type Harness,
-  type TaskId,
-  ToolResultEntry,
-  ToolTask,
-  type ToolTaskInput,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { type CodemodeToolDetails } from "../src/codemode/codemode.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
-import { codemodeChat } from "./codemode-chat-support.ts";
-import { context } from "./session-support.ts";
-import { makeTempFile, removeDir, makeTempDir } from "./temp-support.ts";
+import type codemodeTypes from "../src/codemode/codemode.types.ts";
+import codemodeChatSupport from "./codemode-chat-support.ts";
+import durableKit from "./durable-kit.ts";
+import support from "./support.ts";
 
-export const DONE = fauxAssistantMessage([fauxText("done")]);
+const { fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
-export function script(code: string): AssistantMessage {
+const { durable, envNode: nodeModule, sqliteNode: node } = durableKit;
+
+const { openNodeSqliteStorage } = node;
+const { ToolResultEntry } = durable;
+const { ToolTask } = harnessModule;
+const { NodeExecutionEnv } = nodeModule;
+
+const { codemodeChat } = codemodeChatSupport;
+const { allEntries, awaited, context, makeTempDir, makeTempFile, openChat, removeDir } = support;
+
+const DONE = fauxAssistantMessage([fauxText("done")]);
+
+function script(code: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall("codemode", { code }, { id: "s1" })], {
     stopReason: "toolUse",
   });
 }
 
-export const directories = new Set<string>();
+const directories = new Set<string>();
 
-export async function removeDirectories(): Promise<void> {
-  for await (const directory of directories) await removeDir(directory);
-  directories.clear();
+function removeDirectories(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  );
 }
 
-export async function sqlitePath(): Promise<string> {
-  const { directory, path } = await makeTempFile("msa-durable-codemode-", "session.sqlite");
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const { directory, path } = yield* makeTempFile("msa-durable-codemode-", "session.sqlite");
   directories.add(directory);
   return path;
-}
+});
 
-// Open the chat on the SQLite storage at `path`.
-export async function openStoredChat(
+const openStoredChat = Effect.fn("openStoredChat")(function* (
   path: string,
-  setup: ChatSetup,
+  setup: ReturnType<typeof support.chatSetup>,
   options?: Parameters<typeof openChat>[2],
 ) {
-  return openChat(await openNodeSqliteStorage(path), setup, options);
-}
+  return yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup, options);
+});
 
-// A fresh working directory for a Node environment, removed after the test.
-export async function envDirectory(): Promise<string> {
-  const cwd = await makeTempDir("msa-codemode-env-");
+const envDirectory = Effect.fn("envDirectory")(function* () {
+  const cwd = yield* makeTempDir("msa-codemode-env-");
   directories.add(cwd);
   return cwd;
-}
+});
 
-// The details of the code mode call's result.
-export async function resultDetails(
-  root: Awaited<ReturnType<typeof openChat>>["root"],
-): Promise<CodemodeToolDetails | undefined> {
-  const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
-  return (entry.model![0] as { details?: CodemodeToolDetails }).details;
-}
+const resultDetails = Effect.fn("resultDetails")(function* (
+  root: Effect.Success<ReturnType<typeof openChat>>["root"],
+) {
+  const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
+  return (entry.model![0] as { details?: codemodeTypes.CodemodeToolDetails }).details;
+});
 
-export async function scriptTask(harness: Harness): Promise<TaskId> {
-  const tasks = (
-    await harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context)
-  ).items;
-  return tasks.find((task) => (task.input as ToolTaskInput).kind === "model")!.id;
-}
+const scriptTask = Effect.fn("scriptTask")(function* (harness: durableTypes.Harness) {
+  const tasks = (yield* awaited(
+    harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
+  )).items;
+  return tasks.find((task) => (task.input as durableTypes.ToolTaskInput).kind === "model")!.id;
+});
 
-export async function nestedCount(harness: Harness): Promise<number> {
-  const tasks = (
-    await harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context)
-  ).items;
-  return tasks.filter((task) => (task.input as ToolTaskInput).kind === "nested").length;
-}
+const nestedCount = Effect.fn("nestedCount")(function* (harness: durableTypes.Harness) {
+  const tasks = (yield* awaited(
+    harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
+  )).items;
+  return tasks.filter((task) => (task.input as durableTypes.ToolTaskInput).kind === "nested")
+    .length;
+});
 
-// The code mode call's result text.
-export async function resultText(
-  setup: ChatSetup,
-  root: Awaited<ReturnType<typeof openChat>>["root"],
+const resultText = Effect.fn("resultText")(function* (
+  setup: ReturnType<typeof support.chatSetup>,
+  root: Effect.Success<ReturnType<typeof openChat>>["root"],
 ) {
   void setup;
-  const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
+  const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
   const message = entry.model![0]!;
   return {
-    // Without the "Script completed" header and its wall time, which tests of it check themselves.
+    isError: message.role === "toolResult" && message.isError,
     text:
       message.role === "toolResult"
         ? message.content
@@ -92,48 +99,71 @@ export async function resultText(
             .join("")
             .replace(/^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n/u, "")
         : "",
-    isError: message.role === "toolResult" && message.isError,
   };
-}
+});
 
-// Run `code` until `holds.reached`, close the Harness (a restart), let `between` change the stored state, then reopen
-// with `hold` no longer blocking and wait for the answer.
-export async function restart(
+const restart = Effect.fn("restart")(function* (
   chat: ReturnType<typeof codemodeChat>,
   code: string,
-  between: (harness: Harness, task: TaskId) => Promise<void> = async () => {},
-  beforeClose: (harness: Harness, task: TaskId) => Promise<void> = async () => {},
+  between: (harness: durableTypes.Harness, task: durableTypes.TaskId) => Effect.Effect<void> = () =>
+    Effect.void,
+  beforeClose: (
+    harness: durableTypes.Harness,
+    task: durableTypes.TaskId,
+  ) => Effect.Effect<void> = () => Effect.void,
 ) {
-  const path = await sqlitePath();
+  const path = yield* sqlitePath();
   chat.setup.faux.setResponses([script(code), DONE]);
-  let opened = await openStoredChat(path, chat.setup);
-  const id = (await opened.root.submit({ type: "input", content: "go" }, context)).id;
-  await chat.holds.reached.promise;
-  await beforeClose(opened.harness, await scriptTask(opened.harness));
-  await opened.harness.close(context);
+  let opened = yield* openStoredChat(path, chat.setup);
+  const id = (yield* awaited(opened.root.submit({ content: "go", type: "input" }, context))).id;
+  yield* awaited(chat.holds.reached.promise);
+  yield* beforeClose(opened.harness, yield* scriptTask(opened.harness));
+  yield* awaited(opened.harness.close(context));
   chat.holds.block = false;
-  opened = await openStoredChat(path, chat.setup);
-  await between(opened.harness, await scriptTask(opened.harness));
+  opened = yield* openStoredChat(path, chat.setup);
+  yield* between(opened.harness, yield* scriptTask(opened.harness));
   opened.harness.resume();
-  expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe("done");
-  return { ...opened, result: await resultText(chat.setup, opened.root) };
-}
+  expect(
+    (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
+      .status,
+  ).toBe("done");
+  return { ...opened, result: yield* resultText(chat.setup, opened.root) };
+});
 
-// Run `code` once in a chat with a Node environment; the result's content and details.
-export async function runScript(code: string, chat = codemodeChat()) {
+const runScript = Effect.fn("runScript")(function* (code: string, chat = codemodeChat()) {
   chat.holds.block = false;
-  const cwd = await envDirectory();
+  const cwd = yield* envDirectory();
   chat.setup.faux.setResponses([script(code), DONE]);
-  const { harness, root } = await openStoredChat(await sqlitePath(), chat.setup, {
+  const { harness, root } = yield* openStoredChat(yield* sqlitePath(), chat.setup, {
     env: new NodeExecutionEnv({ cwd }),
   });
-  await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-  const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+  );
+  const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
   const model = entry.model![0];
   const message = {
     ...(model as { content: { type: string; text?: string }[]; isError: boolean }),
-    details: (model as { details?: CodemodeToolDetails }).details,
+    details: (model as { details?: codemodeTypes.CodemodeToolDetails }).details,
   };
-  await harness.close(context);
-  return { text: message.content.map((item) => item.text ?? `<${item.type}>`).join(""), message };
-}
+  yield* awaited(harness.close(context));
+  return { message, text: message.content.map((item) => item.text ?? `<${item.type}>`).join("") };
+});
+
+const codemodeSupport = {
+  DONE,
+  directories,
+  envDirectory,
+  nestedCount,
+  openStoredChat,
+  removeDirectories,
+  restart,
+  resultDetails,
+  resultText,
+  runScript,
+  script,
+  scriptTask,
+  sqlitePath,
+};
+
+export default codemodeSupport;

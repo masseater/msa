@@ -1,27 +1,79 @@
-/**
- * Built-in tool renderers, without the tools themselves.
- *
- * A presentation displays tool calls and results; it does not execute them and does not need their
- * typebox parameter schemas. Importing this instead of `core/tools/index.ts` keeps ~17 MB of module
- * graph out of a process that only renders.
- */
+import { Function as Fn } from "effect";
 
-import type { ToolRenderers } from "../../extensions/types.ts";
-import type { ToolName } from "../index.ts";
-import { createShellRenderers } from "./bash.ts";
-import { editRenderers } from "./edit.ts";
-import { findRenderers } from "./find.ts";
-import { grepRenderers } from "./grep.ts";
-import { lsRenderers } from "./ls.ts";
-import { readRenderers } from "./read.ts";
-import { webFetchRenderers, webSearchRenderers } from "./web.ts";
-import { writeRenderers } from "./write.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import bashModule from "./bash.ts";
+import editModule from "./edit.ts";
+import findModule from "./find.ts";
+import grepModule from "./grep.ts";
+import lsModule from "./ls.ts";
+import readModule from "./read.ts";
+import web from "./web.ts";
+import writeModule from "./write.ts";
 
-export type { ToolRenderers };
+const { createShellRenderers } = bashModule;
+const { editRenderers } = editModule;
+const { findRenderers } = findModule;
+const { grepRenderers } = grepModule;
+const { lsRenderers } = lsModule;
+const { readRenderers } = readModule;
+const { webFetchRenderers, webSearchRenderers } = web;
+const { writeRenderers } = writeModule;
 
-type RenderedToolName = ToolName | "web_search" | "web_fetch";
+type RenderedToolName =
+  | "read"
+  | "bash"
+  | "powershell"
+  | "edit"
+  | "write"
+  | "grep"
+  | "find"
+  | "ls"
+  | "web_search"
+  | "web_fetch";
 
-export {
+function createAllToolRenderers(): Record<RenderedToolName, extensionsTypesTypes.ToolRenderers> {
+  return {
+    bash: createShellRenderers("$"),
+    edit: editRenderers,
+    find: findRenderers,
+    grep: grepRenderers,
+    ls: lsRenderers,
+    powershell: createShellRenderers("PS>"),
+    read: readRenderers,
+    web_fetch: webFetchRenderers,
+    web_search: webSearchRenderers,
+    write: writeRenderers,
+  };
+}
+
+type WithBuiltIn = <TDefinition extends extensionsTypesTypes.ToolRenderers>(
+  toolName: string,
+  definition: TDefinition | undefined,
+) => TDefinition | extensionsTypesTypes.ToolRenderers | undefined;
+
+const withBuiltInRenderersImpl: WithBuiltIn = (toolName, definition) => {
+  const builtIn = createAllToolRenderers()[toolName as RenderedToolName];
+  if (definition === undefined) return builtIn;
+  if (builtIn === undefined) return definition;
+  return {
+    ...definition,
+    renderCall: definition.renderCall ?? builtIn.renderCall,
+    renderResult: definition.renderResult ?? builtIn.renderResult,
+  };
+};
+
+const withBuiltInRenderers: {
+  <TDefinition extends extensionsTypesTypes.ToolRenderers>(
+    definition: TDefinition | undefined,
+  ): (toolName: string) => TDefinition | extensionsTypesTypes.ToolRenderers | undefined;
+  <TDefinition extends extensionsTypesTypes.ToolRenderers>(
+    toolName: string,
+    definition: TDefinition | undefined,
+  ): TDefinition | extensionsTypesTypes.ToolRenderers | undefined;
+} = Fn.dual(2, withBuiltInRenderersImpl);
+
+const renderers = {
+  createAllToolRenderers,
   createShellRenderers,
   editRenderers,
   findRenderers,
@@ -30,41 +82,8 @@ export {
   readRenderers,
   webFetchRenderers,
   webSearchRenderers,
+  withBuiltInRenderers,
   writeRenderers,
 };
 
-/** Renderers for every built-in tool, keyed by tool name. */
-export function createAllToolRenderers(): Record<RenderedToolName, ToolRenderers> {
-  return {
-    read: readRenderers,
-    bash: createShellRenderers("$"),
-    powershell: createShellRenderers("PS>"),
-    edit: editRenderers,
-    write: writeRenderers,
-    grep: grepRenderers,
-    find: findRenderers,
-    ls: lsRenderers,
-    web_search: webSearchRenderers,
-    web_fetch: webFetchRenderers,
-  };
-}
-
-/**
- * Merge built-in renderers into a tool definition that does not supply its own.
- *
- * `ToolExecutionComponent` used to do this lookup itself, which forced every presentation to import
- * the tool implementations. Callers do it now, so a process that renders can import renderers alone.
- */
-export function withBuiltInRenderers<TDefinition extends ToolRenderers>(
-  toolName: string,
-  definition: TDefinition | undefined,
-): TDefinition | ToolRenderers | undefined {
-  const builtIn = createAllToolRenderers()[toolName as RenderedToolName];
-  if (!definition) return builtIn;
-  if (!builtIn) return definition;
-  return {
-    ...definition,
-    renderCall: definition.renderCall ?? builtIn.renderCall,
-    renderResult: definition.renderResult ?? builtIn.renderResult,
-  };
-}
+export default renderers;

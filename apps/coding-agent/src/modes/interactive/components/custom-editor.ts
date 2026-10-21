@@ -1,46 +1,40 @@
-import { Editor, type EditorOptions, type EditorTheme, type TUI, visibleWidth } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { AppKeybinding, KeybindingsManager } from "../../../core/keybindings.ts";
-import type { StatusIndicator } from "./status-indicator.ts";
+import type keybindingsTypes from "../../../core/keybindings.types.ts";
+import type customEditorTypes from "./custom-editor.types.ts";
+import type statusIndicatorTypes from "./status-indicator.types.ts";
 
-export type CustomEditorOptions = EditorOptions & {
-  /** Render working, compaction, summarization, and retry status in the editor's top border. */
-  embedWorkingStatus?: boolean;
-};
+const { visibleWidth } = tuiModule;
 
-/**
- * Custom editor that handles app-level keybindings for coding-agent.
- */
-export class CustomEditor extends Editor {
-  private keybindings: KeybindingsManager;
-  private workingStatusIndicator: StatusIndicator | undefined;
+export default class CustomEditor extends tuiModule.Editor {
+  private keybindings: keybindingsTypes.KeybindingsManager;
+  private workingStatusIndicator: statusIndicatorTypes.StatusIndicator | undefined;
   public readonly embedWorkingStatus: boolean;
-  public actionHandlers: Map<AppKeybinding, () => void> = new Map();
+  public actionHandlers: Map<keybindingsTypes.AppKeybinding, () => void> = new Map();
 
-  // Special handlers that can be dynamically replaced
   public onEscape?: (() => void) | undefined;
   public onCtrlD?: () => void;
   public onPasteImage?: () => void;
-  /** Handler for extension-registered shortcuts. Returns true if handled. */
   public onExtensionShortcut?: ((data: string) => boolean) | undefined;
 
   constructor(
-    tui: TUI,
-    theme: EditorTheme,
-    keybindings: KeybindingsManager,
-    options?: CustomEditorOptions,
+    tui: tuiTypes.TUI,
+    theme: tuiTypes.EditorTheme,
+    keybindings: keybindingsTypes.KeybindingsManager,
+    options?: customEditorTypes.CustomEditorOptions,
   ) {
     super(tui, theme, options);
     this.keybindings = keybindings;
     this.embedWorkingStatus = options?.embedWorkingStatus ?? false;
   }
 
-  setWorkingStatusIndicator(indicator: StatusIndicator | undefined): void {
+  setWorkingStatusIndicator(indicator: statusIndicatorTypes.StatusIndicator | undefined): void {
     this.workingStatusIndicator = indicator;
   }
 
   protected override renderTopBorder(width: number, hiddenLineCount: number): string {
-    if (!this.embedWorkingStatus || !this.workingStatusIndicator || width <= 0) {
+    if (!this.embedWorkingStatus || this.workingStatusIndicator === undefined || width <= 0) {
       return super.renderTopBorder(width, hiddenLineCount);
     }
 
@@ -49,14 +43,15 @@ export class CustomEditor extends Editor {
     if (statusWidth === 0) return super.renderTopBorder(width, hiddenLineCount);
 
     const overflowLabel = hiddenLineCount > 0 ? ` ↑ ${hiddenLineCount} more ` : undefined;
-    const overflowLabelWidth = overflowLabel ? visibleWidth(overflowLabel) : 0;
+    const overflowLabelWidth =
+      overflowLabel !== undefined && overflowLabel !== "" ? visibleWidth(overflowLabel) : 0;
     const overflowStart = Math.floor((width - overflowLabelWidth) / 2);
     const canFitOverflow = () =>
       overflowLabel !== undefined &&
       overflowLabelWidth + 2 <= width &&
       overflowStart - (3 + statusWidth + 1) >= 1;
 
-    if (overflowLabel && !canFitOverflow()) {
+    if (overflowLabel !== undefined && overflowLabel !== "" && !canFitOverflow()) {
       status = this.workingStatusIndicator.renderSpinnerInBorder(width);
       statusWidth = visibleWidth(status);
     }
@@ -82,6 +77,10 @@ export class CustomEditor extends Editor {
 
     status = this.workingStatusIndicator.renderSpinnerInBorder(width);
     statusWidth = visibleWidth(status);
+    return this.borderWithStatus(width, statusWidth, status);
+  }
+
+  private borderWithStatus(width: number, statusWidth: number, status: string) {
     const prefixWidth = Math.min(3, Math.max(0, width - statusWidth));
     return (
       this.borderColor("─".repeat(prefixWidth)) +
@@ -90,75 +89,50 @@ export class CustomEditor extends Editor {
     );
   }
 
-  /**
-   * Register a handler for an app action.
-   */
-  onAction(action: AppKeybinding, handler: () => void): void {
+  onAction(action: keybindingsTypes.AppKeybinding, handler: () => void): void {
     this.actionHandlers.set(action, handler);
   }
 
   override handleInput(data: string): void {
-    // Check extension-registered shortcuts first
-    if (this.onExtensionShortcut?.(data)) {
-      return;
-    }
+    if (this.handleEditorShortcut(data)) return;
+    const handler = this.isHistoryKey(data) ? undefined : this.registeredActionFor(data);
+    if (handler === undefined) super.handleInput(data);
+    else handler();
+  }
 
-    // Check for clipboard paste keybinding
+  private handleEditorShortcut(data: string): boolean {
+    if (this.onExtensionShortcut?.(data) === true) return true;
     if (this.keybindings.matches(data, "app.clipboard.pasteImage")) {
       this.onPasteImage?.();
-      return;
+      return true;
     }
-
-    // Check app keybindings first
-
-    // Escape/interrupt - only if autocomplete is NOT active
     if (this.keybindings.matches(data, "app.interrupt")) {
-      if (!this.isShowingAutocomplete()) {
-        // Use dynamic onEscape if set, otherwise registered handler
-        const handler = this.onEscape ?? this.actionHandlers.get("app.interrupt");
-        if (handler) {
-          handler();
-          return;
-        }
-      }
-      // Let parent handle escape for autocomplete cancellation
-      super.handleInput(data);
-      return;
+      const handler = this.isShowingAutocomplete()
+        ? undefined
+        : (this.onEscape ?? this.actionHandlers.get("app.interrupt"));
+      if (handler === undefined) super.handleInput(data);
+      else handler();
+      return true;
     }
-
-    // Exit (Ctrl+D) - only when editor is empty
-    if (this.keybindings.matches(data, "app.exit")) {
-      if (this.getText().length === 0) {
-        const handler = this.onCtrlD ?? this.actionHandlers.get("app.exit");
-        if (handler) handler();
-        return;
-      }
-      // Fall through to editor handling for delete-char-forward when not empty
+    if (this.keybindings.matches(data, "app.exit") && this.getText().length === 0) {
+      (this.onCtrlD ?? this.actionHandlers.get("app.exit"))?.();
+      return true;
     }
+    return false;
+  }
 
-    // Explicit history bindings take precedence over app actions while the editor is focused.
-    // This lets users bind Ctrl+P even though it cycles models by default.
-    if (
+  private isHistoryKey(data: string): boolean {
+    return (
       this.keybindings.matches(data, "tui.editor.historyPrevious") ||
       this.keybindings.matches(data, "tui.editor.historyNext")
-    ) {
-      super.handleInput(data);
-      return;
-    }
+    );
+  }
 
-    // Check all other app actions
+  private registeredActionFor(data: string): (() => void) | undefined {
     for (const [action, handler] of this.actionHandlers) {
-      if (
-        action !== "app.interrupt" &&
-        action !== "app.exit" &&
-        this.keybindings.matches(data, action)
-      ) {
-        handler();
-        return;
-      }
+      if (action === "app.interrupt" || action === "app.exit") continue;
+      if (this.keybindings.matches(data, action)) return handler;
     }
-
-    // Pass to parent for editor handling
-    super.handleInput(data);
+    return undefined;
   }
 }

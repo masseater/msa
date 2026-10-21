@@ -1,17 +1,13 @@
+import { Clock, Effect } from "effect";
+
 const MAX_UUID_V7_TIMESTAMP = 0xffffffffffff;
 const MAX_SEQUENCE = (1n << 41n) - 1n;
 
 let lastOrdinaryTimestamp = -1;
 let sequence: bigint | undefined;
 
-/**
- * Generate a time-ordered UUIDv7. A supplied timestamp is preserved for follower ids.
- *
- * @param {number} [timestampMs] - timestamp to embed
- * @returns {string} the UUID
- */
-export function uuidv7(timestampMs?: number): string {
-  const requestedTimestamp = timestampMs ?? Date.now();
+function uuidv7(timestampMs?: number): string {
+  const requestedTimestamp = timestampMs ?? Effect.runSync(Clock.currentTimeMillis);
   if (
     !Number.isInteger(requestedTimestamp) ||
     requestedTimestamp < 0 ||
@@ -50,3 +46,9 @@ export function uuidv7(timestampMs?: number): string {
   const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0"));
   return `${hex.slice(0, 4).join("")}-${hex.slice(4, 6).join("")}-${hex.slice(6, 8).join("")}-${hex.slice(8, 10).join("")}-${hex.slice(10).join("")}`;
 }
+
+const uuid = {
+  uuidv7,
+};
+
+export default uuid;

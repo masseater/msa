@@ -1,6 +1,14 @@
-import type { ProviderClassifier } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
-export const typesafeSystemOneApi = (): ProviderClassifier => ({
-  classify: async (model, context, options) =>
-    (await import("./typesafe-system-one.ts")).classify(model, context, options),
+const typesafeSystemOneApi = (): typesModule.ProviderClassifier => ({
+  classify: (model, context, options) =>
+    import("./typesafe-system-one.ts").then((module) =>
+      module.default.classify(model, context, options),
+    ),
 });
+
+const typesafeSystemOneLazy = {
+  typesafeSystemOneApi,
+};
+
+export default typesafeSystemOneLazy;

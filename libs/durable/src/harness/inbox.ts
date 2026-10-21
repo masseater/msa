@@ -1,237 +1,238 @@
-import { copyJson, type Draft, type JsonRepresentation } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
+import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import { UserEntry } from "../entries.ts";
-import type {
-  ConversationId,
-  EntryDraft,
-  EntryId,
-  EntryRecord,
-  JsonObject,
-  SubmissionId,
-  Tx,
-} from "../types.ts";
-import type { InputEntry, QueueMode, Settings, UserInput } from "./types.ts";
+import documents from "../documents.ts";
+import entries from "../entries.ts";
+import type inboxTypes from "./inbox.types.ts";
+import type typesModule from "./types.types.ts";
 
-/** A queued submission: user input for a run, with the entry it is placed as when not `msa.user`, or an entry write. */
-export type InboxItem =
-  | {
-      id: SubmissionId;
-      mode: "steer" | "followUp";
-      content: JsonRepresentation<UserInput>;
-      entry?: JsonRepresentation<InputEntry>;
-    }
-  /** `entry` is an `EntryDraft`, stored as plain JSON. */
-  | { id: SubmissionId; mode: "write"; entry: JsonObject };
+const { copyJson } = json;
 
-/** Built-in queue of one conversation's submissions waiting for a boundary, in ID order. */
-export type InboxState = { items: InboxItem[] };
+const { defineDoc } = documents;
+const { UserEntry } = entries;
 
-export const InboxDoc = defineDoc<InboxState>({
-  kind: "msa.inbox",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ items: [] }),
+const InboxDoc = defineDoc<inboxTypes.InboxState>({
   checkpointWhen: (value) => value.items.length === 0,
+  fork: "initial",
+  history: "latest",
+  initial: () => ({ items: [] }),
+  kind: "msa.inbox",
+  scope: "conversation",
+  version: 1,
 });
 
-/** The settings a boundary reads, on the Session line. */
-export type QueueModes = Pick<Settings, "steeringMode" | "followUpMode">;
+const prepareBoundary: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  inboxTypes.QueueModes,
+  Effect.Effect<inboxTypes.Boundary>
+> = Function.dual(
+  3,
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    modes: inboxTypes.QueueModes,
+  ) {
+    const marker = yield* Effect.promise(() => tx.latestHeadMarker(conversationId));
+    const inbox = yield* Effect.promise(() => tx.doc(InboxDoc, conversationId));
+    return {
+      conversationId,
+      followUpMode: modes.followUpMode,
+      head: marker?.head,
+      inbox,
+      steeringMode: modes.steeringMode,
+    };
+  }),
+);
 
-/** What a boundary reads before the commit's first table write, and the newest head it has seen so far. */
-export type Boundary = {
-  readonly conversationId: ConversationId;
-  readonly inbox: Draft<InboxState>;
-  readonly steeringMode: QueueMode;
-  readonly followUpMode: QueueMode;
-  /** Start of the active range, the newest head marker's `head`; advanced by heads written in this commit. */
-  head: EntryId | undefined;
+const pickIndexes = (
+  items: readonly chordTypes.Draft<inboxTypes.InboxItem>[],
+  mode: "steer" | "followUp",
+  queueMode: typesModule.QueueMode,
+): number[] => {
+  const indexes = items.flatMap((item, index) => (item.mode === mode ? [index] : []));
+  return queueMode === "all" ? indexes : indexes.slice(0, 1);
 };
 
-/** Selected user items, in ID order, and whether a `head: "self"` write (a reset) was placed. */
-export type BoundaryResult = { readonly users: SubmissionId[]; readonly reset: boolean };
+const applyWrite = Effect.fnUntraced(function* (
+  tx: typesModule.Tx,
+  boundary: inboxTypes.Boundary,
+  item: chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
+) {
+  const draft = item.entry as chordTypes.Draft<typesModule.EntryDraft>;
+  if (isStale(boundary, draft)) {
+    tx.settleSubmission(item.id, { reason: "stale", status: "unanswered" });
+    return;
+  }
+  const entry = yield* Effect.promise(() => tx.appendEntry(boundary.conversationId, draft));
+  if (draft.head !== undefined) boundary.head = draft.head === "self" ? entry.id : draft.head;
+  tx.placeSubmission(item.id, entry.id);
+});
 
-/**
- * Read what a boundary needs. Table reads must precede the commit's first table write, so callers prepare the
- * boundary at the start of their commit.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {QueueModes} modes - How queued items are placed.
- * @returns {Promise<Boundary>} The boundary.
- */
-export async function prepareBoundary(
-  tx: Tx,
-  conversationId: ConversationId,
-  modes: QueueModes,
-): Promise<Boundary> {
-  const head = (await tx.latestHeadMarker(conversationId))?.head;
-  const inbox = await tx.doc(InboxDoc, conversationId);
-  return {
+const applyUser = Effect.fnUntraced(function* (
+  tx: typesModule.Tx,
+  conversationId: typesModule.ConversationId,
+  item: chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>>,
+  now: number,
+) {
+  const entry = yield* appendInput(
+    tx,
     conversationId,
-    inbox,
-    steeringMode: modes.steeringMode,
-    followUpMode: modes.followUpMode,
-    head,
-  };
-}
+    item.content as typesModule.UserInput,
+    item.entry as typesModule.InputEntry,
+    now,
+  );
+  tx.placeSubmission(item.id, entry.id);
+  return item.id;
+});
 
-/**
- * Place the queued items a boundary selects (spec §6): every write, the first or all steers, and at `final` the first
- * or all follow-ups. A selected reset turns a `postTools` boundary into `final`. Writes are placed first and user
- * items after them, each in ID order, so user items queued before a reset run in the new context. A write whose head
- * targets an entry before the active range, including a range started earlier in this commit, is stale. Selected and
- * stale items are removed positionally.
- * @param {Tx} tx - The commit's transaction.
- * @param {Boundary} boundary - The prepared boundary.
- * @param {"postTools" | "final"} at - Which boundary.
- * @param {number} now - The commit's time.
- * @returns {Promise<BoundaryResult>} What was placed.
- */
-export async function applyBoundary(
-  tx: Tx,
-  boundary: Boundary,
-  at: "postTools" | "final",
-  now: number,
-): Promise<BoundaryResult> {
-  const { conversationId, inbox } = boundary;
-  const items = inbox.items;
-  const reset = hasQueuedReset(items);
-  const final = at === "final" || reset;
-  const pick = (mode: "steer" | "followUp", queueMode: QueueMode): number[] => {
-    const indexes = items.flatMap((item, index) => (item.mode === mode ? [index] : []));
-    return queueMode === "all" ? indexes : indexes.slice(0, 1);
-  };
-  const writes = items.flatMap((item, index) => (item.mode === "write" ? [index] : []));
-  const users = [
-    ...pick("steer", boundary.steeringMode),
-    ...(final ? pick("followUp", boundary.followUpMode) : []),
-  ];
-  users.sort((a, b) => a - b);
-
-  // `appendEntry()` copies the drafts' values; the items are removed only afterwards.
-  for await (const index of writes) {
-    const item = items[index] as Draft<Extract<InboxItem, { mode: "write" }>>;
-    const draft = item.entry as unknown as EntryDraft;
-    if (isStale(boundary, draft)) {
-      tx.settleSubmission(item.id, { status: "unanswered", reason: "stale" });
-      continue;
-    }
-    const entry = await tx.appendEntry(conversationId, draft);
-    if (draft.head !== undefined) boundary.head = draft.head === "self" ? entry.id : draft.head;
-    tx.placeSubmission(item.id, entry.id);
-  }
-  const placed: SubmissionId[] = [];
-  for await (const index of users) {
-    const item = items[index] as Draft<Extract<InboxItem, { mode: "steer" | "followUp" }>>;
-    const entry = await appendInput(
-      tx,
-      conversationId,
-      item.content as UserInput,
-      item.entry as InputEntry,
-      now,
+const applyBoundary: typesModule.Dual4<
+  typesModule.Tx,
+  inboxTypes.Boundary,
+  "postTools" | "final",
+  number,
+  Effect.Effect<inboxTypes.BoundaryResult>
+> = Function.dual(
+  4,
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    boundary: inboxTypes.Boundary,
+    at: "postTools" | "final",
+    now: number,
+  ) {
+    const { conversationId, inbox } = boundary;
+    const items = inbox.items;
+    const reset = hasQueuedReset(items);
+    const final = at === "final" || reset;
+    const writes = items.flatMap((item, index) => (item.mode === "write" ? [index] : []));
+    const users = [
+      ...pickIndexes(items, "steer", boundary.steeringMode),
+      ...(final ? pickIndexes(items, "followUp", boundary.followUpMode) : []),
+    ];
+    users.sort((a, b) => a - b);
+    yield* Effect.forEach(
+      writes,
+      (index) =>
+        applyWrite(
+          tx,
+          boundary,
+          items[index] as chordTypes.Draft<Extract<inboxTypes.InboxItem, { mode: "write" }>>,
+        ),
+      { discard: true },
     );
-    tx.placeSubmission(item.id, entry.id);
-    placed.push(item.id);
-  }
-  const removed = [...writes, ...users].sort((a, b) => b - a);
-  for (const index of removed) items.splice(index, 1);
-  return { users: placed, reset };
+    const placed = yield* Effect.forEach(users, (index) =>
+      applyUser(
+        tx,
+        conversationId,
+        items[index] as chordTypes.Draft<
+          Extract<inboxTypes.InboxItem, { mode: "steer" | "followUp" }>
+        >,
+        now,
+      ),
+    );
+    const removed = [...writes, ...users].sort((a, b) => b - a);
+    for (const index of removed) items.splice(index, 1);
+    return { reset, users: placed };
+  }),
+);
+
+const appendInput: typesModule.Dual5<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  typesModule.UserInput,
+  typesModule.InputEntry | undefined,
+  number,
+  Effect.Effect<typesModule.EntryRecord>
+> = Function.dual(
+  5,
+  (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    content: typesModule.UserInput,
+    entry: typesModule.InputEntry | undefined,
+    now: number,
+  ): Effect.Effect<typesModule.EntryRecord> => {
+    const message = { content, role: "user", timestamp: now } as const;
+    return Effect.promise(() =>
+      entry === undefined
+        ? tx.appendEntry(UserEntry, conversationId, { model: [message] })
+        : tx.appendEntry(conversationId, { ...pickInputEntry(entry), model: [message] }),
+    );
+  },
+);
+
+function pickInputEntry({
+  kind,
+  data,
+}: typesModule.InputEntry): chordTypes.JsonRepresentation<typesModule.InputEntry> {
+  const picked = data === undefined ? { kind } : { data, kind };
+  return copyJson(picked, {
+    omitUndefinedProperties: true,
+  }) as chordTypes.JsonRepresentation<typesModule.InputEntry>;
 }
 
-/**
- * Append the entry an input is placed as: `entry`'s kind and data, or `msa.user`, with the user message of `content`.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {UserInput} content - The input's content.
- * @param {InputEntry | undefined} entry - The input's entry, if given.
- * @param {number} now - The commit's time.
- * @returns {Promise<EntryRecord>} The appended entry.
- */
-export function appendInput(
-  tx: Tx,
-  conversationId: ConversationId,
-  content: UserInput,
-  entry: InputEntry | undefined,
-  now: number,
-): Promise<EntryRecord> {
-  const message = { role: "user", content, timestamp: now } as const;
-  if (entry === undefined) return tx.appendEntry(UserEntry, conversationId, { model: [message] });
-  return tx.appendEntry(conversationId, { ...pickInputEntry(entry), model: [message] });
-}
-
-/**
- * The kind and data of an input's entry as strict JSON, without other fields an untyped caller might pass.
- * @param {InputEntry} entry - The input entry.
- * @param {string} entry.kind - Its kind.
- * @param {import("@msa/chord").JsonValue | undefined} entry.data - Its data.
- * @returns {JsonRepresentation<InputEntry>} The kind and data.
- */
-export function pickInputEntry({ kind, data }: InputEntry): JsonRepresentation<InputEntry> {
-  const picked = data === undefined ? { kind } : { kind, data };
-  return copyJson(picked, { omitUndefinedProperties: true }) as JsonRepresentation<InputEntry>;
-}
-
-/**
- * Whether a write is display-only: it has no `model`, `head`, or `edits` (present counts, even if empty), so it changes
- * nothing the model sees and needs no boundary.
- * @param {EntryDraft} entry - The write.
- * @returns {boolean} Whether it is display-only.
- */
-export function isDisplayOnly(entry: EntryDraft): boolean {
+function isDisplayOnly(entry: typesModule.EntryDraft): boolean {
   return entry.model === undefined && entry.head === undefined && entry.edits === undefined;
 }
 
-/**
- * Whether a reset (`head: "self"` write) is queued; entries appended before it leave the active range when it lands.
- * @param {readonly InboxItem[]} items - The inbox items.
- * @returns {boolean} Whether a reset is queued.
- */
-export function hasQueuedReset(items: readonly InboxItem[]): boolean {
+function hasQueuedReset(items: readonly inboxTypes.InboxItem[]): boolean {
   return items.some((item) => item.mode === "write" && item.entry["head"] === "self");
 }
 
-/**
- * Whether a head write targets an entry before the active range, so placing it would bring back cut history.
- * @param {Boundary} boundary - The boundary.
- * @param {EntryDraft} entry - The write.
- * @returns {boolean} Whether it is stale.
- */
-export function isStale(boundary: Boundary, entry: EntryDraft): boolean {
-  return (
-    typeof entry.head === "number" && boundary.head !== undefined && entry.head < boundary.head
+const isStale: typesModule.Dual2<inboxTypes.Boundary, typesModule.EntryDraft, boolean> =
+  Function.dual(
+    2,
+    (boundary: inboxTypes.Boundary, entry: typesModule.EntryDraft): boolean =>
+      typeof entry.head === "number" && boundary.head !== undefined && entry.head < boundary.head,
   );
-}
 
-/**
- * Remove a withdrawn submission's item; the caller settles the submission.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {SubmissionId} id - The submission.
- */
-export async function removeInboxItem(
-  tx: Tx,
-  conversationId: ConversationId,
-  id: SubmissionId,
-): Promise<void> {
-  const items = (await tx.doc(InboxDoc, conversationId)).items;
-  const index = items.findIndex((item) => item.id === id);
-  if (index >= 0) items.splice(index, 1);
-}
+const removeInboxItem: typesModule.Dual3<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  typesModule.SubmissionId,
+  Effect.Effect<void>
+> = Function.dual(
+  3,
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    id: typesModule.SubmissionId,
+  ) {
+    const items = (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId))).items;
+    const index = items.findIndex((item) => item.id === id);
+    if (index >= 0) items.splice(index, 1);
+  }),
+);
 
-/**
- * Withdraw every queued input of a conversation, as `Conversation.abort()` and abort cascades do: each settles
- * `unanswered` with `aborted` and leaves the inbox; queued writes stay for later placement.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- */
-export async function withdrawQueuedInputs(tx: Tx, conversationId: ConversationId): Promise<void> {
-  const items = (await tx.doc(InboxDoc, conversationId)).items;
-  for (let index = items.length - 1; index >= 0; index--) {
-    const item = items[index]!;
-    if (item.mode === "write") continue;
-    tx.settleSubmission(item.id, { status: "unanswered", reason: "aborted" });
-    items.splice(index, 1);
-  }
-}
+const withdrawQueuedInputs: typesModule.Dual2<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  Effect.Effect<void>
+> = Function.dual(
+  2,
+  Effect.fnUntraced(function* (tx: typesModule.Tx, conversationId: typesModule.ConversationId) {
+    const items = (yield* Effect.promise(() => tx.doc(InboxDoc, conversationId))).items;
+    for (let index = items.length - 1; index >= 0; index--) {
+      const item = items[index]!;
+      if (item.mode === "write") continue;
+      tx.settleSubmission(item.id, { reason: "aborted", status: "unanswered" });
+      items.splice(index, 1);
+    }
+  }),
+);
+
+const inboxModule = {
+  InboxDoc,
+  appendInput,
+  applyBoundary,
+  hasQueuedReset,
+  isDisplayOnly,
+  isStale,
+  pickInputEntry,
+  prepareBoundary,
+  removeInboxItem,
+  withdrawQueuedInputs,
+};
+
+export default inboxModule;

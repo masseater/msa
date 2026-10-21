@@ -1,6 +1,12 @@
-import { getKeybindings } from "../keybindings.ts";
-import type { Component, TuiMouseEvent, TuiMouseEventResult } from "../tui.ts";
-import { truncateToWidth, visibleWidth } from "../utils.ts";
+import keybindingsModule from "../keybindings.ts";
+import textTruncate from "../text-truncate.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import utils from "../utils.ts";
+import type selectListTypes from "./select-list.types.ts";
+
+const { truncateToWidth } = textTruncate;
+const { getKeybindings } = keybindingsModule;
+const { visibleWidth } = utils;
 
 const DEFAULT_PRIMARY_COLUMN_WIDTH = 32;
 const PRIMARY_COLUMN_GAP = 2;
@@ -10,52 +16,24 @@ const normalizeToSingleLine = (text: string): string => text.replace(/[\r\n]+/gu
 const clamp = (value: number, min: number, max: number): number =>
   Math.max(min, Math.min(value, max));
 
-export interface SelectItem {
-  value: string;
-  label: string;
-  description?: string;
-}
-
-export interface SelectListTheme {
-  selectedPrefix: (text: string) => string;
-  selectedText: (text: string) => string;
-  description: (text: string) => string;
-  scrollInfo: (text: string) => string;
-  noMatch: (text: string) => string;
-}
-
-export interface SelectListTruncatePrimaryContext {
-  text: string;
-  maxWidth: number;
-  columnWidth: number;
-  item: SelectItem;
-  isSelected: boolean;
-}
-
-export interface SelectListLayoutOptions {
-  minPrimaryColumnWidth?: number;
-  maxPrimaryColumnWidth?: number;
-  truncatePrimary?: (context: SelectListTruncatePrimaryContext) => string;
-}
-
-export class SelectList implements Component {
-  private items: SelectItem[] = [];
-  private filteredItems: SelectItem[] = [];
+export default class SelectList implements tuiComponentTypes.Component {
+  private items: selectListTypes.SelectItem[] = [];
+  private filteredItems: selectListTypes.SelectItem[] = [];
   private selectedIndex: number = 0;
   private mousePressedIndex: number | undefined;
   private maxVisible: number = 5;
-  private theme: SelectListTheme;
-  private layout: SelectListLayoutOptions;
+  private theme: selectListTypes.SelectListTheme;
+  private layout: selectListTypes.SelectListLayoutOptions;
 
-  public onSelect?: (item: SelectItem) => void;
+  public onSelect?: (item: selectListTypes.SelectItem) => void;
   public onCancel?: () => void;
-  public onSelectionChange?: (item: SelectItem) => void;
+  public onSelectionChange?: (item: selectListTypes.SelectItem) => void;
 
   constructor(
-    items: SelectItem[],
+    items: selectListTypes.SelectItem[],
     maxVisible: number,
-    theme: SelectListTheme,
-    layout: SelectListLayoutOptions = {},
+    theme: selectListTypes.SelectListTheme,
+    layout: selectListTypes.SelectListLayoutOptions = {},
   ) {
     this.items = items;
     this.filteredItems = items;
@@ -68,7 +46,6 @@ export class SelectList implements Component {
     this.filteredItems = this.items.filter((item) =>
       item.value.toLowerCase().startsWith(filter.toLowerCase()),
     );
-    // Reset selection when filter changes
     this.selectedIndex = 0;
   }
 
@@ -76,14 +53,11 @@ export class SelectList implements Component {
     this.selectedIndex = Math.max(0, Math.min(index, this.filteredItems.length - 1));
   }
 
-  invalidate(): void {
-    // No cached state to invalidate currently
-  }
+  invalidate(): void {}
 
   render(width: number): string[] {
     const lines: string[] = [];
 
-    // If no items match filter, show message
     if (this.filteredItems.length === 0) {
       lines.push(this.theme.noMatch("  No matching commands"));
       return lines;
@@ -91,36 +65,35 @@ export class SelectList implements Component {
 
     const primaryColumnWidth = this.getPrimaryColumnWidth();
 
-    // Calculate visible range with scrolling
     const { startIndex, endIndex } = this.getVisibleRange();
 
-    // Render visible items
     for (let i = startIndex; i < endIndex; i++) {
       const item = this.filteredItems[i];
-      if (!item) continue;
+      if (item === undefined) continue;
 
       const isSelected = i === this.selectedIndex;
-      const descriptionSingleLine = item.description
-        ? normalizeToSingleLine(item.description)
-        : undefined;
+      const descriptionSingleLine =
+        item.description !== undefined && item.description !== ""
+          ? normalizeToSingleLine(item.description)
+          : undefined;
       lines.push(
         this.renderItem(item, isSelected, width, descriptionSingleLine, primaryColumnWidth),
       );
     }
 
-    // Add scroll indicators if needed
     if (startIndex > 0 || endIndex < this.filteredItems.length) {
       const scrollText = `  (${this.selectedIndex + 1}/${this.filteredItems.length})`;
-      // Truncate if too long for terminal
       lines.push(this.theme.scrollInfo(truncateToWidth(scrollText, width - 2, "")));
     }
 
     return lines;
   }
 
-  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+  handleMouse(
+    event: tuiComponentTypes.TuiMouseEvent,
+  ): tuiComponentTypes.TuiMouseEventResult | undefined {
     if (this.filteredItems.length === 0) return undefined;
-    if (event.type === "wheel" && event.wheelDelta) {
+    if (event.type === "wheel" && event.wheelDelta !== undefined && event.wheelDelta !== 0) {
       const delta = event.wheelDelta < 0 ? -1 : 1;
       const previousIndex = this.selectedIndex;
       this.selectedIndex = Math.max(
@@ -130,7 +103,6 @@ export class SelectList implements Component {
       if (this.selectedIndex !== previousIndex) this.notifySelectionChange();
       return { handled: true, render: this.selectedIndex !== previousIndex };
     }
-    // Hover must not change selection: the visible range is centered on it.
     if (event.button !== "left" || (event.type !== "press" && event.type !== "click"))
       return undefined;
     const { startIndex, endIndex } = this.getVisibleRange();
@@ -143,7 +115,7 @@ export class SelectList implements Component {
         this.selectedIndex = itemIndex;
         this.notifySelectionChange();
       }
-      return { handled: true, focus: true };
+      return { focus: true, handled: true };
     }
     if (event.type === "click") {
       const clickedIndex = this.mousePressedIndex ?? itemIndex;
@@ -152,7 +124,7 @@ export class SelectList implements Component {
       this.selectedIndex = clickedIndex;
       if (changed) this.notifySelectionChange();
       const selectedItem = this.filteredItems[this.selectedIndex];
-      if (selectedItem) this.onSelect?.(selectedItem);
+      if (selectedItem !== undefined) this.onSelect?.(selectedItem);
       return { handled: true };
     }
     return undefined;
@@ -160,28 +132,21 @@ export class SelectList implements Component {
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    // Up arrow - wrap to bottom when at top
     if (kb.matches(keyData, "tui.select.up")) {
       this.selectedIndex =
         this.selectedIndex === 0 ? this.filteredItems.length - 1 : this.selectedIndex - 1;
       this.notifySelectionChange();
-    }
-    // Down arrow - wrap to top when at bottom
-    else if (kb.matches(keyData, "tui.select.down")) {
+    } else if (kb.matches(keyData, "tui.select.down")) {
       this.selectedIndex =
         this.selectedIndex === this.filteredItems.length - 1 ? 0 : this.selectedIndex + 1;
       this.notifySelectionChange();
-    }
-    // Enter
-    else if (kb.matches(keyData, "tui.select.confirm")) {
+    } else if (kb.matches(keyData, "tui.select.confirm")) {
       const selectedItem = this.filteredItems[this.selectedIndex];
-      if (selectedItem && this.onSelect) {
+      if (selectedItem !== undefined && this.onSelect !== undefined) {
         this.onSelect(selectedItem);
       }
-    }
-    // Escape or Ctrl+C
-    else if (kb.matches(keyData, "tui.select.cancel")) {
-      if (this.onCancel) {
+    } else if (kb.matches(keyData, "tui.select.cancel")) {
+      if (this.onCancel !== undefined) {
         this.onCancel();
       }
     }
@@ -196,13 +161,13 @@ export class SelectList implements Component {
       ),
     );
     return {
-      startIndex,
       endIndex: Math.min(startIndex + this.maxVisible, this.filteredItems.length),
+      startIndex,
     };
   }
 
   private renderItem(
-    item: SelectItem,
+    item: selectListTypes.SelectItem,
     isSelected: boolean,
     width: number,
     descriptionSingleLine: string | undefined,
@@ -211,7 +176,7 @@ export class SelectList implements Component {
     const prefix = isSelected ? "→ " : "  ";
     const prefixWidth = visibleWidth(prefix);
 
-    if (descriptionSingleLine && width > 40) {
+    if (descriptionSingleLine !== undefined && descriptionSingleLine !== "" && width > 40) {
       const effectivePrimaryColumnWidth = Math.max(
         1,
         Math.min(primaryColumnWidth, width - prefixWidth - 4),
@@ -226,7 +191,6 @@ export class SelectList implements Component {
       const truncatedValueWidth = visibleWidth(truncatedValue);
       const spacing = " ".repeat(Math.max(1, effectivePrimaryColumnWidth - truncatedValueWidth));
       const descriptionStart = prefixWidth + truncatedValueWidth + spacing.length;
-      // -2 for safety
       const remainingWidth = width - descriptionStart - 2;
 
       if (remainingWidth > MIN_DESCRIPTION_WIDTH) {
@@ -251,9 +215,11 @@ export class SelectList implements Component {
 
   private getPrimaryColumnWidth(): number {
     const { min, max } = this.getPrimaryColumnBounds();
-    const widestPrimary = this.filteredItems.reduce((widest, item) => {
-      return Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP);
-    }, 0);
+    const widestPrimary = this.filteredItems.reduce(
+      (widest, item) =>
+        Math.max(widest, visibleWidth(this.getDisplayValue(item)) + PRIMARY_COLUMN_GAP),
+      0,
+    );
 
     return clamp(widestPrimary, min, max);
   }
@@ -269,43 +235,44 @@ export class SelectList implements Component {
       DEFAULT_PRIMARY_COLUMN_WIDTH;
 
     return {
-      min: Math.max(1, Math.min(rawMin, rawMax)),
       max: Math.max(1, Math.max(rawMin, rawMax)),
+      min: Math.max(1, Math.min(rawMin, rawMax)),
     };
   }
 
   private truncatePrimary(
-    item: SelectItem,
+    item: selectListTypes.SelectItem,
     isSelected: boolean,
     maxWidth: number,
     columnWidth: number,
   ): string {
     const displayValue = this.getDisplayValue(item);
-    const truncatedValue = this.layout.truncatePrimary
-      ? this.layout.truncatePrimary({
-          text: displayValue,
-          maxWidth,
-          columnWidth,
-          item,
-          isSelected,
-        })
-      : truncateToWidth(displayValue, maxWidth, "");
+    const truncatedValue =
+      this.layout.truncatePrimary === undefined
+        ? truncateToWidth(displayValue, maxWidth, "")
+        : this.layout.truncatePrimary({
+            columnWidth,
+            isSelected,
+            item,
+            maxWidth,
+            text: displayValue,
+          });
 
     return truncateToWidth(truncatedValue, maxWidth, "");
   }
 
-  private getDisplayValue(item: SelectItem): string {
+  private getDisplayValue(item: selectListTypes.SelectItem): string {
     return item.label || item.value;
   }
 
   private notifySelectionChange(): void {
     const selectedItem = this.filteredItems[this.selectedIndex];
-    if (selectedItem && this.onSelectionChange) {
+    if (selectedItem !== undefined && this.onSelectionChange !== undefined) {
       this.onSelectionChange(selectedItem);
     }
   }
 
-  getSelectedItem(): SelectItem | null {
+  getSelectedItem(): selectListTypes.SelectItem | null {
     const item = this.filteredItems[this.selectedIndex];
     return item || null;
   }

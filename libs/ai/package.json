@@ -19,7 +19,7 @@
     "directory": "libs/ai"
   },
   "bin": {
-    "msa-ai": "dist/cli.js"
+    "msa-ai": "dist/bin/msa-ai.mjs"
   },
   "files": [
     "dist",
@@ -28,8 +28,7 @@
   "type": "module",
   "sideEffects": [
     "./dist/compat.js",
-    "./dist/images.js",
-    "./dist/providers/images/register-builtins.js"
+    "./dist/images.js"
   ],
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -38,13 +37,30 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index.types": {
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
+    },
+    "./models/types": {
+      "source": "./src/models/types.ts",
+      "types": "./dist/models/types.d.ts",
+      "import": "./dist/models/types.js"
+    },
     "./models": {
       "types": "./dist/models.d.ts",
       "import": "./dist/models.js"
     },
+    "./models.types": {
+      "types": "./dist/models.types.d.ts",
+      "import": "./dist/models.types.js"
+    },
     "./compat": {
       "types": "./dist/compat.d.ts",
       "import": "./dist/compat.js"
+    },
+    "./compat.types": {
+      "types": "./dist/compat.types.d.ts",
+      "import": "./dist/compat.types.js"
     },
     "./providers/*": {
       "types": "./dist/providers/*.d.ts",
@@ -62,9 +78,13 @@
       "types": "./dist/oauth.d.ts",
       "import": "./dist/oauth.js"
     },
-    "./bun-oauth": {
-      "types": "./dist/bun-oauth.d.ts",
-      "import": "./dist/bun-oauth.js"
+    "./oauth.types": {
+      "types": "./dist/oauth.types.d.ts",
+      "import": "./dist/oauth.types.js"
+    },
+    "./*.types": {
+      "types": "./dist/*.types.d.ts",
+      "import": "./dist/*.types.js"
     }
   },
   "scripts": {
@@ -72,18 +92,19 @@
     "generate-models": "node scripts/generate-models.ts --strict",
     "hydrate-model-data": "node scripts/generate-models.ts --strict --data-only",
     "generate-model-catalog": "node scripts/generate-models.ts --strict --json-only --json-output ../../.artifacts/model-catalog",
-    "check:model-data": "node scripts/check-model-data.ts",
     "build": "vp run generate-models && vp run build:offline",
-    "build:offline": "vp run check:model-data && tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data",
+    "build:offline": "tsc -p tsconfig.build.json && shx rm -rf dist/providers/data && shx cp -r src/providers/data dist/providers/data && vp pack",
     "test": "vitest --run"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "catalog:",
+    "@effect/platform-node": "catalog:",
     "@google/genai": "catalog:",
     "@msa/telemetry": "workspace:*",
     "effect": "catalog:stack",
     "openai": "catalog:",
     "partial-json": "catalog:",
+    "srvx": "catalog:",
     "typebox": "catalog:"
   },
   "devDependencies": {

@@ -1,15 +1,26 @@
-import { readFileSync } from "node:fs";
+import * as Effect from "effect/Effect";
 
-/** Windows Subsystem for Linux, where Windows executables are reachable through interop. */
-export function isWSL(env: NodeJS.ProcessEnv = process.env): boolean {
-  if (env["WSL_DISTRO_NAME"] || env["WSLENV"]) {
-    return true;
+import platform from "../core/platform/index.ts";
+
+const { envSnapshot } = platform;
+const { readText } = platform.files;
+
+function isWSL(env: NodeJS.ProcessEnv = envSnapshot()): Promise<boolean> {
+  if (
+    (env["WSL_DISTRO_NAME"] !== undefined && env["WSL_DISTRO_NAME"] !== "") ||
+    (env["WSLENV"] !== undefined && env["WSLENV"] !== "")
+  ) {
+    return Effect.runPromise(Effect.succeed(true));
   }
 
-  try {
-    const release = readFileSync("/proc/version", "utf-8");
-    return /microsoft|wsl/i.test(release);
-  } catch {
-    return false;
-  }
+  return readText("/proc/version").then(
+    (release) => /microsoft|wsl/iu.test(release),
+    () => false,
+  );
 }
+
+const wsl = {
+  isWSL,
+};
+
+export default wsl;

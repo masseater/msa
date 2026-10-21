@@ -1,13 +1,14 @@
-import { Data } from "effect";
+import OrchestratorError from "./orchestrator-error.ts";
 
-export class OrchestratorError extends Data.TaggedError("OrchestratorError")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
-
-export function orchestratorError(error: unknown): OrchestratorError {
+function orchestratorError(error: unknown): OrchestratorError {
   return new OrchestratorError({
-    message: error instanceof Error ? error.message : String(error),
     cause: error,
+    message: error instanceof Error ? error.message : String(error),
   });
 }
+
+const errors = {
+  orchestratorError,
+};
+
+export default errors;

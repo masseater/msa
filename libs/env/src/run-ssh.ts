@@ -1,29 +1,27 @@
-import { spawn } from "node:child_process";
+import { Effect, Stream } from "effect";
 
-import { Effect } from "effect";
+import HostKeyChangedError from "./host-key-changed-error.ts";
+import HostKeyUnknownError from "./host-key-unknown-error.ts";
+import platform from "./platform.ts";
+import type runSshTypes from "./run-ssh.types.ts";
+import sshArgs from "./ssh-args.ts";
+import type sshArgsTypes from "./ssh-args.types.ts";
+import SshError from "./ssh-error.ts";
 
-import { HostKeyChangedError } from "./host-key-changed-error.ts";
-import { HostKeyUnknownError } from "./host-key-unknown-error.ts";
-import { sshArguments, type SshTarget } from "./ssh-args.ts";
-import { SshError } from "./ssh-error.ts";
+const { spawnProcess } = platform;
+const { sshArguments } = sshArgs;
 
 const SSH_TIMEOUT_MS = 60_000;
 
-export type SshFailure = SshError | HostKeyChangedError | HostKeyUnknownError;
-
-export interface SshRun {
-  readonly target: SshTarget;
-  readonly command: string;
-  readonly stdin?: Uint8Array;
-  readonly args?: string[];
-  readonly timeoutMs?: number;
-}
-
-export function powershell(script: string): string {
+function powershell(script: string): string {
   return `powershell -NoProfile -NonInteractive -EncodedCommand ${Buffer.from(script, "utf16le").toString("base64")}`;
 }
 
-function exitFailure(target: SshTarget, code: number | null, diagnostics: string): SshFailure {
+function exitFailure(
+  target: sshArgsTypes.SshTarget,
+  code: number | null,
+  diagnostics: string,
+): runSshTypes.SshFailure {
   if (/REMOTE HOST IDENTIFICATION HAS CHANGED/u.test(diagnostics)) {
     return new HostKeyChangedError(
       `The host key of ${target.host} changed; remove the old key to continue`,
@@ -39,40 +37,37 @@ function exitFailure(target: SshTarget, code: number | null, diagnostics: string
   );
 }
 
-export function runSsh(run: SshRun): Effect.Effect<string, SshFailure> {
+const collect = (target: sshArgsTypes.SshTarget, run: runSshTypes.SshRun, stderr: Uint8Array[]) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const child = yield* spawnProcess({
+        args: [...(run.args ?? sshArguments(target)), run.command],
+        command: target.ssh ?? "ssh",
+        stdin: Stream.make(run.stdin ?? new Uint8Array(0)),
+      }).pipe(Effect.mapError((error) => new SshError(error.message, null, "")));
+      const [stdout, , code] = yield* Effect.all(
+        [
+          Stream.mkString(Stream.decodeText(child.stdout)),
+          Stream.runForEach(child.stderr, (chunk) =>
+            Effect.sync(() => {
+              stderr.push(chunk);
+            }),
+          ),
+          child.exitCode,
+        ],
+        { concurrency: "unbounded" },
+      );
+      if (code === 0) return stdout;
+      return yield* exitFailure(target, code, Buffer.concat(stderr).toString("utf8"));
+    }),
+  );
+
+function runSsh(run: runSshTypes.SshRun): Effect.Effect<string, runSshTypes.SshFailure> {
   return Effect.suspend(() => {
     const { target } = run;
-    const stdout: Buffer[] = [];
-    const stderr: Buffer[] = [];
+    const stderr: Uint8Array[] = [];
     const timeoutMs = run.timeoutMs ?? SSH_TIMEOUT_MS;
-    const finished = Effect.callback<string, SshFailure>((resume) => {
-      const child = spawn(
-        target.ssh ?? "ssh",
-        [...(run.args ?? sshArguments(target)), run.command],
-        {
-          stdio: ["pipe", "pipe", "pipe"],
-        },
-      );
-      child.stdout.on("data", (chunk: Buffer) => stdout.push(chunk));
-      child.stderr.on("data", (chunk: Buffer) => stderr.push(chunk));
-      child.stdin.on("error", () => undefined);
-      child.on("error", (error) => {
-        resume(Effect.fail(new SshError(error.message, null, "")));
-      });
-      child.on("close", (code) => {
-        const diagnostics = Buffer.concat(stderr).toString("utf8");
-        resume(
-          code === 0
-            ? Effect.succeed(Buffer.concat(stdout).toString("utf8"))
-            : Effect.fail(exitFailure(target, code, diagnostics)),
-        );
-      });
-      child.stdin.end(run.stdin ?? new Uint8Array(0));
-      return Effect.sync(() => {
-        child.kill();
-      });
-    });
-    return Effect.timeoutOrElse(finished, {
+    return Effect.timeoutOrElse(collect(target, run, stderr), {
       duration: timeoutMs,
       orElse: () => {
         const diagnostics = Buffer.concat(stderr).toString("utf8");
@@ -87,3 +82,10 @@ export function runSsh(run: SshRun): Effect.Effect<string, SshFailure> {
     });
   });
 }
+
+const runSshModule = {
+  powershell,
+  runSsh,
+};
+
+export default runSshModule;

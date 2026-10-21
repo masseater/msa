@@ -1,16 +1,10 @@
-import type { DatabaseSync } from "node:sqlite";
+import type DatabaseSync from "../platform/node/sqlite.ts";
+import dbModule from "./db.ts";
+import textModule from "./text.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
-import { db } from "./db.ts";
-import { searchQuery, segmentWords } from "./text.ts";
-import type {
-  Assignment,
-  Report,
-  ReportHit,
-  Thread,
-  ThreadRole,
-  ThreadStatus,
-  ThreadView,
-} from "./types.ts";
+const { db } = dbModule;
+const { searchQuery, segmentWords } = textModule;
 
 interface ThreadRow {
   id: string;
@@ -41,42 +35,42 @@ interface ReportRow {
   created_at: number;
 }
 
-function toThread(row: ThreadRow): Thread {
+function toThread(row: ThreadRow): orchestratorTypesTypes.Thread {
   return {
-    id: row.id,
-    project: row.project,
-    model: row.model,
-    thinkingLevel: row.thinking_level as Thread["thinkingLevel"],
-    cwd: row.cwd,
-    status: row.status as ThreadStatus,
-    sessionFile: row.session_file,
     createdAt: row.created_at,
+    cwd: row.cwd,
+    id: row.id,
+    model: row.model,
+    project: row.project,
+    sessionFile: row.session_file,
+    status: row.status as orchestratorTypesTypes.ThreadStatus,
+    thinkingLevel: row.thinking_level as orchestratorTypesTypes.Thread["thinkingLevel"],
     updatedAt: row.updated_at,
   };
 }
 
-function toAssignment(row: AssignmentRow): Assignment {
+function toAssignment(row: AssignmentRow): orchestratorTypesTypes.Assignment {
   return {
+    createdAt: row.created_at,
+    role: row.role as orchestratorTypesTypes.ThreadRole,
     taskId: row.task_id,
     threadId: row.thread_id,
-    role: row.role as ThreadRole,
-    createdAt: row.created_at,
   };
 }
 
-function toReport(row: ReportRow): Report {
+function toReport(row: ReportRow): orchestratorTypesTypes.Report {
   return {
-    id: row.id,
-    taskId: row.task_id,
-    threadId: row.thread_id,
-    role: row.role as ThreadRole,
-    status: row.status as ThreadStatus,
     content: row.content,
     createdAt: row.created_at,
+    id: row.id,
+    role: row.role as orchestratorTypesTypes.ThreadRole,
+    status: row.status as orchestratorTypesTypes.ThreadStatus,
+    taskId: row.task_id,
+    threadId: row.thread_id,
   };
 }
 
-function insertThread(database: DatabaseSync, thread: Thread): void {
+function insertThread(database: DatabaseSync, thread: orchestratorTypesTypes.Thread): void {
   database
     .prepare(
       `INSERT INTO threads (id, project, model, thinking_level, cwd, status, session_file,
@@ -95,7 +89,7 @@ function insertThread(database: DatabaseSync, thread: Thread): void {
     );
 }
 
-function getThread(database: DatabaseSync, id: string): Thread | undefined {
+function getThread(database: DatabaseSync, id: string): orchestratorTypesTypes.Thread | undefined {
   const row = database.prepare("SELECT * FROM threads WHERE id = ?").get(id) as
     | ThreadRow
     | undefined;
@@ -104,15 +98,17 @@ function getThread(database: DatabaseSync, id: string): Thread | undefined {
 
 const THREAD_COLUMNS: Readonly<Record<string, string>> = {
   model: "model",
-  thinkingLevel: "thinking_level",
-  status: "status",
   sessionFile: "session_file",
+  status: "status",
+  thinkingLevel: "thinking_level",
 };
 
 function updateThread(
   database: DatabaseSync,
   id: string,
-  patch: Partial<Pick<Thread, "model" | "thinkingLevel" | "status" | "sessionFile">>,
+  patch: Partial<
+    Pick<orchestratorTypesTypes.Thread, "model" | "thinkingLevel" | "status" | "sessionFile">
+  >,
   now: number,
 ): void {
   const entries = db
@@ -125,21 +121,24 @@ function updateThread(
     .run(...entries.map(([, value]) => value), now, id);
 }
 
-function listThreads(database: DatabaseSync, project: string): Thread[] {
+function listThreads(database: DatabaseSync, project: string): orchestratorTypesTypes.Thread[] {
   const rows = database
     .prepare("SELECT * FROM threads WHERE project = ? ORDER BY created_at, id")
     .all(project) as unknown as ThreadRow[];
   return rows.map(toThread);
 }
 
-function runningThreads(database: DatabaseSync, project: string): Thread[] {
+function runningThreads(database: DatabaseSync, project: string): orchestratorTypesTypes.Thread[] {
   const rows = database
     .prepare("SELECT * FROM threads WHERE project = ? AND status = 'running'")
     .all(project) as unknown as ThreadRow[];
   return rows.map(toThread);
 }
 
-function insertAssignment(database: DatabaseSync, assignment: Assignment): void {
+function insertAssignment(
+  database: DatabaseSync,
+  assignment: orchestratorTypesTypes.Assignment,
+): void {
   database
     .prepare(
       "INSERT OR IGNORE INTO assignments (task_id, thread_id, role, created_at) VALUES (?, ?, ?, ?)",
@@ -147,7 +146,10 @@ function insertAssignment(database: DatabaseSync, assignment: Assignment): void 
     .run(assignment.taskId, assignment.threadId, assignment.role, assignment.createdAt);
 }
 
-function listAssignments(database: DatabaseSync, project: string): Assignment[] {
+function listAssignments(
+  database: DatabaseSync,
+  project: string,
+): orchestratorTypesTypes.Assignment[] {
   const rows = database
     .prepare(
       `SELECT a.* FROM assignments a JOIN tasks t ON t.id = a.task_id
@@ -157,7 +159,10 @@ function listAssignments(database: DatabaseSync, project: string): Assignment[] 
   return rows.map(toAssignment);
 }
 
-function assignmentsOfThread(database: DatabaseSync, threadId: string): Assignment[] {
+function assignmentsOfThread(
+  database: DatabaseSync,
+  threadId: string,
+): orchestratorTypesTypes.Assignment[] {
   const rows = database
     .prepare("SELECT * FROM assignments WHERE thread_id = ? ORDER BY created_at, task_id")
     .all(threadId) as unknown as AssignmentRow[];
@@ -168,26 +173,29 @@ function deleteAssignmentsOfThread(database: DatabaseSync, threadId: string): vo
   database.prepare("DELETE FROM assignments WHERE thread_id = ?").run(threadId);
 }
 
-function assignmentsOfTask(database: DatabaseSync, taskId: string): Assignment[] {
+function assignmentsOfTask(
+  database: DatabaseSync,
+  taskId: string,
+): orchestratorTypesTypes.Assignment[] {
   const rows = database
     .prepare("SELECT * FROM assignments WHERE task_id = ? ORDER BY created_at, thread_id")
     .all(taskId) as unknown as AssignmentRow[];
   return rows.map(toAssignment);
 }
 
-function threadViews(database: DatabaseSync, project: string): ThreadView[] {
+function threadViews(database: DatabaseSync, project: string): orchestratorTypesTypes.ThreadView[] {
   const threads = listThreads(database, project);
   const assignments = listAssignments(database, project);
   return threads.map((thread) =>
     Object.assign(thread, {
       tasks: assignments
         .filter((assignment) => assignment.threadId === thread.id)
-        .map((assignment) => ({ taskId: assignment.taskId, role: assignment.role })),
+        .map((assignment) => ({ role: assignment.role, taskId: assignment.taskId })),
     }),
   );
 }
 
-function insertReport(database: DatabaseSync, report: Report): void {
+function insertReport(database: DatabaseSync, report: orchestratorTypesTypes.Report): void {
   db.transaction(database, () => {
     database
       .prepare(
@@ -209,14 +217,14 @@ function insertReport(database: DatabaseSync, report: Report): void {
   });
 }
 
-function reportsOfTask(database: DatabaseSync, taskId: string): Report[] {
+function reportsOfTask(database: DatabaseSync, taskId: string): orchestratorTypesTypes.Report[] {
   const rows = database
     .prepare("SELECT * FROM reports WHERE task_id = ? ORDER BY created_at, id")
     .all(taskId) as unknown as ReportRow[];
   return rows.map(toReport);
 }
 
-function listReports(database: DatabaseSync, project: string): Report[] {
+function listReports(database: DatabaseSync, project: string): orchestratorTypesTypes.Report[] {
   const rows = database
     .prepare(
       `SELECT r.* FROM reports r JOIN tasks t ON t.id = r.task_id
@@ -231,7 +239,7 @@ function searchReports(
   project: string,
   text: string,
   limit: number,
-): ReportHit[] {
+): orchestratorTypesTypes.ReportHit[] {
   const query = searchQuery(text);
   if (query === "") return [];
   const rows = database
@@ -255,20 +263,26 @@ function searchReports(
   }));
 }
 
-export const threadStore = {
-  insertThread,
-  getThread,
-  updateThread,
-  listThreads,
-  runningThreads,
-  insertAssignment,
-  listAssignments,
-  assignmentsOfThread,
+const threadStore = {
   assignmentsOfTask,
+  assignmentsOfThread,
   deleteAssignmentsOfThread,
-  threadViews,
+  getThread,
+  insertAssignment,
   insertReport,
-  reportsOfTask,
+  insertThread,
+  listAssignments,
   listReports,
+  listThreads,
+  reportsOfTask,
+  runningThreads,
   searchReports,
+  threadViews,
+  updateThread,
 };
+
+const threadStoreModule = {
+  threadStore,
+};
+
+export default threadStoreModule;

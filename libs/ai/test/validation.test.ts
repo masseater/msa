@@ -2,33 +2,35 @@ import { Type } from "typebox";
 import { Compile } from "typebox/compile";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { JsonValue, Tool, ToolCall } from "../src/types.ts";
-import { validateToolArguments } from "../src/utils/validation.ts";
+import type typesModule from "../src/types.types.ts";
+import validation from "../src/utils/validation.ts";
+
+const { validateToolArguments } = validation;
 
 function createToolCallWithPlainSchema(
-  schema: Tool["parameters"],
+  schema: typesModule.Tool["parameters"],
   value: unknown,
 ): {
-  tool: Tool;
-  toolCall: ToolCall;
+  tool: typesModule.Tool;
+  toolCall: typesModule.ToolCall;
 } {
-  const tool: Tool = {
-    name: "echo",
+  const tool: typesModule.Tool = {
     description: "Echo tool",
+    name: "echo",
     parameters: {
-      type: "object",
       properties: {
         value: schema,
       },
       required: ["value"],
-    } as Tool["parameters"],
+      type: "object",
+    } as typesModule.Tool["parameters"],
   };
 
-  const toolCall: ToolCall = {
-    type: "toolCall",
+  const toolCall: typesModule.ToolCall = {
+    arguments: { value: value as typesModule.JsonValue },
     id: "tool-1",
     name: "echo",
-    arguments: { value: value as JsonValue },
+    type: "toolCall",
   };
 
   return { tool, toolCall };
@@ -37,18 +39,18 @@ function createToolCallWithPlainSchema(
 describe("validateToolArguments", () => {
   it("still validates when Function constructor is unavailable", () => {
     const originalFunction = globalThis.Function;
-    const tool: Tool = {
-      name: "echo",
+    const tool: typesModule.Tool = {
       description: "Echo tool",
+      name: "echo",
       parameters: Type.Object({
         count: Type.Number(),
       }),
     };
-    const toolCall: ToolCall = {
-      type: "toolCall",
+    const toolCall: typesModule.ToolCall = {
+      arguments: { count: "42" as unknown as number },
       id: "tool-1",
       name: "echo",
-      arguments: { count: "42" as unknown as number },
+      type: "toolCall",
     };
 
     globalThis.Function = (() => {
@@ -61,35 +63,49 @@ describe("validateToolArguments", () => {
       globalThis.Function = originalFunction;
     }
   });
+});
 
+describe("validateToolArguments", () => {
   it("coerces serialized plain JSON schemas with AJV-compatible primitive rules", () => {
     const passingCases: Array<{
-      schema: Tool["parameters"];
+      schema: typesModule.Tool["parameters"];
       input: unknown;
       expected: unknown;
     }> = [
-      { schema: { type: "number" } as Tool["parameters"], input: "42", expected: 42 },
-      { schema: { type: "number" } as Tool["parameters"], input: true, expected: 1 },
-      { schema: { type: "number" } as Tool["parameters"], input: null, expected: 0 },
-      { schema: { type: "integer" } as Tool["parameters"], input: "42", expected: 42 },
-      { schema: { type: "boolean" } as Tool["parameters"], input: "true", expected: true },
-      { schema: { type: "boolean" } as Tool["parameters"], input: "false", expected: false },
-      { schema: { type: "boolean" } as Tool["parameters"], input: 1, expected: true },
-      { schema: { type: "boolean" } as Tool["parameters"], input: 0, expected: false },
-      { schema: { type: "string" } as Tool["parameters"], input: null, expected: "" },
-      { schema: { type: "string" } as Tool["parameters"], input: true, expected: "true" },
-      { schema: { type: "null" } as Tool["parameters"], input: "", expected: null },
-      { schema: { type: "null" } as Tool["parameters"], input: 0, expected: null },
-      { schema: { type: "null" } as Tool["parameters"], input: false, expected: null },
+      { expected: 42, input: "42", schema: { type: "number" } as typesModule.Tool["parameters"] },
+      { expected: 1, input: true, schema: { type: "number" } as typesModule.Tool["parameters"] },
+      { expected: 0, input: null, schema: { type: "number" } as typesModule.Tool["parameters"] },
+      { expected: 42, input: "42", schema: { type: "integer" } as typesModule.Tool["parameters"] },
       {
-        schema: { type: ["number", "string"] } as Tool["parameters"],
-        input: "1",
-        expected: "1",
+        expected: true,
+        input: "true",
+        schema: { type: "boolean" } as typesModule.Tool["parameters"],
       },
       {
-        schema: { type: ["boolean", "number"] } as Tool["parameters"],
+        expected: false,
+        input: "false",
+        schema: { type: "boolean" } as typesModule.Tool["parameters"],
+      },
+      { expected: true, input: 1, schema: { type: "boolean" } as typesModule.Tool["parameters"] },
+      { expected: false, input: 0, schema: { type: "boolean" } as typesModule.Tool["parameters"] },
+      { expected: "", input: null, schema: { type: "string" } as typesModule.Tool["parameters"] },
+      {
+        expected: "true",
+        input: true,
+        schema: { type: "string" } as typesModule.Tool["parameters"],
+      },
+      { expected: null, input: "", schema: { type: "null" } as typesModule.Tool["parameters"] },
+      { expected: null, input: 0, schema: { type: "null" } as typesModule.Tool["parameters"] },
+      { expected: null, input: false, schema: { type: "null" } as typesModule.Tool["parameters"] },
+      {
+        expected: "1",
         input: "1",
+        schema: { type: ["number", "string"] } as typesModule.Tool["parameters"],
+      },
+      {
         expected: 1,
+        input: "1",
+        schema: { type: ["boolean", "number"] } as typesModule.Tool["parameters"],
       },
     ];
 
@@ -98,65 +114,69 @@ describe("validateToolArguments", () => {
       expect(validateToolArguments(tool, toolCall)).toEqual({ value: testCase.expected });
     }
   });
+});
 
+describe("validateToolArguments", () => {
   it("treats null as omission for optional non-nullable properties", () => {
-    const tool: Tool = {
-      name: "echo",
+    const tool: typesModule.Tool = {
       description: "Echo tool",
+      name: "echo",
       parameters: Type.Object({
-        path: Type.String(),
-        offset: Type.Optional(Type.Number()),
-        nullable: Type.Optional(Type.Union([Type.String(), Type.Null()])),
         metadata: Type.Object({ enabled: Type.Optional(Type.Boolean()) }),
+        nullable: Type.Optional(Type.Union([Type.String(), Type.Null()])),
+        offset: Type.Optional(Type.Number()),
+        path: Type.String(),
       }),
     };
-    const toolCall: ToolCall = {
-      type: "toolCall",
+    const toolCall: typesModule.ToolCall = {
+      arguments: { metadata: { enabled: null }, nullable: null, offset: null, path: "file.txt" },
       id: "tool-1",
       name: "echo",
-      arguments: { path: "file.txt", offset: null, nullable: null, metadata: { enabled: null } },
+      type: "toolCall",
     };
 
     expect(validateToolArguments(tool, toolCall)).toEqual({
-      path: "file.txt",
-      nullable: null,
       metadata: {},
+      nullable: null,
+      path: "file.txt",
     });
   });
 
   it("preserves optional nulls whose referenced schema is nullable", () => {
-    const tool: Tool = {
-      name: "echo",
+    const tool: typesModule.Tool = {
       description: "Echo tool",
+      name: "echo",
       parameters: {
-        type: "object",
-        properties: { value: { $ref: "#/$defs/value" } },
         $defs: { value: { anyOf: [{ type: "number" }, { type: "null" }] } },
-      } as Tool["parameters"],
+        properties: { value: { $ref: "#/$defs/value" } },
+        type: "object",
+      } as typesModule.Tool["parameters"],
     };
-    const toolCall: ToolCall = {
-      type: "toolCall",
+    const toolCall: typesModule.ToolCall = {
+      arguments: { value: null },
       id: "tool-1",
       name: "echo",
-      arguments: { value: null },
+      type: "toolCall",
     };
 
     expect(validateToolArguments(tool, toolCall)).toEqual({ value: null });
   });
+});
 
+describe("validateToolArguments", () => {
   it("preserves a value that already matches a nullable union arm", () => {
-    const tool: Tool = {
-      name: "echo",
+    const tool: typesModule.Tool = {
       description: "Echo tool",
+      name: "echo",
       parameters: Type.Object({
         value: Type.Union([Type.Number(), Type.Null()]),
       }),
     };
-    const toolCall: ToolCall = {
-      type: "toolCall",
+    const toolCall: typesModule.ToolCall = {
+      arguments: { value: null },
       id: "tool-1",
       name: "echo",
-      arguments: { value: null },
+      type: "toolCall",
     };
 
     expect(validateToolArguments(tool, toolCall)).toEqual({ value: null });
@@ -164,7 +184,7 @@ describe("validateToolArguments", () => {
 
   it("preserves a value that already matches a oneOf nullable union arm", () => {
     const { tool, toolCall } = createToolCallWithPlainSchema(
-      { oneOf: [{ type: "number" }, { type: "null" }] } as Tool["parameters"],
+      { oneOf: [{ type: "number" }, { type: "null" }] } as typesModule.Tool["parameters"],
       null,
     );
 
@@ -173,7 +193,7 @@ describe("validateToolArguments", () => {
 
   it("still coerces nullable unions when the original value does not match any arm", () => {
     const { tool, toolCall } = createToolCallWithPlainSchema(
-      { anyOf: [{ type: "number" }, { type: "null" }] } as Tool["parameters"],
+      { anyOf: [{ type: "number" }, { type: "null" }] } as typesModule.Tool["parameters"],
       "42",
     );
 
@@ -182,10 +202,9 @@ describe("validateToolArguments", () => {
 
   it("accepts null for nullable array schemas with items", () => {
     const { tool, toolCall } = createToolCallWithPlainSchema(
-      { type: ["array", "null"], items: { type: "string" } } as Tool["parameters"],
+      { items: { type: "string" }, type: ["array", "null"] } as typesModule.Tool["parameters"],
       null,
     );
-    // The CSP test above selects TypeBox's process-wide interpreted fallback, so exercise the generated validator explicitly.
     const generatedCheck = new Function(Compile(tool.parameters).Code())() as (
       value: unknown,
     ) => boolean;
@@ -193,16 +212,18 @@ describe("validateToolArguments", () => {
     expect(generatedCheck(toolCall.arguments)).toBe(true);
     expect(validateToolArguments(tool, toolCall)).toEqual({ value: null });
   });
+});
 
+describe("validateToolArguments", () => {
   it("rejects invalid coercions for serialized plain JSON schemas", () => {
     const failingCases: Array<{
-      schema: Tool["parameters"];
+      schema: typesModule.Tool["parameters"];
       input: unknown;
     }> = [
-      { schema: { type: "boolean" } as Tool["parameters"], input: "1" },
-      { schema: { type: "boolean" } as Tool["parameters"], input: "0" },
-      { schema: { type: "null" } as Tool["parameters"], input: "null" },
-      { schema: { type: "integer" } as Tool["parameters"], input: "42.1" },
+      { input: "1", schema: { type: "boolean" } as typesModule.Tool["parameters"] },
+      { input: "0", schema: { type: "boolean" } as typesModule.Tool["parameters"] },
+      { input: "null", schema: { type: "null" } as typesModule.Tool["parameters"] },
+      { input: "42.1", schema: { type: "integer" } as typesModule.Tool["parameters"] },
     ];
 
     for (const testCase of failingCases) {
@@ -210,19 +231,19 @@ describe("validateToolArguments", () => {
       expect(() => validateToolArguments(tool, toolCall)).toThrow("Validation failed");
     }
   });
-  // #10897
+
   it("reports malformed arguments JSON instead of validating empty arguments", () => {
-    const tool: Tool = {
-      name: "echo",
+    const tool: typesModule.Tool = {
       description: "Echo tool",
+      name: "echo",
       parameters: Type.Object({ value: Type.Optional(Type.String()) }),
     };
-    const toolCall: ToolCall = {
-      type: "toolCall",
-      id: "tool-1",
-      name: "echo",
+    const toolCall: typesModule.ToolCall = {
       arguments: {},
       argumentsError: "Unexpected token",
+      id: "tool-1",
+      name: "echo",
+      type: "toolCall",
     };
 
     expect(() => validateToolArguments(tool, toolCall)).toThrow(

@@ -1,17 +1,30 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { basename, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type ExternalEditorResult,
-  editInExternalEditor,
-} from "../src/modes/interactive/external-editor.ts";
+import externalEditor from "../src/modes/interactive/external-editor.ts";
+import type externalEditorTypes from "../src/modes/interactive/external-editor.types.ts";
+
+const { editInExternalEditor } = externalEditor;
+
+const {
+  awaited,
+  basenameOf,
+  dirnameOf,
+  fromJsonText,
+  joinPath,
+  makeTempDir,
+  pathExists,
+  readTextFile,
+  removePath,
+  runTest,
+} = testing;
 
 const editorFixturePath = fileURLToPath(
-  new URL("./fixtures/fake-external-editor.mjs", import.meta.url),
+  new URL("./fixtures/fake-external-editor.ts", import.meta.url),
 );
 
 interface EditorCapture {
@@ -21,50 +34,77 @@ interface EditorCapture {
   directoryMode: number;
 }
 
-async function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
-  result: ExternalEditorResult;
+function runExternalEditor(fixtureFlag?: "--fail" | "--empty"): Promise<{
+  result: externalEditorTypes.ExternalEditorResult;
   capture: EditorCapture;
 }> {
-  const testDirectory = mkdtempSync(join(tmpdir(), "msa-external-editor-test-"));
-  const capturePath = join(testDirectory, "capture.json");
-  try {
-    const result = await editInExternalEditor({
-      command: `${process.execPath} ${editorFixturePath} ${capturePath}${fixtureFlag ? ` ${fixtureFlag}` : ""}`,
-      content: "original",
-    });
-    const capture = JSON.parse(readFileSync(capturePath, "utf-8")) as EditorCapture;
-    return { result, capture };
-  } finally {
-    rmSync(testDirectory, { recursive: true, force: true });
-  }
+  return runTest(
+    Effect.gen(function* () {
+      const testDirectory = yield* makeTempDir("msa-external-editor-test-");
+      const capturePath = joinPath(testDirectory, "capture.json");
+      try {
+        const result = yield* awaited(
+          editInExternalEditor({
+            command: `${process.execPath} ${editorFixturePath} ${capturePath}${fixtureFlag !== undefined && fixtureFlag.length > 0 ? ` ${fixtureFlag}` : ""}`,
+            content: "original",
+          }),
+        );
+        const capture = (yield* fromJsonText(yield* readTextFile(capturePath))) as EditorCapture;
+        return yield* awaited({ capture, result });
+      } finally {
+        yield* removePath(testDirectory);
+      }
+    }),
+  );
 }
 
+const editsAPromptInsideAPrivateTemporary = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { result, capture } = yield* awaited(runExternalEditor());
+      const directory = dirnameOf(capture.filePath);
+
+      expect(result).toEqual({ content: "edited", status: "complete" });
+      expect(dirnameOf(directory)).toBe(tmpdir());
+      expect(basenameOf(directory)).toMatch(/^msa-editor-.+$/u);
+      expect(basenameOf(capture.filePath)).toBe("prompt.md");
+      expect(capture.entries).toEqual(["prompt.md"]);
+      expect(capture.content).toBe("original");
+      if (process.platform !== "win32") {
+        expect(capture.directoryMode & 0o077).toBe(0);
+      }
+      expect(yield* pathExists(directory)).toBe(false);
+    }),
+  );
+
+const keepsTheOriginalContentWhenTheEditor = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { result, capture } = yield* awaited(runExternalEditor("--fail"));
+
+      expect(result).toEqual({ status: "failed" });
+      expect(yield* pathExists(dirnameOf(capture.filePath))).toBe(false);
+    }),
+  );
+
+const returnsEmptyContentWhenTheEditorClears = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { result } = yield* awaited(runExternalEditor("--empty"));
+
+      expect(result).toEqual({ content: "", status: "complete" });
+    }),
+  );
+
 describe("editInExternalEditor", () => {
-  it("edits a prompt inside a private temporary directory", async () => {
-    const { result, capture } = await runExternalEditor();
-    const directory = dirname(capture.filePath);
+  it("edits a prompt inside a private temporary directory", editsAPromptInsideAPrivateTemporary);
 
-    expect(result).toEqual({ status: "complete", content: "edited" });
-    expect(dirname(directory)).toBe(tmpdir());
-    expect(basename(directory)).toMatch(/^msa-editor-.+$/);
-    expect(basename(capture.filePath)).toBe("prompt.md");
-    expect(capture.entries).toEqual(["prompt.md"]);
-    expect(capture.content).toBe("original");
-    if (process.platform !== "win32") {
-      expect(capture.directoryMode & 0o077).toBe(0);
-    }
-    expect(existsSync(directory)).toBe(false);
-  });
-
-  it("keeps the original content when the editor exits unsuccessfully", async () => {
-    const { result, capture } = await runExternalEditor("--fail");
-
-    expect(result).toEqual({ status: "failed" });
-    expect(existsSync(dirname(capture.filePath))).toBe(false);
-  });
-  it("returns empty content when the editor clears the prompt", async () => {
-    const { result } = await runExternalEditor("--empty");
-
-    expect(result).toEqual({ status: "complete", content: "" });
-  });
+  it(
+    "keeps the original content when the editor exits unsuccessfully",
+    keepsTheOriginalContentWhenTheEditor,
+  );
+  it(
+    "returns empty content when the editor clears the prompt",
+    returnsEmptyContentWhenTheEditorClears,
+  );
 });

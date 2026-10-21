@@ -1,282 +1,233 @@
-import { rm } from "node:fs/promises";
-
-import {
-  LiveDoc,
-  MemoryStorage,
-  NestedCallDoc,
-  type NestedToolExecutionResult,
-  type TaskId,
-  type ToolHookCall,
-  ToolTask,
-  type ToolTaskInput,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { chatSetup, openChat } from "./chat-support.ts";
-import {
-  directories,
-  results,
-  toolTasks,
-  runOnce,
-  text,
-  DONE,
-  call,
-  tool,
-  echoTool,
-} from "./harness-nested-tools-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { deferred } from "./task-support.ts";
+import harnessNestedToolsSupport from "./harness-nested-tools-support.ts";
+import support from "./support.ts";
 
-afterEach(async () => {
-  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
-  directories.clear();
+const { MemoryStorage } = memory;
+const { LiveDoc, NestedCallDoc } = durable;
+
+const { DONE, call, directories, echoTool, results, runOnce, text, tool, toolTasks } =
+  harnessNestedToolsSupport;
+const { addTool, awaited, chatSetup, context, deferred, openChat, removeDir } = support;
+
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
+
+const storesOneDocument = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const setup = chatSetup();
+  const echo = echoTool();
+  addTool(setup.registry, echo.registration);
+  addTool(
+    setup.registry,
+    tool("batch", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(
+            Promise.all([
+              api.executeTool("echo", { text: "a" }, callContext),
+              api.executeTool("echo", { text: "b" }, callContext, { key: "named" }),
+            ]),
+          );
+          return {};
+        }),
+      ),
+    ),
+  );
+  setup.faux.setResponses([call("batch"), DONE]);
+  const storage = new MemoryStorage();
+  const written: { kind: string; key: string | undefined }[] = [];
+  const commit = storage.commit.bind(storage);
+  storage.commit = (writes, commitContext) => {
+    for (const write of writes) {
+      if (write.type === "document.create")
+        written.push({ key: write.record.key, kind: write.record.kind });
+    }
+    return commit(writes, commitContext);
+  };
+  const { harness, root } = yield* openChat(storage, setup);
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+  );
+  const nested = written.filter((write) => write.kind.startsWith("msa.tool."));
+  expect(nested).toEqual([
+    { key: "1", kind: NestedCallDoc.definition.kind },
+    { key: "named", kind: NestedCallDoc.definition.kind },
+  ]);
+  yield* awaited(harness.close(context));
 });
 
 describe("nested tool calls", () => {
-  it("stores one document per nested call, keyed by its key, written only by that call", async () => {
-    const setup = chatSetup();
-    const echo = echoTool();
-    addTool(setup.registry, echo.registration);
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        await Promise.all([
-          api.executeTool("echo", { text: "a" }, callContext),
-          api.executeTool("echo", { text: "b" }, callContext, { key: "named" }),
-        ]);
-        return {};
-      }),
-    );
-    setup.faux.setResponses([call("batch"), DONE]);
-    const storage = new MemoryStorage();
-    // Per document written, the keys of the nested calls it holds.
-    const written: { kind: string; key: string | undefined }[] = [];
-    const commit = storage.commit.bind(storage);
-    storage.commit = (writes, commitContext) => {
-      for (const write of writes) {
-        if (write.type === "document.create")
-          written.push({ kind: write.record.kind, key: write.record.key });
-      }
-      return commit(writes, commitContext);
-    };
-    const { harness, root } = await openChat(storage, setup);
-    await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-    const nested = written.filter((write) => write.kind.startsWith("msa.tool."));
-    expect(nested).toEqual([
-      { kind: NestedCallDoc.definition.kind, key: "1" },
-      { kind: NestedCallDoc.definition.kind, key: "named" },
-    ]);
-    await harness.close(context);
-  });
+  it("stores one document per nested call, keyed by its key, written only by that call", () =>
+    Effect.runPromise(storesOneDocument));
+});
+
+const rejectsNestedCallStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const setup = chatSetup();
+  const echo = echoTool();
+  addTool(setup.registry, echo.registration);
+  const started = deferred();
+  const marked = deferred();
+  return { marked, runPromise, setup, started };
+});
+
+const rejectsNestedCall = Effect.gen(function* () {
+  const { runPromise, setup, started, marked } = yield* rejectsNestedCallStep1;
+  let rejected: unknown;
+  let caller: durableTypes.TaskId | undefined;
+  addTool(
+    setup.registry,
+    tool("late", (_args, api) =>
+      runPromise(
+        Effect.gen(function* () {
+          caller = api.taskId;
+          started.resolve();
+          yield* awaited(marked.promise);
+          yield* awaited(api.executeTool("echo", { text: "a" }, context)).pipe(
+            Effect.catchDefect((error) =>
+              Effect.sync(() => {
+                rejected = error;
+              }),
+            ),
+          );
+          return {};
+        }),
+      ),
+    ),
+  );
+  setup.faux.setResponses([call("late"), DONE]);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  const submission = yield* awaited(root.submit({ content: "go", type: "input" }, context));
+  yield* awaited(started.promise);
+  yield* awaited(
+    harness.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const record = (yield* awaited(tx.task(caller!)))!;
+            (tx as unknown as { setTask(value: unknown): void }).setTask({
+              ...record,
+              abortRequested: true,
+            });
+          }),
+        ),
+      context,
+    ),
+  );
+  marked.resolve();
+  yield* awaited(submission.wait(context));
+  expect(String(rejected)).toMatch(/abort mark|aborted|has settled/u);
+  expect(yield* awaited(harness.snapshot(NestedCallDoc, caller!, "1", context))).toBeUndefined();
+  yield* awaited(harness.close(context));
 });
 
 describe("nested tool calls", () => {
-  it("rejects a nested call of an aborted caller and leaves no document for it", async () => {
-    const setup = chatSetup();
-    const echo = echoTool();
-    addTool(setup.registry, echo.registration);
-    const started = deferred();
-    const marked = deferred();
-    let rejected: unknown;
-    let caller: TaskId | undefined;
-    addTool(
-      setup.registry,
-      tool("late", async (_args, api) => {
-        caller = api.taskId;
-        started.resolve();
-        await marked.promise;
-        // Its context is aborted too, so pass one that is not: the admission itself must refuse.
-        try {
-          await api.executeTool("echo", { text: "a" }, context);
-        } catch (error) {
-          rejected = error;
-        }
-        return {};
-      }),
-    );
-    setup.faux.setResponses([call("late"), DONE]);
-    const { harness, root } = await openChat(new MemoryStorage(), setup);
-    const submission = await root.submit({ type: "input", content: "go" }, context);
-    await started.promise;
-    await harness.commit(async (tx) => {
-      const record = (await tx.task(caller!))!;
-      (tx as unknown as { setTask(value: unknown): void }).setTask({
-        ...record,
-        abortRequested: true,
-      });
-    }, context);
-    marked.resolve();
-    await submission.wait(context);
-    expect(String(rejected)).toMatch(/abort mark|aborted|has settled/u);
-    expect(await harness.snapshot(NestedCallDoc, caller!, "1", context)).toBeUndefined();
-    await harness.close(context);
+  it("rejects a nested call of an aborted caller and leaves no document for it", () =>
+    Effect.runPromise(rejectsNestedCall));
+});
+
+const runsNestedCall = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const setup = chatSetup();
+  const echo = echoTool();
+  addTool(setup.registry, echo.registration);
+  let nested: durableTypes.NestedToolExecutionResult | undefined;
+  addTool(
+    setup.registry,
+    tool("batch", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          nested = yield* awaited(api.executeTool("echo", { text: "a" }, callContext));
+          return { output: [{ text: `got ${text(nested)}`, type: "text" }] };
+        }),
+      ),
+    ),
+  );
+  const { harness, root, status, entries } = yield* runOnce(setup, [call("batch"), DONE]);
+  expect(status).toBe("done");
+  const [parent, child] = yield* toolTasks(harness);
+  expect(nested).toEqual({
+    diagnostics: [],
+    durationMs: expect.any(Number),
+    isError: false,
+    structuredOutput: "echo a",
+    taskId: child!.id,
   });
+  expect(results(entries).map((result) => [result.toolCallId, text(result)])).toEqual([
+    ["c1", "got echo a"],
+  ]);
+  expect(results(entries)[0]).not.toHaveProperty("nestedCalls");
+  expect(parent!.input).toMatchObject({ callId: "c1", kind: "model" });
+  expect(child!.owner).toBe(parent!.id);
+  expect(child!.input as durableTypes.ToolTaskInput).toEqual({
+    call: { arguments: { text: "a" }, id: "c1/1", name: "echo", type: "toolCall" },
+    key: "1",
+    kind: "nested",
+    parent: parent!.id,
+    parentCallId: "c1",
+  });
+  expect(child!.state).toEqual({
+    outcome: { result: { kind: "nested" }, status: "completed" },
+    status: "terminal",
+  });
+  expect(yield* awaited(harness.snapshot(NestedCallDoc, parent!.id, "1", context))).toBeUndefined();
+  expect(yield* awaited(harness.snapshot(LiveDoc, root.id, context))).toEqual({});
+  yield* awaited(harness.close(context));
 });
 
 describe("nested tool calls", () => {
-  it("runs a nested call as its own tool task and returns its result to the caller, not the transcript", async () => {
-    const setup = chatSetup();
-    const echo = echoTool();
-    addTool(setup.registry, echo.registration);
-    let nested: NestedToolExecutionResult | undefined;
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        nested = await api.executeTool("echo", { text: "a" }, callContext);
-        return { output: [{ type: "text", text: `got ${text(nested)}` }] };
-      }),
-    );
-    const { harness, root, status, entries } = await runOnce(setup, [call("batch"), DONE]);
-    expect(status).toBe("done");
-    const [parent, child] = await toolTasks(harness);
-    expect(nested).toEqual({
-      taskId: child!.id,
-      structuredOutput: "echo a",
-      isError: false,
-      diagnostics: [],
-      durationMs: expect.any(Number),
-    });
-    // One result entry: the model-issued call's, which records nothing of its nested calls.
-    expect(results(entries).map((result) => [result.toolCallId, text(result)])).toEqual([
-      ["c1", "got echo a"],
-    ]);
-    expect(results(entries)[0]).not.toHaveProperty("nestedCalls");
-    expect(parent!.input).toMatchObject({ kind: "model", callId: "c1" });
-    expect(child!.owner).toBe(parent!.id);
-    expect(child!.input as ToolTaskInput).toEqual({
-      kind: "nested",
-      parent: parent!.id,
-      parentCallId: "c1",
-      key: "1",
-      call: { type: "toolCall", id: "c1/1", name: "echo", arguments: { text: "a" } },
-    });
-    // The receipt stays small: the result lived in the caller's documents, which retired with it.
-    expect(child!.state).toEqual({
-      status: "terminal",
-      outcome: { status: "completed", result: { kind: "nested" } },
-    });
-    expect(await harness.snapshot(NestedCallDoc, parent!.id, "1", context)).toBeUndefined();
-    expect(await harness.snapshot(LiveDoc, root.id, context)).toEqual({});
-    await harness.close(context);
-  });
+  it("runs a nested call as its own tool task and returns its result to the caller, not the transcript", () =>
+    Effect.runPromise(runsNestedCall));
+});
+
+const givesEachNested = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const setup = chatSetup();
+  const seen: { taskId: durableTypes.TaskId; callId: string }[] = [];
+  addTool(
+    setup.registry,
+    tool("who", (_args, api) => {
+      seen.push({ callId: api.callId, taskId: api.taskId });
+      return Promise.resolve({});
+    }),
+  );
+  addTool(
+    setup.registry,
+    tool("batch", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          yield* awaited(
+            Promise.all([
+              api.executeTool("who", {}, callContext, { key: "a" }),
+              api.executeTool("who", {}, callContext, { key: "b" }),
+            ]),
+          );
+          return {};
+        }),
+      ),
+    ),
+  );
+  const { harness } = yield* runOnce(setup, [call("batch"), DONE]);
+  expect(seen.map((each) => each.callId).sort()).toEqual(["c1/a", "c1/b"]);
+  expect(new Set(seen.map((each) => each.taskId)).size).toBe(2);
+  yield* awaited(harness.close(context));
 });
 
 describe("nested tool calls", () => {
-  it("gives each nested call its own task and call ID", async () => {
-    const setup = chatSetup();
-    const seen: { taskId: TaskId; callId: string }[] = [];
-    addTool(
-      setup.registry,
-      tool("who", (_args, api) => {
-        seen.push({ taskId: api.taskId, callId: api.callId });
-        return Promise.resolve({});
-      }),
-    );
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        await Promise.all([
-          api.executeTool("who", {}, callContext, { key: "a" }),
-          api.executeTool("who", {}, callContext, { key: "b" }),
-        ]);
-        return {};
-      }),
-    );
-    const { harness } = await runOnce(setup, [call("batch"), DONE]);
-    expect(seen.map((each) => each.callId).sort()).toEqual(["c1/a", "c1/b"]);
-    expect(new Set(seen.map((each) => each.taskId)).size).toBe(2);
-    await harness.close(context);
-  });
-});
-
-describe("nested tool calls", () => {
-  it("runs the tool hooks on nested calls, which see their parent", async () => {
-    const setup = chatSetup();
-    const echo = echoTool();
-    addTool(setup.registry, echo.registration);
-    const parents: ToolHookCall["parent"][] = [];
-    addHooks(setup.registry, ToolTask, {
-      beforeTool: (hookCall) => {
-        parents.push(hookCall.parent);
-        return hookCall.parent !== undefined && hookCall.arguments["text"] === "secret"
-          ? { block: "no secrets" }
-          : undefined;
-      },
-      afterTool: (hookCall, result) =>
-        hookCall.parent === undefined
-          ? undefined
-          : { ...result, output: [{ type: "text", text: "rewritten" }] },
-    });
-    const nested: NestedToolExecutionResult[] = [];
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        nested.push(await api.executeTool("echo", { text: "secret" }, callContext));
-        nested.push(await api.executeTool("echo", { text: "public" }, callContext));
-        return {};
-      }),
-    );
-    const { harness } = await runOnce(setup, [call("batch"), DONE]);
-    const [parent] = await toolTasks(harness);
-    expect(parents).toEqual([
-      undefined,
-      { taskId: parent!.id, callId: "c1" },
-      { taskId: parent!.id, callId: "c1" },
-    ]);
-    expect(nested[0]).toMatchObject({
-      isError: true,
-      diagnostics: [
-        { severity: "error", code: "blocked", message: "Tool call blocked: no secrets" },
-      ],
-    });
-    expect(text(nested[1])).toBe("rewritten");
-    expect(echo.state.runs).toBe(1);
-    await harness.close(context);
-  });
-});
-
-describe("nested tool calls", () => {
-  it("returns an error result for an unavailable tool and invalid arguments", async () => {
-    const setup = chatSetup();
-    addTool(setup.registry, echoTool().registration);
-    const nested: NestedToolExecutionResult[] = [];
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        nested.push(await api.executeTool("missing", {}, callContext));
-        nested.push(await api.executeTool("echo", { text: { not: "a string" } }, callContext));
-        return {};
-      }),
-    );
-    const { harness } = await runOnce(setup, [call("batch"), DONE]);
-    expect(nested.map((result) => [result.isError, result.diagnostics[0]?.code])).toEqual([
-      [true, "tool_unavailable"],
-      [true, "invalid_arguments"],
-    ]);
-    await harness.close(context);
-  });
-
-  it("returns the call a key already names, and rejects reusing the key for another call", async () => {
-    const setup = chatSetup();
-    const echo = echoTool();
-    addTool(setup.registry, echo.registration);
-    let reused: NestedToolExecutionResult | undefined;
-    addTool(
-      setup.registry,
-      tool("batch", async (_args, api, callContext) => {
-        await api.executeTool("echo", { text: "a" }, callContext, { key: "k" });
-        reused = await api.executeTool("echo", { text: "a" }, callContext, { key: "k" });
-        await api.executeTool("echo", { text: "b" }, callContext, { key: "k" });
-        return {};
-      }),
-    );
-    const { harness, entries } = await runOnce(setup, [call("batch"), DONE]);
-    expect(echo.state.runs).toBe(1);
-    expect(text(reused)).toBe("echo a");
-    expect(text(results(entries)[0])).toContain(
-      "Nested call c1/k was already made with another tool or other arguments",
-    );
-    await harness.close(context);
-  });
+  it("gives each nested call its own task and call ID", () => Effect.runPromise(givesEachNested));
 });

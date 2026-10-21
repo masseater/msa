@@ -1,10 +1,11 @@
-import type { Keybinding } from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { ExtensionShortcut } from "../../core/extensions/index.ts";
-import { formatKeyText, keyDisplayText } from "./components/keybinding-hints.ts";
+import type extensionsTypes from "../../core/extensions/index.types.ts";
+import keybindingHints from "./components/keybinding-hints.ts";
 
-/** A row lists the keybindings it documents, or the literal text typed for it. */
-type Row = readonly [keys: readonly Keybinding[] | string, action: string];
+const { formatKeyText, keyDisplayText } = keybindingHints;
+
+type Row = readonly [keys: readonly tuiTypes.Keybinding[] | string, action: string];
 
 const NEW_LINE_ACTION =
   process.platform === "win32" ? "New line (Ctrl+Enter on Windows Terminal)" : "New line";
@@ -79,9 +80,8 @@ function table(
   return `**${title}**\n| Key | Action |\n|-----|--------|\n${body}`;
 }
 
-/** The `/keybindings` table, using the current keybindings, followed by the shortcuts extensions registered. */
-export function formatHotkeysMarkdown(
-  extensionShortcuts: ReadonlyMap<string, ExtensionShortcut>,
+function formatHotkeysMarkdown(
+  extensionShortcuts: ReadonlyMap<string, extensionsTypes.ExtensionShortcut>,
 ): string {
   const sections = SECTIONS.map(([title, rows]) =>
     table(
@@ -105,3 +105,9 @@ export function formatHotkeysMarkdown(
   }
   return sections.join("\n\n");
 }
+
+const hotkeys = {
+  formatHotkeysMarkdown,
+};
+
+export default hotkeys;

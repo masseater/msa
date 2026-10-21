@@ -1,44 +1,78 @@
-import { uuidv7 } from "@msa/ai/utils/uuid";
-import type { Context } from "@msa/chord";
+import uuid from "@msa/ai/utils/uuid";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import type { TaskRuntime } from "../types.ts";
+import documents from "../documents.ts";
+import type providerTypes from "./provider.types.ts";
+import type typesModule from "./types.types.ts";
 
-/** Stable provider-facing identity of one conversation. */
-export type ProviderState = {
-  sessionId: string;
-};
+const { uuidv7 } = uuid;
 
-/** Built-in provider state; every fork starts with a fresh identity instead of copying its parent. */
-export const ProviderDoc = defineDoc<ProviderState>({
-  kind: "msa.provider",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ sessionId: uuidv7() }),
+const { defineDoc } = documents;
+
+const ProviderDoc = defineDoc<providerTypes.ProviderState>({
   checkpointWhen: () => true,
+  fork: "initial",
+  history: "latest",
+  initial: () => ({ sessionId: uuidv7() }),
+  kind: "msa.provider",
+  scope: "conversation",
+  version: 1,
 });
 
-/**
- * Return the persisted identity without writing in the normal path. A legacy conversation without `msa.provider` gets
- * one migration commit whose `tx.doc()` runs `initial()` before the provider request starts.
- * @param {TaskRuntime<I, S, R, H>} runtime - The task's runtime.
- * @param {Context} context - The caller's context.
- * @returns {Promise<string>} The identity.
- */
-export async function ensureProviderSessionId<I, S, R, H extends object>(
-  runtime: TaskRuntime<I, S, R, H>,
-  context: Context,
-): Promise<string> {
-  const existing = await runtime.snapshot(ProviderDoc, runtime.conversationId, context);
-  if (existing !== undefined) return existing.sessionId;
-  let created: string | undefined;
-  await runtime.commit(async (tx) => {
-    created = (await tx.doc(ProviderDoc, runtime.conversationId)).sessionId;
-    return undefined;
-  }, context);
-  if (created === undefined)
-    throw new Error(`Conversation ${runtime.conversationId} has no provider session ID`);
-  return created;
-}
+const createSessionId = <I, S, R, H extends object>(
+  runtime: typesModule.TaskRuntime<I, S, R, H>,
+  context: chordTypes.Context,
+) =>
+  Effect.gen(function* () {
+    const services = yield* Effect.context<never>();
+    let created: string | undefined;
+    yield* Effect.promise(() =>
+      runtime.commit(
+        (tx) =>
+          Effect.runPromiseWith(services)(
+            Effect.gen(function* () {
+              created = (yield* Effect.promise(() => tx.doc(ProviderDoc, runtime.conversationId)))
+                .sessionId;
+              return undefined;
+            }),
+          ),
+        context,
+      ),
+    );
+    return created;
+  });
+
+const ensureProviderSessionId: {
+  (
+    context: chordTypes.Context,
+  ): <I, S, R, H extends object>(
+    runtime: typesModule.TaskRuntime<I, S, R, H>,
+  ) => Effect.Effect<string>;
+  <I, S, R, H extends object>(
+    runtime: typesModule.TaskRuntime<I, S, R, H>,
+    context: chordTypes.Context,
+  ): Effect.Effect<string>;
+} = Function.dual(
+  2,
+  Effect.fnUntraced(function* <I, S, R, H extends object>(
+    runtime: typesModule.TaskRuntime<I, S, R, H>,
+    context: chordTypes.Context,
+  ) {
+    const existing = yield* Effect.promise(() =>
+      runtime.snapshot(ProviderDoc, runtime.conversationId, context),
+    );
+    if (existing !== undefined) return existing.sessionId;
+    const created = yield* createSessionId(runtime, context);
+    if (created === undefined)
+      throw new Error(`Conversation ${runtime.conversationId} has no provider session ID`);
+    return created;
+  }),
+);
+
+const provider = {
+  ProviderDoc,
+  ensureProviderSessionId,
+};
+
+export default provider;

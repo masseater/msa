@@ -1,7 +1,17 @@
-import type { Models } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
+import type typesModule from "../../../../../libs/ai/src/types.types.ts";
+import type modelRuntimeTypes from "../../../src/core/model-runtime.types.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { createHarness } = harnessModule;
+
+const { deferredPromise } = testing;
 
 interface Deferred {
   promise: Promise<void>;
@@ -17,136 +27,184 @@ interface StalledCredentialList {
 }
 
 function createDeferred(): Deferred {
-  let resolvePromise = () => {};
-  let rejectPromise = (_error: Error) => {};
-  const promise = new Promise<void>((resolve, reject) => {
-    resolvePromise = resolve;
-    rejectPromise = reject;
-  });
-  return { promise, resolve: resolvePromise, reject: rejectPromise };
+  const deferred = deferredPromise<void>();
+  return {
+    promise: deferred.promise,
+    reject: (error) => deferred.reject(error),
+    resolve: () => deferred.resolve(undefined),
+  };
 }
 
-function stallNextCredentialList(harness: Harness): StalledCredentialList {
+function stallNextCredentialList(harness: harnessTypes.Harness): StalledCredentialList {
   const originalList = harness.authStorage.list.bind(harness.authStorage);
   const started = createDeferred();
   const gate = createDeferred();
   let shouldStall = true;
   let callCount = 0;
 
-  harness.authStorage.list = async () => {
-    const entries = await originalList();
-    callCount++;
-    if (!shouldStall) return entries;
-    shouldStall = false;
-    started.resolve();
-    await gate.promise;
-    return entries;
-  };
+  harness.authStorage.list = () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const entries = yield* Effect.promise(() => originalList());
+        callCount++;
+        if (!shouldStall) return entries;
+        shouldStall = false;
+        started.resolve();
+        yield* Effect.promise(() => gate.promise);
+        return entries;
+      }),
+    );
 
   return {
-    started: started.promise,
-    release: gate.resolve,
     fail: gate.reject,
     getCallCount: () => callCount,
+    release: gate.resolve,
+    started: started.promise,
   };
 }
 
-async function waitForRecoveryRefresh(
+function waitForRecoveryRefresh(
   stalledList: StalledCredentialList,
-  harness: Harness,
+  harness: harnessTypes.Harness,
 ): Promise<void> {
-  const refresh = harness.session.modelRuntime.refresh({ allowNetwork: false });
-  await vi.waitFor(() => expect(stalledList.getCallCount()).toBe(2));
-  await refresh;
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const refresh = harness.session.models.selection.modelRuntime.refresh({
+        allowNetwork: false,
+      });
+      yield* Effect.promise(() => vi.waitFor(() => expect(stalledList.getCallCount()).toBe(2)));
+      yield* Effect.promise(() => refresh);
+    }),
+  );
 }
 
-describe("issue #7301 stalled availability refresh", () => {
-  let harness: Harness | undefined;
-  let stalledList: StalledCredentialList | undefined;
+let harness!: harnessTypes.Harness;
 
+let stalledList!: StalledCredentialList;
+
+const recoversWithoutLettingTheStalledRefresh = Effect.gen(function* () {
+  harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  const runtime = harness.session.models.selection.modelRuntime;
+  yield* Effect.promise(() =>
+    harness.authStorage.modify("stale-provider", () =>
+      Promise.resolve({
+        key: "stale-key",
+        type: "api_key",
+      }),
+    ),
+  );
+  yield* Effect.promise(() => runtime.refresh({ allowNetwork: false }));
+  expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({
+    configured: true,
+    source: "stored",
+  });
+  stalledList = stallNextCredentialList(harness);
+  const staleRefresh = runtime.getAvailable();
+  yield* Effect.promise(() => stalledList.started);
+  yield* Effect.promise(() => harness.authStorage.delete("stale-provider"));
+  yield* Effect.promise(() =>
+    harness.authStorage.modify("current-provider", () =>
+      Promise.resolve({
+        key: "current-key",
+        type: "api_key",
+      }),
+    ),
+  );
+  yield* Effect.promise(() => waitForRecoveryRefresh(stalledList, harness));
+  return yield* recoversWithoutLettingTheStalledRefreshStep1(runtime, staleRefresh);
+});
+
+const recoversWithoutLettingTheStalledRefreshStep1 = (
+  runtime: modelRuntimeTypes.ModelRuntime,
+  staleRefresh: Promise<readonly modelTypesModule.Model<typesModule.Api>[]>,
+) =>
+  Effect.gen(function* () {
+    expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({ configured: false });
+    expect(runtime.getProviderAuthStatus("current-provider")).toEqual({
+      configured: true,
+      source: "stored",
+    });
+    stalledList.release();
+    yield* Effect.promise(() => staleRefresh);
+    expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({ configured: false });
+    expect(runtime.getProviderAuthStatus("current-provider")).toEqual({
+      configured: true,
+      source: "stored",
+    });
+  });
+
+const doesNotLetAStaleFailure = Effect.gen(function* () {
+  harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  const runtime = harness.session.models.selection.modelRuntime;
+  stalledList = stallNextCredentialList(harness);
+  const staleRefresh = runtime.getAvailable();
+  yield* Effect.promise(() => stalledList.started);
+
+  yield* Effect.promise(() => waitForRecoveryRefresh(stalledList, harness));
+  expect(runtime.getError()).toBeUndefined();
+
+  stalledList.fail(new Error("stale credential list failure"));
+  yield* Effect.promise(() =>
+    expect(staleRefresh).rejects.toThrow("stale credential list failure"),
+  );
+  expect(runtime.getError()).toBeUndefined();
+});
+
+const doesNotLetAStaleProvider = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  harness = yield* Effect.promise(() => createHarness());
+  const runtime = harness.session.models.selection.modelRuntime;
+  const models = Reflect.get(Reflect.get(runtime, "runtime") as object, "models") as aiTypes.Models;
+  const originalGetAvailable = models.getAvailable.bind(models);
+  const started = createDeferred();
+  const gate = createDeferred();
+  let stall = true;
+  models.getAvailable = (providerId, options) =>
+    runPromise(
+      Effect.gen(function* () {
+        if (providerId === undefined || providerId === "" || !stall)
+          return yield* Effect.promise(() => originalGetAvailable(providerId, options));
+        stall = false;
+        started.resolve();
+        yield* Effect.promise(() => gate.promise);
+        throw new Error("stale provider availability failure");
+      }),
+    );
+
+  const staleRefresh = runtime.getAvailable(harness.getModel().provider);
+  yield* Effect.promise(() => started.promise);
+  yield* Effect.promise(() => runtime.getAvailable());
+  expect(runtime.getError()).toBeUndefined();
+
+  gate.resolve();
+  yield* Effect.promise(() =>
+    expect(staleRefresh).rejects.toThrow("stale provider availability failure"),
+  );
+  expect(runtime.getError()).toBeUndefined();
+});
+
+const recoversWithoutLettingTheStalledRefreshOverwrite = () =>
+  Effect.runPromise(recoversWithoutLettingTheStalledRefresh);
+
+const doesNotLetAStaleFailureOverwrite = () => Effect.runPromise(doesNotLetAStaleFailure);
+
+const doesNotLetAStaleProviderScoped = () => Effect.runPromise(doesNotLetAStaleProvider);
+
+describe("issue #7301 stalled availability refresh", () => {
   afterEach(() => {
     stalledList?.release();
-    stalledList = undefined;
     harness?.cleanup();
-    harness = undefined;
   });
-
-  it("recovers without letting the stalled refresh overwrite the newer snapshot", async () => {
-    harness = await createHarness({ withConfiguredAuth: false });
-    const runtime = harness.session.modelRuntime;
-    await harness.authStorage.modify("stale-provider", async () => ({
-      type: "api_key",
-      key: "stale-key",
-    }));
-    await runtime.refresh({ allowNetwork: false });
-    expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({
-      configured: true,
-      source: "stored",
-    });
-
-    stalledList = stallNextCredentialList(harness);
-    const staleRefresh = runtime.getAvailable();
-    await stalledList.started;
-
-    await harness.authStorage.delete("stale-provider");
-    await harness.authStorage.modify("current-provider", async () => ({
-      type: "api_key",
-      key: "current-key",
-    }));
-    await waitForRecoveryRefresh(stalledList, harness);
-    expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({ configured: false });
-    expect(runtime.getProviderAuthStatus("current-provider")).toEqual({
-      configured: true,
-      source: "stored",
-    });
-
-    stalledList.release();
-    await staleRefresh;
-    expect(runtime.getProviderAuthStatus("stale-provider")).toEqual({ configured: false });
-    expect(runtime.getProviderAuthStatus("current-provider")).toEqual({
-      configured: true,
-      source: "stored",
-    });
-  });
-
-  it("does not let a stale failure overwrite newer availability error state", async () => {
-    harness = await createHarness({ withConfiguredAuth: false });
-    const runtime = harness.session.modelRuntime;
-    stalledList = stallNextCredentialList(harness);
-    const staleRefresh = runtime.getAvailable();
-    await stalledList.started;
-
-    await waitForRecoveryRefresh(stalledList, harness);
-    expect(runtime.getError()).toBeUndefined();
-
-    stalledList.fail(new Error("stale credential list failure"));
-    await expect(staleRefresh).rejects.toThrow("stale credential list failure");
-    expect(runtime.getError()).toBeUndefined();
-  });
-
-  it("does not let a stale provider-scoped failure overwrite a newer availability pass", async () => {
-    harness = await createHarness();
-    const runtime = harness.session.modelRuntime;
-    const models = Reflect.get(runtime, "models") as Models;
-    const originalGetAvailable = models.getAvailable.bind(models);
-    const started = createDeferred();
-    const gate = createDeferred();
-    let stall = true;
-    models.getAvailable = async (providerId, options) => {
-      if (!providerId || !stall) return originalGetAvailable(providerId, options);
-      stall = false;
-      started.resolve();
-      await gate.promise;
-      throw new Error("stale provider availability failure");
-    };
-
-    const staleRefresh = runtime.getAvailable(harness.getModel().provider);
-    await started.promise;
-    await runtime.getAvailable();
-    expect(runtime.getError()).toBeUndefined();
-
-    gate.resolve();
-    await expect(staleRefresh).rejects.toThrow("stale provider availability failure");
-    expect(runtime.getError()).toBeUndefined();
-  });
+  it(
+    "recovers without letting the stalled refresh overwrite the newer snapshot",
+    recoversWithoutLettingTheStalledRefreshOverwrite,
+  );
+  it(
+    "does not let a stale failure overwrite newer availability error state",
+    doesNotLetAStaleFailureOverwrite,
+  );
+  it(
+    "does not let a stale provider-scoped failure overwrite a newer availability pass",
+    doesNotLetAStaleProviderScoped,
+  );
 });

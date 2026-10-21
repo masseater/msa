@@ -1,92 +1,34 @@
-import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
-import type { AuthOperationOptions, Credential, CredentialInfo, CredentialStore } from "./types.ts";
+import { Effect } from "effect";
 
-/**
- * Default in-memory credential store. Apps inject persistent stores.
- * Keyed by `Provider.id`, one credential per provider; see `CredentialStore`.
- * Writes are serialized per provider through a promise chain.
- */
-export class InMemoryCredentialStore implements CredentialStore {
-  private credentials = new Map<string, Credential>();
-  private chains = new Map<string, Promise<unknown>>();
+import type credentialStoreTypes from "./credential-store.types.ts";
+import InMemoryCredentialStore from "./in-memory-credential-store.ts";
 
-  /**
-   * Serialize tasks per provider id without releasing the chain before active work settles.
-   *
-   * @param {string} providerId - provider id to serialize on
-   * @param {() => Promise<T>} task - work to run
-   * @param {AuthOperationOptions} [options] - operation options
-   * @returns {Promise<T>} the task result
-   */
-  private enqueue<T>(
-    providerId: string,
-    task: () => Promise<T>,
-    options?: AuthOperationOptions,
-  ): Promise<T> {
-    const signal = operationSignal(options?.signal);
-    const previous = this.chains.get(providerId) ?? Promise.resolve();
-    const queued = (async () => {
-      await previous.catch(() => {});
-      signal.throwIfAborted();
-      return task();
-    })();
-    const tail = queued.catch(() => {});
-    this.chains.set(providerId, tail);
-    void tail.then(() => {
-      if (this.chains.get(providerId) === tail) this.chains.delete(providerId);
-    });
-    return raceWithAbortSignal(queued, signal);
-  }
+const runAfterPrevious = <K, A>({
+  chains,
+  key,
+  task,
+}: credentialStoreTypes.SerialTask<K, A>): Promise<A> => {
+  const previous = chains.get(key) ?? Promise.resolve();
+  const queued = Effect.runPromise(
+    Effect.promise(() => previous.catch(() => {})).pipe(Effect.andThen(task)),
+  );
+  const tail = queued.catch(() => {});
+  chains.set(key, tail);
+  Effect.runFork(
+    Effect.promise(() => tail).pipe(
+      Effect.andThen(
+        Effect.sync(() => {
+          if (chains.get(key) === tail) chains.delete(key);
+        }),
+      ),
+    ),
+  );
+  return queued;
+};
 
-  read(providerId: string, options?: AuthOperationOptions): Promise<Credential | undefined> {
-    try {
-      options?.signal?.throwIfAborted();
-      return Promise.resolve(this.credentials.get(providerId));
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }
+const credentialStore = {
+  InMemoryCredentialStore,
+  runAfterPrevious,
+};
 
-  list(options?: AuthOperationOptions): Promise<readonly CredentialInfo[]> {
-    try {
-      options?.signal?.throwIfAborted();
-      return Promise.resolve(
-        [...this.credentials].map(([providerId, credential]) => ({
-          providerId,
-          type: credential.type,
-        })),
-      );
-    } catch (error) {
-      return Promise.reject(error);
-    }
-  }
-
-  modify(
-    providerId: string,
-    fn: (current: Credential | undefined) => Promise<Credential | undefined>,
-    options?: AuthOperationOptions,
-  ): Promise<Credential | undefined> {
-    return this.enqueue(
-      providerId,
-      async () => {
-        const current = this.credentials.get(providerId);
-        const next = await fn(current);
-        options?.signal?.throwIfAborted();
-        if (next !== undefined) this.credentials.set(providerId, next);
-        return next ?? current;
-      },
-      options,
-    );
-  }
-
-  delete(providerId: string, options?: AuthOperationOptions): Promise<void> {
-    return this.enqueue(
-      providerId,
-      () => {
-        this.credentials.delete(providerId);
-        return Promise.resolve();
-      },
-      options,
-    );
-  }
-}
+export default credentialStore;

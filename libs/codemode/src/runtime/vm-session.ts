@@ -1,32 +1,24 @@
 import { dual } from "effect/Function";
 import { JSException, type JSValueHandle, type QuickJS } from "quickjs-wasi";
 
-import { PRELUDE_SOURCE } from "./prelude-source.ts";
-import type {
-  HostToWorkerMessage,
-  VmControllerOptions,
-  VmSession,
-  WorkerToHostMessage,
-} from "./protocol.ts";
+import preludeSource from "./prelude-source.ts";
+import type protocolTypes from "./protocol.ts";
+import type vmSessionTypes from "./vm-session.types.ts";
+import vmWasi from "./vm-wasi.ts";
 
-export interface VirtualClock {
-  creating: boolean;
-  startedAt: number;
-  now: number;
-  seed: number;
-}
+const { deterministicWasi, discardOutput, fnv1a } = vmWasi;
 
-type WasmMemory = { readonly buffer: ArrayBufferLike };
+const { PRELUDE_SOURCE } = preludeSource;
 type QuickJSExports = ReturnType<QuickJS["_getExports"]>;
 type Handle = JSValueHandle | undefined;
 type Handles = Record<"api" | "settle" | "run" | "stalled", JSValueHandle>;
 
 interface Controller {
   readonly vm: QuickJS;
-  readonly options: VmControllerOptions;
-  readonly clock: VirtualClock | undefined;
+  readonly options: protocolTypes.VmControllerOptions;
+  readonly clock: vmSessionTypes.VirtualClock | undefined;
   readonly exports: QuickJSExports;
-  readonly early: Map<number, HostToWorkerMessage>;
+  readonly early: Map<number, protocolTypes.HostToWorkerMessage>;
   handles: Handles | undefined;
   disposed: boolean;
   issued: number;
@@ -37,85 +29,26 @@ interface Controller {
 const DETERMINISTIC_VERSION = 1;
 const JOBS_PER_POLL = 50;
 
-export function fnv1a(text: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < text.length; index++) {
-    hash ^= text.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(16).padStart(8, "0");
-}
-
 const PRELUDE_HASH = fnv1a(PRELUDE_SOURCE);
-
-function prng(seed: number): () => number {
-  let state = seed >>> 0;
-  return () => {
-    state = (state + 0x6d2b79f5) >>> 0;
-    let value = Math.imul(state ^ (state >>> 15), 1 | state);
-    value = (value + Math.imul(value ^ (value >>> 7), 61 | value)) ^ value;
-    return (value ^ (value >>> 14)) >>> 0;
-  };
-}
-
-export function discardOutput(memory: WasmMemory) {
-  return {
-    fd_write(_fd: number, iovsPtr: number, iovsLen: number, nwrittenPtr: number): number {
-      const view = new DataView(memory.buffer);
-      let written = 0;
-      for (let i = 0; i < iovsLen; i++) {
-        written += view.getUint32(iovsPtr + i * 8 + 4, true);
-      }
-      view.setUint32(nwrittenPtr, written, true);
-      return 0;
-    },
-  };
-}
-
-function clockReading(clock: VirtualClock, clockId: number): bigint {
-  if (clock.creating) return clockId === 0 ? BigInt(clock.seed + 1) * 1000n : 0n;
-  if (clockId === 0) return BigInt(Math.round(clock.now)) * 1_000_000n;
-  return BigInt(Math.round(clock.now - clock.startedAt)) * 1_000_000n;
-}
-
-export function deterministicWasi(clock: VirtualClock) {
-  const random = prng(clock.seed ^ 0x9e3779b9);
-  return (memory: WasmMemory) => ({
-    ...discardOutput(memory),
-    clock_time_get(clockId: number, _precision: bigint, resultPtr: number): number {
-      new DataView(memory.buffer).setBigUint64(resultPtr, clockReading(clock, clockId), true);
-      return 0;
-    },
-    random_get(bufPtr: number, bufLen: number): number {
-      const bytes = new Uint8Array(memory.buffer, bufPtr, bufLen);
-      for (let index = 0; index < bufLen; index += 4) {
-        const value = random();
-        for (let byte = 0; byte < 4 && index + byte < bufLen; byte++)
-          bytes[index + byte] = value >>> (byte * 8);
-      }
-      return 0;
-    },
-  });
-}
 
 function describeException(error: JSException): string {
   const head = error.message === "" ? error.name : `${error.name}: ${error.message}`;
   const stack = error.stack?.trimEnd();
   return JSON.stringify({
-    name: error.name,
     message: error.message,
+    name: error.name,
     stack: stack === undefined || stack === "" ? head : `${head}\n${stack}`,
   });
 }
 
-export function crashMessage(error: unknown): WorkerToHostMessage {
+function crashMessage(error: unknown): protocolTypes.WorkerToHostMessage {
   return {
-    type: "crash",
     message: error instanceof Error ? `${error.name}: ${error.message}` : String(error),
+    type: "crash",
   };
 }
 
-export function isHostToWorkerMessage(value: unknown): value is HostToWorkerMessage {
+function isHostToWorkerMessage(value: unknown): value is protocolTypes.HostToWorkerMessage {
   return (
     typeof value === "object" && value !== null && (value as { type?: unknown }).type === "result"
   );
@@ -140,7 +73,7 @@ function drain(c: Controller): void {
   c.vm.callFunction(stalled, api).dispose();
 }
 
-function apply(c: Controller, message: HostToWorkerMessage): void {
+function apply(c: Controller, message: protocolTypes.HostToWorkerMessage): void {
   const { api, settle } = handlesOf(c);
   const { vm } = c;
   vm.withScope(() => {
@@ -156,7 +89,11 @@ function apply(c: Controller, message: HostToWorkerMessage): void {
   drain(c);
 }
 
-function deliverInOrder(c: Controller, message: HostToWorkerMessage, clock: VirtualClock): void {
+function deliverInOrder(
+  c: Controller,
+  message: protocolTypes.HostToWorkerMessage,
+  clock: vmSessionTypes.VirtualClock,
+): void {
   const { seq } = message;
   if (seq === undefined || !Number.isInteger(seq) || seq < c.nextSeq || c.early.has(seq)) {
     throw new Error(
@@ -170,18 +107,18 @@ function deliverInOrder(c: Controller, message: HostToWorkerMessage, clock: Virt
       clock.now = Math.max(clock.now, next.now);
     c.current = c.nextSeq;
     apply(c, next);
-    c.options.post({ type: "idle", seq: c.nextSeq, issued: c.issued });
+    c.options.post({ issued: c.issued, seq: c.nextSeq, type: "idle" });
     c.nextSeq++;
   }
 }
 
 function onDone(c: Controller, a: JSValueHandle, b: Handle, d: Handle): void {
-  const during = c.clock === undefined ? {} : { during: { seq: c.current, issued: c.issued } };
+  const during = c.clock === undefined ? {} : { during: { issued: c.issued, seq: c.current } };
   if (a.toBoolean()) {
     const writes = (d as JSValueHandle).toString();
-    c.options.post({ type: "done", ok: true, value: optionalString(b), writes, ...during });
+    c.options.post({ ok: true, type: "done", value: optionalString(b), writes, ...during });
   } else {
-    c.options.post({ type: "done", ok: false, error: (b as JSValueHandle).toString(), ...during });
+    c.options.post({ error: (b as JSValueHandle).toString(), ok: false, type: "done", ...during });
   }
 }
 
@@ -190,17 +127,17 @@ function onBridge(c: Controller, kind: string, a: JSValueHandle, b: JSValueHandl
   if (kind === "call" || kind === "global") {
     c.issued++;
     const target = kind === "call" ? "tool" : "global";
-    post({ type: "call", id: a.toNumber(), target, name: b.toString(), args: optionalString(d) });
+    post({ args: optionalString(d), id: a.toNumber(), name: b.toString(), target, type: "call" });
   } else if (kind === "output") {
     const channel = a.toString();
     post({
-      type: "output",
       item:
         channel === "image"
-          ? { type: "image", data: b.toString(), mimeType: (d as JSValueHandle).toString() }
+          ? { data: b.toString(), mimeType: (d as JSValueHandle).toString(), type: "image" }
           : channel === "console"
-            ? { type: "text", text: b.toString(), console: true }
-            : { type: "text", text: b.toString() },
+            ? { console: true, text: b.toString(), type: "text" }
+            : { text: b.toString(), type: "text" },
+      type: "output",
     });
   } else if (kind === "done") onDone(c, a, b, d);
 }
@@ -226,15 +163,15 @@ function loadPrelude(c: Controller): Handles {
   );
   const settle = api.getProp("settle");
   const run = api.getProp("run");
-  return { api, settle, run, stalled: api.getProp("stalled") };
+  return { api, run, settle, stalled: api.getProp("stalled") };
 }
 
 function reportFingerprint(c: Controller): void {
   const { versions } = c.vm;
   const { data, maxStackSize, interruptBudget } = c.options;
   c.options.post({
-    type: "started",
     fingerprint: `quickjs-wasi ${versions["quickjs-wasi"]}, quickjs ${versions["quickjs"]}, prelude ${PRELUDE_HASH}, deterministic ${DETERMINISTIC_VERSION}, stack ${maxStackSize}, heap ${data.memoryLimitBytes ?? "none"}, budget ${interruptBudget ?? "none"}`,
+    type: "started",
   });
 }
 
@@ -247,32 +184,43 @@ function runScript(c: Controller): void {
     fn = c.vm.evalCode(`(async (tools, console) => {${c.options.data.code}\n})`, "codemode.js");
   } catch (error) {
     if (!(error instanceof JSException)) throw error;
-    c.options.post({ type: "done", ok: false, error: describeException(error) });
+    c.options.post({ error: describeException(error), ok: false, type: "done" });
     return;
   }
   c.vm.callFunction(handles.run, handles.api, fn).dispose();
   fn.dispose();
   drain(c);
-  if (c.clock !== undefined) c.options.post({ type: "idle", seq: 0, issued: c.issued });
+  if (c.clock !== undefined) c.options.post({ issued: c.issued, seq: 0, type: "idle" });
 }
 
-export const bootVm: {
-  (options: VmControllerOptions, clock: VirtualClock | undefined): (vm: QuickJS) => VmSession;
-  (vm: QuickJS, options: VmControllerOptions, clock: VirtualClock | undefined): VmSession;
+const bootVm: {
+  (
+    options: protocolTypes.VmControllerOptions,
+    clock: vmSessionTypes.VirtualClock | undefined,
+  ): (vm: QuickJS) => protocolTypes.VmSession;
+  (
+    vm: QuickJS,
+    options: protocolTypes.VmControllerOptions,
+    clock: vmSessionTypes.VirtualClock | undefined,
+  ): protocolTypes.VmSession;
 } = dual(
   3,
-  (vm: QuickJS, options: VmControllerOptions, clock: VirtualClock | undefined): VmSession => {
+  (
+    vm: QuickJS,
+    options: protocolTypes.VmControllerOptions,
+    clock: vmSessionTypes.VirtualClock | undefined,
+  ): protocolTypes.VmSession => {
     const c: Controller = {
-      vm,
-      options,
       clock,
-      exports: vm["_getExports"](),
-      early: new Map(),
-      handles: undefined,
+      current: 0,
       disposed: false,
+      early: new Map(),
+      exports: vm["_getExports"](),
+      handles: undefined,
       issued: 0,
       nextSeq: 1,
-      current: 0,
+      options,
+      vm,
     };
     try {
       runScript(c);
@@ -297,3 +245,14 @@ export const bootVm: {
     };
   },
 );
+
+const vmSession = {
+  bootVm,
+  crashMessage,
+  deterministicWasi,
+  discardOutput,
+  fnv1a,
+  isHostToWorkerMessage,
+};
+
+export default vmSession;

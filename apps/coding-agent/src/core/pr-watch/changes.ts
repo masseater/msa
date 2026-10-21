@@ -1,38 +1,27 @@
-import {
-  describeChecks,
-  isBehind,
-  isConflicting,
-  type PrCheckCounts,
-  type PrSnapshot,
-} from "./snapshot.ts";
+import type changesTypes from "./changes.types.ts";
+import snapshot from "./snapshot.ts";
+import type snapshotTypes from "./snapshot.types.ts";
 
-export type PrChangeKind =
-  | "merged"
-  | "closed"
-  | "conflict"
-  | "base-moved"
-  | "checks-failed"
-  | "checks-passed"
-  | "review"
-  | "comment";
+const { describeChecks, isBehind, isConflicting } = snapshot;
 
-export interface PrChange {
-  readonly kind: PrChangeKind;
-  readonly label: string;
-  readonly text: string;
-  readonly terminal: boolean;
+function change(
+  kind: changesTypes.PrChangeKind,
+  label: string,
+  text: string,
+  terminal = false,
+): changesTypes.PrChange {
+  return { kind, label, terminal, text };
 }
 
-function change(kind: PrChangeKind, label: string, text: string, terminal = false): PrChange {
-  return { kind, label, text, terminal };
-}
-
-function commentChange(count: number): PrChange {
+function commentChange(count: number): changesTypes.PrChange {
   const noun = count === 1 ? "comment" : "comments";
   return change("comment", "comment", `has ${count} new ${noun}. Read them before the next push.`);
 }
 
-function checkChange(previous: PrCheckCounts, current: PrCheckCounts): PrChange | undefined {
+function checkChange(
+  previous: snapshotTypes.PrCheckCounts,
+  current: snapshotTypes.PrCheckCounts,
+): changesTypes.PrChange | undefined {
   if (current.total === 0 || current.pending > 0) return undefined;
   const unchanged =
     previous.total === current.total &&
@@ -54,7 +43,7 @@ function checkChange(previous: PrCheckCounts, current: PrCheckCounts): PrChange 
   );
 }
 
-function reviewChange(previous: string, current: string): PrChange | undefined {
+function reviewChange(previous: string, current: string): changesTypes.PrChange | undefined {
   if (previous === current) return undefined;
   if (current === "APPROVED") {
     return change("review", "approved", "approved. Merge it when you are ready.");
@@ -76,7 +65,7 @@ function reviewChange(previous: string, current: string): PrChange | undefined {
   return undefined;
 }
 
-function baseMovedChange(current: PrSnapshot): PrChange {
+function baseMovedChange(current: snapshotTypes.PrSnapshot): changesTypes.PrChange {
   const behind = current.behindBy;
   const distance =
     behind === undefined || behind === 0 ? "" : ` by ${behind} commit${behind === 1 ? "" : "s"}`;
@@ -87,7 +76,10 @@ function baseMovedChange(current: PrSnapshot): PrChange {
   );
 }
 
-export function describeChanges(previous: PrSnapshot, current: PrSnapshot): readonly PrChange[] {
+function describeChanges(
+  previous: snapshotTypes.PrSnapshot,
+  current: snapshotTypes.PrSnapshot,
+): readonly changesTypes.PrChange[] {
   if (current.state === "MERGED" && previous.state !== "MERGED") {
     return [
       change(
@@ -109,7 +101,7 @@ export function describeChanges(previous: PrSnapshot, current: PrSnapshot): read
     ];
   }
 
-  const changes: PrChange[] = [];
+  const changes: changesTypes.PrChange[] = [];
   if (!isConflicting(previous) && isConflicting(current)) {
     changes.push(
       change(
@@ -122,19 +114,27 @@ export function describeChanges(previous: PrSnapshot, current: PrSnapshot): read
     changes.push(baseMovedChange(current));
   }
   const checks = checkChange(previous.checks, current.checks);
-  if (checks) changes.push(checks);
+  if (checks !== undefined) changes.push(checks);
   const review = reviewChange(previous.reviewDecision, current.reviewDecision);
-  if (review) changes.push(review);
+  if (review !== undefined) changes.push(review);
   if (current.comments > previous.comments) {
     changes.push(commentChange(current.comments - previous.comments));
   }
   return changes;
 }
 
-export function describeChangeText(target: string, changes: readonly PrChange[]): string {
+function describeChangeText(target: string, changes: readonly changesTypes.PrChange[]): string {
   return `${target}: ${changes.map((entry) => entry.text).join(" ")}`;
 }
 
-export function isTerminalChange(changes: readonly PrChange[]): boolean {
+function isTerminalChange(changes: readonly changesTypes.PrChange[]): boolean {
   return changes.some((entry) => entry.terminal);
 }
+
+const changes = {
+  describeChangeText,
+  describeChanges,
+  isTerminalChange,
+};
+
+export default changes;

@@ -69,7 +69,7 @@ release. Add a tool name to select part of the graph. For example, run
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
 - squash merge の本文は手で書き直さず、PR の検査を通ったコミットメッセージを使う。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
-- パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（verify の `workspace-layout` が落とす）。
+- パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。
 - `libs/ai/src/models.generated.ts` は直接編集せず、`vp run generate:models` で作り直す。clone 直後に typecheck が通らないときは `vp run hydrate:model-data` を回す。
 
 ## pi との関係
@@ -80,10 +80,26 @@ release. Add a tool name to select part of the graph. For example, run
 
 - msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
 - 機能はコマンドラインやツールだけで終わらせず、人間が使う画面（TUI）も作る。状態をひと目で見られ、キー操作で覗く・指示する・止められるようにする。
+- `apps/coding-agent/src` では、同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む（`msa/no-local-class-extends`）。`tui.Container` や `Data.TaggedError` のような、別パッケージが継承して使う前提で出している基底は継承してよい。
 
 ## 環境変数
 
 - 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
+- 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
+
+## node の組み込み
+
+- Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。
+- import 文だけでなく、`require`・`createRequire(...)(...)`・`Module._load`・動的 `import()`・`export ... from` による再 export・`process.getBuiltinModule`・`process.binding` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。`node:module` から来た `createRequire`・`Module` と CJS の `module`（`module.constructor`）、`process`・`globalThis` は変数・別名・分割代入・再代入を追い、読み込む先やキーを決められない書き方（文字列でない引数、計算したキー、値を外へ渡すなど）も弾く。
+- 同期の fs（`existsSync`・`readFileSync` などの `*Sync`）は `msa/no-sync-fs` で禁じている。Effect の `FileSystem` か platform の非同期 API を使う。起動前など同期でしか書けない処理は、`core/platform/node/` の名前付き関数に閉じる。
+- 規則は `tools/oxlint/` にあり、すり抜けの書き方と一覧が effecttsgo・node の fs とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。lint の抑止コメントは書けない（`no-comments` で弾く）。読み込む先が実行時に決まるファイルは、`import()` に `pathToFileURL(...)` の URL を直接渡すか、ネイティブアドオンなら `process.dlopen` で読む（`libs/tui/src/native-addon.ts`）。どちらも組み込みには届かない。
+
+## テスト
+
+- テストは `Effect.gen` と `@msa/testing` で書く。`it` には `runTest(effect)` を渡し、`async` 関数と `await` は使わない。
+- fs・path・JSON・一時ディレクトリ・時刻・乱数は `@msa/testing` の関数を使い、`node:fs`・`node:path`・`JSON.parse`・`Date.now`・`Math.random`・`console` を直接触らない。
+- 環境変数は `withEnv` で与える（`effect.pipe(withEnv({ MSA_X: "1" }))`）。スコープを抜けると元に戻る。子プロセスへは `envSnapshot()` を `env` に渡す。
+- 書き方の実例は `apps/coding-agent/test/keybindings-migration.test.ts` と `apps/coding-agent/test/process-env.test.ts`。
 
 ## ライブラリ
 

@@ -1,13 +1,10 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import {
-  decodeKittyPrintable,
-  decodePrintableKey,
-  matchesKey,
-  parseKey,
-  setKittyProtocolActive,
-} from "../src/keys.ts";
+import keys from "../src/keys.ts";
+
+const { decodeKittyPrintable, decodePrintableKey, matchesKey, parseKey, setKittyProtocolActive } =
+  keys;
 
 describe("matchesKey", () => {
   describe("Legacy key matching", () => {
@@ -149,7 +146,6 @@ describe("parseKey", () => {
   describe("Kitty protocol with alternate keys", () => {
     it("should return Latin key name when base layout key is present", () => {
       setKittyProtocolActive(true);
-      // Cyrillic ctrl+с with base layout 'c'
       const cyrillicCtrlC = "\x1b[1089::99;5u";
       assert.strictEqual(parseKey(cyrillicCtrlC), "ctrl+c");
       setKittyProtocolActive(false);
@@ -157,7 +153,6 @@ describe("parseKey", () => {
 
     it("should prefer codepoint for Latin letters when base layout differs", () => {
       setKittyProtocolActive(true);
-      // Dvorak Ctrl+K reports codepoint 'k' (107) and base layout 'v' (118)
       const dvorakCtrlK = "\x1b[107::118;5u";
       assert.strictEqual(parseKey(dvorakCtrlK), "ctrl+k");
       setKittyProtocolActive(false);
@@ -165,7 +160,6 @@ describe("parseKey", () => {
 
     it("should prefer codepoint for symbol keys when base layout differs", () => {
       setKittyProtocolActive(true);
-      // Dvorak Ctrl+/ reports codepoint '/' (47) and base layout '[' (91)
       const dvorakCtrlSlash = "\x1b[47::91;5u";
       assert.strictEqual(parseKey(dvorakCtrlSlash), "ctrl+/");
       setKittyProtocolActive(false);

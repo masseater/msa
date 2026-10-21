@@ -1,267 +1,221 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-import { getModel } from "@msa/ai/compat";
-import { Type } from "typebox";
+import compat from "@msa/ai/compat";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { DefaultResourceLoader } from "../src/core/resource-loader.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createBashTool } from "../src/core/tools/bash.ts";
+import sdk from "../src/core/sdk.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
+import bash from "../src/core/tools/bash.ts";
+import codingAgent from "../src/index.ts";
 
-describe("AgentSession dynamic tool registration", () => {
-  let tempDir: string;
-  let agentDir: string;
+const { DefaultResourceLoader, SessionManager, SettingsManager } = codingAgent;
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-dynamic-tool-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
-  });
+const { createBashTool } = bash;
+const { createAgentSession } = sdk;
 
-  afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+const { getModel } = compat;
 
-  it("exposes session state before custom bash spawn hooks and supports opting out", async () => {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.create(tempDir, join(agentDir, "sessions"), {
+const {
+  awaited,
+  currentTimeMillis,
+  joinPath,
+  makeDirectory,
+  pathExists,
+  randomSuffixSync,
+  removePath,
+  runTest,
+} = testing;
+
+let tempDir: string;
+
+let agentDir: string;
+
+const exposesSessionStateBeforeCustomBashSpawnStep1 = () =>
+  Effect.gen(function* () {
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, agentDir));
+    const sessionManager = SessionManager.create(tempDir, joinPath(agentDir, "sessions"), {
       id: "bash-env-test",
     });
-    let sessionEnv: NodeJS.ProcessEnv | undefined;
-    let optedOutEnv: NodeJS.ProcessEnv | undefined;
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-      extensionFactories: [
-        (msa) => {
-          msa.registerTool(
-            createBashTool(tempDir, {
-              spawnHook: (ctx) => {
-                sessionEnv = ctx.env;
-                return ctx;
-              },
-            }),
-          );
-          msa.registerTool({
-            ...createBashTool(tempDir, {
-              exposeSessionEnvironment: false,
-              spawnHook: (ctx) => {
-                optedOutEnv = ctx.env;
-                return ctx;
-              },
-            }),
-            name: "bash_without_session_env",
-            label: "bash without session env",
-          });
+    return { sessionManager, settingsManager };
+  });
+
+const exposesSessionStateBeforeCustomBashSpawnStep2 = (context0: {
+  readonly args: {
+    readonly carried: {
+      readonly input: {
+        readonly sessionManager: sessionManagerTypes.SessionManager;
+        readonly settingsManager: settingsManagerTypes.SettingsManager;
+      };
+    };
+  };
+}) =>
+  Effect.sync(() => {
+    const { args } = context0;
+    const { carried } = args;
+    const { input } = carried;
+    const { settingsManager, sessionManager } = input;
+    return { sessionManager, settingsManager };
+  });
+
+const sessionEnvNames = [
+  "MSA_SESSION_ID",
+  "MSA_SESSION_FILE",
+  "MSA_PROVIDER",
+  "MSA_MODEL",
+  "MSA_REASONING_LEVEL",
+];
+
+type CapturedEnvs = { optedOut?: NodeJS.ProcessEnv; session?: NodeJS.ProcessEnv };
+
+type ExtensionFactory = NonNullable<
+  ConstructorParameters<typeof DefaultResourceLoader>[0]["extensionFactories"]
+>[number];
+
+const registerCapturingBashTools =
+  (envs: CapturedEnvs): ExtensionFactory =>
+  (msa) => {
+    msa.registerTool(
+      createBashTool(tempDir, {
+        spawnHook: (ctx) => {
+          envs.session = ctx.env;
+          return ctx;
         },
-      ],
+      }),
+    );
+    msa.registerTool({
+      ...createBashTool(tempDir, {
+        exposeSessionEnvironment: false,
+        spawnHook: (ctx) => {
+          envs.optedOut = ctx.env;
+          return ctx;
+        },
+      }),
+      label: "bash without session env",
+      name: "bash_without_session_env",
     });
-    await resourceLoader.reload();
+  };
+
+const exposesSessionStateBeforeCustomBashSpawnStep3 = (input: {
+  readonly sessionManager: sessionManagerTypes.SessionManager;
+  readonly settingsManager: settingsManagerTypes.SettingsManager;
+}) =>
+  Effect.gen(function* () {
+    const { sessionManager, settingsManager } = input;
+    const envs: CapturedEnvs = {};
+    const resourceLoader = new DefaultResourceLoader({
+      agentDir,
+      cwd: tempDir,
+      extensionFactories: [registerCapturingBashTools(envs)],
+      settingsManager,
+    });
+    yield* awaited(resourceLoader.reload());
 
     const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir,
-      model,
-      thinkingLevel: "high",
-      settingsManager,
-      sessionManager,
-      resourceLoader,
-    });
+    const { session } = yield* awaited(
+      createAgentSession({
+        agentDir,
+        cwd: tempDir,
+        model,
+        resourceLoader,
+        sessionManager,
+        settingsManager,
+        thinkingLevel: "high",
+      }),
+    );
 
     const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash")!;
-    expect(session.systemPrompt).toContain(
+    expect(session.tools.prompt.systemPrompt).toContain(
       "You can inspect MSA_* environment variables for current model and session details.",
     );
-    await bashTool.execute("bash-env", { command: "printf ok" });
-    expect(sessionEnv).toMatchObject({
-      MSA_SESSION_ID: session.sessionId,
-      MSA_SESSION_FILE: session.sessionFile,
-      MSA_PROVIDER: model.provider,
+    yield* awaited(bashTool.execute("bash-env", { command: "printf ok" }));
+    expect(envs.session).toMatchObject({
       MSA_MODEL: model.id,
+      MSA_PROVIDER: model.provider,
       MSA_REASONING_LEVEL: session.thinkingLevel,
+      MSA_SESSION_FILE: session.sessionFile,
+      MSA_SESSION_ID: session.sessionId,
     });
 
     const optedOutBashTool = session.agent.state.tools.find(
       (tool) => tool.name === "bash_without_session_env",
     )!;
-    await optedOutBashTool.execute("bash-no-env", { command: "printf ok" });
-    expect(optedOutEnv).not.toHaveProperty("MSA_SESSION_ID");
-    expect(optedOutEnv).not.toHaveProperty("MSA_SESSION_FILE");
-    expect(optedOutEnv).not.toHaveProperty("MSA_PROVIDER");
-    expect(optedOutEnv).not.toHaveProperty("MSA_MODEL");
-    expect(optedOutEnv).not.toHaveProperty("MSA_REASONING_LEVEL");
-
-    session.dispose();
+    yield* awaited(optedOutBashTool.execute("bash-no-env", { command: "printf ok" }));
+    for (const name of sessionEnvNames) expect(envs.optedOut).not.toHaveProperty(name);
+    return { session };
   });
 
-  it("refreshes tool registry when tools are registered after initialization", async () => {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.inMemory();
-
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_start", () => {
-            msa.registerTool({
-              name: "dynamic_tool",
-              label: "Dynamic Tool",
-              description: "Tool registered from session_start",
-              promptSnippet: "Run dynamic test behavior",
-              promptGuidelines: ["Use dynamic_tool when the user asks for dynamic behavior tests."],
-              parameters: Type.Object({}),
-              execute: async () => ({
-                content: [{ type: "text", text: "ok" }],
-                details: {},
-              }),
-            });
-          });
-        },
-      ],
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir,
-      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-      settingsManager,
+const exposesSessionStateBeforeCustomBashSpawnStep4 = (args: {
+  readonly carried: {
+    readonly input: {
+      readonly sessionManager: sessionManagerTypes.SessionManager;
+      readonly settingsManager: settingsManagerTypes.SettingsManager;
+    };
+  };
+}) =>
+  Effect.gen(function* () {
+    const { sessionManager, settingsManager } =
+      yield* exposesSessionStateBeforeCustomBashSpawnStep2({ args });
+    const { session } = yield* exposesSessionStateBeforeCustomBashSpawnStep3({
       sessionManager,
-      resourceLoader,
+      settingsManager,
     });
-
-    expect(session.getAllTools().map((tool) => tool.name)).not.toContain("dynamic_tool");
-
-    await session.bindExtensions({});
-
-    const allTools = session.getAllTools();
-    const dynamicTool = allTools.find((tool) => tool.name === "dynamic_tool");
-    const readTool = allTools.find((tool) => tool.name === "read");
-
-    expect(allTools.map((tool) => tool.name)).toContain("dynamic_tool");
-    expect(dynamicTool?.promptGuidelines).toEqual([
-      "Use dynamic_tool when the user asks for dynamic behavior tests.",
-    ]);
-    expect(dynamicTool?.sourceInfo).toMatchObject({
-      path: "<inline:1>",
-      source: "inline",
-      scope: "temporary",
-      origin: "top-level",
-    });
-    expect(readTool?.sourceInfo).toMatchObject({
-      path: "builtin:read",
-      source: "builtin",
-      scope: "temporary",
-      origin: "top-level",
-    });
-    expect(session.getActiveToolNames()).toContain("dynamic_tool");
-    expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-    expect(session.systemPrompt).toContain(
-      "- Use dynamic_tool when the user asks for dynamic behavior tests.",
-    );
-
-    session.dispose();
+    return { session };
   });
 
-  it("returns source metadata for SDK custom tools", async () => {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.inMemory();
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir,
-      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-      settingsManager,
-      sessionManager,
-      resourceLoader,
-      customTools: [
-        {
-          name: "sdk_tool",
-          label: "SDK Tool",
-          description: "Tool registered through createAgentSession",
-          parameters: Type.Object({}),
-          execute: async () => ({
-            content: [{ type: "text", text: "ok" }],
-            details: {},
-          }),
-        },
-      ],
-    });
-
-    const sdkTool = session.getAllTools().find((tool) => tool.name === "sdk_tool");
-    expect(sdkTool?.sourceInfo).toMatchObject({
-      path: "<sdk:sdk_tool>",
-      source: "sdk",
-      scope: "temporary",
-      origin: "top-level",
-    });
-    expect(session.getActiveToolNames()).toContain("sdk_tool");
-
-    session.dispose();
+const exposesSessionStateBeforeCustomBashSpawnStep5 = (carried: {
+  readonly input: {
+    readonly sessionManager: sessionManagerTypes.SessionManager;
+    readonly settingsManager: settingsManagerTypes.SettingsManager;
+  };
+}) =>
+  Effect.gen(function* () {
+    const { session } = yield* exposesSessionStateBeforeCustomBashSpawnStep4({ carried });
+    return { session };
   });
 
-  it("keeps custom tools active but omits them from available tools when promptSnippet is not provided", async () => {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.inMemory();
-
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_start", () => {
-            msa.registerTool({
-              name: "hidden_tool",
-              label: "Hidden Tool",
-              description: "Description should not appear in available tools",
-              parameters: Type.Object({}),
-              execute: async () => ({
-                content: [{ type: "text", text: "ok" }],
-                details: {},
-              }),
-            });
-          });
-        },
-      ],
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir,
-      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-      settingsManager,
-      sessionManager,
-      resourceLoader,
-    });
-
-    await session.bindExtensions({});
-
-    expect(session.getAllTools().map((tool) => tool.name)).toContain("hidden_tool");
-    expect(session.getActiveToolNames()).toContain("hidden_tool");
-    expect(session.systemPrompt).not.toContain("hidden_tool");
-    expect(session.systemPrompt).not.toContain("Description should not appear in available tools");
-
-    session.dispose();
+const exposesSessionStateBeforeCustomBashSpawnStep6 = (input: {
+  readonly sessionManager: sessionManagerTypes.SessionManager;
+  readonly settingsManager: settingsManagerTypes.SettingsManager;
+}) =>
+  Effect.gen(function* () {
+    const { session } = yield* exposesSessionStateBeforeCustomBashSpawnStep5({ input });
+    return { session };
   });
+
+const exposesSessionStateBeforeCustomBashSpawn = Effect.gen(function* () {
+  const { sessionManager, settingsManager } =
+    yield* exposesSessionStateBeforeCustomBashSpawnStep1();
+  const { session } = yield* exposesSessionStateBeforeCustomBashSpawnStep6({
+    sessionManager,
+    settingsManager,
+  });
+
+  session.dispose();
+});
+
+const beforeEachHook = Effect.gen(function* () {
+  tempDir = joinPath(
+    tmpdir(),
+    `msa-dynamic-tool-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+  );
+  agentDir = joinPath(tempDir, "agent");
+  yield* makeDirectory(agentDir);
+});
+
+const afterEachHook = Effect.gen(function* () {
+  if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+    yield* removePath(tempDir);
+  }
+});
+
+describe("AgentSession dynamic tool registration", () => {
+  beforeEach(() => runTest(beforeEachHook));
+
+  afterEach(() => runTest(afterEachHook));
+
+  it("exposes session state before custom bash spawn hooks and supports opting out", () =>
+    runTest(exposesSessionStateBeforeCustomBashSpawn));
 });

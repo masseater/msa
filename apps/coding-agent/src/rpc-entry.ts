@@ -1,11 +1,13 @@
-#!/usr/bin/env node
-import { APP_NAME } from "./config.ts";
-import { configureHttpDispatcher } from "./core/http-dispatcher.ts";
-import { main } from "./main.ts";
+import config from "./config.ts";
+import httpDispatcher from "./core/http-dispatcher.ts";
+import mainModule from "./main.ts";
+
+const { APP_NAME } = config;
+const { configureHttpDispatcher } = httpDispatcher;
+const { main } = mainModule;
 
 process.title = `${APP_NAME}-rpc`;
-process.env["MSA_CODING_AGENT"] = "true";
-process.env["AI_AGENT"] = "msa";
+Object.assign(process.env, { AI_AGENT: "msa", MSA_CODING_AGENT: "true" });
 process.emitWarning = (() => {}) as typeof process.emitWarning;
 
 configureHttpDispatcher();

@@ -1,48 +1,84 @@
-import type { Context } from "@msa/chord";
-import { type Conversation, defineTask, type Storage, type TaskId } from "@msa/durable";
+import type chordTypes from "@msa/chord/index.types";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { context } from "./session-support.ts";
-import { completed } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessLifecycleSupportTypes from "./harness-lifecycle-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export type Step = { phase: "run" };
+const { defineTask } = durable;
 
-// A one-phase task running `run` and completing with null.
-export function oneStep(name: string, run: () => Promise<void> = async () => {}) {
-  return defineTask<null, Step, null>({
-    name,
-    version: 1,
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { completed } = taskSupport;
+
+function oneStepImpl(name: string, run: () => Promise<void> = () => Promise.resolve()) {
+  return defineTask<null, harnessLifecycleSupportTypes.Step, null>({
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "run" }),
+    name,
     phases: {
-      run: async (_task, runtime, ctx) => {
-        await run();
-        await runtime.commit(() => completed(null), ctx);
-      },
+      run: (_task, runtime, ctx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(run());
+            yield* awaited(runtime.commit(() => completed(null), ctx));
+          }),
+        ),
     },
-    abort: async () => {},
+    version: 1,
   });
 }
 
-export function start(
-  conversation: Conversation,
+const oneStep: {
+  (run?: () => Promise<void>): (name: string) => ReturnType<typeof oneStepImpl>;
+  (name: string, run?: () => Promise<void>): ReturnType<typeof oneStepImpl>;
+} = dual((args) => typeof args[0] === "string", oneStepImpl);
+
+function startImpl(
+  conversation: durableTypes.Conversation,
   task: ReturnType<typeof oneStep>,
   background = false,
-): Promise<TaskId> {
+): Promise<durableTypes.TaskId> {
   return conversation.commit(
-    (tx) => tx.createTask(task, null, { ownership: { kind: "conversation" }, background }),
+    (tx) => tx.createTask(task, null, { background, ownership: { kind: "conversation" } }),
     context,
   );
 }
 
-export function withSignal(signal: AbortSignal): Context {
+const start: {
+  (
+    task: ReturnType<typeof oneStep>,
+    background?: boolean,
+  ): (conversation: durableTypes.Conversation) => ReturnType<typeof startImpl>;
+  (
+    conversation: durableTypes.Conversation,
+    task: ReturnType<typeof oneStep>,
+    background?: boolean,
+  ): ReturnType<typeof startImpl>;
+} = dual((args) => !("definition" in args[0]), startImpl);
+
+function withSignal(signal: AbortSignal): chordTypes.Context {
   return { ...context, abortSignal: signal };
 }
 
-// Whether a raw Storage read still succeeds, as code of a joined invocation relies on.
-export function storageOpen(storage: Storage): Promise<boolean> {
+function storageOpen(storage: durableTypes.Storage): Promise<boolean> {
   return Promise.resolve(
-    storage.task(1 as TaskId, context).then(
+    storage.task(1 as durableTypes.TaskId, context).then(
       () => true,
       () => false,
     ),
   );
 }
+
+const harnessLifecycleSupport = {
+  oneStep,
+  start,
+  storageOpen,
+  withSignal,
+};
+
+export default harnessLifecycleSupport;

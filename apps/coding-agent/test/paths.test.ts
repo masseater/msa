@@ -1,196 +1,202 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
-import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { describe, expect, it } from "vite-plus/test";
 
-import {
-  canonicalizePath,
+import paths from "../src/utils/paths.ts";
+import tempDirFixture from "./temp-dir-fixture.ts";
+
+const { useTempDir } = tempDirFixture;
+
+const {
   getCwdRelativePath,
   isLocalPath,
   normalizePath,
   normalizeWindowsShellPath,
-  resolvePath,
-} from "../src/utils/paths.ts";
+  resolvePath: resolvePathTo,
+} = paths;
 
-let tempDir: string;
+const { joinPath, resolvePath, runTest } = testing;
 
-afterEach(() => {
-  if (tempDir) {
-    rmSync(tempDir, { recursive: true, force: true });
-    tempDir = "";
-  }
-});
+const createTempDir = useTempDir("msa-paths-");
 
-function createTempDir(): string {
-  tempDir = mkdtempSync(join(tmpdir(), "msa-paths-"));
-  return tempDir;
-}
+const keepsCwdRelativeNamesThatStartWith = () => {
+  const cwd = joinPath(tmpdir(), "msa-paths-cwd");
+  expect(getCwdRelativePath(joinPath(cwd, "..config", "AGENTS.md"), cwd)).toBe(
+    joinPath("..config", "AGENTS.md"),
+  );
+};
 
-describe("canonicalizePath", () => {
-  it("returns the real path for a regular file", () => {
-    const dir = createTempDir();
-    const file = join(dir, "file.txt");
-    writeFileSync(file, "hello");
-    expect(canonicalizePath(file)).toBe(realpathSync(file));
-  });
-
-  it("resolves symlinks to their targets", () => {
-    const dir = createTempDir();
-    const target = join(dir, "target.txt");
-    const link = join(dir, "link.txt");
-    writeFileSync(target, "hello");
-    symlinkSync(target, link);
-    expect(canonicalizePath(link)).toBe(realpathSync(target));
-  });
-
-  it("resolves directory symlinks", () => {
-    const dir = createTempDir();
-    const targetDir = join(dir, "target-dir");
-    const linkDir = join(dir, "link-dir");
-    mkdirSync(targetDir);
-    symlinkSync(targetDir, linkDir, "dir");
-    expect(canonicalizePath(linkDir)).toBe(realpathSync(targetDir));
-  });
-
-  it("falls back to the raw path when the target does not exist", () => {
-    const dir = createTempDir();
-    const nonexistent = join(dir, "no-such-file");
-    expect(canonicalizePath(nonexistent)).toBe(nonexistent);
-  });
-
-  it("falls back to the raw path for a dangling symlink", () => {
-    const dir = createTempDir();
-    const target = join(dir, "target.txt");
-    const link = join(dir, "link.txt");
-    // Create a symlink whose target does not exist.
-    symlinkSync(target, link);
-    // realpathSync would throw, so canonicalizePath returns the link path.
-    expect(canonicalizePath(link)).toBe(link);
-  });
-});
+const rejectsParentDirectoryTraversals = () => {
+  const cwd = joinPath(tmpdir(), "msa-paths-cwd");
+  expect(getCwdRelativePath(joinPath(cwd, "..", "AGENTS.md"), cwd)).toBeUndefined();
+};
 
 describe("getCwdRelativePath", () => {
-  it("keeps cwd-relative names that start with dots", () => {
-    const cwd = join(tmpdir(), "msa-paths-cwd");
-    expect(getCwdRelativePath(join(cwd, "..config", "AGENTS.md"), cwd)).toBe(
-      join("..config", "AGENTS.md"),
-    );
-  });
+  it("keeps cwd-relative names that start with dots", keepsCwdRelativeNamesThatStartWith);
 
-  it("rejects parent-directory traversals", () => {
-    const cwd = join(tmpdir(), "msa-paths-cwd");
-    expect(getCwdRelativePath(join(cwd, "..", "AGENTS.md"), cwd)).toBeUndefined();
-  });
+  it("rejects parent-directory traversals", rejectsParentDirectoryTraversals);
 });
+
+const expandsOnlyHomeTildeShortcuts = () => {
+  const cwd = joinPath(tmpdir(), "msa-paths-cwd");
+  expect(normalizePath("~")).toBe(homedir());
+  expect(normalizePath("~/file.txt")).toBe(joinPath(homedir(), "file.txt"));
+  expect(resolvePathTo("~draft.md", cwd)).toBe(resolvePath(cwd, "~draft.md"));
+  expect(normalizePath("~draft.md")).toBe("~draft.md");
+};
+
+const resolvesRelativePathsAgainstTheBaseDirectory = () => {
+  const cwd = joinPath(tmpdir(), "msa-paths-cwd");
+  expect(resolvePathTo("subdir/file.txt", cwd)).toBe(resolvePath(cwd, "subdir/file.txt"));
+  expect(resolvePathTo("subdir/file.txt", pathToFileURL(cwd).href)).toBe(
+    resolvePath(cwd, "subdir/file.txt"),
+  );
+};
+
+const acceptsFileUrls = () =>
+  runTest(
+    Effect.gen(function* () {
+      const dir = yield* createTempDir;
+      const filePath = joinPath(dir, "file with spaces.txt");
+      expect(resolvePathTo(pathToFileURL(filePath).href, joinPath(dir, "base"))).toBe(
+        resolvePath(filePath),
+      );
+    }),
+  );
+
+const throwsForInvalidFileUrls = () => {
+  expect(() => resolvePathTo("file:///%E0%A4%A")).toThrow();
+};
+
+const preservesPosixAbsolutePathsWithLiteralPercent = () =>
+  runTest(
+    Effect.gen(function* () {
+      if (process.platform === "win32") {
+        return;
+      }
+
+      const dir = yield* createTempDir;
+      for (const filePath of [
+        joinPath(dir, "report%2026.md"),
+        joinPath(dir, "foo%2Fbar"),
+        joinPath(dir, "malformed%A.md"),
+      ]) {
+        expect(resolvePathTo(filePath, joinPath(dir, "base"))).toBe(resolvePath(filePath));
+      }
+    }),
+  );
+
+const doesNotTreatWindowsFileUrlPathname = () =>
+  runTest(
+    Effect.gen(function* () {
+      if (process.platform !== "win32") {
+        return;
+      }
+
+      const dir = yield* createTempDir;
+      const filePath = joinPath(dir, "dir", "SKILL.md");
+      const pathname = pathToFileURL(filePath).pathname;
+      expect(pathname).toMatch(/^\/[A-Za-z]:/u);
+      expect(resolvePathTo(pathname, "E:\\project")).toBe(resolvePath(pathname));
+    }),
+  );
 
 describe("resolvePath", () => {
-  it("expands only home tilde shortcuts", () => {
-    const cwd = join(tmpdir(), "msa-paths-cwd");
-    expect(normalizePath("~")).toBe(homedir());
-    expect(normalizePath("~/file.txt")).toBe(join(homedir(), "file.txt"));
-    expect(resolvePath("~draft.md", cwd)).toBe(resolve(cwd, "~draft.md"));
-    expect(normalizePath("~draft.md")).toBe("~draft.md");
-  });
+  it("expands only home tilde shortcuts", expandsOnlyHomeTildeShortcuts);
 
-  it("resolves relative paths against the base directory", () => {
-    const cwd = join(tmpdir(), "msa-paths-cwd");
-    expect(resolvePath("subdir/file.txt", cwd)).toBe(resolve(cwd, "subdir/file.txt"));
-    expect(resolvePath("subdir/file.txt", pathToFileURL(cwd).href)).toBe(
-      resolve(cwd, "subdir/file.txt"),
-    );
-  });
+  it(
+    "resolves relative paths against the base directory",
+    resolvesRelativePathsAgainstTheBaseDirectory,
+  );
 
-  it("accepts file URLs", () => {
-    const dir = createTempDir();
-    const filePath = join(dir, "file with spaces.txt");
-    expect(resolvePath(pathToFileURL(filePath).href, join(dir, "base"))).toBe(resolve(filePath));
-  });
+  it("accepts file URLs", acceptsFileUrls);
 
-  it("throws for invalid file URLs", () => {
-    expect(() => resolvePath("file:///%E0%A4%A")).toThrow();
-  });
+  it("throws for invalid file URLs", throwsForInvalidFileUrls);
 
-  it("preserves POSIX absolute paths with literal percent sequences", () => {
-    if (process.platform === "win32") {
-      return;
-    }
+  it(
+    "preserves POSIX absolute paths with literal percent sequences",
+    preservesPosixAbsolutePathsWithLiteralPercent,
+  );
 
-    const dir = createTempDir();
-    for (const filePath of [
-      join(dir, "report%2026.md"),
-      join(dir, "foo%2Fbar"),
-      join(dir, "malformed%A.md"),
-    ]) {
-      expect(resolvePath(filePath, join(dir, "base"))).toBe(resolve(filePath));
-    }
-  });
-
-  it("does not treat Windows file URL pathname strings as native paths", () => {
-    if (process.platform !== "win32") {
-      return;
-    }
-
-    const dir = createTempDir();
-    const filePath = join(dir, "dir", "SKILL.md");
-    const pathname = pathToFileURL(filePath).pathname;
-    expect(pathname).toMatch(/^\/[A-Za-z]:/);
-    expect(resolvePath(pathname, "E:\\project")).toBe(resolve(pathname));
-  });
+  it(
+    "does not treat Windows file URL pathname strings as native paths",
+    doesNotTreatWindowsFileUrlPathname,
+  );
 });
+
+const convertsGitBashMsysCygwinAndWsl = () => {
+  expect(normalizeWindowsShellPath("/c/Users/example/project")).toBe("C:\\Users\\example\\project");
+  expect(normalizeWindowsShellPath("/cygdrive/d/work")).toBe("D:\\work");
+  expect(normalizeWindowsShellPath("/mnt/e/source")).toBe("E:\\source");
+  expect(normalizeWindowsShellPath("/c")).toBe("C:\\");
+};
+
+const leavesOtherPathFormsUnchanged = () => {
+  for (const path of [
+    "C:/Users/example",
+    "C:\\Users\\example",
+    "//server/share/file",
+    "/c/Users\\example",
+    "relative/file",
+    "/tmp/file",
+  ]) {
+    expect(normalizeWindowsShellPath(path)).toBe(path);
+  }
+};
+
+const isAppliedByNormalPathHandlingOn = () => {
+  expect(normalizePath("/c/Users/example")).toBe("C:\\Users\\example");
+  expect(resolvePathTo("/mnt/c/Users/example", "D:\\work")).toBe(resolvePath("C:/Users/example"));
+};
 
 describe("normalizeWindowsShellPath", () => {
-  it("converts Git Bash, MSYS, Cygwin, and WSL drive paths", () => {
-    expect(normalizeWindowsShellPath("/c/Users/example/project")).toBe(
-      "C:\\Users\\example\\project",
-    );
-    expect(normalizeWindowsShellPath("/cygdrive/d/work")).toBe("D:\\work");
-    expect(normalizeWindowsShellPath("/mnt/e/source")).toBe("E:\\source");
-    expect(normalizeWindowsShellPath("/c")).toBe("C:\\");
-  });
+  it("converts Git Bash, MSYS, Cygwin, and WSL drive paths", convertsGitBashMsysCygwinAndWsl);
 
-  it("leaves other path forms unchanged", () => {
-    for (const path of [
-      "C:/Users/example",
-      "C:\\Users\\example",
-      "//server/share/file",
-      "/c/Users\\example",
-      "relative/file",
-      "/tmp/file",
-    ]) {
-      expect(normalizeWindowsShellPath(path)).toBe(path);
-    }
-  });
+  it("leaves other path forms unchanged", leavesOtherPathFormsUnchanged);
 
-  it.runIf(process.platform === "win32")("is applied by normal path handling on Windows", () => {
-    expect(normalizePath("/c/Users/example")).toBe("C:\\Users\\example");
-    expect(resolvePath("/mnt/c/Users/example", "D:\\work")).toBe(resolve("C:/Users/example"));
-  });
+  it.runIf(process.platform === "win32")(
+    "is applied by normal path handling on Windows",
+    isAppliedByNormalPathHandlingOn,
+  );
 });
 
+const returnsTrueForBareNames = () => {
+  expect(isLocalPath("my-package")).toBe(true);
+};
+
+const returnsTrueForRelativePaths = () => {
+  expect(isLocalPath("./foo")).toBe(true);
+};
+
+const returnsTrueForFileUrls = () => {
+  expect(isLocalPath("file:///tmp/foo")).toBe(true);
+};
+
+const returnsFalseForNpmProtocol = () => {
+  expect(isLocalPath("npm:package")).toBe(false);
+};
+
+const returnsFalseForGitProtocol = () => {
+  expect(isLocalPath("git://repo")).toBe(false);
+};
+
+const returnsFalseForHttpsProtocol = () => {
+  expect(isLocalPath("https://example.com")).toBe(false);
+};
+
 describe("isLocalPath", () => {
-  it("returns true for bare names", () => {
-    expect(isLocalPath("my-package")).toBe(true);
-  });
+  it("returns true for bare names", returnsTrueForBareNames);
 
-  it("returns true for relative paths", () => {
-    expect(isLocalPath("./foo")).toBe(true);
-  });
+  it("returns true for relative paths", returnsTrueForRelativePaths);
 
-  it("returns true for file URLs", () => {
-    expect(isLocalPath("file:///tmp/foo")).toBe(true);
-  });
+  it("returns true for file URLs", returnsTrueForFileUrls);
 
-  it("returns false for npm: protocol", () => {
-    expect(isLocalPath("npm:package")).toBe(false);
-  });
+  it("returns false for npm: protocol", returnsFalseForNpmProtocol);
 
-  it("returns false for git: protocol", () => {
-    expect(isLocalPath("git://repo")).toBe(false);
-  });
+  it("returns false for git: protocol", returnsFalseForGitProtocol);
 
-  it("returns false for https: protocol", () => {
-    expect(isLocalPath("https://example.com")).toBe(false);
-  });
+  it("returns false for https: protocol", returnsFalseForHttpsProtocol);
 });

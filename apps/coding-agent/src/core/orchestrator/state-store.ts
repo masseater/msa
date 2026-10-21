@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type DatabaseSync from "../platform/node/sqlite.ts";
 
 function storedMaxConcurrent(database: DatabaseSync, project: string): number | null {
   const row = database
@@ -16,7 +16,7 @@ function storeMaxConcurrent(database: DatabaseSync, project: string, value: numb
     .run(project, value);
 }
 
-export const stateStore = { storedMaxConcurrent, storeMaxConcurrent };
+const stateStore = { storeMaxConcurrent, storedMaxConcurrent };
 
 function recoverRunning(database: DatabaseSync, project: string, now: number): void {
   database
@@ -31,4 +31,11 @@ function recoverRunning(database: DatabaseSync, project: string, now: number): v
     .run(now, project);
 }
 
-export const recovery = { recoverRunning };
+const recovery = { recoverRunning };
+
+const stateStoreModule = {
+  recovery,
+  stateStore,
+};
+
+export default stateStoreModule;

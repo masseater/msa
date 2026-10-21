@@ -1,10 +1,16 @@
 import assert from "node:assert";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { Image } from "../src/components/image.ts";
-import {
+import imageModule from "../src/components/image.ts";
+import platform from "../src/platform.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import terminalImage from "../src/terminal-image.ts";
+import utils from "../src/utils.ts";
+
+const { pathOperations } = platform;
+const {
   cropKittyImageLine,
   deleteAllKittyImages,
   deleteAllKittyPlacements,
@@ -14,21 +20,22 @@ import {
   getKittyImagePlacement,
   getKittyImagePlacementRows,
   registerKittyImageMetadata,
-  renderImage,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-image.ts";
-import { visibleWidth } from "../src/utils.ts";
+} = terminalImageKitty;
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { renderImage } = terminalImage;
+const { Image } = imageModule;
+const { visibleWidth } = utils;
+
+const { join } = pathOperations;
 
 describe("Kitty image cursor movement", () => {
   it("can request no terminal-side cursor movement", () => {
-    const sequence = encodeKitty("AAAA", { columns: 2, rows: 2, moveCursor: false });
+    const sequence = encodeKitty("AAAA", { columns: 2, moveCursor: false, rows: 2 });
     assert.ok(sequence.startsWith("\x1b_Ga=T,f=100,q=2,C=1,c=2,r=2;"));
   });
 
   it("reads explicit placement rows without registered metadata", () => {
-    const sequence = encodeKitty("AAAA", { columns: 2, rows: 3, moveCursor: false });
+    const sequence = encodeKitty("AAAA", { columns: 2, moveCursor: false, rows: 3 });
     assert.strictEqual(getKittyImagePlacementRows(sequence), 3);
   });
 
@@ -39,28 +46,28 @@ describe("Kitty image cursor movement", () => {
   });
 
   it("preserves renderImage's default terminal-side cursor movement", () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
     try {
-      const result = renderImage("AAAA", { widthPx: 20, heightPx: 20 }, { maxWidthCells: 2 });
+      const result = renderImage("AAAA", { heightPx: 20, widthPx: 20 }, { maxWidthCells: 2 });
       assert.ok(result);
       assert.ok(!result.sequence.includes(",C=1,"));
       assert.strictEqual(result.rows, 2);
     } finally {
       resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
     }
   });
 });
 
 describe("Kitty image cursor movement", () => {
   it("can opt renderImage into no terminal-side cursor movement", () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
     try {
       const result = renderImage(
         "AAAA",
-        { widthPx: 20, heightPx: 20 },
+        { heightPx: 20, widthPx: 20 },
         { maxWidthCells: 2, moveCursor: false },
       );
       assert.ok(result);
@@ -68,43 +75,43 @@ describe("Kitty image cursor movement", () => {
       assert.strictEqual(result.rows, 2);
     } finally {
       resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
     }
   });
 
   it("registers metadata and crops a partially visible placement", () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
     try {
       const result = renderImage(
         "AAAA",
-        { widthPx: 100, heightPx: 100 },
-        { maxWidthCells: 3, imageId: 42, moveCursor: false },
+        { heightPx: 100, widthPx: 100 },
+        { imageId: 42, maxWidthCells: 3, moveCursor: false },
       );
       assert.ok(result);
       assert.deepStrictEqual(getKittyImageMetadata(result.sequence), {
-        imageId: 42,
         columns: 3,
+        heightPx: 100,
+        imageId: 42,
         rows: 3,
         widthPx: 100,
-        heightPx: 100,
       });
       assert.ok(cropKittyImageLine(result.sequence, 2, 1).includes("y=66,h=34,r=1"));
     } finally {
       resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
     }
   });
 });
 
 describe("Kitty image cursor movement", () => {
   it("creates placement-only commands for uploaded and cropped images", () => {
-    registerKittyImageMetadata({ imageId: 42, columns: 3, rows: 3, widthPx: 100, heightPx: 100 });
+    registerKittyImageMetadata({ columns: 3, heightPx: 100, imageId: 42, rows: 3, widthPx: 100 });
     const transmission = encodeKitty("A".repeat(8192), {
       columns: 3,
-      rows: 3,
       imageId: 42,
       moveCursor: false,
+      rows: 3,
     });
     const line = `left ${cropKittyImageLine(transmission, 2, 1)} right`;
     const placement = getKittyImagePlacement(line);
@@ -119,57 +126,57 @@ describe("Kitty image cursor movement", () => {
   });
 
   it("honors maxHeightCells by reducing rendered width", () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
     try {
       const result = renderImage(
         "AAAA",
-        { widthPx: 10, heightPx: 100 },
-        { maxWidthCells: 10, maxHeightCells: 5 },
+        { heightPx: 100, widthPx: 10 },
+        { maxHeightCells: 5, maxWidthCells: 10 },
       );
       assert.ok(result);
       assert.strictEqual(result.rows, 5);
       assert.ok(result.sequence.includes(",c=1,r=5"));
     } finally {
       resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
     }
   });
 });
 
 describe("Kitty image cursor movement", () => {
   it("caps Image component height to a square pixel box by default", () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 20 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 20, widthPx: 10 });
     try {
       const image = new Image(
         "AAAA",
         "image/png",
         { fallbackColor: (value) => value },
         { maxWidthCells: 10 },
-        { widthPx: 10, heightPx: 100 },
+        { heightPx: 100, widthPx: 10 },
       );
       const lines = image.render(12);
       assert.strictEqual(lines.length, 5);
       assert.ok(lines[0]?.includes(",c=1,r=5"));
     } finally {
       resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
     }
   });
 });
 
 describe("Kitty image cursor movement", () => {
   it("places image sequence on first line with empty padding rows", () => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
     try {
       const image = new Image(
         "AAAA",
         "image/png",
         { fallbackColor: (value) => value },
         { maxWidthCells: 2 },
-        { widthPx: 20, heightPx: 20 },
+        { heightPx: 20, widthPx: 20 },
       );
       const lines = image.render(4);
       const imageId = image.getImageId();
@@ -181,14 +188,14 @@ describe("Kitty image cursor movement", () => {
       assert.deepStrictEqual(lines.slice(1, lines.length), [""]);
     } finally {
       resetCapabilitiesCache();
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
     }
   });
 });
 
 describe("Kitty image cursor movement", () => {
   it("truncates long image fallback lines to render width", () => {
-    setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+    setCapabilities({ hyperlinks: false, images: null, trueColor: false });
     try {
       const longPath = join(
         homedir(),
@@ -201,7 +208,7 @@ describe("Kitty image cursor movement", () => {
         "image/png",
         { fallbackColor: (value) => `\x1b[33m${value}\x1b[0m` },
         { filename: longPath },
-        { widthPx: 1280, heightPx: 720 },
+        { heightPx: 720, widthPx: 1280 },
       );
       const lines = image.render(width);
       assert.strictEqual(lines.length, 1);
@@ -222,15 +229,15 @@ describe("Kitty image cursor movement", () => {
 describe("image cell sizing", () => {
   afterEach(() => {
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   describe("Kitty", () => {
     beforeEach(() => {
-      setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
     });
     it("reserves at least one Kitty row for thin images", () => {
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
-      const result = renderImage("AAAA", { widthPx: 1200, heightPx: 12 }, { maxWidthCells: 60 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
+      const result = renderImage("AAAA", { heightPx: 12, widthPx: 1200 }, { maxWidthCells: 60 });
       assert.ok(result);
       assert.strictEqual(result.rows, 1);
       assert.ok(result.sequence.includes(",c=60,r=1;"));

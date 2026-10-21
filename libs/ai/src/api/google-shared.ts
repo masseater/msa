@@ -1,510 +1,12 @@
-/**
- * Shared utilities for the Google Generative AI API.
- */
+import { FinishReason } from "@google/genai";
+import { Effect, Function } from "effect";
 
-import {
-  type Content,
-  FinishReason,
-  FunctionCallingConfigMode,
-  ThinkingLevel as GoogleSdkThinkingLevel,
-  type Part,
-  type ThinkingConfig,
-} from "@google/genai";
+import type typesModule from "../types.types.ts";
+import providerRetry from "../utils/provider-retry.ts";
 
-import { clampThinkingLevel } from "../models.ts";
-import type {
-  ImageContent,
-  Model,
-  StopReason,
-  StreamOptions,
-  TextContent,
-  ThinkingLevel,
-  Tool,
-  TranscriptContext,
-} from "../types.ts";
-import { retryProviderRequest } from "../utils/provider-retry.ts";
-import { sanitizeSurrogates } from "../utils/sanitize-unicode.ts";
-import { collapseSystemMessages, withoutInitialSystemMessage } from "../utils/transcript.ts";
-import {
-  getJsonSchemaToolParameters,
-  resolveJsonSchemaStrictSampling,
-} from "./constrained-sampling.ts";
-import { transformMessages } from "./transform-messages.ts";
+const { retryProviderEffect } = providerRetry;
 
-type GoogleApiType = "google-generative-ai";
-
-/**
- * Thinking level for Gemini 3 models.
- * Mirrors Google's ThinkingLevel enum values.
- */
-export type GoogleApiThinkingLevel =
-  | "THINKING_LEVEL_UNSPECIFIED"
-  | "MINIMAL"
-  | "LOW"
-  | "MEDIUM"
-  | "HIGH";
-export type ResolvedGoogleThinkingLevel = Exclude<ThinkingLevel, "xhigh" | "max">;
-
-const GOOGLE_SDK_THINKING_LEVEL_MAP: Record<GoogleApiThinkingLevel, GoogleSdkThinkingLevel> = {
-  THINKING_LEVEL_UNSPECIFIED: GoogleSdkThinkingLevel.THINKING_LEVEL_UNSPECIFIED,
-  MINIMAL: GoogleSdkThinkingLevel.MINIMAL,
-  LOW: GoogleSdkThinkingLevel.LOW,
-  MEDIUM: GoogleSdkThinkingLevel.MEDIUM,
-  HIGH: GoogleSdkThinkingLevel.HIGH,
-};
-
-/**
- * Resolve a supported msa level or model-specific Google mapping to a standard Google level.
- *
- * @param {Model<T>} model - Google model the request targets
- * @param {ThinkingLevel} level - requested thinking level
- * @returns {ResolvedGoogleThinkingLevel} the standard Google thinking level
- */
-export function resolveGoogleThinkingLevel<T extends GoogleApiType>(
-  model: Model<T>,
-  level: ThinkingLevel,
-): ResolvedGoogleThinkingLevel {
-  const mapped = model.thinkingLevelMap?.[level];
-  const resolvedLevel = typeof mapped === "string" ? mapped.toLowerCase() : level;
-  switch (resolvedLevel) {
-    case "minimal":
-    case "low":
-    case "medium":
-    case "high":
-      return resolvedLevel;
-    default:
-      throw new Error(
-        `Unsupported Google thinking level mapping for ${model.provider}/${model.id}: ${level} -> ${String(mapped)}`,
-      );
-  }
-}
-
-/**
- * Whether this model uses Gemini's discrete `thinkingLevel` control instead of
- * the token-based `thinkingBudget` control. Supported levels come from the
- * model's `thinkingLevelMap`; this only selects the Google wire format.
- *
- * @param {Model<T>} model - Google model to check
- * @returns {boolean} whether the model uses thinkingLevel
- */
-export function usesGoogleThinkingLevel<T extends GoogleApiType>(model: Model<T>): boolean {
-  const id = model.id.toLowerCase();
-  return (
-    // Match Gemini 3 Pro/Flash IDs with or without a minor version, such as
-    // gemini-3-flash-preview, gemini-3.1-pro-preview, and gemini-3.8-flash.
-    /gemini-3(?:\.\d+)?-(?:pro|flash)/u.test(id) ||
-    // Match Gemini 4 and later, such as gemini-4-argon (#10890).
-    /gemini-(?:[4-9]|[1-9]\d)/u.test(id) ||
-    id === "gemini-flash-latest" ||
-    id === "gemini-flash-lite-latest" ||
-    // Match both hosted Gemma 4 naming forms: gemma-4-* and gemma4-*.
-    /gemma-?4/u.test(id)
-  );
-}
-
-export function toGoogleThinkingLevel(level: ResolvedGoogleThinkingLevel): GoogleApiThinkingLevel {
-  switch (level) {
-    case "minimal":
-      return "MINIMAL";
-    case "low":
-      return "LOW";
-    case "medium":
-      return "MEDIUM";
-    case "high":
-      return "HIGH";
-  }
-}
-
-export function toGoogleSdkThinkingLevel(level: GoogleApiThinkingLevel): GoogleSdkThinkingLevel {
-  return GOOGLE_SDK_THINKING_LEVEL_MAP[level];
-}
-
-export function getDisabledGoogleThinkingConfig<T extends GoogleApiType>(
-  model: Model<T>,
-): ThinkingConfig {
-  if (!usesGoogleThinkingLevel(model)) return { thinkingBudget: 0 };
-
-  const fallback = clampThinkingLevel(model, "off");
-  if (fallback === "off") return { thinkingBudget: 0 };
-
-  const resolvedLevel = resolveGoogleThinkingLevel(model, fallback);
-  const apiLevel = toGoogleThinkingLevel(resolvedLevel);
-  return { thinkingLevel: toGoogleSdkThinkingLevel(apiLevel) };
-}
-
-/**
- * Determines whether a streamed Gemini `Part` should be treated as "thinking".
- *
- * Protocol note (Gemini / Vertex AI thought signatures):
- * - `thought: true` is the definitive marker for thinking content (thought summaries).
- * - `thoughtSignature` is an encrypted representation of the model's internal thought process
- *   used to preserve reasoning context across multi-turn interactions.
- * - `thoughtSignature` can appear on ANY part type (text, functionCall, etc.) - it does NOT
- *   indicate the part itself is thinking content.
- * - For non-functionCall responses, the signature appears on the last part for context replay.
- * - When persisting/replaying model outputs, signature-bearing parts must be preserved as-is;
- *   do not merge/move signatures across parts.
- *
- * See: https://ai.google.dev/gemini-api/docs/thought-signatures
- *
- * @param {Pick<Part, "thought" | "thoughtSignature">} part - streamed Gemini part
- * @returns {boolean} whether the part is thinking content
- */
-export function isThinkingPart(part: Pick<Part, "thought" | "thoughtSignature">): boolean {
-  return part.thought === true;
-}
-
-/**
- * Retain thought signatures during streaming.
- *
- * Some backends only send `thoughtSignature` on the first delta for a given part/block; later deltas may omit it.
- * This helper preserves the last non-empty signature for the current block.
- *
- * Note: this does NOT merge or move signatures across distinct response parts. It only prevents
- * a signature from being overwritten with `undefined` within the same streamed block.
- *
- * @param {string | undefined} existing - signature kept so far for the block
- * @param {string | undefined} incoming - signature of the current delta
- * @returns {string | undefined} the signature to keep
- */
-export function retainThoughtSignature(
-  existing: string | undefined,
-  incoming: string | undefined,
-): string | undefined {
-  if (typeof incoming === "string" && incoming.length > 0) return incoming;
-  return existing;
-}
-
-// Thought signatures must be base64 for Google APIs (TYPE_BYTES).
-const base64SignaturePattern = /^[A-Za-z0-9+/]+={0,2}$/u;
-
-function isValidThoughtSignature(signature: string | undefined): boolean {
-  if (!signature) return false;
-  if (signature.length % 4 !== 0) return false;
-  return base64SignaturePattern.test(signature);
-}
-
-/**
- * Only keep signatures from the same provider/model and with valid base64.
- *
- * @param {boolean} isSameProviderAndModel - whether the signature comes from the target model
- * @param {string | undefined} signature - stored thought signature
- * @returns {string | undefined} the signature to replay, or undefined
- */
-function resolveThoughtSignature(
-  isSameProviderAndModel: boolean,
-  signature: string | undefined,
-): string | undefined {
-  return isSameProviderAndModel && isValidThoughtSignature(signature) ? signature : undefined;
-}
-
-/**
- * Models via Google APIs that require explicit tool call IDs in function calls/responses.
- *
- * @param {string} modelId - model id to check
- * @returns {boolean} whether function calls and responses need explicit ids
- */
-export function requiresToolCallId(modelId: string): boolean {
-  const geminiMajorVersion = getGeminiMajorVersion(modelId);
-  return (
-    modelId.startsWith("claude-") ||
-    modelId.startsWith("gpt-oss-") ||
-    (geminiMajorVersion !== undefined && geminiMajorVersion >= 3)
-  );
-}
-
-function getGeminiMajorVersion(modelId: string): number | undefined {
-  const major = modelId.toLowerCase().match(/^gemini(?:-live)?-(\d+)/u)?.[1];
-  if (major === undefined) return undefined;
-  return Number.parseInt(major, 10);
-}
-
-function supportsMultimodalFunctionResponse(modelId: string): boolean {
-  const geminiMajorVersion = getGeminiMajorVersion(modelId);
-  if (geminiMajorVersion !== undefined) {
-    return geminiMajorVersion >= 3;
-  }
-  return true;
-}
-
-export function convertMessages<T extends GoogleApiType>(
-  model: Model<T>,
-  context: TranscriptContext,
-): Content[] {
-  // Gemini has no mid-conversation system messages; the leading prompt is sent as systemInstruction.
-  const conversation = withoutInitialSystemMessage(collapseSystemMessages(context).messages);
-  const contents: Content[] = [];
-  const normalizeToolCallId = (id: string): string => {
-    if (!requiresToolCallId(model.id)) return id;
-    return id.replace(/[^a-zA-Z0-9_-]/gu, (char) => "_".repeat(char.length)).slice(0, 64);
-  };
-
-  const transformedMessages = transformMessages(conversation, model, normalizeToolCallId);
-
-  for (const msg of transformedMessages) {
-    if (msg.role === "user") {
-      if (typeof msg.content === "string") {
-        contents.push({
-          role: "user",
-          parts: [{ text: sanitizeSurrogates(msg.content) }],
-        });
-      } else {
-        const parts: Part[] = msg.content.map((item) => {
-          if (item.type === "text") {
-            return { text: sanitizeSurrogates(item.text) };
-          }
-          return {
-            inlineData: {
-              mimeType: item.mimeType,
-              data: item.data,
-            },
-          };
-        });
-        if (parts.length === 0) continue;
-        contents.push({
-          role: "user",
-          parts,
-        });
-      }
-    } else if (msg.role === "assistant") {
-      const parts: Part[] = [];
-      // Check if message is from same provider and model - only then keep thinking blocks
-      const isSameProviderAndModel = msg.provider === model.provider && msg.model === model.id;
-
-      for (const block of msg.content) {
-        if (block.type === "text") {
-          const thoughtSignature = resolveThoughtSignature(
-            isSameProviderAndModel,
-            block.textSignature,
-          );
-          // Skip empty text blocks — unless they carry a thought signature. Gemini can attach
-          // the signature to a part whose visible text is empty and requires it echoed back;
-          // dropping it breaks the reasoning chain and the model intermittently ends mid-task
-          // turns with a thought-only STOP (empty completion, no tool call).
-          if ((!block.text || block.text.trim() === "") && !thoughtSignature) continue;
-          parts.push({
-            text: sanitizeSurrogates(block.text),
-            ...(thoughtSignature && { thoughtSignature }),
-          });
-        } else if (block.type === "thinking") {
-          // Only keep as thinking block if same provider AND same model
-          // Otherwise convert to plain text (no tags to avoid model mimicking them)
-          if (isSameProviderAndModel) {
-            const thoughtSignature = resolveThoughtSignature(
-              isSameProviderAndModel,
-              block.thinkingSignature,
-            );
-            // Same rule as text blocks: an empty thinking block is dropped only when it
-            // carries no signature (mirrors the anthropic converter's handling).
-            if ((!block.thinking || block.thinking.trim() === "") && !thoughtSignature) continue;
-            parts.push({
-              thought: true,
-              text: sanitizeSurrogates(block.thinking),
-              ...(thoughtSignature && { thoughtSignature }),
-            });
-          } else {
-            // Cross-provider/model: the signature is unusable, empty blocks stay dropped.
-            if (!block.thinking || block.thinking.trim() === "") continue;
-            parts.push({
-              text: sanitizeSurrogates(block.thinking),
-            });
-          }
-        } else if (block.type === "toolCall") {
-          const thoughtSignature = resolveThoughtSignature(
-            isSameProviderAndModel,
-            block.thoughtSignature,
-          );
-          const part: Part = {
-            functionCall: {
-              name: block.name,
-              args: block.arguments ?? {},
-              ...(requiresToolCallId(model.id) ? { id: block.id } : {}),
-            },
-            ...(thoughtSignature && { thoughtSignature }),
-          };
-          parts.push(part);
-        }
-      }
-
-      if (parts.length === 0) continue;
-      contents.push({
-        role: "model",
-        parts,
-      });
-    } else if (msg.role === "toolResult") {
-      // Extract text and image content
-      const textContent = msg.content.filter((c): c is TextContent => c.type === "text");
-      const textResult = textContent.map((c) => c.text).join("\n");
-      const imageContent = model.input.includes("image")
-        ? msg.content.filter((c): c is ImageContent => c.type === "image")
-        : [];
-
-      const hasText = textResult.length > 0;
-      const hasImages = imageContent.length > 0;
-
-      // Gemini 3+ models support multimodal function responses with images nested inside
-      // functionResponse.parts. Claude and other non-Gemini models behind Cloud Code Assist /
-      // Gemini < 3 still needs a separate user image turn.
-      const modelSupportsMultimodalFunctionResponse = supportsMultimodalFunctionResponse(model.id);
-
-      // Use "output" key for success, "error" key for errors as per SDK documentation
-      const responseValue = hasText
-        ? sanitizeSurrogates(textResult)
-        : hasImages
-          ? "(see attached image)"
-          : "";
-
-      const imageParts: Part[] = imageContent.map((imageBlock) => ({
-        inlineData: {
-          mimeType: imageBlock.mimeType,
-          data: imageBlock.data,
-        },
-      }));
-
-      const includeId = requiresToolCallId(model.id);
-      const functionResponsePart: Part = {
-        functionResponse: {
-          name: msg.toolName,
-          response: msg.isError ? { error: responseValue } : { output: responseValue },
-          ...(hasImages && modelSupportsMultimodalFunctionResponse && { parts: imageParts }),
-          ...(includeId ? { id: msg.toolCallId } : {}),
-        },
-      };
-
-      // Cloud Code Assist API requires all function responses to be in a single user turn.
-      // Check if the last content is already a user turn with function responses and merge.
-      const lastContent = contents[contents.length - 1];
-      if (lastContent?.role === "user" && lastContent.parts?.some((p) => p.functionResponse)) {
-        lastContent.parts.push(functionResponsePart);
-      } else {
-        contents.push({
-          role: "user",
-          parts: [functionResponsePart],
-        });
-      }
-
-      // For Gemini < 3, add images in a separate user message
-      if (hasImages && !modelSupportsMultimodalFunctionResponse) {
-        contents.push({
-          role: "user",
-          parts: [{ text: "Tool result image:" }, ...imageParts],
-        });
-      }
-    }
-  }
-
-  return contents;
-}
-
-const JSON_SCHEMA_META_DECLARATIONS = new Set([
-  "$schema",
-  "$id",
-  "$anchor",
-  "$dynamicAnchor",
-  "$vocabulary",
-  "$comment",
-  "$defs",
-  // pre-draft-2019-09 equivalent of $defs
-  "definitions",
-]);
-
-/**
- * Strip meta-declarations from a schema obj
- *
- * @param {unknown} schema - JSON schema value
- * @returns {unknown} the schema without meta-declarations
- */
-function sanitizeForOpenApi(schema: unknown): unknown {
-  if (typeof schema !== "object" || schema === null || Array.isArray(schema)) {
-    return schema;
-  }
-
-  const result: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(schema)) {
-    if (JSON_SCHEMA_META_DECLARATIONS.has(key)) continue;
-    result[key] = sanitizeForOpenApi(value);
-  }
-  return result;
-}
-
-/**
- * Convert tools to Gemini function declarations format.
- *
- * By default uses `parametersJsonSchema` which supports full JSON Schema (including
- * anyOf, oneOf, const, etc.). Set `useParameters` to true to use the legacy `parameters`
- * field instead (OpenAPI 3.03 Schema). This is needed for Cloud Code Assist with Claude
- * models, where the API translates `parameters` into Anthropic's `input_schema`.
- *
- * @param {Tool[]} tools - tools to convert
- * @param {boolean} [useParameters] - send the legacy `parameters` field
- * @param {boolean} [supportsStrictMode] - whether the target honours strict tool schemas
- * @returns {{ functionDeclarations: Record<string, unknown>[] }[] | undefined} the function declarations, or undefined when there are no tools
- */
-export function convertTools(
-  tools: Tool[],
-  useParameters = false,
-  supportsStrictMode = true,
-): { functionDeclarations: Record<string, unknown>[] }[] | undefined {
-  if (tools.length === 0) return undefined;
-  return [
-    {
-      functionDeclarations: tools.map((tool) => {
-        const strict = resolveJsonSchemaStrictSampling(tool, supportsStrictMode);
-        const parameters = getJsonSchemaToolParameters(tool, strict);
-        return {
-          name: tool.name,
-          description: tool.description,
-          ...(useParameters
-            ? { parameters: sanitizeForOpenApi(parameters as unknown) }
-            : { parametersJsonSchema: parameters }),
-        };
-      }),
-    },
-  ];
-}
-
-/**
- * Gemini 3+ enforces required function parameters in validated tool-calling modes.
- *
- * @param {string} modelId - model id to check
- * @returns {boolean} whether validated tool-calling modes are available
- */
-export function supportsGoogleStrictToolSampling(modelId: string): boolean {
-  const majorVersion = getGeminiMajorVersion(modelId);
-  return majorVersion !== undefined && majorVersion >= 3;
-}
-
-export function mapToolChoice(choice: string): FunctionCallingConfigMode {
-  switch (choice) {
-    case "auto":
-      return FunctionCallingConfigMode.AUTO;
-    case "none":
-      return FunctionCallingConfigMode.NONE;
-    case "any":
-      return FunctionCallingConfigMode.ANY;
-    default:
-      return FunctionCallingConfigMode.AUTO;
-  }
-}
-
-export function resolveGoogleFunctionCallingMode(
-  tools: Tool[],
-  toolChoice: string | undefined,
-  supportsStrictMode: boolean,
-): FunctionCallingConfigMode | undefined {
-  const useStrictMode = tools.some(
-    (tool) => resolveJsonSchemaStrictSampling(tool, supportsStrictMode) === true,
-  );
-  if (toolChoice === "none" || toolChoice === "any") {
-    return mapToolChoice(toolChoice);
-  }
-  if (useStrictMode) {
-    return FunctionCallingConfigMode.VALIDATED;
-  }
-  return toolChoice ? mapToolChoice(toolChoice) : undefined;
-}
-
-export function mapStopReason(reason: FinishReason): StopReason {
+function mapStopReason(reason: FinishReason): typesModule.StopReason {
   switch (reason) {
     case FinishReason.STOP:
       return "stop";
@@ -528,19 +30,13 @@ export function mapStopReason(reason: FinishReason): StopReason {
     case FinishReason.NO_IMAGE:
       return "error";
     default: {
-      const _exhaustive: never = reason;
-      throw new Error(`Unhandled stop reason: ${_exhaustive}`);
+      const exhaustive: never = reason;
+      throw new Error(`Unhandled stop reason: ${exhaustive}`);
     }
   }
 }
 
-/**
- * Map string finish reason to our StopReason (for raw API responses).
- *
- * @param {string} reason - raw finish reason
- * @returns {StopReason} the matching stop reason
- */
-export function mapStopReasonString(reason: string): StopReason {
+function mapStopReasonString(reason: string): typesModule.StopReason {
   switch (reason) {
     case "STOP":
       return "stop";
@@ -551,38 +47,43 @@ export function mapStopReasonString(reason: string): StopReason {
   }
 }
 
-/**
- * Run a Google GenAI SDK request with the shared provider retry policy
- * (408/409/429/5xx with backoff, honoring retry-after), mirroring how the
- * Anthropic and OpenAI adapters wrap their initial request in
- * retryProviderRequest. The SDK's ApiError has a `status` property but no
- * `headers` property, and retryProviderRequest only retries errors that carry
- * both, so normalize the error by adding the missing `headers` before
- * rethrowing.
- *
- * @param {() => Promise<T>} request - SDK request to run
- * @param {Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">} [options] - retry options
- * @returns {Promise<T>} the request result
- */
-export function retryGoogleRequest<T>(
-  request: () => Promise<T>,
-  options?: Pick<StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
-): Promise<T> {
-  return retryProviderRequest(
-    async () => {
-      try {
-        return await request();
-      } catch (error) {
-        if (error instanceof Error && "status" in error && !("headers" in error)) {
-          (error as { headers?: Headers | undefined }).headers = undefined;
-        }
-        throw error;
-      }
-    },
-    {
-      maxRetries: options?.maxRetries,
-      maxRetryDelayMs: options?.maxRetryDelayMs,
-      signal: options?.signal,
-    },
-  );
-}
+const withHeadersField = (error: unknown): unknown => {
+  if (error instanceof Error && "status" in error && !("headers" in error)) {
+    (error as { headers?: Headers | undefined }).headers = undefined;
+  }
+  return error;
+};
+
+const retryGoogleRequest: {
+  <T>(
+    options?: Pick<typesModule.StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+  ): (request: () => Promise<T>) => Effect.Effect<T>;
+  <T>(
+    request: () => Promise<T>,
+    options?: Pick<typesModule.StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+  ): Effect.Effect<T>;
+} = Function.dual(
+  (args) => typeof args[0] === "function",
+  <T>(
+    request: () => Promise<T>,
+    options?: Pick<typesModule.StreamOptions, "maxRetries" | "maxRetryDelayMs" | "signal">,
+  ): Effect.Effect<T> =>
+    retryProviderEffect(
+      Effect.promise(() => Promise.resolve(request())).pipe(
+        Effect.catchDefect((error) => Effect.die(withHeadersField(error))),
+      ),
+      {
+        maxRetries: options?.maxRetries,
+        maxRetryDelayMs: options?.maxRetryDelayMs,
+        signal: options?.signal,
+      },
+    ),
+);
+
+const googleShared = {
+  mapStopReason,
+  mapStopReasonString,
+  retryGoogleRequest,
+};
+
+export default googleShared;

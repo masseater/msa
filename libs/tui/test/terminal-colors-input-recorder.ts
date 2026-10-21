@@ -1,6 +1,6 @@
-import { type Component } from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
 
-export class InputRecorder implements Component {
+class InputRecorder implements tuiTypes.Component {
   readonly inputs: string[] = [];
 
   render(_width: number): string[] {
@@ -13,3 +13,5 @@ export class InputRecorder implements Component {
 
   invalidate(): void {}
 }
+
+export default InputRecorder;

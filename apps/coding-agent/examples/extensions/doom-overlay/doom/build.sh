@@ -147,6 +147,8 @@ emcc -O2 \
     dummy.c \
     -o "$BUILD_DIR/doom.js"
 
+mv "$BUILD_DIR/doom.js" "$BUILD_DIR/doom.cjs"
+
 echo ""
 echo "Build complete!"
-echo "Output: $BUILD_DIR/doom.js and $BUILD_DIR/doom.wasm"
+echo "Output: $BUILD_DIR/doom.cjs and $BUILD_DIR/doom.wasm"

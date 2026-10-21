@@ -1,39 +1,44 @@
 import { Effect } from "effect";
 
-import { fromPromise, fromSync } from "../foreign.ts";
-import { discoverAuthorizationServerMetadata, discoverOAuthServerInfo } from "./discovery.ts";
-import { present, secureEndpoint } from "./endpoint.ts";
-import type { OAuthClientProvider, OAuthFlowOptions } from "./flow-types.ts";
-import { selectResource } from "./resource.ts";
-import type { OAuthServerInfo } from "./types.ts";
+import foreignModule from "../foreign.ts";
+import discovery from "./discovery.ts";
+import endpoint from "./endpoint.ts";
+import type flowTypesModule from "./flow-types.ts";
+import resourceModule from "./resource.ts";
+import type typesModule from "./types.types.ts";
+
+const { present, secureEndpoint } = endpoint;
+const { fromPromise, fromSync } = foreignModule;
+const { discoverAuthorizationServerMetadata, discoverOAuthServerInfo } = discovery;
+const { selectResource } = resourceModule;
 
 const discoverServer = Effect.fn("discoverServer")(function* (
-  provider: OAuthClientProvider,
-  options: OAuthFlowOptions,
+  provider: flowTypesModule.OAuthClientProvider,
+  options: flowTypesModule.OAuthFlowOptions,
 ) {
   const configured = options.authorizationServerMetadataUrl;
   const metadataUrl = configured === undefined ? undefined : yield* secureEndpoint(configured);
   const cached =
     metadataUrl === undefined ? yield* fromPromise(() => provider.discoveryState?.()) : undefined;
   const cachedUrl = cached?.authorizationServerUrl;
-  const discovered: OAuthServerInfo = present(cachedUrl)
+  const discovered: typesModule.OAuthServerInfo = present(cachedUrl)
     ? {
-        authorizationServerUrl: cachedUrl,
         authorizationServerMetadata:
           cached?.authorizationServerMetadata ??
           (yield* discoverAuthorizationServerMetadata(cachedUrl, {
             fetch: options.fetch,
-            skipIssuerValidation: options.skipIssuerValidation,
             signal: options.signal,
+            skipIssuerValidation: options.skipIssuerValidation,
           })),
+        authorizationServerUrl: cachedUrl,
         resourceMetadata: cached?.resourceMetadata,
       }
     : yield* discoverOAuthServerInfo(options.serverUrl, {
-        resourceMetadataUrl: options.resourceMetadataUrl,
         authorizationServerMetadataUrl: metadataUrl,
         fetch: options.fetch,
-        skipIssuerValidation: options.skipIssuerValidation,
+        resourceMetadataUrl: options.resourceMetadataUrl,
         signal: options.signal,
+        skipIssuerValidation: options.skipIssuerValidation,
       });
   if (metadataUrl === undefined) {
     const resourceMetadataUrl = options.resourceMetadataUrl;
@@ -49,9 +54,9 @@ const discoverServer = Effect.fn("discoverServer")(function* (
   return discovered;
 });
 
-export const discover = Effect.fn("discover")(function* (
-  provider: OAuthClientProvider,
-  options: OAuthFlowOptions,
+const discover = Effect.fn("discover")(function* (
+  provider: flowTypesModule.OAuthClientProvider,
+  options: flowTypesModule.OAuthFlowOptions,
 ) {
   const discovered = yield* discoverServer(provider, options);
   const resource = yield* fromSync(() =>
@@ -59,3 +64,9 @@ export const discover = Effect.fn("discover")(function* (
   );
   return { discovered, resource };
 });
+
+const discoverModule = {
+  discover,
+};
+
+export default discoverModule;

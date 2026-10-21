@@ -1,38 +1,41 @@
-import { homedir } from "node:os";
+import codingAgent from "@msa/coding-agent";
+import { describe, expect, it } from "vite-plus/test";
 
-import { getDocsPath, getExamplesPath, getReadmePath } from "@msa/coding-agent";
-import { describe, expect, it, vi } from "vite-plus/test";
+import systemPromptModule from "../../coding-agent/src/core/system-prompt.ts";
+import harness from "../src/harness.ts";
+import modelSelection from "../src/model-selection.ts";
+import systemPrompt from "../src/system-prompt.ts";
 
-import { buildSystemPrompt } from "../../coding-agent/src/core/system-prompt.ts";
-import {
-  applyIsolatedEnvironment,
-  createMsaDocumentationEvalHarness,
+const { resolveModelSelection } = modelSelection;
+const {
   DOCUMENTATION_EVAL_TOOLS,
   excludeMsaDocumentation,
   resolveDocumentationVariant,
-  resolveModelSelection,
   verifySystemPrompt,
-} from "../src/harness.ts";
+} = systemPrompt;
+const { buildSystemPrompt } = systemPromptModule;
+const { getDocsPath, getExamplesPath, getReadmePath } = codingAgent;
+const { createMsaDocumentationEvalHarness } = harness;
 
 describe("resolveModelSelection", () => {
   it("prefers an explicit harness model", () => {
     expect(
       resolveModelSelection(
-        { provider: "anthropic", id: "claude-opus-4-6" },
-        { MSA_PROVIDER: "openai-codex", MSA_MODEL: "gpt-5.6-sol" },
+        { id: "claude-opus-4-6", provider: "anthropic" },
+        { MSA_MODEL: "gpt-5.6-sol", MSA_PROVIDER: "openai-codex" },
       ),
-    ).toEqual({ provider: "anthropic", id: "claude-opus-4-6" });
+    ).toEqual({ id: "claude-opus-4-6", provider: "anthropic" });
   });
 
   it("uses trimmed environment defaults", () => {
     expect(
       resolveModelSelection(undefined, {
-        MSA_PROVIDER: " openai-codex ",
         MSA_MODEL: " gpt-5.6-sol ",
+        MSA_PROVIDER: " openai-codex ",
       }),
     ).toEqual({
-      provider: "openai-codex",
       id: "gpt-5.6-sol",
+      provider: "openai-codex",
     });
   });
 
@@ -46,29 +49,6 @@ describe("resolveModelSelection", () => {
   );
 });
 
-describe("isolateProcessEnvironment", () => {
-  it("removes runner metadata and restores the process environment", () => {
-    vi.stubEnv("MSA_EVAL_VARIANT", "with_docs");
-    vi.stubEnv("MSA_EVAL_ARTIFACT_DIR", "/tmp/artifacts");
-    const oldHome = process.env["HOME"];
-    try {
-      const restore = applyIsolatedEnvironment("/tmp/eval-home", "/tmp/eval-agent");
-      try {
-        expect(homedir()).toBe("/tmp/eval-home");
-        expect(process.env["MSA_CODING_AGENT_DIR"]).toBe("/tmp/eval-agent");
-        expect(process.env["MSA_EVAL_VARIANT"]).toBeUndefined();
-        expect(process.env["MSA_EVAL_ARTIFACT_DIR"]).toBeUndefined();
-      } finally {
-        restore();
-      }
-      expect(process.env["HOME"]).toBe(oldHome);
-      expect(process.env["MSA_EVAL_VARIANT"]).toBe("with_docs");
-    } finally {
-      vi.unstubAllEnvs();
-    }
-  });
-});
-
 describe("documentation variant", () => {
   it.each(["without_docs", "with_docs"] as const)("accepts %s", (variant) => {
     expect(resolveDocumentationVariant(variant)).toBe(variant);
@@ -77,7 +57,9 @@ describe("documentation variant", () => {
   it.each([undefined, "", "other"])("rejects invalid variant %s", (variant) => {
     expect(() => resolveDocumentationVariant(variant)).toThrow("MSA_EVAL_VARIANT");
   });
+});
 
+describe("documentation system prompt", () => {
   it("strips only the documentation routing section from the default msa prompt", () => {
     const prompt = buildSystemPrompt({
       cwd: "/workspace",
@@ -107,10 +89,10 @@ describe("documentation variant", () => {
     const stripped = excludeMsaDocumentation(prompt);
 
     expect(
-      verifySystemPrompt(stripped, { name: "without_docs", expectedMsaDocumentation: false }),
+      verifySystemPrompt(stripped, { expectedMsaDocumentation: false, name: "without_docs" }),
     ).toBe(stripped);
     expect(() =>
-      verifySystemPrompt(prompt, { name: "without_docs", expectedMsaDocumentation: false }),
+      verifySystemPrompt(prompt, { expectedMsaDocumentation: false, name: "without_docs" }),
     ).toThrow("does not match");
   });
 

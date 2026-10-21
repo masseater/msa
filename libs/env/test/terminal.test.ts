@@ -1,29 +1,40 @@
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { Connection, RemoteError } from "../src/connection.ts";
-import { openTerminal, type TerminalForeground } from "../src/terminal.ts";
-import { daemon } from "./daemon.ts";
-import { windows } from "./environment.ts";
+import connectionModule from "../src/connection.ts";
+import type connectionTypes from "../src/connection.types.ts";
+import terminalModule from "../src/terminal.ts";
+import type terminalTypes from "../src/terminal.types.ts";
+import daemon from "./daemon.ts";
+import environment from "./environment.ts";
+import platformModule from "./platform.ts";
 
-const connections: Connection[] = [];
+const { Connection, RemoteError } = connectionModule;
+const { openTerminal } = terminalModule;
+
+const { windows } = environment;
+const { localPath, makeTempDirectory, readText, removePath } = platformModule;
+
+const connections: connectionTypes.Connection[] = [];
 const dirs: string[] = [];
-afterAll(() => {
-  for (const connection of connections) connection.close();
-  for (const dir of dirs) rmSync(dir, { recursive: true, force: true });
-});
+afterAll(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const connection of connections) connection.close();
+      for (const dir of dirs) yield* removePath(dir);
+    }),
+  ),
+);
 
-function connect(): { connection: Connection; cwd: string } {
-  const cwd = mkdtempSync(join(tmpdir(), "msa-env-terminal-"));
-  dirs.push(cwd);
-  const connection = new Connection({ command: [daemon] });
-  connections.push(connection);
-  return { connection, cwd };
-}
+const connect: Effect.Effect<{ connection: connectionTypes.Connection; cwd: string }> = Effect.map(
+  makeTempDirectory("msa-env-terminal-"),
+  (cwd) => {
+    dirs.push(cwd);
+    const connection = new Connection({ command: [daemon] });
+    connections.push(connection);
+    return { connection, cwd };
+  },
+);
 
 function collector(): {
   onData: (bytes: Uint8Array) => void;
@@ -48,10 +59,10 @@ function collector(): {
         ? Effect.void
         : Effect.callback<void>((resume) => {
             waiting.push({
-              text,
               resolve: () => {
                 resume(Effect.void);
               },
+              text,
             });
           }),
   };
@@ -62,16 +73,16 @@ const run = (effect: Effect.Effect<void>): Promise<void> => Effect.runPromise(ef
 const ignoreData = (): void => undefined;
 
 const ttyProgram = Effect.gen(function* () {
-  const { connection, cwd } = connect();
+  const { connection, cwd } = yield* connect;
   const output = collector();
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["/bin/sh"],
-      env: { PS1: "$ ", TERM: "xterm-256color" },
       cols: 80,
-      rows: 24,
+      cwd,
+      env: { PS1: "$ ", TERM: "xterm-256color" },
       onData: output.onData,
+      rows: 24,
     }),
   );
   expect(terminal.pid).toBeGreaterThan(0);
@@ -88,20 +99,20 @@ const ttyProgram = Effect.gen(function* () {
 
 const named = process.platform === "darwin" || process.platform === "linux";
 
-const isCommand = (foreground: TerminalForeground | undefined): boolean =>
+const isCommand = (foreground: terminalTypes.TerminalForeground | undefined): boolean =>
   foreground !== undefined && (!named || foreground.name === "sleep");
 
 const foregroundJob = Effect.gen(function* () {
-  const { connection, cwd } = connect();
+  const { connection, cwd } = yield* connect;
   const output = collector();
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["/bin/sh", "-i"],
-      env: { PS1: "$ ", TERM: "xterm-256color" },
       cols: 80,
-      rows: 24,
+      cwd,
+      env: { PS1: "$ ", TERM: "xterm-256color" },
       onData: output.onData,
+      rows: 24,
     }),
   );
   terminal.write("echo READY\n");
@@ -124,15 +135,15 @@ const foregroundJob = Effect.gen(function* () {
 });
 
 const rawBytes = Effect.gen(function* () {
-  const { connection, cwd } = connect();
+  const { connection, cwd } = yield* connect;
   const output = collector();
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["sh", "-c", "printf 'a\\377b'"],
       cols: 80,
-      rows: 24,
+      cwd,
       onData: output.onData,
+      rows: 24,
     }),
   );
   expect(yield* Effect.promise(() => terminal.exited)).toBe(0);
@@ -140,14 +151,14 @@ const rawBytes = Effect.gen(function* () {
 });
 
 const inputOrder = Effect.gen(function* () {
-  const { connection, cwd } = connect();
+  const { connection, cwd } = yield* connect;
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["sh", "-c", "head -c 40000 > input.txt"],
       cols: 80,
-      rows: 24,
+      cwd,
       onData: ignoreData,
+      rows: 24,
     }),
   );
   let text = "";
@@ -157,37 +168,44 @@ const inputOrder = Effect.gen(function* () {
     terminal.write(piece);
   }
   expect(yield* Effect.promise(() => terminal.exited)).toBe(0);
-  expect(readFileSync(join(cwd, "input.txt"), "utf8")).toBe(text);
+  expect(yield* readText(localPath.join(cwd, "input.txt"))).toBe(text);
 });
 
 const killOnClose = Effect.gen(function* () {
-  const { connection, cwd } = connect();
+  const { connection, cwd } = yield* connect;
   const terminal = yield* Effect.promise(() =>
     openTerminal(connection, {
-      cwd,
       argv: ["sleep", "100"],
       cols: 80,
-      rows: 24,
+      cwd,
       onData: ignoreData,
+      rows: 24,
     }),
   );
   terminal.close();
   yield* Effect.promise(() => expect(terminal.exited).rejects.toMatchObject({ code: "aborted" }));
 });
 
-const missingDirectory = Effect.promise(() => {
-  const { connection, cwd } = connect();
-  return expect(
-    openTerminal(connection, { cwd: join(cwd, "missing"), cols: 80, rows: 24, onData: ignoreData }),
-  ).rejects.toBeInstanceOf(RemoteError);
-});
+const missingDirectory = Effect.flatMap(connect, ({ connection, cwd }) =>
+  Effect.promise(() =>
+    expect(
+      openTerminal(connection, {
+        cols: 80,
+        cwd: localPath.join(cwd, "missing"),
+        onData: ignoreData,
+        rows: 24,
+      }),
+    ).rejects.toBeInstanceOf(RemoteError),
+  ),
+);
 
-const missingTerminal = Effect.promise(() => {
-  const { connection } = connect();
-  return expect(connection.request("ptyWrite", { target: 999 })).rejects.toMatchObject({
-    code: "EBADF",
-  });
-});
+const missingTerminal = Effect.flatMap(connect, ({ connection }) =>
+  Effect.promise(() =>
+    expect(connection.request("ptyWrite", { target: 999 })).rejects.toMatchObject({
+      code: "EBADF",
+    }),
+  ),
+);
 
 describe.skipIf(windows)("openTerminal", () => {
   it(

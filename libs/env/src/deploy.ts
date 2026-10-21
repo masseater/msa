@@ -1,26 +1,34 @@
-import { createHash } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { type DetectFailure, normalizeArch, type RemotePlatform, SetupError } from "./detect.ts";
-import { powershell, runSsh } from "./run-ssh.ts";
-import type { SshTarget } from "./ssh-args.ts";
+import type deployTypes from "./deploy.types.ts";
+import detect from "./detect.ts";
+import type detectTypes from "./detect.types.ts";
+import platformModule from "./platform.ts";
+import runSshModule from "./run-ssh.ts";
+import type sshArgsTypes from "./ssh-args.types.ts";
+
+const { fileExists, localPath, readBytes, sha256Hex } = platformModule;
+const { SetupError, normalizeArch } = detect;
+const { powershell, runSsh } = runSshModule;
 
 const UPLOAD_TIMEOUT_MS = 300_000;
 
 const packageRoot = fileURLToPath(new URL("..", import.meta.url));
 
-export function packagedDaemon(remote: Pick<RemotePlatform, "platform" | "arch">): string {
+function packagedDaemon(remote: Pick<detectTypes.RemotePlatform, "platform" | "arch">): string {
   const name = `msa-env-${remote.platform}-${remote.arch}`;
-  return join(packageRoot, "bin", name, remote.platform === "windows" ? "msa-env.exe" : "msa-env");
+  return localPath.join(
+    packageRoot,
+    "bin",
+    name,
+    remote.platform === "windows" ? "msa-env.exe" : "msa-env",
+  );
 }
 
-export function localDaemon(): string {
+function localDaemon(): string {
   const platform = process.platform === "win32" ? "windows" : process.platform;
   if (
     platform !== "linux" &&
@@ -30,18 +38,18 @@ export function localDaemon(): string {
   ) {
     throw new Error(`No msa-env daemon for ${process.platform}`);
   }
-  return packagedDaemon({ platform, arch: normalizeArch(process.arch) });
+  return packagedDaemon({ arch: normalizeArch(process.arch), platform });
 }
 
-export function quotePosix(text: string): string {
+function quotePosix(text: string): string {
   return `'${text.replaceAll("'", "'\\''")}'`;
 }
 
-export function quotePowerShell(text: string): string {
+function quotePowerShell(text: string): string {
   return `'${text.replaceAll("'", "''")}'`;
 }
 
-function daemonPath(remote: RemotePlatform, sha256: string): string {
+function daemonPath(remote: detectTypes.RemotePlatform, sha256: string): string {
   const name = `msa-env-${sha256.slice(0, 32)}`;
   return remote.platform === "windows"
     ? `${remote.home}\\.msa\\mobile\\tools\\${name}.exe`
@@ -51,11 +59,11 @@ function daemonPath(remote: RemotePlatform, sha256: string): string {
 const POSIX_HASH = `hash() { if command -v sha256sum >/dev/null 2>&1; then sha256sum "$1" | cut -d' ' -f1; elif command -v shasum >/dev/null 2>&1; then shasum -a 256 "$1" | cut -d' ' -f1; elif command -v openssl >/dev/null 2>&1; then openssl dgst -sha256 "$1" | sed 's/.*= //'; else echo none; fi; }`;
 
 interface Deployment {
-  readonly target: SshTarget;
-  readonly remote: RemotePlatform;
+  readonly target: sshArgsTypes.SshTarget;
+  readonly remote: detectTypes.RemotePlatform;
   readonly file: string;
   readonly sha256: string;
-  readonly bytes: Buffer;
+  readonly bytes: Uint8Array;
 }
 
 const checkDaemon = ({
@@ -63,17 +71,17 @@ const checkDaemon = ({
   remote,
   file,
   sha256,
-}: Deployment): Effect.Effect<string, DetectFailure> => {
+}: Deployment): Effect.Effect<string, detectTypes.DetectFailure> => {
   if (remote.platform === "windows") {
     const check = powershell(
       `$f = ${quotePowerShell(file)}; if ((Test-Path -LiteralPath $f) -and ((Get-FileHash -Algorithm SHA256 -LiteralPath $f).Hash.ToLower() -eq '${sha256}')) { 'present' } else { 'missing' }`,
     );
-    return runSsh({ target, command: check }).pipe(
+    return runSsh({ command: check, target }).pipe(
       Effect.map((output) => (output.trim().endsWith("present") ? "present" : "missing")),
     );
   }
   const check = `${POSIX_HASH}; f=${quotePosix(file)}; if [ -f "$f" ] && [ "$(hash "$f")" = ${sha256} ]; then echo present; elif [ "$(hash /dev/null)" = none ]; then echo nohash; else echo missing; fi`;
-  return runSsh({ target, command: `sh -c ${quotePosix(check)}` }).pipe(
+  return runSsh({ command: `sh -c ${quotePosix(check)}`, target }).pipe(
     Effect.map((output) => output.trim().split("\n").at(-1) ?? "missing"),
   );
 };
@@ -114,50 +122,46 @@ const posixUpload = ({ file, sha256 }: Deployment): string =>
     "echo deployed",
   ].join("\n");
 
-const upload = (deployment: Deployment): Effect.Effect<string, DetectFailure> => {
+const upload = (deployment: Deployment): Effect.Effect<string, detectTypes.DetectFailure> => {
   const { target, remote, file, bytes } = deployment;
   if (remote.platform === "windows") {
-    const lines = bytes.toString("base64").replaceAll(/.{1,76}/gu, "$&\n");
+    const lines = Buffer.from(bytes)
+      .toString("base64")
+      .replaceAll(/.{1,76}/gu, "$&\n");
     return runSsh({
-      target,
       command: windowsUpload(deployment),
       stdin: Buffer.from(`${lines}MSA-ENV-END\n`),
+      target,
       timeoutMs: UPLOAD_TIMEOUT_MS,
     }).pipe(Effect.as(file));
   }
   return runSsh({
-    target,
     command: `sh -c ${quotePosix(posixUpload(deployment))}`,
     stdin: bytes,
+    target,
     timeoutMs: UPLOAD_TIMEOUT_MS,
   }).pipe(Effect.as(file));
 };
 
-export interface DaemonDeployment {
-  readonly target: SshTarget;
-  readonly remote: RemotePlatform;
-  readonly binary: string;
-}
-
-export const deployDaemonEffect = ({
+const deployDaemonEffect = ({
   target,
   remote,
   binary,
-}: DaemonDeployment): Effect.Effect<string, DetectFailure> =>
+}: deployTypes.DaemonDeployment): Effect.Effect<string, detectTypes.DetectFailure> =>
   Effect.gen(function* () {
-    if (!existsSync(binary)) {
+    if (!(yield* fileExists(binary))) {
       return yield* new SetupError(
         `No msa-env daemon for ${remote.platform}-${remote.arch} at ${binary}`,
       );
     }
-    const bytes = yield* Effect.promise(() => readFile(binary));
-    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    const bytes = yield* readBytes(binary);
+    const sha256 = yield* sha256Hex(bytes);
     const deployment: Deployment = {
-      target,
-      remote,
-      file: daemonPath(remote, sha256),
-      sha256,
       bytes,
+      file: daemonPath(remote, sha256),
+      remote,
+      sha256,
+      target,
     };
     const state = yield* checkDaemon(deployment);
     if (state === "present") return deployment.file;
@@ -169,9 +173,32 @@ export const deployDaemonEffect = ({
     return yield* upload(deployment);
   });
 
-export const deployDaemon: {
-  (remote: RemotePlatform, binary: string): (target: SshTarget) => Promise<string>;
-  (target: SshTarget, remote: RemotePlatform, binary: string): Promise<string>;
-} = dual(3, (target: SshTarget, remote: RemotePlatform, binary: string): Promise<string> =>
-  Effect.runPromise(deployDaemonEffect({ target, remote, binary })),
+const deployDaemon: {
+  (
+    remote: detectTypes.RemotePlatform,
+    binary: string,
+  ): (target: sshArgsTypes.SshTarget) => Promise<string>;
+  (
+    target: sshArgsTypes.SshTarget,
+    remote: detectTypes.RemotePlatform,
+    binary: string,
+  ): Promise<string>;
+} = dual(
+  3,
+  (
+    target: sshArgsTypes.SshTarget,
+    remote: detectTypes.RemotePlatform,
+    binary: string,
+  ): Promise<string> => Effect.runPromise(deployDaemonEffect({ binary, remote, target })),
 );
+
+const deploy = {
+  deployDaemon,
+  deployDaemonEffect,
+  localDaemon,
+  packagedDaemon,
+  quotePosix,
+  quotePowerShell,
+};
+
+export default deploy;

@@ -1,9 +1,6 @@
-import type { Component } from "../tui.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
 
-/**
- * Spacer component that renders empty lines
- */
-export class Spacer implements Component {
+export default class Spacer implements tuiComponentTypes.Component {
   private lines: number;
 
   constructor(lines: number = 1) {
@@ -14,9 +11,7 @@ export class Spacer implements Component {
     this.lines = lines;
   }
 
-  invalidate(): void {
-    // No cached state to invalidate currently
-  }
+  invalidate(): void {}
 
   render(_width: number): string[] {
     const result: string[] = [];

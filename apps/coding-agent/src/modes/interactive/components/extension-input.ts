@@ -1,36 +1,34 @@
-/**
- * Simple text input component for extensions.
- */
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@msa/tui";
+import themeModule from "../theme/theme.ts";
+import CountdownTimer from "./countdown-timer.ts";
+import type countdownTimerTypes from "./countdown-timer.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type extensionInputTypes from "./extension-input.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { theme } = themeModule;
+const { keyHint } = keybindingHints;
 
-import { theme } from "../theme/theme.ts";
-import { CountdownTimer } from "./countdown-timer.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+const { Input, Spacer, Text, getKeybindings } = tuiModule;
 
-export interface ExtensionInputOptions {
-  tui?: TUI | undefined;
-  timeout?: number | undefined;
-  initialValue?: string | undefined;
-  description?: string | undefined;
-}
-
-export class ExtensionInputComponent extends Container implements Focusable {
-  private input: Input;
+export default class ExtensionInputComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
+  private input: tuiTypes.Input;
   private onSubmitCallback: (value: string) => void;
   private onCancelCallback: () => void;
-  private titleText: Text;
+  private titleText: tuiTypes.Text;
   private baseTitle: string;
-  private countdown: CountdownTimer | undefined;
+  private countdown: countdownTimerTypes.CountdownTimer | undefined;
 
-  // Focusable implementation - propagate to input for IME cursor positioning
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.input.focused = value;
   }
 
@@ -39,7 +37,7 @@ export class ExtensionInputComponent extends Container implements Focusable {
     _placeholder: string | undefined,
     onSubmit: (value: string) => void,
     onCancel: () => void,
-    opts?: ExtensionInputOptions,
+    opts?: extensionInputTypes.ExtensionInputOptions,
   ) {
     super();
 
@@ -52,13 +50,18 @@ export class ExtensionInputComponent extends Container implements Focusable {
 
     this.titleText = new Text(theme.fg("accent", title), 1, 0);
     this.addChild(this.titleText);
-    if (opts?.description) {
+    if (opts?.description !== undefined && opts?.description !== "") {
       this.addChild(new Spacer(1));
       this.addChild(new Text(theme.fg("text", opts.description), 1, 0));
     }
     this.addChild(new Spacer(1));
 
-    if (opts?.timeout && opts.timeout > 0 && opts.tui) {
+    if (
+      opts?.timeout !== undefined &&
+      opts?.timeout !== 0 &&
+      opts.timeout > 0 &&
+      opts.tui !== undefined
+    ) {
       this.countdown = new CountdownTimer(
         opts.timeout,
         opts.tui,
@@ -68,18 +71,26 @@ export class ExtensionInputComponent extends Container implements Focusable {
     }
 
     this.input = new Input();
-    if (opts?.initialValue) this.input.setValue(opts.initialValue);
-    this.addChild(this.input);
+    ExtensionInputComponent.addInputWithHints(this, opts);
     this.addChild(new Spacer(1));
-    this.addChild(
+    this.addChild(new DynamicBorder());
+  }
+
+  private static addInputWithHints(
+    self: ExtensionInputComponent,
+    opts: extensionInputTypes.ExtensionInputOptions | undefined,
+  ): void {
+    if (opts?.initialValue !== undefined && opts?.initialValue !== "")
+      self.input.setValue(opts.initialValue);
+    self.addChild(self.input);
+    self.addChild(new Spacer(1));
+    self.addChild(
       new Text(
         `${keyHint("tui.select.confirm", "submit")}  ${keyHint("tui.select.cancel", "cancel")}`,
         1,
         0,
       ),
     );
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
   }
 
   handleInput(keyData: string): void {

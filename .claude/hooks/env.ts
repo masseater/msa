@@ -18,8 +18,8 @@ import {
 } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { HookPlatform } from "./platform.ts";
-import type { CommandResult, Sink } from "./platform.ts";
+import HookPlatform from "./platform.ts";
+import type platformTypes from "./platform.types.ts";
 
 class HookBlocked extends Data.TaggedError("HookBlocked")<{ readonly reason: string }> {}
 
@@ -47,7 +47,10 @@ const blockWhen = (reasons: readonly string[]): Effect.Effect<void, HookBlocked>
   return Effect.fail(new HookBlocked({ reason: reasons.join("\n") }));
 };
 
-const writeTo = (sink: Sink, text: string): Effect.Effect<void, never, HookPlatform> =>
+const writeTo = (
+  sink: platformTypes.Sink,
+  text: string,
+): Effect.Effect<void, never, HookPlatform> =>
   Effect.gen(function* write() {
     const platform = yield* HookPlatform;
     yield* platform.write(sink, text);
@@ -80,7 +83,7 @@ const readHookInput = <Codec extends Schema.Top>(
 const spawnCommand = (
   command: string,
   args: readonly string[],
-): Effect.Effect<CommandResult, never, ChildProcessSpawner.ChildProcessSpawner> =>
+): Effect.Effect<platformTypes.CommandResult, never, ChildProcessSpawner.ChildProcessSpawner> =>
   Effect.gen(function* run() {
     const dir = yield* projectDir.pipe(Effect.orDie);
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
@@ -93,11 +96,11 @@ const spawnCommand = (
       ],
       { concurrency: "unbounded" },
     );
-    return { succeeded: exitCode === EXIT_SUCCESS, stdout, output: `${stdout}${stderr}` };
+    return { output: `${stdout}${stderr}`, stdout, succeeded: exitCode === EXIT_SUCCESS };
   }).pipe(
     Effect.scoped,
     Effect.catchTag("PlatformError", (failure) =>
-      Effect.succeed({ succeeded: false, stdout: "", output: failure.message }),
+      Effect.succeed({ output: failure.message, stdout: "", succeeded: false }),
     ),
   );
 
@@ -109,18 +112,18 @@ const platformLayer = Layer.effect(
     const path = yield* Path.Path;
     const stdio = yield* Stdio.Stdio;
     return HookPlatform.of({
+      exists: (file) => fs.exists(file).pipe(Effect.orDie),
+      join: (...segments) => path.join(...segments),
+      readFile: (file) => fs.readFileString(file).pipe(Effect.option),
+      readStdin: stdio.stdin.pipe(Stream.decodeText, Stream.mkString, Effect.orDie),
+      relative: (from, to) => path.relative(from, to),
+      resolve: (...segments) => path.resolve(...segments),
       runCommand: (command, args) =>
         spawnCommand(command, args).pipe(
           Effect.provideService(ChildProcessSpawner.ChildProcessSpawner, spawner),
         ),
-      readStdin: stdio.stdin.pipe(Stream.decodeText, Stream.mkString, Effect.orDie),
-      write: (sink, text) => Stream.make(text).pipe(Stream.run(stdio[sink]()), Effect.orDie),
-      exists: (file) => fs.exists(file).pipe(Effect.orDie),
-      readFile: (file) => fs.readFileString(file).pipe(Effect.option),
-      resolve: (...segments) => path.resolve(...segments),
-      join: (...segments) => path.join(...segments),
-      relative: (from, to) => path.relative(from, to),
       sep: path.sep,
+      write: (sink, text) => Stream.make(text).pipe(Stream.run(stdio[sink]()), Effect.orDie),
     });
   }),
 );
@@ -128,8 +131,13 @@ const platformLayer = Layer.effect(
 const hookLayer = platformLayer.pipe(Layer.provideMerge(nodeServicesLayer));
 
 const runCommand: {
-  (args: readonly string[]): (command: string) => Effect.Effect<CommandResult, never, HookPlatform>;
-  (command: string, args: readonly string[]): Effect.Effect<CommandResult, never, HookPlatform>;
+  (
+    args: readonly string[],
+  ): (command: string) => Effect.Effect<platformTypes.CommandResult, never, HookPlatform>;
+  (
+    command: string,
+    args: readonly string[],
+  ): Effect.Effect<platformTypes.CommandResult, never, HookPlatform>;
 } = Fn.dual(DATA_FIRST_ARITY, (command: string, args: readonly string[]) =>
   Effect.gen(function* run() {
     const platform = yield* HookPlatform;
@@ -181,5 +189,6 @@ const runHookWith =
 
 const runHook = runHookWith(Layer.empty);
 
-export type { HookBlocked };
-export { blockWhen, localBin, projectRoot, readHookInput, runCommand, runHook, writeJson };
+const env = { blockWhen, localBin, projectRoot, readHookInput, runCommand, runHook, writeJson };
+
+export default env;

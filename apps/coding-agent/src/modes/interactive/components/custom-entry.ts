@@ -1,23 +1,28 @@
-import type { Component } from "@msa/tui";
-import { Box, Container, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { EntryRenderer } from "../../../core/extensions/types.ts";
-import type { CustomEntry } from "../../../core/session-manager.ts";
-import { toErrorMessage } from "../../../utils/errors.ts";
-import { theme } from "../theme/theme.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import type sessionManagerTypes from "../../../core/session-manager.types.ts";
+import errors from "../../../utils/errors.ts";
+import themeModule from "../theme/theme.ts";
 
-/**
- * Component that renders a custom session entry from extensions.
- * The host owns transcript spacing; renderer output should provide only its content.
- */
-export class CustomEntryComponent extends Container {
-  private entry: CustomEntry<unknown>;
-  private renderer: EntryRenderer;
-  private customComponent?: Component | undefined;
-  private _expanded = false;
+const { theme } = themeModule;
+const { toErrorMessage } = errors;
+
+const { Box, Spacer, Text } = tui;
+
+export default class CustomEntryComponent extends tui.Container {
+  private entry: sessionManagerTypes.CustomEntry<unknown>;
+  private renderer: extensionsTypesTypes.EntryRenderer;
+  private customComponent?: tuiTypes.Component | undefined;
+  private expandedState = false;
   private outputPad: number;
 
-  constructor(entry: CustomEntry<unknown>, renderer: EntryRenderer, outputPad = 1) {
+  constructor(
+    entry: sessionManagerTypes.CustomEntry<unknown>,
+    renderer: extensionsTypesTypes.EntryRenderer,
+    outputPad = 1,
+  ) {
     super();
     this.entry = entry;
     this.renderer = renderer;
@@ -30,8 +35,8 @@ export class CustomEntryComponent extends Container {
   }
 
   setExpanded(expanded: boolean): void {
-    if (this._expanded !== expanded) {
-      this._expanded = expanded;
+    if (this.expandedState !== expanded) {
+      this.expandedState = expanded;
       this.rebuild();
     }
   }
@@ -50,9 +55,9 @@ export class CustomEntryComponent extends Container {
     this.clear();
     this.customComponent = undefined;
 
-    let component: Component | undefined;
+    let component: tuiTypes.Component | undefined;
     try {
-      component = this.renderer(this.entry, { expanded: this._expanded }, theme);
+      component = this.renderer(this.entry, { expanded: this.expandedState }, theme);
     } catch (error) {
       const message = toErrorMessage(error);
       const box = new Box(this.outputPad, 1, (text) => theme.bg("customMessageBg", text));
@@ -62,7 +67,7 @@ export class CustomEntryComponent extends Container {
       component = box;
     }
 
-    if (!component) {
+    if (component === undefined) {
       return;
     }
 

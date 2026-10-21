@@ -1,28 +1,34 @@
-import { Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-// Reload extension code through the registry.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/10-registry-reload.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import modelsModule from "@msa/ai/models";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import {
-  createRegistry,
-  defineExtension,
-  defineTool,
-  Harness,
-  MemoryStorage,
-  wrapTool,
-} from "../../src/index.ts";
+import harnessModule from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import memory from "../../src/storage/memory.ts";
+import effectSupport from "../effect-support.ts";
+
+const { Type } = ai;
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { defineExtension, defineTool, wrapTool } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
 function exampleTool(name: string, description: string) {
   return defineTool({
-    name,
     description,
-    parameters: Type.Object({ path: Type.String() }),
     execute: (args) =>
-      Promise.resolve({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
+      Promise.resolve({ output: [{ text: `${name} ${args.path}`, type: "text" }] }),
+    name,
+    parameters: Type.Object({ path: Type.String() }),
   });
 }
 
@@ -31,36 +37,37 @@ const registry = createRegistry();
 registry.install(
   defineExtension({ name: "files", tools: [read, exampleTool("grep", "Search files")] }),
 );
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models: createModels(), registry },
-  context,
-);
-const root = await harness.root(context);
-const tools = async () =>
-  (await root.agent(context)).tools.map((tool) => `${tool.name}: ${tool.description}`);
 
-// Reloading is installing a new object with the same name: it replaces the old
-// one in place, in one publication, so no conversation ever sees it missing.
-// A task phase that already started keeps the snapshot it took; the next phase
-// uses the new code.
-registry.install(
-  defineExtension({ name: "files", tools: [read, exampleTool("grep", "Search files, faster")] }),
-);
-console.log("after reload:", await tools());
+const main = Effect.gen(function* () {
+  const harness = yield* awaited(
+    Harness.open(new MemoryStorage(), { models: createModels(), registry }, context),
+  );
+  const root = yield* awaited(harness.root(context));
+  const tools = Effect.fn("tools")(function* () {
+    return (yield* awaited(root.agent(context))).tools.map(
+      (tool) => `${tool.name}: ${tool.description}`,
+    );
+  });
 
-// Another extension may wrap a tool by name. The wrap applies where the
-// wrapping extension is selected, and survives reloads of the wrapped tool.
-const Audit = defineExtension({
-  name: "audit",
-  wraps: [wrapTool(read, (tool) => ({ ...tool, description: `${tool.description} (audited)` }))],
+  registry.install(
+    defineExtension({
+      name: "files",
+      tools: [read, exampleTool("grep", "Search files, faster")],
+    }),
+  );
+  yield* Console.log("after reload:", yield* tools());
+
+  const Audit = defineExtension({
+    name: "audit",
+    wraps: [wrapTool(read, (tool) => ({ ...tool, description: `${tool.description} (audited)` }))],
+  });
+  registry.install(Audit);
+  yield* Console.log("with audit:", yield* tools());
+
+  registry.uninstall(Audit);
+  yield* Console.log("after uninstall:", yield* tools());
+
+  yield* awaited(harness.close(context));
 });
-registry.install(Audit);
-console.log("with audit:", await tools());
 
-// Uninstall removes an extension by name; conversations that select it stop
-// getting its code.
-registry.uninstall(Audit);
-console.log("after uninstall:", await tools());
-
-await harness.close(context);
+NodeRuntime.runMain(main);

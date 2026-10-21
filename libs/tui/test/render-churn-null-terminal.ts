@@ -1,14 +1,17 @@
-import type { Terminal } from "../src/terminal.ts";
+import { Effect } from "effect";
 
-export const COLUMNS = 100;
-export const ROWS = 30;
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
 
-/** Terminal that discards output; keeps xterm parsing out of the measurement. */
-export class NullTerminal implements Terminal {
+const COLUMNS = 100;
+const ROWS = 30;
+
+class NullTerminal implements terminalProtocolTypes.Terminal {
   bytesWritten = 0;
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(): Promise<void> {}
+  drainInput(): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(data: string): void {
     this.bytesWritten += data.length;
   }
@@ -31,3 +34,11 @@ export class NullTerminal implements Terminal {
   setProgress(_active: boolean): void {}
   setProgramStatus(): void {}
 }
+
+const renderChurnNullTerminal = {
+  COLUMNS,
+  NullTerminal,
+  ROWS,
+};
+
+export default renderChurnNullTerminal;

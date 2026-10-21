@@ -1,47 +1,28 @@
-/**
- * ANSI escape code to HTML converter.
- *
- * Converts terminal ANSI color/style codes to HTML with inline styles.
- * Supports:
- * - Standard foreground colors (30-37) and bright variants (90-97)
- * - Standard background colors (40-47) and bright variants (100-107)
- * - 256-color palette (38;5;N and 48;5;N)
- * - RGB true color (38;2;R;G;B and 48;2;R;G;B)
- * - Text styles: bold (1), dim (2), italic (3), underline (4)
- * - Reset (0)
- */
-
-// Standard ANSI color palette (0-15)
 const ANSI_COLORS = [
-  "#000000", // 0: black
-  "#800000", // 1: red
-  "#008000", // 2: green
-  "#808000", // 3: yellow
-  "#000080", // 4: blue
-  "#800080", // 5: magenta
-  "#008080", // 6: cyan
-  "#c0c0c0", // 7: white
-  "#808080", // 8: bright black
-  "#ff0000", // 9: bright red
-  "#00ff00", // 10: bright green
-  "#ffff00", // 11: bright yellow
-  "#0000ff", // 12: bright blue
-  "#ff00ff", // 13: bright magenta
-  "#00ffff", // 14: bright cyan
-  "#ffffff", // 15: bright white
+  "#000000",
+  "#800000",
+  "#008000",
+  "#808000",
+  "#000080",
+  "#800080",
+  "#008080",
+  "#c0c0c0",
+  "#808080",
+  "#ff0000",
+  "#00ff00",
+  "#ffff00",
+  "#0000ff",
+  "#ff00ff",
+  "#00ffff",
+  "#ffffff",
 ];
 
-/**
- * Convert 256-color index to hex.
- */
 function color256ToHex(index: number): string {
-  // Standard colors (0-15)
   const standardColor = ANSI_COLORS[index];
   if (index < 16 && standardColor !== undefined) {
     return standardColor;
   }
 
-  // Color cube (16-231): 6x6x6 = 216 colors
   if (index < 232) {
     const cubeIndex = index - 16;
     const r = Math.floor(cubeIndex / 36);
@@ -52,22 +33,18 @@ function color256ToHex(index: number): string {
     return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
   }
 
-  // Grayscale (232-255): 24 shades
   const gray = 8 + (index - 232) * 10;
   const grayHex = gray.toString(16).padStart(2, "0");
   return `#${grayHex}${grayHex}${grayHex}`;
 }
 
-/**
- * Escape HTML special characters.
- */
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&#039;");
 }
 
 interface TextStyle {
@@ -81,10 +58,10 @@ interface TextStyle {
 
 function createEmptyStyle(): TextStyle {
   return {
-    fg: null,
     bg: null,
     bold: false,
     dim: false,
+    fg: null,
     italic: false,
     underline: false,
   };
@@ -92,8 +69,8 @@ function createEmptyStyle(): TextStyle {
 
 function styleToInlineCSS(style: TextStyle): string {
   const parts: string[] = [];
-  if (style.fg) parts.push(`color:${style.fg}`);
-  if (style.bg) parts.push(`background-color:${style.bg}`);
+  if (style.fg !== null && style.fg !== "") parts.push(`color:${style.fg}`);
+  if (style.bg !== null && style.bg !== "") parts.push(`background-color:${style.bg}`);
   if (style.bold) parts.push("font-weight:bold");
   if (style.dim) parts.push("opacity:0.6");
   if (style.italic) parts.push("font-style:italic");
@@ -112,131 +89,125 @@ function hasStyle(style: TextStyle): boolean {
   );
 }
 
-/**
- * Parse ANSI SGR (Select Graphic Rendition) codes and update style.
- */
+const SGR_ACTIONS: Record<number, (style: TextStyle) => void> = {
+  0: (style) => {
+    style.fg = null;
+    style.bg = null;
+    style.bold = false;
+    style.dim = false;
+    style.italic = false;
+    style.underline = false;
+  },
+  1: (style) => {
+    style.bold = true;
+  },
+  2: (style) => {
+    style.dim = true;
+  },
+  22: (style) => {
+    style.bold = false;
+    style.dim = false;
+  },
+  23: (style) => {
+    style.italic = false;
+  },
+  24: (style) => {
+    style.underline = false;
+  },
+  3: (style) => {
+    style.italic = true;
+  },
+  39: (style) => {
+    style.fg = null;
+  },
+  4: (style) => {
+    style.underline = true;
+  },
+  49: (style) => {
+    style.bg = null;
+  },
+};
+
+function applyPaletteColor(code: number, style: TextStyle): void {
+  if (code >= 30 && code <= 37) style.fg = ANSI_COLORS[code - 30] ?? null;
+  else if (code >= 40 && code <= 47) style.bg = ANSI_COLORS[code - 40] ?? null;
+  else if (code >= 90 && code <= 97) style.fg = ANSI_COLORS[code - 90 + 8] ?? null;
+  else if (code >= 100 && code <= 107) style.bg = ANSI_COLORS[code - 100 + 8] ?? null;
+}
+
+function readExtendedColor(
+  params: number[],
+  index: number,
+): { color: string; consumed: number } | undefined {
+  const colorIndex = params[index + 2];
+  if (params[index + 1] === 5 && colorIndex !== undefined) {
+    return { color: color256ToHex(colorIndex), consumed: 2 };
+  }
+  if (params[index + 1] === 2 && params.length > index + 4) {
+    const [r, g, b] = [params[index + 2], params[index + 3], params[index + 4]];
+    return { color: `rgb(${r},${g},${b})`, consumed: 4 };
+  }
+  return undefined;
+}
+
+function applySingleCode(params: number[], index: number, style: TextStyle): number {
+  const code = params[index] ?? 0;
+  const action = SGR_ACTIONS[code];
+  if (action !== undefined) {
+    action(style);
+    return 0;
+  }
+  if (code !== 38 && code !== 48) {
+    applyPaletteColor(code, style);
+    return 0;
+  }
+  const extended = readExtendedColor(params, index);
+  if (extended === undefined) return 0;
+  if (code === 38) style.fg = extended.color;
+  else style.bg = extended.color;
+  return extended.consumed;
+}
+
 function applySgrCode(params: number[], style: TextStyle): void {
   let i = 0;
   while (i < params.length) {
     const code = params[i];
     if (code === undefined) break;
-
-    if (code === 0) {
-      // Reset all
-      style.fg = null;
-      style.bg = null;
-      style.bold = false;
-      style.dim = false;
-      style.italic = false;
-      style.underline = false;
-    } else if (code === 1) {
-      style.bold = true;
-    } else if (code === 2) {
-      style.dim = true;
-    } else if (code === 3) {
-      style.italic = true;
-    } else if (code === 4) {
-      style.underline = true;
-    } else if (code === 22) {
-      // Reset bold/dim
-      style.bold = false;
-      style.dim = false;
-    } else if (code === 23) {
-      style.italic = false;
-    } else if (code === 24) {
-      style.underline = false;
-    } else if (code >= 30 && code <= 37) {
-      // Standard foreground colors
-      style.fg = ANSI_COLORS[code - 30] ?? null;
-    } else if (code === 38) {
-      // Extended foreground color
-      const colorIndex = params[i + 2];
-      if (params[i + 1] === 5 && colorIndex !== undefined) {
-        // 256-color: 38;5;N
-        style.fg = color256ToHex(colorIndex);
-        i += 2;
-      } else if (params[i + 1] === 2 && params.length > i + 4) {
-        // RGB: 38;2;R;G;B
-        const r = params[i + 2];
-        const g = params[i + 3];
-        const b = params[i + 4];
-        style.fg = `rgb(${r},${g},${b})`;
-        i += 4;
-      }
-    } else if (code === 39) {
-      // Default foreground
-      style.fg = null;
-    } else if (code >= 40 && code <= 47) {
-      // Standard background colors
-      style.bg = ANSI_COLORS[code - 40] ?? null;
-    } else if (code === 48) {
-      // Extended background color
-      const colorIndex = params[i + 2];
-      if (params[i + 1] === 5 && colorIndex !== undefined) {
-        // 256-color: 48;5;N
-        style.bg = color256ToHex(colorIndex);
-        i += 2;
-      } else if (params[i + 1] === 2 && params.length > i + 4) {
-        // RGB: 48;2;R;G;B
-        const r = params[i + 2];
-        const g = params[i + 3];
-        const b = params[i + 4];
-        style.bg = `rgb(${r},${g},${b})`;
-        i += 4;
-      }
-    } else if (code === 49) {
-      // Default background
-      style.bg = null;
-    } else if (code >= 90 && code <= 97) {
-      // Bright foreground colors
-      style.fg = ANSI_COLORS[code - 90 + 8] ?? null;
-    } else if (code >= 100 && code <= 107) {
-      // Bright background colors
-      style.bg = ANSI_COLORS[code - 100 + 8] ?? null;
-    }
-    // Ignore unrecognized codes
-
-    i++;
+    i += applySingleCode(params, i, style) + 1;
   }
 }
 
-// Match ANSI escape sequences: ESC[ followed by params and ending with 'm'
-const ANSI_REGEX = /\x1b\[([\d;]*)m/g;
+const ESC = String.fromCodePoint(27);
+const ANSI_REGEX = new RegExp(`${ESC}\\[([\\d;]*)m`, "gu");
 
-/**
- * Convert ANSI-escaped text to HTML with inline styles.
- */
-export function ansiToHtml(text: string): string {
+function ansiToHtml(text: string): string {
   const style = createEmptyStyle();
   let result = "";
   let lastIndex = 0;
   let inSpan = false;
 
-  // Reset regex state
   ANSI_REGEX.lastIndex = 0;
 
   let match = ANSI_REGEX.exec(text);
   while (match !== null) {
-    // Add text before this escape sequence
     const beforeText = text.slice(lastIndex, match.index);
-    if (beforeText) {
+    if (beforeText !== "") {
       result += escapeHtml(beforeText);
     }
 
-    // Parse SGR parameters
     const paramStr = match[1];
-    const params = paramStr ? paramStr.split(";").map((p) => parseInt(p, 10) || 0) : [0];
+    const params =
+      paramStr !== undefined && paramStr !== ""
+        ? paramStr.split(";").map((p) => parseInt(p, 10) || 0)
+        : [0];
 
-    // Close existing span if we have one
     if (inSpan) {
       result += "</span>";
       inSpan = false;
     }
 
-    // Apply the codes
     applySgrCode(params, style);
 
-    // Open new span if we have any styling
     if (hasStyle(style)) {
       result += `<span style="${styleToInlineCSS(style)}">`;
       inSpan = true;
@@ -246,13 +217,11 @@ export function ansiToHtml(text: string): string {
     match = ANSI_REGEX.exec(text);
   }
 
-  // Add remaining text
   const remainingText = text.slice(lastIndex);
-  if (remainingText) {
+  if (remainingText !== "") {
     result += escapeHtml(remainingText);
   }
 
-  // Close any open span
   if (inSpan) {
     result += "</span>";
   }
@@ -260,12 +229,15 @@ export function ansiToHtml(text: string): string {
   return result;
 }
 
-/**
- * Convert array of ANSI-escaped lines to HTML.
- * Each line is wrapped in a div element.
- */
-export function ansiLinesToHtml(lines: string[]): string {
+function ansiLinesToHtml(lines: string[]): string {
   return lines
     .map((line) => `<div class="ansi-line">${ansiToHtml(line) || "&nbsp;"}</div>`)
     .join("");
 }
+
+const ansiToHtmlModule = {
+  ansiLinesToHtml,
+  ansiToHtml,
+};
+
+export default ansiToHtmlModule;

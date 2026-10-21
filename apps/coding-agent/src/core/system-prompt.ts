@@ -1,90 +1,43 @@
-/**
- * System prompt construction and project context loading
- */
+import ai from "@msa/ai";
 
-import { getSystemMessageText } from "@msa/ai";
+import config from "../config.ts";
+import skillsModule from "./skills.ts";
+import type skillsTypes from "./skills.types.ts";
+import type systemPromptTypes from "./system-prompt.types.ts";
 
-import { getDocsPath, getExamplesPath, getReadmePath } from "../config.ts";
-import { formatSkillsForPrompt, type Skill } from "./skills.ts";
+const { getDocsPath, getExamplesPath, getReadmePath } = config;
+const { formatSkillsForPrompt } = skillsModule;
 
-export interface BuildSystemPromptOptions {
-  /** Custom system prompt (replaces the default prefix). */
-  customPrompt?: string | undefined;
-  /** Exact full prompt replacement set by a before_agent_start handler. */
-  forceSystemPrompt?: string | undefined;
-  /** Tools to include in prompt. Default: [read, bash, edit, write]. */
-  selectedTools?: string[] | undefined;
-  /**
-   * Selected tools whose declarations requests leave out (`prepareLoadout` hidden declarations).
-   * They are reachable only through another tool, so the tool list and rules leave them out too.
-   */
-  hiddenTools?: string[] | undefined;
-  /** Optional one-line tool snippets keyed by tool name. */
-  toolSnippets?: Record<string, string> | undefined;
-  /** Guideline bullets contributed by each tool, keyed by tool name. */
-  toolGuidelines?: Record<string, string[]> | undefined;
-  /** Additional guideline bullets appended to the default system prompt rules. */
-  promptGuidelines?: string[] | undefined;
-  /** Text appended from user configuration before project context, skills, and cwd. */
-  appendSystemPrompt?: string | undefined;
-  /** Additional XML-wrapped prompt sections keyed by tag name. */
-  sections?: Record<string, string> | undefined;
-  /** Working directory. */
-  cwd: string;
-  /** Pre-loaded context files. */
-  contextFiles?: Array<{ path: string; content: string }> | undefined;
-  /** Pre-loaded skills. */
-  skills?: Skill[] | undefined;
-}
+const { getSystemMessageText } = ai;
 
-export type NormalizedBuildSystemPromptOptions = BuildSystemPromptOptions & {
-  selectedTools: string[];
-  hiddenTools: string[];
-  toolSnippets: Record<string, string>;
-  toolGuidelines: Record<string, string[]>;
-  promptGuidelines: string[];
-  appendSystemPrompt: string;
-  sections: Record<string, string>;
-  contextFiles: Array<{ path: string; content: string }>;
-  skills: Skill[];
-};
-
-/**
- * Ordered system prompt sections, keyed by name. `preamble` is untagged text; every other
- * section is wrapped in a tag of the same name so the model can match later updates to it.
- * These become `SystemMessage.sections` in the transcript.
- */
-export type SystemPromptSections = Record<string, string>;
-
-export const ORCHESTRATOR_PREAMBLE =
+const ORCHESTRATOR_PREAMBLE =
   "You are an expert coding assistant operating inside msa, a coding agent harness. You work as an orchestrator: you break the request into tasks with create_task, give each one the state it starts from and the state it must reach, record what it depends on, and steer the threads that carry them out. You do not implement the tasks yourself; you read their reports, replan, and tell the user what the tasks produced.";
 
 const CODING_PREAMBLE =
   "You are an expert coding assistant operating inside msa, a coding agent harness. You help users by reading files, executing commands, editing code, and writing new files.";
 
-const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/;
-/** Normalize prompt input into the mutable, collection-complete shape exposed to extensions. */
-export function normalizeBuildSystemPromptOptions(
-  input: BuildSystemPromptOptions,
-): NormalizedBuildSystemPromptOptions {
+const SYSTEM_PROMPT_SECTION_NAME = /^[a-z][a-z0-9_-]*$/u;
+function normalizeBuildSystemPromptOptions(
+  input: systemPromptTypes.BuildSystemPromptOptions,
+): systemPromptTypes.NormalizedBuildSystemPromptOptions {
   return {
+    appendSystemPrompt: input.appendSystemPrompt ?? "",
+    contextFiles: (input.contextFiles ?? []).map((file) => Object.assign({}, file)),
     customPrompt: input.customPrompt,
+    cwd: input.cwd,
     forceSystemPrompt: input.forceSystemPrompt,
-    selectedTools: [...(input.selectedTools ?? ["read", "bash", "edit", "write"])],
     hiddenTools: [...(input.hiddenTools ?? [])],
-    toolSnippets: { ...(input.toolSnippets ?? {}) },
+    promptGuidelines: [...(input.promptGuidelines ?? [])],
+    sections: { ...(input.sections ?? {}) },
+    selectedTools: [...(input.selectedTools ?? ["read", "bash", "edit", "write"])],
+    skills: (input.skills ?? []).map((skill) => Object.assign({}, skill)),
     toolGuidelines: Object.fromEntries(
       Object.entries(input.toolGuidelines ?? {}).map(([name, guidelines]) => [
         name,
         [...guidelines],
       ]),
     ),
-    promptGuidelines: [...(input.promptGuidelines ?? [])],
-    appendSystemPrompt: input.appendSystemPrompt ?? "",
-    sections: { ...(input.sections ?? {}) },
-    cwd: input.cwd,
-    contextFiles: (input.contextFiles ?? []).map((file) => ({ ...file })),
-    skills: (input.skills ?? []).map((skill) => ({ ...skill })),
+    toolSnippets: { ...(input.toolSnippets ?? {}) },
   };
 }
 
@@ -107,7 +60,7 @@ function buildRules(
   const seen = new Set<string>();
   const addRule = (rule: string): void => {
     const normalized = rule.trim();
-    if (!normalized || seen.has(normalized)) return;
+    if (normalized === "" || seen.has(normalized)) return;
     seen.add(normalized);
     rules.push(normalized);
   };
@@ -139,8 +92,9 @@ function buildRules(
   return rules.map((rule) => `- ${rule}`).join("\n");
 }
 
-/** Build the ordered, independently replaceable sections of the structured system prompt. */
-export function buildSystemPromptSections(input: BuildSystemPromptOptions): SystemPromptSections {
+function buildSystemPromptSections(
+  input: systemPromptTypes.BuildSystemPromptOptions,
+): systemPromptTypes.SystemPromptSections {
   const options = normalizeBuildSystemPromptOptions(input);
   const {
     customPrompt,
@@ -164,22 +118,28 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 
   const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
   const promptSections: Record<string, string> = {};
-  if (customPrompt) {
-    promptSections["preamble"] = customPrompt;
-  } else {
-    promptSections["preamble"] = declaredTools.includes("create_task")
-      ? ORCHESTRATOR_PREAMBLE
-      : CODING_PREAMBLE;
-    const visibleTools = declaredTools.filter((name) => !!toolSnippets[name]);
-    const tools =
-      visibleTools.length > 0
-        ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n")
-        : "(none)";
-    promptSections["tools"] =
-      `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
-    promptSections["rules"] = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-    promptSections["docs"] =
-      `msa documentation (read only when the user asks about msa itself, its SDK, extensions, themes, skills, or TUI):
+  const sections: systemPromptTypes.SystemPromptSections = fillPromptSections(
+    customPrompt,
+    promptSections,
+    declaredTools,
+    toolSnippets,
+    toolGuidelines,
+    promptGuidelines,
+    appendSystemPrompt,
+    contextFiles,
+    selectedTools,
+    skills,
+    cwd,
+    customSections,
+  );
+  for (const [name, content] of Object.entries(promptSections)) {
+    if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
+  }
+  return sections;
+}
+
+const docsSection = (): string =>
+  `msa documentation (read only when the user asks about msa itself, its SDK, extensions, themes, skills, or TUI):
 - Main documentation: ${getReadmePath()}
 - Additional docs: ${getDocsPath()}
 - Examples: ${getExamplesPath()} (extensions, custom tools, SDK)
@@ -187,57 +147,113 @@ export function buildSystemPromptSections(input: BuildSystemPromptOptions): Syst
 - When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), msa packages (docs/packages.md), environment variables (docs/environment-variables.md), MCP servers (docs/mcp.md), long-term memory (docs/memory.md), codemode scripts and non-LLM models such as classifiers and image models (docs/codemode.md)
 - When working on msa topics, read the docs and examples, and follow .md cross-references before implementing
 - Always read msa .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
+
+function addDefaultSections(
+  promptSections: Record<string, string>,
+  declaredTools: string[],
+  toolSnippets: Record<string, string>,
+  guidelines: { toolGuidelines: Record<string, string[]>; promptGuidelines: string[] },
+): void {
+  const visibleTools = declaredTools.filter(
+    (name) => !(toolSnippets[name] === undefined || toolSnippets[name] === ""),
+  );
+  const tools =
+    visibleTools.length > 0
+      ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n")
+      : "(none)";
+  promptSections["tools"] =
+    `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
+  promptSections["rules"] = buildRules(
+    declaredTools,
+    guidelines.toolGuidelines,
+    guidelines.promptGuidelines,
+  );
+  promptSections["docs"] = docsSection();
+}
+
+function fillPromptSections(
+  customPrompt: string | undefined,
+  promptSections: Record<string, string>,
+  declaredTools: string[],
+  toolSnippets: Record<string, string>,
+  toolGuidelines: Record<string, string[]>,
+  promptGuidelines: string[],
+  appendSystemPrompt: string,
+  contextFiles: { path: string; content: string }[] & { path: string; content: string }[],
+  selectedTools: string[],
+  skills: skillsTypes.Skill[],
+  cwd: string,
+  customSections: Record<string, string>,
+) {
+  const hasCustomPrompt = customPrompt !== undefined && customPrompt !== "";
+  const preamble = hasCustomPrompt
+    ? customPrompt
+    : declaredTools.includes("create_task")
+      ? ORCHESTRATOR_PREAMBLE
+      : CODING_PREAMBLE;
+  promptSections["preamble"] = preamble;
+  if (!hasCustomPrompt) {
+    addDefaultSections(promptSections, declaredTools, toolSnippets, {
+      promptGuidelines,
+      toolGuidelines,
+    });
   }
 
-  if (appendSystemPrompt) promptSections["addendum"] = appendSystemPrompt;
+  if (appendSystemPrompt !== "") promptSections["addendum"] = appendSystemPrompt;
+  fillContextSections(
+    contextFiles,
+    promptSections,
+    declaredTools,
+    selectedTools,
+    skills,
+    cwd,
+    customSections,
+  );
+
+  const sections: systemPromptTypes.SystemPromptSections = { preamble };
+  return sections;
+}
+
+function fillContextSections(
+  contextFiles: { path: string; content: string }[] & { path: string; content: string }[],
+  promptSections: Record<string, string>,
+  declaredTools: string[],
+  selectedTools: string[],
+  skills: skillsTypes.Skill[],
+  cwd: string,
+  customSections: Record<string, string>,
+) {
   if (contextFiles.length > 0)
     promptSections["project_context"] = renderProjectContext(contextFiles);
-  // A hidden reader is still reachable through another tool, so skills stay but the hint names no tool.
   const readers = ["read", "bash"] as const;
   const skillFileReadTool =
     readers.find((tool) => declaredTools.includes(tool)) ??
     (readers.some((tool) => selectedTools.includes(tool)) ? "indirect" : undefined);
-  if (skillFileReadTool && skills.length > 0) {
+  if (skillFileReadTool !== undefined && skills.length > 0) {
     const skillsPrompt = formatSkillsForPrompt(skills, skillFileReadTool).trim();
-    if (skillsPrompt) promptSections["skills"] = skillsPrompt;
+    if (skillsPrompt !== "") promptSections["skills"] = skillsPrompt;
   }
-  promptSections["cwd"] = cwd.replace(/\\/g, "/");
+  promptSections["cwd"] = cwd.replace(/\\/gu, "/");
   for (const [name, content] of Object.entries(customSections)) {
-    if (content) promptSections[name] = content;
+    if (content !== "") promptSections[name] = content;
   }
-
-  const sections: SystemPromptSections = { preamble: promptSections["preamble"] };
-  for (const [name, content] of Object.entries(promptSections)) {
-    if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
-  }
-  return sections;
 }
 
-/**
- * The complete prompt state for `input`. A forced prompt is opaque and lives in `content`
- * with no sections; otherwise `content` is empty and the structured sections carry the prompt.
- */
-export function buildSystemPromptState(input: BuildSystemPromptOptions): {
+function buildSystemPromptState(input: systemPromptTypes.BuildSystemPromptOptions): {
   content: string;
-  sections?: SystemPromptSections;
+  sections?: systemPromptTypes.SystemPromptSections;
 } {
   if (input.forceSystemPrompt !== undefined) return { content: input.forceSystemPrompt };
   return { content: "", sections: buildSystemPromptSections(input) };
 }
 
-/** Build the system prompt text, rendered exactly as the transcript's system message replays it. */
-export function buildSystemPrompt(input: BuildSystemPromptOptions): string {
+function buildSystemPrompt(input: systemPromptTypes.BuildSystemPromptOptions): string {
   return getSystemMessageText({ role: "system", ...buildSystemPromptState(input), timestamp: 0 });
 }
 
-/**
- * Diff the sections the model currently has (replayed from the transcript, so never null)
- * against the desired ones. Returns a `SystemMessage.sections` patch, or undefined when
- * nothing changed.
- */
-export function diffSystemPromptSections(
+function diffSystemPromptSections(
   previous: Record<string, string | null>,
-  current: SystemPromptSections,
+  current: systemPromptTypes.SystemPromptSections,
 ): Record<string, string | null> | undefined {
   const patch: Record<string, string | null> = {};
   for (const [name, text] of Object.entries(current)) {
@@ -248,3 +264,14 @@ export function diffSystemPromptSections(
   }
   return Object.keys(patch).length > 0 ? patch : undefined;
 }
+
+const systemPrompt = {
+  ORCHESTRATOR_PREAMBLE,
+  buildSystemPrompt,
+  buildSystemPromptSections,
+  buildSystemPromptState,
+  diffSystemPromptSections,
+  normalizeBuildSystemPromptOptions,
+};
+
+export default systemPrompt;

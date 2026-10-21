@@ -1,13 +1,12 @@
+import testing from "@msa/testing";
+import { Cause, Data, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
 
-// Regression for https://github.com/earendil-works/pi/issues/5724
-//
-// `proper-lockfile` installs `signal-exit`, whose signal listener re-sends
-// SIGTERM/SIGHUP when it observes no other process listeners during the same
-// signal dispatch. InteractiveMode must therefore keep its signal handlers
-// registered until async terminal cleanup has completed.
+const { bindModeFake } = interactiveModeFake;
+
+const { gate } = testing;
 
 type ShutdownThis = {
   isShuttingDown: boolean;
@@ -18,84 +17,89 @@ type ShutdownThis = {
   stop: () => void;
 };
 
-type InteractiveModePrototypeWithShutdown = {
-  shutdown(this: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
-
-class ProcessExitError extends Error {}
+class ProcessExitError extends Data.TaggedError("ProcessExitError")<{}> {}
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve: (() => void) | undefined;
-  const promise = new Promise<void>((res) => {
-    resolve = res;
-  });
+  const promise = gate();
   return {
     promise,
-    resolve: () => resolve?.(),
+    resolve: () => promise.release(),
   };
 }
 
-async function callShutdown(
-  context: ShutdownThis,
-  options?: { fromSignal?: boolean },
-): Promise<void> {
-  try {
-    await (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
-      context,
-      options,
-    );
-  } catch (error) {
-    if (!(error instanceof ProcessExitError)) throw error;
-  }
+function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      {
+        const tryExit5 = yield* Effect.exit(
+          Effect.promise(() => bindModeFake(context).lifecycle.shutdown.shutdown(options)),
+        );
+        if (Exit.isFailure(tryExit5)) {
+          const error = Cause.squash(tryExit5.cause);
+          if (!(error instanceof ProcessExitError)) throw error;
+        }
+      }
+    }),
+  );
 }
+
+const keepsSignalHandlersRegisteredWhileSignal = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new ProcessExitError();
+  }) as typeof process.exit);
+
+  const order: string[] = [];
+  const dispose = deferred();
+  const context: ShutdownThis = {
+    isShuttingDown: false,
+    runtimeHost: {
+      dispose: vi.fn(() => {
+        order.push("dispose");
+        return dispose.promise;
+      }),
+    },
+    stop: vi.fn(() => {
+      order.push("stop");
+    }),
+    themeController: { disableAutoSync: vi.fn() },
+    ui: {
+      terminal: {
+        drainInput: vi.fn(() =>
+          runPromise(
+            Effect.sync(() => {
+              order.push("drainInput");
+            }),
+          ),
+        ),
+      },
+    },
+    unregisterSignalHandlers: vi.fn(() => {
+      order.push("unregister");
+    }),
+  };
+
+  const shutdownPromise = callShutdown(context, { fromSignal: true });
+  yield* Effect.promise(() => Promise.resolve());
+
+  expect(order).toEqual(["dispose"]);
+  expect(context.unregisterSignalHandlers).not.toHaveBeenCalled();
+
+  dispose.resolve();
+  yield* Effect.promise(() => shutdownPromise);
+
+  expect(order).toEqual(["dispose", "drainInput", "stop"]);
+});
+
+const keepsSignalHandlersRegisteredWhileSignalTriggered = () =>
+  Effect.runPromise(keepsSignalHandlersRegisteredWhileSignal);
 
 describe("InteractiveMode SIGTERM shutdown with signal-exit (#5724)", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  test("keeps signal handlers registered while signal-triggered cleanup is pending", async () => {
-    vi.spyOn(process, "exit").mockImplementation((() => {
-      throw new ProcessExitError();
-    }) as typeof process.exit);
-
-    const order: string[] = [];
-    const dispose = deferred();
-    const context: ShutdownThis = {
-      isShuttingDown: false,
-      unregisterSignalHandlers: vi.fn(() => {
-        order.push("unregister");
-      }),
-      runtimeHost: {
-        dispose: vi.fn(() => {
-          order.push("dispose");
-          return dispose.promise;
-        }),
-      },
-      ui: {
-        terminal: {
-          drainInput: vi.fn(async () => {
-            order.push("drainInput");
-          }),
-        },
-      },
-      themeController: { disableAutoSync: vi.fn() },
-      stop: vi.fn(() => {
-        order.push("stop");
-      }),
-    };
-
-    const shutdownPromise = callShutdown(context, { fromSignal: true });
-    await Promise.resolve();
-
-    expect(order).toEqual(["dispose"]);
-    expect(context.unregisterSignalHandlers).not.toHaveBeenCalled();
-
-    dispose.resolve();
-    await shutdownPromise;
-
-    expect(order).toEqual(["dispose", "drainInput", "stop"]);
-  });
+  test(
+    "keeps signal handlers registered while signal-triggered cleanup is pending",
+    keepsSignalHandlersRegisteredWhileSignalTriggered,
+  );
 });

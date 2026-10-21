@@ -1,141 +1,89 @@
-import type { AgentMessage } from "@msa/agent-core";
-import {
-  contentText,
-  getCurrentTools,
-  getInitialSystemMessage,
-  renderSystemMessageUpdate,
-  type Message,
-  type SystemMessage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 
-import { estimateTokens } from "./compaction/compaction.ts";
-import { MEMORY_RECALL_MESSAGE_TYPE } from "./memory/memory.ts";
-import { ORCHESTRATOR_PREAMBLE } from "./system-prompt.ts";
+import compaction from "./compaction/compaction.ts";
+import type contextBreakdownTypes from "./context-breakdown.types.ts";
+import memory from "./memory/memory.ts";
+import systemPrompt from "./system-prompt.ts";
 
-/** Where an element of the request sits. */
-export type ContextPart =
-  | "system"
-  | "tools"
-  | "conversation"
-  | "toolResults"
-  | "compaction"
-  | "other";
+const { estimateTokens } = compaction;
+const { ORCHESTRATOR_PREAMBLE } = systemPrompt;
+const { MEMORY_RECALL_MESSAGE_TYPE } = memory;
 
-export interface ContextBreakdownEntry {
-  part: ContextPart;
-  name: string;
-  tokens: number;
-}
+const { contentText, getCurrentTools, getInitialSystemMessage, renderSystemMessageUpdate } = ai;
 
-/**
- * The request the model would receive next, split into its elements. `tokens` is the whole
- * request; entries sum to it. `exact` when the provider counted the request, otherwise the
- * total is the context usage and entries are shares of it.
- */
-export interface ContextBreakdown {
-  method: "exact" | "estimated";
-  tokens: number;
-  entries: ContextBreakdownEntry[];
-}
+const systemOnly = (
+  fields: Omit<aiTypes.SystemMessage, "role" | "content" | "timestamp">,
+): number => estimateTokens({ content: "", role: "system", timestamp: 0, ...fields });
 
-/** One element with its approximate size, before apportioning to the total. */
-export interface ContextElement {
-  part: ContextPart;
-  name: string;
-  estimate: number;
-}
-
-/** The pipeline the agent loop sends a request through, and the counts known for it. */
-export interface ContextBreakdownSource {
-  /** The transcript the latest response's usage covers, plus messages appended since. */
-  messages: AgentMessage[];
-  /** Messages the next request adds before it is sent: prompt updates and tool declarations. */
-  pending: AgentMessage[];
-  transformContext: ((messages: AgentMessage[]) => Promise<AgentMessage[]>) | undefined;
-  convertToLlm: (messages: AgentMessage[]) => Message[] | Promise<Message[]>;
-  /** Provider count of the converted request, or undefined when the provider cannot count. */
-  countTokens: (messages: Message[]) => Promise<number | undefined>;
-  /** Context usage from the latest response, or null when unknown. */
-  usageTokens: number | null;
-  /**
-   * The provider when it runs another agent that adds its own prompt and tools to the request,
-   * so its usage holds context msa does not send.
-   */
-  addingProvider: string | undefined;
-}
-
-const systemOnly = (fields: Omit<SystemMessage, "role" | "content" | "timestamp">): number =>
-  estimateTokens({ role: "system", content: "", timestamp: 0, ...fields });
-
-function systemElements(system: SystemMessage): ContextElement[] {
-  const elements: ContextElement[] = [];
-  const content = contentText(system.content);
+function systemElements(system: aiTypes.SystemMessage): contextBreakdownTypes.ContextElement[] {
+  const elements: contextBreakdownTypes.ContextElement[] = [];
+  const content = contentText(system.content, "\n");
   if (content.length > 0) {
     elements.push({
-      part: "system",
+      estimate: estimateTokens({ content, role: "system", timestamp: 0 }),
       name: "prompt",
-      estimate: estimateTokens({ role: "system", content, timestamp: 0 }),
+      part: "system",
     });
   }
   for (const [name, text] of Object.entries(system.sections ?? {})) {
     if (text === null) continue;
     elements.push({
-      part: "system",
-      name: name === "preamble" && text === ORCHESTRATOR_PREAMBLE ? "orchestrator" : name,
       estimate: systemOnly({ sections: { [name]: text } }),
+      name: name === "preamble" && text === ORCHESTRATOR_PREAMBLE ? "orchestrator" : name,
+      part: "system",
     });
   }
   return elements;
 }
 
-function conversationElement(source: AgentMessage, sent: Message): ContextElement {
+function conversationElement(
+  source: agentTypes.AgentMessage,
+  sent: aiTypes.Message,
+): contextBreakdownTypes.ContextElement {
   const estimate = estimateTokens(sent);
   switch (source.role) {
     case "user":
     case "assistant":
-      return { part: "conversation", name: source.role, estimate };
+      return { estimate, name: source.role, part: "conversation" };
     case "toolResult":
-      return { part: "toolResults", name: source.toolName, estimate };
+      return { estimate, name: source.toolName, part: "toolResults" };
     case "compactionSummary":
-      return { part: "compaction", name: "summary", estimate };
+      return { estimate, name: "summary", part: "compaction" };
     case "custom":
       return source.customType === MEMORY_RECALL_MESSAGE_TYPE
-        ? { part: "system", name: "memory", estimate }
-        : { part: "other", name: source.customType, estimate };
+        ? { estimate, name: "memory", part: "system" }
+        : { estimate, name: source.customType, part: "other" };
     default:
-      return { part: "other", name: source.role, estimate };
+      return { estimate, name: source.role, part: "other" };
   }
 }
 
-/**
- * Split a request into elements. `sent` is each transformed message converted for the
- * provider (empty when the conversion drops it). The leading system message splits into its
- * prompt sections and the tools it declares; later system messages count as prompt updates.
- */
 function splitContext(
-  transformed: readonly AgentMessage[],
-  sent: readonly (readonly Message[])[],
-): ContextElement[] {
+  transformed: readonly agentTypes.AgentMessage[],
+  sent: readonly (readonly aiTypes.Message[])[],
+): contextBreakdownTypes.ContextElement[] {
   const llmMessages = sent.flat();
-  const elements: ContextElement[] = [];
+  const elements: contextBreakdownTypes.ContextElement[] = [];
   const initial = getInitialSystemMessage(llmMessages);
-  if (initial) elements.push(...systemElements(initial));
+  if (initial !== undefined) elements.push(...systemElements(initial));
   for (const tool of getCurrentTools(llmMessages)) {
-    elements.push({ part: "tools", name: tool.name, estimate: systemOnly({ toolsAdded: [tool] }) });
+    elements.push({ estimate: systemOnly({ toolsAdded: [tool] }), name: tool.name, part: "tools" });
   }
   transformed.forEach((source, index) => {
     for (const message of sent[index] ?? []) {
       if (message === initial) continue;
       if (message.role === "system") {
         elements.push({
-          part: "system",
-          name: "updates",
           estimate: estimateTokens({
-            role: "user",
             content: renderSystemMessageUpdate(message),
+            role: "user",
             timestamp: 0,
           }),
+          name: "updates",
+          part: "system",
         });
         continue;
       }
@@ -145,27 +93,25 @@ function splitContext(
   return mergeElements(elements);
 }
 
-function mergeElements(elements: readonly ContextElement[]): ContextElement[] {
-  const merged = new Map<string, ContextElement>();
+function mergeElements(
+  elements: readonly contextBreakdownTypes.ContextElement[],
+): contextBreakdownTypes.ContextElement[] {
+  const merged = new Map<string, contextBreakdownTypes.ContextElement>();
   for (const element of elements) {
     const key = `${element.part}\u0000${element.name}`;
     const existing = merged.get(key);
-    if (existing) existing.estimate += element.estimate;
-    else merged.set(key, { ...element });
+    if (existing === undefined) merged.set(key, { ...element });
+    else existing.estimate += element.estimate;
   }
   return [...merged.values()];
 }
 
-/**
- * Apportion `total` across elements by their estimates, rounding with the largest remainders
- * so the integer shares sum to `total` exactly.
- */
-export function apportion(
-  elements: readonly ContextElement[],
+function apportion(
+  elements: readonly contextBreakdownTypes.ContextElement[],
   total: number,
-): ContextBreakdownEntry[] {
+): contextBreakdownTypes.ContextBreakdownEntry[] {
   const estimated = elements.reduce((sum, element) => sum + element.estimate, 0);
-  if (estimated === 0) return elements.map(({ part, name }) => ({ part, name, tokens: 0 }));
+  if (estimated === 0) return elements.map(({ part, name }) => ({ name, part, tokens: 0 }));
   const shares = elements.map((element) => (element.estimate / estimated) * total);
   const tokens = shares.map(Math.floor);
   const order = shares
@@ -177,40 +123,52 @@ export function apportion(
     tokens[index] = (tokens[index] ?? 0) + 1;
     missing--;
   }
-  return elements.map(({ part, name }, index) => ({ part, name, tokens: tokens[index] ?? 0 }));
+  return elements.map(({ part, name }, index) => ({ name, part, tokens: tokens[index] ?? 0 }));
 }
 
-/** Build the breakdown of the request the agent loop would send for `source.messages`. */
-export const measureContextBreakdown = (
-  source: ContextBreakdownSource,
-): Effect.Effect<ContextBreakdown> =>
+const measureContextBreakdown = (
+  source: contextBreakdownTypes.ContextBreakdownSource,
+): Effect.Effect<contextBreakdownTypes.ContextBreakdown> =>
   Effect.gen(function* () {
     const messages = [...source.messages, ...source.pending];
-    const transformed = source.transformContext
-      ? yield* Effect.promise(() => source.transformContext!(messages))
-      : messages;
+    const transformed =
+      source.transformContext === undefined
+        ? messages
+        : yield* Effect.promise(() => source.transformContext!(messages));
     const sent = yield* Effect.forEach(transformed, (message) =>
-      Effect.promise(async () => source.convertToLlm([message])),
+      Effect.promise(() => Promise.resolve(source.convertToLlm([message]))),
     );
     const elements = splitContext(transformed, sent);
     const counted = yield* Effect.tryPromise(() => source.countTokens(sent.flat())).pipe(
       Effect.orElseSucceed(() => undefined),
     );
     const estimated = elements.reduce((sum, element) => sum + element.estimate, 0);
-    const pending = yield* Effect.promise(async () => source.convertToLlm(source.pending));
+    const pending = yield* Effect.promise(() =>
+      Promise.resolve(source.convertToLlm(source.pending)),
+    );
     const pendingEstimate = pending.reduce((sum, message) => sum + estimateTokens(message), 0);
     const tokens =
       counted ?? (source.usageTokens === null ? estimated : source.usageTokens + pendingEstimate);
-    const added = counted === undefined && source.addingProvider ? tokens - estimated : 0;
+    const added =
+      counted === undefined && source.addingProvider !== undefined && source.addingProvider !== ""
+        ? tokens - estimated
+        : 0;
     return {
-      method: counted === undefined ? "estimated" : "exact",
-      tokens,
       entries:
         added > 0
           ? [
               ...apportion(elements, estimated),
-              { part: "other", name: source.addingProvider!, tokens: added },
+              { name: source.addingProvider!, part: "other", tokens: added },
             ]
           : apportion(elements, tokens),
+      method: counted === undefined ? "estimated" : "exact",
+      tokens,
     };
   });
+
+const contextBreakdown = {
+  apportion,
+  measureContextBreakdown,
+};
+
+export default contextBreakdown;

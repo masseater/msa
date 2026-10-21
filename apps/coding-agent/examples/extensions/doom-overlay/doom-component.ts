@@ -1,15 +1,13 @@
-/**
- * DOOM Component for overlay mode
- *
- * Renders DOOM frames using half-block characters (▀) with 24-bit color.
- * Height is calculated from width to maintain DOOM's aspect ratio.
- */
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect, type Fiber } from "effect";
 
-import type { Component } from "@msa/tui";
-import { isKeyRelease, type TUI } from "@msa/tui";
+import type doomEngineTypes from "./doom-engine.types.ts";
+import doomKeysModule from "./doom-keys.ts";
 
-import type { DoomEngine } from "./doom-engine.ts";
-import { DoomKeys, mapKeyToDoom } from "./doom-keys.ts";
+const { DoomKeys, mapKeyToDoom } = doomKeysModule;
+
+const { isKeyRelease } = tuiModule;
 
 function renderHalfBlock(
   rgba: Uint8Array,
@@ -45,21 +43,24 @@ function renderHalfBlock(
   return lines;
 }
 
-export class DoomOverlayComponent implements Component {
-  private engine: DoomEngine;
-  private tui: TUI;
-  private interval: ReturnType<typeof setInterval> | null = null;
+export default class DoomOverlayComponent implements tuiTypes.Component {
+  private engine: doomEngineTypes.DoomEngine;
+  private tui: tuiTypes.TUI;
+  private fiber: Fiber.Fiber<void> | undefined;
   private onExit: () => void;
 
-  // Opt-in to key release events for smooth movement
   wantsKeyRelease = true;
 
-  constructor(tui: TUI, engine: DoomEngine, onExit: () => void, resume = false) {
+  constructor(
+    tui: tuiTypes.TUI,
+    engine: doomEngineTypes.DoomEngine,
+    onExit: () => void,
+    resume = false,
+  ) {
     this.tui = tui;
     this.engine = engine;
     this.onExit = onExit;
 
-    // Unpause if resuming
     if (resume) {
       this.engine.pushKey(true, DoomKeys.KEY_PAUSE);
       this.engine.pushKey(false, DoomKeys.KEY_PAUSE);
@@ -69,22 +70,20 @@ export class DoomOverlayComponent implements Component {
   }
 
   private startGameLoop(): void {
-    this.interval = setInterval(() => {
+    const tick = Effect.sync(() => {
       try {
         this.engine.tick();
         this.tui.requestRender();
       } catch {
-        // WASM error (e.g., exit via DOOM menu) - treat as quit
         this.dispose();
         this.onExit();
       }
-    }, 1000 / 35);
+    });
+    this.fiber = Effect.runFork(Effect.forever(tick.pipe(Effect.andThen(Effect.sleep(1000 / 35)))));
   }
 
   handleInput(data: string): void {
-    // Q to pause and exit (but not on release)
     if (!isKeyRelease(data) && (data === "q" || data === "Q")) {
-      // Send DOOM's pause key before exiting
       this.engine.pushKey(true, DoomKeys.KEY_PAUSE);
       this.engine.pushKey(false, DoomKeys.KEY_PAUSE);
       this.dispose();
@@ -103,10 +102,6 @@ export class DoomOverlayComponent implements Component {
   }
 
   render(width: number): string[] {
-    // DOOM renders at 640x400 (1.6:1 ratio)
-    // With half-block characters, each terminal row = 2 pixels
-    // So effective ratio is 640:200 = 3.2:1 (width:height in terminal cells)
-    // Add 1 row for footer
     const ASPECT_RATIO = 3.2;
     const MIN_HEIGHT = 10;
     const height = Math.max(MIN_HEIGHT, Math.floor(width / ASPECT_RATIO));
@@ -114,7 +109,6 @@ export class DoomOverlayComponent implements Component {
     const rgba = this.engine.getFrameRGBA();
     const lines = renderHalfBlock(rgba, this.engine.width, this.engine.height, width, height);
 
-    // Footer
     const footer =
       " DOOM | Q=Pause | WASD=Move | Shift+WASD=Run | Space=Use | F=Fire | 1-7=Weapons";
     const truncatedFooter = footer.length > width ? footer.slice(0, width) : footer;
@@ -126,9 +120,7 @@ export class DoomOverlayComponent implements Component {
   invalidate(): void {}
 
   dispose(): void {
-    if (this.interval) {
-      clearInterval(this.interval);
-      this.interval = null;
-    }
+    this.fiber?.interruptUnsafe();
+    this.fiber = undefined;
   }
 }

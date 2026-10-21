@@ -1,38 +1,44 @@
-import type { AuthInfoLink, OAuthDeviceCodeInfo } from "@msa/ai";
-import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect } from "effect";
 
-import { openBrowser } from "../../../utils/open-browser.ts";
-import { theme } from "../theme/theme.ts";
-import { AuthUrlComponent } from "./auth-url.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import openBrowserModule from "../../../utils/open-browser.ts";
+import themeModule from "../theme/theme.ts";
+import AuthUrlComponent from "./auth-url.ts";
+import type authUrlTypes from "./auth-url.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { theme } = themeModule;
+const { openBrowser } = openBrowserModule;
+const { keyHint } = keybindingHints;
 
-/**
- * Login dialog component - replaces editor during OAuth login flow
- */
-export class LoginDialogComponent extends Container implements Focusable {
-  private contentContainer: Container;
-  private input: Input;
-  private tui: TUI;
-  /** The shown sign-in URL, which `app.message.copy` copies. */
-  private authUrl?: AuthUrlComponent | undefined;
+const { Container, Input, Spacer, Text, getKeybindings } = tuiModule;
+
+export default class LoginDialogComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
+  private contentContainer: tuiTypes.Container;
+  private input: tuiTypes.Input;
+  private tui: tuiTypes.TUI;
+  private authUrl?: authUrlTypes.AuthUrlComponent | undefined;
   private abortController = new AbortController();
   private inputResolver?: ((value: string) => void) | undefined;
   private inputRejecter?: ((error: Error) => void) | undefined;
   private onComplete: (success: boolean, message?: string) => void;
 
-  // Focusable implementation - propagate to input for IME cursor positioning
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.input.focused = value;
   }
 
   constructor(
-    tui: TUI,
+    tui: tuiTypes.TUI,
     providerId: string,
     onComplete: (success: boolean, message?: string) => void,
     providerNameOverride?: string,
@@ -45,20 +51,16 @@ export class LoginDialogComponent extends Container implements Focusable {
     const providerName = providerNameOverride || providerId;
     const title = titleOverride ?? `Login to ${providerName}`;
 
-    // Top border
     this.addChild(new DynamicBorder());
 
-    // Title
     this.addChild(new Text(theme.fg("accent", theme.bold(title)), 1, 0));
 
-    // Dynamic content area
     this.contentContainer = new Container();
     this.addChild(this.contentContainer);
 
-    // Input (always present, used when needed)
     this.input = new Input();
     this.input.onSubmit = () => {
-      if (this.inputResolver) {
+      if (this.inputResolver !== undefined) {
         const value = this.input.getValue();
         this.replaceInputWithSubmittedText(value);
         this.inputResolver(value);
@@ -70,7 +72,6 @@ export class LoginDialogComponent extends Container implements Focusable {
       this.cancel();
     };
 
-    // Bottom border
     this.addChild(new DynamicBorder());
   }
 
@@ -86,7 +87,7 @@ export class LoginDialogComponent extends Container implements Focusable {
 
   private cancel(): void {
     this.abortController.abort();
-    if (this.inputRejecter) {
+    if (this.inputRejecter !== undefined) {
       this.inputRejecter(new Error("Login cancelled"));
       this.inputResolver = undefined;
       this.inputRejecter = undefined;
@@ -94,16 +95,13 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.onComplete(false, "Login cancelled");
   }
 
-  /**
-   * Called by onAuth callback - show URL and optional instructions
-   */
   showAuth(url: string, instructions?: string): void {
     this.contentContainer.clear();
     this.contentContainer.addChild(new Spacer(1));
     this.authUrl = new AuthUrlComponent(this.tui, url);
     this.contentContainer.addChild(this.authUrl);
 
-    if (instructions) {
+    if (instructions !== undefined && instructions !== "") {
       this.contentContainer.addChild(new Spacer(1));
       this.contentContainer.addChild(new Text(theme.fg("warning", instructions), 1, 0));
     }
@@ -112,10 +110,7 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  /**
-   * Called by onDeviceCode callback - show URL and user code.
-   */
-  showDeviceCode(info: Pick<OAuthDeviceCodeInfo, "userCode" | "verificationUri">): void {
+  showDeviceCode(info: Pick<aiTypes.OAuthDeviceCodeInfo, "userCode" | "verificationUri">): void {
     this.authUrl = undefined;
     this.contentContainer.clear();
     this.contentContainer.addChild(new Spacer(1));
@@ -133,9 +128,6 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  /**
-   * Show input for manual code/URL entry (for callback server providers)
-   */
   showManualInput(prompt: string): Promise<string> {
     this.input.setValue("");
     this.contentContainer.addChild(new Spacer(1));
@@ -146,20 +138,18 @@ export class LoginDialogComponent extends Container implements Focusable {
     );
     this.tui.requestRender();
 
-    return new Promise((resolve, reject) => {
-      this.inputResolver = resolve;
-      this.inputRejecter = reject;
-    });
+    return Effect.runPromise(
+      Effect.callback<string>((resume) => {
+        this.inputResolver = (value: string) => resume(Effect.succeed(value));
+        this.inputRejecter = (error: Error) => resume(Effect.die(error));
+      }),
+    );
   }
 
-  /**
-   * Called by onPrompt callback - show prompt and wait for input
-   * Note: Does NOT clear content, appends to existing (preserves URL from showAuth)
-   */
   showPrompt(message: string, placeholder?: string): Promise<string> {
     this.contentContainer.addChild(new Spacer(1));
     this.contentContainer.addChild(new Text(theme.fg("text", message), 1, 0));
-    if (placeholder) {
+    if (placeholder !== undefined && placeholder !== "") {
       this.contentContainer.addChild(new Text(theme.fg("dim", `e.g., ${placeholder}`), 1, 0));
     }
     this.contentContainer.addChild(this.input);
@@ -174,13 +164,14 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.input.setValue("");
     this.tui.requestRender();
 
-    return new Promise((resolve, reject) => {
-      this.inputResolver = resolve;
-      this.inputRejecter = reject;
-    });
+    return Effect.runPromise(
+      Effect.callback<string>((resume) => {
+        this.inputResolver = (value: string) => resume(Effect.succeed(value));
+        this.inputRejecter = (error: Error) => resume(Effect.die(error));
+      }),
+    );
   }
 
-  /** Show informational text before another login step. */
   showDetails(lines: string[]): void {
     this.authUrl = undefined;
     this.contentContainer.clear();
@@ -191,12 +182,16 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  /** Show provider-owned information and links without starting an auth callback flow. */
-  showInfo(message: string, links: readonly AuthInfoLink[] = [], showCloseHint = false): void {
+  showInfo(
+    message: string,
+    links: readonly aiTypes.AuthInfoLink[] = [],
+    showCloseHint = false,
+  ): void {
     this.contentContainer.addChild(new Spacer(1));
     this.contentContainer.addChild(new Text(theme.fg("text", message), 1, 0));
     for (const link of links) {
-      const text = link.label ? `${link.label}: ${link.url}` : link.url;
+      const text =
+        link.label !== undefined && link.label !== "" ? `${link.label}: ${link.url}` : link.url;
       const hyperlink = `\x1b]8;;${link.url}\x07${text}\x1b]8;;\x07`;
       this.contentContainer.addChild(new Text(theme.fg("accent", hyperlink), 1, 0));
     }
@@ -209,9 +204,6 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  /**
-   * Show waiting message (for polling flows)
-   */
   showWaiting(message: string): void {
     this.contentContainer.addChild(new Spacer(1));
     this.contentContainer.addChild(new Text(theme.fg("dim", message), 1, 0));
@@ -221,9 +213,6 @@ export class LoginDialogComponent extends Container implements Focusable {
     this.tui.requestRender();
   }
 
-  /**
-   * Called by onProgress callback
-   */
   showProgress(message: string): void {
     this.contentContainer.addChild(new Text(theme.fg("dim", message), 1, 0));
     this.tui.requestRender();
@@ -236,12 +225,11 @@ export class LoginDialogComponent extends Container implements Focusable {
       this.cancel();
       return;
     }
-    if (this.authUrl && kb.matches(data, "app.message.copy")) {
+    if (this.authUrl !== undefined && kb.matches(data, "app.message.copy")) {
       void this.authUrl.copy();
       return;
     }
 
-    // Pass to input
     this.input.handleInput(data);
   }
 }

@@ -1,6 +1,12 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
+
+const { awaited, runTest } = testing;
 
 type SubmitContext = {
   defaultEditor: { onSubmit?: (text: string) => void };
@@ -9,10 +15,10 @@ type SubmitContext = {
     setText: (text: string) => void;
   };
   session: {
-    isCompacting: boolean;
+    compaction: { manual: { isCompacting: boolean } };
+    context: { bash: { isBashRunning: boolean } };
     isStreaming: boolean;
-    isBashRunning: boolean;
-    prompt: (text: string, options?: unknown) => Promise<void>;
+    run: { prompting: { prompt: (text: string, options?: unknown) => Promise<void> } };
   };
   flushPendingBashComponents: () => void;
   onInputCallback?: (text: string) => void;
@@ -29,14 +35,6 @@ type StartupSubmitContext = {
   showStatus: (message: string) => void;
 };
 
-type InteractiveModePrivate = {
-  handleStartupSubmit(this: StartupSubmitContext, text: string): void;
-  setupEditorSubmitHandler(this: SubmitContext): void;
-  getUserInput(this: InputContext): Promise<string>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrivate;
-
 function createSubmitContext(): SubmitContext {
   return {
     defaultEditor: {},
@@ -44,14 +42,14 @@ function createSubmitContext(): SubmitContext {
       addToHistory: vi.fn(),
       setText: vi.fn(),
     },
-    session: {
-      isCompacting: false,
-      isStreaming: false,
-      isBashRunning: false,
-      prompt: vi.fn(async () => {}),
-    },
     flushPendingBashComponents: vi.fn(),
     pendingUserInputs: [],
+    session: {
+      compaction: { manual: { isCompacting: false } },
+      context: { bash: { isBashRunning: false } },
+      isStreaming: false,
+      run: { prompting: { prompt: vi.fn(() => runTest(Effect.sync(() => {}))) } },
+    },
   };
 }
 
@@ -62,32 +60,41 @@ describe("InteractiveMode startup input", () => {
       showStatus: vi.fn(),
     };
 
-    interactiveModePrototype.handleStartupSubmit.call(context, "early prompt");
+    bindModeFake(context);
+    bindModeFake(context).input.submit.handleStartupSubmit("early prompt");
 
     expect(context.editor.setText).toHaveBeenCalledWith("early prompt");
     expect(context.showStatus).toHaveBeenCalledWith("Startup is still in progress");
   });
 
-  it("queues a normal prompt submitted before the input callback is installed", async () => {
-    const context = createSubmitContext();
-    interactiveModePrototype.setupEditorSubmitHandler.call(context);
+  it("queues a normal prompt submitted before the input callback is installed", () =>
+    runTest(
+      Effect.gen(function* () {
+        const context = createSubmitContext();
+        bindModeFake(context);
+        bindModeFake(context).input.submit.setupEditorSubmitHandler();
 
-    await context.defaultEditor.onSubmit?.(" early prompt ");
+        yield* awaited(context.defaultEditor.onSubmit?.(" early prompt "));
 
-    expect(context.pendingUserInputs).toEqual(["early prompt"]);
-    expect(context.flushPendingBashComponents).toHaveBeenCalledTimes(1);
-    expect(context.editor.addToHistory).toHaveBeenCalledWith("early prompt");
-  });
+        expect(context.pendingUserInputs).toEqual(["early prompt"]);
+        expect(context.flushPendingBashComponents).toHaveBeenCalledTimes(1);
+        expect(context.editor.addToHistory).toHaveBeenCalledWith("early prompt");
+      }),
+    ));
 
-  it("returns queued startup input before installing a new input callback", async () => {
-    const context: InputContext = {
-      pendingUserInputs: ["queued prompt"],
-    };
+  it("returns queued startup input before installing a new input callback", () =>
+    runTest(
+      Effect.gen(function* () {
+        const context: InputContext = {
+          pendingUserInputs: ["queued prompt"],
+        };
 
-    await expect(interactiveModePrototype.getUserInput.call(context)).resolves.toBe(
-      "queued prompt",
-    );
-    expect(context.onInputCallback).toBeUndefined();
-    expect(context.pendingUserInputs).toEqual([]);
-  });
+        bindModeFake(context);
+        yield* awaited(
+          expect(bindModeFake(context).input.submit.getUserInput()).resolves.toBe("queued prompt"),
+        );
+        expect(context.onInputCallback).toBeUndefined();
+        expect(context.pendingUserInputs).toEqual([]);
+      }),
+    ));
 });

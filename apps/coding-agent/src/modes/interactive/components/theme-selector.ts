@@ -1,18 +1,19 @@
-import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { getAvailableThemes, getSelectListTheme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
 
-const THEME_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
-  minPrimaryColumnWidth: 12,
+const { getAvailableThemes, getSelectListTheme } = themeModule;
+const { SelectList } = tui;
+
+const THEME_SELECT_LIST_LAYOUT: tuiTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
+  minPrimaryColumnWidth: 12,
 };
 
-/**
- * Component that renders a theme selector
- */
-export class ThemeSelectorComponent extends Container {
-  private selectList: SelectList;
+export default class ThemeSelectorComponent extends tui.Container {
+  private selectList: tuiTypes.SelectList;
   private onPreview: (themeName: string) => void;
 
   constructor(
@@ -24,18 +25,15 @@ export class ThemeSelectorComponent extends Container {
     super();
     this.onPreview = onPreview;
 
-    // Get available themes and create select items
     const themes = getAvailableThemes();
-    const themeItems: SelectItem[] = themes.map((name) => ({
-      value: name,
+    const themeItems: tuiTypes.SelectItem[] = themes.map((name) => ({
       label: name,
+      value: name,
       ...(name === currentTheme ? { description: "(current)" } : {}),
     }));
 
-    // Add top border
     this.addChild(new DynamicBorder());
 
-    // Create selector
     this.selectList = new SelectList(
       themeItems,
       10,
@@ -43,7 +41,6 @@ export class ThemeSelectorComponent extends Container {
       THEME_SELECT_LIST_LAYOUT,
     );
 
-    // Preselect current theme
     const currentIndex = themes.indexOf(currentTheme);
     if (currentIndex !== -1) {
       this.selectList.setSelectedIndex(currentIndex);
@@ -63,11 +60,10 @@ export class ThemeSelectorComponent extends Container {
 
     this.addChild(this.selectList);
 
-    // Add bottom border
     this.addChild(new DynamicBorder());
   }
 
-  getSelectList(): SelectList {
+  getSelectList(): tuiTypes.SelectList {
     return this.selectList;
   }
 }

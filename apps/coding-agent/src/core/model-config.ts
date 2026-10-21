@@ -1,169 +1,102 @@
-/** Immutable, credential-blind models.json snapshot. */
-
-import { readFile } from "node:fs/promises";
-
-import { ProviderCompatSchema } from "@msa/ai/providers/compat-schema";
-import {
-  ModelCostSchema,
-  ModelInputLimitsSchema,
-  ModelInputModalitySchema,
-  ModelPromptCacheSchema,
-  ThinkingLevelMapSchema,
-} from "@msa/ai/providers/model-schema";
-import { type Static, Type } from "typebox";
+import * as Effect from "effect/Effect";
 import { Compile } from "typebox/compile";
 import type { TLocalizedValidationError } from "typebox/error";
 
-import { stripJsonComments } from "../utils/json.ts";
-import { normalizePath } from "../utils/paths.ts";
-import { stripBom } from "../utils/text.ts";
+import json from "../utils/json.ts";
+import paths from "../utils/paths.ts";
+import text from "../utils/text.ts";
+import awaitingModule from "./awaiting.ts";
+import modelConfigSupport from "./model-config-support.ts";
+import type modelConfigTypes from "./model-config.types.ts";
+import nodeFsPromises from "./platform/node/fs-promises.ts";
 
-const SamplingParamsSchema = Type.Record(Type.String(), Type.Unknown());
-const SamplingParamsByThinkingLevelSchema = Type.Object({
-  off: Type.Optional(SamplingParamsSchema),
-  minimal: Type.Optional(SamplingParamsSchema),
-  low: Type.Optional(SamplingParamsSchema),
-  medium: Type.Optional(SamplingParamsSchema),
-  high: Type.Optional(SamplingParamsSchema),
-  xhigh: Type.Optional(SamplingParamsSchema),
-  max: Type.Optional(SamplingParamsSchema),
-});
-
-const PositiveTokenCountSchema = Type.Number({ exclusiveMinimum: 0 });
-
-const ModelDefinitionSchema = Type.Object({
-  id: Type.String({ minLength: 1 }),
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  api: Type.Optional(Type.String({ minLength: 1 })),
-  baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-  reasoning: Type.Optional(Type.Boolean()),
-  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
-  input: Type.Optional(Type.Array(ModelInputModalitySchema)),
-  inputLimits: Type.Optional(ModelInputLimitsSchema),
-  cost: Type.Optional(ModelCostSchema),
-  promptCache: Type.Optional(ModelPromptCacheSchema),
-  contextWindow: Type.Optional(PositiveTokenCountSchema),
-  maxTokens: Type.Optional(PositiveTokenCountSchema),
-  samplingParams: Type.Optional(SamplingParamsSchema),
-  samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  compat: Type.Optional(ProviderCompatSchema),
-});
-
-const ModelOverrideSchema = Type.Object({
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  reasoning: Type.Optional(Type.Boolean()),
-  thinkingLevelMap: Type.Optional(ThinkingLevelMapSchema),
-  input: Type.Optional(Type.Array(ModelInputModalitySchema)),
-  inputLimits: Type.Optional(ModelInputLimitsSchema),
-  cost: Type.Optional(Type.Partial(ModelCostSchema)),
-  promptCache: Type.Optional(ModelPromptCacheSchema),
-  contextWindow: Type.Optional(PositiveTokenCountSchema),
-  maxTokens: Type.Optional(PositiveTokenCountSchema),
-  samplingParams: Type.Optional(SamplingParamsSchema),
-  samplingParamsByThinkingLevel: Type.Optional(SamplingParamsByThinkingLevelSchema),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  compat: Type.Optional(ProviderCompatSchema),
-});
-
-const ProviderConfigSchema = Type.Object({
-  name: Type.Optional(Type.String({ minLength: 1 })),
-  baseUrl: Type.Optional(Type.String({ minLength: 1 })),
-  apiKey: Type.Optional(Type.String({ minLength: 1 })),
-  api: Type.Optional(Type.String({ minLength: 1 })),
-  headers: Type.Optional(Type.Record(Type.String(), Type.String())),
-  compat: Type.Optional(ProviderCompatSchema),
-  authHeader: Type.Optional(Type.Boolean()),
-  models: Type.Optional(Type.Array(ModelDefinitionSchema)),
-  modelOverrides: Type.Optional(Type.Record(Type.String(), ModelOverrideSchema)),
-});
-
-const ModelsConfigProperties = {
-  providers: Type.Record(Type.String(), ProviderConfigSchema),
-};
-
-export const ModelsConfigSchema = Type.Object({
-  $schema: Type.Optional(Type.String()),
-  ...ModelsConfigProperties,
-});
+const { readFile } = nodeFsPromises;
+const { awaited, awaiting } = awaitingModule;
+const { normalizePath } = paths;
+const { stripJsonComments } = json;
+const { stripBom } = text;
+const { ModelsConfigSchema } = modelConfigSupport;
 
 const validateModelsConfig = Compile(ModelsConfigSchema);
-
-export type ModelsJsonModel = Static<typeof ModelDefinitionSchema>;
-export type ModelsJsonModelOverride = Static<typeof ModelOverrideSchema>;
-export type ModelsJsonProvider = Static<typeof ProviderConfigSchema>;
-
 function formatValidationPath(error: TLocalizedValidationError): string {
   if (error.keyword === "required") {
     const requiredProperties = (error.params as { requiredProperties?: string[] })
       .requiredProperties;
     const requiredProperty = requiredProperties?.[0];
-    if (requiredProperty) {
-      const basePath = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
-      return basePath ? `${basePath}.${requiredProperty}` : requiredProperty;
+    if (requiredProperty !== undefined && requiredProperty !== "") {
+      const basePath = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
+      return basePath === "" ? requiredProperty : `${basePath}.${requiredProperty}`;
     }
   }
-  const path = error.instancePath.replace(/^\//, "").replace(/\//g, ".");
+  const path = error.instancePath.replace(/^\//u, "").replace(/\//gu, ".");
   return path || "root";
 }
-
 function deepFreeze<T>(value: T): T {
   if (typeof value !== "object" || value === null || Object.isFrozen(value)) return value;
   for (const child of Object.values(value)) deepFreeze(child);
   return Object.freeze(value);
 }
-
-/** One immutable load of models.json. */
-export class ModelConfig {
-  private readonly providers: ReadonlyMap<string, ModelsJsonProvider>;
+export default class ModelConfig {
+  private readonly providers: ReadonlyMap<string, modelConfigTypes.ModelsJsonProvider>;
   private readonly error: string | undefined;
 
-  private constructor(providers: ReadonlyMap<string, ModelsJsonProvider>, error?: string) {
+  private constructor(
+    providers: ReadonlyMap<string, modelConfigTypes.ModelsJsonProvider>,
+    error?: string,
+  ) {
     this.providers = providers;
     this.error = error;
   }
 
-  static async load(modelsJsonPath: string | undefined): Promise<ModelConfig> {
-    if (!modelsJsonPath) return new ModelConfig(new Map());
-    const path = normalizePath(modelsJsonPath);
-    let content: string;
-    try {
-      content = await readFile(path, "utf-8");
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === "ENOENT") return new ModelConfig(new Map());
-      return new ModelConfig(
-        new Map(),
-        `Failed to load models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
-      );
-    }
+  static load(modelsJsonPath: string | undefined): Promise<ModelConfig> {
+    return Effect.runPromise(
+      awaiting(function* () {
+        if (modelsJsonPath === undefined || modelsJsonPath === "")
+          return new ModelConfig(new Map());
+        const path = normalizePath(modelsJsonPath);
+        let content: string;
+        try {
+          content = yield* awaited(readFile(path, "utf-8"));
+        } catch (error) {
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") return new ModelConfig(new Map());
+          return new ModelConfig(
+            new Map(),
+            `Failed to load models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
+          );
+        }
 
-    let parsed: unknown;
-    try {
-      parsed = JSON.parse(stripJsonComments(stripBom(content)));
-    } catch (error) {
-      return new ModelConfig(
-        new Map(),
-        `Failed to parse models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
-      );
-    }
+        let parsed: unknown;
+        try {
+          parsed = JSON.parse(stripJsonComments(stripBom(content)));
+        } catch (error) {
+          return new ModelConfig(
+            new Map(),
+            `Failed to parse models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${path}`,
+          );
+        }
 
-    if (!validateModelsConfig.Check(parsed)) {
-      const errors =
-        validateModelsConfig
-          .Errors(parsed)
-          .map((error) => `  - ${formatValidationPath(error)}: ${error.message}`)
-          .join("\n") || "Unknown schema error";
-      return new ModelConfig(new Map(), `Invalid models.json schema:\n${errors}\n\nFile: ${path}`);
-    }
+        if (!validateModelsConfig.Check(parsed)) {
+          const errors =
+            validateModelsConfig
+              .Errors(parsed)
+              .map((error) => `  - ${formatValidationPath(error)}: ${error.message}`)
+              .join("\n") || "Unknown schema error";
+          return new ModelConfig(
+            new Map(),
+            `Invalid models.json schema:\n${errors}\n\nFile: ${path}`,
+          );
+        }
 
-    const providers = new Map<string, ModelsJsonProvider>();
-    for (const [providerId, provider] of Object.entries(parsed.providers)) {
-      providers.set(providerId, deepFreeze(structuredClone(provider)));
-    }
-    return new ModelConfig(providers);
+        const providers = new Map<string, modelConfigTypes.ModelsJsonProvider>();
+        for (const [providerId, provider] of Object.entries(parsed.providers)) {
+          providers.set(providerId, deepFreeze(structuredClone(provider)));
+        }
+        return new ModelConfig(providers);
+      }),
+    );
   }
 
-  getProvider(providerId: string): ModelsJsonProvider | undefined {
+  getProvider(providerId: string): modelConfigTypes.ModelsJsonProvider | undefined {
     return this.providers.get(providerId);
   }
 

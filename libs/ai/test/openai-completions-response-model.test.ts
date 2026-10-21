@@ -1,10 +1,10 @@
+import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { complete } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
 
-// Router/virtual ids (e.g. OpenRouter `auto`) keep `model` pinned to the
-// requested id and surface the routed concrete id on `responseModel`.
+const { complete } = compat;
 
 const mockState = vi.hoisted(() => ({
   chunks: [] as unknown[],
@@ -17,8 +17,14 @@ vi.mock("openai", () => {
         create: () => {
           const chunks = mockState.chunks;
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              for (const chunk of chunks) yield chunk;
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    for (const chunk of chunks) yield chunk;
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -30,7 +36,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -40,18 +46,18 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-function openRouterAuto(): Model<"openai-completions"> {
+function openRouterAuto(): typesModule.Model<"openai-completions"> {
   return {
-    id: "openrouter/auto",
-    name: "OpenRouter Auto",
     api: "openai-completions",
-    provider: "openrouter",
     baseUrl: "https://openrouter.ai/api/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "openrouter/auto",
+    input: ["text"],
     maxTokens: 8192,
+    name: "OpenRouter Auto",
+    provider: "openrouter",
+    reasoning: false,
   };
 }
 
@@ -59,92 +65,119 @@ describe("openai-completions responseModel", () => {
   beforeEach(() => {
     mockState.chunks = [];
   });
+  it("surfaces routed chunk.model on responseModel without changing model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          {
+            choices: [{ delta: { content: "hi" }, index: 0 }],
+            id: "chatcmpl-1",
+            model: "anthropic/claude-opus-4.8",
+          },
+          {
+            choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+            id: "chatcmpl-1",
+            model: "anthropic/claude-opus-4.8",
+            usage: {
+              completion_tokens: 5,
+              completion_tokens_details: { reasoning_tokens: 0 },
+              prompt_tokens: 10,
+              prompt_tokens_details: { cached_tokens: 0 },
+            },
+          },
+        ];
 
-  it("surfaces routed chunk.model on responseModel without changing model", async () => {
-    mockState.chunks = [
-      {
-        id: "chatcmpl-1",
-        model: "anthropic/claude-opus-4.8",
-        choices: [{ index: 0, delta: { content: "hi" } }],
-      },
-      {
-        id: "chatcmpl-1",
-        model: "anthropic/claude-opus-4.8",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        usage: {
-          prompt_tokens: 10,
-          completion_tokens: 5,
-          prompt_tokens_details: { cached_tokens: 0 },
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      },
-    ];
+        const currentTime = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          complete(
+            openRouterAuto(),
+            { messages: [{ content: "hi", role: "user", timestamp: currentTime }] },
+            { apiKey: "test" },
+          ),
+        );
 
-    const message = await complete(
-      openRouterAuto(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    );
+        expect(message.model).toBe("openrouter/auto");
+        expect(message.responseModel).toBe("anthropic/claude-opus-4.8");
+        expect(message.provider).toBe("openrouter");
+        expect(message.stopReason).toBe("stop");
+      }),
+    ));
+});
 
-    expect(message.model).toBe("openrouter/auto");
-    expect(message.responseModel).toBe("anthropic/claude-opus-4.8");
-    expect(message.provider).toBe("openrouter");
-    expect(message.stopReason).toBe("stop");
+describe("openai-completions responseModel", () => {
+  beforeEach(() => {
+    mockState.chunks = [];
   });
+  it("leaves responseModel undefined when chunks echo the requested id", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          {
+            choices: [{ delta: { content: "hi" }, index: 0 }],
+            id: "chatcmpl-2",
+            model: "openrouter/auto",
+          },
+          {
+            choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+            id: "chatcmpl-2",
+            model: "openrouter/auto",
+            usage: {
+              completion_tokens: 1,
+              completion_tokens_details: { reasoning_tokens: 0 },
+              prompt_tokens: 1,
+              prompt_tokens_details: { cached_tokens: 0 },
+            },
+          },
+        ];
 
-  it("leaves responseModel undefined when chunks echo the requested id", async () => {
-    mockState.chunks = [
-      {
-        id: "chatcmpl-2",
-        model: "openrouter/auto",
-        choices: [{ index: 0, delta: { content: "hi" } }],
-      },
-      {
-        id: "chatcmpl-2",
-        model: "openrouter/auto",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 1,
-          prompt_tokens_details: { cached_tokens: 0 },
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      },
-    ];
+        const currentTime1 = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          complete(
+            openRouterAuto(),
+            { messages: [{ content: "hi", role: "user", timestamp: currentTime1 }] },
+            { apiKey: "test" },
+          ),
+        );
 
-    const message = await complete(
-      openRouterAuto(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    );
+        expect(message.model).toBe("openrouter/auto");
+        expect(message.responseModel).toBeUndefined();
+      }),
+    ));
+});
 
-    expect(message.model).toBe("openrouter/auto");
-    expect(message.responseModel).toBeUndefined();
+describe("openai-completions responseModel", () => {
+  beforeEach(() => {
+    mockState.chunks = [];
   });
+  it("ignores empty or missing chunk.model", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        mockState.chunks = [
+          { choices: [{ delta: { content: "hi" }, index: 0 }], id: "chatcmpl-3" },
+          { choices: [{ delta: { content: "!" }, index: 0 }], id: "chatcmpl-3", model: "" },
+          {
+            choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+            id: "chatcmpl-3",
+            usage: {
+              completion_tokens: 2,
+              completion_tokens_details: { reasoning_tokens: 0 },
+              prompt_tokens: 1,
+              prompt_tokens_details: { cached_tokens: 0 },
+            },
+          },
+        ];
 
-  it("ignores empty or missing chunk.model", async () => {
-    mockState.chunks = [
-      { id: "chatcmpl-3", choices: [{ index: 0, delta: { content: "hi" } }] },
-      { id: "chatcmpl-3", model: "", choices: [{ index: 0, delta: { content: "!" } }] },
-      {
-        id: "chatcmpl-3",
-        choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-        usage: {
-          prompt_tokens: 1,
-          completion_tokens: 2,
-          prompt_tokens_details: { cached_tokens: 0 },
-          completion_tokens_details: { reasoning_tokens: 0 },
-        },
-      },
-    ];
+        const currentTime2 = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          complete(
+            openRouterAuto(),
+            { messages: [{ content: "hi", role: "user", timestamp: currentTime2 }] },
+            { apiKey: "test" },
+          ),
+        );
 
-    const message = await complete(
-      openRouterAuto(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    );
-
-    expect(message.model).toBe("openrouter/auto");
-    expect(message.responseModel).toBeUndefined();
-  });
+        expect(message.model).toBe("openrouter/auto");
+        expect(message.responseModel).toBeUndefined();
+      }),
+    ));
 });

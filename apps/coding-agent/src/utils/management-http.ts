@@ -1,40 +1,84 @@
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
+
+import awaitingModule from "../core/awaiting.ts";
+import interop from "./interop.ts";
+import type managementHttpTypes from "./management-http.types.ts";
+
+const { awaited, awaiting } = awaitingModule;
+const { fetchResponse } = interop;
 type FetchInput = Parameters<typeof fetch>[0];
 
 const RETRYABLE_STATUS_CODES = new Set([408, 425, 429, 500, 502, 503, 504]);
 
-export interface FetchRetryOptions {
-  /** Number of additional attempts after the initial request. Defaults to two. */
-  maxRetries?: number;
-  /** Retry transient HTTP responses as well as transport failures. Defaults to true. */
-  retryOnStatus?: boolean;
-  /** Overall time budget shared by all attempts. */
-  timeoutMs?: number;
-  /** Per-attempt timeout. A new timeout is created for every attempt. */
-  attemptTimeoutMs?: number;
-}
-
-/**
- * Fetch a management HTTP resource with a bounded immediate retry.
- *
- * This is intentionally a transport-level helper for idempotent management
- * requests (version checks, catalogs, and downloads). It must not be used for
- * agent/model operations: those can fail after the HTTP request starts and are
- * retried by their semantic caller instead.
- *
- * Caller cancellation and timeoutMs are terminal. attemptTimeoutMs aborts
- * only the current attempt so a hung connection can be retried.
- */
-export async function fetchWithRetry(
+function fetchWithRetryImpl(
   input: FetchInput,
   init: RequestInit | undefined = undefined,
-  options: FetchRetryOptions = {},
+  options: managementHttpTypes.FetchRetryOptions = {},
 ): Promise<Response> {
-  const maxRetries =
-    options.maxRetries === undefined || !Number.isFinite(options.maxRetries)
-      ? 2
-      : Math.max(0, Math.floor(options.maxRetries));
-  const retryOnStatus = options.retryOnStatus ?? true;
-  const parentSignal = init?.signal ?? undefined;
+  return Effect.runPromise(
+    awaiting(function* () {
+      const maxRetries =
+        options.maxRetries === undefined || !Number.isFinite(options.maxRetries)
+          ? 2
+          : Math.max(0, Math.floor(options.maxRetries));
+      const retryOnStatus = options.retryOnStatus ?? true;
+      const parentSignal = init?.signal ?? undefined;
+      const { timeoutSignal, attemptTimeoutMs } = retryTimeouts(options);
+
+      for (let attempt = 0; ; attempt++) {
+        parentSignal?.throwIfAborted();
+        timeoutSignal?.throwIfAborted();
+        const attemptTimeoutSignal =
+          attemptTimeoutMs !== undefined && attemptTimeoutMs !== 0
+            ? AbortSignal.timeout(attemptTimeoutMs)
+            : undefined;
+        const signals = [parentSignal, timeoutSignal, attemptTimeoutSignal].filter(
+          (signal): signal is AbortSignal => signal !== undefined,
+        );
+        const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
+
+        try {
+          const response = yield* awaited(
+            fetchResponse(input, signal === undefined ? init : { ...init, signal }),
+          );
+          const shouldRetry =
+            retryOnStatus && RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries;
+          if (!shouldRetry) return response;
+          try {
+            yield* awaited(response.body?.cancel());
+          } catch {}
+        } catch (error) {
+          const attemptTimedOut =
+            attemptTimeoutSignal?.aborted === true &&
+            parentSignal?.aborted !== true &&
+            timeoutSignal?.aborted !== true;
+          rethrowIfFinal(parentSignal, timeoutSignal, error, attemptTimedOut, attempt, maxRetries);
+        }
+      }
+    }),
+  );
+}
+
+const fetchWithRetry: {
+  (
+    input: FetchInput,
+    init?: RequestInit | undefined,
+    options?: managementHttpTypes.FetchRetryOptions,
+  ): Promise<Response>;
+  (
+    init?: RequestInit | undefined,
+    options?: managementHttpTypes.FetchRetryOptions,
+  ): (input: FetchInput) => Promise<Response>;
+} = dual((args: IArguments) => args.length >= 1, fetchWithRetryImpl);
+
+const managementHttp = {
+  fetchWithRetry,
+};
+
+export default managementHttp;
+
+function retryTimeouts(options: managementHttpTypes.FetchRetryOptions) {
   const timeoutSignal =
     options.timeoutMs !== undefined && options.timeoutMs > 0
       ? AbortSignal.timeout(options.timeoutMs)
@@ -43,43 +87,26 @@ export async function fetchWithRetry(
     options.attemptTimeoutMs !== undefined && options.attemptTimeoutMs > 0
       ? options.attemptTimeoutMs
       : undefined;
+  return { attemptTimeoutMs, timeoutSignal };
+}
 
-  for (let attempt = 0; ; attempt++) {
-    parentSignal?.throwIfAborted();
-    timeoutSignal?.throwIfAborted();
-    const attemptTimeoutSignal = attemptTimeoutMs
-      ? AbortSignal.timeout(attemptTimeoutMs)
-      : undefined;
-    const signals = [parentSignal, timeoutSignal, attemptTimeoutSignal].filter(
-      (signal): signal is AbortSignal => signal !== undefined,
-    );
-    const signal = signals.length > 1 ? AbortSignal.any(signals) : signals[0];
-
-    try {
-      const response = await fetch(input, signal ? { ...init, signal } : init);
-      const shouldRetry =
-        retryOnStatus && RETRYABLE_STATUS_CODES.has(response.status) && attempt < maxRetries;
-      if (!shouldRetry) return response;
-      try {
-        await response.body?.cancel();
-      } catch {
-        // The response is being discarded before a retry. There is nothing useful to
-        // do if cancelling its body also fails.
-      }
-    } catch (error) {
-      const attemptTimedOut =
-        attemptTimeoutSignal?.aborted === true && !parentSignal?.aborted && !timeoutSignal?.aborted;
-      if (
-        parentSignal?.aborted ||
-        timeoutSignal?.aborted ||
-        (error instanceof Error &&
-          error.name === "AbortError" &&
-          !attemptTimedOut &&
-          timeoutSignal === undefined) ||
-        attempt >= maxRetries
-      ) {
-        throw error;
-      }
-    }
+function rethrowIfFinal(
+  parentSignal: any,
+  timeoutSignal: AbortSignal | undefined,
+  error: unknown,
+  attemptTimedOut: boolean,
+  attempt: number,
+  maxRetries: number,
+) {
+  if (
+    parentSignal?.aborted === true ||
+    timeoutSignal?.aborted === true ||
+    (error instanceof Error &&
+      error.name === "AbortError" &&
+      !attemptTimedOut &&
+      timeoutSignal === undefined) ||
+    attempt >= maxRetries
+  ) {
+    throw error;
   }
 }

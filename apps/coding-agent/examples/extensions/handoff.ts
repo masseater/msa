@@ -1,21 +1,13 @@
-/**
- * Handoff extension - transfer context to a new focused session
- *
- * Instead of compacting (which is lossy), handoff extracts what matters
- * for your next task and creates a new session with a generated prompt.
- *
- * Usage:
- *   /handoff now implement this for teams as well
- *   /handoff execute phase one of the plan
- *   /handoff check other places that need this fix
- *
- * The generated prompt appears as a draft in the editor for review/editing.
- */
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Clock, DateTime, Effect } from "effect";
 
-import type { AgentMessage } from "@msa/agent-core";
-import { type Message, uuidv7 } from "@msa/ai";
-import type { ExtensionAPI, SessionEntry } from "@msa/coding-agent";
-import { BorderedLoader, convertToLlm, serializeConversation } from "@msa/coding-agent";
+const { BorderedLoader, convertToLlm, serializeConversation } = codingAgent;
+
+const { uuidv7 } = ai;
 
 const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversation history and the user's goal for a new thread, generate a focused prompt that:
 
@@ -24,22 +16,9 @@ const SYSTEM_PROMPT = `You are a context transfer assistant. Given a conversatio
 3. Clearly states the next task based on the user's goal
 4. Is self-contained - the new thread should be able to proceed without the old conversation
 
-Format your response as a prompt the user can send to start the new thread. Be concise but include all necessary context. Do not include any preamble like "Here's the prompt" - just output the prompt itself.
+Output only the new prompt, nothing else.`;
 
-Example output format:
-## Context
-We've been working on X. Key decisions:
-- Decision 1
-- Decision 2
-
-Files involved:
-- path/to/file1.ts
-- path/to/file2.ts
-
-## Task
-[Clear description of what to do next based on user's goal]`;
-
-function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
+function entryToMessage(entry: codingAgentTypes.SessionEntry): agentTypes.AgentMessage | undefined {
   if (entry.type === "message") {
     return entry.message;
   }
@@ -47,14 +26,14 @@ function entryToMessage(entry: SessionEntry): AgentMessage | undefined {
     return {
       role: "compactionSummary",
       summary: entry.summary,
+      timestamp: DateTime.makeUnsafe(entry.timestamp).epochMilliseconds,
       tokensBefore: entry.tokensBefore,
-      timestamp: new Date(entry.timestamp).getTime(),
     };
   }
   return undefined;
 }
 
-function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
+function getHandoffMessages(branch: codingAgentTypes.SessionEntry[]): agentTypes.AgentMessage[] {
   const compactionIndex = branch.findLastIndex((entry) => entry.type === "compaction");
   const compaction = branch[compactionIndex];
   if (compaction === undefined) {
@@ -73,116 +52,144 @@ function getHandoffMessages(branch: SessionEntry[]): AgentMessage[] {
   return compactedBranch.map(entryToMessage).filter((message) => message !== undefined);
 }
 
-export default function (msa: ExtensionAPI) {
+const generatePrompt = (
+  ctx: codingAgentTypes.ExtensionContext,
+  conversationText: string,
+  goal: string,
+  signal: AbortSignal,
+) =>
+  Effect.gen(function* () {
+    const userMessage: aiTypes.Message = {
+      content: [
+        {
+          text: `## Conversation History\n\n${conversationText}\n\n## User's Goal for New Thread\n\n${goal}`,
+          type: "text",
+        },
+      ],
+      role: "user",
+      timestamp: yield* Clock.currentTimeMillis,
+    };
+
+    const response = yield* Effect.promise(() =>
+      ctx.modelRegistry.complete(
+        ctx.model!,
+        { messages: [userMessage], systemPrompt: SYSTEM_PROMPT },
+        {
+          cacheRetention: "none",
+          sessionId: uuidv7(),
+          signal,
+        },
+      ),
+    );
+
+    if (response.stopReason === "aborted") {
+      return null;
+    }
+
+    return response.content
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+  });
+
+const generateHandoffPrompt = (
+  ctx: codingAgentTypes.ExtensionContext,
+  conversationText: string,
+  goal: string,
+): Promise<string | null> =>
+  ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
+    const loader = new BorderedLoader(tui, theme, `Generating handoff prompt...`);
+    loader.onAbort = () => done(null);
+
+    Effect.runFork(
+      generatePrompt(ctx, conversationText, goal, loader.signal).pipe(
+        Effect.orElseSucceed(() => null),
+        Effect.flatMap((text) => Effect.sync(() => done(text))),
+      ),
+    );
+
+    return loader;
+  });
+
+const applyHandoff = (
+  prompt: string,
+  replacementCtx: codingAgentTypes.ExtensionCommandContext,
+): Promise<void> =>
+  Effect.runPromise(
+    Effect.sync(() => {
+      replacementCtx.ui.setEditorText(prompt);
+      replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
+    }),
+  );
+
+const startHandoffSession = (
+  ctx: codingAgentTypes.ExtensionCommandContext,
+  currentSessionFile: string | undefined,
+  editedPrompt: string,
+) =>
+  ctx.newSession({
+    ...(currentSessionFile === undefined ? {} : { parentSession: currentSessionFile }),
+    withSession: (replacementCtx) => applyHandoff(editedPrompt, replacementCtx),
+  });
+
+const resolvePrompt = (
+  ctx: codingAgentTypes.ExtensionCommandContext,
+  args: string,
+  currentSessionFile: string | undefined,
+) =>
+  Effect.gen(function* () {
+    const goal = args.trim();
+    if (goal.length === 0) {
+      ctx.ui.notify("Usage: /handoff <goal for new thread>", "error");
+      return undefined;
+    }
+
+    const messages = getHandoffMessages(ctx.sessionManager.getBranch());
+    if (messages.length === 0) {
+      ctx.ui.notify("No conversation to hand off", "error");
+      return undefined;
+    }
+
+    const conversationText = serializeConversation(convertToLlm(messages));
+    const result = yield* Effect.promise(() => generateHandoffPrompt(ctx, conversationText, goal));
+    if (result === null) {
+      ctx.ui.notify("Cancelled", "info");
+      return undefined;
+    }
+
+    const editedPrompt = yield* Effect.promise(() => ctx.ui.editor("Edit handoff prompt", result));
+    if (editedPrompt === undefined) {
+      ctx.ui.notify("Cancelled", "info");
+      return undefined;
+    }
+
+    const newSessionResult = yield* Effect.promise(() =>
+      startHandoffSession(ctx, currentSessionFile, editedPrompt),
+    );
+    if (newSessionResult.cancelled) {
+      ctx.ui.notify("New session cancelled", "info");
+    }
+    return undefined;
+  });
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerCommand("handoff", {
     description: "Transfer context to a new focused session",
-    handler: async (args, ctx) => {
-      if (ctx.mode !== "tui") {
-        ctx.ui.notify("handoff requires interactive mode", "error");
-        return;
-      }
-
-      if (!ctx.model) {
-        ctx.ui.notify("No model selected", "error");
-        return;
-      }
-
-      const goal = args.trim();
-      if (!goal) {
-        ctx.ui.notify("Usage: /handoff <goal for new thread>", "error");
-        return;
-      }
-
-      // Gather conversation context from current branch. If the branch was compacted,
-      // include the compaction summary plus entries from firstKeptEntryId onward.
-      const messages = getHandoffMessages(ctx.sessionManager.getBranch());
-
-      if (messages.length === 0) {
-        ctx.ui.notify("No conversation to hand off", "error");
-        return;
-      }
-
-      // Convert to LLM format and serialize
-      const llmMessages = convertToLlm(messages);
-      const conversationText = serializeConversation(llmMessages);
-      const currentSessionFile = ctx.sessionManager.getSessionFile();
-
-      // Generate the handoff prompt with loader UI
-      const result = await ctx.ui.custom<string | null>((tui, theme, _kb, done) => {
-        const loader = new BorderedLoader(tui, theme, `Generating handoff prompt...`);
-        loader.onAbort = () => done(null);
-
-        const doGenerate = async () => {
-          const userMessage: Message = {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: `## Conversation History\n\n${conversationText}\n\n## User's Goal for New Thread\n\n${goal}`,
-              },
-            ],
-            timestamp: Date.now(),
-          };
-
-          const response = await ctx.modelRegistry.complete(
-            ctx.model!,
-            { systemPrompt: SYSTEM_PROMPT, messages: [userMessage] },
-            {
-              signal: loader.signal,
-              cacheRetention: "none",
-              sessionId: uuidv7(),
-            },
-          );
-
-          if (response.stopReason === "aborted") {
-            return null;
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          if (ctx.mode !== "tui") {
+            ctx.ui.notify("handoff requires interactive mode", "error");
+            return;
           }
 
-          return response.content
-            .filter((c): c is { type: "text"; text: string } => c.type === "text")
-            .map((c) => c.text)
-            .join("\n");
-        };
+          if (ctx.model === undefined) {
+            ctx.ui.notify("No model selected", "error");
+            return;
+          }
 
-        doGenerate()
-          // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
-          .then(done)
-          .catch((err) => {
-            console.error("Handoff generation failed:", err);
-            // oxlint-disable-next-line promise/no-callback-in-promise -- ローダーの完了コールバックを promise の完了で呼ぶブリッジ
-            done(null);
-          });
-
-        return loader;
-      });
-
-      if (result === null) {
-        ctx.ui.notify("Cancelled", "info");
-        return;
-      }
-
-      // Let user edit the generated prompt
-      const editedPrompt = await ctx.ui.editor("Edit handoff prompt", result);
-
-      if (editedPrompt === undefined) {
-        ctx.ui.notify("Cancelled", "info");
-        return;
-      }
-
-      // Create new session with parent tracking. Use the replacement-session
-      // context for post-switch UI work; the original ctx is stale after a
-      // successful session replacement.
-      const newSessionResult = await ctx.newSession({
-        ...(currentSessionFile !== undefined ? { parentSession: currentSessionFile } : {}),
-        withSession: async (replacementCtx) => {
-          replacementCtx.ui.setEditorText(editedPrompt);
-          replacementCtx.ui.notify("Handoff ready. Submit when ready.", "info");
-        },
-      });
-
-      if (newSessionResult.cancelled) {
-        ctx.ui.notify("New session cancelled", "info");
-      }
-    },
+          yield* resolvePrompt(ctx, args, ctx.sessionManager.getSessionFile());
+        }),
+      ),
   });
 }

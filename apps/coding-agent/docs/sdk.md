@@ -10,24 +10,24 @@ import { createAgentSession } from "@msa/coding-agent";
 const { session } = await createAgentSession();
 
 try {
-  await session.prompt("What files are in the current directory?");
-  console.log(session.getLastAssistantText());
+  await session.run.prompting.prompt("What files are in the current directory?");
+  console.log(session.context.transcript.getLastAssistantText());
 } finally {
   session.dispose();
 }
 ```
 
-This uses the working directory, discovered resources, stored settings, and configured credentials. `prompt()` resolves when the run finishes.
+This uses the working directory, discovered resources, stored settings, and configured credentials. `session.run.prompting.prompt()` resolves when the run finishes.
 
 The [complete minimal example](../examples/sdk/01-minimal.ts) also streams text events. All [SDK examples](../examples/sdk/) are typechecked with the repository.
 
 ## Session lifecycle
 
-`createAgentSession()` creates an `AgentSession`. The session owns one conversation, its model and tools, queued messages, compaction state, and extension runtime.
+`createAgentSession()` creates an `AgentSession`. The session owns one conversation, its model and tools, queued messages, compaction state, and extension runtime. Each responsibility is a property of the session: `run` (prompting, queue, lifecycle, retry), `tools`, `models`, `context` (transcript, tree, bash, stats, exports), `compaction`, `commands`, `extensions`, and `integrations` (goal, memory, orchestration, PR watch).
 
-Read current state through `session.messages`, `session.model`, `session.thinkingLevel`, `session.systemPrompt`, and `session.getActiveToolNames()`.
+Read current state through `session.messages`, `session.model`, `session.thinkingLevel`, `session.tools.prompt.systemPrompt`, and `session.tools.loadout.getActiveToolNames()`.
 
-`session.systemPrompt` is read-only and returns the current effective system prompt, including changes that have not yet been sent to the model. Tool changes are declared to the model before the next request.
+`session.tools.prompt.systemPrompt` is read-only and returns the current effective system prompt, including changes that have not yet been sent to the model. Tool changes are declared to the model before the next request.
 
 ### Session storage
 
@@ -57,15 +57,15 @@ After a runtime replacement, subscriptions belong to the old `AgentSession` and 
 
 ## Prompting
 
-`prompt()` handles extension commands and expands file-based prompt templates before ordinary user messages enter the agent. For an accepted agent run, it resolves after the run finishes, including automatic retries.
+`session.run.prompting.prompt()` handles extension commands and expands file-based prompt templates before ordinary user messages enter the agent. For an accepted agent run, it resolves after the run finishes, including automatic retries.
 
 A prompt sent while the session is already streaming must specify whether it should steer the current run or follow it. Calling `prompt()` without that choice rejects rather than guessing.
 
 `prompt(text, { mode: "ask" })` runs the prompt as an [`/ask`](slash-commands.md#ask-a-question) turn, and `prompt("/ask <question>")` is the same turn: the model is given only the read-only tools and a system prompt section that says to answer without starting work, and the next prompt is a normal turn. It rejects while the session is streaming.
 
-A steering message enters after the current assistant turn and its tool calls. A follow-up enters after the current run finishes its pending work. `steer()` and `followUp()` expose those behaviors directly and return `"queued"` if the input was queued (including after an extension transformed it), or `"handled"` if an extension consumed it.
+A steering message enters after the current assistant turn and its tool calls. A follow-up enters after the current run finishes its pending work. `session.run.queue.steer()` and `session.run.queue.followUp()` expose those behaviors directly and return `"queued"` if the input was queued (including after an extension transformed it), or `"handled"` if an extension consumed it.
 
-`abort()` stops the active operation and waits for the session to become idle. `waitForIdle()` waits without aborting it.
+`session.run.lifecycle.abort()` stops the active operation and waits for the session to become idle. `session.run.lifecycle.waitForIdle()` waits without aborting it.
 
 ## Subscribing to events
 
@@ -79,7 +79,7 @@ const unsubscribe = session.subscribe((event) => {
 });
 
 try {
-  await session.prompt("Explain this repository");
+  await session.run.prompting.prompt("Explain this repository");
 } finally {
   unsubscribe();
 }
@@ -107,7 +107,7 @@ Use `DefaultResourceLoader` when you want standard discovery with selected overr
 
 Inline extension factories can be supplied through `DefaultResourceLoader`. Give one an `InlineExtension` name only when it needs a stable name in diagnostics and startup output. A named inline extension with `replaceable: true` is left out when another extension registers a tool, command, or flag with a name it registers during loading, instead of both loading with a conflict. The CLI's built-in codemode, tool search, and MCP extensions are replaceable. A named entry with `builtin: true` is not an inline extension: it supplies the code of the `builtin:<name>` extension, which loads like a configured extension file. It loads by default, is listed in `msa config`, and is disabled by `-builtin:<name>` in the `extensions` setting or by `noExtensions`; `additionalExtensionPaths: ["builtin:<name>"]` loads it explicitly. It loads after project trust is resolved, so it cannot handle `project_trust`. The CLI's built-in extensions use it.
 
-The CLI loads `codemode`, `tool_search`, and MCP as built-in extensions. SDK sessions do not; add `createCodemodeExtension()`, `createToolSearchExtension()`, and `createMcpExtension()` to the `extensionFactories` of `DefaultResourceLoader`. `codemode` and `tool_search` are registered inactive: enable them through the `defaultTools` setting (`["+codemode", "+tool_search"]` keeps the other default tools), or let the MCP extension activate them: `codemode` for servers with `codemode` exposure, `tool_search` for servers with `deferred` exposure. The MCP extension connects its servers on `session_start`, so call `session.bindExtensions()`. See [Codemode and MCP](../examples/sdk/14-codemode-mcp.ts).
+The CLI loads `codemode`, `tool_search`, and MCP as built-in extensions. SDK sessions do not; add `createCodemodeExtension()`, `createToolSearchExtension()`, and `createMcpExtension()` to the `extensionFactories` of `DefaultResourceLoader`. `codemode` and `tool_search` are registered inactive: enable them through the `defaultTools` setting (`["+codemode", "+tool_search"]` keeps the other default tools), or let the MCP extension activate them: `codemode` for servers with `codemode` exposure, `tool_search` for servers with `deferred` exposure. The MCP extension connects its servers on `session_start`, so call `session.extensions.binding.bindExtensions()`. See [Codemode and MCP](../examples/sdk/14-codemode-mcp.ts).
 
 See the focused examples for [models](../examples/sdk/02-custom-model.ts), [tools](../examples/sdk/05-tools.ts), [extensions](../examples/sdk/06-extensions.ts), and [full control](../examples/sdk/12-full-control.ts).
 

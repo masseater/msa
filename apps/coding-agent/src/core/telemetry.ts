@@ -1,15 +1,24 @@
-import type { SettingsManager } from "./settings-manager.ts";
+import platform from "./platform/index.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
+
+const { readEnv } = platform;
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
-  if (!value) return false;
+  if (value === undefined || value === "") return false;
   return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
 
-export function isInstallTelemetryEnabled(
-  settingsManager: SettingsManager,
-  telemetryEnv: string | undefined = process.env["MSA_TELEMETRY"],
+function isInstallTelemetryEnabled(
+  settingsManager: settingsManagerTypes.SettingsManager,
+  telemetryEnv: string | undefined = readEnv("MSA_TELEMETRY"),
 ): boolean {
-  return telemetryEnv !== undefined
-    ? isTruthyEnvFlag(telemetryEnv)
-    : settingsManager.getEnableInstallTelemetry();
+  return telemetryEnv === undefined
+    ? settingsManager.telemetry.getEnableInstallTelemetry()
+    : isTruthyEnvFlag(telemetryEnv);
 }
+
+const telemetry = {
+  isInstallTelemetryEnabled,
+};
+
+export default telemetry;

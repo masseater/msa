@@ -1,616 +1,135 @@
-import { type Model, modelsAreEqual } from "@msa/ai";
-import {
-  Container,
-  type Focusable,
-  fuzzyFilter,
-  getKeybindings,
-  Input,
-  Spacer,
-  Text,
-  type TUI,
-} from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import {
-  addModelPolicyPattern,
-  allowModelReference,
-  evaluateModelPolicy,
-  type ModelPolicy,
-  removeModelPolicyPattern,
-} from "../../../core/model-policy.ts";
-import type { ModelRuntime } from "../../../core/model-runtime.ts";
-import { toErrorMessage } from "../../../utils/errors.ts";
-import { refreshModelCatalogs } from "../model-catalog-refresh.ts";
-import { getModelSelectorSearchText } from "../model-search.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyDisplayText, keyHint } from "./keybinding-hints.ts";
+import type modelSelectorInternalTypes from "./model-selector-internal.types.ts";
+import type modelSelectorTypes from "./model-selector.types.ts";
+import ModelCatalog from "./model-selector/model-catalog.ts";
+import ModelInput from "./model-selector/model-input.ts";
+import ModelList from "./model-selector/model-list.ts";
+import ModelRefresh from "./model-selector/model-refresh.ts";
+import ModelSelectorLayout from "./model-selector/model-selector-layout.ts";
 
-interface ModelItem {
-  provider: string;
-  id: string;
-  model: Model<any>;
-  /**
-   * The model policy pattern that hides the model, or undefined when it is usable. An empty string
-   * means the allow list leaves the model out, so no deny pattern names it.
-   */
-  deniedBy?: string | undefined;
-}
+export default class ModelSelectorComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
+  readonly catalog: ModelCatalog;
+  readonly list: ModelList;
+  readonly refresh: ModelRefresh;
+  readonly input: ModelInput;
+  readonly layout: ModelSelectorLayout;
 
-/** Lets the selector show the models the model policy hides and change the policy in place. */
-export interface ModelSelectorPolicyOptions {
-  getPolicy(): ModelPolicy;
-  /** Every catalog model, including the ones the policy hides. */
-  getCatalogModels(): readonly Model<any>[];
-  /** Persist a policy and apply it to the catalog. Returns the policy in effect. */
-  savePolicy(policy: ModelPolicy): ModelPolicy;
-}
+  searchInput!: tuiTypes.Input;
 
-interface ScopedModelItem {
-  model: Model<any>;
-  thinkingLevel?: string | undefined;
-}
+  private focusedState = false;
 
-interface DefaultModelReference {
-  provider: string;
-  id: string;
-}
+  listContainer!: tuiTypes.Container;
 
-type ModelScope = "all" | "scoped" | "hidden";
+  allModels: modelSelectorInternalTypes.ModelItem[] = [];
 
-/**
- * Component that renders a model selector with search
- */
-export class ModelSelectorComponent extends Container implements Focusable {
-  private searchInput: Input;
+  scopedModelItems: modelSelectorInternalTypes.ModelItem[] = [];
 
-  // Focusable implementation - propagate to searchInput for IME cursor positioning
-  private _focused = false;
+  hiddenModelItems: modelSelectorInternalTypes.ModelItem[] = [];
+
+  activeModels: modelSelectorInternalTypes.ModelItem[] = [];
+
+  filteredModels: modelSelectorInternalTypes.ModelItem[] = [];
+
+  selectedIndex: number = 0;
+
+  currentModel?: modelSelectorTypes.SelectableModel | undefined;
+
+  modelRuntime!: modelSelectorTypes.ModelSource;
+
+  onSelectCallback!: (model: modelSelectorTypes.SelectableModel) => void;
+
+  onSelectAsDefaultCallback?: ((model: modelSelectorTypes.SelectableModel) => void) | undefined;
+
+  onCancelCallback!: () => void;
+
+  errorMessage?: string | undefined;
+
+  refreshStatusMessage = "Refreshing model catalogs…";
+
+  refreshStatusSuccess = false;
+
+  tui!: tuiTypes.TUI;
+
+  scopedModels!: ReadonlyArray<modelSelectorInternalTypes.ScopedModelItem>;
+
+  defaultModel?: modelSelectorInternalTypes.DefaultModelReference | undefined;
+
+  policyOptions?: modelSelectorTypes.ModelSelectorPolicyOptions | undefined;
+
+  scope: modelSelectorInternalTypes.ModelScope = "all";
+
+  scopeText?: tuiTypes.Text;
+
+  scopeHintText?: tuiTypes.Text;
+
+  policyHintText?: tuiTypes.Text;
+
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
+
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.searchInput.focused = value;
-  }
-  private listContainer: Container;
-  private allModels: ModelItem[] = [];
-  private scopedModelItems: ModelItem[] = [];
-  private hiddenModelItems: ModelItem[] = [];
-  private activeModels: ModelItem[] = [];
-  private filteredModels: ModelItem[] = [];
-  private selectedIndex: number = 0;
-  private currentModel?: Model<any> | undefined;
-  private modelRuntime: ModelRuntime;
-  private onSelectCallback: (model: Model<any>) => void;
-  private onSelectAsDefaultCallback?: ((model: Model<any>) => void) | undefined;
-  private onCancelCallback: () => void;
-  private errorMessage?: string | undefined;
-  private refreshStatusMessage = "Refreshing model catalogs…";
-  private refreshStatusSuccess = false;
-  private tui: TUI;
-  private scopedModels: ReadonlyArray<ScopedModelItem>;
-  private defaultModel?: DefaultModelReference | undefined;
-  private policyOptions?: ModelSelectorPolicyOptions | undefined;
-  private scope: ModelScope = "all";
-  private scopeText?: Text;
-  private scopeHintText?: Text;
-  private policyHintText?: Text;
-  private readonly refreshAbortController = new AbortController();
-  private refreshTimeout?: ReturnType<typeof setTimeout>;
-  private closed = false;
-
-  constructor(
-    tui: TUI,
-    currentModel: Model<any> | undefined,
-    modelRuntime: ModelRuntime,
-    scopedModels: ReadonlyArray<ScopedModelItem>,
-    onSelect: (model: Model<any>) => void,
-    onCancel: () => void,
-    initialSearchInput?: string,
-    onSelectAsDefault?: (model: Model<any>) => void,
-    defaultModel?: DefaultModelReference,
-    policyOptions?: ModelSelectorPolicyOptions,
-  ) {
-    super();
-
-    this.tui = tui;
-    this.policyOptions = policyOptions;
-    this.currentModel = currentModel;
-    this.modelRuntime = modelRuntime;
-    this.scopedModels = scopedModels;
-    this.defaultModel = defaultModel;
-    this.scope = scopedModels.length > 0 ? "scoped" : "all";
-    this.onSelectCallback = onSelect;
-    this.onSelectAsDefaultCallback = onSelectAsDefault;
-    this.onCancelCallback = onCancel;
-
-    // Add top border
-    this.addChild(new DynamicBorder());
-    this.addChild(new Spacer(1));
-
-    // Add hint about model filtering
-    if (scopedModels.length > 0 || policyOptions) {
-      this.scopeText = new Text(this.getScopeText(), 0, 0);
-      this.addChild(this.scopeText);
-      this.scopeHintText = new Text(this.getScopeHintText(), 0, 0);
-      this.addChild(this.scopeHintText);
-    } else {
-      const hintText =
-        "Only showing models from configured providers. Use /login to add providers.";
-      this.addChild(new Text(theme.fg("warning", hintText), 0, 0));
-    }
-    this.addChild(new Spacer(1));
-
-    // Create search input
-    this.searchInput = new Input();
-    if (initialSearchInput) {
-      this.searchInput.setValue(initialSearchInput);
-    }
-    this.searchInput.onSubmit = () => {
-      // Enter on search input selects the first filtered item
-      const selected = this.filteredModels[this.selectedIndex];
-      if (selected) {
-        this.handleSelect(selected.model);
-      }
-    };
-    this.addChild(this.searchInput);
-
-    this.addChild(new Spacer(1));
-
-    // Create list container
-    this.listContainer = new Container();
-    this.addChild(this.listContainer);
-
-    this.addChild(new Spacer(1));
-
-    // Hint
-    if (this.onSelectAsDefaultCallback) {
-      this.addChild(
-        new Text(
-          theme.fg(
-            "dim",
-            `  ${keyDisplayText("tui.select.confirm")} to select · ${keyDisplayText("app.models.save")} to set as default · ${keyDisplayText("tui.select.cancel")} to cancel`,
-          ),
-          0,
-          0,
-        ),
-      );
-    }
-
-    if (policyOptions) {
-      this.policyHintText = new Text(this.getPolicyHintText(), 0, 0);
-      this.addChild(this.policyHintText);
-    }
-
-    // Add bottom border
-    this.addChild(new DynamicBorder());
-
-    // Render the current snapshot immediately, then refresh in the background.
-    this.loadModelsFromSnapshot();
-    if (initialSearchInput) this.filterModels(initialSearchInput);
-    else this.updateList();
-    this.tui.requestRender();
-    void this.refreshModels();
-  }
-
-  private loadModelsFromSnapshot(): void {
-    const models = this.modelRuntime.getAvailableSnapshot().map((model: Model<any>) => ({
-      provider: model.provider,
-      id: model.id,
-      model,
-    }));
-    this.allModels = this.sortModels(models);
-    this.scopedModels = this.scopedModels.map((scoped) => {
-      const refreshed = this.modelRuntime.getModel(scoped.model.provider, scoped.model.id);
-      return refreshed ? { ...scoped, model: refreshed } : scoped;
-    });
-    this.scopedModelItems = this.scopedModels.map((scoped) => ({
-      provider: scoped.model.provider,
-      id: scoped.model.id,
-      model: scoped.model,
-    }));
-    this.hiddenModelItems = this.buildHiddenItems();
-    this.syncScope();
-    this.activeModels = this.scopeItems(this.scope);
-    this.filteredModels = this.activeModels;
-    const currentIndex = this.filteredModels.findIndex((item) =>
-      modelsAreEqual(this.currentModel, item.model),
-    );
-    this.selectedIndex =
-      currentIndex >= 0
-        ? currentIndex
-        : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
-  }
-
-  /** The catalog models the model policy hides, with the pattern that hides each one. */
-  private buildHiddenItems(): ModelItem[] {
-    const options = this.policyOptions;
-    if (!options) return [];
-    const policy = options.getPolicy();
-    const items: ModelItem[] = [];
-    for (const model of options.getCatalogModels()) {
-      if (!this.modelRuntime.hasConfiguredAuth(model.provider)) continue;
-      const decision = evaluateModelPolicy(policy, model);
-      if (decision.allowed) continue;
-      items.push({
-        provider: model.provider,
-        id: model.id,
-        model,
-        deniedBy: decision.reason === "deny" ? decision.pattern : "",
-      });
-    }
-    return items.sort((a, b) => a.provider.localeCompare(b.provider) || a.id.localeCompare(b.id));
-  }
-
-  private scopeItems(scope: ModelScope): ModelItem[] {
-    if (scope === "scoped") return this.scopedModelItems;
-    if (scope === "hidden") return this.hiddenModelItems;
-    return this.allModels;
-  }
-
-  /** The scopes the selector can show, in Tab order. */
-  private availableScopes(): ModelScope[] {
-    const scopes: ModelScope[] = ["all"];
-    if (this.scopedModelItems.length > 0) scopes.push("scoped");
-    if (this.policyOptions && this.hiddenModelItems.length > 0) scopes.push("hidden");
-    return scopes;
-  }
-
-  private syncScope(): void {
-    if (this.availableScopes().includes(this.scope)) return;
-    this.scope = "all";
-  }
-
-  private async refreshModels(): Promise<void> {
-    const timeoutMs = 15_000;
-    let timedOut = false;
-    this.refreshTimeout = setTimeout(() => {
-      timedOut = true;
-      this.refreshAbortController.abort();
-    }, timeoutMs);
-    try {
-      const result = await refreshModelCatalogs(
-        this.modelRuntime,
-        this.refreshAbortController.signal,
-      );
-      if (this.closed) return;
-      this.refreshStatusMessage = "";
-      if (result.aborted && timedOut) {
-        this.errorMessage = "Model refresh timed out; showing cached models.";
-      } else if (result.errors.size === 1) {
-        this.errorMessage = `Could not refresh ${result.errors.keys().next().value}; showing cached models.`;
-      } else if (result.errors.size > 1) {
-        this.errorMessage = `Could not refresh ${result.errors.size} model catalogs (${[...result.errors.keys()].join(", ")}); showing cached models.`;
-      } else {
-        this.errorMessage = this.modelRuntime.getError();
-        if (!this.errorMessage) {
-          this.refreshStatusMessage = "Model catalogs refreshed.";
-          this.refreshStatusSuccess = true;
-        }
-      }
-      this.loadModelsFromSnapshot();
-      this.filterModels(this.searchInput.getValue());
-      this.tui.requestRender();
-    } catch (error) {
-      if (this.closed) return;
-      this.refreshStatusMessage = "";
-      this.errorMessage = timedOut
-        ? "Model refresh timed out; showing cached models."
-        : `Could not refresh model catalogs: ${toErrorMessage(error)}`;
-      this.updateList();
-      this.tui.requestRender();
-    } finally {
-      if (this.refreshTimeout) clearTimeout(this.refreshTimeout);
-    }
   }
 
   dispose(): void {
-    if (this.closed) return;
-    this.closed = true;
-    if (this.refreshTimeout) clearTimeout(this.refreshTimeout);
-    this.refreshAbortController.abort();
+    this.refresh.close();
   }
 
-  private sortModels(models: ModelItem[]): ModelItem[] {
-    const sorted = [...models];
-    // Sort: current model first, default model second, then by provider.
-    sorted.sort((a, b) => {
-      const aIsCurrent = modelsAreEqual(this.currentModel, a.model);
-      const bIsCurrent = modelsAreEqual(this.currentModel, b.model);
-      if (aIsCurrent && !bIsCurrent) return -1;
-      if (!aIsCurrent && bIsCurrent) return 1;
-      const aIsDefault = this.isDefaultModel(a.model);
-      const bIsDefault = this.isDefaultModel(b.model);
-      if (aIsDefault && !bIsDefault) return -1;
-      if (!aIsDefault && bIsDefault) return 1;
-      return a.provider.localeCompare(b.provider);
-    });
-    return sorted;
-  }
-
-  private getScopeText(): string {
-    const labels = this.availableScopes().map((scope) =>
-      scope === this.scope ? theme.fg("accent", scope) : theme.fg("muted", scope),
-    );
-    return `${theme.fg("muted", "Scope: ")}${labels.join(theme.fg("muted", " | "))}`;
-  }
-
-  private getScopeHintText(): string {
-    return keyHint("tui.input.tab", "scope");
-  }
-
-  /** What the policy keys do for the selected row. */
-  private getPolicyHintText(): string {
-    const selected = this.filteredModels[this.selectedIndex];
-    const verb = selected?.deniedBy === undefined ? "deny" : "allow";
-    return theme.fg(
-      "dim",
-      `  ${keyDisplayText("app.models.policy")} ${verb} · ${keyDisplayText("app.models.toggleProvider")} provider`,
-    );
-  }
-
-  private isDefaultModel(model: Model<any>): boolean {
-    return this.defaultModel?.provider === model.provider && this.defaultModel.id === model.id;
-  }
-
-  private isDefaultSearch(query: string): boolean {
-    const normalized = query.trim().toLowerCase();
-    return normalized.length > 0 && "default".startsWith(normalized);
-  }
-
-  private setScope(scope: ModelScope): void {
-    if (this.scope === scope) return;
-    this.scope = scope;
-    this.activeModels = this.scopeItems(scope);
-    const currentIndex = this.activeModels.findIndex((item) =>
-      modelsAreEqual(this.currentModel, item.model),
-    );
-    this.selectedIndex = currentIndex >= 0 ? currentIndex : 0;
-    this.filterModels(this.searchInput.getValue());
-    if (this.scopeText) {
-      this.scopeText.setText(this.getScopeText());
-    }
-  }
-
-  private filterModels(query: string): void {
-    if (query) {
-      const filtered = fuzzyFilter(this.activeModels, query, (item) => {
-        const defaultText = this.isDefaultModel(item.model) ? " default" : "";
-        return `${getModelSelectorSearchText({ id: item.id, provider: item.provider, name: item.model.name })}${defaultText}`;
-      });
-      if (this.isDefaultSearch(query)) {
-        const defaultItems = this.activeModels.filter((item) => this.isDefaultModel(item.model));
-        const defaultKeys = new Set(defaultItems.map((item) => `${item.provider}\0${item.id}`));
-        this.filteredModels = [
-          ...defaultItems,
-          ...filtered.filter((item) => !defaultKeys.has(`${item.provider}\0${item.id}`)),
-        ];
-      } else {
-        this.filteredModels = filtered;
-      }
-    } else {
-      this.filteredModels = this.activeModels;
-    }
-    // When filtering by a query, move the selector to the top row so the best
-    // match is highlighted. When the query is cleared, keep the current position
-    // clamped to the (restored) list length.
-    this.selectedIndex = query
-      ? 0
-      : Math.min(this.selectedIndex, Math.max(0, this.filteredModels.length - 1));
-    this.updateList();
-  }
-
-  private updateList(): void {
-    this.listContainer.clear();
-
-    const maxVisible = 10;
-    const startIndex = Math.max(
-      0,
-      Math.min(
-        this.selectedIndex - Math.floor(maxVisible / 2),
-        this.filteredModels.length - maxVisible,
-      ),
-    );
-    const endIndex = Math.min(startIndex + maxVisible, this.filteredModels.length);
-
-    // Show visible slice of filtered models
-    for (let i = startIndex; i < endIndex; i++) {
-      const item = this.filteredModels[i];
-      if (!item) continue;
-
-      const isSelected = i === this.selectedIndex;
-      const isCurrent = modelsAreEqual(this.currentModel, item.model);
-      const isDefault = this.isDefaultModel(item.model);
-      const defaultBadge = isDefault ? theme.fg("muted", " · default") : "";
-      const denied = item.deniedBy !== undefined;
-
-      const cursor = isSelected ? theme.fg("accent", "→ ") : "  ";
-      const currentMarker = denied
-        ? theme.fg("warning", "✕ ")
-        : isCurrent
-          ? theme.fg("accent", "✓ ")
-          : "  ";
-      const plainId = denied ? theme.fg("dim", theme.strikethrough(item.id)) : item.id;
-      const modelText = isSelected ? theme.fg("accent", plainId) : plainId;
-      const providerBadge = theme.fg("muted", `[${item.provider}]`);
-      const deniedBadge = denied ? theme.fg("warning", ` · ${item.deniedBy || "allow list"}`) : "";
-      const line = `${cursor}${currentMarker}${modelText} ${providerBadge}${defaultBadge}${deniedBadge}`;
-
-      this.listContainer.addChild(new Text(line, 0, 0));
-    }
-
-    // Add scroll indicator if needed
-    if (startIndex > 0 || endIndex < this.filteredModels.length) {
-      const scrollInfo = theme.fg(
-        "muted",
-        `  (${this.selectedIndex + 1}/${this.filteredModels.length})`,
-      );
-      this.listContainer.addChild(new Text(scrollInfo, 0, 0));
-    }
-
-    // Show error message or "no results" if empty
-    if (this.errorMessage) {
-      // Show error in red
-      const errorLines = this.errorMessage.split("\n");
-      for (const line of errorLines) {
-        this.listContainer.addChild(new Text(theme.fg("error", line), 0, 0));
-      }
-    } else if (this.filteredModels.length === 0) {
-      this.listContainer.addChild(new Text(theme.fg("muted", "  No matching models"), 0, 0));
-    } else {
-      const selected = this.filteredModels[this.selectedIndex];
-      if (selected !== undefined) {
-        this.listContainer.addChild(new Spacer(1));
-        this.listContainer.addChild(
-          new Text(theme.fg("muted", `  Model Name: ${selected.model.name}`), 0, 0),
-        );
-      }
-    }
-    this.policyHintText?.setText(this.getPolicyHintText());
-    if (this.refreshStatusMessage) {
-      this.listContainer.addChild(new Spacer(1));
-      this.listContainer.addChild(
-        new Text(
-          theme.fg(
-            this.refreshStatusSuccess ? "success" : "muted",
-            `  ${this.refreshStatusMessage}`,
-          ),
-          0,
-          0,
-        ),
-      );
-    }
-  }
-
-  handleInput(keyData: string): void {
-    const kb = getKeybindings();
-    if (kb.matches(keyData, "tui.input.tab")) {
-      const scopes = this.availableScopes();
-      if (scopes.length > 1) {
-        const index = scopes.indexOf(this.scope);
-        const next = scopes[(index + 1) % scopes.length] ?? "all";
-        this.setScope(next);
-        this.scopeText?.setText(this.getScopeText());
-        if (this.scopeHintText) this.scopeHintText.setText(this.getScopeHintText());
-      }
-      return;
-    }
-    if (this.policyOptions && kb.matches(keyData, "app.models.policy")) {
-      this.toggleModelPolicy();
-      return;
-    }
-    if (this.policyOptions && kb.matches(keyData, "app.models.toggleProvider")) {
-      this.toggleProviderPolicy();
-      return;
-    }
-    // Up arrow - wrap to bottom when at top
-    if (kb.matches(keyData, "tui.select.up")) {
-      if (this.filteredModels.length === 0) return;
-      this.selectedIndex =
-        this.selectedIndex === 0 ? this.filteredModels.length - 1 : this.selectedIndex - 1;
-      this.updateList();
-    }
-    // Down arrow - wrap to top when at bottom
-    else if (kb.matches(keyData, "tui.select.down")) {
-      if (this.filteredModels.length === 0) return;
-      this.selectedIndex =
-        this.selectedIndex === this.filteredModels.length - 1 ? 0 : this.selectedIndex + 1;
-      this.updateList();
-    }
-    // Enter
-    else if (kb.matches(keyData, "tui.select.confirm")) {
-      const selectedModel = this.filteredModels[this.selectedIndex];
-      if (!selectedModel) return;
-      if (selectedModel.deniedBy !== undefined) {
-        this.errorMessage = `${selectedModel.provider}/${selectedModel.id} denied by ${selectedModel.deniedBy || "the allow list"}`;
-        this.updateList();
-        this.tui.requestRender();
-        return;
-      }
-      this.handleSelect(selectedModel.model);
-    }
-    // Escape or Ctrl+C
-    else if (kb.matches(keyData, "tui.select.cancel")) {
-      this.dispose();
-      this.onCancelCallback();
-    }
-    // Select and save as default
-    else if (kb.matches(keyData, "app.models.save") && this.onSelectAsDefaultCallback) {
-      const selectedModel = this.filteredModels[this.selectedIndex];
-      if (selectedModel) {
-        this.dispose();
-        this.onSelectAsDefaultCallback(selectedModel.model);
-      }
-    }
-    // Pass everything else to search input
-    else {
-      this.searchInput.handleInput(keyData);
-      this.filterModels(this.searchInput.getValue());
-    }
-  }
-
-  private handleSelect(model: Model<any>): void {
+  handleSelect(model: modelSelectorTypes.SelectableModel): void {
     this.dispose();
     this.onSelectCallback(model);
   }
 
-  /**
-   * Deny the selected model, or allow it again when the policy already hides it. The change is
-   * saved at once and the list is rebuilt, so the next selection sees it.
-   */
-  private toggleModelPolicy(): void {
-    const options = this.policyOptions;
-    const item = this.filteredModels[this.selectedIndex];
-    if (!options || !item) return;
-    const reference = `${item.provider}/${item.id}`;
-    const policy = options.getPolicy();
-    const next =
-      item.deniedBy === undefined
-        ? addModelPolicyPattern(policy, "deny", reference)
-        : allowModelReference(policy, reference);
-    this.applyPolicy(options.savePolicy(next), reference, item);
-  }
-
-  /** Deny or allow every model of the selected provider with a `provider/*` pattern. */
-  private toggleProviderPolicy(): void {
-    const options = this.policyOptions;
-    const item = this.filteredModels[this.selectedIndex];
-    if (!options || !item) return;
-    const pattern = `${item.provider}/*`;
-    const policy = options.getPolicy();
-    const denied = policy.deny.some((entry) => entry.toLowerCase() === pattern.toLowerCase());
-    const next = denied
-      ? removeModelPolicyPattern(policy, pattern)
-      : addModelPolicyPattern(policy, "deny", pattern);
-    this.applyPolicy(options.savePolicy(next), pattern, item);
-  }
-
-  private applyPolicy(policy: ModelPolicy, changed: string, item: ModelItem): void {
-    this.errorMessage = undefined;
-    this.loadModelsFromSnapshot();
-    this.scopeText?.setText(this.getScopeText());
-    this.filterModels(this.searchInput.getValue());
-    const refreshed = this.filteredModels.find(
-      (entry) => entry.provider === item.provider && entry.id === item.id,
-    );
-    if (refreshed) {
-      this.selectedIndex = this.filteredModels.indexOf(refreshed);
-      this.updateList();
-    }
-    const decision = evaluateModelPolicy(policy, item.model);
-    const stillHidden =
-      !decision.allowed && decision.reason === "deny" && decision.pattern !== changed;
-    this.refreshStatusMessage = decision.allowed
-      ? `Allowed ${changed}`
-      : stillHidden
-        ? `${changed} denied; also hidden by ${decision.pattern}`
-        : `Denied ${changed}`;
-    this.refreshStatusSuccess = decision.allowed;
-    this.updateList();
-    this.tui.requestRender();
-  }
-
-  getSearchInput(): Input {
+  getSearchInput(): tuiTypes.Input {
     return this.searchInput;
+  }
+
+  handleInput(keyData: string): void {
+    this.input.handle(keyData);
+  }
+
+  constructor(
+    tui: tuiTypes.TUI,
+    currentModel: modelSelectorTypes.SelectableModel | undefined,
+    modelRuntime: modelSelectorTypes.ModelSource,
+    scopedModels: ReadonlyArray<modelSelectorInternalTypes.ScopedModelItem>,
+    onSelect: (model: modelSelectorTypes.SelectableModel) => void,
+    onCancel: () => void,
+    initialSearchInput?: string,
+    onSelectAsDefault?: (model: modelSelectorTypes.SelectableModel) => void,
+    defaultModel?: modelSelectorInternalTypes.DefaultModelReference,
+    policyOptions?: modelSelectorTypes.ModelSelectorPolicyOptions,
+  ) {
+    super();
+    this.catalog = new ModelCatalog(this);
+    this.list = new ModelList(this);
+    this.refresh = new ModelRefresh(this);
+    this.input = new ModelInput(this);
+    this.layout = new ModelSelectorLayout(this);
+    this.tui = tui;
+    this.currentModel = currentModel;
+    this.modelRuntime = modelRuntime;
+    this.scopedModels = scopedModels;
+    this.defaultModel = defaultModel;
+    this.policyOptions = policyOptions;
+    this.scope = scopedModels.length > 0 ? "scoped" : "all";
+    this.onSelectCallback = onSelect;
+    this.onSelectAsDefaultCallback = onSelectAsDefault;
+    this.onCancelCallback = onCancel;
+    this.layout.build(initialSearchInput);
+
+    this.catalog.loadModelsFromSnapshot();
+    if (initialSearchInput !== undefined && initialSearchInput !== "")
+      this.list.filterModels(initialSearchInput);
+    else this.list.updateList();
+    this.tui.requestRender();
+    void this.refresh.refreshModels();
   }
 }

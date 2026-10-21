@@ -1,9 +1,15 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Markdown } from "../src/components/markdown.ts";
-import { chalk } from "./markdown-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import Markdown from "../src/components/markdown.ts";
+import markdownHelpers from "./markdown-helpers.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultMarkdownTheme } = testThemes;
+const { stripStyleSequences } = ansiSequences;
+
+const { chalk } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Spacing after code blocks", () => {
@@ -35,7 +41,7 @@ more text`,
       for (const text of cases) {
         const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
         const lines = markdown.render(80);
-        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+        const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
         assert.deepStrictEqual(
           plainLines,
@@ -58,7 +64,7 @@ describe("Markdown component", () => {
       for (const text of cases) {
         const markdown = new Markdown(text, 0, 0, defaultMarkdownTheme);
         const lines = markdown.render(80);
-        const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+        const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
         assert.notStrictEqual(
           plainLines.at(-1),
@@ -85,7 +91,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const dividerIndex = plainLines.findIndex((line) => line.includes("─"));
       assert.ok(dividerIndex !== -1, "Should have divider");
@@ -103,7 +109,7 @@ again, hello world`,
     it("should not add a trailing blank line when divider is the last rendered block", () => {
       const markdown = new Markdown("---", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -127,7 +133,7 @@ This is a paragraph`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const headingIndex = plainLines.findIndex((line) => line.includes("Hello"));
       assert.ok(headingIndex !== -1, "Should have heading");
@@ -145,7 +151,7 @@ This is a paragraph`,
     it("should not add a trailing blank line when heading is the last rendered block", () => {
       const markdown = new Markdown("# Hello", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -171,7 +177,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const quoteIndex = plainLines.findIndex((line) => line.includes("This is a quote"));
       assert.ok(quoteIndex !== -1, "Should have blockquote");
@@ -189,7 +195,7 @@ again, hello world`,
     it("should not add a trailing blank line when blockquote is the last rendered block", () => {
       const markdown = new Markdown("> This is a quote", 0, 0, defaultMarkdownTheme);
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       assert.notStrictEqual(
         plainLines.at(-1),
@@ -208,7 +214,6 @@ describe("Markdown component", () => {
 
 function blockquotesWithMultilineContentCases5(): void {
   it("should apply consistent styling to all lines in lazy continuation blockquote", () => {
-    // Markdown "lazy continuation" - second line without > is still part of the quote
     const markdown = new Markdown(
       `>Foo
 bar`,
@@ -216,15 +221,13 @@ bar`,
       0,
       defaultMarkdownTheme,
       {
-        // This should NOT be applied to blockquotes
         color: (text) => chalk.magenta(text),
       },
     );
 
     const lines = markdown.render(80);
 
-    // Both lines should have the quote border
-    const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+    const plainLines = lines.map((line) => stripStyleSequences(line));
     const quotedLines = plainLines.filter((line) => line.startsWith("│ "));
     assert.strictEqual(
       quotedLines.length,
@@ -232,17 +235,14 @@ bar`,
       `Expected 2 quoted lines, got: ${JSON.stringify(plainLines)}`,
     );
 
-    // Both lines should have italic (from theme.quote styling)
     const fooLine = lines.find((line) => line.includes("Foo"));
     const barLine = lines.find((line) => line.includes("bar"));
     assert.ok(fooLine, "Should have Foo line");
     assert.ok(barLine, "Should have bar line");
 
-    // Check that both have italic (\x1b[3m) - blockquotes use theme styling, not default message color
     assert.ok(fooLine?.includes("\x1b[3m"), `Foo line should have italic: ${fooLine}`);
     assert.ok(barLine?.includes("\x1b[3m"), `bar line should have italic: ${barLine}`);
 
-    // Blockquotes should NOT have the default message color (magenta)
     assert.ok(!fooLine?.includes("\x1b[35m"), `Foo line should NOT have magenta color: ${fooLine}`);
     assert.ok(!barLine?.includes("\x1b[35m"), `bar line should NOT have magenta color: ${barLine}`);
   });

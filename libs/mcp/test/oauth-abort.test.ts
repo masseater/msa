@@ -1,13 +1,23 @@
+import testing from "@msa/testing";
 import { Effect, Fiber } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { authorizeMcp } from "../src/oauth/index.ts";
-import { closeServers, listen } from "./helpers.ts";
-import { authorizationServerMetadata, originalError, TestOAuthProvider } from "./oauth-support.ts";
+import oauth from "../src/oauth/index.ts";
+import oauthSupport from "./oauth-support.ts";
+import type oauthSupportTypes from "./oauth-support.types.ts";
+
+const { authorizeMcp } = oauth;
+
+const { closeServers, listen } = testing;
+const { TestOAuthProvider, authorizationServerMetadata, originalError } = oauthSupport;
 
 const abortController = (): AbortController => new AbortController();
 
-const runAborted = (origin: string, stalled: string[], provider: TestOAuthProvider) =>
+const runAborted = (
+  origin: string,
+  stalled: string[],
+  provider: oauthSupportTypes.TestOAuthProvider,
+) =>
   Effect.gen(function* () {
     const controller = abortController();
     const count = stalled.length;
@@ -37,8 +47,8 @@ const stopsOnAbort = Effect.gen(function* () {
   refreshing.client = { client_id: "client" };
   refreshing.tokenSet = { access_token: "a1", refresh_token: "r1", token_type: "Bearer" };
   refreshing.discovery = {
-    authorizationServerUrl: origin,
     authorizationServerMetadata: authorizationServerMetadata(origin),
+    authorizationServerUrl: origin,
   };
   expect(yield* runAborted(origin, stalled, refreshing)).toBe("/token");
 });

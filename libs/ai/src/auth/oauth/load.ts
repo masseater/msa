@@ -1,52 +1,18 @@
-import type { OAuthAuth } from "../types.ts";
+import type typesModule from "../types.ts";
 
-/**
- * Loads an OAuth flow module through a variable specifier so bundlers cannot
- * follow the import into Node-only flow code (`node:http` callback servers,
- * `node:crypto` PKCE). The `.ts`/`.js` rewrite keeps the trick working from
- * both source and built output.
- *
- * @param {string} specifier - module specifier
- * @returns {Promise<unknown>} the loaded module
- */
-const importOAuthModule = (specifier: string): Promise<unknown> => {
-  const runtimeSpecifier = import.meta.url.endsWith(".js")
-    ? specifier.replace(/\.ts$/u, ".js")
-    : specifier;
-  return import(runtimeSpecifier);
+const loadOpenAICodexOAuth = (): Promise<typesModule.OAuthAuth> =>
+  import("./openai-codex.ts").then((module) => module.default.openaiCodexOAuth);
+
+const loadOpenAIChatGPTOAuth = (): Promise<typesModule.OAuthAuth> =>
+  import("./openai-chatgpt.ts").then((module) => module.default.openaiChatGPTOAuth);
+
+const loadOpenRouterOAuth = (): Promise<typesModule.OAuthAuth> =>
+  import("./openrouter.ts").then((module) => module.default.openRouterOAuth);
+
+const load = {
+  loadOpenAIChatGPTOAuth,
+  loadOpenAICodexOAuth,
+  loadOpenRouterOAuth,
 };
 
-type OAuthFlowLoaders = {
-  openaiCodex: () => OAuthAuth | Promise<OAuthAuth>;
-  openaiChatGPT: () => OAuthAuth | Promise<OAuthAuth>;
-  openrouter: () => OAuthAuth | Promise<OAuthAuth>;
-};
-
-let bundledLoaders: OAuthFlowLoaders | undefined;
-
-/**
- * Registers statically bundled OAuth flows for standalone Bun binaries.
- *
- * @param {OAuthFlowLoaders} loaders - bundled flow loaders by provider id
- */
-export function registerBundledOAuthFlowLoaders(loaders: OAuthFlowLoaders): void {
-  bundledLoaders = loaders;
-}
-
-export const loadOpenAICodexOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders) return bundledLoaders.openaiCodex();
-  return ((await importOAuthModule("./openai-codex.ts")) as { openaiCodexOAuth: OAuthAuth })
-    .openaiCodexOAuth;
-};
-
-export const loadOpenAIChatGPTOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders) return bundledLoaders.openaiChatGPT();
-  return ((await importOAuthModule("./openai-chatgpt.ts")) as { openaiChatGPTOAuth: OAuthAuth })
-    .openaiChatGPTOAuth;
-};
-
-export const loadOpenRouterOAuth = async (): Promise<OAuthAuth> => {
-  if (bundledLoaders) return bundledLoaders.openrouter();
-  return ((await importOAuthModule("./openrouter.ts")) as { openRouterOAuth: OAuthAuth })
-    .openRouterOAuth;
-};
+export default load;

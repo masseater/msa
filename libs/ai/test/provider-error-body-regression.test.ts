@@ -1,139 +1,113 @@
-// Per-tier provider regression for issues/provider-error-body-passthrough.
-//
-// Routes a 403-with-body error through the real provider catch path for one
-// representative per tier (Success Criterion 7): a body-blind text provider
-// (openai-completions) and a status-only provider (openai-responses). Each
-// asserts the resulting errorMessage carries both the HTTP status and the body
-// reason. The image-provider tier is covered by
-// provider-error-body-passthrough.test.ts; the already-correct happy path (no
-// double body / no duplicated status) is asserted via the shared helper in
-// error-body.test.ts.
-
+import { Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { stream as streamOpenAICompletions } from "../src/api/openai-completions.ts";
-import { stream as streamOpenAIResponses } from "../src/api/openai-responses.ts";
-import type { Model } from "../src/types.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import openaiResponses from "../src/api/openai-responses.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import openaiPermissionDeniedMock from "./openai-permission-denied-mock.ts";
 
-// openai SDK APIError shape: "<status> status code (no body)" message, the
-// parsed body kept on `.error`.
-class FakeAPIError extends Error {
-  status: number;
-  error: unknown;
-  constructor(status: number, parsedBody: unknown) {
-    super(`${status} status code (no body)`);
-    this.name = "PermissionDeniedError";
-    this.status = status;
-    this.error = parsedBody;
-  }
-}
+const { normalizeContext } = compat;
+const { stream: streamOpenAICompletions } = openaiCompletions;
+const { stream: streamOpenAIResponses } = openaiResponses;
 
-const openaiMock = vi.hoisted(() => ({
-  // Default parsed body; individual tests may override before invoking.
-  parsedBody: { error: "blocked by gateway WAF" } as unknown,
-}));
+vi.mock("openai", () =>
+  import("./openai-permission-denied-mock.ts").then((module) => module.default),
+);
 
-vi.mock("openai", () => {
-  function throwingCreate() {
-    const promise = Promise.resolve(undefined) as unknown as { withResponse: () => Promise<never> };
-    promise.withResponse = () => {
-      return Promise.reject(new FakeAPIError(403, openaiMock.parsedBody));
-    };
-    return promise;
-  }
-  class FakeOpenAI {
-    chat = { completions: { create: throwingCreate } };
-    responses = { create: throwingCreate };
-  }
-  return { default: FakeOpenAI };
-});
-
-import { normalizeContext } from "../src/compat.ts";
+const { mockState: openaiMock } = openaiPermissionDeniedMock;
 
 const context = normalizeContext({
+  messages: [{ content: [{ text: "hi", type: "text" }], role: "user", timestamp: 0 }],
   systemPrompt: "",
-  messages: [{ role: "user", content: [{ type: "text", text: "hi" }], timestamp: 0 }],
   tools: [],
 });
 
-const completionsModel: Model<"openai-completions"> = {
-  id: "test-model",
-  name: "Test Model",
+const completionsModel: typesModule.Model<"openai-completions"> = {
   api: "openai-completions",
-  provider: "openrouter",
   baseUrl: "https://openrouter.ai/api/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "test-model",
+  input: ["text"],
   maxTokens: 100,
+  name: "Test Model",
+  provider: "openrouter",
+  reasoning: false,
 };
 
-const responsesModel: Model<"openai-responses"> = {
-  id: "gpt-test",
-  name: "GPT Test",
+const responsesModel: typesModule.Model<"openai-responses"> = {
   api: "openai-responses",
-  provider: "openai",
   baseUrl: "https://api.openai.com/v1",
-  reasoning: false,
-  input: ["text"],
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
   contextWindow: 1000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-test",
+  input: ["text"],
   maxTokens: 100,
+  name: "GPT Test",
+  provider: "openai",
+  reasoning: false,
 };
 
-async function drainResult(stream: {
+function drainResult(stream: {
   [Symbol.asyncIterator](): AsyncIterator<unknown>;
   result(): Promise<{ errorMessage?: string; stopReason?: string }>;
 }) {
-  for await (const _event of stream) {
-    void _event;
-  }
-  return stream.result();
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      yield* Stream.fromAsyncIterable(stream, (error) => error).pipe(Stream.orDie, Stream.runDrain);
+      return yield* Effect.promise(() => stream.result());
+    }),
+  );
 }
 
 describe("provider error body passthrough (per-tier regression)", () => {
   beforeEach(() => {
     openaiMock.parsedBody = { error: "blocked by gateway WAF" };
   });
+  it("openai-completions (body-blind text) surfaces status + body", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = yield* Effect.promise(() =>
+          drainResult(streamOpenAICompletions(completionsModel, context, { apiKey: "test" })),
+        );
 
-  it("openai-completions (body-blind text) surfaces status + body", async () => {
-    const output = await drainResult(
-      streamOpenAICompletions(completionsModel, context, { apiKey: "test" }),
-    );
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("403");
+        expect(output.errorMessage).toContain("blocked by gateway WAF");
+        expect(output.errorMessage).not.toBe("403 status code (no body)");
+      }),
+    ));
 
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("403");
-    expect(output.errorMessage).toContain("blocked by gateway WAF");
-    expect(output.errorMessage).not.toBe("403 status code (no body)");
-  });
+  it("openai-completions does not double-print the OpenRouter metadata.raw extra", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        openaiMock.parsedBody = {
+          code: 403,
+          message: "Provider returned error",
+          metadata: { raw: "upstream WAF blocked policy XYZ" },
+        };
 
-  it("openai-completions does not double-print the OpenRouter metadata.raw extra", async () => {
-    // OpenRouter returns the extra reason under error.error.metadata.raw, which
-    // is part of the parsed body normalizeProviderError already surfaces. The
-    // manual append must not duplicate it.
-    openaiMock.parsedBody = {
-      message: "Provider returned error",
-      code: 403,
-      metadata: { raw: "upstream WAF blocked policy XYZ" },
-    };
+        const output = yield* Effect.promise(() =>
+          drainResult(streamOpenAICompletions(completionsModel, context, { apiKey: "test" })),
+        );
 
-    const output = await drainResult(
-      streamOpenAICompletions(completionsModel, context, { apiKey: "test" }),
-    );
+        expect(output.errorMessage).toContain("upstream WAF blocked policy XYZ");
+        const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/gu) ?? [];
+        expect(occurrences).toHaveLength(1);
+      }),
+    ));
 
-    expect(output.errorMessage).toContain("upstream WAF blocked policy XYZ");
-    const occurrences = output.errorMessage?.match(/upstream WAF blocked policy XYZ/gu) ?? [];
-    expect(occurrences).toHaveLength(1);
-  });
+  it("openai-responses (status-only) keeps the prefix and surfaces the body", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const output = yield* Effect.promise(() =>
+          drainResult(streamOpenAIResponses(responsesModel, context, { apiKey: "test" })),
+        );
 
-  it("openai-responses (status-only) keeps the prefix and surfaces the body", async () => {
-    const output = await drainResult(
-      streamOpenAIResponses(responsesModel, context, { apiKey: "test" }),
-    );
-
-    expect(output.stopReason).toBe("error");
-    expect(output.errorMessage).toContain("OpenAI API error (403)");
-    expect(output.errorMessage).toContain("blocked by gateway WAF");
-  });
+        expect(output.stopReason).toBe("error");
+        expect(output.errorMessage).toContain("OpenAI API error (403)");
+        expect(output.errorMessage).toContain("blocked by gateway WAF");
+      }),
+    ));
 });

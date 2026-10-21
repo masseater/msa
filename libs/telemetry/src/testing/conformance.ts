@@ -1,14 +1,26 @@
-import { lifecycleCases } from "./lifecycle-cases.ts";
-import { passivityCases } from "./passivity-cases.ts";
-import { recordingCases } from "./recording-cases.ts";
-import { signalCases } from "./signal-cases.ts";
-import { createCase } from "./support.ts";
-import type { TelemetryAdapterConformanceCase, TelemetryAdapterFixtureFactory } from "./types.ts";
+import lifecycleCasesModule from "./lifecycle-cases.ts";
+import passivityCasesModule from "./passivity-cases.ts";
+import recordingCasesModule from "./recording-cases.ts";
+import signalCasesModule from "./signal-cases.ts";
+import support from "./support.ts";
+import type typesModule from "./types.ts";
 
-export function createTelemetryAdapterConformance(
-  factory: TelemetryAdapterFixtureFactory,
-): readonly TelemetryAdapterConformanceCase[] {
+const { lifecycleCases } = lifecycleCasesModule;
+const { recordingCases } = recordingCasesModule;
+const { passivityCases } = passivityCasesModule;
+const { signalCases } = signalCasesModule;
+const { createCase } = support;
+
+function createTelemetryAdapterConformance(
+  factory: typesModule.TelemetryAdapterFixtureFactory,
+): readonly typesModule.TelemetryAdapterConformanceCase[] {
   return [...lifecycleCases, ...recordingCases, ...passivityCases, ...signalCases].map(
     (definition) => createCase(factory, definition),
   );
 }
+
+const conformance = {
+  createTelemetryAdapterConformance,
+};
+
+export default conformance;

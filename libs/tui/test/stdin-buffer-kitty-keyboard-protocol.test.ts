@@ -1,23 +1,26 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { wait } from "./stdin-buffer-helpers.ts";
+import { Effect } from "effect";
+
+import StdinBuffer from "../src/stdin-buffer.ts";
+import type stdinBufferTypes from "../src/stdin-buffer.types.ts";
+import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { wait } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -46,25 +49,22 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Kitty Keyboard Protocol", () => {
     it("should handle rapid typing simulation with Kitty protocol", () => {
-      // Simulates typing "hi" quickly with releases interleaved
       processInput("\x1b[104u\x1b[104;1:3u\x1b[105u\x1b[105;1:3u");
       assert.deepStrictEqual(emittedSequences, [
         "\x1b[104u",
@@ -77,19 +77,17 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -120,19 +118,17 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -161,65 +157,65 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Edge Cases", () => {
     it("should handle empty input", () => {
       processInput("");
-      // Empty string emits an empty data event
       assert.deepStrictEqual(emittedSequences, [""]);
     });
 
-    it("should handle lone escape character with timeout", async () => {
-      processInput("\x1b");
-      assert.deepStrictEqual(emittedSequences, []);
+    it("should handle lone escape character with timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b");
+          assert.deepStrictEqual(emittedSequences, []);
 
-      // After timeout, should emit
-      await wait(15);
-      assert.deepStrictEqual(emittedSequences, ["\x1b"]);
-    });
+          yield* wait(15);
+          assert.deepStrictEqual(emittedSequences, ["\x1b"]);
+        }),
+      ));
 
-    it("flushes a lone escape promptly with the longer default sequence timeout", async () => {
-      const defaultBuffer = new StdinBuffer();
-      const defaultSequences: string[] = [];
-      defaultBuffer.on("data", (sequence) => defaultSequences.push(sequence));
+    it("flushes a lone escape promptly with the longer default sequence timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const defaultBuffer = new StdinBuffer();
+          const defaultSequences: string[] = [];
+          defaultBuffer.on("data", (sequence) => defaultSequences.push(sequence));
 
-      defaultBuffer.process("\x1b");
-      await wait(20);
-      assert.deepStrictEqual(defaultSequences, ["\x1b"]);
-      defaultBuffer.destroy();
-    });
+          defaultBuffer.process("\x1b");
+          yield* wait(20);
+          assert.deepStrictEqual(defaultSequences, ["\x1b"]);
+          defaultBuffer.destroy();
+        }),
+      ));
   });
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }

@@ -1,13 +1,19 @@
-import { APP_NAME } from "../config.ts";
-import { configureHttpDispatcher } from "../core/http-dispatcher.ts";
+import config from "../config.ts";
+import httpDispatcher from "../core/http-dispatcher.ts";
 
-export function setupCli(): void {
+const { APP_NAME } = config;
+const { configureHttpDispatcher } = httpDispatcher;
+
+function setupCli(): void {
   process.title = APP_NAME;
-  process.env["MSA_CODING_AGENT"] = "true";
-  process.env["AI_AGENT"] = "msa";
+  Object.assign(process.env, { AI_AGENT: "msa", MSA_CODING_AGENT: "true" });
   process.emitWarning = (() => {}) as typeof process.emitWarning;
 
-  // Configure undici before provider SDKs issue requests. Settings are applied
-  // once SettingsManager has loaded global/project configuration.
   configureHttpDispatcher();
 }
+
+const setup = {
+  setupCli,
+};
+
+export default setup;

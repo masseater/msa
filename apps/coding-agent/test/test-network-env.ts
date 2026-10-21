@@ -1,6 +1,11 @@
 import { vi } from "vite-plus/test";
 
-/** Enable network code paths for tests that replace external I/O with local fixtures or mocks. */
-export function allowNetwork(): void {
+function allowNetwork(): void {
   vi.stubEnv("MSA_OFFLINE", undefined);
 }
+
+const testNetworkEnv = {
+  allowNetwork,
+};
+
+export default testNetworkEnv;

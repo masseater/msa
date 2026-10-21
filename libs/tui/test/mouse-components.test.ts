@@ -1,14 +1,16 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Input } from "../src/components/input.ts";
-import { SelectList } from "../src/components/select-list.ts";
-import { SettingsList } from "../src/components/settings-list.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { mouseAwareComponentsCases1 } from "./mouse-components-cases-helpers.ts";
-import { mouse, selectTheme, settingsTheme } from "./mouse-components-helpers.ts";
-import { InputOverlay } from "./mouse-components-input-overlay.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import { Effect } from "effect";
+
+import tuiModule from "../src/index.ts";
+import mouseAwareComponentsCases1 from "./mouse-components-cases-helpers.ts";
+import mouseComponentsHelpers from "./mouse-components-helpers.ts";
+import InputOverlay from "./mouse-components-input-overlay.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
+
+const { Input, SelectList, SettingsList, TuiAltScreen } = tuiModule;
+const { mouse, selectTheme, settingsTheme } = mouseComponentsHelpers;
 
 describe("mouse-aware components", () => {
   it("positions a single-line input cursor on press", () => {
@@ -24,11 +26,11 @@ describe("mouse-aware components", () => {
   it("selects and activates list rows", () => {
     const list = new SelectList(
       [
-        { value: "a", label: "A" },
-        { value: "b", label: "B" },
-        { value: "c", label: "C" },
-        { value: "d", label: "D" },
-        { value: "e", label: "E" },
+        { label: "A", value: "a" },
+        { label: "B", value: "b" },
+        { label: "C", value: "c" },
+        { label: "D", value: "d" },
+        { label: "E", value: "e" },
       ],
       3,
       selectTheme,
@@ -50,10 +52,10 @@ describe("mouse-aware components", () => {
     const changes: Array<{ id: string; value: string }> = [];
     const list = new SettingsList(
       [
-        { id: "mode", label: "Mode", currentValue: "one", values: ["one", "two"] },
-        { id: "other", label: "Other", currentValue: "off", values: ["off", "on"] },
-        { id: "third", label: "Third", currentValue: "low", values: ["low", "high"] },
-        { id: "fourth", label: "Fourth", currentValue: "x", values: ["x", "y"] },
+        { currentValue: "one", id: "mode", label: "Mode", values: ["one", "two"] },
+        { currentValue: "off", id: "other", label: "Other", values: ["off", "on"] },
+        { currentValue: "low", id: "third", label: "Third", values: ["low", "high"] },
+        { currentValue: "x", id: "fourth", label: "Fourth", values: ["x", "y"] },
       ],
       3,
       settingsTheme,
@@ -72,22 +74,25 @@ describe("mouse-aware components", () => {
 });
 
 describe("mouse-aware components", () => {
-  it("keeps a delegating overlay focused when its nested input is clicked", async () => {
-    const terminal = new VirtualTerminal(20, 4);
-    const tui = new TuiAltScreen(terminal);
-    const overlay = new InputOverlay();
-    overlay.input.setValue("hi");
-    tui.start();
-    tui.showOverlay(overlay, { anchor: "top-left", width: 20 });
-    await terminal.waitForRender();
+  it("keeps a delegating overlay focused when its nested input is clicked", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const terminal = new VirtualTerminal(20, 4);
+        const tui = new TuiAltScreen(terminal);
+        const overlay = new InputOverlay();
+        overlay.input.setValue("hi");
+        tui.start();
+        tui.showOverlay(overlay, { anchor: "top-left", width: 20 });
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    terminal.sendInput("\x1b[<0;5;1M");
-    terminal.sendInput("\x1b[<0;5;1m");
-    terminal.sendInput("!");
-    await terminal.waitForRender();
+        terminal.sendInput("\x1b[<0;5;1M");
+        terminal.sendInput("\x1b[<0;5;1m");
+        terminal.sendInput("!");
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    assert.strictEqual(overlay.input.getValue(), "hi!");
-    assert.strictEqual(tui.getFocusedComponent(), overlay);
-    tui.stop();
-  });
+        assert.strictEqual(overlay.input.getValue(), "hi!");
+        assert.strictEqual(tui.getFocusedComponent(), overlay);
+        tui.stop();
+      }),
+    ));
 });

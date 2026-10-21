@@ -1,22 +1,28 @@
-import { writeFileSync } from "node:fs";
-import { join } from "node:path";
-
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { getOrThrow } from "@msa/durable/env";
+import contextModule from "@msa/chord/context";
+import envModule from "@msa/durable/env";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { connectTo, posixAccountShell, type SshServer, sshd, useSshd } from "./sshd.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
+import platform from "./platform.ts";
+import sshdModule from "./sshd.ts";
+import type sshdTypes from "./sshd.types.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { getOrThrow } = envModule;
+
+const { localPath, writeText } = platform;
+const { connectTo, posixAccountShell, sshd, useSshd } = sshdModule;
 
 const context = BACKGROUND_CONTEXT;
 
-const loginOutput = (server: SshServer, loginShell: boolean): Effect.Effect<string> =>
+const loginOutput = (server: sshdTypes.SshServer, loginShell: boolean): Effect.Effect<string> =>
   Effect.acquireUseRelease(
-    Effect.promise(() => connectTo({ server, loginShell })),
+    Effect.promise(() => connectTo({ loginShell, server })),
     ({ connection }) =>
       Effect.gen(function* () {
-        const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: server.home });
+        const env = new RemoteExecutionEnv({ connection, cwd: server.home, id: "msa-env:test" });
         const output: string[] = [];
         const onOutput = (text: string): void => {
           output.push(text);
@@ -33,10 +39,14 @@ const loginOutput = (server: SshServer, loginShell: boolean): Effect.Effect<stri
       }),
   );
 
-const loginShellOnlyWhenAsked = (server: SshServer): Effect.Effect<void> =>
+const loginShellOnlyWhenAsked = (server: sshdTypes.SshServer): Effect.Effect<void> =>
   Effect.gen(function* () {
-    writeFileSync(join(server.home, ".profile"), "export MSA_ENV_LOGIN=yes\n");
-    writeFileSync(join(server.home, ".zprofile"), "export MSA_ENV_LOGIN=yes\n");
+    for (const name of [".profile", ".zprofile"]) {
+      yield* writeText({
+        path: localPath.join(server.home, name),
+        text: "export MSA_ENV_LOGIN=yes\n",
+      });
+    }
     expect(yield* loginOutput(server, false)).toBe("");
     expect(yield* loginOutput(server, true)).toBe("yes");
   });

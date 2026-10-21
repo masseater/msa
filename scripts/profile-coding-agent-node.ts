@@ -1,15 +1,20 @@
 import { Config, Console, Effect, Option } from "effect";
 
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
-import { HELP, parseArgs } from "./profile-startup-args.ts";
-import type { ProfileOptions, Runtime } from "./profile-startup-args.ts";
-import { buildReport } from "./profile-startup-report.ts";
-import type { RunResult } from "./profile-startup-report.ts";
-import { fail, runBuild, runRpc, runTui } from "./profile-startup-runs.ts";
-import type { Paths, RunParams } from "./profile-startup-runs.ts";
+import hostModule from "./host.ts";
+import type hostTypes from "./host.types.ts";
+import profileStartupArgs from "./profile-startup-args.ts";
+import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
+import profileStartupReport from "./profile-startup-report.ts";
+import type profileStartupReportTypes from "./profile-startup-report.types.ts";
+import profileStartupRuns from "./profile-startup-runs.ts";
+import type profileStartupRunsTypes from "./profile-startup-runs.types.ts";
 
-const makePaths = (host: HostShape): Paths => {
+const { Host, runScript } = hostModule;
+const { runBuild, runRpc, runTui } = profileStartupRuns;
+const { HELP, fail, parseArgs } = profileStartupArgs;
+const { buildReport } = profileStartupReport;
+
+const makePaths = (host: hostTypes.HostShape): profileStartupRunsTypes.Paths => {
   const repoRoot = host.resolve(import.meta.dirname, "..");
   const packageDir = host.join(repoRoot, "apps", "coding-agent");
   return {
@@ -21,84 +26,148 @@ const makePaths = (host: HostShape): Paths => {
   };
 };
 
-const resolveRuntime = (requested: ProfileOptions["runtime"]) =>
+const resolveRuntime = (requested: profileStartupArgsTypes.ProfileOptions["runtime"]) =>
   Effect.gen(function* () {
     if (requested !== "auto") return requested;
     const userAgent = yield* Config.option(Config.String("npm_config_user_agent"));
     return Option.getOrElse(userAgent, () => "").startsWith("bun/") ? "bun" : "node";
   });
 
-const displayPath = (host: HostShape, repoRoot: string) => (path: string) => {
+const displayPath = (host: hostTypes.HostShape, repoRoot: string) => (path: string) => {
   const relativePath = host.relative(repoRoot, path);
   return relativePath !== "" && !relativePath.startsWith("..")
     ? relativePath.replaceAll("\\", "/")
     : path;
 };
 
-const validate = (options: ProfileOptions, runtime: Runtime) =>
+const isInteractiveTerminal = (): boolean =>
+  process.stdin.isTTY === true && process.stdout.isTTY === true;
+
+const VALIDATIONS: ReadonlyArray<{
+  readonly message: string;
+  readonly violated: (
+    options: profileStartupArgsTypes.ProfileOptions,
+    runtime: profileStartupArgsTypes.Runtime,
+  ) => boolean;
+}> = [
+  {
+    message: "--agent-dir and --isolated-agent-dir cannot be combined",
+    violated: (options) => options.agentDir !== undefined && options.isolatedAgentDir,
+  },
+  {
+    message: "TUI benchmark must be run from an interactive terminal.",
+    violated: (options) => options.mode === "tui" && !isInteractiveTerminal(),
+  },
+  {
+    message: "--bundle only supports the Node runtime",
+    violated: (options, runtime) => options.bundle && runtime !== "node",
+  },
+];
+
+const validate = (
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+) => {
+  const violation = VALIDATIONS.find((validation) => validation.violated(options, runtime));
+  return violation === undefined ? Effect.void : Effect.fail(fail(violation.message));
+};
+
+const usesUnbundledDist = (
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+): boolean => runtime === "node" && !options.bundle && !options.build;
+
+const isBundledFacade = (host: hostTypes.HostShape, distCli: string) =>
   Effect.gen(function* () {
-    if (options.agentDir !== undefined && options.isolatedAgentDir) {
-      return yield* fail("--agent-dir and --isolated-agent-dir cannot be combined");
-    }
-    if (options.mode === "tui" && (process.stdin.isTTY !== true || process.stdout.isTTY !== true)) {
-      return yield* fail("TUI benchmark must be run from an interactive terminal.");
-    }
-    if (options.bundle && runtime !== "node") {
-      return yield* fail("--bundle only supports the Node runtime");
-    }
+    if (!(yield* host.exists(distCli))) return false;
+    return (yield* host.readText(distCli)).includes('import "./bundle/cli.js";');
   });
 
-const checkEntry = (host: HostShape, paths: Paths, options: ProfileOptions, runtime: Runtime) =>
+const nodeEntryPath = (
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+): string => (options.bundle ? paths.bundledDistCli : paths.distCli);
+
+const entryPathOf = (
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+): string => (runtime === "bun" ? paths.srcCli : nodeEntryPath(paths, options));
+
+const checkEntry = (
+  host: hostTypes.HostShape,
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+) =>
   Effect.gen(function* () {
-    const facadeCheck =
-      runtime === "node" &&
-      !options.bundle &&
-      !options.build &&
-      (yield* host.exists(paths.distCli)) &&
-      (yield* host.readText(paths.distCli)).includes('import "./bundle/cli.js";');
-    if (facadeCheck) {
+    if (usesUnbundledDist(options, runtime) && (yield* isBundledFacade(host, paths.distCli))) {
       return yield* fail(
         "dist/cli.js is a bundled facade; rerun without --skip-build for an unbundled profile",
       );
     }
-    const entryPath =
-      runtime === "bun" ? paths.srcCli : options.bundle ? paths.bundledDistCli : paths.distCli;
+    const entryPath = entryPathOf(paths, options, runtime);
     if (!(yield* host.exists(entryPath))) {
       return yield* fail(`CLI entrypoint not found: ${entryPath}`);
     }
   });
 
-const prepare = (host: HostShape, paths: Paths, options: ProfileOptions, runtime: Runtime) =>
+const bunEntry = (mode: profileStartupArgsTypes.ProfileOptions["mode"]): string =>
+  mode === "rpc" ? "apps/coding-agent/src/cli.ts --mode rpc" : "apps/coding-agent/src/cli.ts";
+
+const prepare = (
+  host: hostTypes.HostShape,
+  paths: profileStartupRunsTypes.Paths,
+  options: profileStartupArgsTypes.ProfileOptions,
+  runtime: profileStartupArgsTypes.Runtime,
+) =>
   Effect.gen(function* () {
     if (runtime === "node" && options.build)
       yield* runBuild({ bundle: options.bundle, host, repoRoot: paths.repoRoot });
-    if (runtime === "bun") {
-      const entry =
-        options.mode === "rpc"
-          ? "apps/coding-agent/src/cli.ts --mode rpc"
-          : "apps/coding-agent/src/cli.ts";
-      yield* Console.log(`Using Bun runtime with ${entry}`);
-    }
+    if (runtime === "bun") yield* Console.log(`Using Bun runtime with ${bunEntry(options.mode)}`);
     yield* checkEntry(host, paths, options, runtime);
   });
 
-const runAll = (base: Omit<RunParams, "measuredIndex" | "runIndex">) =>
+const measuredIndexOf = (runIndex: number, warmup: number): number | undefined =>
+  runIndex >= warmup ? runIndex - warmup + 1 : undefined;
+
+const runLabel = (runIndex: number, measuredIndex: number | undefined): string =>
+  measuredIndex === undefined ? `warmup ${runIndex + 1}` : `run ${measuredIndex}`;
+
+const runAll = (base: Omit<profileStartupRunsTypes.RunParams, "measuredIndex" | "runIndex">) =>
   Effect.gen(function* () {
     const { runs, warmup } = base.options;
     const indices = Array.from({ length: warmup + runs }, (_, index) => index);
     const results = yield* Effect.forEach(indices, (runIndex) =>
       Effect.gen(function* () {
-        const measuredIndex = runIndex >= warmup ? runIndex - warmup + 1 : undefined;
+        const measuredIndex = measuredIndexOf(runIndex, warmup);
         const params = { ...base, measuredIndex, runIndex };
         const result = yield* base.options.mode === "rpc" ? runRpc(params) : runTui(params);
-        const label =
-          measuredIndex === undefined ? `warmup ${runIndex + 1}` : `run ${measuredIndex}`;
-        yield* Console.log(`[${label}] elapsed=${result.elapsedMs.toFixed(1)}ms`);
+        yield* Console.log(
+          `[${runLabel(runIndex, measuredIndex)}] elapsed=${result.elapsedMs.toFixed(1)}ms`,
+        );
         return measuredIndex === undefined ? undefined : result;
       }),
     );
-    return results.filter((result): result is RunResult => result !== undefined);
+    return results.filter(
+      (result): result is profileStartupReportTypes.RunResult => result !== undefined,
+    );
   });
+
+const profileDirOf = (options: {
+  readonly host: hostTypes.HostShape;
+  readonly paths: profileStartupRunsTypes.Paths;
+  readonly profileDir: string | undefined;
+  readonly runtime: profileStartupArgsTypes.Runtime;
+}): string =>
+  options.profileDir ??
+  options.host.join(
+    options.paths.repoRoot,
+    options.runtime === "bun" ? "profiles-bun" : "profiles-node",
+  );
+
+const runtimeLabel = (runtime: profileStartupArgsTypes.Runtime, bundle: boolean): string =>
+  `${runtime}${bundle ? " (bundle)" : ""}`;
 
 const main = Effect.gen(function* () {
   const host = yield* Host;
@@ -108,9 +177,7 @@ const main = Effect.gen(function* () {
   const runtime = yield* resolveRuntime(options.runtime);
   yield* validate(options, runtime);
   const label = options.label ?? `${options.mode}-startup`;
-  const profileDir =
-    options.profileDir ??
-    host.join(paths.repoRoot, runtime === "bun" ? "profiles-bun" : "profiles-node");
+  const profileDir = profileDirOf({ host, paths, profileDir: options.profileDir, runtime });
   yield* prepare(host, paths, options, runtime);
   yield* host.makeDirectory(profileDir);
   const measured = yield* runAll({
@@ -126,7 +193,7 @@ const main = Effect.gen(function* () {
       displayPath: displayPath(host, paths.repoRoot),
       mode: options.mode,
       profileDir,
-      runtimeLabel: `${runtime}${options.bundle ? " (bundle)" : ""}`,
+      runtimeLabel: runtimeLabel(runtime, options.bundle),
     },
     measured,
   );

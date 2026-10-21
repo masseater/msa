@@ -1,54 +1,52 @@
 import { Predicate, Schema } from "effect";
 
-const ContentBlock = Schema.Record(Schema.String, Schema.Unknown);
+import sessionContextEntrySchema from "./session-context-entry-schema.ts";
+import type sessionContextEntryTypes from "./session-context-entry.types.ts";
+import toolCalls from "./tool-calls.ts";
+import type toolCallsTypes from "./tool-calls.types.ts";
 
-const UsageRecord = Schema.Record(Schema.String, Schema.Unknown);
-
-const ContextEntrySchema = Schema.Struct({
-  type: Schema.optional(Schema.String),
-  timestamp: Schema.optional(Schema.String),
-  cwd: Schema.optional(Schema.String),
-  tokensBefore: Schema.optional(Schema.Finite),
-  message: Schema.optional(
-    Schema.Struct({
-      role: Schema.optional(Schema.String),
-      provider: Schema.optional(Schema.String),
-      model: Schema.optional(Schema.String),
-      content: Schema.optional(Schema.Union([Schema.String, Schema.Array(ContentBlock)])),
-      usage: Schema.optional(UsageRecord),
-    }),
-  ),
-});
-
-type ContextEntry = typeof ContextEntrySchema.Type;
-type ContextMessage = NonNullable<ContextEntry["message"]>;
-type ContextUsage = typeof UsageRecord.Type;
+const { toolCallsOf } = toolCalls;
+const { ContextEntrySchema, UsageRecord } = sessionContextEntrySchema;
 
 const decodeEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(ContextEntrySchema));
 
 const decodeContextEntry = (line: string) => decodeEntry(line);
 
-const contextTokens = (usage: ContextUsage | undefined): number | null => {
-  if (usage === undefined) return null;
-  const totalTokens = Number(usage.totalTokens ?? 0);
-  if (Number.isFinite(totalTokens) && totalTokens > 0) return totalTokens;
-  const value =
-    Number(usage.input ?? 0) +
-    Number(usage.output ?? 0) +
-    Number(usage.cacheRead ?? 0) +
-    Number(usage.cacheWrite ?? 0);
-  return Number.isFinite(value) && value > 0 ? value : null;
+const COMPONENT_TOKEN_KEYS = ["input", "output", "cacheRead", "cacheWrite"] as const;
+
+const usageNumber = (usage: sessionContextEntryTypes.ContextUsage, key: string): number =>
+  Number(usage[key] ?? 0);
+
+const positiveFinite = (value: number): number | null =>
+  Number.isFinite(value) && value > 0 ? value : null;
+
+const componentTokens = (usage: sessionContextEntryTypes.ContextUsage): number =>
+  COMPONENT_TOKEN_KEYS.reduce((sum, key) => sum + usageNumber(usage, key), 0);
+
+const contextTokens = (usage: sessionContextEntryTypes.ContextUsage | undefined): number | null =>
+  usage === undefined
+    ? null
+    : (positiveFinite(usageNumber(usage, "totalTokens")) ?? positiveFinite(componentTokens(usage)));
+
+const bashCommandOf = (block: toolCallsTypes.Block): ReadonlyArray<string> => {
+  const args = block["arguments"];
+  const command = Predicate.hasProperty("command")(args) ? args.command : undefined;
+  return Predicate.isString(command) && command !== "" ? [command] : [];
 };
 
-const bashCommandsOf = (content: ContextMessage["content"]): ReadonlyArray<string> => {
-  if (content === undefined || Predicate.isString(content)) return [];
-  return content.flatMap((block) => {
-    if (block.type !== "toolCall" || block.name !== "bash") return [];
-    const args = block.arguments;
-    const command = Predicate.hasProperty("command")(args) ? args.command : undefined;
-    return Predicate.isString(command) && command !== "" ? [command] : [];
-  });
+const bashCommandsOf = (message: sessionContextEntryTypes.ContextMessage): ReadonlyArray<string> =>
+  toolCallsOf({ message, name: "bash" }).flatMap(bashCommandOf);
+
+const providerModelOf = (message: sessionContextEntryTypes.ContextMessage): string =>
+  `${message.provider ?? "[unknown]"}/${message.model ?? "[unknown]"}`;
+
+const sessionContextEntry = {
+  ContextEntrySchema,
+  UsageRecord,
+  bashCommandsOf,
+  contextTokens,
+  decodeContextEntry,
+  providerModelOf,
 };
 
-export type { ContextEntry, ContextMessage, ContextUsage };
-export { bashCommandsOf, contextTokens, decodeContextEntry };
+export default sessionContextEntry;

@@ -1,20 +1,41 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { HStack } from "../src/components/h-stack.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import { renderLayoutFrame } from "../src/layout.ts";
-import { encodeKitty, registerKittyImageMetadata } from "../src/terminal-image.ts";
-import { visibleLines } from "./layout-helpers.ts";
+import HStack from "../src/components/h-stack.ts";
+import ScrollView from "../src/components/scroll-view.ts";
+import Text from "../src/components/text.ts";
+import VStack from "../src/components/v-stack.ts";
+import layout from "../src/layout.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import visibleLines from "./layout-helpers.ts";
+
+const { renderLayoutFrame } = layout;
+
+const { encodeKitty, registerKittyImageMetadata } = terminalImageKitty;
+
+const rendersScrollContentOnce = (): void => {
+  let renderCount = 0;
+  const transcript = new ScrollView({
+    invalidate: () => {},
+    render: () => {
+      renderCount += 1;
+      return ["one", "two", "three"];
+    },
+  });
+  const root = new VStack([
+    { basis: 0, component: transcript, grow: 1 },
+    { basis: "auto", component: new Text("dock", 0, 0) },
+  ]);
+  renderLayoutFrame(root, 10, 3, () => {});
+  assert.strictEqual(renderCount, 1);
+};
 
 describe("viewport layout", () => {
   it("allocates vertical grow space deterministically", () => {
     const frame = renderLayoutFrame(
       new VStack([
-        { component: new Text("top", 0, 0), basis: 1, shrink: 0 },
-        { component: new Text("body", 0, 0), basis: 0, grow: 1 },
+        { basis: 1, component: new Text("top", 0, 0), shrink: 0 },
+        { basis: 0, component: new Text("body", 0, 0), grow: 1 },
       ]),
       10,
       4,
@@ -31,9 +52,9 @@ describe("viewport layout", () => {
   it("splits grow space in proportion to the grow weights", () => {
     const frame = renderLayoutFrame(
       new HStack([
-        { component: new Text("left", 0, 0), basis: 0, grow: 7 },
-        { component: new Text("|", 0, 0), basis: 1, grow: 0 },
-        { component: new Text("right", 0, 0), basis: 0, grow: 3 },
+        { basis: 0, component: new Text("left", 0, 0), grow: 7 },
+        { basis: 1, component: new Text("|", 0, 0), grow: 0 },
+        { basis: 0, component: new Text("right", 0, 0), grow: 3 },
       ]),
       101,
       1,
@@ -46,22 +67,10 @@ describe("viewport layout", () => {
     );
   });
 
-  it("does not render fixed-basis scroll content during stack measurement", () => {
-    let renderCount = 0;
-    const transcript = new ScrollView({
-      render: () => {
-        renderCount += 1;
-        return ["one", "two", "three"];
-      },
-      invalidate: () => {},
-    });
-    const root = new VStack([
-      { component: transcript, basis: 0, grow: 1 },
-      { component: new Text("dock", 0, 0), basis: "auto" },
-    ]);
-    renderLayoutFrame(root, 10, 3, () => {});
-    assert.strictEqual(renderCount, 1);
-  });
+  it(
+    "does not render fixed-basis scroll content during stack measurement",
+    rendersScrollContentOnce,
+  );
 });
 
 describe("viewport layout", () => {
@@ -75,8 +84,8 @@ describe("viewport layout", () => {
     lines[lineCount - 1] = "visible 3";
     const transcript = new ScrollView(
       {
-        render: () => lines,
         invalidate: () => {},
+        render: () => lines,
       },
       { follow: "end" },
     );
@@ -88,7 +97,7 @@ describe("viewport layout", () => {
   it("shrinks entries to their minimum sizes", () => {
     const frame = renderLayoutFrame(
       new VStack([
-        { component: new Text("a1\na2\na3", 0, 0), shrink: 1, minSize: 1 },
+        { component: new Text("a1\na2\na3", 0, 0), minSize: 1, shrink: 1 },
         { component: new Text("b1\nb2\nb3", 0, 0), shrink: 0 },
       ]),
       10,
@@ -114,8 +123,8 @@ describe("viewport layout", () => {
     ]);
     const frame = renderLayoutFrame(
       new VStack([
-        { component: new Text("body", 0, 0), basis: 0, grow: 1, minSize: 1 },
-        { component: dock, basis: "auto", minSize: 1 },
+        { basis: 0, component: new Text("body", 0, 0), grow: 1, minSize: 1 },
+        { basis: "auto", component: dock, minSize: 1 },
       ]),
       10,
       9,
@@ -154,14 +163,14 @@ describe("viewport layout", () => {
 
   it("crops Kitty images at a scroll view's lower boundary", () => {
     const imageId = 124;
-    const imageLine = encodeKitty("AAAA", { columns: 2, rows: 3, imageId, moveCursor: false });
-    registerKittyImageMetadata({ imageId, columns: 2, rows: 3, widthPx: 100, heightPx: 100 });
+    const imageLine = encodeKitty("AAAA", { columns: 2, imageId, moveCursor: false, rows: 3 });
+    registerKittyImageMetadata({ columns: 2, heightPx: 100, imageId, rows: 3, widthPx: 100 });
     const transcript = new ScrollView({
-      render: () => ["one", "two", imageLine, "", ""],
       invalidate: () => {},
+      render: () => ["one", "two", imageLine, "", ""],
     });
     const frame = renderLayoutFrame(
-      new VStack([{ component: transcript, basis: 0, grow: 1 }, new Text("dock", 0, 0)]),
+      new VStack([{ basis: 0, component: transcript, grow: 1 }, new Text("dock", 0, 0)]),
       20,
       4,
       () => {},
@@ -175,8 +184,8 @@ describe("viewport layout", () => {
   it("composes horizontal children at allocated widths", () => {
     const frame = renderLayoutFrame(
       new HStack([
-        { component: new Text("left", 0, 0), basis: 6, shrink: 0 },
-        { component: new Text("right", 0, 0), basis: 6, shrink: 0 },
+        { basis: 6, component: new Text("left", 0, 0), shrink: 0 },
+        { basis: 6, component: new Text("right", 0, 0), shrink: 0 },
       ]),
       12,
       1,
@@ -188,8 +197,8 @@ describe("viewport layout", () => {
   it("does not paint zero-width horizontal children", () => {
     const frame = renderLayoutFrame(
       new HStack([
-        { component: new Text("hidden", 0, 0), basis: 0, shrink: 0 },
-        { component: new Text("shown", 0, 0), basis: 0, grow: 1 },
+        { basis: 0, component: new Text("hidden", 0, 0), shrink: 0 },
+        { basis: 0, component: new Text("shown", 0, 0), grow: 1 },
       ]),
       5,
       1,

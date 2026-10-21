@@ -1,11 +1,21 @@
-import { anthropicMessagesApi } from "../api/anthropic-messages.lazy.ts";
-import { googleGenerativeAIApi } from "../api/google-generative-ai.lazy.ts";
-import { openAICompletionsApi } from "../api/openai-completions.lazy.ts";
-import { openAIResponsesApi } from "../api/openai-responses.lazy.ts";
-import { envApiKeyAuth } from "../auth/helpers.ts";
-import { createProvider, type Provider } from "../models.ts";
-import { OPENCODE_GO_MODELS } from "./opencode-go.models.ts";
-import { withOpenCodeSessionHeader } from "./opencode-headers.ts";
+import anthropicMessagesLazy from "../api/anthropic-messages.lazy.ts";
+import googleGenerativeAiLazy from "../api/google-generative-ai.lazy.ts";
+import openaiCompletionsLazy from "../api/openai-completions.lazy.ts";
+import openaiResponsesLazy from "../api/openai-responses.lazy.ts";
+import helpers from "../auth/helpers.ts";
+import modelsModule from "../models.ts";
+import type modelsTypes from "../models.types.ts";
+import opencodeGoModels from "./opencode-go.models.ts";
+import opencodeHeaders from "./opencode-headers.ts";
+
+const { createProvider } = modelsModule;
+const { withOpenCodeSessionHeader } = opencodeHeaders;
+const { anthropicMessagesApi } = anthropicMessagesLazy;
+const { googleGenerativeAIApi } = googleGenerativeAiLazy;
+const { openAICompletionsApi } = openaiCompletionsLazy;
+const { openAIResponsesApi } = openaiResponsesLazy;
+const { envApiKeyAuth } = helpers;
+const { OPENCODE_GO_MODELS } = opencodeGoModels;
 
 type OpenCodeGoApi =
   | "anthropic-messages"
@@ -13,17 +23,23 @@ type OpenCodeGoApi =
   | "openai-completions"
   | "openai-responses";
 
-export function opencodeGoProvider(): Provider<OpenCodeGoApi> {
+function opencodeGoProvider(): modelsTypes.Provider<OpenCodeGoApi> {
   return createProvider<OpenCodeGoApi>({
-    id: "opencode-go",
-    name: "OpenCode Go",
-    auth: { apiKey: envApiKeyAuth("OpenCode API key", ["OPENCODE_API_KEY"]) },
-    models: Object.values(OPENCODE_GO_MODELS),
     api: {
       "anthropic-messages": withOpenCodeSessionHeader(anthropicMessagesApi()),
       "google-generative-ai": withOpenCodeSessionHeader(googleGenerativeAIApi()),
       "openai-completions": withOpenCodeSessionHeader(openAICompletionsApi()),
       "openai-responses": withOpenCodeSessionHeader(openAIResponsesApi()),
     },
+    auth: { apiKey: envApiKeyAuth("OpenCode API key", ["OPENCODE_API_KEY"]) },
+    id: "opencode-go",
+    models: Object.values(OPENCODE_GO_MODELS),
+    name: "OpenCode Go",
   });
 }
+
+const opencodeGo = {
+  opencodeGoProvider,
+};
+
+export default opencodeGo;

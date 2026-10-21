@@ -1,81 +1,111 @@
-import {
-  type AssistantMessage,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  type ToolResultMessage,
-  Type,
-} from "@msa/ai";
-import {
-  defineTool,
-  MemoryStorage,
-  type NestedToolExecutionResult,
-  type ToolExecutionResult,
-  type ToolRegistration,
-  ToolResultEntry,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import testSupport from "./support.ts";
 
-export const Count = Type.Object({ count: Type.Number() });
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
-// A tool that returns `result`, with `extra` such as a schema.
-export function returning(
+const { ToolResultEntry, defineTool } = durable;
+const { MemoryStorage } = memory;
+
+const { allEntries, openChat } = testSupport;
+const { awaited } = testSupport;
+const { addTool } = testSupport;
+const { context } = testSupport;
+
+const Count = Type.Object({ count: Type.Number() });
+
+function returningImpl(
   name: string,
-  result: ToolExecutionResult,
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
+  result: durableTypes.ToolExecutionResult,
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
   return defineTool({
-    name,
     description: name,
-    parameters: Type.Object({}),
     execute: () => Promise.resolve(result),
+    name,
+    parameters: Type.Object({}),
     ...extra,
   });
 }
 
-export function call(name: string): AssistantMessage {
+const returning: {
+  (
+    result: durableTypes.ToolExecutionResult,
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): (name: string) => ReturnType<typeof returningImpl>;
+  (
+    name: string,
+    result: durableTypes.ToolExecutionResult,
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): ReturnType<typeof returningImpl>;
+} = dual((args) => typeof args[0] === "string", returningImpl);
+
+function call(name: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
-export const DONE = fauxAssistantMessage([fauxText("done")]);
+const DONE = fauxAssistantMessage([fauxText("done")]);
 
-// Run `name` as a nested call of a `probe` tool and return what the probe received.
-export async function nested(setup: ChatSetup, name: string): Promise<NestedToolExecutionResult> {
-  let received: NestedToolExecutionResult | undefined;
+const nested = Effect.fn("nested")(function* (setup: chatSupportTypes.ChatSetup, name: string) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  let received: durableTypes.NestedToolExecutionResult | undefined;
   addTool(
     setup.registry,
     defineTool({
-      name: "probe",
       description: "probe",
+      execute: (_args, api, callContext) =>
+        runPromise(
+          Effect.gen(function* () {
+            received = yield* awaited(api.executeTool(name, {}, callContext));
+            return {};
+          }),
+        ),
+      name: "probe",
       parameters: Type.Object({}),
-      execute: async (_args, api, callContext) => {
-        received = await api.executeTool(name, {}, callContext);
-        return {};
-      },
     }),
   );
   setup.faux.setResponses([call("probe"), DONE]);
-  const { harness, root } = await openChat(new MemoryStorage(), setup);
-  await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-  await harness.close(context);
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+  );
+  yield* awaited(harness.close(context));
   return received!;
-}
+});
 
-// Run `name` as a model-issued call and return its transcript message.
-export async function direct(setup: ChatSetup, name: string): Promise<ToolResultMessage> {
+const direct = Effect.fn("direct")(function* (setup: chatSupportTypes.ChatSetup, name: string) {
   setup.faux.setResponses([call(name), DONE]);
-  const { harness, root } = await openChat(new MemoryStorage(), setup);
-  await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-  const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
-  await harness.close(context);
-  return entry.model![0] as ToolResultMessage;
-}
+  const { harness, root } = yield* openChat(new MemoryStorage(), setup);
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+  );
+  const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
+  yield* awaited(harness.close(context));
+  return entry.model![0] as aiTypes.ToolResultMessage;
+});
 
-export function codes(result: {
+function codes(result: {
   readonly diagnostics?: readonly { readonly code?: string }[];
 }): (string | undefined)[] {
   return (result.diagnostics ?? []).map((diagnostic) => diagnostic.code);
 }
+
+const harnessStructuredOutputSupport = {
+  Count,
+  DONE,
+  call,
+  codes,
+  direct,
+  nested,
+  returning,
+};
+
+export default harnessStructuredOutputSupport;

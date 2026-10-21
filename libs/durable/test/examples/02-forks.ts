@@ -1,62 +1,106 @@
-// Fork a conversation.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/02-forks.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import { createSession, defineDoc, MemoryStorage } from "../../src/index.ts";
+import durable from "../../src/index.ts";
+import sessionModule from "../../src/session/index.ts";
+import memory from "../../src/storage/memory.ts";
+import effectSupport from "../effect-support.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { createSession } = sessionModule;
+const { MemoryStorage } = memory;
+const { defineDoc } = durable;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const session = createSession(new MemoryStorage());
 
 const Notes = defineDoc<{ text: string }>({
-  kind: "example.notes",
-  version: 1,
-  scope: "conversation",
-  history: "rewindable",
   fork: "asOf",
+  history: "rewindable",
   initial: () => ({ text: "" }),
+  kind: "example.notes",
+  scope: "conversation",
+  version: 1,
 });
 
-const chat = await session.commit(
-  (tx) => tx.createConversation({ ownership: { kind: "ownerless" } }),
-  context,
-);
-const firstEntry = await session.commit(async (tx) => {
-  const entry = await tx.appendEntry(chat.id, { kind: "note", data: "hello" });
-  (await tx.doc(Notes, chat.id)).text = "after hello";
-  return entry;
-}, context);
-await session.commit(async (tx) => {
-  await tx.appendEntry(chat.id, { kind: "note", data: "goodbye" });
-  (await tx.doc(Notes, chat.id)).text = "after goodbye";
-}, context);
+const mainStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-// A fork is a new conversation that continues from one entry of another. It
-// sees the parent's transcript up to that entry, and each document follows its
-// own `fork` setting. Notes uses "asOf", so the fork starts with the notes
-// value from the fork entry.
-const branch = await session.commit(
-  (tx) => tx.forkConversation(chat.id, firstEntry.id, { ownership: { kind: "ownerless" } }),
-  context,
-);
+  const chat = yield* awaited(
+    session.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context),
+  );
+  const firstEntry = yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const entry = yield* awaited(tx.appendEntry(chat.id, { data: "hello", kind: "note" }));
+            (yield* awaited(tx.doc(Notes, chat.id))).text = "after hello";
+            return entry;
+          }),
+        ),
+      context,
+    ),
+  );
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            yield* awaited(tx.appendEntry(chat.id, { data: "goodbye", kind: "note" }));
+            (yield* awaited(tx.doc(Notes, chat.id))).text = "after goodbye";
+          }),
+        ),
+      context,
+    ),
+  );
 
-// scanEntries() pages through visible entries, newest first. The fork sees
-// "hello" (inherited from the parent) but not "goodbye", which came later.
-const branchEntries = await session.commit(
-  (tx) => tx.scanEntries({ conversationId: branch.id }, 10),
-  context,
-);
-console.log(
-  "fork transcript:",
-  branchEntries.items.map((entry) => entry.data),
-);
-console.log("fork notes:", await session.snapshot(Notes, branch.id, context));
+  const branch = yield* awaited(
+    session.commit(
+      (tx) => tx.forkConversation(chat.id, firstEntry.id, { ownership: { kind: "ownerless" } }),
+      context,
+    ),
+  );
 
-// The fork's copy is independent: editing it leaves the parent unchanged.
-await session.commit(async (tx) => {
-  (await tx.doc(Notes, branch.id)).text = "changed only in the fork";
-}, context);
-console.log("fork notes after edit:", await session.snapshot(Notes, branch.id, context));
-console.log("parent notes after edit:", await session.snapshot(Notes, chat.id, context));
+  const branchEntries = yield* awaited(
+    session.commit((tx) => tx.scanEntries({ conversationId: branch.id }, 10), context),
+  );
+  return { branch, branchEntries, chat, runPromise };
+});
 
-await session.close(context);
+const main = Effect.gen(function* () {
+  const { runPromise, chat, branch, branchEntries } = yield* mainStep1;
+  yield* Console.log(
+    "fork transcript:",
+    branchEntries.items.map((entry) => entry.data),
+  );
+  yield* Console.log("fork notes:", yield* awaited(session.snapshot(Notes, branch.id, context)));
+
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(Notes, branch.id))).text = "changed only in the fork";
+          }),
+        ),
+      context,
+    ),
+  );
+  yield* Console.log(
+    "fork notes after edit:",
+    yield* awaited(session.snapshot(Notes, branch.id, context)),
+  );
+  yield* Console.log(
+    "parent notes after edit:",
+    yield* awaited(session.snapshot(Notes, chat.id, context)),
+  );
+
+  yield* awaited(session.close(context));
+});
+
+NodeRuntime.runMain(main);

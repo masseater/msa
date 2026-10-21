@@ -1,3 +1,8 @@
+import * as Effect from "effect/Effect";
+
+import awaitingModule from "./awaiting.ts";
+
+const { awaited, awaiting, performed } = awaitingModule;
 interface StdoutTakeoverState {
   rawStdoutWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
   rawStderrWrite: (chunk: string, callback?: (error?: Error | null) => void) => boolean;
@@ -11,39 +16,43 @@ const RAW_STDOUT_RETRY_DELAY_MS = 10;
 let rawStdoutWriteTail: Promise<void> = Promise.resolve();
 
 function getRawStdoutWrite(): StdoutTakeoverState["rawStdoutWrite"] {
-  if (stdoutTakeoverState) {
+  if (stdoutTakeoverState !== undefined) {
     return stdoutTakeoverState.rawStdoutWrite;
   }
   return process.stdout.write.bind(process.stdout) as StdoutTakeoverState["rawStdoutWrite"];
 }
 
-async function writeRawStdoutChunk(text: string): Promise<void> {
-  while (true) {
-    try {
-      await new Promise<void>((resolve, reject) => {
-        try {
-          getRawStdoutWrite()(text, (error) => {
-            if (error) reject(error);
-            else resolve();
-          });
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)));
+function writeRawStdoutChunk(text: string): Effect.Effect<void> {
+  return awaiting(function* () {
+    while (true) {
+      try {
+        yield* performed(
+          Effect.callback<void>((resume) => {
+            try {
+              getRawStdoutWrite()(text, (error) => {
+                if (error !== undefined && error !== null) resume(Effect.die(error));
+                else resume(Effect.void);
+              });
+            } catch (error) {
+              resume(Effect.die(error instanceof Error ? error : new Error(String(error))));
+            }
+          }),
+        );
+        return;
+      } catch (error) {
+        const writeError = error instanceof Error ? error : new Error(String(error));
+        const code = (writeError as Error & { code?: unknown }).code;
+        if (code !== "ENOBUFS" && code !== "EAGAIN" && code !== "EWOULDBLOCK") {
+          throw writeError;
         }
-      });
-      return;
-    } catch (error) {
-      const writeError = error instanceof Error ? error : new Error(String(error));
-      const code = (writeError as Error & { code?: unknown }).code;
-      if (code !== "ENOBUFS" && code !== "EAGAIN" && code !== "EWOULDBLOCK") {
-        throw writeError;
+        yield* performed(Effect.sleep(RAW_STDOUT_RETRY_DELAY_MS));
       }
-      await new Promise<void>((resolve) => setTimeout(resolve, RAW_STDOUT_RETRY_DELAY_MS));
     }
-  }
+  });
 }
 
-export function takeOverStdout(): void {
-  if (stdoutTakeoverState) {
+function takeOverStdout(): void {
+  if (stdoutTakeoverState !== undefined) {
     return;
   }
 
@@ -67,14 +76,14 @@ export function takeOverStdout(): void {
   }) as typeof process.stdout.write;
 
   stdoutTakeoverState = {
-    rawStdoutWrite,
-    rawStderrWrite,
     originalStdoutWrite,
+    rawStderrWrite,
+    rawStdoutWrite,
   };
 }
 
-export function restoreStdout(): void {
-  if (!stdoutTakeoverState) {
+function restoreStdout(): void {
+  if (stdoutTakeoverState === undefined) {
     return;
   }
 
@@ -82,31 +91,50 @@ export function restoreStdout(): void {
   stdoutTakeoverState = undefined;
 }
 
-export function isStdoutTakenOver(): boolean {
+function isStdoutTakenOver(): boolean {
   return stdoutTakeoverState !== undefined;
 }
 
-export function writeRawStdout(text: string): void {
+function writeRawStdout(text: string): void {
   if (text.length === 0) {
     return;
   }
-  rawStdoutWriteTail = rawStdoutWriteTail.then(() => writeRawStdoutChunk(text));
+  rawStdoutWriteTail = rawStdoutWriteTail.then(() => Effect.runPromise(writeRawStdoutChunk(text)));
   void rawStdoutWriteTail.catch(() => {
     process.exit(1);
   });
 }
 
-export async function waitForRawStdoutBackpressure(): Promise<void> {
-  while (true) {
-    const tail = rawStdoutWriteTail;
-    await tail;
-    if (tail === rawStdoutWriteTail) {
-      return;
-    }
-  }
+function waitForRawStdoutBackpressure(): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      while (true) {
+        const tail = rawStdoutWriteTail;
+        yield* awaited(tail);
+        if (tail === rawStdoutWriteTail) {
+          return;
+        }
+      }
+    }),
+  );
 }
 
-export async function flushRawStdout(): Promise<void> {
-  await waitForRawStdoutBackpressure();
-  await writeRawStdoutChunk("");
+function flushRawStdout(): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(waitForRawStdoutBackpressure());
+      yield* performed(writeRawStdoutChunk(""));
+    }),
+  );
 }
+
+const outputGuard = {
+  flushRawStdout,
+  isStdoutTakenOver,
+  restoreStdout,
+  takeOverStdout,
+  waitForRawStdoutBackpressure,
+  writeRawStdout,
+};
+
+export default outputGuard;

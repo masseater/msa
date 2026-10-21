@@ -1,188 +1,225 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Agent } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  createAssistantMessageEventStream,
-  getModel,
-  type Model,
-} from "@msa/ai/compat";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import type { AgentSessionRuntime } from "../src/core/agent-session-runtime.ts";
-import { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import type { LoadExtensionsResult } from "../src/core/extensions/index.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { runRpcMode } from "../src/modes/rpc/rpc-mode.ts";
-import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
-import { createTestExtensionsResult, createTestResourceLoader } from "./utilities.ts";
+import rpcPromptResponseSupport from "./rpc-prompt-response-support.ts";
+import type rpcPromptResponseSupportTypes from "./rpc-prompt-response-support.types.ts";
+import utilities from "./utilities.ts";
 
-const rpcIo = vi.hoisted(() => ({
-  outputLines: [] as string[],
-  lineHandler: undefined as ((line: string) => void) | undefined,
+const { parseOutputLines, startRpcMode } = rpcPromptResponseSupport;
+const { createTestExtensionsResult } = utilities;
+
+const { awaited, runTest, toJsonText } = testing;
+
+const rpcIo = vi.hoisted((): rpcPromptResponseSupportTypes.RpcIo => ({
+  lineHandler: undefined,
+  outputLines: [],
 }));
 
 vi.mock("../src/core/output-guard.js", () => ({
-  flushRawStdout: vi.fn(async () => {}),
-  takeOverStdout: vi.fn(),
-  waitForRawStdoutBackpressure: vi.fn(async () => {}),
-  writeRawStdout: (line: string) => {
-    rpcIo.outputLines.push(line);
+  default: {
+    flushRawStdout: vi.fn(() => Promise.resolve()),
+    takeOverStdout: vi.fn(),
+    waitForRawStdoutBackpressure: vi.fn(() => Promise.resolve()),
+    writeRawStdout: (line: string) => {
+      rpcIo.outputLines.push(line);
+    },
   },
 }));
 
-vi.mock("../src/modes/interactive/theme/theme.js", () => ({ theme: {} }));
+vi.mock("../src/modes/interactive/theme/theme.js", () => ({ default: { theme: {} } }));
 
 vi.mock("../src/modes/rpc/jsonl.js", () => ({
-  attachJsonlLineReader: vi.fn((_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
-    rpcIo.lineHandler = onLine;
-    return () => {};
-  }),
-  serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  default: {
+    attachJsonlLineReader: vi.fn(
+      (_stream: NodeJS.ReadableStream, onLine: (line: string) => void) => {
+        rpcIo.lineHandler = onLine;
+        return () => {};
+      },
+    ),
+    serializeJsonLine: (value: unknown) => `${JSON.stringify(value)}\n`,
+  },
 }));
 
-function createAssistantMessage(text: string): AssistantMessage {
-  return {
-    role: "assistant",
-    content: [{ type: "text", text }],
-    api: "anthropic-messages",
-    provider: "anthropic-api",
-    model: "claude-sonnet-4-5",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "stop",
-    timestamp: Date.now(),
-  };
-}
-
-type ParsedOutputLine = Record<string, unknown>;
-
-function parseOutputLines(outputLines: string[]): ParsedOutputLine[] {
-  return outputLines
-    .flatMap((line) => line.split("\n"))
-    .filter((line) => line.trim().length > 0)
-    .map((line) => JSON.parse(line) as ParsedOutputLine);
-}
-
-function getPromptResponses(outputLines: string[], id: string): ParsedOutputLine[] {
-  return parseOutputLines(outputLines).filter(
+const promptResponses = (id: string) =>
+  parseOutputLines(rpcIo.outputLines).filter(
     (record) =>
       record["id"] === id && record["type"] === "response" && record["command"] === "prompt",
   );
-}
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-async function createRuntimeHost(options: {
-  withAuth: boolean;
-  responseDelayMs: number;
-  model?: Model<any>;
-  extensionsResult?: LoadExtensionsResult;
-}): Promise<{
-  runtimeHost: AgentSessionRuntime;
-  cleanup: () => Promise<void>;
-}> {
-  const tempDir = join(
-    tmpdir(),
-    `msa-rpc-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  mkdirSync(tempDir, { recursive: true });
-  // Memory stays out of these tests: recall would add a real embedding request and timing noise.
-  writeFileSync(join(tempDir, "settings.json"), JSON.stringify({ memory: { enabled: false } }));
-
-  const model = options.model ?? getModel("anthropic-api", "claude-sonnet-4-5");
-  if (!model) {
-    throw new Error("Test model not found");
-  }
-
-  const agent = new Agent({
-    getApiKey: () => "test-key",
-    initialState: {
-      model,
-      systemPrompt: "Test",
-      tools: [],
-    },
-    streamFn: (_model, _context, _options) => {
-      const stream = createAssistantMessageEventStream();
-      queueMicrotask(() => {
-        stream.push({ type: "start", partial: createAssistantMessage("") });
-        setTimeout(() => {
-          stream.push({ type: "done", reason: "stop", message: createAssistantMessage("done") });
-        }, options.responseDelayMs);
+const emitsOneFailureResponseWhenPromptPreflight = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { lineHandler, cleanup } = yield* startRpcMode({
+        io: rpcIo,
+        model: {
+          api: "openai-completions",
+          baseUrl: "https://example.invalid",
+          contextWindow: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+          id: "fake-model",
+          input: [],
+          maxTokens: 0,
+          name: "Fake Model",
+          provider: "fake-provider",
+          reasoning: false,
+        },
+        responseDelayMs: 0,
+        withAuth: false,
       });
-      return stream;
-    },
-  });
 
-  const sessionManager = SessionManager.inMemory();
-  const settingsManager = SettingsManager.create(tempDir, tempDir);
-  const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-  const modelRegistry = await createInMemoryModelRegistry(authStorage);
-  if (options.withAuth) {
-    await authStorage.modify("anthropic-api", async () => ({ type: "api_key", key: "test-key" }));
-  }
-
-  const session = new AgentSession({
-    agent,
-    sessionManager,
-    settingsManager,
-    cwd: tempDir,
-    modelRuntime: getModelRuntime(modelRegistry),
-    resourceLoader: createTestResourceLoader(
-      options.extensionsResult !== undefined ? { extensionsResult: options.extensionsResult } : {},
-    ),
-  });
-
-  const runtimeHost = {
-    session,
-    newSession: vi.fn(async () => ({ cancelled: true })),
-    switchSession: vi.fn(async () => ({ cancelled: true })),
-    fork: vi.fn(async () => ({ cancelled: true, selectedText: "" })),
-    dispose: vi.fn(async () => {}),
-    setRebindSession: vi.fn(),
-  } as unknown as AgentSessionRuntime;
-
-  return {
-    runtimeHost,
-    cleanup: async () => {
       try {
-        await session.abort();
-      } catch {
-        // ignore test cleanup failures
+        lineHandler(yield* toJsonText({ id: "b1", message: "Hello", type: "prompt" }));
+
+        yield* awaited(
+          vi.waitFor(() => {
+            const responses = promptResponses("b1");
+            expect(responses).toHaveLength(1);
+            expect(responses[0]).toMatchObject({
+              command: "prompt",
+              error: expect.stringContaining(
+                "No API key found for fake-provider.\n\nUse /login to log into a provider via OAuth or API key. See:",
+              ),
+              id: "b1",
+              success: false,
+              type: "response",
+            });
+          }),
+        );
+      } finally {
+        yield* cleanup;
       }
-      session.dispose();
-      if (existsSync(tempDir)) {
-        rmSync(tempDir, { recursive: true });
+    }),
+  );
+
+const emitsOneStartedResponseWhenPromptPreflight = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { lineHandler, cleanup } = yield* startRpcMode({
+        io: rpcIo,
+        responseDelayMs: 0,
+        withAuth: true,
+      });
+
+      try {
+        lineHandler(yield* toJsonText({ id: "b2", message: "Hello", type: "prompt" }));
+
+        yield* awaited(
+          vi.waitFor(() => {
+            const responses = promptResponses("b2");
+            expect(responses).toHaveLength(1);
+            expect(responses[0]).toMatchObject({
+              command: "prompt",
+              data: { disposition: "started" },
+              id: "b2",
+              success: true,
+              type: "response",
+            });
+          }),
+        );
+      } finally {
+        yield* cleanup;
       }
-    },
-  };
-}
+    }),
+  );
 
-async function startRpcMode(options: Parameters<typeof createRuntimeHost>[0]): Promise<{
-  lineHandler: (line: string) => void;
-  cleanup: () => Promise<void>;
-}> {
-  rpcIo.outputLines = [];
-  rpcIo.lineHandler = undefined;
+const reportsExtensionCommandsAndInterceptedInputAs = () =>
+  runTest(
+    Effect.gen(function* () {
+      const extensionsResult = yield* awaited(
+        createTestExtensionsResult([
+          (msa) => {
+            msa.registerCommand("handled", { handler: () => Promise.resolve() });
+            msa.on("input", (event) => {
+              if (event.text === "handled input") return { action: "handled" };
+              return undefined;
+            });
+          },
+        ]),
+      );
+      const { lineHandler, cleanup } = yield* startRpcMode({
+        extensionsResult,
+        io: rpcIo,
+        responseDelayMs: 0,
+        withAuth: false,
+      });
 
-  const { runtimeHost, cleanup } = await createRuntimeHost(options);
-  void runRpcMode(runtimeHost);
-  await vi.waitFor(() => expect(rpcIo.lineHandler).toBeDefined());
+      try {
+        for (const [id, message] of [
+          ["command", "/handled"],
+          ["input", "handled input"],
+        ] as const) {
+          lineHandler(yield* toJsonText({ id, message, type: "prompt" }));
+          yield* awaited(
+            vi.waitFor(() => {
+              expect(promptResponses(id)).toEqual([
+                {
+                  command: "prompt",
+                  data: { disposition: "handled" },
+                  id,
+                  success: true,
+                  type: "response",
+                },
+              ]);
+            }),
+          );
+        }
+        expect(
+          parseOutputLines(rpcIo.outputLines).filter((line) => line["type"] === "agent_start"),
+        ).toHaveLength(0);
+      } finally {
+        yield* cleanup;
+      }
+    }),
+  );
 
-  return { lineHandler: rpcIo.lineHandler!, cleanup };
-}
+const emitsOneSuccessResponseWhenPromptIs = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { lineHandler, cleanup } = yield* startRpcMode({
+        io: rpcIo,
+        responseDelayMs: 100,
+        withAuth: true,
+      });
+
+      try {
+        lineHandler(yield* toJsonText({ id: "b3-start", message: "Start", type: "prompt" }));
+        yield* awaited(
+          vi.waitFor(() => {
+            expect(promptResponses("b3-start")).toHaveLength(1);
+          }),
+        );
+
+        rpcIo.outputLines = [];
+        lineHandler(
+          yield* toJsonText({
+            id: "b3",
+            message: "Queue this",
+            streamingBehavior: "followUp",
+            type: "prompt",
+          }),
+        );
+
+        yield* awaited(
+          vi.waitFor(() => {
+            const responses = promptResponses("b3");
+            expect(responses).toHaveLength(1);
+            expect(responses[0]).toMatchObject({
+              command: "prompt",
+              data: { disposition: "queued" },
+              id: "b3",
+              success: true,
+              type: "response",
+            });
+          }),
+        );
+
+        yield* Effect.sleep(150);
+      } finally {
+        yield* cleanup;
+      }
+    }),
+  );
 
 describe("RPC prompt response semantics", () => {
   afterEach(() => {
@@ -190,293 +227,23 @@ describe("RPC prompt response semantics", () => {
     rpcIo.lineHandler = undefined;
   });
 
-  it("emits one failure response when prompt preflight rejects", async () => {
-    const { lineHandler, cleanup } = await startRpcMode({
-      withAuth: false,
-      responseDelayMs: 0,
-      model: {
-        id: "fake-model",
-        name: "Fake Model",
-        api: "openai-completions",
-        provider: "fake-provider",
-        baseUrl: "https://example.invalid",
-        reasoning: false,
-        input: [],
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: 0,
-        maxTokens: 0,
-      },
-    });
-
-    try {
-      lineHandler(JSON.stringify({ id: "b1", type: "prompt", message: "Hello" }));
-
-      await vi.waitFor(() => {
-        const responses = getPromptResponses(rpcIo.outputLines, "b1");
-        expect(responses).toHaveLength(1);
-        expect(responses[0]).toMatchObject({
-          id: "b1",
-          type: "response",
-          command: "prompt",
-          success: false,
-          error: expect.stringContaining(
-            "No API key found for fake-provider.\n\nUse /login to log into a provider via OAuth or API key. See:",
-          ),
-        });
-      });
-    } finally {
-      await cleanup();
-    }
-  });
-
-  // #9098: a successful prompt may start an agent run or be consumed by an extension.
-  it("emits one started response when prompt preflight succeeds", async () => {
-    const { lineHandler, cleanup } = await startRpcMode({ withAuth: true, responseDelayMs: 0 });
-
-    try {
-      lineHandler(JSON.stringify({ id: "b2", type: "prompt", message: "Hello" }));
-
-      await vi.waitFor(() => {
-        const responses = getPromptResponses(rpcIo.outputLines, "b2");
-        expect(responses).toHaveLength(1);
-        expect(responses[0]).toMatchObject({
-          id: "b2",
-          type: "response",
-          command: "prompt",
-          success: true,
-          data: { disposition: "started" },
-        });
-      });
-    } finally {
-      await cleanup();
-    }
-  });
-
-  it("reports extension commands and intercepted input as handled without starting a run", async () => {
-    const { lineHandler, cleanup } = await startRpcMode({
-      withAuth: false,
-      responseDelayMs: 0,
-      extensionsResult: await createTestExtensionsResult([
-        (msa) => {
-          msa.registerCommand("handled", { handler: async () => {} });
-          msa.on("input", (event) => {
-            if (event.text === "handled input") return { action: "handled" };
-            return undefined;
-          });
-        },
-      ]),
-    });
-
-    try {
-      for (const [id, message] of [
-        ["command", "/handled"],
-        ["input", "handled input"],
-      ] as const) {
-        lineHandler(JSON.stringify({ id, type: "prompt", message }));
-        await vi.waitFor(() => {
-          expect(getPromptResponses(rpcIo.outputLines, id)).toEqual([
-            {
-              id,
-              type: "response",
-              command: "prompt",
-              success: true,
-              data: { disposition: "handled" },
-            },
-          ]);
-        });
-      }
-      expect(
-        parseOutputLines(rpcIo.outputLines).filter((line) => line["type"] === "agent_start"),
-      ).toHaveLength(0);
-    } finally {
-      await cleanup();
-    }
-  });
-
-  it("emits one success response when prompt is queued during streaming", async () => {
-    const { lineHandler, cleanup } = await startRpcMode({ withAuth: true, responseDelayMs: 100 });
-
-    try {
-      lineHandler(JSON.stringify({ id: "b3-start", type: "prompt", message: "Start" }));
-      await vi.waitFor(() => {
-        expect(getPromptResponses(rpcIo.outputLines, "b3-start")).toHaveLength(1);
-      });
-
-      rpcIo.outputLines = [];
-      lineHandler(
-        JSON.stringify({
-          id: "b3",
-          type: "prompt",
-          message: "Queue this",
-          streamingBehavior: "followUp",
-        }),
-      );
-
-      await vi.waitFor(() => {
-        const responses = getPromptResponses(rpcIo.outputLines, "b3");
-        expect(responses).toHaveLength(1);
-        expect(responses[0]).toMatchObject({
-          id: "b3",
-          type: "response",
-          command: "prompt",
-          success: true,
-          data: { disposition: "queued" },
-        });
-      });
-
-      await sleep(150);
-    } finally {
-      await cleanup();
-    }
-  });
-
-  // #9803: a handler can consume A while independently queueing B; report A's outcome.
-  it.each(["steer", "follow_up"] as const)(
-    "reports %s as handled even when an extension queues another message",
-    async (type) => {
-      const { lineHandler, cleanup } = await startRpcMode({
-        withAuth: true,
-        responseDelayMs: 500,
-        extensionsResult: await createTestExtensionsResult([
-          (msa) => {
-            msa.on("input", (event) => {
-              if (event.text === "A" && event.source === "rpc") {
-                msa.sendUserMessage("B", { deliverAs: type === "steer" ? "steer" : "followUp" });
-                return { action: "handled" };
-              }
-              return undefined;
-            });
-          },
-        ]),
-      });
-
-      try {
-        lineHandler(JSON.stringify({ id: "start", type: "prompt", message: "Start" }));
-        await vi.waitFor(() =>
-          expect(getPromptResponses(rpcIo.outputLines, "start")).toHaveLength(1),
-        );
-
-        lineHandler(JSON.stringify({ id: "A", type, message: "A" }));
-        await vi.waitFor(() => {
-          expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
-            id: "A",
-            type: "response",
-            command: type,
-            success: true,
-            data: { disposition: "handled" },
-          });
-          expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
-            type: "queue_update",
-            steering: type === "steer" ? ["B"] : [],
-            followUp: type === "follow_up" ? ["B"] : [],
-          });
-        });
-        await vi.waitFor(() => {
-          expect(
-            parseOutputLines(rpcIo.outputLines).filter(
-              (line) => line["type"] === "response" && line["id"] === "A",
-            ),
-          ).toHaveLength(1);
-        });
-      } finally {
-        await cleanup();
-      }
-    },
+  it(
+    "emits one failure response when prompt preflight rejects",
+    emitsOneFailureResponseWhenPromptPreflight,
   );
 
-  it.each(["steer", "follow_up"] as const)(
-    "reports %s as queued after input transformation",
-    async (type) => {
-      const { lineHandler, cleanup } = await startRpcMode({
-        withAuth: false,
-        responseDelayMs: 0,
-        extensionsResult: await createTestExtensionsResult([
-          (msa) => {
-            msa.on("input", (event) => {
-              if (event.text === "A") return { action: "transform", text: "B" };
-              return undefined;
-            });
-          },
-        ]),
-      });
-
-      try {
-        lineHandler(JSON.stringify({ id: "A", type, message: "A" }));
-        await vi.waitFor(() => {
-          expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
-            id: "A",
-            type: "response",
-            command: type,
-            success: true,
-            data: { disposition: "queued" },
-          });
-          expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
-            type: "queue_update",
-            steering: type === "steer" ? ["B"] : [],
-            followUp: type === "follow_up" ? ["B"] : [],
-          });
-        });
-      } finally {
-        await cleanup();
-      }
-    },
+  it(
+    "emits one started response when prompt preflight succeeds",
+    emitsOneStartedResponseWhenPromptPreflight,
   );
 
-  it("returns and clears queued steering and follow-up messages", async () => {
-    const { lineHandler, cleanup } = await startRpcMode({ withAuth: true, responseDelayMs: 500 });
+  it(
+    "reports extension commands and intercepted input as handled without starting a run",
+    reportsExtensionCommandsAndInterceptedInputAs,
+  );
 
-    try {
-      lineHandler(JSON.stringify({ id: "clear-start", type: "prompt", message: "Start" }));
-      await vi.waitFor(() => {
-        expect(getPromptResponses(rpcIo.outputLines, "clear-start")).toHaveLength(1);
-      });
-
-      lineHandler(
-        JSON.stringify({
-          id: "clear-steering",
-          type: "prompt",
-          message: "Change direction",
-          streamingBehavior: "steer",
-        }),
-      );
-      await vi.waitFor(() => {
-        expect(getPromptResponses(rpcIo.outputLines, "clear-steering")).toMatchObject([
-          { data: { disposition: "queued" } },
-        ]);
-      });
-
-      lineHandler(
-        JSON.stringify({
-          id: "clear-follow-up",
-          type: "prompt",
-          message: "Summarize when finished",
-          streamingBehavior: "followUp",
-        }),
-      );
-      await vi.waitFor(() => {
-        expect(getPromptResponses(rpcIo.outputLines, "clear-follow-up")).toHaveLength(1);
-      });
-
-      lineHandler(JSON.stringify({ id: "clear", type: "clear_queue" }));
-      await vi.waitFor(() => {
-        expect(parseOutputLines(rpcIo.outputLines)).toContainEqual({
-          id: "clear",
-          type: "response",
-          command: "clear_queue",
-          success: true,
-          data: {
-            steering: ["Change direction"],
-            followUp: ["Summarize when finished"],
-          },
-        });
-      });
-
-      await sleep(600);
-      expect(
-        parseOutputLines(rpcIo.outputLines).filter((record) => record["type"] === "agent_start"),
-      ).toHaveLength(1);
-    } finally {
-      await cleanup();
-    }
-  });
+  it(
+    "emits one success response when prompt is queued during streaming",
+    emitsOneSuccessResponseWhenPromptIs,
+  );
 });

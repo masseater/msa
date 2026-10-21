@@ -1,54 +1,69 @@
-import { rm } from "node:fs/promises";
-
-import { type AssistantMessage, fauxAssistantMessage, fauxToolCall, type Message } from "@msa/ai";
-import { type ContextView, type EntryRecord } from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { selectCut, serializeConversation } from "../src/harness/compaction.ts";
-import { orderToolResults } from "../src/harness/context.ts";
-import { text, directories, user } from "./harness-compaction-support.ts";
+import compaction from "../src/harness/compaction.ts";
+import contextModule from "../src/harness/context.ts";
+import harnessCompactionSupport from "./harness-compaction-support.ts";
+import platformSupport from "./platform-support.ts";
 
-afterEach(async () => {
-  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
-  directories.clear();
-});
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
+const { orderToolResults } = contextModule;
+const { selectCut, serializeConversation } = compaction;
+
+const { directories, text, user } = harnessCompactionSupport;
+const { removeDir } = platformSupport;
+
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
 
 let nextId = 1;
 
-function entry(kind: string, model: Message[], head?: number): EntryRecord {
+function entry(kind: string, model: aiTypes.Message[], head?: number): durableTypes.EntryRecord {
   return {
-    id: nextId++,
     conversationId: 1,
+    id: nextId++,
     kind,
     model,
     ...(head === undefined ? {} : { head }),
-  } as unknown as EntryRecord;
+  } as unknown as durableTypes.EntryRecord;
 }
 
 const assistant = (
   content: string,
   calls: string[] = [],
-  stopReason: AssistantMessage["stopReason"] = "stop",
+  stopReason: aiTypes.AssistantMessage["stopReason"] = "stop",
 ) =>
   ({
     ...fauxAssistantMessage([
-      { type: "text", text: content },
+      { text: content, type: "text" },
       ...calls.map((id) => fauxToolCall("read", {}, { id })),
     ]),
     stopReason,
-  }) as AssistantMessage;
+  }) as aiTypes.AssistantMessage;
 
-const toolResult = (callId: string, content: string): Message => ({
+const toolResult = (callId: string, content: string): aiTypes.Message => ({
+  content: [{ text: content, type: "text" }],
+  isError: false,
   role: "toolResult",
+  timestamp: 0,
   toolCallId: callId,
   toolName: "read",
-  content: [{ type: "text", text: content }],
-  isError: false,
-  timestamp: 0,
 });
 
-// A view over `entries` whose contributions are their models, with excluded assistants removed.
-function view(entries: EntryRecord[], head?: EntryRecord): ContextView {
+function view(
+  entries: durableTypes.EntryRecord[],
+  head?: durableTypes.EntryRecord,
+): durableTypes.ContextView {
   const all = head === undefined ? entries : [head, ...entries];
   const contributions = all.map((record) =>
     (record.model ?? []).filter(
@@ -57,7 +72,7 @@ function view(entries: EntryRecord[], head?: EntryRecord): ContextView {
         !["error", "aborted", "deferred"].includes(message.stopReason),
     ),
   );
-  return { head, entries: all, contributions, messages: orderToolResults(contributions.flat()) };
+  return { contributions, entries: all, head, messages: orderToolResults(contributions.flat()) };
 }
 
 describe("range selection", () => {
@@ -90,7 +105,6 @@ describe("range selection", () => {
       entries.push(entry("msa.tool-result", [toolResult(`c${index}`, text(`r${index}`, 100))]));
     }
     const cut = selectCut(view(entries), 150)!;
-    // The budget is reached at the fourth result; the cut is the last call, whose result it keeps.
     expect(entries[cut]!.kind).toBe("msa.assistant");
     expect(cut).toBe(9);
   });
@@ -102,7 +116,6 @@ describe("range selection", () => {
       entry("chat.message", []),
       entry("msa.assistant", [assistant(text("a2", 100))]),
     ];
-    // The budget is reached at a1; the display-only entry after it is skipped for the assistant a2.
     expect(selectCut(view(entries), 150)).toBe(1);
     expect(selectCut(view(entries), 50)).toBe(3);
   });
@@ -123,13 +136,12 @@ describe("range selection", () => {
       entry("msa.user", [user(text("u1", 100))]),
       entry("msa.assistant", [assistant(text("a1", 100))]),
       entry("msa.system", [
-        { role: "system", content: "", sections: { s: text("s", 100) }, timestamp: 0 },
+        { content: "", role: "system", sections: { s: text("s", 100) }, timestamp: 0 },
       ]),
       entry("msa.assistant", [assistant(text("err", 100), [], "error")]),
       entry("msa.assistant", [assistant(text("stopped", 100), [], "aborted")]),
       entry("msa.assistant", [assistant(text("a2", 100))]),
     ];
-    // The walk reaches 150 at the system entry; the excluded answers after it contribute nothing.
     expect(selectCut(view(entries), 150)).toBe(5);
   });
 
@@ -159,7 +171,6 @@ describe("range selection", () => {
       entry("msa.tool-result", [toolResult("c", text("r", 100))]),
       entry("msa.assistant", [assistant(text("a2", 100))]),
     ];
-    // The budget is reached at the steer; its result follows it, so the cut moves to the next assistant.
     expect(selectCut(view(entries), 250)).toBe(4);
   });
 
@@ -167,7 +178,6 @@ describe("range selection", () => {
     const small = [entry("msa.user", [user("hi")]), entry("msa.assistant", [assistant("hello")])];
     expect(selectCut(view(small), 150)).toBeUndefined();
     const marker = entry("msa.compaction", [user("summary")], 0);
-    // The budget is reached at the only entry after the marker, so the marker alone would be summarized.
     expect(
       selectCut(view([entry("msa.user", [user(text("u", 200))])], marker), 150),
     ).toBeUndefined();
@@ -192,13 +202,13 @@ describe("range selection", () => {
 describe("serialization", () => {
   it("writes a transcript, truncates tool results, and omits system messages and thinking", () => {
     const call = fauxToolCall("read", { path: "a.ts" }, { id: "c" });
-    const messages: Message[] = [
-      { role: "system", content: "", sections: { s: "hidden" }, timestamp: 0 },
+    const messages: aiTypes.Message[] = [
+      { content: "", role: "system", sections: { s: "hidden" }, timestamp: 0 },
       user("hello"),
       {
         ...fauxAssistantMessage([
-          { type: "thinking", thinking: "hmm" },
-          { type: "text", text: "sure" },
+          { thinking: "hmm", type: "thinking" },
+          { text: "sure", type: "text" },
           call,
         ]),
       },

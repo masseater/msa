@@ -1,10 +1,17 @@
-import { registerBunOAuthFlows } from "@msa/ai/bun-oauth";
-// Bun loads .wasm imports as files: embedded in compiled executables, evaluating to a readable path.
 import quickjsWasmPath from "quickjs-wasi/quickjs.wasm";
 
-import { APP_NAME, setEmbeddedQuickJSWasmPath } from "../config.ts";
+import config from "../config.ts";
 
-process.title = APP_NAME;
-process.emitWarning = (() => {}) as typeof process.emitWarning;
-registerBunOAuthFlows();
-setEmbeddedQuickJSWasmPath(quickjsWasmPath);
+const { APP_NAME, setEmbeddedQuickJSWasmPath } = config;
+
+function setupBunRuntime(): void {
+  process.title = APP_NAME;
+  process.emitWarning = (() => {}) as typeof process.emitWarning;
+  setEmbeddedQuickJSWasmPath(quickjsWasmPath);
+}
+
+const runtimeSetup = {
+  setupBunRuntime,
+};
+
+export default runtimeSetup;

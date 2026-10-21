@@ -6,16 +6,21 @@ const durableSrcIndex = fileURLToPath(new URL("./src/index.ts", import.meta.url)
 const durableSrcTesting = fileURLToPath(new URL("./src/testing/index.ts", import.meta.url));
 
 export default defineConfig({
-  test: {
-    environment: "node",
-    setupFiles: ["./test/setup-document-retention.ts"],
-  },
   resolve: {
-    conditions: ["source"],
     alias: [
-      { find: /^@msa\/durable$/, replacement: durableSrcIndex },
-      { find: /^@msa\/durable\/testing$/, replacement: durableSrcTesting },
+      { find: /^@msa\/durable$/u, replacement: durableSrcIndex },
+      { find: /^@msa\/durable\/testing$/u, replacement: durableSrcTesting },
     ],
+    conditions: ["source"],
   },
   ssr: { resolve: { conditions: ["source"] } },
+  test: {
+    environment: "node",
+    globalSetup: ["./test/global-setup.ts"],
+    projects: [
+      { test: { name: "retaining" } },
+      { test: { env: { MSA_DURABLE_DOCUMENT_RETENTION_MS: "0" }, name: "evicting" } },
+    ],
+    setupFiles: ["./test/setup-document-retention.ts"],
+  },
 });

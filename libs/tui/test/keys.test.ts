@@ -1,18 +1,14 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Key, matchesKey, parseKey, setKittyProtocolActive } from "../src/keys.ts";
+import keys from "../src/keys.ts";
+
+const { Key, matchesKey, parseKey, setKittyProtocolActive } = keys;
 
 describe("matchesKey", () => {
   describe("Kitty protocol with alternate keys (non-Latin layouts)", () => {
-    // Kitty protocol flag 4 (Report alternate keys) sends:
-    // CSI codepoint:shifted:base ; modifier:event u
-    // Where base is the key in standard PC-101 layout
-
     it("should match Ctrl+c when pressing Ctrl+С (Cyrillic) with base layout key", () => {
       setKittyProtocolActive(true);
-      // Cyrillic 'с' = codepoint 1089, Latin 'c' = codepoint 99
-      // Format: CSI 1089::99;5u (codepoint::base;modifier with ctrl=4, +1=5)
       const cyrillicCtrlC = "\x1b[1089::99;5u";
       assert.strictEqual(matchesKey(cyrillicCtrlC, "ctrl+c"), true);
       setKittyProtocolActive(false);
@@ -20,7 +16,6 @@ describe("matchesKey", () => {
 
     it("should match Ctrl+d when pressing Ctrl+В (Cyrillic) with base layout key", () => {
       setKittyProtocolActive(true);
-      // Cyrillic 'в' = codepoint 1074, Latin 'd' = codepoint 100
       const cyrillicCtrlD = "\x1b[1074::100;5u";
       assert.strictEqual(matchesKey(cyrillicCtrlD, "ctrl+d"), true);
       setKittyProtocolActive(false);
@@ -28,7 +23,6 @@ describe("matchesKey", () => {
 
     it("should match Ctrl+z when pressing Ctrl+Я (Cyrillic) with base layout key", () => {
       setKittyProtocolActive(true);
-      // Cyrillic 'я' = codepoint 1103, Latin 'z' = codepoint 122
       const cyrillicCtrlZ = "\x1b[1103::122;5u";
       assert.strictEqual(matchesKey(cyrillicCtrlZ, "ctrl+z"), true);
       setKittyProtocolActive(false);
@@ -36,8 +30,6 @@ describe("matchesKey", () => {
 
     it("should match Ctrl+Shift+p with base layout key", () => {
       setKittyProtocolActive(true);
-      // Cyrillic 'з' = codepoint 1079, Latin 'p' = codepoint 112
-      // ctrl=4, shift=1, +1 = 6
       const cyrillicCtrlShiftP = "\x1b[1079::112;6u";
       assert.strictEqual(matchesKey(cyrillicCtrlShiftP, "ctrl+shift+p"), true);
       setKittyProtocolActive(false);
@@ -49,7 +41,6 @@ describe("matchesKey", () => {
   describe("Kitty protocol with alternate keys (non-Latin layouts)", () => {
     it("should still match direct codepoint when no base layout key", () => {
       setKittyProtocolActive(true);
-      // Latin ctrl+c without base layout key (terminal doesn't support flag 4)
       const latinCtrlC = "\x1b[99;5u";
       assert.strictEqual(matchesKey(latinCtrlC, "ctrl+c"), true);
       setKittyProtocolActive(false);
@@ -123,9 +114,6 @@ describe("matchesKey", () => {
   describe("Kitty protocol with alternate keys (non-Latin layouts)", () => {
     it("should handle shifted key in format", () => {
       setKittyProtocolActive(true);
-      // Format with shifted key: CSI codepoint:shifted:base;modifier u
-      // Latin 'c' with shifted 'C' (67) and base 'c' (99)
-      // shift modifier = 1, +1 = 2
       const shiftedKey = "\x1b[99:67:99;2u";
       assert.strictEqual(matchesKey(shiftedKey, "shift+c"), true);
       setKittyProtocolActive(false);
@@ -133,8 +121,6 @@ describe("matchesKey", () => {
 
     it("should handle event type in format", () => {
       setKittyProtocolActive(true);
-      // Format with event type: CSI codepoint::base;modifier:event u
-      // Cyrillic ctrl+c release event (event type 3)
       const releaseEvent = "\x1b[1089::99;5:3u";
       assert.strictEqual(matchesKey(releaseEvent, "ctrl+c"), true);
       setKittyProtocolActive(false);
@@ -142,10 +128,6 @@ describe("matchesKey", () => {
 
     it("should handle full format with shifted key, base key, and event type", () => {
       setKittyProtocolActive(true);
-      // Full format: CSI codepoint:shifted:base;modifier:event u
-      // Cyrillic 'С' (shifted) with base 'c', Ctrl+Shift pressed, repeat event
-      // Cyrillic 'с' = 1089, Cyrillic 'С' = 1057, Latin 'c' = 99
-      // ctrl=4, shift=1, +1 = 6, repeat event = 2
       const fullFormat = "\x1b[1089:1057:99;6:2u";
       assert.strictEqual(matchesKey(fullFormat, "ctrl+shift+c"), true);
       setKittyProtocolActive(false);
@@ -153,7 +135,6 @@ describe("matchesKey", () => {
 
     it("should prefer codepoint for Latin letters even when base layout differs", () => {
       setKittyProtocolActive(true);
-      // Dvorak Ctrl+K reports codepoint 'k' (107) and base layout 'v' (118)
       const dvorakCtrlK = "\x1b[107::118;5u";
       assert.strictEqual(matchesKey(dvorakCtrlK, "ctrl+k"), true);
       assert.strictEqual(matchesKey(dvorakCtrlK, "ctrl+v"), false);
@@ -166,7 +147,6 @@ describe("matchesKey", () => {
   describe("Kitty protocol with alternate keys (non-Latin layouts)", () => {
     it("should prefer codepoint for symbol keys even when base layout differs", () => {
       setKittyProtocolActive(true);
-      // Dvorak Ctrl+/ reports codepoint '/' (47) and base layout '[' (91)
       const dvorakCtrlSlash = "\x1b[47::91;5u";
       assert.strictEqual(matchesKey(dvorakCtrlSlash, "ctrl+/"), true);
       assert.strictEqual(matchesKey(dvorakCtrlSlash, "ctrl+["), false);
@@ -175,7 +155,6 @@ describe("matchesKey", () => {
 
     it("should not match wrong key even with base layout", () => {
       setKittyProtocolActive(true);
-      // Cyrillic ctrl+с with base 'c' should NOT match ctrl+d
       const cyrillicCtrlC = "\x1b[1089::99;5u";
       assert.strictEqual(matchesKey(cyrillicCtrlC, "ctrl+d"), false);
       setKittyProtocolActive(false);
@@ -183,7 +162,6 @@ describe("matchesKey", () => {
 
     it("should not match wrong modifiers even with base layout", () => {
       setKittyProtocolActive(true);
-      // Cyrillic ctrl+с should NOT match ctrl+shift+c
       const cyrillicCtrlC = "\x1b[1089::99;5u";
       assert.strictEqual(matchesKey(cyrillicCtrlC, "ctrl+shift+c"), false);
       setKittyProtocolActive(false);

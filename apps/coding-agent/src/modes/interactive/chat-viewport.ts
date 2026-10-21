@@ -1,29 +1,16 @@
-import { type Component, ScrollView, type ScrollViewScrollbar, VStack } from "@msa/tui";
+import tui from "@msa/tui";
 
-export interface ChatViewportOptions {
-  readonly document: Component;
-  readonly pendingMessages: Component;
-  readonly status: Component;
-  readonly editor: Component;
-  readonly footer: Component;
-  readonly widgetsAbove?: Component;
-  readonly widgetsBelow?: Component;
-  readonly scrollbar?: ScrollViewScrollbar;
-  readonly scrollbarTrackStyle?: (text: string) => string;
-  readonly scrollbarThumbStyle?: (text: string) => string;
-}
+import type chatViewportTypes from "./chat-viewport.types.ts";
 
-export interface ChatViewport {
-  readonly root: Component;
-  readonly transcript: ScrollView;
-}
+const { ScrollView, VStack } = tui;
 
-/** Shared fullscreen transcript and fixed input-dock layout. */
-export function createChatViewport(options: ChatViewportOptions): ChatViewport {
+function createChatViewport(
+  options: chatViewportTypes.ChatViewportOptions,
+): chatViewportTypes.ChatViewport {
   const transcript = new ScrollView(options.document, {
     follow: "end",
-    primary: true,
     overscroll: "chain",
+    primary: true,
     scrollbar: options.scrollbar ?? "auto",
     ...(options.scrollbarTrackStyle === undefined
       ? {}
@@ -33,22 +20,28 @@ export function createChatViewport(options: ChatViewportOptions): ChatViewport {
       : { scrollbarThumbStyle: options.scrollbarThumbStyle }),
   });
   const dock = new VStack([
-    { component: options.pendingMessages, shrink: 1, minSize: 0 },
-    { component: options.status, shrink: 1, minSize: 0 },
+    { component: options.pendingMessages, minSize: 0, shrink: 1 },
+    { component: options.status, minSize: 0, shrink: 1 },
     ...(options.widgetsAbove === undefined
       ? []
-      : [{ component: options.widgetsAbove, shrink: 1, minSize: 0 }]),
-    { component: options.editor, shrink: 1, minSize: 3 },
+      : [{ component: options.widgetsAbove, minSize: 0, shrink: 1 }]),
+    { component: options.editor, minSize: 3, shrink: 1 },
     ...(options.widgetsBelow === undefined
       ? []
-      : [{ component: options.widgetsBelow, shrink: 1, minSize: 0 }]),
-    { component: options.footer, shrink: 1, minSize: 0 },
+      : [{ component: options.widgetsBelow, minSize: 0, shrink: 1 }]),
+    { component: options.footer, minSize: 0, shrink: 1 },
   ]);
   return {
-    transcript,
     root: new VStack([
-      { component: transcript, basis: 0, grow: 1, shrink: 1, minSize: 1 },
-      { component: dock, basis: "auto", grow: 0, shrink: 1, minSize: 1 },
+      { basis: 0, component: transcript, grow: 1, minSize: 1, shrink: 1 },
+      { basis: "auto", component: dock, grow: 0, minSize: 1, shrink: 1 },
     ]),
+    transcript,
   };
 }
+
+const chatViewport = {
+  createChatViewport,
+};
+
+export default chatViewport;

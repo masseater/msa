@@ -1,0 +1,48 @@
+import ai from "@msa/ai";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
+import { expect } from "vite-plus/test";
+
+import agentSessionQueueCases1 from "./agent-session-queue-cases-1.ts";
+import harnessModule from "./harness.ts";
+
+const { fauxAssistantMessage } = ai;
+
+const { createHarness, getUserTexts } = harnessModule;
+const { harnesses } = agentSessionQueueCases1;
+
+const deliversFollowUpsQueuedDuringAgent = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  let sent = false;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
+      extensionFactories: [
+        (msa: codingAgentTypes.ExtensionAPI) => {
+          msa.on("agent_end", () =>
+            runPromise(
+              Effect.sync(() => {
+                if (sent) return;
+                sent = true;
+                msa.sendUserMessage("conflict report", { deliverAs: "followUp" });
+              }),
+            ),
+          );
+        },
+      ],
+    }),
+  );
+  harnesses.push(harness);
+
+  harness.setResponses([fauxAssistantMessage("reply"), fauxAssistantMessage("follow-up reply")]);
+
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
+  yield* Effect.promise(() => harness.session.agent.waitForIdle());
+
+  expect(getUserTexts(harness)).toEqual(["hello", "conflict report"]);
+});
+
+const agentSessionQueueCases4 = {
+  deliversFollowUpsQueuedDuringAgent,
+};
+
+export default agentSessionQueueCases4;

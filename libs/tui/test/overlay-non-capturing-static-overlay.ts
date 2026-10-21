@@ -1,6 +1,6 @@
-import type { Component } from "../src/tui.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-export class StaticOverlay implements Component {
+class StaticOverlay implements tuiComponentTypes.Component {
   private lines: string[];
 
   constructor(lines: string[]) {
@@ -13,3 +13,5 @@ export class StaticOverlay implements Component {
 
   invalidate(): void {}
 }
+
+export default StaticOverlay;

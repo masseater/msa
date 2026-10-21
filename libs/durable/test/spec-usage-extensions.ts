@@ -1,29 +1,32 @@
-import { Type } from "@msa/ai";
-import {
-  configure,
-  defineDoc,
-  defineExtension,
-  defineTask,
-  defineTool,
-  type EntryId,
-  GenerationTask,
-  hook,
-  section,
-  ToolTask,
-  wrapTool,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type chordTypes from "@msa/chord/index.types";
+import harness from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { createBashTool } from "../src/tools/index.ts";
-import type { SpecNames } from "./spec-usage-names.ts";
+import durableKit from "./durable-kit.ts";
+import effectSupport from "./effect-support.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
 
-// ─── Section 7.1: extensions and host setup ──────────────────────────────────
+const { Type } = ai;
 
-export function promptExtensions({
+const { clock: clockModule, durable, tools: toolsModule } = durableKit;
+
+const { configure, defineDoc, defineExtension, defineTask, defineTool, hook, section, wrapTool } =
+  durable;
+const { GenerationTask, ToolTask } = harness;
+const { createBashTool } = toolsModule;
+const { currentTimeMillis } = clockModule;
+
+const { awaited } = effectSupport;
+
+function promptExtensions({
   renderAgentsMd,
   renderSkills,
   isDangerous,
   requestSecondPass,
-}: SpecNames) {
+}: specUsageNamesTypes.SpecNames) {
   const ContextFiles = defineExtension({
     name: "context-files",
     sections: [section("agents-md", renderAgentsMd)],
@@ -34,32 +37,30 @@ export function promptExtensions({
     name: "coding",
     sections: [
       section("preamble", () => "You are an expert coding assistant.", { tag: false }),
-      // The environment the host built for this conversation, in the conversation's directory.
       section("cwd", (input) => input.env && `Working directory: ${input.env.cwd}`),
     ],
   });
   const Permissions = defineExtension({
-    name: "permissions",
     hooks: [
       hook(ToolTask, {
         beforeTool: (call) =>
           Promise.resolve(isDangerous(call) ? { block: "Needs approval" } : undefined),
       }),
     ],
+    name: "permissions",
   });
-  // A role and a review loop, for conversations that select it.
   const Reviewer = defineExtension({
+    hooks: [hook(GenerationTask, { onYield: requestSecondPass })],
     name: "reviewer",
     sections: [
       section("role", () => "You review diffs. Report problems as a list. Never edit files."),
     ],
-    hooks: [hook(GenerationTask, { onYield: requestSecondPass })],
   });
-  return { ContextFiles, Skills, SkillsV2, Coding, Permissions, Reviewer };
+  return { Coding, ContextFiles, Permissions, Reviewer, Skills, SkillsV2 };
 }
 
-export function bashExtensions(
-  { metrics }: SpecNames,
+function bashExtensionsImpl(
+  { metrics }: specUsageNamesTypes.SpecNames,
   bashTool: ReturnType<typeof createBashTool>,
 ) {
   const Timing = defineExtension({
@@ -67,19 +68,22 @@ export function bashExtensions(
     wraps: [
       wrapTool(bashTool, (tool) => ({
         ...tool,
-        execute: async (args, api, context) => {
-          const start = Date.now();
-          try {
-            return await tool.execute(args, api, context);
-          } finally {
-            metrics.record("bash", Date.now() - start);
-          }
-        },
+        execute: (args, api, context) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              const start = currentTimeMillis();
+              return yield* Effect.suspend(() => awaited(tool.execute(args, api, context))).pipe(
+                Effect.ensuring(
+                  Effect.sync(() => {
+                    metrics.record("bash", currentTimeMillis() - start);
+                  }),
+                ),
+              );
+            }),
+          ),
       })),
     ],
   });
-  // A bash inside a Python virtualenv for one conversation: it replaces CodingTools' bash in place,
-  // and Timing, if selected, wraps it.
   const Venv = defineExtension({
     name: "venv",
     tools: [createBashTool({ commandPrefix: "source .venv/bin/activate" })],
@@ -87,77 +91,110 @@ export function bashExtensions(
   return { Timing, Venv };
 }
 
-// ─── Section 7.2: hooks reading extension state ──────────────────────────────
+const bashExtensions: {
+  (
+    bashTool: ReturnType<typeof createBashTool>,
+  ): (arg0: specUsageNamesTypes.SpecNames) => ReturnType<typeof bashExtensionsImpl>;
+  (
+    arg0: specUsageNamesTypes.SpecNames,
+    bashTool: ReturnType<typeof createBashTool>,
+  ): ReturnType<typeof bashExtensionsImpl>;
+} = dual(2, bashExtensionsImpl);
 
-export function planMode({ writes }: SpecNames) {
+function planMode({ writes }: specUsageNamesTypes.SpecNames) {
   const PlanModeDoc = defineDoc<{ enabled: boolean }>({
-    kind: "app.plan-mode",
-    version: 1,
-    scope: "conversation",
-    history: "latest",
     fork: "current",
+    history: "latest",
     initial: () => ({ enabled: false }),
+    kind: "app.plan-mode",
+    scope: "conversation",
+    version: 1,
   });
   const PlanMode = defineExtension({
-    name: "plan-mode",
     hooks: [
       hook(ToolTask, {
-        // An absent document means plan mode is off.
-        beforeTool: async (call, api, context) =>
-          (await api.snapshot(PlanModeDoc, api.conversationId, context))?.enabled && writes(call)
-            ? { block: "Plan mode: read-only" }
-            : undefined,
+        beforeTool: (call, api, context) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              return (yield* awaited(api.snapshot(PlanModeDoc, api.conversationId, context)))
+                ?.enabled === true && writes(call)
+                ? { block: "Plan mode: read-only" }
+                : undefined;
+            }),
+          ),
       }),
     ],
+    name: "plan-mode",
   });
-  return { PlanModeDoc, PlanMode };
+  return { PlanMode, PlanModeDoc };
 }
 
-// ─── Section 7.3: subagents ──────────────────────────────────────────────────
+const childWithout = Effect.fn("childWithout")(function* (
+  api: durableTypes.ToolExecutionApi,
+  context: chordTypes.Context,
+  removed: durableTypes.Extension,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  return yield* awaited(
+    api.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const existing = (yield* awaited(tx.scanConversations({ ownerTaskId: api.taskId }, 1)))
+              .items[0];
+            if (existing !== undefined) return existing.id;
+            const created = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }),
+            );
+            yield* awaited(configure(tx, created.id, { extensions: { remove: [removed] } }));
+            return created.id;
+          }),
+        ),
+      context,
+    ),
+  );
+});
 
-export function subagentExtension({ answerText }: SpecNames) {
-  const Subagent = defineExtension({
+function subagentExtension({ answerText }: specUsageNamesTypes.SpecNames) {
+  const Subagent: durableTypes.Extension = defineExtension({
     name: "subagent",
     tools: [
       defineTool({
-        name: "subagent",
         description: "Delegate a self-contained task to a subagent and get its answer back.",
+        execute: (args, api, context) =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              const { task } = args;
+              const child = yield* childWithout(api, context, Subagent);
+              yield* awaited(api.details({ conversationId: child }, context));
+              const handle = (yield* awaited(api.conversation(child, context)))!;
+              const request = {
+                content: task,
+                requestId: `subagent:${api.taskId}`,
+                type: "input",
+              } as const;
+              const settled = yield* awaited(
+                (yield* awaited(handle.submit(request, context))).wait(context),
+              );
+              if (settled.status !== "done" || settled.type !== "input")
+                throw new Error(`Subagent failed: ${settled.status}`);
+              return {
+                output: [
+                  { text: yield* awaited(answerText(api, settled.answer, context)), type: "text" },
+                ],
+              };
+            }),
+          ),
+        name: "subagent",
         parameters: Type.Object({ task: Type.String() }),
         replay: "safe",
-        execute: async (args, api, context) => {
-          const { task } = args;
-          const child = await api.commit(async (tx) => {
-            const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
-            if (existing !== undefined) return existing.id;
-            // Starts as a copy of this conversation's agent: model, thinking level, cwd, extensions, tools.
-            const created = await tx.createConversation({
-              ownership: { kind: "task", taskId: api.taskId },
-            });
-            // Without this extension, the child is not offered this tool.
-            await configure(tx, created.id, { extensions: { remove: [Subagent] } });
-            return created.id;
-          }, context);
-          await api.details({ conversationId: child }, context);
-          const handle = (await api.conversation(child, context))!;
-          const request = {
-            type: "input",
-            content: task,
-            requestId: `subagent:${api.taskId}`,
-          } as const;
-          const settled = await (await handle.submit(request, context)).wait(context);
-          if (settled.status !== "done" || settled.type !== "input")
-            throw new Error(`Subagent failed: ${settled.status}`);
-          return {
-            output: [{ type: "text", text: await answerText(api, settled.answer, context) }],
-          };
-        },
       }),
     ],
   });
   return Subagent;
 }
 
-export function subagentTools({ Anchor, Reporter, subagentTool }: SpecNames) {
+function subagentTools({ Anchor, Reporter, subagentTool }: specUsageNamesTypes.SpecNames) {
   return defineExtension({
     name: "subagent-tools",
     tasks: [Anchor, Reporter],
@@ -165,61 +202,85 @@ export function subagentTools({ Anchor, Reporter, subagentTool }: SpecNames) {
   });
 }
 
-// ─── Section 7.4 ─────────────────────────────────────────────────────────────
-
-export function chatExtension() {
+function chatExtension() {
   return defineExtension({
     name: "chat",
     sections: [section("preamble", () => "You are a helpful assistant.", { tag: false })],
   });
 }
 
-// ─── Section 5.1: a task with intent, effect, outcome ────────────────────────
-
 type Charge = { phase: "prepare" } | { phase: "charge"; key: string };
 
-export function paymentTask({ newKey, payments, receiptEntry }: SpecNames) {
-  return defineTask<null, Charge, { entryId: EntryId }>({
-    name: "app.payment",
-    version: 1,
+function paymentTask({ newKey, payments, receiptEntry }: specUsageNamesTypes.SpecNames) {
+  return defineTask<null, Charge, { entryId: durableTypes.EntryId }>({
+    abort: (task, runtime, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(payments.cancel(task.state.checkpoint));
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { reason: "user", status: "aborted" }, status: "terminal" }),
+              context,
+            ),
+          );
+        }),
+      ),
     initial: () => ({ phase: "prepare" }),
+    name: "app.payment",
     phases: {
-      // Intent, effect, outcome.
-      prepare: async (_task, runtime, context) => {
-        await runtime.commit(
-          () => ({ status: "running", checkpoint: { phase: "charge", key: newKey() } }),
-          context,
-        );
-      },
-      charge: async (task, runtime, context) => {
-        // idempotent by key
-        const receipt = await payments.charge(task.state.checkpoint.key);
-        await runtime.commit(async (tx, current) => {
-          const entry = await tx.appendEntry(current.conversationId, receiptEntry(receipt));
-          return {
-            status: "terminal",
-            outcome: { status: "completed", result: { entryId: entry.id } },
-          };
-        }, context);
-      },
+      charge: (task, runtime, context) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const receipt = yield* awaited(payments.charge(task.state.checkpoint.key));
+            yield* awaited(
+              runtime.commit(
+                (tx, current) =>
+                  tx.appendEntry(current.conversationId, receiptEntry(receipt)).then((entry) => ({
+                    outcome: { result: { entryId: entry.id }, status: "completed" },
+                    status: "terminal",
+                  })),
+                context,
+              ),
+            );
+          }),
+        ),
+      prepare: (_task, runtime, context) =>
+        Effect.runPromise(
+          Effect.asVoid(
+            Effect.suspend(() =>
+              awaited(
+                runtime.commit(
+                  () => ({ checkpoint: { key: newKey(), phase: "charge" }, status: "running" }),
+                  context,
+                ),
+              ),
+            ),
+          ),
+        ),
     },
-    // The abort handler decides the outcome; returning without one faults the task.
-    abort: async (task, runtime, context) => {
-      await payments.cancel(task.state.checkpoint);
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "aborted", reason: "user" } }),
-        context,
-      );
-    },
+    version: 1,
   });
 }
 
-export function followTask() {
+function followTask() {
   return defineTask<object, { phase: "follow" }, null>({
-    name: "app.follow",
-    version: 1,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "follow" }),
-    phases: { follow: async () => {} },
-    abort: async () => {},
+    name: "app.follow",
+    phases: { follow: () => Promise.resolve() },
+    version: 1,
   });
 }
+
+const specUsageExtensions = {
+  bashExtensions,
+  chatExtension,
+  followTask,
+  paymentTask,
+  planMode,
+  promptExtensions,
+  subagentExtension,
+  subagentTools,
+};
+
+export default specUsageExtensions;

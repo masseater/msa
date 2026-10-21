@@ -1,42 +1,18 @@
-import type {
-  AssistantImages,
-  ImageApi,
-  ImageModel,
-  ImagesContext,
-  ImagesFunction,
-  ImagesOptions,
-} from "./types.ts";
+import { Function } from "effect";
 
-export type ImagesApiFunction = (
-  model: ImageModel<ImageApi>,
-  context: ImagesContext,
-  options?: ImagesOptions,
-) => Promise<AssistantImages>;
-
-export interface ImagesApiProvider<
-  TApi extends ImageApi = ImageApi,
-  TOptions extends ImagesOptions = ImagesOptions,
-> {
-  api: TApi;
-  generateImages: ImagesFunction<TOptions>;
-}
-
-interface ImagesApiProviderInternal {
-  api: ImageApi;
-  generateImages: ImagesApiFunction;
-}
-
+import type imagesApiRegistryTypes from "./images-api-registry.types.ts";
+import type typesModule from "./types.types.ts";
 type RegisteredImagesApiProvider = {
-  provider: ImagesApiProviderInternal;
+  provider: imagesApiRegistryTypes.ImagesApiProviderInternal;
   sourceId?: string | undefined;
 };
 
 const imagesApiProviderRegistry = new Map<string, RegisteredImagesApiProvider>();
 
-function wrapGenerateImages<TOptions extends ImagesOptions>(
-  api: ImageApi,
-  generateImages: ImagesFunction<TOptions>,
-): ImagesApiFunction {
+function wrapGenerateImages<TOptions extends typesModule.ImagesOptions>(
+  api: typesModule.ImageApi,
+  generateImages: typesModule.ImagesFunction<TOptions>,
+): imagesApiRegistryTypes.ImagesApiFunction {
   return (model, context, options) => {
     if (model.api !== api) {
       throw new Error(`Mismatched api: ${model.api} expected ${api}`);
@@ -45,19 +21,39 @@ function wrapGenerateImages<TOptions extends ImagesOptions>(
   };
 }
 
-export function registerImagesApiProvider<TApi extends ImageApi, TOptions extends ImagesOptions>(
-  provider: ImagesApiProvider<TApi, TOptions>,
-  sourceId?: string,
-): void {
-  imagesApiProviderRegistry.set(provider.api, {
-    provider: {
-      api: provider.api,
-      generateImages: wrapGenerateImages(provider.api, provider.generateImages),
-    },
-    sourceId,
-  });
-}
+const registerImagesApiProvider: {
+  <TApi extends typesModule.ImageApi, TOptions extends typesModule.ImagesOptions>(
+    sourceId?: string,
+  ): (provider: imagesApiRegistryTypes.ImagesApiProvider<TApi, TOptions>) => void;
+  <TApi extends typesModule.ImageApi, TOptions extends typesModule.ImagesOptions>(
+    provider: imagesApiRegistryTypes.ImagesApiProvider<TApi, TOptions>,
+    sourceId?: string,
+  ): void;
+} = Function.dual(
+  (args) => typeof args[0] === "object" && args[0] !== null,
+  function <TApi extends typesModule.ImageApi, TOptions extends typesModule.ImagesOptions>(
+    provider: imagesApiRegistryTypes.ImagesApiProvider<TApi, TOptions>,
+    sourceId?: string,
+  ): void {
+    imagesApiProviderRegistry.set(provider.api, {
+      provider: {
+        api: provider.api,
+        generateImages: wrapGenerateImages(provider.api, provider.generateImages),
+      },
+      sourceId,
+    });
+  },
+);
 
-export function getImagesApiProvider(api: ImageApi): ImagesApiProviderInternal | undefined {
+function getImagesApiProvider(
+  api: typesModule.ImageApi,
+): imagesApiRegistryTypes.ImagesApiProviderInternal | undefined {
   return imagesApiProviderRegistry.get(api)?.provider;
 }
+
+const imagesApiRegistry = {
+  getImagesApiProvider,
+  registerImagesApiProvider,
+};
+
+export default imagesApiRegistry;

@@ -1,21 +1,21 @@
-import type { TelemetryContext } from "../context.ts";
-import type {
-  RecordedTelemetryLog,
-  RecordedTelemetryMetric,
-  RecordedTelemetrySpan,
-} from "../memory.ts";
+import type contextTypes from "../context.ts";
+import type memoryTypes from "../memory.types.ts";
 
-export interface TelemetryAdapterFixture extends AsyncDisposable {
-  readonly context: TelemetryContext;
-  getSpans(): Promise<readonly RecordedTelemetrySpan[]>;
-  getLogs(): Promise<readonly RecordedTelemetryLog[]>;
-  getMetrics(): Promise<readonly RecordedTelemetryMetric[]>;
+declare namespace typesModule {
+  interface TelemetryAdapterFixture extends AsyncDisposable {
+    readonly context: contextTypes.TelemetryContext;
+    getSpans(): Promise<readonly memoryTypes.RecordedTelemetrySpan[]>;
+    getLogs(): Promise<readonly memoryTypes.RecordedTelemetryLog[]>;
+    getMetrics(): Promise<readonly memoryTypes.RecordedTelemetryMetric[]>;
+  }
+
+  type TelemetryAdapterFixtureFactory = () => Promise<TelemetryAdapterFixture>;
+
+  interface TelemetryAdapterConformanceCase {
+    readonly group: string;
+    readonly name: string;
+    run(): Promise<void>;
+  }
 }
 
-export type TelemetryAdapterFixtureFactory = () => Promise<TelemetryAdapterFixture>;
-
-export interface TelemetryAdapterConformanceCase {
-  readonly group: string;
-  readonly name: string;
-  run(): Promise<void>;
-}
+export type { typesModule as default };

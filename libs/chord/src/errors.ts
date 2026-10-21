@@ -1,5 +1,10 @@
-/** Error codes callers see (guide table). A refused or aborted reload keeps the code of its cause. */
-export const CHORD_ERROR_CODES = [
+import { Cause, Effect, Exit } from "effect";
+import { dual } from "effect/Function";
+
+import ChordError from "./chord-error.ts";
+import type errorsTypes from "./errors.types.ts";
+
+const CHORD_ERROR_CODES = [
   "aborted",
   "contract_mismatch",
   "forbidden",
@@ -13,69 +18,66 @@ export const CHORD_ERROR_CODES = [
   "upgrade_conflict",
   "upgrade_required",
 ] as const;
-export type ChordErrorCode = (typeof CHORD_ERROR_CODES)[number];
 
-/**
- * Finer cause inside a code, for logs and tests: e.g. `invalid` + `args`, `result`, `state`, `input`, `implementation`,
- * `duplicate`, `cycle`, `read_only`, `not_host_lifetime`, `registry_conflict`; `unavailable` + `unknown_type`.
- */
-export type ChordErrorReason = string;
+const isChordErrorCode = (value: unknown): value is errorsTypes.ChordErrorCode =>
+  CHORD_ERROR_CODES.some((code) => code === value);
 
-const RETRYABLE: ReadonlySet<ChordErrorCode> = new Set(["superseded", "upgrade_conflict"]);
+const isChordError: {
+  (code?: errorsTypes.ChordErrorCode): (error: unknown) => error is ChordError;
+  (error: unknown, code?: errorsTypes.ChordErrorCode): error is ChordError;
+} = dual(
+  (args) => args.length >= 2 || !isChordErrorCode(args[0]),
+  (error: unknown, code?: errorsTypes.ChordErrorCode): error is ChordError =>
+    error instanceof ChordError && (code === undefined || error.code === code),
+);
 
-export class ChordError extends Error {
-  readonly code: ChordErrorCode;
-  readonly reason: ChordErrorReason | undefined;
-  readonly retryable: boolean;
-  readonly details: unknown;
-  constructor(
-    code: ChordErrorCode,
-    message: string,
-    options?: { cause?: unknown; details?: unknown; reason?: ChordErrorReason | undefined },
-  ) {
-    super(`${code}${options?.reason ? `/${options.reason}` : ""}: ${message}`, {
-      cause: options?.cause,
-    });
-    this.name = "ChordError";
-    this.code = code;
-    this.reason = options?.reason;
-    this.retryable = RETRYABLE.has(code);
-    this.details = options?.details;
-  }
-}
+const forbidden = (message = "forbidden"): ChordError => new ChordError("forbidden", message);
 
-export const isChordError = (error: unknown, code?: ChordErrorCode): error is ChordError =>
-  error instanceof ChordError && (code === undefined || error.code === code);
+const invalid: {
+  (message: string, details?: unknown): (reason: errorsTypes.ChordErrorReason) => ChordError;
+  (reason: errorsTypes.ChordErrorReason, message: string, details?: unknown): ChordError;
+} = dual(
+  (args) => args.length >= 2,
+  (reason: errorsTypes.ChordErrorReason, message: string, details?: unknown): ChordError =>
+    new ChordError("invalid", message, { details, reason }),
+);
 
-/** For factories and methods refusing a principal: `throw forbidden()`. */
-export const forbidden = (message = "forbidden"): ChordError =>
-  new ChordError("forbidden", message);
-
-export const invalid = (reason: ChordErrorReason, message: string, details?: unknown): ChordError =>
-  new ChordError("invalid", message, { reason, details });
-
-/** Keeps a ChordError's code; anything else becomes `unavailable` with the original as cause. */
-export const asChordError = (error: unknown, context: string): ChordError =>
+const asChordError: {
+  (context: string): (error: unknown) => ChordError;
+  (error: unknown, context: string): ChordError;
+} = dual(2, (error: unknown, context: string): ChordError =>
   error instanceof ChordError
     ? error
     : new ChordError(
         "unavailable",
         `${context}: ${error instanceof Error ? error.message : String(error)}`,
-        {
-          cause: error,
-        },
-      );
+        { cause: error },
+      ),
+);
 
-/** Runs every step, then throws one error, or an AggregateError when several failed. */
-export async function runAll(steps: readonly (() => unknown)[], message: string): Promise<void> {
-  const errors: unknown[] = [];
-  for (const step of steps) {
-    try {
-      await step();
-    } catch (error) {
-      errors.push(error);
+const runAll: {
+  (message: string): (steps: readonly Effect.Effect<unknown>[]) => Effect.Effect<void>;
+  (steps: readonly Effect.Effect<unknown>[], message: string): Effect.Effect<void>;
+} = dual(2, (steps: readonly Effect.Effect<unknown>[], message: string): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const errors: unknown[] = [];
+    for (const step of steps) {
+      const exit = yield* Effect.exit(step);
+      if (Exit.isFailure(exit)) errors.push(Cause.squash(exit.cause));
     }
-  }
-  if (errors.length === 1) throw errors[0];
-  if (errors.length > 1) throw new AggregateError(errors, message);
-}
+    if (errors.length === 1) return yield* Effect.die(errors[0]);
+    if (errors.length > 1) return yield* Effect.die(new AggregateError(errors, message));
+  }),
+);
+
+const errorsModule = {
+  CHORD_ERROR_CODES,
+  ChordError,
+  asChordError,
+  forbidden,
+  invalid,
+  isChordError,
+  runAll,
+};
+
+export default errorsModule;

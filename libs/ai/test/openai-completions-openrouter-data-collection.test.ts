@@ -1,10 +1,16 @@
+import { Clock, Effect, Stream } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
+import compatModule from "../src/compat.ts";
+import modelChoice from "./model-choice.ts";
+
+const { streamSimple } = compatModule;
+
+const { chooseModel } = modelChoice;
 
 const mockState = vi.hoisted(() => ({
-  lastParams: undefined as unknown,
   lastClientOptions: undefined as unknown,
+  lastParams: undefined as unknown,
 }));
 
 vi.mock("openai", () => {
@@ -18,16 +24,22 @@ vi.mock("openai", () => {
         create: (params: unknown) => {
           mockState.lastParams = params;
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              yield {
-                choices: [{ delta: {}, finish_reason: "stop" }],
-                usage: {
-                  prompt_tokens: 1,
-                  completion_tokens: 1,
-                  prompt_tokens_details: { cached_tokens: 0 },
-                  completion_tokens_details: { reasoning_tokens: 0 },
-                },
-              };
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    yield {
+                      choices: [{ delta: {}, finish_reason: "stop" }],
+                      usage: {
+                        completion_tokens: 1,
+                        completion_tokens_details: { reasoning_tokens: 0 },
+                        prompt_tokens: 1,
+                        prompt_tokens_details: { cached_tokens: 0 },
+                      },
+                    };
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -39,7 +51,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers() },
+              response: { headers: new Headers(), status: 200 },
             });
           return promise;
         },
@@ -50,51 +62,61 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-function openRouterModel(routing?: Record<string, unknown>) {
-  const { compat: _compat, ...base } = getModel("openai", "gpt-4o-mini")!;
-  return {
-    ...base,
-    api: "openai-completions",
-    provider: "openrouter",
-    baseUrl: "https://openrouter.ai/api/v1",
-    ...(routing ? { compat: { openRouterRouting: routing } } : {}),
-  } as const;
-}
+const directModel = () => {
+  const { compat: _compat, ...base } = chooseModel("openai", "direct OpenAI");
+  return { ...base, api: "openai-completions" } as const;
+};
 
-async function sentProvider(model: ReturnType<typeof openRouterModel>) {
-  await streamSimple(
-    model,
-    { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-    { apiKey: "test" },
-  ).result();
-  return (mockState.lastParams as { provider?: unknown }).provider;
-}
+const openRouterModel = (routing?: Record<string, unknown>) => ({
+  ...directModel(),
+  baseUrl: "https://openrouter.ai/api/v1",
+  provider: "openrouter",
+  ...(routing === undefined ? {} : { compat: { openRouterRouting: routing } }),
+});
+
+const sentParams = (model: ReturnType<typeof directModel>) =>
+  Effect.gen(function* () {
+    const timestamp = yield* Clock.currentTimeMillis;
+    yield* Effect.promise(() =>
+      streamSimple(
+        model,
+        { messages: [{ content: "hi", role: "user", timestamp }] },
+        { apiKey: "test" },
+      ).result(),
+    );
+    return mockState.lastParams as { provider?: unknown };
+  });
+
+const expectSentProvider =
+  (routing: Record<string, unknown> | undefined, expected: Record<string, unknown>) => () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        expect((yield* sentParams(openRouterModel(routing))).provider).toEqual(expected);
+      }),
+    );
+
+const omitsRoutingElsewhere = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      expect("provider" in (yield* sentParams(directModel()))).toBe(false);
+    }),
+  );
 
 describe("openrouter data_collection default", () => {
-  it("denies data collection when nothing is configured", async () => {
-    expect(await sentProvider(openRouterModel())).toEqual({ data_collection: "deny" });
-  });
-
-  it("keeps deny next to other routing preferences", async () => {
-    expect(await sentProvider(openRouterModel({ only: ["deepinfra/fp8"] }))).toEqual({
-      only: ["deepinfra/fp8"],
-      data_collection: "deny",
-    });
-  });
-
-  it("sends allow only when the model sets it explicitly", async () => {
-    expect(await sentProvider(openRouterModel({ data_collection: "allow" }))).toEqual({
-      data_collection: "allow",
-    });
-  });
-
-  it("does not add provider routing to other endpoints", async () => {
-    const { compat: _compat, ...base } = getModel("openai", "gpt-4o-mini")!;
-    await streamSimple(
-      { ...base, api: "openai-completions" } as const,
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      { apiKey: "test" },
-    ).result();
-    expect("provider" in (mockState.lastParams as object)).toBe(false);
-  });
+  it(
+    "denies data collection when nothing is configured",
+    expectSentProvider(undefined, { data_collection: "deny" }),
+  );
+  it(
+    "keeps deny next to other routing preferences",
+    expectSentProvider(
+      { only: ["deepinfra/fp8"] },
+      { data_collection: "deny", only: ["deepinfra/fp8"] },
+    ),
+  );
+  it(
+    "sends allow only when the model sets it explicitly",
+    expectSentProvider({ data_collection: "allow" }, { data_collection: "allow" }),
+  );
+  it("does not add provider routing to other endpoints", omitsRoutingElsewhere);
 });

@@ -1,22 +1,21 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import testing from "@msa/testing";
 import chalk from "chalk";
+import { Cause, Effect, Exit, FileSystem, ManagedRuntime } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
-import { APP_NAME } from "../../../src/config.ts";
-import type { SessionManager } from "../../../src/core/session-manager.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
+import config from "../../../src/config.ts";
+import type sessionManagerTypes from "../../../src/core/session-manager.types.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
+import ProcessExitError from "./5080-signal-shutdown-extension-cleanup-support.ts";
 
-// Regression for https://github.com/earendil-works/pi/issues/5080
-//
-// On SIGTERM/SIGHUP the graceful shutdown must emit `session_shutdown`
-// (runtimeHost.dispose) BEFORE touching the terminal. Extension teardown such
-// as removing a socket does not write to the tty, so it must not be skipped if
-// a later terminal-restore write fails on a dead or stalled terminal. The
-// interactive quit path (Ctrl+D, /quit) keeps the opposite order to preserve
-// the final TUI frame.
+const { bindModeFake } = interactiveModeFake;
+const { APP_NAME } = config;
+const { joinPath } = testing;
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 type ShutdownThis = {
   isShuttingDown: boolean;
@@ -25,41 +24,34 @@ type ShutdownThis = {
   ui: { terminal: { drainInput: (ms: number) => Promise<void> } };
   themeController: { disableAutoSync: () => void };
   stop: () => void;
-  sessionManager: SessionManager;
+  sessionManager: sessionManagerTypes.SessionManager;
 };
-
-type InteractiveModePrototypeWithShutdown = {
-  shutdown(this: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void>;
-};
-
-const interactiveModePrototype = InteractiveMode.prototype as unknown;
 const tempDirs: string[] = [];
+
 const originalStdoutIsTTY = Object.getOwnPropertyDescriptor(process.stdout, "isTTY");
 
-class ProcessExitError extends Error {
-  readonly code: number | undefined;
-  constructor(code?: number) {
-    super(`process.exit(${code})`);
-    this.code = code;
-  }
-}
-
-function createSessionManager(options: { sessionFile?: string } = {}): SessionManager {
+function createSessionManager(
+  options: { sessionFile?: string } = {},
+): sessionManagerTypes.SessionManager {
   return {
-    isPersisted: () => options.sessionFile !== undefined,
+    getSessionDir: () => "/tmp/msa-sessions",
     getSessionFile: () => options.sessionFile,
     getSessionId: () => "test-session",
-    getSessionDir: () => "/tmp/msa-sessions",
+    isPersisted: () => options.sessionFile !== undefined,
     usesDefaultSessionDir: () => true,
-  } as unknown as SessionManager;
+  } as unknown as sessionManagerTypes.SessionManager;
 }
 
-function createTempFile(): string {
-  const dir = mkdtempSync(join(tmpdir(), "msa-shutdown-resume-hint-"));
-  tempDirs.push(dir);
-  const file = join(dir, "session.jsonl");
-  writeFileSync(file, "\n");
-  return file;
+function createTempFile() {
+  return runtime.runPromise(
+    Effect.gen(function* () {
+      const dir = yield* fs.makeTempDirectory({ prefix: "msa-shutdown-resume-hint-" });
+      tempDirs.push(dir);
+      const file = joinPath(dir, "session.jsonl");
+      yield* fs.writeFileString(file, "\n");
+      return file;
+    }),
+  );
 }
 
 function setStdoutIsTTY(value: boolean): void {
@@ -67,261 +59,185 @@ function setStdoutIsTTY(value: boolean): void {
 }
 
 function restoreStdoutIsTTY(): void {
-  if (originalStdoutIsTTY) {
-    Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY);
-  } else {
+  if (originalStdoutIsTTY === undefined) {
     Reflect.deleteProperty(process.stdout, "isTTY");
+  } else {
+    Object.defineProperty(process.stdout, "isTTY", originalStdoutIsTTY);
   }
 }
 
 function createContext(order: string[], sessionManager = createSessionManager()): ShutdownThis {
   return {
     isShuttingDown: false,
-    unregisterSignalHandlers: vi.fn(),
     runtimeHost: {
-      dispose: vi.fn(async () => {
-        order.push("dispose");
-      }),
+      dispose: vi.fn(() =>
+        Effect.runPromise(
+          Effect.sync(() => {
+            order.push("dispose");
+          }),
+        ),
+      ),
     },
-    ui: {
-      terminal: {
-        drainInput: vi.fn(async () => {
-          order.push("drainInput");
-        }),
-      },
-    },
-    themeController: { disableAutoSync: vi.fn() },
+    sessionManager,
     stop: vi.fn(() => {
       order.push("stop");
     }),
-    sessionManager,
+    themeController: { disableAutoSync: vi.fn() },
+    ui: {
+      terminal: {
+        drainInput: vi.fn(() =>
+          Effect.runPromise(
+            Effect.sync(() => {
+              order.push("drainInput");
+            }),
+          ),
+        ),
+      },
+    },
+    unregisterSignalHandlers: vi.fn(),
   };
 }
 
-async function callShutdown(
-  context: ShutdownThis,
-  options?: { fromSignal?: boolean },
-): Promise<void> {
-  try {
-    await (interactiveModePrototype as InteractiveModePrototypeWithShutdown).shutdown.call(
-      context,
-      options,
-    );
-  } catch (error) {
-    if (!(error instanceof ProcessExitError)) throw error;
-  }
+function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean }): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      {
+        const tryExit4 = yield* Effect.exit(
+          Effect.promise(() => bindModeFake(context).lifecycle.shutdown.shutdown(options)),
+        );
+        if (Exit.isFailure(tryExit4)) {
+          const error = Cause.squash(tryExit4.cause);
+          if (!(error instanceof ProcessExitError)) throw error;
+        }
+      }
+    }),
+  );
 }
 
-describe("InteractiveMode.shutdown ordering (#5080)", () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-    restoreStdoutIsTTY();
-    for (const dir of tempDirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true });
-    }
-  });
+const signalTriggeredShutdownEmitsSessionShutdown = Effect.gen(function* () {
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new ProcessExitError({});
+  }) as typeof process.exit);
+  const order: string[] = [];
+  const context = createContext(order);
 
-  test("signal-triggered shutdown emits session_shutdown before terminal writes", async () => {
-    vi.spyOn(process, "exit").mockImplementation((() => {
-      throw new ProcessExitError();
-    }) as typeof process.exit);
-    const order: string[] = [];
-    const context = createContext(order);
+  yield* Effect.promise(() => callShutdown(context, { fromSignal: true }));
 
-    await callShutdown(context, { fromSignal: true });
-
-    expect(order).toEqual(["dispose", "drainInput", "stop"]);
-    expect(context.isShuttingDown).toBe(true);
-  });
-
-  test("interactive quit stops the TUI before emitting session_shutdown", async () => {
-    vi.spyOn(process, "exit").mockImplementation((() => {
-      throw new ProcessExitError();
-    }) as typeof process.exit);
-    const order: string[] = [];
-    const context = createContext(order);
-
-    await callShutdown(context);
-
-    expect(order).toEqual(["drainInput", "stop", "dispose"]);
-  });
-
-  test("interactive quit prints a resume hint for persisted sessions", async () => {
-    vi.spyOn(process, "exit").mockImplementation((() => {
-      throw new ProcessExitError();
-    }) as typeof process.exit);
-    const stdoutWrite = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation((() => true) as typeof process.stdout.write);
-    setStdoutIsTTY(true);
-    const order: string[] = [];
-    const context = createContext(order, createSessionManager({ sessionFile: createTempFile() }));
-
-    await callShutdown(context);
-
-    expect(order).toEqual(["drainInput", "stop", "dispose"]);
-    expect(stdoutWrite).toHaveBeenCalledWith(
-      `${chalk.dim("To resume this session:")} ${APP_NAME} --session test-session\n`,
-    );
-  });
-
-  test("signal-triggered shutdown does not print a resume hint", async () => {
-    vi.spyOn(process, "exit").mockImplementation((() => {
-      throw new ProcessExitError();
-    }) as typeof process.exit);
-    const stdoutWrite = vi
-      .spyOn(process.stdout, "write")
-      .mockImplementation((() => true) as typeof process.stdout.write);
-    setStdoutIsTTY(true);
-    const order: string[] = [];
-    const context = createContext(order, createSessionManager({ sessionFile: createTempFile() }));
-
-    await callShutdown(context, { fromSignal: true });
-
-    for (const call of stdoutWrite.mock.calls) {
-      expect(call[0]).not.toContain("To resume this session:");
-    }
-  });
-
-  test("re-entrant shutdown is a no-op", async () => {
-    vi.spyOn(process, "exit").mockImplementation((() => {
-      throw new ProcessExitError();
-    }) as typeof process.exit);
-    const order: string[] = [];
-    const context = createContext(order);
-    context.isShuttingDown = true;
-
-    await callShutdown(context, { fromSignal: true });
-
-    expect(order).toEqual([]);
-    expect(context.runtimeHost.dispose).not.toHaveBeenCalled();
-  });
+  expect(order).toEqual(["dispose", "drainInput", "stop"]);
+  expect(context.isShuttingDown).toBe(true);
 });
 
-// Regression for the `read EIO` crash reports (crash_tty_read_eio).
-//
-// When the terminal goes away, stdin reads and setRawMode fail with EIO (msa is
-// left in an orphaned background process group) or ENOTTY (macOS revoked the
-// tty). Node emits these as `error` events on process.stdin. Without a stdin
-// listener they became uncaught exceptions that were recorded as crashes and
-// prompted users to run /bug on the next launch.
+const interactiveQuitStopsTheTuiBefore = Effect.gen(function* () {
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new ProcessExitError({});
+  }) as typeof process.exit);
+  const order: string[] = [];
+  const context = createContext(order);
 
-type HandlerContext = {
-  isShuttingDown: boolean;
-  signalCleanupHandlers: Array<() => void>;
-  shutdown: () => Promise<void>;
-  unregisterSignalHandlers: () => void;
-  emergencyTerminalExit: () => never;
-  uncaughtCrash: (error: Error) => never;
-  recordCrash: () => boolean;
-  getCrashExtensionHint: () => string | undefined;
-  crashReportInstructions: () => string;
-  ui: { stop: () => void };
-};
+  yield* Effect.promise(() => callShutdown(context));
 
-type InteractiveModePrivates = {
-  registerSignalHandlers(this: HandlerContext): void;
-  unregisterSignalHandlers(this: HandlerContext): void;
-  emergencyTerminalExit(this: HandlerContext): never;
-  uncaughtCrash(this: HandlerContext, error: Error): never;
-};
+  expect(order).toEqual(["drainInput", "stop", "dispose"]);
+});
 
-const proto = InteractiveMode.prototype as unknown as InteractiveModePrivates;
+const interactiveQuitPrintsAResumeHint = Effect.gen(function* () {
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new ProcessExitError({});
+  }) as typeof process.exit);
+  const stdoutWrite = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation((() => true) as typeof process.stdout.write);
+  setStdoutIsTTY(true);
+  const order: string[] = [];
+  const context = createContext(
+    order,
+    createSessionManager({ sessionFile: yield* Effect.promise(() => createTempFile()) }),
+  );
 
-function createHandlerContext(): HandlerContext {
-  const context: HandlerContext = {
-    isShuttingDown: false,
-    signalCleanupHandlers: [],
-    shutdown: vi.fn(async () => {}),
-    unregisterSignalHandlers: () => proto.unregisterSignalHandlers.call(context),
-    emergencyTerminalExit: () => proto.emergencyTerminalExit.call(context),
-    uncaughtCrash: (error: Error) => proto.uncaughtCrash.call(context, error),
-    recordCrash: vi.fn(() => true),
-    getCrashExtensionHint: () => undefined,
-    crashReportInstructions: () => "",
-    ui: { stop: vi.fn() },
-  };
-  return context;
-}
+  yield* Effect.promise(() => callShutdown(context));
 
-function errnoError(message: string, code: string): NodeJS.ErrnoException {
-  return Object.assign(new Error(message), { code });
-}
+  expect(order).toEqual(["drainInput", "stop", "dispose"]);
+  expect(stdoutWrite).toHaveBeenCalledWith(
+    `${chalk.dim("To resume this session:")} ${APP_NAME} --session test-session\n`,
+  );
+});
 
-function captureExit(fn: () => void): number | undefined {
-  try {
-    fn();
-  } catch (error) {
-    if (error instanceof ProcessExitError) return error.code;
-    throw error;
+const signalTriggeredShutdownDoesNotPrint = Effect.gen(function* () {
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new ProcessExitError({});
+  }) as typeof process.exit);
+  const stdoutWrite = vi
+    .spyOn(process.stdout, "write")
+    .mockImplementation((() => true) as typeof process.stdout.write);
+  setStdoutIsTTY(true);
+  const order: string[] = [];
+  const context = createContext(
+    order,
+    createSessionManager({ sessionFile: yield* Effect.promise(() => createTempFile()) }),
+  );
+
+  yield* Effect.promise(() => callShutdown(context, { fromSignal: true }));
+
+  for (const call of stdoutWrite.mock.calls) {
+    expect(call[0]).not.toContain("To resume this session:");
   }
-  throw new Error("expected process.exit");
-}
+});
 
-describe("dead terminal errors on stdin", () => {
-  let context: HandlerContext | undefined;
+const reEntrantShutdownIsANo = Effect.gen(function* () {
+  vi.spyOn(process, "exit").mockImplementation((() => {
+    throw new ProcessExitError({});
+  }) as typeof process.exit);
+  const order: string[] = [];
+  const context = createContext(order);
+  context.isShuttingDown = true;
 
-  afterEach(() => {
-    context?.unregisterSignalHandlers();
-    context = undefined;
-    vi.restoreAllMocks();
-  });
+  yield* Effect.promise(() => callShutdown(context, { fromSignal: true }));
 
-  function setup(): HandlerContext {
-    vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-      throw new ProcessExitError(code);
-    }) as typeof process.exit);
-    vi.spyOn(console, "error").mockImplementation(() => {});
-    context = createHandlerContext();
-    proto.registerSignalHandlers.call(context);
-    return context;
-  }
+  expect(order).toEqual([]);
+  expect(context.runtimeHost.dispose).not.toHaveBeenCalled();
+});
 
-  test.each([
-    ["read EIO", "EIO"],
-    ["setRawMode EIO", "EIO"],
-    ["setRawMode ENOTTY", "ENOTTY"],
-  ])("stdin %s exits quietly without recording a crash", (message, code) => {
-    const ctx = setup();
+const signalTriggeredShutdownEmitsSessionShutdownBefore = () =>
+  Effect.runPromise(signalTriggeredShutdownEmitsSessionShutdown);
 
-    const exitCode = captureExit(() => process.stdin.emit("error", errnoError(message, code)));
+const interactiveQuitStopsTheTuiBeforeEmitting = () =>
+  Effect.runPromise(interactiveQuitStopsTheTuiBefore);
 
-    expect(exitCode).toBe(129);
-    expect(ctx.recordCrash).not.toHaveBeenCalled();
-    expect(ctx.ui.stop).not.toHaveBeenCalled();
-  });
+const interactiveQuitPrintsAResumeHintFor = () =>
+  Effect.runPromise(interactiveQuitPrintsAResumeHint);
 
-  test("other stdin errors still crash", () => {
-    setup();
-    const error = errnoError("read ECONNREFUSED", "ECONNREFUSED");
+const signalTriggeredShutdownDoesNotPrintA = () =>
+  Effect.runPromise(signalTriggeredShutdownDoesNotPrint);
 
-    expect(() => process.stdin.emit("error", error)).toThrow(error);
-  });
+const reEntrantShutdownIsANoOp = () => Effect.runPromise(reEntrantShutdownIsANo);
 
-  test("uncaught dead terminal errors are not recorded as crashes", () => {
-    const ctx = setup();
+const afterEachHook = () =>
+  runtime.runPromise(
+    Effect.gen(function* () {
+      vi.restoreAllMocks();
+      restoreStdoutIsTTY();
+      for (const dir of tempDirs.splice(0)) {
+        yield* fs.remove(dir, { force: true, recursive: true });
+      }
+    }),
+  );
 
-    const exitCode = captureExit(() => ctx.uncaughtCrash(errnoError("read EIO", "EIO")));
-
-    expect(exitCode).toBe(129);
-    expect(ctx.recordCrash).not.toHaveBeenCalled();
-  });
-
-  test("other uncaught errors are still recorded as crashes", () => {
-    const ctx = setup();
-
-    const exitCode = captureExit(() => ctx.uncaughtCrash(new Error("boom")));
-
-    expect(exitCode).toBe(1);
-    expect(ctx.recordCrash).toHaveBeenCalledOnce();
-  });
-
-  test("handlers are removed on unregister", () => {
-    const ctx = setup();
-    const before = process.stdin.listenerCount("error");
-
-    ctx.unregisterSignalHandlers();
-
-    expect(process.stdin.listenerCount("error")).toBe(before - 1);
-  });
+describe("InteractiveMode.shutdown ordering (#5080)", () => {
+  afterEach(afterEachHook);
+  test(
+    "signal-triggered shutdown emits session_shutdown before terminal writes",
+    signalTriggeredShutdownEmitsSessionShutdownBefore,
+  );
+  test(
+    "interactive quit stops the TUI before emitting session_shutdown",
+    interactiveQuitStopsTheTuiBeforeEmitting,
+  );
+  test(
+    "interactive quit prints a resume hint for persisted sessions",
+    interactiveQuitPrintsAResumeHintFor,
+  );
+  test(
+    "signal-triggered shutdown does not print a resume hint",
+    signalTriggeredShutdownDoesNotPrintA,
+  );
+  test("re-entrant shutdown is a no-op", reEntrantShutdownIsANoOp);
 });

@@ -1,25 +1,25 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { createTaskPlan, parseDiscoveredCases } from "../src/plan.ts";
+import plan from "../src/plan.ts";
 
-const discovered = [{ name: "Add model > adds the model", file: "evals/models.docs.eval.ts" }];
+const { createTaskPlan, parseDiscoveredCases } = plan;
+
+const discovered = [{ file: "evals/models.docs.eval.ts", name: "adds the model" }];
 
 describe("parseDiscoveredCases", () => {
-  it("derives stable case identity from ordinary Vitest names", () => {
+  it("derives stable case identity from the eval file and Vitest name", () => {
     expect(parseDiscoveredCases(discovered)).toEqual([
       {
-        fullName: "Add model > adds the model",
-        evalSet: "Add model",
         caseId: "adds the model",
+        evalSet: "models",
         file: "evals/models.docs.eval.ts",
+        fullName: "adds the model",
       },
     ]);
   });
 
-  it("rejects ambiguous and duplicate identities", () => {
-    expect(() => parseDiscoveredCases([{ name: "adds the model", file: "model.ts" }])).toThrow(
-      "<eval set> > <case>",
-    );
+  it("rejects empty and duplicate identities", () => {
+    expect(() => parseDiscoveredCases([{ file: "model.ts", name: " " }])).toThrow("empty name");
     expect(() => parseDiscoveredCases([...discovered, ...discovered])).toThrow(
       "Duplicate eval case identity",
     );

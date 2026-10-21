@@ -1,17 +1,16 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  convertTools,
-  resolveGoogleFunctionCallingMode,
-  supportsGoogleStrictToolSampling,
-} from "../src/api/google-shared.ts";
-import type { Tool } from "../src/types.ts";
+import googleTools from "../src/api/google-tools.ts";
+import type typesModule from "../src/types.types.ts";
 
-function makeTool(parameters: Record<string, unknown>): Tool {
+const { convertTools, resolveGoogleFunctionCallingMode, supportsGoogleStrictToolSampling } =
+  googleTools;
+
+function makeTool(parameters: Record<string, unknown>): typesModule.Tool {
   return {
-    name: "test_tool",
     description: "A test tool",
-    parameters: parameters as Tool["parameters"],
+    name: "test_tool",
+    parameters: parameters as typesModule.Tool["parameters"],
   };
 }
 
@@ -19,20 +18,20 @@ describe("google-shared convertTools", () => {
   it("strips JSON Schema meta keys from parameters when useParameters=true", () => {
     const tools = [
       makeTool({
-        $schema: "http://json-schema.org/draft-07/schema#",
-        $id: "urn:bash-tool",
         $comment: "A bash tool for demonstration",
         $defs: {
           commandDef: { type: "string" },
         },
+        $id: "urn:bash-tool",
+        $schema: "http://json-schema.org/draft-07/schema#",
         definitions: {
           legacyDef: { type: "number" },
         },
-        type: "object",
         properties: {
           command: { type: "string" },
         },
         required: ["command"],
+        type: "object",
       }),
     ];
 
@@ -41,11 +40,11 @@ describe("google-shared convertTools", () => {
 
     expect(decl).toBeDefined();
     expect(decl?.["parameters"]).toEqual({
-      type: "object",
       properties: {
         command: { type: "string" },
       },
       required: ["command"],
+      type: "object",
     });
     expect(decl?.["parameters"]).not.toHaveProperty("$schema");
     expect(decl?.["parameters"]).not.toHaveProperty("$id");
@@ -53,19 +52,21 @@ describe("google-shared convertTools", () => {
     expect(decl?.["parameters"]).not.toHaveProperty("$defs");
     expect(decl?.["parameters"]).not.toHaveProperty("definitions");
   });
+});
 
+describe("google-shared convertTools", () => {
   it("recursively strips nested JSON Schema meta keys", () => {
     const tools = [
       makeTool({
         $schema: "http://json-schema.org/draft-07/schema#",
-        type: "object",
         properties: {
           deep: {
-            $schema: "http://json-schema.org/draft-07/schema#",
             $id: "urn:nested",
+            $schema: "http://json-schema.org/draft-07/schema#",
             type: "string",
           },
         },
+        type: "object",
       }),
     ];
 
@@ -74,26 +75,28 @@ describe("google-shared convertTools", () => {
 
     expect(decl).toBeDefined();
     expect(decl?.["parameters"]).toEqual({
-      type: "object",
       properties: {
         deep: {
           type: "string",
         },
       },
+      type: "object",
     });
   });
+});
 
+describe("google-shared convertTools", () => {
   it("preserves $ref while stripping meta keys", () => {
     const tools = [
       makeTool({
         $schema: "http://json-schema.org/draft-07/schema#",
-        type: "object",
         properties: {
           refProp: {
             $ref: "#/$defs/someDef",
             type: "string",
           },
         },
+        type: "object",
       }),
     ];
 
@@ -102,24 +105,26 @@ describe("google-shared convertTools", () => {
 
     expect(decl).toBeDefined();
     expect(decl?.["parameters"]).toEqual({
-      type: "object",
       properties: {
         refProp: {
           $ref: "#/$defs/someDef",
           type: "string",
         },
       },
+      type: "object",
     });
   });
+});
 
+describe("google-shared convertTools", () => {
   it("does not mutate the original Tool.parameters object", () => {
     const originalParameters = {
       $schema: "http://json-schema.org/draft-07/schema#",
-      type: "object",
       properties: {
         command: { type: "string" },
       },
       required: ["command"],
+      type: "object",
     };
     const tools = [makeTool(originalParameters)];
 
@@ -127,11 +132,11 @@ describe("google-shared convertTools", () => {
 
     expect(originalParameters).toEqual({
       $schema: "http://json-schema.org/draft-07/schema#",
-      type: "object",
       properties: {
         command: { type: "string" },
       },
       required: ["command"],
+      type: "object",
     });
   });
 
@@ -139,11 +144,11 @@ describe("google-shared convertTools", () => {
     const tools = [
       makeTool({
         $schema: "http://json-schema.org/draft-07/schema#",
-        type: "object",
         properties: {
           command: { type: "string" },
         },
         required: ["command"],
+        type: "object",
       }),
     ];
 
@@ -153,22 +158,24 @@ describe("google-shared convertTools", () => {
     expect(decl).toBeDefined();
     expect(decl?.["parametersJsonSchema"]).toEqual({
       $schema: "http://json-schema.org/draft-07/schema#",
-      type: "object",
       properties: {
         command: { type: "string" },
       },
       required: ["command"],
+      type: "object",
     });
   });
+});
 
+describe("google-shared convertTools", () => {
   it("handles tools without $schema gracefully", () => {
     const tools = [
       makeTool({
-        type: "object",
         properties: {
           path: { type: "string" },
         },
         required: ["path"],
+        type: "object",
       }),
     ];
 
@@ -177,17 +184,17 @@ describe("google-shared convertTools", () => {
 
     expect(decl).toBeDefined();
     expect(decl?.["parameters"]).toEqual({
-      type: "object",
       properties: {
         path: { type: "string" },
       },
       required: ["path"],
+      type: "object",
     });
   });
 
   it("uses validated function calling for strict tools on Gemini 3", () => {
-    const tool = makeTool({ type: "object", properties: {} });
-    tool.constrainedSampling = { type: "json_schema", strict: "require" };
+    const tool = makeTool({ properties: {}, type: "object" });
+    tool.constrainedSampling = { strict: "require", type: "json_schema" };
 
     expect(supportsGoogleStrictToolSampling("gemini-3.1-pro-preview")).toBe(true);
     expect(supportsGoogleStrictToolSampling("gemini-2.5-pro")).toBe(false);

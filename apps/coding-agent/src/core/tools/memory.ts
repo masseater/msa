@@ -1,18 +1,18 @@
-/**
- * The `memory` tool: the model's way to save, search, list, and forget long-term memories.
- */
-
+import { Effect } from "effect";
 import { type Static, Type } from "typebox";
 
-import { readOnlyVariantOf } from "../ask.ts";
-import type { ToolDefinition } from "../extensions/types.ts";
-import {
-  formatMemoryList,
-  formatSearchResults,
-  isMemoryKind,
-  type MemoryService,
-} from "../memory/memory.ts";
-import { MEMORY_KINDS, type MemoryKind, type MemoryScope } from "../memory/store.ts";
+import ask from "../ask.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import memoryFormat from "../memory/memory-format.ts";
+import type memoryTypesModule from "../memory/memory.types.ts";
+import storeTypes from "../memory/store-types.ts";
+import platform from "../platform/index.ts";
+import type platformTypes from "../platform/index.types.ts";
+
+const { MEMORY_KINDS } = storeTypes;
+const { ToolFailure, fromPromise, unwrapForeign } = platform;
+const { formatMemoryList, formatSearchResults, isMemoryKind } = memoryFormat;
+const { readOnlyVariantOf } = ask;
 
 const memorySchema = Type.Object({
   action: Type.Union(
@@ -25,21 +25,21 @@ const memorySchema = Type.Object({
   content: Type.Optional(
     Type.String({ description: "The memory text (action: save). One durable fact per memory." }),
   ),
-  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
   id: Type.Optional(Type.String({ description: "Memory id to delete (action: forget)" })),
   kind: Type.Optional(
     Type.String({
       description: `Memory kind: ${MEMORY_KINDS.join(", ")} (action: save, default fact)`,
     }),
   ),
+  limit: Type.Optional(
+    Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
+  ),
+  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
   scope: Type.Optional(
     Type.String({
       description:
         "project (default): only this repository; global: every project, for user preferences",
     }),
-  ),
-  limit: Type.Optional(
-    Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
   ),
 });
 
@@ -47,121 +47,178 @@ const memoryReadSchema = Type.Object({
   action: Type.Union([Type.Literal("search"), Type.Literal("list")], {
     description: "search: find memories by meaning and keywords; list: newest memories",
   }),
-  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
   limit: Type.Optional(
     Type.Number({ description: "Maximum results (actions: search, list; default 5)" }),
   ),
+  query: Type.Optional(Type.String({ description: "What to look for (action: search)" })),
 });
 
-export type MemoryToolInput = Static<typeof memorySchema>;
-
-export const memoryToolSystemPromptContribution = {
-  snippet: "Save, search, list, and forget long-term memories across sessions",
+const memoryToolSystemPromptContribution = {
   guidelines: [
     "Use the memory tool to save durable facts, user preferences, and decisions that future sessions need; do not save transient details",
   ],
+  snippet: "Save, search, list, and forget long-term memories across sessions",
 } as const;
 
-export function createMemoryToolDefinition(
-  service: MemoryService,
-): ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
-  const memory: ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> = {
-    name: "memory",
-    label: "memory",
+type MemoryParams = Static<typeof memorySchema>;
+
+interface MemoryToolResult {
+  content: Array<{ type: "text"; text: string }>;
+  details: Record<string, unknown>;
+}
+
+const textResult = (text: string, details: Record<string, unknown>): MemoryToolResult => ({
+  content: [{ text, type: "text" }],
+  details,
+});
+
+const requireText = Effect.fn("requireText")(function* (
+  value: string | undefined,
+  action: string,
+  field: string,
+) {
+  const trimmed = value?.trim();
+  if (trimmed === undefined || trimmed === "") {
+    return yield* new ToolFailure({ message: `action ${action} requires ${field}` });
+  }
+  return trimmed;
+});
+
+const parseKind = Effect.fn("parseKind")(function* (raw: string | undefined) {
+  const rawKind = raw?.trim();
+  if (rawKind === undefined || rawKind === "") return undefined;
+  if (!isMemoryKind(rawKind)) {
+    return yield* new ToolFailure({
+      message: `Unknown memory kind "${rawKind}"; use one of ${MEMORY_KINDS.join(", ")}`,
+    });
+  }
+  return rawKind;
+});
+
+const parseScope = Effect.fn("parseScope")(function* (raw: string | undefined) {
+  const rawScope = raw?.trim();
+  if (rawScope === undefined || rawScope === "") return undefined;
+  if (rawScope !== "project" && rawScope !== "global") {
+    return yield* new ToolFailure({
+      message: `Unknown memory scope "${rawScope}"; use project or global`,
+    });
+  }
+  return rawScope;
+});
+
+const saveMemory = Effect.fn("memorySave")(function* (
+  service: memoryTypesModule.MemoryService,
+  params: MemoryParams,
+) {
+  const content = yield* requireText(params.content, "save", "content");
+  const kind = yield* parseKind(params.kind);
+  const scope = yield* parseScope(params.scope);
+  const outcome = yield* fromPromise(() =>
+    service.save({
+      content,
+      ...(kind === undefined ? {} : { kind }),
+      ...(scope === undefined ? {} : { scope }),
+    }),
+  );
+  const { record } = outcome;
+  const where = record.scope === "global" ? "global" : `project:${record.project}`;
+  const lines = [
+    outcome.created
+      ? `Saved memory ${record.id} (${record.kind}, ${where}).`
+      : `Updated memory ${record.id} (${record.kind}).`,
+  ];
+  if (!outcome.embedded) {
+    const reason =
+      outcome.embeddingError !== undefined && outcome.embeddingError !== ""
+        ? `: ${outcome.embeddingError}`
+        : "";
+    lines.push(`Saved without an embedding${reason}; it stays searchable by keyword.`);
+  }
+  return textResult(lines.join("\n"), {
+    action: "save",
+    created: outcome.created,
+    embedded: outcome.embedded,
+    id: record.id,
+  });
+});
+
+const searchMemory = Effect.fn("memorySearch")(function* (
+  service: memoryTypesModule.MemoryService,
+  params: MemoryParams,
+) {
+  const query = yield* requireText(params.query, "search", "query");
+  const scores = yield* fromPromise(() => service.search(query, params.limit ?? 5));
+  return textResult(formatSearchResults(scores), { action: "search", count: scores.length, query });
+});
+
+const forgetMemory = Effect.fn("memoryForget")(function* (
+  service: memoryTypesModule.MemoryService,
+  params: MemoryParams,
+) {
+  const id = yield* requireText(params.id, "forget", "id");
+  const forgotten = service.forget(id);
+  return textResult(forgotten ? `Forgot memory ${id}.` : `No memory with id ${id}.`, {
+    action: "forget",
+    forgotten,
+    id,
+  });
+});
+
+const listMemory = (service: memoryTypesModule.MemoryService, params: MemoryParams) =>
+  Effect.map(
+    fromPromise(() => service.list(params.limit ?? 20)),
+    (records) => textResult(formatMemoryList(records), { action: "list", count: records.length }),
+  );
+
+const runMemoryAction = (
+  service: memoryTypesModule.MemoryService,
+  params: MemoryParams,
+): Effect.Effect<MemoryToolResult, platformTypes.ForeignError | platformTypes.ToolFailure> => {
+  switch (params.action) {
+    case "save":
+      return saveMemory(service, params);
+    case "search":
+      return searchMemory(service, params);
+    case "list":
+      return listMemory(service, params);
+    case "forget":
+      return forgetMemory(service, params);
+  }
+};
+
+function createMemoryToolDefinition(
+  service: memoryTypesModule.MemoryService,
+): extensionsTypesTypes.ToolDefinition<typeof memorySchema, Record<string, unknown> | undefined> {
+  const memory: extensionsTypesTypes.ToolDefinition<
+    typeof memorySchema,
+    Record<string, unknown> | undefined
+  > = {
     description:
       "Long-term memory shared across sessions. Save durable facts, user preferences, and decisions (one per memory); search before assuming something was never decided; forget memories the user wants removed. Memories are scoped to this project by default, or global for user-level preferences.",
-    promptSnippet: memoryToolSystemPromptContribution.snippet,
-    promptGuidelines: [...memoryToolSystemPromptContribution.guidelines],
+    execute: (_toolCallId, params) =>
+      Effect.runPromise(unwrapForeign(runMemoryAction(service, params))),
+    label: "memory",
+    name: "memory",
     parameters: memorySchema,
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-      switch (params.action) {
-        case "save": {
-          const content = params.content?.trim();
-          if (!content) throw new Error("action save requires content");
-          let kind: MemoryKind | undefined;
-          const rawKind = params.kind?.trim();
-          if (rawKind) {
-            if (!isMemoryKind(rawKind)) {
-              throw new Error(
-                `Unknown memory kind "${rawKind}"; use one of ${MEMORY_KINDS.join(", ")}`,
-              );
-            }
-            kind = rawKind;
-          }
-          let scope: MemoryScope | undefined;
-          const rawScope = params.scope?.trim();
-          if (rawScope) {
-            if (rawScope !== "project" && rawScope !== "global") {
-              throw new Error(`Unknown memory scope "${rawScope}"; use project or global`);
-            }
-            scope = rawScope;
-          }
-          const outcome = await service.save({
-            content,
-            ...(kind ? { kind } : {}),
-            ...(scope ? { scope } : {}),
-          });
-          const lines = [
-            outcome.created
-              ? `Saved memory ${outcome.record.id} (${outcome.record.kind}, ${outcome.record.scope === "global" ? "global" : `project:${outcome.record.project}`}).`
-              : `Updated memory ${outcome.record.id} (${outcome.record.kind}).`,
-          ];
-          if (!outcome.embedded) {
-            lines.push(
-              `Saved without an embedding${outcome.embeddingError ? `: ${outcome.embeddingError}` : ""}; it stays searchable by keyword.`,
-            );
-          }
-          return {
-            content: [{ type: "text", text: lines.join("\n") }],
-            details: {
-              action: "save",
-              id: outcome.record.id,
-              created: outcome.created,
-              embedded: outcome.embedded,
-            },
-          };
-        }
-        case "search": {
-          const query = params.query?.trim();
-          if (!query) throw new Error("action search requires query");
-          const scores = await service.search(query, params.limit ?? 5);
-          return {
-            content: [{ type: "text", text: formatSearchResults(scores) }],
-            details: { action: "search", query, count: scores.length },
-          };
-        }
-        case "list": {
-          const records = service.list(params.limit ?? 20);
-          return {
-            content: [{ type: "text", text: formatMemoryList(records) }],
-            details: { action: "list", count: records.length },
-          };
-        }
-        case "forget": {
-          const id = params.id?.trim();
-          if (!id) throw new Error("action forget requires id");
-          const forgotten = service.forget(id);
-          return {
-            content: [
-              {
-                type: "text",
-                text: forgotten ? `Forgot memory ${id}.` : `No memory with id ${id}.`,
-              },
-            ],
-            details: { action: "forget", id, forgotten },
-          };
-        }
-      }
-    },
+    promptGuidelines: [...memoryToolSystemPromptContribution.guidelines],
+    promptSnippet: memoryToolSystemPromptContribution.snippet,
   };
   return {
     ...memory,
     readOnlyVariant: readOnlyVariantOf(memory, {
       actions: ["search", "list"],
-      parameters: memoryReadSchema,
       description:
         "Long-term memory shared across sessions, read only: search memories by meaning and keywords, or list the newest.",
+      parameters: memoryReadSchema,
       promptSnippet: "Search and list long-term memories across sessions",
     }),
   };
 }
+
+const memory = {
+  createMemoryToolDefinition,
+  memorySchema,
+  memoryToolSystemPromptContribution,
+};
+
+export default memory;

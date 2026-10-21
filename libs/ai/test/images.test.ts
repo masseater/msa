@@ -1,84 +1,78 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { Console, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getImageModel } from "../src/image-models.ts";
-import { generateImages } from "../src/images.ts";
-import type {
-  ImageContent,
-  ImageModel,
-  ImagesContext,
-  ProviderImagesOptions,
-} from "../src/types.ts";
+import imageModelsModule from "../src/image-models.ts";
+import images from "../src/images.ts";
+import type typesModule from "../src/types.types.ts";
+import env from "./env.ts";
+import redCircle from "./red-circle.ts";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const { generateImages } = images;
+const { getImageModels } = imageModelsModule;
 
-type ImagesOptionsWithExtras = ProviderImagesOptions & Record<string, unknown>;
+const { envValue } = env;
 
-async function basicImageGeneration<TApi extends string>(
-  model: ImageModel<TApi>,
+type ImagesOptionsWithExtras = typesModule.ProviderImagesOptions & Record<string, unknown>;
+
+const basicImageGeneration = Effect.fn("basicImageGeneration")(function* <TApi extends string>(
+  model: typesModule.ImageModel<TApi>,
   options?: ImagesOptionsWithExtras,
 ) {
-  const context: ImagesContext = {
+  const context: typesModule.ImagesContext = {
     input: [
-      { type: "text", text: "Generate a simple red circle on a plain white background. No text." },
+      { text: "Generate a simple red circle on a plain white background. No text.", type: "text" },
     ],
   };
 
-  const response = await generateImages(model, context, options);
+  const response = yield* Effect.promise(() => generateImages(model, context, options));
 
   expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
   expect(response.errorMessage).toBeFalsy();
   expect(response.output.some((item) => item.type === "image")).toBe(true);
   expect(response.timestamp).toBeGreaterThan(0);
-}
+});
 
-async function handleImageInput<TApi extends string>(
-  model: ImageModel<TApi>,
+const handleImageInput = Effect.fn("handleImageInput")(function* <TApi extends string>(
+  model: typesModule.ImageModel<TApi>,
   options?: ImagesOptionsWithExtras,
 ) {
   if (!model.input.includes("image")) {
-    console.log(`Skipping image input test - model ${model.id} doesn't support image input`);
+    yield* Console.log(`Skipping image input test - model ${model.id} doesn't support image input`);
     return;
   }
 
-  const imagePath = join(__dirname, "data", "red-circle.png");
-  const imageBuffer = readFileSync(imagePath);
-  const imageContent: ImageContent = {
-    type: "image",
-    data: imageBuffer.toString("base64"),
+  const imageContent: typesModule.ImageContent = {
+    data: redCircle.data,
     mimeType: "image/png",
+    type: "image",
   };
 
-  const context: ImagesContext = {
+  const context: typesModule.ImagesContext = {
     input: [
-      { type: "text", text: "Create a variation of this image with a blue background." },
+      { text: "Create a variation of this image with a blue background.", type: "text" },
       imageContent,
     ],
   };
 
-  const response = await generateImages(model, context, options);
+  const response = yield* Effect.promise(() => generateImages(model, context, options));
 
   expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
   expect(response.output.some((item) => item.type === "image")).toBe(true);
-}
+});
 
 describe("Images E2E Tests", () => {
-  describe.skipIf(!process.env["OPENROUTER_API_KEY"])(
-    "OpenRouter Images Provider (google/gemini-2.5-flash-image)",
-    () => {
-      const model = getImageModel("openrouter", "google/gemini-2.5-flash-image");
+  describe.skipIf(
+    envValue("OPENROUTER_API_KEY") === undefined || envValue("OPENROUTER_API_KEY") === "",
+  )("OpenRouter Images Provider (image input)", () => {
+    const [model] = getImageModels("openrouter")
+      .filter((candidate) => candidate.input.includes("image"))
+      .toSorted((a, b) => a.cost.input + a.cost.output - (b.cost.input + b.cost.output));
+    if (model === undefined) throw new Error("The openrouter catalog has no image-input model");
 
-      it("should generate a basic image", { retry: 3 }, async () => {
-        await basicImageGeneration(model);
-      });
+    it("should generate a basic image", { retry: 3 }, () =>
+      Effect.runPromise(basicImageGeneration(model)),
+    );
 
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImageInput(model);
-      });
-    },
-  );
+    it("should handle image input", { retry: 3 }, () => Effect.runPromise(handleImageInput(model)));
+  });
 });

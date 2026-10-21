@@ -1,37 +1,16 @@
-/**
- * Program Status Protocol (OSC 7501): a program tells the terminal whether it is idle, working,
- * blocked on the user, done, or failed. Only the root record is supported.
- *
- * Spec: https://www.superlogical.com/rex/docs/build/program-status
- */
+import ansiSequences from "./ansi-sequences.ts";
+import type programStatusTypes from "./program-status.types.ts";
 
-export interface ProgramStatus {
-  /** `clear` removes the status instead of reporting one. */
-  state: "idle" | "working" | "blocked" | "done" | "error" | "clear";
-  /** Stable program name, `[A-Za-z0-9_.+-]{1,32}`. Other values are omitted. */
-  app?: string;
-  /** What a blocked program waits for. Omitted for other states. */
-  kind?: "permission" | "question" | "auth";
-  /** One human-readable line. Control characters become spaces; longer text is cut to the spec limit. */
-  message?: string;
-}
+const { matchStringSequence, replaceControlRuns } = ansiSequences;
 
-/** Feature detection query. A supporting terminal replies with the same body. */
-export const PROGRAM_STATUS_QUERY = "\x1b]7501;?\x1b\\";
+const PROGRAM_STATUS_QUERY = "\x1b]7501;?\x1b\\";
 
-/**
- * The reply to {@link PROGRAM_STATUS_QUERY}. Later spec revisions may add pairs after the `?`.
- *
- * @param {string} sequence - A sequence read from the terminal.
- * @returns {boolean} Whether the sequence is such a reply.
- */
-export function isProgramStatusReply(sequence: string): boolean {
-  return /^\x1b\]7501;\?[^\x07\x1b]*(?:\x07|\x1b\\)$/u.test(sequence);
+function isProgramStatusReply(sequence: string): boolean {
+  return matchStringSequence({ body: PROGRAM_STATUS_BODY, data: sequence, kind: "osc" }) !== null;
 }
 
 const APP_PATTERN = /^[A-Za-z0-9_.+-]{1,32}$/u;
-const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]+/gu;
-/** Decoded `msg` limit. Its base64 encoding stays under the 2732-byte encoded limit. */
+const PROGRAM_STATUS_BODY = /^7501;\?.*$/su;
 const MAX_MESSAGE_BYTES = 2048;
 
 function truncateUtf8(text: string, maxBytes: number): string {
@@ -47,20 +26,22 @@ function truncateUtf8(text: string, maxBytes: number): string {
   return text.slice(0, end);
 }
 
-/**
- * Encode a status report. Terminals discard reports whose text contains control characters, so they are replaced.
- *
- * @param {ProgramStatus} status - The status to report.
- * @returns {string} The OSC sequence to write to the terminal.
- */
-export function formatProgramStatus(status: ProgramStatus): string {
+function formatProgramStatus(status: programStatusTypes.ProgramStatus): string {
   const pairs = [`state=${status.state}`];
   if (status.app !== undefined && APP_PATTERN.test(status.app)) pairs.push(`app=${status.app}`);
-  if (status.state === "blocked" && status.kind) pairs.push(`kind=${status.kind}`);
+  if (status.state === "blocked" && status.kind !== undefined) pairs.push(`kind=${status.kind}`);
   const message = truncateUtf8(
-    (status.message ?? "").replace(CONTROL_CHARACTERS, " ").trim(),
+    replaceControlRuns(status.message ?? "", " ").trim(),
     MAX_MESSAGE_BYTES,
   );
-  if (message) pairs.push(`msg=${Buffer.from(message, "utf8").toString("base64")}`);
+  if (message !== "") pairs.push(`msg=${Buffer.from(message, "utf8").toString("base64")}`);
   return `\x1b]7501;${pairs.join(":")}\x1b\\`;
 }
+
+const programStatus = {
+  PROGRAM_STATUS_QUERY,
+  formatProgramStatus,
+  isProgramStatusReply,
+};
+
+export default programStatus;

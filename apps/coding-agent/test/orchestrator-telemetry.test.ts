@@ -1,32 +1,40 @@
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { harness } from "./orchestrator-harness.ts";
+import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
 
-const TASK = { title: "a", currentState: "a is not done", goalState: "a is done" };
+const TASK = { currentState: "a is not done", goalState: "a is done", title: "a" };
 
-it("traces a task through its worker and reviewer threads and logs each report", () =>
+const tracesATaskThroughItsWorkerAndSetup = () =>
+  Effect.gen(function* () {
+    const { orchestrator, workers, telemetry } = setup();
+    const task = yield* Effect.promise(() => orchestrator.createTask(TASK));
+    yield* Effect.promise(() =>
+      workers[0]!.telemetry.context.startSpan({ name: "msa.turn" }, () => undefined),
+    );
+    workers[0]?.complete("did a");
+    yield* waitFor(() => workers.length === 2);
+    workers[1]?.complete("looks good");
+    yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+
+    const spans = telemetry.getSpans();
+    return { spans, task, telemetry, workers };
+  });
+
+const tracesATaskThroughItsWorkerAnd = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, workers, telemetry } = setup();
-      const task = yield* Effect.promise(() => orchestrator.createTask(TASK));
-      yield* Effect.promise(() =>
-        workers[0]!.telemetry.context.startSpan({ name: "msa.turn" }, () => undefined),
-      );
-      workers[0]?.complete("did a");
-      yield* waitFor(() => workers.length === 2);
-      workers[1]?.complete("looks good");
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
-
-      const spans = telemetry.getSpans();
+      const { spans, task, telemetry, workers } = yield* tracesATaskThroughItsWorkerAndSetup();
       const taskSpan = spans.find((span) => span.name === "msa.task");
       expect(taskSpan).toMatchObject({
+        attributes: { "msa.task.id": task.id, "msa.task.status": "completed" },
         parentId: null,
         settled: true,
         status: { status: "ok" },
-        attributes: { "msa.task.id": task.id, "msa.task.status": "completed" },
       });
       const threads = spans.filter(
         (span) => span.name === "msa.thread" && span.attributes["msa.task.id"] === task.id,
@@ -66,9 +74,14 @@ it("traces a task through its worker and reviewer threads and logs each report",
       expect(active[0]).toBe(0);
       expect(active).toContain(1);
     }),
-  ));
+  );
 
-it("ends the spans of a stopped task as errors", () =>
+it(
+  "traces a task through its worker and reviewer threads and logs each report",
+  tracesATaskThroughItsWorkerAnd,
+);
+
+const endsTheSpansOfAStoppedTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, telemetry } = setup();
@@ -80,12 +93,14 @@ it("ends the spans of a stopped task as errors", () =>
         .getSpans()
         .filter((span) => span.attributes["msa.task.id"] === task.id);
       expect(spans.map((span) => [span.name, span.settled, span.status])).toEqual([
-        ["msa.task", true, { status: "error", error: { name: "TaskFailed", message: "stopped" } }],
+        ["msa.task", true, { error: { message: "stopped", name: "TaskFailed" }, status: "error" }],
         [
           "msa.thread",
           true,
-          { status: "error", error: { name: "ThreadFailed", message: "stopped" } },
+          { error: { message: "stopped", name: "ThreadFailed" }, status: "error" },
         ],
       ]);
     }),
-  ));
+  );
+
+it("ends the spans of a stopped task as errors", endsTheSpansOfAStoppedTask);

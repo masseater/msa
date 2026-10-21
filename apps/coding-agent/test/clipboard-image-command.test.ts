@@ -1,32 +1,45 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { describe, expect, test } from "vite-plus/test";
 
-import { afterAll, describe, expect, test } from "vite-plus/test";
+import clipboardImage from "../src/utils/clipboard-image.ts";
 
-import { readClipboardImageFromCommand } from "../src/utils/clipboard-image.ts";
+const { readClipboardImageFromCommand } = clipboardImage;
 
-const dir = mkdtempSync(join(tmpdir(), "msa-clipboard-command-"));
-afterAll(() => rmSync(dir, { recursive: true, force: true }));
+const { awaited, makeTempFile, removePath, runTest, writeBytesFile } = testing;
+
+const readsTheImageTheCommandPrints = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { directory, path } = yield* makeTempFile("msa-clipboard-command-", "clip.png");
+      const png = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      yield* writeBytesFile(path, png);
+
+      yield* Effect.gen(function* () {
+        const image = yield* awaited(readClipboardImageFromCommand(`cat '${path}'`));
+
+        expect(image?.mimeType).toBe("image/png");
+        expect([...(image?.bytes ?? [])]).toEqual([...png]);
+      }).pipe(Effect.ensuring(removePath(directory)));
+    }),
+  );
+
+const tellsNoOutputApartFromAFailure = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(yield* awaited(readClipboardImageFromCommand("true"))).toBeNull();
+      expect(yield* awaited(readClipboardImageFromCommand("exit 1"))).toBeUndefined();
+      expect(
+        yield* awaited(readClipboardImageFromCommand("printf 'not an image'")),
+      ).toBeUndefined();
+    }),
+  );
 
 describe.skipIf(process.platform === "win32")("readClipboardImageFromCommand", () => {
-  test("reads the image the command prints", async () => {
-    const png = Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==",
-      "base64",
-    );
-    const file = join(dir, "clip.png");
-    writeFileSync(file, png);
+  test("reads the image the command prints", readsTheImageTheCommandPrints);
 
-    const image = await readClipboardImageFromCommand(`cat '${file}'`);
-
-    expect(image?.mimeType).toBe("image/png");
-    expect([...(image?.bytes ?? [])]).toEqual([...png]);
-  });
-
-  test("tells no output apart from a failure", async () => {
-    expect(await readClipboardImageFromCommand("true")).toBeNull();
-    expect(await readClipboardImageFromCommand("exit 1")).toBeUndefined();
-    expect(await readClipboardImageFromCommand("printf 'not an image'")).toBeUndefined();
-  });
+  test("tells no output apart from a failure", tellsNoOutputApartFromAFailure);
 });

@@ -1,76 +1,105 @@
-import type { CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
-import { resolveCliModel } from "../core/model-resolver.ts";
-import { ModelRuntime } from "../core/model-runtime.ts";
-import { InMemoryCodingAgentModelsStore } from "../core/models-store.ts";
-import type { Args } from "./args.ts";
-import { AuthCommandError, getAuthCredential, validateAuthCommandArgs } from "./auth-command.ts";
+import awaitingModule from "../core/awaiting.ts";
+import cliModelFlag from "../core/cli-model.ts";
+import type modelRuntimeTypes from "../core/model-runtime.types.ts";
+import type argsTypes from "./args.types.ts";
+import type authCheckTypes from "./auth-check.types.ts";
+import AuthCommandError from "./auth-command-error.ts";
+import authCommand from "./auth-command.ts";
 
-export type AuthCheckStatus = "ready" | "not_ready" | "invalid";
-export type AuthCheckReason =
-  | "provider_not_found"
-  | "credentials_not_configured"
-  | "credential_not_available"
-  | "invalid_state";
+const { awaited, awaiting } = awaitingModule;
+const { getAuthCredential, validateAuthCommandArgs } = authCommand;
+const { resolveCliModel } = cliModelFlag;
 
-export interface AuthCheckResult {
-  status: AuthCheckStatus;
-  provider: string;
-  reason?: AuthCheckReason;
-  authType?: "api_key" | "oauth";
-}
-
-export async function checkProviderAuth(
-  args: Args,
-  modelRuntime: ModelRuntime,
+function checkProviderAuthImpl(
+  args: argsTypes.Args,
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
   options: { refresh: boolean } = { refresh: false },
-): Promise<AuthCheckResult> {
-  const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
-  let provider = cliProvider;
-  if (cliModel) {
-    const resolved = resolveCliModel({ cliProvider, cliModel, modelRuntime });
-    if (resolved.error || !resolved.model) {
-      throw new AuthCommandError(resolved.error ?? `Unable to resolve model "${cliModel}"`);
-    }
-    provider = resolved.model.provider;
-  }
-  if (!provider) throw new AuthCommandError("Unable to resolve an auth provider");
-  if (modelRuntime.getError()) {
-    return { status: "invalid", provider, reason: "invalid_state" };
-  }
-  if (!modelRuntime.getProvider(provider)) {
-    return { status: "not_ready", provider, reason: "provider_not_found" };
-  }
-  try {
-    const auth = await modelRuntime.checkAuth(provider);
-    if (!auth) return { status: "not_ready", provider, reason: "credentials_not_configured" };
-    if (options.refresh && !(await modelRuntime.getAuth(provider))) {
-      return { status: "not_ready", provider, reason: "credentials_not_configured" };
-    }
-    return { status: "ready", provider, authType: auth.type };
-  } catch {
-    return { status: "invalid", provider, reason: "invalid_state" };
-  }
+): Promise<authCheckTypes.AuthCheckResult> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, "check");
+      let provider = cliProvider;
+      if (cliModel !== undefined && cliModel !== "") {
+        const resolved = resolveCliModel({ cliModel, cliProvider, modelRuntime });
+        if (
+          (resolved.error !== undefined && resolved.error !== "") ||
+          resolved.model === undefined
+        ) {
+          throw new AuthCommandError(resolved.error ?? `Unable to resolve model "${cliModel}"`);
+        }
+        provider = resolved.model.provider;
+      }
+      if (provider === undefined || provider === "")
+        throw new AuthCommandError("Unable to resolve an auth provider");
+      if (modelRuntime.getError() !== undefined) {
+        return { provider, reason: "invalid_state", status: "invalid" };
+      }
+      if (modelRuntime.getProvider(provider) === undefined) {
+        return { provider, reason: "provider_not_found", status: "not_ready" };
+      }
+      try {
+        const auth = yield* awaited(modelRuntime.checkAuth(provider));
+        if (auth === undefined)
+          return { provider, reason: "credentials_not_configured", status: "not_ready" };
+        if (options.refresh && (yield* awaited(modelRuntime.getAuth(provider))) === undefined) {
+          return { provider, reason: "credentials_not_configured", status: "not_ready" };
+        }
+        return { authType: auth.type, provider, status: "ready" };
+      } catch {
+        return { provider, reason: "invalid_state", status: "invalid" };
+      }
+    }),
+  );
 }
 
-export async function getProviderCredential(
+const checkProviderAuth: {
+  (
+    args: argsTypes.Args,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+    options?: { refresh: boolean },
+  ): Promise<authCheckTypes.AuthCheckResult>;
+  (
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+    options?: { refresh: boolean },
+  ): (args: argsTypes.Args) => Promise<authCheckTypes.AuthCheckResult>;
+} = dual((args: IArguments) => args.length >= 2, checkProviderAuthImpl);
+
+function getProviderCredentialImpl(
   providerId: string,
-  modelRuntime: ModelRuntime,
-  credentials: CredentialStore,
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
+  credentials: aiTypes.CredentialStore,
   options: { refresh: boolean },
 ): Promise<string | undefined> {
-  const credential = await credentials.read(providerId);
-  if (!options.refresh && credential?.type === "oauth") return credential.access;
-  return getAuthCredential(await modelRuntime.getAuth(providerId));
+  return Effect.runPromise(
+    awaiting(function* () {
+      const credential = yield* awaited(credentials.read(providerId));
+      if (!options.refresh && credential?.type === "oauth") return credential.access;
+      return getAuthCredential(yield* awaited(modelRuntime.getAuth(providerId)));
+    }),
+  );
 }
 
-export async function createAuthCheckModelRuntime(
-  credentials: CredentialStore,
-): Promise<ModelRuntime> {
-  return ModelRuntime.create({
-    credentials,
-    modelsStore: new InMemoryCodingAgentModelsStore(),
-    allowModelNetwork: false,
-    refreshOnCreate: false,
-  });
-}
+const getProviderCredential: {
+  (
+    providerId: string,
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+    credentials: aiTypes.CredentialStore,
+    options: { refresh: boolean },
+  ): Promise<string | undefined>;
+  (
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+    credentials: aiTypes.CredentialStore,
+    options: { refresh: boolean },
+  ): (providerId: string) => Promise<string | undefined>;
+} = dual((args: IArguments) => args.length >= 4, getProviderCredentialImpl);
+
+const authCheck = {
+  checkProviderAuth,
+  getProviderCredential,
+};
+
+export default authCheck;

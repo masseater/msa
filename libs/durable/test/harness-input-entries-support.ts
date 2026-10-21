@@ -1,76 +1,100 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  type Context as ModelContext,
-  Type,
-} from "@msa/ai";
-import {
-  type Conversation,
-  defineTool,
-  type EntryRecord,
-  type Harness,
-  InboxDoc,
-  LiveDoc,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { type ChatSetup, textOf, waitFor } from "./chat-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import harnessInputEntriesSupportKit from "./harness-input-entries-support-kit.ts";
+import type harnessInputEntriesSupportTypes from "./harness-input-entries-support.types.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export function answer(text: string): AssistantMessage {
+const { chatSupport, effectSupport } = harnessInputEntriesSupportKit;
+
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
+
+const { InboxDoc, LiveDoc, defineTool } = durable;
+
+const { textOf, waitFor } = chatSupport;
+const { awaited } = effectSupport;
+const { addTool } = harnessSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
+
+function answer(text: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
 
-// A faux response held until `release` or cancellation; `reached` resolves when the request is sent.
-export function gated(message: AssistantMessage): {
-  step: FauxResponseStep;
+function gated(message: aiTypes.AssistantMessage): {
+  step: aiTypes.FauxResponseStep;
   reached: Promise<void>;
   release: () => void;
 } {
   const reached = deferred();
   const gate = deferred();
-  const step: FauxResponseStep = async (_request, options) => {
-    reached.resolve();
-    await Promise.race([gate.promise, aborted(options!.signal!)]);
-    return message;
-  };
-  return { step, reached: reached.promise, release: () => gate.resolve() };
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        reached.resolve();
+        yield* awaited(Promise.race([gate.promise, aborted(options!.signal!)]));
+        return message;
+      }),
+    );
+  return { reached: reached.promise, release: () => gate.resolve(), step };
 }
 
-// Register a `hold` tool whose calls wait for `gate`.
-export function holdTool(setup: ChatSetup, gate: Deferred): void {
+function holdToolImpl(
+  setup: harnessInputEntriesSupportTypes.ChatSetup,
+  gate: PromiseWithResolvers<void>,
+): void {
   addTool(
     setup.registry,
     defineTool({
-      name: "hold",
       description: "Waits for the test",
+      execute: () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(gate.promise);
+            return { output: [{ text: "held", type: "text" }] };
+          }),
+        ),
+      name: "hold",
       parameters: Type.Object({}),
-      execute: async () => {
-        await gate.promise;
-        return { output: [{ type: "text", text: "held" }] };
-      },
     }),
   );
 }
 
-export const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
+const holdTool: {
+  (
+    gate: PromiseWithResolvers<void>,
+  ): (setup: harnessInputEntriesSupportTypes.ChatSetup) => ReturnType<typeof holdToolImpl>;
+  (
+    setup: harnessInputEntriesSupportTypes.ChatSetup,
+    gate: PromiseWithResolvers<void>,
+  ): ReturnType<typeof holdToolImpl>;
+} = dual(2, holdToolImpl);
+
+const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
   stopReason: "toolUse",
 });
 
-// Role and text of each request message, as the provider receives them.
-export function requestLog(requests: string[][], reply: AssistantMessage): FauxResponseStep {
-  return (request: ModelContext) => {
+function requestLogImpl(
+  requests: string[][],
+  reply: aiTypes.AssistantMessage,
+): aiTypes.FauxResponseStep {
+  return (request: aiTypes.Context) => {
     requests.push(request.messages.map((message) => `${message.role}:${textOf(message) ?? ""}`));
     return reply;
   };
 }
 
-// Kind, application data, and model text of each entry, skipping system entries.
-export function transcript(entries: readonly EntryRecord[]): unknown[][] {
+const requestLog: {
+  (reply: aiTypes.AssistantMessage): (requests: string[][]) => ReturnType<typeof requestLogImpl>;
+  (requests: string[][], reply: aiTypes.AssistantMessage): ReturnType<typeof requestLogImpl>;
+} = dual(2, requestLogImpl);
+
+function transcript(entries: readonly harnessInputEntriesSupportTypes.EntryRecord[]): unknown[][] {
   return entries
     .filter((entry) => entry.kind !== "msa.system")
     .map((entry) => {
@@ -84,15 +108,39 @@ export function transcript(entries: readonly EntryRecord[]): unknown[][] {
     });
 }
 
-export async function inboxItems(harness: Harness, root: Conversation) {
-  return (await harness.snapshot(InboxDoc, root.id, context))!.items;
-}
+const inboxItems = Effect.fn("inboxItems")(function* (
+  harness: harnessInputEntriesSupportTypes.Harness,
+  root: harnessInputEntriesSupportTypes.Conversation,
+) {
+  return (yield* awaited(harness.snapshot(InboxDoc, root.id, context)))!.items;
+});
 
-export async function toolRunning(harness: Harness, root: Conversation): Promise<void> {
-  await waitFor(
-    async () =>
-      (await harness.snapshot(LiveDoc, root.id, context))?.tools?.[0]?.status === "running",
+const toolRunning = Effect.fn("toolRunning")(function* (
+  harness: harnessInputEntriesSupportTypes.Harness,
+  root: harnessInputEntriesSupportTypes.Conversation,
+) {
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status ===
+        "running"
+      );
+    }),
   );
-}
+});
 
-export const mention = (text: string) => ({ kind: "chat.mention", data: { author: "ann", text } });
+const mention = (text: string) => ({ data: { author: "ann", text }, kind: "chat.mention" });
+
+const harnessInputEntriesSupport = {
+  HOLD,
+  answer,
+  gated,
+  holdTool,
+  inboxItems,
+  mention,
+  requestLog,
+  toolRunning,
+  transcript,
+};
+
+export default harnessInputEntriesSupport;

@@ -1,33 +1,37 @@
-import type { AssistantMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { openaiProvider } from "@msa/ai/providers/openai";
-// Print mode: submit one prompt and print its answer, like `msa -p`. The host awaits its own Submission, not global
-// idle. Uses OpenAI when OPENAI_API_KEY is set, and a scripted faux model otherwise.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/18-print.ts "What is in this directory?"
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import openai from "@msa/ai/providers/openai";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
+import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  AssistantEntry,
-  createRegistry,
-  defineExtension,
-  Harness,
-  MemoryStorage,
-  section,
-} from "../../src/index.ts";
-import { createBashTool, createReadTool } from "../../src/tools/index.ts";
+import support from "../support.ts";
+import example18PrintKit from "./18-print-kit.ts";
+
+const { node, tools: toolsModule } = example18PrintKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
+
+const { Harness, createRegistry } = harnessModule;
+const { AssistantEntry, defineExtension, section } = durable;
+const { createBashTool, createReadTool } = toolsModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 const prompt = process.argv[2] ?? "What is in this directory?";
 
 const models = createModels();
-let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env["OPENAI_API_KEY"] === undefined) {
+let model = { modelId: "gpt-6-sol", provider: "openai" };
+if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
   const faux = fauxProvider();
   models.setProvider(faux.provider);
-  model = { provider: "faux", modelId: "faux-1" };
+  model = { modelId: "faux-1", provider: "faux" };
   faux.setResponses([
     fauxAssistantMessage([fauxToolCall("bash", { command: "ls" }, { id: "call-1" })], {
       stopReason: "toolUse",
@@ -44,28 +48,35 @@ const registry = createRegistry();
 registry.install(
   defineExtension({
     name: "coding",
-    tools: [createReadTool(), createBashTool()],
     sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
+    tools: [createReadTool(), createBashTool()],
   }),
 );
 const env = new NodeExecutionEnv({ cwd: process.cwd() });
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models, registry, env: () => env },
-  context,
-);
-const root = await harness.root(context, { agent: { model } });
 
-const submission = await root.submit({ type: "input", content: prompt }, context);
-const settled = await submission.wait(context);
-if (settled.status === "done" && settled.type === "input") {
-  const entry = await root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context);
-  const answer = entry?.model?.[0] as AssistantMessage;
-  console.log(
-    answer.content.flatMap((content) => (content.type === "text" ? [content.text] : [])).join(""),
+const main = Effect.gen(function* () {
+  const harness = yield* awaited(
+    Harness.open(new MemoryStorage(), { env: () => env, models, registry }, context),
   );
-} else {
-  console.error(`unanswered: ${settled.status === "unanswered" ? settled.reason : settled.status}`);
-  process.exitCode = 1;
-}
-await harness.close(context);
+  const root = yield* awaited(harness.root(context, { agent: { model } }));
+
+  const submission = yield* awaited(root.submit({ content: prompt, type: "input" }, context));
+  const settled = yield* awaited(submission.wait(context));
+  if (settled.status === "done" && settled.type === "input") {
+    const entry = yield* awaited(
+      root.commit((tx) => tx.entry(AssistantEntry, settled.answer), context),
+    );
+    const answer = entry?.model?.[0] as aiTypes.AssistantMessage;
+    yield* Console.log(
+      answer.content.flatMap((content) => (content.type === "text" ? [content.text] : [])).join(""),
+    );
+  } else {
+    yield* Console.error(
+      `unanswered: ${settled.status === "unanswered" ? settled.reason : settled.status}`,
+    );
+    process.exitCode = 1;
+  }
+  yield* awaited(harness.close(context));
+});
+
+NodeRuntime.runMain(main);

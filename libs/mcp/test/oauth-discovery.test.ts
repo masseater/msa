@@ -1,20 +1,20 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  authorizeMcp,
-  discoverAuthorizationServerMetadata,
+import oauth from "../src/oauth/index.ts";
+import oauthSupport from "./oauth-support.ts";
+
+const {
   OAuthInsecureEndpointError,
   OAuthIssuerMismatchError,
+  authorizeMcp,
+  discoverAuthorizationServerMetadata,
   registerClient,
-} from "../src/oauth/index.ts";
-import { closeServers, listen, readBody, readMessage } from "./helpers.ts";
-import {
-  authorizationServerMetadata,
-  endWith,
-  sendJson,
-  TestOAuthProvider,
-} from "./oauth-support.ts";
+} = oauth;
+
+const { closeServers, listen, readBody, readMessage } = testing;
+const { TestOAuthProvider, authorizationServerMetadata, endWith, sendJson } = oauthSupport;
 
 const derivesApplicationType = Effect.gen(function* () {
   const bodies: Record<string, unknown>[] = [];
@@ -66,23 +66,23 @@ const usesConfiguredMetadata = Effect.gen(function* () {
     const url = new URL(request.url);
     if (url.pathname === "/.well-known/oauth-protected-resource/mcp")
       return sendJson(200, {
-        resource: `${serverOrigin}/mcp`,
         authorization_servers: [serverOrigin],
+        resource: `${serverOrigin}/mcp`,
       });
     if (url.pathname === "/idp/metadata.json")
       return sendJson(200, {
-        issuer: "https://idp.example",
         authorization_endpoint: `${serverOrigin}/idp/authorize`,
-        token_endpoint: `${serverOrigin}/idp/token`,
+        issuer: "https://idp.example",
         response_types_supported: ["code"],
+        token_endpoint: `${serverOrigin}/idp/token`,
       });
     return endWith(404);
   });
   const provider = new TestOAuthProvider("http://127.0.0.1/callback");
   provider.client = { client_id: "client" };
   const options = {
-    serverUrl: `${origin}/mcp`,
     authorizationServerMetadataUrl: new URL(`${origin}/idp/metadata.json`),
+    serverUrl: `${origin}/mcp`,
   };
   expect(yield* authorizeMcp(provider, options)).toBe("REDIRECT");
   const authorizationUrl = provider.authorizationUrl as URL;
@@ -110,15 +110,15 @@ const exchangeWith =
     provider.client = { client_id: "client" };
     provider.verifier = "verifier";
     provider.discovery = {
-      authorizationServerUrl: origin,
       authorizationServerMetadata: metadata
         ? {
             ...authorizationServerMetadata(origin),
             authorization_response_iss_parameter_supported: issParameterSupported,
           }
         : undefined,
+      authorizationServerUrl: origin,
     };
-    return authorizeMcp(provider, { serverUrl: `${origin}/mcp`, authorizationCode: code, iss });
+    return authorizeMcp(provider, { authorizationCode: code, iss, serverUrl: `${origin}/mcp` });
   };
 
 const verifiesIss = Effect.gen(function* () {

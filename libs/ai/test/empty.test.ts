@@ -1,278 +1,284 @@
-import { describe, expect, it } from "vite-plus/test";
+import { Clock, Effect } from "effect";
+import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete, getModel } from "../src/compat.ts";
-import type {
-  Api,
-  AssistantMessage,
-  Context,
-  Model,
-  StreamOptions,
-  UserMessage,
-} from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { complete } = compat;
 
-import { resolveApiKey } from "./oauth.ts";
+const { chooseModel, usesApi } = modelChoice;
 
-// Resolve OAuth tokens at module level (async, runs before tests)
-const openaiCodexToken = await resolveApiKey("openai-codex");
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
-async function testEmptyMessage<TApi extends Api>(
-  llm: Model<TApi>,
+const { envValue } = env;
+
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
+
+const testEmptyMessage = Effect.fn("testEmptyMessage")(function* <TApi extends typesModule.Api>(
+  llm: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
 ) {
-  // Test with completely empty content array
-  const emptyMessage: UserMessage = {
-    role: "user",
+  const emptyMessage: typesModule.UserMessage = {
     content: [],
-    timestamp: Date.now(),
+    role: "user",
+    timestamp: yield* Clock.currentTimeMillis,
   };
 
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [emptyMessage],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
-  // Should either handle gracefully or return an error
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
-  // Should handle empty string gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
     expect(response.content).toBeDefined();
   }
-}
+});
 
-async function testEmptyStringMessage<TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
-  // Test with empty string content
-  const context: Context = {
+const testEmptyStringMessage = Effect.fn("testEmptyStringMessage")(function* <
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const context: typesModule.Context = {
     messages: [
       {
-        role: "user",
         content: "",
-        timestamp: Date.now(),
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
 
-  // Should handle empty string gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
     expect(response.content).toBeDefined();
   }
-}
+});
 
-async function testWhitespaceOnlyMessage<TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
-  // Test with whitespace-only content
-  const context: Context = {
+const testWhitespaceOnlyMessage = Effect.fn("testWhitespaceOnlyMessage")(function* <
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const context: typesModule.Context = {
     messages: [
       {
-        role: "user",
         content: "   \n\t  ",
-        timestamp: Date.now(),
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
 
-  // Should handle whitespace-only gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
     expect(response.content).toBeDefined();
   }
-}
+});
 
-async function testEmptyAssistantMessage<TApi extends Api>(
-  llm: Model<TApi>,
-  options: StreamOptionsWithExtras = {},
-) {
-  // Test with empty assistant message in conversation flow
-  // User -> Empty Assistant -> User
-  const emptyAssistant: AssistantMessage = {
-    role: "assistant",
-    content: [],
+const testEmptyAssistantMessage = Effect.fn("testEmptyAssistantMessage")(function* <
+  TApi extends typesModule.Api,
+>(llm: typesModule.Model<TApi>, options: StreamOptionsWithExtras = {}) {
+  const emptyAssistant: typesModule.AssistantMessage = {
     api: llm.api,
-    provider: llm.provider,
+    content: [],
     model: llm.id,
+    provider: llm.provider,
+    role: "assistant",
+    stopReason: "stop",
+    timestamp: yield* Clock.currentTimeMillis,
     usage: {
-      input: 10,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 10,
+      output: 0,
       totalTokens: 10,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-    stopReason: "stop",
-    timestamp: Date.now(),
   };
 
-  const context: Context = {
+  const context: typesModule.Context = {
     messages: [
       {
-        role: "user",
         content: "Hello, how are you?",
-        timestamp: Date.now(),
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
       },
       emptyAssistant,
       {
-        role: "user",
         content: "Please respond this time.",
-        timestamp: Date.now(),
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
   };
 
-  const response = await complete(llm, context, options);
+  const response = yield* Effect.promise(() => complete(llm, context, options));
 
   expect(response).toBeDefined();
   expect(response.role).toBe("assistant");
 
-  // Should handle empty assistant message in context gracefully
   if (response.stopReason === "error") {
     expect(response.errorMessage).toBeDefined();
   } else {
     expect(response.content).toBeDefined();
     expect(response.content.length).toBeGreaterThan(0);
   }
-}
+});
 
 describe("AI Providers Empty Message Tests", () => {
-  describe.skipIf(!process.env["OPENAI_API_KEY"])(
+  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Completions Provider Empty Messages",
     () => {
-      const llm = getModel("openai", "gpt-4o-mini");
+      const llm = chooseModel("openai", "direct OpenAI");
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
+});
 
-  describe.skipIf(!process.env["OPENAI_API_KEY"])(
+describe("AI Providers Empty Message Tests", () => {
+  describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
     "OpenAI Responses Provider Empty Messages",
     () => {
-      const llm = getModel("openai", "gpt-5-mini");
+      const llm = chooseModel(
+        "openai",
+        "reasoning Responses",
+        (model) => usesApi("openai-responses")(model) && model.reasoning,
+      );
 
-      it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyMessage(llm);
-      });
+      it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyMessage(llm)),
+      );
 
-      it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-        await testEmptyStringMessage(llm);
-      });
+      it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testEmptyStringMessage(llm)),
+      );
 
-      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-        await testWhitespaceOnlyMessage(llm);
-      });
+      it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+        Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+      );
 
       it(
         "should handle empty assistant message in conversation",
         { retry: 3, timeout: 30000 },
-        async () => {
-          await testEmptyAssistantMessage(llm);
-        },
+        () => Effect.runPromise(testEmptyAssistantMessage(llm)),
       );
     },
   );
+});
 
-  describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider Empty Messages", () => {
-    const llm = getModel("anthropic-api", "claude-haiku-4-5");
+describe("AI Providers Empty Message Tests", () => {
+  describe.skipIf(
+    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
+  )("Anthropic Provider Empty Messages", () => {
+    const llm = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
-    it("should handle empty content array", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyMessage(llm);
-    });
+    it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyMessage(llm)),
+    );
 
-    it("should handle empty string content", { retry: 3, timeout: 30000 }, async () => {
-      await testEmptyStringMessage(llm);
-    });
+    it("should handle empty string content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyStringMessage(llm)),
+    );
 
-    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, async () => {
-      await testWhitespaceOnlyMessage(llm);
-    });
+    it("should handle whitespace-only content", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testWhitespaceOnlyMessage(llm)),
+    );
 
-    it(
-      "should handle empty assistant message in conversation",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testEmptyAssistantMessage(llm);
-      },
+    it("should handle empty assistant message in conversation", { retry: 3, timeout: 30000 }, () =>
+      Effect.runPromise(testEmptyAssistantMessage(llm)),
     );
   });
+});
 
-  // =========================================================================
-  // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
-  // =========================================================================
+const gpt55ShouldHandleEmpty = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = chooseModel("openai-codex", "Codex");
+      yield* testEmptyMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
 
+const gpt55ShouldHandleEmpty2 = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = chooseModel("openai-codex", "Codex");
+      yield* testEmptyStringMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+const gpt55ShouldHandleWhitespace = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = chooseModel("openai-codex", "Codex");
+      yield* testWhitespaceOnlyMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+const gpt55ShouldHandleEmpty3 = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const llm = chooseModel("openai-codex", "Codex");
+      yield* testEmptyAssistantMessage(llm, { apiKey: openaiCodexToken });
+    }),
+  );
+
+describe("AI Providers Empty Message Tests", () => {
   describe("OpenAI Codex Provider Empty Messages", () => {
-    it.skipIf(!openaiCodexToken)(
-      "gpt-5.5 - should handle empty content array",
+    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
+      "Codex - should handle empty content array",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testEmptyMessage(llm, { apiKey: openaiCodexToken });
-      },
+      gpt55ShouldHandleEmpty,
     );
 
-    it.skipIf(!openaiCodexToken)(
-      "gpt-5.5 - should handle empty string content",
+    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
+      "Codex - should handle empty string content",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testEmptyStringMessage(llm, { apiKey: openaiCodexToken });
-      },
+      gpt55ShouldHandleEmpty2,
     );
 
-    it.skipIf(!openaiCodexToken)(
-      "gpt-5.5 - should handle whitespace-only content",
+    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
+      "Codex - should handle whitespace-only content",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testWhitespaceOnlyMessage(llm, { apiKey: openaiCodexToken });
-      },
+      gpt55ShouldHandleWhitespace,
     );
 
-    it.skipIf(!openaiCodexToken)(
-      "gpt-5.5 - should handle empty assistant message in conversation",
+    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
+      "Codex - should handle empty assistant message in conversation",
       { retry: 3, timeout: 30000 },
-      async () => {
-        const llm = getModel("openai-codex", "gpt-5.5");
-        await testEmptyAssistantMessage(llm, { apiKey: openaiCodexToken });
-      },
+      gpt55ShouldHandleEmpty3,
     );
   });
 });

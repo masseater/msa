@@ -1,61 +1,49 @@
-/**
- * Alternate-screen large-transcript benchmark.
- *
- * Mirrors the fullscreen transcript shape used by the coding agent:
- *
- * ScrollView
- * └── document Container
- *     ├── header Container
- *     ├── resources Container
- *     └── chat Container
- *         └── 2,500 alternating user/assistant Markdown components
- *
- * Measures warm steady frames, one-line scrolling, streaming updates to the
- * final assistant message, and width changes that invalidate Markdown caches.
- *
- * Run from the repository root:
- *   node --experimental-strip-types libs/tui/test/alt-screen-large-transcript-bench.ts
- */
-
 import { performance } from "node:perf_hooks";
 
-import { Markdown, type MarkdownTheme } from "../src/components/markdown.ts";
-import { ScrollView } from "../src/components/scroll-view.ts";
-import { Text } from "../src/components/text.ts";
-import { VStack } from "../src/components/v-stack.ts";
-import type { Terminal } from "../src/terminal.ts";
-import { TuiAltScreen } from "../src/tui-alt-screen.ts";
-import { Container } from "../src/tui.ts";
+import { Console, Effect } from "effect";
+
+import Markdown from "../src/components/markdown.ts";
+import type markdownTypes from "../src/components/markdown.types.ts";
+import ScrollView from "../src/components/scroll-view.ts";
+import Text from "../src/components/text.ts";
+import VStack from "../src/components/v-stack.ts";
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
+import TuiAltScreen from "../src/tui-alt-screen.ts";
+import tuiComponent from "../src/tui-component.ts";
+
+const { Container } = tuiComponent;
 
 const COLUMNS = 80;
 const ROWS = 50;
 const COMPONENT_COUNT = 2_500;
 const WARMUP_FRAMES = 20;
 
-const theme: MarkdownTheme = {
-  heading: (text) => text,
-  link: (text) => text,
-  linkUrl: (text) => text,
+const theme: markdownTypes.MarkdownTheme = {
+  bold: (text) => text,
   code: (text) => text,
   codeBlock: (text) => text,
   codeBlockBorder: (text) => text,
+  heading: (text) => text,
+  hr: (text) => text,
+  italic: (text) => text,
+  link: (text) => text,
+  linkUrl: (text) => text,
+  listBullet: (text) => text,
   quote: (text) => text,
   quoteBorder: (text) => text,
-  hr: (text) => text,
-  listBullet: (text) => text,
-  bold: (text) => text,
-  italic: (text) => text,
   strikethrough: (text) => text,
   underline: (text) => text,
 };
 
-class NullTerminal implements Terminal {
+class NullTerminal implements terminalProtocolTypes.Terminal {
   columns = COLUMNS;
   rows = ROWS;
 
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(): Promise<void> {}
+  drainInput(): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(_data: string): void {}
   get kittyProtocolActive(): boolean {
     return false;
@@ -115,13 +103,13 @@ header.addChild(new Text("msa benchmark\nheader line", 0, 0));
 const resources = new Container();
 resources.addChild(new Text("resource", 0, 0));
 const chat = new Container();
-let streamingMarkdown: Markdown | undefined;
+let streamingMarkdown: markdownTypes.Markdown | undefined;
 for (let index = 0; index < COMPONENT_COUNT; index++) {
   const markdown = new Markdown(index % 2 === 0 ? userMarkdown : assistantMarkdown, 1, 0, theme);
   chat.addChild(markdown);
   if (index === COMPONENT_COUNT - 1) streamingMarkdown = markdown;
 }
-if (!streamingMarkdown)
+if (streamingMarkdown === undefined)
   throw new Error("Benchmark requires at least one assistant Markdown component");
 
 const document = new Container();
@@ -132,8 +120,8 @@ document.addChild(chat);
 const transcript = new ScrollView(document, { follow: "none", primary: true });
 const dock = new VStack([new Text("editor\nfooter", 0, 0)]);
 const root = new VStack([
-  { component: transcript, basis: 0, grow: 1, minSize: 1 },
-  { component: dock, basis: "auto", minSize: 1 },
+  { basis: 0, component: transcript, grow: 1, minSize: 1 },
+  { basis: "auto", component: dock, minSize: 1 },
 ]);
 const terminal = new NullTerminal();
 const tui = new TuiAltScreen(terminal, false, "/tmp/msa-tui-bench");
@@ -152,11 +140,15 @@ function measure(name: string, frames: number, beforeFrame: (frame: number) => v
     tui.renderNow();
   }
   const millisecondsPerFrame = (performance.now() - start) / frames;
-  console.log(`${name}: ${millisecondsPerFrame.toFixed(3)} ms/frame (${frames} frames)`);
+  Effect.runSync(
+    Console.log(`${name}: ${millisecondsPerFrame.toFixed(3)} ms/frame (${frames} frames)`),
+  );
 }
 
-console.log(
-  `components=${COMPONENT_COUNT} lines=${totalLines} viewport=${terminal.columns}x${terminal.rows}`,
+Effect.runSync(
+  Console.log(
+    `components=${COMPONENT_COUNT} lines=${totalLines} viewport=${terminal.columns}x${terminal.rows}`,
+  ),
 );
 measure("steady", 200, () => {});
 transcript.scrollTo(Math.floor(totalLines / 2));

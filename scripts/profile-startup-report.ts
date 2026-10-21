@@ -1,24 +1,12 @@
-import { Function } from "effect";
+import { Clock, Effect, Function } from "effect";
 
-interface RunResult {
-  readonly elapsedMs: number;
-  readonly profilePath: string | undefined;
-  readonly timings: ReadonlyMap<string, number>;
-}
+import type profileStartupReportTypes from "./profile-startup-report.types.ts";
 
 interface Summary {
   readonly avg: number;
   readonly max: number;
   readonly median: number;
   readonly min: number;
-}
-
-interface ReportContext {
-  readonly cpuProfile: boolean;
-  readonly displayPath: (path: string) => string;
-  readonly mode: string;
-  readonly profileDir: string;
-  readonly runtimeLabel: string;
 }
 
 const TIMINGS_HEADER = /^--- Startup Timings(?:: [^-]+)? ---$/u;
@@ -28,6 +16,8 @@ const NON_ALNUM = /[^a-zA-Z0-9]+/gu;
 const EDGE_UNDERSCORES = /^_+|_+$/gu;
 
 const formatMs = (value: number): string => `${value.toFixed(1)}ms`;
+
+const nowMs = Effect.map(Clock.currentTimeNanos, (nanos) => Number(nanos) / 1_000_000);
 
 const summarize = (values: ReadonlyArray<number>): Summary => {
   const sorted = [...values].sort((left, right) => left - right);
@@ -42,25 +32,27 @@ const summarize = (values: ReadonlyArray<number>): Summary => {
   };
 };
 
-const parseStartupTimings = (stderr: string): ReadonlyMap<string, number> => {
-  const timings = new Map<string, number>();
-  let inBlock = false;
-  for (const line of stderr.split(LINE_BREAK)) {
-    if (TIMINGS_HEADER.test(line.trim())) {
-      inBlock = true;
-      continue;
-    }
-    if (!inBlock) continue;
-    if (line.includes("------------------------")) break;
-    const match = TIMING_LINE.exec(line);
-    const label = match?.[1];
-    const value = match?.[2];
-    if (label !== undefined && value !== undefined) timings.set(label, Number.parseInt(value, 10));
-  }
-  return timings;
+const timingBlock = (lines: ReadonlyArray<string>): ReadonlyArray<string> => {
+  const start = lines.findIndex((line) => TIMINGS_HEADER.test(line.trim()));
+  if (start === -1) return [];
+  const block = lines.slice(start + 1);
+  const end = block.findIndex((line) => line.includes("------------------------"));
+  return end === -1 ? block : block.slice(0, end);
 };
 
-const summarizeTimingMaps = (runs: ReadonlyArray<RunResult>): ReadonlyMap<string, Summary> => {
+const timingEntry = (line: string): ReadonlyArray<readonly [string, number]> => {
+  const match = TIMING_LINE.exec(line);
+  if (match === null) return [];
+  const [, label, value] = match;
+  return label === undefined || value === undefined ? [] : [[label, Number.parseInt(value, 10)]];
+};
+
+const parseStartupTimings = (stderr: string): ReadonlyMap<string, number> =>
+  new Map(timingBlock(stderr.split(LINE_BREAK)).flatMap(timingEntry));
+
+const summarizeTimingMaps = (
+  runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+): ReadonlyMap<string, Summary> => {
   const valuesByLabel = new Map<string, Array<number>>();
   for (const run of runs) {
     for (const [label, value] of run.timings.entries()) {
@@ -75,15 +67,28 @@ const summarizeTimingMaps = (runs: ReadonlyArray<RunResult>): ReadonlyMap<string
 const toMetricName = (label: string): string =>
   `${label.replaceAll(NON_ALNUM, "_").replaceAll(EDGE_UNDERSCORES, "")}_ms`;
 
-const slowestRun = (runs: ReadonlyArray<RunResult>): RunResult | undefined =>
-  runs.reduce<RunResult | undefined>(
+const slowestRun = (
+  runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+): profileStartupReportTypes.RunResult | undefined =>
+  runs.reduce<profileStartupReportTypes.RunResult | undefined>(
     (slowest, run) => (slowest === undefined || run.elapsedMs > slowest.elapsedMs ? run : slowest),
     undefined,
   );
 
-const profileLines = (context: ReportContext, runs: ReadonlyArray<RunResult>) => {
+const selectedProfilePath = (
+  context: profileStartupReportTypes.ReportContext,
+  runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+): string | undefined => {
   const profilePath = slowestRun(runs)?.profilePath;
-  if (!context.cpuProfile || profilePath === undefined || profilePath === "") return [];
+  return context.cpuProfile && profilePath !== "" ? profilePath : undefined;
+};
+
+const profileLines = (
+  context: profileStartupReportTypes.ReportContext,
+  runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+) => {
+  const profilePath = selectedProfilePath(context, runs);
+  if (profilePath === undefined) return [];
   return [
     `  selected profile: ${context.displayPath(profilePath)}`,
     `  profiles dir:     ${context.displayPath(context.profileDir)}`,
@@ -97,7 +102,10 @@ const metricLines = (startupMs: number, timings: ReadonlyMap<string, Summary>) =
   ),
 ];
 
-const singleRunReport = (context: ReportContext, run: RunResult): ReadonlyArray<string> => {
+const singleRunReport = (
+  context: profileStartupReportTypes.ReportContext,
+  run: profileStartupReportTypes.RunResult,
+): ReadonlyArray<string> => {
   const timings = summarizeTimingMaps([run]);
   return [
     "\nResult",
@@ -111,8 +119,8 @@ const singleRunReport = (context: ReportContext, run: RunResult): ReadonlyArray<
 };
 
 const multiRunReport = (
-  context: ReportContext,
-  runs: ReadonlyArray<RunResult>,
+  context: profileStartupReportTypes.ReportContext,
+  runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
 ): ReadonlyArray<string> => {
   const elapsed = summarize(runs.map((run) => run.elapsedMs));
   const timings = summarizeTimingMaps(runs);
@@ -133,13 +141,30 @@ const multiRunReport = (
 };
 
 const buildReport: {
-  (runs: ReadonlyArray<RunResult>): (context: ReportContext) => ReadonlyArray<string>;
-  (context: ReportContext, runs: ReadonlyArray<RunResult>): ReadonlyArray<string>;
-} = Function.dual(2, (context: ReportContext, runs: ReadonlyArray<RunResult>) => {
-  const [first] = runs;
-  if (first === undefined) return ["\nNo measured runs requested."];
-  return runs.length === 1 ? singleRunReport(context, first) : multiRunReport(context, runs);
-});
+  (
+    runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+  ): (context: profileStartupReportTypes.ReportContext) => ReadonlyArray<string>;
+  (
+    context: profileStartupReportTypes.ReportContext,
+    runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+  ): ReadonlyArray<string>;
+} = Function.dual(
+  2,
+  (
+    context: profileStartupReportTypes.ReportContext,
+    runs: ReadonlyArray<profileStartupReportTypes.RunResult>,
+  ) => {
+    const [first] = runs;
+    if (first === undefined) return ["\nNo measured runs requested."];
+    return runs.length === 1 ? singleRunReport(context, first) : multiRunReport(context, runs);
+  },
+);
 
-export type { ReportContext, RunResult };
-export { buildReport, formatMs, parseStartupTimings };
+const profileStartupReport = {
+  buildReport,
+  formatMs,
+  nowMs,
+  parseStartupTimings,
+};
+
+export default profileStartupReport;

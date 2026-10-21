@@ -1,237 +1,133 @@
-import { once } from "node:events";
-import http from "node:http";
-import type { AddressInfo } from "node:net";
+import { Effect } from "effect";
+import { describe, expect, it } from "vite-plus/test";
 
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import openaiCompletionsCompat from "../src/api/openai-completions-compat.ts";
+import openaiCompletions from "../src/api/openai-completions.ts";
+import type typesModule from "../src/types.types.ts";
+import transcript from "../src/utils/transcript.ts";
+import jsonCodec from "./json-codec.ts";
 
-import {
-  convertMessages,
-  stream as streamOpenAICompletions,
-} from "../src/api/openai-completions.ts";
-import type {
-  AssistantMessage,
-  AssistantMessageEvent,
-  Context,
-  Model,
-  OpenAICompletionsCompat,
-  Usage,
-} from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+const { convertMessages, stream: streamOpenAICompletions } = openaiCompletions;
+const { normalizeContext } = transcript;
+const { getCompat } = openaiCompletionsCompat;
 
-const emptyUsage: Usage = {
-  input: 0,
-  output: 0,
-  cacheRead: 0,
-  cacheWrite: 0,
-  totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+const { decodeJson, encodeJson } = jsonCodec;
+
+const model: typesModule.Model<"openai-completions"> = {
+  api: "openai-completions",
+  baseUrl: "https://completions.test/v1",
+  compat: { requiresThinkingAsText: true },
+  contextWindow: 128000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "repro-model",
+  input: ["text"],
+  maxTokens: 4096,
+  name: "Repro Model",
+  provider: "repro-provider",
+  reasoning: true,
 };
 
-const compat = {
-  supportsStore: true,
-  supportsDeveloperRole: true,
-  supportsReasoningEffort: true,
-  supportsUsageInStreaming: true,
-  supportsFinishReason: true,
-  maxTokensField: "max_completion_tokens",
-  requiresToolResultName: false,
-  requiresAssistantAfterToolResult: false,
-  requiresThinkingAsText: true,
-  requiresReasoningContentOnAssistantMessages: false,
-  thinkingFormat: "openai",
-  openRouterRouting: {},
-  chatTemplateKwargs: {},
-  supportsThinkingTokenBudget: false,
-  supportsStrictMode: true,
-  supportsOpenAIGrammarTools: false,
-  supportsMidConvoSystemMessages: false,
-  supportsMidConvoToolAdditions: false,
-  sendSessionAffinityHeaders: false,
-  sessionAffinityFormat: "openai",
-  supportsLongCacheRetention: true,
-} satisfies Omit<
-  Required<OpenAICompletionsCompat>,
-  "cacheControlFormat" | "thinkingTokenBudgetField" | "vllmPriority"
-> & {
-  cacheControlFormat?: OpenAICompletionsCompat["cacheControlFormat"];
-  thinkingTokenBudgetField?: OpenAICompletionsCompat["thinkingTokenBudgetField"];
-};
+const replayContext = (content: typesModule.AssistantMessage["content"]): typesModule.Context => ({
+  messages: [
+    { content: "hello", role: "user", timestamp: 1 },
+    {
+      api: model.api,
+      content,
+      model: model.id,
+      provider: model.provider,
+      role: "assistant",
+      stopReason: "stop",
+      timestamp: 2,
+      usage: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 0,
+        output: 0,
+        totalTokens: 0,
+      },
+    },
+    { content: "continue", role: "user", timestamp: 3 },
+  ],
+});
 
-function buildModel(baseUrl = "http://127.0.0.1:1"): Model<"openai-completions"> {
-  return {
-    id: "repro-model",
-    name: "Repro Model",
-    api: "openai-completions",
-    provider: "repro-provider",
-    baseUrl,
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128000,
-    maxTokens: 4096,
-    compat,
-  };
-}
+const thinkingAndText: typesModule.AssistantMessage["content"] = [
+  { thinking: "internal reasoning", type: "thinking" },
+  { text: "visible answer", type: "text" },
+];
 
-function buildAssistant(content: AssistantMessage["content"]): AssistantMessage {
-  return {
-    role: "assistant",
-    content,
-    api: "openai-completions",
-    provider: "repro-provider",
-    model: "repro-model",
-    usage: emptyUsage,
-    stopReason: "stop",
-    timestamp: 2,
-  };
-}
+const replayedAssistant = (content: typesModule.AssistantMessage["content"]) =>
+  convertMessages(model, normalizeContext(replayContext(content)), getCompat(model))[1];
 
-function buildContext(assistant: AssistantMessage): Context {
-  return {
-    messages: [
-      { role: "user", content: "hello", timestamp: 1 },
-      assistant,
-      { role: "user", content: "continue", timestamp: 3 },
-    ],
-  };
-}
+const completionStream = Effect.gen(function* () {
+  const chunk = (fields: object) =>
+    encodeJson({
+      created: 0,
+      id: "chatcmpl-repro",
+      model: "repro-model",
+      object: "chat.completion.chunk",
+      ...fields,
+    });
+  const lines = [
+    yield* chunk({
+      choices: [{ delta: { content: "ok", role: "assistant" }, finish_reason: null, index: 0 }],
+    }),
+    yield* chunk({
+      choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+      usage: { completion_tokens: 1, prompt_tokens: 1 },
+    }),
+    "[DONE]",
+  ];
+  return lines.map((line) => `data: ${line}\n\n`).join("");
+});
 
-async function collectEvents(
-  stream: AsyncIterable<AssistantMessageEvent>,
-): Promise<AssistantMessageEvent[]> {
-  const events: AssistantMessageEvent[] = [];
-  for await (const event of stream) {
-    events.push(event);
-  }
-  return events;
-}
-
-interface ChatCompletionsRequestBody {
-  model: string;
-  messages: Array<{ role: string; content?: unknown }>;
-  stream: boolean;
-  stream_options?: { include_usage?: boolean };
-}
+const reachesEndpointWithThinkingAndText = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const body = yield* completionStream;
+      const sent: string[] = [];
+      const result = yield* Effect.promise(() =>
+        streamOpenAICompletions(model, normalizeContext(replayContext(thinkingAndText)), {
+          apiKey: "test-key",
+          fetch: (_input, init) => {
+            sent.push(String(init?.body));
+            return Promise.resolve(
+              new Response(body, { headers: { "content-type": "text/event-stream" }, status: 200 }),
+            );
+          },
+        }).result(),
+      );
+      expect(sent).toHaveLength(1);
+      const request = (yield* decodeJson(sent[0] ?? "")) as { messages: unknown[] };
+      expect(request.messages[1]).toEqual({
+        content: [
+          { text: "internal reasoning", type: "text" },
+          { text: "visible answer", type: "text" },
+        ],
+        role: "assistant",
+      });
+      expect(result.stopReason).toBe("stop");
+    }),
+  );
 
 describe("openai-completions thinking-as-text replay", () => {
-  afterEach(() => {
-    delete process.env["OPENAI_API_KEY"];
-  });
-
   it("serializes same-model thinking-plus-text replay as assistant text parts", () => {
-    const messages = convertMessages(
-      buildModel(),
-      normalizeContext(
-        buildContext(
-          buildAssistant([
-            { type: "thinking", thinking: "internal reasoning" },
-            { type: "text", text: "visible answer" },
-          ]),
-        ),
-      ),
-      compat,
-    );
-
-    expect(messages[1]).toEqual({
-      role: "assistant",
+    expect(replayedAssistant(thinkingAndText)).toEqual({
       content: [
-        { type: "text", text: "internal reasoning" },
-        { type: "text", text: "visible answer" },
+        { text: "internal reasoning", type: "text" },
+        { text: "visible answer", type: "text" },
       ],
-    });
-  });
-
-  it("serializes same-model thinking-only replay as assistant text parts", () => {
-    const messages = convertMessages(
-      buildModel(),
-      normalizeContext(
-        buildContext(buildAssistant([{ type: "thinking", thinking: "internal reasoning" }])),
-      ),
-      compat,
-    );
-
-    expect(messages[1]).toEqual({
       role: "assistant",
-      content: [{ type: "text", text: "internal reasoning" }],
     });
   });
-
-  it("reaches the endpoint when replay contains both thinking and text", async () => {
-    const requestBodies: ChatCompletionsRequestBody[] = [];
-    const server = http.createServer(async (req, res) => {
-      if (req.method !== "POST" || req.url !== "/chat/completions") {
-        res.writeHead(404).end();
-        return;
-      }
-
-      let body = "";
-      for await (const chunk of req) {
-        body += chunk.toString();
-      }
-      requestBodies.push(JSON.parse(body) as ChatCompletionsRequestBody);
-
-      res.writeHead(200, {
-        "content-type": "text/event-stream",
-        "cache-control": "no-cache",
-        connection: "keep-alive",
-      });
-      res.write(
-        `data: ${JSON.stringify({
-          id: "chatcmpl-repro",
-          object: "chat.completion.chunk",
-          created: 0,
-          model: "repro-model",
-          choices: [{ index: 0, delta: { role: "assistant", content: "ok" }, finish_reason: null }],
-        })}\n\n`,
-      );
-      res.write(
-        `data: ${JSON.stringify({
-          id: "chatcmpl-repro",
-          object: "chat.completion.chunk",
-          created: 0,
-          model: "repro-model",
-          choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-          usage: { prompt_tokens: 1, completion_tokens: 1 },
-        })}\n\n`,
-      );
-      res.write("data: [DONE]\n\n");
-      res.end();
+  it("serializes same-model thinking-only replay as assistant text parts", () => {
+    expect(replayedAssistant([{ thinking: "internal reasoning", type: "thinking" }])).toEqual({
+      content: [{ text: "internal reasoning", type: "text" }],
+      role: "assistant",
     });
-
-    server.listen(0, "127.0.0.1");
-    await once(server, "listening");
-
-    try {
-      const { port } = server.address() as AddressInfo;
-      const events = await collectEvents(
-        streamOpenAICompletions(
-          buildModel(`http://127.0.0.1:${port}`),
-          normalizeContext(
-            buildContext(
-              buildAssistant([
-                { type: "thinking", thinking: "internal reasoning" },
-                { type: "text", text: "visible answer" },
-              ]),
-            ),
-          ),
-          { apiKey: "test-key" },
-        ),
-      );
-
-      expect(requestBodies).toHaveLength(1);
-      expect(requestBodies[0]?.messages[1]).toEqual({
-        role: "assistant",
-        content: [
-          { type: "text", text: "internal reasoning" },
-          { type: "text", text: "visible answer" },
-        ],
-      });
-
-      const terminalEvent = events.at(-1);
-      expect(terminalEvent?.type).toBe("done");
-    } finally {
-      server.close();
-      await once(server, "close");
-    }
   });
+  it(
+    "reaches the endpoint when replay contains both thinking and text",
+    reachesEndpointWithThinkingAndText,
+  );
 });

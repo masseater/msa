@@ -1,102 +1,145 @@
-import {
-  type AssistantMessage,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  type ToolResultMessage,
-  Type,
-} from "@msa/ai";
-import {
-  defineTool,
-  type EntryRecord,
-  type Harness,
-  LiveDoc,
-  type TaskId,
-  type ToolRegistration,
-  ToolResultEntry,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import type { ExecutionEnv } from "../src/env/index.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { type ChatSetup, openChat, waitFor } from "./chat-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred } from "./task-support.ts";
-import { makeTempFile, removeDir } from "./temp-support.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/storage/sqlite/node.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
 
-export const directories = new Set<string>();
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
-export async function removeDirectories(): Promise<void> {
-  for await (const directory of directories) await removeDir(directory);
-  directories.clear();
+const { openNodeSqliteStorage } = node;
+const { LiveDoc, ToolResultEntry, defineTool } = durable;
+
+const { aborted, awaited, context, deferred, makeTempFile, openChat, removeDir, waitFor } = support;
+
+const directories = new Set<string>();
+
+function removeDirectories(): Promise<void> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  );
 }
 
-export async function sqlitePath(): Promise<string> {
-  const { directory, path } = await makeTempFile("msa-durable-tools-", "session.sqlite");
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const { directory, path } = yield* makeTempFile("msa-durable-tools-", "session.sqlite");
   directories.add(directory);
   return path;
-}
+});
 
-export async function open(path: string, setup: ChatSetup, env?: ExecutionEnv) {
-  const opened = await openChat(
-    await openNodeSqliteStorage(path),
+const open = Effect.fn("open")(function* (
+  path: string,
+  setup: supportTypes.ChatSetup,
+  env?: envTypes.ExecutionEnv,
+) {
+  const opened = yield* openChat(
+    yield* awaited(openNodeSqliteStorage(path)),
     setup,
     env === undefined ? {} : { env },
   );
   opened.harness.resume();
   return opened;
-}
+});
 
-export function tool(
+function toolImpl(
   name: string,
-  execute: ToolRegistration["execute"],
-  extra: Partial<ToolRegistration> = {},
-): ToolRegistration {
-  return defineTool({ name, description: name, parameters: Type.Object({}), execute, ...extra });
+  execute: durableTypes.ToolRegistration["execute"],
+  extra: Partial<durableTypes.ToolRegistration> = {},
+): durableTypes.ToolRegistration {
+  return defineTool({ description: name, execute, name, parameters: Type.Object({}), ...extra });
 }
 
-export function call(name: string, id = "c1"): AssistantMessage {
-  return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
+const tool: {
+  (
+    execute: durableTypes.ToolRegistration["execute"],
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (
+    name: string,
+    execute: durableTypes.ToolRegistration["execute"],
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
+function call(name: string): aiTypes.AssistantMessage {
+  return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
-export const DONE = fauxAssistantMessage([fauxText("done")]);
+const DONE = fauxAssistantMessage([fauxText("done")]);
 
-export function results(entries: readonly EntryRecord[]): ToolResultMessage[] {
+function results(entries: readonly durableTypes.EntryRecord[]): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
-export function text(message: ToolResultMessage | undefined): string {
+function text(message: aiTypes.ToolResultMessage | undefined): string {
   return (message?.content ?? []).map((item) => (item.type === "text" ? item.text : "")).join("|");
 }
 
-export async function toolTaskId(harness: Harness): Promise<TaskId> {
-  let id: TaskId | undefined;
-  await waitFor(async () => {
-    id = (await harness.snapshot(LiveDoc, 1 as never, context))?.tools?.[0]?.taskId;
-    return id !== undefined;
-  });
+const toolTaskId = Effect.fn("toolTaskId")(function* (harness: durableTypes.Harness) {
+  let id: durableTypes.TaskId | undefined;
+  yield* waitFor(
+    Effect.gen(function* () {
+      id = (yield* awaited(harness.snapshot(LiveDoc, 1 as never, context)))?.tools?.[0]?.taskId;
+      return id !== undefined;
+    }),
+  );
   return id!;
-}
+});
 
-// A tool that writes output, then blocks until its invocation is cancelled the first `blocking` times it runs.
-// `started` resolves once the output is durable.
-export function blockingTool(name: string, extra: Partial<ToolRegistration> = {}) {
+function blockingToolImpl(name: string, extra: Partial<durableTypes.ToolRegistration> = {}) {
   const started = deferred();
-  const state = { runs: 0, blocking: 1 };
+  const state = { blocking: 1, runs: 0 };
   const registration = tool(
     name,
-    async (_args, api, callContext) => {
-      state.runs++;
-      api.output(`run ${state.runs}\n`);
-      await api.details({ run: state.runs }, callContext);
-      if (state.runs <= state.blocking) {
-        started.resolve();
-        await aborted(callContext.abortSignal!);
-      }
-      return {};
-    },
+    (_args, api, callContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          state.runs++;
+          api.output(`run ${state.runs}\n`);
+          yield* awaited(api.details({ run: state.runs }, callContext));
+          if (state.runs <= state.blocking) {
+            started.resolve();
+            return yield* awaited(aborted(callContext.abortSignal!));
+          }
+          return {};
+        }),
+      ),
     extra,
   );
   return { registration, started, state };
 }
+
+const blockingTool: {
+  (
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): (name: string) => ReturnType<typeof blockingToolImpl>;
+  (
+    name: string,
+    extra?: Partial<durableTypes.ToolRegistration>,
+  ): ReturnType<typeof blockingToolImpl>;
+} = dual((args) => typeof args[0] === "string", blockingToolImpl);
+
+const harnessToolsRecoverySupport = {
+  DONE,
+  blockingTool,
+  call,
+  directories,
+  open,
+  removeDirectories,
+  results,
+  sqlitePath,
+  text,
+  tool,
+  toolTaskId,
+};
+
+export default harnessToolsRecoverySupport;

@@ -1,8 +1,12 @@
+import { builtinModules } from "node:module";
+
 import type { OxlintConfig } from "vite-plus/lint";
 
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
+const ENV_ONLY_VIA_PROCESS_ENV =
+  "環境変数は core/platform の readEnv・writeEnv・envSnapshot だけで扱う";
 
 const requiredStack: Readonly<Record<string, readonly string[]>> = {
   [EFFECT_ONLY_UTILS]: [
@@ -41,7 +45,7 @@ const requiredStackEntries = Object.entries(requiredStack).flatMap(([message, mo
 const requiredStackPaths: readonly Readonly<{ name: string; message: string }>[] =
   requiredStackEntries
     .filter(({ module }) => !module.includes("*"))
-    .map(({ message, module }) => ({ name: module, message }));
+    .map(({ message, module }) => ({ message, name: module }));
 
 const requiredStackPatterns: readonly Readonly<{ group: readonly string[]; message: string }>[] =
   requiredStackEntries.map(({ message, module }) => {
@@ -51,9 +55,95 @@ const requiredStackPatterns: readonly Readonly<{ group: readonly string[]; messa
     return { group: [`${module}/**`], message };
   });
 
+const envImportPaths: readonly Readonly<{
+  name: string;
+  importNames: readonly string[];
+  message: string;
+}>[] = [
+  { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "node:process" },
+  { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "process" },
+];
+
 const restrictedImports = {
-  paths: [...requiredStackPaths],
+  paths: [...requiredStackPaths, ...envImportPaths],
   patterns: [...requiredStackPatterns],
+};
+
+const NODE_BUILTINS_VIA_PLATFORM = "node の組み込みは core/platform/node/ を通して使う";
+
+const effectReplaceableBuiltins: readonly string[] = [
+  "child_process",
+  "console",
+  "crypto",
+  "fs",
+  "http",
+  "https",
+  "path",
+  "stream",
+  "timers",
+];
+
+const fsSyncFunctions: readonly string[] = [
+  "accessSync",
+  "appendFileSync",
+  "chmodSync",
+  "chownSync",
+  "closeSync",
+  "copyFileSync",
+  "cpSync",
+  "existsSync",
+  "fchmodSync",
+  "fchownSync",
+  "fdatasyncSync",
+  "fstatSync",
+  "fsyncSync",
+  "ftruncateSync",
+  "futimesSync",
+  "globSync",
+  "lchmodSync",
+  "lchownSync",
+  "linkSync",
+  "lstatSync",
+  "lutimesSync",
+  "mkdirSync",
+  "mkdtempDisposableSync",
+  "mkdtempSync",
+  "openAsBlobSync",
+  "openSync",
+  "opendirSync",
+  "readFileSync",
+  "readSync",
+  "readdirSync",
+  "readlinkSync",
+  "readvSync",
+  "realpathSync",
+  "renameSync",
+  "rmSync",
+  "rmdirSync",
+  "statSync",
+  "statfsSync",
+  "symlinkSync",
+  "truncateSync",
+  "unlinkSync",
+  "utimesSync",
+  "writeFileSync",
+  "writeSync",
+  "writevSync",
+];
+
+const builtinModuleBases: readonly string[] = [
+  ...new Set(builtinModules.map((name) => name.replace(/^node:/u, "").split("/")[0] ?? name)),
+];
+
+const platformOnlyImports = {
+  paths: [
+    ...restrictedImports.paths,
+    ...builtinModules.map((name) => ({ message: NODE_BUILTINS_VIA_PLATFORM, name })),
+  ],
+  patterns: [
+    ...restrictedImports.patterns,
+    { group: ["node:*", "node:*/**"], message: NODE_BUILTINS_VIA_PLATFORM },
+  ],
 };
 
 const generated = [
@@ -78,7 +168,6 @@ const lintPlugins: NonNullable<OxlintConfig["plugins"]> = [
   "effecttsgo",
 ];
 const strictCategories = ["perf", "pedantic", "nursery"];
-const strictCategoryExclusions = ["eslint/no-undef"];
 
 const strictCategoryRules = [
   "eslint/accessor-pairs",
@@ -108,6 +197,7 @@ const strictCategoryRules = [
   "eslint/no-restricted-exports",
   "eslint/no-self-compare",
   "eslint/no-throw-literal",
+  "eslint/no-undef",
   "eslint/no-unreachable-loop",
   "eslint/no-useless-assignment",
   "eslint/no-useless-call",
@@ -137,12 +227,17 @@ const strictCategoryRules = [
   "promise/no-return-in-finally",
 ];
 
-export {
+const lintConfig = {
+  builtinModuleBases,
+  effectReplaceableBuiltins,
+  fsSyncFunctions,
   generated,
   lintPlugins,
+  platformOnlyImports,
   requiredStack,
   restrictedImports,
   strictCategories,
-  strictCategoryExclusions,
   strictCategoryRules,
 };
+
+export default lintConfig;

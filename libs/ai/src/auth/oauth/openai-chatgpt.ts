@@ -1,350 +1,264 @@
-/**
- * OpenAI Responses API token sharing through Sign in with ChatGPT.
- *
- * This public-client flow uses no client secret and sends the resulting user
- * access token directly to api.openai.com.
- */
+import { Data, Deferred, Effect, type Scope } from "effect";
+import { Base64Url } from "effect/encoding";
 
-import { randomBytes } from "node:crypto";
-import { createServer, type Server, type ServerResponse } from "node:http";
+import cryptoModule from "../../utils/crypto.ts";
+import localHttpServer from "../../utils/local-http-server.ts";
+import type localHttpServerTypes from "../../utils/local-http-server.types.ts";
+import oauthPage from "../../utils/oauth-page.ts";
+import providerEnv from "../../utils/provider-env.ts";
+import type typesModule from "../types.ts";
+import openaiChatgptToken from "./openai-chatgpt-token.ts";
+import pkce from "./pkce.ts";
 
-import { oauthErrorHtml, oauthSuccessHtml } from "../../utils/oauth-page.ts";
-import { getProviderEnvValue } from "../../utils/provider-env.ts";
-import type {
-  LoginOptions,
-  OAuthAuth,
-  OAuthCredential,
-  ProviderAuthInteraction,
-} from "../types.ts";
-import { generatePKCE } from "./pkce.ts";
+const { DIRECT_TOKEN_SCOPE, RESOURCE, exchangeAuthorizationCode, refreshAccessToken } =
+  openaiChatgptToken;
+const { getProviderEnvValue } = providerEnv;
+const { randomBytes } = cryptoModule;
+const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
+const { startLocalHttpServer } = localHttpServer;
+const { generatePKCE } = pkce;
 
-// every login registers a new client with this ID; OpenAI returns the issued client ID in the callback
 const DYNAMIC_CLIENT_ID = "dynamic_agent_client";
 const AGENT_NAME_HINT = "msa";
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/iu;
 const AUTHORIZE_URL = "https://auth.openai.com/api/accounts/authorize";
-const TOKEN_URL = "https://auth.openai.com/api/accounts/oauth/token";
-const RESOURCE = "https://api.openai.com/v1";
-const CALLBACK_HOST = getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST") || "127.0.0.1";
 const CALLBACK_PORT = 1455;
 const CALLBACK_PATH = "/auth/callback";
 const REDIRECT_URI = `http://127.0.0.1:${CALLBACK_PORT}${CALLBACK_PATH}`;
-const DIRECT_TOKEN_SCOPE = "chatgpt.tokens.use.direct";
 const SCOPE = `openid profile email offline_access resource.invoke ${DIRECT_TOKEN_SCOPE}`;
-// Refresh this long before the real expiry so a request never starts with a token about to expire.
-const EXPIRY_MARGIN_MS = 3 * 60 * 1000;
 
-type AuthorizationResult = {
-  code: string;
-  clientId: string;
+const callbackHost = (): string => {
+  const configured = getProviderEnvValue("MSA_OAUTH_CALLBACK_HOST");
+  return configured === undefined || configured === "" ? "127.0.0.1" : configured;
 };
 
-type CallbackServer = {
-  server: Server;
-  result: Promise<AuthorizationResult>;
-};
-
-type TokenResponse = {
-  access_token?: unknown;
-  refresh_token?: unknown;
-  expires_in?: unknown;
-  id_token?: unknown;
-  scope?: unknown;
-};
-
-function randomValue(): string {
-  return randomBytes(32).toString("base64url");
+interface AuthorizationResult {
+  readonly code: string;
+  readonly clientId: string;
 }
 
-function authorizationResultFromCallback(url: URL, expectedState: string): AuthorizationResult {
+class CallbackError extends Data.TaggedError("CallbackError")<{ readonly message: string }> {}
+
+const randomValue = (): string => Base64Url.encode(randomBytes(32));
+
+const authorizationResultFromCallback = (
+  url: URL,
+  expectedState: string,
+): Effect.Effect<AuthorizationResult, CallbackError> => {
+  const fail = (message: string) => Effect.fail(new CallbackError({ message }));
   const code = url.searchParams.get("code");
-  if (!code) throw new Error("Missing authorization code");
+  if (code === null || code === "") return fail("Missing authorization code");
   const state = url.searchParams.get("state");
-  if (!state) throw new Error("Missing OAuth state");
-  if (state !== expectedState) throw new Error("OAuth state mismatch");
+  if (state === null || state === "") return fail("Missing OAuth state");
+  if (state !== expectedState) return fail("OAuth state mismatch");
   const clientId = url.searchParams.get("client_id")?.trim();
-  if (!clientId)
-    throw new Error("OpenAI OAuth registration callback did not contain an issued client ID");
-  return { code, clientId };
-}
+  if (clientId === undefined || clientId === "")
+    return fail("OpenAI OAuth registration callback did not contain an issued client ID");
+  return Effect.succeed({ clientId, code });
+};
 
-function authorizationResultFromManualInput(
+const authorizationResultFromManualInput = (
   input: string,
   expectedState: string,
-): AuthorizationResult {
-  let url: URL;
-  try {
-    url = new URL(input.trim());
-  } catch {
-    throw new Error("Paste the full callback URL from the browser");
-  }
-  const expected = new URL(REDIRECT_URI);
-  if (url.origin !== expected.origin || url.pathname !== expected.pathname) {
-    throw new Error(`The pasted callback URL must start with ${REDIRECT_URI}`);
+): Effect.Effect<AuthorizationResult> =>
+  Effect.gen(function* () {
+    const url = yield* Effect.try({
+      catch: () => new CallbackError({ message: "Paste the full callback URL from the browser" }),
+      try: () => new URL(input.trim()),
+    });
+    const expected = new URL(REDIRECT_URI);
+    if (url.origin !== expected.origin || url.pathname !== expected.pathname) {
+      return yield* new CallbackError({
+        message: `The pasted callback URL must start with ${REDIRECT_URI}`,
+      });
+    }
+    const error = url.searchParams.get("error");
+    if (error !== null && error !== "") {
+      return yield* new CallbackError({ message: `ChatGPT authorization failed: ${error}` });
+    }
+    return yield* authorizationResultFromCallback(url, expectedState);
+  }).pipe(Effect.catchTag("CallbackError", (error) => Effect.die(new Error(error.message))));
+
+const html = (status: number, body: string): localHttpServerTypes.LocalHttpResponse => ({
+  body,
+  headers: { "content-type": "text/html; charset=utf-8" },
+  status,
+});
+
+interface CallbackListener {
+  readonly server: localHttpServerTypes.LocalHttpServer;
+  readonly result: Deferred.Deferred<AuthorizationResult>;
+}
+
+const handleCallback = (
+  { url }: localHttpServerTypes.LocalHttpRequest,
+  expectedState: string,
+  result: Deferred.Deferred<AuthorizationResult>,
+): Effect.Effect<localHttpServerTypes.LocalHttpResponse> => {
+  if (url.pathname !== CALLBACK_PATH) {
+    return Effect.succeed(html(404, oauthErrorHtml("Callback route not found.", undefined)));
   }
   const error = url.searchParams.get("error");
-  if (error) throw new Error(`ChatGPT authorization failed: ${error}`);
-  return authorizationResultFromCallback(url, expectedState);
-}
-
-function sendHtml(response: ServerResponse, status: number, body: string): void {
-  response.writeHead(status, { "Content-Type": "text/html; charset=utf-8" });
-  response.end(body);
-}
-
-function startCallbackServer(expectedState: string): Promise<CallbackServer> {
-  return new Promise((resolve, reject) => {
-    let resolveResult!: (result: AuthorizationResult) => void;
-    let rejectResult!: (error: Error) => void;
-    const result = new Promise<AuthorizationResult>((resolveAuthorization, rejectAuthorization) => {
-      resolveResult = resolveAuthorization;
-      rejectResult = rejectAuthorization;
-    });
-
-    const server = createServer((request, response) => {
-      try {
-        const url = new URL(request.url || "", REDIRECT_URI);
-        if (url.pathname !== CALLBACK_PATH) {
-          sendHtml(response, 404, oauthErrorHtml("Callback route not found."));
-          return;
-        }
-
-        const error = url.searchParams.get("error");
-        if (error) {
-          sendHtml(response, 400, oauthErrorHtml("ChatGPT was not connected.", `Error: ${error}`));
-          rejectResult(new Error(`ChatGPT authorization failed: ${error}`));
-          return;
-        }
-
-        let authorizationResult: AuthorizationResult;
-        try {
-          authorizationResult = authorizationResultFromCallback(url, expectedState);
-        } catch (cause) {
-          const message = cause instanceof Error ? cause.message : "Invalid callback";
-          sendHtml(response, 400, oauthErrorHtml(message));
-          return;
-        }
-
-        sendHtml(
-          response,
-          200,
-          oauthSuccessHtml("ChatGPT authentication completed. You can close this window."),
-        );
-        resolveResult(authorizationResult);
-      } catch {
-        sendHtml(response, 500, oauthErrorHtml("Internal error while processing the callback."));
-      }
-    });
-
-    server.once("error", reject);
-    server.listen(CALLBACK_PORT, CALLBACK_HOST, () => {
-      server.removeListener("error", reject);
-      server.on("error", rejectResult);
-      resolve({ server, result });
-    });
-  });
-}
-
-async function requestToken(body: URLSearchParams, signal: AbortSignal): Promise<TokenResponse> {
-  const response = await fetch(TOKEN_URL, {
-    method: "POST",
-    headers: {
-      accept: "application/json",
-      "content-type": "application/x-www-form-urlencoded",
-    },
-    body,
-    signal,
-  });
-  if (!response.ok) {
-    const responseBody = await response.text().catch(() => "");
-    throw new Error(
-      `OpenAI OAuth token request failed (${response.status}): ${responseBody || response.statusText}`,
+  if (error !== null && error !== "") {
+    return Effect.as(
+      Deferred.die(result, new Error(`ChatGPT authorization failed: ${error}`)),
+      html(400, oauthErrorHtml("ChatGPT was not connected.", `Error: ${error}`)),
     );
   }
-  const data: unknown = await response.json();
-  if (typeof data !== "object" || data === null || Array.isArray(data)) {
-    throw new Error("OpenAI OAuth token response must be an object");
-  }
-  return data as TokenResponse;
-}
-
-function requireTokenString(
-  value: unknown,
-  field: "access_token" | "refresh_token" | "scope",
-): string {
-  if (typeof value !== "string" || value.trim().length === 0) {
-    throw new Error(`OpenAI OAuth token response has invalid ${field}`);
-  }
-  return value;
-}
-
-function credentialFromTokenResponse(token: TokenResponse, clientId: string): OAuthCredential {
-  const access = requireTokenString(token.access_token, "access_token");
-  const refresh = requireTokenString(token.refresh_token, "refresh_token");
-  const scope = requireTokenString(token.scope, "scope");
-  if (
-    typeof token.expires_in !== "number" ||
-    !Number.isFinite(token.expires_in) ||
-    token.expires_in <= 0
-  ) {
-    throw new Error("OpenAI OAuth token response has invalid expires_in");
-  }
-  const scopes = scope.trim().split(/\s+/u).filter(Boolean);
-  if (!scopes.includes(DIRECT_TOKEN_SCOPE)) {
-    throw new Error(`OpenAI OAuth grant did not include ${DIRECT_TOKEN_SCOPE}`);
-  }
-  return {
-    type: "oauth",
-    access,
-    refresh,
-    expires: Date.now() + token.expires_in * 1000 - EXPIRY_MARGIN_MS,
-    clientId,
-    scopes,
-  };
-}
-
-async function exchangeAuthorizationCode(
-  code: string,
-  verifier: string,
-  clientId: string,
-  signal: AbortSignal,
-): Promise<OAuthCredential> {
-  const token = await requestToken(
-    new URLSearchParams({
-      grant_type: "authorization_code",
-      client_id: clientId,
-      code,
-      code_verifier: verifier,
-      redirect_uri: REDIRECT_URI,
-      resource: RESOURCE,
-    }),
-    signal,
+  return authorizationResultFromCallback(url, expectedState).pipe(
+    Effect.flatMap((authorization) =>
+      Effect.as(
+        Deferred.succeed(result, authorization),
+        html(200, oauthSuccessHtml("ChatGPT authentication completed. You can close this window.")),
+      ),
+    ),
+    Effect.catchTag("CallbackError", (failure) =>
+      Effect.succeed(html(400, oauthErrorHtml(failure.message, undefined))),
+    ),
   );
-  // msa does not use the ID token to identify the user or read profile data.
-  // Keep the presence check as part of the token-response contract.
-  if (typeof token.id_token !== "string" || token.id_token.trim().length === 0) {
-    throw new Error("OpenAI OAuth token response did not contain an ID token");
-  }
-  return credentialFromTokenResponse(token, clientId);
-}
+};
 
-async function refreshAccessToken(
-  credential: OAuthCredential,
-  signal: AbortSignal,
-): Promise<OAuthCredential> {
-  const clientId = credential["clientId"];
-  if (typeof clientId !== "string" || clientId.trim().length === 0) {
-    throw new Error(
-      "Stored OpenAI OAuth credential does not contain an issued client ID; reconnect ChatGPT",
-    );
-  }
-  const token = await requestToken(
-    new URLSearchParams({
-      grant_type: "refresh_token",
-      client_id: clientId,
-      refresh_token: credential.refresh,
-      resource: RESOURCE,
-    }),
-    signal,
+const isAddressInUse = (error: unknown): boolean =>
+  error instanceof Error && "code" in error && error.code === "EADDRINUSE";
+
+const listenForCallback = (expectedState: string): Effect.Effect<CallbackListener> =>
+  Effect.gen(function* () {
+    const result = yield* Deferred.make<AuthorizationResult>();
+    const server = yield* startLocalHttpServer({
+      baseUrl: REDIRECT_URI,
+      closeConnections: true,
+      handle: (request, reply) =>
+        handleCallback(request, expectedState, result).pipe(
+          Effect.catchDefect(() =>
+            Effect.succeed(
+              html(500, oauthErrorHtml("Internal error while processing the callback.", undefined)),
+            ),
+          ),
+          Effect.flatMap(reply),
+        ),
+      host: callbackHost(),
+      onError: (error) => Effect.asVoid(Deferred.die(result, error)),
+      port: CALLBACK_PORT,
+    });
+    return { result, server };
+  }).pipe(
+    Effect.catchDefect((error) =>
+      Effect.die(
+        isAddressInUse(error)
+          ? new Error(
+              `Port ${CALLBACK_PORT} is in use, probably by an unfinished login in another msa session or by the Codex CLI. Cancel that login and try again.`,
+            )
+          : error,
+      ),
+    ),
   );
-  return credentialFromTokenResponse(token, clientId);
+
+const agentHostId = (deviceId: string | undefined): Effect.Effect<string> =>
+  deviceId === undefined || deviceId === "" || !UUID_PATTERN.test(deviceId)
+    ? Effect.die(
+        new Error("Sign in with ChatGPT requires a device ID (UUID) for this installation"),
+      )
+    : Effect.succeed(`urn:uuid:${deviceId.toLowerCase()}`);
+
+interface AuthorizationRequest {
+  readonly hostId: string;
+  readonly agentName: string;
+  readonly state: string;
+  readonly challenge: string;
 }
 
-/**
- * OpenAI identifies each installation ("agent host") by a stable URI such as `urn:uuid:<uuid>`.
- *
- * @param {string | undefined} deviceId - installation id
- * @returns {string} the agent host URI
- */
-function agentHostId(deviceId: string | undefined): string {
-  if (!deviceId || !UUID_PATTERN.test(deviceId)) {
-    throw new Error("Sign in with ChatGPT requires a device ID (UUID) for this installation");
-  }
-  return `urn:uuid:${deviceId.toLowerCase()}`;
-}
-
-async function loginOpenAIChatGPT(
-  interaction: ProviderAuthInteraction,
-  options?: LoginOptions,
-): Promise<OAuthCredential> {
-  const hostId = agentHostId(options?.getDeviceId?.());
-  const { verifier, challenge } = await generatePKCE();
-  const state = randomValue();
-  const nonce = randomValue();
-  // Without this server, the browser's callback would reach whatever else holds the port (another
-  // pending login or the Codex CLI), which rejects it as a state mismatch. Fail with a clear error instead.
-  const callback = await startCallbackServer(state).catch((error: unknown) => {
-    if (!(error instanceof Error && "code" in error && error.code === "EADDRINUSE")) throw error;
-    throw new Error(
-      `Port ${CALLBACK_PORT} is in use, probably by an unfinished login in another msa session or by the Codex CLI. Cancel that login and try again.`,
-    );
-  });
-
-  const authorizationUrl = new URL(AUTHORIZE_URL);
-  authorizationUrl.search = new URLSearchParams({
+const authorizationUrl = ({ hostId, agentName, state, challenge }: AuthorizationRequest): URL => {
+  const url = new URL(AUTHORIZE_URL);
+  url.search = new URLSearchParams({
+    agent_name_hint: agentName,
     client_id: DYNAMIC_CLIENT_ID,
-    agent_name_hint: options?.agentName ?? AGENT_NAME_HINT,
-    ext_agent_host_id: hostId,
-    response_type: "code",
-    redirect_uri: REDIRECT_URI,
-    resource: RESOURCE,
-    scope: SCOPE,
-    state,
     code_challenge: challenge,
     code_challenge_method: "S256",
-    nonce,
+    ext_agent_host_id: hostId,
+    nonce: randomValue(),
+    redirect_uri: REDIRECT_URI,
+    resource: RESOURCE,
+    response_type: "code",
+    scope: SCOPE,
+    state,
   }).toString();
-  interaction.notify({
-    type: "auth_url",
-    url: authorizationUrl.toString(),
-    instructions:
-      "Complete sign-in in your browser. If the callback does not complete, paste the final redirect URL here.",
+  return url;
+};
+
+const awaitAuthorization = (
+  interaction: typesModule.ProviderAuthInteraction,
+  listener: CallbackListener,
+  state: string,
+): Effect.Effect<AuthorizationResult, never, Scope.Scope> =>
+  Effect.gen(function* () {
+    const signal = yield* Effect.abortSignal;
+    const manual = Effect.flatMap(
+      Effect.promise(() =>
+        interaction.prompt({
+          message: "Complete login in your browser, or paste the final redirect URL here:",
+          placeholder: REDIRECT_URI,
+          signal: AbortSignal.any([signal, interaction.signal]),
+          type: "manual_code",
+        }),
+      ),
+      (input) => authorizationResultFromManualInput(input, state),
+    );
+    return yield* Effect.raceFirst(Deferred.await(listener.result), manual);
   });
 
-  const manualAbort = new AbortController();
-  const manualCode = interaction
-    .prompt({
-      type: "manual_code",
-      message: "Complete login in your browser, or paste the final redirect URL here:",
-      placeholder: REDIRECT_URI,
-      signal: AbortSignal.any([manualAbort.signal, interaction.signal]),
-    })
-    .then((input) => authorizationResultFromManualInput(input, state));
-
-  try {
-    const result = await Promise.race([callback.result, manualCode]);
+const loginOpenAIChatGPT = (
+  interaction: typesModule.ProviderAuthInteraction,
+  options?: typesModule.LoginOptions,
+): Effect.Effect<typesModule.OAuthCredential> =>
+  Effect.gen(function* () {
+    const hostId = yield* agentHostId(options?.getDeviceId?.());
+    const { verifier, challenge } = yield* Effect.promise(() => generatePKCE());
+    const state = randomValue();
+    const agentName = options?.agentName ?? AGENT_NAME_HINT;
+    const listener = yield* listenForCallback(state);
     interaction.notify({
-      type: "progress",
-      message: "Exchanging authorization code for tokens...",
+      instructions:
+        "Complete sign-in in your browser. If the callback does not complete, paste the final redirect URL here.",
+      type: "auth_url",
+      url: authorizationUrl({ agentName, challenge, hostId, state }).toString(),
     });
-    return await exchangeAuthorizationCode(
-      result.code,
-      verifier,
-      result.clientId,
-      interaction.signal,
+    return yield* Effect.gen(function* () {
+      const result = yield* awaitAuthorization(interaction, listener, state);
+      interaction.notify({
+        message: "Exchanging authorization code for tokens...",
+        type: "progress",
+      });
+      return yield* exchangeAuthorizationCode({
+        clientId: result.clientId,
+        code: result.code,
+        redirectUri: REDIRECT_URI,
+        signal: interaction.signal,
+        verifier,
+      });
+    }).pipe(
+      Effect.scoped,
+      Effect.catchDefect((error) =>
+        Effect.die(
+          interaction.signal.aborted ? new Error("Login cancelled", { cause: error }) : error,
+        ),
+      ),
+      Effect.ensuring(listener.server.close),
     );
-  } catch (error) {
-    if (interaction.signal.aborted) throw new Error("Login cancelled", { cause: error });
-    throw error;
-  } finally {
-    manualAbort.abort();
-    callback.server.close();
-    // close() only stops accepting new connections. Browsers open spare connections ahead of
-    // time, and one that has not sent a request yet stays open and attached to this server.
-    // A later login in the same process starts a new server with a new state, but the browser
-    // may send that login's callback over the spare connection. This server would then handle
-    // it and reject it with "OAuth state mismatch", and the new login would never see it.
-    callback.server.closeAllConnections();
-  }
-}
+  });
 
-export const openaiChatGPTOAuth: OAuthAuth = {
-  name: "OpenAI (ChatGPT subscription)",
+const openaiChatGPTOAuth: typesModule.OAuthAuth = {
   isSubscription: true,
+  login: (interaction, options) => Effect.runPromise(loginOpenAIChatGPT(interaction, options)),
   loginLabel: "Sign in with ChatGPT",
-  login: loginOpenAIChatGPT,
-  refresh: refreshAccessToken,
+  name: "OpenAI (ChatGPT subscription)",
+  refresh: (credential, signal) => Effect.runPromise(refreshAccessToken(credential, signal)),
   toAuth(credential) {
     return Promise.resolve({ apiKey: credential.access });
   },
 };
+
+const openaiChatgpt = {
+  openaiChatGPTOAuth,
+};
+
+export default openaiChatgpt;

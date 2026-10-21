@@ -1,20 +1,22 @@
 import { defineConfig, mergeConfig } from "vite-plus";
 
-import { testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
+import vitestShared from "../../vitest.shared.ts";
+
+const { testBaseConfig, workspaceSourcePaths } = vitestShared;
 
 export default mergeConfig(
   testBaseConfig,
   defineConfig({
-    test: {
-      include: ["test/**/*.test.ts"],
-    },
     resolve: {
       alias: [
         {
-          find: /^@msa\/coding-agent$/,
+          find: /^@msa\/coding-agent$/u,
           replacement: workspaceSourcePaths.codingAgentIndex,
         },
       ],
+    },
+    test: {
+      include: ["test/**/*.test.ts"],
     },
   }),
 );

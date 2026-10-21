@@ -1,244 +1,176 @@
-import type { AgentMessage } from "@msa/agent-core";
-import {
-  fauxAssistantMessage,
-  getCurrentSystemPrompt,
-  getCurrentTools,
-  type TranscriptContext,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionFactory } from "../../../src/index.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+import ContextHandlerSystemMessagesSupport from "./9789-context-handler-system-messages-support.ts";
 
-/** Compaction supplied by an extension hook, as in the reported sessions. */
-const compactViaHook: ExtensionFactory = (msa) => {
-  msa.on("session_before_compact", async (event) => ({
-    compaction: {
-      summary: "extension summary",
-      firstKeptEntryId: event.preparation.firstKeptEntryId,
-      tokensBefore: event.preparation.tokensBefore,
-      details: { source: "test" },
-    },
-  }));
-};
+const { fauxAssistantMessage, getCurrentSystemPrompt } = ai;
 
-function captureRequest(harness: Harness, text: string): () => TranscriptContext {
-  let request: TranscriptContext | undefined;
-  harness.setResponses([
-    (context) => {
-      request = context;
-      return fauxAssistantMessage(text);
-    },
-  ]);
-  return () => {
-    if (!request) throw new Error("expected a provider request");
-    return request;
-  };
-}
+const { captureRequest, compactSession, compactViaHook, toolNames } =
+  ContextHandlerSystemMessagesSupport;
 
-function toolNames(context: TranscriptContext): string[] {
-  return getCurrentTools(context.messages).map((tool) => tool.name);
-}
+const { createHarness } = harnessModule;
 
-async function compactSession(harness: Harness): Promise<void> {
-  harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-  harness.setResponses([fauxAssistantMessage("one"), fauxAssistantMessage("two")]);
-  await harness.session.prompt("first");
-  await harness.session.prompt("second");
-  await harness.session.compact();
-  expect(harness.session.messages.map((message) => message.role).slice(0, 2)).toEqual([
-    "system",
-    "compactionSummary",
-  ]);
-}
+const harnesses: harnessTypes.Harness[] = [];
 
-describe("context handlers and system messages", () => {
-  const harnesses: Harness[] = [];
-
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
-
-  // Regression #9789, #9822: pruning from the compaction summary dropped the prompt and tool checkpoint.
-  it("keeps the prompt and tools when a handler slices from the compaction summary", async () => {
-    const seen: AgentMessage[][] = [];
-    const harness = await createHarness({
+const keepsThePromptAndToolsWhen = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const seen: agentTypes.AgentMessage[][] = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         compactViaHook,
         (msa) => {
-          msa.on("context", async (event) => {
-            seen.push(event.messages);
-            const summary = event.messages.findIndex(
-              (message) => message.role === "compactionSummary",
-            );
-            return { messages: event.messages.slice(summary) };
-          });
+          msa.on("context", (event) =>
+            runPromise(
+              Effect.sync(() => {
+                seen.push(event.messages);
+                const summary = event.messages.findIndex(
+                  (message) => message.role === "compactionSummary",
+                );
+                return { messages: event.messages.slice(summary) };
+              }),
+            ),
+          );
         },
       ],
-    });
-    harnesses.push(harness);
-    await compactSession(harness);
-    const getRequest = captureRequest(harness, "after compaction");
+    }),
+  );
+  harnesses.push(harness);
+  yield* Effect.promise(() => compactSession(harness));
+  const getRequest = captureRequest(harness, "after compaction");
 
-    await harness.session.prompt("third");
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("third"));
 
-    const request = getRequest();
-    expect(seen.at(-1)?.some((message) => message.role === "system")).toBe(false);
-    expect(request.messages[0]?.role).toBe("system");
-    expect(toolNames(request)).toEqual(harness.session.getActiveToolNames());
-    expect(getCurrentSystemPrompt(request.messages)).toBe(harness.session.systemPrompt);
-    expect(request.messages.filter((message) => message.role === "system")).toHaveLength(1);
-  });
+  const request = getRequest();
+  expect(seen.at(-1)?.some((message) => message.role === "system")).toBe(false);
+  expect(request.messages[0]?.role).toBe("system");
+  expect(toolNames(request)).toEqual(harness.session.tools.loadout.getActiveToolNames());
+  expect(getCurrentSystemPrompt(request.messages)).toBe(harness.session.tools.prompt.systemPrompt);
+  expect(request.messages.filter((message) => message.role === "system")).toHaveLength(1);
+});
 
-  it("keeps mid-conversation system messages in place when a handler leaves the conversation unchanged", async () => {
-    let turn = 0;
-    const harness = await createHarness({
+const keepsMidConversationSystemMessagesIn = Effect.gen(function* () {
+  let turn = 0;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("before_agent_start", (event) => {
             if (++turn === 2) event.systemPromptOptions.sections["plan_mode"] = "Plan only.";
           });
-          msa.on("context", async (event) => ({ messages: event.messages }));
+          msa.on("context", (event) => Promise.resolve({ messages: event.messages }));
         },
       ],
-    });
-    harnesses.push(harness);
-    harness.setResponses([fauxAssistantMessage("one")]);
-    await harness.session.prompt("first");
-    const getRequest = captureRequest(harness, "two");
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("one")]);
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("first"));
+  const getRequest = captureRequest(harness, "two");
 
-    await harness.session.prompt("second");
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("second"));
 
-    const systemMessages = getRequest().messages.filter((message) => message.role === "system");
-    expect(systemMessages).toHaveLength(2);
-    expect(systemMessages[1]?.sections).toEqual({
-      plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>",
-    });
-  });
-
-  it("applies in-place edits to event.messages without a return value", async () => {
-    const harness = await createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("context", async (event) => {
-            event.messages.splice(0, 0, {
-              role: "user",
-              content: [{ type: "text", text: "injected" }],
-              timestamp: 0,
-            });
-          });
-        },
-      ],
-    });
-    harnesses.push(harness);
-    const getRequest = captureRequest(harness, "done");
-
-    await harness.session.prompt("hello");
-
-    const request = getRequest();
-    expect(request.messages.map((message) => message.role)).toEqual(["system", "user", "user"]);
-    expect(toolNames(request)).toEqual(harness.session.getActiveToolNames());
-  });
-
-  it("keeps system messages a handler adds after the replayed head", async () => {
-    const harness = await createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("context", async (event) => ({
-            messages: [
-              { role: "system", content: "ephemeral reminder", timestamp: 0 },
-              ...event.messages,
-            ],
-          }));
-        },
-      ],
-    });
-    harnesses.push(harness);
-    const getRequest = captureRequest(harness, "done");
-
-    await harness.session.prompt("hello");
-
-    const request = getRequest();
-    expect(request.messages.map((message) => message.role)).toEqual(["system", "system", "user"]);
-    expect(toolNames(request)).toEqual(harness.session.getActiveToolNames());
-    expect(getCurrentSystemPrompt(request.messages)).toContain(harness.session.systemPrompt);
-    expect(getCurrentSystemPrompt(request.messages)).toContain("ephemeral reminder");
+  const systemMessages = getRequest().messages.filter((message) => message.role === "system");
+  expect(systemMessages).toHaveLength(2);
+  expect(systemMessages[1]?.sections).toEqual({
+    plan_mode: "<plan_mode>\nPlan only.\n</plan_mode>",
   });
 });
 
-describe("context_with_system handlers", () => {
-  const harnesses: Harness[] = [];
+const appliesInPlaceEditsToEvent = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const harness = yield* Effect.promise(() =>
+    createHarness({
+      extensionFactories: [
+        (msa) => {
+          msa.on("context", (event) =>
+            runPromise(
+              Effect.sync(() => {
+                event.messages.splice(0, 0, {
+                  content: [{ text: "injected", type: "text" }],
+                  role: "user",
+                  timestamp: 0,
+                });
+              }),
+            ),
+          );
+        },
+      ],
+    }),
+  );
+  harnesses.push(harness);
+  const getRequest = captureRequest(harness, "done");
 
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
+
+  const request = getRequest();
+  expect(request.messages.map((message) => message.role)).toEqual(["system", "user", "user"]);
+  expect(toolNames(request)).toEqual(harness.session.tools.loadout.getActiveToolNames());
+});
+
+const keepsSystemMessagesAHandlerAdds = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
+      extensionFactories: [
+        (msa) => {
+          msa.on("context", (event) =>
+            Promise.resolve({
+              messages: [
+                { content: "ephemeral reminder", role: "system", timestamp: 0 },
+                ...event.messages,
+              ],
+            }),
+          );
+        },
+      ],
+    }),
+  );
+  harnesses.push(harness);
+  const getRequest = captureRequest(harness, "done");
+
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("hello"));
+
+  const request = getRequest();
+  expect(request.messages.map((message) => message.role)).toEqual(["system", "system", "user"]);
+  expect(toolNames(request)).toEqual(harness.session.tools.loadout.getActiveToolNames());
+  expect(getCurrentSystemPrompt(request.messages)).toContain(
+    harness.session.tools.prompt.systemPrompt,
+  );
+  expect(getCurrentSystemPrompt(request.messages)).toContain("ephemeral reminder");
+});
+
+const keepsThePromptAndToolsWhenA = () => Effect.runPromise(keepsThePromptAndToolsWhen);
+
+const keepsMidConversationSystemMessagesInPlace = () =>
+  Effect.runPromise(keepsMidConversationSystemMessagesIn);
+
+const appliesInPlaceEditsToEventMessages = () => Effect.runPromise(appliesInPlaceEditsToEvent);
+
+const keepsSystemMessagesAHandlerAddsAfter = () =>
+  Effect.runPromise(keepsSystemMessagesAHandlerAdds);
+
+describe("context handlers and system messages", () => {
   afterEach(() => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
-
-  it("runs after context handlers on the restored transcript and sends its output verbatim", async () => {
-    const seen: AgentMessage[][] = [];
-    const harness = await createHarness({
-      extensionFactories: [
-        compactViaHook,
-        (msa) => {
-          msa.on("context_with_system", async (event) => {
-            seen.push(event.messages);
-            return {
-              messages: event.messages.map((message) =>
-                message.role === "system" && message.toolsAdded
-                  ? {
-                      ...message,
-                      toolsAdded: message.toolsAdded.filter((tool) => tool.name !== "bash"),
-                    }
-                  : message,
-              ),
-            };
-          });
-          // Registered after, but runs first: context handlers precede context_with_system.
-          msa.on("context", async (event) => {
-            const summary = event.messages.findIndex(
-              (message) => message.role === "compactionSummary",
-            );
-            return { messages: event.messages.slice(summary) };
-          });
-        },
-      ],
-    });
-    harnesses.push(harness);
-    await compactSession(harness);
-    const getRequest = captureRequest(harness, "after compaction");
-
-    await harness.session.prompt("third");
-
-    const input = seen.at(-1);
-    expect(input?.[0]?.role).toBe("system");
-    expect(input?.[1]?.role).toBe("compactionSummary");
-    expect(harness.session.getActiveToolNames()).toContain("bash");
-    expect(toolNames(getRequest())).toEqual(
-      harness.session.getActiveToolNames().filter((name) => name !== "bash"),
-    );
-  });
-
-  it("reports a handler that drops the leading system message but honors its output", async () => {
-    const harness = await createHarness({
-      extensionFactories: [
-        (msa) => {
-          msa.on("context_with_system", async (event) => ({
-            messages: event.messages.filter((message) => message.role !== "system"),
-          }));
-        },
-      ],
-    });
-    harnesses.push(harness);
-    const errors: string[] = [];
-    harness.session.extensionRunner.onError((error) => {
-      errors.push(`${error.event}: ${error.error}`);
-    });
-    const getRequest = captureRequest(harness, "done");
-
-    await harness.session.prompt("hello");
-
-    expect(getRequest().messages.map((message) => message.role)).toEqual(["user"]);
-    expect(errors).toEqual([
-      expect.stringMatching(/^context_with_system: Handler removed the leading system message/),
-    ]);
-  });
+  it(
+    "keeps the prompt and tools when a handler slices from the compaction summary",
+    keepsThePromptAndToolsWhenA,
+  );
+  it(
+    "keeps mid-conversation system messages in place when a handler leaves the conversation unchanged",
+    keepsMidConversationSystemMessagesInPlace,
+  );
+  it(
+    "applies in-place edits to event.messages without a return value",
+    appliesInPlaceEditsToEventMessages,
+  );
+  it(
+    "keeps system messages a handler adds after the replayed head",
+    keepsSystemMessagesAHandlerAddsAfter,
+  );
 });

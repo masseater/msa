@@ -1,84 +1,96 @@
-import type { Box, TuiMouseEvent } from "@msa/tui";
+import testing from "@msa/testing";
+import type tuiTypes from "@msa/tui/index.types";
 import { beforeAll, describe, expect, test } from "vite-plus/test";
 
-import { BranchSummaryMessageComponent } from "../src/modes/interactive/components/branch-summary-message.ts";
-import { CompactionSummaryMessageComponent } from "../src/modes/interactive/components/compaction-summary-message.ts";
-import { SkillInvocationMessageComponent } from "../src/modes/interactive/components/skill-invocation-message.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
-import { stripAnsi } from "../src/utils/ansi.ts";
+import BranchSummaryMessageComponent from "../src/modes/interactive/components/branch-summary-message.ts";
+import CompactionSummaryMessageComponent from "../src/modes/interactive/components/compaction-summary-message.ts";
+import SkillInvocationMessageComponent from "../src/modes/interactive/components/skill-invocation-message.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
+
+const { stripAnsi } = ansi;
+const { initTheme } = themeModule;
+
+const { currentTimeMillis } = testing;
 
 const WIDTH = 80;
 
-function renderText(component: Box): string {
+function renderText(component: tuiTypes.Box): string {
   return stripAnsi(component.render(WIDTH).join("\n"));
 }
 
-function clickRow(component: Box, marker: string): void {
+function clickRow(component: tuiTypes.Box, marker: string): void {
   const lines = component.render(WIDTH);
   const row = lines.findIndex((line) => stripAnsi(line).includes(marker));
   expect(row).toBeGreaterThanOrEqual(0);
-  const event: TuiMouseEvent = {
-    type: "click",
+  const event: tuiTypes.TuiMouseEvent = {
+    alt: false,
     button: "left",
-    x: 2,
-    y: row,
+    clickCount: 1,
+    ctrl: false,
+    height: lines.length,
     screenX: 2,
     screenY: row,
-    width: WIDTH,
-    height: lines.length,
     shift: false,
-    alt: false,
-    ctrl: false,
-    clickCount: 1,
+    type: "click",
+    width: WIDTH,
+    x: 2,
+    y: row,
   };
   expect(component.handleMouse(event)?.handled).toBe(true);
 }
 
+const togglesACompactionSummaryWhenClicked = () => {
+  const component = new CompactionSummaryMessageComponent({
+    role: "compactionSummary",
+    summary: "compaction details",
+    timestamp: currentTimeMillis(),
+    tokensBefore: 1234,
+  });
+
+  expect(renderText(component)).not.toContain("compaction details");
+  clickRow(component, "[compaction]");
+  expect(renderText(component)).toContain("compaction details");
+  clickRow(component, "[compaction]");
+  expect(renderText(component)).not.toContain("compaction details");
+};
+
+const togglesABranchSummaryWhenClicked = () => {
+  const component = new BranchSummaryMessageComponent({
+    fromId: "entry-1",
+    role: "branchSummary",
+    summary: "branch details",
+    timestamp: currentTimeMillis(),
+  });
+
+  expect(renderText(component)).not.toContain("branch details");
+  clickRow(component, "[branch]");
+  expect(renderText(component)).toContain("branch details");
+  clickRow(component, "[branch]");
+  expect(renderText(component)).not.toContain("branch details");
+};
+
+const togglesASkillInvocationWhenClicked = () => {
+  const component = new SkillInvocationMessageComponent({
+    content: "skill details",
+    location: "/tmp/example-skill.md",
+    name: "example-skill",
+    userMessage: undefined,
+  });
+
+  expect(renderText(component)).not.toContain("skill details");
+  clickRow(component, "[skill]");
+  expect(renderText(component)).toContain("skill details");
+  clickRow(component, "[skill]");
+  expect(renderText(component)).not.toContain("skill details");
+};
+
 describe("collapsible message components", () => {
   beforeAll(() => initTheme("dark"));
 
-  test("toggles a compaction summary when clicked", () => {
-    const component = new CompactionSummaryMessageComponent({
-      role: "compactionSummary",
-      summary: "compaction details",
-      tokensBefore: 1234,
-      timestamp: Date.now(),
-    });
+  test("toggles a compaction summary when clicked", togglesACompactionSummaryWhenClicked);
 
-    expect(renderText(component)).not.toContain("compaction details");
-    clickRow(component, "[compaction]");
-    expect(renderText(component)).toContain("compaction details");
-    clickRow(component, "[compaction]");
-    expect(renderText(component)).not.toContain("compaction details");
-  });
+  test("toggles a branch summary when clicked", togglesABranchSummaryWhenClicked);
 
-  test("toggles a branch summary when clicked", () => {
-    const component = new BranchSummaryMessageComponent({
-      role: "branchSummary",
-      summary: "branch details",
-      fromId: "entry-1",
-      timestamp: Date.now(),
-    });
-
-    expect(renderText(component)).not.toContain("branch details");
-    clickRow(component, "[branch]");
-    expect(renderText(component)).toContain("branch details");
-    clickRow(component, "[branch]");
-    expect(renderText(component)).not.toContain("branch details");
-  });
-
-  test("toggles a skill invocation when clicked", () => {
-    const component = new SkillInvocationMessageComponent({
-      name: "example-skill",
-      location: "/tmp/example-skill.md",
-      content: "skill details",
-      userMessage: undefined,
-    });
-
-    expect(renderText(component)).not.toContain("skill details");
-    clickRow(component, "[skill]");
-    expect(renderText(component)).toContain("skill details");
-    clickRow(component, "[skill]");
-    expect(renderText(component)).not.toContain("skill details");
-  });
+  test("toggles a skill invocation when clicked", togglesASkillInvocationWhenClicked);
 });

@@ -3,14 +3,19 @@ import process from "node:process";
 import crossSpawn from "cross-spawn";
 import { Effect } from "effect";
 
-import { foreign, type McpForeignError, toPromise } from "../foreign.ts";
-import {
-  type JsonRpcMessage,
-  McpConnectionClosedError,
-  parseJsonRpcMessage,
-} from "../protocol/jsonrpc.ts";
-import { McpTransportError } from "./errors/transport-error.ts";
-import { DEFAULT_MAX_MESSAGE_BYTES, type McpTransport, TransportEvents } from "./transport.ts";
+import type foreignTypes from "../foreign.types.ts";
+import type jsonrpcTypes from "../protocol/jsonrpc.types.ts";
+import type transportErrorTypes from "./errors/transport-error.types.ts";
+import stdioKit from "./stdio-kit.ts";
+import type stdioTypes from "./stdio.types.ts";
+import transport from "./transport.ts";
+import type transportTypes from "./transport.types.ts";
+
+const { foreign: foreignModule, jsonrpc: jsonrpcModule, McpTransportError } = stdioKit;
+
+const { foreign, toPromise } = foreignModule;
+const { DEFAULT_MAX_MESSAGE_BYTES } = transport;
+const { McpConnectionClosedError, parseJsonRpcMessage } = jsonrpcModule;
 
 const DEFAULT_MAX_STDERR_BYTES = 64 * 1024;
 const DEFAULT_CLOSE_TIMEOUT_MS = 2_000;
@@ -55,23 +60,13 @@ function installExitHook(): void {
   });
 }
 
-export interface StdioTransportOptions {
-  command: string;
-  args?: readonly string[] | undefined;
-  cwd?: string;
-  env?: Record<string, string>;
-  inheritEnv?: boolean;
-  stderr?: "pipe" | "inherit";
-  onStderr?: (chunk: string) => void;
-  maxMessageBytes?: number;
-  maxStderrBytes?: number;
-  closeTimeoutMs?: number;
-}
+type StartFailure =
+  | foreignTypes.McpForeignError
+  | transportErrorTypes.McpTransportError
+  | jsonrpcTypes.McpConnectionClosedError;
 
-type StartFailure = McpForeignError | McpTransportError | McpConnectionClosedError;
-
-const waitForSpawn = (child: ChildProcess): Effect.Effect<void, McpForeignError> =>
-  Effect.callback<void, McpForeignError>((resume) => {
+const waitForSpawn = (child: ChildProcess): Effect.Effect<void, foreignTypes.McpForeignError> =>
+  Effect.callback<void, foreignTypes.McpForeignError>((resume) => {
     const onSpawn = () => {
       child.off("error", onError);
       resume(Effect.void);
@@ -84,15 +79,18 @@ const waitForSpawn = (child: ChildProcess): Effect.Effect<void, McpForeignError>
     child.once("error", onError);
   });
 
-export class StdioTransport extends TransportEvents implements McpTransport {
-  readonly options: Readonly<StdioTransportOptions>;
+export default class StdioTransport
+  extends transport.TransportEvents
+  implements transportTypes.McpTransport
+{
+  readonly options: Readonly<stdioTypes.StdioTransportOptions>;
   private child: ChildProcess | undefined;
   private stdoutBuffer = Buffer.alloc(0);
   private stderrBuffer = Buffer.alloc(0);
   private started = false;
   private closed = false;
 
-  constructor(options: StdioTransportOptions) {
+  constructor(options: stdioTypes.StdioTransportOptions) {
     super();
     this.options = Object.freeze({
       ...options,
@@ -129,13 +127,13 @@ export class StdioTransport extends TransportEvents implements McpTransport {
     );
   }
 
-  send(message: JsonRpcMessage): Promise<void> {
+  send(message: jsonrpcTypes.JsonRpcMessage): Promise<void> {
     const stdin = this.child?.stdin;
     if (!this.started || this.closed || stdin === null || stdin === undefined || !stdin.writable)
       return toPromise(Effect.fail(new McpConnectionClosedError()));
     const payload = `${JSON.stringify(message)}\n`;
     return toPromise(
-      Effect.callback<void, McpForeignError>((resume) => {
+      Effect.callback<void, foreignTypes.McpForeignError>((resume) => {
         stdin.write(payload, (error) =>
           resume(error === null || error === undefined ? Effect.void : Effect.fail(foreign(error))),
         );
@@ -184,10 +182,10 @@ export class StdioTransport extends TransportEvents implements McpTransport {
         : { ...process.env, ...this.options.env };
     const child = crossSpawn(this.options.command, this.options.args ?? [], {
       cwd: this.options.cwd,
+      detached: USE_PROCESS_GROUPS,
       env,
       stdio: ["pipe", "pipe", this.options.stderr === "inherit" ? "inherit" : "pipe"],
       windowsHide: true,
-      detached: USE_PROCESS_GROUPS,
     });
     this.child = child;
     const pid = child.pid;

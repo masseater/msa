@@ -1,30 +1,30 @@
-import type { Context } from "@msa/chord";
-import {
-  err,
-  ExecutionError,
-  ok,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  type ShellOutputInfo,
-  type ShellOutputSkip,
-} from "@msa/durable/env";
+import type chordTypes from "@msa/chord/index.types";
+import envModule from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Cause, Effect, Exit } from "effect";
 
-import { type Connection, type Json, RemoteError } from "./connection.ts";
-import { type RemoteTarget, resolveIn, run } from "./file-op.ts";
-import { errorMessage } from "./remote-error.ts";
+import connectionModule from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
+import type execTypes from "./exec.types.ts";
+import fileOp from "./file-op.ts";
+import remoteError from "./remote-error.ts";
+
+const { ExecutionError, err, ok } = envModule;
+
+const { RemoteError } = connectionModule;
+const { errorMessage } = remoteError;
+const { resolveIn, run } = fileOp;
 
 const MAX_TIMEOUT_MS = 2_147_483_647;
 const MAX_TIMEOUT_SECONDS = MAX_TIMEOUT_MS / 1000;
 
-type ExecResult = Result<ShellExecResult, ExecutionError>;
+type ExecResult = envTypes.Result<envTypes.ShellExecResult, envTypes.ExecutionError>;
 
 interface ExecRequest {
-  readonly connection: Connection;
+  readonly connection: connectionTypes.Connection;
   readonly command: string | readonly string[];
-  readonly options: ShellExecOptions | undefined;
-  readonly context: Context;
+  readonly options: envTypes.ShellExecOptions | undefined;
+  readonly context: chordTypes.Context;
   readonly cwd: string;
   readonly env: Record<string, string>;
   readonly inheritEnv: boolean;
@@ -47,7 +47,7 @@ function invalidTimeout(timeout: number | undefined): ExecResult | undefined {
   return undefined;
 }
 
-function failureOf(error: unknown, timeout: number | undefined): ExecutionError {
+function failureOf(error: unknown, timeout: number | undefined): envTypes.ExecutionError {
   if (!(error instanceof RemoteError)) return new ExecutionError("unknown", errorMessage(error));
   const failure =
     error.code === "timeout"
@@ -62,7 +62,7 @@ function failureOf(error: unknown, timeout: number | undefined): ExecutionError 
   return failure;
 }
 
-function execFields(request: ExecRequest): Json {
+function execFields(request: ExecRequest): connectionTypes.Json {
   const { command, options } = request;
   const timeout = options?.timeout;
   return {
@@ -78,7 +78,7 @@ function execFields(request: ExecRequest): Json {
 }
 
 interface ExecState {
-  callbackError: ExecutionError | undefined;
+  callbackError: envTypes.ExecutionError | undefined;
   settled: boolean;
   running: number | undefined;
 }
@@ -87,15 +87,17 @@ function deliverOutput(
   request: ExecRequest,
   state: ExecState,
   controller: AbortController,
-  event: Json,
+  event: connectionTypes.Json,
   payload: Uint8Array,
 ): void {
   if (state.settled || state.callbackError !== undefined || event["kind"] !== "output") return;
   const text = Buffer.from(payload.buffer, payload.byteOffset, payload.length).toString("utf8");
   const onOutput = request.options?.onOutput;
   if (text === "" || onOutput === undefined) return;
-  const info: ShellOutputInfo = { stream: event["stream"] === "stderr" ? "stderr" : "stdout" };
-  if (event["skipped"] !== undefined) info.skipped = event["skipped"] as ShellOutputSkip;
+  const info: envTypes.ShellOutputInfo = {
+    stream: event["stream"] === "stderr" ? "stderr" : "stdout",
+  };
+  if (event["skipped"] !== undefined) info.skipped = event["skipped"] as envTypes.ShellOutputSkip;
   try {
     onOutput(text, request.context, info);
   } catch (error) {
@@ -107,21 +109,21 @@ function deliverOutput(
 
 function runExec(request: ExecRequest): Promise<ExecResult> {
   const signal = request.context.abortSignal;
-  const state: ExecState = { callbackError: undefined, settled: false, running: undefined };
+  const state: ExecState = { callbackError: undefined, running: undefined, settled: false };
   const controller = new AbortController();
   const onAbort = (): void => {
     controller.abort();
   };
   signal?.addEventListener("abort", onAbort, { once: true });
   const reply = request.connection.request("exec", execFields(request), {
-    signal: controller.signal,
+    onEvent: (event, payload) => {
+      deliverOutput(request, state, controller, event, payload);
+    },
     onStart: (requestId, session) => {
       state.running = requestId;
       request.running.set(requestId, session);
     },
-    onEvent: (event, payload) => {
-      deliverOutput(request, state, controller, event, payload);
-    },
+    signal: controller.signal,
   });
   return Effect.runPromise(
     Effect.exit(Effect.promise(() => reply)).pipe(
@@ -148,17 +150,7 @@ function runExec(request: ExecRequest): Promise<ExecResult> {
   );
 }
 
-export interface ExecIn {
-  readonly target: RemoteTarget;
-  readonly command: string | readonly string[];
-  readonly options: ShellExecOptions | undefined;
-  readonly context: Context;
-  readonly shellEnv: Record<string, string> | undefined;
-  readonly shellPath: string | undefined;
-  readonly running: Map<number, number>;
-}
-
-function execEnv(request: ExecIn, inheritEnv: boolean): Record<string, string> {
+function execEnv(request: execTypes.ExecIn, inheritEnv: boolean): Record<string, string> {
   const env: Record<string, string> = {};
   const { options } = request;
   for (const [key, value] of Object.entries(
@@ -169,7 +161,7 @@ function execEnv(request: ExecIn, inheritEnv: boolean): Record<string, string> {
   return env;
 }
 
-export function execIn(request: ExecIn): Promise<ExecResult> {
+function execIn(request: execTypes.ExecIn): Promise<ExecResult> {
   const { target, options, context } = request;
   const signal = context.abortSignal;
   if (signal?.aborted === true)
@@ -181,22 +173,28 @@ export function execIn(request: ExecIn): Promise<ExecResult> {
   const cwd =
     cwdOption === undefined || cwdOption === ""
       ? Promise.resolve(target.cwd)
-      : run(resolveIn({ target, path: cwdOption }));
+      : run(resolveIn({ path: cwdOption, target }));
   return cwd.then(
     (resolvedCwd) => {
       if (signal?.aborted === true) return err(new ExecutionError("aborted", "aborted"));
       return runExec({
-        connection: target.connection,
         command: request.command,
-        options,
+        connection: target.connection,
         context,
         cwd: resolvedCwd,
         env: execEnv(request, inheritEnv),
         inheritEnv,
-        shellPath: request.shellPath,
+        options,
         running: request.running,
+        shellPath: request.shellPath,
       });
     },
     (error: unknown) => err(new ExecutionError("unknown", errorMessage(error))),
   );
 }
+
+const exec = {
+  execIn,
+};
+
+export default exec;

@@ -1,20 +1,22 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { renderDeclarations, renderToolSample, renderToolSignature } from "../src/index.ts";
+import codemode from "../src/index.ts";
+
+const { renderDeclarations, renderToolSample, renderToolSignature } = codemode;
 
 const execute = () => undefined;
 
 function rendersSignaturesWithNormalizedIdentifiers(): void {
   expect(
     renderToolSignature({
-      name: "hidden-dynamic-tool",
       inputSchema: {
-        type: "object",
+        additionalProperties: false,
         properties: { city: { type: "string" } },
         required: ["city"],
-        additionalProperties: false,
+        type: "object",
       },
-      outputSchema: { type: "object", properties: { ok: { type: "boolean" } }, required: ["ok"] },
+      name: "hidden-dynamic-tool",
+      outputSchema: { properties: { ok: { type: "boolean" } }, required: ["ok"], type: "object" },
     }),
   ).toBe("hidden_dynamic_tool(args: { city: string; }): Promise<{ ok: boolean; }>;");
   expect(renderToolSignature({ name: "free" })).toBe("free(args: unknown): Promise<unknown>;");
@@ -22,18 +24,18 @@ function rendersSignaturesWithNormalizedIdentifiers(): void {
 
 function rendersOutputSchemasShapedLikeAn(): void {
   const outputSchema = {
-    type: "object",
     properties: {
-      content: { type: "array", items: { type: "object" } },
-      isError: { type: "boolean" },
       _meta: { type: "object" },
+      content: { items: { type: "object" }, type: "array" },
+      isError: { type: "boolean" },
     },
     required: ["content"],
+    type: "object",
   };
   expect(
     renderToolSignature({
+      inputSchema: { properties: {}, type: "object" },
       name: "plain",
-      inputSchema: { type: "object", properties: {} },
       outputSchema,
     }),
   ).toBe(
@@ -43,7 +45,7 @@ function rendersOutputSchemasShapedLikeAn(): void {
 
 function rendersThePerToolSample(): void {
   expect(
-    renderToolSample({ name: "foo", description: "bar", inputSchema: { type: "string" } }),
+    renderToolSample({ description: "bar", inputSchema: { type: "string" }, name: "foo" }),
   ).toBe(
     "bar\n\ncodemode tool declaration:\n```ts\ndeclare const tools: { foo(args: string): Promise<unknown>; };\n```",
   );
@@ -51,22 +53,22 @@ function rendersThePerToolSample(): void {
 
 function rendersToolsAndGlobals(): void {
   const text = renderDeclarations({
+    globals: [
+      { description: "Attach it.", execute, inputSchema: { type: "string" }, name: "attach" },
+    ],
     tools: [
       {
-        name: "read",
         description: "Read a file.\nSecond line.",
+        execute,
         inputSchema: {
-          type: "object",
           properties: { path: { type: "string" } },
           required: ["path"],
+          type: "object",
         },
+        name: "read",
         outputSchema: { type: "string" },
-        execute,
       },
-      { name: "remote-api", execute },
-    ],
-    globals: [
-      { name: "attach", description: "Attach it.", inputSchema: { type: "string" }, execute },
+      { execute, name: "remote-api" },
     ],
   });
   expect(text).toBe(
@@ -90,13 +92,13 @@ function rendersNamespacedGlobalsAndExplicitSignatures(): void {
   const text = renderDeclarations({
     globals: [
       {
-        name: "models.list",
         description: "List models.",
-        signature: "(type: string): Promise<string[]>",
         execute,
+        name: "models.list",
+        signature: "(type: string): Promise<string[]>",
       },
-      { name: "models.get", inputSchema: { type: "string" }, execute },
-      { name: "plain", signature: "(): void", execute },
+      { execute, inputSchema: { type: "string" }, name: "models.get" },
+      { execute, name: "plain", signature: "(): void" },
     ],
   });
   expect(text).toBe(
@@ -113,7 +115,7 @@ function rendersNamespacedGlobalsAndExplicitSignatures(): void {
 }
 
 function escapesCommentTerminatorsInDescriptions(): void {
-  const text = renderDeclarations({ tools: [{ name: "x", description: "a */ b", execute }] });
+  const text = renderDeclarations({ tools: [{ description: "a */ b", execute, name: "x" }] });
   expect(text).toContain("/** a *\\/ b */");
 }
 

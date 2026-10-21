@@ -1,20 +1,27 @@
-import { Container, hyperlink, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect } from "effect";
 
-import { copyToClipboard } from "../../../utils/clipboard.ts";
-import { toErrorMessage } from "../../../utils/errors.ts";
-import { theme } from "../theme/theme.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import clipboard from "../../../utils/clipboard.ts";
+import errors from "../../../utils/errors.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-/**
- * A sign-in URL with a click hint and a copy hint. Hosts call `copy()` when `app.message.copy` is
- * pressed, since a long URL wraps and often cannot be selected or clicked as a whole (SSH, tmux).
- */
-export class AuthUrlComponent extends Container {
+const { theme } = themeModule;
+const { keyHint } = keybindingHints;
+const { awaited, awaitingWith } = awaitingModule;
+const { copyToClipboard } = clipboard;
+const { toErrorMessage } = errors;
+
+const { Text, hyperlink } = tuiModule;
+
+export default class AuthUrlComponent extends tuiModule.Container {
   readonly url: string;
-  private readonly tui: TUI;
-  private readonly hint: Text;
+  private readonly tui: tuiTypes.TUI;
+  private readonly hint: tuiTypes.Text;
 
-  constructor(tui: TUI, url: string) {
+  constructor(tui: tuiTypes.TUI, url: string) {
     super();
     this.tui = tui;
     this.url = url;
@@ -32,12 +39,16 @@ export class AuthUrlComponent extends Container {
     this.tui.requestRender();
   }
 
-  async copy(): Promise<void> {
-    try {
-      await copyToClipboard(this.url);
-      this.setHint(theme.fg("success", "Copied URL to clipboard"));
-    } catch (error) {
-      this.setHint(theme.fg("error", toErrorMessage(error)));
-    }
+  copy(): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        try {
+          yield* awaited(copyToClipboard(this.url));
+          this.setHint(theme.fg("success", "Copied URL to clipboard"));
+        } catch (error) {
+          this.setHint(theme.fg("error", toErrorMessage(error)));
+        }
+      }, this),
+    );
   }
 }

@@ -1,5 +1,7 @@
 import { Data } from "effect";
 
-export class MissingVerifierError extends Data.TaggedError("MissingVerifierError")<{
+class MissingVerifierError extends Data.TaggedError("MissingVerifierError")<{
   readonly message: string;
 }> {}
+
+export default MissingVerifierError;

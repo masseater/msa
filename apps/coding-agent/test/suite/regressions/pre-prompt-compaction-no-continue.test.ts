@@ -1,79 +1,111 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, getUserTexts, type Harness } from "../harness.ts";
+import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+
+const { fauxAssistantMessage } = ai;
+
+const { createHarness, getUserTexts } = harnessModule;
+
+const { currentTimeMillis } = testing;
 
 function createUsage(totalTokens: number) {
   return {
-    input: totalTokens,
-    output: 0,
     cacheRead: 0,
     cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: totalTokens,
+    output: 0,
     totalTokens,
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
   };
 }
 
-describe("pre-prompt compaction regression", () => {
-  const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  it("compacts length-stop overflow before a new prompt without continuing from an assistant message", async () => {
-    const harness = await createHarness({
-      models: [{ id: "faux-1", contextWindow: 100, maxTokens: 100 }],
-      settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
+const compactsLengthStopOverflowBeforeA = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
-          msa.on("session_before_compact", async (event) => ({
-            compaction: {
-              summary: "pre-prompt summary",
-              firstKeptEntryId: event.preparation.firstKeptEntryId,
-              tokensBefore: event.preparation.tokensBefore,
-              details: {},
-            },
-          }));
+          msa.on("session_before_compact", (event) =>
+            Promise.resolve({
+              compaction: {
+                details: {},
+                firstKeptEntryId: event.preparation.firstKeptEntryId,
+                summary: "pre-prompt summary",
+                tokensBefore: event.preparation.tokensBefore,
+              },
+            }),
+          );
         },
       ],
-    });
-    harnesses.push(harness);
+      models: [{ contextWindow: 100, id: "faux-1", maxTokens: 100 }],
+      settings: { compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 0 } },
+    }),
+  );
+  harnesses.push(harness);
+  const now = currentTimeMillis();
+  const model = harness.getModel();
+  harness.sessionManager.appendMessage({
+    content: [{ text: "previous prompt", type: "text" }],
+    role: "user",
+    timestamp: now - 1000,
+  });
+  return yield* compactsLengthStopOverflowBeforeAStep1(harness, now, model);
+});
 
-    const now = Date.now();
-    const model = harness.getModel();
-    harness.sessionManager.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "previous prompt" }],
-      timestamp: now - 1000,
-    });
-    const lengthStopAssistant: AssistantMessage = {
+const compactsLengthStopOverflowBeforeAStep1 = (
+  harness: harnessTypes.Harness,
+  now: number,
+  model: modelTypesModule.Model<string>,
+) =>
+  Effect.gen(function* () {
+    const lengthStopAssistant: aiTypes.AssistantMessage = {
       ...fauxAssistantMessage("length-stop assistant response", {
         stopReason: "length",
         timestamp: now - 500,
       }),
       api: model.api,
-      provider: model.provider,
       model: model.id,
+      provider: model.provider,
       usage: createUsage(100),
     };
     harness.sessionManager.appendMessage(lengthStopAssistant);
     harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
     harness.setResponses([fauxAssistantMessage("answered next prompt")]);
     const continueSpy = vi.spyOn(harness.session.agent, "continue");
-
-    await expect(harness.session.prompt("next prompt")).resolves.toBeUndefined();
-
+    yield* Effect.promise(() =>
+      expect(harness.session.run.prompting.prompt("next prompt")).resolves.toBeUndefined(),
+    );
     expect(continueSpy).not.toHaveBeenCalled();
     expect(harness.eventsOfType("compaction_end").at(-1)).toMatchObject({
-      reason: "overflow",
       aborted: false,
+      reason: "overflow",
       willRetry: true,
     });
     expect(getUserTexts(harness)).toContain("next prompt");
     expect(harness.faux.state.callCount).toBe(1);
   });
+
+const compactsLengthStopOverflowBeforeANew = () =>
+  Effect.runPromise(compactsLengthStopOverflowBeforeA);
+
+const afterEachHook = () => {
+  vi.restoreAllMocks();
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
+describe("pre-prompt compaction regression", () => {
+  afterEach(afterEachHook);
+  it(
+    "compacts length-stop overflow before a new prompt without continuing from an assistant message",
+    compactsLengthStopOverflowBeforeANew,
+  );
 });

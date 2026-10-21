@@ -1,6 +1,6 @@
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
 
-export class CursorTrackingTerminal extends VirtualTerminal {
+class CursorTrackingTerminal extends VirtualTerminal {
   cursorVisible = true;
 
   override hideCursor(): void {
@@ -13,3 +13,5 @@ export class CursorTrackingTerminal extends VirtualTerminal {
     super.showCursor();
   }
 }
+
+export default CursorTrackingTerminal;

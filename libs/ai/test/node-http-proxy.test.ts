@@ -1,9 +1,11 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  resolveHttpProxyUrlForTarget,
-  UNSUPPORTED_PROXY_PROTOCOL_MESSAGE,
-} from "../src/utils/node-http-proxy.ts";
+import nodeHttpProxy from "../src/utils/node-http-proxy.ts";
+import env from "./env.ts";
+
+const { UNSUPPORTED_PROXY_PROTOCOL_MESSAGE, resolveHttpProxyUrlForTarget } = nodeHttpProxy;
+
+const { envValue } = env;
 
 const PROXY_ENV_KEYS = [
   "HTTP_PROXY",
@@ -22,12 +24,12 @@ const PROXY_ENV_KEYS = [
 
 const originalEnv = new Map<string, string | undefined>();
 for (const key of PROXY_ENV_KEYS) {
-  originalEnv.set(key, process.env[key]);
+  originalEnv.set(key, envValue(key));
 }
 
 function resetProxyEnv(): void {
   for (const key of PROXY_ENV_KEYS) {
-    delete process.env[key];
+    vi.stubEnv(key, undefined);
   }
 }
 
@@ -35,7 +37,7 @@ afterEach(() => {
   resetProxyEnv();
   for (const [key, value] of originalEnv) {
     if (value !== undefined) {
-      process.env[key] = value;
+      vi.stubEnv(key, value);
     }
   }
 });
@@ -43,15 +45,15 @@ afterEach(() => {
 describe("node HTTP proxy resolution", () => {
   it("respects NO_PROXY exclusions", () => {
     resetProxyEnv();
-    process.env["HTTPS_PROXY"] = "http://proxy.example:8080";
-    process.env["NO_PROXY"] = "chatgpt.com";
+    vi.stubEnv("HTTPS_PROXY", "http://proxy.example:8080");
+    vi.stubEnv("NO_PROXY", "chatgpt.com");
 
     expect(resolveHttpProxyUrlForTarget("https://chatgpt.com")).toBeUndefined();
   });
 
   it("resolves HTTP and HTTPS proxy URLs", () => {
     resetProxyEnv();
-    process.env["HTTPS_PROXY"] = "http://proxy.example:8080";
+    vi.stubEnv("HTTPS_PROXY", "http://proxy.example:8080");
 
     expect(resolveHttpProxyUrlForTarget("https://chatgpt.com")?.toString()).toBe(
       "http://proxy.example:8080/",
@@ -60,7 +62,7 @@ describe("node HTTP proxy resolution", () => {
 
   it("prefers scoped proxy env aliases before process env aliases", () => {
     resetProxyEnv();
-    process.env["https_proxy"] = "http://process-proxy.example:8080";
+    vi.stubEnv("https_proxy", "http://process-proxy.example:8080");
 
     expect(
       resolveHttpProxyUrlForTarget("https://chatgpt.com", {
@@ -71,18 +73,22 @@ describe("node HTTP proxy resolution", () => {
 
   it("rejects SOCKS and PAC proxy URLs explicitly", () => {
     resetProxyEnv();
-    process.env["HTTPS_PROXY"] = "socks5://proxy.example:1080";
+    vi.stubEnv("HTTPS_PROXY", "socks5://proxy.example:1080");
 
     expect(() => resolveHttpProxyUrlForTarget("https://chatgpt.com")).toThrow(
       UNSUPPORTED_PROXY_PROTOCOL_MESSAGE,
     );
   });
+});
 
+describe("node HTTP proxy resolution", () => {
   it("handles subdomain wildcards, IPv6, and ports in NO_PROXY", () => {
     resetProxyEnv();
-    process.env["HTTPS_PROXY"] = "http://proxy.example:8080";
-    process.env["NO_PROXY"] =
-      "example.com, .wildcard.org, *.star.net, ::1, [2001:db8::1], 127.0.0.1:8080";
+    vi.stubEnv("HTTPS_PROXY", "http://proxy.example:8080");
+    vi.stubEnv(
+      "NO_PROXY",
+      "example.com, .wildcard.org, *.star.net, ::1, [2001:db8::1], 127.0.0.1:8080",
+    );
 
     expect(resolveHttpProxyUrlForTarget("https://example.com")).toBeUndefined();
     expect(resolveHttpProxyUrlForTarget("https://api.example.com")).toBeUndefined();

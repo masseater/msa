@@ -1,103 +1,104 @@
-import { type AssistantMessage, type FauxResponseStep, Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { openaiProvider } from "@msa/ai/providers/openai";
-// A foreground subagent tool: the parent's tool call creates a child conversation it owns, runs one task there, and
-// returns the child's answer. Aborting the tool call aborts the child. A UI finds the child through the tool's running
-// details and shows its events under the call.
-// Uses OpenAI when OPENAI_API_KEY is set, and a scripted faux model otherwise.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/22-subagent-foreground.ts
-import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import openai from "@msa/ai/providers/openai";
+import type chordTypes from "@msa/chord/index.types";
+import type durableTypes from "@msa/durable/index.types";
+import { Console, Effect } from "effect";
 
-import {
-  type AgentEvent,
-  AssistantEntry,
-  type ConversationId,
-  configure,
-  createRegistry,
-  defineExtension,
-  defineTool,
-  type EntryId,
-  type Extension,
-  Harness,
-  MemoryStorage,
-  type ToolExecutionApi,
-  watchEvents,
-} from "../../src/index.ts";
+import support from "../support.ts";
+import exampleSubagentForegroundKit from "./22-subagent-foreground-kit.ts";
+
+const { durable, harnessModule, memory } = exampleSubagentForegroundKit;
+
+const { Type, createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
+
+const { AssistantEntry, configure, defineExtension, defineTool } = durable;
+const { Harness, createRegistry, watchEvents } = harnessModule;
+const { MemoryStorage } = memory;
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 
-// ─── Product code: the subagent extension ───────────────────────────────────
-
-async function answerText(
-  api: ToolExecutionApi,
-  answer: EntryId,
-  callContext: Context,
-): Promise<string> {
-  const entry = await api.commit((tx) => tx.entry(AssistantEntry, answer), callContext);
-  const message = entry?.model?.[0] as AssistantMessage;
+const answerText = Effect.fn("answerText")(function* (
+  api: durableTypes.ToolExecutionApi,
+  answer: durableTypes.EntryId,
+  callContext: chordTypes.Context,
+) {
+  const entry = yield* awaited(api.commit((tx) => tx.entry(AssistantEntry, answer), callContext));
+  const message = entry?.model?.[0] as aiTypes.AssistantMessage;
   return message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
-}
+});
 
-const Subagent: Extension = defineExtension({
+const Subagent: durableTypes.Extension = defineExtension({
   name: "subagent",
   tools: [
     defineTool({
-      name: "subagent",
       description: "Delegate a self-contained task to a subagent and get its answer back.",
+      execute: (args, api, callContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+            const { task } = args;
+            const child = yield* awaited(
+              api.commit(
+                (tx) =>
+                  runPromise(
+                    Effect.gen(function* () {
+                      const existing = (yield* awaited(
+                        tx.scanConversations({ ownerTaskId: api.taskId }, 1),
+                      )).items[0];
+                      if (existing !== undefined) return existing.id;
+                      const created = yield* awaited(
+                        tx.createConversation({
+                          ownership: { kind: "task", taskId: api.taskId },
+                        }),
+                      );
+                      yield* awaited(
+                        configure(tx, created.id, { extensions: { remove: [Subagent] } }),
+                      );
+                      return created.id;
+                    }),
+                  ),
+                callContext,
+              ),
+            );
+            yield* awaited(api.details({ conversationId: child }, callContext));
+
+            const handle = (yield* awaited(api.conversation(child, callContext)))!;
+            const request = {
+              content: task,
+              requestId: `subagent:${api.taskId}`,
+              type: "input",
+            } as const;
+            const settled = yield* awaited(
+              (yield* awaited(handle.submit(request, callContext))).wait(callContext),
+            );
+            if (settled.status !== "done" || settled.type !== "input") {
+              throw new Error(`Subagent failed: ${settled.status}`);
+            }
+            const text = yield* answerText(api, settled.answer, callContext);
+            return { details: { conversationId: child }, output: [{ text, type: "text" }] };
+          }),
+        ),
+      name: "subagent",
       parameters: Type.Object({
         task: Type.String({ description: "What the subagent should do" }),
       }),
-      // Safe to rerun after a crash: a rerun finds the child it already created and the submission it already made.
       replay: "safe",
-      execute: async (args, api, callContext) => {
-        const { task } = args;
-        // The child is owned by this tool call's task, so aborting the call aborts the child, and the call
-        // finishes only once the child's work is done.
-        const child = await api.commit(async (tx) => {
-          // Ownership records the child: a rerun of this call finds it instead of creating another.
-          const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
-          if (existing !== undefined) return existing.id;
-          // Starts as a copy of this conversation's agent: model, thinking level, cwd, extensions, tools.
-          const created = await tx.createConversation({
-            ownership: { kind: "task", taskId: api.taskId },
-          });
-          // Without this extension, the child is not offered this tool.
-          await configure(tx, created.id, { extensions: { remove: [Subagent] } });
-          return created.id;
-        }, callContext);
-        // A UI watching the parent sees this and can attach to the child.
-        await api.details({ conversationId: child }, callContext);
-
-        const handle = (await api.conversation(child, callContext))!;
-        // The request ID makes a rerun get back the submission it made before the crash.
-        const request = {
-          type: "input",
-          content: task,
-          requestId: `subagent:${api.taskId}`,
-        } as const;
-        const settled = await (await handle.submit(request, callContext)).wait(callContext);
-        if (settled.status !== "done" || settled.type !== "input") {
-          throw new Error(`Subagent failed: ${settled.status}`);
-        }
-        const text = await answerText(api, settled.answer, callContext);
-        return { output: [{ type: "text", text }], details: { conversationId: child } };
-      },
     }),
   ],
 });
 
-// ─── Host setup ─────────────────────────────────────────────────────────────
-
 const models = createModels();
-let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env["OPENAI_API_KEY"] === undefined) {
-  // The parent delegates, the child answers, and the parent reports.
+let model = { modelId: "gpt-6-sol", provider: "openai" };
+if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
   const faux = fauxProvider();
   models.setProvider(faux.provider);
-  model = { provider: "faux", modelId: "faux-1" };
+  model = { modelId: "faux-1", provider: "faux" };
   const delegate = fauxToolCall(
     "subagent",
     { task: "Name three prime numbers." },
@@ -107,53 +108,68 @@ if (process.env["OPENAI_API_KEY"] === undefined) {
     fauxAssistantMessage([delegate], { stopReason: "toolUse" }),
     fauxAssistantMessage([fauxText("2, 3, and 5.")]),
     fauxAssistantMessage([fauxText("The subagent says: 2, 3, and 5.")]),
-  ] satisfies FauxResponseStep[]);
+  ] satisfies aiTypes.FauxResponseStep[]);
 } else {
   models.setProvider(openaiProvider());
 }
 const registry = createRegistry();
 registry.install(Subagent);
-const harness = await Harness.open(new MemoryStorage(), { models, registry }, context);
-const root = await harness.root(context, { agent: { model } });
 
-// ─── UI: the parent's events, with each subagent's events indented under its call ───
+const mainStep1 = Effect.gen(function* () {
+  const runSync = Effect.runSyncWith(yield* Effect.context<never>());
 
-const print = (indent: string, event: AgentEvent): void => {
-  if (event.type === "message_end" && event.entry.kind === "msa.assistant") {
-    const message = event.entry.model?.[0] as AssistantMessage;
-    const text = message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
-    if (text !== "") console.log(`${indent}assistant: ${text}`);
-  } else if (event.type === "tool_execution_start") {
-    console.log(`${indent}tool ${event.toolName}(${JSON.stringify(event.args)})`);
-  }
-};
-const attached = new Set<ConversationId>();
-const attach = async (id: ConversationId, indent: string): Promise<void> => {
-  attached.add(id);
-  const stream = await watchEvents(harness, id, context);
-  stream.start(async (events) => {
-    for await (const event of events) {
-      print(indent, event);
-      if (event.type !== "tool_execution_update") continue;
-      const child = (event.details as { conversationId?: ConversationId } | undefined)
-        ?.conversationId;
-      if (child !== undefined && !attached.has(child)) await attach(child, `${indent}  `);
+  const harness = yield* awaited(Harness.open(new MemoryStorage(), { models, registry }, context));
+  const root = yield* awaited(harness.root(context, { agent: { model } }));
+
+  const print = (indent: string, event: durableTypes.AgentEvent): void => {
+    if (event.type === "message_end" && event.entry.kind === "msa.assistant") {
+      const message = event.entry.model?.[0] as aiTypes.AssistantMessage;
+      const text = message.content.flatMap((c) => (c.type === "text" ? [c.text] : [])).join("");
+      if (text !== "") runSync(Console.log(`${indent}assistant: ${text}`));
+    } else if (event.type === "tool_execution_start") {
+      runSync(Console.log(`${indent}tool ${event.toolName}(${JSON.stringify(event.args)})`));
     }
-  });
-};
-await attach(root.id, "");
+  };
+  const attached = new Set<durableTypes.ConversationId>();
+  const attach = Effect.fn("attach")(function* (id: durableTypes.ConversationId, indent: string) {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-const submission = await root.submit(
-  {
-    type: "input",
-    content: "Use the subagent tool to find three prime numbers, then tell me what it said.",
-  },
-  context,
-);
-await submission.wait(context);
-await harness.waitForIdle(context);
-// Event callbacks run after their commit; let the last ones print.
-await new Promise((resolve) => {
-  setTimeout(resolve, 0);
+    attached.add(id);
+    const stream = yield* awaited(watchEvents(harness, id, context));
+    stream.start((events) =>
+      runPromise(
+        Effect.gen(function* () {
+          for (const event of events) {
+            print(indent, event);
+            if (event.type !== "tool_execution_update") continue;
+            const child = (
+              event.details as { conversationId?: durableTypes.ConversationId } | undefined
+            )?.conversationId;
+            if (child !== undefined && !attached.has(child)) yield* attach(child, `${indent}  `);
+          }
+        }),
+      ),
+    );
+  });
+  yield* attach(root.id, "");
+  return { harness, root };
 });
-await harness.close(context);
+
+const main = Effect.gen(function* () {
+  const { harness, root } = yield* mainStep1;
+  const submission = yield* awaited(
+    root.submit(
+      {
+        content: "Use the subagent tool to find three prime numbers, then tell me what it said.",
+        type: "input",
+      },
+      context,
+    ),
+  );
+  yield* awaited(submission.wait(context));
+  yield* awaited(harness.waitForIdle(context));
+  yield* Effect.sleep(1);
+  yield* awaited(harness.close(context));
+});
+
+NodeRuntime.runMain(main);

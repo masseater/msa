@@ -1,27 +1,20 @@
-import { Container, getKeybindings, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import {
-  getProjectTrustOptions,
-  type ProjectTrustOption,
-  type ProjectTrustStoreEntry,
-} from "../../../core/trust-manager.ts";
-import { theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+import type trustManagerTypes from "../../../core/trust-manager.types.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+import type trustSelectorTypes from "./trust-selector.types.ts";
 
-export type TrustSelection = Pick<ProjectTrustOption, "trusted" | "updates">;
+const { theme } = themeModule;
+const { keyHint, rawKeyHint } = keybindingHints;
 
-export interface TrustSelectorOptions {
-  cwd: string;
-  savedDecision: ProjectTrustStoreEntry | null;
-  projectTrusted: boolean;
-  onSelect: (selection: TrustSelection) => void;
-  onCancel: () => void;
-}
+const { Container, Spacer, Text, getKeybindings } = tui;
 
 function formatDecision(
   trustPath: string | undefined,
-  decision: ProjectTrustStoreEntry | null,
+  decision: trustManagerTypes.ProjectTrustStoreEntry | null,
 ): string {
   if (decision === null) {
     return "none";
@@ -33,19 +26,19 @@ function formatDecision(
   return `${label} (${decision.path})`;
 }
 
-export class TrustSelectorComponent extends Container {
+export default class TrustSelectorComponent extends tui.Container {
   private selectedIndex: number;
-  private readonly listContainer: Container;
-  private readonly trustOptions: ProjectTrustOption[];
-  private readonly savedDecision: ProjectTrustStoreEntry | null;
-  private readonly onSelectCallback: (selection: TrustSelection) => void;
+  private readonly listContainer: tuiTypes.Container;
+  private readonly trustOptions: trustManagerTypes.ProjectTrustOption[];
+  private readonly savedDecision: trustManagerTypes.ProjectTrustStoreEntry | null;
+  private readonly onSelectCallback: (selection: trustSelectorTypes.TrustSelection) => void;
   private readonly onCancelCallback: () => void;
 
-  constructor(options: TrustSelectorOptions) {
+  constructor(options: trustSelectorTypes.TrustSelectorOptions) {
     super();
 
     this.savedDecision = options.savedDecision;
-    this.trustOptions = getProjectTrustOptions(options.cwd);
+    this.trustOptions = options.trustOptions;
     this.selectedIndex = Math.max(
       0,
       this.trustOptions.findIndex((option) => this.isSavedOption(option)),
@@ -80,7 +73,11 @@ export class TrustSelectorComponent extends Container {
     this.listContainer = new Container();
     this.addChild(this.listContainer);
     this.addChild(new Spacer(1));
-    this.addChild(
+    TrustSelectorComponent.addHintsAndBorder(this);
+  }
+
+  private static addHintsAndBorder(self: TrustSelectorComponent): void {
+    self.addChild(
       new Text(
         rawKeyHint("↑↓", "navigate") +
           "  " +
@@ -91,13 +88,13 @@ export class TrustSelectorComponent extends Container {
         0,
       ),
     );
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
+    self.addChild(new Spacer(1));
+    self.addChild(new DynamicBorder());
 
-    this.updateList();
+    self.updateList();
   }
 
-  private isSavedOption(option: ProjectTrustOption): boolean {
+  private isSavedOption(option: trustManagerTypes.ProjectTrustOption): boolean {
     return (
       option.savedPath !== undefined &&
       this.savedDecision?.decision === option.trusted &&
@@ -109,7 +106,7 @@ export class TrustSelectorComponent extends Container {
     this.listContainer.clear();
     for (let i = 0; i < this.trustOptions.length; i++) {
       const option = this.trustOptions[i];
-      if (!option) {
+      if (option === undefined) {
         continue;
       }
 
@@ -132,7 +129,7 @@ export class TrustSelectorComponent extends Container {
       this.updateList();
     } else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
       const selected = this.trustOptions[this.selectedIndex];
-      if (selected) {
+      if (selected !== undefined) {
         this.onSelectCallback({ trusted: selected.trusted, updates: selected.updates });
       }
     } else if (kb.matches(keyData, "tui.select.cancel")) {

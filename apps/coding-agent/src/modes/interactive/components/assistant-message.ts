@@ -1,38 +1,62 @@
-import type { AssistantMessage } from "@msa/ai";
-import { Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@msa/tui";
+import type compatTypes from "@msa/ai/compat.types";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { MarkdownTransformer } from "../../../core/extensions/types.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
-import { createMarkdownTransform } from "./markdown-transform.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import themeModule from "../theme/theme.ts";
+import markdownTransform from "./markdown-transform.ts";
+
+const { getMarkdownTheme, theme } = themeModule;
+const { createMarkdownTransform } = markdownTransform;
+
+const { Container, Markdown, MouseRegion, Spacer, Text } = tui;
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";
 const OSC133_ZONE_END = "\x1b]133;B\x07";
 const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
-/**
- * Component that renders a complete assistant message
- */
-export class AssistantMessageComponent extends Container {
-  private contentContainer: Container;
+function isVisibleBlock(block: aiTypes.AssistantMessage["content"][number]): boolean {
+  if (block.type === "text") return block.text.trim() !== "";
+  if (block.type === "thinking") return block.thinking.trim() !== "";
+  return false;
+}
+
+function thinkingRunAt(
+  blocks: aiTypes.AssistantMessage["content"],
+  start: number,
+): { texts: string[]; end: number } {
+  const texts: string[] = [];
+  let end = start;
+  for (; end < blocks.length; end++) {
+    const block = blocks[end];
+    if (block?.type !== "thinking") break;
+    const thinking = block.thinking.trim();
+    if (thinking !== "") texts.push(thinking);
+  }
+  return { end, texts };
+}
+
+export default class AssistantMessageComponent extends tui.Container {
+  private contentContainer: tuiTypes.Container;
   private hideThinkingBlock: boolean;
-  private markdownTheme: MarkdownTheme;
+  private markdownTheme: tuiTypes.MarkdownTheme;
   private hiddenThinkingLabel: string;
   private outputPad: number;
-  private markdownTransformers: readonly MarkdownTransformer[];
-  private lastMessage?: AssistantMessage;
+  private markdownTransformers: readonly extensionsTypesTypes.MarkdownTransformer[];
+  private lastMessage?: aiTypes.AssistantMessage;
   private hasToolCalls = false;
   private isStreaming = false;
   private thinkingVisibilityOverrides = new Map<number, boolean>();
-  /** Shows this message's thinking in place of the message, once a tool group folds it in. */
   private splitThinking?: AssistantMessageComponent;
 
   constructor(
-    message?: AssistantMessage,
+    message?: aiTypes.AssistantMessage,
     hideThinkingBlock = false,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     hiddenThinkingLabel = "Thinking...",
     outputPad = 1,
-    markdownTransformers: readonly MarkdownTransformer[] = [],
+    markdownTransformers: readonly extensionsTypesTypes.MarkdownTransformer[] = [],
   ) {
     super();
 
@@ -42,18 +66,17 @@ export class AssistantMessageComponent extends Container {
     this.outputPad = outputPad;
     this.markdownTransformers = markdownTransformers;
 
-    // Container for text/thinking content
     this.contentContainer = new Container();
     this.addChild(this.contentContainer);
 
-    if (message) {
+    if (message !== undefined) {
       this.updateContent(message);
     }
   }
 
   override invalidate(): void {
     super.invalidate();
-    if (this.lastMessage) {
+    if (this.lastMessage !== undefined) {
       this.updateContent(this.lastMessage);
     }
   }
@@ -61,43 +84,38 @@ export class AssistantMessageComponent extends Container {
   setHideThinkingBlock(hide: boolean): void {
     this.hideThinkingBlock = hide;
     this.thinkingVisibilityOverrides.clear();
-    if (this.lastMessage) {
+    if (this.lastMessage !== undefined) {
       this.updateContent(this.lastMessage);
     }
   }
 
   setHiddenThinkingLabel(label: string): void {
     this.hiddenThinkingLabel = label;
-    if (this.lastMessage) {
+    if (this.lastMessage !== undefined) {
       this.updateContent(this.lastMessage);
     }
   }
 
   setOutputPad(padding: number): void {
     this.outputPad = padding;
-    if (this.lastMessage) {
+    if (this.lastMessage !== undefined) {
       this.updateContent(this.lastMessage);
     }
   }
 
-  /** Whether the message shows anything besides thinking, so a tool group must not fold it away. */
   hasVisibleText(): boolean {
     const message = this.lastMessage;
-    if (!message) return false;
+    if (message === undefined) return false;
     return (
       message.stopReason === "length" ||
       message.content.some((c) => c.type === "text" && c.text.trim().length > 0)
     );
   }
 
-  /**
-   * Move the thinking of a message that also shows text into a component of its own, so a tool
-   * group can fold the thinking in while the text stays in the chat. The returned component keeps
-   * following this message's updates.
-   */
   takeThinking(): AssistantMessageComponent | undefined {
     const message = this.lastMessage;
-    if (this.splitThinking || !message || !this.hasVisibleText()) return undefined;
+    if (this.splitThinking !== undefined || message === undefined || !this.hasVisibleText())
+      return undefined;
     if (!message.content.some((c) => c.type === "thinking" && c.thinking.trim())) return undefined;
     this.splitThinking = new AssistantMessageComponent(
       undefined,
@@ -111,12 +129,10 @@ export class AssistantMessageComponent extends Container {
     return this.splitThinking;
   }
 
-  /** The component holding this message's thinking after {@link takeThinking}. */
   get takenThinking(): AssistantMessageComponent | undefined {
     return this.splitThinking;
   }
 
-  /** Whether the message has thinking to show. */
   hasThinking(): boolean {
     return (
       this.lastMessage?.content.some((c) => c.type === "thinking" && c.thinking.trim()) ?? false
@@ -134,12 +150,10 @@ export class AssistantMessageComponent extends Container {
     return lines;
   }
 
-  updateContent(message: AssistantMessage, isStreaming = this.isStreaming): void {
+  updateContent(message: aiTypes.AssistantMessage, isStreaming = this.isStreaming): void {
     this.lastMessage = message;
     this.isStreaming = isStreaming;
 
-    // The thinking component stands in for the message's thinking, but not for its stop reason,
-    // which the message shows. Keeping the tool calls stops it from marking a prompt zone.
     this.splitThinking?.updateContent(
       {
         ...message,
@@ -148,129 +162,134 @@ export class AssistantMessageComponent extends Container {
       },
       isStreaming,
     );
-    const contentBlocks = this.splitThinking
-      ? message.content.filter((c) => c.type !== "thinking")
-      : message.content;
+    const contentBlocks =
+      this.splitThinking === undefined
+        ? message.content
+        : message.content.filter((c) => c.type !== "thinking");
 
-    // Clear content container
     this.contentContainer.clear();
-
-    const hasVisibleContent = contentBlocks.some(
-      (c) => (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
-    );
-
-    if (hasVisibleContent) {
+    if (contentBlocks.some(isVisibleBlock)) {
       this.contentContainer.addChild(new Spacer(1));
     }
+    this.addContentBlocks(contentBlocks);
 
-    // Render content in order
+    AssistantMessageComponent.addStopNotices(this, message);
+  }
+
+  private addContentBlocks(contentBlocks: aiTypes.AssistantMessage["content"]): void {
     let thinkingRunIndex = 0;
-    for (let i = 0; i < contentBlocks.length; i++) {
-      const content = contentBlocks[i];
-      if (content === undefined) continue;
-      if (content.type === "text" && content.text.trim()) {
-        // Assistant text messages with no background - trim the text
-        // Set paddingY=0 to avoid extra spacing before tool executions
-        this.contentContainer.addChild(
-          new Markdown(content.text.trim(), this.outputPad, 0, this.markdownTheme, undefined, {
-            transform: createMarkdownTransform(
-              "assistant",
-              this.isStreaming,
-              this.markdownTransformers,
-            ),
-          }),
-        );
-      } else if (content.type === "thinking") {
-        const thinkingBlocks: string[] = [];
-        for (; i < contentBlocks.length; i++) {
-          const thinkingContent = contentBlocks[i];
-          if (thinkingContent?.type !== "thinking") {
-            break;
-          }
-          const thinking = thinkingContent.thinking.trim();
-          if (thinking) {
-            thinkingBlocks.push(thinking);
-          }
+    let index = 0;
+    while (index < contentBlocks.length) {
+      const content = contentBlocks[index];
+      if (content?.type !== "thinking") {
+        if (content?.type === "text" && content.text.trim() !== "") {
+          AssistantMessageComponent.addTextBlock(this, content);
         }
-        i--;
-
-        if (thinkingBlocks.length === 0) {
-          continue;
-        }
-
-        // Add spacing only when another visible assistant content block follows.
-        // This avoids a superfluous blank line before separately-rendered tool execution blocks.
-        const hasVisibleContentAfter = contentBlocks
-          .slice(i + 1)
-          .some(
-            (c) =>
-              (c.type === "text" && c.text.trim()) || (c.type === "thinking" && c.thinking.trim()),
-          );
-
-        const runIndex = thinkingRunIndex++;
-        const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
-        const thinkingComponent = hidden
-          ? new Text(
-              theme.italic(theme.fg("thinkingText", this.hiddenThinkingLabel)),
-              this.outputPad,
-              0,
-            )
-          : new Markdown(
-              thinkingBlocks.join("\n\n"),
-              this.outputPad,
-              0,
-              this.markdownTheme,
-              {
-                color: (text: string) => theme.fg("thinkingText", text),
-                italic: true,
-              },
-              {
-                transform: createMarkdownTransform(
-                  "assistant-thinking",
-                  this.isStreaming,
-                  this.markdownTransformers,
-                ),
-              },
-            );
-        this.contentContainer.addChild(
-          new MouseRegion(thinkingComponent, (event) => {
-            if (event.type !== "click" || event.button !== "left") return undefined;
-            this.thinkingVisibilityOverrides.set(runIndex, !hidden);
-            if (this.lastMessage) this.updateContent(this.lastMessage);
-            return { handled: true };
-          }),
-        );
-        if (hasVisibleContentAfter) {
-          this.contentContainer.addChild(new Spacer(1));
-        }
+        index++;
+        continue;
       }
+      const run = thinkingRunAt(contentBlocks, index);
+      index = run.end;
+      if (run.texts.length === 0) continue;
+      const runIndex = thinkingRunIndex++;
+      const hidden = this.thinkingVisibilityOverrides.get(runIndex) ?? this.hideThinkingBlock;
+      const hasVisibleContentAfter = contentBlocks.slice(run.end).some(isVisibleBlock);
+      AssistantMessageComponent.addThinkingBlock(
+        this,
+        hidden,
+        run.texts,
+        runIndex,
+        hasVisibleContentAfter,
+      );
     }
+  }
 
-    // Check if incomplete/failed - show after partial content.
-    // For aborted/error tool calls, tool execution components show the error.
-    // Length stops can happen before a tool call is complete, so surface them here too.
+  private static addTextBlock(
+    self: AssistantMessageComponent,
+    content: compatTypes.TextContent,
+  ): void {
+    self.contentContainer.addChild(
+      new Markdown(content.text.trim(), self.outputPad, 0, self.markdownTheme, undefined, {
+        transform: createMarkdownTransform(
+          "assistant",
+          self.isStreaming,
+          self.markdownTransformers,
+        ),
+      }),
+    );
+  }
+
+  private static addThinkingBlock(
+    self: AssistantMessageComponent,
+    hidden: boolean,
+    thinkingBlocks: string[],
+    runIndex: number,
+    hasVisibleContentAfter: boolean,
+  ): void {
+    const thinkingComponent = hidden
+      ? new Text(
+          theme.italic(theme.fg("thinkingText", self.hiddenThinkingLabel)),
+          self.outputPad,
+          0,
+        )
+      : new Markdown(
+          thinkingBlocks.join("\n\n"),
+          self.outputPad,
+          0,
+          self.markdownTheme,
+          {
+            color: (text: string) => theme.fg("thinkingText", text),
+            italic: true,
+          },
+          {
+            transform: createMarkdownTransform(
+              "assistant-thinking",
+              self.isStreaming,
+              self.markdownTransformers,
+            ),
+          },
+        );
+    self.contentContainer.addChild(
+      new MouseRegion(thinkingComponent, (event) => {
+        if (event.type !== "click" || event.button !== "left") return undefined;
+        self.thinkingVisibilityOverrides.set(runIndex, !hidden);
+        if (self.lastMessage !== undefined) self.updateContent(self.lastMessage);
+        return { handled: true };
+      }),
+    );
+    if (hasVisibleContentAfter) {
+      self.contentContainer.addChild(new Spacer(1));
+    }
+  }
+
+  private static addStopNotices(
+    self: AssistantMessageComponent,
+    message: aiTypes.AssistantMessage,
+  ): void {
     const hasToolCalls = message.content.some((c) => c.type === "toolCall");
-    this.hasToolCalls = hasToolCalls;
+    self.hasToolCalls = hasToolCalls;
     if (message.stopReason === "length") {
-      this.contentContainer.addChild(new Spacer(1));
-      this.contentContainer.addChild(
-        new Text(theme.fg("error", "Response was truncated before completion."), this.outputPad, 0),
+      self.contentContainer.addChild(new Spacer(1));
+      self.contentContainer.addChild(
+        new Text(theme.fg("error", "Response was truncated before completion."), self.outputPad, 0),
       );
     } else if (!hasToolCalls) {
       if (message.stopReason === "aborted") {
         const abortMessage =
-          message.errorMessage && message.errorMessage !== "Request was aborted"
+          message.errorMessage !== undefined &&
+          message.errorMessage !== "" &&
+          message.errorMessage !== "Request was aborted"
             ? message.errorMessage
             : "Operation aborted";
-        this.contentContainer.addChild(new Spacer(1));
-        this.contentContainer.addChild(
-          new Text(theme.fg("error", abortMessage), this.outputPad, 0),
+        self.contentContainer.addChild(new Spacer(1));
+        self.contentContainer.addChild(
+          new Text(theme.fg("error", abortMessage), self.outputPad, 0),
         );
       } else if (message.stopReason === "error") {
         const errorMsg = message.errorMessage || "Unknown error";
-        this.contentContainer.addChild(new Spacer(1));
-        this.contentContainer.addChild(
-          new Text(theme.fg("error", `Error: ${errorMsg}`), this.outputPad, 0),
+        self.contentContainer.addChild(new Spacer(1));
+        self.contentContainer.addChild(
+          new Text(theme.fg("error", `Error: ${errorMsg}`), self.outputPad, 0),
         );
       }
     }

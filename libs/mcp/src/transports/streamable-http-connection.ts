@@ -1,61 +1,47 @@
 import { Effect } from "effect";
 
-import type { AuthProvider, McpFetch } from "../auth-provider.ts";
-import { fromPromise, type McpForeignError } from "../foreign.ts";
-import {
-  type JsonRpcMessage,
-  McpAbortError,
-  type McpConnectionClosedError,
-  parseJsonRpcMessage,
-} from "../protocol/jsonrpc.ts";
-import { McpAuthRequiredError } from "./errors/auth-required-error.ts";
-import { McpHttpError } from "./errors/http-error.ts";
-import { McpSessionExpiredError } from "./errors/session-expired-error.ts";
-import {
-  contentType,
-  describeHttpFailure,
-  discard,
-  needsAuthorization,
-  sleepUnlessAborted,
-  type StreamCursor,
-} from "./http-support.ts";
-import { consumeSseStream } from "./sse.ts";
-import { DEFAULT_MAX_MESSAGE_BYTES, TransportEvents } from "./transport.ts";
+import type authProviderTypes from "../auth-provider.ts";
+import type foreignTypes from "../foreign.types.ts";
+import type jsonrpcTypes from "../protocol/jsonrpc.types.ts";
+import type httpErrorTypes from "./errors/http-error.types.ts";
+import type httpSupportTypes from "./http-support.types.ts";
+import sse from "./sse.ts";
+import streamableHttpConnectionKit from "./streamable-http-connection-kit.ts";
+import type streamableHttpConnectionTypes from "./streamable-http-connection.types.ts";
+import transport from "./transport.ts";
+
+const {
+  McpAuthRequiredError,
+  foreign: foreignModule,
+  McpHttpError,
+  httpSupport,
+  jsonrpc: jsonrpcModule,
+  McpSessionExpiredError,
+} = streamableHttpConnectionKit;
+
+const { DEFAULT_MAX_MESSAGE_BYTES } = transport;
+const { McpAbortError, parseJsonRpcMessage } = jsonrpcModule;
+const { fromPromise } = foreignModule;
+const { contentType, describeHttpFailure, discard, needsAuthorization, sleepUnlessAborted } =
+  httpSupport;
+const { consumeSseStream } = sse;
 
 const MAX_ERROR_BODY_BYTES = 8 * 1024;
 const DEFAULT_RECONNECT_INITIAL_DELAY_MS = 1_000;
 const DEFAULT_RECONNECT_MAX_DELAY_MS = 30_000;
 const DEFAULT_RECONNECT_MAX_RETRIES = 5;
 
-export interface StreamableHttpReconnectOptions {
-  initialDelayMs?: number;
-  maxDelayMs?: number;
-  maxRetries?: number;
-}
-
-export interface StreamableHttpTransportOptions {
-  url: string | URL;
-  headers?: Record<string, string> | undefined;
-  fetch?: McpFetch;
-  openGetStream?: boolean;
-  maxMessageBytes?: number;
-  authProvider?: AuthProvider;
-  reconnect?: StreamableHttpReconnectOptions;
-}
-
-export type HttpFailure = McpForeignError | McpHttpError | McpAbortError | McpConnectionClosedError;
-
-export abstract class StreamableHttpConnection extends TransportEvents {
+export default abstract class StreamableHttpConnection extends transport.TransportEvents {
   readonly url: URL;
-  readonly options: Readonly<StreamableHttpTransportOptions>;
-  protected fetch: McpFetch;
+  readonly options: Readonly<streamableHttpConnectionTypes.StreamableHttpTransportOptions>;
+  protected fetch: authProviderTypes.McpFetch;
   protected controller = new AbortController();
   protected closed = false;
   protected sessionIdValue: string | undefined;
   protected protocolVersion: string | undefined;
   protected lastToken: string | undefined;
 
-  constructor(options: StreamableHttpTransportOptions) {
+  constructor(options: streamableHttpConnectionTypes.StreamableHttpTransportOptions) {
     super();
     this.options = Object.freeze({
       ...options,
@@ -70,7 +56,7 @@ export abstract class StreamableHttpConnection extends TransportEvents {
     method: "GET" | "POST",
     init: { headers: Record<string, string>; body?: string },
     signal?: AbortSignal,
-  ): Effect.Effect<Response, McpForeignError | McpAbortError> {
+  ): Effect.Effect<Response, foreignTypes.McpForeignError | jsonrpcTypes.McpAbortError> {
     return Effect.gen({ self: this }, function* () {
       const provider = this.options.authProvider;
       const onUnauthorized = provider?.onUnauthorized?.bind(provider);
@@ -82,15 +68,15 @@ export abstract class StreamableHttpConnection extends TransportEvents {
         const controllerSignal = this.controller.signal;
         const response = yield* fromPromise(() =>
           fetch(url, {
-            method,
             headers,
-            ...(init.body === undefined ? {} : { body: init.body }),
+            method,
             signal: controllerSignal,
+            ...(init.body === undefined ? {} : { body: init.body }),
           }),
         );
         if (attempt > 0 || onUnauthorized === undefined || !needsAuthorization(response))
           return response;
-        const context = { response, serverUrl: url, fetch, token };
+        const context = { fetch, response, serverUrl: url, token };
         yield* fromPromise(() => onUnauthorized(context)).pipe(Effect.ensuring(discard(response)));
       }
     });
@@ -98,7 +84,7 @@ export abstract class StreamableHttpConnection extends TransportEvents {
 
   protected headers(
     extra: Record<string, string> = {},
-  ): Effect.Effect<{ headers: Headers; token?: string }, McpForeignError> {
+  ): Effect.Effect<{ headers: Headers; token?: string }, foreignTypes.McpForeignError> {
     const provider = this.options.authProvider;
     return fromPromise(() => provider?.token()).pipe(
       Effect.map((token) => {
@@ -128,7 +114,7 @@ export abstract class StreamableHttpConnection extends TransportEvents {
     if (sessionId !== null && sessionId !== "") this.sessionIdValue = sessionId;
   }
 
-  protected checkResponse(response: Response): Effect.Effect<void, McpHttpError> {
+  protected checkResponse(response: Response): Effect.Effect<void, httpErrorTypes.McpHttpError> {
     if (response.ok) return Effect.void;
     return Effect.gen({ self: this }, function* () {
       const text = yield* Effect.promise(() => response.text().catch(() => ""));
@@ -147,22 +133,16 @@ export abstract class StreamableHttpConnection extends TransportEvents {
 
   protected consumeSse(
     stream: ReadableStream<Uint8Array>,
-    cursor: StreamCursor,
-    onMessage?: (message: JsonRpcMessage) => void,
-  ): Effect.Effect<void, McpForeignError> {
+    cursor: httpSupportTypes.StreamCursor,
+    onMessage?: (message: jsonrpcTypes.JsonRpcMessage) => void,
+  ): Effect.Effect<void, foreignTypes.McpForeignError> {
     return consumeSseStream(stream, {
       maxEventBytes: this.options.maxMessageBytes ?? DEFAULT_MAX_MESSAGE_BYTES,
-      onId: (id) => {
-        cursor.lastEventId = id;
-      },
-      onRetry: (delayMs) => {
-        cursor.retryMs = delayMs;
-      },
       onEvent: (event) => {
         cursor.received = true;
         if (event.data.trim() === "" || (event.event !== undefined && event.event !== "message"))
           return;
-        let message: JsonRpcMessage;
+        let message: jsonrpcTypes.JsonRpcMessage;
         try {
           message = parseJsonRpcMessage(JSON.parse(event.data));
         } catch (error) {
@@ -172,12 +152,21 @@ export abstract class StreamableHttpConnection extends TransportEvents {
         onMessage?.(message);
         this.emitMessage(message);
       },
+      onId: (id) => {
+        cursor.lastEventId = id;
+      },
+      onRetry: (delayMs) => {
+        cursor.retryMs = delayMs;
+      },
     });
   }
 
   protected openSseStream(
     lastEventId: string | undefined,
-  ): Effect.Effect<ReadableStream<Uint8Array> | undefined, HttpFailure> {
+  ): Effect.Effect<
+    ReadableStream<Uint8Array> | undefined,
+    streamableHttpConnectionTypes.HttpFailure
+  > {
     return Effect.gen({ self: this }, function* () {
       const response = yield* this.authorizedFetch("GET", {
         headers: {

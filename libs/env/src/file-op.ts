@@ -1,50 +1,32 @@
-import type { Context } from "@msa/chord";
-import { type FileError, ok, type Result } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
-import type { Connection, Json } from "./connection.ts";
-import { abortResult, fileResult, recoverFileError } from "./errors.ts";
-import { Handle } from "./handle.ts";
-import { resolveRemotePath } from "./resolve-path.ts";
+import type connectionTypes from "./connection.types.ts";
+import errors from "./errors.ts";
+import type fileOpTypes from "./file-op.types.ts";
+import Handle from "./handle.ts";
+import type handleTypes from "./handle.types.ts";
+import resolvePath from "./resolve-path.ts";
 
-export interface RemoteTarget {
-  readonly connection: Connection;
-  readonly cwd: string;
-}
+const { ok } = env;
 
-export interface PathRequest {
-  readonly target: RemoteTarget;
-  readonly path: string;
-  readonly context: Context;
-}
+const { resolveRemotePath } = resolvePath;
+const { abortResult, fileResult, recoverFileError } = errors;
 
-export interface FileOp<T> extends PathRequest {
-  readonly operation: (resolved: string) => Effect.Effect<T, FileError>;
-  readonly check?: "before" | "both";
-}
+const run = <T>(effect: Effect.Effect<T>): Promise<T> => Effect.runPromise(effect);
 
-export interface ReaderOpen<R> extends PathRequest {
-  readonly open: (resolved: string) => Effect.Effect<Handle>;
-  readonly wrap: (handle: Handle) => R;
-}
-
-export type Opened = { handle: Handle; json: Json };
-
-export interface RemoteRequest {
-  readonly connection: Connection;
-  readonly op: string;
-  readonly json: Json;
-  readonly payload?: Uint8Array;
-}
-
-export const run = <T>(effect: Effect.Effect<T>): Promise<T> => Effect.runPromise(effect);
-
-export const resolveIn = (request: { target: RemoteTarget; path: string }): Effect.Effect<string> =>
+const resolveIn = (request: {
+  target: fileOpTypes.RemoteTarget;
+  path: string;
+}): Effect.Effect<string> =>
   Effect.promise(() => request.target.connection.info()).pipe(
     Effect.map((info) => resolveRemotePath(request.path, info, request.target.cwd)),
   );
 
-export const runFileOp = <T>(op: FileOp<T>): Effect.Effect<Result<T, FileError>> =>
+const runFileOp = <T>(
+  op: fileOpTypes.FileOp<T>,
+): Effect.Effect<envTypes.Result<T, envTypes.FileError>> =>
   Effect.gen(function* () {
     const resolved = yield* fileResult(resolveIn(op), op.path);
     if (!resolved.ok) return resolved;
@@ -56,14 +38,14 @@ export const runFileOp = <T>(op: FileOp<T>): Effect.Effect<Result<T, FileError>>
         Effect.map((value) => {
           const after =
             op.check === "both" ? abortResult<T>(op.context.abortSignal, target) : undefined;
-          return after ?? ok<T, FileError>(value);
+          return after ?? ok<T, envTypes.FileError>(value);
         }),
       ),
       target,
     );
   });
 
-export const remoteRequest = (request: RemoteRequest): Effect.Effect<Json> =>
+const remoteRequest = (request: fileOpTypes.RemoteRequest): Effect.Effect<connectionTypes.Json> =>
   Effect.promise(() =>
     request.connection.request(
       request.op,
@@ -72,11 +54,11 @@ export const remoteRequest = (request: RemoteRequest): Effect.Effect<Json> =>
     ),
   ).pipe(Effect.map((reply) => reply.json));
 
-export const openFile = (request: {
-  connection: Connection;
+const openFile = (request: {
+  connection: connectionTypes.Connection;
   resolved: string;
-  json: Json;
-}): Effect.Effect<Opened> =>
+  json: connectionTypes.Json;
+}): Effect.Effect<fileOpTypes.Opened> =>
   Effect.promise(() =>
     request.connection.request("open", { path: request.resolved, ...request.json }),
   ).pipe(
@@ -86,15 +68,17 @@ export const openFile = (request: {
     })),
   );
 
-export const openDir = (request: {
-  connection: Connection;
+const openDir = (request: {
+  connection: connectionTypes.Connection;
   resolved: string;
-}): Effect.Effect<Handle> =>
+}): Effect.Effect<handleTypes.Handle> =>
   Effect.promise(() => request.connection.request("opendir", { path: request.resolved })).pipe(
     Effect.map((reply) => new Handle(request.connection, reply, request.resolved)),
   );
 
-export const openReader = <R>(request: ReaderOpen<R>): Promise<Result<R, FileError>> =>
+const openReader = <R>(
+  request: fileOpTypes.ReaderOpen<R>,
+): Promise<envTypes.Result<R, envTypes.FileError>> =>
   run(
     Effect.gen(function* () {
       const opened = yield* runFileOp({ ...request, operation: request.open });
@@ -104,6 +88,18 @@ export const openReader = <R>(request: ReaderOpen<R>): Promise<Result<R, FileErr
         yield* Effect.promise(() => opened.value.close());
         return aborted;
       }
-      return ok<R, FileError>(request.wrap(opened.value));
+      return ok<R, envTypes.FileError>(request.wrap(opened.value));
     }),
   );
+
+const fileOp = {
+  openDir,
+  openFile,
+  openReader,
+  remoteRequest,
+  resolveIn,
+  run,
+  runFileOp,
+};
+
+export default fileOp;

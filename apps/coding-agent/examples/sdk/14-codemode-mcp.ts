@@ -1,63 +1,62 @@
-/**
- * Codemode, Tool Search, and MCP
- *
- * The CLI loads `codemode`, `tool_search`, and MCP as built-in extensions. SDK sessions add
- * them to the resource loader's extension factories.
- *
- * `codemode` and `tool_search` are registered inactive. Enable them through the `defaultTools` setting
- * (`tools` would also restrict the session to the named tools, which hides MCP tools), or let the
- * MCP extension activate them: `codemode` for servers with `codemode` exposure, `tool_search` for
- * servers with `deferred` exposure.
- */
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-import {
+const {
+  DefaultResourceLoader,
+  SessionManager,
+  SettingsManager,
   createAgentSession,
   createCodemodeExtension,
   createMcpExtension,
   createToolSearchExtension,
-  DefaultResourceLoader,
   getAgentDir,
-  SessionManager,
-  SettingsManager,
-} from "@msa/coding-agent";
+} = codingAgent;
 
 const cwd = process.cwd();
 
 const resourceLoader = new DefaultResourceLoader({
-  cwd,
   agentDir: getAgentDir(),
+  cwd,
   extensionFactories: [
     createCodemodeExtension({ mode: "on" }),
     createToolSearchExtension(),
-    // Reads mcp.json from the agent directory and the trusted project, like the CLI.
+
     createMcpExtension(),
   ],
 });
-await resourceLoader.reload();
 
-const settingsManager = SettingsManager.create(cwd);
-// `+name` adds to the configured default tools instead of replacing them.
-settingsManager.applyOverrides({ defaultTools: ["+codemode", "+tool_search"] });
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => resourceLoader.reload());
 
-const { session } = await createAgentSession({
-  resourceLoader,
-  settingsManager,
-  sessionManager: SessionManager.inMemory(),
-});
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(cwd));
 
-try {
-  // Emits session_start, which connects the MCP servers in the background.
-  await session.bindExtensions({});
-  console.log("Active tools:", session.getActiveToolNames().join(", "));
-  session.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      process.stdout.write(event.assistantMessageEvent.delta);
+    settingsManager.applyOverrides({ defaultTools: ["+codemode", "+tool_search"] });
+
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader,
+        sessionManager: SessionManager.inMemory(),
+        settingsManager,
+      }),
+    );
+
+    try {
+      yield* Effect.promise(() => session.extensions.binding.bindExtensions({}));
+      yield* Console.log("Active tools:", session.tools.loadout.getActiveToolNames().join(", "));
+      session.subscribe((event) => {
+        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+          process.stdout.write(event.assistantMessageEvent.delta);
+        }
+      });
+      yield* Effect.promise(() =>
+        session.run.prompting.prompt(
+          "Use codemode to count the TypeScript files in src/ and list the three largest.",
+        ),
+      );
+      yield* Console.log();
+    } finally {
+      session.dispose();
     }
-  });
-  await session.prompt(
-    "Use codemode to count the TypeScript files in src/ and list the three largest.",
-  );
-  console.log();
-} finally {
-  session.dispose();
-}
+  }),
+);

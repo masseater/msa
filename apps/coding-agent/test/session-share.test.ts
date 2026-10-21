@@ -1,6 +1,4 @@
 import { EventEmitter } from "node:events";
-import { readFileSync, writeFileSync } from "node:fs";
-import { PassThrough } from "node:stream";
 
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
@@ -9,80 +7,86 @@ const childProcessMocks = vi.hoisted(() => ({
   spawnSync: vi.fn(() => ({ status: 0 })),
 }));
 
-vi.mock("node:child_process", () => childProcessMocks);
+vi.mock("node:child_process", (importOriginal) =>
+  importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, ...childProcessMocks })),
+);
 
-import { shareSession } from "../src/modes/interactive/session-share.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 
-function deferred(): { promise: Promise<void>; resolve: () => void } {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
+import sessionShare from "../src/modes/interactive/session-share.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { shareSession } = sessionShare;
+const { initTheme } = themeModule;
+
+const { awaited, gate, provideNode, readTextFile, runTest, writeTextFile } = testing;
+
+const fakeGh = (uploads: string[]) => (_command: string, args: string[]) => {
+  const child = Object.assign(new EventEmitter(), {
+    kill: vi.fn(),
+    stderr: new EventEmitter(),
+    stdout: new EventEmitter(),
   });
-  return { promise, resolve };
-}
+  Effect.runFork(
+    provideNode(
+      Effect.gen(function* () {
+        uploads.push(yield* readTextFile(args.at(-1) ?? ""));
+        child.stdout.emit("data", `https://gist.github.com/test/${uploads.length}\n`);
+        child.emit("close", 0);
+      }),
+    ),
+  );
+  return child;
+};
+
+const shareContext = (
+  name: "A" | "B",
+  exportToHtml: (filePath: string) => Promise<void>,
+  errors: string[],
+) => ({
+  editorSlot: { restoreEditor() {}, show() {} },
+  session: {
+    context: { exports: { exportToHtml } },
+    sessionManager: { getBranch: () => [], getCwd: () => "/tmp", getSessionId: () => name },
+    state: { systemPrompt: name, tools: [] },
+  },
+  showError(message: string) {
+    errors.push(message);
+  },
+  showStatus() {},
+  ui: { requestRender() {}, setFocus() {} },
+});
+
+const keepsConcurrentExportsIsolated = Effect.gen(function* () {
+  const uploads: string[] = [];
+  childProcessMocks.spawn.mockImplementation(fakeGh(uploads));
+  const aWritten = gate();
+  const bWritten = gate();
+  const releaseB = gate();
+  const errors: string[] = [];
+  const exportAs = (name: "A" | "B") => (filePath: string) =>
+    runTest(
+      Effect.gen(function* () {
+        yield* writeTextFile(filePath, name);
+        (name === "A" ? aWritten : bWritten).release();
+        yield* awaited(name === "A" ? bWritten : releaseB);
+      }),
+    );
+  const shareA = shareSession(shareContext("A", exportAs("A"), errors) as never);
+  yield* awaited(aWritten);
+  const shareB = shareSession(shareContext("B", exportAs("B"), errors) as never);
+  yield* awaited(bWritten);
+  yield* awaited(shareA);
+  releaseB.release();
+  yield* awaited(shareB);
+  expect(uploads).toEqual(["A", "B"]);
+  expect(errors).toEqual([]);
+});
 
 describe("shareSession", () => {
   beforeAll(() => initTheme("dark"));
   beforeEach(() => vi.clearAllMocks());
 
-  it("keeps concurrent session exports isolated", async () => {
-    const uploads: string[] = [];
-    childProcessMocks.spawn.mockImplementation((_command, args: string[]) => {
-      uploads.push(readFileSync(args.at(-1)!, "utf8"));
-      const child = Object.assign(new EventEmitter(), {
-        stdout: new PassThrough(),
-        stderr: new PassThrough(),
-        kill: vi.fn(),
-      });
-      queueMicrotask(() => {
-        child.stdout.end(`https://gist.github.com/test/${uploads.length}\n`);
-        child.stderr.end();
-        child.emit("close", 0);
-      });
-      return child;
-    });
-
-    const aWritten = deferred();
-    const bWritten = deferred();
-    const releaseB = deferred();
-    const errors: string[] = [];
-    const context = (name: "A" | "B") => ({
-      session: {
-        sessionManager: {
-          getSessionId: () => name,
-          getCwd: () => "/tmp",
-          getBranch: () => [],
-        },
-        state: { systemPrompt: name, tools: [] },
-        exportToHtml: async (filePath: string) => {
-          writeFileSync(filePath, name);
-          if (name === "A") {
-            aWritten.resolve();
-            await bWritten.promise;
-          } else {
-            bWritten.resolve();
-            await releaseB.promise;
-          }
-        },
-      },
-      ui: { setFocus() {}, requestRender() {} },
-      editorSlot: { show() {}, restoreEditor() {} },
-      showStatus() {},
-      showError(message: string) {
-        errors.push(message);
-      },
-    });
-
-    const shareA = shareSession(context("A") as never);
-    await aWritten.promise;
-    const shareB = shareSession(context("B") as never);
-    await bWritten.promise;
-    await shareA;
-    releaseB.resolve();
-    await shareB;
-
-    expect(uploads).toEqual(["A", "B"]);
-    expect(errors).toEqual([]);
-  });
+  it("keeps concurrent session exports isolated", () => runTest(keepsConcurrentExportsIsolated));
 });

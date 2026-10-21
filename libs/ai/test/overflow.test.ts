@@ -1,32 +1,39 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import type { AssistantMessage } from "../src/types.ts";
-import { isContextOverflow, isRecoverableLength } from "../src/utils/overflow.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import overflow from "../src/utils/overflow.ts";
 
-function createErrorMessage(errorMessage: string, provider = "ollama"): AssistantMessage {
+const { currentTimeMillis } = clock;
+const { isContextOverflow, isRecoverableLength } = overflow;
+
+function createErrorMessage(
+  errorMessage: string,
+  provider = "ollama",
+): typesModule.AssistantMessage {
   return {
-    role: "assistant",
-    content: [],
     api: "openai-completions",
-    provider,
+    content: [],
+    errorMessage,
     model: "qwen3.5:35b",
+    provider,
+    role: "assistant",
+    stopReason: "error",
+    timestamp: currentTimeMillis(),
     usage: {
-      input: 0,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
-      totalTokens: 0,
       cost: {
-        input: 0,
-        output: 0,
         cacheRead: 0,
         cacheWrite: 0,
+        input: 0,
+        output: 0,
         total: 0,
       },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
     },
-    stopReason: "error",
-    errorMessage,
-    timestamp: Date.now(),
   };
 }
 
@@ -39,20 +46,20 @@ describe("isContextOverflow", () => {
   });
 
   it("detects z.ai prompt-too-long errors", () => {
-    // Regression for #9805.
     const message = createErrorMessage('400 {"code":"1261","message":"Prompt too long"}', "zai");
     expect(isContextOverflow(message, 1048576)).toBe(true);
   });
 
   it("detects z.ai CN endpoint prompt-exceeds-max-length errors", () => {
-    // Regression for #10208.
     const message = createErrorMessage(
       '400 {"code":"1261","message":"Prompt exceeds max length"}',
       "zai",
     );
     expect(isContextOverflow(message, 1048576)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
   it("detects Together AI context length errors", () => {
     const message = createErrorMessage(
       "400 The input (516368 tokens) is longer than the model's context length (262144 tokens).",
@@ -73,7 +80,9 @@ describe("isContextOverflow", () => {
     );
     expect(isContextOverflow(message, 262144)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
   it("detects OpenRouter Poolside maximum allowed input length errors", () => {
     const message = createErrorMessage(
       "Provider returned error: Input length 131393 exceeds the maximum allowed input length of 131040 tokens.",
@@ -92,12 +101,16 @@ describe("isContextOverflow", () => {
     );
     expect(isContextOverflow(commaMessage, 256000)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
   it("does not treat generic non-overflow Ollama errors as overflow", () => {
     const message = createErrorMessage("500 `model runner crashed unexpectedly`");
     expect(isContextOverflow(message, 32768)).toBe(false);
   });
+});
 
+describe("isContextOverflow", () => {
   it("does not treat generic rate limit errors as overflow", () => {
     const message = createErrorMessage("Rate limit exceeded, please retry after 30 seconds.");
     expect(isContextOverflow(message, 200000)).toBe(false);
@@ -107,77 +120,168 @@ describe("isContextOverflow", () => {
     const message = createErrorMessage("Too many requests. Please slow down.");
     expect(isContextOverflow(message, 200000)).toBe(false);
   });
+});
 
+describe("isContextOverflow", () => {
   function createLengthStopMessage(options: {
     input: number;
     cacheRead: number;
     output: number;
     cacheWrite?: number;
-    api?: AssistantMessage["api"];
+    api?: typesModule.AssistantMessage["api"];
     provider?: string;
     model?: string;
-  }): AssistantMessage {
+  }): typesModule.AssistantMessage {
     const cacheWrite = options.cacheWrite ?? 0;
     return {
-      role: "assistant",
-      content: [],
       api: options.api ?? "openai-completions",
-      provider: options.provider ?? "test-provider",
+      content: [],
       model: options.model ?? "test-model",
+      provider: options.provider ?? "test-provider",
+      role: "assistant",
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
       usage: {
-        input: options.input,
-        output: options.output,
         cacheRead: options.cacheRead,
         cacheWrite,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: options.input,
+        output: options.output,
         totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
       },
-      stopReason: "length",
-      timestamp: Date.now(),
     };
   }
-
   it("detects Xiaomi-style overflow (length stop with zero output and filled context)", () => {
     const message = createLengthStopMessage({
-      input: 58,
       cacheRead: 1048512,
+      input: 58,
+      model: "mimo-v2.6-pro",
       output: 0,
       provider: "xiaomi",
-      model: "mimo-v2.6-pro",
     });
     expect(isContextOverflow(message, 1048576)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
+  function createLengthStopMessage(options: {
+    input: number;
+    cacheRead: number;
+    output: number;
+    cacheWrite?: number;
+    api?: typesModule.AssistantMessage["api"];
+    provider?: string;
+    model?: string;
+  }): typesModule.AssistantMessage {
+    const cacheWrite = options.cacheWrite ?? 0;
+    return {
+      api: options.api ?? "openai-completions",
+      content: [],
+      model: options.model ?? "test-model",
+      provider: options.provider ?? "test-provider",
+      role: "assistant",
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
+      usage: {
+        cacheRead: options.cacheRead,
+        cacheWrite,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: options.input,
+        output: options.output,
+        totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
+      },
+    };
+  }
   it("treats a length stop below the desired output limit as recoverable", () => {
     const message = createLengthStopMessage({
-      input: 3,
+      api: "openai-responses",
       cacheRead: 253584,
       cacheWrite: 25554,
-      output: 16,
-      api: "openai-responses",
-      provider: "openai",
+      input: 3,
       model: "gpt-5.6-sol",
+      output: 16,
+      provider: "openai",
     });
     expect(isRecoverableLength(message, 128000)).toBe(true);
   });
 
   it("does not recover a length stop that reached the desired output limit", () => {
-    const message = createLengthStopMessage({ input: 4062, cacheRead: 0, output: 1024 });
+    const message = createLengthStopMessage({ cacheRead: 0, input: 4062, output: 1024 });
     expect(isRecoverableLength(message, 1024)).toBe(false);
   });
+});
 
+describe("isContextOverflow", () => {
+  function createLengthStopMessage(options: {
+    input: number;
+    cacheRead: number;
+    output: number;
+    cacheWrite?: number;
+    api?: typesModule.AssistantMessage["api"];
+    provider?: string;
+    model?: string;
+  }): typesModule.AssistantMessage {
+    const cacheWrite = options.cacheWrite ?? 0;
+    return {
+      api: options.api ?? "openai-completions",
+      content: [],
+      model: options.model ?? "test-model",
+      provider: options.provider ?? "test-provider",
+      role: "assistant",
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
+      usage: {
+        cacheRead: options.cacheRead,
+        cacheWrite,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: options.input,
+        output: options.output,
+        totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
+      },
+    };
+  }
   it("treats zero-output length stops as recoverable without context metadata", () => {
-    const message = createLengthStopMessage({ input: 100, cacheRead: 0, output: 0 });
+    const message = createLengthStopMessage({ cacheRead: 0, input: 100, output: 0 });
     expect(isRecoverableLength(message, 128000)).toBe(true);
   });
+});
 
+describe("isContextOverflow", () => {
+  function createLengthStopMessage(options: {
+    input: number;
+    cacheRead: number;
+    output: number;
+    cacheWrite?: number;
+    api?: typesModule.AssistantMessage["api"];
+    provider?: string;
+    model?: string;
+  }): typesModule.AssistantMessage {
+    const cacheWrite = options.cacheWrite ?? 0;
+    return {
+      api: options.api ?? "openai-completions",
+      content: [],
+      model: options.model ?? "test-model",
+      provider: options.provider ?? "test-provider",
+      role: "assistant",
+      stopReason: "length",
+      timestamp: currentTimeMillis(),
+      usage: {
+        cacheRead: options.cacheRead,
+        cacheWrite,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: options.input,
+        output: options.output,
+        totalTokens: options.input + options.cacheRead + cacheWrite + options.output,
+      },
+    };
+  }
   it("does not treat normal length stops with output as context overflow", () => {
-    const message = createLengthStopMessage({ input: 1000, cacheRead: 0, output: 4096 });
+    const message = createLengthStopMessage({ cacheRead: 0, input: 1000, output: 4096 });
     expect(isContextOverflow(message, 200000)).toBe(false);
   });
 
   it("does not treat zero-output length stops far below context as context overflow", () => {
-    const message = createLengthStopMessage({ input: 100, cacheRead: 0, output: 0 });
+    const message = createLengthStopMessage({ cacheRead: 0, input: 100, output: 0 });
     expect(isContextOverflow(message, 200000)).toBe(false);
   });
 });

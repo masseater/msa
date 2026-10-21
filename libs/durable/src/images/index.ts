@@ -1,58 +1,78 @@
-// The package declares only `module`, which bundlers use but Node does not: import the file itself.
 import {
+  PhotonImage,
+  SamplingFilter,
+  type SyncInitInput,
   fliph,
   flipv,
   initSync,
-  PhotonImage,
   resize,
-  SamplingFilter,
-  type SyncInitInput,
 } from "@silvia-odwyer/photon/photon_rs.js";
 
-import { promiseTry } from "../promise-try.ts";
-import type { ImageLimits, ImageProcessor, PreparedImage } from "../tools/image-processor.ts";
-import { base64Length, INLINE_IMAGE_TYPES, toBase64 } from "../tools/image-processor.ts";
-import { exifOrientation } from "./exif.ts";
+import promiseTryModule from "../promise-try.ts";
+import imageModule from "../tools/image.ts";
+import type imageTypes from "../tools/image.types.ts";
+import exif from "./exif.ts";
 
-/** JPEG qualities tried in order. */
+const { promiseTry } = promiseTryModule;
+const { exifOrientation } = exif;
+const { INLINE_IMAGE_TYPES, base64Length, toBase64 } = imageModule;
+
 const JPEG_QUALITIES = [80, 70, 55, 40];
 
-/**
- * An `ImageProcessor` on Photon (Rust compiled to WebAssembly), for `createCodingTools({ images })`. `wasm` is
- * Photon's `photon_rs_bg.wasm` as bytes or as a compiled module: `@msa/durable/images/node` reads it from
- * the installed package, `@msa/durable/images/cloudflare` imports it as a Workers module. Elsewhere, such
- * as a browser, fetch the file and pass its bytes. Photon loads once per process; later calls reuse the first `wasm`.
- *
- * An image already upright, in a format providers take inline, and within the limits is returned as it is, once it
- * decodes. Otherwise it is turned upright by its EXIF orientation, scaled to the
- * maximum width and height, and encoded as PNG or JPEG at falling qualities (JPEG first for JPEG sources), then at
- * smaller dimensions, 3/4 at a time, until the base64 fits. Formats providers do not take inline (BMP) become PNG.
- *
- * The work runs on the calling thread: about a second and a half for a 12-megapixel photo. Decoding takes the image's
- * RGBA size in WebAssembly memory, which does not shrink again; leave the processor out on memory-constrained hosts.
- * @param {SyncInitInput} wasm - Photon's WebAssembly.
- * @returns {ImageProcessor} The processor.
- */
-export function createPhotonImages(wasm: SyncInitInput): ImageProcessor {
+function createPhotonImages(wasm: SyncInitInput): imageTypes.ImageProcessor {
   initSync({ module: wasm });
   return {
     prepare: (bytes, mimeType, limits) => promiseTry(() => prepare(bytes, mimeType, limits)),
   };
 }
 
+function flipped(image: PhotonImage, orientation: number): void {
+  if (orientation === 1) return;
+  if (orientation !== 4) fliph(image);
+  if (orientation !== 2) flipv(image);
+}
+
+function fitWithin(
+  image: PhotonImage,
+  mimeType: string,
+  limits: imageTypes.ImageLimits,
+): imageTypes.PreparedImage | undefined {
+  const width = image.get_width();
+  const height = image.get_height();
+  const scale = Math.min(1, limits.maxWidth / width, limits.maxHeight / height);
+  let target = {
+    height: Math.max(1, Math.round(height * scale)),
+    width: Math.max(1, Math.round(width * scale)),
+  };
+  for (;;) {
+    const encoded = encodeWithin(image, target, limits.maxBytes, mimeType === "image/jpeg");
+    if (encoded !== undefined) {
+      const resized =
+        target.width === width && target.height === height
+          ? {}
+          : { resized: { from: { height, width }, to: target } };
+      const converted = encoded.mimeType === mimeType ? {} : { convertedFrom: mimeType };
+      return { ...encoded, ...converted, ...resized };
+    }
+    if (target.width === 1 && target.height === 1) return undefined;
+    target = {
+      height: Math.max(1, Math.floor(target.height * 0.75)),
+      width: Math.max(1, Math.floor(target.width * 0.75)),
+    };
+  }
+}
+
 function prepare(
   bytes: Uint8Array,
   mimeType: string,
-  limits: ImageLimits,
-): PreparedImage | undefined {
+  limits: imageTypes.ImageLimits,
+): imageTypes.PreparedImage | undefined {
   const orientation = exifOrientation(bytes);
-  const inline = INLINE_IMAGE_TYPES.has(mimeType);
   let image: PhotonImage | undefined;
   try {
-    // Decoded even when it is returned as it is: a damaged file is an error, not an image the provider rejects.
     image = PhotonImage.new_from_byteslice(bytes);
     if (
-      inline &&
+      INLINE_IMAGE_TYPES.has(mimeType) &&
       orientation === 1 &&
       image.get_width() <= limits.maxWidth &&
       image.get_height() <= limits.maxHeight &&
@@ -61,55 +81,21 @@ function prepare(
       return { data: toBase64(bytes), mimeType };
     }
     if (orientation >= 5) {
-      const upright = transposed(image, orientation);
-      // Freed first, so the upright copy reuses its WebAssembly memory.
+      const turned = transposed(image, orientation);
       image.free();
       image = undefined;
-      image = new PhotonImage(upright.pixels, upright.width, upright.height);
-    } else if (orientation !== 1) {
-      if (orientation !== 4) fliph(image);
-      if (orientation !== 2) flipv(image);
+      image = new PhotonImage(turned.pixels, turned.width, turned.height);
+    } else {
+      flipped(image, orientation);
     }
-    const width = image.get_width();
-    const height = image.get_height();
-    const scale = Math.min(1, limits.maxWidth / width, limits.maxHeight / height);
-    let target = {
-      width: Math.max(1, Math.round(width * scale)),
-      height: Math.max(1, Math.round(height * scale)),
-    };
-    for (;;) {
-      const encoded = encodeWithin(image, target, limits.maxBytes, mimeType === "image/jpeg");
-      if (encoded !== undefined) {
-        const resized =
-          target.width === width && target.height === height
-            ? {}
-            : { resized: { from: { width, height }, to: target } };
-        const converted = encoded.mimeType === mimeType ? {} : { convertedFrom: mimeType };
-        return { ...encoded, ...converted, ...resized };
-      }
-      if (target.width === 1 && target.height === 1) return undefined;
-      target = {
-        width: Math.max(1, Math.floor(target.width * 0.75)),
-        height: Math.max(1, Math.floor(target.height * 0.75)),
-      };
-    }
+    return fitWithin(image, mimeType, limits);
   } catch {
-    // Photon throws for bytes it cannot decode.
     return undefined;
   } finally {
     image?.free();
   }
 }
 
-/**
- * `image` at `size` in the first encoding whose base64 fits `maxBytes`: PNG, then JPEG at falling qualities, or the
- * JPEG qualities first when `jpegFirst`; `undefined` if none fits.
- * @param {PhotonImage} image - The decoded image.
- * @param {{ readonly width: number; readonly height: number }} size - The size to encode at.
- * @param {number} maxBytes - The base64 limit.
- * @param {boolean} jpegFirst - Whether to try JPEG first.
- * @returns {{ readonly data: string; readonly mimeType: string } | undefined} The encoding.
- */
 function encodeWithin(
   image: PhotonImage,
   size: { readonly width: number; readonly height: number },
@@ -119,10 +105,10 @@ function encodeWithin(
   const same = size.width === image.get_width() && size.height === image.get_height();
   const scaled = same ? image : resize(image, size.width, size.height, SamplingFilter.Lanczos3);
   try {
-    const png = { mimeType: "image/png", encode: () => scaled.get_bytes() };
+    const png = { encode: () => scaled.get_bytes(), mimeType: "image/png" };
     const jpegs = JPEG_QUALITIES.map((quality) => ({
-      mimeType: "image/jpeg",
       encode: () => scaled.get_bytes_jpeg(quality),
+      mimeType: "image/jpeg",
     }));
     for (const candidate of jpegFirst ? [...jpegs, png] : [png, ...jpegs]) {
       const bytes = candidate.encode();
@@ -135,13 +121,6 @@ function encodeWithin(
   }
 }
 
-/**
- * The RGBA pixels of `image` turned upright for EXIF `orientation` 5 to 8, the orientations that swap width and
- * height. Photon's own `rotate` drops pixels at right angles, so the pixels are moved here.
- * @param {PhotonImage} image - The decoded image.
- * @param {number} orientation - The EXIF orientation.
- * @returns {{ readonly pixels: Uint8Array; readonly width: number; readonly height: number }} The pixels and size.
- */
 function transposed(
   image: PhotonImage,
   orientation: number,
@@ -152,7 +131,6 @@ function transposed(
   const pixels = new Uint8Array(source.length);
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      // Where (x, y) lands in the upright image, which is `height` wide.
       const outX = orientation === 5 || orientation === 8 ? y : height - 1 - y;
       const outY = orientation === 5 || orientation === 6 ? x : width - 1 - x;
       pixels.set(
@@ -161,5 +139,11 @@ function transposed(
       );
     }
   }
-  return { pixels, width: height, height: width };
+  return { height: width, pixels, width: height };
 }
+
+const images = {
+  createPhotonImages,
+};
+
+export default images;

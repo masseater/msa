@@ -1,22 +1,20 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel } from "../src/compat.ts";
+import modelChoice from "./model-choice.ts";
 
-const OPENROUTER_ANTHROPIC_LATEST_MODEL_IDS = [
-  "~anthropic/claude-fable-latest",
-  "~anthropic/claude-haiku-latest",
-  "~anthropic/claude-opus-latest",
-  "~anthropic/claude-sonnet-latest",
-] as const;
+const { compatValue, modelsWhere } = modelChoice;
+
+const anthropicLatestAliases = modelsWhere("openrouter", (model) =>
+  model.id.startsWith("~anthropic/"),
+);
 
 describe("OpenRouter Anthropic latest alias metadata", () => {
-  it.each(OPENROUTER_ANTHROPIC_LATEST_MODEL_IDS)(
-    "keeps completions cache control for %s",
-    (modelId) => {
-      const model = getModel("openrouter", modelId);
-      expect(model.api).toBe("openai-completions");
-      if (model.api !== "openai-completions") throw new Error(`Unexpected API for ${modelId}`);
-      expect(model.compat?.cacheControlFormat).toBe("anthropic");
-    },
-  );
+  it("lists Anthropic latest aliases", () => {
+    expect(anthropicLatestAliases.length).toBeGreaterThan(0);
+  });
+
+  it.for(anthropicLatestAliases)("keeps completions cache control for $id", (model) => {
+    expect(model.api).toBe("openai-completions");
+    expect(compatValue(model, "cacheControlFormat")).toBe("anthropic");
+  });
 });

@@ -1,63 +1,25 @@
-import type { ProviderEnv } from "../types.ts";
+import { Function } from "effect";
 
-let procEnvCache: Map<string, string> | null = null;
+import type typesModule from "../types.types.ts";
+import envModule from "./env.ts";
 
-/**
- * Fallback for https://github.com/oven-sh/bun/issues/27802.
- * Bun compiled binaries can expose an empty process.env inside Linux sandboxes
- * even though /proc/self/environ contains the environment.
- *
- * This intentionally duplicates restoreSandboxEnv() in
- * apps/coding-agent/src/bun/restore-sandbox-env.ts. The ai package can be
- * used directly, without going through that entrypoint, so provider env lookup
- * must not depend on process.env having been patched.
- *
- * @param {string} name - environment variable name
- * @returns {string | undefined} the value from /proc/self/environ, or undefined
- */
-function getBunSandboxEnvValue(name: string): string | undefined {
-  if (
-    typeof process === "undefined" ||
-    !process.versions?.["bun"] ||
-    Object.keys(process.env).length > 0
-  ) {
-    return undefined;
-  }
+const { readProcessEnv } = envModule;
 
-  if (procEnvCache === null) {
-    procEnvCache = new Map();
-    try {
-      const { readFileSync } = require("node:fs") as {
-        readFileSync(path: string, encoding: BufferEncoding): string;
-      };
-      const data = readFileSync("/proc/self/environ", "utf-8");
-      for (const entry of data.split("\0")) {
-        const idx = entry.indexOf("=");
-        if (idx > 0) {
-          procEnvCache.set(entry.slice(0, idx), entry.slice(idx + 1));
-        }
-      }
-    } catch {
-      // /proc/self/environ may not exist or may not be readable.
-    }
-  }
+const nonEmpty = (value: string | undefined): string | undefined =>
+  value === undefined || value === "" ? undefined : value;
 
-  return procEnvCache.get(name);
-}
+const getProviderEnvValue: {
+  (env?: typesModule.ProviderEnv): (name: string) => string | undefined;
+  (name: string, env?: typesModule.ProviderEnv): string | undefined;
+} = Function.dual(
+  (args) => typeof args[0] === "string",
+  (name: string, env?: typesModule.ProviderEnv): string | undefined =>
+    nonEmpty(env?.[name]) ??
+    nonEmpty(typeof process === "undefined" ? undefined : readProcessEnv(name)),
+);
 
-/**
- * Resolve a provider env value from scoped overrides, normal process.env, then
- * the duplicated Bun sandbox fallback for direct msa-ai consumers.
- *
- * @param {string} name - environment variable name
- * @param {ProviderEnv} [env] - scoped provider env overrides
- * @returns {string | undefined} the resolved value, or undefined when unset
- */
-export function getProviderEnvValue(name: string, env?: ProviderEnv): string | undefined {
-  return (
-    env?.[name] ||
-    (typeof process === "undefined" ? undefined : process.env[name]) ||
-    getBunSandboxEnvValue(name) ||
-    undefined
-  );
-}
+const providerEnv = {
+  getProviderEnvValue,
+};
+
+export default providerEnv;

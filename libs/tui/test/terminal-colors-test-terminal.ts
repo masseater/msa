@@ -1,6 +1,8 @@
-import { type Terminal } from "../src/index.ts";
+import { Effect } from "effect";
 
-export class TestTerminal implements Terminal {
+import type tuiTypes from "../src/index.types.ts";
+
+class TestTerminal implements tuiTypes.Terminal {
   private inputHandler?: ((data: string) => void) | undefined;
   private resizeHandler?: (() => void) | undefined;
   private readonly columnCount: number;
@@ -22,7 +24,9 @@ export class TestTerminal implements Terminal {
     this.resizeHandler = undefined;
   }
 
-  async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {}
+  drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
 
   write(data: string): void {
     this.writes.push(data);
@@ -65,3 +69,5 @@ export class TestTerminal implements Terminal {
     this.resizeHandler?.();
   }
 }
+
+export default TestTerminal;

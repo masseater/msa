@@ -1,18 +1,13 @@
-import type { SpanOptions, SpanStatus, TelemetryContext, TelemetrySpan } from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
 
-/** A span that stays open across events until `end()` is called. */
-export interface OpenSpan {
-  readonly span: TelemetrySpan;
-  end(status?: SpanStatus): void;
-}
+import type openSpanTypes from "./open-span.types.ts";
 
-/**
- * Opens a span whose lifetime follows events rather than one callback.
- * The telemetry contract invokes the callback synchronously, so the span exists on return.
- */
-export function openSpan(context: TelemetryContext, options: SpanOptions): OpenSpan {
+function openSpan(
+  context: telemetryTypes.TelemetryContext,
+  options: telemetryTypes.SpanOptions,
+): openSpanTypes.OpenSpan {
   const done = Promise.withResolvers<void>();
-  let opened: TelemetrySpan | undefined;
+  let opened: telemetryTypes.TelemetrySpan | undefined;
   void context.startSpan(options, (span) => {
     opened = span;
     return done.promise;
@@ -20,12 +15,18 @@ export function openSpan(context: TelemetryContext, options: SpanOptions): OpenS
   const span = opened!;
   let ended = false;
   return {
-    span,
     end(status) {
       if (ended) return;
       ended = true;
       if (status !== undefined) span.setStatus(status);
       done.resolve();
     },
+    span,
   };
 }
+
+const openSpanModule = {
+  openSpan,
+};
+
+export default openSpanModule;

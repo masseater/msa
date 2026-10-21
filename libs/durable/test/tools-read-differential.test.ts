@@ -1,13 +1,26 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { characterEnd } from "@msa/chord/output";
+import contextModule from "@msa/chord/context";
+import outputModule from "@msa/chord/output";
+import { Cause, Effect, Exit } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import type { ToolDiagnostic, ToolExecutionApi } from "../src/harness/types.ts";
-import { detectSupportedImageMimeType } from "../src/tools/image.ts";
-import { createReadTool } from "../src/tools/read.ts";
-import { DEFAULT_MAX_BYTES, formatSize, truncateHead } from "../src/truncate.ts";
-import { makeTempDirSync, removeDirSync, writeTempFile } from "./temp-support.ts";
+import type nodeTypes from "../src/env/node.types.ts";
+import type typesModule from "../src/harness/types.types.ts";
+import image from "../src/tools/image.ts";
+import read from "../src/tools/read.ts";
+import durableKit from "./durable-kit.ts";
+import support from "./support.ts";
+
+const { characterEnd } = outputModule;
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { envNode: node, truncate } = durableKit;
+
+const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
+const { detectSupportedImageMimeType } = image;
+const { NodeExecutionEnv } = node;
+const { createReadTool } = read;
+
+const { awaited, makeTempDir, removeDirs, writeTempFile } = support;
 
 function selectLines(allLines: readonly string[], startLine: number, limit: number | undefined) {
   let selectedContent: string;
@@ -22,7 +35,6 @@ function selectLines(allLines: readonly string[], startLine: number, limit: numb
   return { selectedContent, userLimitedLines };
 }
 
-// The text, details, and diagnostics of a selection by how it was cut: an oversized first line, truncation, or limit.
 function truncationNotice(
   {
     headText,
@@ -35,7 +47,7 @@ function truncationNotice(
   }: { allLines: readonly string[]; startLine: number; userLimitedLines: number | undefined },
   path: string,
 ) {
-  const diagnostics: ToolDiagnostic[] = [];
+  const diagnostics: typesModule.ToolDiagnostic[] = [];
   let outputText = headText;
   let details: object | undefined;
   const totalFileLines = allLines.length;
@@ -45,9 +57,9 @@ function truncationNotice(
     const end = characterEnd(lineBytes, DEFAULT_MAX_BYTES);
     outputText = new TextDecoder().decode(lineBytes.subarray(0, end));
     diagnostics.push({
-      severity: "warn",
       code: "truncated",
       message: `Line ${startLineDisplay} is ${formatSize(lineBytes.byteLength)}, exceeds the ${formatSize(DEFAULT_MAX_BYTES)} limit; showing its first ${formatSize(end)}. Use bash: sed -n '${startLineDisplay}p' ${path} | tail -c +${end + 1}`,
+      severity: "warn",
     });
     details = { truncation: { ...truncation, outputBytes: end, outputLines: 1 } };
   } else if (truncation.truncated) {
@@ -56,24 +68,22 @@ function truncationNotice(
     const limitText =
       truncation.truncatedBy === "lines" ? "" : ` (${formatSize(DEFAULT_MAX_BYTES)} limit)`;
     diagnostics.push({
-      severity: "info",
       code: "truncated",
       message: `Showing lines ${startLineDisplay}-${endLineDisplay} of ${totalFileLines}${limitText}. Use offset=${nextOffset} to continue.`,
+      severity: "info",
     });
     details = { truncation };
   } else if (userLimitedLines !== undefined && startLine + userLimitedLines < allLines.length) {
     const remaining = allLines.length - (startLine + userLimitedLines);
     const nextOffset = startLine + userLimitedLines + 1;
     diagnostics.push({
-      severity: "info",
       message: `${remaining} more lines in file. Use offset=${nextOffset} to continue.`,
+      severity: "info",
     });
   }
-  return { outputText, details, diagnostics };
+  return { details, diagnostics, outputText };
 }
 
-// The `read` tool before bounded reads, kept as the reference: it decodes the whole file, splits it into lines, and
-// truncates the selection. The tool must give the same result while reading only a bounded part of the file.
 function referenceRead(
   bytes: Uint8Array,
   path: string,
@@ -81,15 +91,15 @@ function referenceRead(
   limit: number | undefined,
 ) {
   const mimeType = detectSupportedImageMimeType(bytes);
-  if (mimeType) {
+  if (mimeType !== undefined && mimeType !== "") {
     return {
-      output: [{ type: "image", data: Buffer.from(bytes).toString("base64"), mimeType }],
-      diagnostics: [{ severity: "info", code: "image", message: `Read image file [${mimeType}].` }],
+      diagnostics: [{ code: "image", message: `Read image file [${mimeType}].`, severity: "info" }],
+      output: [{ data: Buffer.from(bytes).toString("base64"), mimeType, type: "image" }],
     };
   }
   const textContent = new TextDecoder().decode(bytes);
   const allLines = textContent.split("\n");
-  const startLine = offset ? Math.max(0, offset - 1) : 0;
+  const startLine = offset !== undefined && offset > 0 ? Math.max(0, offset - 1) : 0;
   if (startLine >= allLines.length) {
     throw new Error(`Offset ${offset} is beyond end of file (${allLines.length} lines total)`);
   }
@@ -101,7 +111,7 @@ function referenceRead(
     path,
   );
   return {
-    output: outputText === "" ? [] : [{ type: "text", text: outputText }],
+    output: outputText === "" ? [] : [{ text: outputText, type: "text" }],
     ...(details === undefined ? {} : { details }),
     diagnostics,
   };
@@ -132,7 +142,6 @@ const PIECES = [
   [0x0d, 0x0a],
 ];
 
-// Mostly small files, some over the line limit, some over the byte limit, some with one huge line.
 function randomFile(next: () => number): Uint8Array {
   const kind = next();
   if (kind < 0.1)
@@ -153,87 +162,91 @@ function randomFile(next: () => number): Uint8Array {
 const OFFSETS = [undefined, 0, 1, 2, 3, 2.5, -4, 50, 2001, 3000, 1e20, Number.NaN];
 const LIMITS = [undefined, 0, 1, 2, -3, -1e20, 1.5, 7, 2000, 2500, 1e20, Number.NaN];
 
-function apiFor(env: NodeExecutionEnv): ToolExecutionApi {
+function apiFor(env: nodeTypes.NodeExecutionEnv): typesModule.ToolExecutionApi {
   return {
+    agent: () => Promise.resolve({}),
+    details: () => Promise.resolve(),
+    diagnostic: () => {},
     env,
     output: () => {},
     outputWindow: undefined,
-    diagnostic: () => {},
-    details: async () => {},
-    agent: () => Promise.resolve({}),
-  } as unknown as ToolExecutionApi;
+  } as unknown as typesModule.ToolExecutionApi;
 }
 
 const dirs: string[] = [];
-afterAll(() => {
-  for (const dir of dirs) removeDirSync(dir);
+afterAll(() => Effect.runPromise(removeDirs(dirs)));
+
+const outcome = Effect.fn("outcome")(function* <T>(run: () => T | Promise<T>) {
+  const exit = yield* Effect.exit(Effect.suspend(() => awaited(run())));
+  return Exit.isSuccess(exit) ? exit.value : { error: (Cause.squash(exit.cause) as Error).message };
 });
 
-async function outcome<T>(run: () => T | Promise<T>): Promise<T | { error: string }> {
-  try {
-    return await run();
-  } catch (error) {
-    return { error: (error as Error).message };
-  }
-}
-
-describe("read tool", () => {
-  it("returns exactly what reading the whole file returned", async () => {
-    const cwd = makeTempDirSync("msa-durable-read-");
-    dirs.push(cwd);
-    const env = new NodeExecutionEnv({ cwd });
-    const tool = createReadTool();
-    for await (const seed of Array.from({ length: 400 }, (_, i) => 1 + i)) {
-      const next = random(seed);
-      const file = randomFile(next);
-      writeTempFile(cwd, "f.txt", file);
-      for await (const _ of Array.from({ length: 4 })) {
-        const offset = OFFSETS[Math.floor(next() * OFFSETS.length)];
-        const limit = LIMITS[Math.floor(next() * LIMITS.length)];
-        const args = {
-          path: "f.txt",
-          ...(offset === undefined ? {} : { offset }),
-          ...(limit === undefined ? {} : { limit }),
-        };
-        const actual = await outcome(() => tool.execute(args, apiFor(env), BACKGROUND_CONTEXT));
-        const expected = await outcome(() => referenceRead(file, "f.txt", offset, limit));
-        expect(actual, `seed ${seed} offset ${offset} limit ${limit}`).toEqual(expected);
-      }
+const returnsExactlyWhat = Effect.gen(function* () {
+  const cwd = yield* makeTempDir("msa-durable-read-");
+  dirs.push(cwd);
+  const env = new NodeExecutionEnv({ cwd });
+  const tool = createReadTool();
+  for (const seed of Array.from({ length: 400 }, (_, i) => 1 + i)) {
+    const next = random(seed);
+    const file = randomFile(next);
+    yield* writeTempFile(cwd, "f.txt", file);
+    for (const _ of Array.from({ length: 4 })) {
+      const offset = OFFSETS[Math.floor(next() * OFFSETS.length)];
+      const limit = LIMITS[Math.floor(next() * LIMITS.length)];
+      const args = {
+        path: "f.txt",
+        ...(offset === undefined ? {} : { offset }),
+        ...(limit === undefined ? {} : { limit }),
+      };
+      const actual = yield* outcome(() => tool.execute(args, apiFor(env), BACKGROUND_CONTEXT));
+      const expected = yield* outcome(() => referenceRead(file, "f.txt", offset, limit));
+      expect(actual, `seed ${seed} offset ${offset} limit ${limit}`).toEqual(expected);
     }
-  }, 120_000);
+  }
 });
 
 describe("read tool", () => {
-  it("detects animated PNGs whose acTL chunk lies far beyond the header", async () => {
-    const cwd = makeTempDirSync("msa-durable-read-");
-    dirs.push(cwd);
-    const chunk = (type: string, length: number): number[] => [
-      (length >>> 24) & 0xff,
-      (length >>> 16) & 0xff,
-      (length >>> 8) & 0xff,
-      length & 0xff,
-      ...new TextEncoder().encode(type),
-      ...new Array<number>(length + 4).fill(0),
-    ];
-    const png = Uint8Array.from([
-      0x89,
-      0x50,
-      0x4e,
-      0x47,
-      0x0d,
-      0x0a,
-      0x1a,
-      0x0a,
-      ...chunk("IHDR", 13),
-      ...chunk("iCCP", 200_000),
-      ...chunk("acTL", 8),
-      ...chunk("IDAT", 10),
-    ]);
-    writeTempFile(cwd, "a.png", png);
-    const env = new NodeExecutionEnv({ cwd });
-    const actual = await outcome(() =>
-      createReadTool().execute({ path: "a.png" }, apiFor(env), BACKGROUND_CONTEXT),
-    );
-    expect(actual).toEqual(await outcome(() => referenceRead(png, "a.png", undefined, undefined)));
-  });
+  it(
+    "returns exactly what reading the whole file returned",
+    () => Effect.runPromise(returnsExactlyWhat),
+    120_000,
+  );
+});
+
+const detectsAnimatedPNGs = Effect.gen(function* () {
+  const cwd = yield* makeTempDir("msa-durable-read-");
+  dirs.push(cwd);
+  const chunk = (type: string, length: number): number[] => [
+    (length >>> 24) & 0xff,
+    (length >>> 16) & 0xff,
+    (length >>> 8) & 0xff,
+    length & 0xff,
+    ...new TextEncoder().encode(type),
+    ...new Array<number>(length + 4).fill(0),
+  ];
+  const png = Uint8Array.from([
+    0x89,
+    0x50,
+    0x4e,
+    0x47,
+    0x0d,
+    0x0a,
+    0x1a,
+    0x0a,
+    ...chunk("IHDR", 13),
+    ...chunk("iCCP", 200_000),
+    ...chunk("acTL", 8),
+    ...chunk("IDAT", 10),
+  ]);
+  yield* writeTempFile(cwd, "a.png", png);
+  const env = new NodeExecutionEnv({ cwd });
+  const actual = yield* outcome(() =>
+    createReadTool().execute({ path: "a.png" }, apiFor(env), BACKGROUND_CONTEXT),
+  );
+  expect(actual).toEqual(yield* outcome(() => referenceRead(png, "a.png", undefined, undefined)));
+});
+
+describe("read tool", () => {
+  it("detects animated PNGs whose acTL chunk lies far beyond the header", () =>
+    Effect.runPromise(detectsAnimatedPNGs));
 });

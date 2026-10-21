@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { isThinkingPart, retainThoughtSignature } from "../src/api/google-shared.ts";
+import googleMessages from "../src/api/google-messages.ts";
+
+const { isThinkingPart, retainThoughtSignature } = googleMessages;
 
 describe("Google thinking detection (thoughtSignature)", () => {
   it("treats part.thought === true as thinking", () => {
@@ -9,9 +11,6 @@ describe("Google thinking detection (thoughtSignature)", () => {
   });
 
   it("does not treat thoughtSignature alone as thinking", () => {
-    // Per Google docs, thoughtSignature is for context replay and can appear on any part type.
-    // Only thought === true indicates thinking content.
-    // See: https://ai.google.dev/gemini-api/docs/thought-signatures
     expect(isThinkingPart({ thoughtSignature: "opaque-signature" })).toBe(false);
     expect(isThinkingPart({ thought: false, thoughtSignature: "opaque-signature" })).toBe(false);
   });

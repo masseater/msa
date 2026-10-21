@@ -1,40 +1,66 @@
-import { mkdtempSync, rmSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
-
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-vi.mock("../src/config.ts", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...(actual as Record<string, unknown>),
-    PACKAGE_NAME: "@example/msa-coding-agent",
-  };
-});
+vi.mock("../src/config.ts", (importOriginal) =>
+  testing.runTest(
+    Effect.gen(function* () {
+      const actual = yield* testing.awaited(importOriginal());
+      const { default: config } = actual as { default: Record<string, unknown> };
+      return yield* testing.awaited({
+        default: { ...config, PACKAGE_NAME: "@example/msa-coding-agent" },
+      });
+    }),
+  ),
+);
 
-import { shouldRunFirstTimeSetup } from "../src/cli/startup-ui.ts";
+import testing from "@msa/testing";
+import { Effect } from "effect";
+
+import startupUi from "../src/cli/startup-ui.ts";
+import platform from "../src/core/platform/index.ts";
+
+const { deleteEnv, readEnv, writeEnv } = platform;
+const { shouldRunFirstTimeSetup } = startupUi;
+
+const { joinPath, makeTempDir, removePath, runTest } = testing;
+
+const originalMsaExperimental = readEnv("MSA_EXPERIMENTAL");
+
+let tempDir: string;
+
+let settingsPath: string;
+
+const returnsFalseForAForkedPackage = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(yield* Effect.promise(() => shouldRunFirstTimeSetup(settingsPath))).toBe(false);
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = yield* makeTempDir("msa-first-time-setup-fork-");
+      settingsPath = joinPath(tempDir, "settings.json");
+      writeEnv("MSA_EXPERIMENTAL", "1");
+    }),
+  );
+
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* removePath(tempDir);
+      if (originalMsaExperimental === undefined) {
+        deleteEnv("MSA_EXPERIMENTAL");
+      } else {
+        writeEnv("MSA_EXPERIMENTAL", originalMsaExperimental);
+      }
+    }),
+  );
 
 describe("shouldRunFirstTimeSetup in forked distributions", () => {
-  const originalMsaExperimental = process.env["MSA_EXPERIMENTAL"];
-  let tempDir: string;
-  let settingsPath: string;
+  beforeEach(beforeEachHook);
 
-  beforeEach(() => {
-    tempDir = mkdtempSync(join(tmpdir(), "msa-first-time-setup-fork-"));
-    settingsPath = join(tempDir, "settings.json");
-    process.env["MSA_EXPERIMENTAL"] = "1";
-  });
+  afterEach(afterEachHook);
 
-  afterEach(() => {
-    rmSync(tempDir, { recursive: true, force: true });
-    if (originalMsaExperimental === undefined) {
-      delete process.env["MSA_EXPERIMENTAL"];
-    } else {
-      process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
-    }
-  });
-
-  it("returns false for a forked package", () => {
-    expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-  });
+  it("returns false for a forked package", returnsFalseForAForkedPackage);
 });

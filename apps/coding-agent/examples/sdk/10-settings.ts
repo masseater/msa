@@ -1,56 +1,52 @@
-/**
- * Settings Configuration
- *
- * Override settings using SettingsManager.
- */
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-import { createAgentSession, SessionManager, SettingsManager } from "@msa/coding-agent";
+const { SessionManager, SettingsManager, createAgentSession } = codingAgent;
 
 const cwd = process.cwd();
 
-// Load current settings (merged global + project)
-const settingsManagerFromDisk = SettingsManager.create(cwd);
-console.log(
-  "Current settings:",
-  JSON.stringify(settingsManagerFromDisk.getGlobalSettings(), null, 2),
+void Effect.runPromise(
+  Effect.gen(function* () {
+    const settingsManagerFromDisk = yield* Effect.promise(() => SettingsManager.create(cwd));
+    yield* Console.log("Current settings:", settingsManagerFromDisk.getGlobalSettings());
+
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(cwd));
+    settingsManager.applyOverrides({
+      compaction: { enabled: false },
+      retry: { baseDelayMs: 1000, enabled: true, maxRetries: 5 },
+    });
+
+    const { session: customSettingsSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+        settingsManager,
+      }),
+    );
+    yield* Console.log("Session created with custom settings");
+    customSettingsSession.dispose();
+
+    settingsManager.models.setDefaultThinkingLevel("low");
+    yield* Effect.promise(() => settingsManager.persistence.flush());
+
+    const settingsErrors = settingsManager.drainErrors();
+    if (settingsErrors.length > 0) {
+      for (const { scope, error } of settingsErrors) {
+        yield* Console.warn(`Warning (${scope} settings): ${error.message}`);
+      }
+    }
+
+    const inMemorySettings = SettingsManager.inMemory({
+      compaction: { enabled: false },
+      retry: { enabled: false },
+    });
+
+    const { session: testSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+        settingsManager: inMemorySettings,
+      }),
+    );
+    yield* Console.log("Test session created with in-memory settings");
+    testSession.dispose();
+  }),
 );
-
-// Override specific settings
-const settingsManager = SettingsManager.create(cwd);
-settingsManager.applyOverrides({
-  compaction: { enabled: false },
-  retry: { enabled: true, maxRetries: 5, baseDelayMs: 1000 },
-});
-
-const { session: customSettingsSession } = await createAgentSession({
-  settingsManager,
-  sessionManager: SessionManager.inMemory(),
-});
-console.log("Session created with custom settings");
-customSettingsSession.dispose();
-
-// Setters update memory immediately and queue persistence writes.
-// Call flush() when you need a durability boundary.
-settingsManager.setDefaultThinkingLevel("low");
-await settingsManager.flush();
-
-// Surface settings I/O errors at the app layer.
-const settingsErrors = settingsManager.drainErrors();
-if (settingsErrors.length > 0) {
-  for (const { scope, error } of settingsErrors) {
-    console.warn(`Warning (${scope} settings): ${error.message}`);
-  }
-}
-
-// For testing without file I/O:
-const inMemorySettings = SettingsManager.inMemory({
-  compaction: { enabled: false },
-  retry: { enabled: false },
-});
-
-const { session: testSession } = await createAgentSession({
-  settingsManager: inMemorySettings,
-  sessionManager: SessionManager.inMemory(),
-});
-console.log("Test session created with in-memory settings");
-testSession.dispose();

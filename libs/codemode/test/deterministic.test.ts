@@ -1,23 +1,19 @@
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  BACKENDS,
-  BUDGET,
-  type Create,
-  PINNED_FIRST_RANDOM,
-  PINNED_SEED_ZERO,
-  STARTED_AT,
-  start,
-  waitFor,
-} from "./deterministic-support.ts";
-import { fromJson } from "./support.ts";
+import deterministicSupport from "./deterministic-support.ts";
+import type deterministicSupportTypes from "./deterministic-support.types.ts";
+import support from "./support.ts";
+
+const { BACKENDS, BUDGET, PINNED_FIRST_RANDOM, PINNED_SEED_ZERO, STARTED_AT, start, waitFor } =
+  deterministicSupport;
+const { fromJson } = support;
 
 afterEach(() => {
   vi.unstubAllEnvs();
 });
 
-const makesTheSameCallsAndOutput = (create: Create) =>
+const makesTheSameCallsAndOutput = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const code = `
 				const values = [Date.now(), performance.now(), Math.random(), Math.random(), new Date().toISOString()];
@@ -55,7 +51,7 @@ const makesTheSameCallsAndOutput = (create: Create) =>
     expect((zeroResult.ok ? zeroResult.value : []) as number[]).not.toContain(random);
   });
 
-const runsInUtcWhateverTheHost = (create: Create) =>
+const runsInUtcWhateverTheHost = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     vi.stubEnv("TZ", "Asia/Kolkata");
     const code =
@@ -72,7 +68,7 @@ const runsInUtcWhateverTheHost = (create: Create) =>
     });
   });
 
-const appliesResultsInSeqOrderWhatever = (create: Create) =>
+const appliesResultsInSeqOrderWhatever = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(
@@ -95,7 +91,10 @@ const appliesResultsInSeqOrderWhatever = (create: Create) =>
     ]);
   });
 
-const reportsTheFingerprintBeforeAnyCall = (create: Create, backend: string) =>
+const reportsTheFingerprintBeforeAnyCall = (
+  create: deterministicSupportTypes.Create,
+  backend: string,
+) =>
   Effect.gen(function* () {
     const sandbox = create({ memoryLimitBytes: 64 * 1024 * 1024 });
     const recorded = start(
@@ -128,7 +127,7 @@ const reportsTheFingerprintBeforeAnyCall = (create: Create, backend: string) =>
     expect(other.fingerprint()).not.toBe(fingerprint);
   });
 
-const numbersCallsToGlobalsWithTools = (create: Create) =>
+const numbersCallsToGlobalsWithTools = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(
@@ -137,26 +136,26 @@ const numbersCallsToGlobalsWithTools = (create: Create) =>
 				try { await tools.echo("fail"); } catch (error) { text(error.message); }
 				return found;`,
       {
-        globals: [{ name: "search", spread: true }],
         answer: (call) =>
           call.args === "fail"
-            ? { ok: false, message: "no" }
+            ? { message: "no", ok: false }
             : { ok: true, value: call.name === "search" ? ["found"] : call.args },
+        globals: [{ name: "search", spread: true }],
       },
     );
     const result = yield* Effect.promise(() => recorded.run.result);
     expect(recorded.calls[0]).toEqual({
-      id: 1,
-      target: "global",
-      name: "search",
       args: ["x", 2],
+      id: 1,
+      name: "search",
+      target: "global",
     });
     expect(result).toMatchObject({
       ok: true,
+      output: [{ text: "no", type: "text" }],
       value: ["found"],
-      output: [{ type: "text", text: "no" }],
     });
-    expect(recorded.calls[1]).toMatchObject({ id: 2, target: "tool", name: "echo" });
+    expect(recorded.calls[1]).toMatchObject({ id: 2, name: "echo", target: "tool" });
     expect(recorded.idles.slice(0, 2)).toEqual([
       [0, 1],
       [1, 2],
@@ -164,7 +163,7 @@ const numbersCallsToGlobalsWithTools = (create: Create) =>
     expect(result.calls).toMatchObject([{ name: "echo", status: "error" }]);
   });
 
-const keepsTheClockMonotonicAndRejects = (create: Create) =>
+const keepsTheClockMonotonicAndRejects = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(
@@ -182,7 +181,7 @@ const keepsTheClockMonotonicAndRejects = (create: Create) =>
     });
   });
 
-const reportsTheResultTheVmWas = (create: Create) =>
+const reportsTheResultTheVmWas = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const returned = start(sandbox, "await tools.echo(1); return await tools.echo(2)");
@@ -192,17 +191,17 @@ const reportsTheResultTheVmWas = (create: Create) =>
     );
     const first = start(sandbox, "return 1");
     expect(yield* Effect.promise(() => returned.run.result)).toMatchObject({
+      during: { issued: 2, seq: 2 },
       ok: true,
       value: 2,
-      during: { seq: 2, issued: 2 },
     });
     expect(yield* Effect.promise(() => thrown.run.result)).toMatchObject({
+      during: { issued: 3, seq: 3 },
       ok: false,
-      during: { seq: 3, issued: 3 },
     });
     expect(yield* Effect.promise(() => first.run.result)).toMatchObject({
+      during: { issued: 0, seq: 0 },
       ok: true,
-      during: { seq: 0, issued: 0 },
     });
     expect(yield* Effect.promise(() => sandbox.execute("return 1"))).not.toHaveProperty("during");
   });

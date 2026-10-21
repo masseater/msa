@@ -1,50 +1,53 @@
+import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, streamSimple } from "../src/compat.ts";
-import type { Context, Model, SimpleStreamOptions } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { streamSimple } = compatModule;
+
+const { compatValue, modelsWhere, usesApi } = modelChoice;
 
 interface AnthropicTemperaturePayload {
   temperature?: number;
 }
 
-class PayloadCaptured extends Error {
-  constructor() {
-    super("payload captured");
-    this.name = "PayloadCaptured";
-  }
-}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
 function makeCustomModel(
-  compat?: Model<"anthropic-messages">["compat"],
-): Model<"anthropic-messages"> {
+  compat?: typesModule.Model<"anthropic-messages">["compat"],
+): typesModule.Model<"anthropic-messages"> {
   return {
-    id: "vendor--claude-opus-4-7",
-    name: "Vendor Proxy Opus 4.7",
     api: "anthropic-messages",
-    provider: "vendor-proxy",
     baseUrl: "http://127.0.0.1:9",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 200000,
-    maxTokens: 32000,
     compat,
+    contextWindow: 200000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "vendor--claude-opus-4-7",
+    input: ["text"],
+    maxTokens: 32000,
+    name: "Vendor Proxy Opus 4.7",
+    provider: "vendor-proxy",
+    reasoning: true,
   };
 }
 
-async function capturePayload(
-  model: Model<"anthropic-messages">,
-  options?: SimpleStreamOptions,
-): Promise<AnthropicTemperaturePayload> {
+const capturePayload = Effect.fn("capturePayload")(function* (
+  model: typesModule.Model<"anthropic-messages">,
+  options?: typesModule.SimpleStreamOptions,
+) {
   let capturedPayload: AnthropicTemperaturePayload | undefined;
 
-  const payloadCaptureModel: Model<"anthropic-messages"> = {
+  const payloadCaptureModel: typesModule.Model<"anthropic-messages"> = {
     ...model,
     baseUrl: "http://127.0.0.1:9",
   };
@@ -54,65 +57,61 @@ async function capturePayload(
     apiKey: "fake-key",
     onPayload: (payload) => {
       capturedPayload = payload as AnthropicTemperaturePayload;
-      throw new PayloadCaptured();
+      throw new PayloadCaptured({ message: "payload captured" });
     },
   });
 
-  await s.result();
+  yield* Effect.promise(() => s.result());
 
-  if (!capturedPayload) {
+  if (capturedPayload === undefined) {
     throw new Error("Expected payload to be captured before request failure");
   }
 
   return capturedPayload;
-}
+});
+
+const anthropicModels = modelsWhere("anthropic-api", () => true).filter(
+  usesApi("anthropic-messages"),
+);
+const rejectsTemperature = (model: typesModule.Model<"anthropic-messages">) =>
+  compatValue(model, "supportsTemperature") === false;
+const keepsTemperature = (model: typesModule.Model<"anthropic-messages">) =>
+  !rejectsTemperature(model) && model.thinkingLevelMap?.off !== null;
 
 describe("Anthropic temperature compatibility", () => {
-  it("omits temperature for Claude Opus 4.7", async () => {
-    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
-      temperature: 0,
-    });
-
-    expect(payload.temperature).toBeUndefined();
+  it("covers catalog models on both sides of supportsTemperature", () => {
+    expect(anthropicModels.some(rejectsTemperature)).toBe(true);
+    expect(anthropicModels.some(keepsTemperature)).toBe(true);
   });
 
-  it("omits temperature for Claude Opus 4.8", async () => {
-    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-8"), {
-      temperature: 0,
-    });
+  it.for(anthropicModels.filter(rejectsTemperature))("omits temperature for $id", (model) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        for (const temperature of [0, 1]) {
+          const payload = yield* capturePayload(model, { temperature });
+          expect(payload.temperature).toBeUndefined();
+        }
+      }),
+    ),
+  );
 
-    expect(payload.temperature).toBeUndefined();
-  });
+  it.for(anthropicModels.filter(keepsTemperature))("keeps temperature for $id", (model) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(model, { temperature: 0 });
+        expect(payload.temperature).toBe(0);
+      }),
+    ),
+  );
 
-  it("omits default temperature for Claude Opus 4.7", async () => {
-    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-7"), {
-      temperature: 1,
-    });
+  it("omits temperature for custom models with supportsTemperature disabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeCustomModel({ supportsTemperature: false }), {
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBeUndefined();
-  });
-
-  it("keeps temperature for Claude Opus 4.6", async () => {
-    const payload = await capturePayload(getModel("anthropic-api", "claude-opus-4-6"), {
-      temperature: 0,
-    });
-
-    expect(payload.temperature).toBe(0);
-  });
-
-  it("keeps temperature for Claude Sonnet 4.6", async () => {
-    const payload = await capturePayload(getModel("anthropic-api", "claude-sonnet-4-6"), {
-      temperature: 0,
-    });
-
-    expect(payload.temperature).toBe(0);
-  });
-
-  it("omits temperature for custom models with supportsTemperature disabled", async () => {
-    const payload = await capturePayload(makeCustomModel({ supportsTemperature: false }), {
-      temperature: 0,
-    });
-
-    expect(payload.temperature).toBeUndefined();
-  });
+        expect(payload.temperature).toBeUndefined();
+      }),
+    ));
 });

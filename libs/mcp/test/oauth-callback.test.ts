@@ -1,16 +1,15 @@
-import { Effect } from "effect";
+import { Effect, Exit } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type OAuthCallbackPage,
-  OAuthCallbackServer,
-  type OAuthCallbackServerOptions,
-} from "../src/oauth/index.ts";
-import { webFetch } from "./web-fetch.ts";
+import oauth from "../src/oauth/index.ts";
+import type oauthTypes from "../src/oauth/index.types.ts";
+import webFetch from "./web-fetch.ts";
+
+const { OAuthCallbackServer } = oauth;
 
 const withCallback = <A>(
-  options: OAuthCallbackServerOptions | undefined,
-  use: (callback: OAuthCallbackServer) => Effect.Effect<A>,
+  options: oauthTypes.OAuthCallbackServerOptions | undefined,
+  use: (callback: oauthTypes.OAuthCallbackServer) => Effect.Effect<A>,
 ) =>
   Effect.acquireUseRelease(
     Effect.promise(() => OAuthCallbackServer.listen(options)),
@@ -51,7 +50,7 @@ const rejectsOtherPath = withCallback({ extraPaths: ["/callback/server-id"] }, (
   }),
 );
 
-const pages: OAuthCallbackPage[] = [];
+const pages: oauthTypes.OAuthCallbackPage[] = [];
 
 const rendersPages = withCallback(
   {
@@ -69,9 +68,9 @@ const rendersPages = withCallback(
       expect(failure.headers.get("content-type")).toBe("text/html; charset=utf-8");
       yield* Effect.promise(() => expect(denied).rejects.toThrow("Denied"));
       expect(pages.at(-1)).toEqual({
-        ok: false,
-        message: "Authorization failed. You may close this window.",
         details: "Denied",
+        message: "Authorization failed. You may close this window.",
+        ok: false,
       });
       const pending = callback.waitForCallback("s2");
       const success = yield* get(`${callback.redirectUrl}?code=abc&state=s2`);
@@ -80,9 +79,20 @@ const rendersPages = withCallback(
     }),
 );
 
+const rejectsTakenPort = withCallback(undefined, (callback) =>
+  Effect.gen(function* () {
+    const port = Number(new URL(callback.redirectUrl).port);
+    const second = yield* Effect.exit(
+      Effect.tryPromise(() => OAuthCallbackServer.listen({ port })),
+    );
+    expect(Exit.isFailure(second)).toBe(true);
+  }),
+);
+
 describe("OAuthCallbackServer pages", () => {
   it("renders plain text by default", () => Effect.runPromise(rendersPlainText));
   it("rejects a response on another path than the expected one", () =>
     Effect.runPromise(rejectsOtherPath));
   it("renders pages through renderPage", () => Effect.runPromise(rendersPages));
+  it("fails to listen on a port that is already taken", () => Effect.runPromise(rejectsTakenPort));
 });

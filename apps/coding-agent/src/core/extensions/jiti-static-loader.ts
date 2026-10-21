@@ -1,3 +1,7 @@
-// Compiled binaries need jiti's static entry so Bun and SEA bundlers embed the
-// Babel transform. The module itself remains lazy until an extension is loaded.
-export { createJiti } from "jiti/static";
+import { createJiti as createJitiModule } from "jiti/static";
+
+const jitiStaticLoader = {
+  createJiti: createJitiModule,
+};
+
+export default jitiStaticLoader;

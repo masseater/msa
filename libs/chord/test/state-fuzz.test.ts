@@ -1,6 +1,9 @@
 import { expect, it } from "vite-plus/test";
 
-import { applyImmutable, type Draft, type Op, track } from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+
+const { applyImmutable, track } = delta;
 
 type Item = { id: number; text: string; score: number };
 type Document = {
@@ -9,7 +12,7 @@ type Document = {
   meta: { revision: number; label?: string };
 };
 
-type MutableDocument = Document | Draft<Document>;
+type MutableDocument = Document | deltaTypes.Draft<Document>;
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
@@ -41,7 +44,7 @@ const random =
   };
 
 const mutate = (document: MutableDocument, choice: number, value: number): void => {
-  const item = (): Item => ({ id: value, text: `item-${value}`, score: value % 7 });
+  const item = (): Item => ({ id: value, score: value % 7, text: `item-${value}` });
   switch (choice) {
     case 0:
       document.text += `-${value}`;
@@ -95,9 +98,9 @@ it("converges across randomized prepared revisions", () => {
   for (let seed = 1; seed <= 100; seed++) {
     const rng = random(seed);
     const initial: Document = {
-      items: Array.from({ length: 4 }, (_, id) => ({ id, text: `item-${id}`, score: 0 })),
-      text: "start",
+      items: Array.from({ length: 4 }, (_, id) => ({ id, score: 0, text: `item-${id}` })),
       meta: { revision: 0 },
+      text: "start",
     };
     const tracker = track(initial);
     const expected = clone(initial);
@@ -111,7 +114,7 @@ it("converges across randomized prepared revisions", () => {
       const change = tracker.beginChange();
       mutate(change.state, choice, value);
       const prepared = change.prepare();
-      const operations = clone(prepared.ops) as readonly Op[];
+      const operations = clone(prepared.ops) as readonly deltaTypes.Op[];
       expect(baseRoot, `prepare base seed ${seed} step ${step} choice ${choice}`).toEqual(base);
       expect(prepared.base).toBe(baseRoot);
       replica = applyImmutable(replica, operations);

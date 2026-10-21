@@ -1,28 +1,31 @@
-// Reload an extension while a call runs, then restart the process. Running work finishes on the code it started
-// with; stored choices are names, so they survive a restart and bind to whatever code the new process installs.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/31-reload-and-restart.ts
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import modelsModule from "@msa/ai/models";
+import fauxModule from "@msa/ai/providers/faux";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import { type ToolResultMessage, Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import node from "../../src/storage/sqlite/node.ts";
+import support from "../support.ts";
+import example31ReloadAndRestartKit from "./31-reload-and-restart-kit.ts";
 
-import {
-  createRegistry,
-  defineExtension,
-  defineTool,
-  Harness,
-  ToolResultEntry,
-} from "../../src/index.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
+const { harness: harnessModule, src: durable } = example31ReloadAndRestartKit;
+
+const { Type } = ai;
+const { fauxAssistantMessage, fauxProvider, fauxToolCall } = fauxModule;
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { ToolResultEntry, defineExtension, defineTool } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { openNodeSqliteStorage } = node;
+
+const { awaited, joinPath, makeTempDir, removeDir } = support;
 
 const context = BACKGROUND_CONTEXT;
 
-// Stand-in for code loaded from disk: each call builds the extension as the file currently reads.
 let started = (): void => {};
 let gate = Promise.resolve();
 function loadVersioned(version: string) {
@@ -30,14 +33,17 @@ function loadVersioned(version: string) {
     name: "versioned",
     tools: [
       defineTool({
-        name: "version",
         description: "Report the tool's code version",
+        execute: () =>
+          Effect.runPromise(
+            Effect.gen(function* () {
+              started();
+              yield* awaited(gate);
+              return { output: [{ text: version, type: "text" }] };
+            }),
+          ),
+        name: "version",
         parameters: Type.Object({}),
-        execute: async () => {
-          started();
-          await gate;
-          return { output: [{ type: "text", text: version }] };
-        },
       }),
     ],
   });
@@ -55,55 +61,76 @@ faux.setResponses([
   fauxAssistantMessage("Done."),
 ]);
 
-const directory = await mkdtemp(join(tmpdir(), "msa-durable-reload-"));
-const open = async (registry: ReturnType<typeof createRegistry>) =>
-  Harness.open(
-    await openNodeSqliteStorage(join(directory, "session.sqlite")),
-    { models, registry },
-    context,
+const mainStep1 = Effect.gen(function* () {
+  const directory = yield* makeTempDir("msa-durable-reload-");
+  const open = Effect.fn("open")(function* (registry: ReturnType<typeof createRegistry>) {
+    return yield* awaited(
+      Harness.open(
+        yield* awaited(openNodeSqliteStorage(joinPath(directory, "session.sqlite"))),
+        { models, registry },
+        context,
+      ),
+    );
+  });
+  return { directory, open };
+});
+
+const mainStep2 = Effect.gen(function* () {
+  const { directory, open } = yield* mainStep1;
+  let registry = createRegistry();
+  registry.install(loadVersioned("v1"));
+  let harness = yield* open(registry);
+  let root = yield* awaited(
+    harness.root(context, {
+      agent: {
+        extensions: [loadVersioned("v1")],
+        model: { modelId: "faux-1", provider: "faux" },
+      },
+    }),
   );
+  const lastResult = Effect.fn("lastResult")(function* () {
+    const page = yield* awaited(root.entries({}, 10, undefined, context));
+    const result = page.items.find((entry) => ToolResultEntry.is(entry))
+      ?.model?.[0] as aiTypes.ToolResultMessage;
+    return result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
+  });
 
-// First process.
-let registry = createRegistry();
-registry.install(loadVersioned("v1"));
-let harness = await open(registry);
-let root = await harness.root(context, {
-  // Selected by name. The name is what is stored, never the code.
-  agent: { model: { provider: "faux", modelId: "faux-1" }, extensions: [loadVersioned("v1")] },
+  const opened = Promise.withResolvers<void>();
+  const release = (): void => opened.resolve();
+  gate = opened.promise;
+  const { promise: running, resolve: start } = Promise.withResolvers<void>();
+  started = start;
+  const submission = yield* awaited(
+    root.submit({ content: "Which version?", type: "input" }, context),
+  );
+  yield* awaited(running);
+  registry.install(loadVersioned("v2"));
+  release();
+  yield* awaited(submission.wait(context));
+  yield* Console.log("call running during the reload:", yield* lastResult());
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "And now?", type: "input" }, context))).wait(context),
+  );
+  yield* Console.log("next call:", yield* lastResult());
+  yield* awaited(harness.close(context));
+
+  registry = createRegistry();
+  harness = yield* open(registry);
+  root = yield* awaited(harness.root(context));
+  return { directory, harness, registry, root };
 });
-const lastResult = async () => {
-  const page = await root.entries({}, 10, undefined, context);
-  const result = page.items.find((entry) => ToolResultEntry.is(entry))
-    ?.model?.[0] as ToolResultMessage;
-  return result.content.map((part) => (part.type === "text" ? part.text : "")).join("");
-};
 
-// The file changes while a call runs: the running call finishes on v1, the next call uses v2.
-let release = (): void => {};
-gate = new Promise((resolve) => {
-  release = resolve;
+const main = Effect.gen(function* () {
+  const { directory, registry, harness, root } = yield* mainStep2;
+  const tools = Effect.fn("tools")(function* () {
+    return (yield* awaited(root.agent(context))).tools.map((tool) => tool.name);
+  });
+  yield* Console.log("after restart, before install:", yield* tools());
+  registry.install(loadVersioned("v3"));
+  yield* Console.log("after install:", yield* tools());
+
+  yield* awaited(harness.close(context));
+  yield* removeDir(directory);
 });
-const running = new Promise<void>((resolve) => {
-  started = resolve;
-});
-const submission = await root.submit({ type: "input", content: "Which version?" }, context);
-await running;
-registry.install(loadVersioned("v2"));
-release();
-await submission.wait(context);
-console.log("call running during the reload:", await lastResult());
-await (await root.submit({ type: "input", content: "And now?" }, context)).wait(context);
-console.log("next call:", await lastResult());
-await harness.close(context);
 
-// Second process: the conversation still selects "versioned", but this process has not installed it yet.
-registry = createRegistry();
-harness = await open(registry);
-root = await harness.root(context);
-const tools = async () => (await root.agent(context)).tools.map((tool) => tool.name);
-console.log("after restart, before install:", await tools());
-registry.install(loadVersioned("v3"));
-console.log("after install:", await tools());
-
-await harness.close(context);
-await rm(directory, { recursive: true, force: true });
+NodeRuntime.runMain(main);

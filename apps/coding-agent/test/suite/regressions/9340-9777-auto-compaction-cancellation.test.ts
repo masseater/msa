@@ -1,167 +1,201 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-type SessionWithCompactionInternals = {
-  _runAutoCompaction: (reason: "overflow" | "threshold", willRetry: boolean) => Promise<boolean>;
-};
+const { fauxAssistantMessage } = ai;
 
-function seedCompactableSession(harness: Harness): void {
+const { createHarness } = harnessModule;
+
+const { deferredPromise, gate } = testing;
+
+function seedCompactableSession(harness: harnessTypes.Harness): void {
   const model = harness.getModel();
   harness.sessionManager.appendMessage({
+    content: [{ text: "x".repeat(500), type: "text" }],
     role: "user",
-    content: [{ type: "text", text: "x".repeat(500) }],
     timestamp: 1,
   });
-  const assistant: AssistantMessage = {
+  const assistant: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("y".repeat(200), { timestamp: 2 }),
     api: model.api,
-    provider: model.provider,
     model: model.id,
+    provider: model.provider,
     usage: {
-      input: 100,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 100,
+      output: 0,
       totalTokens: 100,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
   harness.sessionManager.appendMessage(assistant);
   harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 }
 
-function runAutoCompaction(harness: Harness): Promise<boolean> {
-  return (harness.session as unknown as SessionWithCompactionInternals)._runAutoCompaction(
-    "threshold",
-    false,
-  );
+function runAutoCompaction(harness: harnessTypes.Harness): Promise<boolean> {
+  return harness.session.compaction.auto["runAutoCompaction"]("threshold", false);
 }
 
-describe("automatic compaction cancellation regressions", () => {
-  const harnesses: Harness[] = [];
+const harnesses: harnessTypes.Harness[] = [];
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
-
-  // Regression test for #9340.
-  it("does not start post-run auto-compaction after abort", async () => {
-    const harness = await createHarness({
-      models: [{ id: "faux-1", contextWindow: 200, maxTokens: 50 }],
-      settings: {
-        compaction: { enabled: true, reserveTokens: 50, keepRecentTokens: 1 },
-        retry: { enabled: false },
-      },
+const doesNotStartPostRunAuto = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("session_before_compact", () => ({ cancel: true }));
         },
       ],
-    });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.setResponses([
-      fauxAssistantMessage("", { stopReason: "error", errorMessage: "Synthetic network failure" }),
-    ]);
-    harness.session.subscribe((event) => {
-      if (event.type === "message_end" && event.message.role === "assistant") {
-        harness.session.abortCompaction();
-        void harness.session.abort();
-      }
-    });
-
-    await harness.session.prompt("z".repeat(1000));
-
-    expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
-  });
-
-  // Regression test for #9777.
-  it("cancels summarization authentication", async () => {
-    const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    let markAuthStarted = () => {};
-    const authStarted = new Promise<void>((resolve) => {
-      markAuthStarted = resolve;
-    });
-    let authSignal: AbortSignal | undefined;
-    vi.spyOn(harness.session.modelRuntime, "getAuth").mockImplementation(
-      async (_model, options) => {
-        authSignal = options?.signal;
-        markAuthStarted();
-        if (!authSignal) throw new Error("Missing auth abort signal");
-        return await new Promise<never>((_resolve, reject) => {
-          authSignal?.addEventListener("abort", () => reject(authSignal?.reason), { once: true });
-        });
+      models: [{ contextWindow: 200, id: "faux-1", maxTokens: 50 }],
+      settings: {
+        compaction: { enabled: true, keepRecentTokens: 1, reserveTokens: 50 },
+        retry: { enabled: false },
       },
-    );
-
-    const compaction = runAutoCompaction(harness);
-    await authStarted;
-    const started = harness.eventsOfType("compaction_start").length;
-    const wasCompacting = harness.session.isCompacting;
-    await Promise.all([compaction, harness.session.abort()]);
-
-    expect({ started, wasCompacting, authAborted: authSignal?.aborted }).toEqual({
-      started: 1,
-      wasCompacting: true,
-      authAborted: true,
-    });
-    expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
+    }),
+  );
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.setResponses([
+    fauxAssistantMessage("", {
+      errorMessage: "Synthetic network failure",
+      stopReason: "error",
+    }),
+  ]);
+  harness.session.subscribe((event) => {
+    if (event.type === "message_end" && event.message.role === "assistant") {
+      harness.session.compaction.manual.abortCompaction();
+      void harness.session.run.lifecycle.abort();
+    }
   });
 
-  // Regression test for #9777.
-  it("cancels synchronously from compaction_start", async () => {
-    const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.session.subscribe((event) => {
-      if (event.type === "compaction_start") harness.session.abortCompaction();
-    });
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("z".repeat(1000)));
 
-    await runAutoCompaction(harness);
+  expect(harness.eventsOfType("compaction_start")).toHaveLength(0);
+});
 
-    expect(harness.faux.state.callCount).toBe(0);
-    expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
+const cancelsSummarizationAuthentication = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const harness = yield* Effect.promise(() =>
+    createHarness({ settings: { compaction: { keepRecentTokens: 1 } } }),
+  );
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  const authStarted = gate();
+  let authSignal: AbortSignal | undefined;
+  vi.spyOn(harness.session.models.selection.modelRuntime, "getAuth").mockImplementation(
+    (_model, options) =>
+      runPromise(
+        Effect.gen(function* () {
+          authSignal = options?.signal;
+          authStarted.release();
+          if (authSignal === undefined) throw new Error("Missing auth abort signal");
+          const aborted = deferredPromise<never>();
+          const signal = authSignal;
+          signal.addEventListener("abort", () => aborted.reject(signal.reason), { once: true });
+          return yield* Effect.promise(() => aborted.promise);
+        }),
+      ),
+  );
+
+  const compaction = runAutoCompaction(harness);
+  yield* Effect.promise(() => authStarted);
+  const started = harness.eventsOfType("compaction_start").length;
+  const wasCompacting = harness.session.compaction.manual.isCompacting;
+  yield* Effect.promise(() => Promise.all([compaction, harness.session.run.lifecycle.abort()]));
+
+  expect({ authAborted: authSignal?.aborted, started, wasCompacting }).toEqual({
+    authAborted: true,
+    started: 1,
+    wasCompacting: true,
+  });
+  expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
+});
+
+const cancelsSynchronouslyFromCompactionStart = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({ settings: { compaction: { keepRecentTokens: 1 } } }),
+  );
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.session.subscribe((event) => {
+    if (event.type === "compaction_start") harness.session.compaction.manual.abortCompaction();
   });
 
-  // Regression test for #9777.
+  yield* Effect.promise(() => runAutoCompaction(harness));
+
+  expect(harness.faux.state.callCount).toBe(0);
+  expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
+});
+
+const reportsExtensionCancellationAsAborted = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
+      extensionFactories: [
+        (msa) => {
+          msa.on("session_before_compact", () => ({ cancel: true }));
+        },
+      ],
+      settings: { compaction: { keepRecentTokens: 1 } },
+    }),
+  );
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+
+  yield* Effect.promise(() => runAutoCompaction(harness));
+
+  expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
+});
+
+const doesNotStartPostRunAutoCompaction = () => Effect.runPromise(doesNotStartPostRunAuto);
+
+const cancelsSummarizationAuthentication2 = () =>
+  Effect.runPromise(cancelsSummarizationAuthentication);
+
+const cancelsSynchronouslyFromCompactionStart2 = () =>
+  Effect.runPromise(cancelsSynchronouslyFromCompactionStart);
+
+const reportsExtensionCancellationAsAborted2 = () =>
+  Effect.runPromise(reportsExtensionCancellationAsAborted);
+
+describe("automatic compaction cancellation regressions", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+    while (harnesses.length > 0) harnesses.pop()?.cleanup();
+  });
+  it("does not start post-run auto-compaction after abort", doesNotStartPostRunAutoCompaction);
+  it("cancels summarization authentication", cancelsSummarizationAuthentication2);
+  it("cancels synchronously from compaction_start", cancelsSynchronouslyFromCompactionStart2);
   it.each([
     ["matching error text", () => new Error("Compaction cancelled")],
     [
       "an unrelated AbortError",
       () => Object.assign(new Error("auth failed"), { name: "AbortError" }),
     ],
-  ] as const)("reports %s as a failure", async (_label, createError) => {
-    const harness = await createHarness({ settings: { compaction: { keepRecentTokens: 1 } } });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    vi.spyOn(harness.session.modelRuntime, "getAuth").mockRejectedValue(createError());
+  ] as const)("reports %s as a failure", (_label, createError) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const harness = yield* Effect.promise(() =>
+          createHarness({ settings: { compaction: { keepRecentTokens: 1 } } }),
+        );
+        harnesses.push(harness);
+        seedCompactableSession(harness);
+        vi.spyOn(harness.session.models.selection.modelRuntime, "getAuth").mockRejectedValue(
+          createError(),
+        );
 
-    await runAutoCompaction(harness);
+        yield* Effect.promise(() => runAutoCompaction(harness));
 
-    const event = harness.eventsOfType("compaction_end").at(-1);
-    expect(event?.aborted).toBe(false);
-    expect(event?.errorMessage).toContain(createError().message);
-  });
-
-  it("reports extension cancellation as aborted", async () => {
-    const harness = await createHarness({
-      settings: { compaction: { keepRecentTokens: 1 } },
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_before_compact", () => ({ cancel: true }));
-        },
-      ],
-    });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-
-    await runAutoCompaction(harness);
-
-    expect(harness.eventsOfType("compaction_end").at(-1)?.aborted).toBe(true);
-  });
+        const event = harness.eventsOfType("compaction_end").at(-1);
+        expect(event?.aborted).toBe(false);
+        expect(event?.errorMessage).toContain(createError().message);
+      }),
+    ),
+  );
+  it("reports extension cancellation as aborted", reportsExtensionCancellationAsAborted2);
 });

@@ -1,34 +1,22 @@
-export { Connection, isConnectionLost, RemoteError, type Reply } from "./connection.ts";
-export { LocalExecutionEnv, type LocalExecutionEnvOptions } from "./list-files.ts";
-export {
-  type ConnectionOptions,
-  nodePlatform,
-  type RemoteInfo,
-  type RequestOptions,
-} from "./remote-info.ts";
-export { RemoteExecutionEnv, type RemoteExecutionEnvOptions } from "./remote-env.ts";
-export {
-  acceptHostKey,
-  connectSsh,
-  deployDaemon,
-  detectPlatform,
-  forgetHostKey,
-  HostKeyChangedError,
-  HostKeyUnknownError,
-  localDaemon,
-  packagedDaemon,
-  type RemotePlatform,
-  type SshConnectOptions,
-  SshError,
-  type SshTarget,
-  scanHostKey,
-  sshArguments,
-  sshConnection,
-} from "./ssh.ts";
-export {
-  openTerminal,
-  RemoteTerminal,
-  type TerminalForeground,
-  type TerminalOptions,
-} from "./terminal.ts";
-export { RemoteWatcher, type RemoteWatchOptions } from "./watch.ts";
+import connection from "./connection.ts";
+import envDaemon from "./env-daemon.ts";
+import envErrors from "./env-errors.ts";
+import envSsh from "./env-ssh.ts";
+import LocalExecutionEnv from "./local-execution-env.ts";
+import RemoteExecutionEnv from "./remote-env.ts";
+import terminal from "./terminal.ts";
+import RemoteWatcher from "./watch.ts";
+
+const env = {
+  ...envDaemon,
+  ...envErrors,
+  ...envSsh,
+  Connection: connection.Connection,
+  LocalExecutionEnv: LocalExecutionEnv,
+  RemoteExecutionEnv: RemoteExecutionEnv,
+  RemoteTerminal: terminal.RemoteTerminal,
+  RemoteWatcher: RemoteWatcher,
+  openTerminal: terminal.openTerminal,
+};
+
+export default env;

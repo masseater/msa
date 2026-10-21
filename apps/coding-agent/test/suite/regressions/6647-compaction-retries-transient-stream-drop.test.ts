@@ -1,211 +1,241 @@
-import type { StreamFn } from "@msa/agent-core";
-import {
-  type AssistantMessage,
-  createAssistantMessageEventStream,
-  fauxAssistantMessage,
-} from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-/**
- * Regression for #6647: compaction runs a single non-retried summarization call, so a
- * transient mid-stream socket death (`terminated`) failed the whole compaction.
- * Verifies that summarization now reuses `settings.retry` (bounded retries with
- * exponential backoff gated on isRetryableAssistantError), emits
- * `summarization_retry_*` events, and that aborts / non-retryable errors are not retried.
- */
+const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
+
+const { createHarness } = harnessModule;
+
+const { currentTimeMillis } = testing;
+
+const harnesses: harnessTypes.Harness[] = [];
+
+function createUsage(totalTokens: number) {
+  return {
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: totalTokens,
+    output: 0,
+    totalTokens,
+  };
+}
+
+function seedCompactableSession(harness: harnessTypes.Harness): void {
+  harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
+  const now = currentTimeMillis();
+  harness.sessionManager.appendMessage({
+    content: [{ text: "message to compact", type: "text" }],
+    role: "user",
+    timestamp: now - 1000,
+  });
+  const model = harness.getModel();
+  const assistant: aiTypes.AssistantMessage = {
+    ...fauxAssistantMessage("", { stopReason: "stop", timestamp: now - 500 }),
+    api: model.api,
+    model: model.id,
+    provider: model.provider,
+    usage: createUsage(100),
+  };
+  assistant.content = [{ text: "assistant response to compact", type: "text" }];
+  harness.sessionManager.appendMessage(assistant);
+  harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
+}
+
+function useScriptedStreamFn(
+  harness: harnessTypes.Harness,
+  script: aiTypes.AssistantMessage[],
+): () => number {
+  let callCount = 0;
+  const streamFunction: agentTypes.StreamFn = (model) => {
+    const message = script[callCount] ?? script[script.length - 1]!;
+    callCount++;
+    const stream = createAssistantMessageEventStream();
+    queueMicrotask(() => {
+      const response = { ...message, api: model.api, model: model.id, provider: model.provider };
+      if (response.stopReason === "pending") {
+        const error: aiTypes.AssistantMessage = {
+          ...response,
+          errorMessage: "Scripted response ended without a stop reason",
+          stopReason: "error",
+        };
+        stream.push({ error, reason: "error", type: "error" });
+      } else if (response.stopReason === "error" || response.stopReason === "aborted") {
+        stream.push({ error: response, reason: response.stopReason, type: "error" });
+      } else {
+        stream.push({ message: response, reason: response.stopReason, type: "done" });
+      }
+    });
+    return stream;
+  };
+  harness.session.agent.streamFunction = streamFunction;
+  return () => callCount;
+}
+
+const retriesATransientTerminatedSummarizationError = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.settingsManager.applyOverrides({
+    retry: { baseDelayMs: 0, enabled: true, maxRetries: 3 },
+  });
+
+  const model = harness.getModel();
+  const error = (errorMessage: string): aiTypes.AssistantMessage => ({
+    ...fauxAssistantMessage("", { errorMessage, stopReason: "error" }),
+    usage: createUsage(10),
+  });
+  const success: aiTypes.AssistantMessage = {
+    ...fauxAssistantMessage("recovered summary"),
+    usage: createUsage(10),
+  };
+  const getCallCount = useScriptedStreamFn(harness, [
+    error("terminated"),
+    error("terminated"),
+    success,
+  ]);
+
+  const result = yield* Effect.promise(() => harness.session.compaction.manual.compact());
+
+  expect(result.summary).toContain("recovered summary");
+  expect(getCallCount()).toBe(3);
+  const starts = harness.eventsOfType("summarization_retry_scheduled");
+  const ends = harness.eventsOfType("summarization_retry_finished");
+  expect(starts).toHaveLength(2);
+  expect(ends).toHaveLength(1);
+  expect(starts[0]).toMatchObject({ attempt: 1, errorMessage: "terminated", maxAttempts: 3 });
+  expect(starts[1]).toMatchObject({ attempt: 2, maxAttempts: 3 });
+  expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
+
+  expect(model.id).toBeTruthy();
+});
+
+const doesNotRetryANonRetryable = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.settingsManager.applyOverrides({
+    retry: { baseDelayMs: 0, enabled: true, maxRetries: 3 },
+  });
+
+  const error: aiTypes.AssistantMessage = {
+    ...fauxAssistantMessage("", { errorMessage: "insufficient_quota", stopReason: "error" }),
+    usage: createUsage(10),
+  };
+  const getCallCount = useScriptedStreamFn(harness, [error]);
+
+  yield* Effect.promise(() =>
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("insufficient_quota"),
+  );
+  expect(getCallCount()).toBe(1);
+  expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
+});
+
+const doesNotRetryWhenRetryIs = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.settingsManager.applyOverrides({
+    retry: { baseDelayMs: 0, enabled: false, maxRetries: 3 },
+  });
+
+  const error: aiTypes.AssistantMessage = {
+    ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
+    usage: createUsage(10),
+  };
+  const getCallCount = useScriptedStreamFn(harness, [error]);
+
+  yield* Effect.promise(() =>
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("terminated"),
+  );
+  expect(getCallCount()).toBe(1);
+  expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
+});
+
+const stopsRetryingAfterMaxretriesAndReports = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.settingsManager.applyOverrides({
+    retry: { baseDelayMs: 0, enabled: true, maxRetries: 2 },
+  });
+
+  const error: aiTypes.AssistantMessage = {
+    ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
+    usage: createUsage(10),
+  };
+  const getCallCount = useScriptedStreamFn(harness, [error, error, error]);
+
+  yield* Effect.promise(() =>
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow("terminated"),
+  );
+  expect(getCallCount()).toBe(3);
+  const starts = harness.eventsOfType("summarization_retry_scheduled");
+  const ends = harness.eventsOfType("summarization_retry_finished");
+  expect(starts).toHaveLength(2);
+  expect(ends).toHaveLength(1);
+  expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
+});
+
+const abortsAnInFlightRetryBackoff = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  harnesses.push(harness);
+  seedCompactableSession(harness);
+  harness.settingsManager.applyOverrides({
+    retry: { baseDelayMs: 30_000, enabled: true, maxRetries: 5 },
+  });
+
+  const error: aiTypes.AssistantMessage = {
+    ...fauxAssistantMessage("", { errorMessage: "terminated", stopReason: "error" }),
+    usage: createUsage(10),
+  };
+  useScriptedStreamFn(harness, [error, error, error]);
+
+  const compactPromise = harness.session.compaction.manual.compact();
+
+  yield* Effect.sleep(0);
+  harness.session.compaction.manual.abortCompaction();
+
+  yield* Effect.promise(() => expect(compactPromise).rejects.toThrow());
+  const compactionEnd = harness.eventsOfType("compaction_end").at(-1);
+  expect(compactionEnd).toMatchObject({ aborted: true });
+});
+
+const retriesATransientTerminatedSummarizationErrorAnd = () =>
+  Effect.runPromise(retriesATransientTerminatedSummarizationError);
+
+const doesNotRetryANonRetryableError = () => Effect.runPromise(doesNotRetryANonRetryable);
+
+const doesNotRetryWhenRetryIsDisabled = () => Effect.runPromise(doesNotRetryWhenRetryIs);
+
+const stopsRetryingAfterMaxretriesAndReportsFailure = () =>
+  Effect.runPromise(stopsRetryingAfterMaxretriesAndReports);
+
+const abortsAnInFlightRetryBackoffVia = () => Effect.runPromise(abortsAnInFlightRetryBackoff);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 describe("#6647 compaction retries transient summarization failures", () => {
-  const harnesses: Harness[] = [];
-
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  function createUsage(totalTokens: number) {
-    return {
-      input: totalTokens,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    };
-  }
-
-  function seedCompactableSession(harness: Harness): void {
-    harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-    const now = Date.now();
-    harness.sessionManager.appendMessage({
-      role: "user",
-      content: [{ type: "text", text: "message to compact" }],
-      timestamp: now - 1000,
-    });
-    const model = harness.getModel();
-    const assistant: AssistantMessage = {
-      ...fauxAssistantMessage("", { stopReason: "stop", timestamp: now - 500 }),
-      api: model.api,
-      provider: model.provider,
-      model: model.id,
-      usage: createUsage(100),
-    };
-    assistant.content = [{ type: "text", text: "assistant response to compact" }];
-    harness.sessionManager.appendMessage(assistant);
-    harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
-  }
-
-  /** streamFn that responds with the given sequence of assistant messages across calls. */
-  function useScriptedStreamFn(harness: Harness, script: AssistantMessage[]): () => number {
-    let callCount = 0;
-    const streamFunction: StreamFn = (model) => {
-      const message = script[callCount] ?? script[script.length - 1]!;
-      callCount++;
-      const stream = createAssistantMessageEventStream();
-      queueMicrotask(() => {
-        const response = { ...message, api: model.api, provider: model.provider, model: model.id };
-        if (response.stopReason === "pending") {
-          const error: AssistantMessage = {
-            ...response,
-            stopReason: "error",
-            errorMessage: "Scripted response ended without a stop reason",
-          };
-          stream.push({ type: "error", reason: "error", error });
-        } else if (response.stopReason === "error" || response.stopReason === "aborted") {
-          stream.push({ type: "error", reason: response.stopReason, error: response });
-        } else {
-          stream.push({ type: "done", reason: response.stopReason, message: response });
-        }
-      });
-      return stream;
-    };
-    harness.session.agent.streamFunction = streamFunction;
-    return () => callCount;
-  }
-
-  it("retries a transient `terminated` summarization error and compacts successfully", async () => {
-    const harness = await createHarness({ withConfiguredAuth: false });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.settingsManager.applyOverrides({
-      retry: { enabled: true, maxRetries: 3, baseDelayMs: 0 },
-    });
-
-    const model = harness.getModel();
-    const error = (errorMessage: string): AssistantMessage => ({
-      ...fauxAssistantMessage("", { stopReason: "error", errorMessage }),
-      usage: createUsage(10),
-    });
-    const success: AssistantMessage = {
-      ...fauxAssistantMessage("recovered summary"),
-      usage: createUsage(10),
-    };
-    const getCallCount = useScriptedStreamFn(harness, [
-      error("terminated"),
-      error("terminated"),
-      success,
-    ]);
-
-    const result = await harness.session.compact();
-
-    expect(result.summary).toContain("recovered summary");
-    expect(getCallCount()).toBe(3); // 1 prefix-summary attempt + 2 retries
-    const starts = harness.eventsOfType("summarization_retry_scheduled");
-    const ends = harness.eventsOfType("summarization_retry_finished");
-    expect(starts).toHaveLength(2);
-    expect(ends).toHaveLength(1);
-    expect(starts[0]).toMatchObject({ attempt: 1, maxAttempts: 3, errorMessage: "terminated" });
-    expect(starts[1]).toMatchObject({ attempt: 2, maxAttempts: 3 });
-    expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
-    // model.* referenced to keep imports honest
-    expect(model.id).toBeTruthy();
-  });
-
-  it("does not retry a non-retryable error (insufficient_quota)", async () => {
-    const harness = await createHarness({ withConfiguredAuth: false });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.settingsManager.applyOverrides({
-      retry: { enabled: true, maxRetries: 3, baseDelayMs: 0 },
-    });
-
-    const error: AssistantMessage = {
-      ...fauxAssistantMessage("", { stopReason: "error", errorMessage: "insufficient_quota" }),
-      usage: createUsage(10),
-    };
-    const getCallCount = useScriptedStreamFn(harness, [error]);
-
-    await expect(harness.session.compact()).rejects.toThrow("insufficient_quota");
-    expect(getCallCount()).toBe(1);
-    expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
-  });
-
-  it("does not retry when retry is disabled", async () => {
-    const harness = await createHarness({ withConfiguredAuth: false });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.settingsManager.applyOverrides({
-      retry: { enabled: false, maxRetries: 3, baseDelayMs: 0 },
-    });
-
-    const error: AssistantMessage = {
-      ...fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
-      usage: createUsage(10),
-    };
-    const getCallCount = useScriptedStreamFn(harness, [error]);
-
-    await expect(harness.session.compact()).rejects.toThrow("terminated");
-    expect(getCallCount()).toBe(1);
-    expect(harness.eventsOfType("summarization_retry_scheduled")).toHaveLength(0);
-  });
-
-  it("stops retrying after maxRetries and reports failure", async () => {
-    const harness = await createHarness({ withConfiguredAuth: false });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.settingsManager.applyOverrides({
-      retry: { enabled: true, maxRetries: 2, baseDelayMs: 0 },
-    });
-
-    const error: AssistantMessage = {
-      ...fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
-      usage: createUsage(10),
-    };
-    const getCallCount = useScriptedStreamFn(harness, [error, error, error]);
-
-    await expect(harness.session.compact()).rejects.toThrow("terminated");
-    expect(getCallCount()).toBe(3); // 1 initial + 2 retries
-    const starts = harness.eventsOfType("summarization_retry_scheduled");
-    const ends = harness.eventsOfType("summarization_retry_finished");
-    expect(starts).toHaveLength(2);
-    expect(ends).toHaveLength(1);
-    expect(ends[0]).toMatchObject({ type: "summarization_retry_finished" });
-  });
-
-  it("aborts an in-flight retry backoff via abortCompaction", async () => {
-    const harness = await createHarness({ withConfiguredAuth: false });
-    harnesses.push(harness);
-    seedCompactableSession(harness);
-    harness.settingsManager.applyOverrides({
-      retry: { enabled: true, maxRetries: 5, baseDelayMs: 30_000 },
-    });
-
-    const error: AssistantMessage = {
-      ...fauxAssistantMessage("", { stopReason: "error", errorMessage: "terminated" }),
-      usage: createUsage(10),
-    };
-    useScriptedStreamFn(harness, [error, error, error]);
-
-    const compactPromise = harness.session.compact();
-    // Let the first error resolve and the retry backoff sleep start.
-    await new Promise((resolve) => setTimeout(resolve, 0));
-    harness.session.abortCompaction();
-
-    // The aborted retry backoff is normalized to an aborted assistant message,
-    // which compaction classifies as aborted.
-    await expect(compactPromise).rejects.toThrow();
-    const compactionEnd = harness.eventsOfType("compaction_end").at(-1);
-    expect(compactionEnd).toMatchObject({ aborted: true });
-  });
+  afterEach(afterEachHook);
+  it(
+    "retries a transient `terminated` summarization error and compacts successfully",
+    retriesATransientTerminatedSummarizationErrorAnd,
+  );
+  it("does not retry a non-retryable error (insufficient_quota)", doesNotRetryANonRetryableError);
+  it("does not retry when retry is disabled", doesNotRetryWhenRetryIsDisabled);
+  it(
+    "stops retrying after maxRetries and reports failure",
+    stopsRetryingAfterMaxretriesAndReportsFailure,
+  );
+  it("aborts an in-flight retry backoff via abortCompaction", abortsAnInFlightRetryBackoffVia);
 });

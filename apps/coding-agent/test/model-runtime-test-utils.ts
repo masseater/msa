@@ -1,42 +1,82 @@
-import type { CredentialStore } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 
-import { ModelRegistry } from "../src/core/model-registry.ts";
-import { ModelRuntime } from "../src/core/model-runtime.ts";
-import { InMemoryCodingAgentModelsStore } from "../src/core/models-store.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import InMemoryCodingAgentModelsStore from "../src/core/in-memory-coding-agent-models-store.ts";
+import ModelRegistry from "../src/core/model-registry.ts";
+import type modelRegistryTypes from "../src/core/model-registry.types.ts";
+import ModelRuntime from "../src/core/model-runtime.ts";
+import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 
-const runtimes = new WeakMap<ModelRegistry, ModelRuntime>();
+const { awaited, joinPath, runTest } = testing;
 
-function wrap(runtime: ModelRuntime): ModelRegistry {
+const runtimes = new WeakMap<modelRegistryTypes.ModelRegistry, modelRuntimeTypes.ModelRuntime>();
+
+function wrap(runtime: modelRuntimeTypes.ModelRuntime): modelRegistryTypes.ModelRegistry {
   const registry = new ModelRegistry(runtime);
   runtimes.set(registry, runtime);
   return registry;
 }
 
-/** Load optional models.json configuration without introducing file-backed catalog locks into unit tests. */
-export async function createModelRegistry(
-  credentials: CredentialStore,
-  modelsPath?: string,
-): Promise<ModelRegistry> {
-  return wrap(
-    await ModelRuntime.create({
-      credentials,
-      ...(modelsPath !== undefined ? { modelsPath } : {}),
-      modelsStore: new InMemoryCodingAgentModelsStore(),
-      allowModelNetwork: false,
+const createModelRegistry = (
+  ...[credentials, modelsPath]: [credentials: aiTypes.CredentialStore, modelsPath?: string]
+): Promise<modelRegistryTypes.ModelRegistry> =>
+  runTest(
+    Effect.gen(function* () {
+      const runtime = yield* awaited(
+        ModelRuntime.create({
+          allowModelNetwork: false,
+          credentials,
+          ...(modelsPath === undefined ? {} : { modelsPath }),
+          modelsStore: new InMemoryCodingAgentModelsStore(),
+        }),
+      );
+      return wrap(runtime);
     }),
   );
-}
 
-export async function createInMemoryModelRegistry(
-  credentials: CredentialStore,
-): Promise<ModelRegistry> {
-  return wrap(
-    await ModelRuntime.create({ credentials, modelsPath: null, allowModelNetwork: false }),
+const createInMemoryModelRegistry = (
+  credentials: aiTypes.CredentialStore,
+): Promise<modelRegistryTypes.ModelRegistry> =>
+  runTest(
+    Effect.gen(function* () {
+      const runtime = yield* awaited(
+        ModelRuntime.create({ allowModelNetwork: false, credentials, modelsPath: null }),
+      );
+      return wrap(runtime);
+    }),
   );
-}
 
-export function getModelRuntime(modelRegistry: ModelRegistry): ModelRuntime {
+function getModelRuntime(
+  modelRegistry: modelRegistryTypes.ModelRegistry,
+): modelRuntimeTypes.ModelRuntime {
   const runtime = runtimes.get(modelRegistry);
-  if (!runtime) throw new Error("ModelRegistry was not created by the test helper");
+  if (runtime === undefined) throw new Error("ModelRegistry was not created by the test helper");
   return runtime;
 }
+
+const createKeyedModelRuntime = Effect.fn("createKeyedModelRuntime")(function* (
+  cwd: string,
+  provider: string | undefined = "anthropic-api",
+) {
+  const authStorage = AuthStorage.create(joinPath(cwd, "auth.json"));
+  const modelRegistry = yield* awaited(createModelRegistry(authStorage, cwd));
+  if (provider !== undefined) {
+    yield* awaited(
+      authStorage.modify(provider, () =>
+        runTest(Effect.succeed({ key: "test-key", type: "api_key" as const })),
+      ),
+    );
+  }
+  return { authStorage, modelRegistry, modelRuntime: getModelRuntime(modelRegistry) };
+});
+
+const modelRuntimeTestUtils = {
+  createInMemoryModelRegistry,
+  createKeyedModelRuntime,
+  createModelRegistry,
+  getModelRuntime,
+};
+
+export default modelRuntimeTestUtils;

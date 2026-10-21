@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { uuidv7 } from "../src/utils/uuid.ts";
+import uuidModule from "../src/utils/uuid.ts";
+
+const { uuidv7 } = uuidModule;
 
 const UUID_V7_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u;
 const TIMESTAMP = 0x0123456789ab;
@@ -59,7 +61,9 @@ describe("uuidv7", () => {
   it.each([0, 2 ** 48 - 1])("accepts timestamp boundary %s", (timestamp) => {
     expect(parseTimestamp(uuidv7(timestamp))).toBe(timestamp);
   });
+});
 
+describe("uuidv7", () => {
   it.each([-1, 2 ** 48, 1.5, Number.NaN, Number.POSITIVE_INFINITY])(
     "rejects invalid timestamp %s",
     (timestamp) => {

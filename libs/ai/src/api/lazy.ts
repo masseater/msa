@@ -1,128 +1,173 @@
-import type {
-  Api,
-  AssistantMessage,
-  AssistantMessageEvent,
-  Model,
-  ProviderStreams,
-} from "../types.ts";
-import { toErrorMessage } from "../utils/errors.ts";
-import { AssistantMessageEventStream } from "../utils/event-stream.ts";
+import { Clock, Effect, Function, Stream } from "effect";
 
-function createSetupErrorMessage(
-  model: Model<Api>,
+import type typesModule from "../types.types.ts";
+import errors from "../utils/errors.ts";
+import eventStream from "../utils/event-stream.ts";
+import type eventStreamTypes from "../utils/event-stream.types.ts";
+import type lazyTypes from "./lazy.types.ts";
+
+const { toErrorMessage } = errors;
+const { AssistantMessageEventStream } = eventStream;
+
+const createSetupErrorMessage = (
+  model: typesModule.Model<typesModule.Api>,
   error: unknown,
   timestamp: number,
-): AssistantMessage {
-  return {
-    role: "assistant",
-    content: [],
-    api: model.api,
-    provider: model.provider,
-    model: model.id,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: "error",
-    errorMessage: toErrorMessage(error),
-    timestamp,
-  };
-}
+): typesModule.AssistantMessage => ({
+  api: model.api,
+  content: [],
+  errorMessage: toErrorMessage(error),
+  model: model.id,
+  provider: model.provider,
+  role: "assistant",
+  stopReason: "error",
+  timestamp,
+  usage: {
+    cacheRead: 0,
+    cacheWrite: 0,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+    input: 0,
+    output: 0,
+    totalTokens: 0,
+  },
+});
 
-function hasResult(
-  source: AsyncIterable<AssistantMessageEvent>,
-): source is AsyncIterable<AssistantMessageEvent> & { result(): Promise<AssistantMessage> } {
-  return typeof (source as { result?: unknown }).result === "function";
-}
+const hasResult = (
+  source: AsyncIterable<typesModule.AssistantMessageEvent>,
+): source is AsyncIterable<typesModule.AssistantMessageEvent> & {
+  result(): Promise<typesModule.AssistantMessage>;
+} => typeof (source as { result?: unknown }).result === "function";
 
-async function forwardStream(
-  target: AssistantMessageEventStream,
-  source: AsyncIterable<AssistantMessageEvent>,
-): Promise<void> {
-  for await (const event of source) {
-    target.push(event);
-  }
-  target.end(hasResult(source) ? await source.result() : undefined);
-}
+const forwardStream = (
+  target: eventStreamTypes.AssistantMessageEventStream,
+  source: AsyncIterable<typesModule.AssistantMessageEvent>,
+): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    yield* Stream.fromAsyncIterable(source, (error) => error).pipe(
+      Stream.orDie,
+      Stream.runForEach((event) => Effect.sync(() => target.push(event))),
+    );
+    target.end(hasResult(source) ? yield* Effect.promise(() => source.result()) : undefined);
+  });
 
-/**
- * Returns a stream synchronously while running async setup (auth resolution,
- * lazy module loading) behind it. Setup failures, thrown or rejected, terminate
- * the stream with an error event.
- *
- * @param {Model<Api>} model - model the stream is for
- * @param {() => Promise<AsyncIterable<AssistantMessageEvent>> | AsyncIterable<AssistantMessageEvent>} setup - resolves the inner stream
- * @returns {AssistantMessageEventStream} the outer stream
- */
-export function lazyStream(
-  model: Model<Api>,
-  setup: () => Promise<AsyncIterable<AssistantMessageEvent>> | AsyncIterable<AssistantMessageEvent>,
-): AssistantMessageEventStream {
-  const startedAt = Date.now();
-  const outer = new AssistantMessageEventStream();
+type StreamSetup = () =>
+  | Promise<AsyncIterable<typesModule.AssistantMessageEvent>>
+  | AsyncIterable<typesModule.AssistantMessageEvent>;
 
-  new Promise<AsyncIterable<AssistantMessageEvent>>((resolve) => {
-    resolve(setup());
-  })
-    .then((inner) => forwardStream(outer, inner))
-    .catch((error) => {
-      const message = createSetupErrorMessage(model, error, startedAt);
-      outer.push({ type: "error", reason: "error", error: message });
-      outer.end(message);
-    });
+const lazyStream: {
+  (
+    setup: StreamSetup,
+  ): (model: typesModule.Model<typesModule.Api>) => eventStreamTypes.AssistantMessageEventStream;
+  (
+    model: typesModule.Model<typesModule.Api>,
+    setup: StreamSetup,
+  ): eventStreamTypes.AssistantMessageEventStream;
+} = Function.dual(
+  2,
+  (
+    model: typesModule.Model<typesModule.Api>,
+    setup: StreamSetup,
+  ): eventStreamTypes.AssistantMessageEventStream => {
+    const outer = new AssistantMessageEventStream();
+    Effect.runFork(
+      Effect.gen(function* () {
+        const startedAt = yield* Clock.currentTimeMillis;
+        yield* Effect.promise(() => Promise.resolve(setup())).pipe(
+          Effect.flatMap((inner) => forwardStream(outer, inner)),
+          Effect.catchDefect((error) =>
+            Effect.sync(() => {
+              const message = createSetupErrorMessage(model, error, startedAt);
+              outer.push({ error: message, reason: "error", type: "error" });
+              outer.end(message);
+            }),
+          ),
+        );
+      }),
+    );
+    return outer;
+  },
+);
 
-  return outer;
-}
+const loadThen = <A>(
+  load: () => Promise<typesModule.ProviderStreams>,
+  use: (implementation: typesModule.ProviderStreams) => A | Promise<A>,
+): Promise<A> =>
+  Effect.runPromise(
+    Effect.promise(() => load()).pipe(
+      Effect.flatMap((implementation) =>
+        Effect.promise(() => Promise.resolve(use(implementation))),
+      ),
+    ),
+  );
 
-/**
- * Wraps a dynamically imported API implementation module as `ProviderStreams`.
- * The module loads on first stream call; the host's import cache deduplicates
- * loads. Load failures terminate the returned stream with an error event.
- */
-export interface LazyApiCapabilities {
-  fetchDeferred?: boolean;
-  cancelDeferred?: boolean;
-  countTokens?: boolean;
-}
-
-export function lazyApi(
-  load: () => Promise<ProviderStreams>,
-  capabilities?: LazyApiCapabilities,
-): ProviderStreams {
-  const api: ProviderStreams = {
-    stream: (model, context, options) =>
-      lazyStream(model, async () => (await load()).stream(model, context, options)),
-    streamSimple: (model, context, options) =>
-      lazyStream(model, async () => (await load()).streamSimple(model, context, options)),
-  };
-
-  if (capabilities?.fetchDeferred) {
+const withDeferredSupport = (
+  api: typesModule.ProviderStreams,
+  load: () => Promise<typesModule.ProviderStreams>,
+  capabilities: lazyTypes.LazyApiCapabilities | undefined,
+): typesModule.ProviderStreams => {
+  if (capabilities?.fetchDeferred === true) {
     api.fetchDeferred = (model, handle, options) =>
-      lazyStream(model, async () => {
-        const implementation = await load();
-        if (!implementation.fetchDeferred)
-          throw new Error("API does not support deferred responses");
-        return implementation.fetchDeferred(model, handle, options);
+      lazyStream(model, () =>
+        loadThen(load, (implementation) => {
+          if (implementation.fetchDeferred === undefined)
+            throw new Error("API does not support deferred responses");
+          return implementation.fetchDeferred(model, handle, options);
+        }),
+      );
+  }
+  if (capabilities?.cancelDeferred === true) {
+    api.cancelDeferred = (model, handle, options) =>
+      loadThen(load, (implementation) => {
+        if (implementation.cancelDeferred === undefined)
+          throw new Error("API cannot cancel deferred responses");
+        return implementation.cancelDeferred(model, handle, options);
       });
   }
-  if (capabilities?.cancelDeferred) {
-    api.cancelDeferred = async (model, handle, options) => {
-      const implementation = await load();
-      if (!implementation.cancelDeferred) throw new Error("API cannot cancel deferred responses");
-      await implementation.cancelDeferred(model, handle, options);
-    };
+  if (capabilities?.countTokens === true) {
+    api.countTokens = (model, context, options) =>
+      loadThen(load, (implementation) => {
+        if (implementation.countTokens === undefined) throw new Error("API cannot count tokens");
+        return implementation.countTokens(model, context, options);
+      });
   }
-  if (capabilities?.countTokens) {
-    api.countTokens = async (model, context, options) => {
-      const implementation = await load();
-      if (!implementation.countTokens) throw new Error("API cannot count tokens");
-      return implementation.countTokens(model, context, options);
-    };
-  }
-
   return api;
-}
+};
+
+const lazyApi: {
+  (
+    capabilities?: lazyTypes.LazyApiCapabilities,
+  ): (load: () => Promise<typesModule.ProviderStreams>) => typesModule.ProviderStreams;
+  (
+    load: () => Promise<typesModule.ProviderStreams>,
+    capabilities?: lazyTypes.LazyApiCapabilities,
+  ): typesModule.ProviderStreams;
+} = Function.dual(
+  (args) => typeof args[0] === "function",
+  (
+    load: () => Promise<typesModule.ProviderStreams>,
+    capabilities?: lazyTypes.LazyApiCapabilities,
+  ): typesModule.ProviderStreams =>
+    withDeferredSupport(
+      {
+        stream: (model, context, options) =>
+          lazyStream(model, () =>
+            loadThen(load, (implementation) => implementation.stream(model, context, options)),
+          ),
+        streamSimple: (model, context, options) =>
+          lazyStream(model, () =>
+            loadThen(load, (implementation) =>
+              implementation.streamSimple(model, context, options),
+            ),
+          ),
+      },
+      load,
+      capabilities,
+    ),
+);
+
+const lazy = {
+  lazyApi,
+  lazyStream,
+};
+
+export default lazy;

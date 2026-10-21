@@ -1,107 +1,139 @@
-// Replace a tool for some conversations, and decorate whichever tool wins: a bash that runs inside a Python
-// virtualenv, and a wrapper that times every bash call.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/30-tool-override.ts
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import { Console, Effect } from "effect";
 
-import type { ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import support from "../support.ts";
+import example30ToolOverrideKit from "./30-tool-override-kit.ts";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  type Conversation,
-  createRegistry,
-  defineExtension,
-  Harness,
-  MemoryStorage,
-  ToolResultEntry,
-  wrapTool,
-} from "../../src/index.ts";
-import { CodingTools, createBashTool } from "../../src/tools/index.ts";
+const { node, tools: toolsModule } = example30ToolOverrideKit;
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
+
+const { ToolResultEntry, defineExtension, wrapTool } = durable;
+const { CodingTools, createBashTool } = toolsModule;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+const { NodeExecutionEnv } = node;
+
+const {
+  BACKGROUND_CONTEXT,
+  awaited,
+  currentTimeMillis,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  removeDir,
+  writeText,
+} = support;
 
 const context = BACKGROUND_CONTEXT;
 
-// ─── Product code ───────────────────────────────────────────────────────────
-
-// A bash with the same name: where selected after CodingTools, it replaces CodingTools' bash in place.
 const Venv = defineExtension({
   name: "venv",
   tools: [createBashTool({ commandPrefix: "source .venv/bin/activate" })],
 });
 
-// Wraps the bash that won, whichever it is. Wrappers never capture a base tool, so reloading either bash keeps it.
 const timings: number[] = [];
 const Timing = defineExtension({
   name: "timing",
   wraps: [
     wrapTool(createBashTool(), (bash) => ({
       ...bash,
-      execute: async (args, api, callContext) => {
-        const start = Date.now();
-        try {
-          return await bash.execute(args, api, callContext);
-        } finally {
-          timings.push(Date.now() - start);
-        }
-      },
+      execute: (args, api, callContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const start = currentTimeMillis();
+            return yield* Effect.suspend(() => awaited(bash.execute(args, api, callContext))).pipe(
+              Effect.ensuring(
+                Effect.sync(() => {
+                  timings.push(currentTimeMillis() - start);
+                }),
+              ),
+            );
+          }),
+        ),
     })),
   ],
 });
 
-// ─── Host setup ─────────────────────────────────────────────────────────────
+const mainStep1 = Effect.gen(function* () {
+  const project = yield* makeTempDir("msa-durable-venv-");
+  yield* makeDirectory(joinPath(project, ".venv/bin"));
+  yield* writeText(
+    joinPath(project, ".venv/bin/activate"),
+    `export VIRTUAL_ENV="${project}/.venv"\n`,
+  );
 
-const project = await mkdtemp(join(tmpdir(), "msa-durable-venv-"));
-await mkdir(join(project, ".venv/bin"), { recursive: true });
-await writeFile(join(project, ".venv/bin/activate"), `export VIRTUAL_ENV="${project}/.venv"\n`);
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const probe = () =>
+    fauxAssistantMessage(fauxToolCall("bash", { command: "echo venv: $VIRTUAL_ENV" }), {
+      stopReason: "toolUse",
+    });
+  faux.setResponses([
+    probe(),
+    fauxAssistantMessage("Done."),
+    probe(),
+    fauxAssistantMessage("Done."),
+  ]);
 
-const faux = fauxProvider();
-const models = createModels();
-models.setProvider(faux.provider);
-const probe = () =>
-  fauxAssistantMessage(fauxToolCall("bash", { command: "echo venv: $VIRTUAL_ENV" }), {
-    stopReason: "toolUse",
+  const registry = createRegistry();
+  registry.install(CodingTools);
+  registry.install(Timing);
+  registry.install(Venv);
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      {
+        env: () => new NodeExecutionEnv({ cwd: project }),
+        models,
+        registry,
+        settings: { extensions: [CodingTools, Timing] },
+      },
+      context,
+    ),
+  );
+  const model = { modelId: "faux-1", provider: "faux" };
+  const plain = yield* awaited(harness.root(context, { agent: { model } }));
+  return { harness, model, plain, project };
+});
+
+const main = Effect.gen(function* () {
+  const { project, harness, model, plain } = yield* mainStep1;
+  const python = yield* awaited(
+    harness.createConversation(
+      { agent: { extensions: { add: [Venv] }, model }, ownership: { kind: "ownerless" } },
+      context,
+    ),
+  );
+
+  const probeBash = Effect.fn("probeBash")(function* (conversation: durableTypes.Conversation) {
+    yield* awaited(
+      (yield* awaited(
+        conversation.submit({ content: "Which venv?", type: "input" }, context),
+      )).wait(context),
+    );
+    const page = yield* awaited(conversation.entries({}, 10, undefined, context));
+    const result = page.items.find((entry) => ToolResultEntry.is(entry))
+      ?.model?.[0] as aiTypes.ToolResultMessage;
+    return result.content.map((part) => (part.type === "text" ? part.text.trim() : "")).join("");
   });
-faux.setResponses([probe(), fauxAssistantMessage("Done."), probe(), fauxAssistantMessage("Done.")]);
 
-const registry = createRegistry();
-registry.install(CodingTools);
-registry.install(Timing);
-registry.install(Venv);
-const harness = await Harness.open(
-  new MemoryStorage(),
-  {
-    models,
-    registry,
-    // Venv is installed but not selected by default.
-    settings: { extensions: [CodingTools, Timing] },
-    env: () => new NodeExecutionEnv({ cwd: project }),
-  },
-  context,
-);
-const model = { provider: "faux", modelId: "faux-1" };
-const plain = await harness.root(context, { agent: { model } });
-const python = await harness.createConversation(
-  { ownership: { kind: "ownerless" }, agent: { model, extensions: { add: [Venv] } } },
-  context,
-);
+  yield* Console.log("plain conversation:", yield* probeBash(plain));
+  yield* Console.log(
+    "python conversation:",
+    (yield* probeBash(python)).replace(project, "<project>"),
+  );
+  yield* Console.log("timed bash calls:", timings.length);
 
-async function probeBash(conversation: Conversation): Promise<string> {
-  await (
-    await conversation.submit({ type: "input", content: "Which venv?" }, context)
-  ).wait(context);
-  const page = await conversation.entries({}, 10, undefined, context);
-  const result = page.items.find((entry) => ToolResultEntry.is(entry))
-    ?.model?.[0] as ToolResultMessage;
-  return result.content.map((part) => (part.type === "text" ? part.text.trim() : "")).join("");
-}
+  yield* awaited(harness.close(context));
+  yield* removeDir(project);
+});
 
-console.log("plain conversation:", await probeBash(plain));
-console.log("python conversation:", (await probeBash(python)).replace(project, "<project>"));
-console.log("timed bash calls:", timings.length);
-
-await harness.close(context);
-await rm(project, { recursive: true, force: true });
+NodeRuntime.runMain(main);

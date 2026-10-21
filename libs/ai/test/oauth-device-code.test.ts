@@ -1,6 +1,11 @@
+import { Clock, DateTime, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { pollOAuthDeviceCodeFlow } from "../src/auth/oauth/device-code.ts";
+import deviceCode from "../src/auth/oauth/device-code.ts";
+import clock from "../src/utils/clock.ts";
+
+const { currentTimeMillis } = clock;
+const { pollOAuthDeviceCodeFlow } = deviceCode;
 
 const neverAbortedSignal = new AbortController().signal;
 
@@ -8,144 +13,184 @@ describe("OAuth device-code polling", () => {
   afterEach(() => {
     vi.useRealTimers();
   });
+  it("polls immediately and returns the completed value", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.setSystemTime("2026-03-09T00:00:00Z");
 
-  it("polls immediately and returns the completed value", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-09T00:00:00Z"));
+        const pollTimes: number[] = [];
+        const poll = vi.fn(() => {
+          pollTimes.push(currentTimeMillis());
+          return Promise.resolve(
+            pollTimes.length === 1
+              ? { status: "pending" as const }
+              : { status: "complete" as const, value: "token" },
+          );
+        });
 
-    const pollTimes: number[] = [];
-    const poll = vi.fn(() => {
-      pollTimes.push(Date.now());
-      return Promise.resolve(
-        pollTimes.length === 1
-          ? { status: "pending" as const }
-          : { status: "complete" as const, value: "token" },
-      );
-    });
+        const resultPromise = pollOAuthDeviceCodeFlow({
+          expiresInSeconds: 30,
+          intervalSeconds: 2,
+          poll,
+          signal: neverAbortedSignal,
+        });
 
-    const resultPromise = pollOAuthDeviceCodeFlow({
-      intervalSeconds: 2,
-      expiresInSeconds: 30,
-      poll,
-      signal: neverAbortedSignal,
-    });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+        expect(pollTimes).toEqual([
+          DateTime.toEpochMillis(DateTime.makeUnsafe("2026-03-09T00:00:00Z")),
+        ]);
 
-    await vi.advanceTimersByTimeAsync(0);
-    expect(pollTimes).toEqual([new Date("2026-03-09T00:00:00Z").getTime()]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1999));
+        expect(pollTimes).toEqual([
+          DateTime.toEpochMillis(DateTime.makeUnsafe("2026-03-09T00:00:00Z")),
+        ]);
 
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(pollTimes).toEqual([new Date("2026-03-09T00:00:00Z").getTime()]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        yield* Effect.promise(() => expect(resultPromise).resolves.toBe("token"));
+        expect(pollTimes).toEqual([
+          DateTime.toEpochMillis(DateTime.makeUnsafe("2026-03-09T00:00:00Z")),
+          DateTime.toEpochMillis(DateTime.makeUnsafe("2026-03-09T00:00:02Z")),
+        ]);
+      }),
+    ));
+});
 
-    await vi.advanceTimersByTimeAsync(1);
-    await expect(resultPromise).resolves.toBe("token");
-    expect(pollTimes).toEqual([
-      new Date("2026-03-09T00:00:00Z").getTime(),
-      new Date("2026-03-09T00:00:02Z").getTime(),
-    ]);
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
   });
+  it("can wait before the first poll", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.setSystemTime("2026-03-09T00:00:00Z");
 
-  it("can wait before the first poll", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-09T00:00:00Z"));
+        const pollTimes: number[] = [];
+        const resultPromise = pollOAuthDeviceCodeFlow({
+          expiresInSeconds: 30,
+          intervalSeconds: 2,
+          poll: () => {
+            pollTimes.push(currentTimeMillis());
+            return Promise.resolve({ status: "complete" as const, value: "token" });
+          },
+          signal: neverAbortedSignal,
+          waitBeforeFirstPoll: true,
+        });
 
-    const pollTimes: number[] = [];
-    const resultPromise = pollOAuthDeviceCodeFlow({
-      intervalSeconds: 2,
-      expiresInSeconds: 30,
-      waitBeforeFirstPoll: true,
-      poll: () => {
-        pollTimes.push(Date.now());
-        return Promise.resolve({ status: "complete" as const, value: "token" });
-      },
-      signal: neverAbortedSignal,
-    });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1999));
+        expect(pollTimes).toEqual([]);
 
-    await vi.advanceTimersByTimeAsync(1999);
-    expect(pollTimes).toEqual([]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        yield* Effect.promise(() => expect(resultPromise).resolves.toBe("token"));
+        expect(pollTimes).toEqual([
+          DateTime.toEpochMillis(DateTime.makeUnsafe("2026-03-09T00:00:02Z")),
+        ]);
+      }),
+    ));
+});
 
-    await vi.advanceTimersByTimeAsync(1);
-    await expect(resultPromise).resolves.toBe("token");
-    expect(pollTimes).toEqual([new Date("2026-03-09T00:00:02Z").getTime()]);
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
   });
+  it("increases the interval by 5 seconds after slow_down without a server interval", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.setSystemTime("2026-03-09T00:00:00Z");
+        const startTime = yield* Clock.currentTimeMillis;
 
-  it("increases the interval by 5 seconds after slow_down without a server interval", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-09T00:00:00Z"));
-    const startTime = Date.now();
+        const pollTimes: number[] = [];
+        const results = [
+          { status: "slow_down" as const },
+          { status: "complete" as const, value: "token" },
+        ];
+        const resultPromise = pollOAuthDeviceCodeFlow({
+          expiresInSeconds: 900,
+          intervalSeconds: 2,
+          poll: () => {
+            pollTimes.push(currentTimeMillis());
+            const result = results.shift();
+            if (result === undefined) return Promise.reject(new Error("Unexpected extra poll"));
+            return Promise.resolve(result);
+          },
+          signal: neverAbortedSignal,
+        });
 
-    const pollTimes: number[] = [];
-    const results = [
-      { status: "slow_down" as const },
-      { status: "complete" as const, value: "token" },
-    ];
-    const resultPromise = pollOAuthDeviceCodeFlow({
-      intervalSeconds: 2,
-      expiresInSeconds: 900,
-      poll: () => {
-        pollTimes.push(Date.now());
-        const result = results.shift();
-        if (!result) return Promise.reject(new Error("Unexpected extra poll"));
-        return Promise.resolve(result);
-      },
-      signal: neverAbortedSignal,
-    });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+        expect(pollTimes).toEqual([startTime]);
 
-    await vi.advanceTimersByTimeAsync(0);
-    expect(pollTimes).toEqual([startTime]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(6999));
+        expect(pollTimes).toEqual([startTime]);
 
-    await vi.advanceTimersByTimeAsync(6999);
-    expect(pollTimes).toEqual([startTime]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        yield* Effect.promise(() => expect(resultPromise).resolves.toBe("token"));
+        expect(pollTimes).toEqual([startTime, startTime + 7000]);
+      }),
+    ));
+});
 
-    await vi.advanceTimersByTimeAsync(1);
-    await expect(resultPromise).resolves.toBe("token");
-    expect(pollTimes).toEqual([startTime, startTime + 7000]);
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
   });
+  it("honors a server-provided slow_down interval", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        vi.setSystemTime("2026-03-09T00:00:00Z");
+        const startTime = yield* Clock.currentTimeMillis;
 
-  it("honors a server-provided slow_down interval", async () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date("2026-03-09T00:00:00Z"));
-    const startTime = Date.now();
+        const pollTimes: number[] = [];
+        const results = [
+          { intervalSeconds: 30, status: "slow_down" as const },
+          { status: "complete" as const, value: "token" },
+        ];
+        const resultPromise = pollOAuthDeviceCodeFlow({
+          expiresInSeconds: 900,
+          intervalSeconds: 2,
+          poll: () => {
+            pollTimes.push(currentTimeMillis());
+            const result = results.shift();
+            if (result === undefined) return Promise.reject(new Error("Unexpected extra poll"));
+            return Promise.resolve(result);
+          },
+          signal: neverAbortedSignal,
+        });
 
-    const pollTimes: number[] = [];
-    const results = [
-      { status: "slow_down" as const, intervalSeconds: 30 },
-      { status: "complete" as const, value: "token" },
-    ];
-    const resultPromise = pollOAuthDeviceCodeFlow({
-      intervalSeconds: 2,
-      expiresInSeconds: 900,
-      poll: () => {
-        pollTimes.push(Date.now());
-        const result = results.shift();
-        if (!result) return Promise.reject(new Error("Unexpected extra poll"));
-        return Promise.resolve(result);
-      },
-      signal: neverAbortedSignal,
-    });
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(0));
+        expect(pollTimes).toEqual([startTime]);
 
-    await vi.advanceTimersByTimeAsync(0);
-    expect(pollTimes).toEqual([startTime]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(29999));
+        expect(pollTimes).toEqual([startTime]);
 
-    await vi.advanceTimersByTimeAsync(29999);
-    expect(pollTimes).toEqual([startTime]);
+        yield* Effect.promise(() => vi.advanceTimersByTimeAsync(1));
+        yield* Effect.promise(() => expect(resultPromise).resolves.toBe("token"));
+        expect(pollTimes).toEqual([startTime, startTime + 30000]);
+      }),
+    ));
+});
 
-    await vi.advanceTimersByTimeAsync(1);
-    await expect(resultPromise).resolves.toBe("token");
-    expect(pollTimes).toEqual([startTime, startTime + 30000]);
+describe("OAuth device-code polling", () => {
+  afterEach(() => {
+    vi.useRealTimers();
   });
-
-  it("cancels an in-flight wait", async () => {
-    vi.useFakeTimers();
+  it("cancels an in-flight wait", () => {
     const controller = new AbortController();
+    return Effect.runPromise(
+      Effect.gen(function* () {
+        vi.useFakeTimers();
+        const resultPromise = pollOAuthDeviceCodeFlow({
+          expiresInSeconds: 30,
+          intervalSeconds: 5,
+          poll: () => Promise.resolve({ status: "pending" }),
+          signal: controller.signal,
+        });
 
-    const resultPromise = pollOAuthDeviceCodeFlow({
-      intervalSeconds: 5,
-      expiresInSeconds: 30,
-      poll: () => Promise.resolve({ status: "pending" }),
-      signal: controller.signal,
-    });
-
-    controller.abort();
-    await expect(resultPromise).rejects.toThrow("Login cancelled");
+        controller.abort();
+        yield* Effect.promise(() => expect(resultPromise).rejects.toThrow("Login cancelled"));
+      }),
+    );
   });
 });

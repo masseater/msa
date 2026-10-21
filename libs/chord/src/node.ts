@@ -1,16 +1,18 @@
-/** Node-only parts of Chord: child host processes, their manager, and the facet module loader. */
-export { nodeLoader } from "./loader.ts";
-export {
-  type ControlMessage,
-  childControl,
-  createHostManager,
-  type Driver,
-  type Exit,
-  type ForkDriverOptions,
-  forkDriver,
-  type HostManager,
-  type HostManagerOptions,
-  type Instance,
-  type Liveness,
-  processLock,
-} from "./manager.ts";
+import loader from "./loader.ts";
+import managerChild from "./manager-child.ts";
+import managerFork from "./manager-fork.ts";
+import managerLock from "./manager-lock.ts";
+import manager from "./manager.ts";
+import zlibCompression from "./zlib-compression.ts";
+
+const node = {
+  childControl: managerChild.childControl,
+  createHostManager: manager.createHostManager,
+  forkDriver: managerFork.forkDriver,
+  nodeLoader: loader.nodeLoader,
+  parentChannel: managerChild.parentChannel,
+  processLock: managerLock.processLock,
+  zlibCompression,
+};
+
+export default node;

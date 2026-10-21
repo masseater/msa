@@ -1,5 +1,9 @@
-import { stripTerminalSequences } from "../src/utils.ts";
+import utils from "../src/utils.ts";
 
-export function visibleLines(lines: string[]): string[] {
+const { stripTerminalSequences } = utils;
+
+function visibleLines(lines: string[]): string[] {
   return lines.map((line) => stripTerminalSequences(line).trimEnd());
 }
+
+export default visibleLines;

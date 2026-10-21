@@ -1,95 +1,87 @@
-/**
- * Multi-line editor component for extensions.
- * Supports Ctrl+G for external editor.
- */
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect } from "effect";
 
-import {
-  Container,
-  Editor,
-  type EditorOptions,
-  type Focusable,
-  getKeybindings,
-  Spacer,
-  Text,
-  type TUI,
-} from "@msa/tui";
+import type keybindingsTypes from "../../../core/keybindings.types.ts";
+import externalEditor from "../external-editor.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type extensionEditorTypes from "./extension-editor.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-import type { KeybindingsManager } from "../../../core/keybindings.ts";
-import { editInExternalEditor } from "../external-editor.ts";
-import { getEditorTheme, theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+const { getEditorTheme, theme } = themeModule;
+const { keyHint } = keybindingHints;
+const { editWhileSuspended } = externalEditor;
 
-export interface ExtensionEditorOptions extends EditorOptions {
-  description?: string;
-}
+const { Editor, Spacer, Text, getKeybindings } = tuiModule;
 
-export class ExtensionEditorComponent extends Container implements Focusable {
-  private editor: Editor;
+export default class ExtensionEditorComponent
+  extends tuiModule.Container
+  implements tuiTypes.Focusable
+{
+  private editor: tuiTypes.Editor;
   private onSubmitCallback: (value: string) => void;
   private onCancelCallback: () => void;
-  private tui: TUI;
-  private keybindings: KeybindingsManager;
+  private tui: tuiTypes.TUI;
+  private keybindings: keybindingsTypes.KeybindingsManager;
   private externalEditorCommand: string;
 
-  private _focused = false;
+  private focusedState = false;
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.editor.focused = value;
   }
 
   constructor(
-    tui: TUI,
-    keybindings: KeybindingsManager,
+    tui: tuiTypes.TUI,
+    keybindings: keybindingsTypes.KeybindingsManager,
     title: string,
     prefill: string | undefined,
     onSubmit: (value: string) => void,
     onCancel: () => void,
-    options?: ExtensionEditorOptions,
-    externalEditorCommand?: string,
+    options: extensionEditorTypes.ExtensionEditorOptions | undefined,
+    externalEditorCommand: string,
   ) {
     super();
 
     this.tui = tui;
     this.keybindings = keybindings;
-    this.externalEditorCommand =
-      externalEditorCommand ||
-      process.env["VISUAL"] ||
-      process.env["EDITOR"] ||
-      (process.platform === "win32" ? "notepad" : "nano");
+    this.externalEditorCommand = externalEditorCommand;
     this.onSubmitCallback = onSubmit;
     this.onCancelCallback = onCancel;
     const { description, ...editorOptions } = options ?? {};
 
-    // Add top border
     this.addChild(new DynamicBorder());
     this.addChild(new Spacer(1));
 
-    // Add title and optional description
     this.addChild(new Text(theme.fg("accent", title), 1, 0));
-    if (description) {
+    if (description !== undefined && description !== "") {
       this.addChild(new Spacer(1));
       this.addChild(new Text(theme.fg("text", description), 1, 0));
     }
     this.addChild(new Spacer(1));
 
-    // Create editor
     this.editor = new Editor(tui, getEditorTheme(), editorOptions);
-    if (prefill) {
-      this.editor.setText(prefill);
+    ExtensionEditorComponent.addEditorWithHints(this, prefill);
+  }
+
+  private static addEditorWithHints(
+    self: ExtensionEditorComponent,
+    prefill: string | undefined,
+  ): void {
+    if (prefill !== undefined && prefill !== "") {
+      self.editor.setText(prefill);
     }
-    // Wire up Enter to submit (Shift+Enter for newlines, like the main editor)
-    this.editor.onSubmit = (text: string) => {
-      this.onSubmitCallback(text);
+    self.editor.onSubmit = (text: string) => {
+      self.onSubmitCallback(text);
     };
-    this.addChild(this.editor);
+    self.addChild(self.editor);
 
-    this.addChild(new Spacer(1));
+    self.addChild(new Spacer(1));
 
-    // Add hint
     const hint =
       keyHint("tui.select.confirm", "submit") +
       "  " +
@@ -97,46 +89,33 @@ export class ExtensionEditorComponent extends Container implements Focusable {
       "  " +
       keyHint("tui.select.cancel", "cancel") +
       `  ${keyHint("app.editor.external", "external editor")}`;
-    this.addChild(new Text(hint, 1, 0));
+    self.addChild(new Text(hint, 1, 0));
 
-    this.addChild(new Spacer(1));
+    self.addChild(new Spacer(1));
 
-    // Add bottom border
-    this.addChild(new DynamicBorder());
+    self.addChild(new DynamicBorder());
   }
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    // Escape or Ctrl+C to cancel
     if (kb.matches(keyData, "tui.select.cancel")) {
       this.onCancelCallback();
       return;
     }
 
-    // External editor (app keybinding)
     if (this.keybindings.matches(keyData, "app.editor.external")) {
-      void this.handleOpenExternalEditor();
+      void Effect.runFork(this.handleOpenExternalEditor());
       return;
     }
 
-    // Forward to editor
     this.editor.handleInput(keyData);
   }
 
-  private async handleOpenExternalEditor(): Promise<void> {
-    const content = this.editor.getText();
-    this.tui.stop();
-    try {
-      const result = await editInExternalEditor({
-        command: this.externalEditorCommand,
-        content,
-      });
-      if (result.status === "complete") {
-        this.editor.setText(result.content);
-      }
-    } finally {
-      this.tui.start();
-      this.tui.requestRender(true);
-    }
+  private handleOpenExternalEditor(): Effect.Effect<void> {
+    return editWhileSuspended(
+      this.tui,
+      { command: this.externalEditorCommand, content: this.editor.getText() },
+      (content) => this.editor.setText(content),
+    );
   }
 }

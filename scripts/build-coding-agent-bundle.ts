@@ -4,9 +4,13 @@ import { Console, Data, Effect } from "effect";
 import { build } from "esbuild";
 import type { Metafile } from "esbuild";
 
-import { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions } from "./coding-agent-bundle-options.ts";
-import { Host, runScript } from "./host.ts";
-import type { HostShape } from "./host.ts";
+import codingAgentBundleOptions from "./coding-agent-bundle-options.ts";
+import hostModule from "./host.ts";
+import type hostTypes from "./host.types.ts";
+
+const { Host, runScript } = hostModule;
+const { ALLOWED_EXTERNAL_PACKAGES, commonBuildOptions, unbannedBuildOptions } =
+  codingAgentBundleOptions;
 
 const CLI_MODE = 0o755;
 
@@ -28,7 +32,7 @@ interface Layout {
   readonly repoRoot: string;
 }
 
-const layoutOf = (host: HostShape): Layout => {
+const layoutOf = (host: hostTypes.HostShape): Layout => {
   const repoRoot = host.resolve(import.meta.dirname, "..");
   const codingAgentDistDir = host.join(repoRoot, "apps", "coding-agent", "dist");
   return {
@@ -41,8 +45,8 @@ const layoutOf = (host: HostShape): Layout => {
 
 const runBuild = (options: Parameters<typeof build>[0]) =>
   Effect.tryPromise({
-    try: () => build(options),
     catch: (cause) => new BundleError({ message: `esbuild failed: ${String(cause)}` }),
+    try: () => build(options),
   });
 
 const metafileOf = (result: { readonly metafile?: Metafile | undefined }) =>
@@ -73,7 +77,7 @@ const validateExternalImports = (metafiles: ReadonlyArray<Metafile>) => {
 };
 
 const findContainingOutput = (options: {
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly inputSuffix: string;
   readonly metafile: Metafile;
   readonly repoRoot: string;
@@ -100,7 +104,7 @@ const outputBytes = (metafiles: ReadonlyArray<Metafile>): number =>
     0,
   );
 
-const requireInputs = (host: HostShape, layout: Layout) =>
+const requireInputs = (host: hostTypes.HostShape, layout: Layout) =>
   Effect.forEach(
     [
       host.join(layout.codingAgentDistDir, "cli.js"),
@@ -119,7 +123,7 @@ const requireInputs = (host: HostShape, layout: Layout) =>
       }),
   );
 
-const lazyEntryPointsOf = (host: HostShape, layout: Layout): Record<string, string> => ({
+const lazyEntryPointsOf = (host: hostTypes.HostShape, layout: Layout): Record<string, string> => ({
   "image-resize-worker": host.join(layout.codingAgentDistDir, "utils", "image-resize-worker.js"),
   "openai-chatgpt": host.join(layout.aiDistDir, "auth", "oauth", "openai-chatgpt.js"),
   "openai-codex": host.join(layout.aiDistDir, "auth", "oauth", "openai-codex.js"),
@@ -127,7 +131,7 @@ const lazyEntryPointsOf = (host: HostShape, layout: Layout): Record<string, stri
 });
 
 const requireOAuthEntries = (
-  host: HostShape,
+  host: hostTypes.HostShape,
   layout: Layout,
   lazyEntryPoints: Record<string, string>,
 ) =>
@@ -145,7 +149,7 @@ const requireOAuthEntries = (
     }
   });
 
-const checkCodemodeWorker = (host: HostShape, layout: Layout, metafile: Metafile) =>
+const checkCodemodeWorker = (host: hostTypes.HostShape, layout: Layout, metafile: Metafile) =>
   Effect.forEach(Object.entries(metafile.outputs), ([outputPath, output]) =>
     Effect.gen(function* () {
       const invalid = output.imports.filter(
@@ -163,16 +167,17 @@ const checkCodemodeWorker = (host: HostShape, layout: Layout, metafile: Metafile
     }),
   );
 
-const sameDirectory = (host: HostShape, left: string, right: string, message: string) =>
+const sameDirectory = (host: hostTypes.HostShape, left: string, right: string, message: string) =>
   host.dirname(left) === host.dirname(right)
     ? Effect.void
     : Effect.fail(new BundleError({ message }));
 
-const buildMain = (host: HostShape, layout: Layout) =>
+const buildMain = (host: hostTypes.HostShape, layout: Layout) =>
   Effect.gen(function* () {
     return yield* metafileOf(
       yield* runBuild({
         ...commonBuildOptions(layout.repoRoot),
+        chunkNames: "chunks/[name]-[hash]",
         entryNames: "[name]",
         entryPoints: {
           "cli-runtime": host.join(layout.codingAgentDistDir, "cli.js"),
@@ -180,13 +185,12 @@ const buildMain = (host: HostShape, layout: Layout) =>
           "rpc-entry": host.join(layout.codingAgentDistDir, "rpc-entry.js"),
         },
         outdir: layout.bundleDir,
-        chunkNames: "chunks/[name]-[hash]",
         splitting: true,
       }),
     );
   });
 
-const buildLazy = (host: HostShape, layout: Layout, lazyDir: string) =>
+const buildLazy = (host: hostTypes.HostShape, layout: Layout, lazyDir: string) =>
   Effect.gen(function* () {
     const lazyEntryPoints = lazyEntryPointsOf(host, layout);
     yield* requireOAuthEntries(host, layout, lazyEntryPoints);
@@ -201,12 +205,11 @@ const buildLazy = (host: HostShape, layout: Layout, lazyDir: string) =>
     );
   });
 
-const buildCodemodeWorker = (host: HostShape, layout: Layout, lazyDir: string) =>
+const buildCodemodeWorker = (host: hostTypes.HostShape, layout: Layout, lazyDir: string) =>
   Effect.gen(function* () {
     const metafile = yield* metafileOf(
       yield* runBuild({
-        ...commonBuildOptions(layout.repoRoot),
-        banner: undefined,
+        ...unbannedBuildOptions(layout.repoRoot),
         entryNames: "[name]",
         entryPoints: {
           "codemode-worker": host.join(
@@ -224,7 +227,7 @@ const buildCodemodeWorker = (host: HostShape, layout: Layout, lazyDir: string) =
     return metafile;
   });
 
-const finish = (host: HostShape, layout: Layout, metafiles: ReadonlyArray<Metafile>) =>
+const finish = (host: hostTypes.HostShape, layout: Layout, metafiles: ReadonlyArray<Metafile>) =>
   Effect.gen(function* () {
     yield* validateExternalImports(metafiles);
     const cliPath = host.join(layout.bundleDir, "cli.js");

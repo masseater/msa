@@ -1,86 +1,109 @@
-import type { FauxResponseStep } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
-// The inbox: what happens to submissions while a conversation is busy.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/20-inbox.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import type aiTypes from "@msa/ai/index.types";
+import modelsModule from "@msa/ai/models";
+import fauxModule from "@msa/ai/providers/faux";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import {
-  createRegistry,
-  Harness,
-  InboxDoc,
-  MemoryStorage,
-  type Submission,
-} from "../../src/index.ts";
+import type durableTypes from "../../src/index.types.ts";
+import durableKit from "../durable-kit.ts";
+import effectSupport from "../effect-support.ts";
+
+const { fauxAssistantMessage, fauxProvider } = fauxModule;
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { durable, harness: harnessModule, memory } = durableKit;
+
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+const { InboxDoc } = durable;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
-// The first answer waits until we let it go, so the conversation stays busy while we submit more.
-let release!: () => void;
-const held = new Promise<void>((resolve) => {
-  release = resolve;
-});
-const slow: FauxResponseStep = async () => {
-  await held;
-  return fauxAssistantMessage("Answer to the first question.");
-};
+const { promise: held, resolve: release } = Promise.withResolvers<void>();
+const slow: aiTypes.FauxResponseStep = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      yield* awaited(held);
+      return fauxAssistantMessage("Answer to the first question.");
+    }),
+  );
 const faux = fauxProvider();
 faux.setResponses([slow, fauxAssistantMessage("Answer to the follow-up and the steer.")]);
 const models = createModels();
 models.setProvider(faux.provider);
 
-// Settings apply to every conversation: place every queued follow-up at once instead of one per run.
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models, registry: createRegistry(), settings: { followUpMode: "all" } },
-  context,
-);
-const root = await harness.root(context, {
-  agent: { model: { provider: "faux", modelId: "faux-1" } },
+const mainStep1 = Effect.gen(function* () {
+  const runSync = Effect.runSyncWith(yield* Effect.context<never>());
+
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      { models, registry: createRegistry(), settings: { followUpMode: "all" } },
+      context,
+    ),
+  );
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { model: { modelId: "faux-1", provider: "faux" } },
+    }),
+  );
+
+  const first = yield* awaited(root.submit({ content: "First question", type: "input" }, context));
+
+  const followUp = yield* awaited(root.submit({ content: "A follow-up", type: "input" }, context));
+  const steer = yield* awaited(
+    root.submit({ content: "A steer", type: "input", whenBusy: "steer" }, context),
+  );
+  const note = yield* awaited(
+    root.submit({ entry: { data: "noted while busy", kind: "app.note" }, type: "write" }, context),
+  );
+  const withdrawn = yield* awaited(root.submit({ content: "Never mind", type: "input" }, context));
+  yield* awaited(
+    root
+      .submit({ content: "Now or never", type: "input", whenBusy: "reject" }, context)
+      .catch((error: Error) => {
+        runSync(Console.log("rejected:", error.message));
+      }),
+  );
+  yield* Console.log("withdraw:", yield* awaited(withdrawn.abort(context)));
+
+  const inbox = yield* awaited(harness.snapshot(InboxDoc, root.id, context));
+  yield* Console.log(
+    "inbox:",
+    inbox?.items.map((item) => `${item.id} ${item.mode}`),
+  );
+
+  release();
+  return { first, followUp, harness, note, root, steer, withdrawn };
 });
 
-const first = await root.submit({ type: "input", content: "First question" }, context);
-
-// While busy, input queues as a follow-up (the default) or a steer, and writes queue too.
-const followUp = await root.submit({ type: "input", content: "A follow-up" }, context);
-const steer = await root.submit({ type: "input", content: "A steer", whenBusy: "steer" }, context);
-const note = await root.submit(
-  { type: "write", entry: { kind: "app.note", data: "noted while busy" } },
-  context,
-);
-const withdrawn = await root.submit({ type: "input", content: "Never mind" }, context);
-// whenBusy: "reject" refuses instead of queueing.
-await root
-  .submit({ type: "input", content: "Now or never", whenBusy: "reject" }, context)
-  .catch((error: Error) => {
-    console.log("rejected:", error.message);
+const main = Effect.gen(function* () {
+  const { harness, root, first, followUp, steer, note, withdrawn } = yield* mainStep1;
+  const status = Effect.fn("status")(function* (name: string, submission: durableTypes.Submission) {
+    const record = yield* awaited(submission.wait(context));
+    yield* Console.log(
+      `${name}:`,
+      record.status,
+      record.status === "unanswered" ? record.reason : "",
+    );
   });
-// A queued submission can be withdrawn until a boundary places it.
-console.log("withdraw:", await withdrawn.abort(context));
+  yield* status("first", first);
+  yield* status("follow-up", followUp);
+  yield* status("steer", steer);
+  yield* status("note", note);
+  yield* status("withdrawn", withdrawn);
 
-const inbox = await harness.snapshot(InboxDoc, root.id, context);
-console.log(
-  "inbox:",
-  inbox?.items.map((item) => `${item.id} ${item.mode}`),
-);
+  const page = yield* awaited(root.entries({}, 20, undefined, context));
+  yield* Console.log(
+    "transcript:",
+    [...page.items].reverse().map((entry) => entry.kind),
+  );
+  yield* awaited(harness.close(context));
+});
 
-// The first answer ends the run at a final boundary: the write is placed first, then the steer and the
-// follow-up, which start the next run together.
-release();
-const status = async (name: string, submission: Submission) => {
-  const record = await submission.wait(context);
-  console.log(`${name}:`, record.status, record.status === "unanswered" ? record.reason : "");
-};
-await status("first", first);
-await status("follow-up", followUp);
-await status("steer", steer);
-await status("note", note);
-await status("withdrawn", withdrawn);
-
-const page = await root.entries({}, 20, undefined, context);
-console.log(
-  "transcript:",
-  [...page.items].reverse().map((entry) => entry.kind),
-);
-await harness.close(context);
+NodeRuntime.runMain(main);

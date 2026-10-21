@@ -1,59 +1,86 @@
-import type { AgentTool } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { createHarness, type Harness } from "./harness.ts";
+import harnessModule from "./harness.ts";
+import type harnessTypes from "./harness.types.ts";
 
-const normalizeToolResultImages = vi.hoisted(() => vi.fn(async (content: unknown[]) => content));
-vi.mock("../../src/utils/tool-result-images.ts", () => ({ normalizeToolResultImages }));
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
+const { createHarness } = harnessModule;
+
+const normalizeToolResultImages = vi.hoisted(() =>
+  vi.fn((content: unknown[]) => Promise.resolve(content)),
+);
+vi.mock("../../src/utils/tool-result-images.ts", () => ({
+  default: { normalizeToolResultImages },
+}));
 
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
-const screenshotTool: AgentTool = {
-  name: "screenshot",
-  label: "Screenshot",
+const screenshotTool: agentTypes.AgentTool = {
   description: "Return a screenshot",
+  execute: () =>
+    Promise.resolve({
+      content: [
+        { text: "captured", type: "text" },
+        { data: TINY_PNG_BASE64, mimeType: "image/png", type: "image" },
+      ],
+      details: {},
+    }),
+  label: "Screenshot",
+  name: "screenshot",
   parameters: Type.Object({}),
-  execute: async () => ({
-    content: [
-      { type: "text", text: "captured" },
-      { type: "image", data: TINY_PNG_BASE64, mimeType: "image/png" },
-    ],
-    details: {},
-  }),
+};
+
+const harnesses: harnessTypes.Harness[] = [];
+
+const passesImageSettingsAndTheCurrent = Effect.gen(function* () {
+  const resizeOptions = {
+    jpegQuality: 70,
+    maxBytes: 500000,
+    maxHeight: 1000,
+    maxWidth: 1200,
+  };
+  const harness = yield* Effect.promise(() =>
+    createHarness({
+      settings: { images: { autoResize: false } },
+      tools: [screenshotTool],
+    }),
+  );
+  harnesses.push(harness);
+  if (harness.session.model === undefined) throw new Error("Expected a model");
+  harness.session.model.inputLimits = { images: { resize: resizeOptions } };
+  harness.setResponses([
+    fauxAssistantMessage([fauxToolCall("screenshot", {})], { stopReason: "toolUse" }),
+    fauxAssistantMessage("done"),
+  ]);
+
+  yield* Effect.promise(() => harness.session.run.prompting.prompt("take a screenshot"));
+
+  expect(normalizeToolResultImages).toHaveBeenCalledWith(expect.any(Array), {
+    autoResizeImages: false,
+    resizeOptions,
+  });
+});
+
+const passesImageSettingsAndTheCurrentModel = () =>
+  Effect.runPromise(passesImageSettingsAndTheCurrent);
+
+const afterEachHook = () => {
+  normalizeToolResultImages.mockClear();
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
 };
 
 describe("AgentSession tool result images", () => {
-  const harnesses: Harness[] = [];
-
-  afterEach(() => {
-    normalizeToolResultImages.mockClear();
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
-
-  it("passes image settings and the current model profile to tool result normalization", async () => {
-    const resizeOptions = { maxWidth: 1200, maxHeight: 1000, maxBytes: 500000, jpegQuality: 70 };
-    const harness = await createHarness({
-      tools: [screenshotTool],
-      settings: { images: { autoResize: false } },
-    });
-    harnesses.push(harness);
-    if (!harness.session.model) throw new Error("Expected a model");
-    harness.session.model.inputLimits = { images: { resize: resizeOptions } };
-    harness.setResponses([
-      fauxAssistantMessage([fauxToolCall("screenshot", {})], { stopReason: "toolUse" }),
-      fauxAssistantMessage("done"),
-    ]);
-
-    await harness.session.prompt("take a screenshot");
-
-    expect(normalizeToolResultImages).toHaveBeenCalledWith(expect.any(Array), {
-      autoResizeImages: false,
-      resizeOptions,
-    });
-  });
+  afterEach(afterEachHook);
+  it(
+    "passes image settings and the current model profile to tool result normalization",
+    passesImageSettingsAndTheCurrentModel,
+  );
 });

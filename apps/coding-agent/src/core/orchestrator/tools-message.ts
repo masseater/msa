@@ -1,23 +1,26 @@
 import { Type } from "typebox";
 
-import type { ToolDefinition } from "../extensions/types.ts";
-import type { Orchestrator } from "./orchestrator.ts";
-import { prompts } from "./prompts.ts";
-import { taskIdObject, taskIdSchema, tool } from "./tool-support.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import promptsModule from "./prompts.ts";
+import toolSupport from "./tool-support.ts";
+
+const { taskIdObject, taskIdSchema, tool } = toolSupport;
+const { prompts } = promptsModule;
 
 const messageSchema = Type.Object({
-  taskId: taskIdSchema,
   message: Type.String({
     description:
       "Steers a running thread, waits in the prompt of one that has not started, or reruns a finished one.",
   }),
+  taskId: taskIdSchema,
 });
 
 const noteSchema = Type.Object({
-  content: Type.String({ description: "The instruction shared with the tasks." }),
   audience: Type.Union([Type.Literal("all"), Type.Literal("round"), Type.Literal("tasks")], {
     description: "Who receives the note.",
   }),
+  content: Type.String({ description: "The instruction shared with the tasks." }),
   round: Type.Optional(Type.String({ description: "Round id, when audience is round." })),
   taskIds: Type.Optional(
     Type.Array(taskIdSchema, { description: "Tasks, when audience is tasks." }),
@@ -25,41 +28,43 @@ const noteSchema = Type.Object({
 });
 
 const searchSchema = Type.Object({
+  limit: Type.Optional(Type.Integer({ maximum: 50, minimum: 1 })),
   query: Type.String({ description: "Words to find in reports across every task and thread." }),
-  limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 50 })),
 });
 
 const maxConcurrentSchema = Type.Object({
-  value: Type.Integer({ minimum: 1, description: "Threads that may run at the same time." }),
+  value: Type.Integer({ description: "Threads that may run at the same time.", minimum: 1 }),
 });
 
-export function messageToolsA(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function messageToolsA(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     send_message: tool({
-      name: "send_message",
-      label: "send message",
       description:
         "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a finished task reruns in a new thread.",
-      promptSnippet: "Steer, queue a message for, or rerun a task",
+      label: "send message",
+      name: "send_message",
       parameters: messageSchema,
+      promptSnippet: "Steer, queue a message for, or rerun a task",
       run: ({ taskId, message }) =>
         orchestrator.sendMessage(taskId, message).then((task) => prompts.formatTaskList([task])),
     }),
     send_note: tool({
-      name: "send_note",
-      label: "send note",
       description:
         "Share one note with every task, one round, or a set of tasks. Running threads are steered at once; waiting tasks receive it when they start, and threads that stop between turns receive it before continuing.",
-      promptSnippet: "Share a note with tasks, rounds, or all work",
+      label: "send note",
+      name: "send_note",
+      parameters: noteSchema,
       promptGuidelines: [
         "Use send_note for instructions that apply to several tasks, such as a file another task will delete.",
       ],
-      parameters: noteSchema,
+      promptSnippet: "Share a note with tasks, rounds, or all work",
       run: ({ content, audience, round, taskIds }) =>
         orchestrator
           .sendNote({
-            content,
             audience,
+            content,
             ...(round === undefined ? {} : { round }),
             ...(taskIds === undefined ? {} : { taskIds }),
           })
@@ -80,15 +85,17 @@ export function messageToolsA(orchestrator: Orchestrator): Record<string, ToolDe
   };
 }
 
-export function messageToolsC(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function messageToolsC(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
     search_reports: tool({
-      name: "search_reports",
-      label: "search reports",
-      description: "Full-text search across the reports of every task and thread.",
-      promptSnippet: "Search reports across tasks and threads",
       annotations: { readOnlyHint: true },
+      description: "Full-text search across the reports of every task and thread.",
+      label: "search reports",
+      name: "search_reports",
       parameters: searchSchema,
+      promptSnippet: "Search reports across tasks and threads",
       run: ({ query, limit }) =>
         orchestrator
           .searchReports(query, limit)
@@ -106,38 +113,48 @@ export function messageToolsC(orchestrator: Orchestrator): Record<string, ToolDe
   };
 }
 
-export function messageToolsB(orchestrator: Orchestrator): Record<string, ToolDefinition> {
+function messageToolsB(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
-    stop_task: tool({
-      name: "stop_task",
-      label: "stop task",
-      description:
-        "Stop a task, aborting its running thread. Dependents keep waiting until it is rerun, or you remove the dependency.",
-      promptSnippet: "Stop a task",
-      parameters: taskIdObject,
-      run: ({ taskId }) =>
-        orchestrator.stop(taskId).then((task) => `${task.id} is ${task.status}.`),
-    }),
     rerun_task: tool({
-      name: "rerun_task",
-      label: "rerun task",
       description:
         "Run a finished, failed, or stopped task again in a new thread. Dependencies and notes apply as usual.",
-      promptSnippet: "Rerun a task in a new thread",
+      label: "rerun task",
+      name: "rerun_task",
       parameters: taskIdObject,
+      promptSnippet: "Rerun a task in a new thread",
       run: ({ taskId }) =>
         orchestrator.rerun(taskId).then((task) => `${task.id} is ${task.status}.`),
     }),
     set_max_concurrent_threads: tool({
-      name: "set_max_concurrent_threads",
-      label: "set max concurrent threads",
       description: "Change how many threads may run at the same time, from now on.",
-      promptSnippet: "Change the concurrency limit",
+      label: "set max concurrent threads",
+      name: "set_max_concurrent_threads",
       parameters: maxConcurrentSchema,
+      promptSnippet: "Change the concurrency limit",
       run: ({ value }) =>
         orchestrator
           .setMaxConcurrentThreads(value)
           .then((max) => `Max concurrent threads: ${max}.`),
     }),
+    stop_task: tool({
+      description:
+        "Stop a task, aborting its running thread. Dependents keep waiting until it is rerun, or you remove the dependency.",
+      label: "stop task",
+      name: "stop_task",
+      parameters: taskIdObject,
+      promptSnippet: "Stop a task",
+      run: ({ taskId }) =>
+        orchestrator.stop(taskId).then((task) => `${task.id} is ${task.status}.`),
+    }),
   };
 }
+
+const toolsMessage = {
+  messageToolsA,
+  messageToolsB,
+  messageToolsC,
+};
+
+export default toolsMessage;

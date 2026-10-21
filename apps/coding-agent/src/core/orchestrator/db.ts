@@ -1,6 +1,7 @@
-import { mkdirSync } from "node:fs";
-import { dirname } from "node:path";
-import { DatabaseSync } from "node:sqlite";
+import sqliteFile from "../platform/node/sqlite-file.ts";
+import type DatabaseSync from "../platform/node/sqlite.ts";
+
+const { openSqliteFile } = sqliteFile;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -194,8 +195,7 @@ function rejectNewerSchema(database: DatabaseSync, path: string): void {
 }
 
 function openDatabase(path: string): DatabaseSync {
-  mkdirSync(dirname(path), { recursive: true });
-  const database = new DatabaseSync(path, { timeout: 5_000 });
+  const database = openSqliteFile(path, { timeout: 5_000 });
   rejectNewerSchema(database, path);
   database.exec("PRAGMA journal_mode = WAL");
   database.exec("PRAGMA synchronous = NORMAL");
@@ -230,4 +230,10 @@ function definedEntries(value: object): [string, unknown][] {
   return Object.entries(value).filter(([, field]) => field !== undefined);
 }
 
-export const db = { openDatabase, transaction, definedEntries };
+const db = { definedEntries, openDatabase, transaction };
+
+const dbModule = {
+  db,
+};
+
+export default dbModule;

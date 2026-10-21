@@ -1,181 +1,195 @@
-import { Effect, Result, Stream } from "effect";
+import { Effect } from "effect";
 
-import type { HostShape } from "./host.ts";
-import { bashCommandsOf, contextTokens, decodeContextEntry } from "./session-context-entry.ts";
-import type { ContextEntry, ContextMessage } from "./session-context-entry.ts";
-import type { ContextWindows } from "./session-context-windows.ts";
-import { jsonlFilesRecursive, parseMillis, sessionFileMillis } from "./sessions.ts";
+import type hostTypes from "./host.types.ts";
+import sessionContextEntry from "./session-context-entry.ts";
+import type sessionContextEntryTypes from "./session-context-entry.types.ts";
+import type sessionContextScanTypes from "./session-context-scan.types.ts";
+import type sessionContextWindowsTypes from "./session-context-windows.types.ts";
+import sessionsModule from "./sessions.ts";
 
-interface SessionRecord {
-  sessionFile: string;
-  cwd: string | null;
-  startMs: number;
-  endMs: number;
-  providerModel: string;
-  assistantMessages: number;
-  userMessages: number;
-  compactions: number;
-  seenCompaction: boolean;
-  maxPromptTokens: number | null;
-  preFirstCompactionTokens: number | null;
-  maxContextUsagePercent: number | null;
-  preFirstCompactionUsagePercent: number | null;
-  contextWindow: number | null;
-  bashCommands: Array<string>;
-  over80: boolean;
-  over90: boolean;
-  over100: boolean;
-}
+const { bashCommandsOf, contextTokens, decodeContextEntry, providerModelOf } = sessionContextEntry;
+const {
+  emptySessionFileCounts,
+  forEachDecodedLine,
+  forEachSessionFile,
+  messageOf,
+  timestampMillis,
+} = sessionsModule;
 
-interface ScanMeta {
-  sessionsDir: string;
-  sessionFilesScanned: number;
-  sessionFilesIncluded: number;
-  sessionFilesSkippedOlderThanSince: number;
-  malformedLines: number;
-}
-
-const emptySession = (sessionFile: string, fileMillis: number | null): SessionRecord => ({
-  sessionFile,
-  cwd: null,
-  startMs: fileMillis ?? 0,
-  endMs: fileMillis ?? 0,
-  providerModel: "[unknown]/[unknown]",
+const emptySession = (
+  sessionFile: string,
+  fileMillis: number | null,
+): sessionContextScanTypes.SessionRecord => ({
   assistantMessages: 0,
-  userMessages: 0,
-  compactions: 0,
-  seenCompaction: false,
-  maxPromptTokens: null,
-  preFirstCompactionTokens: null,
-  maxContextUsagePercent: null,
-  preFirstCompactionUsagePercent: null,
-  contextWindow: null,
   bashCommands: [],
+  compactions: 0,
+  contextWindow: null,
+  cwd: null,
+  endMs: fileMillis ?? 0,
+  maxContextUsagePercent: null,
+  maxPromptTokens: null,
+  over100: false,
   over80: false,
   over90: false,
-  over100: false,
+  preFirstCompactionTokens: null,
+  preFirstCompactionUsagePercent: null,
+  providerModel: "[unknown]/[unknown]",
+  seenCompaction: false,
+  sessionFile,
+  startMs: fileMillis ?? 0,
+  userMessages: 0,
 });
 
-const recordTokens = (session: SessionRecord, tokens: number): void => {
+const recordTokens = (session: sessionContextScanTypes.SessionRecord, tokens: number): void => {
   session.maxPromptTokens = Math.max(session.maxPromptTokens ?? 0, tokens);
   if (!session.seenCompaction) session.preFirstCompactionTokens = tokens;
 };
 
-const applyMessage = (
-  session: SessionRecord,
-  message: ContextMessage,
+const applyAssistantMessage = (
+  session: sessionContextScanTypes.SessionRecord,
+  message: sessionContextEntryTypes.ContextMessage,
   windows: Map<string, number>,
 ): void => {
-  if (message.role === "assistant") {
-    for (const command of bashCommandsOf(message.content)) session.bashCommands.push(command);
-  }
-  if (message.role === "user") session.userMessages += 1;
-  if (message.role !== "assistant") return;
+  session.bashCommands.push(...bashCommandsOf(message));
   session.assistantMessages += 1;
-  session.providerModel = `${message.provider ?? "[unknown]"}/${message.model ?? "[unknown]"}`;
+  session.providerModel = providerModelOf(message);
   const contextWindow = windows.get(session.providerModel);
   if (contextWindow !== undefined) session.contextWindow = contextWindow;
   const tokens = contextTokens(message.usage);
   if (tokens !== null) recordTokens(session, tokens);
 };
 
-const applyEntry = (
-  session: SessionRecord,
-  entry: ContextEntry,
+const applyMessage = (
+  session: sessionContextScanTypes.SessionRecord,
+  message: sessionContextEntryTypes.ContextMessage,
   windows: Map<string, number>,
 ): void => {
-  if (entry.type === "session" && entry.cwd !== undefined) session.cwd = entry.cwd;
-  const entryMs = entry.timestamp === undefined ? null : parseMillis(entry.timestamp);
-  if (entryMs !== null) {
-    if (session.startMs === 0 || entryMs < session.startMs) session.startMs = entryMs;
-    if (session.endMs === 0 || entryMs > session.endMs) session.endMs = entryMs;
-  }
-  if (entry.type === "compaction") {
-    session.compactions += 1;
-    if (entry.tokensBefore !== undefined) recordTokens(session, entry.tokensBefore);
-    session.seenCompaction = true;
-    return;
-  }
-  if (entry.type !== "message" || entry.message === undefined) return;
-  applyMessage(session, entry.message, windows);
+  if (message.role === "user") session.userMessages += 1;
+  if (message.role === "assistant") applyAssistantMessage(session, message, windows);
 };
 
-const finalizeSession = (session: SessionRecord): void => {
-  if (session.maxPromptTokens !== null && session.contextWindow !== null) {
-    const percent = (session.maxPromptTokens / session.contextWindow) * 100;
+const recordCwd = (
+  session: sessionContextScanTypes.SessionRecord,
+  entry: sessionContextEntryTypes.ContextEntry,
+): void => {
+  if (entry.type === "session" && entry.cwd !== undefined) session.cwd = entry.cwd;
+};
+
+const earlierMillis = (current: number, candidate: number): number =>
+  current === 0 || candidate < current ? candidate : current;
+
+const laterMillis = (current: number, candidate: number): number =>
+  current === 0 || candidate > current ? candidate : current;
+
+const extendTimeRange = (
+  session: sessionContextScanTypes.SessionRecord,
+  entryMs: number | null,
+): void => {
+  if (entryMs === null) return;
+  session.startMs = earlierMillis(session.startMs, entryMs);
+  session.endMs = laterMillis(session.endMs, entryMs);
+};
+
+const applyCompaction = (
+  session: sessionContextScanTypes.SessionRecord,
+  entry: sessionContextEntryTypes.ContextEntry,
+): void => {
+  session.compactions += 1;
+  if (entry.tokensBefore !== undefined) recordTokens(session, entry.tokensBefore);
+  session.seenCompaction = true;
+};
+
+const applyEntry = (
+  session: sessionContextScanTypes.SessionRecord,
+  entry: sessionContextEntryTypes.ContextEntry,
+  windows: Map<string, number>,
+): void => {
+  recordCwd(session, entry);
+  extendTimeRange(session, timestampMillis(entry.timestamp));
+  const message = messageOf(entry);
+  if (entry.type === "compaction") applyCompaction(session, entry);
+  else if (message !== undefined) applyMessage(session, message, windows);
+};
+
+const usagePercent = (tokens: number | null, contextWindow: number | null): number | null =>
+  tokens === null || contextWindow === null ? null : (tokens / contextWindow) * 100;
+
+const finalizeSession = (session: sessionContextScanTypes.SessionRecord): void => {
+  const percent = usagePercent(session.maxPromptTokens, session.contextWindow);
+  if (percent !== null) {
     session.maxContextUsagePercent = percent;
     session.over80 = percent >= 80;
     session.over90 = percent >= 90;
     session.over100 = percent >= 100;
   }
-  if (session.preFirstCompactionTokens !== null && session.contextWindow !== null) {
-    session.preFirstCompactionUsagePercent =
-      (session.preFirstCompactionTokens / session.contextWindow) * 100;
-  }
+  session.preFirstCompactionUsagePercent = usagePercent(
+    session.preFirstCompactionTokens,
+    session.contextWindow,
+  );
 };
 
 const scanFile = (options: {
-  readonly host: HostShape;
-  readonly meta: ScanMeta;
+  readonly host: hostTypes.HostShape;
+  readonly meta: sessionContextScanTypes.ScanMeta;
   readonly sessionFile: string;
+  readonly sessionMillis: number | null;
   readonly windows: Map<string, number>;
 }) =>
   Effect.gen(function* () {
-    const { host, meta, sessionFile, windows } = options;
-    const session = emptySession(sessionFile, sessionFileMillis({ file: sessionFile, host }));
-    yield* host.lines(sessionFile).pipe(
-      Stream.filter((line) => line.trim() !== ""),
-      Stream.runForEach((line) =>
-        Effect.gen(function* () {
-          const parsed = yield* Effect.result(decodeContextEntry(line));
-          if (Result.isSuccess(parsed)) {
-            applyEntry(session, parsed.success, windows);
-            return;
-          }
-          meta.malformedLines += 1;
-        }),
-      ),
-    );
+    const { meta, windows } = options;
+    const session = emptySession(options.sessionFile, options.sessionMillis);
+    yield* forEachDecodedLine({
+      decode: decodeContextEntry,
+      file: options.sessionFile,
+      host: options.host,
+      onEntry: (entry) => applyEntry(session, entry, windows),
+      onMalformed: () => {
+        meta.malformedLines += 1;
+      },
+    });
     finalizeSession(session);
     return session;
   });
 
+const matchesCwd = (options: {
+  readonly cwdFilter: string | undefined;
+  readonly host: hostTypes.HostShape;
+  readonly session: sessionContextScanTypes.SessionRecord;
+}): boolean =>
+  options.cwdFilter === undefined ||
+  options.host.resolve(options.session.cwd ?? "") === options.cwdFilter;
+
 const scanSessions = (options: {
   readonly cwdFilter: string | undefined;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
   readonly sessionsDir: string;
   readonly sinceMs: number | null;
-  readonly windows: ContextWindows;
+  readonly windows: sessionContextWindowsTypes.ContextWindows;
 }) =>
   Effect.gen(function* () {
-    const { cwdFilter, host, sessionsDir, sinceMs } = options;
+    const { cwdFilter, host } = options;
     const windows = options.windows.windows;
-    const sessions: Array<SessionRecord> = [];
-    const meta: ScanMeta = {
-      sessionsDir,
-      sessionFilesScanned: 0,
-      sessionFilesIncluded: 0,
-      sessionFilesSkippedOlderThanSince: 0,
+    const sessions: Array<sessionContextScanTypes.SessionRecord> = [];
+    const meta: sessionContextScanTypes.ScanMeta = {
+      sessionsDir: options.sessionsDir,
+      ...emptySessionFileCounts(),
       malformedLines: 0,
     };
-    const files = yield* jsonlFilesRecursive({ directory: sessionsDir, host });
-    yield* Effect.forEach(files, (sessionFile) =>
-      Effect.gen(function* () {
-        meta.sessionFilesScanned += 1;
-        const fileMillis = sessionFileMillis({ file: sessionFile, host });
-        if (sinceMs !== null && fileMillis !== null && fileMillis < sinceMs) {
-          meta.sessionFilesSkippedOlderThanSince += 1;
-          return;
-        }
-        meta.sessionFilesIncluded += 1;
-        const session = yield* scanFile({ host, meta, sessionFile, windows });
-        if (cwdFilter === undefined || host.resolve(session.cwd ?? "") === cwdFilter) {
-          sessions.push(session);
-        }
-      }),
-    );
+    yield* forEachSessionFile({
+      counts: meta,
+      host,
+      scan: ({ sessionFile, sessionMillis }) =>
+        Effect.map(scanFile({ host, meta, sessionFile, sessionMillis, windows }), (session) => {
+          if (matchesCwd({ cwdFilter, host, session })) sessions.push(session);
+        }),
+      sessionsDir: options.sessionsDir,
+      sinceMs: options.sinceMs,
+    });
     return { meta, sessions };
   });
 
-export type { ScanMeta, SessionRecord };
-export { scanSessions };
+const sessionContextScan = {
+  scanSessions,
+};
+
+export default sessionContextScan;

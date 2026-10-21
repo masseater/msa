@@ -1,34 +1,41 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { type BuiltinProvider, complete, getModels, getProviders } from "../src/compat.ts";
-import { getEnvApiKey } from "../src/env-api-keys.ts";
-import type { Api, Model, ProviderStreamOptions } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import envApiKeys from "../src/env-api-keys.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { complete, getModels, getProviders } = compatModule;
+const { getEnvApiKey } = envApiKeys;
 
 interface AnthropicLongCacheRetentionE2ECase {
   name: string;
-  provider: BuiltinProvider;
-  model: Model<"anthropic-messages">;
+  provider: compatTypes.BuiltinProvider;
+  model: typesModule.Model<"anthropic-messages">;
   apiKey: string | undefined;
 }
 
-function getAnthropicMessagesModels(provider: BuiltinProvider): Model<"anthropic-messages">[] {
-  const models = getModels(provider) as Model<Api>[];
+function getAnthropicMessagesModels(
+  provider: compatTypes.BuiltinProvider,
+): typesModule.Model<"anthropic-messages">[] {
+  const models = getModels(provider) as typesModule.Model<typesModule.Api>[];
   return models.filter(
     (model) => model.api === "anthropic-messages",
-  ) as Model<"anthropic-messages">[];
+  ) as typesModule.Model<"anthropic-messages">[];
 }
 
 const anthropicMessagesCases: AnthropicLongCacheRetentionE2ECase[] = getProviders().flatMap(
   (provider) =>
     getAnthropicMessagesModels(provider).map((model) => ({
+      apiKey: getEnvApiKey(provider),
+      model,
       name: `${provider}/${model.id}`,
       provider,
-      model,
-      apiKey: getEnvApiKey(provider),
     })),
 );
 
-function getProbePriority(model: Model<"anthropic-messages">): number {
+function getProbePriority(model: typesModule.Model<"anthropic-messages">): number {
   const modelId = model.id.toLowerCase();
   const cost = model.cost.input + model.cost.output;
   let priority = cost;
@@ -47,7 +54,7 @@ function getProbePriority(model: Model<"anthropic-messages">): number {
 function selectOneCasePerProvider(
   cases: AnthropicLongCacheRetentionE2ECase[],
 ): AnthropicLongCacheRetentionE2ECase[] {
-  const byProvider = new Map<BuiltinProvider, AnthropicLongCacheRetentionE2ECase[]>();
+  const byProvider = new Map<compatTypes.BuiltinProvider, AnthropicLongCacheRetentionE2ECase[]>();
   for (const testCase of cases) {
     const providerCases = byProvider.get(testCase.provider) ?? [];
     providerCases.push(testCase);
@@ -67,7 +74,9 @@ function selectOneCasePerProvider(
 
 const probeCases = selectOneCasePerProvider(anthropicMessagesCases);
 
-function withLongCacheRetention(model: Model<"anthropic-messages">): Model<"anthropic-messages"> {
+function withLongCacheRetention(
+  model: typesModule.Model<"anthropic-messages">,
+): typesModule.Model<"anthropic-messages"> {
   return {
     ...model,
     compat: {
@@ -77,34 +86,37 @@ function withLongCacheRetention(model: Model<"anthropic-messages">): Model<"anth
   };
 }
 
-async function expectLongCacheRetentionAccepted(
-  model: Model<"anthropic-messages">,
+const expectLongCacheRetentionAccepted = Effect.fn("expectLongCacheRetentionAccepted")(function* (
+  model: typesModule.Model<"anthropic-messages">,
   apiKey: string | undefined,
-): Promise<void> {
-  const options: ProviderStreamOptions = {
+) {
+  const options: typesModule.ProviderStreamOptions = {
     apiKey,
     cacheRetention: "long",
     maxTokens: 128,
     thinkingEnabled: false,
   };
-  const response = await complete(
-    model,
-    {
-      systemPrompt: "You are a concise assistant.",
-      messages: [
-        {
-          role: "user",
-          content: "Reply with exactly: long cache retention accepted",
-          timestamp: Date.now(),
-        },
-      ],
-    },
-    options,
+  const currentTime = yield* Clock.currentTimeMillis;
+  const response = yield* Effect.promise(() =>
+    complete(
+      model,
+      {
+        messages: [
+          {
+            content: "Reply with exactly: long cache retention accepted",
+            role: "user",
+            timestamp: currentTime,
+          },
+        ],
+        systemPrompt: "You are a concise assistant.",
+      },
+      options,
+    ),
   );
 
   expect(response.errorMessage, response.errorMessage).toBeFalsy();
   expect(response.stopReason, response.errorMessage).not.toBe("error");
-}
+});
 
 describe("Anthropic Messages long cache retention E2E", () => {
   it("covers every generated anthropic-messages model", () => {
@@ -120,12 +132,10 @@ describe("Anthropic Messages long cache retention E2E", () => {
     for (const testCase of probeCases) {
       const model = withLongCacheRetention(testCase.model);
 
-      it.skipIf(!testCase.apiKey)(
+      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
         `${testCase.name} accepts long cache retention`,
         { retry: 2 },
-        async () => {
-          await expectLongCacheRetentionAccepted(model, testCase.apiKey);
-        },
+        () => Effect.runPromise(expectLongCacheRetentionAccepted(model, testCase.apiKey)),
       );
     }
   });

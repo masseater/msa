@@ -1,57 +1,37 @@
+import { Effect, Function } from "effect";
+
+import type dualTypes from "../dual.ts";
+import type imageTypes from "./image.types.ts";
+
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
-/** Bytes every check except the APNG chunk walk needs: BMP reads up to offset 29. */
 const HEADER_BYTES = 32;
 const BLOCK_BYTES = 64 * 1024;
 
-/** Positional reads of a file of `size` bytes. */
-export type ByteSource = {
-  readonly size: number;
-  read(offset: number, length: number): Promise<Uint8Array>;
-};
-
-/**
- * `detectSupportedImageMimeType` of a whole file, reading only its header and, for PNG, the chunk headers up to the
- * first `acTL` or `IDAT`.
- * @param {ByteSource} source - The file.
- * @returns {Promise<string | undefined>} The image MIME type, if supported.
- */
-export async function detectSupportedImageMimeTypeOf(
-  source: ByteSource,
-): Promise<string | undefined> {
-  const header = await source.read(0, HEADER_BYTES);
+const detectSupportedImageMimeTypeOf = Effect.fnUntraced(function* (source: imageTypes.ByteSource) {
+  const header = yield* source.read(0, HEADER_BYTES);
   if (!startsWith(header, PNG_SIGNATURE)) return detectSupportedImageMimeType(header);
-  return isPng(header) && !(await isAnimatedPngOf(source)) ? "image/png" : undefined;
-}
+  return isPng(header) && !(yield* isAnimatedPngOf(source)) ? "image/png" : undefined;
+});
 
-/**
- * `isAnimatedPng` over a file read in blocks.
- * @param {ByteSource} source - The file.
- * @returns {Promise<boolean>} Whether it is an animated PNG.
- */
-function isAnimatedPngOf(source: ByteSource): Promise<boolean> {
+const isAnimatedPngOf = Effect.fnUntraced(function* (source: imageTypes.ByteSource) {
   let block: Uint8Array = new Uint8Array(0);
   let blockStart = 0;
-  const bytesAt = async (offset: number, length: number): Promise<Uint8Array> => {
-    if (offset < blockStart || offset + length > blockStart + block.length) {
+  for (let offset = PNG_SIGNATURE.length; offset + 8 <= source.size;) {
+    if (offset < blockStart || offset + 8 > blockStart + block.length) {
       blockStart = offset;
-      block = await source.read(offset, BLOCK_BYTES);
+      block = yield* source.read(offset, BLOCK_BYTES);
     }
-    return block.subarray(offset - blockStart, offset - blockStart + length);
-  };
-  const chunkFrom = async (offset: number): Promise<boolean> => {
-    if (offset + 8 > source.size) return false;
-    const chunkHeader = await bytesAt(offset, 8);
-    const chunkLength = readUint32BE(chunkHeader, 0);
+    const chunkHeader = block.subarray(offset - blockStart, offset - blockStart + 8);
     if (startsWithAscii(chunkHeader, 4, "acTL")) return true;
     if (startsWithAscii(chunkHeader, 4, "IDAT")) return false;
-    const nextOffset = offset + 8 + chunkLength + 4;
+    const nextOffset = offset + 8 + readUint32BE(chunkHeader, 0) + 4;
     if (nextOffset <= offset || nextOffset > source.size) return false;
-    return chunkFrom(nextOffset);
-  };
-  return chunkFrom(PNG_SIGNATURE.length);
-}
+    offset = nextOffset;
+  }
+  return false;
+});
 
-export function detectSupportedImageMimeType(buffer: Uint8Array): string | undefined {
+function detectSupportedImageMimeType(buffer: Uint8Array): string | undefined {
   if (startsWith(buffer, [0xff, 0xd8, 0xff])) return buffer[3] === 0xf7 ? undefined : "image/jpeg";
   if (startsWith(buffer, PNG_SIGNATURE))
     return isPng(buffer) && !isAnimatedPng(buffer) ? "image/png" : undefined;
@@ -84,71 +64,62 @@ function isAnimatedPng(buffer: Uint8Array): boolean {
   return false;
 }
 
-/**
- * The width and height an image of `mimeType` declares in its header, without decoding it: PNG's IHDR, GIF's screen,
- * WebP's VP8, VP8L, or VP8X chunk, JPEG's first SOF segment. `undefined` when the header cannot be read.
- * @param {Uint8Array} bytes - The image bytes.
- * @param {string} mimeType - The image's MIME type.
- * @returns {{ readonly width: number; readonly height: number } | undefined} The size.
- */
-export function imageDimensions(
-  bytes: Uint8Array,
-  mimeType: string,
-): { readonly width: number; readonly height: number } | undefined {
-  switch (mimeType) {
-    case "image/png":
-      return bytes.length < 24
-        ? undefined
-        : { width: readUint32BE(bytes, 16), height: readUint32BE(bytes, 20) };
-    case "image/gif":
-      return bytes.length < 10
-        ? undefined
-        : { width: readUint16LE(bytes, 6), height: readUint16LE(bytes, 8) };
-    case "image/webp":
-      if (bytes.length < 30) return undefined;
-      if (startsWithAscii(bytes, 12, "VP8 "))
-        return {
-          width: readUint16LE(bytes, 26) & 0x3fff,
-          height: readUint16LE(bytes, 28) & 0x3fff,
-        };
-      if (startsWithAscii(bytes, 12, "VP8L")) {
-        const bits = readUint32LE(bytes, 21);
-        return { width: (bits & 0x3fff) + 1, height: ((bits >>> 14) & 0x3fff) + 1 };
-      }
-      if (startsWithAscii(bytes, 12, "VP8X")) {
-        const uint24 = (offset: number): number =>
-          readUint16LE(bytes, offset) + ((bytes[offset + 2] ?? 0) << 16);
-        return { width: uint24(24) + 1, height: uint24(27) + 1 };
-      }
-      return undefined;
-    case "image/jpeg":
-      for (let offset = 2; offset + 9 <= bytes.length;) {
-        if (bytes[offset] !== 0xff) return undefined;
-        const marker = bytes[offset + 1]!;
-        if (marker === 0xff) {
-          offset++;
-          continue;
-        }
-        // SOF0 to SOF15, except DHT (C4), JPG (C8), and DAC (CC), which share the range.
-        if (
-          marker >= 0xc0 &&
-          marker <= 0xcf &&
-          marker !== 0xc4 &&
-          marker !== 0xc8 &&
-          marker !== 0xcc
-        ) {
-          return {
-            width: readUint16BE(bytes, offset + 7),
-            height: readUint16BE(bytes, offset + 5),
-          };
-        }
-        offset += 2 + readUint16BE(bytes, offset + 2);
-      }
-      return undefined;
-    default:
-      return undefined;
+type ImageSize = { readonly width: number; readonly height: number };
+
+const pngSize = (bytes: Uint8Array): ImageSize | undefined =>
+  bytes.length < 24
+    ? undefined
+    : { height: readUint32BE(bytes, 20), width: readUint32BE(bytes, 16) };
+
+const gifSize = (bytes: Uint8Array): ImageSize | undefined =>
+  bytes.length < 10 ? undefined : { height: readUint16LE(bytes, 8), width: readUint16LE(bytes, 6) };
+
+function webpSize(bytes: Uint8Array): ImageSize | undefined {
+  if (bytes.length < 30) return undefined;
+  if (startsWithAscii(bytes, 12, "VP8 "))
+    return { height: readUint16LE(bytes, 28) & 0x3fff, width: readUint16LE(bytes, 26) & 0x3fff };
+  if (startsWithAscii(bytes, 12, "VP8L")) {
+    const bits = readUint32LE(bytes, 21);
+    return { height: ((bits >>> 14) & 0x3fff) + 1, width: (bits & 0x3fff) + 1 };
   }
+  if (startsWithAscii(bytes, 12, "VP8X")) {
+    const uint24 = (offset: number): number =>
+      readUint16LE(bytes, offset) + ((bytes[offset + 2] ?? 0) << 16);
+    return { height: uint24(27) + 1, width: uint24(24) + 1 };
+  }
+  return undefined;
 }
+
+const isFrameMarker = (marker: number): boolean =>
+  marker >= 0xc0 && marker <= 0xcf && marker !== 0xc4 && marker !== 0xc8 && marker !== 0xcc;
+
+function jpegSize(bytes: Uint8Array): ImageSize | undefined {
+  for (let offset = 2; offset + 9 <= bytes.length;) {
+    if (bytes[offset] !== 0xff) return undefined;
+    const marker = bytes[offset + 1]!;
+    if (marker === 0xff) {
+      offset++;
+      continue;
+    }
+    if (isFrameMarker(marker))
+      return { height: readUint16BE(bytes, offset + 5), width: readUint16BE(bytes, offset + 7) };
+    offset += 2 + readUint16BE(bytes, offset + 2);
+  }
+  return undefined;
+}
+
+const SIZE_READERS: ReadonlyMap<string, (bytes: Uint8Array) => ImageSize | undefined> = new Map([
+  ["image/png", pngSize],
+  ["image/gif", gifSize],
+  ["image/webp", webpSize],
+  ["image/jpeg", jpegSize],
+]);
+
+const imageDimensions: dualTypes.Dual2<Uint8Array, string, ImageSize | undefined> = Function.dual(
+  2,
+  (bytes: Uint8Array, mimeType: string): ImageSize | undefined =>
+    SIZE_READERS.get(mimeType)?.(bytes),
+);
 
 function isBmp(buffer: Uint8Array): boolean {
   if (buffer.length < 26) return false;
@@ -212,3 +183,40 @@ function startsWithAscii(buffer: Uint8Array, offset: number, text: string): bool
   }
   return true;
 }
+
+const DEFAULT_IMAGE_LIMITS: imageTypes.ImageLimits = {
+  maxBytes: 4.5 * 1024 * 1024,
+  maxHeight: 2000,
+  maxWidth: 2000,
+};
+
+const INLINE_IMAGE_TYPES: ReadonlySet<string> = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+function toBase64(bytes: Uint8Array): string {
+  const parts: string[] = [];
+  for (let i = 0; i < bytes.length; i += 8192) {
+    parts.push(String.fromCharCode.apply(null, bytes.subarray(i, i + 8192) as unknown as number[]));
+  }
+  return btoa(parts.join(""));
+}
+
+function base64Length(byteLength: number): number {
+  return Math.ceil(byteLength / 3) * 4;
+}
+
+const image = {
+  DEFAULT_IMAGE_LIMITS,
+  INLINE_IMAGE_TYPES,
+  base64Length,
+  detectSupportedImageMimeType,
+  detectSupportedImageMimeTypeOf,
+  imageDimensions,
+  toBase64,
+};
+
+export default image;

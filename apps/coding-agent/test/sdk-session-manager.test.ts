@@ -1,136 +1,207 @@
-import { existsSync, mkdirSync, realpathSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import testing from "@msa/testing";
+import { Effect, FileSystem } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
+import sdk from "../src/core/sdk.ts";
+import SessionManager from "../src/core/session-manager.ts";
+
+const { createAgentSession } = sdk;
+const { getModel } = compat;
+
+const {
+  awaited,
+  currentTimeMillis,
+  joinPath,
+  makeDirectory,
+  pathExists,
+  randomSuffixSync,
+  removePath,
+  runTest,
+  provideNode,
+  runTestSync,
+} = testing;
+
+const fileSystem = runTestSync(provideNode(FileSystem.FileSystem.useSync((service) => service)));
+
+const realPath = (file: string): Effect.Effect<string> => Effect.orDie(fileSystem.realPath(file));
+
+let tempDir: string;
+
+let cwd: string;
+
+let agentDir: string;
+
+const usesAgentdirForTheDefaultPersistedSession = () =>
+  runTest(
+    Effect.gen(function* () {
+      const model = getModel("anthropic-api", "claude-sonnet-4-5");
+      expect(model).toBeTruthy();
+
+      const { session } = yield* awaited(
+        createAgentSession({
+          agentDir,
+          cwd,
+          model: model!,
+        }),
+      );
+
+      const safePath = `--${cwd.replace(/^[/\\]/u, "").replace(/[/\\:]/gu, "-")}--`;
+      const expectedSessionDir = joinPath(agentDir, "sessions", safePath);
+      const sessionDir = session.sessionManager.getSessionDir();
+      const sessionFile = session.sessionManager.getSessionFile();
+
+      expect(sessionDir).toBe(expectedSessionDir);
+      expect(sessionFile?.startsWith(`${expectedSessionDir}/`)).toBe(true);
+
+      session.dispose();
+    }),
+  );
+
+const keepsAnExplicitSessionmanagerOverride = () =>
+  runTest(
+    Effect.gen(function* () {
+      const model = getModel("anthropic-api", "claude-sonnet-4-5");
+      expect(model).toBeTruthy();
+
+      const sessionManager = SessionManager.inMemory(cwd);
+      const { session } = yield* awaited(
+        createAgentSession({
+          agentDir,
+          cwd,
+          model: model!,
+          sessionManager,
+        }),
+      );
+
+      expect(session.sessionManager).toBe(sessionManager);
+      expect(session.sessionManager.isPersisted()).toBe(false);
+
+      session.dispose();
+    }),
+  );
+
+const derivesCwdFromAnExplicitSessionmanagerWhen = () =>
+  runTest(
+    Effect.gen(function* () {
+      const model = getModel("anthropic-api", "claude-sonnet-4-5");
+      expect(model).toBeTruthy();
+
+      const sessionCwd = joinPath(tempDir, "session-project");
+      yield* makeDirectory(sessionCwd);
+      const sessionManager = SessionManager.inMemory(sessionCwd);
+      const { session } = yield* awaited(
+        createAgentSession({
+          agentDir,
+          model: model!,
+          sessionManager,
+        }),
+      );
+
+      expect(session.sessionManager).toBe(sessionManager);
+      expect(session.tools.prompt.systemPrompt).toContain(`<cwd>\n${sessionCwd}\n</cwd>`);
+
+      const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
+      expect(bashTool).toBeTruthy();
+      const result = yield* awaited(bashTool!.execute("test", { command: "pwd" }));
+      const output = result.content
+        .filter((item): item is { type: "text"; text: string } => item.type === "text")
+        .map((item) => item.text)
+        .join("");
+
+      expect(yield* realPath(output.trim())).toBe(yield* realPath(sessionCwd));
+
+      session.dispose();
+    }),
+  );
+
+const exposesCurrentSessionStateToTheBuilt = () =>
+  runTest(
+    Effect.gen(function* () {
+      const model = getModel("anthropic-api", "claude-sonnet-4-5");
+      expect(model).toBeTruthy();
+
+      const { session } = yield* awaited(
+        createAgentSession({
+          agentDir,
+          cwd,
+          model: model!,
+          thinkingLevel: "high",
+        }),
+      );
+      expect(session.sessionFile).toBeTruthy();
+      expect(session.tools.prompt.systemPrompt).toContain(
+        "You can inspect MSA_* environment variables for current model and session details.",
+      );
+
+      const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
+      expect(bashTool).toBeTruthy();
+      const result = yield* awaited(
+        bashTool!.execute("test", {
+          command: `printf '%s\\n' "$MSA_SESSION_ID" "$MSA_SESSION_FILE" "$MSA_PROVIDER" "$MSA_MODEL" "$MSA_REASONING_LEVEL"`,
+        }),
+      );
+      const output = result.content
+        .filter((item): item is { type: "text"; text: string } => item.type === "text")
+        .map((item) => item.text)
+        .join("");
+
+      expect(output.trim().split("\n")).toEqual([
+        session.sessionId,
+        session.sessionFile,
+        model!.provider,
+        model!.id,
+        session.thinkingLevel,
+      ]);
+
+      session.dispose();
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = joinPath(
+        tmpdir(),
+        `msa-sdk-session-test-${currentTimeMillis()}-${randomSuffixSync()}`,
+      );
+      cwd = joinPath(tempDir, "project");
+      agentDir = joinPath(tempDir, "agent");
+      yield* makeDirectory(cwd);
+      yield* makeDirectory(agentDir);
+    }),
+  );
+
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+        yield* removePath(tempDir);
+      }
+    }),
+  );
 
 describe("createAgentSession session manager defaults", () => {
-  let tempDir: string;
-  let cwd: string;
-  let agentDir: string;
+  beforeEach(beforeEachHook);
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-sdk-session-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    cwd = join(tempDir, "project");
-    agentDir = join(tempDir, "agent");
-    mkdirSync(cwd, { recursive: true });
-    mkdirSync(agentDir, { recursive: true });
-  });
+  afterEach(afterEachHook);
 
-  afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
+  it(
+    "uses agentDir for the default persisted session path",
+    usesAgentdirForTheDefaultPersistedSession,
+  );
 
-  it("uses agentDir for the default persisted session path", async () => {
-    const model = getModel("anthropic-api", "claude-sonnet-4-5");
-    expect(model).toBeTruthy();
+  it("keeps an explicit sessionManager override", keepsAnExplicitSessionmanagerOverride);
 
-    const { session } = await createAgentSession({
-      cwd,
-      agentDir,
-      model: model!,
-    });
+  it(
+    "derives cwd from an explicit sessionManager when cwd is omitted",
+    derivesCwdFromAnExplicitSessionmanagerWhen,
+  );
 
-    const safePath = `--${cwd.replace(/^[/\\]/, "").replace(/[/\\:]/g, "-")}--`;
-    const expectedSessionDir = join(agentDir, "sessions", safePath);
-    const sessionDir = session.sessionManager.getSessionDir();
-    const sessionFile = session.sessionManager.getSessionFile();
-
-    expect(sessionDir).toBe(expectedSessionDir);
-    expect(sessionFile?.startsWith(`${expectedSessionDir}/`)).toBe(true);
-
-    session.dispose();
-  });
-
-  it("keeps an explicit sessionManager override", async () => {
-    const model = getModel("anthropic-api", "claude-sonnet-4-5");
-    expect(model).toBeTruthy();
-
-    const sessionManager = SessionManager.inMemory(cwd);
-    const { session } = await createAgentSession({
-      cwd,
-      agentDir,
-      model: model!,
-      sessionManager,
-    });
-
-    expect(session.sessionManager).toBe(sessionManager);
-    expect(session.sessionManager.isPersisted()).toBe(false);
-
-    session.dispose();
-  });
-
-  it("derives cwd from an explicit sessionManager when cwd is omitted", async () => {
-    const model = getModel("anthropic-api", "claude-sonnet-4-5");
-    expect(model).toBeTruthy();
-
-    const sessionCwd = join(tempDir, "session-project");
-    mkdirSync(sessionCwd, { recursive: true });
-    const sessionManager = SessionManager.inMemory(sessionCwd);
-    const { session } = await createAgentSession({
-      agentDir,
-      model: model!,
-      sessionManager,
-    });
-
-    expect(session.sessionManager).toBe(sessionManager);
-    expect(session.systemPrompt).toContain(`<cwd>\n${sessionCwd}\n</cwd>`);
-
-    const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
-    expect(bashTool).toBeTruthy();
-    const result = await bashTool!.execute("test", { command: "pwd" });
-    const output = result.content
-      .filter((item): item is { type: "text"; text: string } => item.type === "text")
-      .map((item) => item.text)
-      .join("");
-
-    expect(realpathSync(output.trim())).toBe(realpathSync(sessionCwd));
-
-    session.dispose();
-  });
-
-  it("exposes current session state to the built-in bash tool", async () => {
-    const model = getModel("anthropic-api", "claude-sonnet-4-5");
-    expect(model).toBeTruthy();
-
-    const { session } = await createAgentSession({
-      cwd,
-      agentDir,
-      model: model!,
-      thinkingLevel: "high",
-    });
-    expect(session.sessionFile).toBeTruthy();
-    expect(session.systemPrompt).toContain(
-      "You can inspect MSA_* environment variables for current model and session details.",
-    );
-
-    const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
-    expect(bashTool).toBeTruthy();
-    const result = await bashTool!.execute("test", {
-      command: `printf '%s\\n' "$MSA_SESSION_ID" "$MSA_SESSION_FILE" "$MSA_PROVIDER" "$MSA_MODEL" "$MSA_REASONING_LEVEL"`,
-    });
-    const output = result.content
-      .filter((item): item is { type: "text"; text: string } => item.type === "text")
-      .map((item) => item.text)
-      .join("");
-
-    expect(output.trim().split("\n")).toEqual([
-      session.sessionId,
-      session.sessionFile,
-      model!.provider,
-      model!.id,
-      session.thinkingLevel,
-    ]);
-
-    session.dispose();
-  });
+  it(
+    "exposes current session state to the built-in bash tool",
+    exposesCurrentSessionStateToTheBuilt,
+  );
 });

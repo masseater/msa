@@ -1,14 +1,12 @@
-/**
- * msa Notify Extension
- *
- * Sends a native terminal notification when msa agent is done and waiting for input.
- * Supports multiple terminal protocols:
- * - OSC 777: Ghostty, iTerm2, WezTerm, rxvt-unicode
- * - OSC 99: Kitty
- * - Windows toast: Windows Terminal (WSL)
- */
+import { NodeServices } from "@effect/platform-node";
+import env from "@msa/ai/utils/env";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect, ManagedRuntime } from "effect";
+import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
+const { readProcessEnv } = env;
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
 function windowsToastScript(title: string, body: string): string {
   const type = "Windows.UI.Notifications";
@@ -28,30 +26,40 @@ function notifyOSC777(title: string, body: string): void {
 }
 
 function notifyOSC99(title: string, body: string): void {
-  // Kitty OSC 99: i=notification id, d=0 means not done yet, p=body for second part
   process.stdout.write(`\x1b]99;i=1:d=0;${title}\x1b\\`);
   process.stdout.write(`\x1b]99;i=1:p=body;${body}\x1b\\`);
 }
 
 function notifyWindows(title: string, body: string): void {
-  const { execFile } = require("child_process");
-  execFile("powershell.exe", ["-NoProfile", "-Command", windowsToastScript(title, body)]);
+  runtime.runFork(
+    Effect.scoped(
+      Effect.gen(function* () {
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
+        const handle = yield* spawner.spawn(
+          ChildProcess.make("powershell.exe", [
+            "-NoProfile",
+            "-Command",
+            windowsToastScript(title, body),
+          ]),
+        );
+        yield* handle.exitCode;
+      }),
+    ).pipe(Effect.ignore),
+  );
 }
 
 function notify(title: string, body: string): void {
-  if (process.env["WT_SESSION"]) {
+  if ((readProcessEnv("WT_SESSION") ?? "").length > 0) {
     notifyWindows(title, body);
-  } else if (process.env["KITTY_WINDOW_ID"]) {
+  } else if ((readProcessEnv("KITTY_WINDOW_ID") ?? "").length > 0) {
     notifyOSC99(title, body);
   } else {
     notifyOSC777(title, body);
   }
 }
 
-export default function (msa: ExtensionAPI) {
-  // `agent_end` fires after each low-level run; msa may still retry, compact,
-  // or continue with queued follow-ups. Notify only after the full run settles.
-  msa.on("agent_settled", async () => {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.on("agent_settled", () => {
     notify("msa", "Ready for input");
   });
 }

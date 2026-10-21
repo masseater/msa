@@ -2,16 +2,12 @@ import { deepStrictEqual, strictEqual } from "node:assert/strict";
 
 import { Effect } from "effect";
 
-import type { ConformanceCaseDefinition, ConformanceTest } from "./support.ts";
-import {
-  findSpan,
-  recordedSpans,
-  rejectsWithSameValue,
-  rejectWith,
-  unreadable,
-} from "./support.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
 
-const admitsOnce: ConformanceTest = (fixture) =>
+const { findSpan, recordedSpans, rejectWith, rejectsWithSameValue, unreadable } = support;
+
+const admitsOnce: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     let admitted = false;
     let calls = 0;
@@ -29,7 +25,7 @@ const admitsOnce: ConformanceTest = (fixture) =>
     strictEqual(findSpan(yield* recordedSpans(fixture), "success").settled, true);
   });
 
-const preservesReadableRejections: ConformanceTest = (fixture) =>
+const preservesReadableRejections: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     const syncError = new Error("sync");
     yield* rejectsWithSameValue(
@@ -52,7 +48,7 @@ const preservesReadableRejections: ConformanceTest = (fixture) =>
     );
   });
 
-const preservesUnreadableRejections: ConformanceTest = (fixture) =>
+const preservesUnreadableRejections: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     const unreadableError = unreadable({ kind: "unreadable" });
     yield* rejectsWithSameValue(
@@ -73,7 +69,7 @@ const preservesUnreadableRejections: ConformanceTest = (fixture) =>
     );
   });
 
-const preservesRejections: ConformanceTest = (fixture) =>
+const preservesRejections: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     yield* preservesReadableRejections(fixture);
     yield* preservesUnreadableRejections(fixture);
@@ -91,20 +87,20 @@ const preservesRejections: ConformanceTest = (fixture) =>
   });
 
 const expectedFailureStatus = {
+  error: { message: "async failure", name: "Expected" },
   status: "error",
-  error: { name: "Expected", message: "async failure" },
 } as const;
 
 const returnedFailureStatus = {
+  error: { message: "returned failure", name: "Expected" },
   status: "error",
-  error: { name: "Expected", message: "returned failure" },
 } as const;
 
-const recordExplicitStatuses: ConformanceTest = (fixture) =>
+const recordExplicitStatuses: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       fixture.context.startSpan({ name: "last-status" }, (span) => {
-        span.setStatus({ status: "error", error: { name: "Expected", message: "first" } });
+        span.setStatus({ error: { message: "first", name: "Expected" }, status: "error" });
         span.setStatus({ status: "ok" });
       }),
     );
@@ -137,7 +133,7 @@ const recordExplicitStatuses: ConformanceTest = (fixture) =>
     );
   });
 
-const usesLastExplicitStatus: ConformanceTest = (fixture) =>
+const usesLastExplicitStatus: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     yield* recordExplicitStatuses(fixture);
 
@@ -148,7 +144,7 @@ const usesLastExplicitStatus: ConformanceTest = (fixture) =>
     deepStrictEqual(findSpan(spans, "expected-failure").status, returnedFailureStatus);
   });
 
-export const lifecycleCases: readonly ConformanceCaseDefinition[] = [
+const lifecycleCases: readonly supportTypes.ConformanceCaseDefinition[] = [
   {
     group: "callback lifecycle",
     name: "admits once synchronously and preserves the result",
@@ -165,3 +161,9 @@ export const lifecycleCases: readonly ConformanceCaseDefinition[] = [
     test: usesLastExplicitStatus,
   },
 ];
+
+const lifecycleCasesModule = {
+  lifecycleCases,
+};
+
+export default lifecycleCasesModule;

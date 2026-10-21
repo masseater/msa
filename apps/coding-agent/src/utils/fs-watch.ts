@@ -1,24 +1,27 @@
-import { type FSWatcher, type WatchListener, watch } from "node:fs";
+import { dual } from "effect/Function";
 
-export const FS_WATCH_RETRY_DELAY_MS = 5000;
+import nodeFs from "../core/platform/node/fs.ts";
+import type nodeFsTypes from "../core/platform/node/fs.types.ts";
 
-export function closeWatcher(watcher: FSWatcher | null | undefined): void {
-  if (!watcher) {
+const { watch } = nodeFs;
+
+const FS_WATCH_RETRY_DELAY_MS = 5000;
+
+function closeWatcher(watcher: nodeFsTypes.FSWatcher | null | undefined): void {
+  if (watcher === undefined || watcher === null) {
     return;
   }
 
   try {
     watcher.close();
-  } catch {
-    // Ignore watcher close errors
-  }
+  } catch {}
 }
 
-export function watchWithErrorHandler(
+function watchWithErrorHandlerImpl(
   path: string,
-  listener: WatchListener<string>,
+  listener: nodeFsTypes.WatchListener<string>,
   onError: () => void,
-): FSWatcher | null {
+): nodeFsTypes.FSWatcher | null {
   try {
     const watcher = watch(path, listener);
     watcher.on("error", onError);
@@ -28,3 +31,23 @@ export function watchWithErrorHandler(
     return null;
   }
 }
+
+const watchWithErrorHandler: {
+  (
+    path: string,
+    listener: nodeFsTypes.WatchListener<string>,
+    onError: () => void,
+  ): nodeFsTypes.FSWatcher | null;
+  (
+    listener: nodeFsTypes.WatchListener<string>,
+    onError: () => void,
+  ): (path: string) => nodeFsTypes.FSWatcher | null;
+} = dual((args: IArguments) => args.length >= 3, watchWithErrorHandlerImpl);
+
+const fsWatch = {
+  FS_WATCH_RETRY_DELAY_MS,
+  closeWatcher,
+  watchWithErrorHandler,
+};
+
+export default fsWatch;

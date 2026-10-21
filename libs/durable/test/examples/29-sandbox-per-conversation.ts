@@ -1,37 +1,43 @@
-// One sandbox per conversation: the app records each conversation's sandbox in its own document, and the Harness
-// environment function looks it up for every tool call. Here a sandbox is a directory; a hosted product would return
-// an ExecutionEnv that runs inside the conversation's container.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/29-sandbox-per-conversation.ts
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import contextModule from "@msa/chord/context";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
+import { Console, Effect } from "effect";
 
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import node from "../../src/env/node.ts";
+import toolsModule from "../../src/tools/index.ts";
+import support from "../support.ts";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import { createRegistry, defineDoc, Harness, MemoryStorage } from "../../src/index.ts";
-import { CodingTools } from "../../src/tools/index.ts";
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { defineDoc } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
+const { MemoryStorage } = memory;
+const { NodeExecutionEnv } = node;
+
+const { awaited, joinPath, makeTempDir, readText, removeDir } = support;
 
 const context = BACKGROUND_CONTEXT;
 
-// Which sandbox a conversation runs in. `fork: "initial"`: a fork gets no sandbox until the app assigns one.
 const Sandbox = defineDoc<{ path?: string }>({
-  kind: "app.sandbox",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
   fork: "initial",
+  history: "latest",
   initial: () => ({}),
+  kind: "app.sandbox",
+  scope: "conversation",
+  version: 1,
 });
 
 const faux = fauxProvider();
 const models = createModels();
 models.setProvider(faux.provider);
 const note = (text: string) =>
-  fauxAssistantMessage(fauxToolCall("write", { path: "note.txt", content: text }), {
+  fauxAssistantMessage(fauxToolCall("write", { content: text, path: "note.txt" }), {
     stopReason: "toolUse",
   });
 faux.setResponses([
@@ -43,48 +49,76 @@ faux.setResponses([
 
 const registry = createRegistry();
 registry.install(CodingTools);
-const harness = await Harness.open(
-  new MemoryStorage(),
-  {
-    models,
-    registry,
-    // Committed reads only; a conversation without a sandbox gets no environment, so its tools fail cleanly.
-    env: async ({ conversationId, read }, envContext) => {
-      const sandbox = await read.snapshot(Sandbox, conversationId, envContext);
-      return sandbox?.path === undefined ? undefined : new NodeExecutionEnv({ cwd: sandbox.path });
-    },
-  },
-  context,
-);
 
-// Each user's conversation gets a fresh sandbox in the creating commit.
-const model = { provider: "faux", modelId: "faux-1" };
-async function conversationFor(user: string) {
-  const path = await mkdtemp(join(tmpdir(), `msa-durable-sandbox-${user}-`));
-  const conversation = await harness.createConversation(
-    {
-      ownership: { kind: "ownerless" },
-      agent: { model },
-      init: async (tx, id) => {
-        (await tx.doc(Sandbox, id)).path = path;
+const mainStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      {
+        env: ({ conversationId, read }, envContext) =>
+          runPromise(
+            Effect.gen(function* () {
+              const sandbox = yield* awaited(read.snapshot(Sandbox, conversationId, envContext));
+              return sandbox?.path === undefined
+                ? undefined
+                : new NodeExecutionEnv({ cwd: sandbox.path });
+            }),
+          ),
+        models,
+        registry,
       },
-    },
-    context,
+      context,
+    ),
   );
-  return { conversation, path };
-}
 
-const alice = await conversationFor("alice");
-const bob = await conversationFor("bob");
-await (
-  await alice.conversation.submit({ type: "input", content: "Leave a note." }, context)
-).wait(context);
-await (
-  await bob.conversation.submit({ type: "input", content: "Leave a note." }, context)
-).wait(context);
-console.log("alice's sandbox:", await readFile(join(alice.path, "note.txt"), "utf8"));
-console.log("bob's sandbox:", await readFile(join(bob.path, "note.txt"), "utf8"));
+  const model = { modelId: "faux-1", provider: "faux" };
+  return { harness, model };
+});
 
-await harness.close(context);
-await rm(alice.path, { recursive: true, force: true });
-await rm(bob.path, { recursive: true, force: true });
+const main = Effect.gen(function* () {
+  const { harness, model } = yield* mainStep1;
+  const conversationFor = Effect.fn("conversationFor")(function* (user: string) {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+    const path = yield* makeTempDir(`msa-durable-sandbox-${user}-`);
+    const conversation = yield* awaited(
+      harness.createConversation(
+        {
+          agent: { model },
+          init: (tx, id) =>
+            runPromise(
+              Effect.gen(function* () {
+                (yield* awaited(tx.doc(Sandbox, id))).path = path;
+              }),
+            ),
+          ownership: { kind: "ownerless" },
+        },
+        context,
+      ),
+    );
+    return { conversation, path };
+  });
+
+  const alice = yield* conversationFor("alice");
+  const bob = yield* conversationFor("bob");
+  yield* awaited(
+    (yield* awaited(
+      alice.conversation.submit({ content: "Leave a note.", type: "input" }, context),
+    )).wait(context),
+  );
+  yield* awaited(
+    (yield* awaited(
+      bob.conversation.submit({ content: "Leave a note.", type: "input" }, context),
+    )).wait(context),
+  );
+  yield* Console.log("alice's sandbox:", yield* readText(joinPath(alice.path, "note.txt")));
+  yield* Console.log("bob's sandbox:", yield* readText(joinPath(bob.path, "note.txt")));
+
+  yield* awaited(harness.close(context));
+  yield* removeDir(alice.path);
+  yield* removeDir(bob.path);
+});
+
+NodeRuntime.runMain(main);

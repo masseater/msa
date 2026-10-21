@@ -1,67 +1,44 @@
-import type { Context } from "@msa/chord";
-import {
-  type BinaryReader,
-  type DirReader,
-  type ExecutionEnv,
-  type ExecutionError,
-  err,
-  type FileError,
-  type FileInfo,
-  type FileListing,
-  type FileWatcher,
-  type ListFilesOptions,
-  ok,
-  type Result,
-  type ShellExecOptions,
-  type ShellExecResult,
-  type TextLineReader,
-  type WatchChange,
-  type WatchTarget,
-} from "@msa/durable/env";
+import type chordTypes from "@msa/chord/index.types";
+import env from "@msa/durable/env";
+import type envTypesModule from "@msa/durable/env.types";
 
-import type { Connection } from "./connection.ts";
-import { fileInfoAt, listDirAt } from "./dir-ops.ts";
-import { execIn } from "./exec.ts";
-import { createDirAt, flushAt, removeAt, renameAt, truncateAt, writeAt } from "./mutate-ops.ts";
-import {
+import dirOps from "./dir-ops.ts";
+import execModule from "./exec.ts";
+import type envTypes from "./index.types.ts";
+import mutateOps from "./mutate-ops.ts";
+import pathOps from "./path-ops.ts";
+import readOps from "./read-ops.ts";
+import watchOp from "./watch-op.ts";
+
+const { err, ok } = env;
+
+const {
   absolutePathOf,
   canonicalPathOf,
   createTempDirIn,
   createTempFileIn,
   joinPathIn,
   listFilesAt,
-} from "./path-ops.ts";
-import {
-  openBinaryReaderAt,
-  openDirReaderAt,
-  openTextLineReaderAt,
-  readFileAt,
-  readTextLinesAt,
-} from "./read-ops.ts";
-import { watchIn } from "./watch-op.ts";
-import type { RemoteWatchOptions } from "./watch.ts";
+} = pathOps;
+const { openBinaryReaderAt, openDirReaderAt, openTextLineReaderAt, readFileAt, readTextLinesAt } =
+  readOps;
+const { createDirAt, flushAt, removeAt, renameAt, truncateAt, writeAt } = mutateOps;
+const { fileInfoAt, listDirAt } = dirOps;
+const { watchIn } = watchOp;
+const { execIn } = execModule;
 
-export interface RemoteExecutionEnvOptions {
-  connection: Connection;
-  id: string;
-  cwd: string;
-  shellPath?: string;
-  shellEnv?: Record<string, string>;
-  watch?: RemoteWatchOptions;
-}
+type FileResult<T> = Promise<envTypesModule.Result<T, envTypesModule.FileError>>;
 
-type FileResult<T> = Promise<Result<T, FileError>>;
-
-export class RemoteExecutionEnv implements ExecutionEnv {
+export default class RemoteExecutionEnv implements envTypesModule.ExecutionEnv {
   readonly id: string;
   cwd: string;
-  readonly connection: Connection;
+  readonly connection: envTypes.Connection;
   readonly #shellPath: string | undefined;
   readonly #shellEnv: Record<string, string> | undefined;
-  readonly #watchOptions: RemoteWatchOptions;
+  readonly #watchOptions: envTypes.RemoteWatchOptions;
   readonly #running = new Map<number, number>();
 
-  constructor(options: RemoteExecutionEnvOptions) {
+  constructor(options: envTypes.RemoteExecutionEnvOptions) {
     this.id = options.id;
     this.cwd = options.cwd;
     this.connection = options.connection;
@@ -70,93 +47,108 @@ export class RemoteExecutionEnv implements ExecutionEnv {
     this.#watchOptions = options.watch ?? {};
   }
 
-  absolutePath(path: string, _context: Context): FileResult<string> {
-    return absolutePathOf({ target: this, path });
+  absolutePath(path: string, _context: chordTypes.Context): FileResult<string> {
+    return absolutePathOf({ path, target: this });
   }
 
-  joinPath(parts: string[], _context: Context): FileResult<string> {
-    return joinPathIn({ target: this, parts });
+  joinPath(parts: string[], _context: chordTypes.Context): FileResult<string> {
+    return joinPathIn({ parts, target: this });
   }
 
-  readTextFile(path: string, context: Context): FileResult<string> {
-    return readFileAt({ target: this, path, context, encoding: true }) as FileResult<string>;
+  readTextFile(path: string, context: chordTypes.Context): FileResult<string> {
+    return readFileAt({ context, encoding: true, path, target: this }) as FileResult<string>;
   }
 
-  readBinaryFile(path: string, context: Context): FileResult<Uint8Array> {
-    return readFileAt({ target: this, path, context, encoding: false }) as FileResult<Uint8Array>;
+  readBinaryFile(path: string, context: chordTypes.Context): FileResult<Uint8Array> {
+    return readFileAt({ context, encoding: false, path, target: this }) as FileResult<Uint8Array>;
   }
 
   openBinaryReader(
     path: string,
     options: { noFollow?: boolean } | undefined,
-    context: Context,
-  ): FileResult<BinaryReader> {
+    context: chordTypes.Context,
+  ): FileResult<envTypesModule.BinaryReader> {
     return openBinaryReaderAt({
-      target: this,
-      path,
       context,
       noFollow: options?.noFollow === true,
+      path,
+      target: this,
     });
   }
 
-  openTextLineReader(path: string, context: Context): FileResult<TextLineReader> {
-    return openTextLineReaderAt({ target: this, path, context });
+  openTextLineReader(
+    path: string,
+    context: chordTypes.Context,
+  ): FileResult<envTypesModule.TextLineReader> {
+    return openTextLineReaderAt({ context, path, target: this });
   }
 
   readTextLines(
     path: string,
     options: { maxLines?: number } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): FileResult<string[]> {
     if (options?.maxLines !== undefined && options.maxLines <= 0) return Promise.resolve(ok([]));
-    return readTextLinesAt({ target: this, path, context, maxLines: options?.maxLines });
+    return readTextLinesAt({ context, maxLines: options?.maxLines, path, target: this });
   }
 
-  writeFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
-    return writeAt({ target: this, path, context, content, append: false });
+  writeFile(
+    path: string,
+    content: string | Uint8Array,
+    context: chordTypes.Context,
+  ): FileResult<void> {
+    return writeAt({ append: false, content, context, path, target: this });
   }
 
-  appendFile(path: string, content: string | Uint8Array, context: Context): FileResult<void> {
-    return writeAt({ target: this, path, context, content, append: true });
+  appendFile(
+    path: string,
+    content: string | Uint8Array,
+    context: chordTypes.Context,
+  ): FileResult<void> {
+    return writeAt({ append: true, content, context, path, target: this });
   }
 
-  truncateFile(path: string, size: number, context: Context): FileResult<void> {
-    return truncateAt({ target: this, path, context, size });
+  truncateFile(path: string, size: number, context: chordTypes.Context): FileResult<void> {
+    return truncateAt({ context, path, size, target: this });
   }
 
-  flushFile(path: string, context: Context): FileResult<void> {
-    return flushAt({ target: this, path, context });
+  flushFile(path: string, context: chordTypes.Context): FileResult<void> {
+    return flushAt({ context, path, target: this });
   }
 
-  renameFile(sourcePath: string, destinationPath: string, context: Context): FileResult<void> {
-    return renameAt({ target: this, path: sourcePath, destination: destinationPath, context });
+  renameFile(
+    sourcePath: string,
+    destinationPath: string,
+    context: chordTypes.Context,
+  ): FileResult<void> {
+    return renameAt({ context, destination: destinationPath, path: sourcePath, target: this });
   }
 
-  fileInfo(path: string, context: Context): FileResult<FileInfo> {
-    return fileInfoAt({ target: this, path, context });
+  fileInfo(path: string, context: chordTypes.Context): FileResult<envTypesModule.FileInfo> {
+    return fileInfoAt({ context, path, target: this });
   }
 
-  listDir(path: string, context: Context): FileResult<FileInfo[]> {
-    return listDirAt({ target: this, path, context });
+  listDir(path: string, context: chordTypes.Context): FileResult<envTypesModule.FileInfo[]> {
+    return listDirAt({ context, path, target: this });
   }
 
   listFiles(
     path: string,
-    options: ListFilesOptions | undefined,
-    context: Context,
-  ): FileResult<FileListing> {
-    return listFilesAt({ target: this, path, options, context });
+    options: envTypesModule.ListFilesOptions | undefined,
+    context: chordTypes.Context,
+  ): FileResult<envTypesModule.FileListing> {
+    return listFilesAt({ context, options, path, target: this });
   }
 
-  openDirReader(path: string, context: Context): FileResult<DirReader> {
-    return openDirReaderAt({ target: this, path, context });
+  openDirReader(path: string, context: chordTypes.Context): FileResult<envTypesModule.DirReader> {
+    return openDirReaderAt({ context, path, target: this });
   }
 
-  canonicalPath(path: string, context: Context): FileResult<string> {
-    return canonicalPathOf({ target: this, path, context });
+  canonicalPath(path: string, context: chordTypes.Context): FileResult<string> {
+    return canonicalPathOf({ context, path, target: this });
   }
 
-  exists(path: string, context: Context): FileResult<boolean> {
+  exists(path: string, context: chordTypes.Context): FileResult<boolean> {
     return this.fileInfo(path, context).then((result) => {
       if (result.ok) return ok(true);
       if (result.error.code === "not_found") return ok(false);
@@ -167,66 +159,66 @@ export class RemoteExecutionEnv implements ExecutionEnv {
   createDir(
     path: string,
     options: { recursive?: boolean } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): FileResult<void> {
-    return createDirAt({ target: this, path, context, recursive: options?.recursive ?? true });
+    return createDirAt({ context, path, recursive: options?.recursive ?? true, target: this });
   }
 
   remove(
     path: string,
     options: { recursive?: boolean; force?: boolean } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): FileResult<void> {
     return removeAt({
-      target: this,
-      path,
       context,
-      recursive: options?.recursive ?? false,
       force: options?.force ?? false,
+      path,
+      recursive: options?.recursive ?? false,
+      target: this,
     });
   }
 
-  createTempDir(prefix: string | undefined, context: Context): FileResult<string> {
-    return createTempDirIn({ target: this, prefix, context });
+  createTempDir(prefix: string | undefined, context: chordTypes.Context): FileResult<string> {
+    return createTempDirIn({ context, prefix, target: this });
   }
 
   createTempFile(
     options: { prefix?: string; suffix?: string } | undefined,
-    context: Context,
+    context: chordTypes.Context,
   ): FileResult<string> {
     return createTempFileIn({
-      target: this,
+      context,
       prefix: options?.prefix,
       suffix: options?.suffix,
-      context,
+      target: this,
     });
   }
 
   watch(
-    targets: readonly WatchTarget[],
-    onChange: (change: WatchChange) => void,
-    context: Context,
-  ): FileResult<FileWatcher> {
-    return watchIn({ target: this, targets, onChange, options: this.#watchOptions, context });
+    targets: readonly envTypesModule.WatchTarget[],
+    onChange: (change: envTypesModule.WatchChange) => void,
+    context: chordTypes.Context,
+  ): FileResult<envTypesModule.FileWatcher> {
+    return watchIn({ context, onChange, options: this.#watchOptions, target: this, targets });
   }
 
   exec(
     command: string | readonly string[],
-    options: ShellExecOptions | undefined,
-    context: Context,
-  ): Promise<Result<ShellExecResult, ExecutionError>> {
+    options: envTypesModule.ShellExecOptions | undefined,
+    context: chordTypes.Context,
+  ): Promise<envTypesModule.Result<envTypesModule.ShellExecResult, envTypesModule.ExecutionError>> {
     return execIn({
-      target: this,
       command,
-      options,
       context,
+      options,
+      running: this.#running,
       shellEnv: this.#shellEnv,
       shellPath: this.#shellPath,
-      running: this.#running,
+      target: this,
     });
   }
 
-  cleanup(_context: Context): Promise<void> {
+  cleanup(_context: chordTypes.Context): Promise<void> {
     for (const [id, session] of this.#running) this.connection.kill(id, session);
     this.#running.clear();
     return Promise.resolve();

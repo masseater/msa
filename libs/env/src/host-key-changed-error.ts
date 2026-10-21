@@ -1,6 +1,6 @@
 import { Data } from "effect";
 
-export class HostKeyChangedError extends Data.TaggedError("HostKeyChangedError")<{
+export default class HostKeyChangedError extends Data.TaggedError("HostKeyChangedError")<{
   readonly message: string;
 }> {
   constructor(message: string) {

@@ -1,15 +1,19 @@
-export interface ResourceCollision {
-  resourceType: "extension" | "skill" | "prompt" | "theme";
-  name: string; // skill name, command/tool/flag name, prompt name, theme name
-  winnerPath: string;
-  loserPath: string;
-  winnerSource?: string; // e.g., "npm:foo", "git:...", "local"
-  loserSource?: string;
+declare namespace diagnosticsTypes {
+  interface ResourceCollision {
+    resourceType: "extension" | "skill" | "prompt" | "theme";
+    name: string;
+    winnerPath: string;
+    loserPath: string;
+    winnerSource?: string;
+    loserSource?: string;
+  }
+
+  interface ResourceDiagnostic {
+    type: "warning" | "error" | "collision";
+    message: string;
+    path?: string | undefined;
+    collision?: ResourceCollision | undefined;
+  }
 }
 
-export interface ResourceDiagnostic {
-  type: "warning" | "error" | "collision";
-  message: string;
-  path?: string | undefined;
-  collision?: ResourceCollision | undefined;
-}
+export type { diagnosticsTypes as default };

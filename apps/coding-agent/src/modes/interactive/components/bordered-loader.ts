@@ -1,16 +1,24 @@
-import { CancellableLoader, Container, Loader, Spacer, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { Theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint } from "./keybinding-hints.ts";
+import type themeTypes from "../theme/theme.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { keyHint } = keybindingHints;
 
-/** Loader wrapped with borders for extension UI */
-export class BorderedLoader extends Container {
-  private loader: CancellableLoader | Loader;
+const { CancellableLoader, Loader, Spacer, Text } = tuiModule;
+
+export default class BorderedLoader extends tuiModule.Container {
+  private loader: tuiTypes.CancellableLoader | tuiTypes.Loader;
   private cancellable: boolean;
   private signalController?: AbortController;
 
-  constructor(tui: TUI, theme: Theme, message: string, options?: { cancellable?: boolean }) {
+  constructor(
+    tui: tuiTypes.TUI,
+    theme: themeTypes.Theme,
+    message: string,
+    options?: { cancellable?: boolean },
+  ) {
     super();
     this.cancellable = options?.cancellable ?? true;
     const borderColor = (s: string) => theme.fg("border", s);
@@ -42,22 +50,29 @@ export class BorderedLoader extends Container {
 
   get signal(): AbortSignal {
     if (this.cancellable) {
-      return (this.loader as CancellableLoader).signal;
+      return (this.loader as tuiTypes.CancellableLoader).signal;
     }
     return this.signalController?.signal ?? new AbortController().signal;
   }
 
+  get onAbort(): (() => void) | undefined {
+    return this.cancellable ? (this.loader as tuiTypes.CancellableLoader).onAbort : undefined;
+  }
+
   set onAbort(fn: (() => void) | undefined) {
     if (this.cancellable) {
-      const loader = this.loader as CancellableLoader;
-      if (fn) loader.onAbort = fn;
-      else delete loader.onAbort;
+      const loader = this.loader as tuiTypes.CancellableLoader;
+      if (fn === undefined) {
+        delete loader.onAbort;
+      } else {
+        loader.onAbort = fn;
+      }
     }
   }
 
   handleInput(data: string): void {
     if (this.cancellable) {
-      (this.loader as CancellableLoader).handleInput(data);
+      (this.loader as tuiTypes.CancellableLoader).handleInput(data);
     }
   }
 

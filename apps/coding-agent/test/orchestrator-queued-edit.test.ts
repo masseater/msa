@@ -1,49 +1,54 @@
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import testing from "@msa/testing";
 import { Effect, Result } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import { orchestratorError } from "../src/core/orchestrator/errors.ts";
-import type { Orchestrator } from "../src/core/orchestrator/orchestrator.ts";
-import { harness } from "./orchestrator-harness.ts";
+import errors from "../src/core/orchestrator/errors.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import orchestratorHarness from "./orchestrator-harness.ts";
+
+const { orchestratorError } = errors;
+
+const { joinPath, makeTempDir, removePath } = testing;
+
+const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
 
-const create = (orchestrator: Orchestrator, input: Parameters<Orchestrator["createTask"]>[0]) =>
-  Effect.promise(() => orchestrator.createTask(input));
+const create = (
+  orchestrator: orchestratorTypes.Orchestrator,
+  input: Parameters<orchestratorTypes.Orchestrator["createTask"]>[0],
+) => Effect.promise(() => orchestrator.createTask(input));
 
-const read = (orchestrator: Orchestrator, id: string) =>
+const read = (orchestrator: orchestratorTypes.Orchestrator, id: string) =>
   Effect.promise(() => orchestrator.read(id));
 
 function attempt<A>(run: () => Promise<A>) {
-  return Effect.result(Effect.tryPromise({ try: run, catch: orchestratorError }));
+  return Effect.result(Effect.tryPromise({ catch: orchestratorError, try: run }));
 }
 
-it("adds a dependency to a waiting task and starts it once both dependencies finish", () =>
+const addsADependencyToAWaitingTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup({ maxConcurrent: 2 });
       const a = yield* create(orchestrator, {
-        title: "a",
         currentState: "a is not written",
         goalState: "a works",
+        title: "a",
       });
       const b = yield* create(orchestrator, {
-        title: "b",
         currentState: "b is not written",
-        goalState: "b works",
         dependsOn: [a.id],
+        goalState: "b works",
+        title: "b",
       });
       const c = yield* create(orchestrator, {
-        title: "c",
         currentState: "c is not written",
         goalState: "c works",
+        title: "c",
       });
       expect(workers).toHaveLength(2);
 
-      yield* Effect.promise(() => orchestrator.setDepends({ taskIds: [b.id], add: [c.id] }));
+      yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }));
       const view = yield* read(orchestrator, b.id);
       expect(view.dependsOn.toSorted()).toEqual([a.id, c.id].toSorted());
       expect(view.status).toBe("waiting");
@@ -63,61 +68,71 @@ it("adds a dependency to a waiting task and starts it once both dependencies fin
       expect(workers[4]?.prompts[0]).toContain("a reviewed");
       expect(workers[4]?.prompts[0]).toContain("c reviewed");
     }),
-  ));
+  );
 
-it("drops a dependency and starts the task that was waiting for it", () =>
+it(
+  "adds a dependency to a waiting task and starts it once both dependencies finish",
+  addsADependencyToAWaitingTask,
+);
+
+const dropsADependencyAndStartsTheTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
       const a = yield* create(orchestrator, {
-        title: "a",
         currentState: "a is not written",
         goalState: "a works",
+        title: "a",
       });
       const b = yield* create(orchestrator, {
-        title: "b",
         currentState: "b is not written",
-        goalState: "b works",
         dependsOn: [a.id],
+        goalState: "b works",
+        title: "b",
       });
       expect(taskStatus(orchestrator, b.id)).toBe("waiting");
 
-      yield* Effect.promise(() => orchestrator.setDepends({ taskIds: [b.id], remove: [a.id] }));
+      yield* Effect.promise(() => orchestrator.setDepends({ remove: [a.id], taskIds: [b.id] }));
       yield* waitFor(() => workers.length === 2);
       const view = yield* read(orchestrator, b.id);
       expect(view.dependsOn).toEqual([]);
       expect(view.status).toBe("running");
       expect(workers[1]?.prompts[0]).toContain("b works");
     }),
-  ));
+  );
 
-it("rejects a cycle and a task that depends on itself without changing anything", () =>
+it(
+  "drops a dependency and starts the task that was waiting for it",
+  dropsADependencyAndStartsTheTask,
+);
+
+const rejectsACycleAndATaskThat = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator } = setup({ maxConcurrent: 1 });
       yield* create(orchestrator, {
-        title: "a",
         currentState: "a is not written",
         goalState: "a works",
+        title: "a",
       });
       const b = yield* create(orchestrator, {
-        title: "b",
         currentState: "b is not written",
         goalState: "b works",
+        title: "b",
       });
       const c = yield* create(orchestrator, {
-        title: "c",
         currentState: "c is not written",
         goalState: "c works",
+        title: "c",
       });
-      yield* Effect.promise(() => orchestrator.setDepends({ taskIds: [b.id], add: [c.id] }));
+      yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }));
 
-      const cycle = yield* attempt(() => orchestrator.setDepends({ taskIds: [c.id], add: [b.id] }));
+      const cycle = yield* attempt(() => orchestrator.setDepends({ add: [b.id], taskIds: [c.id] }));
       expect(Result.isFailure(cycle)).toBe(true);
       if (Result.isFailure(cycle)) expect(cycle.failure.message).toContain("cycle");
 
       const itself = yield* attempt(() =>
-        orchestrator.setDepends({ taskIds: [c.id], add: [c.id] }),
+        orchestrator.setDepends({ add: [c.id], taskIds: [c.id] }),
       );
       expect(Result.isFailure(itself)).toBe(true);
       if (Result.isFailure(itself)) expect(itself.failure.message).toContain("itself");
@@ -126,29 +141,34 @@ it("rejects a cycle and a task that depends on itself without changing anything"
       expect(view.dependsOn).toEqual([]);
       expect((yield* read(orchestrator, b.id)).dependsOn).toEqual([c.id]);
     }),
-  ));
+  );
 
-it("rejects dependency changes on a running task except adding one that already finished", () =>
+it(
+  "rejects a cycle and a task that depends on itself without changing anything",
+  rejectsACycleAndATaskThat,
+);
+
+const rejectsDependencyChangesOnARunningTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
       const a = yield* create(orchestrator, {
-        title: "a",
         currentState: "a is not written",
         goalState: "a works",
+        title: "a",
       });
       const c = yield* create(orchestrator, {
-        title: "c",
         currentState: "c is not written",
         goalState: "c works",
+        title: "c",
       });
 
-      const added = yield* attempt(() => orchestrator.setDepends({ taskIds: [a.id], add: [c.id] }));
+      const added = yield* attempt(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
       expect(Result.isFailure(added)).toBe(true);
       if (Result.isFailure(added)) expect(added.failure.message).toContain("stop_task");
 
       const removed = yield* attempt(() =>
-        orchestrator.setDepends({ taskIds: [a.id], remove: [c.id] }),
+        orchestrator.setDepends({ remove: [c.id], taskIds: [a.id] }),
       );
       expect(Result.isFailure(removed)).toBe(true);
       if (Result.isFailure(removed)) expect(removed.failure.message).toContain("stop_task");
@@ -158,42 +178,47 @@ it("rejects dependency changes on a running task except adding one that already 
       workers[2]?.complete("c reviewed");
       yield* waitFor(() => taskStatus(orchestrator, c.id) === "completed");
 
-      yield* Effect.promise(() => orchestrator.setDepends({ taskIds: [a.id], add: [c.id] }));
+      yield* Effect.promise(() => orchestrator.setDepends({ add: [c.id], taskIds: [a.id] }));
       const view = yield* read(orchestrator, a.id);
       expect(view.dependsOn).toEqual([c.id]);
       expect(view.status).toBe("running");
     }),
-  ));
+  );
 
-it("rewrites the states of a waiting task and the thread starts with them", () =>
+it(
+  "rejects dependency changes on a running task except adding one that already finished",
+  rejectsDependencyChangesOnARunningTask,
+);
+
+const rewritesTheStatesOfAWaitingTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, workers } = setup();
       const a = yield* create(orchestrator, {
-        title: "a",
         currentState: "a is not written",
         goalState: "a works",
+        title: "a",
       });
       const b = yield* create(orchestrator, {
-        title: "b",
         currentState: "the client speaks v2",
-        goalState: "the client speaks v3",
         dependsOn: [a.id],
+        goalState: "the client speaks v3",
+        title: "b",
       });
 
       const running = yield* attempt(() =>
-        orchestrator.setState({ taskId: a.id, goalState: "a works twice" }),
+        orchestrator.setState({ goalState: "a works twice", taskId: a.id }),
       );
       expect(Result.isFailure(running)).toBe(true);
       if (Result.isFailure(running)) expect(running.failure.message).toContain("running");
 
       const nothing = yield* attempt(() => orchestrator.setState({ taskId: b.id }));
       expect(Result.isFailure(nothing)).toBe(true);
-      const blank = yield* attempt(() => orchestrator.setState({ taskId: b.id, goalState: " " }));
+      const blank = yield* attempt(() => orchestrator.setState({ goalState: " ", taskId: b.id }));
       expect(Result.isFailure(blank)).toBe(true);
 
       yield* Effect.promise(() =>
-        orchestrator.setState({ taskId: b.id, goalState: "the client speaks v4" }),
+        orchestrator.setState({ goalState: "the client speaks v4", taskId: b.id }),
       );
       const view = yield* read(orchestrator, b.id);
       expect(view.currentState).toBe("the client speaks v2");
@@ -207,39 +232,44 @@ it("rewrites the states of a waiting task and the thread starts with them", () =
       expect(workers[2]?.prompts[0]).toContain("the client speaks v4");
       expect(workers[2]?.prompts[0]).not.toContain("the client speaks v3");
     }),
-  ));
+  );
 
-it("keeps the rewritten dependencies and states after the database is reopened", () =>
+it(
+  "rewrites the states of a waiting task and the thread starts with them",
+  rewritesTheStatesOfAWaitingTask,
+);
+
+const keepsTheRewrittenDependenciesAndStatesAfter = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const directory = mkdtempSync(join(tmpdir(), "msa-orchestrator-"));
-      const databasePath = join(directory, "orchestrator.db");
+      const directory = yield* makeTempDir("msa-orchestrator-");
+      const databasePath = joinPath(directory, "orchestrator.db");
       try {
         const first = setup({ databasePath });
         const a = yield* create(first.orchestrator, {
-          title: "a",
           currentState: "a is not written",
           goalState: "a works",
+          title: "a",
         });
         const b = yield* create(first.orchestrator, {
-          title: "b",
           currentState: "b is not written",
-          goalState: "b works",
           dependsOn: [a.id],
+          goalState: "b works",
+          title: "b",
         });
         const c = yield* create(first.orchestrator, {
-          title: "c",
           currentState: "c is not written",
           goalState: "c works",
+          title: "c",
         });
         yield* Effect.promise(() =>
-          first.orchestrator.setDepends({ taskIds: [b.id], add: [c.id] }),
+          first.orchestrator.setDepends({ add: [c.id], taskIds: [b.id] }),
         );
         yield* Effect.promise(() =>
           first.orchestrator.setState({
-            taskId: b.id,
             currentState: "b calls the old api",
             goalState: "b calls the new api",
+            taskId: b.id,
           }),
         );
         yield* Effect.promise(() => first.orchestrator.dispose());
@@ -254,7 +284,12 @@ it("keeps the rewritten dependencies and states after the database is reopened",
           yield* Effect.promise(() => second.orchestrator.dispose());
         }
       } finally {
-        rmSync(directory, { recursive: true, force: true });
+        yield* removePath(directory);
       }
     }),
-  ));
+  );
+
+it(
+  "keeps the rewritten dependencies and states after the database is reopened",
+  keepsTheRewrittenDependenciesAndStatesAfter,
+);

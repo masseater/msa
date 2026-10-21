@@ -1,118 +1,46 @@
-export interface ContentAnnotations {
-  audience?: ("user" | "assistant")[];
-  priority?: number;
-  lastModified?: string;
-}
+import type contentTypes from "./content.types.ts";
 
-export interface TextContent {
-  type: "text";
-  text: string;
-  annotations?: ContentAnnotations;
-  _meta?: Record<string, unknown>;
-}
-
-export interface ImageContent {
-  type: "image";
-  data: string;
-  mimeType: string;
-  annotations?: ContentAnnotations;
-  _meta?: Record<string, unknown>;
-}
-
-export interface AudioContent {
-  type: "audio";
-  data: string;
-  mimeType: string;
-  annotations?: ContentAnnotations;
-  _meta?: Record<string, unknown>;
-}
-
-export interface ResourceLinkContent {
-  type: "resource_link";
-  uri: string;
-  name: string;
-  title?: string;
-  description?: string;
-  mimeType?: string;
-  size?: number;
-  annotations?: ContentAnnotations;
-  _meta?: Record<string, unknown>;
-}
-
-export interface TextResourceContents {
-  uri: string;
-  mimeType?: string;
-  text: string;
-  _meta?: Record<string, unknown>;
-}
-
-export interface BlobResourceContents {
-  uri: string;
-  mimeType?: string;
-  blob: string;
-  _meta?: Record<string, unknown>;
-}
-
-export interface EmbeddedResourceContent {
-  type: "resource";
-  resource: TextResourceContents | BlobResourceContents;
-  annotations?: ContentAnnotations;
-  _meta?: Record<string, unknown>;
-}
-
-export type ContentBlock =
-  | TextContent
-  | ImageContent
-  | AudioContent
-  | ResourceLinkContent
-  | EmbeddedResourceContent;
-
-export interface CallToolResult {
-  content: ContentBlock[];
-  structuredContent?: unknown;
-  isError?: boolean;
-  _meta?: Record<string, unknown>;
-}
-
-export type LlmContent =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string };
-
-function blockToLlmContent(block: ContentBlock): LlmContent {
+function blockToLlmContent(block: contentTypes.ContentBlock): contentTypes.LlmContent {
   switch (block.type) {
     case "text":
-      return { type: "text", text: block.text };
+      return { text: block.text, type: "text" };
     case "image":
-      return { type: "image", data: block.data, mimeType: block.mimeType };
+      return { data: block.data, mimeType: block.mimeType, type: "image" };
     case "audio":
-      return { type: "text", text: `[audio ${block.mimeType} omitted]` };
+      return { text: `[audio ${block.mimeType} omitted]`, type: "text" };
     case "resource_link":
-      return { type: "text", text: `${block.name}: ${block.uri}` };
+      return { text: `${block.name}: ${block.uri}`, type: "text" };
     case "resource": {
       const resource = block.resource;
-      if ("text" in resource) return { type: "text", text: resource.text };
+      if ("text" in resource) return { text: resource.text, type: "text" };
       if (resource.mimeType?.startsWith("image/") === true) {
-        return { type: "image", data: resource.blob, mimeType: resource.mimeType };
+        return { data: resource.blob, mimeType: resource.mimeType, type: "image" };
       }
       return {
-        type: "text",
         text: `[binary resource ${resource.uri} (${resource.mimeType ?? "unknown type"}) omitted]`,
+        type: "text",
       };
     }
     default:
       return {
-        type: "text",
         text: `[unsupported MCP content ${(block as { type: string }).type}]`,
+        type: "text",
       };
   }
 }
 
-export function toLlmContent(
-  result: Pick<CallToolResult, "content" | "structuredContent">,
-): LlmContent[] {
+function toLlmContent(
+  result: Pick<contentTypes.CallToolResult, "content" | "structuredContent">,
+): contentTypes.LlmContent[] {
   const content = (result.content ?? []).map(blockToLlmContent);
   if (content.length === 0 && result.structuredContent !== undefined) {
-    content.push({ type: "text", text: JSON.stringify(result.structuredContent, null, 2) });
+    content.push({ text: JSON.stringify(result.structuredContent, null, 2), type: "text" });
   }
   return content;
 }
+
+const contentModule = {
+  toLlmContent,
+};
+
+export default contentModule;

@@ -2,15 +2,15 @@ import { stripVTControlCharacters } from "node:util";
 
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type EvalObservation,
-  type ExpectedEvalRun,
-  formatEvalComparisonReport,
-  summarizeEvalObservations,
-} from "../src/report.ts";
+import reportFormat from "../src/report-format.ts";
+import reportSummary from "../src/report-summary.ts";
+import type reportTypesTypes from "../src/report-types.types.ts";
+
+const { summarizeEvalObservations } = reportSummary;
+const { formatEvalComparisonReport } = reportFormat;
 
 function scored(
-  variant: EvalObservation["variant"],
+  variant: reportTypesTypes.EvalObservation["variant"],
   runNumber: number,
   score: number,
   metrics: Partial<{
@@ -19,47 +19,47 @@ function scored(
     totalMs: number;
     estimatedCostUsd: number;
   }> = {},
-): EvalObservation {
+): reportTypesTypes.EvalObservation {
   return {
-    evalSet: "tool access",
     caseId: "create",
-    variant,
+    estimatedCostUsd: 0.01,
+    evalSet: "tool access",
     model: "fixture/model",
-    runNumber,
     outcome: "scored",
+    runNumber,
     score,
-    totalTokens: 100,
     toolCalls: 2,
     totalMs: 1000,
-    estimatedCostUsd: 0.01,
+    totalTokens: 100,
+    variant,
     ...metrics,
   };
 }
 
 function errored(
-  variant: EvalObservation["variant"],
+  variant: reportTypesTypes.EvalObservation["variant"],
   runNumber: number,
   totalTokens?: number,
-): EvalObservation {
+): reportTypesTypes.EvalObservation {
   return {
-    evalSet: "tool access",
     caseId: "create",
-    variant,
+    evalSet: "tool access",
     model: "fixture/model",
-    runNumber,
     outcome: "errored",
+    runNumber,
     totalTokens,
+    variant,
   };
 }
 
-function expectedFor(runNumbers: readonly number[]): ExpectedEvalRun[] {
+function expectedFor(runNumbers: readonly number[]): reportTypesTypes.ExpectedEvalRun[] {
   return runNumbers.flatMap((runNumber) =>
     (["without_docs", "with_docs"] as const).map((variant) => ({
-      evalSet: "tool access",
       caseId: "create",
-      variant,
+      evalSet: "tool access",
       model: "fixture/model",
       runNumber,
+      variant,
     })),
   );
 }
@@ -67,47 +67,49 @@ function expectedFor(runNumbers: readonly number[]): ExpectedEvalRun[] {
 describe("summarizeEvalObservations", () => {
   it("computes paired lift and efficiency deltas", () => {
     const observations = [
-      scored("without_docs", 1, 0, { totalTokens: 100, toolCalls: 3, totalMs: 1000 }),
-      scored("with_docs", 1, 1, { totalTokens: 120, toolCalls: 2, totalMs: 800 }),
+      scored("without_docs", 1, 0, { toolCalls: 3, totalMs: 1000, totalTokens: 100 }),
+      scored("with_docs", 1, 1, { toolCalls: 2, totalMs: 800, totalTokens: 120 }),
       scored("without_docs", 2, 1, { totalTokens: 200 }),
       scored("with_docs", 2, 1, { totalTokens: 180 }),
     ];
     const report = summarizeEvalObservations("digest", expectedFor([1, 2]), observations);
     expect(report.comparisons).toEqual([
       expect.objectContaining({
-        evalSet: "tool access",
-        totalPairs: 2,
-        eligiblePairs: 2,
         blockedPairs: 0,
         controlPassRate: 0.5,
-        treatmentPassRate: 1,
+        eligiblePairs: 2,
+        evalSet: "tool access",
         lift: 0.5,
-        totalTokens: { eligiblePairs: 2, controlMean: 150, treatmentMean: 150, meanDelta: 0 },
-        toolCalls: { eligiblePairs: 2, controlMean: 2.5, treatmentMean: 2, meanDelta: -0.5 },
+        toolCalls: { controlMean: 2.5, eligiblePairs: 2, meanDelta: -0.5, treatmentMean: 2 },
+        totalPairs: 2,
+        totalTokens: { controlMean: 150, eligiblePairs: 2, meanDelta: 0, treatmentMean: 150 },
+        treatmentPassRate: 1,
       }),
     ]);
   });
 
   it("fails closed for incomplete and errored pairs while retaining totals", () => {
-    const observations: EvalObservation[] = [
+    const observations: reportTypesTypes.EvalObservation[] = [
       scored("without_docs", 1, 0),
       errored("with_docs", 1, 120),
       scored("without_docs", 2, 1, { totalTokens: 200 }),
     ];
     const report = summarizeEvalObservations("digest", expectedFor([1, 2]), observations);
     expect(report.comparisons[0]).toEqual(
-      expect.objectContaining({ totalPairs: 2, eligiblePairs: 0, blockedPairs: 2, lift: null }),
+      expect.objectContaining({ blockedPairs: 2, eligiblePairs: 0, lift: null, totalPairs: 2 }),
     );
     expect(report.blockedPairs).toEqual([
-      expect.objectContaining({ runNumber: 1, reasons: ["with_docs: errored"] }),
+      expect.objectContaining({ reasons: ["with_docs: errored"], runNumber: 1 }),
       expect.objectContaining({
-        runNumber: 2,
         reasons: ["with_docs: expected 1 observation, found 0"],
+        runNumber: 2,
       }),
     ]);
     expect(report.operationalTotals[0]?.totalTokens).toEqual({ availableRuns: 2, total: 300 });
   });
+});
 
+describe("summarizeEvalObservations metrics", () => {
   it("blocks duplicate observations and keeps missing metrics distinct from zero", () => {
     const withoutTokens = scored("without_docs", 1, 1);
     delete withoutTokens.totalTokens;

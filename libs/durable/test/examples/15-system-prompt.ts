@@ -1,21 +1,26 @@
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider } from "@msa/ai/providers/faux";
-// System prompt sections and per-conversation instructions.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/15-system-prompt.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import modelsModule from "@msa/ai/models";
+import fauxModule from "@msa/ai/providers/faux";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  type Conversation,
-  createRegistry,
-  defineExtension,
-  Harness,
-  MemoryStorage,
-  SystemEntry,
-  section,
-  wrapSection,
-} from "../../src/index.ts";
+import type durableTypes from "../../src/index.types.ts";
+import durableKit from "../durable-kit.ts";
+import effectSupport from "../effect-support.ts";
+
+const { fauxAssistantMessage, fauxProvider } = fauxModule;
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { durable, envNode: node, harness: harnessModule, memory } = durableKit;
+
+const { SystemEntry, defineExtension, section, wrapSection } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 const faux = fauxProvider();
@@ -27,16 +32,10 @@ faux.setResponses([
   fauxAssistantMessage("Done."),
 ]);
 
-// Pico stores no prompt state. Before each model request, the sections of the
-// conversation's selected extensions render the desired prompt, and only the
-// difference to what the model already saw is appended to the transcript as a
-// `msa.system` entry.
 const Coding = defineExtension({
   name: "coding",
   sections: [
-    // `tag: false` sends the text as is; by default it is wrapped in <key>...</key>.
     section("preamble", () => "You are a coding agent.", { tag: false }),
-    // Sections see the environment built for this request, here its working directory.
     section("cwd", (input) => input.env?.cwd),
   ],
 });
@@ -44,14 +43,17 @@ const AgentsMd = defineExtension({
   name: "agents-md",
   sections: [section("agents_md", () => "Run npm run check after changes.")],
 });
-// Another extension decorates a section by key without replacing it.
 const Terse = defineExtension({
   name: "terse",
   wraps: [
     wrapSection("preamble", (preamble) => ({
       ...preamble,
-      render: async (input, renderContext) =>
-        `${await preamble.render(input, renderContext)} Be terse.`,
+      render: (input, renderContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            return `${yield* awaited(preamble.render(input, renderContext))} Be terse.`;
+          }),
+        ),
     })),
   ],
 });
@@ -60,42 +62,66 @@ const registry = createRegistry();
 registry.install(Coding);
 registry.install(AgentsMd);
 registry.install(Terse);
-// The environment follows each conversation's agent `cwd`.
 const env = ({ cwd = "/" }: { readonly cwd?: string }) => new NodeExecutionEnv({ cwd });
-const harness = await Harness.open(new MemoryStorage(), { models, registry, env }, context);
-const model = { provider: "faux", modelId: "faux-1" };
-const root = await harness.root(context, { agent: { model, cwd: "/repo" } });
 
-// A subagent deselects AGENTS.md and gets its own instructions, rendered last
-// as the `instructions` section.
-const subagent = await harness.createConversation(
-  {
-    ownership: { kind: "ownerless" },
-    agent: {
-      model,
-      cwd: "/repo",
-      extensions: { remove: [AgentsMd] },
-      instructions: "Only read; never edit files.",
-    },
-  },
-  context,
-);
+const mainStep1 = Effect.gen(function* () {
+  const harness = yield* awaited(
+    Harness.open(new MemoryStorage(), { env, models, registry }, context),
+  );
+  const model = { modelId: "faux-1", provider: "faux" };
+  const root = yield* awaited(harness.root(context, { agent: { cwd: "/repo", model } }));
 
-async function systemEntries(conversation: Conversation) {
-  const page = await conversation.entries({}, 20, undefined, context);
-  return [...page.items]
-    .reverse()
-    .flatMap((entry) => (SystemEntry.is(entry) ? (entry.model ?? []) : []));
-}
+  const subagent = yield* awaited(
+    harness.createConversation(
+      {
+        agent: {
+          cwd: "/repo",
+          extensions: { remove: [AgentsMd] },
+          instructions: "Only read; never edit files.",
+          model,
+        },
+        ownership: { kind: "ownerless" },
+      },
+      context,
+    ),
+  );
 
-await (await root.submit({ type: "input", content: "Fix the build." }, context)).wait(context);
-await (await subagent.submit({ type: "input", content: "Read the logs." }, context)).wait(context);
-console.log("root system prompt:", await systemEntries(root));
-console.log("subagent system prompt:", await systemEntries(subagent));
+  const systemEntries = Effect.fn("systemEntries")(function* (
+    conversation: durableTypes.Conversation,
+  ) {
+    const page = yield* awaited(conversation.entries({}, 20, undefined, context));
+    return [...page.items]
+      .reverse()
+      .flatMap((entry) => (SystemEntry.is(entry) ? (entry.model ?? []) : []));
+  });
 
-// When a section's output changes, the next request appends only the change.
-await root.configure({ cwd: "/repo/packages" }, context);
-await (await root.submit({ type: "input", content: "Now the package." }, context)).wait(context);
-console.log("root system entries after cwd change:", await systemEntries(root));
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "Fix the build.", type: "input" }, context))).wait(
+      context,
+    ),
+  );
+  yield* awaited(
+    (yield* awaited(subagent.submit({ content: "Read the logs.", type: "input" }, context))).wait(
+      context,
+    ),
+  );
+  yield* Console.log("root system prompt:", yield* systemEntries(root));
+  yield* Console.log("subagent system prompt:", yield* systemEntries(subagent));
 
-await harness.close(context);
+  yield* awaited(root.configure({ cwd: "/repo/packages" }, context));
+  return { harness, root, systemEntries };
+});
+
+const main = Effect.gen(function* () {
+  const { harness, root, systemEntries } = yield* mainStep1;
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "Now the package.", type: "input" }, context))).wait(
+      context,
+    ),
+  );
+  yield* Console.log("root system entries after cwd change:", yield* systemEntries(root));
+
+  yield* awaited(harness.close(context));
+});
+
+NodeRuntime.runMain(main);

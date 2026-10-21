@@ -1,46 +1,70 @@
-import type { JsonObject } from "../types.ts";
+import { Clock, Effect, Function } from "effect";
 
-export interface DiagnosticErrorInfo {
-  name?: string | undefined;
-  message: string;
-  stack?: string | undefined;
-  code?: string | number | undefined;
-}
+import type typesModule from "../types.types.ts";
+import type diagnosticsTypes from "./diagnostics.types.ts";
 
-export interface AssistantMessageDiagnostic {
-  type: string;
-  timestamp: number;
-  error?: DiagnosticErrorInfo | undefined;
-  details?: JsonObject | undefined;
-}
-
-export function formatThrownValue(value: unknown): string {
+function formatThrownValue(value: unknown): string {
   if (value instanceof Error) return value.message || value.name;
   if (typeof value === "string") return value;
   return String(value);
 }
 
-export function extractDiagnosticError(error: unknown): DiagnosticErrorInfo {
-  if (!(error instanceof Error)) return { name: "ThrownValue", message: formatThrownValue(error) };
+function extractDiagnosticError(error: unknown): diagnosticsTypes.DiagnosticErrorInfo {
+  if (!(error instanceof Error)) return { message: formatThrownValue(error), name: "ThrownValue" };
   const code = (error as Error & { code?: unknown }).code;
   return {
-    name: error.name || undefined,
-    message: error.message || error.name,
-    stack: error.stack,
     code: typeof code === "string" || typeof code === "number" ? code : undefined,
+    message: error.message || error.name,
+    name: error.name || undefined,
+    stack: error.stack,
   };
 }
 
-export function createAssistantMessageDiagnostic(
-  type: string,
-  error: unknown,
-  details?: JsonObject,
-): AssistantMessageDiagnostic {
-  return { type, timestamp: Date.now(), error: extractDiagnosticError(error), details };
-}
+const createAssistantMessageDiagnostic: {
+  (
+    error: unknown,
+    details: typesModule.JsonObject | undefined,
+  ): (type: string) => diagnosticsTypes.AssistantMessageDiagnostic;
+  (
+    type: string,
+    error: unknown,
+    details: typesModule.JsonObject | undefined,
+  ): diagnosticsTypes.AssistantMessageDiagnostic;
+} = Function.dual(
+  3,
+  function (
+    type: string,
+    error: unknown,
+    details: typesModule.JsonObject | undefined,
+  ): diagnosticsTypes.AssistantMessageDiagnostic {
+    return {
+      details,
+      error: extractDiagnosticError(error),
+      timestamp: Effect.runSync(Clock.currentTimeMillis),
+      type,
+    };
+  },
+);
 
-export function appendAssistantMessageDiagnostic<
-  T extends { diagnostics?: AssistantMessageDiagnostic[] },
->(message: T, diagnostic: AssistantMessageDiagnostic): void {
+const appendAssistantMessageDiagnostic: {
+  <T extends { diagnostics?: diagnosticsTypes.AssistantMessageDiagnostic[] }>(
+    diagnostic: diagnosticsTypes.AssistantMessageDiagnostic,
+  ): (message: T) => void;
+  <T extends { diagnostics?: diagnosticsTypes.AssistantMessageDiagnostic[] }>(
+    message: T,
+    diagnostic: diagnosticsTypes.AssistantMessageDiagnostic,
+  ): void;
+} = Function.dual(2, function <
+  T extends { diagnostics?: diagnosticsTypes.AssistantMessageDiagnostic[] },
+>(message: T, diagnostic: diagnosticsTypes.AssistantMessageDiagnostic): void {
   message.diagnostics = [...(message.diagnostics ?? []), diagnostic];
-}
+});
+
+const diagnosticsModule = {
+  appendAssistantMessageDiagnostic,
+  createAssistantMessageDiagnostic,
+  extractDiagnosticError,
+  formatThrownValue,
+};
+
+export default diagnosticsModule;

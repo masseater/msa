@@ -1,32 +1,21 @@
-import { LAYOUT_NODE, type ScrollLayoutNode } from "../layout-node.ts";
-import { type Component, Container } from "../tui.ts";
+import delay from "../delay.ts";
+import type delayTypes from "../delay.types.ts";
+import layoutNode from "../layout-node.ts";
+import type layoutNodeTypes from "../layout-node.types.ts";
+import tuiComponent from "../tui-component.ts";
+import type tuiComponentTypes from "../tui-component.types.ts";
+import type scrollViewTypes from "./scroll-view.types.ts";
+const { runAfterUnref } = delay;
+const { LAYOUT_NODE } = layoutNode;
 
-export type ScrollViewScrollbar = "hidden" | "auto" | "always";
-
-export interface ScrollViewOptions {
-  axis?: "vertical";
-  follow?: "none" | "end";
-  primary?: boolean;
-  overscroll?: "chain" | "contain";
-  scrollbar?: ScrollViewScrollbar;
-  scrollbarTrackStyle?: (text: string) => string;
-  scrollbarThumbStyle?: (text: string) => string;
-  scrollbarHideDelayMs?: number;
-}
-
-export interface ScrollViewScrollToOptions {
-  /** Keep follow-end disabled even when the target is the current content end. */
-  disableFollow?: boolean;
-}
-
-export class ScrollView extends Container {
-  private readonly child: Component;
+export default class ScrollView extends tuiComponent.Container {
+  private readonly child: tuiComponentTypes.Component;
   readonly followEnd: boolean;
   readonly primary: boolean;
   readonly overscroll: "chain" | "contain";
   readonly scrollbarTrackStyle: (text: string) => string;
   readonly scrollbarThumbStyle: (text: string) => string;
-  private currentScrollbar: ScrollViewScrollbar;
+  private currentScrollbar: scrollViewTypes.ScrollViewScrollbar;
   private readonly scrollbarHideDelayMs: number;
   private currentScrollTop = 0;
   private contentHeight = 0;
@@ -36,9 +25,12 @@ export class ScrollView extends Container {
   private requestRenderCallback: (() => void) | undefined;
   private transientScrollbarVisible = false;
   private scrollbarActive = false;
-  private scrollbarHideTimer: NodeJS.Timeout | undefined;
+  private cancelScrollbarHide: delayTypes.CancelDelay | undefined;
 
-  constructor(component: Component, options: ScrollViewOptions = {}) {
+  constructor(
+    component: tuiComponentTypes.Component,
+    options: scrollViewTypes.ScrollViewOptions = {},
+  ) {
     super();
     if (options.axis !== undefined && options.axis !== "vertical") {
       throw new Error(`Unsupported ScrollView axis: ${options.axis}`);
@@ -67,7 +59,7 @@ export class ScrollView extends Container {
     return this.currentViewportHeight;
   }
 
-  get scrollbar(): ScrollViewScrollbar {
+  get scrollbar(): scrollViewTypes.ScrollViewScrollbar {
     return this.currentScrollbar;
   }
 
@@ -84,7 +76,7 @@ export class ScrollView extends Container {
     return this.scrollbarActive;
   }
 
-  setScrollbar(scrollbar: ScrollViewScrollbar): void {
+  setScrollbar(scrollbar: scrollViewTypes.ScrollViewScrollbar): void {
     if (scrollbar === this.currentScrollbar) return;
     this.currentScrollbar = scrollbar;
     if (scrollbar !== "auto") this.hideTransientScrollbar();
@@ -99,24 +91,23 @@ export class ScrollView extends Container {
   private markScrollbarActivity(): void {
     if (this.scrollbar !== "auto" || this.contentHeight <= this.currentViewportHeight) return;
     this.transientScrollbarVisible = true;
-    if (this.scrollbarHideTimer) {
-      clearTimeout(this.scrollbarHideTimer);
-      this.scrollbarHideTimer = undefined;
+    if (this.cancelScrollbarHide !== undefined) {
+      this.cancelScrollbarHide();
+      this.cancelScrollbarHide = undefined;
     }
     if (this.scrollbarActive) return;
-    this.scrollbarHideTimer = setTimeout(() => {
-      this.scrollbarHideTimer = undefined;
+    this.cancelScrollbarHide = runAfterUnref(this.scrollbarHideDelayMs, () => {
+      this.cancelScrollbarHide = undefined;
       this.transientScrollbarVisible = false;
       this.requestRenderCallback?.();
-    }, this.scrollbarHideDelayMs);
-    this.scrollbarHideTimer.unref();
+    });
   }
 
   private hideTransientScrollbar(): void {
     this.transientScrollbarVisible = false;
-    if (!this.scrollbarHideTimer) return;
-    clearTimeout(this.scrollbarHideTimer);
-    this.scrollbarHideTimer = undefined;
+    if (this.cancelScrollbarHide === undefined) return;
+    this.cancelScrollbarHide();
+    this.cancelScrollbarHide = undefined;
   }
 
   setScrollbarActive(active: boolean): void {
@@ -126,7 +117,7 @@ export class ScrollView extends Container {
     this.requestRenderCallback?.();
   }
 
-  scrollTo(scrollTop: number, options: ScrollViewScrollToOptions = {}): void {
+  scrollTo(scrollTop: number, options: scrollViewTypes.ScrollViewScrollToOptions = {}): void {
     const requested = Number.isFinite(scrollTop) ? Math.trunc(scrollTop) : this.currentScrollTop;
     const maxScrollTop = Math.max(0, this.contentHeight - this.currentViewportHeight);
     const next = Math.max(0, Math.min(maxScrollTop, requested));
@@ -202,11 +193,11 @@ export class ScrollView extends Container {
     if (this.contentHeight <= this.currentViewportHeight) this.hideTransientScrollbar();
   }
 
-  override addChild(_component: Component): void {
+  override addChild(_component: tuiComponentTypes.Component): void {
     throw new Error("ScrollView has exactly one child");
   }
 
-  override removeChild(_component: Component): void {
+  override removeChild(_component: tuiComponentTypes.Component): void {
     throw new Error("ScrollView child cannot be removed");
   }
 
@@ -220,7 +211,7 @@ export class ScrollView extends Container {
     return contentWidth === width ? lines : lines.map((line) => `${line} `);
   }
 
-  [LAYOUT_NODE](): ScrollLayoutNode {
-    return { type: "scroll", component: this.child, state: this };
+  [LAYOUT_NODE](): layoutNodeTypes.ScrollLayoutNode {
+    return { component: this.child, state: this, type: "scroll" };
   }
 }

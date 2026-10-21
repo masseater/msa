@@ -1,12 +1,14 @@
 import * as Data from "effect/Data";
 
-export const CODEMODE_OPTIONS_PREFIX = "// @options:";
+import type sourceTypes from "./source.types.ts";
+
+const CODEMODE_OPTIONS_PREFIX = "// @options:";
 
 const SUPPORTED_FIELDS = ["max_output_tokens", "timeout_ms"] as const;
 const SUPPORTED_FIELDS_TEXT = "`max_output_tokens` and `timeout_ms`";
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-export const CODEMODE_SOURCE_GRAMMAR = String.raw`
+const CODEMODE_SOURCE_GRAMMAR = String.raw`
 start: options_source | plain_source
 options_source: OPTIONS_LINE NEWLINE SOURCE
 plain_source: SOURCE
@@ -16,17 +18,7 @@ NEWLINE: /\r?\n/
 SOURCE: /[\s\S]+/
 `;
 
-export interface CodemodeSourceOptions {
-  maxOutputTokens?: number;
-  timeoutMs?: number;
-}
-
-export interface ParsedCodemodeSource {
-  code: string;
-  options: CodemodeSourceOptions;
-}
-
-export class CodemodeSourceError extends Data.TaggedError("CodemodeSourceError")<{
+class CodemodeSourceError extends Data.TaggedError("CodemodeSourceError")<{
   readonly message: string;
 }> {
   constructor(message: string) {
@@ -38,7 +30,7 @@ function isSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
 
-function parseOptions(directive: string): CodemodeSourceOptions {
+function parseOptions(directive: string): sourceTypes.CodemodeSourceOptions {
   if (directive === "") {
     throw new CodemodeSourceError(
       `@options must be a JSON object with supported fields ${SUPPORTED_FIELDS_TEXT}`,
@@ -65,7 +57,7 @@ function parseOptions(directive: string): CodemodeSourceOptions {
       );
     }
   }
-  const options: CodemodeSourceOptions = {};
+  const options: sourceTypes.CodemodeSourceOptions = {};
   const { max_output_tokens, timeout_ms } = fields;
   if (max_output_tokens !== undefined) {
     if (!isSafeInteger(max_output_tokens)) {
@@ -86,7 +78,7 @@ function parseOptions(directive: string): CodemodeSourceOptions {
   return options;
 }
 
-export function parseCodemodeSource(input: string): ParsedCodemodeSource {
+function parseCodemodeSource(input: string): sourceTypes.ParsedCodemodeSource {
   if (input.trim() === "") {
     throw new CodemodeSourceError(
       'Expected JavaScript source text (non-empty). Provide JS only, optionally with a first line `// @options: {"max_output_tokens": 1000}`.',
@@ -113,3 +105,12 @@ export function parseCodemodeSource(input: string): ParsedCodemodeSource {
   }
   return { code, options: parseOptions(trimmed.slice(CODEMODE_OPTIONS_PREFIX.length).trim()) };
 }
+
+const source = {
+  CODEMODE_OPTIONS_PREFIX,
+  CODEMODE_SOURCE_GRAMMAR,
+  CodemodeSourceError,
+  parseCodemodeSource,
+};
+
+export default source;

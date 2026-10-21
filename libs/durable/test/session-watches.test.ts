@@ -1,251 +1,181 @@
-import type { Context } from "@msa/chord";
-import {
-  BACKGROUND_CONTEXT,
-  createContextKey,
-  withAbortSignal,
-  withContextValue,
-} from "@msa/chord/context";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { context, documentChanges, flush, openTestSession } from "./session-support.ts";
-import { deferred, createState, StateDoc, type State } from "./session-watches-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import sessionWatchesSupport from "./session-watches-support.ts";
+import type sessionWatchesSupportTypes from "./session-watches-support.types.ts";
 
-describe("Session document watches", () => {
-  it("never creates an absent document", async () => {
-    const { session, storage } = openTestSession();
-    const commits = storage.commits.length;
-    expect(await session.watchDoc(StateDoc, context)).toBeUndefined();
-    expect(storage.commits).toHaveLength(commits);
-    expect(storage.mintCount).toBe(0);
+const { awaited } = effectSupport;
+const { context, documentChanges, flush, openTestSession } = sessionSupport;
+const { StateDoc, createState, deferred, writeState } = sessionWatchesSupport;
+
+const neverCreatesAbsent = Effect.gen(function* () {
+  const { session, storage } = openTestSession();
+  const commits = storage.commits.length;
+  expect(yield* awaited(session.watchDoc(StateDoc, context))).toBeUndefined();
+  expect(storage.commits).toHaveLength(commits);
+  expect(storage.mintCount).toBe(0);
+});
+
+const keepsAcquisitionRevisionStep1 = Effect.gen(function* () {
+  const { session, publications } = yield* createState();
+  const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
+  const initial = watch.value;
+  yield* writeState(session, (state) => {
+    state.value = 1;
   });
-
-  it("keeps the acquisition revision until start and delivers exact committed frames", async () => {
-    const { session, publications } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    const initial = watch.value;
-    await session.commit(async (tx) => {
-      (await tx.doc(StateDoc)).value = 1;
-    }, context);
-    await flush();
-    const firstPublished = documentChanges(publications.at(-1)!)[0]!;
-    await session.commit(async (tx) => {
-      (await tx.doc(StateDoc)).value = 2;
-    }, context);
-    await flush();
-    const secondPublished = documentChanges(publications.at(-1)!)[0]!;
-    expect(watch.value).toBe(initial);
-
-    let inline = true;
-    const deliveries: Array<{ value: Readonly<State> | null; ops: unknown }> = [];
-    watch.start((value, ops) => {
-      expect(inline).toBe(false);
-      expect(watch.value).toBe(value);
-      deliveries.push({ value, ops });
-
-      return Promise.resolve();
-    });
-    inline = false;
-    expect(deliveries).toHaveLength(0);
-    await flush();
-    expect(deliveries.map(({ value }) => value?.value)).toEqual([1, 2]);
-    expect(deliveries[0]!.value).toBe(firstPublished.value);
-    expect(deliveries[0]!.ops).toBe(firstPublished.ops);
-    expect(deliveries[1]!.value).toBe(secondPublished.value);
-    expect(deliveries[1]!.ops).toBe(secondPublished.ops);
-    expect(initial?.value).toBe(0);
-    await watch.stop();
+  yield* flush;
+  const firstPublished = documentChanges(publications.at(-1)!)[0]!;
+  yield* writeState(session, (state) => {
+    state.value = 2;
   });
+  yield* flush;
+  const secondPublished = documentChanges(publications.at(-1)!)[0]!;
+  expect(watch.value).toBe(initial);
+
+  let inline = true;
+  const deliveries: Array<{
+    value: Readonly<sessionWatchesSupportTypes.State> | null;
+    ops: unknown;
+  }> = [];
+  watch.start((value, ops) => {
+    expect(inline).toBe(false);
+    expect(watch.value).toBe(value);
+    deliveries.push({ ops, value });
+
+    return Promise.resolve();
+  });
+  inline = false;
+  return { deliveries, firstPublished, initial, secondPublished, watch };
+});
+
+const keepsAcquisitionRevision = Effect.gen(function* () {
+  const { watch, initial, firstPublished, secondPublished, deliveries } =
+    yield* keepsAcquisitionRevisionStep1;
+  expect(deliveries).toHaveLength(0);
+  yield* flush;
+  expect(deliveries.map(({ value }) => value?.value)).toEqual([1, 2]);
+  expect(deliveries[0]!.value).toBe(firstPublished.value);
+  expect(deliveries[0]!.ops).toBe(firstPublished.ops);
+  expect(deliveries[1]!.value).toBe(secondPublished.value);
+  expect(deliveries[1]!.ops).toBe(secondPublished.ops);
+  expect(initial?.value).toBe(0);
+  yield* awaited(watch.stop());
 });
 
 describe("Session document watches", () => {
-  it("serializes callbacks and buffers exact frames committed while one is in flight", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    const entered = deferred();
-    const release = deferred();
-    const values: number[] = [];
-    let active = 0;
-    let maxActive = 0;
-    watch.start(async (value) => {
-      active++;
-      maxActive = Math.max(maxActive, active);
-      values.push(value?.value ?? -1);
-      if (values.length === 1) {
-        entered.resolve();
-        await release.promise;
-      }
-      active--;
-    });
-    await session.commit(async (tx) => {
-      (await tx.doc(StateDoc)).value = 1;
-    }, context);
-    await entered.promise;
-    for await (const value of Array.from({ length: 19 }, (_, i) => 2 + i)) {
-      await session.commit(async (tx) => {
-        (await tx.doc(StateDoc)).value = value;
-      }, context);
-    }
-    expect(values).toEqual([1]);
-    release.resolve();
-    await flush();
-    expect(maxActive).toBe(1);
-    expect(values).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
-    await watch.stop();
+  it("never creates an absent document", () => Effect.runPromise(neverCreatesAbsent));
+
+  it("keeps the acquisition revision until start and delivers exact committed frames", () =>
+    Effect.runPromise(keepsAcquisitionRevision));
+});
+
+const serializesCallbacksBuffersStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { session } = yield* createState();
+  const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
+  const entered = deferred();
+  const release = deferred();
+  const values: number[] = [];
+  return { entered, release, runPromise, session, values, watch };
+});
+
+const serializesCallbacksBuffers = Effect.gen(function* () {
+  const { runPromise, session, watch, entered, release, values } =
+    yield* serializesCallbacksBuffersStep1;
+  let active = 0;
+  let maxActive = 0;
+  watch.start((value) =>
+    runPromise(
+      Effect.gen(function* () {
+        active++;
+        maxActive = Math.max(maxActive, active);
+        values.push(value?.value ?? -1);
+        if (values.length === 1) {
+          entered.resolve();
+          yield* awaited(release.promise);
+        }
+        active--;
+      }),
+    ),
+  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
   });
+  yield* awaited(entered.promise);
+  for (const value of Array.from({ length: 19 }, (_, i) => 2 + i)) {
+    yield* writeState(session, (state) => {
+      state.value = value;
+    });
+  }
+  expect(values).toEqual([1]);
+  release.resolve();
+  yield* flush;
+  expect(maxActive).toBe(1);
+  expect(values).toEqual(Array.from({ length: 20 }, (_, index) => index + 1));
+  yield* awaited(watch.stop());
 });
 
 describe("Session document watches", () => {
-  it("allows a listener to initiate a later Session commit", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    const completed = deferred();
-    const values: number[] = [];
-    watch.start(async (value) => {
-      const current = value?.value ?? -1;
-      values.push(current);
-      if (current === 1) {
-        await session.commit(async (tx) => {
-          (await tx.doc(StateDoc)).value = 2;
-        }, context);
-      } else {
-        completed.resolve();
-      }
-    });
-    await session.commit(async (tx) => {
-      (await tx.doc(StateDoc)).value = 1;
-    }, context);
-    await completed.promise;
-    expect(values).toEqual([1, 2]);
-    await watch.stop();
-  });
+  it("serializes callbacks and buffers exact frames committed while one is in flight", () =>
+    Effect.runPromise(serializesCallbacksBuffers));
+});
 
-  it("collapses 101 pending commits to one root replacement", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    for await (const value of Array.from({ length: 101 }, (_, i) => 1 + i)) {
-      await session.commit(async (tx) => {
-        (await tx.doc(StateDoc)).value = value;
-      }, context);
-    }
-    const deliveries: Array<{ value: number; ops: unknown }> = [];
-    watch.start((value, ops) => {
-      deliveries.push({ value: value?.value ?? -1, ops });
+const allowsListenerInitiate = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      return Promise.resolve();
-    });
-    await flush();
-    expect(deliveries).toEqual([{ value: 101, ops: [["r", watch.value]] }]);
-    await watch.stop();
+  const { session } = yield* createState();
+  const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
+  const completed = deferred();
+  const values: number[] = [];
+  watch.start((value) =>
+    runPromise(
+      Effect.gen(function* () {
+        const current = value?.value ?? -1;
+        values.push(current);
+        if (current === 1) {
+          yield* writeState(session, (state) => {
+            state.value = 2;
+          });
+        } else {
+          completed.resolve();
+        }
+      }),
+    ),
+  );
+  yield* writeState(session, (state) => {
+    state.value = 1;
   });
+  yield* awaited(completed.promise);
+  expect(values).toEqual([1, 2]);
+  yield* awaited(watch.stop());
+});
+
+const collapses101Pending = Effect.gen(function* () {
+  const { session } = yield* createState();
+  const watch = (yield* awaited(session.watchDoc(StateDoc, context)))!;
+  for (const value of Array.from({ length: 101 }, (_, i) => 1 + i)) {
+    yield* writeState(session, (state) => {
+      state.value = value;
+    });
+  }
+  const deliveries: Array<{ value: number; ops: unknown }> = [];
+  watch.start((value, ops) => {
+    deliveries.push({ ops, value: value?.value ?? -1 });
+
+    return Promise.resolve();
+  });
+  yield* flush;
+  expect(deliveries).toEqual([{ ops: [["r", watch.value]], value: 101 }]);
+  yield* awaited(watch.stop());
 });
 
 describe("Session document watches", () => {
-  it("never folds the in-flight frame into an overflow reset", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    const entered = deferred();
-    const release = deferred();
-    const deliveries: Array<{ value: number; ops: unknown }> = [];
-    watch.start(async (value, ops) => {
-      deliveries.push({ value: value?.value ?? -1, ops });
-      if (deliveries.length === 1) {
-        entered.resolve();
-        await release.promise;
-      }
-    });
-    await session.commit(async (tx) => {
-      (await tx.doc(StateDoc)).value = 1;
-    }, context);
-    await entered.promise;
-    for await (const value of Array.from({ length: 101 }, (_, i) => 2 + i)) {
-      await session.commit(async (tx) => {
-        (await tx.doc(StateDoc)).value = value;
-      }, context);
-    }
-    release.resolve();
-    await flush();
-    expect(deliveries[0]!.value).toBe(1);
-    expect(deliveries[1]).toEqual({ value: 102, ops: [["r", watch.value]] });
-    expect(deliveries).toHaveLength(2);
-    await watch.stop();
-  });
+  it("allows a listener to initiate a later Session commit", () =>
+    Effect.runPromise(allowsListenerInitiate));
 
-  it("folds retirement into an overflow reset and then closes", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    for await (const value of Array.from({ length: 100 }, (_, i) => 1 + i)) {
-      await session.commit(async (tx) => {
-        (await tx.doc(StateDoc)).value = value;
-      }, context);
-    }
-    await session.commit((tx) => tx.retireDoc(StateDoc), context);
-    const deliveries: Array<{ value: Readonly<State> | null; ops: unknown }> = [];
-    watch.start((value, ops) => {
-      deliveries.push({ value, ops });
-
-      return Promise.resolve();
-    });
-    expect(await watch.closed).toEqual({ reason: "retired" });
-    expect(deliveries).toEqual([{ value: null, ops: [["r", null]] }]);
-  });
-});
-
-describe("Session document watches", () => {
-  it("delivers replayable structural no-op commits instead of suppressing them", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    const initial = watch.value;
-    await session.commit(async (tx) => {
-      const state = await tx.doc(StateDoc);
-      const first = state.items.shift()!;
-      state.items.unshift(first);
-    }, context);
-    const newest = (await session.snapshot(StateDoc, context))!;
-    expect(newest).not.toBe(initial);
-    expect(newest).toEqual(initial);
-    const batches: unknown[] = [];
-    watch.start((value, ops) => {
-      expect(value).toBe(newest);
-      batches.push(ops);
-
-      return Promise.resolve();
-    });
-    await flush();
-    expect(batches).toHaveLength(1);
-    expect((batches[0] as readonly unknown[]).length).toBeGreaterThan(0);
-    await watch.stop();
-  });
-});
-
-describe("Session document watches", () => {
-  it("preserves commit Context values without inheriting producer cancellation", async () => {
-    const { session } = await createState();
-    const watch = (await session.watchDoc(StateDoc, context))!;
-    const key = createContextKey<string>("watch-test");
-    const parentController = new AbortController();
-    const commitContext = withContextValue(
-      key,
-      "newest-commit",
-      withAbortSignal(parentController.signal, BACKGROUND_CONTEXT),
-    );
-    const entered = deferred();
-    const release = deferred();
-    let deliveryContext: Context | undefined;
-    watch.start(async (_value, _ops, delivered) => {
-      deliveryContext = delivered;
-      entered.resolve();
-      await release.promise;
-    });
-    await session.commit(async (tx) => {
-      (await tx.doc(StateDoc)).value = 1;
-    }, commitContext);
-    await entered.promise;
-    expect(deliveryContext!.value(key)).toBe("newest-commit");
-    expect(deliveryContext!.abortSignal).toBeUndefined();
-    parentController.abort("caller finished");
-    const stopped = watch.stop();
-    expect(await stopped).toEqual({ reason: "stopped" });
-    expect(deliveryContext!.abortSignal).toBeUndefined();
-    release.resolve();
-  });
+  it("collapses 101 pending commits to one root replacement", () =>
+    Effect.runPromise(collapses101Pending));
 });

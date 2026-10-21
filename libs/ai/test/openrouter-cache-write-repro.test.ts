@@ -1,9 +1,34 @@
+import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { completeSimple, getModel } from "../src/compat.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import random from "../src/utils/random.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+
+const { currentTimeMillis } = clock;
+const { nextRandom } = random;
+const { completeSimple } = compat;
+
+const { hasEnv, readEnv } = env;
+const { chooseModel, usesApi } = modelChoice;
+
+type CachePart = { type?: string; text?: string; cache_control?: { type: string } };
+type CacheMessage = { role?: string; content?: string | CachePart[] };
+
+const completions = usesApi("openai-completions");
+
+const explicitCacheModel = chooseModel(
+  "openrouter",
+  "Gemini with billed cache writes",
+  (model): model is typesModule.Model<"openai-completions"> =>
+    completions(model) && model.id.startsWith("google/") && model.cost.cacheWrite > 0,
+);
 
 function createLongSystemPrompt(): string {
-  const nonce = `${Date.now()}-${Math.random()}`;
+  const nonce = `${currentTimeMillis()}-${nextRandom()}`;
   return `You are a concise assistant.\nCache nonce: ${nonce}\n\n${Array(80)
     .fill(
       "Prompt-caching probe content. Keep this exact text stable across requests so the provider can reuse prefix tokens and report cache read and cache write usage.",
@@ -11,70 +36,49 @@ function createLongSystemPrompt(): string {
     .join("\n\n")}`;
 }
 
-describe.skipIf(!process.env["OPENROUTER_API_KEY"])("OpenRouter cache_write repro E2E", () => {
+const markLastUserMessage = (payload: unknown): unknown => {
+  const { messages } = payload as { messages?: CacheMessage[] };
+  const last = Array.isArray(messages)
+    ? messages.findLast((message) => message.role === "user")
+    : undefined;
+  if (last === undefined) return payload;
+  if (typeof last.content === "string") {
+    last.content = [{ cache_control: { type: "ephemeral" }, text: last.content, type: "text" }];
+  } else if (Array.isArray(last.content)) {
+    const text = last.content.findLast((part) => part.type === "text");
+    if (text !== undefined) text.cache_control = { type: "ephemeral" };
+  }
+  return payload;
+};
+
+const reportsCacheWrites = Effect.gen(function* () {
+  const context: typesModule.Context = {
+    messages: [
+      {
+        content: "Reply with exactly: OK",
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
+      },
+    ],
+    systemPrompt: createLongSystemPrompt(),
+  };
+  const options = {
+    apiKey: (yield* readEnv("OPENROUTER_API_KEY")) ?? "",
+    maxTokens: 32,
+    onPayload: markLastUserMessage,
+    temperature: 0,
+  };
+  const first = yield* Effect.promise(() => completeSimple(explicitCacheModel, context, options));
+  expect(first.stopReason, first.errorMessage).toBe("stop");
+  const second = yield* Effect.promise(() => completeSimple(explicitCacheModel, context, options));
+  expect(second.stopReason, second.errorMessage).toBe("stop");
+  expect(first.usage.cacheWrite > 0 || second.usage.cacheWrite > 0).toBe(true);
+});
+
+describe.skipIf(!hasEnv("OPENROUTER_API_KEY"))("OpenRouter cache_write repro E2E", () => {
   it(
     "regression: preserves cache_write_tokens on openai-completions stream path",
     { retry: 2, timeout: 90000 },
-    async () => {
-      const model = getModel("openrouter", "google/gemini-2.5-flash");
-      const context = {
-        systemPrompt: createLongSystemPrompt(),
-        messages: [
-          {
-            role: "user" as const,
-            content: "Reply with exactly: OK",
-            timestamp: Date.now(),
-          },
-        ],
-      };
-
-      const options = {
-        apiKey: process.env["OPENROUTER_API_KEY"]!,
-        maxTokens: 32,
-        temperature: 0,
-        onPayload: (payload: unknown) => {
-          const params = payload as {
-            messages?: Array<{
-              role?: string;
-              content?:
-                | string
-                | Array<{ type?: string; text?: string; cache_control?: { type: string } }>;
-            }>;
-          };
-          const messages = params.messages;
-          if (!Array.isArray(messages)) return payload;
-
-          for (const msg of messages.toReversed()) {
-            if (msg.role !== "user") continue;
-            if (typeof msg.content === "string") {
-              msg.content = [
-                { type: "text", text: msg.content, cache_control: { type: "ephemeral" } },
-              ];
-              break;
-            }
-            if (!Array.isArray(msg.content)) continue;
-            for (const part of msg.content.toReversed()) {
-              if (part.type === "text") {
-                part.cache_control = { type: "ephemeral" };
-                break;
-              }
-            }
-            break;
-          }
-          return payload;
-        },
-      };
-
-      const first = await completeSimple(model, context, options);
-      expect(first.stopReason, first.errorMessage).toBe("stop");
-
-      const second = await completeSimple(model, context, options);
-      expect(second.stopReason, second.errorMessage).toBe("stop");
-
-      // Regression expectation: cache_write_tokens from provider usage must be preserved.
-      // With the cache_control marker above, at least one of the two calls should create cache.
-      const hasCacheWrite = first.usage.cacheWrite > 0 || second.usage.cacheWrite > 0;
-      expect(hasCacheWrite).toBe(true);
-    },
+    () => Effect.runPromise(reportsCacheWrites),
   );
 });

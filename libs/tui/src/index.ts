@@ -1,210 +1,153 @@
-// Core TUI interfaces and classes
+import { Marked as MarkedModule } from "marked";
 
-export { Marked, type Token, type Tokens } from "marked";
-// Autocomplete support
-export {
-  type AutocompleteItem,
-  type AutocompleteProvider,
-  type AutocompleteSuggestions,
+import indexKit from "./index-kit.ts";
+import textSlice from "./text-slice.ts";
+import textTruncate from "./text-truncate.ts";
+import textWrap from "./text-wrap.ts";
+import TuiAltScreen from "./tui-alt-screen.ts";
+import tuiComponent from "./tui-component.ts";
+import tuiInterface from "./tui-interface.ts";
+import TuiMainScreen from "./tui-main-screen.ts";
+import utils from "./utils.ts";
+
+const {
   CombinedAutocompleteProvider,
-  type SlashCommand,
-} from "./autocomplete.ts";
-// Colors and styling
-export {
-  backgroundAnsi,
-  type Color,
-  type ColorMixSpace,
-  colorToHex,
-  colorToOkhsl,
-  colorToOklch,
-  colorToRgb,
-  foregroundAnsi,
-  type IndexedColor,
-  indexedColor,
-  mixColors,
-  type OkhslChannels,
-  type OklchChannels,
-  type OklchColorValue,
-  okhslColor,
-  oklchColor,
-  parseColor,
-  type RgbColorValue,
-  rgbColor,
-  styleText,
-  styleTextWithAnsi,
-  type TerminalColorMode,
-  type TextAttributes,
-  type TextStyle,
-} from "./colors.ts";
-// Components
-export { Box } from "./components/box.ts";
-export { CancellableLoader } from "./components/cancellable-loader.ts";
-export { Editor, type EditorOptions, type EditorTheme } from "./components/editor.ts";
-export { HStack } from "./components/h-stack.ts";
-export {
-  Image,
-  type ImageOptions,
-  type ImageTheme,
-  type ImageTranscoder,
-  setImageTranscoder,
-} from "./components/image.ts";
-export { Input } from "./components/input.ts";
-export { Loader, type LoaderIndicatorOptions } from "./components/loader.ts";
-export {
-  type DefaultTextStyle,
+  Box,
+  CancellableLoader,
+  colorAnsi: colorAnsiModule,
+  colors,
+  Editor,
+  fuzzy,
+  HStack,
+  image,
+  Input,
+  keyIds,
+  keyMatchers,
+  keyProtocols,
+  keybindingDefinitions,
+  keybindings: keybindingsModule,
+  keys,
+  latex,
+  Loader,
   Markdown,
-  type MarkdownOptions,
-  type MarkdownTheme,
-} from "./components/markdown.ts";
-export { MouseRegion, type MouseRegionHandler } from "./components/mouse-region.ts";
-export {
+  MouseRegion,
+  nativePlatform,
+  oklab,
+  programStatus,
   ScrollView,
-  type ScrollViewOptions,
-  type ScrollViewScrollbar,
-  type ScrollViewScrollToOptions,
-} from "./components/scroll-view.ts";
-export {
-  type SelectItem,
   SelectList,
-  type SelectListLayoutOptions,
-  type SelectListTheme,
-  type SelectListTruncatePrimaryContext,
-} from "./components/select-list.ts";
-export {
-  type SettingItem,
   SettingsList,
-  type SettingsListTheme,
-} from "./components/settings-list.ts";
-export { Spacer } from "./components/spacer.ts";
-export {
-  SplitPane,
-  type SplitPaneOptions,
-  type SplitPaneWidths,
-  splitPaneWidths,
-} from "./components/split-pane.ts";
-export { Text } from "./components/text.ts";
-export { TruncatedText } from "./components/truncated-text.ts";
-export {
-  type StackChild,
-  type StackEntry,
-  type StackEntryOptions,
-  type StackOptions,
+  Spacer,
+  splitPane,
+  StdinBuffer,
+  ProcessTerminal,
+  terminalCapabilities,
+  terminalCapabilitiesProbe,
+  terminalColors,
+  terminalImage,
+  terminalImageKitty,
+  terminalImageSize,
+  terminalProtocol,
+  Text,
+  TruncatedText,
   VStack,
-} from "./components/v-stack.ts";
-// Editor component interface (for custom editors)
-export type { EditorComponent } from "./editor-component.ts";
-// Fuzzy matching
-export { type FuzzyMatch, fuzzyFilter, fuzzyMatch } from "./fuzzy.ts";
-// Keybindings
-export {
-  getKeybindings,
-  type Keybinding,
-  type KeybindingConflict,
-  type KeybindingDefinition,
-  type KeybindingDefinitions,
-  type Keybindings,
-  type KeybindingsConfig,
-  KeybindingsManager,
-  setKeybindings,
-  TUI_KEYBINDINGS,
-} from "./keybindings.ts";
-// Keyboard input handling
-export {
-  decodeKittyPrintable,
-  isKeyRelease,
-  isKeyRepeat,
-  isKittyProtocolActive,
-  Key,
-  type KeyEventType,
-  type KeyId,
-  matchesKey,
-  parseKey,
-  setKittyProtocolActive,
-} from "./keys.ts";
-// LaTeX rendering
-export { type RenderLatexOptions, renderLatex } from "./latex.ts";
-// Native platform integration
-export { getNativeClipboard, type NativeClipboard } from "./native-platform.ts";
-export { oklabToOkhslLightness } from "./oklab.ts";
-// Program status reporting (OSC 7501)
-export { formatProgramStatus, type ProgramStatus } from "./program-status.ts";
-// Input buffering for batch splitting
-export { StdinBuffer, type StdinBufferEventMap, type StdinBufferOptions } from "./stdin-buffer.ts";
-// Terminal interface and implementations
-export { isAppleTerminalSession, ProcessTerminal, type Terminal } from "./terminal.ts";
-// Terminal colors
-export {
-  parseTerminalColorSchemeReport,
-  type RgbColor,
-  type TerminalColorScheme,
-  type TerminalColors,
-} from "./terminal-colors.ts";
-// Terminal image support
-export {
-  allocateImageId,
-  type CellDimensions,
-  calculateImageRows,
-  deleteAllKittyImages,
-  deleteKittyImage,
-  detectCapabilities,
-  encodeITerm2,
-  encodeKitty,
-  getCapabilities,
-  getCellDimensions,
-  getGifDimensions,
-  getImageDimensions,
-  getJpegDimensions,
-  getPngDimensions,
-  getTerminalColorMode,
-  getWebpDimensions,
-  hyperlink,
-  type ImageDimensions,
-  type ImageProtocol,
-  type ImageRenderOptions,
-  imageFallback,
-  renderImage,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCapabilityOverrides,
-  setCellDimensions,
-  type TerminalCapabilities,
-} from "./terminal-image.ts";
-export {
-  type Component,
-  Container,
-  CURSOR_MARKER,
-  compositeTuiLine,
-  type Focusable,
-  isFocusable,
-  isViewportTUI,
-  type OverlayAnchor,
-  type OverlayBounds,
-  type OverlayHandle,
-  type OverlayMargin,
-  type OverlayOptions,
-  type OverlayUnfocusOptions,
-  renderFakeCursor,
-  type SizeValue,
-  type TUI,
-  type TuiInputListener,
-  type TuiInputListenerResult,
-  type TuiMode,
-  type TuiMouseButton,
-  type TuiMouseEvent,
-  type TuiMouseEventResult,
-  type TuiMouseEventType,
-  type TuiStopOptions,
-  type ViewportTUI,
-} from "./tui.ts";
-export { TuiAltScreen, type TuiAltScreenOptions } from "./tui-alt-screen.ts";
-export { TuiMainScreen, type TuiMainScreenRenderState } from "./tui-main-screen.ts";
-// Utilities
-export {
-  getOsc8LinkAtColumn,
-  sliceByColumn,
-  stripTerminalSequences,
-  truncateToWidth,
-  visibleWidth,
-  wrapTextWithAnsi,
-} from "./utils.ts";
-export type { WheelScrollLines } from "./wheel-scroll.ts";
+} = indexKit;
+
+const tui = {
+  Box: Box,
+  CURSOR_MARKER: tuiComponent.CURSOR_MARKER,
+  CancellableLoader: CancellableLoader,
+  CombinedAutocompleteProvider: CombinedAutocompleteProvider,
+  Container: tuiComponent.Container,
+  Editor: Editor,
+  HStack: HStack,
+  Image: image.Image,
+  Input: Input,
+  Key: keyIds.Key,
+  KeybindingsManager: keybindingsModule.KeybindingsManager,
+  Loader: Loader,
+  Markdown: Markdown,
+  Marked: MarkedModule,
+  MouseRegion: MouseRegion,
+  ProcessTerminal: ProcessTerminal,
+  ScrollView: ScrollView,
+  SelectList: SelectList,
+  SettingsList: SettingsList,
+  Spacer: Spacer,
+  SplitPane: splitPane.SplitPane,
+  StdinBuffer: StdinBuffer,
+  TUI_KEYBINDINGS: keybindingDefinitions.TUI_KEYBINDINGS,
+  Text: Text,
+  TruncatedText: TruncatedText,
+  TuiAltScreen: TuiAltScreen,
+  TuiMainScreen: TuiMainScreen,
+  VStack: VStack,
+  allocateImageId: terminalImageKitty.allocateImageId,
+  backgroundAnsi: colorAnsiModule.backgroundAnsi,
+  calculateImageRows: terminalImageSize.calculateImageRows,
+  colorToHex: colors.colorToHex,
+  colorToOkhsl: colors.colorToOkhsl,
+  colorToOklch: colors.colorToOklch,
+  colorToRgb: colors.colorToRgb,
+  compositeTuiLine: tuiComponent.compositeTuiLine,
+  decodeKittyPrintable: keys.decodeKittyPrintable,
+  deleteAllKittyImages: terminalImageKitty.deleteAllKittyImages,
+  deleteKittyImage: terminalImageKitty.deleteKittyImage,
+  detectCapabilities: terminalCapabilities.detectCapabilities,
+  encodeITerm2: terminalImage.encodeITerm2,
+  encodeKitty: terminalImageKitty.encodeKitty,
+  foregroundAnsi: colorAnsiModule.foregroundAnsi,
+  formatProgramStatus: programStatus.formatProgramStatus,
+  fuzzyFilter: fuzzy.fuzzyFilter,
+  fuzzyMatch: fuzzy.fuzzyMatch,
+  getCapabilities: terminalCapabilities.getCapabilities,
+  getCellDimensions: terminalCapabilities.getCellDimensions,
+  getGifDimensions: terminalImageSize.getGifDimensions,
+  getImageDimensions: terminalImageSize.getImageDimensions,
+  getJpegDimensions: terminalImageSize.getJpegDimensions,
+  getKeybindings: keybindingsModule.getKeybindings,
+  getNativeClipboard: nativePlatform.getNativeClipboard,
+  getOsc8LinkAtColumn: textSlice.getOsc8LinkAtColumn,
+  getPngDimensions: terminalImageSize.getPngDimensions,
+  getTerminalColorMode: terminalCapabilities.getTerminalColorMode,
+  getWebpDimensions: terminalImageSize.getWebpDimensions,
+  hyperlink: terminalImage.hyperlink,
+  imageFallback: terminalImage.imageFallback,
+  indexedColor: colors.indexedColor,
+  isAppleTerminalSession: terminalProtocol.isAppleTerminalSession,
+  isFocusable: tuiComponent.isFocusable,
+  isKeyRelease: keyProtocols.isKeyRelease,
+  isKeyRepeat: keyProtocols.isKeyRepeat,
+  isKittyProtocolActive: keyProtocols.isKittyProtocolActive,
+  isViewportTUI: tuiInterface.isViewportTUI,
+  matchesKey: keyMatchers.matchesKey,
+  mixColors: colors.mixColors,
+  okhslColor: colors.okhslColor,
+  oklabToOkhslLightness: oklab.oklabToOkhslLightness,
+  oklchColor: colors.oklchColor,
+  parseColor: colors.parseColor,
+  parseKey: keys.parseKey,
+  parseTerminalColorSchemeReport: terminalColors.parseTerminalColorSchemeReport,
+  primeTerminalCapabilities: terminalCapabilitiesProbe.primeTerminalCapabilities,
+  renderFakeCursor: tuiComponent.renderFakeCursor,
+  renderImage: terminalImage.renderImage,
+  renderLatex: latex.renderLatex,
+  resetCapabilitiesCache: terminalCapabilities.resetCapabilitiesCache,
+  rgbColor: colors.rgbColor,
+  setCapabilities: terminalCapabilities.setCapabilities,
+  setCapabilityOverrides: terminalCapabilities.setCapabilityOverrides,
+  setCellDimensions: terminalCapabilities.setCellDimensions,
+  setImageTranscoder: image.setImageTranscoder,
+  setKeybindings: keybindingsModule.setKeybindings,
+  setKittyProtocolActive: keyProtocols.setKittyProtocolActive,
+  sliceByColumn: textSlice.sliceByColumn,
+  splitPaneWidths: splitPane.splitPaneWidths,
+  stripTerminalSequences: utils.stripTerminalSequences,
+  styleText: colorAnsiModule.styleText,
+  styleTextWithAnsi: colorAnsiModule.styleTextWithAnsi,
+  truncateToWidth: textTruncate.truncateToWidth,
+  visibleWidth: utils.visibleWidth,
+  wrapTextWithAnsi: textWrap.wrapTextWithAnsi,
+};
+
+export default tui;

@@ -1,25 +1,38 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, expect, it } from "vite-plus/test";
 
-import { db } from "../src/core/orchestrator/db.ts";
+import dbModule from "../src/core/orchestrator/db.ts";
+
+const { db } = dbModule;
+
+const { joinPath, makeTempDir, pathExists, removePath, runTest } = testing;
 
 const directories: string[] = [];
 
-afterEach(() => {
-  for (const directory of directories.splice(0))
-    rmSync(directory, { recursive: true, force: true });
-});
+afterEach(() =>
+  runTest(
+    Effect.gen(function* () {
+      for (const directory of directories.splice(0)) yield* removePath(directory);
+    }),
+  ),
+);
 
-it("creates the database and its missing parent directories", () => {
-  const root = mkdtempSync(join(tmpdir(), "msa-orchestrator-open-"));
-  directories.push(root);
-  const path = join(root, "agent", "nested", "orchestrator.db");
+const createsTheDatabaseAndItsMissingParent = () =>
+  runTest(
+    Effect.gen(function* () {
+      const root = yield* makeTempDir("msa-orchestrator-open-");
+      directories.push(root);
+      const path = joinPath(root, "agent", "nested", "orchestrator.db");
 
-  const database = db.openDatabase(path);
-  database.close();
+      const database = db.openDatabase(path);
+      database.close();
 
-  expect(existsSync(path)).toBe(true);
-});
+      expect(yield* pathExists(path)).toBe(true);
+    }),
+  );
+
+it(
+  "creates the database and its missing parent directories",
+  createsTheDatabaseAndItsMissingParent,
+);

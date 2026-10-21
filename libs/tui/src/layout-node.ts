@@ -1,51 +1,18 @@
-import type { Component } from "./tui.ts";
+import type layoutNodeTypes from "./layout-node.types.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
 
-export const LAYOUT_NODE = Symbol.for("@msa/tui/layout-node");
+const LAYOUT_NODE = Symbol.for("@msa/tui/layout-node");
 
-export interface LayoutViewport {
-  width: number;
-  height: number;
-}
-
-export interface StackLayoutEntry {
-  component: Component;
-  basis?: number | "auto";
-  grow?: number;
-  shrink?: number;
-  minSize?: number;
-  maxSize?: number;
-  visible?: (viewport: LayoutViewport) => boolean;
-}
-
-export interface StackLayoutNode {
-  type: "vstack" | "hstack";
-  entries: readonly StackLayoutEntry[];
-  gap: number;
-  align: "stretch" | "start" | "center" | "end";
-}
-
-export interface ScrollLayoutState {
-  readonly scrollTop: number;
-  readonly primary: boolean;
-  readonly overscroll: "chain" | "contain";
-  readonly viewportHeight: number;
-  getContentWidth(width: number): number;
-  updateLayout(contentHeight: number, viewportHeight: number, requestRender: () => void): void;
-}
-
-export interface ScrollLayoutNode {
-  type: "scroll";
-  component: Component;
-  state: ScrollLayoutState;
-}
-
-export type LayoutNode = StackLayoutNode | ScrollLayoutNode;
-
-export interface LayoutComponent extends Component {
-  [LAYOUT_NODE](): LayoutNode;
-}
-
-export function getLayoutNode(component: Component): LayoutNode | undefined {
-  const candidate = component as Partial<LayoutComponent>;
+function getLayoutNode(
+  component: tuiComponentTypes.Component,
+): layoutNodeTypes.LayoutNode | undefined {
+  const candidate = component as Partial<layoutNodeTypes.LayoutComponent>;
   return typeof candidate[LAYOUT_NODE] === "function" ? candidate[LAYOUT_NODE]() : undefined;
 }
+
+const layoutNode = {
+  LAYOUT_NODE,
+  getLayoutNode,
+};
+
+export default layoutNode;

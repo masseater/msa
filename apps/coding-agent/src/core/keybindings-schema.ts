@@ -1,9 +1,10 @@
 import { type TSchema, Type } from "typebox";
 
-import { KeybindingValueSchema, keybindingValueSchema } from "./key-id-schema.ts";
-import { KEYBINDINGS } from "./keybindings.ts";
+import keyIdSchema from "./key-id-schema.ts";
+import keybindings from "./keybindings.ts";
 
-export { KeybindingValueSchema } from "./key-id-schema.ts";
+const { KeybindingValueSchema, keybindingValueSchema } = keyIdSchema;
+const { KEYBINDINGS } = keybindings;
 
 const properties: Record<string, TSchema> = {
   $schema: Type.Optional(Type.String()),
@@ -17,6 +18,13 @@ for (const [id, definition] of Object.entries(KEYBINDINGS)) {
   );
 }
 
-export const KeybindingsSchema = Type.Object(properties, {
+const KeybindingsSchema = Type.Object(properties, {
   additionalProperties: KeybindingValueSchema,
 });
+
+const keybindingsSchema = {
+  KeybindingValueSchema: keyIdSchema.KeybindingValueSchema,
+  KeybindingsSchema,
+};
+
+export default keybindingsSchema;

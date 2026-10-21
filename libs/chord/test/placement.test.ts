@@ -1,232 +1,280 @@
 import assert from "node:assert/strict";
 
-import { Type } from "typebox";
-import { describe, it } from "vite-plus/test";
+import { Effect } from "effect";
+import { type Static, Type } from "typebox";
+import { describe, expectTypeOf, it } from "vite-plus/test";
 
-import {
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+import timing from "./fixtures/timing.ts";
+
+const {
+  PROTOCOL_VERSION,
   bind,
   createHost,
-  type Facet,
-  type Frame,
-  type Host,
   hostFamily,
   hostNamed,
   isChordError,
-  type Link,
   memoryLinkPair,
   method,
-  PROTOCOL_VERSION,
   remote,
-} from "../src/index.ts";
+} = chord;
 
-const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+const { tick } = timing;
 
-/** Lives on `session:` + its input's `session`. */
 const Note = remote("t.note", {
-  version: 1,
-  input: Type.Object({ session: Type.String(), id: Type.String() }),
   host: hostFamily("session:", "session"),
+  input: Type.Object({ id: Type.String(), session: Type.String() }),
   variants: { main: { methods: { where: method(undefined, Type.String()) } } },
-});
-
-/** Lives on `server`. */
-const Catalog = remote("t.catalog", {
   version: 1,
-  input: Type.Object({}),
-  host: hostNamed("server"),
-  variants: { main: { methods: { where: method(undefined, Type.String()) } } },
 });
 
-/** A server with two session hosts as children; every host serves what it may and reports its name. */
+const Catalog = remote("t.catalog", {
+  host: hostNamed("server"),
+  input: Type.Object({}),
+  variants: { main: { methods: { where: method(undefined, Type.String()) } } },
+  version: 1,
+});
+
 function cluster() {
-  const server = createHost({ name: "server", self: "host", onError: () => {} });
+  const server = createHost({ name: "server", onError: () => {}, self: "host" });
   server.serve(Catalog, () => ({ variant: "main", where: () => "server" }));
-  const children = new Map<string, Host>();
-  const links = new Map<string, Link>();
+  const children = new Map<string, chordTypes.Host>();
+  const links = new Map<string, chordTypes.Link>();
   const child = (name: string) => {
     const [down, up] = memoryLinkPair();
     links.set(name, down);
     server.accept(down, { kind: "host", name, principal: "server-side" });
     const host = createHost({
       name,
+      onError: () => {},
       self: "host",
       upstream: { link: up, principal: "server" },
-      onError: () => {},
     });
     host.serve(Note, ({ id }) => ({ variant: "main", where: () => `${host.name} ${id}` }));
     children.set(name, host);
-    return { host, down };
+    return { down, host };
   };
   const s1 = child("session:S1");
   const s2 = child("session:S2");
-  const close = async () => {
-    for (const host of children.values()) await host.close();
-    await server.close();
-  };
-  // Relays need a route (where authorization lives); it finds the connected child.
+  const close = () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        for (const host of children.values()) yield* Effect.promise(() => host.close());
+        yield* Effect.promise(() => server.close());
+      }),
+    );
   server.route("session:", {
     authorize: () => true,
-    resolve: async (name) => links.get(name)!,
     principal: (name) => name,
+    resolve: (name) => Effect.runPromise(Effect.sync(() => links.get(name)!)),
   });
-  return { server, s1: s1.host, s2: s2.host, close };
+  return { close, s1: s1.host, s2: s2.host, server };
 }
 
-describe("placement", () => {
-  it("a get goes where the contract places the input: here, a child, or the parent, never named by the caller", async () => {
-    const { server, s1, close } = cluster();
-    await tick();
-    assert.equal(await server.hold(Note, { session: "S1", id: "a" }).where(), "session:S1 a");
-    assert.equal(await server.hold(Note, { session: "S2", id: "b" }).where(), "session:S2 b");
-    // From a session host: its own notes locally, the other session's through the server, the catalog upstream.
-    assert.equal(await s1.hold(Note, { session: "S1", id: "c" }).where(), "session:S1 c");
-    assert.equal(await s1.hold(Catalog, {}).where(), "server");
-    await close();
-  });
+const aGetGoesWhereTheContract = Effect.gen(function* () {
+  const { server, s1, close } = cluster();
+  yield* tick;
+  assert.equal(
+    yield* Effect.promise(() => server.hold(Note, { id: "a", session: "S1" }).where()),
+    "session:S1 a",
+  );
+  assert.equal(
+    yield* Effect.promise(() => server.hold(Note, { id: "b", session: "S2" }).where()),
+    "session:S2 b",
+  );
+  assert.equal(
+    yield* Effect.promise(() => s1.hold(Note, { id: "c", session: "S1" }).where()),
+    "session:S1 c",
+  );
+  assert.equal(yield* Effect.promise(() => s1.hold(Catalog, {}).where()), "server");
+  yield* Effect.promise(() => close());
+});
 
-  it("serve refuses a type the host is not the place of, also at a reload", async () => {
-    const host = createHost({ name: "session:S1", self: "host", onError: () => {} });
-    assert.throws(
-      () => host.serve(Catalog, () => ({ variant: "main", where: () => "" })),
-      /t\.catalog is declared for server, but session:S1 serves it/,
-    );
-    const server = createHost({ name: "server", self: "host", onError: () => {} });
-    assert.throws(
-      () => server.serve(Note, () => ({ variant: "main", where: () => "" })),
-      /t\.note is declared for session:<session>, but server serves it/,
-    );
-    const misplaced: Facet = {
-      name: "misplaced",
-      setup: (api) => api.serve(Note, () => ({ variant: "main", where: () => "" })),
-    };
-    await assert.rejects(
+const serveRefusesATypeTheHost = Effect.gen(function* () {
+  const host = createHost({ name: "session:S1", onError: () => {}, self: "host" });
+  assert.throws(
+    () => host.serve(Catalog, () => ({ variant: "main", where: () => "" })),
+    /t\.catalog is declared for server, but session:S1 serves it/u,
+  );
+  const server = createHost({ name: "server", onError: () => {}, self: "host" });
+  assert.throws(
+    () => server.serve(Note, () => ({ variant: "main", where: () => "" })),
+    /t\.note is declared for session:<session>, but server serves it/u,
+  );
+  const misplaced: chordTypes.Facet = {
+    name: "misplaced",
+    setup: (api) => api.serve(Note, () => ({ variant: "main", where: () => "" })),
+  };
+  yield* Effect.promise(() =>
+    assert.rejects(
       server.reload([misplaced]),
-      /declared for session:<session>, but server serves it/,
-    );
-    await host.close();
-    await server.close();
-  });
+      /declared for session:<session>, but server serves it/u,
+    ),
+  );
+  yield* Effect.promise(() => host.close());
+  yield* Effect.promise(() => server.close());
+});
 
-  it("a host refuses a hold its own contract places elsewhere, and a relay one whose target disagrees", async () => {
-    const { server, close } = cluster();
-    await tick();
-    const holds = async (target: string, input: unknown): Promise<Frame | undefined> => {
-      const [down, raw] = memoryLinkPair();
-      server.accept(down, { principal: "guest" });
-      const frames: Frame[] = [];
-      raw.receive((frame) => frames.push(frame));
-      raw.send({
-        t: "hello",
-        protocol: PROTOCOL_VERSION,
-        name: "raw",
-        kind: "client",
-        codeVersion: 0,
-      });
-      raw.send({ t: "hold", id: 1, at: target, token: Note.description, input });
-      for (
-        let i = 0;
-        i < 50 && !frames.some((frame) => frame.t === "shape" || frame.t === "gone");
-        i++
-      )
-        await tick();
-      return frames.find((frame) => frame.t === "shape" || frame.t === "gone");
-    };
-    // A client picks session:S2 for a note of S1: the relay refuses, nothing reaches S2.
-    const relayed = await holds("session:S2", { session: "S1", id: "x" });
-    assert.equal(relayed?.t, "gone");
-    assert.match(
-      relayed?.t === "gone" ? relayed.error.message : "",
-      /placement|does not live on session:S2/,
+const aHostRefusesAHoldIts = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const { server, close } = cluster();
+  yield* tick;
+  const holds = (target: string, input: unknown): Promise<chordTypes.Frame | undefined> =>
+    Effect.runPromiseWith(services)(
+      Effect.gen(function* () {
+        const [down, raw] = memoryLinkPair();
+        server.accept(down, { principal: "guest" });
+        const frames: chordTypes.Frame[] = [];
+        raw.receive((frame) => frames.push(frame));
+        raw.send({
+          codeVersion: 0,
+          kind: "client",
+          name: "raw",
+          protocol: PROTOCOL_VERSION,
+          t: "hello",
+        });
+        raw.send({ at: target, id: 1, input, t: "hold", token: Note.description });
+        for (
+          let i = 0;
+          i < 50 && !frames.some((frame) => frame.t === "shape" || frame.t === "gone");
+          i++
+        )
+          yield* tick;
+        return frames.find((frame) => frame.t === "shape" || frame.t === "gone");
+      }),
     );
-    // The right target is served.
-    assert.equal((await holds("session:S1", { session: "S1", id: "x" }))?.t, "shape");
-    // Addressed to the server itself, a note is refused by the server's own contract check.
-    const direct = await holds("server", { session: "S1", id: "x" });
-    assert.equal(direct?.t, "gone");
-    await close();
-  });
+  const relayed = yield* Effect.promise(() => holds("session:S2", { id: "x", session: "S1" }));
+  assert.equal(relayed?.t, "gone");
+  assert.match(
+    relayed?.t === "gone" ? relayed.error.message : "",
+    /placement|does not live on session:S2/u,
+  );
+  assert.equal(
+    (yield* Effect.promise(() => holds("session:S1", { id: "x", session: "S1" })))?.t,
+    "shape",
+  );
+  const direct = yield* Effect.promise(() => holds("server", { id: "x", session: "S1" }));
+  assert.equal(direct?.t, "gone");
+  yield* Effect.promise(() => close());
+});
 
-  it("the host comes from the normalized input: unknown fields and defaults do not change it", async () => {
-    const Doc = remote("t.doc-default", {
-      version: 1,
-      input: Type.Object({ session: Type.String({ default: "S1" }) }),
-      host: hostFamily("session:", "session"),
-      variants: { main: { methods: { where: method(undefined, Type.String()) } } },
-    });
-    const { server, s1, close } = cluster();
-    s1.serve(Doc, () => ({ variant: "main", where: () => "session:S1" }));
-    await tick();
-    // An untyped caller leaves the field out: the default places it.
-    assert.equal(await server.hold(Doc, {} as never).where(), "session:S1");
-    assert.throws(
-      () => server.hold(Note, { session: "", id: "x" }),
-      /input field session names no host/,
-    );
-    await close();
+const theHostComesFromTheNormalized = Effect.gen(function* () {
+  const Doc = remote("t.doc-default", {
+    host: hostFamily("session:", "session"),
+    input: Type.Object({ session: Type.String({ default: "S1" }) }),
+    variants: { main: { methods: { where: method(undefined, Type.String()) } } },
+    version: 1,
   });
+  const { server, s1, close } = cluster();
+  s1.serve(Doc, () => ({ variant: "main", where: () => "session:S1" }));
+  yield* tick;
+  assert.equal(yield* Effect.promise(() => server.hold(Doc, {} as never).where()), "session:S1");
+  assert.throws(
+    () => server.hold(Note, { id: "x", session: "" }),
+    /input field session names no host/u,
+  );
+  yield* Effect.promise(() => close());
+});
 
-  it("placement is part of the contract: a moved type is a breaking change, never bridged by an adapter", async () => {
-    const at = (host: string) =>
-      remote("t.moved", {
-        version: 1,
-        input: Type.Object({}),
-        host: hostNamed(host),
-        variants: { main: { methods: { ping: method() } } },
-      });
-    assert.notEqual(at("server").fingerprint, at("session:S1").fingerprint);
-    const host = createHost({ name: "server", self: "host", onError: () => {} });
-    const facet = (version: number, place: string): Facet => ({
-      name: "moved",
-      setup: (api) =>
-        api.serve(
-          remote("t.moved", {
-            version,
-            input: Type.Object({}),
-            host: hostNamed(place),
-            variants: { main: { methods: { ping: method() } } },
-          }),
-          () => ({ variant: "main", ping: () => {} }),
-          { accepts: { 1: (current) => current } },
-        ),
-    });
-    await host.install(facet(1, "server"));
-    await host.get(at("server"), {});
-    // Same version, other placement: a forgotten bump.
-    await assert.rejects(
-      host.reload([facet(1, "session:S1")]),
-      /declared for session:S1|without a version bump/,
-    );
-    // A new version that `accepts` version 1 but lives elsewhere: no adapter makes version 1 consumers bind.
-    const moved = remote("t.moved", {
-      version: 2,
+const placementIsPartOfTheContract = Effect.gen(function* () {
+  const at = (host: string) =>
+    remote("t.moved", {
+      host: hostNamed(host),
       input: Type.Object({}),
-      host: hostNamed("session:S1"),
       variants: { main: { methods: { ping: method() } } },
+      version: 1,
     });
-    assert.throws(
-      () => bind(moved, { 1: (current) => current }, at("server")),
-      (error) =>
-        isChordError(error, "contract_mismatch") && /lives on session:S1/.test(error.message),
-    );
-    await host.close();
+  assert.notEqual(at("server").fingerprint, at("session:S1").fingerprint);
+  const host = createHost({ name: "server", onError: () => {}, self: "host" });
+  const facet = (version: number, place: string): chordTypes.Facet => ({
+    name: "moved",
+    setup: (api) =>
+      api.serve(
+        remote("t.moved", {
+          host: hostNamed(place),
+          input: Type.Object({}),
+          variants: { main: { methods: { ping: method() } } },
+          version,
+        }),
+        () => ({ ping: () => {}, variant: "main" }),
+        { accepts: { 1: (current) => current } },
+      ),
   });
+  yield* Effect.promise(() => host.install(facet(1, "server")));
+  yield* Effect.promise(() => host.get(at("server"), {}));
+  yield* Effect.promise(() =>
+    assert.rejects(
+      host.reload([facet(1, "session:S1")]),
+      /declared for session:S1|without a version bump/u,
+    ),
+  );
+  const moved = remote("t.moved", {
+    host: hostNamed("session:S1"),
+    input: Type.Object({}),
+    variants: { main: { methods: { ping: method() } } },
+    version: 2,
+  });
+  assert.throws(
+    () => bind(moved, { 1: (current) => current }, at("server")),
+    (error) =>
+      isChordError(error, "contract_mismatch") && /lives on session:S1/u.test(error.message),
+  );
+  yield* Effect.promise(() => host.close());
+});
 
-  it("types: the family's field is a required string of the input, and remote contracts need a host", () => {
-    const input = Type.Object({
-      session: Type.String(),
-      count: Type.Number(),
-      note: Type.Optional(Type.String()),
-    });
-    const variants = { main: {} };
-    remote("t.ok", { version: 1, input, host: hostFamily("session:", "session"), variants });
-    // @ts-expect-error: no such field
-    remote("t.typo", { version: 1, input, host: hostFamily("session:", "sesion"), variants });
-    // @ts-expect-error: not a string
-    remote("t.number", { version: 1, input, host: hostFamily("session:", "count"), variants });
-    // @ts-expect-error: optional
-    remote("t.optional", { version: 1, input, host: hostFamily("session:", "note"), variants });
-    // @ts-expect-error: a remote contract says where it lives
-    assert.throws(() => remote("t.nowhere", { version: 1, input, variants }), /needs `host`/);
-    assert.throws(() => hostFamily("", "session"), /prefix/);
+const typesTheFamilySFieldIs = (): void => {
+  const input = Type.Object({
+    count: Type.Number(),
+    note: Type.Optional(Type.String()),
+    session: Type.String(),
   });
+  const variants = { main: {} };
+  remote("t.ok", { host: hostFamily("session:", "session"), input, variants, version: 1 });
+  type Allowed = chordTypes.PlacementFor<Static<typeof input>>;
+  expectTypeOf(hostFamily("session:", "session")).toExtend<Allowed>();
+  expectTypeOf(hostFamily("session:", "sesion")).not.toExtend<Allowed>();
+  expectTypeOf(hostFamily("session:", "count")).not.toExtend<Allowed>();
+  expectTypeOf(hostFamily("session:", "note")).not.toExtend<Allowed>();
+  expectTypeOf<{
+    version: 1;
+    input: typeof input;
+    variants: typeof variants;
+  }>().not.toExtend<Parameters<typeof remote>[1]>();
+  for (const [name, key] of [
+    ["t.typo", "sesion"],
+    ["t.number", "count"],
+    ["t.optional", "note"],
+  ] as const)
+    Reflect.apply(remote, undefined, [
+      name,
+      { host: hostFamily("session:", key), input, variants, version: 1 },
+    ]);
+  assert.throws(
+    () => Reflect.apply(remote, undefined, ["t.nowhere", { input, variants, version: 1 }]),
+    /needs `host`/u,
+  );
+  assert.throws(() => hostFamily("", "session"), /prefix/u);
+};
+
+describe("placement", () => {
+  it("a get goes where the contract places the input: here, a child, or the parent, never named by the caller", () =>
+    Effect.runPromise(aGetGoesWhereTheContract));
+
+  it("serve refuses a type the host is not the place of, also at a reload", () =>
+    Effect.runPromise(serveRefusesATypeTheHost));
+
+  it("a host refuses a hold its own contract places elsewhere, and a relay one whose target disagrees", () =>
+    Effect.runPromise(aHostRefusesAHoldIts));
+
+  it("the host comes from the normalized input: unknown fields and defaults do not change it", () =>
+    Effect.runPromise(theHostComesFromTheNormalized));
+
+  it("placement is part of the contract: a moved type is a breaking change, never bridged by an adapter", () =>
+    Effect.runPromise(placementIsPartOfTheContract));
+
+  it(
+    "types: the family's field is a required string of the input, and remote contracts need a host",
+    typesTheFamilySFieldIs,
+  );
 });

@@ -1,29 +1,12 @@
 import { defineConfig, mergeConfig } from "vite-plus";
 
-import { onGitHubActions, testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
+import vitestShared from "../../vitest.shared.ts";
+
+const { onGitHubActions, testBaseConfig, workspaceSourcePaths } = vitestShared;
 
 export default mergeConfig(
   testBaseConfig,
   defineConfig({
-    test: {
-      globals: true,
-      environment: "node",
-      testTimeout: 30000,
-      // Keep the machine's Claude Code and OpenCode installs out of the model lists tests see.
-      env: {
-        MSA_OFFLINE: "1",
-        CLAUDE_BIN: "/nonexistent/claude",
-        OPENCODE_BIN: "/nonexistent/opencode",
-      },
-      unstubEnvs: true,
-      reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
-      silent: "passed-only",
-      server: {
-        deps: {
-          external: [/@silvia-odwyer\/photon-node/u],
-        },
-      },
-    },
     resolve: {
       alias: [
         { find: /^@msa\/ai$/u, replacement: workspaceSourcePaths.aiIndex },
@@ -33,6 +16,24 @@ export default mergeConfig(
         { find: /^@mariozechner\/msa-agent-core$/u, replacement: workspaceSourcePaths.agentIndex },
         { find: /^@mariozechner\/msa-tui$/u, replacement: workspaceSourcePaths.tuiIndex },
       ],
+    },
+    test: {
+      env: {
+        CLAUDE_BIN: "/nonexistent/claude",
+        MSA_OFFLINE: "1",
+        OPENCODE_BIN: "/nonexistent/opencode",
+      },
+      environment: "node",
+      globals: true,
+      reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
+      server: {
+        deps: {
+          external: [/@silvia-odwyer\/photon-node/u],
+        },
+      },
+      silent: "passed-only",
+      testTimeout: 30000,
+      unstubEnvs: true,
     },
   }),
 );

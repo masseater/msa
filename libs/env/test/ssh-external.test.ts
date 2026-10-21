@@ -1,14 +1,25 @@
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { getOrThrow } from "@msa/durable/env";
-import { registerEnvConformance } from "@msa/durable/testing";
+import contextModule from "@msa/chord/context";
+import envModule2 from "@msa/durable/env";
+import testing from "@msa/durable/testing";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { nodePlatform } from "../src/remote-info.ts";
-import { optionalEnv, windows } from "./environment.ts";
-import { closeExternal, connectExternal, host } from "./external-ssh.ts";
-import { gitBash } from "./temp-dir.ts";
+import envModule from "../src/index.ts";
+import type envTypes from "../src/index.types.ts";
+import environment from "./environment.ts";
+import externalSsh from "./external-ssh.ts";
+import tempDir from "./temp-dir.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { getOrThrow } = envModule2;
+const { registerEnvConformance } = testing;
+
+const { RemoteExecutionEnv, nodePlatform } = envModule;
+
+const { optionalEnv, windows } = environment;
+const { closeExternal, connectExternal, host } = externalSsh;
+const { gitBash } = tempDir;
 
 afterAll(closeExternal);
 
@@ -27,12 +38,12 @@ describe.skipIf(host === undefined)("SSH to this machine's server", () => {
   );
 });
 
-const withExternalEnv = (use: (env: RemoteExecutionEnv) => Promise<void>): Promise<void> =>
+const withExternalEnv = (use: (env: envTypes.RemoteExecutionEnv) => Promise<void>): Promise<void> =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { connection } = yield* Effect.promise(connectExternal);
       const info = yield* Effect.promise(() => connection.info());
-      const home = new RemoteExecutionEnv({ connection, id: "msa-env:external", cwd: info.home });
+      const home = new RemoteExecutionEnv({ connection, cwd: info.home, id: "msa-env:external" });
       const cwd = getOrThrow(
         yield* Effect.promise(() => home.createTempDir("msa-env-conformance-", BACKGROUND_CONTEXT)),
       );
@@ -40,15 +51,15 @@ const withExternalEnv = (use: (env: RemoteExecutionEnv) => Promise<void>): Promi
         use(
           new RemoteExecutionEnv({
             connection,
-            id: "msa-env:external",
             cwd,
+            id: "msa-env:external",
             watch: { pollIntervalMs: 100 },
           }),
         ),
       ).pipe(
         Effect.ensuring(
           Effect.promise(() =>
-            home.remove(cwd, { recursive: true, force: true }, BACKGROUND_CONTEXT),
+            home.remove(cwd, { force: true, recursive: true }, BACKGROUND_CONTEXT),
           ),
         ),
       );
@@ -61,7 +72,7 @@ if (host !== undefined) {
     "RemoteExecutionEnv over SSH",
     withExternalEnv,
     windows
-      ? { shell: [gitBash(optionalEnv("ProgramFiles")), "-c"], symlinks: false, listFiles: true }
+      ? { listFiles: true, shell: [gitBash(optionalEnv("ProgramFiles")), "-c"], symlinks: false }
       : { listFiles: true },
   );
 }

@@ -1,66 +1,23 @@
-/**
- * Custom Compaction Extension
- *
- * Replaces the default compaction behavior with a full summary of the entire context.
- * Instead of keeping the last 20k tokens of conversation turns, this extension:
- * 1. Summarizes ALL messages (messagesToSummarize + turnPrefixMessages)
- * 2. Discards all old turns completely, keeping only the summary
- *
- * This example also demonstrates using a different model (Gemini Flash) for summarization,
- * which can be cheaper/faster than the main conversation model.
- *
- * Usage:
- *   msa --extension examples/extensions/custom-compaction.ts
- */
+import ai from "@msa/ai";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Clock, Effect, Option } from "effect";
 
-import { uuidv7 } from "@msa/ai";
-import type { ExtensionAPI } from "@msa/coding-agent";
-import { convertToLlm, serializeConversation } from "@msa/coding-agent";
+const { convertToLlm, serializeConversation } = codingAgent;
 
-export default function (msa: ExtensionAPI) {
-  msa.on("session_before_compact", async (event, ctx) => {
-    ctx.ui.notify("Custom compaction extension triggered", "info");
+const { uuidv7 } = ai;
 
-    const { preparation, branchEntries: _, signal } = event;
-    const {
-      messagesToSummarize,
-      turnPrefixMessages,
-      tokensBefore,
-      firstKeptEntryId,
-      previousSummary,
-    } = preparation;
-
-    // Use Gemini Flash for summarization (cheaper/faster than most conversation models)
-    const model = ctx.modelRegistry.find("opencode", "gemini-3.5-flash");
-    if (!model) {
-      ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
-      return;
-    }
-
-    // Combine all messages for full summary
-    const allMessages = [...messagesToSummarize, ...turnPrefixMessages];
-
-    ctx.ui.notify(
-      `Custom compaction: summarizing ${allMessages.length} messages (${tokensBefore.toLocaleString()} tokens) with ${model.id}...`,
-      "info",
-    );
-
-    // Convert messages to readable text format
-    const conversationText = serializeConversation(convertToLlm(allMessages));
-
-    // Include previous summary context if available
-    const previousContext = previousSummary
+const buildSummaryMessages = (conversationText: string, previousSummary: string | undefined) => {
+  const previousContext =
+    previousSummary !== undefined && previousSummary.length > 0
       ? `\n\nPrevious session summary for context:\n${previousSummary}`
       : "";
 
-    // Build messages that ask for a comprehensive summary
-    const summaryMessages = [
-      {
-        role: "user" as const,
-        content: [
-          {
-            type: "text" as const,
-            text: `You are a conversation summarizer. Create a comprehensive summary of this conversation that captures:${previousContext}
+  return [
+    {
+      content: [
+        {
+          text: `You are a conversation summarizer. Create a comprehensive summary of this conversation that captures:${previousContext}
 
 1. The main goals and objectives discussed
 2. Key decisions made and their rationale
@@ -76,51 +33,114 @@ Format the summary as structured markdown with clear sections.
 <conversation>
 ${conversationText}
 </conversation>`,
-          },
-        ],
-        timestamp: Date.now(),
-      },
-    ];
+          type: "text" as const,
+        },
+      ],
+      role: "user" as const,
+      timestamp: Effect.runSync(Clock.currentTimeMillis),
+    },
+  ];
+};
 
-    try {
-      // Pass signal to honor abort requests (e.g., user cancels compaction)
-      const response = await ctx.modelRegistry.complete(
+const resolveModel = (ctx: codingAgentTypes.ExtensionContext) => {
+  const model = ctx.modelRegistry.find("opencode", "gemini-3.5-flash");
+  if (model === undefined) {
+    ctx.ui.notify(`Could not find Gemini Flash model, using default compaction`, "warning");
+  }
+  return model;
+};
+
+const notifyStart = (
+  ctx: codingAgentTypes.ExtensionContext,
+  messageCount: number,
+  tokensBefore: number,
+  modelId: string,
+): void => {
+  ctx.ui.notify(
+    `Custom compaction: summarizing ${messageCount} messages (${tokensBefore.toLocaleString()} tokens) with ${modelId}...`,
+    "info",
+  );
+};
+
+const completeSummary = (
+  ctx: codingAgentTypes.ExtensionContext,
+  model: Parameters<codingAgentTypes.ExtensionContext["modelRegistry"]["complete"]>[0],
+  messages: ReturnType<typeof buildSummaryMessages>,
+  signal: AbortSignal,
+) =>
+  Effect.gen(function* () {
+    const response = yield* Effect.promise(() =>
+      ctx.modelRegistry.complete(
         model,
-        { messages: summaryMessages },
+        { messages },
         {
-          maxTokens: 8192,
-          signal,
           cacheRetention: "none",
+          maxTokens: 8192,
           sessionId: uuidv7(),
+          signal,
         },
-      );
+      ),
+    ).pipe(Effect.option);
 
-      const summary = response.content
-        .filter((c): c is { type: "text"; text: string } => c.type === "text")
-        .map((c) => c.text)
-        .join("\n");
-
-      if (!summary.trim()) {
-        if (!signal.aborted)
-          ctx.ui.notify("Compaction summary was empty, using default compaction", "warning");
-        return;
-      }
-
-      // Return compaction content - SessionManager adds id/parentId
-      // Use firstKeptEntryId from preparation to keep recent messages
-      return {
-        compaction: {
-          summary,
-          firstKeptEntryId,
-          tokensBefore,
-          usage: response.usage,
-        },
-      };
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      ctx.ui.notify(`Compaction failed: ${message}`, "error");
-      // Fall back to default compaction on error
-      return;
+    if (Option.isNone(response)) {
+      ctx.ui.notify("Compaction failed, using default compaction", "error");
+      return undefined;
     }
+
+    const summary = response.value.content
+      .filter((c): c is { type: "text"; text: string } => c.type === "text")
+      .map((c) => c.text)
+      .join("\n");
+
+    if (summary.trim().length === 0) {
+      if (!signal.aborted) {
+        ctx.ui.notify("Compaction summary was empty, using default compaction", "warning");
+      }
+      return undefined;
+    }
+
+    return { summary, usage: response.value.usage };
   });
+
+const summarize = (
+  event: codingAgentTypes.SessionBeforeCompactEvent,
+  ctx: codingAgentTypes.ExtensionContext,
+) =>
+  Effect.gen(function* () {
+    ctx.ui.notify("Custom compaction extension triggered", "info");
+
+    const { preparation, signal } = event;
+    const {
+      messagesToSummarize,
+      turnPrefixMessages,
+      tokensBefore,
+      firstKeptEntryId,
+      previousSummary,
+    } = preparation;
+
+    const model = resolveModel(ctx);
+    if (model === undefined) return undefined;
+
+    const allMessages = [...messagesToSummarize, ...turnPrefixMessages];
+
+    notifyStart(ctx, allMessages.length, tokensBefore, model.id);
+
+    const conversationText = serializeConversation(convertToLlm(allMessages));
+    const summaryMessages = buildSummaryMessages(conversationText, previousSummary);
+
+    const completed = yield* completeSummary(ctx, model, summaryMessages, signal);
+    if (completed === undefined) return undefined;
+
+    return {
+      compaction: {
+        firstKeptEntryId,
+        summary: completed.summary,
+        tokensBefore,
+        usage: completed.usage,
+      },
+    };
+  });
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.on("session_before_compact", (event, ctx) => Effect.runPromise(summarize(event, ctx)));
 }

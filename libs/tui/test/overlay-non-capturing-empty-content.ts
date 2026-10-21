@@ -1,8 +1,10 @@
-import type { Component } from "../src/tui.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-export class EmptyContent implements Component {
+class EmptyContent implements tuiComponentTypes.Component {
   render(): string[] {
     return [];
   }
   invalidate(): void {}
 }
+
+export default EmptyContent;

@@ -1,97 +1,195 @@
-import type { ProviderEnv } from "../types.ts";
-import { operationSignal, raceWithAbortSignal } from "../utils/abort.ts";
-import { ModelsError } from "../utils/models-error.ts";
+import { Clock, Effect, Function } from "effect";
 
-export { ModelsError, type ModelsErrorCode } from "../utils/models-error.ts";
+import type typesModule from "../types.types.ts";
+import abortModule from "../utils/abort.ts";
+import modelsError from "../utils/models-error.ts";
+import type resolveTypes from "./resolve.types.ts";
+import type typesModuleModule from "./types.ts";
 
-import type {
-  ApiKeyAuth,
-  ApiKeyCredential,
-  AuthContext,
-  AuthResult,
-  Credential,
-  CredentialStore,
-  OAuthAuth,
-  OAuthCredential,
-  ProviderAuth,
-} from "./types.ts";
+const { ModelsError, promiseOrModelsError } = modelsError;
+const { abortable, operationSignal } = abortModule;
+const overlayEnvAuthContext = (
+  base: typesModuleModule.AuthContext,
+  env: typesModule.ProviderEnv,
+): typesModuleModule.AuthContext => ({
+  env: (name) => {
+    const value = env[name];
+    return value === undefined || value === "" ? base.env(name) : Promise.resolve(value);
+  },
+  fileExists: (path) => base.fileExists(path),
+});
 
-export interface AuthResolutionOverrides {
-  apiKey?: string | undefined;
-  env?: ProviderEnv | undefined;
-  /** Require this much remaining OAuth-token validity; defaults to five minutes. */
-  minOAuthValidityMs?: number | undefined;
-  signal?: AbortSignal | undefined;
+const DEFAULT_OAUTH_MINIMUM_VALIDITY_MS = 5 * 60 * 1000;
+const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 15_000;
+
+interface RefreshRequest {
+  readonly credentials: typesModuleModule.CredentialStore;
+  readonly providerId: string;
+  readonly oauth: typesModuleModule.OAuthAuth;
+  readonly needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean;
+  readonly signal: AbortSignal;
 }
 
-/**
- * Auth resolution shared by all operations in a `Models` collection.
- * A stored credential owns the provider: ambient/env is consulted only when
- * nothing is stored. No silent env fallback after a failed refresh or for a
- * credential type without a matching handler.
- *
- * @param {{ id: string; auth: ProviderAuth }} provider - provider to authenticate
- * @param {CredentialStore} credentials - credential store
- * @param {AuthContext} authContext - env and file access
- * @param {AuthResolutionOverrides} [overrides] - caller auth overrides
- * @returns {Promise<AuthResult | undefined>} the auth result, or undefined when unauthenticated
- */
-export function resolveProviderAuth(
-  provider: { id: string; auth: ProviderAuth },
-  credentials: CredentialStore,
-  authContext: AuthContext,
-  overrides?: AuthResolutionOverrides,
-): Promise<AuthResult | undefined> {
-  const signal = operationSignal(overrides?.signal);
-  return raceWithAbortSignal(
-    resolveProviderAuthWithSignal(provider, credentials, authContext, overrides, signal),
-    signal,
-  );
-}
-
-async function resolveProviderAuthWithSignal(
-  provider: { id: string; auth: ProviderAuth },
-  credentials: CredentialStore,
-  authContext: AuthContext,
-  overrides: AuthResolutionOverrides | undefined,
-  signal: AbortSignal,
-): Promise<AuthResult | undefined> {
-  signal.throwIfAborted();
-  const requestAuthContext = overrides?.env
-    ? overlayEnvAuthContext(authContext, overrides.env)
-    : authContext;
-
-  if (overrides?.apiKey !== undefined && provider.auth.apiKey) {
-    return resolveApiKey(
-      requestAuthContext,
-      provider.auth.apiKey,
-      provider.id,
-      {
-        type: "api_key",
-        key: overrides.apiKey,
-        env: overrides.env,
-      },
-      signal,
+const refreshInsideLock = (
+  request: RefreshRequest,
+  current: typesModuleModule.Credential | undefined,
+  cancelLockWait: () => void,
+): Effect.Effect<typesModuleModule.OAuthCredential | undefined> =>
+  Effect.gen(function* () {
+    request.signal.removeEventListener("abort", cancelLockWait);
+    request.signal.throwIfAborted();
+    if (current?.type !== "oauth") return undefined;
+    if (!request.needsRefresh(current)) return undefined;
+    return yield* promiseOrModelsError(
+      () => request.oauth.refresh(current, AbortSignal.timeout(DEFAULT_OAUTH_REFRESH_TIMEOUT_MS)),
+      { code: "oauth", message: `OAuth refresh failed for ${request.providerId}` },
     );
-  }
+  });
 
-  const stored = await readCredential(credentials, provider.id, signal);
-  if (stored) {
-    if (stored.type === "oauth" && provider.auth.oauth) {
-      return resolveStoredOAuth(
-        credentials,
-        provider.id,
-        provider.auth.oauth,
-        stored,
-        signal,
-        overrides?.minOAuthValidityMs,
-      );
+const refreshWithLock = (
+  request: RefreshRequest,
+): Effect.Effect<typesModuleModule.OAuthCredential | undefined> => {
+  const { signal } = request;
+  const lockWait = new AbortController();
+  const cancelLockWait = () => lockWait.abort(signal.reason);
+  return Effect.gen(function* () {
+    const runInLock = Effect.runPromiseWith(yield* Effect.context<never>());
+    signal.addEventListener("abort", cancelLockWait, { once: true });
+    if (signal.aborted) cancelLockWait();
+    const post = yield* Effect.promise(() =>
+      request.credentials.modify(
+        request.providerId,
+        (current) => runInLock(refreshInsideLock(request, current, cancelLockWait)),
+        { signal: lockWait.signal },
+      ),
+    ).pipe(
+      Effect.catchDefect((error) =>
+        error instanceof ModelsError
+          ? Effect.die(error)
+          : Effect.sync(() => signal.throwIfAborted()).pipe(
+              Effect.andThen(
+                Effect.die(
+                  new ModelsError(
+                    "auth",
+                    `Credential store modify failed for ${request.providerId}`,
+                    { cause: error },
+                  ),
+                ),
+              ),
+            ),
+      ),
+      Effect.ensuring(Effect.sync(() => signal.removeEventListener("abort", cancelLockWait))),
+    );
+    return post?.type === "oauth" ? post : undefined;
+  });
+};
+
+const refreshStoredOAuthCredential: {
+  (
+    providerId: string,
+    oauth: typesModuleModule.OAuthAuth,
+    needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean,
+    signal: AbortSignal,
+  ): (
+    credentials: typesModuleModule.CredentialStore,
+  ) => Effect.Effect<typesModuleModule.OAuthCredential | undefined>;
+  (
+    credentials: typesModuleModule.CredentialStore,
+    providerId: string,
+    oauth: typesModuleModule.OAuthAuth,
+    needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean,
+    signal: AbortSignal,
+  ): Effect.Effect<typesModuleModule.OAuthCredential | undefined>;
+} = Function.dual(
+  5,
+  (
+    credentials: typesModuleModule.CredentialStore,
+    providerId: string,
+    oauth: typesModuleModule.OAuthAuth,
+    needsRefresh: (credential: typesModuleModule.OAuthCredential) => boolean,
+    signal: AbortSignal,
+  ): Effect.Effect<typesModuleModule.OAuthCredential | undefined> =>
+    refreshWithLock({ credentials, needsRefresh, oauth, providerId, signal }),
+);
+
+interface StoredOAuthRequest {
+  readonly credentials: typesModuleModule.CredentialStore;
+  readonly providerId: string;
+  readonly oauth: typesModuleModule.OAuthAuth;
+  readonly stored: typesModuleModule.OAuthCredential;
+  readonly signal: AbortSignal;
+  readonly minOAuthValidityMs: number | undefined;
+}
+
+const resolveStoredOAuth = (
+  request: StoredOAuthRequest,
+): Effect.Effect<typesModuleModule.AuthResult | undefined> =>
+  Effect.gen(function* () {
+    const { providerId, minOAuthValidityMs } = request;
+    const clock = yield* Clock.Clock;
+    const minimumValidityMs = Math.max(DEFAULT_OAUTH_MINIMUM_VALIDITY_MS, minOAuthValidityMs ?? 0);
+    const expiresSoon = (credential: typesModuleModule.OAuthCredential) =>
+      clock.currentTimeMillisUnsafe() + minimumValidityMs >= credential.expires;
+    let credential = request.stored;
+
+    if (expiresSoon(credential)) {
+      const post = yield* refreshWithLock({ ...request, needsRefresh: expiresSoon });
+      if (post === undefined) return undefined;
+      credential = post;
+      if (minOAuthValidityMs !== undefined && expiresSoon(credential)) {
+        return yield* Effect.die(
+          new ModelsError(
+            "oauth",
+            `OAuth refresh returned a token that expires too soon for ${providerId}`,
+          ),
+        );
+      }
     }
-    if (stored.type === "api_key" && provider.auth.apiKey) {
-      const credential = overrides?.env
-        ? { ...stored, env: { ...stored.env, ...overrides.env } }
-        : stored;
-      return resolveApiKey(
+
+    const resolved = credential;
+    const auth = yield* promiseOrModelsError(() => request.oauth.toAuth(resolved), {
+      code: "oauth",
+      message: `OAuth auth derivation failed for ${providerId}`,
+    });
+    return { auth, source: "OAuth" };
+  });
+
+const resolveApiKey = (
+  authContext: typesModuleModule.AuthContext,
+  apiKey: typesModuleModule.ApiKeyAuth,
+  providerId: string,
+  credential: typesModuleModule.ApiKeyCredential | undefined,
+  signal: AbortSignal,
+): Effect.Effect<typesModuleModule.AuthResult | undefined> =>
+  promiseOrModelsError(() => apiKey.resolve({ credential, ctx: authContext, signal }), {
+    code: "auth",
+    message: `API key auth failed for provider ${providerId}`,
+  });
+
+const resolveStoredCredential = (
+  provider: resolveTypes.AuthProvider,
+  credentials: typesModuleModule.CredentialStore,
+  requestAuthContext: typesModuleModule.AuthContext,
+  overrides: resolveTypes.AuthResolutionOverrides | undefined,
+  signal: AbortSignal,
+) =>
+  Effect.fn("resolveStoredCredential")(function* (stored: typesModuleModule.Credential) {
+    if (stored.type === "oauth" && provider.auth.oauth !== undefined) {
+      return yield* resolveStoredOAuth({
+        credentials,
+        minOAuthValidityMs: overrides?.minOAuthValidityMs,
+        oauth: provider.auth.oauth,
+        providerId: provider.id,
+        signal,
+        stored,
+      });
+    }
+    if (stored.type === "api_key" && provider.auth.apiKey !== undefined) {
+      const credential =
+        overrides?.env === undefined
+          ? stored
+          : { ...stored, env: { ...stored.env, ...overrides.env } };
+      return yield* resolveApiKey(
         requestAuthContext,
         provider.auth.apiKey,
         provider.id,
@@ -100,175 +198,94 @@ async function resolveProviderAuthWithSignal(
       );
     }
     return undefined;
-  }
+  });
 
-  // Ambient (env vars, AWS profiles, ADC files).
-  return provider.auth.apiKey
-    ? resolveApiKey(requestAuthContext, provider.auth.apiKey, provider.id, undefined, signal)
-    : undefined;
-}
-
-function overlayEnvAuthContext(base: AuthContext, env: ProviderEnv): AuthContext {
-  return {
-    env: async (name) => env[name] || (await base.env(name)),
-    fileExists: (path) => base.fileExists(path),
-  };
-}
-
-const DEFAULT_OAUTH_MINIMUM_VALIDITY_MS = 5 * 60 * 1000;
-const DEFAULT_OAUTH_REFRESH_TIMEOUT_MS = 15_000;
-
-/**
- * Refresh a stored OAuth credential under the credential-store lock and persist
- * the result before the lock is released. `needsRefresh` is re-checked under
- * the lock, so concurrent callers and processes refresh only once.
- *
- * `signal` cancels only the wait for the lock. Once a refresh starts, the
- * provider may already have rotated the refresh token, so the refresh and its
- * persistence ignore `signal` and are bounded only by a timeout. Otherwise a
- * cancelled caller could discard the only valid refresh token. Callers that
- * must return promptly on cancellation race this promise with their signal.
- *
- * Resolves with the stored OAuth credential after the operation, or undefined
- * when the provider no longer has an OAuth credential.
- *
- * @param {CredentialStore} credentials - credential store
- * @param {string} providerId - provider id
- * @param {OAuthAuth} oauth - provider OAuth implementation
- * @param {(credential: OAuthCredential) => boolean} needsRefresh - decides whether the stored credential needs a refresh
- * @param {AbortSignal} signal - cancels the wait for the lock
- * @returns {Promise<OAuthCredential | undefined>} the refreshed credential, or undefined when nothing was refreshed
- */
-export async function refreshStoredOAuthCredential(
-  credentials: CredentialStore,
-  providerId: string,
-  oauth: OAuthAuth,
-  needsRefresh: (credential: OAuthCredential) => boolean,
+const resolveProviderAuthWithSignal = (
+  provider: resolveTypes.AuthProvider,
+  credentials: typesModuleModule.CredentialStore,
+  authContext: typesModuleModule.AuthContext,
+  overrides: resolveTypes.AuthResolutionOverrides | undefined,
   signal: AbortSignal,
-): Promise<OAuthCredential | undefined> {
-  let post: Credential | undefined;
-  const lockWait = new AbortController();
-  const cancelLockWait = () => lockWait.abort(signal.reason);
-  signal.addEventListener("abort", cancelLockWait, { once: true });
-  if (signal.aborted) cancelLockWait();
-  try {
-    post = await credentials.modify(
-      providerId,
-      async (current) => {
-        signal.removeEventListener("abort", cancelLockWait);
-        signal.throwIfAborted();
-        // logged out meanwhile
-        if (current?.type !== "oauth") return undefined;
-        // another process/request refreshed
-        if (!needsRefresh(current)) return undefined;
-        try {
-          return await oauth.refresh(
-            current,
-            AbortSignal.timeout(DEFAULT_OAUTH_REFRESH_TIMEOUT_MS),
-          );
-        } catch (error) {
-          throw new ModelsError("oauth", `OAuth refresh failed for ${providerId}`, {
-            cause: error,
-          });
-        }
-      },
-      { signal: lockWait.signal },
-    );
-  } catch (error) {
-    if (error instanceof ModelsError) throw error;
+): Effect.Effect<typesModuleModule.AuthResult | undefined> =>
+  Effect.gen(function* () {
     signal.throwIfAborted();
-    throw new ModelsError("auth", `Credential store modify failed for ${providerId}`, {
-      cause: error,
-    });
-  } finally {
-    signal.removeEventListener("abort", cancelLockWait);
-  }
-  return post?.type === "oauth" ? post : undefined;
-}
+    const requestAuthContext =
+      overrides?.env === undefined
+        ? authContext
+        : overlayEnvAuthContext(authContext, overrides.env);
 
-/**
- * OAuth resolution with double-checked locking: tokens with less than five
- * minutes remaining are refreshed through `refreshStoredOAuthCredential`.
- *
- * @param {CredentialStore} credentials - credential store
- * @param {string} providerId - provider id
- * @param {OAuthAuth} oauth - provider OAuth implementation
- * @param {OAuthCredential} stored - stored credential
- * @param {AbortSignal} signal - cancels the wait for the lock
- * @param {number} [minOAuthValidityMs] - minimum remaining validity before a refresh
- * @returns {Promise<AuthResult | undefined>} the auth result, or undefined
- */
-async function resolveStoredOAuth(
-  credentials: CredentialStore,
-  providerId: string,
-  oauth: OAuthAuth,
-  stored: OAuthCredential,
-  signal: AbortSignal,
-  minOAuthValidityMs?: number,
-): Promise<AuthResult | undefined> {
-  const minimumValidityMs = Math.max(DEFAULT_OAUTH_MINIMUM_VALIDITY_MS, minOAuthValidityMs ?? 0);
-  const expiresSoon = (credential: OAuthCredential) =>
-    Date.now() + minimumValidityMs >= credential.expires;
-  let credential = stored;
-
-  if (expiresSoon(credential)) {
-    // Optimistic check said expired; the authoritative check runs under the lock.
-    const post = await refreshStoredOAuthCredential(
-      credentials,
-      providerId,
-      oauth,
-      expiresSoon,
-      signal,
-    );
-    // logged out meanwhile
-    if (!post) return undefined;
-    credential = post;
-    // The normal five-minute window triggers a refresh but does not impose a
-    // provider contract. Explicit callers (such as bearer-token export) do
-    // require the requested minimum after the refresh.
-    if (minOAuthValidityMs !== undefined && expiresSoon(credential)) {
-      throw new ModelsError(
-        "oauth",
-        `OAuth refresh returned a token that expires too soon for ${providerId}`,
+    if (overrides?.apiKey !== undefined && provider.auth.apiKey !== undefined) {
+      return yield* resolveApiKey(
+        requestAuthContext,
+        provider.auth.apiKey,
+        provider.id,
+        { env: overrides.env, key: overrides.apiKey, type: "api_key" },
+        signal,
       );
     }
-  }
 
-  try {
-    return { auth: await oauth.toAuth(credential), source: "OAuth" };
-  } catch (error) {
-    throw new ModelsError("oauth", `OAuth auth derivation failed for ${providerId}`, {
-      cause: error,
+    const stored = yield* promiseOrModelsError(() => credentials.read(provider.id, { signal }), {
+      code: "auth",
+      message: `Credential store read failed for ${provider.id}`,
     });
-  }
-}
+    if (stored !== undefined) {
+      return yield* resolveStoredCredential(
+        provider,
+        credentials,
+        requestAuthContext,
+        overrides,
+        signal,
+      )(stored);
+    }
 
-async function resolveApiKey(
-  authContext: AuthContext,
-  apiKey: ApiKeyAuth,
-  providerId: string,
-  credential: ApiKeyCredential | undefined,
-  signal: AbortSignal,
-): Promise<AuthResult | undefined> {
-  try {
-    return await apiKey.resolve({ ctx: authContext, credential, signal });
-  } catch (error) {
-    throw new ModelsError("auth", `API key auth failed for provider ${providerId}`, {
-      cause: error,
-    });
-  }
-}
+    return provider.auth.apiKey === undefined
+      ? undefined
+      : yield* resolveApiKey(
+          requestAuthContext,
+          provider.auth.apiKey,
+          provider.id,
+          undefined,
+          signal,
+        );
+  });
 
-async function readCredential(
-  credentials: CredentialStore,
-  providerId: string,
-  signal: AbortSignal,
-): Promise<Credential | undefined> {
-  try {
-    return await credentials.read(providerId, { signal });
-  } catch (error) {
-    throw new ModelsError("auth", `Credential store read failed for ${providerId}`, {
-      cause: error,
-    });
-  }
-}
+const isAuthProvider = (value: unknown): value is resolveTypes.AuthProvider =>
+  typeof value === "object" && value !== null && "id" in value && "auth" in value;
+
+const resolveProviderAuth: {
+  (
+    credentials: typesModuleModule.CredentialStore,
+    authContext: typesModuleModule.AuthContext,
+    overrides?: resolveTypes.AuthResolutionOverrides,
+  ): (
+    provider: resolveTypes.AuthProvider,
+  ) => Effect.Effect<typesModuleModule.AuthResult | undefined>;
+  (
+    provider: resolveTypes.AuthProvider,
+    credentials: typesModuleModule.CredentialStore,
+    authContext: typesModuleModule.AuthContext,
+    overrides?: resolveTypes.AuthResolutionOverrides,
+  ): Effect.Effect<typesModuleModule.AuthResult | undefined>;
+} = Function.dual(
+  (args) => isAuthProvider(args[0]),
+  (
+    provider: resolveTypes.AuthProvider,
+    credentials: typesModuleModule.CredentialStore,
+    authContext: typesModuleModule.AuthContext,
+    overrides?: resolveTypes.AuthResolutionOverrides,
+  ): Effect.Effect<typesModuleModule.AuthResult | undefined> => {
+    const signal = operationSignal(overrides?.signal);
+    return abortable(
+      resolveProviderAuthWithSignal(provider, credentials, authContext, overrides, signal),
+      signal,
+    );
+  },
+);
+
+const resolveModule = {
+  ModelsError: modelsError.ModelsError,
+  refreshStoredOAuthCredential,
+  resolveProviderAuth,
+};
+
+export default resolveModule;

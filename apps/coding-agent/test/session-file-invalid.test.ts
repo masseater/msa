@@ -1,77 +1,62 @@
-import { spawn } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
-import { pathToFileURL } from "node:url";
-
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { ENV_AGENT_DIR } from "../src/config.ts";
+import cliProcess from "./cli-process.ts";
 
-const cliPath = resolve(__dirname, "../src/cli.ts");
-// --import takes a module specifier, not a filesystem path.
-const sourceResolverUrl = pathToFileURL(
-  resolve(__dirname, "../src/experimental/source-resolver.ts"),
-).href;
+const {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  readTextFile,
+  realPath,
+  removeDirs,
+  runTest,
+  writeTextFile,
+} = testing;
+
+const { runCli } = cliProcess;
+
 const tempDirs: string[] = [];
 
-afterEach(() => {
-  for (const dir of tempDirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
-  }
-});
+afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
 
-function createTempDir(): string {
-  const dir = realpathSync(mkdtempSync(join(tmpdir(), "msa-session-file-invalid-")));
+const createTempDir = Effect.fn("createTempDir")(function* () {
+  const dir = yield* realPath(yield* makeTempDir("msa-session-file-invalid-"));
   tempDirs.push(dir);
   return dir;
-}
+});
 
-async function runCli(
-  args: string[],
-  cwd: string,
-  agentDir: string,
-): Promise<{ code: number | null; stderr: string }> {
-  let stderr = "";
-  const code = await new Promise<number | null>((resolvePromise, reject) => {
-    const child = spawn(process.execPath, ["--import", sourceResolverUrl, cliPath, ...args], {
-      cwd,
-      env: {
-        ...process.env,
-        [ENV_AGENT_DIR]: agentDir,
-        MSA_OFFLINE: "1",
-      },
-      stdio: ["ignore", "ignore", "pipe"],
-    });
-    child.stderr.on("data", (chunk) => {
-      stderr += chunk.toString();
-    });
-    child.on("error", reject);
-    child.on("close", resolvePromise);
-  });
+const printsAFriendlyErrorAndPreservesNon = () =>
+  runTest(
+    Effect.gen(function* () {
+      const tempRoot = yield* createTempDir();
+      const agentDir = joinPath(tempRoot, "agent");
+      const projectDir = joinPath(tempRoot, "project");
+      const sessionFile = joinPath(tempRoot, "not-a-session.log");
+      const originalContent = '{"type":"event","data":"not a session"}\n';
+      yield* makeDirectory(agentDir);
+      yield* makeDirectory(projectDir);
+      yield* writeTextFile(sessionFile, originalContent);
 
-  return { code, stderr };
-}
+      const result = yield* awaited(
+        runCli(["--session", sessionFile, "-p", "hi"], { agentDir, cwd: projectDir }),
+      );
+
+      expect(result.code).toBe(1);
+      expect(result.stderr).toContain(
+        `Error: Session file is not a valid msa session: ${sessionFile}`,
+      );
+      expect(result.stderr).not.toContain("SessionManager.open");
+      expect(result.stderr).not.toContain("at ");
+      expect(yield* readTextFile(sessionFile)).toBe(originalContent);
+    }),
+  );
 
 describe("--session invalid file handling", () => {
-  it("prints a friendly error and preserves non-session file content", async () => {
-    const tempRoot = createTempDir();
-    const agentDir = join(tempRoot, "agent");
-    const projectDir = join(tempRoot, "project");
-    const sessionFile = join(tempRoot, "not-a-session.log");
-    const originalContent = '{"type":"event","data":"not a session"}\n';
-    mkdirSync(agentDir, { recursive: true });
-    mkdirSync(projectDir, { recursive: true });
-    writeFileSync(sessionFile, originalContent);
-
-    const result = await runCli(["--session", sessionFile, "-p", "hi"], projectDir, agentDir);
-
-    expect(result.code).toBe(1);
-    expect(result.stderr).toContain(
-      `Error: Session file is not a valid msa session: ${sessionFile}`,
-    );
-    expect(result.stderr).not.toContain("SessionManager.open");
-    expect(result.stderr).not.toContain("at ");
-    expect(readFileSync(sessionFile, "utf8")).toBe(originalContent);
-  });
+  it(
+    "prints a friendly error and preserves non-session file content",
+    printsAFriendlyErrorAndPreservesNon,
+  );
 });

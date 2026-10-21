@@ -1,54 +1,47 @@
-import type { DatabaseSync } from "node:sqlite";
+import type DatabaseSync from "../platform/node/sqlite.ts";
+import replanStoreModule from "./replan-store.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
-import { replanStore } from "./replan-store.ts";
-import { store } from "./store.ts";
-import type {
-  OrchestratorSnapshot,
-  ReplanMark,
-  ReplanRole,
-  ReplanView,
-  RoundView,
-  TaskSnapshot,
-  TaskView,
-  WaitingReason,
-} from "./types.ts";
+const { store } = storeModule;
+const { replanStore } = replanStoreModule;
 
 function reasonFor(
-  task: TaskView,
-  byId: ReadonlyMap<string, TaskView>,
+  task: orchestratorTypesTypes.TaskView,
+  byId: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
   free: number,
-): WaitingReason {
+): orchestratorTypesTypes.WaitingReason {
   const unfinished = task.dependsOn.filter(
     (dependency) => byId.get(dependency)?.status !== "completed",
   );
   if (unfinished.length > 0) {
     const titles = unfinished.map((id) => byId.get(id)?.title ?? id);
-    return { kind: "dependencies", detail: `waiting for ${titles.join(", ")}` };
+    return { detail: `waiting for ${titles.join(", ")}`, kind: "dependencies" };
   }
-  if (task.condition !== null) return { kind: "condition", detail: `condition: ${task.condition}` };
+  if (task.condition !== null) return { detail: `condition: ${task.condition}`, kind: "condition" };
   if (task.kind === "review" && task.dependsOn.length === 0) {
-    return { kind: "review", detail: "round has no work to review yet" };
+    return { detail: "round has no work to review yet", kind: "review" };
   }
-  if (free <= 0) return { kind: "capacity", detail: "no free thread slot" };
-  return { kind: "scheduling", detail: "about to start" };
+  if (free <= 0) return { detail: "no free thread slot", kind: "capacity" };
+  return { detail: "about to start", kind: "scheduling" };
 }
 
-function taskViews(database: DatabaseSync, project: string): TaskView[] {
+function taskViews(database: DatabaseSync, project: string): orchestratorTypesTypes.TaskView[] {
   const tasks = store.listTasks(database, project);
   const dependencies = store.listDependencyPairs(database, project);
   const assignments = store.listAssignments(database, project);
   const reports = store.listReports(database, project);
   return tasks.map((task) =>
     Object.assign(task, {
-      dependsOn: dependencies
-        .filter((pair) => pair.taskId === task.id)
-        .map((pair) => pair.dependsOn)
-        .toSorted(),
+      assignments: assignments.filter((assignment) => assignment.taskId === task.id),
       dependents: dependencies
         .filter((pair) => pair.dependsOn === task.id)
         .map((pair) => pair.taskId)
         .toSorted(),
-      assignments: assignments.filter((assignment) => assignment.taskId === task.id),
+      dependsOn: dependencies
+        .filter((pair) => pair.taskId === task.id)
+        .map((pair) => pair.dependsOn)
+        .toSorted(),
       reports: reports.filter((report) => report.taskId === task.id),
     }),
   );
@@ -57,21 +50,23 @@ function taskViews(database: DatabaseSync, project: string): TaskView[] {
 function roundViews(
   database: DatabaseSync,
   project: string,
-  tasks: readonly TaskView[],
-): RoundView[] {
+  tasks: readonly orchestratorTypesTypes.TaskView[],
+): orchestratorTypesTypes.RoundView[] {
   return store.listRoundIds(database, project).map((round) => ({
     id: round.id,
-    title: round.title,
     reviewTaskId:
       tasks.find((task) => task.round === round.id && task.kind === "review")?.id ?? null,
     taskIds: tasks.filter((task) => task.round === round.id).map((task) => task.id),
+    title: round.title,
   }));
 }
 
-function taskMarks(replan: ReplanView | undefined): Map<string, ReplanMark> {
-  const marked = new Map<string, ReplanMark>();
+function taskMarks(
+  replan: orchestratorTypesTypes.ReplanView | undefined,
+): Map<string, orchestratorTypesTypes.ReplanMark> {
+  const marked = new Map<string, orchestratorTypesTypes.ReplanMark>();
   if (replan === undefined) return marked;
-  const add = (ids: readonly string[], role: ReplanRole) => {
+  const add = (ids: readonly string[], role: orchestratorTypesTypes.ReplanRole) => {
     for (const id of ids) marked.set(id, { id: replan.id, reason: replan.reason, role });
   };
   add(
@@ -89,7 +84,7 @@ function taskMarks(replan: ReplanView | undefined): Map<string, ReplanMark> {
   return marked;
 }
 
-function handoffOf(task: TaskView): string | null {
+function handoffOf(task: orchestratorTypesTypes.TaskView): string | null {
   const stopped = task.reports.filter((report) => report.status === "stopped");
   return stopped.at(-1)?.content ?? null;
 }
@@ -98,7 +93,7 @@ function buildSnapshot(
   database: DatabaseSync,
   project: string,
   maxConcurrentThreads: number,
-): OrchestratorSnapshot {
+): orchestratorTypesTypes.OrchestratorSnapshot {
   const views = taskViews(database, project);
   const byId = new Map(views.map((task) => [task.id, task]));
   const threads = store.listThreads(database, project);
@@ -106,34 +101,25 @@ function buildSnapshot(
     maxConcurrentThreads - threads.filter((thread) => thread.status === "running").length;
   const replans = replanStore.listReplans(database, project, 10);
   const byTask = taskMarks(replans[0]);
-  const snapshots: TaskSnapshot[] = views.map((task) => ({
+  const snapshots: orchestratorTypesTypes.TaskSnapshot[] = views.map((task) => ({
     ...task,
-    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free) : null,
     handoff: handoffOf(task),
     replan: byTask.get(task.id) ?? null,
+    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free) : null,
   }));
   return {
+    maxConcurrentThreads,
+    replans,
+    rounds: roundViews(database, project, views),
     tasks: snapshots,
     threads: store.threadViews(database, project),
-    rounds: roundViews(database, project, views),
-    replans,
-    maxConcurrentThreads,
   };
 }
 
-export const snapshots = { taskViews, buildSnapshot };
+const snapshots = { buildSnapshot, taskViews };
 
-export type {
-  CreateTaskInput,
-  NoteDelivery,
-  OrchestratorSnapshot,
-  ReplanInput,
-  ReplanResult,
-  ReplanView,
-  ReportHit,
-  SendNoteInput,
-  SetTaskDependsInput,
-  SetTaskStateInput,
-  TaskSnapshot,
-  TaskView,
-} from "./types.ts";
+const snapshot = {
+  snapshots,
+};
+
+export default snapshot;

@@ -5,9 +5,13 @@ import type { SchemaError } from "effect/Schema";
 import type { TSchema } from "typebox";
 import { format } from "vite-plus/fmt";
 
-import { Host, runScript } from "../../../scripts/host.ts";
-import { schemaArtifacts } from "./schema-artifacts.ts";
-import type { SchemaArtifact } from "./schema-artifacts.ts";
+import hostModule from "../../../scripts/host.ts";
+import schemaArtifactsModule from "./schema-artifacts.ts";
+import type schemaArtifactsTypes from "./schema-artifacts.types.ts";
+
+const { Host, runScript } = hostModule;
+
+const { schemaArtifacts } = schemaArtifactsModule;
 
 const packageDirectory = fileURLToPath(new URL("..", import.meta.url));
 const schemaBaseUrl =
@@ -46,7 +50,7 @@ const splitAnnotations = (schema: object): SplitSchema => {
   for (const [key, value] of Object.entries(schema)) {
     (schemaAnnotationKeys.has(key) ? annotations : shape)[key] = value;
   }
-  return { shape, annotations };
+  return { annotations, shape };
 };
 
 interface PreparedDefinition {
@@ -115,7 +119,7 @@ const addDefinitions = (
     return { ...compactSchema, $defs: compactDefinitions };
   });
 
-const serializeSchema = (artifact: SchemaArtifact) =>
+const serializeSchema = (artifact: schemaArtifactsTypes.SchemaArtifact) =>
   Effect.gen(function* () {
     const definitions = artifact.definitions;
     const schema =
@@ -123,14 +127,14 @@ const serializeSchema = (artifact: SchemaArtifact) =>
         ? artifact.schema
         : yield* addDefinitions(artifact.schema, definitions);
     return `${yield* encodeIndentedJson({
-      $schema: schemaDraft,
-      $id: `${schemaBaseUrl}/${artifact.filename}`,
       $comment: generatedComment,
+      $id: `${schemaBaseUrl}/${artifact.filename}`,
+      $schema: schemaDraft,
       ...schema,
     })}\n`;
   });
 
-const renderArtifact = (artifact: SchemaArtifact) =>
+const renderArtifact = (artifact: schemaArtifactsTypes.SchemaArtifact) =>
   Effect.gen(function* () {
     const relativePath = `schemas/${artifact.filename}`;
     const serialized = yield* serializeSchema(artifact);
@@ -170,4 +174,8 @@ if (invokedFile === fileURLToPath(import.meta.url)) {
   runScript(program);
 }
 
-export { renderConfigSchemas };
+const generateSchemas = {
+  renderConfigSchemas,
+};
+
+export default generateSchemas;

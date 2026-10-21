@@ -1,31 +1,24 @@
-// JSON mode: stream one prompt's run as JSON lines, like `msa --mode json`. Two modes:
-//   --events (default): the experimental agent events of watchEvents(), starting with a `snapshot` event.
-//   --ops: the raw ConversationView frames, starting with the view itself; each later line holds one commit's ops.
-// --storage sqlite (default) | jsonl | memory: sqlite writes a temporary database file, jsonl a temporary directory;
-// neither is deleted, and the path is printed to stderr at the end.
-// Uses OpenAI when OPENAI_API_KEY is set, and a scripted faux model otherwise.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/19-json.ts --events "What is in this directory?"
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import openai from "@msa/ai/providers/openai";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import { Console, Effect } from "effect";
 
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { openaiProvider } from "@msa/ai/providers/openai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import node from "../../src/env/node.ts";
+import toolsModule from "../../src/tools/index.ts";
+import support from "../support.ts";
+import openJsonExampleStorage from "./json-storage.ts";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  createRegistry,
-  defineExtension,
-  Harness,
-  MemoryStorage,
-  type Storage,
-  section,
-  watchEvents,
-} from "../../src/index.ts";
-import { openNodeJsonlStorage } from "../../src/storage/jsonl/node.ts";
-import { openNodeSqliteStorage } from "../../src/storage/sqlite/node.ts";
-import { createBashTool, createReadTool } from "../../src/tools/index.ts";
-import { makeTempDir, tempPath } from "../temp-support.ts";
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+const { openaiProvider } = openai;
+
+const { Harness, createRegistry, watchEvents } = harnessModule;
+const { defineExtension, section } = durable;
+const { createBashTool, createReadTool } = toolsModule;
+const { NodeExecutionEnv } = node;
+
+const { BACKGROUND_CONTEXT, awaited, environmentVariable } = support;
 
 const context = BACKGROUND_CONTEXT;
 const args = process.argv.slice(2);
@@ -37,76 +30,70 @@ const prompt =
     (arg, index) => !arg.startsWith("--") && (storageIndex < 0 || index !== storageIndex + 1),
   ) ?? "What is in this directory?";
 
-let storage: Storage;
-let location: string | undefined;
-if (storageKind === "sqlite") {
-  location = tempPath(`msa-durable-json-${Date.now()}.sqlite`);
-  storage = await openNodeSqliteStorage(location);
-} else if (storageKind === "jsonl") {
-  location = await makeTempDir("msa-durable-json-");
-  storage = await openNodeJsonlStorage(location, context);
-} else if (storageKind === "memory") {
-  storage = new MemoryStorage();
-} else {
-  throw new Error(`Unknown --storage ${storageKind}; use sqlite, jsonl, or memory`);
-}
-const print = (value: unknown): void => void process.stdout.write(`${JSON.stringify(value)}\n`);
+const mainStep1 = Effect.gen(function* () {
+  const { storage, location } = yield* openJsonExampleStorage(storageKind);
+  const print = (value: unknown): void => void process.stdout.write(`${JSON.stringify(value)}\n`);
 
-const models = createModels();
-let model = { provider: "openai", modelId: "gpt-6-sol" };
-if (process.env["OPENAI_API_KEY"] === undefined) {
-  const faux = fauxProvider({ tokensPerSecond: 200 });
-  models.setProvider(faux.provider);
-  model = { provider: "faux", modelId: "faux-1" };
-  faux.setResponses([
-    fauxAssistantMessage([fauxToolCall("bash", { command: "ls" }, { id: "call-1" })], {
-      stopReason: "toolUse",
+  const models = createModels();
+  let model = { modelId: "gpt-6-sol", provider: "openai" };
+  if (environmentVariable("OPENAI_API_KEY", true) === undefined) {
+    const faux = fauxProvider({ tokensPerSecond: 200 });
+    models.setProvider(faux.provider);
+    model = { modelId: "faux-1", provider: "faux" };
+    faux.setResponses([
+      fauxAssistantMessage([fauxToolCall("bash", { command: "ls" }, { id: "call-1" })], {
+        stopReason: "toolUse",
+      }),
+      fauxAssistantMessage([
+        fauxText("This directory holds the durable package sources, tests, and docs."),
+      ]),
+    ]);
+  } else {
+    models.setProvider(openaiProvider());
+  }
+
+  const registry = createRegistry();
+  registry.install(
+    defineExtension({
+      name: "coding",
+      sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
+      tools: [createReadTool(), createBashTool()],
     }),
-    fauxAssistantMessage([
-      fauxText("This directory holds the durable package sources, tests, and docs."),
-    ]),
-  ]);
-} else {
-  models.setProvider(openaiProvider());
-}
-
-const registry = createRegistry();
-registry.install(
-  defineExtension({
-    name: "coding",
-    tools: [createReadTool(), createBashTool()],
-    sections: [section("preamble", () => "You are a concise coding assistant.", { tag: false })],
-  }),
-);
-const env = new NodeExecutionEnv({ cwd: process.cwd() });
-const harness = await Harness.open(storage, { models, registry, env: () => env }, context);
-const root = await harness.root(context, { agent: { model } });
-
-// Attach before submitting, so the stream covers the whole run.
-let stop: () => Promise<unknown>;
-if (mode === "events") {
-  const stream = await watchEvents(harness, root.id, context);
-  print(stream.snapshot);
-  stream.start((events) => {
-    for (const event of events) print(event);
-
-    return Promise.resolve();
-  });
-  stop = () => stream.stop();
-} else {
-  const watch = await root.watch(context);
-  print({ view: watch.value });
-  watch.start((_value, ops) => Promise.resolve(print({ ops })));
-  stop = () => watch.stop();
-}
-
-const submission = await root.submit({ type: "input", content: prompt }, context);
-await submission.wait(context);
-await harness.waitForIdle(context);
-// Let the last batch reach the listener before stopping.
-await new Promise((resolve) => {
-  setTimeout(resolve, 0);
+  );
+  const env = new NodeExecutionEnv({ cwd: process.cwd() });
+  const harness = yield* awaited(
+    Harness.open(storage, { env: () => env, models, registry }, context),
+  );
+  const root = yield* awaited(harness.root(context, { agent: { model } }));
+  return { harness, location, print, root };
 });
-await stop();
-await harness.close(context);
-if (location !== undefined) console.error(`${storageKind} storage: ${location}`);
+
+const main = Effect.gen(function* () {
+  const { location, print, harness, root } = yield* mainStep1;
+  let stop: () => Promise<unknown>;
+  if (mode === "events") {
+    const stream = yield* awaited(watchEvents(harness, root.id, context));
+    print(stream.snapshot);
+    stream.start((events) => {
+      for (const event of events) print(event);
+
+      return Promise.resolve();
+    });
+    stop = () => stream.stop();
+  } else {
+    const watch = yield* awaited(root.watch(context));
+    print({ view: watch.value });
+    watch.start((_value, ops) => Promise.resolve(print({ ops })));
+    stop = () => watch.stop();
+  }
+
+  const submission = yield* awaited(root.submit({ content: prompt, type: "input" }, context));
+  yield* awaited(submission.wait(context));
+  yield* awaited(harness.waitForIdle(context));
+  yield* Effect.sleep(1);
+  yield* awaited(stop());
+  yield* awaited(harness.close(context));
+  if (location !== undefined) yield* Console.error(`${storageKind} storage: ${location}`);
+});
+
+NodeRuntime.runMain(main);

@@ -1,28 +1,28 @@
-import { ProviderCompatSchema } from "@msa/ai/providers/compat-schema";
-import {
+import compatSchema from "@msa/ai/providers/compat-schema";
+import modelSchema from "@msa/ai/providers/model-schema";
+
+import keybindingsSchema from "../src/core/keybindings-schema.ts";
+import modelConfigSupport from "../src/core/model-config-support.ts";
+import settingsSchema from "../src/core/settings-schema.ts";
+import themeSchema from "../src/modes/interactive/theme/theme-schema.ts";
+import type schemaArtifactsTypes from "./schema-artifacts.types.ts";
+
+const { ModelsConfigSchema } = modelConfigSupport;
+const { SettingsSchema } = settingsSchema;
+const { KeybindingValueSchema, KeybindingsSchema } = keybindingsSchema;
+const { ColorValueSchema, ThemeJsonSchema } = themeSchema;
+
+const {
   ModelCostSchema,
   ModelInputLimitsSchema,
   ModelPromptCacheSchema,
   ModelThinkingLevelSchema,
   ThinkingLevelMapSchema,
-} from "@msa/ai/providers/model-schema";
-import type { TSchema } from "typebox";
+} = modelSchema;
+const { ProviderCompatSchema } = compatSchema;
 
-import { KeybindingsSchema, KeybindingValueSchema } from "../src/core/keybindings-schema.ts";
-import { ModelsConfigSchema } from "../src/core/model-config.ts";
-import { SettingsSchema } from "../src/core/settings-schema.ts";
-import { ColorValueSchema, ThemeJsonSchema } from "../src/modes/interactive/theme/theme-schema.ts";
-
-interface SchemaArtifact {
-  filename: `${string}.schema.json`;
-  schema: TSchema;
-  definitions?: Readonly<Record<string, TSchema>>;
-}
-
-const schemaArtifacts: readonly SchemaArtifact[] = [
+const schemaArtifacts: readonly schemaArtifactsTypes.SchemaArtifact[] = [
   {
-    filename: "models.schema.json",
-    schema: ModelsConfigSchema,
     definitions: {
       ModelCost: ModelCostSchema,
       ModelInputLimits: ModelInputLimitsSchema,
@@ -30,23 +30,28 @@ const schemaArtifacts: readonly SchemaArtifact[] = [
       ProviderCompat: ProviderCompatSchema,
       ThinkingLevelMap: ThinkingLevelMapSchema,
     },
+    filename: "models.schema.json",
+    schema: ModelsConfigSchema,
   },
   {
+    definitions: { ModelThinkingLevel: ModelThinkingLevelSchema },
     filename: "settings.schema.json",
     schema: SettingsSchema,
-    definitions: { ModelThinkingLevel: ModelThinkingLevelSchema },
   },
   {
+    definitions: { KeybindingValue: KeybindingValueSchema },
     filename: "keybindings.schema.json",
     schema: KeybindingsSchema,
-    definitions: { KeybindingValue: KeybindingValueSchema },
   },
   {
+    definitions: { ColorValue: ColorValueSchema },
     filename: "theme.schema.json",
     schema: ThemeJsonSchema,
-    definitions: { ColorValue: ColorValueSchema },
   },
 ];
 
-export type { SchemaArtifact };
-export { schemaArtifacts };
+const schemaArtifactsModule = {
+  schemaArtifacts,
+};
+
+export default schemaArtifactsModule;

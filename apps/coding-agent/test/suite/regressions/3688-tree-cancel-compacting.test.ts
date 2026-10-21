@@ -1,37 +1,55 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { assistantMsg, userMsg } from "../../utilities.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import utilities from "../../utilities.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-describe("issue #3688 tree cancellation compaction state", () => {
-  const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
+const { assistantMsg, userMsg } = utilities;
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
+const harnesses: harnessTypes.Harness[] = [];
 
-  it("clears branch summary state when session_before_tree cancels navigation", async () => {
-    const harness = await createHarness({
+const clearsBranchSummaryStateWhenSession = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           msa.on("session_before_tree", () => ({ cancel: true }));
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
 
-    const targetId = harness.sessionManager.appendMessage(userMsg("first"));
-    harness.sessionManager.appendMessage(assistantMsg("reply"));
-    const currentLeafId = harness.sessionManager.appendMessage(userMsg("second"));
+  const targetId = harness.sessionManager.appendMessage(userMsg("first"));
+  harness.sessionManager.appendMessage(assistantMsg("reply"));
+  const currentLeafId = harness.sessionManager.appendMessage(userMsg("second"));
 
-    expect(harness.sessionManager.getLeafId()).toBe(currentLeafId);
+  expect(harness.sessionManager.getLeafId()).toBe(currentLeafId);
 
-    const result = await harness.session.navigateTree(targetId, { summarize: false });
+  const result = yield* Effect.promise(() =>
+    harness.session.context.tree.navigateTree(targetId, { summarize: false }),
+  );
 
-    expect(result).toEqual({ cancelled: true });
-    expect(harness.session.isCompacting).toBe(false);
-    expect(harness.sessionManager.getLeafId()).toBe(currentLeafId);
-  });
+  expect(result).toEqual({ cancelled: true });
+  expect(harness.session.compaction.manual.isCompacting).toBe(false);
+  expect(harness.sessionManager.getLeafId()).toBe(currentLeafId);
+});
+
+const clearsBranchSummaryStateWhenSessionBefore = () =>
+  Effect.runPromise(clearsBranchSummaryStateWhenSession);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
+describe("issue #3688 tree cancellation compaction state", () => {
+  afterEach(afterEachHook);
+  it(
+    "clears branch summary state when session_before_tree cancels navigation",
+    clearsBranchSummaryStateWhenSessionBefore,
+  );
 });

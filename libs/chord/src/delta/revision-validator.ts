@@ -1,19 +1,22 @@
-import type { JsonValue } from "../json.ts";
+import type jsonTypes from "../json.types.ts";
 
-type JsonContainer = JsonValue[] | Record<string, JsonValue>;
+type JsonContainer = jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
 
-const isContainer = (value: JsonValue): value is JsonContainer =>
+const isContainer = (value: jsonTypes.JsonValue): value is JsonContainer =>
   typeof value === "object" && value !== null;
 
-/** Validates immutable replica revisions while skipping containers validated in earlier revisions. */
-export class JsonRevisionValidator {
+export default class JsonRevisionValidator {
   readonly #validated = new WeakSet<object>();
 
-  validate<T extends JsonValue>(value: T): T {
+  validate<T extends jsonTypes.JsonValue>(value: T): T {
     return this.#validate(value, new Set<object>(), new WeakSet<object>()) as T;
   }
 
-  #validate(value: JsonValue, ancestors: Set<object>, finished: WeakSet<object>): JsonValue {
+  #validate(
+    value: jsonTypes.JsonValue,
+    ancestors: Set<object>,
+    finished: WeakSet<object>,
+  ): jsonTypes.JsonValue {
     if (!isContainer(value) || this.#validated.has(value))
       return isContainer(value) ? value : assertPrimitive(value);
     if (finished.has(value)) return value;
@@ -30,10 +33,14 @@ export class JsonRevisionValidator {
           if (typeof key === "symbol")
             throw new TypeError("Replicated state cannot contain symbol properties");
           const descriptor = Object.getOwnPropertyDescriptor(value, key);
-          if (descriptor === undefined || !descriptor.enumerable || !("value" in descriptor)) {
+          if (
+            descriptor === undefined ||
+            descriptor.enumerable !== true ||
+            !("value" in descriptor)
+          ) {
             throw new TypeError("Replicated state objects must contain enumerable data properties");
           }
-          this.#validate(descriptor.value as JsonValue, ancestors, finished);
+          this.#validate(descriptor.value as jsonTypes.JsonValue, ancestors, finished);
         }
       }
       finished.add(value);
@@ -67,7 +74,7 @@ function assertDenseArray(value: readonly unknown[]): void {
     const descriptor = Object.getOwnPropertyDescriptor(value, String(index));
     if (
       descriptor === undefined ||
-      !descriptor.enumerable ||
+      descriptor.enumerable !== true ||
       !("value" in descriptor) ||
       descriptor.value === undefined
     ) {

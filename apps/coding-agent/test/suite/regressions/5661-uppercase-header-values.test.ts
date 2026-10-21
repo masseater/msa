@@ -1,96 +1,98 @@
-import { readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import testing from "@msa/testing";
+import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import config from "../../../src/config.ts";
+import AuthStorage from "../../../src/core/auth-storage.ts";
+import migrations from "../../../src/migrations.ts";
+import modelRuntimeTestUtils from "../../model-runtime-test-utils.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-import { ENV_AGENT_DIR } from "../../../src/config.ts";
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { runMigrations } from "../../../src/migrations.ts";
-import { createModelRegistry } from "../../model-runtime-test-utils.ts";
-import { createHarness } from "../harness.ts";
+const { ENV_AGENT_DIR } = config;
+const { runMigrations } = migrations;
+const { createHarness } = harnessModule;
+const { createModelRegistry } = modelRuntimeTestUtils;
 
-describe("regression #5661: uppercase models.json header values", () => {
-  const cleanups: Array<() => void> = [];
+const { awaited, fromJsonText, joinPath, toJsonText } = testing;
 
-  afterEach(() => {
-    while (cleanups.length > 0) {
-      cleanups.pop()?.();
-    }
-  });
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-  function withAgentDir(agentDir: string, fn: () => void): void {
-    const previousAgentDir = process.env[ENV_AGENT_DIR];
-    process.env[ENV_AGENT_DIR] = agentDir;
-    try {
-      fn();
-    } finally {
-      if (previousAgentDir === undefined) {
-        delete process.env[ENV_AGENT_DIR];
-      } else {
-        process.env[ENV_AGENT_DIR] = previousAgentDir;
-      }
-    }
+const cleanups: Array<() => void> = [];
+
+function withAgentDir<T>(agentDir: string, fn: () => T): T {
+  vi.stubEnv(ENV_AGENT_DIR, agentDir);
+  try {
+    return fn();
+  } finally {
+    vi.unstubAllEnvs();
   }
+}
 
-  it("keeps uppercase header strings as literals during startup migrations", async () => {
-    const harness = await createHarness({ withConfiguredAuth: false });
-    cleanups.push(harness.cleanup);
-
-    const envKeys = ["CUSTOM_API_KEY", "BEARER"];
-    const savedEnv: Record<string, string | undefined> = {};
-    for (const key of envKeys) {
-      savedEnv[key] = process.env[key];
-      process.env[key] = `env-${key}`;
-    }
-    cleanups.push(() => {
-      for (const key of envKeys) {
-        if (savedEnv[key] === undefined) {
-          delete process.env[key];
-        } else {
-          process.env[key] = savedEnv[key];
-        }
-      }
-    });
-
-    const modelsPath = join(harness.tempDir, "models.json");
-    writeFileSync(
-      modelsPath,
-      `${JSON.stringify(
-        {
-          providers: {
-            "my-provider": {
-              baseUrl: "https://example.com/v1",
-              apiKey: "CUSTOM_API_KEY",
-              api: "openai-completions",
-              headers: { Authorization: "BEARER" },
-              models: [{ id: "my-model" }],
-            },
-          },
+const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
+  cleanups.push(harness.cleanup);
+  const envKeys = ["CUSTOM_API_KEY", "BEARER"];
+  for (const key of envKeys) vi.stubEnv(key, `env-${key}`);
+  cleanups.push(() => {
+    vi.unstubAllEnvs();
+  });
+  const modelsPath = joinPath(harness.tempDir, "models.json");
+  yield* fs.writeFileString(
+    modelsPath,
+    `${yield* toJsonText({
+      providers: {
+        "my-provider": {
+          api: "openai-completions",
+          apiKey: "CUSTOM_API_KEY",
+          baseUrl: "https://example.com/v1",
+          headers: { Authorization: "BEARER" },
+          models: [{ id: "my-model" }],
         },
-        null,
-        2,
-      )}\n`,
-      "utf-8",
-    );
+      },
+    })}\n`,
+  );
+  yield* awaited(withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir)));
+  const migrated = (yield* fromJsonText(yield* fs.readFileString(modelsPath))) as {
+    providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
+  };
+  expect(migrated.providers["my-provider"]?.apiKey).toBe("CUSTOM_API_KEY");
+  expect(migrated.providers["my-provider"]?.headers?.["Authorization"]).toBe("BEARER");
+  return yield* keepsUppercaseHeaderStringsAsLiteralsStep1(harness, modelsPath);
+});
 
-    withAgentDir(harness.tempDir, () => runMigrations(harness.tempDir));
-
-    const migrated = JSON.parse(readFileSync(modelsPath, "utf-8")) as {
-      providers: Record<string, { apiKey?: string; headers?: Record<string, string> }>;
-    };
-    expect(migrated.providers["my-provider"]?.apiKey).toBe("CUSTOM_API_KEY");
-    expect(migrated.providers["my-provider"]?.headers?.["Authorization"]).toBe("BEARER");
-
-    const registry = await createModelRegistry(
-      AuthStorage.create(join(harness.tempDir, "auth.json")),
-      modelsPath,
+const keepsUppercaseHeaderStringsAsLiteralsStep1 = (
+  harness: harnessTypes.Harness,
+  modelsPath: string,
+) =>
+  Effect.gen(function* () {
+    const registry = yield* Effect.promise(() =>
+      createModelRegistry(AuthStorage.create(joinPath(harness.tempDir, "auth.json")), modelsPath),
     );
     const model = registry.find("my-provider", "my-model");
     expect(model).toBeDefined();
-    expect(await registry.getApiKeyAndHeaders(model!)).toMatchObject({
-      ok: true,
+    expect(yield* Effect.promise(() => registry.getApiKeyAndHeaders(model!))).toMatchObject({
       apiKey: "CUSTOM_API_KEY",
       headers: { Authorization: "BEARER" },
+      ok: true,
     });
   });
+
+const keepsUppercaseHeaderStringsAsLiteralsDuring = () =>
+  Effect.runPromise(keepsUppercaseHeaderStringsAsLiterals);
+
+const afterEachHook = () => {
+  while (cleanups.length > 0) {
+    cleanups.pop()?.();
+  }
+};
+
+describe("regression #5661: uppercase models.json header values", () => {
+  afterEach(afterEachHook);
+  it(
+    "keeps uppercase header strings as literals during startup migrations",
+    keepsUppercaseHeaderStringsAsLiteralsDuring,
+  );
 });

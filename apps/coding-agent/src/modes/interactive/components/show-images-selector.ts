@@ -1,31 +1,30 @@
-import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { getSelectListTheme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+const { getSelectListTheme } = themeModule;
 
-const SHOW_IMAGES_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
-  minPrimaryColumnWidth: 12,
+const { SelectList } = tui;
+
+const SHOW_IMAGES_SELECT_LIST_LAYOUT: tuiTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
+  minPrimaryColumnWidth: 12,
 };
 
-/**
- * Component that renders a show images selector with borders
- */
-export class ShowImagesSelectorComponent extends Container {
-  private selectList: SelectList;
+export default class ShowImagesSelectorComponent extends tui.Container {
+  private selectList: tuiTypes.SelectList;
 
   constructor(currentValue: boolean, onSelect: (show: boolean) => void, onCancel: () => void) {
     super();
 
-    const items: SelectItem[] = [
-      { value: "yes", label: "Yes", description: "Show images inline in terminal" },
-      { value: "no", label: "No", description: "Show text placeholder instead" },
+    const items: tuiTypes.SelectItem[] = [
+      { description: "Show images inline in terminal", label: "Yes", value: "yes" },
+      { description: "Show text placeholder instead", label: "No", value: "no" },
     ];
 
-    // Add top border
     this.addChild(new DynamicBorder());
 
-    // Create selector
     this.selectList = new SelectList(
       items,
       5,
@@ -33,7 +32,6 @@ export class ShowImagesSelectorComponent extends Container {
       SHOW_IMAGES_SELECT_LIST_LAYOUT,
     );
 
-    // Preselect current value
     this.selectList.setSelectedIndex(currentValue ? 0 : 1);
 
     this.selectList.onSelect = (item) => {
@@ -46,11 +44,10 @@ export class ShowImagesSelectorComponent extends Container {
 
     this.addChild(this.selectList);
 
-    // Add bottom border
     this.addChild(new DynamicBorder());
   }
 
-  getSelectList(): SelectList {
+  getSelectList(): tuiTypes.SelectList {
     return this.selectList;
   }
 }

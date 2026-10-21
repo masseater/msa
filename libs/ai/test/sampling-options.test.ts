@@ -1,17 +1,15 @@
+import { Data, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { stream, streamSimple } from "../src/compat.ts";
-import type {
-  Api,
-  Context,
-  Model,
-  SimpleStreamOptions,
-  StreamOptions,
-  ThinkingLevel,
-} from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
 
-type DirectSamplingOptions = StreamOptions & {
-  reasoningEffort?: ThinkingLevel;
+const { currentTimeMillis } = clock;
+const { stream, streamSimple } = compat;
+
+type DirectSamplingOptions = typesModule.StreamOptions & {
+  reasoningEffort?: typesModule.ThinkingLevel;
   reasoningSummary?: "auto" | "detailed" | "concise" | null;
 };
 
@@ -23,35 +21,30 @@ interface SamplingPayload {
   reasoning?: { effort?: string };
 }
 
-class PayloadCaptured extends Error {
-  constructor() {
-    super("payload captured");
-    this.name = "PayloadCaptured";
-  }
-}
+class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
 
-function makeContext(): Context {
+function makeContext(): typesModule.Context {
   return {
-    messages: [{ role: "user", content: "Hello", timestamp: Date.now() }],
+    messages: [{ content: "Hello", role: "user", timestamp: currentTimeMillis() }],
   };
 }
 
 function makeModel(
-  api: Api,
+  api: typesModule.Api,
   samplingParams?: Record<string, unknown>,
-  overrides: Partial<Model<Api>> = {},
-): Model<Api> {
+  overrides: Partial<typesModule.Model<typesModule.Api>> = {},
+): typesModule.Model<typesModule.Api> {
   return {
-    id: "custom-model",
-    name: "Custom Model",
     api,
-    provider: "custom-provider",
     baseUrl: "http://127.0.0.1:9/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "custom-model",
+    input: ["text"],
     maxTokens: 16384,
+    name: "Custom Model",
+    provider: "custom-provider",
+    reasoning: false,
     ...(samplingParams === undefined ? {} : { samplingParams }),
     ...overrides,
   };
@@ -62,187 +55,231 @@ function capturingOptions(onCapture: (payload: SamplingPayload) => void) {
     apiKey: "fake-key",
     onPayload: (payload: unknown) => {
       onCapture(payload as SamplingPayload);
-      throw new PayloadCaptured();
+      throw new PayloadCaptured({ message: "payload captured" });
     },
   };
 }
 
-async function capturePayload(
-  model: Model<Api>,
+const capturePayload = Effect.fn("capturePayload")(function* (
+  model: typesModule.Model<typesModule.Api>,
   options?: DirectSamplingOptions,
-): Promise<SamplingPayload> {
+) {
   let capturedPayload: SamplingPayload | undefined;
 
-  await stream(model, makeContext(), {
-    ...options,
-    ...capturingOptions((payload) => {
-      capturedPayload = payload;
-    }),
-  }).result();
-
-  if (!capturedPayload) {
-    throw new Error("Expected payload to be captured before request failure");
-  }
-
-  return capturedPayload;
-}
-
-async function captureSimplePayload(
-  model: Model<Api>,
-  options?: SimpleStreamOptions,
-): Promise<SamplingPayload> {
-  let capturedPayload: SamplingPayload | undefined;
-
-  await streamSimple(model, makeContext(), {
-    ...options,
-    ...capturingOptions((payload) => {
-      capturedPayload = payload;
-    }),
-  }).result();
-
-  if (!capturedPayload) {
-    throw new Error("Expected payload to be captured before request failure");
-  }
-
-  return capturedPayload;
-}
-
-describe("sampling params", () => {
-  it("merges request sampling params into the request body", async () => {
-    const payload = await capturePayload(makeModel("openai-completions"), {
-      samplingParams: { top_p: 0.95, top_k: 0, min_p: 0 },
-    });
-
-    expect(payload.top_p).toBe(0.95);
-    expect(payload.top_k).toBe(0);
-    expect(payload.min_p).toBe(0);
-  });
-
-  it("omits sampling params when neither options nor model set them", async () => {
-    const payload = await capturePayload(makeModel("openai-completions"));
-
-    expect(payload.temperature).toBeUndefined();
-    expect(payload.top_p).toBeUndefined();
-  });
-
-  // Model defaults must apply to direct stream()/complete() calls, not only streamSimple() (#9506)
-  it.each(["openai-completions", "openai-responses"] as const)(
-    "applies model-level sampling params with request keys taking precedence for %s",
-    async (api) => {
-      const payload = await capturePayload(makeModel(api, { top_p: 0.95, min_p: 0.05 }), {
-        samplingParams: { top_p: 0.5 },
-      });
-
-      expect(payload.top_p).toBe(0.5);
-      expect(payload.min_p).toBe(0.05);
-    },
+  yield* Effect.promise(() =>
+    stream(model, makeContext(), {
+      ...options,
+      ...capturingOptions((payload) => {
+        capturedPayload = payload;
+      }),
+    }).result(),
   );
 
-  it("passes request sampling params through streamSimple", async () => {
-    const payload = await captureSimplePayload(makeModel("openai-completions"), {
-      samplingParams: { top_p: 0.5 },
-    });
+  if (capturedPayload === undefined) {
+    throw new Error("Expected payload to be captured before request failure");
+  }
 
-    expect(payload.top_p).toBe(0.5);
-  });
+  return capturedPayload;
+});
 
-  it("applies sampling params for the effective thinking level over model defaults", async () => {
-    const payload = await captureSimplePayload(
-      makeModel(
-        "openai-completions",
-        { temperature: 1, top_p: 0.95 },
-        {
-          reasoning: true,
-          thinkingLevelMap: { low: null, medium: null },
-          samplingParamsByThinkingLevel: { high: { temperature: 0.8, top_k: 64 } },
-        },
-      ),
-      { reasoning: "low" },
-    );
+const captureSimplePayload = Effect.fn("captureSimplePayload")(function* (
+  model: typesModule.Model<typesModule.Api>,
+  options?: typesModule.SimpleStreamOptions,
+) {
+  let capturedPayload: SamplingPayload | undefined;
 
-    expect(payload.temperature).toBe(0.8);
-    expect(payload.top_p).toBe(0.95);
-    expect(payload.top_k).toBe(64);
-  });
-
-  it("applies off sampling params when reasoning is disabled", async () => {
-    const payload = await captureSimplePayload(
-      makeModel("openai-completions", undefined, {
-        samplingParamsByThinkingLevel: { off: { temperature: 0.7 } },
+  yield* Effect.promise(() =>
+    streamSimple(model, makeContext(), {
+      ...options,
+      ...capturingOptions((payload) => {
+        capturedPayload = payload;
       }),
-    );
+    }).result(),
+  );
 
-    expect(payload.temperature).toBe(0.7);
-  });
+  if (capturedPayload === undefined) {
+    throw new Error("Expected payload to be captured before request failure");
+  }
 
-  it("merges stream-option keys over thinking-level keys", async () => {
-    const payload = await captureSimplePayload(
-      makeModel("openai-completions", undefined, {
-        reasoning: true,
-        samplingParamsByThinkingLevel: { low: { temperature: 0.6, top_p: 0.95 } },
+  return capturedPayload;
+});
+
+describe("sampling params", () => {
+  it("merges request sampling params into the request body", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("openai-completions"), {
+          samplingParams: { min_p: 0, top_k: 0, top_p: 0.95 },
+        });
+
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.top_k).toBe(0);
+        expect(payload.min_p).toBe(0);
       }),
-      { reasoning: "low", samplingParams: { top_p: 0.5 } },
-    );
+    ));
 
-    expect(payload.temperature).toBe(0.6);
-    expect(payload.top_p).toBe(0.5);
-  });
+  it("omits sampling params when neither options nor model set them", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("openai-completions"));
+
+        expect(payload.temperature).toBeUndefined();
+        expect(payload.top_p).toBeUndefined();
+      }),
+    ));
 
   it.each(["openai-completions", "openai-responses"] as const)(
-    "applies thinking-level params between model and request params for %s",
-    async (api) => {
-      const payload = await capturePayload(
-        makeModel(
-          api,
-          { temperature: 1, top_p: 0.95 },
-          {
-            reasoning: true,
-            samplingParamsByThinkingLevel: { low: { temperature: 0.6, top_k: 64 } },
-          },
-        ),
-        { reasoningEffort: "low", samplingParams: { top_p: 0.5 } },
-      );
+    "applies model-level sampling params with request keys taking precedence for %s",
+    (api) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const payload = yield* capturePayload(makeModel(api, { min_p: 0.05, top_p: 0.95 }), {
+            samplingParams: { top_p: 0.5 },
+          });
 
-      expect(payload.temperature).toBe(0.6);
-      expect(payload.top_p).toBe(0.5);
-      expect(payload.top_k).toBe(64);
-    },
+          expect(payload.top_p).toBe(0.5);
+          expect(payload.min_p).toBe(0.05);
+        }),
+      ),
+  );
+
+  it("passes request sampling params through streamSimple", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* captureSimplePayload(makeModel("openai-completions"), {
+          samplingParams: { top_p: 0.5 },
+        });
+
+        expect(payload.top_p).toBe(0.5);
+      }),
+    ));
+});
+
+describe("sampling params", () => {
+  it("applies sampling params for the effective thinking level over model defaults", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* captureSimplePayload(
+          makeModel(
+            "openai-completions",
+            { temperature: 1, top_p: 0.95 },
+            {
+              reasoning: true,
+              samplingParamsByThinkingLevel: { high: { temperature: 0.8, top_k: 64 } },
+              thinkingLevelMap: { low: null, medium: null },
+            },
+          ),
+          { reasoning: "low" },
+        );
+
+        expect(payload.temperature).toBe(0.8);
+        expect(payload.top_p).toBe(0.95);
+        expect(payload.top_k).toBe(64);
+      }),
+    ));
+
+  it("applies off sampling params when reasoning is disabled", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* captureSimplePayload(
+          makeModel("openai-completions", undefined, {
+            samplingParamsByThinkingLevel: { off: { temperature: 0.7 } },
+          }),
+        );
+
+        expect(payload.temperature).toBe(0.7);
+      }),
+    ));
+});
+
+describe("sampling params", () => {
+  it("merges stream-option keys over thinking-level keys", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* captureSimplePayload(
+          makeModel("openai-completions", undefined, {
+            reasoning: true,
+            samplingParamsByThinkingLevel: { low: { temperature: 0.6, top_p: 0.95 } },
+          }),
+          { reasoning: "low", samplingParams: { top_p: 0.5 } },
+        );
+
+        expect(payload.temperature).toBe(0.6);
+        expect(payload.top_p).toBe(0.5);
+      }),
+    ));
+});
+
+describe("sampling params", () => {
+  it.each(["openai-completions", "openai-responses"] as const)(
+    "applies thinking-level params between model and request params for %s",
+    (api) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const payload = yield* capturePayload(
+            makeModel(
+              api,
+              { temperature: 1, top_p: 0.95 },
+              {
+                reasoning: true,
+                samplingParamsByThinkingLevel: { low: { temperature: 0.6, top_k: 64 } },
+              },
+            ),
+            { reasoningEffort: "low", samplingParams: { top_p: 0.5 } },
+          );
+
+          expect(payload.temperature).toBe(0.6);
+          expect(payload.top_p).toBe(0.5);
+          expect(payload.top_k).toBe(64);
+        }),
+      ),
   );
 
   it.each(["openai-responses"] as const)(
     "uses medium sampling params for summary-only %s requests",
-    async (api) => {
-      const payload = await capturePayload(
-        makeModel(api, undefined, {
-          reasoning: true,
-          samplingParamsByThinkingLevel: {
-            off: { temperature: 0.7 },
-            medium: { temperature: 0.8 },
-          },
+    (api) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const payload = yield* capturePayload(
+            makeModel(api, undefined, {
+              reasoning: true,
+              samplingParamsByThinkingLevel: {
+                medium: { temperature: 0.8 },
+                off: { temperature: 0.7 },
+              },
+            }),
+            { reasoningSummary: "auto" },
+          );
+
+          expect(payload.reasoning?.effort).toBe("medium");
+          expect(payload.temperature).toBe(0.8);
         }),
-        { reasoningSummary: "auto" },
-      );
-
-      expect(payload.reasoning?.effort).toBe("medium");
-      expect(payload.temperature).toBe(0.8);
-    },
+      ),
   );
+});
 
-  it("overrides named request fields", async () => {
-    const payload = await capturePayload(makeModel("openai-completions"), {
-      temperature: 0,
-      samplingParams: { temperature: 1 },
-    });
+describe("sampling params", () => {
+  it("overrides named request fields", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("openai-completions"), {
+          samplingParams: { temperature: 1 },
+          temperature: 0,
+        });
 
-    expect(payload.temperature).toBe(1);
-  });
+        expect(payload.temperature).toBe(1);
+      }),
+    ));
 
-  it("is ignored by non-OpenAI-compatible APIs", async () => {
-    const payload = await capturePayload(makeModel("anthropic-messages"), {
-      samplingParams: { top_p: 0.9, top_k: 40 },
-    });
+  it("is ignored by non-OpenAI-compatible APIs", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const payload = yield* capturePayload(makeModel("anthropic-messages"), {
+          samplingParams: { top_k: 40, top_p: 0.9 },
+        });
 
-    expect(payload.top_p).toBeUndefined();
-    expect(payload.top_k).toBeUndefined();
-  });
+        expect(payload.top_p).toBeUndefined();
+        expect(payload.top_k).toBeUndefined();
+      }),
+    ));
 });

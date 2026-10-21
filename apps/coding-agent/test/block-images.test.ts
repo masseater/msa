@@ -1,14 +1,26 @@
-import { mkdirSync, rmSync, writeFileSync } from "fs";
 import { tmpdir } from "os";
-import { join } from "path";
 
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import { processFileArguments } from "../src/cli/file-processor.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createReadTool } from "../src/core/tools/read.ts";
+import fileProcessor from "../src/cli/file-processor.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import read from "../src/core/tools/read.ts";
+const { createReadTool } = read;
+const { processFileArguments } = fileProcessor;
 
-// 1x1 red PNG image as base64 (smallest valid PNG)
+const {
+  awaited,
+  currentTimeMillis,
+  joinPath,
+  makeDirectory,
+  removePath,
+  runTest,
+  writeBytesFile,
+  writeTextFile,
+} = testing;
+
 const TINY_PNG_BASE64 =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8DwHwAFBQIAX8jx0gAAAABJRU5ErkJggg==";
 
@@ -28,123 +40,171 @@ function createTinyBmp1x1Red24bpp(): Buffer {
   return buffer;
 }
 
-describe("blockImages setting", () => {
-  describe("SettingsManager", () => {
-    it("should default blockImages to false", () => {
-      const manager = SettingsManager.inMemory({});
-      expect(manager.getBlockImages()).toBe(false);
-    });
+let testDir2: string;
 
-    it("should return true when blockImages is set to true", () => {
-      const manager = SettingsManager.inMemory({ images: { blockImages: true } });
-      expect(manager.getBlockImages()).toBe(true);
-    });
+let testDir3: string;
 
-    it("should persist blockImages setting via setBlockImages", () => {
-      const manager = SettingsManager.inMemory({});
-      expect(manager.getBlockImages()).toBe(false);
+const shouldDefaultBlockimagesToFalse = () => {
+  const manager = SettingsManager.inMemory({});
+  expect(manager.display.getBlockImages()).toBe(false);
+};
 
-      manager.setBlockImages(true);
-      expect(manager.getBlockImages()).toBe(true);
+const shouldReturnTrueWhenBlockimagesIsSet = () => {
+  const manager = SettingsManager.inMemory({ images: { blockImages: true } });
+  expect(manager.display.getBlockImages()).toBe(true);
+};
 
-      manager.setBlockImages(false);
-      expect(manager.getBlockImages()).toBe(false);
-    });
+const shouldPersistBlockimagesSettingViaSetblockimages = () => {
+  const manager = SettingsManager.inMemory({});
+  expect(manager.display.getBlockImages()).toBe(false);
 
-    it("should handle blockImages alongside autoResize", () => {
-      const manager = SettingsManager.inMemory({
-        images: { autoResize: true, blockImages: true },
-      });
-      expect(manager.getImageAutoResize()).toBe(true);
-      expect(manager.getBlockImages()).toBe(true);
-    });
+  manager.display.setBlockImages(true);
+  expect(manager.display.getBlockImages()).toBe(true);
+
+  manager.display.setBlockImages(false);
+  expect(manager.display.getBlockImages()).toBe(false);
+};
+
+const shouldHandleBlockimagesAlongsideAutoresize = () => {
+  const manager = SettingsManager.inMemory({
+    images: { autoResize: true, blockImages: true },
   });
+  expect(manager.display.getImageAutoResize()).toBe(true);
+  expect(manager.display.getBlockImages()).toBe(true);
+};
 
-  describe("Read tool", () => {
-    let testDir: string;
+const shouldAlwaysReadImagesFilteringHappensAt = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir2, "test.png");
+      yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-    beforeEach(() => {
-      testDir = join(tmpdir(), `block-images-test-${Date.now()}`);
-      mkdirSync(testDir, { recursive: true });
-    });
+      const tool = createReadTool(testDir2);
+      const result = yield* awaited(tool.execute("test-1", { path: imagePath }));
 
-    afterEach(() => {
-      rmSync(testDir, { recursive: true, force: true });
-    });
-
-    it("should always read images (filtering happens at convertToLlm layer)", async () => {
-      // Create test image
-      const imagePath = join(testDir, "test.png");
-      writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
-
-      const tool = createReadTool(testDir);
-      const result = await tool.execute("test-1", { path: imagePath });
-
-      // Should have text note + image content
       expect(result.content.length).toBeGreaterThanOrEqual(1);
       const hasImage = result.content.some((c) => c.type === "image");
       expect(hasImage).toBe(true);
-    });
+    }),
+  );
 
-    it("should read text files normally", async () => {
-      // Create test text file
-      const textPath = join(testDir, "test.txt");
-      writeFileSync(textPath, "Hello, world!");
+const shouldReadTextFilesNormally = () =>
+  runTest(
+    Effect.gen(function* () {
+      const textPath = joinPath(testDir2, "test.txt");
+      yield* writeTextFile(textPath, "Hello, world!");
 
-      const tool = createReadTool(testDir);
-      const result = await tool.execute("test-2", { path: textPath });
+      const tool = createReadTool(testDir2);
+      const result = yield* awaited(tool.execute("test-2", { path: textPath }));
 
       expect(result.content).toHaveLength(1);
       expect(result.content[0]?.type).toBe("text");
       const textContent = result.content[0] as { type: "text"; text: string };
       expect(textContent.text).toContain("Hello, world!");
-    });
-  });
+    }),
+  );
 
-  describe("processFileArguments", () => {
-    let testDir: string;
+const shouldAlwaysProcessImagesFilteringHappensAt = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir3, "test.png");
+      yield* writeBytesFile(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
 
-    beforeEach(() => {
-      testDir = join(tmpdir(), `block-images-process-test-${Date.now()}`);
-      mkdirSync(testDir, { recursive: true });
-    });
-
-    afterEach(() => {
-      rmSync(testDir, { recursive: true, force: true });
-    });
-
-    it("should always process images (filtering happens at convertToLlm layer)", async () => {
-      // Create test image
-      const imagePath = join(testDir, "test.png");
-      writeFileSync(imagePath, Buffer.from(TINY_PNG_BASE64, "base64"));
-
-      const result = await processFileArguments([imagePath]);
+      const result = yield* awaited(processFileArguments([imagePath]));
 
       expect(result.images).toHaveLength(1);
       expect(result.images[0]?.type).toBe("image");
-    });
+    }),
+  );
 
-    it("should process BMP images from disk as PNG attachments", async () => {
-      const imagePath = join(testDir, "test.bmp");
-      writeFileSync(imagePath, createTinyBmp1x1Red24bpp());
+const shouldProcessBmpImagesFromDiskAs = () =>
+  runTest(
+    Effect.gen(function* () {
+      const imagePath = joinPath(testDir3, "test.bmp");
+      yield* writeBytesFile(imagePath, createTinyBmp1x1Red24bpp());
 
-      const result = await processFileArguments([imagePath]);
+      const result = yield* awaited(processFileArguments([imagePath]));
 
       expect(result.images).toHaveLength(1);
       expect(result.images[0]?.type).toBe("image");
       expect(result.images[0]?.mimeType).toBe("image/png");
       expect(result.text).toContain("[Image converted from image/bmp to image/png.]");
-    });
+    }),
+  );
 
-    it("should process text files normally", async () => {
-      // Create test text file
-      const textPath = join(testDir, "test.txt");
-      writeFileSync(textPath, "Hello, world!");
+const shouldProcessTextFilesNormally = () =>
+  runTest(
+    Effect.gen(function* () {
+      const textPath = joinPath(testDir3, "test.txt");
+      yield* writeTextFile(textPath, "Hello, world!");
 
-      const result = await processFileArguments([textPath]);
+      const result = yield* awaited(processFileArguments([textPath]));
 
       expect(result.images).toHaveLength(0);
       expect(result.text).toContain("Hello, world!");
-    });
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      testDir2 = joinPath(tmpdir(), `block-images-test-${currentTimeMillis()}`);
+      yield* makeDirectory(testDir2);
+    }),
+  );
+
+describe("blockImages setting", () => {
+  describe("SettingsManager", () => {
+    it("should default blockImages to false", shouldDefaultBlockimagesToFalse);
+
+    it("should return true when blockImages is set to true", shouldReturnTrueWhenBlockimagesIsSet);
+
+    it(
+      "should persist blockImages setting via setBlockImages",
+      shouldPersistBlockimagesSettingViaSetblockimages,
+    );
+
+    it(
+      "should handle blockImages alongside autoResize",
+      shouldHandleBlockimagesAlongsideAutoresize,
+    );
+  });
+
+  describe("Read tool", () => {
+    beforeEach(beforeEachHook);
+
+    afterEach(() => runTest(removePath(testDir2)));
+
+    it(
+      "should always read images (filtering happens at convertToLlm layer)",
+      shouldAlwaysReadImagesFilteringHappensAt,
+    );
+
+    it("should read text files normally", shouldReadTextFilesNormally);
+  });
+});
+
+const beforeEachHook2 = () =>
+  runTest(
+    Effect.gen(function* () {
+      testDir3 = joinPath(tmpdir(), `block-images-process-test-${currentTimeMillis()}`);
+      yield* makeDirectory(testDir3);
+    }),
+  );
+
+describe("blockImages setting", () => {
+  describe("processFileArguments", () => {
+    beforeEach(beforeEachHook2);
+
+    afterEach(() => runTest(removePath(testDir3)));
+
+    it(
+      "should always process images (filtering happens at convertToLlm layer)",
+      shouldAlwaysProcessImagesFilteringHappensAt,
+    );
+
+    it("should process BMP images from disk as PNG attachments", shouldProcessBmpImagesFromDiskAs);
+
+    it("should process text files normally", shouldProcessTextFilesNormally);
   });
 });

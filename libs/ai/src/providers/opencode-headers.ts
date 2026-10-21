@@ -1,29 +1,30 @@
-import type { ProviderHeaders, ProviderStreams, StreamOptions } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
 const OPENCODE_SESSION_HEADER = "x-opencode-session";
 
-function hasHeader(headers: ProviderHeaders | undefined, name: string): boolean {
+function hasHeader(headers: typesModule.ProviderHeaders | undefined, name: string): boolean {
   const expected = name.toLowerCase();
   return Object.keys(headers ?? {}).some((key) => key.toLowerCase() === expected);
 }
 
-function withSessionHeader<TOptions extends StreamOptions>(
+function withSessionHeader<TOptions extends typesModule.StreamOptions>(
   options: TOptions | undefined,
 ): TOptions | undefined {
-  if (!options?.sessionId || hasHeader(options.headers, OPENCODE_SESSION_HEADER)) return options;
+  if (
+    options?.sessionId === undefined ||
+    options?.sessionId === "" ||
+    hasHeader(options.headers, OPENCODE_SESSION_HEADER)
+  )
+    return options;
   return {
     ...options,
     headers: { ...options.headers, [OPENCODE_SESSION_HEADER]: options.sessionId },
   };
 }
 
-/**
- * Adds OpenCode's required per-conversation routing header before API dispatch.
- *
- * @param {ProviderStreams} streams - API implementation to wrap
- * @returns {ProviderStreams} the wrapped implementation
- */
-export function withOpenCodeSessionHeader(streams: ProviderStreams): ProviderStreams {
+function withOpenCodeSessionHeader(
+  streams: typesModule.ProviderStreams,
+): typesModule.ProviderStreams {
   return {
     ...streams,
     stream: (model, context, options) => streams.stream(model, context, withSessionHeader(options)),
@@ -31,3 +32,9 @@ export function withOpenCodeSessionHeader(streams: ProviderStreams): ProviderStr
       streams.streamSimple(model, context, withSessionHeader(options)),
   };
 }
+
+const opencodeHeaders = {
+  withOpenCodeSessionHeader,
+};
+
+export default opencodeHeaders;

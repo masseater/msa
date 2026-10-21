@@ -1,13 +1,5 @@
-/**
- * Dynamic Tools Extension
- *
- * Demonstrates registering tools after session initialization.
- *
- * - Registers one tool during session_start
- * - Registers additional tools at runtime via /add-echo-tool <name>
- */
-
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
 const ECHO_PARAMS = Type.Object({
@@ -16,37 +8,41 @@ const ECHO_PARAMS = Type.Object({
 
 function normalizeToolName(input: string): string | undefined {
   const trimmed = input.trim().toLowerCase();
-  if (!trimmed) return undefined;
-  if (!/^[a-z0-9_]+$/.test(trimmed)) return undefined;
+  if (trimmed.length === 0) return undefined;
+  if (!/^[a-z0-9_]+$/u.test(trimmed)) return undefined;
   return trimmed;
 }
 
-export default function dynamicToolsExtension(msa: ExtensionAPI) {
-  const registeredToolNames = new Set<string>();
-
-  const registerEchoTool = (name: string, label: string, prefix: string): boolean => {
+const makeRegisterEchoTool =
+  (msa: codingAgentTypes.ExtensionAPI, registeredToolNames: Set<string>) =>
+  (name: string, label: string, prefix: string): boolean => {
     if (registeredToolNames.has(name)) {
       return false;
     }
 
     registeredToolNames.add(name);
     msa.registerTool({
-      name,
-      label,
       description: `Echo a message with prefix: ${prefix}`,
-      promptSnippet: `Echo back user-provided text with ${prefix.trim()} prefix`,
-      promptGuidelines: ["Use echo_session when the user asks for exact echo output."],
+      execute: (_toolCallId, params) =>
+        Effect.runPromise(
+          Effect.succeed({
+            content: [{ text: `${prefix}${params.message}`, type: "text" }],
+            details: { prefix, tool: name },
+          }),
+        ),
+      label,
+      name,
       parameters: ECHO_PARAMS,
-      async execute(_toolCallId, params) {
-        return {
-          content: [{ type: "text", text: `${prefix}${params.message}` }],
-          details: { tool: name, prefix },
-        };
-      },
+      promptGuidelines: ["Use echo_session when the user asks for exact echo output."],
+      promptSnippet: `Echo back user-provided text with ${prefix.trim()} prefix`,
     });
 
     return true;
   };
+
+export default function dynamicToolsExtension(msa: codingAgentTypes.ExtensionAPI) {
+  const registeredToolNames = new Set<string>();
+  const registerEchoTool = makeRegisterEchoTool(msa, registeredToolNames);
 
   msa.on("session_start", (_event, ctx) => {
     registerEchoTool("echo_session", "Echo Session", "[session] ");
@@ -55,23 +51,26 @@ export default function dynamicToolsExtension(msa: ExtensionAPI) {
 
   msa.registerCommand("add-echo-tool", {
     description: "Register a new echo tool dynamically: /add-echo-tool <tool_name>",
-    handler: async (args, ctx) => {
-      const toolName = normalizeToolName(args);
-      if (!toolName) {
-        ctx.ui.notify(
-          "Usage: /add-echo-tool <tool_name> (lowercase, numbers, underscores)",
-          "warning",
-        );
-        return;
-      }
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const toolName = normalizeToolName(args);
+          if (toolName === undefined || toolName.length === 0) {
+            ctx.ui.notify(
+              "Usage: /add-echo-tool <tool_name> (lowercase, numbers, underscores)",
+              "warning",
+            );
+            return;
+          }
 
-      const created = registerEchoTool(toolName, `Echo ${toolName}`, `[${toolName}] `);
-      if (!created) {
-        ctx.ui.notify(`Tool already registered: ${toolName}`, "warning");
-        return;
-      }
+          const created = registerEchoTool(toolName, `Echo ${toolName}`, `[${toolName}] `);
+          if (!created) {
+            ctx.ui.notify(`Tool already registered: ${toolName}`, "warning");
+            return;
+          }
 
-      ctx.ui.notify(`Registered dynamic tool: ${toolName}`, "info");
-    },
+          ctx.ui.notify(`Registered dynamic tool: ${toolName}`, "info");
+        }),
+      ),
   });
 }

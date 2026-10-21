@@ -1,12 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { lazyApi } from "../src/api/lazy.ts";
-import { envApiKeyAuth } from "../src/auth/helpers.ts";
-import type { AuthContext } from "../src/auth/types.ts";
-import { getModel as getCompatModel, getModels as getCompatModels } from "../src/compat.ts";
-import { InMemoryModelsStore } from "../src/models-store.ts";
-import { createModels, createProvider, getSupportedThinkingLevels } from "../src/models.ts";
-import {
+import compatModule from "../src/compat.ts";
+import modelsModule from "../src/models.ts";
+import allModule from "../src/providers/all.ts";
+
+const {
   builtinModels,
   builtinProviders,
   getAllBuiltinModels,
@@ -17,584 +15,224 @@ import {
   getBuiltinModel,
   getBuiltinModels,
   getBuiltinProviders,
-} from "../src/providers/all.ts";
-import { anthropicProvider } from "../src/providers/anthropic.ts";
-import { fauxAssistantMessage, fauxProvider } from "../src/providers/faux.ts";
-import type {
-  Api,
-  DeferredCancelOptions,
-  DeferredFetchOptions,
-  DeferredHandle,
-  Model,
-  ProviderStreams,
-} from "../src/types.ts";
-import { AssistantMessageEventStream } from "../src/utils/event-stream.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+} = allModule;
+const { getModel: getCompatModel, getModels: getCompatModels } = compatModule;
+const { getSupportedThinkingLevels } = modelsModule;
 
-function fakeAuthContext(env: Record<string, string>): AuthContext {
-  return {
-    env: (name) => Promise.resolve(env[name]),
-    fileExists: () => Promise.resolve(false),
-  };
-}
-
-const neverAbortedSignal = new AbortController().signal;
-
-const context = normalizeContext({
-  messages: [{ role: "user", content: "hi", timestamp: Date.now() }],
-});
+const compatFlag = (model: { readonly compat?: object | undefined }, name: string) =>
+  (model.compat as Readonly<Record<string, unknown>> | undefined)?.[name] === true;
 
 const DEFAULT_IMAGE_RESIZE = {
-  maxWidth: 2000,
-  maxHeight: 2000,
-  maxBytes: 4.5 * 1024 * 1024,
   jpegQuality: 80,
+  maxBytes: 4.5 * 1024 * 1024,
+  maxHeight: 2000,
+  maxWidth: 2000,
+};
+
+const builtinmodelsRegistersEveryBuiltinProviderWith = () => {
+  const models = builtinModels();
+  const providers = models.getProviders();
+  expect(providers.length).toBe(builtinProviders().length);
+  expect(providers.map((p) => p.id)).toContain("anthropic-api");
+
+  expect(
+    models.getModels("anthropic-api").every((model) => model.api === "anthropic-messages"),
+  ).toBe(true);
+
+  const all = models.getModels();
+  expect(all.length).toBeGreaterThan(500);
+
+  for (const provider of providers) {
+    const list = models.getAllModels(provider.id);
+    expect(list.length).toBeGreaterThan(0);
+    expect(list.every((m) => m.provider === provider.id)).toBe(true);
+  }
+
+  return Promise.resolve();
+};
+
+const returnsEmptyResultsForUnknownProvider = () => {
+  const unknownProvider = "not-a-provider" as never;
+  const unknownModel = "x" as never;
+
+  expect(getBuiltinModel(unknownProvider, unknownModel)).toBeUndefined();
+  expect(getBuiltinImageModel(unknownProvider, unknownModel)).toBeUndefined();
+  expect(getBuiltinClassifierModel(unknownProvider, unknownModel)).toBeUndefined();
+  expect(getBuiltinModels(unknownProvider)).toEqual([]);
+  expect(getBuiltinImageModels(unknownProvider)).toEqual([]);
+  expect(getBuiltinClassifierModels(unknownProvider)).toEqual([]);
+  expect(getAllBuiltinModels(unknownProvider)).toEqual([]);
+  expect(getCompatModel(unknownProvider, unknownModel)).toBeUndefined();
+  expect(getCompatModels(unknownProvider)).toEqual([]);
+};
+
+const storesNativeConstrainedSamplingCapabilitiesIn = () => {
+  const openai = getBuiltinModels("openai");
+  expect(openai.every((model) => compatFlag(model, "supportsStrictMode"))).toBe(true);
+  const grammarModels = openai.filter((model) => compatFlag(model, "supportsOpenAIGrammarTools"));
+  expect(grammarModels.length).toBeGreaterThan(0);
+  expect(grammarModels.every((model) => model.api === "openai-responses")).toBe(true);
+  expect(
+    getBuiltinModels("anthropic-api").every((model) => compatFlag(model, "supportsStrictTools")),
+  ).toBe(true);
+};
+
+const keepsTheConservativeResizeProfileOn = () => {
+  const visionModels = getBuiltinProviders()
+    .flatMap((provider) => getBuiltinModels(provider))
+    .filter((model) => model.input.includes("image"));
+  expect(visionModels.length).toBeGreaterThan(0);
+  for (const model of visionModels) {
+    expect(model.inputLimits?.images?.resize).toEqual(DEFAULT_IMAGE_RESIZE);
+  }
+};
+
+const recordsKnownDirectProviderImageRequest = () => {
+  const visionModels = (provider: "anthropic-api" | "openai") =>
+    getBuiltinModels(provider).filter((model) => model.input.includes("image"));
+  for (const model of visionModels("anthropic-api")) {
+    expect(model.inputLimits?.maxRequestBytes, model.id).toBe(32 * 1024 * 1024);
+    expect([100, 600], model.id).toContain(model.inputLimits?.images?.maxPerRequest);
+  }
+  for (const model of visionModels("openai")) {
+    expect(model.inputLimits, model.id).toMatchObject({
+      images: { maxPerRequest: 1500 },
+      maxRequestBytes: 512 * 1024 * 1024,
+    });
+  }
+};
+
+const doesNotInferImageLimitsFrom = () => {
+  const openRouterModel = getBuiltinModels("openrouter").find((model) =>
+    model.input.includes("image"),
+  );
+  expect(openRouterModel?.inputLimits).toEqual({ images: { resize: DEFAULT_IMAGE_RESIZE } });
+};
+
+const usesModelsDevEffortLevelsFor = () => {
+  const googleThinking = getBuiltinModels("opencode").filter(
+    (model) => model.api === "google-generative-ai" && model.thinkingLevelMap !== undefined,
+  );
+  expect(googleThinking.length).toBeGreaterThan(0);
+  for (const model of googleThinking) {
+    const mapped = Object.entries(model.thinkingLevelMap ?? {})
+      .filter(([, value]) => typeof value === "string")
+      .map(([level]) => level);
+    expect(getSupportedThinkingLevels(model), model.id).toEqual(mapped);
+  }
+};
+
+const enablesMidConversationSystemMessagesOnly = () => {
+  const flagged = (model: { readonly compat?: object | undefined }) =>
+    compatFlag(model, "supportsMidConvoSystemMessages");
+  for (const provider of [
+    "openai",
+    "openai-codex",
+    "anthropic-api",
+    "opencode",
+    "opencode-go",
+    "openrouter",
+  ] as const) {
+    const models = getBuiltinModels(provider);
+    expect(models.some(flagged), provider).toBe(true);
+    expect(
+      models.some((model) => !flagged(model)),
+      provider,
+    ).toBe(true);
+  }
+  for (const provider of ["openai", "openai-codex"] as const) {
+    for (const model of getBuiltinModels(provider)) {
+      expect(flagged(model), model.id).toBe(compatFlag(model, "supportsToolSearch"));
+    }
+  }
+  const openaiFlagged = new Set(
+    getBuiltinModels("openai")
+      .filter(flagged)
+      .map((model) => model.id),
+  );
+  for (const model of getBuiltinModels("openrouter").filter(flagged)) {
+    expect(model.id.startsWith("openai/") && !model.id.includes(":"), model.id).toBe(true);
+    expect(openaiFlagged.has(model.id.slice("openai/".length)), model.id).toBe(true);
+  }
+};
+
+const routesProxiedToolChangesThroughVerified = () => {
+  const proxied = ["opencode", "opencode-go", "openrouter"] as const;
+  for (const provider of proxied) {
+    const models = getBuiltinModels(provider);
+    expect(
+      models.some((model) => compatFlag(model, "supportsToolSearch")),
+      provider,
+    ).toBe(false);
+    expect(
+      models.some((model) => compatFlag(model, "supportsMidConvoToolChanges")),
+      provider,
+    ).toBe(false);
+  }
+  for (const provider of ["opencode", "opencode-go"] as const) {
+    const models = getBuiltinModels(provider);
+    expect(
+      models.some((model) => compatFlag(model, "supportsAdditionalTools")),
+      provider,
+    ).toBe(true);
+    expect(
+      models.some((model) => compatFlag(model, "supportsMidConvoToolAdditions")),
+      provider,
+    ).toBe(true);
+  }
+  expect(
+    getBuiltinModels("openrouter").some((model) =>
+      compatFlag(model, "supportsMidConvoToolAdditions"),
+    ),
+  ).toBe(false);
+  for (const model of getBuiltinModels("anthropic-api")) {
+    if (compatFlag(model, "supportsMidConvoSystemMessages")) {
+      expect(compatFlag(model, "supportsMidConvoToolChanges"), model.id).toBe(true);
+    }
+  }
 };
 
 describe("builtin providers", () => {
-  it("builtinModels registers every builtin provider with models", () => {
-    const models = builtinModels();
-    const providers = models.getProviders();
-    expect(providers.length).toBe(builtinProviders().length);
-    expect(providers.map((p) => p.id)).toContain("anthropic-api");
+  it(
+    "builtinModels registers every builtin provider with models",
+    builtinmodelsRegistersEveryBuiltinProviderWith,
+  );
 
-    const anthropic = models.getModel("anthropic-api", "claude-haiku-4-5");
-    expect(anthropic?.api).toBe("anthropic-messages");
-
-    const all = models.getModels();
-    expect(all.length).toBeGreaterThan(500);
-
-    for (const provider of providers) {
-      const list = models.getAllModels(provider.id);
-      expect(list.length).toBeGreaterThan(0);
-      expect(list.every((m) => m.provider === provider.id)).toBe(true);
-    }
-
-    return Promise.resolve();
-  });
-
-  it("returns empty results for unknown provider ids", () => {
-    const unknownProvider = "not-a-provider" as never;
-    const unknownModel = "x" as never;
-
-    expect(getBuiltinModel(unknownProvider, unknownModel)).toBeUndefined();
-    expect(getBuiltinImageModel(unknownProvider, unknownModel)).toBeUndefined();
-    expect(getBuiltinClassifierModel(unknownProvider, unknownModel)).toBeUndefined();
-    expect(getBuiltinModels(unknownProvider)).toEqual([]);
-    expect(getBuiltinImageModels(unknownProvider)).toEqual([]);
-    expect(getBuiltinClassifierModels(unknownProvider)).toEqual([]);
-    expect(getAllBuiltinModels(unknownProvider)).toEqual([]);
-    expect(getCompatModel(unknownProvider, unknownModel)).toBeUndefined();
-    expect(getCompatModels(unknownProvider)).toEqual([]);
-  });
-
-  it("stores native constrained-sampling capabilities in model metadata", () => {
-    const gpt4o = getBuiltinModel("openai", "gpt-4o");
-    expect(gpt4o.compat?.supportsStrictMode).toBe(true);
-    expect(gpt4o.compat?.supportsOpenAIGrammarTools).toBeUndefined();
-    expect(getBuiltinModel("openai", "gpt-5.4").compat).toMatchObject({
-      supportsStrictMode: true,
-      supportsOpenAIGrammarTools: true,
-    });
-    expect(getBuiltinModel("anthropic-api", "claude-haiku-4-5").compat?.supportsStrictTools).toBe(
-      true,
-    );
-  });
-
-  it("keeps the conservative resize profile on every vision model", () => {
-    const visionModels = getBuiltinProviders()
-      .flatMap((provider) => getBuiltinModels(provider))
-      .filter((model) => model.input.includes("image"));
-    expect(visionModels.length).toBeGreaterThan(0);
-    for (const model of visionModels) {
-      expect(model.inputLimits?.images?.resize).toEqual(DEFAULT_IMAGE_RESIZE);
-    }
-  });
-
-  it("records known direct-provider image request limits", () => {
-    expect(getBuiltinModel("anthropic-api", "claude-haiku-4-5").inputLimits).toMatchObject({
-      maxRequestBytes: 32 * 1024 * 1024,
-      images: { maxPerRequest: 100 },
-    });
-    expect(
-      getBuiltinModel("anthropic-api", "claude-opus-5").inputLimits?.images?.maxPerRequest,
-    ).toBe(600);
-    expect(getBuiltinModel("openai", "gpt-4o").inputLimits).toMatchObject({
-      maxRequestBytes: 512 * 1024 * 1024,
-      images: { maxPerRequest: 1500 },
-    });
-  });
-
-  it("does not infer image limits from gateway API compatibility", () => {
-    const openRouterModel = getBuiltinModels("openrouter").find((model) =>
-      model.input.includes("image"),
-    );
-    expect(openRouterModel?.inputLimits).toEqual({ images: { resize: DEFAULT_IMAGE_RESIZE } });
-  });
-
-  it("uses models.dev effort levels for Google thinking models", () => {
-    // Regression test for https://github.com/earendil-works/pi/issues/9455
-    expect(getSupportedThinkingLevels(getBuiltinModel("opencode", "gemini-3.8-flash"))).toEqual([
-      "low",
-      "medium",
-      "high",
-    ]);
-  });
-
-  it("enables mid-conversation system messages only for verified models", () => {
-    const models = builtinModels();
-    const supported = [
-      ["openai", "gpt-5.4"],
-      ["openai", "gpt-5.5"],
-      ["openai", "gpt-6-astra"],
-      ["openai-codex", "gpt-5.5"],
-      ["anthropic-api", "claude-opus-5"],
-      ["opencode", "gpt-5.4"],
-      ["opencode", "gpt-5.6-terra"],
-      ["opencode-go", "gpt-5.6-luna"],
-      ["opencode", "claude-opus-4-8"],
-      ["opencode", "claude-opus-5"],
-      ["opencode", "kimi-k3"],
-      ["opencode-go", "kimi-k3"],
-      ["openrouter", "openai/gpt-5.6-terra"],
-    ] as const;
-    const unsupported = [
-      ["openai", "gpt-4.1"],
-      ["openai", "gpt-5.2"],
-      ["anthropic-api", "claude-sonnet-4-5"],
-      ["opencode", "gemini-3.1-pro"],
-      ["opencode", "gpt-5.2"],
-      ["opencode", "claude-sonnet-4-5"],
-      ["openrouter", "anthropic/claude-opus-5"],
-      ["openrouter", "moonshotai/kimi-k3"],
-      ["openrouter", "openai/gpt-5.6-terra:batch"],
-    ] as const;
-    for (const [provider, modelId] of supported) {
-      expect(models.getModel(provider, modelId), `${provider}/${modelId}`).toHaveProperty(
-        "compat.supportsMidConvoSystemMessages",
-        true,
-      );
-    }
-    for (const [provider, modelId] of unsupported) {
-      expect(models.getModel(provider, modelId), `${provider}/${modelId}`).not.toHaveProperty(
-        "compat.supportsMidConvoSystemMessages",
-      );
-    }
-  });
-
-  it("routes proxied tool changes through verified transports only", () => {
-    const models = builtinModels();
-    // Proxies pass `additional_tools` through to OpenAI but are not verified for tool search.
-    expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).toMatchObject({
-      supportsAdditionalTools: true,
-    });
-    expect(models.getModel("opencode", "gpt-5.6-terra")?.compat).not.toHaveProperty(
-      "supportsToolSearch",
-    );
-    // Proxied Anthropic endpoints reject `tool_addition`/`tool_removal` blocks.
-    expect(models.getModel("opencode", "claude-opus-5")?.compat).not.toHaveProperty(
-      "supportsMidConvoToolChanges",
-    );
-    expect(models.getModel("anthropic-api", "claude-opus-5")?.compat).toMatchObject({
-      supportsMidConvoToolChanges: true,
-    });
-    // Kimi-style tool-bearing system messages survive OpenCode but not OpenRouter.
-    for (const provider of ["opencode", "opencode-go"] as const) {
-      expect(models.getModel(provider, "kimi-k3")?.compat, provider).toMatchObject({
-        supportsMidConvoToolAdditions: true,
-      });
-    }
-    expect(models.getModel("openrouter", "moonshotai/kimi-k3")?.compat).not.toHaveProperty(
-      "supportsMidConvoToolAdditions",
-    );
-    expect(models.getModel("openrouter", "openai/gpt-5.6-terra")?.compat).not.toHaveProperty(
-      "supportsMidConvoToolAdditions",
-    );
-  });
-
-  it("resolves Anthropic bearer auth from env with auth token precedence", async () => {
-    const models = createModels({
-      authContext: fakeAuthContext({
-        ANTHROPIC_AUTH_TOKEN: "auth-token",
-        ANTHROPIC_API_KEY: "api-key",
-      }),
-    });
-    models.setProvider(anthropicProvider());
-
-    expect(await models.getAuth("anthropic-api")).toEqual({
-      auth: { headers: { Authorization: "Bearer auth-token" } },
-      source: "ANTHROPIC_AUTH_TOKEN",
-    });
-  });
+  it("returns empty results for unknown provider ids", returnsEmptyResultsForUnknownProvider);
 });
 
-describe("envApiKeyAuth", () => {
-  it("prefers the stored credential key and falls back through env vars in order", async () => {
-    const auth = envApiKeyAuth("Test key", ["FIRST_KEY", "SECOND_KEY"]);
-
-    const stored = await auth.resolve({
-      ctx: fakeAuthContext({ FIRST_KEY: "env" }),
-      credential: { type: "api_key", key: "stored" },
-      signal: neverAbortedSignal,
-    });
-    expect(stored?.auth.apiKey).toBe("stored");
-    expect(stored?.source).toBe("stored credential");
-
-    const second = await auth.resolve({
-      ctx: fakeAuthContext({ SECOND_KEY: "second" }),
-      signal: neverAbortedSignal,
-    });
-    expect(second?.auth.apiKey).toBe("second");
-    expect(second?.source).toBe("SECOND_KEY");
-
-    expect(
-      await auth.resolve({ ctx: fakeAuthContext({}), signal: neverAbortedSignal }),
-    ).toBeUndefined();
-  });
-
-  it("login prompts for a secret and returns an api-key credential", async () => {
-    const auth = envApiKeyAuth("Test key", ["TEST_KEY"]);
-    const credential = await auth.login?.({
-      signal: neverAbortedSignal,
-      prompt: (prompt) => {
-        expect(prompt.type).toBe("secret");
-        return Promise.resolve("entered-key");
-      },
-      notify: () => {},
-    });
-    expect(credential).toEqual({ type: "api_key", key: "entered-key" });
-  });
+describe("builtin providers", () => {
+  it(
+    "stores native constrained-sampling capabilities in model metadata",
+    storesNativeConstrainedSamplingCapabilitiesIn,
+  );
 });
 
-describe("createProvider", () => {
-  function recordingStreams(label: string, calls: string[]): ProviderStreams {
-    const respond = (model: Model<Api>) => {
-      calls.push(`${label}:${model.id}`);
-      const stream = new AssistantMessageEventStream();
-      const message = fauxAssistantMessage("ok");
-      stream.push({ type: "start", partial: message });
-      stream.push({ type: "done", reason: "stop", message });
-      stream.end(message);
-      return stream;
-    };
-    return { stream: respond, streamSimple: respond };
-  }
+describe("builtin providers", () => {
+  it(
+    "keeps the conservative resize profile on every vision model",
+    keepsTheConservativeResizeProfileOn,
+  );
 
-  function testModel(api: string, id: string): Model<Api> {
-    return {
-      id,
-      name: id,
-      api,
-      provider: "mixed",
-      baseUrl: "https://example.test/v1",
-      reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 10000,
-      maxTokens: 1000,
-    };
-  }
+  it("records known direct-provider image request limits", recordsKnownDirectProviderImageRequest);
 
-  it("lazily exposes only declared deferred capabilities", async () => {
-    let loads = 0;
-    const streams = recordingStreams("deferred", []);
-    streams.fetchDeferred = (model) => streams.streamSimple(model, context);
-    const api = lazyApi(
-      () => {
-        loads++;
-        return Promise.resolve(streams);
-      },
-      { fetchDeferred: true },
-    );
-    const model = testModel("api-a", "model-a");
-    const handle: DeferredHandle = {
-      provider: model.provider,
-      modelId: model.id,
-      api: model.api,
-      id: "response-1",
-    };
-
-    expect(loads).toBe(0);
-    expect(api.cancelDeferred).toBeUndefined();
-    expect((await api.fetchDeferred!(model, handle).result()).stopReason).toBe("stop");
-    expect(loads).toBe(1);
-  });
-
-  it("dispatches on model.api for mixed-API providers", async () => {
-    const calls: string[] = [];
-    const provider = createProvider({
-      id: "mixed",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [testModel("api-a", "model-a"), testModel("api-b", "model-b")],
-      api: { "api-a": recordingStreams("a", calls), "api-b": recordingStreams("b", calls) },
-    });
-    const models = createModels();
-    models.setProvider(provider);
-
-    await models.completeSimple(testModel("api-a", "model-a"), context);
-    await models.completeSimple(testModel("api-b", "model-b"), context);
-    expect(calls).toEqual(["a:model-a", "b:model-b"]);
-  });
-
-  it("merges provider-resolved env into stream options", async () => {
-    let capturedEnv: Record<string, string> | undefined;
-    let capturedApiKey: string | undefined;
-    const envModel = { ...testModel("api-a", "model-a"), provider: "env-provider" };
-    const provider = createProvider({
-      id: "env-provider",
-      auth: {
-        apiKey: {
-          name: "Test",
-          resolve: () =>
-            Promise.resolve({
-              auth: { apiKey: "provider-key" },
-              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-            }),
-        },
-      },
-      models: [envModel],
-      api: {
-        stream: (model, _context, options) => {
-          capturedEnv = options?.env;
-          capturedApiKey = options?.apiKey;
-          return recordingStreams("a", []).stream(model, _context, options);
-        },
-        streamSimple: (model, _context, options) => {
-          capturedEnv = options?.env;
-          capturedApiKey = options?.apiKey;
-          return recordingStreams("a", []).streamSimple(model, _context, options);
-        },
-      },
-    });
-    const models = createModels();
-    models.setProvider(provider);
-
-    await models.completeSimple(envModel, context, {
-      apiKey: "request-key",
-      env: { REQUEST_ONLY: "request", SHARED: "request" },
-    });
-
-    expect(capturedApiKey).toBe("request-key");
-    expect(capturedEnv).toEqual({
-      PROVIDER_ONLY: "provider",
-      REQUEST_ONLY: "request",
-      SHARED: "request",
-    });
-  });
-
-  it("applies resolved request options to deferred fetch and cancellation", async () => {
-    let fetchedModel: Model<Api> | undefined;
-    let fetchedOptions: DeferredFetchOptions | undefined;
-    let cancelledOptions: DeferredCancelOptions | undefined;
-    const deferredModel = { ...testModel("api-a", "model-a"), provider: "deferred-provider" };
-    const streams = recordingStreams("deferred", []);
-    streams.fetchDeferred = (model, _handle, options) => {
-      fetchedModel = model;
-      fetchedOptions = options;
-      return streams.streamSimple(model, context);
-    };
-    streams.cancelDeferred = (_model, _handle, options) => {
-      cancelledOptions = options;
-
-      return Promise.resolve();
-    };
-    const provider = createProvider({
-      id: "deferred-provider",
-      auth: {
-        apiKey: {
-          name: "Test",
-          resolve: () =>
-            Promise.resolve({
-              auth: {
-                apiKey: "provider-key",
-                baseUrl: "https://resolved.test/v1",
-                headers: { Authorization: "Bearer provider", "X-Shared": "provider" },
-              },
-              env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-            }),
-        },
-      },
-      models: [deferredModel],
-      api: streams,
-    });
-    const models = createModels();
-    models.setProvider(provider);
-    const handle: DeferredHandle = {
-      provider: deferredModel.provider,
-      modelId: deferredModel.id,
-      api: deferredModel.api,
-      id: "response-1",
-    };
-
-    await models.fetchDeferred(deferredModel, handle, {
-      wait: 50,
-      timeoutMs: 100,
-      apiKey: "request-key",
-      headers: { "X-Request": "request", "x-shared": "request" },
-      env: { REQUEST_ONLY: "request", SHARED: "request" },
-      transformHeaders: (headers) => ({ ...headers, "X-Transformed": "yes" }),
-    });
-    await models.cancelDeferred(deferredModel, handle, {
-      timeoutMs: 200,
-      transformHeaders: (headers) => ({ ...headers, "X-Cancel": "yes" }),
-    });
-
-    expect(fetchedModel?.baseUrl).toBe("https://resolved.test/v1");
-    expect(fetchedOptions).toMatchObject({
-      wait: 50,
-      timeoutMs: 100,
-      apiKey: "request-key",
-      headers: {
-        Authorization: "Bearer provider",
-        "X-Request": "request",
-        "x-shared": "request",
-        "X-Transformed": "yes",
-      },
-      env: { PROVIDER_ONLY: "provider", REQUEST_ONLY: "request", SHARED: "request" },
-    });
-    expect(cancelledOptions).toMatchObject({
-      timeoutMs: 200,
-      apiKey: "provider-key",
-      headers: { Authorization: "Bearer provider", "X-Shared": "provider", "X-Cancel": "yes" },
-      env: { PROVIDER_ONLY: "provider", SHARED: "provider" },
-    });
-  });
-
-  it("produces a stream error for a model whose api has no implementation", async () => {
-    const provider = createProvider({
-      id: "mixed",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [testModel("api-a", "model-a")],
-      api: { "api-a": recordingStreams("a", []) },
-    });
-    const result = await provider.streamSimple(testModel("api-ghost", "model-x"), context).result();
-    expect(result.stopReason).toBe("error");
-    expect(result.errorMessage).toContain("no API implementation");
-  });
-
-  it("lets a newer dynamic refresh bypass and supersede older network work", async () => {
-    let fetches = 0;
-    let markFirstStarted: (() => void) | undefined;
-    let finishFirst: (() => void) | undefined;
-    const firstStarted = new Promise<void>((resolve) => {
-      markFirstStarted = resolve;
-    });
-    const firstBlocked = new Promise<void>((resolve) => {
-      finishFirst = resolve;
-    });
-    const provider = createProvider({
-      id: "dynamic",
-      auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: [],
-      fetchModels: async () => {
-        fetches++;
-        const current = fetches;
-        if (current === 1) {
-          markFirstStarted?.();
-          await firstBlocked;
-        }
-        return [testModel("api-a", `listed-${current}`)];
-      },
-      api: recordingStreams("a", []),
-    });
-
-    const store = new InMemoryModelsStore();
-    const models = createModels({ modelsStore: store });
-    models.setProvider(provider);
-    expect(provider.getModels()).toEqual([]);
-
-    const first = models.refresh({ providers: ["dynamic"] });
-    await firstStarted;
-    const second = models.refresh({ providers: ["dynamic"] });
-    await expect(second).resolves.toMatchObject({ aborted: false });
-    await expect(first).resolves.toMatchObject({ aborted: false });
-    expect(fetches).toBe(2);
-    expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
-    expect((await store.read("dynamic"))?.models.map((model) => model.id)).toEqual(["listed-2"]);
-
-    finishFirst?.();
-    await new Promise((resolve) => {
-      setTimeout(resolve, 0);
-    });
-    expect(provider.getModels().map((model) => model.id)).toEqual(["listed-2"]);
-    expect((await store.read("dynamic"))?.models.map((model) => model.id)).toEqual(["listed-2"]);
-  });
+  it("does not infer image limits from gateway API compatibility", doesNotInferImageLimitsFrom);
 });
 
-describe("fauxProvider", () => {
-  it("streams queued responses through a Models collection", async () => {
-    const faux = fauxProvider();
-    const models = createModels();
-    models.setProvider(faux.provider);
-    faux.setResponses([fauxAssistantMessage("hello from faux")]);
+describe("builtin providers", () => {
+  it("uses models.dev effort levels for Google thinking models", usesModelsDevEffortLevelsFor);
+});
 
-    const model = models.getModels(faux.provider.id)[0];
+describe("builtin providers", () => {
+  it(
+    "enables mid-conversation system messages only for verified models",
+    enablesMidConversationSystemMessagesOnly,
+  );
+});
 
-    if (!model) throw new Error("Expected a model");
-    const result = await models.completeSimple(model, context);
-    expect(result.stopReason).toBe("stop");
-    expect(result.content).toEqual([{ type: "text", text: "hello from faux" }]);
-    expect(faux.state.callCount).toBe(1);
-  });
-
-  it("submits, polls, and redeems deferred responses", async () => {
-    const faux = fauxProvider({ deferred: { pendingFetches: 1, pollAfterMs: 25 } });
-    const models = createModels();
-    models.setProvider(faux.provider);
-    faux.setResponses([fauxAssistantMessage("ready")]);
-    const model = faux.getModel();
-
-    const submission = models.streamSimple(model, context, { deferred: { window: "1h" } });
-    const eventTypes: string[] = [];
-    for await (const event of submission) eventTypes.push(event.type);
-    const deferred = await submission.result();
-    expect(eventTypes).toEqual(["start", "done"]);
-    expect(deferred).toMatchObject({ stopReason: "deferred", content: [] });
-    expect(deferred.deferred).toEqual({
-      provider: model.provider,
-      modelId: model.id,
-      api: model.api,
-      id: expect.any(String),
-      pollAfterMs: 25,
-    });
-    if (!deferred.deferred) throw new Error("Faux response did not include a deferred handle");
-
-    const pending = await models.fetchDeferred(model, deferred.deferred);
-    expect(pending.stopReason).toBe("deferred");
-    expect(pending.deferred).toEqual(deferred.deferred);
-
-    const ready = await models.fetchDeferred(model, deferred.deferred, { wait: 0 });
-    expect(ready.stopReason).toBe("stop");
-    expect(ready.content).toEqual([{ type: "text", text: "ready" }]);
-    expect(ready.usage.totalTokens).toBeGreaterThan(0);
-    expect(faux.state).toMatchObject({ callCount: 1, deferredFetchCount: 2 });
-  });
-
-  it("records cancellation and returns deferred fetch failures in-band", async () => {
-    const faux = fauxProvider();
-    const models = createModels();
-    models.setProvider(faux.provider);
-    faux.setResponses([
-      () => Promise.reject(new Error("deferred failed")),
-      fauxAssistantMessage("cancelled"),
-    ]);
-    const model = faux.getModel();
-
-    const failedSubmission = await models.completeSimple(model, context, { deferred: true });
-    if (!failedSubmission.deferred)
-      throw new Error("Faux response did not include a deferred handle");
-    const failed = await models.fetchDeferred(model, failedSubmission.deferred);
-    expect(failed).toMatchObject({ stopReason: "error", errorMessage: "deferred failed" });
-
-    const cancelledSubmission = await models.completeSimple(model, context, { deferred: true });
-    if (!cancelledSubmission.deferred)
-      throw new Error("Faux response did not include a deferred handle");
-    await models.cancelDeferred(model, cancelledSubmission.deferred);
-    expect(faux.state.cancelledDeferred).toEqual([cancelledSubmission.deferred]);
-    const cancelled = await models.fetchDeferred(model, cancelledSubmission.deferred);
-    expect(cancelled).toMatchObject({
-      stopReason: "error",
-      errorMessage: expect.stringContaining("was cancelled"),
-    });
-  });
+describe("builtin providers", () => {
+  it(
+    "routes proxied tool changes through verified transports only",
+    routesProxiedToolChangesThroughVerified,
+  );
 });

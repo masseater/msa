@@ -1,11 +1,28 @@
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { fileURLToPath } from "url";
 
-import { colorToHex, okhslColor } from "@msa/tui";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import testing from "@msa/testing";
+import tui from "@msa/tui";
+import { Effect } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { getThemeExportColors } from "../src/modes/interactive/theme/theme.ts";
+import platform from "../src/core/platform/index.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+
+const { readEnv } = platform;
+const { getThemeExportColors, refreshCustomThemes } = themeModule;
+
+const { colorToHex, okhslColor } = tui;
+
+const {
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  readJsonFile,
+  removePath,
+  runTest,
+  toJsonText,
+  writeTextFile,
+} = testing;
 
 type ThemeFile = {
   name: string;
@@ -18,112 +35,146 @@ type ThemeFile = {
   };
 };
 
+const DARK_THEME_PATH = fileURLToPath(
+  new URL("../src/modes/interactive/theme/dark.json", import.meta.url),
+);
+
+let tempRoot: string;
+
+const convertsOkhslExportColorsToHexBecause = () =>
+  runTest(
+    Effect.gen(function* () {
+      const darkTheme = (yield* readJsonFile(DARK_THEME_PATH)) as ThemeFile;
+      const customTheme: ThemeFile = {
+        ...darkTheme,
+        export: { cardBg: "card", infoBg: "oklch(30% 0.05 80)", pageBg: "okhsl(250 20% 15%)" },
+        name: "custom-export-okhsl",
+        vars: { card: "okhsl(250 20% 20%)" },
+      };
+      yield* writeTextFile(
+        joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-okhsl.json"),
+        yield* toJsonText(customTheme),
+      );
+
+      yield* Effect.promise(() => refreshCustomThemes());
+
+      expect(getThemeExportColors("custom-export-okhsl")).toEqual({
+        cardBg: colorToHex(okhslColor(250, 0.2, 0.2)),
+        infoBg: "oklch(30% 0.05 80)",
+        pageBg: colorToHex(okhslColor(250, 0.2, 0.15)),
+      });
+    }),
+  );
+
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempRoot = yield* makeTempDir("msa-theme-export-");
+      vi.stubEnv("MSA_CODING_AGENT_DIR", joinPath(tempRoot, "agent"));
+      yield* makeDirectory(joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes"));
+    }),
+  );
+
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* removePath(tempRoot);
+      vi.stubEnv("MSA_CODING_AGENT_DIR", undefined);
+    }),
+  );
+
 describe("getThemeExportColors", () => {
-  let tempRoot: string;
-  let previousAgentDir: string | undefined;
+  beforeEach(beforeEachHook);
 
-  beforeEach(() => {
-    tempRoot = mkdtempSync(join(tmpdir(), "msa-theme-export-"));
-    previousAgentDir = process.env["MSA_CODING_AGENT_DIR"];
-    process.env["MSA_CODING_AGENT_DIR"] = join(tempRoot, "agent");
-    mkdirSync(join(process.env["MSA_CODING_AGENT_DIR"], "themes"), { recursive: true });
-  });
+  afterEach(afterEachHook);
 
-  afterEach(() => {
-    rmSync(tempRoot, { recursive: true, force: true });
-    if (previousAgentDir === undefined) {
-      delete process.env["MSA_CODING_AGENT_DIR"];
-    } else {
-      process.env["MSA_CODING_AGENT_DIR"] = previousAgentDir;
-    }
-  });
+  it("resolves export variable references using the same syntax as colors", () =>
+    runTest(
+      Effect.gen(function* () {
+        const darkTheme = (yield* readJsonFile(DARK_THEME_PATH)) as ThemeFile;
 
-  it("resolves export variable references using the same syntax as colors", () => {
-    const darkTheme = JSON.parse(
-      readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf-8"),
-    ) as ThemeFile;
+        const customTheme: ThemeFile = {
+          ...darkTheme,
+          export: {
+            cardBg: "cardBgVar",
+            infoBg: "infoBgVar",
+            pageBg: "pageBgAlias",
+          },
+          name: "custom-export-vars",
+          vars: {
+            ...(darkTheme.vars ?? {}),
+            cardBgVar: "#223344",
+            infoBgVar: "#445566",
+            pageBgAlias: "pageBgVar",
+            pageBgVar: "#112233",
+          },
+        };
 
-    const customTheme: ThemeFile = {
-      ...darkTheme,
-      name: "custom-export-vars",
-      vars: {
-        ...(darkTheme.vars ?? {}),
-        pageBgVar: "#112233",
-        pageBgAlias: "pageBgVar",
-        infoBgVar: "#445566",
-        cardBgVar: "#223344",
-      },
-      export: {
-        pageBg: "pageBgAlias",
-        cardBg: "cardBgVar",
-        infoBg: "infoBgVar",
-      },
-    };
+        yield* writeTextFile(
+          joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-vars.json"),
+          yield* toJsonText(customTheme),
+        );
 
-    writeFileSync(
-      join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "custom-export-vars.json"),
-      JSON.stringify(customTheme, null, 2),
-    );
+        yield* Effect.promise(() => refreshCustomThemes());
 
-    expect(getThemeExportColors("custom-export-vars")).toEqual({
-      pageBg: "#112233",
-      cardBg: "#223344",
-      infoBg: "#445566",
-    });
-  });
+        expect(getThemeExportColors("custom-export-vars")).toEqual({
+          cardBg: "#223344",
+          infoBg: "#445566",
+          pageBg: "#112233",
+        });
+      }),
+    ));
+});
 
-  it("converts OKHSL export colors to hex because CSS does not support them", () => {
-    const darkTheme = JSON.parse(
-      readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf-8"),
-    ) as ThemeFile;
-    const customTheme: ThemeFile = {
-      ...darkTheme,
-      name: "custom-export-okhsl",
-      vars: { card: "okhsl(250 20% 20%)" },
-      export: { pageBg: "okhsl(250 20% 15%)", cardBg: "card", infoBg: "oklch(30% 0.05 80)" },
-    };
-    writeFileSync(
-      join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "custom-export-okhsl.json"),
-      JSON.stringify(customTheme, null, 2),
-    );
+describe("getThemeExportColors", () => {
+  beforeEach(beforeEachHook);
 
-    expect(getThemeExportColors("custom-export-okhsl")).toEqual({
-      pageBg: colorToHex(okhslColor(250, 0.2, 0.15)),
-      cardBg: colorToHex(okhslColor(250, 0.2, 0.2)),
-      infoBg: "oklch(30% 0.05 80)",
-    });
-  });
+  afterEach(afterEachHook);
 
-  it("resolves recursive vars and converts 256-color export values to hex", () => {
-    const darkTheme = JSON.parse(
-      readFileSync(new URL("../src/modes/interactive/theme/dark.json", import.meta.url), "utf-8"),
-    ) as ThemeFile;
+  it(
+    "converts OKHSL export colors to hex because CSS does not support them",
+    convertsOkhslExportColorsToHexBecause,
+  );
+});
 
-    const customTheme: ThemeFile = {
-      ...darkTheme,
-      name: "custom-export-recursive",
-      vars: {
-        ...(darkTheme.vars ?? {}),
-        deepPageBg: "#abcdef",
-        pageBgAlias: "deepPageBg",
-        cardBgAnsi: 24,
-      },
-      export: {
-        pageBg: "pageBgAlias",
-        cardBg: "cardBgAnsi",
-        infoBg: "",
-      },
-    };
+describe("getThemeExportColors", () => {
+  beforeEach(beforeEachHook);
 
-    writeFileSync(
-      join(process.env["MSA_CODING_AGENT_DIR"]!, "themes", "custom-export-recursive.json"),
-      JSON.stringify(customTheme, null, 2),
-    );
+  afterEach(afterEachHook);
 
-    expect(getThemeExportColors("custom-export-recursive")).toEqual({
-      pageBg: "#abcdef",
-      cardBg: "#005f87",
-      infoBg: undefined,
-    });
-  });
+  it("resolves recursive vars and converts 256-color export values to hex", () =>
+    runTest(
+      Effect.gen(function* () {
+        const darkTheme = (yield* readJsonFile(DARK_THEME_PATH)) as ThemeFile;
+
+        const customTheme: ThemeFile = {
+          ...darkTheme,
+          export: {
+            cardBg: "cardBgAnsi",
+            infoBg: "",
+            pageBg: "pageBgAlias",
+          },
+          name: "custom-export-recursive",
+          vars: {
+            ...(darkTheme.vars ?? {}),
+            cardBgAnsi: 24,
+            deepPageBg: "#abcdef",
+            pageBgAlias: "deepPageBg",
+          },
+        };
+
+        yield* writeTextFile(
+          joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-recursive.json"),
+          yield* toJsonText(customTheme),
+        );
+
+        yield* Effect.promise(() => refreshCustomThemes());
+
+        expect(getThemeExportColors("custom-export-recursive")).toEqual({
+          cardBg: "#005f87",
+          infoBg: undefined,
+          pageBg: "#abcdef",
+        });
+      }),
+    ));
 });

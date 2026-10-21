@@ -1,14 +1,10 @@
 import { DateTime, Effect } from "effect";
 
+import type reportZoneTypes from "./report-zone.types.ts";
+
 const REPORT_TIME_ZONE = "Europe/Berlin";
 
-interface ReportZone {
-  readonly day: (ms: number) => string;
-  readonly hour: (ms: number) => string;
-  readonly week: (ms: number) => string;
-}
-
-const reportZone: Effect.Effect<ReportZone> = Effect.gen(function* () {
+const reportZone: Effect.Effect<reportZoneTypes.ReportZone> = Effect.gen(function* () {
   const zone = yield* DateTime.zoneMakeNamedEffect(REPORT_TIME_ZONE).pipe(Effect.orDie);
   const zoned = (ms: number) => DateTime.setZone(DateTime.makeUnsafe(ms), zone);
   return {
@@ -19,5 +15,9 @@ const reportZone: Effect.Effect<ReportZone> = Effect.gen(function* () {
   };
 });
 
-export type { ReportZone };
-export { REPORT_TIME_ZONE, reportZone };
+const reportZoneModule = {
+  REPORT_TIME_ZONE,
+  reportZone,
+};
+
+export default reportZoneModule;

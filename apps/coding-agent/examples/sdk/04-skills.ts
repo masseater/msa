@@ -1,57 +1,58 @@
-/**
- * Skills Configuration
- *
- * Skills provide specialized instructions loaded into the system prompt.
- * Discover, filter, merge, or replace them.
- */
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Console, Effect } from "effect";
 
-import {
+const {
+  DefaultResourceLoader,
+  SessionManager,
   createAgentSession,
   createSyntheticSourceInfo,
-  DefaultResourceLoader,
   getAgentDir,
-  SessionManager,
-  type Skill,
-} from "@msa/coding-agent";
+} = codingAgent;
 
-// Or define custom skills inline
-const customSkill: Skill = {
-  name: "my-skill",
-  description: "Custom project instructions",
-  filePath: "/virtual/SKILL.md",
+const customSkill: codingAgentTypes.Skill = {
   baseDir: "/virtual",
-  sourceInfo: createSyntheticSourceInfo("/virtual/SKILL.md", { source: "sdk" }),
+  description: "Custom project instructions",
   disableModelInvocation: false,
+  filePath: "/virtual/SKILL.md",
+  name: "my-skill",
+  sourceInfo: createSyntheticSourceInfo("/virtual/SKILL.md", { source: "sdk" }),
 };
 
 const loader = new DefaultResourceLoader({
-  cwd: process.cwd(),
   agentDir: getAgentDir(),
+  cwd: process.cwd(),
   skillsOverride: (current) => {
     const filteredSkills = current.skills.filter(
       (s) => s.name.includes("browser") || s.name.includes("search"),
     );
     return {
-      skills: [...filteredSkills, customSkill],
       diagnostics: current.diagnostics,
+      skills: [...filteredSkills, customSkill],
     };
   },
 });
-await loader.reload();
 
-// Discover all skills from cwd/.msa/skills, ~/.msa/agent/skills, etc.
-const { skills: allSkills, diagnostics } = loader.getSkills();
-console.log(
-  "Discovered skills:",
-  allSkills.map((s) => s.name),
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => loader.reload());
+
+    const { skills: allSkills, diagnostics } = loader.getSkills();
+    yield* Console.log(
+      "Discovered skills:",
+      allSkills.map((s) => s.name),
+    );
+    if (diagnostics.length > 0) {
+      yield* Console.log("Warnings:", diagnostics);
+    }
+
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader: loader,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log("Session created with filtered skills");
+    session.dispose();
+  }),
 );
-if (diagnostics.length > 0) {
-  console.log("Warnings:", diagnostics);
-}
-
-const { session } = await createAgentSession({
-  resourceLoader: loader,
-  sessionManager: SessionManager.inMemory(),
-});
-console.log("Session created with filtered skills");
-session.dispose();

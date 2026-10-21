@@ -1,31 +1,50 @@
 import { Effect, Result } from "effect";
 
-import { type OrchestratorError, orchestratorError } from "./errors.ts";
-import { newId } from "./ids.ts";
-import { prompts } from "./prompts.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { snapshots } from "./snapshot.ts";
-import { store } from "./store.ts";
-import type { Note, ThreadRole, Task, TaskView } from "./types.ts";
-import type { WorkerSession } from "./worker.ts";
+import errors from "./errors.ts";
+import ids from "./ids.ts";
+import promptsModule from "./prompts.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import snapshot from "./snapshot.ts";
+import storeModule from "./store.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
+
+const { nowMillis } = runtimeModule;
+const { store } = storeModule;
+const { snapshots } = snapshot;
+const { prompts } = promptsModule;
+const { newId } = ids;
+const { orchestratorError } = errors;
 
 interface ThreadPlan {
   threadId: string;
   prompt: string;
   model: string;
-  thinkingLevel: Task["thinkingLevel"];
-  notes: readonly Note[];
+  thinkingLevel: orchestratorTypesTypes.Task["thinkingLevel"];
+  notes: readonly orchestratorTypesTypes.Note[];
 }
 
-function notesFor(runtime: Runtime, taskId: string, threadId: string): Note[] {
+function notesFor(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+  threadId: string,
+): orchestratorTypesTypes.Note[] {
   return store.unreadNotes(runtime.database, runtime.options.project, taskId, threadId);
 }
 
-function markRead(runtime: Runtime, notes: readonly Note[], threadId: string, now: number): void {
+function markRead(
+  runtime: runtimeTypes.Runtime,
+  notes: readonly orchestratorTypesTypes.Note[],
+  threadId: string,
+  now: number,
+): void {
   for (const note of notes) store.markNoteRead(runtime.database, note.id, threadId, now);
 }
 
-function dependencyViews(runtime: Runtime, task: TaskView): TaskView[] {
+function dependencyViews(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.TaskView,
+): orchestratorTypesTypes.TaskView[] {
   const byId = new Map(
     snapshots
       .taskViews(runtime.database, runtime.options.project)
@@ -35,10 +54,10 @@ function dependencyViews(runtime: Runtime, task: TaskView): TaskView[] {
 }
 
 function reviewerPrompt(
-  runtime: Runtime,
-  task: TaskView,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.TaskView,
   workerReport: string,
-  notes: readonly Note[],
+  notes: readonly orchestratorTypesTypes.Note[],
 ): string {
   if (task.kind === "review") {
     const byId = new Map(
@@ -55,11 +74,11 @@ function reviewerPrompt(
 }
 
 function promptFor(
-  runtime: Runtime,
-  task: TaskView,
-  role: ThreadRole,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.TaskView,
+  role: orchestratorTypesTypes.ThreadRole,
   workerReport: string,
-  notes: readonly Note[],
+  notes: readonly orchestratorTypesTypes.Note[],
   extra: string,
 ): string {
   const base =
@@ -70,9 +89,9 @@ function promptFor(
 }
 
 function planThread(
-  runtime: Runtime,
-  task: Task,
-  role: ThreadRole,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   workerReport: string,
   extra: string,
 ): ThreadPlan {
@@ -89,76 +108,76 @@ function planThread(
     role === "worker"
       ? (task.thinkingLevel ?? defaults.workerThinkingLevel)
       : defaults.reviewThinkingLevel;
-  return { threadId, prompt, model, thinkingLevel, notes };
+  return { model, notes, prompt, thinkingLevel, threadId };
 }
 
 function failThread(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
-  task: Task,
-  role: ThreadRole,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   now: number,
   message: string,
 ): void {
   store.updateThread(runtime.database, plan.threadId, { status: "failed" }, now);
   store.setTaskStatus(runtime.database, task.id, "failed", now);
   runtime.publish();
-  runtime.options.report(message, { taskId: task.id, role, status: "failed", started: [] });
+  runtime.options.report(message, { role, started: [], status: "failed", taskId: task.id });
 }
 
 function insertRunningThread(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
-  task: Task,
-  role: ThreadRole,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   now: number,
 ): void {
   const database = runtime.database;
   store.insertThread(database, {
-    id: plan.threadId,
-    project: runtime.options.project,
-    model: plan.model,
-    thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
-    cwd: task.cwd,
-    status: "running",
-    sessionFile: null,
     createdAt: now,
+    cwd: task.cwd,
+    id: plan.threadId,
+    model: plan.model,
+    project: runtime.options.project,
+    sessionFile: null,
+    status: "running",
+    thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
     updatedAt: now,
   });
   store.insertAssignment(database, {
+    createdAt: now,
+    role,
     taskId: task.id,
     threadId: plan.threadId,
-    role,
-    createdAt: now,
   });
   store.setTaskStatus(database, task.id, "running", now);
   markRead(runtime, plan.notes, plan.threadId, now);
 }
 
 function openWorker(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
-  task: Task,
-  role: ThreadRole,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<WorkerSession | undefined, OrchestratorError> {
+): Effect.Effect<runtimeTypes.WorkerSession | undefined, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
     const telemetry = runtime.telemetry.threadStarted(
-      { threadId: plan.threadId, role, model: plan.model, thinkingLevel },
+      { model: plan.model, role, thinkingLevel, threadId: plan.threadId },
       task,
     );
     const created = yield* Effect.result(
       Effect.tryPromise({
+        catch: orchestratorError,
         try: () =>
           runtime.options.createWorker({
             cwd: task.cwd,
             model: runtime.options.resolveModel(plan.model),
-            thinkingLevel,
             telemetry,
+            thinkingLevel,
           }),
-        catch: orchestratorError,
       }),
     );
     if (Result.isFailure(created)) {
@@ -170,9 +189,9 @@ function openWorker(
 }
 
 function launch(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
-  worker: WorkerSession,
+  worker: runtimeTypes.WorkerSession,
   prompt: string,
   now: number,
 ): void {
@@ -182,19 +201,19 @@ function launch(
   worker.subscribe(() => runtime.publish());
   runtime.runs.set(threadId, run);
   runtime.runStartedAt.set(threadId, performance.now());
-  void worker.prompt(prompt).then(
+  void worker.run.prompting.prompt(prompt).then(
     () => runtime.afterTurn(threadId, run, worker),
     (error: unknown) => runtime.settle(threadId, run, worker, error),
   );
 }
 
 function startTasks(
-  runtime: Runtime,
-  task: Task,
-  role: ThreadRole,
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
   workerReport = "",
   extra = "",
-): Effect.Effect<void, OrchestratorError> {
+): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const plan = planThread(runtime, task, role, workerReport, extra);
@@ -204,4 +223,10 @@ function startTasks(
   });
 }
 
-export const starting = { startTasks };
+const starting = { startTasks };
+
+const start = {
+  starting,
+};
+
+export default start;

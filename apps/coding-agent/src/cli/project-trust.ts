@@ -1,64 +1,78 @@
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
 
-import type { ProjectTrustContext } from "../core/extensions/types.ts";
-import type { AppMode } from "../core/project-trust.ts";
-import type { SettingsManager } from "../core/settings-manager.ts";
-import { showStartupInput, showStartupSelector } from "./startup-ui.ts";
+import awaitingModule from "../core/awaiting.ts";
+import type extensionsTypesTypes from "../core/extensions/types.types.ts";
+import platform from "../core/platform/index.ts";
+import type projectTrustTypesModule from "../core/project-trust.types.ts";
+import type settingsManagerTypes from "../core/settings-manager.types.ts";
+import startupUi from "./startup-ui.ts";
 
-export function createProjectTrustContext(options: {
+const { awaited, awaiting } = awaitingModule;
+const { showStartupInput, showStartupSelector } = startupUi;
+const { writeError } = platform;
+
+interface ProjectTrustOptions {
   cwd: string;
-  mode: AppMode;
-  settingsManager: SettingsManager;
+  mode: projectTrustTypesModule.AppMode;
+  settingsManager: settingsManagerTypes.SettingsManager;
   hasUI: boolean;
-}): ProjectTrustContext {
+}
+
+function notifyOutsideInteractive(options: ProjectTrustOptions, type: string, message: string) {
+  if (options.mode !== "interactive") {
+    const color = type === "error" ? chalk.red : type === "warning" ? chalk.yellow : chalk.cyan;
+    writeError(color(message));
+  }
+}
+
+function createProjectTrustContext(
+  options: ProjectTrustOptions,
+): extensionsTypesTypes.ProjectTrustContext {
+  const canPrompt = options.hasUI && options.mode === "interactive";
+  const prompt = <T>(show: () => Promise<T | undefined>): Promise<T | undefined> =>
+    Effect.runPromise(
+      awaiting(function* () {
+        if (!canPrompt) return undefined;
+        return yield* awaited(show());
+      }),
+    );
   return {
     cwd: options.cwd,
-    mode: options.mode === "interactive" ? "tui" : options.mode,
     hasUI: options.hasUI,
+    mode: options.mode === "interactive" ? "tui" : options.mode,
     ui: {
-      select: async (title, selectOptions) => {
-        if (!options.hasUI) {
-          return undefined;
-        }
-        if (options.mode !== "interactive") {
-          return undefined;
-        }
-        return showStartupSelector(
-          options.settingsManager,
-          title,
-          selectOptions.map((option) => ({ label: option, value: option })),
-        );
-      },
-      confirm: async (title, message) => {
-        if (!options.hasUI) {
-          return false;
-        }
-        if (options.mode !== "interactive") {
-          return false;
-        }
-        return (
-          (await showStartupSelector(options.settingsManager, `${title}\n${message}`, [
-            { label: "Yes", value: true },
-            { label: "No", value: false },
-          ])) ?? false
-        );
-      },
-      input: async (title, placeholder) => {
-        if (!options.hasUI) {
-          return undefined;
-        }
-        if (options.mode !== "interactive") {
-          return undefined;
-        }
-        return showStartupInput(options.settingsManager, title, placeholder);
-      },
-      notify: (message, type = "info") => {
-        if (options.mode !== "interactive") {
-          const color =
-            type === "error" ? chalk.red : type === "warning" ? chalk.yellow : chalk.cyan;
-          console.error(color(message));
-        }
-      },
+      confirm: (title, message) =>
+        Effect.runPromise(
+          awaiting(function* () {
+            const choice = yield* awaited(
+              prompt(() =>
+                showStartupSelector(options.settingsManager, `${title}\n${message}`, [
+                  { label: "Yes", value: true },
+                  { label: "No", value: false },
+                ]),
+              ),
+            );
+            return choice ?? false;
+          }),
+        ),
+      input: (title, placeholder) =>
+        prompt(() => showStartupInput(options.settingsManager, title, placeholder)),
+      notify: (message, type = "info") => notifyOutsideInteractive(options, type, message),
+      select: (title, selectOptions) =>
+        prompt(() =>
+          showStartupSelector(
+            options.settingsManager,
+            title,
+            selectOptions.map((option) => ({ label: option, value: option })),
+          ),
+        ),
     },
   };
 }
+
+const projectTrust = {
+  createProjectTrustContext,
+};
+
+export default projectTrust;

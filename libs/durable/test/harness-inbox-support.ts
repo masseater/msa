@@ -1,85 +1,94 @@
-import {
-  type AssistantMessage,
-  type FauxResponseStep,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  Type,
-} from "@msa/ai";
-import {
-  type Conversation,
-  defineTool,
-  type EntryRecord,
-  type Harness,
-  InboxDoc,
-  LiveDoc,
-  type Submission,
-  type SubmissionRecord,
-  type ToolExecutionResult,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { type ChatSetup, textOf, waitFor } from "./chat-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+import type chatSupportTypes from "./chat-support.types.ts";
+import testSupport from "./support.ts";
 
-export const directories = new Set<string>();
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
-export function answer(text: string): AssistantMessage {
+const { InboxDoc, LiveDoc, defineTool } = durable;
+
+const { textOf, waitFor } = testSupport;
+const { awaited } = testSupport;
+const { addTool } = testSupport;
+const { context } = testSupport;
+const { aborted, deferred } = testSupport;
+
+const directories = new Set<string>();
+
+function answer(text: string): aiTypes.AssistantMessage {
   return fauxAssistantMessage([fauxText(text)]);
 }
 
-// A faux response held until `release` or cancellation; `reached` resolves when the request is sent.
-export function gated(message: AssistantMessage): {
-  step: FauxResponseStep;
+function gated(message: aiTypes.AssistantMessage): {
+  step: aiTypes.FauxResponseStep;
   reached: Promise<void>;
   release: () => void;
 } {
   const reached = deferred();
   const gate = deferred();
-  const step: FauxResponseStep = async (_request, options) => {
-    reached.resolve();
-    await Promise.race([gate.promise, aborted(options!.signal!)]);
-    return message;
-  };
-  return { step, reached: reached.promise, release: () => gate.resolve() };
+  const step: aiTypes.FauxResponseStep = (_request, options) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        reached.resolve();
+        yield* awaited(Promise.race([gate.promise, aborted(options!.signal!)]));
+        return message;
+      }),
+    );
+  return { reached: reached.promise, release: () => gate.resolve(), step };
 }
 
-// Register a `hold` tool whose calls wait for `gate` and then return `result`.
-export function holdTool(
-  setup: ChatSetup,
-  gate: Deferred,
-  result: ToolExecutionResult = { output: [] },
+function holdToolImpl(
+  setup: chatSupportTypes.ChatSetup,
+  gate: PromiseWithResolvers<void>,
+  result: durableTypes.ToolExecutionResult = { output: [] },
 ): void {
   addTool(
     setup.registry,
     defineTool({
-      name: "hold",
       description: "Waits for the test",
+      execute: () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(gate.promise);
+            return result;
+          }),
+        ),
+      name: "hold",
       parameters: Type.Object({}),
-      execute: async () => {
-        await gate.promise;
-        return result;
-      },
     }),
   );
 }
 
-// A write that affects model context, so it queues while busy; a data-only write would be appended at once.
-export function queuedNote(text: string) {
-  return { kind: "note", model: [{ role: "user", content: text, timestamp: 0 }] } as const;
+const holdTool: {
+  (
+    gate: PromiseWithResolvers<void>,
+    result?: durableTypes.ToolExecutionResult,
+  ): (setup: chatSupportTypes.ChatSetup) => ReturnType<typeof holdToolImpl>;
+  (
+    setup: chatSupportTypes.ChatSetup,
+    gate: PromiseWithResolvers<void>,
+    result?: durableTypes.ToolExecutionResult,
+  ): ReturnType<typeof holdToolImpl>;
+} = dual((args) => "registry" in args[0], holdToolImpl);
+
+function queuedNote(text: string) {
+  return { kind: "note", model: [{ content: text, role: "user", timestamp: 0 }] } as const;
 }
 
-export const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
+const HOLD = fauxAssistantMessage([fauxToolCall("hold", {}, { id: "c1" })], {
   stopReason: "toolUse",
 });
 
-export function status(submission: Submission): Promise<SubmissionRecord> {
+function status(submission: durableTypes.Submission): Promise<durableTypes.SubmissionRecord> {
   return Promise.resolve(submission.status(context));
 }
 
-// Kind and text of each entry, skipping system entries.
-export function transcript(entries: readonly EntryRecord[]): string[] {
+function transcript(entries: readonly durableTypes.EntryRecord[]): string[] {
   return entries
     .filter((entry) => entry.kind !== "msa.system")
     .map((entry) => {
@@ -89,16 +98,41 @@ export function transcript(entries: readonly EntryRecord[]): string[] {
     });
 }
 
-export async function inbox(harness: Harness, root: Conversation) {
-  return (await harness.snapshot(InboxDoc, root.id, context))!.items.map((item) => [
+const inbox = Effect.fn("inbox")(function* (
+  harness: durableTypes.Harness,
+  root: durableTypes.Conversation,
+) {
+  return (yield* awaited(harness.snapshot(InboxDoc, root.id, context)))!.items.map((item) => [
     item.id,
     item.mode,
   ]);
-}
+});
 
-export async function toolRunning(harness: Harness, root: Conversation): Promise<void> {
-  await waitFor(
-    async () =>
-      (await harness.snapshot(LiveDoc, root.id, context))?.tools?.[0]?.status === "running",
+const toolRunning = Effect.fn("toolRunning")(function* (
+  harness: durableTypes.Harness,
+  root: durableTypes.Conversation,
+) {
+  yield* waitFor(
+    Effect.gen(function* () {
+      return (
+        (yield* awaited(harness.snapshot(LiveDoc, root.id, context)))?.tools?.[0]?.status ===
+        "running"
+      );
+    }),
   );
-}
+});
+
+const harnessInboxSupport = {
+  HOLD,
+  answer,
+  directories,
+  gated,
+  holdTool,
+  inbox,
+  queuedNote,
+  status,
+  toolRunning,
+  transcript,
+};
+
+export default harnessInboxSupport;

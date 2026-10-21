@@ -1,112 +1,39 @@
-import {
-  LAYOUT_NODE,
-  type LayoutViewport,
-  type StackLayoutEntry,
-  type StackLayoutNode,
-} from "../layout-node.ts";
-import { type Component, Container } from "../tui.ts";
+import { dual } from "effect/Function";
 
-export interface StackEntryOptions {
-  basis?: number | "auto";
-  grow?: number;
-  shrink?: number;
-  minSize?: number;
-  maxSize?: number;
-  visible?: (viewport: LayoutViewport) => boolean;
-}
+import type layoutNodeTypes from "../layout-node.types.ts";
+import Stack from "./stack-class.ts";
 
-export interface StackEntry extends StackEntryOptions {
-  component: Component;
-}
+const visibleStackEntries: {
+  (
+    entries: readonly layoutNodeTypes.StackLayoutEntry[],
+    viewport: layoutNodeTypes.LayoutViewport,
+  ): layoutNodeTypes.StackLayoutEntry[];
+  (
+    viewport: layoutNodeTypes.LayoutViewport,
+  ): (entries: readonly layoutNodeTypes.StackLayoutEntry[]) => layoutNodeTypes.StackLayoutEntry[];
+} = dual(
+  2,
+  (
+    entries: readonly layoutNodeTypes.StackLayoutEntry[],
+    viewport: layoutNodeTypes.LayoutViewport,
+  ): layoutNodeTypes.StackLayoutEntry[] =>
+    entries.filter((entry) => entry.visible?.(viewport) ?? true),
+);
 
-export type StackChild = Component | StackEntry;
-
-export interface StackOptions {
-  gap?: number;
-  align?: "stretch" | "start" | "center" | "end";
-}
-
-function isStackEntry(child: StackChild): child is StackEntry {
-  return !("render" in child);
-}
-
-function normalizeSize(value: number | undefined, fallback: number): number {
-  return value === undefined || !Number.isFinite(value) ? fallback : Math.max(0, Math.floor(value));
-}
-
-export abstract class Stack extends Container {
-  protected readonly entries: StackLayoutEntry[] = [];
-  protected readonly gap: number;
-  protected readonly align: "stretch" | "start" | "center" | "end";
-  protected abstract readonly layoutType: "vstack" | "hstack";
-
-  constructor(children: StackChild[] = [], options: StackOptions = {}) {
-    super();
-    this.gap = normalizeSize(options.gap, 0);
-    this.align = options.align ?? "stretch";
-    for (const child of children) {
-      if (isStackEntry(child)) this.addChild(child.component, child);
-      else this.addChild(child);
-    }
-  }
-
-  override addChild(component: Component, options: StackEntryOptions = {}): void {
-    super.addChild(component);
-    this.entries.push({
-      component,
-      ...(options.basis === undefined ? {} : { basis: options.basis }),
-      ...(options.grow === undefined ? {} : { grow: normalizeSize(options.grow, 0) }),
-      ...(options.shrink === undefined ? {} : { shrink: normalizeSize(options.shrink, 1) }),
-      ...(options.minSize === undefined ? {} : { minSize: normalizeSize(options.minSize, 0) }),
-      ...(options.maxSize === undefined
-        ? {}
-        : { maxSize: normalizeSize(options.maxSize, Number.MAX_SAFE_INTEGER) }),
-      ...(options.visible === undefined ? {} : { visible: options.visible }),
-    });
-  }
-
-  override removeChild(component: Component): void {
-    super.removeChild(component);
-    const index = this.entries.findIndex((entry) => entry.component === component);
-    if (index !== -1) this.entries.splice(index, 1);
-  }
-
-  override clear(): void {
-    super.clear();
-    this.entries.length = 0;
-  }
-
-  [LAYOUT_NODE](): StackLayoutNode {
-    return {
-      type: this.layoutType,
-      entries: this.entries,
-      gap: this.gap,
-      align: this.align,
-    };
-  }
-}
-
-export function visibleStackEntries(
-  entries: readonly StackLayoutEntry[],
-  viewport: LayoutViewport,
-): StackLayoutEntry[] {
-  return entries.filter((entry) => entry.visible?.(viewport) ?? true);
-}
-
-function clampSize(size: number, entry: StackLayoutEntry): number {
+function clampSize(size: number, entry: layoutNodeTypes.StackLayoutEntry): number {
   const min = Math.max(0, Math.floor(entry.minSize ?? 0));
   const max = Math.max(min, Math.floor(entry.maxSize ?? Number.MAX_SAFE_INTEGER));
   return Math.max(min, Math.min(max, Math.max(0, Math.floor(size))));
 }
 
-export function proportionalShares(amount: number, weights: readonly number[]): number[] {
+function proportionalShares(amount: number, weights: readonly number[]): number[] {
   const totalWeight = weights.reduce((sum, weight) => sum + weight, 0);
   if (totalWeight <= 0) return weights.map(() => 0);
   const exact = weights.map((weight) => (amount * weight) / totalWeight);
   const shares = exact.map((value) => Math.floor(value));
   let leftover = amount - shares.reduce((sum, share) => sum + share, 0);
   const byFraction = exact
-    .map((value, position) => ({ position, fraction: value - shares[position]! }))
+    .map((value, position) => ({ fraction: value - shares[position]!, position }))
     .toSorted((a, b) => b.fraction - a.fraction || a.position - b.position);
   for (const { position } of byFraction) {
     if (leftover <= 0) break;
@@ -118,7 +45,7 @@ export function proportionalShares(amount: number, weights: readonly number[]): 
 
 function distribute(
   sizes: number[],
-  entries: readonly StackLayoutEntry[],
+  entries: readonly layoutNodeTypes.StackLayoutEntry[],
   amount: number,
   mode: "grow" | "shrink",
 ): void {
@@ -156,28 +83,52 @@ function distribute(
   }
 }
 
-export function allocateStackSizes(
-  entries: readonly StackLayoutEntry[],
-  intrinsicSizes: readonly number[],
-  availableSize: number | undefined,
-  gap: number,
-): number[] {
-  const sizes = entries.map((entry, index) =>
-    clampSize(
-      entry.basis === undefined || entry.basis === "auto"
-        ? (intrinsicSizes[index] ?? 0)
-        : entry.basis,
-      entry,
-    ),
-  );
-  if (availableSize === undefined) return sizes;
+const allocateStackSizes: {
+  (
+    entries: readonly layoutNodeTypes.StackLayoutEntry[],
+    intrinsicSizes: readonly number[],
+    availableSize: number | undefined,
+    gap: number,
+  ): number[];
+  (
+    intrinsicSizes: readonly number[],
+    availableSize: number | undefined,
+    gap: number,
+  ): (entries: readonly layoutNodeTypes.StackLayoutEntry[]) => number[];
+} = dual(
+  4,
+  (
+    entries: readonly layoutNodeTypes.StackLayoutEntry[],
+    intrinsicSizes: readonly number[],
+    availableSize: number | undefined,
+    gap: number,
+  ): number[] => {
+    const sizes = entries.map((entry, index) =>
+      clampSize(
+        entry.basis === undefined || entry.basis === "auto"
+          ? (intrinsicSizes[index] ?? 0)
+          : entry.basis,
+        entry,
+      ),
+    );
+    if (availableSize === undefined) return sizes;
 
-  const contentSize = Math.max(
-    0,
-    Math.floor(availableSize) - Math.max(0, entries.length - 1) * gap,
-  );
-  const total = sizes.reduce((sum, size) => sum + size, 0);
-  if (total < contentSize) distribute(sizes, entries, contentSize - total, "grow");
-  else if (total > contentSize) distribute(sizes, entries, total - contentSize, "shrink");
-  return sizes;
-}
+    const contentSize = Math.max(
+      0,
+      Math.floor(availableSize) - Math.max(0, entries.length - 1) * gap,
+    );
+    const total = sizes.reduce((sum, size) => sum + size, 0);
+    if (total < contentSize) distribute(sizes, entries, contentSize - total, "grow");
+    else if (total > contentSize) distribute(sizes, entries, total - contentSize, "shrink");
+    return sizes;
+  },
+);
+
+const stack = {
+  Stack,
+  allocateStackSizes,
+  proportionalShares,
+  visibleStackEntries,
+};
+
+export default stack;

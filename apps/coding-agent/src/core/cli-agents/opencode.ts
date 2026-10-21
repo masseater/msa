@@ -1,27 +1,30 @@
-/**
- * OpenCode Zen free models, each request run by `opencode run --standalone`.
- *
- * Environment overrides:
- *   OPENCODE_BIN             opencode binary (default: ~/.opencode/bin/opencode)
- *   OPENCODE_FREE_DATA_HOME  data dir for these runs (default: ~/.local/share/msa-opencode-free)
- */
-import { homedir } from "node:os";
-import { join } from "node:path";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
 
-import type { Provider } from "@msa/ai";
-import { getBuiltinModels } from "@msa/ai/providers/all";
+import platformModule from "../platform/index.ts";
+import nodeOs from "../platform/node/os.ts";
+import provider from "./provider.ts";
+import run from "./run.ts";
+import type runTypes from "./run.types.ts";
+import transcript from "./transcript.ts";
 
-import { cliAgentProvider } from "./provider.ts";
-import { streamViaCli, type CliBackend } from "./run.ts";
-import { flattenTranscript } from "./transcript.ts";
+const { homedir } = nodeOs;
+
+const { join } = platformModule;
+
+const { envSnapshot, readEnv } = platformModule;
+const { flattenTranscript } = transcript;
+const { streamViaCli } = run;
+const { cliAgentProvider } = provider;
+
+const { getBuiltinModels } = all;
 
 const PROVIDER_ID = "opencode-free";
 
 function openCodeExecutable(): string {
-  return process.env["OPENCODE_BIN"]?.trim() || join(homedir(), ".opencode", "bin", "opencode");
+  return readEnv("OPENCODE_BIN")?.trim() || join(homedir(), ".opencode", "bin", "opencode");
 }
 
-/** OpenCode Zen's zero-cost chat models from the bundled models.dev catalog. */
 function freeModels() {
   return getBuiltinModels("opencode").filter(
     (model) =>
@@ -52,7 +55,6 @@ function buildPrompt(messages: Parameters<typeof flattenTranscript>[0], cwd: str
   ].join("\n");
 }
 
-/** The parts of `opencode run --format json` lines this backend reads. */
 interface OpenCodeEvent {
   type?: string;
   error?: { message?: string };
@@ -69,11 +71,9 @@ interface OpenCodeEvent {
   };
 }
 
-const backend: CliBackend<OpenCodeEvent> = {
-  providerId: PROVIDER_ID,
+const backend: runTypes.CliBackend<OpenCodeEvent> = {
   command(model, context, cwd) {
     return {
-      bin: openCodeExecutable(),
       args: [
         "run",
         "--standalone",
@@ -83,13 +83,14 @@ const backend: CliBackend<OpenCodeEvent> = {
         "--model",
         `opencode/${model.id}`,
       ],
-      stdin: buildPrompt(context.messages, cwd),
+      bin: openCodeExecutable(),
       env: {
-        ...process.env,
+        ...envSnapshot(),
         XDG_DATA_HOME:
-          process.env["OPENCODE_FREE_DATA_HOME"]?.trim() ||
+          readEnv("OPENCODE_FREE_DATA_HOME")?.trim() ||
           join(homedir(), ".local", "share", "msa-opencode-free"),
       },
+      stdin: buildPrompt(context.messages, cwd),
     };
   },
   handleEvent(event, sink) {
@@ -98,33 +99,40 @@ const backend: CliBackend<OpenCodeEvent> = {
       sink.fail(event.error?.message ?? "");
     } else if (event.type === "text" && part.type === "text") {
       sink.setText(part.id ?? "text", part.text ?? "");
-    } else if (event.type === "step_finish" && part.tokens) {
+    } else if (event.type === "step_finish" && part.tokens !== undefined) {
       const tokens = part.tokens;
       sink.addUsage({
-        input: tokens.input ?? 0,
-        output: tokens.output ?? 0,
         cacheRead: tokens.cache?.read ?? 0,
         cacheWrite: tokens.cache?.write ?? 0,
+        input: tokens.input ?? 0,
+        output: tokens.output ?? 0,
         ...(tokens.reasoning === undefined ? {} : { reasoning: tokens.reasoning }),
       });
     }
   },
-  shouldRetry: (detail) => /readiness|server-connection|database is locked/i.test(detail),
+  providerId: PROVIDER_ID,
+  shouldRetry: (detail) => /readiness|server-connection|database is locked/iu.test(detail),
 };
 
-export function openCodeProvider(): Provider {
+function openCodeProvider(): aiTypes.Provider {
   return cliAgentProvider({
+    executable: openCodeExecutable,
     id: PROVIDER_ID,
-    name: "OpenCode Free",
     models: freeModels().map((free) => ({
+      contextWindow: free.contextWindow,
       id: free.id,
+      input: ["text"],
+      maxTokens: free.maxTokens,
       name: free.name,
       reasoning: false,
-      input: ["text"],
-      contextWindow: free.contextWindow,
-      maxTokens: free.maxTokens,
     })),
-    executable: openCodeExecutable,
+    name: "OpenCode Free",
     streamSimple: (model, context, options) => streamViaCli(backend, model, context, options),
   });
 }
+
+const opencode = {
+  openCodeProvider,
+};
+
+export default opencode;

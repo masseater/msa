@@ -1,93 +1,80 @@
-/**
- * External services msa signs in to from `/login`, such as treg for web search. A service owns its
- * own sign-in (usually its CLI's login command) and contributes tools once it is signed in.
- */
+import * as Effect from "effect/Effect";
 
-import { claudeCodeService } from "./cli-agents/claude-service.ts";
-import type { ToolDefinition } from "./extensions/types.ts";
-import { createWebFetchToolDefinition } from "./tools/web-fetch.ts";
-import { createWebSearchToolDefinition } from "./tools/web-search.ts";
-import { findTreg, findTregCli, loginTreg, logoutTreg, TREG_INSTALL_COMMAND } from "./treg.ts";
+import awaitingModule from "./awaiting.ts";
+import claudeService from "./cli-agents/claude-service.ts";
+import type extensionsTypesTypes from "./extensions/types.types.ts";
+import type externalServicesTypes from "./external-services.types.ts";
+import webFetch from "./tools/web-fetch.ts";
+import webSearch from "./tools/web-search.ts";
+import tregModule from "./treg.ts";
 
-/** The page the user approves the sign-in on. */
-export interface ServiceSignInPage {
-  url: string;
-  /** A code the page shows, for the user to check it matches. */
-  code?: string;
-}
+const { awaited, awaiting } = awaitingModule;
+const { TREG_INSTALL_COMMAND, findTreg, findTregCli, loginTreg, logoutTreg } = tregModule;
+const { createWebSearchToolDefinition } = webSearch;
+const { createWebFetchToolDefinition } = webFetch;
+const { claudeCodeService } = claudeService;
 
-export type ServiceStatus =
-  /** `install` is a shell command that installs what the service needs. */
-  { installed: false; install: string } | { installed: true; signedIn: boolean };
-
-/** What a service's sign-out can ask the user. */
-export interface ServiceLogoutInteraction {
-  /** Ask the user to pick one of `options`; rejects when they cancel. */
-  select(title: string, options: string[]): Promise<string>;
-}
-
-/** What a service's sign-in can show and ask the user while it runs. */
-export interface ServiceLoginInteraction extends ServiceLogoutInteraction {
-  /** Show the page the user approves the sign-in on. */
-  showPage(page: ServiceSignInPage): void;
-  /** Ask the user for text, such as a code the sign-in page shows; rejects when they cancel. */
-  prompt(message: string, placeholder?: string): Promise<string>;
-}
-
-/**
- * A SaaS msa depends on, signed in to from `/login`. msa registers its own in
- * {@link EXTERNAL_SERVICES}; extensions add theirs with `msa.registerExternalService()`.
- */
-export interface ExternalService {
-  id: string;
-  name: string;
-  /** What msa uses the service for, shown next to it in `/login`. */
-  purpose: string;
-  status(): Promise<ServiceStatus>;
-  login(interaction: ServiceLoginInteraction, signal: AbortSignal): Promise<void>;
-  logout(interaction: ServiceLogoutInteraction): Promise<void>;
-  /** The tools the service provides, empty until it is signed in. */
-  tools?(): ToolDefinition[];
-}
-
-const treg: ExternalService = {
+const treg: externalServicesTypes.ExternalService = {
   id: "treg",
+  login(interaction, signal) {
+    return Effect.runPromise(
+      awaiting(function* () {
+        const cli = findTregCli();
+        if (cli === undefined)
+          throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
+        yield* awaited(loginTreg(cli.command, (page) => interaction.showPage(page), signal));
+      }),
+    );
+  },
+  logout() {
+    return Effect.runPromise(
+      awaiting(function* () {
+        const cli = findTregCli();
+        if (cli !== undefined) yield* awaited(logoutTreg(cli.command));
+      }),
+    );
+  },
   name: "treg",
   purpose: "web search and page reading",
-  async status() {
-    const cli = findTregCli();
-    return cli
-      ? { installed: true, signedIn: cli.signedIn }
-      : { installed: false, install: TREG_INSTALL_COMMAND };
-  },
-  async login(interaction, signal) {
-    const cli = findTregCli();
-    if (!cli) throw new Error(`treg is not installed. Install it with: ${TREG_INSTALL_COMMAND}`);
-    await loginTreg(cli.command, (page) => interaction.showPage(page), signal);
-  },
-  async logout() {
-    const cli = findTregCli();
-    if (cli) await logoutTreg(cli.command);
+  status() {
+    return Effect.runPromise(
+      Effect.sync(() => {
+        const cli = findTregCli();
+        return cli === undefined
+          ? { install: TREG_INSTALL_COMMAND, installed: false }
+          : { installed: true, signedIn: cli.signedIn };
+      }),
+    );
   },
   tools() {
     const options = findTreg();
-    return options
-      ? [
-          createWebSearchToolDefinition(options) as ToolDefinition,
-          createWebFetchToolDefinition(options) as ToolDefinition,
-        ]
-      : [];
+    return options === undefined
+      ? []
+      : [
+          createWebSearchToolDefinition(options) as extensionsTypesTypes.ToolDefinition,
+          createWebFetchToolDefinition(options) as extensionsTypesTypes.ToolDefinition,
+        ];
   },
 };
 
-export const EXTERNAL_SERVICES: readonly ExternalService[] = [treg, claudeCodeService];
+const EXTERNAL_SERVICES: readonly externalServicesTypes.ExternalService[] = [
+  treg,
+  claudeCodeService,
+];
 
-export function findExternalService(
-  services: readonly ExternalService[],
+function findExternalService(
+  services: readonly externalServicesTypes.ExternalService[],
   ref: string,
-): ExternalService | undefined {
+): externalServicesTypes.ExternalService | undefined {
   const normalized = ref.trim().toLowerCase();
   return services.find(
     (service) => service.id === normalized || service.name.toLowerCase() === normalized,
   );
 }
+
+const externalServices = {
+  EXTERNAL_SERVICES,
+  findExternalService,
+};
+
+export default externalServices;

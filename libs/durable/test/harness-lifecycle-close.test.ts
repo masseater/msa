@@ -1,36 +1,85 @@
-import { defineDoc, Harness } from "@msa/durable";
+import durable from "@msa/durable";
+import type harnessTypes from "@msa/durable/harness.types";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import type { SessionImpl } from "../src/session/session.ts";
-import { oneStep, withSignal } from "./harness-lifecycle-support.ts";
-import { ControlledStorage, context, flush } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import type sessionTypes from "../src/session/session.types.ts";
+import ControlledStorage from "./controlled-storage.ts";
+import effectSupport from "./effect-support.ts";
+import harnessLifecycleSupport from "./harness-lifecycle-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-// Drop the loaded trackers, so the next acquisition reads Storage on the line.
-function unloadDocuments(harness: Harness): Promise<void> {
-  return (harness as unknown as SessionImpl).unloadDocuments();
+const { defineDoc } = durable;
+
+const { abortController, awaited } = effectSupport;
+const { oneStep, withSignal } = harnessLifecycleSupport;
+const { context, flush } = sessionSupport;
+const { openTasks } = taskSupport;
+
+function unloadDocuments(harness: harnessTypes.Harness): Promise<void> {
+  return (harness as unknown as sessionTypes.SessionImpl).unloadDocuments();
 }
 
-async function observedNotes() {
+const observedNotesStep1 = Effect.fn("observedNotesStep1")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.close-frames",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.close-frames",
+    scope: "session",
+    version: 1,
   });
   const storage = new ControlledStorage();
-  const { harness } = await openTasks(storage, []);
-  const root = await harness.root(context);
-  await harness.commit(async (tx) => {
-    (await tx.doc(Notes)).text = "before";
-  }, context);
-  const docState = (await harness.documentState(Notes, context))!;
-  const docWatch = (await harness.watchDoc(Notes, context))!;
-  const viewState = await root.viewState(context);
-  const viewWatch = await root.watch(context);
-  const graphState = await harness.taskGraph(context);
-  const graphWatch = await harness.watchTaskGraph(context);
+  const { harness } = yield* openTasks(storage, []);
+  const root = yield* awaited(harness.root(context));
+  yield* awaited(
+    harness.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(Notes))).text = "before";
+          }),
+        ),
+      context,
+    ),
+  );
+  const docState = (yield* awaited(harness.documentState(Notes, context)))!;
+  const docWatch = (yield* awaited(harness.watchDoc(Notes, context)))!;
+  const viewState = yield* awaited(root.viewState(context));
+  const viewWatch = yield* awaited(root.watch(context));
+  const graphState = yield* awaited(harness.taskGraph(context));
+  const graphWatch = yield* awaited(harness.watchTaskGraph(context));
   const frames: string[] = [];
+  return {
+    Notes,
+    docState,
+    docWatch,
+    frames,
+    graphState,
+    graphWatch,
+    harness,
+    root,
+    storage,
+    viewState,
+    viewWatch,
+  };
+});
+
+const observedNotes = Effect.fn("observedNotes")(function* () {
+  const {
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+  } = yield* observedNotesStep1();
   graphState.subscribe((_value, _context, delivery) => {
     if (delivery.kind === "update") frames.push("graphState");
   });
@@ -47,35 +96,44 @@ async function observedNotes() {
   const viewValue = viewState.value;
   return {
     Notes,
-    storage,
-    harness,
-    root,
     docState,
+    docValue,
     docWatch,
-    viewState,
-    viewWatch,
+    frames,
     graphState,
     graphWatch,
-    frames,
-    docValue,
+    harness,
+    root,
+    storage,
+    viewState,
     viewValue,
+    viewWatch,
   };
-}
+});
 
-async function countedSubscriptions() {
+const countedSubscriptions = Effect.fn("countedSubscriptions")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const Notes = defineDoc<{ text: string }>({
-    kind: "test.cancelled-watch",
-    version: 1,
-    scope: "session",
     initial: () => ({ text: "" }),
+    kind: "test.cancelled-watch",
+    scope: "session",
+    version: 1,
   });
   const storage = new ControlledStorage();
-  const { harness } = await openTasks(storage, []);
-  const root = await harness.root(context);
-  await harness.commit(async (tx) => {
-    (await tx.doc(Notes)).text = "x";
-  }, context);
-  // Count commit subscriptions of document observers.
+  const { harness } = yield* openTasks(storage, []);
+  const root = yield* awaited(harness.root(context));
+  yield* awaited(
+    harness.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(Notes))).text = "x";
+          }),
+        ),
+      context,
+    ),
+  );
   const counted: { subscriptions: number } = { subscriptions: 0 };
   const subscribe = harness.subscribeCommits.bind(harness);
   harness.subscribeCommits = (listener) => {
@@ -88,85 +146,134 @@ async function countedSubscriptions() {
       unsubscribe();
     };
   };
-  return { Notes, storage, harness, root, counted };
-}
+  return { Notes, counted, harness, root, storage };
+});
 
-describe("Harness close", () => {
-  it("publishes no frame to states and watches from a commit that settles during close", async () => {
-    const {
-      Notes,
-      storage,
-      harness,
-      root,
-      docState,
-      docWatch,
-      viewState,
-      viewWatch,
-      graphState,
-      graphWatch,
-      frames,
-      docValue,
-      viewValue,
-    } = await observedNotes();
+const publishesNoFrameStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const held = storage.holdCommits();
-    const committing = harness.commit(async (tx) => {
-      (await tx.doc(Notes)).text = "during close";
-      await tx.appendEntry(root.id, { kind: "note" });
-      await tx.createTask(oneStep("test.close-graph"), null, {
-        ownership: { kind: "conversation" },
-        conversationId: root.id,
-      });
-    }, context);
-    await held.entered;
-    const closing = harness.close(context);
-    held.release();
-    await committing;
-    await closing;
-    await flush();
-    expect(frames).toEqual([]);
-    expect(docState.value).toBe(docValue);
-    expect(viewState.value).toBe(viewValue);
-    expect(graphState.value).toEqual({ tasks: {} });
-    expect(await graphWatch.closed).toEqual({ reason: "session_closed" });
-    expect(await docWatch.closed).toEqual({ reason: "session_closed" });
-    expect(await viewWatch.closed).toEqual({ reason: "session_closed" });
-    // The commit itself settled.
-    expect(storage.commits.at(-1)).toContainEqual(expect.objectContaining({ type: "entry" }));
-  });
+  const {
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+    docValue,
+    viewValue,
+  } = yield* observedNotes();
+
+  const held = storage.holdCommits();
+  return {
+    Notes,
+    docState,
+    docValue,
+    docWatch,
+    frames,
+    graphState,
+    graphWatch,
+    harness,
+    held,
+    root,
+    runPromise,
+    storage,
+    viewState,
+    viewValue,
+    viewWatch,
+  };
+});
+
+const publishesNoFrame = Effect.gen(function* () {
+  const {
+    runPromise,
+    Notes,
+    storage,
+    harness,
+    root,
+    docState,
+    docWatch,
+    viewState,
+    viewWatch,
+    graphState,
+    graphWatch,
+    frames,
+    docValue,
+    viewValue,
+    held,
+  } = yield* publishesNoFrameStep1;
+  const committing = harness.commit(
+    (tx) =>
+      runPromise(
+        Effect.gen(function* () {
+          (yield* awaited(tx.doc(Notes))).text = "during close";
+          yield* awaited(tx.appendEntry(root.id, { kind: "note" }));
+          yield* awaited(
+            tx.createTask(oneStep("test.close-graph"), null, {
+              conversationId: root.id,
+              ownership: { kind: "conversation" },
+            }),
+          );
+        }),
+      ),
+    context,
+  );
+  yield* awaited(held.entered);
+  const closing = harness.close(context);
+  held.release();
+  yield* awaited(committing);
+  yield* awaited(closing);
+  yield* flush;
+  expect(frames).toEqual([]);
+  expect(docState.value).toBe(docValue);
+  expect(viewState.value).toBe(viewValue);
+  expect(graphState.value).toEqual({ tasks: {} });
+  expect(yield* awaited(graphWatch.closed)).toEqual({ reason: "session_closed" });
+  expect(yield* awaited(docWatch.closed)).toEqual({ reason: "session_closed" });
+  expect(yield* awaited(viewWatch.closed)).toEqual({ reason: "session_closed" });
+  expect(storage.commits.at(-1)).toContainEqual(expect.objectContaining({ type: "entry" }));
 });
 
 describe("Harness close", () => {
-  it("leaves no subscription behind a watch acquisition cancelled on the line", async () => {
-    const { Notes, storage, harness, root, counted } = await countedSubscriptions();
+  it("publishes no frame to states and watches from a commit that settles during close", () =>
+    Effect.runPromise(publishesNoFrame));
+});
 
-    // Cancel a document watch while its acquisition loads the document on the line.
-    await unloadDocuments(harness);
-    let find = storage.holdFindDocument();
-    let controller = new AbortController();
-    const docWatch = harness.watchDoc(Notes, withSignal(controller.signal));
-    await find.entered;
-    controller.abort(new Error("cancelled"));
-    find.release();
-    await expect(docWatch).rejects.toThrow("cancelled");
-    expect(counted.subscriptions).toBe(0);
+const leavesNoSubscription = Effect.gen(function* () {
+  const { Notes, storage, harness, root, counted } = yield* countedSubscriptions();
 
-    // Cancel a view watch while it builds its mount on the line.
-    await unloadDocuments(harness);
-    find = storage.holdFindDocument();
-    controller = new AbortController();
-    const viewWatch = root.watch(withSignal(controller.signal));
-    await find.entered;
-    controller.abort(new Error("cancelled"));
-    find.release();
-    await expect(viewWatch).rejects.toThrow("cancelled");
-    // No observer kept the mount: the next observer builds a new one, and the one after that another.
-    const first = await root.viewState(context);
-    const firstValue = first.value;
-    first.dispose();
-    const second = await root.viewState(context);
-    expect(second.value).not.toBe(firstValue);
-    second.dispose();
-    await harness.close(context);
-  });
+  yield* awaited(unloadDocuments(harness));
+  let find = storage.holdFindDocument();
+  let controller = abortController();
+  const docWatch = harness.watchDoc(Notes, withSignal(controller.signal));
+  yield* awaited(find.entered);
+  controller.abort(new Error("cancelled"));
+  find.release();
+  yield* awaited(expect(docWatch).rejects.toThrow("cancelled"));
+  expect(counted.subscriptions).toBe(0);
+
+  yield* awaited(unloadDocuments(harness));
+  find = storage.holdFindDocument();
+  controller = abortController();
+  const viewWatch = root.watch(withSignal(controller.signal));
+  yield* awaited(find.entered);
+  controller.abort(new Error("cancelled"));
+  find.release();
+  yield* awaited(expect(viewWatch).rejects.toThrow("cancelled"));
+  const first = yield* awaited(root.viewState(context));
+  const firstValue = first.value;
+  first.dispose();
+  const second = yield* awaited(root.viewState(context));
+  expect(second.value).not.toBe(firstValue);
+  second.dispose();
+  yield* awaited(harness.close(context));
+});
+
+describe("Harness close", () => {
+  it("leaves no subscription behind a watch acquisition cancelled on the line", () =>
+    Effect.runPromise(leavesNoSubscription));
 });

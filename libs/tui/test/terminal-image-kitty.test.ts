@@ -1,19 +1,22 @@
 import assert from "node:assert";
 import { homedir } from "node:os";
-import { join } from "node:path";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { Image } from "../src/components/image.ts";
-import {
-  cropKittyImageLine,
-  getKittyImageMetadata,
-  getKittyImagePlacement,
-  imageFallback,
-  renderImage,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-image.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import imageModule from "../src/components/image.ts";
+import platform from "../src/platform.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import terminalImage from "../src/terminal-image.ts";
+
+const { pathOperations } = platform;
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { Image } = imageModule;
+const { cropKittyImageLine, getKittyImageMetadata, getKittyImagePlacement } = terminalImageKitty;
+const { imageFallback, renderImage } = terminalImage;
+const { stripHyperlinkSequences } = ansiSequences;
+
+const { join } = pathOperations;
 
 describe("image cell sizing", () => {
   describe("Kitty", () => {
@@ -24,19 +27,19 @@ describe("image cell sizing", () => {
 function kittyCases1(): void {
   afterEach(() => {
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   beforeEach(() => {
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
   });
   it("keeps Kitty placement, reserved lines, and cropping metadata consistent across width changes", () => {
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
     const image = new Image(
       "AAAA",
       "image/png",
       { fallbackColor: (value) => value },
-      { maxWidthCells: 60, imageId: 8938 },
-      { widthPx: 615, heightPx: 86 },
+      { imageId: 8938, maxWidthCells: 60 },
+      { heightPx: 86, widthPx: 615 },
     );
     const lines = image.render(62);
     assert.strictEqual(lines.length, 4);
@@ -45,11 +48,11 @@ function kittyCases1(): void {
     assert.deepStrictEqual(lines.slice(1), ["", "", ""]);
     assert.ok(line.includes(",c=60,r=4,i=8938;"));
     assert.deepStrictEqual(getKittyImageMetadata(line), {
-      imageId: 8938,
       columns: 60,
+      heightPx: 86,
+      imageId: 8938,
       rows: 4,
       widthPx: 615,
-      heightPx: 86,
     });
     const cropped = cropKittyImageLine(line, 1, 2);
     assert.strictEqual(
@@ -69,15 +72,15 @@ function kittyCases1(): void {
 describe("image cell sizing", () => {
   afterEach(() => {
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   describe("Kitty", () => {
     beforeEach(() => {
-      setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
     });
     it("keeps the ceiling placement when rounding down would increase distortion", () => {
-      setCellDimensions({ widthPx: 15, heightPx: 28 });
-      const result = renderImage("AAAA", { widthPx: 615, heightPx: 86 }, { maxWidthCells: 60 });
+      setCellDimensions({ heightPx: 28, widthPx: 15 });
+      const result = renderImage("AAAA", { heightPx: 86, widthPx: 615 }, { maxWidthCells: 60 });
       assert.ok(result);
       assert.strictEqual(result.rows, 5);
       assert.ok(result.sequence.includes(",c=60,r=5;"));
@@ -88,20 +91,20 @@ describe("image cell sizing", () => {
 describe("image cell sizing", () => {
   afterEach(() => {
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   describe("Kitty", () => {
     beforeEach(() => {
-      setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
     });
     it("keeps height-limited Kitty columns, reservations, and crop metadata consistent", () => {
-      setCellDimensions({ widthPx: 14, heightPx: 28 });
+      setCellDimensions({ heightPx: 28, widthPx: 14 });
       const image = new Image(
         "AAAA",
         "image/png",
         { fallbackColor: (value) => value },
-        { maxWidthCells: 30, imageId: 8938 },
-        { widthPx: 400, heightPx: 900 },
+        { imageId: 8938, maxWidthCells: 30 },
+        { heightPx: 900, widthPx: 400 },
       );
       const lines = image.render(32);
       assert.strictEqual(lines.length, 15);
@@ -109,11 +112,11 @@ describe("image cell sizing", () => {
       assert.ok(line !== undefined);
       assert.ok(line.includes(",c=13,r=15,i=8938;"));
       assert.deepStrictEqual(getKittyImageMetadata(line), {
-        imageId: 8938,
         columns: 13,
+        heightPx: 900,
+        imageId: 8938,
         rows: 15,
         widthPx: 400,
-        heightPx: 900,
       });
       assert.strictEqual(
         getKittyImagePlacement(cropKittyImageLine(line, 1, 2))?.sequence,
@@ -129,14 +132,14 @@ describe("image cell sizing", () => {
 describe("image cell sizing", () => {
   afterEach(() => {
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   describe("Kitty", () => {
     beforeEach(() => {
-      setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
     });
     it("chooses thin Kitty widths by proportions while keeping at least one column", () => {
-      setCellDimensions({ widthPx: 1, heightPx: 1 });
+      setCellDimensions({ heightPx: 1, widthPx: 1 });
       for (const [widthPx, columns] of [
         [1, 1],
         [140, 1],
@@ -144,8 +147,8 @@ describe("image cell sizing", () => {
       ] as const) {
         const result = renderImage(
           "AAAA",
-          { widthPx, heightPx: 1000 },
-          { maxWidthCells: 30, maxHeightCells: 10 },
+          { heightPx: 1000, widthPx },
+          { maxHeightCells: 10, maxWidthCells: 30 },
         );
         assert.ok(result);
         assert.strictEqual(result.columns, columns);
@@ -159,18 +162,18 @@ describe("image cell sizing", () => {
 describe("image cell sizing", () => {
   afterEach(() => {
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   describe("iTerm2", () => {
     beforeEach(() => {
-      setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: "iterm2", trueColor: true });
     });
     it("keeps iTerm2's ceiling width when height-limited", () => {
-      setCellDimensions({ widthPx: 14, heightPx: 28 });
+      setCellDimensions({ heightPx: 28, widthPx: 14 });
       const result = renderImage(
         "AAAA",
-        { widthPx: 400, heightPx: 900 },
-        { maxWidthCells: 30, maxHeightCells: 15 },
+        { heightPx: 900, widthPx: 400 },
+        { maxHeightCells: 15, maxWidthCells: 30 },
       );
       assert.ok(result);
       assert.strictEqual(result.columns, 14);
@@ -182,13 +185,13 @@ describe("image cell sizing", () => {
     });
 
     it("keeps iTerm2's ceiling-based reserved lines and cursor offset", () => {
-      setCellDimensions({ widthPx: 9, heightPx: 18 });
+      setCellDimensions({ heightPx: 18, widthPx: 9 });
       const image = new Image(
         "AAAA",
         "image/png",
         { fallbackColor: (value) => value },
         { maxWidthCells: 60 },
-        { widthPx: 615, heightPx: 86 },
+        { heightPx: 86, widthPx: 615 },
       );
       assert.deepStrictEqual(image.render(62), [
         "",
@@ -203,10 +206,10 @@ describe("image cell sizing", () => {
 
 describe("imageFallback", () => {
   it("shortens home-prefixed absolute paths without hyperlinks", () => {
-    setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+    setCapabilities({ hyperlinks: false, images: null, trueColor: false });
     try {
       const abs = join(homedir(), ".msa", "agent", "shot.png");
-      const result = imageFallback("image/png", { widthPx: 1280, heightPx: 720 }, abs);
+      const result = imageFallback("image/png", { heightPx: 720, widthPx: 1280 }, abs);
       assert.strictEqual(result, "[Image: ~/.msa/agent/shot.png [image/png] 1280x720]");
     } finally {
       resetCapabilitiesCache();
@@ -214,17 +217,16 @@ describe("imageFallback", () => {
   });
 
   it("wraps shortened absolute paths in OSC 8 file links when hyperlinks are enabled", () => {
-    setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+    setCapabilities({ hyperlinks: true, images: null, trueColor: false });
     try {
       const abs = join(homedir(), ".msa", "agent", "shot.png");
-      const result = imageFallback("image/png", { widthPx: 10, heightPx: 10 }, abs);
+      const result = imageFallback("image/png", { heightPx: 10, widthPx: 10 }, abs);
       assert.ok(result.includes("\x1b]8;;file://"), "expected OSC 8 file link");
       assert.ok(
         result.includes(abs.replaceAll("\\", "/")) || result.includes(abs),
         "file URL should target absolute path",
       );
-      // Visible text must use ~/... not the expanded home path.
-      const visible = result.replace(/\x1b\]8;;.*?\x1b\\/gu, "");
+      const visible = stripHyperlinkSequences(result);
       assert.strictEqual(visible, "[Image: ~/.msa/agent/shot.png [image/png] 10x10]");
     } finally {
       resetCapabilitiesCache();
@@ -232,9 +234,9 @@ describe("imageFallback", () => {
   });
 
   it("leaves bare basenames unchanged and does not hyperlink them", () => {
-    setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+    setCapabilities({ hyperlinks: true, images: null, trueColor: false });
     try {
-      const result = imageFallback("image/png", { widthPx: 1, heightPx: 1 }, "clankolas.png");
+      const result = imageFallback("image/png", { heightPx: 1, widthPx: 1 }, "clankolas.png");
       assert.strictEqual(result, "[Image: clankolas.png [image/png] 1x1]");
       assert.ok(!result.includes("\x1b]8;"), "basename must not be hyperlinked");
     } finally {
@@ -245,10 +247,10 @@ describe("imageFallback", () => {
 
 describe("imageFallback", () => {
   it("omits filename segment when not provided", () => {
-    setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+    setCapabilities({ hyperlinks: false, images: null, trueColor: false });
     try {
       assert.strictEqual(
-        imageFallback("image/png", { widthPx: 8, heightPx: 6 }),
+        imageFallback("image/png", { heightPx: 6, widthPx: 8 }),
         "[Image: [image/png] 8x6]",
       );
     } finally {

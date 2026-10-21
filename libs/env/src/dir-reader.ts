@@ -1,22 +1,29 @@
-import type { PlatformPath } from "node:path";
-
-import type { Context } from "@msa/chord";
-import { type DirReader, err, FileError, type FileInfo, ok, type Result } from "@msa/durable/env";
+import type chordTypes from "@msa/chord/index.types";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
-import { RemoteError } from "./connection.ts";
-import { abortResult, recoverFileError, toFileError } from "./errors.ts";
-import type { Handle } from "./handle.ts";
-import { type RemoteDirEntry, remotePath, toInfo } from "./remote-path.ts";
+import connectionModule from "./connection.ts";
+import errors from "./errors.ts";
+import type handleTypes from "./handle.types.ts";
+import type platformTypes from "./platform.types.ts";
+import remotePathModule from "./remote-path.ts";
+import type remotePathTypes from "./remote-path.types.ts";
 
-type Batch = { entries: FileInfo[]; done: boolean };
+const { FileError, err, ok } = env;
+
+const { abortResult, recoverFileError, toFileError } = errors;
+const { RemoteError } = connectionModule;
+const { remotePath, toInfo } = remotePathModule;
+
+type Batch = { entries: envTypes.FileInfo[]; done: boolean };
 
 function collectEntries(
-  entries: FileInfo[],
-  batch: readonly RemoteDirEntry[],
+  entries: envTypes.FileInfo[],
+  batch: readonly remotePathTypes.RemoteDirEntry[],
   path: string,
-  paths: PlatformPath,
-): Result<Batch, FileError> | undefined {
+  paths: platformTypes.PathOps,
+): envTypes.Result<Batch, envTypes.FileError> | undefined {
   for (const entry of batch) {
     const entryPath = paths.resolve(path, entry.name);
     if (entry.error !== undefined) {
@@ -29,16 +36,19 @@ function collectEntries(
   return undefined;
 }
 
-export class RemoteDirReader implements DirReader {
-  readonly #handle: Handle;
+export default class RemoteDirReader implements envTypes.DirReader {
+  readonly #handle: handleTypes.Handle;
   #done = false;
   #closed = false;
 
-  constructor(handle: Handle) {
+  constructor(handle: handleTypes.Handle) {
     this.#handle = handle;
   }
 
-  next(maxEntries: number, context: Context): Promise<Result<Batch, FileError>> {
+  next(
+    maxEntries: number,
+    context: chordTypes.Context,
+  ): Promise<envTypes.Result<Batch, envTypes.FileError>> {
     const path = this.#handle.path;
     const aborted = abortResult<Batch>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
@@ -53,10 +63,13 @@ export class RemoteDirReader implements DirReader {
     return Effect.runPromise(recoverFileError(this.#read(maxEntries, context), path));
   }
 
-  #read(maxEntries: number, context: Context): Effect.Effect<Result<Batch, FileError>> {
+  #read(
+    maxEntries: number,
+    context: chordTypes.Context,
+  ): Effect.Effect<envTypes.Result<Batch, envTypes.FileError>> {
     return Effect.gen({ self: this }, function* () {
       const handle = this.#handle;
-      const entries: FileInfo[] = [];
+      const entries: envTypes.FileInfo[] = [];
       const paths = yield* remotePath(handle.connection);
       while (!this.#done && entries.length < maxEntries) {
         const { json } = yield* Effect.promise(() =>
@@ -66,18 +79,18 @@ export class RemoteDirReader implements DirReader {
         if (loopAbort !== undefined) return loopAbort;
         const failed = collectEntries(
           entries,
-          json["entries"] as RemoteDirEntry[],
+          json["entries"] as remotePathTypes.RemoteDirEntry[],
           handle.path,
           paths,
         );
         if (failed !== undefined) return failed;
         this.#done = json["done"] === true;
       }
-      return ok<Batch, FileError>({ entries, done: this.#done });
+      return ok<Batch, envTypes.FileError>({ done: this.#done, entries });
     });
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     return this.#handle.close();

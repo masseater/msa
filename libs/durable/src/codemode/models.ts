@@ -1,51 +1,39 @@
-import type {
-  AnyModel,
-  ClassifierContext,
-  ImagesContext,
-  Models,
-  ModelType,
-  ModelTypeMap,
-  Usage,
-} from "@msa/ai";
-/**
- * `models.*` for code mode scripts, copied from the coding agent's code mode: the model catalog, and classifier and
- * image model calls.
- *
- * The catalog functions are host globals, journaled like any global. `models.classify()` and `models.generateImages()`
- * are paid effects, so each runs as an internal tool (`callers: ["tools"]`, a reserved name, hidden from scripts'
- * tool listings): a nested durable call with its own task, live row, abort, usage accounting, and replay policy. The
- * code mode tool turns a script's call of the global into a call of that tool.
- */
-import type { Context, JsonValue } from "@msa/chord";
+import type aiTypes from "@msa/ai/index.types";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
-import { defineTool } from "../harness/define.ts";
-import type { ToolRegistration } from "../harness/types.ts";
+import define from "../harness/define.ts";
+import type typesModule from "../harness/types.types.ts";
+import modelInputs from "./model-inputs.ts";
 
-/** Reserved names of code mode's internal tools; they are never listed to scripts or the model. */
-export const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
-export const CLASSIFY_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.classify`;
-export const GENERATE_IMAGES_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.generateImages`;
+const { checkClassifierContext, checkImagesContext, describeValue, isRecord } = modelInputs;
+const { defineTool } = define;
 
-/** The global a script calls, by internal tool. */
-export const MODEL_CALLS: Readonly<Record<string, string>> = {
+const CODEMODE_INTERNAL_PREFIX = "msa.codemode.";
+const CLASSIFY_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.classify`;
+const GENERATE_IMAGES_TOOL = `${CODEMODE_INTERNAL_PREFIX}models.generateImages`;
+
+const MODEL_CALLS: Readonly<Record<string, string>> = {
   "models.classify": CLASSIFY_TOOL,
   "models.generateImages": GENERATE_IMAGES_TOOL,
 };
 
-/** The catalog functions, host globals of the `models` namespace. */
-export const CATALOG_GLOBALS = [
+const CATALOG_GLOBALS = [
   "models.getModelsOfType",
   "models.getAvailableOfType",
   "models.getModelOfType",
 ] as const;
 
-/** `models.classify()` and `models.generateImages()` calls one script may have in flight; the rest wait. */
-export const MAX_CONCURRENT_MODEL_CALLS = 4;
+const MAX_CONCURRENT_MODEL_CALLS = 4;
 
-const MODEL_TYPES: ReadonlySet<string> = new Set<ModelType>(["chat", "image", "classifier"]);
+const MODEL_TYPES: ReadonlySet<string> = new Set<aiTypes.ModelType>([
+  "chat",
+  "image",
+  "classifier",
+]);
 
-export const MODELS_DESCRIPTION = [
+const MODELS_DESCRIPTION = [
   "`models` (all functions return promises):",
   '- `models.getModelsOfType(type, provider?)`, `models.getAvailableOfType(type, provider?)` (configured auth only), `models.getModelOfType(type, provider, id)`: the catalog; `type` is "chat", "image", or "classifier".',
   '- `models.classify(model, { state: { ... }, images?: [{ type: "image", data, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } })` resolves to `{ answers: { <id>: ... }, stopReason, errorMessage?, usage? }`.',
@@ -53,37 +41,12 @@ export const MODELS_DESCRIPTION = [
   `At most ${MAX_CONCURRENT_MODEL_CALLS} classify/generateImages calls run at once; more wait.`,
 ].join("\n");
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-/**
- * A script value in an error message: `undefined`, `a string`, `an array`, or its keys (`{ prompt }`).
- * @param {unknown} value - The value.
- * @returns {string} The description.
- */
-function describeValue(value: unknown): string {
-  if (value === undefined || value === null) return String(value);
-  if (Array.isArray(value)) return value.length === 0 ? "an empty array" : "an array";
-  if (typeof value === "object") {
-    const keys = Object.keys(value);
-    if (keys.length === 0) return "{}";
-    return `{ ${keys.slice(0, 6).join(", ")}${keys.length > 6 ? ", ..." : ""} }`;
-  }
-  return typeof value === "string" ? "a string" : `a ${typeof value}`;
-}
-
-/**
- * `an image`, `a classifier`.
- * @param {string} word - The word.
- * @returns {string} The word with its article.
- */
 function withArticle(word: string): string {
   return `${/^[aeiou]/u.test(word) ? "an" : "a"} ${word}`;
 }
 
-function toModelType(value: unknown): ModelType {
-  if (typeof value === "string" && MODEL_TYPES.has(value)) return value as ModelType;
+function toModelType(value: unknown): aiTypes.ModelType {
+  if (typeof value === "string" && MODEL_TYPES.has(value)) return value as aiTypes.ModelType;
   throw new Error(
     `Unknown model type ${JSON.stringify(value)}. Use "chat", "image", or "classifier".`,
   );
@@ -95,39 +58,30 @@ function toProvider(value: unknown): string | undefined {
   return value;
 }
 
-/**
- * Catalog entry for scripts. `headers` is dropped because configured headers can carry credentials.
- * @param {AnyModel} model - The model.
- * @returns {JsonValue} The entry.
- */
-function toModelInfo(model: AnyModel): JsonValue {
+function toModelInfo(model: aiTypes.AnyModel): chordTypes.JsonValue {
   const info: Record<string, unknown> = { ...model };
   delete info["headers"];
-  return JSON.parse(JSON.stringify(info)) as JsonValue;
+  return JSON.parse(JSON.stringify(info)) as chordTypes.JsonValue;
 }
 
-/**
- * The catalog functions: what a script's call of `name` with `args` (the argument list) resolves to.
- * @param {string} name - The function.
- * @param {unknown} args - The argument list.
- * @param {Models} models - The model registry.
- * @param {Context} context - The caller's context.
- * @returns {Promise<JsonValue | undefined>} The result.
- */
-export async function catalogCall(
+const catalogCall = Effect.fnUntraced(function* (
   name: string,
   args: unknown,
-  models: Models,
-  context: Context,
-): Promise<JsonValue | undefined> {
+  models: aiTypes.Models,
+  context: chordTypes.Context,
+) {
   const list = Array.isArray(args) ? args : [];
   const [type, provider, id] = list;
   if (name === "models.getModelsOfType")
     return models.getModelsOfType(toModelType(type), toProvider(provider)).map(toModelInfo);
   if (name === "models.getAvailableOfType") {
-    const available = await models.getAvailableOfType(toModelType(type), toProvider(provider), {
-      ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-    });
+    const modelType = toModelType(type);
+    const providerName = toProvider(provider);
+    const available = yield* Effect.promise(() =>
+      models.getAvailableOfType(modelType, providerName, {
+        ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+      }),
+    );
     return available.map(toModelInfo);
   }
   if (typeof provider !== "string" || typeof id !== "string") {
@@ -137,129 +91,14 @@ export async function catalogCall(
   }
   const model = models.getModelOfType(toModelType(type), provider, id);
   return model === undefined ? undefined : toModelInfo(model);
-}
+});
 
-const CLASSIFIER_CONTEXT_SHAPE =
-  '{ state: { ... }, images?: [{ type: "image", data: <base64>, mimeType }], questions: { <id>: { type: "choice", instructions, criteria: { <label>: <meaning> } } | { type: "score", instructions, criteria: [<lowest level>, ..., <highest level>] } | { type: "bool", instructions, criteria: { true: <meaning>, false: <meaning> } } } }';
-
-/**
- * Check a script's classifier context, so mistakes fail with the expected shape instead of a provider error.
- * @param {unknown} context - The script's value.
- * @returns {ClassifierContext} The context.
- */
-function checkClassifierContext(context: unknown): ClassifierContext {
-  const fail = (problem: string) =>
-    new Error(`models.classify() ${problem}. Expected context: ${CLASSIFIER_CONTEXT_SHAPE}.`);
-  if (!isRecord(context))
-    throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
-  if (!isRecord(context["state"]))
-    throw fail(`context.state must be an object, got ${describeValue(context["state"])}`);
-  const { images } = context;
-  if (images !== undefined) {
-    if (!Array.isArray(images))
-      throw fail(`context.images must be an array, got ${describeValue(images)}`);
-    images.forEach((image: unknown, index) => {
-      if (
-        !isRecord(image) ||
-        image["type"] !== "image" ||
-        typeof image["data"] !== "string" ||
-        typeof image["mimeType"] !== "string"
-      ) {
-        throw fail(`context.images[${index}] must be an image block, got ${describeValue(image)}`);
-      }
-    });
-  }
-  const { questions } = context;
-  if (!isRecord(questions) || Object.keys(questions).length === 0) {
-    throw fail(
-      `context.questions must map question IDs to questions, got ${describeValue(questions)}`,
-    );
-  }
-  const isStrings = (values: unknown[]) =>
-    values.length > 0 && values.every((value) => typeof value === "string");
-  for (const [id, question] of Object.entries(questions)) {
-    const at = `context.questions.${id}`;
-    if (!isRecord(question))
-      throw fail(`${at} must be a question object, got ${describeValue(question)}`);
-    if (typeof question["instructions"] !== "string")
-      throw fail(`${at}.instructions must be a string`);
-    const { criteria } = question;
-    if (question["type"] === "choice") {
-      if (!isRecord(criteria) || !isStrings(Object.values(criteria))) {
-        throw fail(`${at} is a "choice" question, so criteria must map each label to its meaning`);
-      }
-    } else if (question["type"] === "score") {
-      if (!Array.isArray(criteria) || !isStrings(criteria)) {
-        throw fail(
-          `${at} is a "score" question, so criteria must list the levels as strings, lowest first`,
-        );
-      }
-    } else if (question["type"] === "bool") {
-      if (
-        !isRecord(criteria) ||
-        typeof criteria["true"] !== "string" ||
-        typeof criteria["false"] !== "string"
-      ) {
-        throw fail(
-          `${at} is a "bool" question, so criteria must be { true: string, false: string }`,
-        );
-      }
-    } else {
-      throw fail(
-        `${at}.type must be "choice", "score", or "bool", got ${JSON.stringify(question["type"])}`,
-      );
-    }
-  }
-  return context as unknown as ClassifierContext;
-}
-
-/**
- * Check a script's image context, so mistakes such as `{ prompt }` fail with the expected shape.
- * @param {unknown} context - The script's value.
- * @returns {ImagesContext} The context.
- */
-function checkImagesContext(context: unknown): ImagesContext {
-  const fail = (problem: string) =>
-    new Error(
-      `models.generateImages() ${problem}. Expected context: { input: [{ type: "text", text: <prompt> }, ...optional { type: "image", data: <base64>, mimeType } references] }.`,
-    );
-  if (!isRecord(context))
-    throw fail(`expects a context object as its second argument, got ${describeValue(context)}`);
-  const { input } = context;
-  if (!Array.isArray(input) || input.length === 0) {
-    throw fail(`context.input must be a non-empty array of blocks, got ${describeValue(input)}`);
-  }
-  input.forEach((block: unknown, index) => {
-    if (isRecord(block) && block["type"] === "text" && typeof block["text"] === "string") return;
-    if (
-      isRecord(block) &&
-      block["type"] === "image" &&
-      typeof block["data"] === "string" &&
-      typeof block["mimeType"] === "string"
-    )
-      return;
-    throw fail(
-      `context.input[${index}] must be a text or image block, got ${describeValue(block)}`,
-    );
-  });
-  return context as unknown as ImagesContext;
-}
-
-/**
- * Resolve the script's model by provider and id only, so a script-supplied baseUrl or headers never receive the
- * credentials, with errors that say what to do.
- * @param {string} name - The function, for errors.
- * @param {TType} type - The model type.
- * @param {unknown} model - The script's model.
- * @param {Models} models - The model registry.
- * @returns {ModelTypeMap[TType]} The model.
- */
 function resolveModel<TType extends "classifier" | "image">(
   name: string,
   type: TType,
   model: unknown,
-  models: Models,
-): ModelTypeMap[TType] {
+  models: aiTypes.Models,
+): aiTypes.ModelTypeMap[TType] {
   const listHint = `List the ${type} models you can use with models.getAvailableOfType("${type}").`;
   if (
     !isRecord(model) ||
@@ -279,77 +118,94 @@ function resolveModel<TType extends "classifier" | "image">(
   if (resolved !== undefined) return resolved;
   const actualType = [...MODEL_TYPES].find(
     (other) =>
-      other !== type && models.getModelOfType(other as ModelType, provider, id) !== undefined,
+      other !== type &&
+      models.getModelOfType(other as aiTypes.ModelType, provider, id) !== undefined,
   );
   throw new Error(
-    actualType
-      ? `"${provider}/${id}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`
-      : `Unknown ${type} model "${provider}/${id}". ${listHint}`,
+    actualType === undefined
+      ? `Unknown ${type} model "${provider}/${id}". ${listHint}`
+      : `"${provider}/${id}" is ${withArticle(actualType)} model, not ${withArticle(type)} model. ${listHint}`,
   );
 }
 
-const ModelCallParameters = Type.Object({ model: Type.Unknown(), context: Type.Unknown() });
+const ModelCallParameters = Type.Object({ context: Type.Unknown(), model: Type.Unknown() });
 
-/**
- * The result of a model call as the tool returns it: the whole result for the script, usage counted by the Harness.
- * @param {string} label - The call, for errors.
- * @param {{ stopReason: string; errorMessage?: string; usage?: Usage }} result - The model's result.
- * @param {unknown} value - The value for the script.
- * @returns {ToolExecutionResult} The tool's result.
- */
 function modelResult(
   label: string,
-  result: { stopReason: string; errorMessage?: string; usage?: Usage },
+  result: { stopReason: string; errorMessage?: string; usage?: aiTypes.Usage },
   value: unknown,
 ) {
   const ok = result.stopReason === "stop";
   return {
     output: [
       {
-        type: "text" as const,
         text: ok ? `${label} done` : `${label} ${result.stopReason}: ${result.errorMessage ?? ""}`,
+        type: "text" as const,
       },
     ],
-    structuredOutput: JSON.parse(JSON.stringify(value)) as JsonValue,
+    structuredOutput: JSON.parse(JSON.stringify(value)) as chordTypes.JsonValue,
     ...(ok ? {} : { isError: true }),
     ...(result.usage === undefined ? {} : { usage: result.usage }),
   };
 }
 
-/**
- * The internal tools behind `models.classify()` and `models.generateImages()`.
- * @returns {ToolRegistration[]} The tools.
- */
-export function createModelTools(): ToolRegistration[] {
+function createModelTools(): typesModule.ToolRegistration[] {
   const classify = defineTool({
-    name: CLASSIFY_TOOL,
+    callers: ["tools"],
     description: "models.classify() of code mode scripts.",
+    execute: (args, api, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = resolveModel("models.classify", "classifier", args.model, api.models);
+          const checked = checkClassifierContext(args.context);
+          const result = yield* Effect.promise(() =>
+            api.models.classify(model, checked, {
+              ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+            }),
+          );
+          return modelResult(`classify ${model.provider}/${model.id}`, result, result);
+        }),
+      ),
+    name: CLASSIFY_TOOL,
     parameters: ModelCallParameters,
     structuredOutputSchema: Type.Unknown(),
-    callers: ["tools"],
-    execute: async (args, api, context) => {
-      const model = resolveModel("models.classify", "classifier", args.model, api.models);
-      const checked = checkClassifierContext(args.context);
-      const result = await api.models.classify(model, checked, {
-        ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-      });
-      return modelResult(`classify ${model.provider}/${model.id}`, result, result);
-    },
   });
   const generateImages = defineTool({
-    name: GENERATE_IMAGES_TOOL,
+    callers: ["tools"],
     description: "models.generateImages() of code mode scripts.",
+    execute: (args, api, context) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const model = resolveModel("models.generateImages", "image", args.model, api.models);
+          const checked = checkImagesContext(args.context);
+          const result = yield* Effect.promise(() =>
+            api.models.generateImages(model, checked, {
+              ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
+            }),
+          );
+          return modelResult(`generateImages ${model.provider}/${model.id}`, result, result);
+        }),
+      ),
+    name: GENERATE_IMAGES_TOOL,
     parameters: ModelCallParameters,
     structuredOutputSchema: Type.Unknown(),
-    callers: ["tools"],
-    execute: async (args, api, context) => {
-      const model = resolveModel("models.generateImages", "image", args.model, api.models);
-      const checked = checkImagesContext(args.context);
-      const result = await api.models.generateImages(model, checked, {
-        ...(context.abortSignal === undefined ? {} : { signal: context.abortSignal }),
-      });
-      return modelResult(`generateImages ${model.provider}/${model.id}`, result, result);
-    },
   });
-  return [classify as unknown as ToolRegistration, generateImages as unknown as ToolRegistration];
+  return [
+    classify as unknown as typesModule.ToolRegistration,
+    generateImages as unknown as typesModule.ToolRegistration,
+  ];
 }
+
+const modelsModule = {
+  CATALOG_GLOBALS,
+  CLASSIFY_TOOL,
+  CODEMODE_INTERNAL_PREFIX,
+  GENERATE_IMAGES_TOOL,
+  MAX_CONCURRENT_MODEL_CALLS,
+  MODELS_DESCRIPTION,
+  MODEL_CALLS,
+  catalogCall,
+  createModelTools,
+};
+
+export default modelsModule;

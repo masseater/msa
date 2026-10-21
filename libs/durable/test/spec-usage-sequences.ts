@@ -1,64 +1,44 @@
-import type { Draft } from "@msa/chord";
-import {
-  configure,
-  createRegistry,
-  defineDoc,
-  Harness,
-  type HarnessSettings,
-  LiveDoc,
-  type LiveState,
-  type TaskId,
-  type Tx,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { CodingTools, type createEditTool, type createReadTool } from "../src/tools/index.ts";
-import type {
-  bashExtensions,
-  chatExtension,
-  followTask,
-  planMode,
-  promptExtensions,
-  subagentExtension,
-  subagentTools,
-} from "./spec-usage-extensions.ts";
-import type { SettingsManager, SpecNames } from "./spec-usage-names.ts";
+import toolsModule from "../src/tools/index.ts";
+import effectSupport from "./effect-support.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
+import type specUsageSequencesTypes from "./spec-usage-sequences.types.ts";
 
-export type SpecTools = {
-  readonly readTool: ReturnType<typeof createReadTool>;
-  readonly editTool: ReturnType<typeof createEditTool>;
-  readonly bashTool: SpecBashTool;
-};
-type SpecBashTool = Parameters<typeof bashExtensions>[1];
-export type SpecExtensions = ReturnType<typeof promptExtensions> &
-  ReturnType<typeof bashExtensions> &
-  ReturnType<typeof planMode> & {
-    readonly Subagent: ReturnType<typeof subagentExtension>;
-    readonly SubagentTools: ReturnType<typeof subagentTools>;
-    readonly Chat: ReturnType<typeof chatExtension>;
-  };
+const { configure, defineDoc } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
 
-export function setupSequences(
-  { haiku, worktree, manager }: SpecNames,
-  readTool: SpecTools["readTool"],
+const { awaited } = effectSupport;
+
+function setupSequencesImpl(
+  { haiku, worktree, manager }: specUsageNamesTypes.SpecNames,
+  readTool: specUsageSequencesTypes.SpecTools["readTool"],
 ) {
   return {
-    // Section 2.2: a tool's commit creates a configured child.
-    childInToolCommit: async (tx: Tx, api: { readonly taskId: TaskId }) => {
-      // In a tool's commit. The child starts as a copy of this conversation's agent: model, extensions, tools, cwd.
-      const child = await tx.createConversation({
-        ownership: { kind: "task", taskId: api.taskId },
-      });
-      // A cheaper model, only the read tool, and its own worktree; everything else stays as copied.
-      await configure(tx, child.id, { model: haiku, tools: [readTool], cwd: worktree });
-    },
+    childInToolCommit: (tx: durableTypes.Tx, api: { readonly taskId: durableTypes.TaskId }) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const child = yield* awaited(
+            tx.createConversation({
+              ownership: { kind: "task", taskId: api.taskId },
+            }),
+          );
+          yield* awaited(
+            configure(tx, child.id, { cwd: worktree, model: haiku, tools: [readTool] }),
+          );
+        }),
+      ),
 
-    // Section 2.2: settings read live through getters.
     liveSettings: () => {
-      // The user's settings, read live through getters.
-      class UserSettings implements HarnessSettings {
-        readonly manager: SettingsManager;
-        constructor(manager: SettingsManager) {
-          this.manager = manager;
+      class UserSettings implements durableTypes.HarnessSettings {
+        readonly manager: specUsageNamesTypes.SettingsManager;
+        constructor(managerInner: specUsageNamesTypes.SettingsManager) {
+          this.manager = managerInner;
         }
         get stream() {
           return { timeoutMs: this.manager.get("timeoutMs") };
@@ -67,163 +47,177 @@ export function setupSequences(
           return { enabled: this.manager.get("autoCompact") };
         }
       }
-      // no Session write; every conversation follows at its next threshold check
       manager.set("autoCompact", false);
       return new UserSettings(manager);
     },
   };
 }
 
-export function containerSequence({ storage, models, localEnv, containers, context }: SpecNames) {
+const setupSequences: {
+  (
+    readTool: specUsageSequencesTypes.SpecTools["readTool"],
+  ): (arg0: specUsageNamesTypes.SpecNames) => ReturnType<typeof setupSequencesImpl>;
+  (
+    arg0: specUsageNamesTypes.SpecNames,
+    readTool: specUsageSequencesTypes.SpecTools["readTool"],
+  ): ReturnType<typeof setupSequencesImpl>;
+} = dual(2, setupSequencesImpl);
+
+function containerSequence({
+  storage,
+  models,
+  localEnv,
+  containers,
+  context,
+}: specUsageNamesTypes.SpecNames) {
   return {
-    // Section 2.2: an environment per conversation.
-    containerEnv: async () => {
-      const registry = createRegistry();
-      // Absent: the conversation runs locally. Only conversations with this document run in a container.
-      // Subagents do not copy it: their creator writes it too when they should run in the container.
-      const ContainerDoc = defineDoc<{ image: string }>({
-        kind: "app.container",
-        version: 1,
-        scope: "conversation",
-        history: "latest",
-        fork: "current",
-        initial: () => ({ image: "node:22" }),
-      });
-      const harness = await Harness.open(
-        storage,
-        {
-          models,
-          registry,
-          env: async ({ conversationId, cwd, read }, context) => {
-            const container = await read.snapshot(ContainerDoc, conversationId, context);
-            // Without a container: a cached NodeExecutionEnv per directory.
-            return container === undefined
-              ? localEnv(cwd ?? process.cwd())
-              : containers.env(container.image, cwd ?? "/work", context);
-          },
-        },
-        context,
-      );
-      return harness;
-    },
+    containerEnv: () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+          const registry = createRegistry();
+          const ContainerDoc = defineDoc<{ image: string }>({
+            fork: "current",
+            history: "latest",
+            initial: () => ({ image: "node:22" }),
+            kind: "app.container",
+            scope: "conversation",
+            version: 1,
+          });
+          const harness = yield* awaited(
+            Harness.open(
+              storage,
+              {
+                env: ({ conversationId, cwd, read }, contextInner) =>
+                  runPromise(
+                    Effect.gen(function* () {
+                      const container = yield* awaited(
+                        read.snapshot(ContainerDoc, conversationId, contextInner),
+                      );
+                      return yield* awaited(
+                        container === undefined
+                          ? localEnv(cwd ?? process.cwd())
+                          : containers.env(container.image, cwd ?? "/work", contextInner),
+                      );
+                    }),
+                  ),
+                models,
+                registry,
+              },
+              context,
+            ),
+          );
+          return harness;
+        }),
+      ),
   };
 }
 
-// Sections 2.2 and 7.1: host setup, tool filters, extension selection, plan mode, and reload.
-async function openHost(
-  { storage, models, localEnv, sonnet, context }: SpecNames,
-  { Coding, ContextFiles, Skills, Permissions, Reviewer }: SpecExtensions,
+const openHost = Effect.fn("openHost")(function* (
+  { storage, models, localEnv, sonnet, context }: specUsageNamesTypes.SpecNames,
+  { Coding, ContextFiles, Skills, Permissions, Reviewer }: specUsageSequencesTypes.SpecExtensions,
 ) {
   const registry = createRegistry();
   for (const extension of [CodingTools, Coding, ContextFiles, Skills, Permissions, Reviewer]) {
     registry.install(extension);
   }
-  const harness = await Harness.open(
-    storage,
-    {
-      models,
-      registry,
-      // Reviewer is installed but not selected by default: only conversations that select it get its role and hooks.
-      settings: { extensions: [CodingTools, Coding, ContextFiles, Skills, Permissions] },
-      // cached NodeExecutionEnv per directory
-      env: ({ cwd }) => localEnv(cwd ?? process.cwd()),
-    },
-    context,
+  const harness = yield* awaited(
+    Harness.open(
+      storage,
+      {
+        env: ({ cwd }) => localEnv(cwd ?? process.cwd()),
+        models,
+        registry,
+        settings: { extensions: [CodingTools, Coding, ContextFiles, Skills, Permissions] },
+      },
+      context,
+    ),
   );
-  // The conversation remembers its model and directory; a restart elsewhere keeps both.
-  const root = await harness.root(context, { agent: { model: sonnet, cwd: process.cwd() } });
-  return { registry, harness, root };
-}
+  const root = yield* awaited(
+    harness.root(context, { agent: { cwd: process.cwd(), model: sonnet } }),
+  );
+  return { harness, registry, root };
+});
 
-async function reloadHost(
-  { context }: SpecNames,
-  { editTool, bashTool }: SpecTools,
-  { Timing, Venv, PlanMode, PlanModeDoc, Subagent, Chat, SkillsV2, Skills }: SpecExtensions,
-  { registry, root }: Awaited<ReturnType<typeof openHost>>,
-): Promise<void> {
-  await root.configure({ tools: { remove: [editTool] } }, context);
-  // edit is offered again
-  await root.configure({ tools: { remove: [bashTool] } }, context);
-  // every tool of the selected extensions again
-  await root.configure({ tools: null }, context);
+const reloadHost = Effect.fn("reloadHost")(function* (
+  { context }: specUsageNamesTypes.SpecNames,
+  { editTool, bashTool }: specUsageSequencesTypes.SpecTools,
+  {
+    Timing,
+    Venv,
+    PlanMode,
+    PlanModeDoc,
+    Subagent,
+    Chat,
+    SkillsV2,
+    Skills,
+  }: specUsageSequencesTypes.SpecExtensions,
+  { registry, root }: Effect.Success<ReturnType<typeof openHost>>,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  yield* awaited(root.configure({ tools: { remove: [editTool] } }, context));
+  yield* awaited(root.configure({ tools: { remove: [bashTool] } }, context));
+  yield* awaited(root.configure({ tools: null }, context));
 
   registry.install(Timing);
-  // installed, but not in the default selection
   registry.install(Venv);
   const conversation = root;
-  await conversation.configure({ extensions: { add: [Venv] } }, context);
+  yield* awaited(conversation.configure({ extensions: { add: [Venv] } }, context));
 
   registry.install(PlanMode);
-  // PlanMode is in the default selection; /plan toggles this conversation's state.
-  await root.commit(async (tx) => {
-    (await tx.doc(PlanModeDoc, root.id)).enabled = true;
-  }, context);
+  yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(PlanModeDoc, root.id))).enabled = true;
+          }),
+        ),
+      context,
+    ),
+  );
 
   registry.install(Subagent);
   registry.install(Chat);
-  // same name: conversations selecting skills render v2 at their next request
   registry.install(SkillsV2);
-  // selecting conversations get a system delta removing its section; nothing is rewritten
   registry.uninstall(Skills);
-  // Restart: the host installs its extensions again; stored names resolve against them.
-}
+});
 
-export function hostSequence(names: SpecNames, tools: SpecTools, extensions: SpecExtensions) {
-  return {
-    host: async () => {
-      const opened = await openHost(names, extensions);
-      await reloadHost(names, tools, extensions, opened);
-      return opened.harness;
-    },
-  };
-}
-
-export function taskSequences(
-  { Anchor, name, session, conversationId, message, context }: SpecNames,
-  SubagentTools: SpecExtensions["SubagentTools"],
-  Follow: ReturnType<typeof followTask>,
+function hostSequenceImpl(
+  names: specUsageNamesTypes.SpecNames,
+  tools: specUsageSequencesTypes.SpecTools,
+  extensions: specUsageSequencesTypes.SpecExtensions,
 ) {
   return {
-    // Section 7.3: a named subagent's spawn commit.
-    spawn: async (tx: Tx) => {
-      // In subagentTool's spawn commit, after the name checks:
-      const anchor = await tx.createTask(Anchor, null, {
-        ownership: { kind: "conversation" },
-        background: true,
-      });
-      // Owned by a task of the parent: starts as a copy of the parent's agent.
-      const child = await tx.createConversation({ ownership: { kind: "task", taskId: anchor } });
-      await configure(tx, child.id, {
-        extensions: { remove: [SubagentTools] },
-        instructions: `You are the subagent "${name}". Answer the main agent's requests.`,
-      });
-    },
-
-    // Section 4: table reads before the first table write; documents stay usable.
-    tableRules: async () => {
-      await session.commit(async (tx) => {
-        // table read
-        const conversation = await tx.conversation(conversationId);
-        const live = await tx.doc(LiveDoc, conversationId);
-
-        // first table write
-        await tx.appendEntry(conversationId, message);
-        // document mutation remains valid
-        delete live.generation;
-        // further table writes are fine
-        await tx.createTask(Follow, {}, { ownership: { kind: "conversation" }, conversationId });
-        void conversation;
-      }, context);
-    },
-
-    // Section 3.4: drafts are revoked after their commit.
-    revokedDraft: async () => {
-      let escaped: Draft<LiveState> | undefined;
-      await session.commit(async (tx) => {
-        escaped = await tx.doc(LiveDoc, conversationId);
-      }, context);
-      // throws: the draft was revoked
-      escaped!.generation = { attempt: 1 };
-    },
+    host: () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const opened = yield* openHost(names, extensions);
+          yield* reloadHost(names, tools, extensions, opened);
+          return opened.harness;
+        }),
+      ),
   };
 }
+
+const hostSequence: {
+  (
+    tools: specUsageSequencesTypes.SpecTools,
+    extensions: specUsageSequencesTypes.SpecExtensions,
+  ): (names: specUsageNamesTypes.SpecNames) => ReturnType<typeof hostSequenceImpl>;
+  (
+    names: specUsageNamesTypes.SpecNames,
+    tools: specUsageSequencesTypes.SpecTools,
+    extensions: specUsageSequencesTypes.SpecExtensions,
+  ): ReturnType<typeof hostSequenceImpl>;
+} = dual(3, hostSequenceImpl);
+
+const specUsageSequences = {
+  containerSequence,
+  hostSequence,
+  setupSequences,
+};
+
+export default specUsageSequences;

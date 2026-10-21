@@ -1,11 +1,14 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
-import { registerHooks } from "node:module";
-import { extname, resolve, sep } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import platformModule from "../core/platform/index.ts";
+import moduleHookFiles from "../core/platform/node/module-hook-files.ts";
+import nodeModuleHooks from "../core/platform/node/module-hooks.ts";
+import nodeUrl from "../core/platform/node/url.ts";
 
-// Node strips TypeScript natively, but it does not apply the workspace source
-// aliases from tsconfig.json. Internal source processes preload this resolver so
-// they cannot silently fall through to stale package dist files.
+const { registerHooks } = nodeModuleHooks;
+const { fileURLToPath, pathToFileURL } = nodeUrl;
+
+const { firstRegularFileForModuleHook, readTextForModuleHook } = moduleHookFiles;
+
+const { extname, resolve, sep } = platformModule;
 
 interface TsConfig {
   readonly compilerOptions?: {
@@ -22,9 +25,10 @@ interface SourceAlias {
 
 const repositoryRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const tsconfigPath = resolve(repositoryRoot, "tsconfig.json");
-const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8")) as TsConfig;
+const tsconfig = JSON.parse(readTextForModuleHook(tsconfigPath)) as TsConfig;
 const paths = tsconfig.compilerOptions?.paths;
-if (!paths) throw new Error(`Source runtime requires compilerOptions.paths in ${tsconfigPath}`);
+if (paths === undefined)
+  throw new Error(`Source runtime requires compilerOptions.paths in ${tsconfigPath}`);
 
 const aliases: SourceAlias[] = Object.entries(paths)
   .filter(([pattern]) => pattern.startsWith("@msa/"))
@@ -36,8 +40,8 @@ const aliases: SourceAlias[] = Object.entries(paths)
     return {
       pattern,
       prefix: wildcard === -1 ? pattern : pattern.slice(0, wildcard),
-      suffix: wildcard === -1 ? "" : pattern.slice(wildcard + 1),
       replacements,
+      suffix: wildcard === -1 ? "" : pattern.slice(wildcard + 1),
     };
   })
   .sort((left, right) => right.pattern.length - left.pattern.length);
@@ -51,10 +55,11 @@ registerHooks({
       matchedPattern ??= alias.pattern;
       for (const replacement of alias.replacements) {
         const resolved = resolveSourcePath(replacement.replace("*", wildcard));
-        if (resolved) return { url: pathToFileURL(resolved).href, shortCircuit: true };
+        if (resolved !== undefined && resolved !== "")
+          return { shortCircuit: true, url: pathToFileURL(resolved).href };
       }
     }
-    if (matchedPattern) {
+    if (matchedPattern !== undefined && matchedPattern !== "") {
       throw new Error(
         `Source runtime could not resolve ${specifier} through tsconfig path ${matchedPattern}`,
       );
@@ -82,13 +87,11 @@ function resolveSourcePath(replacement: string): string | undefined {
         : extension === ".cjs"
           ? ".cts"
           : undefined;
-  const candidates = sourceExtension
-    ? [basePath, `${basePath.slice(0, -extension.length)}${sourceExtension}`]
-    : extension === ".ts" || extension === ".mts" || extension === ".cts" || extension === ".json"
-      ? [basePath]
-      : [basePath, `${basePath}.ts`, resolve(basePath, "index.ts")];
-  for (const candidate of candidates) {
-    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
-  }
-  return undefined;
+  const candidates =
+    sourceExtension === undefined
+      ? extension === ".ts" || extension === ".mts" || extension === ".cts" || extension === ".json"
+        ? [basePath]
+        : [basePath, `${basePath}.ts`, resolve(basePath, "index.ts")]
+      : [basePath, `${basePath.slice(0, -extension.length)}${sourceExtension}`];
+  return firstRegularFileForModuleHook(candidates);
 }

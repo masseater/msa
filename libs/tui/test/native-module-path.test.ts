@@ -1,9 +1,14 @@
 import assert from "node:assert";
-import { dirname, join, resolve } from "node:path";
 import { describe, it } from "node:test";
 import { pathToFileURL } from "node:url";
 
-import { getNativeModuleCandidates } from "../src/native-module-path.ts";
+import nativeModulePath from "../src/native-module-path.ts";
+import platform from "../src/platform.ts";
+
+const { pathOperations } = platform;
+const { getNativeModuleCandidates } = nativeModulePath;
+
+const { dirname, join, resolve } = pathOperations;
 
 describe("getNativeModuleCandidates", () => {
   it("resolves native helpers from the installed TUI package when the module is bundled elsewhere", () => {
@@ -19,8 +24,8 @@ describe("getNativeModuleCandidates", () => {
     const nativePath = join("native", "win32", "prebuilds", "win32-arm64", "win32-platform.node");
 
     const candidates = getNativeModuleCandidates(nativePath, {
-      moduleUrl: pathToFileURL(bundledModule).href,
       execPath: resolve("virtual", "node", "node.exe"),
+      moduleUrl: pathToFileURL(bundledModule).href,
       resolvePackage: (specifier) => {
         assert.equal(specifier, "@msa/tui");
         return join(packageRoot, "dist", "index.js");
@@ -45,8 +50,8 @@ describe("getNativeModuleCandidates", () => {
     );
 
     const candidates = getNativeModuleCandidates(nativePath, {
-      moduleUrl: pathToFileURL(bundledModule).href,
       execPath,
+      moduleUrl: pathToFileURL(bundledModule).href,
       resolvePackage: () => {
         throw new Error("not installed");
       },

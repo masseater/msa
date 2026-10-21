@@ -1,23 +1,29 @@
-import type { ModelsRefreshResult } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import { dual } from "effect/Function";
 
-import type { ModelRuntime } from "../../core/model-runtime.ts";
-import { raceWithAbortSignal } from "../../utils/abort.ts";
+import type modelRuntimeTypes from "../../core/model-runtime.types.ts";
+import abortModule from "../../utils/abort.ts";
 
-type ModelCatalogRuntime = Pick<ModelRuntime, "refresh">;
+const { raceWithAbortSignal } = abortModule;
+
+type ModelCatalogRuntime = Pick<modelRuntimeTypes.ModelRuntime, "refresh">;
 
 interface ActiveModelCatalogRefresh {
   controller: AbortController;
-  promise: Promise<ModelsRefreshResult>;
+  promise: Promise<aiTypes.ModelsRefreshResult>;
   waiters: number;
 }
 
 class ModelCatalogRefreshCoordinator {
   private readonly activeByRuntime = new WeakMap<ModelCatalogRuntime, ActiveModelCatalogRefresh>();
 
-  refresh(modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<ModelsRefreshResult> {
+  refresh(
+    modelRuntime: ModelCatalogRuntime,
+    signal: AbortSignal,
+  ): Promise<aiTypes.ModelsRefreshResult> {
     signal.throwIfAborted();
     let active = this.activeByRuntime.get(modelRuntime);
-    if (!active) {
+    if (active === undefined) {
       const controller = new AbortController();
       let created!: ActiveModelCatalogRefresh;
       const operation = modelRuntime.refresh({ signal: controller.signal });
@@ -43,10 +49,19 @@ class ModelCatalogRefreshCoordinator {
 
 const modelCatalogRefreshCoordinator = new ModelCatalogRefreshCoordinator();
 
-/** Share concurrent interactive all-catalog refreshes while keeping each caller's cancellation independent. */
-export function refreshModelCatalogs(
-  modelRuntime: ModelCatalogRuntime,
-  signal: AbortSignal,
-): Promise<ModelsRefreshResult> {
-  return modelCatalogRefreshCoordinator.refresh(modelRuntime, signal);
-}
+const refreshModelCatalogs: {
+  (
+    signal: AbortSignal,
+  ): (modelRuntime: ModelCatalogRuntime) => Promise<aiTypes.ModelsRefreshResult>;
+  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<aiTypes.ModelsRefreshResult>;
+} = dual(
+  2,
+  (modelRuntime: ModelCatalogRuntime, signal: AbortSignal): Promise<aiTypes.ModelsRefreshResult> =>
+    modelCatalogRefreshCoordinator.refresh(modelRuntime, signal),
+);
+
+const modelCatalogRefresh = {
+  refreshModelCatalogs,
+};
+
+export default modelCatalogRefresh;

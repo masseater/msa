@@ -1,23 +1,24 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { replies } from "./stdin-buffer-helpers.ts";
+import StdinBuffer from "../src/stdin-buffer.ts";
+import type stdinBufferTypes from "../src/stdin-buffer.types.ts";
+import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { replies } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -46,19 +47,17 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -73,19 +72,17 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -117,37 +114,32 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Kitty Keyboard Protocol", () => {
     it("should handle Kitty CSI u press events", () => {
-      // Press 'a' in Kitty protocol
       processInput("\x1b[97u");
       assert.deepStrictEqual(emittedSequences, ["\x1b[97u"]);
     });
 
     it("should handle Kitty CSI u release events", () => {
-      // Release 'a' in Kitty protocol
       processInput("\x1b[97;1:3u");
       assert.deepStrictEqual(emittedSequences, ["\x1b[97;1:3u"]);
     });
 
     it("should handle batched Kitty press and release", () => {
-      // Press 'a', release 'a' batched together (common over SSH)
       processInput("\x1b[97u\x1b[97;1:3u");
       assert.deepStrictEqual(emittedSequences, ["\x1b[97u", "\x1b[97;1:3u"]);
     });
@@ -155,25 +147,22 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Kitty Keyboard Protocol", () => {
     it("should handle multiple batched Kitty events", () => {
-      // Press 'a', release 'a', press 'b', release 'b'
       processInput("\x1b[97u\x1b[97;1:3u\x1b[98u\x1b[98;1:3u");
       assert.deepStrictEqual(emittedSequences, [
         "\x1b[97u",
@@ -184,13 +173,11 @@ describe("StdinBuffer", () => {
     });
 
     it("should handle Kitty arrow keys with event type", () => {
-      // Up arrow press with event type
       processInput("\x1b[1;1:1A");
       assert.deepStrictEqual(emittedSequences, ["\x1b[1;1:1A"]);
     });
 
     it("should handle Kitty functional keys with event type", () => {
-      // Delete key release
       processInput("\x1b[3;1:3~");
       assert.deepStrictEqual(emittedSequences, ["\x1b[3;1:3~"]);
     });
@@ -198,28 +185,22 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Kitty Keyboard Protocol", () => {
     it("should split ESC+ESC+CSI into standalone ESC and the CSI sequence (WezTerm Escape key regression)", () => {
-      // WezTerm with enable_kitty_keyboard sends Escape key press as raw \x1b
-      // and the release as a full Kitty CSI-u sequence, concatenated.
-      // The buffer must not treat \x1b\x1b as a complete meta-key when the
-      // following byte starts a new escape sequence.
       processInput("\x1b\x1b[27;129:3u");
       assert.deepStrictEqual(emittedSequences, ["\x1b", "\x1b[27;129:3u"]);
     });
@@ -230,13 +211,11 @@ describe("StdinBuffer", () => {
     });
 
     it("should still emit ESC+ESC as a single sequence when not followed by a new escape", () => {
-      // \x1b\x1b alone (no following CSI) stays as-is — e.g. ctrl+alt+[
       processInput("\x1b\x1b");
       assert.deepStrictEqual(emittedSequences, ["\x1b\x1b"]);
     });
 
     it("should handle plain characters mixed with Kitty sequences", () => {
-      // Plain 'a' followed by Kitty release
       processInput("a\x1b[97;1:3u");
       assert.deepStrictEqual(emittedSequences, ["a", "\x1b[97;1:3u"]);
     });

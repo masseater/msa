@@ -3,9 +3,13 @@ import { parseArgs } from "node:util";
 import { NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path, Schema } from "effect";
 
-import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
-import { archiveFileNameFor, RELEASE_PLATFORMS } from "./release-platforms.ts";
-import { runMainWith } from "./run-main.ts";
+import codingAgentPackage from "./coding-agent-package.ts";
+import releasePlatforms from "./release-platforms.ts";
+import runMain from "./run-main.ts";
+
+const { Workspace, workspaceLayer } = codingAgentPackage;
+const { RELEASE_PLATFORMS, archiveFileNameFor } = releasePlatforms;
+const { runMainWith } = runMain;
 
 const DEFAULT_SUMS = [".artifacts", "binaries", "SHA256SUMS"];
 const DEFAULT_OUT = [".artifacts", "homebrew", "msa.rb"];
@@ -29,6 +33,10 @@ type Flags = Readonly<{ out?: string; sums?: string; version?: string }>;
 
 const parseFlags = () =>
   Effect.try({
+    catch: (error) =>
+      new RenderHomebrewFormulaError({
+        message: `usage: render-homebrew-formula.ts [--version <x.y.z>] [--sums <SHA256SUMS>] [--out <path>] (${String(error)})`,
+      }),
     try: (): Flags =>
       parseArgs({
         options: {
@@ -37,10 +45,6 @@ const parseFlags = () =>
           version: { type: "string" },
         },
       }).values,
-    catch: (error) =>
-      new RenderHomebrewFormulaError({
-        message: `usage: render-homebrew-formula.ts [--version <x.y.z>] [--sums <SHA256SUMS>] [--out <path>] (${String(error)})`,
-      }),
   });
 
 const requireVersion = (candidate: string) =>
@@ -71,14 +75,14 @@ const makeContext = (flags: Flags) =>
     const version = yield* requireVersion(flags.version ?? packageVersion);
     const shortDescription = yield* requireShortDescription(description);
     return {
+      description: shortDescription,
       fs,
+      license,
+      outPath: path.resolve(repoRoot, flags.out ?? path.join(...DEFAULT_OUT)),
       path,
       repoRoot,
-      version,
-      description: shortDescription,
-      license,
       sumsPath: path.resolve(repoRoot, flags.sums ?? path.join(...DEFAULT_SUMS)),
-      outPath: path.resolve(repoRoot, flags.out ?? path.join(...DEFAULT_OUT)),
+      version,
     };
   });
 
@@ -131,8 +135,8 @@ const checksumFor = (context: Context, checksums: Checksums, platformName: strin
     }
     return {
       ...targetFor(platformName),
-      url: `${HOMEPAGE}/releases/download/v${context.version}/${archive}`,
       sha256,
+      url: `${HOMEPAGE}/releases/download/v${context.version}/${archive}`,
     };
   });
 

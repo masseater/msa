@@ -1,21 +1,33 @@
-import { posix } from "node:path";
-
-import { FileError, type FileInfo, type Result } from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
-import { type Connection, RemoteError } from "./connection.ts";
-import { toFileError } from "./errors.ts";
-import { openDir, type PathRequest, remoteRequest, run, runFileOp } from "./file-op.ts";
-import { type RemoteDirEntry, remoteFileInfo, remotePath, toInfo } from "./remote-path.ts";
+import connectionModule from "./connection.ts";
+import type dirOpsTypes from "./dir-ops.types.ts";
+import errors from "./errors.ts";
+import fileOp from "./file-op.ts";
+import platform from "./platform.ts";
+import remotePathModule from "./remote-path.ts";
+import type remotePathTypes from "./remote-path.types.ts";
 
-export const fileInfoAt = (request: PathRequest): Promise<Result<FileInfo, FileError>> => {
+const { FileError } = env;
+
+const { openDir, remoteRequest, run, runFileOp } = fileOp;
+const { remoteFileInfo, remotePath, toInfo } = remotePathModule;
+const { posixPath } = platform;
+const { toFileError } = errors;
+const { RemoteError } = connectionModule;
+
+const fileInfoAt = (
+  request: dirOpsTypes.PathRequest,
+): Promise<envTypes.Result<envTypes.FileInfo, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
       ...request,
       operation: (resolved) =>
         Effect.all([
-          remoteRequest({ connection, op: "lstat", json: { path: resolved } }),
+          remoteRequest({ connection, json: { path: resolved }, op: "lstat" }),
           remotePath(connection),
         ]).pipe(Effect.map(([json, paths]) => toInfo(resolved, remoteFileInfo(json), paths))),
     }).pipe(Effect.map((result) => (result.ok ? result.value : result))),
@@ -23,16 +35,16 @@ export const fileInfoAt = (request: PathRequest): Promise<Result<FileInfo, FileE
 };
 
 const readAllEntries = (request: {
-  connection: Connection;
+  connection: dirOpsTypes.Connection;
   resolved: string;
-}): Effect.Effect<RemoteDirEntry[]> =>
+}): Effect.Effect<remotePathTypes.RemoteDirEntry[]> =>
   openDir(request).pipe(
     Effect.flatMap((handle) =>
       Effect.gen(function* () {
-        const entries: RemoteDirEntry[] = [];
+        const entries: remotePathTypes.RemoteDirEntry[] = [];
         for (let done = false; !done;) {
           const { json } = yield* Effect.promise(() => handle.request("readdir", { max: 1000 }));
-          entries.push(...(json["entries"] as RemoteDirEntry[]));
+          entries.push(...(json["entries"] as remotePathTypes.RemoteDirEntry[]));
           done = json["done"] === true;
         }
         return entries;
@@ -40,13 +52,15 @@ const readAllEntries = (request: {
     ),
   );
 
-const sortRaw = (entries: RemoteDirEntry[]): void => {
-  const key = (entry: RemoteDirEntry): Buffer =>
+const sortRaw = (entries: remotePathTypes.RemoteDirEntry[]): void => {
+  const key = (entry: remotePathTypes.RemoteDirEntry): Buffer =>
     Buffer.from(entry.raw ?? Buffer.from(entry.name, "utf8"));
   entries.sort((a, b) => Buffer.compare(key(a), key(b)));
 };
 
-export const listDirAt = (request: PathRequest): Promise<Result<FileInfo[], FileError>> => {
+const listDirAt = (
+  request: dirOpsTypes.PathRequest,
+): Promise<envTypes.Result<envTypes.FileInfo[], envTypes.FileError>> => {
   const { connection } = request.target;
   const signal = request.context.abortSignal;
   return run(
@@ -56,15 +70,15 @@ export const listDirAt = (request: PathRequest): Promise<Result<FileInfo[], File
         Effect.gen(function* () {
           const entries = yield* readAllEntries({ connection, resolved });
           const paths = yield* remotePath(connection);
-          if (paths === posix) sortRaw(entries);
-          const infos: FileInfo[] = [];
+          if (paths === posixPath) sortRaw(entries);
+          const infos: envTypes.FileInfo[] = [];
           for (const entry of entries) {
             if (signal?.aborted === true) {
-              return yield* Effect.fail(new FileError("aborted", "aborted", resolved));
+              return yield* new FileError("aborted", "aborted", resolved);
             }
             const entryPath = paths.resolve(resolved, entry.name);
             if (entry.error !== undefined) {
-              return yield* Effect.fail(toFileError(new RemoteError(entry.error), entryPath));
+              return yield* toFileError(new RemoteError(entry.error), entryPath);
             }
             const info = toInfo(entryPath, entry.info!, paths);
             if (info.ok) infos.push(info.value);
@@ -74,3 +88,10 @@ export const listDirAt = (request: PathRequest): Promise<Result<FileInfo[], File
     }),
   );
 };
+
+const dirOps = {
+  fileInfoAt,
+  listDirAt,
+};
+
+export default dirOps;

@@ -1,7 +1,10 @@
+import { Clock, Effect, Stream } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { completeSimple } from "../src/compat.ts";
-import type { Model } from "../src/types.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+
+const { completeSimple } = compat;
 
 const mockState = vi.hoisted(() => ({
   chunks: [] as unknown[],
@@ -13,8 +16,14 @@ vi.mock("openai", () => {
       completions: {
         create: () => {
           const stream = {
-            async *[Symbol.asyncIterator]() {
-              for (const chunk of mockState.chunks) yield chunk;
+            [Symbol.asyncIterator]() {
+              return Stream.toAsyncIterable(
+                Stream.fromIterable(
+                  (function* () {
+                    for (const chunk of mockState.chunks) yield chunk;
+                  })(),
+                ),
+              )[Symbol.asyncIterator]();
             },
           };
           const promise = Promise.resolve(stream) as Promise<typeof stream> & {
@@ -26,7 +35,7 @@ vi.mock("openai", () => {
           promise.withResponse = () =>
             Promise.resolve({
               data: stream,
-              response: { status: 200, headers: new Headers({ "x-request-id": "req-1" }) },
+              response: { headers: new Headers({ "x-request-id": "req-1" }), status: 200 },
             });
           return promise;
         },
@@ -36,18 +45,18 @@ vi.mock("openai", () => {
   return { default: FakeOpenAI };
 });
 
-function openRouterModel(): Model<"openai-completions"> {
+function openRouterModel(): typesModule.Model<"openai-completions"> {
   return {
-    id: "openrouter/auto",
-    name: "OpenRouter Auto",
     api: "openai-completions",
-    provider: "openrouter",
     baseUrl: "https://openrouter.ai/api/v1",
-    reasoning: false,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 200_000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id: "openrouter/auto",
+    input: ["text"],
     maxTokens: 8192,
+    name: "OpenRouter Auto",
+    provider: "openrouter",
+    reasoning: false,
   };
 }
 
@@ -56,41 +65,46 @@ describe("openai-completions provider stream events", () => {
     mockState.chunks = [];
   });
 
-  // Regression test for #9784.
-  it("exposes provider chunks including OpenRouter metadata", async () => {
-    const firstChunk = {
-      id: "chatcmpl-1",
-      model: "anthropic/claude-sonnet-4.6",
-      choices: [{ index: 0, delta: { content: "hello" } }],
-    };
-    const finalChunk = {
-      id: "chatcmpl-1",
-      model: "anthropic/claude-sonnet-4.6",
-      choices: [{ index: 0, delta: {}, finish_reason: "stop" }],
-      usage: {
-        prompt_tokens: 10,
-        completion_tokens: 2,
-        total_tokens: 12,
-        cost: 0.0012,
-        is_byok: false,
-      },
-      openrouter_metadata: { strategy: "direct", region: "iad" },
-    };
-    mockState.chunks = [firstChunk, finalChunk];
-    const events: unknown[] = [];
+  it("exposes provider chunks including OpenRouter metadata", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const firstChunk = {
+          choices: [{ delta: { content: "hello" }, index: 0 }],
+          id: "chatcmpl-1",
+          model: "anthropic/claude-sonnet-4.6",
+        };
+        const finalChunk = {
+          choices: [{ delta: {}, finish_reason: "stop", index: 0 }],
+          id: "chatcmpl-1",
+          model: "anthropic/claude-sonnet-4.6",
+          openrouter_metadata: { region: "iad", strategy: "direct" },
+          usage: {
+            completion_tokens: 2,
+            cost: 0.0012,
+            is_byok: false,
+            prompt_tokens: 10,
+            total_tokens: 12,
+          },
+        };
+        mockState.chunks = [firstChunk, finalChunk];
+        const events: unknown[] = [];
 
-    const message = await completeSimple(
-      openRouterModel(),
-      { messages: [{ role: "user", content: "hi", timestamp: Date.now() }] },
-      {
-        apiKey: "test",
-        onProviderStreamEvent: (data) => {
-          events.push(data);
-        },
-      },
-    );
+        const currentTime = yield* Clock.currentTimeMillis;
+        const message = yield* Effect.promise(() =>
+          completeSimple(
+            openRouterModel(),
+            { messages: [{ content: "hi", role: "user", timestamp: currentTime }] },
+            {
+              apiKey: "test",
+              onProviderStreamEvent: (data) => {
+                events.push(data);
+              },
+            },
+          ),
+        );
 
-    expect(message.content).toEqual([{ type: "text", text: "hello" }]);
-    expect(events).toEqual([firstChunk, finalChunk]);
-  });
+        expect(message.content).toEqual([{ text: "hello", type: "text" }]);
+        expect(events).toEqual([firstChunk, finalChunk]);
+      }),
+    ));
 });

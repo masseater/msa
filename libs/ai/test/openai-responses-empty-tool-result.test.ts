@@ -1,47 +1,58 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertResponsesMessages } from "../src/api/openai-responses-shared.ts";
-import { getModel, normalizeContext } from "../src/compat.ts";
-import type { AssistantMessage, ToolResultMessage, Usage } from "../src/types.ts";
+import openaiResponsesMessages from "../src/api/openai-responses-messages.ts";
+import compat from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import modelChoice from "./model-choice.ts";
 
-const usage: Usage = {
-  input: 0,
-  output: 0,
+const { currentTimeMillis } = clock;
+const { normalizeContext } = compat;
+const { convertResponsesMessages } = openaiResponsesMessages;
+
+const { chooseModel } = modelChoice;
+
+const usage: typesModule.Usage = {
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+  input: 0,
+  output: 0,
   totalTokens: 0,
-  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
 };
 
-function buildEmptyToolResult(toolCallId: string, timestamp: number): ToolResultMessage {
+function buildEmptyToolResult(
+  toolCallId: string,
+  timestamp: number,
+): typesModule.ToolResultMessage {
   return {
+    content: [{ text: "", type: "text" }],
+    isError: false,
     role: "toolResult",
+    timestamp,
     toolCallId,
     toolName: "bash",
-    content: [{ type: "text", text: "" }],
-    isError: false,
-    timestamp,
   };
 }
 
 describe("OpenAI Responses convertResponsesMessages empty tool result", () => {
   it("uses '(no tool output)' placeholder for empty tool results without images", () => {
-    const model = getModel("openai", "gpt-4o-mini");
-    const now = Date.now();
-    const assistant: AssistantMessage = {
-      role: "assistant",
-      content: [{ type: "toolCall", id: "tool-1", name: "bash", arguments: { command: "true" } }],
+    const model = chooseModel("openai", "direct OpenAI");
+    const now = currentTimeMillis();
+    const assistant: typesModule.AssistantMessage = {
       api: model.api,
-      provider: model.provider,
+      content: [{ arguments: { command: "true" }, id: "tool-1", name: "bash", type: "toolCall" }],
       model: model.id,
-      usage,
+      provider: model.provider,
+      role: "assistant",
       stopReason: "toolUse",
       timestamp: now,
+      usage,
     };
 
     const context = normalizeContext({
       messages: [
-        { role: "user", content: "Run the command", timestamp: now - 1 },
+        { content: "Run the command", role: "user", timestamp: now - 1 },
         assistant,
         buildEmptyToolResult("tool-1", now + 1),
       ],

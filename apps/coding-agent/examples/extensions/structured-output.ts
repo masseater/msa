@@ -1,13 +1,12 @@
-/**
- * Structured Output Tool
- *
- * Demonstrates `terminate: true` so the agent can end on a tool call
- * without paying for an extra follow-up LLM turn.
- */
-
-import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
-import { Text } from "@msa/tui";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import tui from "@msa/tui";
+import { Effect } from "effect";
 import { Type } from "typebox";
+
+const { defineTool } = codingAgent;
+
+const { Text } = tui;
 
 interface StructuredOutputDetails {
   headline: string;
@@ -16,36 +15,35 @@ interface StructuredOutputDetails {
 }
 
 const structuredOutputTool = defineTool({
-  name: "structured_output",
-  label: "Structured Output",
   description:
     "Return a final structured answer. Use this as your last action when the user asks for structured output or a machine-readable summary.",
-  promptSnippet: "Emit a final structured answer as a terminating tool result",
+  execute: (_toolCallId, params) =>
+    Effect.runPromise(
+      Effect.succeed({
+        content: [{ text: `Saved structured output: ${params.headline}`, type: "text" }],
+        details: {
+          actionItems: params.actionItems,
+          headline: params.headline,
+          summary: params.summary,
+        } satisfies StructuredOutputDetails,
+        terminate: true,
+      }),
+    ),
+  label: "Structured Output",
+  name: "structured_output",
+  parameters: Type.Object({
+    actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
+    headline: Type.String({ description: "Short title for the result" }),
+    summary: Type.String({ description: "One-paragraph summary" }),
+  }),
   promptGuidelines: [
     "Use structured_output as your final action when the user asks for structured output, JSON-like output, or a machine-readable summary.",
     "After calling structured_output, do not emit another assistant response in the same turn.",
   ],
-  parameters: Type.Object({
-    headline: Type.String({ description: "Short title for the result" }),
-    summary: Type.String({ description: "One-paragraph summary" }),
-    actionItems: Type.Array(Type.String(), { description: "Concrete next steps or key bullets" }),
-  }),
-
-  async execute(_toolCallId, params) {
-    return {
-      content: [{ type: "text", text: `Saved structured output: ${params.headline}` }],
-      details: {
-        headline: params.headline,
-        summary: params.summary,
-        actionItems: params.actionItems,
-      } satisfies StructuredOutputDetails,
-      terminate: true,
-    };
-  },
-
+  promptSnippet: "Emit a final structured answer as a terminating tool result",
   renderResult(result, _options, theme) {
     const details = result.details as StructuredOutputDetails | undefined;
-    if (!details) {
+    if (details === undefined) {
       const text = result.content[0];
       return new Text(text?.type === "text" ? text.text : "", 0, 0);
     }
@@ -60,6 +58,6 @@ const structuredOutputTool = defineTool({
   },
 });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool(structuredOutputTool);
 }

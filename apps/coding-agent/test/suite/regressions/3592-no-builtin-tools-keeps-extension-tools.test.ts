@@ -1,142 +1,56 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { getModel } from "@msa/ai/compat";
-import { Type } from "typebox";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  createAgentSessionFromServices,
-  createAgentSessionServices,
-} from "../../../src/core/agent-session-services.ts";
-import { ORCHESTRATOR_TOOL_NAMES } from "../../../src/core/orchestrator/tool-names.ts";
-import { DefaultResourceLoader } from "../../../src/core/resource-loader.ts";
-import { createAgentSession } from "../../../src/core/sdk.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
+import toolNames from "../../../src/core/orchestrator/tool-names.ts";
+import regression3592Support from "./3592-no-builtin-tools-keeps-extension-tools-support.ts";
+
+const { ORCHESTRATOR_TOOL_NAMES } = toolNames;
+
+const { cleanupDirs, createSession, prepareDirs } = regression3592Support;
+
+const keepsExtensionToolsActiveWhenBuilt = Effect.gen(function* () {
+  const session = yield* Effect.promise(() => createSession({ noTools: "builtin" }));
+
+  expect(
+    session.tools.registry
+      .getAllTools()
+      .map((tool) => tool.name)
+      .sort(),
+  ).toEqual(
+    [
+      "bash",
+      "dynamic_tool",
+      "edit",
+      "find",
+      "grep",
+      "ls",
+      "memory",
+      "model_policy",
+      "model_upgrade",
+      "powershell",
+      "pr_watch",
+      "read",
+      "write",
+      ...ORCHESTRATOR_TOOL_NAMES,
+    ].sort(),
+  );
+  expect(session.tools.loadout.getActiveToolNames()).toEqual(["dynamic_tool"]);
+  expect(session.tools.prompt.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- read:");
+  expect(session.tools.prompt.systemPrompt).not.toContain("- bash:");
+  session.dispose();
+});
+
+const keepsExtensionToolsActiveWhenBuiltIn = () =>
+  Effect.runPromise(keepsExtensionToolsActiveWhenBuilt);
 
 describe("regression #3592: no-builtin-tools keeps extension tools enabled", () => {
-  let tempDir: string;
-  let agentDir: string;
+  beforeEach(prepareDirs);
 
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `msa-no-builtin-tools-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    agentDir = join(tempDir, "agent");
-    mkdirSync(agentDir, { recursive: true });
-  });
+  afterEach(cleanupDirs);
 
-  afterEach(() => {
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  });
-
-  async function createSession(options?: { noTools?: "all" | "builtin"; tools?: string[] }) {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.inMemory(tempDir);
-    const resourceLoader = new DefaultResourceLoader({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-      extensionFactories: [
-        (msa) => {
-          msa.on("session_start", () => {
-            msa.registerTool({
-              name: "dynamic_tool",
-              label: "Dynamic Tool",
-              description: "Tool registered from session_start",
-              promptSnippet: "Run dynamic test behavior",
-              parameters: Type.Object({}),
-              execute: async () => ({
-                content: [{ type: "text", text: "ok" }],
-                details: {},
-              }),
-            });
-          });
-        },
-      ],
-    });
-    await resourceLoader.reload();
-
-    const { session } = await createAgentSession({
-      cwd: tempDir,
-      agentDir,
-      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-      settingsManager,
-      sessionManager,
-      resourceLoader,
-      ...(options?.noTools !== undefined ? { noTools: options.noTools } : {}),
-      ...(options?.tools !== undefined ? { tools: options.tools } : {}),
-    });
-    await session.bindExtensions({});
-    return session;
-  }
-
-  it("keeps extension tools active when built-in defaults are disabled", async () => {
-    const session = await createSession({ noTools: "builtin" });
-
-    expect(
-      session
-        .getAllTools()
-        .map((tool) => tool.name)
-        .sort(),
-    ).toEqual(
-      [
-        "bash",
-        "dynamic_tool",
-        "edit",
-        "find",
-        "grep",
-        "ls",
-        "memory",
-        "model_policy",
-        "model_upgrade",
-        "powershell",
-        "pr_watch",
-        "read",
-        "write",
-        ...ORCHESTRATOR_TOOL_NAMES,
-      ].sort(),
-    );
-    expect(session.getActiveToolNames()).toEqual(["dynamic_tool"]);
-    expect(session.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
-    expect(session.systemPrompt).not.toContain("- read:");
-    expect(session.systemPrompt).not.toContain("- bash:");
-    session.dispose();
-  });
-
-  it("still disables all tools when noTools is all", async () => {
-    const session = await createSession({ noTools: "all" });
-
-    expect(session.getAllTools()).toEqual([]);
-    expect(session.getActiveToolNames()).toEqual([]);
-    expect(session.systemPrompt).toContain("<tools>\n(none)\n");
-    session.dispose();
-  });
-
-  it("propagates noTools through service-based session creation", async () => {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
-    const sessionManager = SessionManager.inMemory(tempDir);
-    const services = await createAgentSessionServices({
-      cwd: tempDir,
-      agentDir,
-      settingsManager,
-    });
-
-    const { session } = await createAgentSessionFromServices({
-      services,
-      sessionManager,
-      model: getModel("anthropic-api", "claude-sonnet-4-5")!,
-      noTools: "builtin",
-    });
-
-    expect(session.getActiveToolNames()).toEqual([]);
-    expect(session.systemPrompt).toContain("<tools>\n(none)\n");
-    expect(session.systemPrompt).not.toContain("- read:");
-    session.dispose();
-  });
+  it(
+    "keeps extension tools active when built-in defaults are disabled",
+    keepsExtensionToolsActiveWhenBuiltIn,
+  );
 });

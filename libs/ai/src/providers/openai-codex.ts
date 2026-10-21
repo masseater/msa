@@ -1,22 +1,35 @@
-import { openAICodexResponsesApi } from "../api/openai-codex-responses.lazy.ts";
-import { lazyOAuth } from "../auth/helpers.ts";
-import { loadOpenAICodexOAuth } from "../auth/oauth/load.ts";
-import { createProvider, type Provider } from "../models.ts";
-import { OPENAI_CODEX_MODELS } from "./openai-codex.models.ts";
+import openaiCodexResponsesLazy from "../api/openai-codex-responses.lazy.ts";
+import helpers from "../auth/helpers.ts";
+import loadModule from "../auth/oauth/load.ts";
+import modelsModule from "../models.ts";
+import type modelsTypes from "../models.types.ts";
+import openaiCodexModels from "./openai-codex.models.ts";
 
-export function openaiCodexProvider(): Provider<"openai-codex-responses"> {
+const { createProvider } = modelsModule;
+const { openAICodexResponsesApi } = openaiCodexResponsesLazy;
+const { lazyOAuth } = helpers;
+const { loadOpenAICodexOAuth } = loadModule;
+const { OPENAI_CODEX_MODELS } = openaiCodexModels;
+
+function openaiCodexProvider(): modelsTypes.Provider<"openai-codex-responses"> {
   return createProvider({
-    id: "openai-codex",
-    name: "OpenAI Codex (legacy)",
-    baseUrl: "https://chatgpt.com/backend-api",
+    api: openAICodexResponsesApi(),
     auth: {
       oauth: lazyOAuth({
-        name: "OpenAI (ChatGPT Plus/Pro)",
         isSubscription: true,
         load: loadOpenAICodexOAuth,
+        name: "OpenAI (ChatGPT Plus/Pro)",
       }),
     },
+    baseUrl: "https://chatgpt.com/backend-api",
+    id: "openai-codex",
     models: Object.values(OPENAI_CODEX_MODELS),
-    api: openAICodexResponsesApi(),
+    name: "OpenAI Codex (legacy)",
   });
 }
+
+const openaiCodex = {
+  openaiCodexProvider,
+};
+
+export default openaiCodex;

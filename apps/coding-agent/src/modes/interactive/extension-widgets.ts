@@ -1,30 +1,33 @@
-import { type Component, Container, Spacer, Text, type TUI } from "@msa/tui";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { ExtensionWidgetOptions } from "../../core/extensions/index.ts";
-import { ThemedText } from "./components/themed-text.ts";
-import { type Theme, theme } from "./theme/theme.ts";
+import type extensionsTypes from "../../core/extensions/index.types.ts";
+import ThemedText from "./components/themed-text.ts";
+import type extensionWidgetsTypes from "./extension-widgets.types.ts";
+import themeModule from "./theme/theme.ts";
 
-type Widget = Component & { dispose?(): void };
-export type WidgetContent = string[] | ((tui: TUI, thm: Theme) => Widget);
+const { theme } = themeModule;
+const { Container, Spacer, Text } = tuiModule;
 
-/** Text widgets are cut to this many lines so they cannot push the editor off screen. */
 const MAX_WIDGET_LINES = 10;
 
-/** The extension widgets rendered directly above and below the editor, keyed by extension-chosen names. */
-export class ExtensionWidgets {
+export default class ExtensionWidgets {
   readonly above = new Container();
   readonly below = new Container();
-  private readonly ui: TUI;
-  private readonly aboveWidgets = new Map<string, Widget>();
-  private readonly belowWidgets = new Map<string, Widget>();
+  private readonly ui: tuiTypes.TUI;
+  private readonly aboveWidgets = new Map<string, extensionWidgetsTypes.Widget>();
+  private readonly belowWidgets = new Map<string, extensionWidgetsTypes.Widget>();
 
-  constructor(ui: TUI) {
+  constructor(ui: tuiTypes.TUI) {
     this.ui = ui;
     this.fill();
   }
 
-  /** Replaces the widget named `key`, or removes it when `content` is undefined. */
-  set(key: string, content: WidgetContent | undefined, options?: ExtensionWidgetOptions): void {
+  set(
+    key: string,
+    content: extensionWidgetsTypes.WidgetContent | undefined,
+    options?: extensionsTypes.ExtensionWidgetOptions,
+  ): void {
     for (const widgets of [this.aboveWidgets, this.belowWidgets]) {
       widgets.get(key)?.dispose?.();
       widgets.delete(key);
@@ -59,7 +62,7 @@ export class ExtensionWidgets {
   }
 }
 
-function createTextWidget(lines: readonly string[]): Container {
+function createTextWidget(lines: readonly string[]): tuiTypes.Container {
   const container = new Container();
   for (const line of lines.slice(0, MAX_WIDGET_LINES)) {
     container.addChild(new Text(line, 1, 0));

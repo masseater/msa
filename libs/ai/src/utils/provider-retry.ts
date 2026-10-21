@@ -1,10 +1,15 @@
+import { Clock, DateTime, Effect, Function, Option, Random } from "effect";
+
+import abort from "./abort.ts";
+
+const { sleepUnlessAborted } = abort;
+
 const DEFAULT_MAX_RETRY_DELAY_MS = 60_000;
 
 interface ProviderRetryOptions {
   maxRetries?: number | undefined;
   maxRetryDelayMs?: number | undefined;
   signal?: AbortSignal | undefined;
-  /** HTTP statuses that fail at once although the default policy would retry them. */
   noRetryStatuses?: readonly number[] | undefined;
 }
 
@@ -21,12 +26,6 @@ function isProviderError(error: unknown): error is ProviderError {
   );
 }
 
-/**
- * Mirrors the pinned OpenAI/Anthropic SDK retry policy; review when either SDK is upgraded.
- *
- * @param {ProviderError} error - thrown value
- * @returns {boolean} whether the SDKs would retry the error
- */
 function isRetryableProviderError(error: ProviderError): boolean {
   const shouldRetry = error.headers?.get("x-should-retry");
   if (shouldRetry === "true") return true;
@@ -54,95 +53,116 @@ function validateServerRetryDelayMs(
   }
   return delayMs;
 }
+const parseHeaderNumber = (
+  error: ProviderError,
+  name: "retry-after-ms" | "retry-after",
+): string | undefined => {
+  const value = error.headers?.get(name);
+  return value === undefined || value === null || value === "" ? undefined : value;
+};
 
-function getRetryDelayMs(
+const getRetryDelayMs = (
   error: ProviderError,
   retryIndex: number,
   maxRetryDelayMs: number | undefined,
-): number {
-  const retryAfterMs = error.headers?.get("retry-after-ms");
-  if (retryAfterMs) {
-    const value = Number.parseFloat(retryAfterMs);
-    if (Number.isFinite(value))
-      return validateServerRetryDelayMs(value, maxRetryDelayMs, error.message);
-  }
+): Effect.Effect<number> =>
+  Effect.gen(function* () {
+    const retryAfterMs = parseHeaderNumber(error, "retry-after-ms");
+    if (retryAfterMs !== undefined) {
+      const value = Number.parseFloat(retryAfterMs);
+      if (Number.isFinite(value))
+        return validateServerRetryDelayMs(value, maxRetryDelayMs, error.message);
+    }
 
-  const retryAfter = error.headers?.get("retry-after");
-  if (retryAfter) {
-    const seconds = Number.parseFloat(retryAfter);
-    const delayMs = Number.isNaN(seconds) ? Date.parse(retryAfter) - Date.now() : seconds * 1000;
-    if (Number.isFinite(delayMs))
-      return validateServerRetryDelayMs(delayMs, maxRetryDelayMs, error.message);
-  }
+    const retryAfter = parseHeaderNumber(error, "retry-after");
+    if (retryAfter !== undefined) {
+      const seconds = Number.parseFloat(retryAfter);
+      const delayMs = Number.isNaN(seconds)
+        ? Option.match(DateTime.make(retryAfter), {
+            onNone: () => Number.NaN,
+            onSome: DateTime.toEpochMillis,
+          }) - (yield* Clock.currentTimeMillis)
+        : seconds * 1000;
+      if (Number.isFinite(delayMs))
+        return validateServerRetryDelayMs(delayMs, maxRetryDelayMs, error.message);
+    }
 
-  const exponentialDelay = Math.min(0.5 * 2 ** retryIndex, 8) * 1000;
-  return exponentialDelay * (1 - Math.random() * 0.25);
-}
+    const exponentialDelay = Math.min(0.5 * 2 ** retryIndex, 8) * 1000;
+    return exponentialDelay * (1 - (yield* Random.next) * 0.25);
+  });
 
-function createAbortError(): Error {
+const createAbortError = (): Error => {
   const error = new Error("Request aborted");
   error.name = "AbortError";
   return error;
+};
+
+interface ProviderRetryRun<T> {
+  readonly request: Effect.Effect<T>;
+  readonly options: ProviderRetryOptions;
+  readonly maxRetries: number;
 }
 
-function abortableSleep(ms: number, signal?: AbortSignal): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (signal?.aborted) {
-      reject(createAbortError());
-      return;
-    }
+const attemptProviderRequest = <T>(
+  run: ProviderRetryRun<T>,
+  retriesRemaining: number,
+): Effect.Effect<T> =>
+  run.request.pipe(
+    Effect.catchDefect((error) =>
+      Effect.gen(function* () {
+        if (run.options.signal?.aborted === true) return yield* Effect.die(createAbortError());
+        if (retriesRemaining <= 0 || !isProviderError(error) || !isRetryableProviderError(error))
+          return yield* Effect.die(error);
+        if (
+          error.status !== undefined &&
+          run.options.noRetryStatuses?.includes(error.status) === true
+        )
+          return yield* Effect.die(error);
 
-    const onAbort = () => {
-      clearTimeout(timeout);
-      reject(createAbortError());
-    };
-    const timeout = setTimeout(
-      () => {
-        signal?.removeEventListener("abort", onAbort);
-        resolve();
-      },
-      Math.max(0, ms),
-    );
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-}
+        const retryIndex = run.maxRetries - retriesRemaining;
+        const delayMs = yield* getRetryDelayMs(error, retryIndex, run.options.maxRetryDelayMs);
+        yield* sleepUnlessAborted(Math.max(0, delayMs), run.options.signal, createAbortError);
+        return yield* attemptProviderRequest(run, retriesRemaining - 1);
+      }),
+    ),
+  );
 
-/**
- * Reproduce the retry behavior used by the OpenAI and Anthropic SDKs while making
- * their backoff sleep interruptible. Their built-in retry timers ignore the
- * request AbortSignal, so callers must invoke the SDK with `maxRetries: 0` and
- * wrap the request with this helper. Provider-requested delays above
- * `maxRetryDelayMs` fail immediately (60 seconds by default); set it to zero to
- * disable the limit.
- *
- * @param {() => Promise<T>} request - request to run
- * @param {ProviderRetryOptions} [options] - retry options
- * @returns {Promise<T>} the request result
- */
-export async function retryProviderRequest<T>(
-  request: () => Promise<T>,
-  options: ProviderRetryOptions = {},
-): Promise<T> {
-  const maxRetries = options.maxRetries ?? 0;
-  let retriesRemaining = maxRetries;
+const retryProviderEffect: {
+  (options?: ProviderRetryOptions): <T>(request: Effect.Effect<T>) => Effect.Effect<T>;
+  <T>(request: Effect.Effect<T>, options?: ProviderRetryOptions): Effect.Effect<T>;
+} = Function.dual(
+  (args) => Effect.isEffect(args[0]),
+  <T>(request: Effect.Effect<T>, options: ProviderRetryOptions = {}): Effect.Effect<T> => {
+    const maxRetries = options.maxRetries ?? 0;
+    return attemptProviderRequest({ maxRetries, options, request }, maxRetries);
+  },
+);
 
-  for (;;) {
-    try {
-      // Each retry is a fresh SDK request, so X-Stainless-Retry-Count remains zero.
-      return await request();
-    } catch (error) {
-      if (options.signal?.aborted) throw createAbortError();
-      if (retriesRemaining <= 0 || !isProviderError(error) || !isRetryableProviderError(error))
-        throw error;
-      if (error.status !== undefined && options.noRetryStatuses?.includes(error.status))
-        throw error;
+const providerRequestWithRetry: {
+  (options?: ProviderRetryOptions): <T>(request: () => Promise<T>) => Effect.Effect<T>;
+  <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Effect.Effect<T>;
+} = Function.dual(
+  (args) => typeof args[0] === "function",
+  <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Effect.Effect<T> =>
+    retryProviderEffect(
+      Effect.promise(() => request()),
+      options,
+    ),
+);
 
-      const retryIndex = maxRetries - retriesRemaining;
-      retriesRemaining--;
-      await abortableSleep(
-        getRetryDelayMs(error, retryIndex, options.maxRetryDelayMs),
-        options.signal,
-      );
-    }
-  }
-}
+const retryProviderRequest: {
+  (options?: ProviderRetryOptions): <T>(request: () => Promise<T>) => Promise<T>;
+  <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Promise<T>;
+} = Function.dual(
+  (args) => typeof args[0] === "function",
+  <T>(request: () => Promise<T>, options?: ProviderRetryOptions): Promise<T> =>
+    Effect.runPromise(providerRequestWithRetry(request, options)),
+);
+
+const providerRetry = {
+  providerRequestWithRetry,
+  retryProviderEffect,
+  retryProviderRequest,
+};
+
+export default providerRetry;

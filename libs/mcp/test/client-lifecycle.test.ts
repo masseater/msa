@@ -1,8 +1,13 @@
 import { Deferred, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { McpAbortError, McpClient, McpTimeoutError } from "../src/index.ts";
-import { connect, createServer, type TestServer } from "./in-memory-server.ts";
+import mcp from "../src/index.ts";
+import inMemoryServer from "./in-memory-server.ts";
+import type inMemoryServerTypes from "./in-memory-server.types.ts";
+
+const { McpAbortError, McpClient, McpTimeoutError } = mcp;
+
+const { connect, createServer } = inMemoryServer;
 
 const yieldMacrotask = Effect.sleep("0 millis");
 
@@ -11,12 +16,12 @@ const progressTokenOf = (params: unknown): number =>
 
 const abortController = (): AbortController => new AbortController();
 
-const sendProgress = (server: TestServer, token: number) =>
+const sendProgress = (server: inMemoryServerTypes.TestServer, token: number) =>
   Effect.promise(() =>
     server.transport.send({
       jsonrpc: "2.0",
       method: "notifications/progress",
-      params: { progressToken: token, progress: 1, total: 2 },
+      params: { progress: 1, progressToken: token, total: 2 },
     }),
   );
 
@@ -30,17 +35,17 @@ const renewsTimeout = Effect.gen(function* () {
         Effect.sleep("40 millis").pipe(Effect.andThen(sendProgress(server, token))),
       );
       yield* Effect.sleep("80 millis");
-      return { content: [{ type: "text", text: "done" }] };
+      return { content: [{ text: "done", type: "text" }] };
     }),
   );
   const progress = vi.fn();
-  const result = client.callTool("slow", {}, { timeoutMs: 50, onProgress: progress });
+  const result = client.callTool("slow", {}, { onProgress: progress, timeoutMs: 50 });
   yield* Effect.promise(() => vi.advanceTimersByTimeAsync(40));
   yield* Effect.promise(() => vi.advanceTimersByTimeAsync(40));
   expect(yield* Effect.promise(() => result)).toEqual({
-    content: [{ type: "text", text: "done" }],
+    content: [{ text: "done", type: "text" }],
   });
-  expect(progress).toHaveBeenCalledWith({ progressToken: 2, progress: 1, total: 2 });
+  expect(progress).toHaveBeenCalledWith({ progress: 1, progressToken: 2, total: 2 });
   yield* Effect.promise(() => client.close());
 });
 
@@ -55,7 +60,7 @@ const cancelsRequests = Effect.gen(function* () {
   expect(server.messages).toContainEqual({
     jsonrpc: "2.0",
     method: "notifications/cancelled",
-    params: { requestId: 2, reason: "stop" },
+    params: { reason: "stop", requestId: 2 },
   });
   yield* Effect.promise(() =>
     expect(client.callTool("wait", {}, { timeoutMs: 5 })).rejects.toBeInstanceOf(McpTimeoutError),
@@ -84,8 +89,8 @@ const acceptsOlderProtocol = Effect.gen(function* () {
   const { clientTransport, server } = yield* createServer();
   server.setHandler("initialize", () =>
     Effect.succeed({
-      protocolVersion: "2024-11-05",
       capabilities: {},
+      protocolVersion: "2024-11-05",
       serverInfo: { name: "old-server", version: "0.1.0" },
     }),
   );
@@ -97,8 +102,8 @@ const acceptsOlderProtocol = Effect.gen(function* () {
   const unsupported = yield* createServer();
   unsupported.server.setHandler("initialize", () =>
     Effect.succeed({
-      protocolVersion: "1999-01-01",
       capabilities: {},
+      protocolVersion: "1999-01-01",
       serverInfo: { name: "ancient-server", version: "0.1.0" },
     }),
   );
@@ -114,7 +119,7 @@ const acceptsOlderProtocol = Effect.gen(function* () {
 const skipsCancelForInitialize = Effect.gen(function* () {
   const { clientTransport, server } = yield* createServer();
   server.setHandler("initialize", () => Effect.never);
-  const client = new McpClient({ name: "test-client", version: "1.0.0", requestTimeoutMs: 5 });
+  const client = new McpClient({ name: "test-client", requestTimeoutMs: 5, version: "1.0.0" });
   yield* Effect.promise(() =>
     expect(client.connect(clientTransport)).rejects.toBeInstanceOf(McpTimeoutError),
   );
@@ -144,23 +149,23 @@ const answersRoots = Effect.gen(function* () {
   const { clientTransport, server } = yield* createServer();
   const client = new McpClient({
     name: "test-client",
+    roots: [{ name: "workspace", uri: "file:///workspace" }],
     version: "1.0.0",
-    roots: [{ uri: "file:///workspace", name: "workspace" }],
   });
   yield* Effect.promise(() => client.connect(clientTransport));
   const changed = vi.fn();
   client.onNotification("notifications/tools/list_changed", changed);
   yield* Effect.promise(() =>
-    server.transport.send({ jsonrpc: "2.0", id: "roots", method: "roots/list" }),
+    server.transport.send({ id: "roots", jsonrpc: "2.0", method: "roots/list" }),
   );
   yield* Effect.promise(() =>
     server.transport.send({ jsonrpc: "2.0", method: "notifications/tools/list_changed" }),
   );
   yield* yieldMacrotask;
   expect(server.messages).toContainEqual({
-    jsonrpc: "2.0",
     id: "roots",
-    result: { roots: [{ uri: "file:///workspace", name: "workspace" }] },
+    jsonrpc: "2.0",
+    result: { roots: [{ name: "workspace", uri: "file:///workspace" }] },
   });
   expect(changed).toHaveBeenCalledWith(undefined);
   yield* Effect.promise(() => client.close());

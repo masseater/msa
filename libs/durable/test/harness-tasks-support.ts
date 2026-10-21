@@ -1,52 +1,90 @@
-import type { Context } from "@msa/chord";
-import {
-  type Conversation,
-  defineTask,
-  MemoryStorage,
-  type TaskId,
-  type TaskRuntime,
-} from "@msa/durable";
+import type chordTypes from "@msa/chord/index.types";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { context } from "./session-support.ts";
-import { abortMarked, abortedWith, completed, openTasks } from "./task-support.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessTasksSupportTypes from "./harness-tasks-support.types.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-export type Step = { phase: "run" };
+const { defineTask } = durable;
+const { MemoryStorage } = memory;
 
-export type StepRuntime<R> = TaskRuntime<null, Step, R, object>;
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { abortMarked, abortedWith, completed, openTasks } = taskSupport;
 
-// A one-phase task; the default abort handler settles `aborted` with reason "test".
-export function oneStep<R = null>(
+function oneStepImpl<R = null>(
   name: string,
   run: (
-    task: { readonly id: TaskId<R> },
-    runtime: StepRuntime<R>,
-    context: Context,
+    task: { readonly id: durableTypes.TaskId<R> },
+    runtime: harnessTasksSupportTypes.StepRuntime<R>,
+    context: chordTypes.Context,
   ) => Promise<void>,
-  abort: (runtime: StepRuntime<R>, context: Context) => Promise<void> = (runtime, ctx) =>
-    runtime.commit(() => abortedWith("test"), ctx),
-) {
-  return defineTask<null, Step, R>({
-    name,
-    version: 1,
-    initial: () => ({ phase: "run" }),
-    phases: { run: (task, runtime, ctx) => run(task, runtime, ctx) },
+  abort: (
+    runtime: harnessTasksSupportTypes.StepRuntime<R>,
+    context: chordTypes.Context,
+  ) => Promise<void> = (runtime, ctx) => runtime.commit(() => abortedWith("test"), ctx),
+): durableTypes.Task<null, harnessTasksSupportTypes.Step, R, object> {
+  return defineTask<null, harnessTasksSupportTypes.Step, R>({
     abort: (_task, runtime, ctx) => abort(runtime, ctx),
+    initial: () => ({ phase: "run" }),
+    name,
+    phases: { run: (task, runtime, ctx) => run(task, runtime, ctx) },
+    version: 1,
   });
 }
 
-// A one-phase task that waits for `gate` and completes with null.
-export function gated(name: string, gate: Promise<void>) {
-  return oneStep(name, async (_task, runtime, ctx) => {
-    await gate;
-    await runtime.commit(() => completed(null), ctx);
-  });
+const oneStep: {
+  <R = null>(
+    run: (
+      task: { readonly id: durableTypes.TaskId<R> },
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
+      context: chordTypes.Context,
+    ) => Promise<void>,
+    abort?: (
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
+      context: chordTypes.Context,
+    ) => Promise<void>,
+  ): (name: string) => durableTypes.Task<null, harnessTasksSupportTypes.Step, R, object>;
+  <R = null>(
+    name: string,
+    run: (
+      task: { readonly id: durableTypes.TaskId<R> },
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
+      context: chordTypes.Context,
+    ) => Promise<void>,
+    abort?: (
+      runtime: harnessTasksSupportTypes.StepRuntime<R>,
+      context: chordTypes.Context,
+    ) => Promise<void>,
+  ): durableTypes.Task<null, harnessTasksSupportTypes.Step, R, object>;
+} = dual((args) => typeof args[0] === "string", oneStepImpl);
+
+function gatedImpl(name: string, gate: Promise<void>) {
+  return oneStep(name, (_task, runtime, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        yield* awaited(gate);
+        yield* awaited(runtime.commit(() => completed(null), ctx));
+      }),
+    ),
+  );
 }
 
-export function start<R>(
-  conversation: Conversation,
+const gated: {
+  (gate: Promise<void>): (name: string) => ReturnType<typeof gatedImpl>;
+  (name: string, gate: Promise<void>): ReturnType<typeof gatedImpl>;
+} = dual(2, gatedImpl);
+
+function startImpl<R>(
+  conversation: durableTypes.Conversation,
   task: ReturnType<typeof oneStep<R>>,
   options: { readonly background?: boolean } = {},
-): Promise<TaskId<R>> {
+): Promise<durableTypes.TaskId<R>> {
   return Promise.resolve(
     conversation.commit(
       (tx) => tx.createTask(task, null, { ownership: { kind: "conversation" }, ...options }),
@@ -55,25 +93,49 @@ export function start<R>(
   );
 }
 
-export async function openRoot(
+const start: {
+  <R>(
+    task: ReturnType<typeof oneStep<R>>,
+    options?: { readonly background?: boolean },
+  ): (conversation: durableTypes.Conversation) => Promise<durableTypes.TaskId<R>>;
+  <R>(
+    conversation: durableTypes.Conversation,
+    task: ReturnType<typeof oneStep<R>>,
+    options?: { readonly background?: boolean },
+  ): Promise<durableTypes.TaskId<R>>;
+} = dual((args) => !("definition" in args[0]), startImpl);
+
+const openRoot = Effect.fn("openRoot")(function* (
   tasks: Parameters<typeof openTasks>[1],
-  options: Parameters<typeof openTasks>[2] & { readonly storage?: MemoryStorage } = {},
+  options: Parameters<typeof openTasks>[2] & {
+    readonly storage?: harnessTasksSupportTypes.MemoryStorage;
+  } = {},
 ) {
-  const opened = await openTasks(options.storage ?? new MemoryStorage(), tasks, options);
-  const root = await opened.harness.root(context);
+  const opened = yield* openTasks(options.storage ?? new MemoryStorage(), tasks, options);
+  const root = yield* awaited(opened.harness.root(context));
   return { ...opened, root };
-}
+});
 
-// Start `abortTask()` and resolve once its mark is durable, before it has joined the run.
-export async function markDurably(
-  harness: Awaited<ReturnType<typeof openRoot>>["harness"],
-  id: TaskId,
-): Promise<{ readonly aborting: Promise<unknown> }> {
+const markDurably = Effect.fn("markDurably")(function* (
+  harness: Effect.Success<ReturnType<typeof openRoot>>["harness"],
+  id: durableTypes.TaskId,
+) {
   const aborting = harness.abortTask(id, context);
-  await abortMarked(harness, id);
+  yield* abortMarked(harness, id);
   return { aborting };
-}
+});
 
-export function withSignal(signal: AbortSignal): Context {
+function withSignal(signal: AbortSignal): chordTypes.Context {
   return { ...context, abortSignal: signal };
 }
+
+const harnessTasksSupport = {
+  gated,
+  markDurably,
+  oneStep,
+  openRoot,
+  start,
+  withSignal,
+};
+
+export default harnessTasksSupport;

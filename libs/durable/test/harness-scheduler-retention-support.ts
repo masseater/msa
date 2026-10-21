@@ -1,23 +1,27 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 
-import {
-  type Conversation,
-  defineTask,
-  type Harness,
-  type Storage,
-  type TaskId,
-} from "@msa/durable";
+import harnessModule from "../src/harness/harness.ts";
+import node from "../src/storage/sqlite/node.ts";
+import effectSupport from "./effect-support.ts";
+import type harnessSchedulerRetentionSupportTypes from "./harness-scheduler-retention-support.types.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-import { SCHEDULER_INDEX_SIZES } from "../src/harness/harness.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred, openTasks } from "./task-support.ts";
+const { defineTask } = durable;
+const { SCHEDULER_INDEX_SIZES } = harnessModule;
+const { openNodeSqliteStorage } = node;
 
-export const gates = new Map<string, Deferred<void>>();
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir } = platformSupport;
+const { context } = sessionSupport;
+const { aborted, deferred, openTasks } = taskSupport;
 
-export function gate(name: string): Deferred<void> {
+const gates = new Map<string, PromiseWithResolvers<void>>();
+
+function gate(name: string): PromiseWithResolvers<void> {
   let found = gates.get(name);
   if (found === undefined) {
     found = deferred<void>();
@@ -26,162 +30,228 @@ export function gate(name: string): Deferred<void> {
   return found;
 }
 
-/** How often each named task started its phase. */
-export const runs = new Map<string, number>();
+const runs = new Map<string, number>();
 
-/** Holds until its gate opens, then completes; its abort handler ends it `aborted`. */
-export const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
+const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
+  initial: () => ({ phase: "hold" }),
   name: "test.retention.hold",
-  version: 1,
-  initial: () => ({ phase: "hold" }),
   phases: {
-    hold: async (task, runtime, ctx) => {
-      runs.set(task.input.name, (runs.get(task.input.name) ?? 0) + 1);
-      const opened = await Promise.race([
-        gate(task.input.name).promise.then(() => true),
-        aborted(runtime.signal),
-      ]);
-      if (opened !== true) return;
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
-        ctx,
-      );
-    },
+    hold: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          runs.set(task.input.name, (runs.get(task.input.name) ?? 0) + 1);
+          const opened = yield* awaited(
+            Promise.race([gate(task.input.name).promise.then(() => true), aborted(runtime.signal)]),
+          );
+          if (opened !== true) return;
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
+              ctx,
+            ),
+          );
+        }),
+      ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
-/** Holds until its gate opens, then creates a held task `inside.<name>` in conversation `input.into` and ends. */
-export const Spawner = defineTask<{ name: string; into: number }, { phase: "hold" }, null>({
+const Spawner = defineTask<{ name: string; into: number }, { phase: "hold" }, null>({
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
+  initial: () => ({ phase: "hold" }),
   name: "test.retention.spawner",
-  version: 1,
-  initial: () => ({ phase: "hold" }),
   phases: {
-    hold: async (task, runtime, ctx) => {
-      const opened = await Promise.race([
-        gate(task.input.name).promise.then(() => true),
-        aborted(runtime.signal),
-      ]);
-      if (opened !== true) return;
-      await runtime.commit(async (tx) => {
-        await tx.createTask(
-          Hold,
-          { name: `inside.${task.input.name}` },
-          { ownership: { kind: "conversation" }, conversationId: task.input.into as never },
-        );
-        return { status: "terminal", outcome: { status: "completed", result: null } };
-      }, ctx);
-    },
+    hold: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+          const opened = yield* awaited(
+            Promise.race([gate(task.input.name).promise.then(() => true), aborted(runtime.signal)]),
+          );
+          if (opened !== true) return;
+          yield* awaited(
+            runtime.commit(
+              (tx) =>
+                runPromise(
+                  Effect.gen(function* () {
+                    yield* awaited(
+                      tx.createTask(
+                        Hold,
+                        { name: `inside.${task.input.name}` },
+                        {
+                          conversationId: task.input.into as never,
+                          ownership: { kind: "conversation" },
+                        },
+                      ),
+                    );
+                    return { outcome: { result: null, status: "completed" }, status: "terminal" };
+                  }),
+                ),
+              ctx,
+            ),
+          );
+        }),
+      ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
-/** Rejected commits it caught. */
-export const rejections: unknown[] = [];
+const rejections: unknown[] = [];
 
-/**
- * Holds until `rejected` opens, then tries one terminal commit that creates a task in conversation `into` and a child of
- * its own, which the Transaction rejects as the task is ending. Catches the rejection and holds.
- */
-export const Rejected = defineTask<{ into: number }, { phase: "hold" }, null>({
+const Rejected = defineTask<{ into: number }, { phase: "hold" }, null>({
+  abort: (_task, runtime, ctx) =>
+    Promise.resolve(
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
+    ),
+  initial: () => ({ phase: "hold" }),
   name: "test.retention.rejected",
-  version: 1,
-  initial: () => ({ phase: "hold" }),
   phases: {
-    hold: async (task, runtime, ctx) => {
-      const opened = await Promise.race([
-        gate("rejected").promise.then(() => true),
-        aborted(runtime.signal),
-      ]);
-      if (opened !== true) return;
-      try {
-        await runtime.commit(async (tx) => {
-          await tx.createTask(
-            Hold,
-            { name: "staged" },
-            { ownership: { kind: "conversation" }, conversationId: task.input.into as never },
+    hold: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+          const opened = yield* awaited(
+            Promise.race([gate("rejected").promise.then(() => true), aborted(runtime.signal)]),
           );
-          await tx.createTask(
-            Hold,
-            { name: "child" },
-            { ownership: { kind: "task", taskId: task.id } },
+          if (opened !== true) return;
+          yield* awaited(
+            runtime.commit(
+              (tx) =>
+                runPromise(
+                  Effect.gen(function* () {
+                    yield* awaited(
+                      tx.createTask(
+                        Hold,
+                        { name: "staged" },
+                        {
+                          conversationId: task.input.into as never,
+                          ownership: { kind: "conversation" },
+                        },
+                      ),
+                    );
+                    yield* awaited(
+                      tx.createTask(
+                        Hold,
+                        { name: "child" },
+                        { ownership: { kind: "task", taskId: task.id } },
+                      ),
+                    );
+                    return { outcome: { result: null, status: "completed" }, status: "terminal" };
+                  }),
+                ),
+              ctx,
+            ),
+          ).pipe(
+            Effect.catchDefect((error) =>
+              Effect.sync(() => {
+                rejections.push(error);
+              }),
+            ),
           );
-          return { status: "terminal", outcome: { status: "completed", result: null } };
-        }, ctx);
-      } catch (error) {
-        rejections.push(error);
-      }
-      await aborted(runtime.signal);
-    },
+          return yield* awaited(aborted(runtime.signal));
+        }),
+      ),
   },
-  abort: (_task, runtime, ctx) =>
-    Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
-    ),
+  version: 1,
 });
 
-export type Sizes = Record<
-  "live" | "settled" | "edges" | "below" | "roots" | "unloaded" | "dropQueue",
-  number
->;
-
-export function sizes(harness: Harness): Sizes {
-  return (harness as unknown as Record<symbol, Sizes>)[SCHEDULER_INDEX_SIZES]!;
+function sizes(harness: durableTypes.Harness): harnessSchedulerRetentionSupportTypes.Sizes {
+  return (harness as unknown as Record<symbol, harnessSchedulerRetentionSupportTypes.Sizes>)[
+    SCHEDULER_INDEX_SIZES
+  ]!;
 }
 
-export const directories: string[] = [];
+const directories: string[] = [];
 
-export async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-retention-"));
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const directory = yield* makeTempDir("msa-durable-retention-");
   directories.push(directory);
-  return join(directory, "session.sqlite");
-}
+  return joinPath(directory, "session.sqlite");
+});
 
-export async function open(storage?: Storage) {
-  const opened = await openTasks(storage ?? (await openNodeSqliteStorage(await sqlitePath())), [
-    Hold,
-    Spawner,
-    Rejected,
-  ]);
-  const root = await opened.harness.root(context);
+const open = Effect.fn("open")(function* (storage?: durableTypes.Storage) {
+  const opened = yield* openTasks(
+    storage ?? (yield* awaited(openNodeSqliteStorage(yield* sqlitePath()))),
+    [Hold, Spawner, Rejected],
+  );
+  const root = yield* awaited(opened.harness.root(context));
   opened.harness.resume();
   return { ...opened, root };
-}
+});
 
-export async function status(harness: Harness, id: TaskId) {
-  return (await harness.getTask(id, context))!.state;
-}
+const status = Effect.fn("status")(function* (
+  harness: durableTypes.Harness,
+  id: durableTypes.TaskId,
+) {
+  return (yield* awaited(harness.getTask(id, context)))!.state;
+});
 
-// Under live `parent`: tool task T owning conversation C, a task in C; all of them end. Returns C.
-export async function subagentCycle(
-  harness: Harness,
-  root: Conversation,
-  parent: TaskId,
+const subagentCycle = Effect.fn("subagentCycle")(function* (
+  harness: durableTypes.Harness,
+  root: durableTypes.Conversation,
+  parent: durableTypes.TaskId,
   n: number,
 ) {
-  const { tool, inner, child } = await root.commit(async (tx) => {
-    const tool = await tx.createTask(
-      Hold,
-      { name: `tool${n}` },
-      { ownership: { kind: "task", taskId: parent } },
-    );
-    const child = await tx.createConversation({ ownership: { kind: "task", taskId: tool } });
-    const inner = await tx.createTask(
-      Hold,
-      { name: `inner${n}` },
-      { ownership: { kind: "conversation" }, conversationId: child.id },
-    );
-    return { tool, inner, child: child.id };
-  }, context);
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { tool, inner, child } = yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const toolInner = yield* awaited(
+              tx.createTask(
+                Hold,
+                { name: `tool${n}` },
+                { ownership: { kind: "task", taskId: parent } },
+              ),
+            );
+            const childInner = yield* awaited(
+              tx.createConversation({ ownership: { kind: "task", taskId: toolInner } }),
+            );
+            const innerInner = yield* awaited(
+              tx.createTask(
+                Hold,
+                { name: `inner${n}` },
+                { conversationId: childInner.id, ownership: { kind: "conversation" } },
+              ),
+            );
+            return { child: childInner.id, inner: innerInner, tool: toolInner };
+          }),
+        ),
+      context,
+    ),
+  );
   gate(`inner${n}`).resolve();
   gate(`tool${n}`).resolve();
-  await harness.waitForTask(inner, context);
-  await harness.waitForTask(tool, context);
+  yield* awaited(harness.waitForTask(inner, context));
+  yield* awaited(harness.waitForTask(tool, context));
   return child;
-}
+});
+
+const harnessSchedulerRetentionSupport = {
+  Hold,
+  Rejected,
+  Spawner,
+  directories,
+  gate,
+  gates,
+  open,
+  rejections,
+  runs,
+  sizes,
+  sqlitePath,
+  status,
+  subagentCycle,
+};
+
+export default harnessSchedulerRetentionSupport;

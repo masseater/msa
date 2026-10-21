@@ -1,12 +1,14 @@
-/**
- * The usage examples of docs/spec.md, compile-checked. Each block is copied as written apart from formatting, with
- * the names the spec leaves to the application typed in `spec-usage-names.ts`. Keep the two in sync; `test/examples/`
- * runs the same patterns end to end.
- */
 import { expect, expectTypeOf, it } from "vite-plus/test";
 
-import { createBashTool, createEditTool, createReadTool } from "../src/tools/index.ts";
-import {
+import toolsModule from "../src/tools/index.ts";
+import specUsageExtensions from "./spec-usage-extensions.ts";
+import type specUsageNamesTypes from "./spec-usage-names.ts";
+import specUsageSequences from "./spec-usage-sequences.ts";
+import taskSequences from "./spec-usage-task-sequences.ts";
+
+const { createBashTool, createEditTool, createReadTool } = toolsModule;
+
+const {
   bashExtensions,
   chatExtension,
   followTask,
@@ -15,29 +17,22 @@ import {
   promptExtensions,
   subagentExtension,
   subagentTools,
-} from "./spec-usage-extensions.ts";
-import type { SpecNames } from "./spec-usage-names.ts";
-import {
-  containerSequence,
-  hostSequence,
-  setupSequences,
-  taskSequences,
-} from "./spec-usage-sequences.ts";
+} = specUsageExtensions;
+const { containerSequence, hostSequence, setupSequences } = specUsageSequences;
 
-// Never called: the names the spec leaves to the application have no values.
-function examples(names: SpecNames) {
+function examples(names: specUsageNamesTypes.SpecNames) {
   const tools = {
-    readTool: createReadTool(),
-    editTool: createEditTool(),
     bashTool: createBashTool(),
+    editTool: createEditTool(),
+    readTool: createReadTool(),
   };
   const extensions = {
     ...promptExtensions(names),
     ...bashExtensions(names, tools.bashTool),
     ...planMode(names),
+    Chat: chatExtension(),
     Subagent: subagentExtension(names),
     SubagentTools: subagentTools(names),
-    Chat: chatExtension(),
   };
   const Payment = paymentTask(names);
   const sequences = {
@@ -46,7 +41,7 @@ function examples(names: SpecNames) {
     ...hostSequence(names, tools, extensions),
     ...taskSequences(names, extensions.SubagentTools, followTask()),
   };
-  return { sequences, Payment };
+  return { Payment, sequences };
 }
 
 it("compiles the spec's usage examples", () => {

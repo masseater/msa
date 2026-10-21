@@ -1,26 +1,28 @@
-/**
- * Hello Tool - Minimal custom tool example
- */
+import ai from "@msa/ai";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
 
-import { Type } from "@msa/ai";
-import { defineTool, type ExtensionAPI } from "@msa/coding-agent";
+const { defineTool } = codingAgent;
+
+const { Type } = ai;
 
 const helloTool = defineTool({
-  name: "hello",
-  label: "Hello",
   description: "A simple greeting tool",
+  execute: (_toolCallId, params) =>
+    Effect.runPromise(
+      Effect.succeed({
+        content: [{ text: `Hello, ${params.name}!`, type: "text" }],
+        details: { greeted: params.name },
+      }),
+    ),
+  label: "Hello",
+  name: "hello",
   parameters: Type.Object({
     name: Type.String({ description: "Name to greet" }),
   }),
-
-  async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-    return {
-      content: [{ type: "text", text: `Hello, ${params.name}!` }],
-      details: { greeted: params.name },
-    };
-  },
 });
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   msa.registerTool(helloTool);
 }

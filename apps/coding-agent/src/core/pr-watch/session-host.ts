@@ -1,59 +1,55 @@
-import type { TelemetryContext } from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
 
-import { shortId } from "../../utils/text.ts";
-import type { PrNotification, PrWatchHost } from "./watch.ts";
+import textModule from "../../utils/text.ts";
+import type sessionHostTypes from "./session-host.types.ts";
+import type watchTypes from "./watch.types.ts";
 
-export const PR_WATCH_MESSAGE_TYPE = "msa.pr_watch";
+const { shortId } = textModule;
 
-export interface PrWatchMessage {
-  readonly customType: string;
-  readonly content: string;
-  readonly display: boolean;
-}
+const PR_WATCH_MESSAGE_TYPE = "msa.pr_watch";
 
-export interface PrWatchDelivery {
-  /** The session the notification is injected into, so the text says which thread it belongs to. */
-  readonly threadId: string;
-  readonly sendMessage: (
-    message: PrWatchMessage,
-    options: { readonly triggerTurn: boolean; readonly deliverAs: "steer" },
-  ) => void;
-  readonly changed: () => void;
-  readonly telemetry: TelemetryContext;
-}
-
-function record(telemetry: TelemetryContext, notification: PrNotification): void {
+function record(
+  telemetry: telemetryTypes.TelemetryContext,
+  notification: watchTypes.PrNotification,
+): void {
   telemetry.log({
-    severity: "info",
-    body: "msa.pr_watch.notification",
     attributes: {
       "msa.pr_watch.label": notification.label,
       "msa.pr_watch.text": notification.text,
       "msa.pr_watch.wake": notification.wake,
     },
+    body: "msa.pr_watch.notification",
+    severity: "info",
   });
   if (notification.ci === undefined) return;
   telemetry.recordMetric({
+    attributes: { "msa.ci.conclusion": notification.ci.conclusion },
+    description: "Time a watched pull request waited for its checks to finish",
     kind: "histogram",
     name: "msa.pr_watch.ci.duration",
-    value: notification.ci.durationMs / 1000,
     unit: "s",
-    description: "Time a watched pull request waited for its checks to finish",
-    attributes: { "msa.ci.conclusion": notification.ci.conclusion },
+    value: notification.ci.durationMs / 1000,
   });
 }
 
-export function createPrWatchHost(delivery: PrWatchDelivery): PrWatchHost {
+function createPrWatchHost(delivery: sessionHostTypes.PrWatchDelivery): watchTypes.PrWatchHost {
   const thread = shortId(delivery.threadId);
   return {
+    changed: () => delivery.changed(),
     notify: (notification) => {
       record(delivery.telemetry, notification);
       const content = thread === "" ? notification.text : `${notification.text} [${thread}]`;
       delivery.sendMessage(
-        { customType: PR_WATCH_MESSAGE_TYPE, content, display: true },
-        { triggerTurn: notification.wake, deliverAs: "steer" },
+        { content, customType: PR_WATCH_MESSAGE_TYPE, display: true },
+        { deliverAs: "steer", triggerTurn: notification.wake },
       );
     },
-    changed: () => delivery.changed(),
   };
 }
+
+const sessionHost = {
+  PR_WATCH_MESSAGE_TYPE,
+  createPrWatchHost,
+};
+
+export default sessionHost;

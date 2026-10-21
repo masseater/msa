@@ -1,647 +1,280 @@
-/**
- * RPC Client for programmatic access to the coding agent.
- *
- * Spawns the agent in RPC mode and provides a typed API for all operations.
- */
+import type agentTypes from "@msa/agent-core/index.types";
+import type aiTypes from "@msa/ai/index.types";
+import { Effect } from "effect";
 
-import { type ChildProcess, spawn } from "node:child_process";
+import awaitingModule from "../../core/awaiting.ts";
+import type jsonEventTypes from "../json-event.types.ts";
+import type rpcClientTypes from "./rpc-client.types.ts";
+import RpcConnection from "./rpc-client/rpc-connection.ts";
+import type rpcTypesTypes from "./rpc-types.ts";
 
-import type { AgentMessage, ThinkingLevel } from "@msa/agent-core";
-import type { ImageContent } from "@msa/ai";
+const { awaited, awaitingWith } = awaitingModule;
 
-import type {
-  PromptDisposition,
-  QueuedInputDisposition,
-  SessionStats,
-} from "../../core/agent-session.ts";
-import type { BashResult } from "../../core/bash-executor.ts";
-import type { CompactionResult } from "../../core/compaction/index.ts";
-import type { SessionEntry, SessionTreeNode } from "../../core/session-manager.ts";
-import type { JsonAgentSessionEvent } from "../json-event.ts";
-import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.ts";
-import type { RpcCommand, RpcResponse, RpcSessionState, RpcSlashCommand } from "./rpc-types.ts";
+export default class RpcClient {
+  readonly connection: RpcConnection;
 
-// ============================================================================
-// Types
-// ============================================================================
+  options!: rpcClientTypes.RpcClientOptions;
 
-/** Distributive Omit that works with union types */
-type DistributiveOmit<T, K extends keyof T> = T extends unknown ? Omit<T, K> : never;
-
-/** RpcCommand without the id field (for internal send) */
-type RpcCommandBody = DistributiveOmit<RpcCommand, "id">;
-
-export interface RpcClientOptions {
-  /** Path to the CLI entry point (default: searches for dist/cli.js) */
-  cliPath?: string;
-  /** Working directory for the agent */
-  cwd?: string;
-  /** Environment variables */
-  env?: Record<string, string>;
-  /** Provider to use */
-  provider?: string;
-  /** Model ID to use */
-  model?: string;
-  /** Additional CLI arguments */
-  args?: string[];
-}
-
-export interface ModelInfo {
-  provider: string;
-  id: string;
-  contextWindow: number;
-  reasoning: boolean;
-}
-
-export type RpcEventListener = (event: JsonAgentSessionEvent) => void;
-
-// ============================================================================
-// RPC Client
-// ============================================================================
-
-export class RpcClient {
-  private process: ChildProcess | null = null;
-  private stopReadingStdout: (() => void) | null = null;
-  private eventListeners: RpcEventListener[] = [];
-  private pendingRequests: Map<
-    string,
-    { resolve: (response: RpcResponse) => void; reject: (error: Error) => void }
-  > = new Map();
-  private requestId = 0;
-  private stderr = "";
-  private exitError: Error | null = null;
-  private options: RpcClientOptions;
-
-  constructor(options: RpcClientOptions = {}) {
-    this.options = options;
+  abort(): Promise<void> {
+    return this.connection.command({ type: "abort" });
   }
 
-  /**
-   * Start the RPC agent process.
-   */
-  async start(): Promise<void> {
-    if (this.process) {
-      throw new Error("Client already started");
-    }
-
-    this.exitError = null;
-
-    const cliPath = this.options.cliPath ?? "dist/cli.js";
-    const args = ["--mode", "rpc"];
-
-    if (this.options.provider) {
-      args.push("--provider", this.options.provider);
-    }
-    if (this.options.model) {
-      args.push("--model", this.options.model);
-    }
-    if (this.options.args) {
-      args.push(...this.options.args);
-    }
-
-    const childProcess = spawn("node", [cliPath, ...args], {
-      cwd: this.options.cwd,
-      env: { ...process.env, ...this.options.env },
-      stdio: ["pipe", "pipe", "pipe"],
-    });
-    this.process = childProcess;
-
-    // Collect stderr for debugging
-    childProcess.stderr?.on("data", (data) => {
-      this.stderr += data.toString();
-      process.stderr.write(data);
-    });
-
-    childProcess.once("exit", (code, signal) => {
-      if (this.process !== childProcess) return;
-      const error = this.createProcessExitError(code, signal);
-      this.exitError = error;
-      this.rejectPendingRequests(error);
-    });
-    childProcess.once("error", (error) => {
-      if (this.process !== childProcess) return;
-      const processError = new Error(
-        `Agent process error: ${error.message}. Stderr: ${this.stderr}`,
-      );
-      this.exitError = processError;
-      this.rejectPendingRequests(processError);
-    });
-    childProcess.stdin?.on("error", (error) => {
-      if (this.process !== childProcess) return;
-      const stdinError =
-        this.exitError ??
-        new Error(`Agent process stdin error: ${error.message}. Stderr: ${this.stderr}`);
-      this.exitError = stdinError;
-      this.rejectPendingRequests(stdinError);
-    });
-
-    // Set up strict JSONL reader for stdout.
-    this.stopReadingStdout = attachJsonlLineReader(childProcess.stdout!, (line) => {
-      this.handleLine(line);
-    });
-
-    // Wait a moment for process to initialize
-    await new Promise((resolve) => setTimeout(resolve, 100));
-
-    if (this.process.exitCode !== null) {
-      const error =
-        this.exitError ??
-        this.createProcessExitError(this.process.exitCode, this.process.signalCode);
-      this.exitError = error;
-      throw error;
-    }
+  setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void> {
+    return this.connection.command({ mode, type: "set_steering_mode" });
   }
 
-  /**
-   * Stop the RPC agent process.
-   */
-  async stop(): Promise<void> {
-    if (!this.process) return;
-
-    this.stopReadingStdout?.();
-    this.stopReadingStdout = null;
-    this.process.kill("SIGTERM");
-
-    // Wait for process to exit
-    await new Promise<void>((resolve) => {
-      const timeout = setTimeout(() => {
-        this.process?.kill("SIGKILL");
-        resolve();
-      }, 1000);
-
-      this.process?.on("exit", () => {
-        clearTimeout(timeout);
-        resolve();
-      });
-    });
-
-    this.process = null;
-    this.pendingRequests.clear();
+  setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void> {
+    return this.connection.command({ mode, type: "set_follow_up_mode" });
   }
 
-  /**
-   * Subscribe to agent events.
-   */
-  onEvent(listener: RpcEventListener): () => void {
-    this.eventListeners.push(listener);
-    return () => {
-      const index = this.eventListeners.indexOf(listener);
-      if (index !== -1) {
-        this.eventListeners.splice(index, 1);
-      }
-    };
+  setAutoCompaction(enabled: boolean): Effect.Effect<void> {
+    return Effect.promise(() => this.connection.command({ enabled, type: "set_auto_compaction" }));
   }
 
-  /**
-   * Get collected stderr output (useful for debugging).
-   */
-  getStderr(): string {
-    return this.stderr;
+  setAutoRetry(enabled: boolean): Effect.Effect<void> {
+    return Effect.promise(() => this.connection.command({ enabled, type: "set_auto_retry" }));
   }
 
-  // =========================================================================
-  // Command Methods
-  // =========================================================================
-
-  /**
-   * Send a prompt to the agent.
-   * Returns the prompt's disposition after acceptance; use onEvent() to receive streaming events.
-   * If the disposition is "handled", no run started for this prompt, so don't wait for agent_settled.
-   */
-  async prompt(
-    message: string,
-    images?: ImageContent[],
-    streamingBehavior?: "steer" | "followUp",
-  ): Promise<PromptDisposition> {
-    const response = await this.send({ type: "prompt", message, images, streamingBehavior });
-    return this.getData<{ disposition: PromptDisposition }>(response).disposition;
+  abortRetry(): Promise<void> {
+    return this.connection.command({ type: "abort_retry" });
   }
 
-  /**
-   * Send a prompt as an `/ask` turn: the model can only answer, and the next prompt is back to the
-   * full set of tools.
-   */
-  async ask(message: string, images?: ImageContent[]): Promise<PromptDisposition> {
-    const response = await this.send({ type: "prompt", message, images, mode: "ask" });
-    return this.getData<{ disposition: PromptDisposition }>(response).disposition;
+  abortBash(): Promise<void> {
+    return this.connection.command({ type: "abort_bash" });
   }
 
-  /**
-   * Queue a steering message to interrupt the agent mid-run.
-   */
-  async steer(message: string, images?: ImageContent[]): Promise<QueuedInputDisposition> {
-    const response = await this.send({ type: "steer", message, images });
-    return this.getData<{ disposition: QueuedInputDisposition }>(response).disposition;
-  }
-
-  /**
-   * Queue a follow-up message to be processed after the agent finishes.
-   */
-  async followUp(message: string, images?: ImageContent[]): Promise<QueuedInputDisposition> {
-    const response = await this.send({ type: "follow_up", message, images });
-    return this.getData<{ disposition: QueuedInputDisposition }>(response).disposition;
-  }
-
-  /**
-   * Abort current operation.
-   */
-  async abort(): Promise<void> {
-    await this.send({ type: "abort" });
-  }
-
-  /**
-   * Clear queued steering and follow-up messages, returning their text.
-   */
-  async clearQueue(): Promise<{ steering: string[]; followUp: string[] }> {
-    const response = await this.send({ type: "clear_queue" });
-    return this.getData(response);
-  }
-
-  /**
-   * Start a new session, optionally with parent tracking.
-   * @param parentSession - Optional parent session path for lineage tracking
-   * @returns Object with `cancelled: true` if an extension cancelled the new session
-   */
-  async newSession(parentSession?: string): Promise<{ cancelled: boolean }> {
-    const response = await this.send({ type: "new_session", parentSession });
-    return this.getData(response);
-  }
-
-  /**
-   * Get current session state.
-   */
-  async getState(): Promise<RpcSessionState> {
-    const response = await this.send({ type: "get_state" });
-    return this.getData(response);
-  }
-
-  /**
-   * Set model by provider and ID.
-   */
-  async setModel(provider: string, modelId: string): Promise<{ provider: string; id: string }> {
-    const response = await this.send({ type: "set_model", provider, modelId });
-    return this.getData(response);
-  }
-
-  /**
-   * Cycle to next model.
-   */
-  async cycleModel(): Promise<{
-    model: { provider: string; id: string };
-    thinkingLevel: ThinkingLevel;
-    isScoped: boolean;
-  } | null> {
-    const response = await this.send({ type: "cycle_model" });
-    return this.getData(response);
-  }
-
-  /**
-   * Get list of available models.
-   */
-  async getAvailableModels(): Promise<ModelInfo[]> {
-    const response = await this.send({ type: "get_available_models" });
-    return this.getData<{ models: ModelInfo[] }>(response).models;
-  }
-
-  /**
-   * Set thinking level.
-   */
-  async setThinkingLevel(level: ThinkingLevel): Promise<void> {
-    await this.send({ type: "set_thinking_level", level });
-  }
-
-  /**
-   * Cycle thinking level.
-   */
-  async cycleThinkingLevel(): Promise<{ level: ThinkingLevel } | null> {
-    const response = await this.send({ type: "cycle_thinking_level" });
-    return this.getData(response);
-  }
-
-  /**
-   * Get list of available thinking levels for the current model.
-   */
-  async getAvailableThinkingLevels(): Promise<ThinkingLevel[]> {
-    const response = await this.send({ type: "get_available_thinking_levels" });
-    return this.getData<{ levels: ThinkingLevel[] }>(response).levels;
-  }
-
-  /**
-   * Set steering mode.
-   */
-  async setSteeringMode(mode: "all" | "one-at-a-time"): Promise<void> {
-    await this.send({ type: "set_steering_mode", mode });
-  }
-
-  /**
-   * Set follow-up mode.
-   */
-  async setFollowUpMode(mode: "all" | "one-at-a-time"): Promise<void> {
-    await this.send({ type: "set_follow_up_mode", mode });
-  }
-
-  /**
-   * Compact session context.
-   */
-  async compact(customInstructions?: string): Promise<CompactionResult> {
-    const response = await this.send({ type: "compact", customInstructions });
-    return this.getData(response);
-  }
-
-  /**
-   * Set auto-compaction enabled/disabled.
-   */
-  async setAutoCompaction(enabled: boolean): Promise<void> {
-    await this.send({ type: "set_auto_compaction", enabled });
-  }
-
-  /**
-   * Set auto-retry enabled/disabled.
-   */
-  async setAutoRetry(enabled: boolean): Promise<void> {
-    await this.send({ type: "set_auto_retry", enabled });
-  }
-
-  /**
-   * Abort in-progress retry.
-   */
-  async abortRetry(): Promise<void> {
-    await this.send({ type: "abort_retry" });
-  }
-
-  /**
-   * Execute a bash command.
-   */
-  async bash(command: string): Promise<BashResult> {
-    const response = await this.send({ type: "bash", command });
-    return this.getData(response);
-  }
-
-  /**
-   * Abort running bash command.
-   */
-  async abortBash(): Promise<void> {
-    await this.send({ type: "abort_bash" });
-  }
-
-  /**
-   * Get session statistics.
-   */
-  async getSessionStats(): Promise<SessionStats> {
-    const response = await this.send({ type: "get_session_stats" });
-    return this.getData(response);
-  }
-
-  /**
-   * Export session to HTML.
-   */
-  async exportHtml(outputPath?: string): Promise<{ path: string }> {
-    const response = await this.send({ type: "export_html", outputPath });
-    return this.getData(response);
-  }
-
-  /**
-   * Switch to a different session file.
-   * @returns Object with `cancelled: true` if an extension cancelled the switch
-   */
-  async switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
-    const response = await this.send({ type: "switch_session", sessionPath });
-    return this.getData(response);
-  }
-
-  /**
-   * Fork from a specific message.
-   * @returns Object with `text` (the message text) and `cancelled` (if extension cancelled)
-   */
-  async fork(entryId: string): Promise<{ text: string; cancelled: boolean }> {
-    const response = await this.send({ type: "fork", entryId });
-    return this.getData(response);
-  }
-
-  /**
-   * Clone the current active branch into a new session.
-   * @returns Object with `cancelled: true` if an extension cancelled the clone
-   */
-  async clone(): Promise<{ cancelled: boolean }> {
-    const response = await this.send({ type: "clone" });
-    return this.getData(response);
-  }
-
-  /**
-   * Get messages available for forking.
-   */
-  async getForkMessages(): Promise<Array<{ entryId: string; text: string }>> {
-    const response = await this.send({ type: "get_fork_messages" });
-    return this.getData<{ messages: Array<{ entryId: string; text: string }> }>(response).messages;
-  }
-
-  /**
-   * Get session entries in append order, optionally only those after the `since` entry id.
-   */
-  async getEntries(since?: string): Promise<{ entries: SessionEntry[]; leafId: string | null }> {
-    const response = await this.send({ type: "get_entries", since });
-    return this.getData<{ entries: SessionEntry[]; leafId: string | null }>(response);
-  }
-
-  /**
-   * Get the session entry tree.
-   */
-  async getTree(): Promise<{ tree: SessionTreeNode[]; leafId: string | null }> {
-    const response = await this.send({ type: "get_tree" });
-    return this.getData<{ tree: SessionTreeNode[]; leafId: string | null }>(response);
-  }
-
-  /**
-   * Get text of last assistant message.
-   */
-  async getLastAssistantText(): Promise<string | null> {
-    const response = await this.send({ type: "get_last_assistant_text" });
-    return this.getData<{ text: string | null }>(response).text;
-  }
-
-  /**
-   * Set the session display name.
-   */
-  async setSessionName(name: string): Promise<void> {
-    await this.send({ type: "set_session_name", name });
-  }
-
-  /**
-   * Get all messages in the session.
-   */
-  async getMessages(): Promise<AgentMessage[]> {
-    const response = await this.send({ type: "get_messages" });
-    return this.getData<{ messages: AgentMessage[] }>(response).messages;
-  }
-
-  /**
-   * Get available commands (extension commands, prompt templates, skills).
-   */
-  async getCommands(): Promise<RpcSlashCommand[]> {
-    const response = await this.send({ type: "get_commands" });
-    return this.getData<{ commands: RpcSlashCommand[] }>(response).commands;
-  }
-
-  // =========================================================================
-  // Helpers
-  // =========================================================================
-
-  /**
-   * Wait for agent to become idle (no streaming).
-   * Resolves when agent_settled event is received.
-   */
-  waitForIdle(timeout = 60000): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        unsubscribe();
-        reject(new Error(`Timeout waiting for agent to become idle. Stderr: ${this.stderr}`));
-      }, timeout);
-
-      const unsubscribe = this.onEvent((event) => {
-        if (event.type === "agent_settled") {
-          clearTimeout(timer);
-          unsubscribe();
-          resolve();
-        }
-      });
-    });
-  }
-
-  /**
-   * Collect events until agent becomes idle.
-   */
-  collectEvents(timeout = 60000): Promise<JsonAgentSessionEvent[]> {
-    return new Promise((resolve, reject) => {
-      const events: JsonAgentSessionEvent[] = [];
-      const timer = setTimeout(() => {
-        unsubscribe();
-        reject(new Error(`Timeout collecting events. Stderr: ${this.stderr}`));
-      }, timeout);
-
-      const unsubscribe = this.onEvent((event) => {
-        events.push(event);
-        if (event.type === "agent_settled") {
-          clearTimeout(timer);
-          unsubscribe();
-          resolve(events);
-        }
-      });
-    });
-  }
-
-  /**
-   * Send prompt and wait for completion, returning all events.
-   */
-  async promptAndWait(
-    message: string,
-    images?: ImageContent[],
-    timeout = 60000,
-  ): Promise<JsonAgentSessionEvent[]> {
-    const eventsPromise = this.collectEvents(timeout);
-    await this.prompt(message, images);
-    return eventsPromise;
-  }
-
-  // =========================================================================
-  // Internal
-  // =========================================================================
-
-  private handleLine(line: string): void {
-    try {
-      const data = JSON.parse(line);
-
-      // Check if it's a response to a pending request
-      if (data.type === "response" && data.id && this.pendingRequests.has(data.id)) {
-        const pending = this.pendingRequests.get(data.id)!;
-        this.pendingRequests.delete(data.id);
-        pending.resolve(data as RpcResponse);
-        return;
-      }
-
-      // Otherwise it's an event. Iterate a snapshot so listeners that unsubscribe during dispatch
-      // do not cause later listeners to miss this event.
-      for (const listener of [...this.eventListeners]) {
-        listener(data as JsonAgentSessionEvent);
-      }
-    } catch {
-      // Ignore non-JSON lines
-    }
-  }
-
-  private createProcessExitError(code: number | null, signal: NodeJS.Signals | null): Error {
-    return new Error(
-      `Agent process exited (code=${code} signal=${signal}). Stderr: ${this.stderr}`,
+  getForkMessages(): Effect.Effect<Array<{ entryId: string; text: string }>> {
+    return Effect.promise(() =>
+      this.connection.requestField<
+        { messages: Array<{ entryId: string; text: string }> },
+        "messages"
+      >({ type: "get_fork_messages" }, "messages"),
     );
   }
 
-  private rejectPendingRequests(error: Error): void {
-    for (const pending of this.pendingRequests.values()) {
-      pending.reject(error);
-    }
-    this.pendingRequests.clear();
+  setSessionName(name: string): Promise<void> {
+    return this.connection.command({ name, type: "set_session_name" });
   }
 
-  private async send(command: RpcCommandBody): Promise<RpcResponse> {
-    const childProcess = this.process;
-    const stdin = childProcess?.stdin;
-    if (!childProcess || !stdin) {
-      throw new Error("Client not started");
-    }
-    if (this.exitError) {
-      throw this.exitError;
-    }
-    if (childProcess.exitCode !== null) {
-      const error = this.createProcessExitError(childProcess.exitCode, childProcess.signalCode);
-      this.exitError = error;
-      throw error;
-    }
-    if (stdin.destroyed || !stdin.writable) {
-      const error = new Error(`Agent process stdin is not writable. Stderr: ${this.stderr}`);
-      this.exitError = error;
-      throw error;
-    }
-
-    const id = `req_${++this.requestId}`;
-    const fullCommand = { ...command, id } as RpcCommand;
-
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        this.pendingRequests.delete(id);
-        reject(
-          new Error(`Timeout waiting for response to ${command.type}. Stderr: ${this.stderr}`),
-        );
-      }, 30000);
-
-      this.pendingRequests.set(id, {
-        resolve: (response) => {
-          clearTimeout(timeout);
-          resolve(response);
-        },
-        reject: (error) => {
-          clearTimeout(timeout);
-          reject(error);
-        },
-      });
-
-      try {
-        stdin.write(serializeJsonLine(fullCommand));
-      } catch (error: unknown) {
-        const writeError = error instanceof Error ? error : new Error(String(error));
-        const pending = this.pendingRequests.get(id);
-        this.pendingRequests.delete(id);
-        pending?.reject(writeError);
-      }
-    });
+  clearQueue(): Promise<{ steering: string[]; followUp: string[] }> {
+    return this.connection.request({ type: "clear_queue" });
   }
 
-  private getData<T>(response: RpcResponse): T {
-    if (!response.success) {
-      const errorResponse = response as Extract<RpcResponse, { success: false }>;
-      throw new Error(errorResponse.error);
-    }
-    // Type assertion: we trust response.data matches T based on the command sent.
-    // This is safe because each public method specifies the correct T for its command.
-    const successResponse = response as Extract<RpcResponse, { success: true; data: unknown }>;
-    return successResponse.data as T;
+  newSession(parentSession?: string): Promise<{ cancelled: boolean }> {
+    return this.connection.request({ parentSession, type: "new_session" });
+  }
+
+  getState(): Promise<rpcTypesTypes.RpcSessionState> {
+    return this.connection.request({ type: "get_state" });
+  }
+
+  setModel(provider: string, modelId: string): Promise<{ provider: string; id: string }> {
+    return this.connection.request({ modelId, provider, type: "set_model" });
+  }
+
+  cycleModel(): Promise<{
+    model: { provider: string; id: string };
+    thinkingLevel: agentTypes.ThinkingLevel;
+    isScoped: boolean;
+  } | null> {
+    return this.connection.request({ type: "cycle_model" });
+  }
+
+  getAvailableModels(): Promise<rpcClientTypes.ModelInfo[]> {
+    return this.connection.requestField<{ models: rpcClientTypes.ModelInfo[] }, "models">(
+      { type: "get_available_models" },
+      "models",
+    );
+  }
+
+  setThinkingLevel(level: agentTypes.ThinkingLevel): Promise<void> {
+    return this.connection.command({ level, type: "set_thinking_level" });
+  }
+
+  cycleThinkingLevel(): Promise<{ level: agentTypes.ThinkingLevel } | null> {
+    return this.connection.request({ type: "cycle_thinking_level" });
+  }
+
+  getAvailableThinkingLevels(): Promise<agentTypes.ThinkingLevel[]> {
+    return this.connection.requestField<{ levels: agentTypes.ThinkingLevel[] }, "levels">(
+      { type: "get_available_thinking_levels" },
+      "levels",
+    );
+  }
+
+  compact(customInstructions?: string): Promise<rpcClientTypes.CompactionResult> {
+    return this.connection.request({ customInstructions, type: "compact" });
+  }
+
+  bash(command: string): Promise<rpcClientTypes.BashResult> {
+    return this.connection.request({ command, type: "bash" });
+  }
+
+  getSessionStats(): Promise<rpcClientTypes.SessionStats> {
+    return this.connection.request({ type: "get_session_stats" });
+  }
+
+  exportHtml(outputPath?: string): Promise<{ path: string }> {
+    return this.connection.request({ outputPath, type: "export_html" });
+  }
+
+  switchSession(sessionPath: string): Promise<{ cancelled: boolean }> {
+    return this.connection.request({ sessionPath, type: "switch_session" });
+  }
+
+  fork(entryId: string): Promise<{ text: string; cancelled: boolean }> {
+    return this.connection.request({ entryId, type: "fork" });
+  }
+
+  clone(): Promise<{ cancelled: boolean }> {
+    return this.connection.request({ type: "clone" });
+  }
+
+  getEntries(
+    since?: string,
+  ): Promise<{ entries: rpcClientTypes.SessionEntry[]; leafId: string | null }> {
+    return this.connection.request({ since, type: "get_entries" });
+  }
+
+  getTree(): Promise<{ tree: rpcClientTypes.SessionTreeNode[]; leafId: string | null }> {
+    return this.connection.request({ type: "get_tree" });
+  }
+
+  getLastAssistantText(): Promise<string | null> {
+    return this.connection.requestField<{ text: string | null }, "text">(
+      { type: "get_last_assistant_text" },
+      "text",
+    );
+  }
+
+  getMessages(): Effect.Effect<agentTypes.AgentMessage[]> {
+    return Effect.promise(() =>
+      this.connection.requestField<{ messages: agentTypes.AgentMessage[] }, "messages">(
+        { type: "get_messages" },
+        "messages",
+      ),
+    );
+  }
+
+  getCommands(): Promise<rpcTypesTypes.RpcSlashCommand[]> {
+    return this.connection.requestField<{ commands: rpcTypesTypes.RpcSlashCommand[] }, "commands">(
+      { type: "get_commands" },
+      "commands",
+    );
+  }
+
+  prompt(
+    message: string,
+    images?: aiTypes.ImageContent[],
+    streamingBehavior?: "steer" | "followUp",
+  ): Promise<rpcClientTypes.PromptDisposition> {
+    return this.connection.requestField<
+      { disposition: rpcClientTypes.PromptDisposition },
+      "disposition"
+    >({ images, message, streamingBehavior, type: "prompt" }, "disposition");
+  }
+
+  ask(message: string, images?: aiTypes.ImageContent[]): Promise<rpcClientTypes.PromptDisposition> {
+    return this.connection.requestField<
+      { disposition: rpcClientTypes.PromptDisposition },
+      "disposition"
+    >({ images, message, mode: "ask", type: "prompt" }, "disposition");
+  }
+
+  steer(
+    message: string,
+    images?: aiTypes.ImageContent[],
+  ): Promise<rpcClientTypes.QueuedInputDisposition> {
+    return this.connection.requestField<
+      { disposition: rpcClientTypes.QueuedInputDisposition },
+      "disposition"
+    >({ images, message, type: "steer" }, "disposition");
+  }
+
+  followUp(
+    message: string,
+    images?: aiTypes.ImageContent[],
+  ): Promise<rpcClientTypes.QueuedInputDisposition> {
+    return this.connection.requestField<
+      { disposition: rpcClientTypes.QueuedInputDisposition },
+      "disposition"
+    >({ images, message, type: "follow_up" }, "disposition");
+  }
+
+  promptAndWait(
+    message: string,
+    images?: aiTypes.ImageContent[],
+    timeout = 60000,
+  ): Promise<jsonEventTypes.JsonAgentSessionEvent[]> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const eventsPromise = this.collectEvents(timeout);
+        yield* awaited(this.prompt(message, images));
+        return yield* awaited(eventsPromise);
+      }, this),
+    );
+  }
+
+  start(): Promise<void> {
+    return this.connection.start();
+  }
+
+  stop(): Promise<void> {
+    return this.connection.stop();
+  }
+
+  onEvent(listener: rpcClientTypes.RpcEventListener): () => void {
+    return this.connection.onEvent(listener);
+  }
+
+  getStderr(): string {
+    return this.connection.getStderr();
+  }
+
+  waitForIdle(timeout = 60000): Promise<void> {
+    return Effect.runPromise(
+      Effect.callback<void>((resume) => {
+        const unsubscribe = this.connection.onEvent((event) => {
+          if (event.type === "agent_settled") resume(Effect.void);
+        });
+        return Effect.sync(unsubscribe);
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: timeout,
+          orElse: () =>
+            Effect.die(
+              new Error(
+                `Timeout waiting for agent to become idle. Stderr: ${this.connection.getStderr()}`,
+              ),
+            ),
+        }),
+      ),
+    );
+  }
+
+  collectEvents(timeout = 60000): Promise<jsonEventTypes.JsonAgentSessionEvent[]> {
+    return Effect.runPromise(
+      Effect.callback<jsonEventTypes.JsonAgentSessionEvent[]>((resume) => {
+        const events: jsonEventTypes.JsonAgentSessionEvent[] = [];
+        const unsubscribe = this.connection.onEvent((event) => {
+          events.push(event);
+          if (event.type === "agent_settled") resume(Effect.succeed(events));
+        });
+        return Effect.sync(unsubscribe);
+      }).pipe(
+        Effect.timeoutOrElse({
+          duration: timeout,
+          orElse: () =>
+            Effect.die(
+              new Error(`Timeout collecting events. Stderr: ${this.connection.getStderr()}`),
+            ),
+        }),
+      ),
+    );
+  }
+
+  constructor(options: rpcClientTypes.RpcClientOptions = {}) {
+    this.connection = new RpcConnection(this);
+    this.options = options;
   }
 }

@@ -1,15 +1,17 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { SelectList } from "../src/components/select-list.ts";
-import { visibleWidth } from "../src/utils.ts";
+import SelectList from "../src/components/select-list.ts";
+import utils from "../src/utils.ts";
+
+const { visibleWidth } = utils;
 
 const testTheme = {
+  description: (text: string) => text,
+  noMatch: (text: string) => text,
+  scrollInfo: (text: string) => text,
   selectedPrefix: (text: string) => text,
   selectedText: (text: string) => text,
-  description: (text: string) => text,
-  scrollInfo: (text: string) => text,
-  noMatch: (text: string) => text,
 };
 
 const visibleIndexOf = (line: string, text: string): number => {
@@ -22,9 +24,9 @@ describe("SelectList", () => {
   it("normalizes multiline descriptions to single line", () => {
     const items = [
       {
-        value: "test",
-        label: "test",
         description: "Line one\nLine two\nLine three",
+        label: "test",
+        value: "test",
       },
     ];
 
@@ -39,11 +41,11 @@ describe("SelectList", () => {
 
   it("keeps descriptions aligned when the primary text is truncated", () => {
     const items = [
-      { value: "short", label: "short", description: "short description" },
+      { description: "short description", label: "short", value: "short" },
       {
-        value: "very-long-command-name-that-needs-truncation",
-        label: "very-long-command-name-that-needs-truncation",
         description: "long description",
+        label: "very-long-command-name-that-needs-truncation",
+        value: "very-long-command-name-that-needs-truncation",
       },
     ];
 
@@ -61,13 +63,13 @@ describe("SelectList", () => {
 describe("SelectList", () => {
   it("uses the configured minimum primary column width", () => {
     const items = [
-      { value: "a", label: "a", description: "first" },
-      { value: "bb", label: "bb", description: "second" },
+      { description: "first", label: "a", value: "a" },
+      { description: "second", label: "bb", value: "bb" },
     ];
 
     const list = new SelectList(items, 5, testTheme, {
-      minPrimaryColumnWidth: 12,
       maxPrimaryColumnWidth: 20,
+      minPrimaryColumnWidth: 12,
     });
     const rendered = list.render(80);
 
@@ -78,16 +80,16 @@ describe("SelectList", () => {
   it("uses the configured maximum primary column width", () => {
     const items = [
       {
-        value: "very-long-command-name-that-needs-truncation",
-        label: "very-long-command-name-that-needs-truncation",
         description: "first",
+        label: "very-long-command-name-that-needs-truncation",
+        value: "very-long-command-name-that-needs-truncation",
       },
-      { value: "short", label: "short", description: "second" },
+      { description: "second", label: "short", value: "short" },
     ];
 
     const list = new SelectList(items, 5, testTheme, {
-      minPrimaryColumnWidth: 12,
       maxPrimaryColumnWidth: 20,
+      minPrimaryColumnWidth: 12,
     });
     const [first, second] = list.render(80);
     assert.ok(first !== undefined && second !== undefined);
@@ -101,16 +103,16 @@ describe("SelectList", () => {
   it("allows overriding primary truncation while preserving description alignment", () => {
     const items = [
       {
-        value: "very-long-command-name-that-needs-truncation",
-        label: "very-long-command-name-that-needs-truncation",
         description: "first",
+        label: "very-long-command-name-that-needs-truncation",
+        value: "very-long-command-name-that-needs-truncation",
       },
-      { value: "short", label: "short", description: "second" },
+      { description: "second", label: "short", value: "short" },
     ];
 
     const list = new SelectList(items, 5, testTheme, {
-      minPrimaryColumnWidth: 12,
       maxPrimaryColumnWidth: 12,
+      minPrimaryColumnWidth: 12,
       truncatePrimary: ({ text, maxWidth }) => {
         if (text.length <= maxWidth) {
           return text;

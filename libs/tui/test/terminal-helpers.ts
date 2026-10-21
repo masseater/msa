@@ -1,15 +1,14 @@
-import { setKittyProtocolActive } from "../src/keys.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
+import { dual } from "effect/Function";
 
-export type NegotiationHarness = {
-  terminal: ProcessTerminal;
-  writes: string[];
-  send(data: string): void;
-  getInput(): string | undefined;
-  cleanup(): void;
-};
+import env from "../src/env.ts";
+import keys from "../src/keys.ts";
+import ProcessTerminal from "../src/terminal.ts";
+import type terminalHelpersTypes from "./terminal-helpers.types.ts";
 
-export function setupNegotiation(): NegotiationHarness {
+const { setKittyProtocolActive } = keys;
+const { overrideEnv } = env;
+
+function setupNegotiation(): terminalHelpersTypes.NegotiationHarness {
   const terminal = new ProcessTerminal();
   const writes: string[] = [];
   let input: string | undefined;
@@ -38,14 +37,6 @@ export function setupNegotiation(): NegotiationHarness {
   (terminal as unknown as { queryAndEnableKittyProtocol(): void }).queryAndEnableKittyProtocol();
 
   return {
-    terminal,
-    writes,
-    send(data: string): void {
-      dataHandler?.(data);
-    },
-    getInput(): string | undefined {
-      return input;
-    },
     cleanup(): void {
       if (cleaned) return;
       cleaned = true;
@@ -57,21 +48,38 @@ export function setupNegotiation(): NegotiationHarness {
         setKittyProtocolActive(false);
       }
     },
+    getInput(): string | undefined {
+      return input;
+    },
+    send(data: string): void {
+      dataHandler?.(data);
+    },
+    terminal,
+    writes,
   };
 }
 
-export const working = "\x1b]7501;state=working:app=msa\x1b\\";
+const working = "\x1b]7501;state=working:app=msa\x1b\\";
 
-export const clear = "\x1b]7501;state=clear\x1b\\";
+const clear = "\x1b]7501;state=clear\x1b\\";
 
-export function withOverride(value: string | undefined, fn: () => void): void {
-  const previous = process.env["MSA_PROGRAM_STATUS"];
-  if (value === undefined) delete process.env["MSA_PROGRAM_STATUS"];
-  else process.env["MSA_PROGRAM_STATUS"] = value;
+const withOverride: {
+  (value: string | undefined, fn: () => void): void;
+  (fn: () => void): (value: string | undefined) => void;
+} = dual(2, (value: string | undefined, fn: () => void): void => {
+  const restore = overrideEnv({ MSA_PROGRAM_STATUS: value });
   try {
     fn();
   } finally {
-    if (previous === undefined) delete process.env["MSA_PROGRAM_STATUS"];
-    else process.env["MSA_PROGRAM_STATUS"] = previous;
+    restore();
   }
-}
+});
+
+const terminalHelpers = {
+  clear,
+  setupNegotiation,
+  withOverride,
+  working,
+};
+
+export default terminalHelpers;

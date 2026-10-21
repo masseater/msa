@@ -1,7 +1,9 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { fuzzyFilter, fuzzyMatch } from "../src/fuzzy.ts";
+import fuzzy from "../src/fuzzy.ts";
+
+const { fuzzyFilter, fuzzyMatch } = fuzzy;
 
 describe("fuzzyMatch", () => {
   it("empty query matches everything with score 0", () => {
@@ -18,7 +20,6 @@ describe("fuzzyMatch", () => {
   it("exact match has good score", () => {
     const result = fuzzyMatch("test", "test");
     assert.strictEqual(result.matches, true);
-    // Should be negative due to consecutive bonuses
     assert.ok(result.score < 0);
   });
 
@@ -83,7 +84,6 @@ describe("fuzzyFilter", () => {
     const items = ["a_p_p", "app", "application"];
     const result = fuzzyFilter(items, "app", (x: string) => x);
 
-    // "app" should be first (exact consecutive match at start)
     assert.strictEqual(result[0], "app");
   });
 
@@ -96,9 +96,9 @@ describe("fuzzyFilter", () => {
 
   it("works with custom getText function", () => {
     const items = [
-      { name: "foo", id: 1 },
-      { name: "bar", id: 2 },
-      { name: "foobar", id: 3 },
+      { id: 1, name: "foo" },
+      { id: 2, name: "bar" },
+      { id: 3, name: "foobar" },
     ];
     const result = fuzzyFilter(items, "foo", (item: { name: string; id: number }) => item.name);
 

@@ -1,0 +1,84 @@
+import { Effect } from "effect";
+import { afterEach, describe, expect, it } from "vite-plus/test";
+
+import type typesModule from "../src/types.types.ts";
+import effectSupport from "./effect-support.ts";
+import jsonlStorageSupport from "./jsonl-storage-support.ts";
+import platformSupport from "./platform-support.ts";
+
+const { awaited } = effectSupport;
+const {
+  context,
+  createRoot,
+  openStorage,
+  openStorages,
+  readLines,
+  sessionDocument,
+  tempDirectories,
+  tempDirectory,
+} = jsonlStorageSupport;
+const { joinPath, removeDir } = platformSupport;
+
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
+
+const appendsLaterDeltas = Effect.gen(function* () {
+  const directory = yield* tempDirectory();
+  const storage = yield* openStorage(directory);
+  yield* createRoot(storage);
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          content: { kind: "base", value: { count: 0 }, version: 1 },
+          record: sessionDocument(id),
+          type: "document.create",
+        },
+      ],
+      context,
+    ),
+  );
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          content: { kind: "base", value: { count: 10 }, version: 1 },
+          id,
+          type: "document.change",
+        },
+      ],
+      context,
+    ),
+  );
+  yield* awaited(
+    storage.commit(
+      [
+        {
+          content: { kind: "delta", ops: [["s", ["count"], 11]], version: 1 },
+          id,
+          type: "document.change",
+        },
+      ],
+      context,
+    ),
+  );
+  expect(yield* readLines(joinPath(directory, `doc-${id}.jsonl`))).toHaveLength(2);
+  const reopened = yield* openStorage(directory);
+  expect((yield* awaited(reopened.document(id, "current", context)))?.value).toEqual({
+    count: 11,
+  });
+});
+
+describe("Pico JsonlStorage publication and recovery", () => {
+  it("appends later deltas to the replacement sidecar after a current-only base", () =>
+    Effect.runPromise(appendsLaterDeltas));
+});

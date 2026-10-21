@@ -1,116 +1,158 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import {
-  type AssistantMessage,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  type ToolResultMessage,
-  Type,
-} from "@msa/ai";
-import {
-  defineTool,
-  type Harness,
-  type NestedToolExecutionResult,
-  type Task,
-  type TaskId,
-  type ToolRegistration,
-  ToolResultEntry,
-  ToolTask,
-  type ToolTaskInput,
-} from "@msa/durable";
+import node from "../src/storage/sqlite/node.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, openChat } from "./chat-support.ts";
-import { addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+const { Type, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
 
-export const Parameters = Type.Object({ text: Type.Optional(Type.String()) });
+const { ToolResultEntry, defineTool } = durable;
+const { openNodeSqliteStorage } = node;
+const { ToolTask } = harnessModule;
 
-export function tool(
+const { addTool, allEntries, awaited, context, joinPath, makeTempDir, openChat } = support;
+
+const Parameters = Type.Object({ text: Type.Optional(Type.String()) });
+
+function toolImpl(
   name: string,
-  execute: ToolRegistration<typeof Parameters>["execute"],
-  extra: Partial<ToolRegistration<typeof Parameters>> = {},
-): ToolRegistration<typeof Parameters> {
-  return defineTool({ name, description: name, parameters: Parameters, execute, ...extra });
+  execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
+  extra: Partial<durableTypes.ToolRegistration<typeof Parameters>> = {},
+): durableTypes.ToolRegistration<typeof Parameters> {
+  return defineTool({ description: name, execute, name, parameters: Parameters, ...extra });
 }
 
-export function call(name: string, id = "c1"): AssistantMessage {
-  return fauxAssistantMessage([fauxToolCall(name, {}, { id })], { stopReason: "toolUse" });
+const tool: {
+  (
+    execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
+    extra?: Partial<durableTypes.ToolRegistration<typeof Parameters>>,
+  ): (name: string) => ReturnType<typeof toolImpl>;
+  (
+    name: string,
+    execute: durableTypes.ToolRegistration<typeof Parameters>["execute"],
+    extra?: Partial<durableTypes.ToolRegistration<typeof Parameters>>,
+  ): ReturnType<typeof toolImpl>;
+} = dual((args) => typeof args[0] === "string", toolImpl);
+
+function call(name: string): aiTypes.AssistantMessage {
+  return fauxAssistantMessage([fauxToolCall(name, {}, { id: "c1" })], { stopReason: "toolUse" });
 }
 
-export const DONE = fauxAssistantMessage([fauxText("done")]);
+const DONE = fauxAssistantMessage([fauxText("done")]);
 
-export const directories = new Set<string>();
+const directories = new Set<string>();
 
-export async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-nested-restart-"));
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const directory = yield* makeTempDir("msa-durable-nested-restart-");
   directories.add(directory);
-  return join(directory, "session.sqlite");
-}
+  return joinPath(directory, "session.sqlite");
+});
 
-// Open the SQLite Harness without starting scheduling.
-export function open(path: string, setup: ChatSetup) {
-  return openNodeSqliteStorage(path).then((storage) => openChat(storage, setup));
-}
+const open = Effect.fn("open")(function* (path: string, setup: supportTypes.ChatSetup) {
+  return yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
+});
 
-export async function nestedTasks(harness: Harness) {
-  const tasks = (
-    await harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context)
-  ).items;
-  return tasks.filter((task) => (task.input as ToolTaskInput).kind === "nested");
-}
+const nestedTasks = Effect.fn("nestedTasks")(function* (harness: durableTypes.Harness) {
+  const tasks = (yield* awaited(
+    harness.commit((tx) => tx.scanTasks({ kind: ToolTask.definition.name }, 100), context),
+  )).items;
+  return tasks.filter((task) => (task.input as durableTypes.ToolTaskInput).kind === "nested");
+});
 
-export function results(entries: Awaited<ReturnType<typeof allEntries>>): ToolResultMessage[] {
+function results(
+  entries: Effect.Success<ReturnType<typeof allEntries>>,
+): aiTypes.ToolResultMessage[] {
   return entries
     .filter((entry) => ToolResultEntry.is(entry))
-    .map((entry) => entry.model![0] as ToolResultMessage);
+    .map((entry) => entry.model![0] as aiTypes.ToolResultMessage);
 }
 
-export function codes(result: NestedToolExecutionResult | undefined): string[] {
+function codes(result: durableTypes.NestedToolExecutionResult | undefined): string[] {
   return (result?.diagnostics ?? []).flatMap((diagnostic) =>
     diagnostic.code === undefined ? [] : [diagnostic.code],
   );
 }
 
-// Register `spawn`, which creates a `Worker` task it owns and waits for it, and `batch`, which makes `spawn` a nested
-// call, and let the model call `batch`. Returns where `spawn` records the worker's ID.
-export function spawnThroughBatch(
-  setup: ChatSetup,
-  Worker: Task<null, { phase: "work" }, null, object>,
+function spawnThroughBatchImpl(
+  setup: supportTypes.ChatSetup,
+  Worker: durableTypes.Task<null, { phase: "work" }, null, object>,
 ) {
-  const spawned: { worker?: TaskId } = {};
+  const spawned: { worker?: durableTypes.TaskId } = {};
   addTool(
     setup.registry,
-    tool("spawn", async (_args, api, callContext) => {
-      spawned.worker = await api.createTask(
-        Worker,
-        null,
-        { ownership: { kind: "task", taskId: api.taskId } },
-        callContext,
-      );
-      await api.waitForTask(spawned.worker, callContext);
-      return {};
-    }),
+    tool("spawn", (_args, api, callContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          spawned.worker = yield* awaited(
+            api.createTask(
+              Worker,
+              null,
+              { ownership: { kind: "task", taskId: api.taskId } },
+              callContext,
+            ),
+          );
+          yield* awaited(api.waitForTask(spawned.worker, callContext));
+          return {};
+        }),
+      ),
+    ),
   );
   addTool(
     setup.registry,
-    tool("batch", async (_args, api, callContext) => {
-      await api.executeTool("spawn", {}, callContext);
-      return {};
-    }),
+    tool("batch", (_args, api, callContext) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(api.executeTool("spawn", {}, callContext));
+          return {};
+        }),
+      ),
+    ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
   return spawned;
 }
 
-// Submit "go", close the Harness once `reached` holds, and reopen it without starting scheduling.
-export async function restartDuring(path: string, setup: ChatSetup, reached: Promise<unknown>) {
-  const first = await open(path, setup);
-  const id = (await first.root.submit({ type: "input", content: "go" }, context)).id;
-  await reached;
-  await first.harness.close(context);
-  return { opened: await open(path, setup), id };
-}
+const spawnThroughBatch: {
+  (
+    Worker: durableTypes.Task<null, { phase: "work" }, null, object>,
+  ): (setup: supportTypes.ChatSetup) => ReturnType<typeof spawnThroughBatchImpl>;
+  (
+    setup: supportTypes.ChatSetup,
+    Worker: durableTypes.Task<null, { phase: "work" }, null, object>,
+  ): ReturnType<typeof spawnThroughBatchImpl>;
+} = dual(2, spawnThroughBatchImpl);
+
+const restartDuring = Effect.fn("restartDuring")(function* (
+  path: string,
+  setup: supportTypes.ChatSetup,
+  reached: Promise<unknown>,
+) {
+  const first = yield* open(path, setup);
+  const id = (yield* awaited(first.root.submit({ content: "go", type: "input" }, context))).id;
+  yield* awaited(reached);
+  yield* awaited(first.harness.close(context));
+  return { id, opened: yield* open(path, setup) };
+});
+
+const harnessNestedToolsRestartSupport = {
+  DONE,
+  Parameters,
+  call,
+  codes,
+  directories,
+  nestedTasks,
+  open,
+  restartDuring,
+  results,
+  spawnThroughBatch,
+  sqlitePath,
+  tool,
+};
+
+export default harnessNestedToolsRestartSupport;

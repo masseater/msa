@@ -1,6 +1,6 @@
-import type { Component, Focusable } from "../src/tui.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-export class FocusableOverlay implements Component, Focusable {
+class FocusableOverlay implements tuiComponentTypes.Component, tuiComponentTypes.Focusable {
   focused = false;
   inputs: string[] = [];
   private lines: string[];
@@ -19,3 +19,5 @@ export class FocusableOverlay implements Component, Focusable {
 
   invalidate(): void {}
 }
+
+export default FocusableOverlay;

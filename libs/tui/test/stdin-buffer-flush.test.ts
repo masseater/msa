@@ -1,23 +1,26 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { wait } from "./stdin-buffer-helpers.ts";
+import { Effect } from "effect";
+
+import StdinBuffer from "../src/stdin-buffer.ts";
+import type stdinBufferTypes from "../src/stdin-buffer.types.ts";
+import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { wait } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -34,32 +37,32 @@ describe("StdinBuffer", () => {
       assert.deepStrictEqual(flushed, []);
     });
 
-    it("should emit flushed data via timeout", async () => {
-      processInput("\x1b[<35");
-      assert.deepStrictEqual(emittedSequences, []);
+    it("should emit flushed data via timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          processInput("\x1b[<35");
+          assert.deepStrictEqual(emittedSequences, []);
 
-      // Wait for timeout to flush
-      await wait(15);
+          yield* wait(15);
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b[<35"]);
+        }),
+      ));
   });
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -82,19 +85,17 @@ describe("StdinBuffer", () => {
 });
 
 function bracketedPasteCases2(): void {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -102,13 +103,11 @@ function bracketedPasteCases2(): void {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
 
-    // Collect paste events
     emittedPaste = [];
     buffer.on("paste", (data) => {
       emittedPaste.push(data);
@@ -122,7 +121,6 @@ function bracketedPasteCases2(): void {
     processInput(pasteStart + content + pasteEnd);
 
     assert.deepStrictEqual(emittedPaste, ["hello world"]);
-    // No data events during paste
     assert.deepStrictEqual(emittedSequences, []);
   });
 }
@@ -134,19 +132,17 @@ describe("StdinBuffer", () => {
 });
 
 function bracketedPasteCases3(): void {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -154,13 +150,11 @@ function bracketedPasteCases3(): void {
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
 
-    // Collect paste events
     emittedPaste = [];
     buffer.on("paste", (data) => {
       emittedPaste.push(data);
@@ -180,19 +174,17 @@ function bracketedPasteCases3(): void {
 }
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -201,13 +193,11 @@ describe("StdinBuffer", () => {
     beforeEach(() => {
       buffer = new StdinBuffer({ timeout: 10 });
 
-      // Collect emitted sequences
       emittedSequences = [];
       buffer.on("data", (sequence) => {
         emittedSequences.push(sequence);
       });
 
-      // Collect paste events
       emittedPaste = [];
       buffer.on("paste", (data) => {
         emittedPaste.push(data);

@@ -1,160 +1,74 @@
-import type { AgentMessage } from "@msa/agent-core";
-import { Effect, Fiber } from "effect";
+import type agentTypes from "@msa/agent-core/index.types";
+import { Effect } from "effect";
 
-import { actions } from "./actions.ts";
-import { type HandoffInput, type HandoffResult, handoffs } from "./handoff.ts";
-import { replan } from "./replan.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { scheduling } from "./schedule.ts";
-import { settling } from "./settle.ts";
-import {
-  snapshots,
-  type CreateTaskInput,
-  type NoteDelivery,
-  type OrchestratorSnapshot,
-  type ReplanInput,
-  type ReplanResult,
-  type ReportHit,
-  type SendNoteInput,
-  type SetTaskDependsInput,
-  type SetTaskStateInput,
-  type TaskView,
-} from "./snapshot.ts";
-import { store } from "./store.ts";
-import { OrchestratorTelemetry } from "./telemetry.ts";
-import { TranscriptCache } from "./transcripts.ts";
-import type { OrchestratorOptions, WorkerSession } from "./worker.ts";
-import type { WrapUp } from "./wrap-up.ts";
+import actionsModule from "./actions.ts";
+import handoffModule from "./handoff.ts";
+import OrchestratorState from "./orchestrator-state.ts";
+import type orchestratorTypes from "./orchestrator.types.ts";
+import replanModule from "./replan.ts";
+import storeModule from "./store.ts";
+import TranscriptCache from "./transcripts.ts";
 
-export type { HandoffInput, HandoffResult } from "./handoff.ts";
-export type {
-  CreateWorkerOptions,
-  OrchestratorDefaults,
-  OrchestratorOptions,
-  OrchestratorReport,
-  WorkerSession,
-} from "./worker.ts";
-export type {
-  CreateTaskInput,
-  NoteDelivery,
-  ReplanInput,
-  ReplanResult,
-  SendNoteInput,
-  SetTaskDependsInput,
-  SetTaskStateInput,
-} from "./types.ts";
+const { handoffs } = handoffModule;
+const { store } = storeModule;
+const { actions } = actionsModule;
+const { replan } = replanModule;
 
-export const ORCHESTRATOR_REPORT_MESSAGE_TYPE = "msa.orchestrator.report";
+export default class Orchestrator {
+  private readonly state: OrchestratorState;
+  private readonly transcripts: TranscriptCache;
 
-const EMPTY: OrchestratorSnapshot = {
-  tasks: [],
-  threads: [],
-  rounds: [],
-  replans: [],
-  maxConcurrentThreads: 4,
-};
-
-export class Orchestrator implements Runtime {
-  readonly database: ReturnType<typeof store.openDatabase>;
-  readonly options: OrchestratorOptions;
-  readonly telemetry: OrchestratorTelemetry;
-  readonly workers = new Map<string, WorkerSession>();
-  readonly runs = new Map<string, number>();
-  readonly runStartedAt = new Map<string, number>();
-  readonly wrapUps = new Map<string, WrapUp>();
-  readonly listeners = new Set<() => void>();
-  replanning = false;
-  snapshot: OrchestratorSnapshot = EMPTY;
-  maxConcurrentThreads: number;
-  private readonly transcripts = new TranscriptCache();
-  private queue: Promise<void> = Promise.resolve();
-  private runCount = 0;
-  private poller: Fiber.Fiber<never, never> | undefined;
-
-  constructor(options: OrchestratorOptions) {
-    this.telemetry = new OrchestratorTelemetry(options.telemetry);
-    this.options = {
-      ...options,
-      report: (text, details) => {
-        this.telemetry.reported(text, details);
-        options.report(text, details);
-      },
-    };
-    this.database = store.openDatabase(options.databasePath);
-    store.recoverRunning(this.database, options.project, Effect.runSync(nowMillis));
-    this.maxConcurrentThreads =
-      store.storedMaxConcurrent(this.database, options.project) ??
-      options.defaults().maxConcurrentThreads;
-    this.publish();
-    if (options.pollIntervalMs !== null) {
-      this.poller = scheduling.startPolling(this, options.pollIntervalMs ?? 5000);
-    }
+  constructor(options: orchestratorTypes.OrchestratorOptions) {
+    this.state = new OrchestratorState(options);
+    this.transcripts = new TranscriptCache(() => {
+      for (const listener of this.state.listeners) listener();
+    });
   }
 
-  nextRun(): number {
-    this.runCount += 1;
-    return this.runCount;
+  get database(): OrchestratorState["database"] {
+    return this.state.database;
   }
 
-  exclusive<A, E>(effect: Effect.Effect<A, E>): Promise<A> {
-    const run = this.queue.then(() => Effect.runPromise(effect));
-    this.queue = run.then(
-      () => undefined,
-      () => undefined,
-    );
-    return run;
+  get snapshot(): orchestratorTypes.OrchestratorSnapshot {
+    return this.state.snapshot;
   }
 
-  publish(): void {
-    this.snapshot = snapshots.buildSnapshot(
-      this.database,
-      this.options.project,
-      this.maxConcurrentThreads,
-    );
-    this.telemetry.published(this.snapshot, this.runs.size);
-    for (const listener of this.listeners) listener();
+  get replanning(): boolean {
+    return this.state.replanning;
   }
 
-  settle(threadId: string, run: number, worker: WorkerSession, error: unknown): Promise<void> {
-    return settling.settle(this, threadId, run, worker, error);
-  }
-
-  afterTurn(threadId: string, run: number, worker: WorkerSession): void {
-    settling.afterTurn(this, threadId, run, worker);
-  }
-
-  get tasks(): readonly TaskView[] {
-    return this.snapshot.tasks;
+  get tasks(): readonly orchestratorTypes.TaskView[] {
+    return this.state.snapshot.tasks;
   }
 
   onChange(listener: () => void): () => void {
-    this.listeners.add(listener);
+    this.state.listeners.add(listener);
     return () => {
-      this.listeners.delete(listener);
+      this.state.listeners.delete(listener);
     };
   }
 
-  messages(id: string): readonly AgentMessage[] {
+  messages(id: string): readonly agentTypes.AgentMessage[] {
     const sessionFile = this.snapshot.threads.find((thread) => thread.id === id)?.sessionFile;
-    return this.transcripts.messages(id, this.workers, sessionFile ?? null);
+    return this.transcripts.messages(id, this.state.workers, sessionFile ?? null);
   }
 
   progress(id: string): { startedAt: number | undefined; retrying: boolean } {
     return {
-      startedAt: this.runs.has(id) ? this.runStartedAt.get(id) : undefined,
-      retrying: this.workers.get(id)?.isRetrying ?? false,
+      retrying: this.state.workers.get(id)?.run.retry.isRetrying ?? false,
+      startedAt: this.state.runs.has(id) ? this.state.runStartedAt.get(id) : undefined,
     };
   }
 
   refresh(): Promise<void> {
-    return this.exclusive(Effect.sync(() => this.publish()));
+    return this.state.exclusive(Effect.sync(() => this.state.publish()));
   }
 
-  list(): Promise<TaskView[]> {
+  list(): Promise<orchestratorTypes.TaskView[]> {
     return this.refresh().then(() => [...this.snapshot.tasks]);
   }
 
-  read(id: string): Promise<TaskView> {
+  read(id: string): Promise<orchestratorTypes.TaskView> {
     return this.refresh().then(() => {
       const found = this.snapshot.tasks.find((task) => task.id === id);
       if (found === undefined) throw new Error(`Unknown task: ${id}`);
@@ -162,82 +76,68 @@ export class Orchestrator implements Runtime {
     });
   }
 
-  createTask(input: CreateTaskInput): Promise<TaskView> {
-    return this.exclusive(actions.createTask(this, input));
+  createTask(input: orchestratorTypes.CreateTaskInput): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(actions.createTask(this.state, input));
   }
 
-  setDepends(input: SetTaskDependsInput): Promise<TaskView[]> {
-    return this.exclusive(actions.setDepends(this, input));
+  setDepends(input: orchestratorTypes.SetTaskDependsInput): Promise<orchestratorTypes.TaskView[]> {
+    return this.state.exclusive(actions.setDepends(this.state, input));
   }
 
-  setState(input: SetTaskStateInput): Promise<TaskView> {
-    return this.exclusive(actions.setState(this, input));
+  setState(input: orchestratorTypes.SetTaskStateInput): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(actions.setState(this.state, input));
   }
 
   setModel(
     taskId: string,
     model: string,
-    thinkingLevel?: TaskView["thinkingLevel"],
-  ): Promise<TaskView> {
-    return this.exclusive(actions.setModel(this, taskId, model, thinkingLevel ?? undefined));
+    thinkingLevel?: orchestratorTypes.TaskView["thinkingLevel"],
+  ): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(
+      actions.setModel(this.state, taskId, model, thinkingLevel ?? undefined),
+    );
   }
 
-  sendNote(input: SendNoteInput): Promise<NoteDelivery> {
-    return this.exclusive(actions.sendNote(this, input));
+  sendNote(input: orchestratorTypes.SendNoteInput): Promise<orchestratorTypes.NoteDelivery> {
+    return this.state.exclusive(actions.sendNote(this.state, input));
   }
 
-  sendMessage(taskId: string, message: string): Promise<TaskView> {
-    return this.exclusive(actions.sendMessage(this, taskId, message));
+  sendMessage(taskId: string, message: string): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(actions.sendMessage(this.state, taskId, message));
   }
 
-  stop(taskId: string): Promise<TaskView> {
-    return this.exclusive(actions.stop(this, taskId));
+  stop(taskId: string): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(actions.stop(this.state, taskId));
   }
 
-  rerun(taskId: string, extra = ""): Promise<TaskView> {
-    return this.exclusive(actions.rerun(this, taskId, extra));
+  rerun(taskId: string, extra = ""): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(actions.rerun(this.state, taskId, extra));
   }
 
   setMaxConcurrentThreads(value: number): Promise<number> {
-    return this.exclusive(actions.setMaxConcurrent(this, value));
+    return this.state.exclusive(actions.setMaxConcurrent(this.state, value));
   }
 
-  replan(input: ReplanInput): Promise<ReplanResult> {
-    return replan(this, input).then((result) => {
-      this.telemetry.replanned(input, result);
+  replan(input: orchestratorTypes.ReplanInput): Promise<orchestratorTypes.ReplanResult> {
+    return replan(this.state, input).then((result) => {
+      this.state.telemetry.replanned(input, result);
       return result;
     });
   }
 
-  handoff(input: HandoffInput): Promise<HandoffResult> {
-    return this.exclusive(handoffs.write(this, input));
+  handoff(input: orchestratorTypes.HandoffInput): Promise<orchestratorTypes.HandoffResult> {
+    return this.state.exclusive(handoffs.write(this.state, input));
   }
 
-  searchReports(query: string, limit = 10): Promise<ReportHit[]> {
-    return this.exclusive(
-      Effect.sync(() => store.searchReports(this.database, this.options.project, query, limit)),
+  searchReports(query: string, limit = 10): Promise<orchestratorTypes.ReportHit[]> {
+    return this.state.exclusive(
+      Effect.sync(() =>
+        store.searchReports(this.state.database, this.state.options.project, query, limit),
+      ),
     );
   }
 
   dispose(): Promise<void> {
-    const poller = this.poller;
-    this.poller = undefined;
-    this.telemetry.close();
-    const self = this;
-    return Effect.runPromise(
-      Effect.gen(function* () {
-        if (poller !== undefined) yield* Fiber.interrupt(poller);
-        self.runs.clear();
-        for (const worker of self.workers.values()) {
-          yield* Effect.tryPromise({
-            try: () => worker.abort(),
-            catch: () => undefined,
-          });
-          worker.dispose();
-        }
-        self.workers.clear();
-        yield* Effect.sync(() => self.database.close());
-      }),
-    );
+    return this.state.dispose();
   }
 }

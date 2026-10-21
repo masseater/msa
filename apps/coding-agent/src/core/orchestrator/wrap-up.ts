@@ -1,19 +1,15 @@
 import { Deferred, Duration, Effect, Option, Result } from "effect";
 
-import { outcomes } from "./outcome.ts";
-import { type Runtime, nowMillis } from "./runtime.ts";
-import { store } from "./store.ts";
-import type { WorkerSession } from "./worker.ts";
+import outcomeModule from "./outcome.ts";
+import runtimeModule from "./runtime.ts";
+import type runtimeTypes from "./runtime.types.ts";
+import storeModule from "./store.ts";
+import type workerTypes from "./worker.ts";
+import type wrapUpTypes from "./wrap-up.types.ts";
 
-export interface WrapUp {
-  sent: boolean;
-  memo: Deferred.Deferred<string, string>;
-}
-
-export interface WrapUpResume {
-  turn: () => void;
-  settle: (error: unknown) => void;
-}
+const { nowMillis } = runtimeModule;
+const { store } = storeModule;
+const { outcomes } = outcomeModule;
 
 const TIMEOUT = Duration.minutes(15);
 
@@ -25,44 +21,44 @@ const PROMPT = [
   "</wrap-up>",
 ].join("\n");
 
-function pending(runtime: Runtime, threadId: string): WrapUp | undefined {
+function pending(runtime: runtimeTypes.Runtime, threadId: string): wrapUpTypes.WrapUp | undefined {
   return runtime.wrapUps.get(threadId);
 }
 
 function begin(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
 ): Effect.Effect<Deferred.Deferred<string, string>> {
   return Effect.sync(() => {
     const memo = Deferred.makeUnsafe<string, string>();
-    runtime.wrapUps.set(threadId, { sent: false, memo });
+    runtime.wrapUps.set(threadId, { memo, sent: false });
     return memo;
   });
 }
 
-function fail(runtime: Runtime, threadId: string, message: string): void {
+function fail(runtime: runtimeTypes.Runtime, threadId: string, message: string): void {
   const wrapUp = pending(runtime, threadId);
   if (wrapUp === undefined) return;
   runtime.wrapUps.delete(threadId);
   Deferred.doneUnsafe(wrapUp.memo, Effect.fail(message));
 }
 
-function cancel(runtime: Runtime, threadId: string): void {
+function cancel(runtime: runtimeTypes.Runtime, threadId: string): void {
   runtime.wrapUps.delete(threadId);
 }
 
-function stopped(runtime: Runtime, threadId: string, memo: string, now: number): void {
+function stopped(runtime: runtimeTypes.Runtime, threadId: string, memo: string, now: number): void {
   const database = runtime.database;
   store.updateThread(database, threadId, { status: "stopped" }, now);
   for (const assignment of store.assignmentsOfThread(database, threadId)) {
     store.insertReport(database, {
-      id: `rep-${assignment.threadId}-${assignment.taskId}-wrap-up`,
-      taskId: assignment.taskId,
-      threadId,
-      role: assignment.role,
-      status: "stopped",
       content: memo,
       createdAt: now,
+      id: `rep-${assignment.threadId}-${assignment.taskId}-wrap-up`,
+      role: assignment.role,
+      status: "stopped",
+      taskId: assignment.taskId,
+      threadId,
     });
     store.setTaskStatus(database, assignment.taskId, "stopped", now);
   }
@@ -71,7 +67,12 @@ function stopped(runtime: Runtime, threadId: string, memo: string, now: number):
   runtime.publish();
 }
 
-function finish(runtime: Runtime, threadId: string, worker: WorkerSession, now: number): void {
+function finish(
+  runtime: runtimeTypes.Runtime,
+  threadId: string,
+  worker: workerTypes.WorkerSession,
+  now: number,
+): void {
   const wrapUp = pending(runtime, threadId);
   if (wrapUp === undefined) return;
   runtime.wrapUps.delete(threadId);
@@ -90,10 +91,10 @@ function finish(runtime: Runtime, threadId: string, worker: WorkerSession, now: 
 }
 
 function takeOver(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
-  worker: WorkerSession,
-  resume: WrapUpResume,
+  worker: workerTypes.WorkerSession,
+  resume: wrapUpTypes.WrapUpResume,
 ): boolean {
   const wrapUp = pending(runtime, threadId);
   if (wrapUp === undefined) return false;
@@ -102,7 +103,7 @@ function takeOver(
     return true;
   }
   wrapUp.sent = true;
-  void worker.prompt(PROMPT).then(resume.turn, (error: unknown) => {
+  void worker.run.prompting.prompt(PROMPT).then(resume.turn, (error: unknown) => {
     fail(runtime, threadId, `wrap-up failed: ${outcomes.errorText(error)}`);
     resume.settle(error);
   });
@@ -110,7 +111,7 @@ function takeOver(
 }
 
 function awaitMemo(
-  runtime: Runtime,
+  runtime: runtimeTypes.Runtime,
   threadId: string,
   memo: Deferred.Deferred<string, string>,
 ): Effect.Effect<string, string> {
@@ -125,4 +126,10 @@ function awaitMemo(
   });
 }
 
-export const wrapping = { begin, fail, cancel, takeOver, awaitMemo };
+const wrapping = { awaitMemo, begin, cancel, fail, takeOver };
+
+const wrapUp = {
+  wrapping,
+};
+
+export default wrapUp;

@@ -1,44 +1,54 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
-import { Markdown } from "../src/components/markdown.ts";
-import { resetCapabilitiesCache, setCapabilities } from "../src/terminal-image.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
-import { getCell } from "./markdown-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import { Effect } from "effect";
+
+import ansiSequences from "../src/ansi-sequences.ts";
+import tuiModule from "../src/index.ts";
+import type tuiTypes from "../src/index.types.ts";
+import markdownHelpers from "./markdown-helpers.ts";
+import testThemes from "./test-themes.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
+
+const { Markdown, TuiMainScreen, resetCapabilitiesCache, setCapabilities } = tuiModule;
+const { defaultMarkdownTheme } = testThemes;
+const { stripEscapeSequences, stripHyperlinkSequences, stripStyleSequences } = ansiSequences;
+
+const { getCell } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Heading with inline code", () => {
-    it("should not leak h1 underline into padding when inline code is the last token", async () => {
-      const markdown = new Markdown(
-        "# Important distinction from `open()`",
-        0,
-        0,
-        defaultMarkdownTheme,
-      );
-      const terminal = new VirtualTerminal(80, 4);
-      const tui: TUI = new TuiMainScreen(terminal);
-      tui.addChild(markdown);
-      tui.start();
-      await terminal.waitForRender();
+    it("should not leak h1 underline into padding when inline code is the last token", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const markdown = new Markdown(
+            "# Important distinction from `open()`",
+            0,
+            0,
+            defaultMarkdownTheme,
+          );
+          const terminal = new VirtualTerminal(80, 4);
+          const tui: tuiTypes.TUI = new TuiMainScreen(terminal);
+          tui.addChild(markdown);
+          tui.start();
+          yield* Effect.promise(() => terminal.waitForRender());
 
-      const renderedLine = markdown.render(80)[0];
-      assert.ok(renderedLine, "Should render heading line");
-      const contentWidth = renderedLine.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd().length;
-      assert.ok(contentWidth > 0, "Should have visible heading content");
+          const renderedLine = markdown.render(80)[0];
+          assert.ok(renderedLine, "Should render heading line");
+          const contentWidth = stripStyleSequences(renderedLine).trimEnd().length;
+          assert.ok(contentWidth > 0, "Should have visible heading content");
 
-      for (let col = contentWidth; col < 80; col++) {
-        assert.strictEqual(
-          getCell(terminal, 0, col).isUnderline(),
-          0,
-          `Expected no underline in padding at col ${col}`,
-        );
-      }
+          for (let col = contentWidth; col < 80; col++) {
+            assert.strictEqual(
+              getCell(terminal, 0, col).isUnderline(),
+              0,
+              `Expected no underline in padding at col ${col}`,
+            );
+          }
 
-      tui.stop();
-    });
+          tui.stop();
+        }),
+      ));
   });
 });
 
@@ -78,7 +88,7 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
-      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "")).join(" ");
+      const joinedPlain = lines.map((line) => stripStyleSequences(line)).join(" ");
 
       assert.ok(joinedOutput.includes("\x1b[9m"), "Should apply strikethrough styling");
       assert.ok(joinedPlain.includes("strikethrough"), "Should include struck text content");
@@ -90,7 +100,7 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
-      const joinedPlain = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "")).join(" ");
+      const joinedPlain = lines.map((line) => stripStyleSequences(line)).join(" ");
 
       assert.ok(
         joinedPlain.includes("~strikethrough~"),
@@ -110,8 +120,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should not duplicate URL for autolinked emails", () => {
-      // Hyperlinks capability does not affect the mailto: display check.
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "Contact user@example.com for help",
         0,
@@ -120,10 +129,9 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
-      // Should contain the email once, not duplicated with mailto:
       assert.ok(joinedPlain.includes("user@example.com"), "Should contain email");
       assert.ok(
         !joinedPlain.includes("mailto:"),
@@ -139,7 +147,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should not duplicate URL for bare URLs", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "Visit https://example.com for more",
         0,
@@ -148,16 +156,15 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
-      // URL should appear only once
       const urlCount = (joinedPlain.match(/https:\/\/example\.com/gu) || []).length;
       assert.strictEqual(urlCount, 1, "URL should appear exactly once");
     });
 
     it("should show URL in parentheses when hyperlinks are not supported", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "[click here](https://example.com)",
         0,
@@ -166,7 +173,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("click here"), "Should contain link text");
@@ -181,7 +188,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should show mailto URL in parentheses when hyperlinks are not supported", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilities({ hyperlinks: false, images: null, trueColor: false });
       const markdown = new Markdown(
         "[Email me](mailto:test@example.com)",
         0,
@@ -190,7 +197,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
       const joinedPlain = plainLines.join(" ");
 
       assert.ok(joinedPlain.includes("Email me"), "Should contain link text");
@@ -208,7 +215,7 @@ describe("Markdown component", () => {
       resetCapabilitiesCache();
     });
     it("should emit OSC 8 hyperlink sequence when terminal supports hyperlinks", () => {
-      setCapabilities({ images: null, trueColor: false, hyperlinks: true });
+      setCapabilities({ hyperlinks: true, images: null, trueColor: false });
       const markdown = new Markdown(
         "[click here](https://example.com)",
         0,
@@ -219,22 +226,14 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const joined = lines.join("");
 
-      // OSC 8 open: ESC ] 8 ; ; <url> ESC \
       assert.ok(
         joined.includes("\x1b]8;;https://example.com\x1b\\"),
         "Should contain OSC 8 open sequence",
       );
-      // OSC 8 close: ESC ] 8 ; ; ESC \
       assert.ok(joined.includes("\x1b]8;;\x1b\\"), "Should contain OSC 8 close sequence");
-      // Visible text is present
-      const plainLines = lines.map((line) =>
-        line.replace(/\x1b[^a-zA-Z]*[a-zA-Z]|\x1b\].*?\x1b\\/gu, ""),
-      );
+      const plainLines = lines.map((line) => stripEscapeSequences(line));
       assert.ok(plainLines.join("").includes("click here"), "Should contain link text");
-      // URL is NOT printed inline as plain text
-      const rawPlain = lines.map((line) =>
-        line.replace(/\x1b\]8;;[^\x1b]*\x1b\\/gu, "").replace(/\x1b\[[0-9;]*m/gu, ""),
-      );
+      const rawPlain = lines.map((line) => stripStyleSequences(stripHyperlinkSequences(line)));
       assert.ok(
         !rawPlain.join("").includes("(https://example.com)"),
         "URL should not appear inline in parentheses",

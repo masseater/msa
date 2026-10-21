@@ -1,53 +1,48 @@
-/**
- * Session Management
- *
- * Control session persistence: in-memory, new file, continue, or open specific.
- */
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-import { createAgentSession, SessionManager } from "@msa/coding-agent";
+const { SessionManager, createAgentSession } = codingAgent;
 
-// In-memory (no persistence)
-const { session: inMemory } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-});
-console.log("In-memory session:", inMemory.sessionFile ?? "(none)");
-inMemory.dispose();
+void Effect.runPromise(
+  Effect.gen(function* () {
+    const { session: inMemory } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log("In-memory session:", inMemory.sessionFile ?? "(none)");
+    inMemory.dispose();
 
-// New persistent session
-const { session: newSession } = await createAgentSession({
-  sessionManager: SessionManager.create(process.cwd()),
-});
-console.log("New session file:", newSession.sessionFile);
-newSession.dispose();
+    const { session: newSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        sessionManager: SessionManager.create(process.cwd()),
+      }),
+    );
+    yield* Console.log("New session file:", newSession.sessionFile);
+    newSession.dispose();
 
-// Continue most recent session (or create new if none)
-const { session: continued, modelFallbackMessage } = await createAgentSession({
-  sessionManager: SessionManager.continueRecent(process.cwd()),
-});
-if (modelFallbackMessage) console.log("Note:", modelFallbackMessage);
-console.log("Continued session:", continued.sessionFile);
-continued.dispose();
+    const recent = yield* Effect.promise(() => SessionManager.continueRecent(process.cwd()));
+    const { session: continued, modelFallbackMessage } = yield* Effect.promise(() =>
+      createAgentSession({ sessionManager: recent }),
+    );
+    if (modelFallbackMessage !== undefined) yield* Console.log("Note:", modelFallbackMessage);
+    yield* Console.log("Continued session:", continued.sessionFile);
+    continued.dispose();
 
-// List and open specific session
-const sessions = await SessionManager.list(process.cwd());
-console.log(`\nFound ${sessions.length} sessions:`);
-for (const info of sessions.slice(0, 3)) {
-  console.log(`  ${info.id.slice(0, 8)}... - "${info.firstMessage.slice(0, 30)}..."`);
-}
+    const sessions = yield* Effect.promise(() => SessionManager.list(process.cwd()));
+    yield* Console.log(`\nFound ${sessions.length} sessions:`);
+    for (const info of sessions.slice(0, 3)) {
+      yield* Console.log(`  ${info.id.slice(0, 8)}... - "${info.firstMessage.slice(0, 30)}..."`);
+    }
 
-const [latestSession] = sessions;
-if (latestSession) {
-  const { session: opened } = await createAgentSession({
-    sessionManager: SessionManager.open(latestSession.path),
-  });
-  console.log(`\nOpened: ${opened.sessionId}`);
-  opened.dispose();
-}
-
-// Custom session directory (no cwd encoding)
-// const customDir = "/path/to/my-sessions";
-// const { session } = await createAgentSession({
-//   sessionManager: SessionManager.create(process.cwd(), customDir),
-// });
-// SessionManager.list(process.cwd(), customDir);
-// SessionManager.continueRecent(process.cwd(), customDir);
+    const [latestSession] = sessions;
+    if (latestSession !== undefined) {
+      const latest = yield* Effect.promise(() => SessionManager.open(latestSession.path));
+      const { session: opened } = yield* Effect.promise(() =>
+        createAgentSession({ sessionManager: latest }),
+      );
+      yield* Console.log(`\nOpened: ${opened.sessionId}`);
+      opened.dispose();
+    }
+  }),
+);

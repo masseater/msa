@@ -1,60 +1,65 @@
-#!/usr/bin/env node
-import { matchesKey } from "../src/keys.ts";
-import { ProcessTerminal } from "../src/terminal.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
-import { truncateToWidth } from "../src/utils.ts";
+import { Console, Effect } from "effect";
 
-/**
- * Simple key code logger component
- */
-class KeyLogger implements Component {
+import delay from "../src/delay.ts";
+import keys from "../src/keys.ts";
+import ProcessTerminal from "../src/terminal.ts";
+import type terminalTypes from "../src/terminal.types.ts";
+import textTruncate from "../src/text-truncate.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+
+const { matchesKey } = keys;
+const { truncateToWidth } = textTruncate;
+
+const { runEvery } = delay;
+
+const CONTROL_NAMES = new Map([
+  ["\u001b", "\\x1b"],
+  ["\r", "\\r"],
+  ["\n", "\\n"],
+  ["\t", "\\t"],
+  ["\u007f", "\\x7f"],
+]);
+
+class KeyLogger implements tuiComponentTypes.Component {
   private log: string[] = [];
   private maxLines = 20;
-  private tui: TUI;
-  private terminal: ProcessTerminal;
+  private tui: tuiInterfaceTypes.TUI;
+  private terminal: terminalTypes.ProcessTerminal;
 
-  constructor(tui: TUI, terminal: ProcessTerminal) {
+  constructor(tui: tuiInterfaceTypes.TUI, terminal: terminalTypes.ProcessTerminal) {
     this.tui = tui;
     this.terminal = terminal;
   }
 
   handleInput(data: string): void {
-    // Handle Ctrl+C (raw or Kitty protocol) for exit
     if (matchesKey(data, "ctrl+c")) {
       this.tui.stop();
-      console.log("\nExiting...");
+      Effect.runSync(Console.log("\nExiting..."));
       process.exit(0);
     }
 
-    // Convert to various representations
     const hex = Buffer.from(data).toString("hex");
     const charCodes = Array.from(data)
       .map((c) => c.charCodeAt(0))
       .join(", ");
-    const repr = data
-      .replace(/\x1b/gu, "\\x1b")
-      .replace(/\r/gu, "\\r")
-      .replace(/\n/gu, "\\n")
-      .replace(/\t/gu, "\\t")
-      .replace(/\x7f/gu, "\\x7f");
+    const repr = Array.from(data)
+      .map((character) => CONTROL_NAMES.get(character) ?? character)
+      .join("");
 
     const logLine = `Hex: ${hex.padEnd(20)} | Chars: [${charCodes.padEnd(15)}] | Repr: "${repr}"`;
 
     this.log.push(logLine);
 
-    // Keep only last N lines
     if (this.log.length > this.maxLines) {
       this.log.shift();
     }
 
-    // Request re-render to show the new log entry
     this.tui.requestRender();
   }
 
-  invalidate(): void {
-    // No cached state to invalidate currently
-  }
+  invalidate(): void {}
 
   private protocolName(): string {
     if (this.terminal.kittyProtocolActive) return "kitty";
@@ -69,25 +74,21 @@ class KeyLogger implements Component {
   render(width: number): string[] {
     const lines: string[] = [];
 
-    // Title
     lines.push("=".repeat(width));
     lines.push(this.fit("Key Code Tester - Press keys to see their codes (Ctrl+C to exit)", width));
     lines.push(this.fit(`Protocol: ${this.protocolName()}`, width));
     lines.push("=".repeat(width));
     lines.push("");
 
-    // Log entries
     for (const entry of this.log) {
       lines.push(this.fit(entry, width));
     }
 
-    // Fill remaining space
     const remaining = Math.max(0, 25 - lines.length);
     for (let i = 0; i < remaining; i++) {
       lines.push("".padEnd(width));
     }
 
-    // Footer
     lines.push("=".repeat(width));
     lines.push(this.fit("Test these:", width));
     lines.push(this.fit("  - Shift + Enter (should show: \\x1b[13;2u with Kitty protocol)", width));
@@ -101,24 +102,19 @@ class KeyLogger implements Component {
   }
 }
 
-// Set up TUI
 const terminal = new ProcessTerminal();
-const tui: TUI = new TuiMainScreen(terminal);
+const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
 const logger = new KeyLogger(tui, terminal);
 
 tui.addChild(logger);
 tui.setFocus(logger);
 
-// Handle Ctrl+C for clean exit (SIGINT still works for raw mode)
 process.on("SIGINT", () => {
   tui.stop();
-  console.log("\nExiting...");
+  Effect.runSync(Console.log("\nExiting..."));
   process.exit(0);
 });
 
-// Start the TUI
 tui.start();
 
-// Protocol negotiation completes asynchronously after the first render.
-// Refresh briefly/continuously so the displayed protocol state is not stale.
-setInterval(() => tui.requestRender(), 100);
+runEvery(100, () => tui.requestRender());

@@ -1,60 +1,84 @@
-/**
- * Utilities for formatting keybinding hints in the UI.
- */
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { dual } from "effect/Function";
 
-import { getKeybindings, type Keybinding, type KeyId } from "@msa/tui";
+import themeModule from "../theme/theme.ts";
+import type keybindingHintsTypes from "./keybinding-hints.types.ts";
 
-import { theme } from "../theme/theme.ts";
+const { theme } = themeModule;
 
-export interface KeyTextFormatOptions {
-  capitalize?: boolean;
-}
+const { getKeybindings } = tui;
 
-function formatKeyPart(part: string, options: KeyTextFormatOptions): string {
+function formatKeyPart(part: string, options: keybindingHintsTypes.KeyTextFormatOptions): string {
   const displayPart =
     process.platform === "darwin" && part.toLowerCase() === "alt" ? "option" : part;
-  return options.capitalize
+  return options.capitalize === true
     ? displayPart.charAt(0).toUpperCase() + displayPart.slice(1)
     : displayPart;
 }
 
-export function formatKeyText(key: string, options: KeyTextFormatOptions = {}): string {
-  return key
-    .split("/")
-    .map((k) =>
-      k
-        .split("+")
-        .map((part) => formatKeyPart(part, options))
-        .join("+"),
-    )
-    .join("/");
-}
+const formatKeyText: {
+  (options?: keybindingHintsTypes.KeyTextFormatOptions): (key: string) => string;
+  (key: string, options?: keybindingHintsTypes.KeyTextFormatOptions): string;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (key: string, options: keybindingHintsTypes.KeyTextFormatOptions = {}): string =>
+    key
+      .split("/")
+      .map((k) =>
+        k
+          .split("+")
+          .map((part) => formatKeyPart(part, options))
+          .join("+"),
+      )
+      .join("/"),
+);
 
-function formatKeys(keys: KeyId[], options: KeyTextFormatOptions = {}): string {
+function formatKeys(
+  keys: tuiTypes.KeyId[],
+  options: keybindingHintsTypes.KeyTextFormatOptions = {},
+): string {
   if (keys.length === 0) return "";
   return formatKeyText(keys.join("/"), options);
 }
 
-export function keyText(keybinding: Keybinding): string {
+function keyText(keybinding: tuiTypes.Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding));
 }
 
-export function keyDisplayText(keybinding: Keybinding): string {
+function keyDisplayText(keybinding: tuiTypes.Keybinding): string {
   return formatKeys(getKeybindings().getKeys(keybinding), { capitalize: true });
 }
 
-export function keyHint(keybinding: Keybinding, description: string): string {
-  return theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`);
-}
+const keyHint: {
+  (description: string): (keybinding: tuiTypes.Keybinding) => string;
+  (keybinding: tuiTypes.Keybinding, description: string): string;
+} = dual(
+  2,
+  (keybinding: tuiTypes.Keybinding, description: string): string =>
+    theme.fg("dim", keyText(keybinding)) + theme.fg("muted", ` ${description}`),
+);
 
-/**
- * The line a collapsed tool shows in place of its output: what is hidden, and the key that shows
- * it. Clicking the tool shows it too.
- */
-export function expandHint(summary: string): string {
+function expandHint(summary: string): string {
   return `${theme.fg("muted", `${summary} (`)}${keyHint("app.tools.expand", "to expand")}${theme.fg("muted", ")")}`;
 }
 
-export function rawKeyHint(key: string, description: string): string {
-  return theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`);
-}
+const rawKeyHint: {
+  (description: string): (key: string) => string;
+  (key: string, description: string): string;
+} = dual(
+  2,
+  (key: string, description: string): string =>
+    theme.fg("dim", formatKeyText(key)) + theme.fg("muted", ` ${description}`),
+);
+
+const keybindingHints = {
+  expandHint,
+  formatKeyText,
+  keyDisplayText,
+  keyHint,
+  keyText,
+  rawKeyHint,
+};
+
+export default keybindingHints;

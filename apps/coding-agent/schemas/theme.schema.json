@@ -1,18 +1,13 @@
 {
-  "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://raw.githubusercontent.com/masseater/msa/main/apps/coding-agent/schemas/theme.schema.json",
   "$comment": "This file is generated from TypeScript source. Do not edit it manually; run npm run generate:schemas.",
+  "$id": "https://raw.githubusercontent.com/masseater/msa/main/apps/coding-agent/schemas/theme.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "type": "object",
-  "required": ["name", "colors"],
+  "required": ["colors", "name"],
   "properties": {
     "$schema": {
       "type": "string",
       "description": "JSON schema reference"
-    },
-    "name": {
-      "type": "string",
-      "pattern": "^[^/]+$",
-      "description": "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings."
     },
     "appearance": {
       "anyOf": [
@@ -27,74 +22,69 @@
       ],
       "description": "Background the theme is designed for. Detected from the theme colors when omitted."
     },
-    "vars": {
-      "type": "object",
-      "patternProperties": {
-        "^.*$": {
-          "$ref": "#/$defs/ColorValue"
-        }
-      },
-      "description": "Reusable color variables"
-    },
     "colors": {
       "type": "object",
       "required": [
         "accent",
+        "bashMode",
         "border",
         "borderAccent",
         "borderMuted",
-        "success",
-        "error",
-        "warning",
-        "muted",
-        "dim",
-        "text",
-        "thinkingText",
-        "selectedBg",
-        "userMessageBg",
-        "userMessageText",
         "customMessageBg",
-        "customMessageText",
         "customMessageLabel",
-        "toolPendingBg",
-        "toolSuccessBg",
-        "toolErrorBg",
-        "toolTitle",
-        "toolOutput",
-        "mdHeading",
-        "mdLink",
-        "mdLinkUrl",
+        "customMessageText",
+        "dim",
+        "error",
         "mdCode",
         "mdCodeBlock",
         "mdCodeBlockBorder",
+        "mdHeading",
+        "mdHr",
+        "mdLink",
+        "mdLinkUrl",
+        "mdListBullet",
         "mdQuote",
         "mdQuoteBorder",
-        "mdHr",
-        "mdListBullet",
-        "toolDiffAdded",
-        "toolDiffRemoved",
-        "toolDiffContext",
+        "muted",
+        "selectedBg",
+        "success",
         "syntaxComment",
-        "syntaxKeyword",
         "syntaxFunction",
-        "syntaxVariable",
-        "syntaxString",
+        "syntaxKeyword",
         "syntaxNumber",
-        "syntaxType",
         "syntaxOperator",
         "syntaxPunctuation",
-        "thinkingOff",
-        "thinkingMinimal",
+        "syntaxString",
+        "syntaxType",
+        "syntaxVariable",
+        "text",
+        "thinkingHigh",
         "thinkingLow",
         "thinkingMedium",
-        "thinkingHigh",
+        "thinkingMinimal",
+        "thinkingOff",
+        "thinkingText",
         "thinkingXhigh",
-        "bashMode"
+        "toolDiffAdded",
+        "toolDiffContext",
+        "toolDiffRemoved",
+        "toolErrorBg",
+        "toolOutput",
+        "toolPendingBg",
+        "toolSuccessBg",
+        "toolTitle",
+        "userMessageBg",
+        "userMessageText",
+        "warning"
       ],
       "properties": {
         "accent": {
           "$ref": "#/$defs/ColorValue",
           "description": "Primary accent color (logo, selected items, cursor)"
+        },
+        "bashMode": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Editor border color in bash mode"
         },
         "border": {
           "$ref": "#/$defs/ColorValue",
@@ -108,105 +98,25 @@
           "$ref": "#/$defs/ColorValue",
           "description": "Subtle borders"
         },
-        "success": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Success states"
-        },
-        "error": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Error states"
-        },
-        "warning": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Warning states"
-        },
-        "muted": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Secondary/dimmed text"
-        },
-        "dim": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Very dimmed text (more subtle than muted)"
-        },
-        "text": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Default text color (usually empty string)"
-        },
-        "thinkingText": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Thinking block text color"
-        },
-        "scrollbarTrack": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Fullscreen scrollbar track foreground (falls back to muted when omitted)"
-        },
-        "scrollbarThumb": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Fullscreen scrollbar thumb foreground (falls back to text when omitted)"
-        },
-        "selectedBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Selected item background"
-        },
-        "searchMatchBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Transcript search match background and current-match text (falls back to selectedBg when omitted)"
-        },
-        "searchMatchText": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Transcript search match text and current-match background (falls back to text when omitted)"
-        },
-        "userMessageBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "User message background"
-        },
-        "userMessageText": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "User message text color"
-        },
         "customMessageBg": {
           "$ref": "#/$defs/ColorValue",
           "description": "Custom message background (hook-injected messages)"
-        },
-        "customMessageText": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Custom message text color"
         },
         "customMessageLabel": {
           "$ref": "#/$defs/ColorValue",
           "description": "Custom message type label color"
         },
-        "toolPendingBg": {
+        "customMessageText": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Tool execution box (pending state)"
+          "description": "Custom message text color"
         },
-        "toolSuccessBg": {
+        "dim": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Tool execution box (success state)"
+          "description": "Very dimmed text (more subtle than muted)"
         },
-        "toolErrorBg": {
+        "error": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Tool execution box (error state)"
-        },
-        "toolTitle": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Tool execution box title color"
-        },
-        "toolOutput": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Tool execution box output text color"
-        },
-        "mdHeading": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Markdown heading text"
-        },
-        "mdLink": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Markdown link text"
-        },
-        "mdLinkUrl": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Markdown link URL"
+          "description": "Error states"
         },
         "mdCode": {
           "$ref": "#/$defs/ColorValue",
@@ -220,6 +130,26 @@
           "$ref": "#/$defs/ColorValue",
           "description": "Markdown code block fences"
         },
+        "mdHeading": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Markdown heading text"
+        },
+        "mdHr": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Markdown horizontal rule"
+        },
+        "mdLink": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Markdown link text"
+        },
+        "mdLinkUrl": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Markdown link URL"
+        },
+        "mdListBullet": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Markdown list bullets/numbers"
+        },
         "mdQuote": {
           "$ref": "#/$defs/ColorValue",
           "description": "Markdown blockquote text"
@@ -228,53 +158,49 @@
           "$ref": "#/$defs/ColorValue",
           "description": "Markdown blockquote border"
         },
-        "mdHr": {
+        "muted": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Markdown horizontal rule"
+          "description": "Secondary/dimmed text"
         },
-        "mdListBullet": {
+        "scrollbarThumb": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Markdown list bullets/numbers"
+          "description": "Fullscreen scrollbar thumb foreground (falls back to text when omitted)"
         },
-        "toolDiffAdded": {
+        "scrollbarTrack": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Added lines in tool diffs"
+          "description": "Fullscreen scrollbar track foreground (falls back to muted when omitted)"
         },
-        "toolDiffRemoved": {
+        "searchMatchBg": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Removed lines in tool diffs"
+          "description": "Transcript search match background and current-match text (falls back to selectedBg when omitted)"
         },
-        "toolDiffContext": {
+        "searchMatchText": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Context lines in tool diffs"
+          "description": "Transcript search match text and current-match background (falls back to text when omitted)"
+        },
+        "selectedBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Selected item background"
+        },
+        "success": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Success states"
         },
         "syntaxComment": {
           "$ref": "#/$defs/ColorValue",
           "description": "Syntax highlighting: comments"
         },
-        "syntaxKeyword": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Syntax highlighting: keywords"
-        },
         "syntaxFunction": {
           "$ref": "#/$defs/ColorValue",
           "description": "Syntax highlighting: function names"
         },
-        "syntaxVariable": {
+        "syntaxKeyword": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Syntax highlighting: variable names"
-        },
-        "syntaxString": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Syntax highlighting: string literals"
+          "description": "Syntax highlighting: keywords"
         },
         "syntaxNumber": {
           "$ref": "#/$defs/ColorValue",
           "description": "Syntax highlighting: number literals"
-        },
-        "syntaxType": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Syntax highlighting: type names"
         },
         "syntaxOperator": {
           "$ref": "#/$defs/ColorValue",
@@ -284,49 +210,105 @@
           "$ref": "#/$defs/ColorValue",
           "description": "Syntax highlighting: punctuation"
         },
-        "thinkingOff": {
+        "syntaxString": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Thinking level border: off"
+          "description": "Syntax highlighting: string literals"
         },
-        "thinkingMinimal": {
+        "syntaxType": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Thinking level border: minimal"
+          "description": "Syntax highlighting: type names"
         },
-        "thinkingLow": {
+        "syntaxVariable": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Thinking level border: low"
+          "description": "Syntax highlighting: variable names"
         },
-        "thinkingMedium": {
+        "text": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Thinking level border: medium"
+          "description": "Default text color (usually empty string)"
         },
         "thinkingHigh": {
           "$ref": "#/$defs/ColorValue",
           "description": "Thinking level border: high"
         },
-        "thinkingXhigh": {
+        "thinkingLow": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Thinking level border: xhigh"
+          "description": "Thinking level border: low"
         },
         "thinkingMax": {
           "$ref": "#/$defs/ColorValue",
           "description": "Thinking level border: max (falls back to thinkingXhigh when omitted)"
         },
-        "bashMode": {
+        "thinkingMedium": {
           "$ref": "#/$defs/ColorValue",
-          "description": "Editor border color in bash mode"
+          "description": "Thinking level border: medium"
+        },
+        "thinkingMinimal": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Thinking level border: minimal"
+        },
+        "thinkingOff": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Thinking level border: off"
+        },
+        "thinkingText": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Thinking block text color"
+        },
+        "thinkingXhigh": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Thinking level border: xhigh"
+        },
+        "toolDiffAdded": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Added lines in tool diffs"
+        },
+        "toolDiffContext": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Context lines in tool diffs"
+        },
+        "toolDiffRemoved": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Removed lines in tool diffs"
+        },
+        "toolErrorBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Tool execution box (error state)"
+        },
+        "toolOutput": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Tool execution box output text color"
+        },
+        "toolPendingBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Tool execution box (pending state)"
+        },
+        "toolSuccessBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Tool execution box (success state)"
+        },
+        "toolTitle": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Tool execution box title color"
+        },
+        "userMessageBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "User message background"
+        },
+        "userMessageText": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "User message text color"
+        },
+        "warning": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Warning states"
         }
       },
-      "description": "Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)",
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Theme color definitions (scrollbar, thinkingMax, and search highlight colors are optional and use compatible fallbacks)"
     },
     "export": {
       "type": "object",
       "properties": {
-        "pageBg": {
-          "$ref": "#/$defs/ColorValue",
-          "description": "Page background color"
-        },
         "cardBg": {
           "$ref": "#/$defs/ColorValue",
           "description": "Card/container background color"
@@ -334,15 +316,33 @@
         "infoBg": {
           "$ref": "#/$defs/ColorValue",
           "description": "Info sections background (system prompt, notices)"
+        },
+        "pageBg": {
+          "$ref": "#/$defs/ColorValue",
+          "description": "Page background color"
         }
       },
-      "description": "Optional colors for HTML export (defaults derived from userMessageBg if not specified)",
-      "additionalProperties": false
+      "additionalProperties": false,
+      "description": "Optional colors for HTML export (defaults derived from userMessageBg if not specified)"
+    },
+    "name": {
+      "type": "string",
+      "description": "Theme name. Must not contain '/' because it is reserved for automatic light/dark theme settings.",
+      "pattern": "^[^/]+$"
+    },
+    "vars": {
+      "type": "object",
+      "patternProperties": {
+        "^.*$": {
+          "$ref": "#/$defs/ColorValue"
+        }
+      },
+      "description": "Reusable color variables"
     }
   },
-  "title": "msa Coding Agent Theme",
-  "description": "Theme schema for msa coding agent",
   "additionalProperties": false,
+  "description": "Theme schema for msa coding agent",
+  "title": "msa Coding Agent Theme",
   "$defs": {
     "ColorValue": {
       "anyOf": [
@@ -352,9 +352,9 @@
         },
         {
           "type": "integer",
-          "minimum": 0,
+          "description": "256-color palette index (0-255)",
           "maximum": 255,
-          "description": "256-color palette index (0-255)"
+          "minimum": 0
         }
       ]
     }

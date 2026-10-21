@@ -1,52 +1,52 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { ExtensionAPI } from "../../../src/index.ts";
-import { createHarness, type Harness } from "../harness.ts";
+import type srcTypes from "../../../src/index.types.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-describe("regression #3686: session name changes emit an event", () => {
-  const harnesses: Harness[] = [];
+const { createHarness } = harnessModule;
 
-  afterEach(() => {
-    while (harnesses.length > 0) {
-      harnesses.pop()?.cleanup();
-    }
-  });
+const harnesses: harnessTypes.Harness[] = [];
 
-  it("emits session_info_changed when AgentSession.setSessionName is called", async () => {
-    const harness = await createHarness();
-    harnesses.push(harness);
+const emitsSessionInfoChangedWhenAgentsession = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness());
+  harnesses.push(harness);
 
-    harness.session.setSessionName("hello world");
+  harness.session.context.transcript.setSessionName("hello world");
 
-    expect(harness.sessionManager.getSessionName()).toBe("hello world");
-    expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual([
-      "hello world",
-    ]);
-  });
+  expect(harness.sessionManager.getSessionName()).toBe("hello world");
+  expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual([
+    "hello world",
+  ]);
+});
 
-  it("emits session_info_changed when an extension calls msa.setSessionName", async () => {
-    let api: ExtensionAPI | undefined;
-    const harness = await createHarness({
+const emitsSessionInfoChangedWhenAn = Effect.gen(function* () {
+  let api: srcTypes.ExtensionAPI | undefined;
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           api = msa;
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
 
-    api?.setSessionName("from extension");
+  api?.setSessionName("from extension");
 
-    expect(harness.sessionManager.getSessionName()).toBe("from extension");
-    expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual([
-      "from extension",
-    ]);
-  });
+  expect(harness.sessionManager.getSessionName()).toBe("from extension");
+  expect(harness.eventsOfType("session_info_changed").map((event) => event.name)).toEqual([
+    "from extension",
+  ]);
+});
 
-  it("emits session_info_changed to extensions", async () => {
-    let api: ExtensionAPI | undefined;
-    const events: Array<{ name: string | undefined }> = [];
-    const harness = await createHarness({
+const emitsSessionInfoChangedToExtensions = Effect.gen(function* () {
+  let api: srcTypes.ExtensionAPI | undefined;
+  const events: Array<{ name: string | undefined }> = [];
+  const harness = yield* Effect.promise(() =>
+    createHarness({
       extensionFactories: [
         (msa) => {
           api = msa;
@@ -55,12 +55,40 @@ describe("regression #3686: session name changes emit an event", () => {
           });
         },
       ],
-    });
-    harnesses.push(harness);
+    }),
+  );
+  harnesses.push(harness);
 
-    api?.setSessionName("first");
-    harness.session.setSessionName("second");
+  api?.setSessionName("first");
+  harness.session.context.transcript.setSessionName("second");
 
-    expect(events).toEqual([{ name: "first" }, { name: "second" }]);
-  });
+  expect(events).toEqual([{ name: "first" }, { name: "second" }]);
+});
+
+const emitsSessionInfoChangedWhenAgentsessionSetsessionname = () =>
+  Effect.runPromise(emitsSessionInfoChangedWhenAgentsession);
+
+const emitsSessionInfoChangedWhenAnExtension = () =>
+  Effect.runPromise(emitsSessionInfoChangedWhenAn);
+
+const emitsSessionInfoChangedToExtensions2 = () =>
+  Effect.runPromise(emitsSessionInfoChangedToExtensions);
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
+describe("regression #3686: session name changes emit an event", () => {
+  afterEach(afterEachHook);
+  it(
+    "emits session_info_changed when AgentSession.setSessionName is called",
+    emitsSessionInfoChangedWhenAgentsessionSetsessionname,
+  );
+  it(
+    "emits session_info_changed when an extension calls msa.setSessionName",
+    emitsSessionInfoChangedWhenAnExtension,
+  );
+  it("emits session_info_changed to extensions", emitsSessionInfoChangedToExtensions2);
 });

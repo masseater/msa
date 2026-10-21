@@ -1,17 +1,18 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { parseStreamingJson, parseToolCallArguments } from "../src/utils/json-parse.ts";
+import jsonParse from "../src/utils/json-parse.ts";
+
+const { parseStreamingJson, parseToolCallArguments } = jsonParse;
 
 describe("parseStreamingJson", () => {
-  // #10868
   it("keeps invalid \\u escapes as literal text without dropping fields", () => {
     expect(parseStreamingJson(String.raw`{"text":"\url{x}"}`)).toEqual({ text: "\\url{x}" });
     expect(
       parseStreamingJson(String.raw`{"path":"a.tex","content":"\usepackage{x}","mode":"w"}`),
     ).toEqual({
-      path: "a.tex",
       content: "\\usepackage{x}",
       mode: "w",
+      path: "a.tex",
     });
   });
 
@@ -26,7 +27,6 @@ describe("parseStreamingJson", () => {
   });
 });
 
-// #10897
 describe("parseToolCallArguments", () => {
   it("parses complete JSON and repairs invalid escapes", () => {
     expect(parseToolCallArguments(String.raw`{"kind":"seek","note":"\url"}`)).toEqual({

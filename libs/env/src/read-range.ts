@@ -1,9 +1,11 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-export const READ_DEPTH = 8;
+import type readRangeTypes from "./read-range.types.ts";
 
-export const concat: {
+const READ_DEPTH = 8;
+
+const concat: {
   (total: number): (chunks: readonly Uint8Array[]) => Uint8Array;
   (chunks: readonly Uint8Array[], total: number): Uint8Array;
 } = dual(2, (chunks: readonly Uint8Array[], total: number): Uint8Array => {
@@ -17,23 +19,15 @@ export const concat: {
   return bytes;
 });
 
-export interface RangeRead {
-  readonly read: (offset: number, length: number) => Promise<Uint8Array>;
-  readonly offset: number;
-  readonly length: number;
-  readonly chunk: number;
-  readonly aborted: () => boolean;
-}
-
 type InFlight = { length: number; bytes: Promise<Uint8Array> };
 
-export const readRange = ({
+const readRange = ({
   read,
   offset,
   length,
   chunk,
   aborted,
-}: RangeRead): Effect.Effect<{ chunks: Uint8Array[]; total: number } | undefined> =>
+}: readRangeTypes.RangeRead): Effect.Effect<{ chunks: Uint8Array[]; total: number } | undefined> =>
   Effect.gen(function* () {
     const chunks: Uint8Array[] = [];
     let total = 0;
@@ -44,7 +38,7 @@ export const readRange = ({
         const size = Math.min(offset + length - next, chunk);
         const bytes = read(next, size);
         bytes.catch(() => undefined);
-        inFlight.push({ length: size, bytes });
+        inFlight.push({ bytes, length: size });
         next += size;
       }
       const head = inFlight.shift()!;
@@ -60,3 +54,11 @@ export const readRange = ({
     }
     return { chunks, total };
   });
+
+const readRangeModule = {
+  READ_DEPTH,
+  concat,
+  readRange,
+};
+
+export default readRangeModule;

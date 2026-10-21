@@ -1,25 +1,11 @@
-import { Data, Effect, Function } from "effect";
+import { Effect, Function } from "effect";
 
-type Mode = "rpc" | "tui";
-type Runtime = "bun" | "node";
+import cliOptions from "./cli-options.ts";
+import type cliOptionsTypes from "./cli-options.types.ts";
+import ProfileError from "./profile-error.ts";
+import type profileStartupArgsTypes from "./profile-startup-args.types.ts";
 
-interface ProfileOptions {
-  agentDir: string | undefined;
-  build: boolean;
-  bundle: boolean;
-  cpuProfile: boolean;
-  help: boolean;
-  isolatedAgentDir: boolean;
-  label: string | undefined;
-  mode: Mode;
-  offline: boolean;
-  profileDir: string | undefined;
-  runs: number;
-  runtime: Runtime | "auto";
-  warmup: number;
-}
-
-class ProfileError extends Data.TaggedError("ProfileError")<{ readonly message: string }> {}
+const { flagOption, parseOptions, requiredOption } = cliOptions;
 
 const HELP = `Usage:
   node scripts/profile-coding-agent-node.ts [options]
@@ -53,16 +39,6 @@ Notes:
   - CPU profiles are kept in the selected profile directory for later analysis.
 `;
 
-const VALUE_FLAGS = new Set([
-  "--agent-dir",
-  "--label",
-  "--mode",
-  "--profile-dir",
-  "--runs",
-  "--runtime",
-  "--warmup",
-]);
-
 const fail = (message: string) => new ProfileError({ message });
 
 const parseIntegerFlag = (value: string, name: string) => {
@@ -72,17 +48,19 @@ const parseIntegerFlag = (value: string, name: string) => {
     : Effect.succeed(parsed);
 };
 
-const parseRuntime = (value: string): Effect.Effect<Runtime | "auto", ProfileError> =>
+const parseRuntime = (
+  value: string,
+): Effect.Effect<profileStartupArgsTypes.Runtime | "auto", ProfileError> =>
   value === "auto" || value === "node" || value === "bun"
     ? Effect.succeed(value)
     : Effect.fail(fail(`Invalid --runtime: ${value}`));
 
-const parseMode = (value: string): Effect.Effect<Mode, ProfileError> =>
+const parseMode = (value: string): Effect.Effect<profileStartupArgsTypes.Mode, ProfileError> =>
   value === "tui" || value === "rpc"
     ? Effect.succeed(value)
     : Effect.fail(fail(`Invalid --mode: ${value}`));
 
-const defaultOptions = (): ProfileOptions => ({
+const defaultOptions = (): profileStartupArgsTypes.ProfileOptions => ({
   agentDir: undefined,
   build: true,
   bundle: false,
@@ -98,53 +76,121 @@ const defaultOptions = (): ProfileOptions => ({
   warmup: 0,
 });
 
-const applyFlag = (options: ProfileOptions, arg: string): boolean => {
-  if (arg === "--help" || arg === "-h") options.help = true;
-  else if (arg === "--no-offline") options.offline = false;
-  else if (arg === "--isolated-agent-dir") options.isolatedAgentDir = true;
-  else if (arg === "--bundle") options.bundle = true;
-  else if (arg === "--skip-build") options.build = false;
-  else if (arg === "--cpu-profile") options.cpuProfile = true;
-  else return false;
-  return true;
-};
+const flag = (
+  name: string,
+  set: (options: profileStartupArgsTypes.ProfileOptions) => void,
+): readonly [
+  string,
+  cliOptionsTypes.CliOption<profileStartupArgsTypes.ProfileOptions, ProfileError>,
+] => [name, flagOption(set)];
 
-const applyValue = (
-  options: ProfileOptions,
-  arg: string,
-  value: string,
+const valueFlag = (
+  name: string,
+  apply: (
+    options: profileStartupArgsTypes.ProfileOptions,
+    value: string,
+  ) => Effect.Effect<void, ProfileError>,
+): readonly [
+  string,
+  cliOptionsTypes.CliOption<profileStartupArgsTypes.ProfileOptions, ProfileError>,
+] => requiredOption({ apply, missing: (option) => fail(`Missing value for ${option}`), name });
+
+const assign = <A>(parse: Effect.Effect<A, ProfileError>, set: (value: A) => void) =>
+  Effect.map(parse, set);
+
+const FLAG_OPTIONS = [
+  flag("--help", (options) => {
+    options.help = true;
+  }),
+  flag("-h", (options) => {
+    options.help = true;
+  }),
+  flag("--no-offline", (options) => {
+    options.offline = false;
+  }),
+  flag("--isolated-agent-dir", (options) => {
+    options.isolatedAgentDir = true;
+  }),
+  flag("--bundle", (options) => {
+    options.bundle = true;
+  }),
+  flag("--skip-build", (options) => {
+    options.build = false;
+  }),
+  flag("--cpu-profile", (options) => {
+    options.cpuProfile = true;
+  }),
+];
+
+const valueOptions = (resolve: (path: string) => string) => [
+  valueFlag("--mode", (options, value) =>
+    assign(parseMode(value), (mode) => {
+      options.mode = mode;
+    }),
+  ),
+  valueFlag("--runs", (options, value) =>
+    assign(parseIntegerFlag(value, "--runs"), (runs) => {
+      options.runs = runs;
+    }),
+  ),
+  valueFlag("--warmup", (options, value) =>
+    assign(parseIntegerFlag(value, "--warmup"), (warmup) => {
+      options.warmup = warmup;
+    }),
+  ),
+  valueFlag("--profile-dir", (options, value) =>
+    Effect.sync(() => {
+      options.profileDir = resolve(value);
+    }),
+  ),
+  valueFlag("--label", (options, value) =>
+    Effect.sync(() => {
+      options.label = value;
+    }),
+  ),
+  valueFlag("--runtime", (options, value) =>
+    assign(parseRuntime(value), (runtime) => {
+      options.runtime = runtime;
+    }),
+  ),
+  valueFlag("--agent-dir", (options, value) =>
+    Effect.sync(() => {
+      options.agentDir = resolve(value);
+    }),
+  ),
+];
+
+const profileOptions = (
   resolve: (path: string) => string,
-) =>
-  Effect.gen(function* () {
-    if (arg === "--mode") options.mode = yield* parseMode(value);
-    else if (arg === "--runs") options.runs = yield* parseIntegerFlag(value, "--runs");
-    else if (arg === "--warmup") options.warmup = yield* parseIntegerFlag(value, "--warmup");
-    else if (arg === "--profile-dir") options.profileDir = resolve(value);
-    else if (arg === "--label") options.label = value;
-    else if (arg === "--runtime") options.runtime = yield* parseRuntime(value);
-    else options.agentDir = resolve(value);
-  });
-
-type Resolve = (path: string) => string;
+): ReadonlyMap<
+  string,
+  cliOptionsTypes.CliOption<profileStartupArgsTypes.ProfileOptions, ProfileError>
+> => new Map([...FLAG_OPTIONS, ...valueOptions(resolve)]);
 
 const parseArgs: {
-  (resolve: Resolve): (argv: ReadonlyArray<string>) => Effect.Effect<ProfileOptions, ProfileError>;
-  (argv: ReadonlyArray<string>, resolve: Resolve): Effect.Effect<ProfileOptions, ProfileError>;
-} = Function.dual(2, (argv: ReadonlyArray<string>, resolve: Resolve) =>
-  Effect.gen(function* () {
-    const options = defaultOptions();
-    for (let index = 0; index < argv.length; index += 1) {
-      const arg = argv[index] ?? "";
-      if (applyFlag(options, arg)) continue;
-      if (!VALUE_FLAGS.has(arg)) return yield* fail(`Unknown option: ${arg}`);
-      const value = argv[index + 1];
-      if (value === undefined) return yield* fail(`Missing value for ${arg}`);
-      yield* applyValue(options, arg, value, resolve);
-      index += 1;
-    }
-    return options;
+  (
+    resolve: (path: string) => string,
+  ): (
+    argv: ReadonlyArray<string>,
+  ) => Effect.Effect<profileStartupArgsTypes.ProfileOptions, ProfileError>;
+  (
+    argv: ReadonlyArray<string>,
+    resolve: (path: string) => string,
+  ): Effect.Effect<profileStartupArgsTypes.ProfileOptions, ProfileError>;
+} = Function.dual(2, (argv: ReadonlyArray<string>, resolve: (path: string) => string) =>
+  parseOptions({
+    args: argv,
+    options: profileOptions(resolve),
+    parsed: defaultOptions(),
+    unknown: (arg) => Effect.fail(fail(`Unknown option: ${arg}`)),
   }),
 );
 
-export type { Mode, ProfileOptions, Runtime };
-export { HELP, ProfileError, parseArgs };
+const profileStartupArgs = {
+  HELP,
+  ProfileError,
+  fail,
+  parseArgs,
+};
+
+export default profileStartupArgs;

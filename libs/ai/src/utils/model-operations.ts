@@ -1,58 +1,47 @@
-import type {
-  AnyModel,
-  Api,
-  AssistantImages,
-  ClassifierApi,
-  ClassifierContext,
-  ClassifierModel,
-  ClassifierResult,
-  ImageApi,
-  ImageModel,
-  Model,
-  ModelType,
-  ModelTypeMap,
-} from "../types.ts";
-import { ModelsError } from "./models-error.ts";
+import { Clock, Effect, Function } from "effect";
 
-/**
- * The type of a model. Models without `type` are chat models.
- *
- * @param {AnyModel} model - model to inspect
- * @returns {ModelType} the model type
- */
-export function getModelType(model: AnyModel): ModelType {
-  return model.type ?? "chat";
-}
+import type typesModule from "../types.types.ts";
+import modelsError from "./models-error.ts";
 
-/**
- * Runtime-checked model type narrowing, including legacy chat models without `type`.
- *
- * @param {AnyModel} model - model to check
- * @param {TType} type - expected model type
- * @returns {boolean} whether the model has the type
- */
-export function isModelType<TType extends ModelType>(
-  model: AnyModel,
-  type: TType,
-): model is ModelTypeMap[TType] {
-  return getModelType(model) === type;
-}
+const { ModelsError } = modelsError;
 
-export function assertChatModel(model: AnyModel): asserts model is Model<Api> {
+const getModelType = (model: typesModule.AnyModel): typesModule.ModelType => model.type ?? "chat";
+
+const isModelType: {
+  <TType extends typesModule.ModelType>(
+    type: TType,
+  ): (model: typesModule.AnyModel) => model is typesModule.ModelTypeMap[TType];
+  <TType extends typesModule.ModelType>(
+    model: typesModule.AnyModel,
+    type: TType,
+  ): model is typesModule.ModelTypeMap[TType];
+} = Function.dual(
+  2,
+  <TType extends typesModule.ModelType>(
+    model: typesModule.AnyModel,
+    type: TType,
+  ): model is typesModule.ModelTypeMap[TType] => getModelType(model) === type,
+);
+
+function assertChatModel(
+  model: typesModule.AnyModel,
+): asserts model is typesModule.Model<typesModule.Api> {
   if (!isModelType(model, "chat")) {
     throw new ModelsError("provider", `Model ${model.provider}/${model.id} is not a chat model`);
   }
 }
 
-export function assertImageModel(model: AnyModel): asserts model is ImageModel<ImageApi> {
+function assertImageModel(
+  model: typesModule.AnyModel,
+): asserts model is typesModule.ImageModel<typesModule.ImageApi> {
   if (!isModelType(model, "image")) {
     throw new ModelsError("provider", `Model ${model.provider}/${model.id} is not an image model`);
   }
 }
 
-export function assertClassifierModel(
-  model: AnyModel,
-): asserts model is ClassifierModel<ClassifierApi> {
+function assertClassifierModel(
+  model: typesModule.AnyModel,
+): asserts model is typesModule.ClassifierModel<typesModule.ClassifierApi> {
   if (!isModelType(model, "classifier")) {
     throw new ModelsError(
       "provider",
@@ -61,52 +50,103 @@ export function assertClassifierModel(
   }
 }
 
-/**
- * Rejects classifier images for models whose catalog entry does not accept image input.
- *
- * @param {ClassifierModel<ClassifierApi>} model - classifier model
- * @param {ClassifierContext} context - classifier request context
- */
-export function assertClassifierInputSupported(
-  model: ClassifierModel<ClassifierApi>,
-  context: ClassifierContext,
-): void {
-  if (context.images?.length && !model.input.includes("image")) {
-    throw new ModelsError(
-      "provider",
-      `Model ${model.provider}/${model.id} does not accept image input`,
-    );
-  }
-}
+const assertClassifierInputSupported: {
+  (
+    context: typesModule.ClassifierContext,
+  ): (model: typesModule.ClassifierModel<typesModule.ClassifierApi>) => void;
+  (
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    context: typesModule.ClassifierContext,
+  ): void;
+} = Function.dual(
+  2,
+  (
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    context: typesModule.ClassifierContext,
+  ): void => {
+    if (
+      context.images?.length !== undefined &&
+      context.images?.length > 0 &&
+      !model.input.includes("image")
+    ) {
+      throw new ModelsError(
+        "provider",
+        `Model ${model.provider}/${model.id} does not accept image input`,
+      );
+    }
+  },
+);
 
-export function imageErrorResult(
-  model: ImageModel<ImageApi>,
-  error: unknown,
-  aborted = false,
-): AssistantImages {
-  return {
+const errorFields = (error: unknown, aborted: boolean) => ({
+  errorMessage: error instanceof Error ? error.message : String(error),
+  stopReason: aborted ? ("aborted" as const) : ("error" as const),
+  timestamp: Effect.runSync(Clock.currentTimeMillis),
+});
+
+const isImageModel = (value: unknown): value is typesModule.ImageModel<typesModule.ImageApi> =>
+  typeof value === "object" && value !== null && "api" in value && "provider" in value;
+
+const imageErrorResult: {
+  (
+    error: unknown,
+    aborted?: boolean,
+  ): (model: typesModule.ImageModel<typesModule.ImageApi>) => typesModule.AssistantImages;
+  (
+    model: typesModule.ImageModel<typesModule.ImageApi>,
+    error: unknown,
+    aborted?: boolean,
+  ): typesModule.AssistantImages;
+} = Function.dual(
+  (args) => args.length >= 3 || (args.length === 2 && isImageModel(args[0])),
+  (
+    model: typesModule.ImageModel<typesModule.ImageApi>,
+    error: unknown,
+    aborted = false,
+  ): typesModule.AssistantImages => ({
     api: model.api,
-    provider: model.provider,
     model: model.id,
     output: [],
-    stopReason: aborted ? "aborted" : "error",
-    errorMessage: error instanceof Error ? error.message : String(error),
-    timestamp: Date.now(),
-  };
-}
-
-export function classifierErrorResult(
-  model: ClassifierModel<ClassifierApi>,
-  error: unknown,
-  aborted = false,
-): ClassifierResult {
-  return {
-    api: model.api,
     provider: model.provider,
-    model: model.id,
+    ...errorFields(error, aborted),
+  }),
+);
+
+const classifierErrorResult: {
+  (
+    error: unknown,
+    aborted?: boolean,
+  ): (
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+  ) => typesModule.ClassifierResult;
+  (
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    error: unknown,
+    aborted?: boolean,
+  ): typesModule.ClassifierResult;
+} = Function.dual(
+  (args) => args.length >= 3 || (args.length === 2 && isImageModel(args[0])),
+  (
+    model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+    error: unknown,
+    aborted = false,
+  ): typesModule.ClassifierResult => ({
     answers: {},
-    stopReason: aborted ? "aborted" : "error",
-    errorMessage: error instanceof Error ? error.message : String(error),
-    timestamp: Date.now(),
-  };
-}
+    api: model.api,
+    model: model.id,
+    provider: model.provider,
+    ...errorFields(error, aborted),
+  }),
+);
+
+const modelOperations = {
+  assertChatModel,
+  assertClassifierInputSupported,
+  assertClassifierModel,
+  assertImageModel,
+  classifierErrorResult,
+  getModelType,
+  imageErrorResult,
+  isModelType,
+};
+
+export default modelOperations;

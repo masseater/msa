@@ -1,44 +1,67 @@
-import type { WriteStream } from "node:fs";
-import { open } from "node:fs/promises";
+import { Effect, FileSystem } from "effect";
 
-import { createOutputFileStream } from "../../utils/output-files.ts";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type TruncationResult,
-  truncateTail,
-} from "./truncate.ts";
+import outputFiles from "../../utils/output-files.ts";
+import type outputFilesTypes from "../../utils/output-files.types.ts";
+import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
+import type outputAccumulatorTypes from "./output-accumulator.types.ts";
+import truncate from "./truncate.ts";
+import type truncateTypes from "./truncate.types.ts";
 
-export interface OutputAccumulatorOptions {
-  maxLines?: number;
-  maxBytes?: number;
-  tempFilePrefix?: string;
-}
-
-export interface OutputSnapshot {
-  content: string;
-  truncation: TruncationResult;
-  fullOutputPath?: string | undefined;
-}
-
-export interface FullOutput {
-  content: string;
-  /** Whether `content` omits part of the output. */
-  truncated: boolean;
-}
+const { createOutputFileStream } = outputFiles;
+const { rethrowCause } = platform;
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES, truncateTail } = truncate;
 
 function byteLength(text: string): number {
   return Buffer.byteLength(text, "utf-8");
 }
 
-/**
- * Incrementally tracks streaming output with bounded memory.
- *
- * Appends decode chunks with a streaming UTF-8 decoder, keeps only a decoded
- * tail for display snapshots, and opens a temp file when the full output needs
- * to be preserved.
- */
-export class OutputAccumulator {
+type OutputFileStream = outputFilesTypes.OutputFileStream["stream"];
+
+const readOutputFile = (path: string, maxBytes: number) =>
+  Effect.scoped(
+    Effect.gen(function* () {
+      const fs = yield* FileSystem.FileSystem;
+      const file = yield* fs.open(path, { flag: "r" });
+      const size = Number((yield* file.stat).size);
+      if (size <= maxBytes) {
+        return { content: new TextDecoder().decode(yield* fs.readFile(path)), truncated: false };
+      }
+      const headBytes = Math.floor(maxBytes / 2);
+      const tailBytes = maxBytes - headBytes;
+      const head = Buffer.alloc(headBytes);
+      const tail = Buffer.alloc(tailBytes);
+      yield* file.read(head);
+      yield* file.seek(BigInt(size - tailBytes), "start");
+      yield* file.read(tail);
+      const headText = new TextDecoder().decode(head, { stream: true });
+      let tailStart = 0;
+      while (tailStart < tail.length && ((tail[tailStart] ?? 0) & 0xc0) === 0x80) tailStart++;
+      const tailText = new TextDecoder().decode(tail.subarray(tailStart));
+      const omitted = size - headBytes - tailBytes;
+      return {
+        content: `${headText}\n\n[... ${omitted} bytes omitted ...]\n\n${tailText}`,
+        truncated: true,
+      };
+    }),
+  ).pipe(rethrowCause);
+
+const endStream = (stream: OutputFileStream) =>
+  Effect.callback<void>((resume) => {
+    const onError = (error: Error): void => {
+      stream.off("finish", onFinish);
+      resume(Effect.die(error));
+    };
+    const onFinish = (): void => {
+      stream.off("error", onError);
+      resume(Effect.void);
+    };
+    stream.once("error", onError);
+    stream.once("finish", onFinish);
+    stream.end();
+  });
+
+export default class OutputAccumulator {
   private readonly maxLines: number;
   private readonly maxBytes: number;
   private readonly maxRollingBytes: number;
@@ -58,9 +81,9 @@ export class OutputAccumulator {
   private finished = false;
 
   private tempFilePath: string | undefined;
-  private tempFileStream: WriteStream | undefined;
+  private tempFileStream: OutputFileStream | undefined;
 
-  constructor(options: OutputAccumulatorOptions = {}) {
+  constructor(options: outputAccumulatorTypes.OutputAccumulatorOptions = {}) {
     this.maxLines = options.maxLines ?? DEFAULT_MAX_LINES;
     this.maxBytes = options.maxBytes ?? DEFAULT_MAX_BYTES;
     this.maxRollingBytes = Math.max(this.maxBytes * 2, 1);
@@ -75,7 +98,7 @@ export class OutputAccumulator {
     this.totalRawBytes += data.length;
     this.appendDecodedText(this.decoder.decode(data, { stream: true }));
 
-    if (this.tempFileStream || this.shouldUseTempFile()) {
+    if (this.tempFileStream !== undefined || this.shouldUseTempFile()) {
       this.ensureTempFile();
       this.tempFileStream?.write(data);
     } else if (data.length > 0) {
@@ -94,94 +117,53 @@ export class OutputAccumulator {
     }
   }
 
-  snapshot(options: { persistIfTruncated?: boolean } = {}): OutputSnapshot {
+  snapshot(options: { persistIfTruncated?: boolean } = {}): outputAccumulatorTypes.OutputSnapshot {
     const tailTruncation = truncateTail(this.getSnapshotText(), {
-      maxLines: this.maxLines,
       maxBytes: this.maxBytes,
+      maxLines: this.maxLines,
     });
     const truncated = this.totalLines > this.maxLines || this.totalDecodedBytes > this.maxBytes;
     const truncatedBy = truncated
       ? (tailTruncation.truncatedBy ?? (this.totalDecodedBytes > this.maxBytes ? "bytes" : "lines"))
       : null;
-    const truncation: TruncationResult = {
+    const truncation: truncateTypes.TruncationResult = {
       ...tailTruncation,
+      maxBytes: this.maxBytes,
+      maxLines: this.maxLines,
+      totalBytes: this.totalDecodedBytes,
+      totalLines: this.totalLines,
       truncated,
       truncatedBy,
-      totalLines: this.totalLines,
-      totalBytes: this.totalDecodedBytes,
-      maxLines: this.maxLines,
-      maxBytes: this.maxBytes,
     };
 
-    if (options.persistIfTruncated && truncation.truncated) {
+    if (options.persistIfTruncated === true && truncation.truncated) {
       this.ensureTempFile();
     }
 
     return {
       content: truncation.content,
-      truncation,
       fullOutputPath: this.tempFilePath,
+      truncation,
     };
   }
 
-  async closeTempFile(): Promise<void> {
-    if (!this.tempFileStream) {
-      return;
-    }
-
+  closeTempFile(): Promise<void> {
     const stream = this.tempFileStream;
+    if (stream === undefined) {
+      return Promise.resolve();
+    }
     this.tempFileStream = undefined;
-
-    await new Promise<void>((resolve, reject) => {
-      const onError = (error: Error) => {
-        stream.off("finish", onFinish);
-        reject(error);
-      };
-      const onFinish = () => {
-        stream.off("error", onError);
-        resolve();
-      };
-      stream.once("error", onError);
-      stream.once("finish", onFinish);
-      stream.end();
-    });
+    return nodeRuntime.runPromise(endStream(stream));
   }
 
-  /**
-   * The complete output, for callers that can take more than the display snapshot. Call after
-   * `finish()` and `closeTempFile()`. Output longer than `maxBytes` raw bytes keeps its first and
-   * last `maxBytes / 2` bytes around an omission marker.
-   */
-  async readFullOutput(maxBytes: number): Promise<FullOutput> {
-    if (!this.tempFilePath) {
-      return { content: new TextDecoder().decode(Buffer.concat(this.rawChunks)), truncated: false };
+  readFullOutput(maxBytes: number): Promise<outputAccumulatorTypes.FullOutput> {
+    if (this.tempFilePath === undefined || this.tempFilePath === "") {
+      return Promise.resolve({
+        content: new TextDecoder().decode(Buffer.concat(this.rawChunks)),
+        truncated: false,
+      });
     }
-    const file = await open(this.tempFilePath, "r");
-    try {
-      const size = (await file.stat()).size;
-      if (size <= maxBytes) {
-        return { content: new TextDecoder().decode(await file.readFile()), truncated: false };
-      }
-      const headBytes = Math.floor(maxBytes / 2);
-      const tailBytes = maxBytes - headBytes;
-      const head = Buffer.alloc(headBytes);
-      const tail = Buffer.alloc(tailBytes);
-      await file.read(head, 0, headBytes, 0);
-      await file.read(tail, 0, tailBytes, size - tailBytes);
-      // Cut at character boundaries: streaming decode holds back an incomplete trailing sequence,
-      // and the tail skips leading continuation bytes.
-      const headText = new TextDecoder().decode(head, { stream: true });
-      let tailStart = 0;
-      while (tailStart < tail.length && ((tail[tailStart] ?? 0) & 0xc0) === 0x80) tailStart++;
-      const tailText = new TextDecoder().decode(tail.subarray(tailStart));
-      const omitted = size - headBytes - tailBytes;
-      return {
-        content: `${headText}\n\n[... ${omitted} bytes omitted ...]\n\n${tailText}`,
-        truncated: true,
-      };
-    } finally {
-      await file.close();
-    }
+    return nodeRuntime.runPromise(readOutputFile(this.tempFilePath, maxBytes));
   }
 
   getLastLineBytes(): number {
@@ -255,7 +237,7 @@ export class OutputAccumulator {
   }
 
   private ensureTempFile(): void {
-    if (this.tempFilePath) {
+    if (this.tempFilePath !== undefined && this.tempFilePath !== "") {
       return;
     }
     const { path, stream } = createOutputFileStream(this.tempFilePrefix, ".log");

@@ -1,37 +1,18 @@
-/**
- * Agent discovery and configuration
- */
+import { NodeServices } from "@effect/platform-node";
+import codingAgent from "@msa/coding-agent";
+import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
+import { dual } from "effect/Function";
 
-import * as fs from "node:fs";
-import * as path from "node:path";
+import type agentsTypes from "./agents.types.ts";
 
-import { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } from "@msa/coding-agent";
+const { CONFIG_DIR_NAME, getAgentDir, parseFrontmatter } = codingAgent;
 
-export type AgentScope = "user" | "project" | "both";
+const runtime = ManagedRuntime.make(NodeServices.layer);
+const pathService = runtime.runSync(Path.Path);
 
-export interface AgentConfig {
-  name: string;
-  description: string;
-  tools?: string[] | undefined;
-  model?: string | undefined;
-  systemPrompt: string;
-  source: "user" | "project";
-  filePath: string;
-}
+const joinPath = (...segments: string[]): string => pathService.join(...segments);
+const fsService = runtime.runSync(FileSystem.FileSystem);
 
-export interface AgentDiscoveryResult {
-  agents: AgentConfig[];
-  projectAgentsDir: string | null;
-}
-
-/**
- * Raw agent frontmatter. Values are `unknown` because `parseFrontmatter` runs a
- * real YAML parser, so any scalar or collection can appear here.
- *
- * A type alias rather than an interface: `parseFrontmatter` constrains its
- * parameter to `Record<string, unknown>`, and only an alias picks up the
- * implicit index signature that satisfies it.
- */
 type AgentFrontmatter = {
   name?: unknown;
   description?: unknown;
@@ -39,18 +20,6 @@ type AgentFrontmatter = {
   model?: unknown;
 };
 
-/**
- * Normalize a frontmatter `tools` value to a list of tool names.
- *
- * Both spellings are valid YAML and both are in use:
- *
- *     tools: read, bash        # string
- *     tools: [read, bash]      # array
- *
- * so accept either. Anything else (a number, a map, a nested list) yields no
- * tools rather than throwing: this runs inside agent discovery, where a single
- * bad file must not take down every other agent in the same directory.
- */
 function parseToolList(value: unknown): string[] | undefined {
   const raw = Array.isArray(value) ? value : typeof value === "string" ? value.split(",") : [];
   const tools = raw
@@ -60,103 +29,101 @@ function parseToolList(value: unknown): string[] | undefined {
   return tools.length > 0 ? tools : undefined;
 }
 
-function loadAgentsFromDir(dir: string, source: "user" | "project"): AgentConfig[] {
-  const agents: AgentConfig[] = [];
-
-  if (!fs.existsSync(dir)) {
-    return agents;
-  }
-
-  let entries: fs.Dirent[];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return agents;
-  }
-
-  for (const entry of entries) {
-    if (!entry.name.endsWith(".md")) continue;
-    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
-
-    const filePath = path.join(dir, entry.name);
-    let content: string;
-    try {
-      content = fs.readFileSync(filePath, "utf-8");
-    } catch {
-      continue;
-    }
-
-    const { frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content);
-
+const readAgentFile = (filePath: string, source: "user" | "project") =>
+  Effect.gen(function* () {
+    const content = yield* fsService.readFileString(filePath).pipe(Effect.option);
+    if (Option.isNone(content)) return undefined;
+    const { frontmatter, body } = parseFrontmatter<AgentFrontmatter>(content.value);
     if (typeof frontmatter.name !== "string" || typeof frontmatter.description !== "string") {
-      continue;
+      return undefined;
     }
-
-    agents.push({
-      name: frontmatter.name,
+    const agent: agentsTypes.AgentConfig = {
       description: frontmatter.description,
-      tools: parseToolList(frontmatter.tools),
-      model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
-      systemPrompt: body,
-      source,
       filePath,
-    });
-  }
+      model: typeof frontmatter.model === "string" ? frontmatter.model : undefined,
+      name: frontmatter.name,
+      source,
+      systemPrompt: body,
+      tools: parseToolList(frontmatter.tools),
+    };
+    return agent;
+  });
 
-  return agents;
-}
+const loadAgentsFromDir = (dir: string, source: "user" | "project") =>
+  Effect.gen(function* () {
+    const names = yield* fsService.readDirectory(dir).pipe(Effect.orElseSucceed(() => []));
+    const agents = yield* Effect.forEach(
+      names.filter((name) => name.endsWith(".md")),
+      (name) => readAgentFile(pathService.join(dir, name), source),
+    );
+    return agents.filter((agent): agent is agentsTypes.AgentConfig => agent !== undefined);
+  });
 
-function isDirectory(p: string): boolean {
-  try {
-    return fs.statSync(p).isDirectory();
-  } catch {
-    return false;
-  }
-}
+const isDirectory = (p: string) =>
+  fsService.stat(p).pipe(
+    Effect.map((info) => info.type === "Directory"),
+    Effect.orElseSucceed(() => false),
+  );
 
-function findNearestProjectAgentsDir(cwd: string): string | null {
-  let currentDir = cwd;
-  while (true) {
-    const candidate = path.join(currentDir, CONFIG_DIR_NAME, "agents");
-    if (isDirectory(candidate)) return candidate;
+const findNearestProjectAgentsDir = (cwd: string) =>
+  Effect.gen(function* () {
+    let currentDir = cwd;
+    for (;;) {
+      const candidate = pathService.join(currentDir, CONFIG_DIR_NAME, "agents");
+      if (yield* isDirectory(candidate)) return candidate;
+      const parentDir = pathService.dirname(currentDir);
+      if (parentDir === currentDir) return null;
+      currentDir = parentDir;
+    }
+  });
 
-    const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) return null;
-    currentDir = parentDir;
-  }
-}
+const discoverAgentsImpl = (cwd: string, scope: agentsTypes.AgentScope) =>
+  Effect.gen(function* () {
+    const userDir = pathService.join(getAgentDir(), "agents");
+    const projectAgentsDir = yield* findNearestProjectAgentsDir(cwd);
+    const userAgents = scope === "project" ? [] : yield* loadAgentsFromDir(userDir, "user");
+    const projectAgents =
+      scope === "user" || projectAgentsDir === null || projectAgentsDir.length === 0
+        ? []
+        : yield* loadAgentsFromDir(projectAgentsDir, "project");
 
-export function discoverAgents(cwd: string, scope: AgentScope): AgentDiscoveryResult {
-  const userDir = path.join(getAgentDir(), "agents");
-  const projectAgentsDir = findNearestProjectAgentsDir(cwd);
+    const agentMap = new Map<string, agentsTypes.AgentConfig>();
+    if (scope !== "project") for (const agent of userAgents) agentMap.set(agent.name, agent);
+    if (scope !== "user") for (const agent of projectAgents) agentMap.set(agent.name, agent);
+    const result: agentsTypes.AgentDiscoveryResult = {
+      agents: Array.from(agentMap.values()),
+      projectAgentsDir,
+    };
+    return result;
+  });
 
-  const userAgents = scope === "project" ? [] : loadAgentsFromDir(userDir, "user");
-  const projectAgents =
-    scope === "user" || !projectAgentsDir ? [] : loadAgentsFromDir(projectAgentsDir, "project");
+const discoverAgents: {
+  (cwd: string, scope: agentsTypes.AgentScope): Effect.Effect<agentsTypes.AgentDiscoveryResult>;
+  (scope: agentsTypes.AgentScope): (cwd: string) => Effect.Effect<agentsTypes.AgentDiscoveryResult>;
+} = dual(2, discoverAgentsImpl);
 
-  const agentMap = new Map<string, AgentConfig>();
-
-  if (scope === "both") {
-    for (const agent of userAgents) agentMap.set(agent.name, agent);
-    for (const agent of projectAgents) agentMap.set(agent.name, agent);
-  } else if (scope === "user") {
-    for (const agent of userAgents) agentMap.set(agent.name, agent);
-  } else {
-    for (const agent of projectAgents) agentMap.set(agent.name, agent);
-  }
-
-  return { agents: Array.from(agentMap.values()), projectAgentsDir };
-}
-
-export function formatAgentList(
-  agents: AgentConfig[],
+function formatAgentListImpl(
+  agents: agentsTypes.AgentConfig[],
   maxItems: number,
 ): { text: string; remaining: number } {
-  if (agents.length === 0) return { text: "none", remaining: 0 };
+  if (agents.length === 0) return { remaining: 0, text: "none" };
   const listed = agents.slice(0, maxItems);
   const remaining = agents.length - listed.length;
   return {
-    text: listed.map((a) => `${a.name} (${a.source}): ${a.description}`).join("; "),
     remaining,
+    text: listed.map((a) => `${a.name} (${a.source}): ${a.description}`).join("; "),
   };
 }
+
+const formatAgentList: {
+  (agents: agentsTypes.AgentConfig[], maxItems: number): { text: string; remaining: number };
+  (maxItems: number): (agents: agentsTypes.AgentConfig[]) => { text: string; remaining: number };
+} = dual(2, formatAgentListImpl);
+
+const agents = {
+  discoverAgents,
+  formatAgentList,
+  joinPath,
+};
+
+export default agents;

@@ -1,18 +1,15 @@
-export interface CombinedAbortSignal {
-  signal?: AbortSignal;
-  cleanup: () => void;
-}
+import type abortSignalsTypes from "./abort-signals.types.ts";
 
-export function combineAbortSignals(
+function combineAbortSignals(
   signals: readonly (AbortSignal | undefined)[],
-): CombinedAbortSignal {
+): abortSignalsTypes.CombinedAbortSignal {
   const activeSignals = signals.filter((signal): signal is AbortSignal => signal !== undefined);
   const [first, ...rest] = activeSignals;
   if (first === undefined) {
     return { cleanup: () => {} };
   }
   if (rest.length === 0) {
-    return { signal: first, cleanup: () => {} };
+    return { cleanup: () => {}, signal: first };
   }
 
   const controller = new AbortController();
@@ -30,15 +27,21 @@ export function combineAbortSignals(
     }
     const listener = () => abort(signal);
     signal.addEventListener("abort", listener, { once: true });
-    listeners.push({ signal, listener });
+    listeners.push({ listener, signal });
   }
 
   return {
-    signal: controller.signal,
     cleanup: () => {
       for (const { signal, listener } of listeners) {
         signal.removeEventListener("abort", listener);
       }
     },
+    signal: controller.signal,
   };
 }
+
+const abortSignals = {
+  combineAbortSignals,
+};
+
+export default abortSignals;

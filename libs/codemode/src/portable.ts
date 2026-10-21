@@ -1,47 +1,20 @@
-export { toCodemodeIdentifier } from "./runtime/bridge.ts";
-export { CodemodeSandboxBase } from "./runtime/sandbox-base.ts";
-export {
-  DEFAULT_INTERRUPT_BUDGET,
-  InlineCodemodeSandbox,
-  type InlineCodemodeSandboxOptions,
-} from "./runtime/inline.ts";
-export {
-  MAX_OUTPUT_CHARS,
-  MAX_OUTPUT_ITEMS,
-  MAX_STORE_TOTAL_CHARS,
-  MAX_STORE_VALUE_CHARS,
-} from "./runtime/prelude-source.ts";
-export type { HostToWorkerMessage, VmStartData, WorkerToHostMessage } from "./runtime/protocol.ts";
-export {
-  type CodemodeRemote,
-  type CodemodeRemoteExchange,
-  type CodemodeRemoteMessage,
-  type CodemodeRemoteReply,
-  type CodemodeRemoteRequest,
-  type CodemodeServeOptions,
-  RemoteCodemodeSandbox,
-  type RemoteCodemodeSandboxOptions,
-  serveCodemodeRemote,
-} from "./runtime/remote.ts";
-export type {
-  CodemodeCall,
-  CodemodeCallStatus,
-  CodemodeDeclaredGlobal,
-  CodemodeDeclaredTool,
-  CodemodeDuring,
-  CodemodeError,
-  CodemodeErrorKind,
-  CodemodeExecuteOptions,
-  CodemodeHostCall,
-  CodemodeJsonSchema,
-  CodemodeOutcome,
-  CodemodeOutputItem,
-  CodemodeResult,
-  CodemodeRun,
-  CodemodeRunOptions,
-  CodemodeSandboxBaseOptions,
-  CodemodeStoreWrites,
-  CodemodeTool,
-  CodemodeToolContext,
-  CodemodeWasmModule,
-} from "./types.ts";
+import bridge from "./runtime/bridge.ts";
+import inline from "./runtime/inline.ts";
+import preludeSource from "./runtime/prelude-source.ts";
+import remoteModule from "./runtime/remote.ts";
+import sandboxBase from "./runtime/sandbox-base.ts";
+
+const portable = {
+  CodemodeSandboxBase: sandboxBase.CodemodeSandboxBase,
+  DEFAULT_INTERRUPT_BUDGET: inline.DEFAULT_INTERRUPT_BUDGET,
+  InlineCodemodeSandbox: inline.InlineCodemodeSandbox,
+  MAX_OUTPUT_CHARS: preludeSource.MAX_OUTPUT_CHARS,
+  MAX_OUTPUT_ITEMS: preludeSource.MAX_OUTPUT_ITEMS,
+  MAX_STORE_TOTAL_CHARS: preludeSource.MAX_STORE_TOTAL_CHARS,
+  MAX_STORE_VALUE_CHARS: preludeSource.MAX_STORE_VALUE_CHARS,
+  RemoteCodemodeSandbox: remoteModule.RemoteCodemodeSandbox,
+  serveCodemodeRemote: remoteModule.serveCodemodeRemote,
+  toCodemodeIdentifier: bridge.toCodemodeIdentifier,
+};
+
+export default portable;

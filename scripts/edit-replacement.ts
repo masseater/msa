@@ -2,49 +2,11 @@ import { Buffer } from "node:buffer";
 
 import { Array as Arr, Predicate } from "effect";
 
-import type { HostShape } from "./host.ts";
-import { median } from "./stats-format.ts";
+import type editReplacementTypes from "./edit-replacement.types.ts";
+import type hostTypes from "./host.types.ts";
+import statsFormat from "./stats-format.ts";
 
-type EditMode = "multi" | "single";
-
-interface Replacement {
-  readonly oldBytes: number;
-  readonly newBytes: number;
-  readonly totalEditBytes: number;
-  readonly sharedPrefixBytes: number;
-  readonly sharedSuffixBytes: number;
-  readonly sharedContextBytes: number;
-  readonly coreOldBytes: number;
-  readonly coreNewBytes: number;
-  readonly coreBytes: number;
-  readonly wrapperPayloadBytes: number;
-  readonly inflationRatio: number | null;
-  readonly noCoreChange: boolean;
-}
-
-interface EditAnalysis {
-  readonly path: string;
-  readonly extension: string;
-  readonly mode: EditMode;
-  readonly argStyle: string;
-  readonly editsCount: number;
-  readonly oldBytes: number;
-  readonly newBytes: number;
-  readonly totalEditBytes: number;
-  readonly sharedPrefixBytes: number;
-  readonly sharedSuffixBytes: number;
-  readonly sharedContextBytes: number;
-  readonly coreOldBytes: number;
-  readonly coreNewBytes: number;
-  readonly coreBytes: number;
-  readonly wrapperPayloadBytes: number;
-  readonly noCoreChange?: boolean;
-  readonly noCoreChangeCount?: number;
-  readonly inflationRatio: number | null;
-  readonly medianEditInflationRatio: number | null;
-  readonly maxEditInflationRatio: number | null;
-  readonly perEdit: ReadonlyArray<Replacement>;
-}
+const { median } = statsFormat;
 
 const utf8Bytes = (value: string): number => Buffer.byteLength(value, "utf8");
 
@@ -64,15 +26,15 @@ const commonSuffixLength = (left: string, right: string): number => {
   return index;
 };
 
-const analyzeReplacement = (oldText: string, newText: string): Replacement => {
+const analyzeReplacement = (oldText: string, newText: string): editReplacementTypes.Replacement => {
   const prefixChars = commonPrefixLength(oldText, newText);
   const oldRemainder = oldText.slice(prefixChars);
   const newRemainder = newText.slice(prefixChars);
   const suffixChars = commonSuffixLength(oldRemainder, newRemainder);
-  const oldCore = suffixChars > 0 ? oldRemainder.slice(0, -suffixChars) : oldRemainder;
-  const newCore = suffixChars > 0 ? newRemainder.slice(0, -suffixChars) : newRemainder;
+  const oldCore = oldRemainder.slice(0, oldRemainder.length - suffixChars);
+  const newCore = newRemainder.slice(0, newRemainder.length - suffixChars);
   const sharedPrefixBytes = utf8Bytes(oldText.slice(0, prefixChars));
-  const sharedSuffixBytes = utf8Bytes(suffixChars > 0 ? oldRemainder.slice(-suffixChars) : "");
+  const sharedSuffixBytes = utf8Bytes(oldRemainder.slice(oldRemainder.length - suffixChars));
   const oldBytes = utf8Bytes(oldText);
   const newBytes = utf8Bytes(newText);
   const coreOldBytes = utf8Bytes(oldCore);
@@ -80,28 +42,28 @@ const analyzeReplacement = (oldText: string, newText: string): Replacement => {
   const coreBytes = coreOldBytes + coreNewBytes;
   const totalEditBytes = oldBytes + newBytes;
   return {
-    oldBytes,
+    coreBytes,
+    coreNewBytes,
+    coreOldBytes,
+    inflationRatio: coreBytes === 0 ? null : totalEditBytes / coreBytes,
     newBytes,
-    totalEditBytes,
+    noCoreChange: coreBytes === 0,
+    oldBytes,
+    sharedContextBytes: sharedPrefixBytes + sharedSuffixBytes,
     sharedPrefixBytes,
     sharedSuffixBytes,
-    sharedContextBytes: sharedPrefixBytes + sharedSuffixBytes,
-    coreOldBytes,
-    coreNewBytes,
-    coreBytes,
+    totalEditBytes,
     wrapperPayloadBytes: totalEditBytes - coreBytes,
-    inflationRatio: coreBytes === 0 ? null : totalEditBytes / coreBytes,
-    noCoreChange: coreBytes === 0,
   };
 };
 
-const pathExtension = (host: HostShape, filePath: string): string => {
+const dotfileExtension = (base: string): string =>
+  base.startsWith(".") && !base.slice(1).includes(".") ? base.toLowerCase() : "[no_ext]";
+
+const pathExtension = (host: hostTypes.HostShape, filePath: string): string => {
   if (filePath.length === 0) return "[unknown]";
   const extension = host.extname(filePath).toLowerCase();
-  if (extension !== "") return extension;
-  const base = host.basename(filePath);
-  if (base.startsWith(".") && !base.slice(1).includes(".")) return base.toLowerCase();
-  return "[no_ext]";
+  return extension === "" ? dotfileExtension(host.basename(filePath)) : extension;
 };
 
 const stringField = (args: unknown, key: string): string | undefined => {
@@ -116,46 +78,57 @@ const arrayField = (args: unknown, key: string): ReadonlyArray<unknown> | undefi
   return Arr.isArray(value) ? value : undefined;
 };
 
-const argStyleOf = (args: unknown): string => {
-  const hasEdits = arrayField(args, "edits") !== undefined;
-  const hasOldText =
-    stringField(args, "oldText") !== undefined || stringField(args, "newText") !== undefined;
-  const hasOldString =
-    stringField(args, "old_string") !== undefined || stringField(args, "new_string") !== undefined;
-  if (hasEdits) return "edits";
-  if (hasOldText && hasOldString) return "mixed";
-  if (hasOldText) return "oldText/newText";
-  if (hasOldString) return "old_string/new_string";
-  return "unknown";
-};
+const hasEitherString = (args: unknown, first: string, second: string): boolean =>
+  stringField(args, first) !== undefined || stringField(args, second) !== undefined;
 
-const sumReplacements = (perEdit: ReadonlyArray<Replacement>) =>
+const REPLACEMENT_STYLES: ReadonlyMap<string, string> = new Map([
+  ["true:true", "mixed"],
+  ["true:false", "oldText/newText"],
+  ["false:true", "old_string/new_string"],
+  ["false:false", "unknown"],
+]);
+
+const replacementStyle = (hasOldText: boolean, hasOldString: boolean): string =>
+  REPLACEMENT_STYLES.get(`${hasOldText}:${hasOldString}`) ?? "unknown";
+
+const argStyleOf = (args: unknown): string =>
+  arrayField(args, "edits") === undefined
+    ? replacementStyle(
+        hasEitherString(args, "oldText", "newText"),
+        hasEitherString(args, "old_string", "new_string"),
+      )
+    : "edits";
+
+const stringFieldOr = (args: unknown, primary: string, fallback: string): string =>
+  stringField(args, primary) ?? stringField(args, fallback) ?? "";
+
+const sumReplacements = (perEdit: ReadonlyArray<editReplacementTypes.Replacement>) =>
   perEdit.reduce(
     (totals, edit) => ({
-      oldBytes: totals.oldBytes + edit.oldBytes,
+      coreBytes: totals.coreBytes + edit.coreBytes,
+      coreNewBytes: totals.coreNewBytes + edit.coreNewBytes,
+      coreOldBytes: totals.coreOldBytes + edit.coreOldBytes,
       newBytes: totals.newBytes + edit.newBytes,
-      totalEditBytes: totals.totalEditBytes + edit.totalEditBytes,
+      noCoreChangeCount: totals.noCoreChangeCount + (edit.noCoreChange ? 1 : 0),
+      oldBytes: totals.oldBytes + edit.oldBytes,
+      sharedContextBytes: totals.sharedContextBytes + edit.sharedContextBytes,
       sharedPrefixBytes: totals.sharedPrefixBytes + edit.sharedPrefixBytes,
       sharedSuffixBytes: totals.sharedSuffixBytes + edit.sharedSuffixBytes,
-      sharedContextBytes: totals.sharedContextBytes + edit.sharedContextBytes,
-      coreOldBytes: totals.coreOldBytes + edit.coreOldBytes,
-      coreNewBytes: totals.coreNewBytes + edit.coreNewBytes,
-      coreBytes: totals.coreBytes + edit.coreBytes,
+      totalEditBytes: totals.totalEditBytes + edit.totalEditBytes,
       wrapperPayloadBytes: totals.wrapperPayloadBytes + edit.wrapperPayloadBytes,
-      noCoreChangeCount: totals.noCoreChangeCount + (edit.noCoreChange ? 1 : 0),
     }),
     {
-      oldBytes: 0,
+      coreBytes: 0,
+      coreNewBytes: 0,
+      coreOldBytes: 0,
       newBytes: 0,
-      totalEditBytes: 0,
+      noCoreChangeCount: 0,
+      oldBytes: 0,
+      sharedContextBytes: 0,
       sharedPrefixBytes: 0,
       sharedSuffixBytes: 0,
-      sharedContextBytes: 0,
-      coreOldBytes: 0,
-      coreNewBytes: 0,
-      coreBytes: 0,
+      totalEditBytes: 0,
       wrapperPayloadBytes: 0,
-      noCoreChangeCount: 0,
     },
   );
 
@@ -164,7 +137,7 @@ const multiAnalysis = (options: {
   readonly edits: ReadonlyArray<unknown>;
   readonly extension: string;
   readonly path: string;
-}): EditAnalysis => {
+}): editReplacementTypes.EditAnalysis => {
   const perEdit = options.edits.map((edit) =>
     analyzeReplacement(stringField(edit, "oldText") ?? "", stringField(edit, "newText") ?? ""),
   );
@@ -173,23 +146,23 @@ const multiAnalysis = (options: {
   );
   const totals = sumReplacements(perEdit);
   return {
-    path: options.path,
-    extension: options.extension,
-    mode: "multi",
     argStyle: options.argStyle,
     editsCount: options.edits.length,
+    extension: options.extension,
+    mode: "multi",
+    path: options.path,
     ...totals,
     inflationRatio: totals.coreBytes === 0 ? null : totals.totalEditBytes / totals.coreBytes,
-    medianEditInflationRatio: median(inflations),
     maxEditInflationRatio: inflations.length > 0 ? Math.max(...inflations) : null,
+    medianEditInflationRatio: median(inflations),
     perEdit,
   };
 };
 
 const analyzeEditArguments = (options: {
   readonly args: unknown;
-  readonly host: HostShape;
-}): EditAnalysis => {
+  readonly host: hostTypes.HostShape;
+}): editReplacementTypes.EditAnalysis => {
   const { args } = options;
   const path = stringField(args, "path") ?? "";
   const extension = pathExtension(options.host, path);
@@ -197,21 +170,24 @@ const analyzeEditArguments = (options: {
   const edits = arrayField(args, "edits");
   if (edits !== undefined) return multiAnalysis({ argStyle, edits, extension, path });
   const replacement = analyzeReplacement(
-    stringField(args, "oldText") ?? stringField(args, "old_string") ?? "",
-    stringField(args, "newText") ?? stringField(args, "new_string") ?? "",
+    stringFieldOr(args, "oldText", "old_string"),
+    stringFieldOr(args, "newText", "new_string"),
   );
   return {
-    path,
-    extension,
-    mode: "single",
     argStyle,
     editsCount: 1,
+    extension,
+    mode: "single",
+    path,
     ...replacement,
-    medianEditInflationRatio: replacement.inflationRatio,
     maxEditInflationRatio: replacement.inflationRatio,
+    medianEditInflationRatio: replacement.inflationRatio,
     perEdit: [replacement],
   };
 };
 
-export type { EditAnalysis, EditMode, Replacement };
-export { analyzeEditArguments };
+const editReplacement = {
+  analyzeEditArguments,
+};
+
+export default editReplacement;

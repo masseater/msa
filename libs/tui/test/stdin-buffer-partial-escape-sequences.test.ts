@@ -1,88 +1,95 @@
 import assert from "node:assert";
-import { afterEach, beforeEach, describe, it } from "node:test";
+import { type TestContext, afterEach, beforeEach, describe, it } from "node:test";
 
-import { matchesKey } from "../src/keys.ts";
-import { StdinBuffer } from "../src/stdin-buffer.ts";
-import { replies, wait } from "./stdin-buffer-helpers.ts";
+import { Effect } from "effect";
+
+import keys from "../src/keys.ts";
+import StdinBuffer from "../src/stdin-buffer.ts";
+import type stdinBufferTypes from "../src/stdin-buffer.types.ts";
+import stdinBufferHelpers from "./stdin-buffer-helpers.ts";
+
+const { matchesKey } = keys;
+
+const { replies, wait } = stdinBufferHelpers;
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Partial Escape Sequences", () => {
-    it("should merge ESC + CR split across chunks within a larger timeout", async () => {
-      buffer = new StdinBuffer({ escapeTimeout: 100 });
-      emittedSequences = [];
-      buffer.on("data", (sequence) => {
-        emittedSequences.push(sequence);
-      });
+    it("should merge ESC + CR split across chunks within a larger timeout", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          buffer = new StdinBuffer({ escapeTimeout: 100 });
+          emittedSequences = [];
+          buffer.on("data", (sequence) => {
+            emittedSequences.push(sequence);
+          });
 
-      processInput("\x1b");
-      // > 10ms default escapeTimeout, < 100ms configured escapeTimeout
-      await wait(20);
-      processInput("\r");
+          processInput("\x1b");
+          yield* wait(20);
+          processInput("\r");
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b\r"]);
-      assert.equal(matchesKey(emittedSequences[0] ?? "", "alt+enter"), true);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b\r"]);
+          assert.equal(matchesKey(emittedSequences[0] ?? "", "alt+enter"), true);
+        }),
+      ));
   });
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
   describe("Partial Escape Sequences", () => {
-    it("does not apply the sequence timeout to a lone ESC", async () => {
-      buffer = new StdinBuffer({ timeout: 100 });
-      emittedSequences = [];
-      buffer.on("data", (sequence) => {
-        emittedSequences.push(sequence);
-      });
+    it("does not apply the sequence timeout to a lone ESC", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          buffer = new StdinBuffer({ timeout: 100 });
+          emittedSequences = [];
+          buffer.on("data", (sequence) => {
+            emittedSequences.push(sequence);
+          });
 
-      processInput("\x1b");
-      await wait(20);
-      processInput("\r");
+          processInput("\x1b");
+          yield* wait(20);
+          processInput("\r");
 
-      assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
-      assert.equal(matchesKey(emittedSequences[0] ?? "", "escape"), true);
-    });
+          assert.deepStrictEqual(emittedSequences, ["\x1b", "\r"]);
+          assert.equal(matchesKey(emittedSequences[0] ?? "", "escape"), true);
+        }),
+      ));
   });
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
@@ -90,28 +97,30 @@ describe("StdinBuffer", () => {
   });
   afterEach(() => buffer.destroy());
   describe("Partial Escape Sequences", () => {
-    it("keeps fragmented mouse sequences buffered across delayed chunks by default", async () => {
-      const delayedBuffer = new StdinBuffer();
-      const delayedSequences: string[] = [];
-      delayedBuffer.on("data", (sequence) => delayedSequences.push(sequence));
+    it("keeps fragmented mouse sequences buffered across delayed chunks by default", () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const delayedBuffer = new StdinBuffer();
+          const delayedSequences: string[] = [];
+          delayedBuffer.on("data", (sequence) => delayedSequences.push(sequence));
 
-      delayedBuffer.process("\x1b[");
-      await wait(20);
-      assert.deepStrictEqual(delayedSequences, []);
-      delayedBuffer.process("<65;48;39M");
-      assert.deepStrictEqual(delayedSequences, ["\x1b[<65;48;39M"]);
-      delayedBuffer.destroy();
-    });
+          delayedBuffer.process("\x1b[");
+          yield* wait(20);
+          assert.deepStrictEqual(delayedSequences, []);
+          delayedBuffer.process("<65;48;39M");
+          assert.deepStrictEqual(delayedSequences, ["\x1b[<65;48;39M"]);
+          delayedBuffer.destroy();
+        }),
+      ));
   });
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
@@ -145,19 +154,17 @@ describe("StdinBuffer", () => {
 });
 
 describe("StdinBuffer", () => {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  // Helper to process data through the buffer
   function processInput(data: string | Buffer): void {
     buffer.process(data);
   }
@@ -185,65 +192,70 @@ describe("StdinBuffer", () => {
   });
 });
 
+const ambiguousLegacyInputs = [
+  "\x1b]a",
+  "\x1b]1",
+  "\x1b]10",
+  "\x1b]0;title",
+  "\x1b]4;",
+  "\x1b]4;a;",
+  "\x1bPa",
+  "\x1bP>",
+  "\x1b_a",
+  "\x1b_G",
+  "\x1b_Gi=1",
+];
+
 describe("StdinBuffer", () => {
   describe("Terminal Reply Strings", () => {
     terminalReplyStringsCases1();
   });
 });
 
+function recoverLegacyAltInput(t: TestContext, ambiguous: string): void {
+  t.mock.timers.enable({ apis: ["setTimeout"] });
+  const legacyBuffer = new StdinBuffer();
+  const sequences: string[] = [];
+  legacyBuffer.on("data", (sequence) => sequences.push(sequence));
+  try {
+    legacyBuffer.process(ambiguous);
+    t.mock.timers.tick(20);
+    legacyBuffer.process("x\r\x03\x04");
+    t.mock.timers.tick(49);
+    assert.deepStrictEqual(sequences, []);
+    t.mock.timers.tick(1);
+    assert.deepStrictEqual(sequences, [
+      ambiguous.slice(0, 2),
+      ...ambiguous.slice(2),
+      "x",
+      "\r",
+      "\x03",
+      "\x04",
+    ]);
+    assert.strictEqual(legacyBuffer.getBuffer(), "");
+
+    legacyBuffer.process("y\r\x03\x04");
+    assert.deepStrictEqual(sequences.slice(-4), ["y", "\r", "\x03", "\x04"]);
+  } finally {
+    legacyBuffer.destroy();
+  }
+}
+
 function terminalReplyStringsCases1(): void {
-  let buffer: StdinBuffer;
+  let buffer: stdinBufferTypes.StdinBuffer;
   let emittedSequences: string[];
   beforeEach(() => {
     buffer = new StdinBuffer({ timeout: 10 });
 
-    // Collect emitted sequences
     emittedSequences = [];
     buffer.on("data", (sequence) => {
       emittedSequences.push(sequence);
     });
   });
   afterEach(() => buffer.destroy());
-  for (const ambiguous of [
-    "\x1b]a",
-    "\x1b]1",
-    "\x1b]10",
-    "\x1b]0;title",
-    "\x1b]4;",
-    "\x1b]4;a;",
-    "\x1bPa",
-    "\x1bP>",
-    "\x1b_a",
-    "\x1b_G",
-    "\x1b_Gi=1",
-  ]) {
+  for (const ambiguous of ambiguousLegacyInputs) {
     it(`recovers batched legacy Alt input ${JSON.stringify(ambiguous)} within the sequence timeout`, (t) => {
-      t.mock.timers.enable({ apis: ["setTimeout"] });
-      const legacyBuffer = new StdinBuffer();
-      const sequences: string[] = [];
-      legacyBuffer.on("data", (sequence) => sequences.push(sequence));
-      try {
-        legacyBuffer.process(ambiguous);
-        t.mock.timers.tick(20);
-        legacyBuffer.process("x\r\x03\x04");
-        t.mock.timers.tick(49);
-        assert.deepStrictEqual(sequences, []);
-        t.mock.timers.tick(1);
-        assert.deepStrictEqual(sequences, [
-          ambiguous.slice(0, 2),
-          ...ambiguous.slice(2),
-          "x",
-          "\r",
-          "\x03",
-          "\x04",
-        ]);
-        assert.strictEqual(legacyBuffer.getBuffer(), "");
-
-        legacyBuffer.process("y\r\x03\x04");
-        assert.deepStrictEqual(sequences.slice(-4), ["y", "\r", "\x03", "\x04"]);
-      } finally {
-        legacyBuffer.destroy();
-      }
+      recoverLegacyAltInput(t, ambiguous);
     });
   }
 }

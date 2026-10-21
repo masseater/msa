@@ -1,6 +1,6 @@
 import { parse as partialParse } from "partial-json";
 
-import type { ToolCall } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
 const VALID_JSON_ESCAPES = new Set(['"', "\\", "/", "b", "f", "n", "r", "t"]);
 
@@ -26,15 +26,21 @@ function escapeControlCharacter(char: string): string {
   }
 }
 
-/**
- * Repairs malformed JSON string literals by:
- * - escaping raw control characters inside strings
- * - doubling backslashes before invalid escape characters
- *
- * @param {string} json - JSON text
- * @returns {string} the repaired JSON text
- */
-export function repairJson(json: string): string {
+const repairEscape = (json: string, index: number): { text: string; skip: number } => {
+  const nextChar = json[index + 1];
+  if (nextChar === undefined) return { skip: 0, text: "\\\\" };
+
+  if (nextChar === "u") {
+    const unicodeDigits = json.slice(index + 2, index + 6);
+    if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) return { skip: 5, text: `\\u${unicodeDigits}` };
+  }
+
+  if (VALID_JSON_ESCAPES.has(nextChar)) return { skip: 1, text: `\\${nextChar}` };
+
+  return { skip: 0, text: "\\\\" };
+};
+
+const repairJson = (json: string): string => {
   let repaired = "";
   let inString = false;
 
@@ -56,28 +62,9 @@ export function repairJson(json: string): string {
     }
 
     if (char === "\\") {
-      const nextChar = json[index + 1];
-      if (nextChar === undefined) {
-        repaired += "\\\\";
-        continue;
-      }
-
-      if (nextChar === "u") {
-        const unicodeDigits = json.slice(index + 2, index + 6);
-        if (/^[0-9a-fA-F]{4}$/u.test(unicodeDigits)) {
-          repaired += `\\u${unicodeDigits}`;
-          index += 5;
-          continue;
-        }
-      }
-
-      if (VALID_JSON_ESCAPES.has(nextChar)) {
-        repaired += `\\${nextChar}`;
-        index += 1;
-        continue;
-      }
-
-      repaired += "\\\\";
+      const escape = repairEscape(json, index);
+      repaired += escape.text;
+      index += escape.skip;
       continue;
     }
 
@@ -85,9 +72,9 @@ export function repairJson(json: string): string {
   }
 
   return repaired;
-}
+};
 
-export function parseJsonWithRepair<T>(json: string): T {
+function parseJsonWithRepair<T>(json: string): T {
   try {
     return JSON.parse(json) as T;
   } catch (error) {
@@ -99,23 +86,12 @@ export function parseJsonWithRepair<T>(json: string): T {
   }
 }
 
-/**
- * Parses the model's complete arguments text of a finished tool call.
- *
- * Unlike {@link parseStreamingJson}, this never keeps a partially parsed prefix: once the call is
- * finished, text that is not a valid JSON object means the model sent malformed arguments. In that
- * case `arguments` is `{}` and `argumentsError` describes the problem, including the text the
- * model sent, so tool validation can report it back to the model.
- *
- * @param {string | undefined} json - complete arguments text
- * @returns {Pick<ToolCall, "arguments" | "argumentsError">} the parsed arguments, or `{}` with an error description
- */
-export function parseToolCallArguments(
+function parseToolCallArguments(
   json: string | undefined,
-): Pick<ToolCall, "arguments" | "argumentsError"> {
-  if (!json?.trim()) return { arguments: {} };
+): Pick<typesModule.ToolCall, "arguments" | "argumentsError"> {
+  if (json === undefined || json.trim() === "") return { arguments: {} };
   try {
-    const parsed = parseJsonWithRepair<ToolCall["arguments"] | null>(json);
+    const parsed = parseJsonWithRepair<typesModule.ToolCall["arguments"] | null>(json);
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
       throw new Error("Tool arguments must be a JSON object");
     }
@@ -128,17 +104,8 @@ export function parseToolCallArguments(
   }
 }
 
-/**
- * Attempts to parse potentially incomplete JSON during streaming.
- * Always returns a valid object, even if the JSON is incomplete.
- *
- * @param {string | undefined} partialJson - The partial JSON string from streaming
- * @returns {T} Parsed object or empty object if parsing fails
- */
-export function parseStreamingJson<T = Record<string, unknown>>(
-  partialJson: string | undefined,
-): T {
-  if (!partialJson || partialJson.trim() === "") {
+function parseStreamingJson<T = Record<string, unknown>>(partialJson: string | undefined): T {
+  if (partialJson === undefined || partialJson === "" || partialJson.trim() === "") {
     return {} as T;
   }
 
@@ -158,3 +125,12 @@ export function parseStreamingJson<T = Record<string, unknown>>(
     }
   }
 }
+
+const jsonParse = {
+  parseJsonWithRepair,
+  parseStreamingJson,
+  parseToolCallArguments,
+  repairJson,
+};
+
+export default jsonParse;

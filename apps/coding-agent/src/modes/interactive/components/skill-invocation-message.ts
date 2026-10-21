@@ -1,22 +1,23 @@
-import { Box, Container, Markdown, type MarkdownTheme, MouseRegion, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { ParsedSkillBlock } from "../../../core/agent-session.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
-import { keyText } from "./keybinding-hints.ts";
+import type agentSessionTypes from "../../../core/agent-session.types.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-/**
- * Component that renders a skill invocation message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
- * Only renders the skill block itself - user message is rendered separately.
- */
-export class SkillInvocationMessageComponent extends Box {
+const { getMarkdownTheme, theme } = themeModule;
+const { keyText } = keybindingHints;
+
+const { Container, Markdown, MouseRegion, Text } = tui;
+
+export default class SkillInvocationMessageComponent extends tui.Box {
   private expanded = false;
-  private skillBlock: ParsedSkillBlock;
-  private markdownTheme: MarkdownTheme;
+  private skillBlock: agentSessionTypes.ParsedSkillBlock;
+  private markdownTheme: tuiTypes.MarkdownTheme;
 
   constructor(
-    skillBlock: ParsedSkillBlock,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    skillBlock: agentSessionTypes.ParsedSkillBlock,
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {
     super(outputPad, 1, (t) => theme.bg("customMessageBg", t));
@@ -44,7 +45,6 @@ export class SkillInvocationMessageComponent extends Box {
     const content = new Container();
 
     if (this.expanded) {
-      // Expanded: label + skill name header + full content
       const label = theme.fg("customMessageLabel", `\x1b[1m[skill]\x1b[22m`);
       content.addChild(new Text(label, 0, 0));
       const header = `**${this.skillBlock.name}**\n\n`;
@@ -54,7 +54,6 @@ export class SkillInvocationMessageComponent extends Box {
         }),
       );
     } else {
-      // Collapsed: single line - [skill] name (hint to expand)
       const line =
         theme.fg("customMessageLabel", `\x1b[1m[skill]\x1b[22m `) +
         theme.fg("customMessageText", this.skillBlock.name) +

@@ -1,177 +1,140 @@
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-
+import { Clock, Effect } from "effect";
 import type { ResponseFunctionCallOutputItemList } from "openai/resources/responses/responses.js";
 import { Type } from "typebox";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
-import type { Api, Context, Model, StreamOptions, Tool, ToolResultMessage } from "../src/compat.ts";
-import { complete, getModel } from "../src/compat.ts";
-import { resolveApiKey } from "./oauth.ts";
+import compat from "../src/compat.ts";
+import type compatTypes from "../src/compat.types.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+import redCircle from "./red-circle.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { complete } = compat;
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const { hasEnv, hasValue } = env;
+const { chooseModel, usesApi } = modelChoice;
 
-const openaiCodexToken = await resolveApiKey("openai-codex");
+type StreamOptionsWithExtras = compatTypes.StreamOptions & Record<string, unknown>;
+type ResponseInputItem = { readonly role?: unknown; readonly type?: unknown } | null;
+type FunctionCallOutputItem = {
+  readonly output: string | ResponseFunctionCallOutputItemList;
+  readonly type: "function_call_output";
+};
+
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
+const toolText = "A red circle with a diameter of 100 pixels.";
 
 const getImageSchema = Type.Object({});
-const getImageTool: Tool<typeof getImageSchema> = {
-  name: "get_circle_with_description",
+const getImageTool: compatTypes.Tool<typeof getImageSchema> = {
   description: "Returns a red circle image with a short text description.",
+  name: "get_circle_with_description",
   parameters: getImageSchema,
 };
 
-type CapturedResponsePayload = { input?: unknown[] };
-type FunctionCallOutputItem = {
-  type: "function_call_output";
-  output: string | ResponseFunctionCallOutputItemList;
-};
-type InputTextItem = { type: "input_text"; text: string };
-type InputImageItem = { type: "input_image"; image_url: string };
-
-async function verifyToolResultImagesStayInFunctionCallOutput<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
-  if (!model.input.includes("image")) {
-    console.log(
-      `Skipping responses tool-result image test. Model ${model.id} does not support images.`,
-    );
-    return;
-  }
-
-  const imagePath = join(__dirname, "data", "red-circle.png");
-  const base64Image = readFileSync(imagePath).toString("base64");
-  const toolText = "A red circle with a diameter of 100 pixels.";
-
-  const context: Context = {
-    systemPrompt: "You are a helpful assistant that always uses the provided tool when asked.",
+const answerWithToolImage = Effect.fn("answerWithToolImage")(function* <
+  TApi extends compatTypes.Api,
+>(model: compatTypes.Model<TApi>, options: StreamOptionsWithExtras) {
+  const context: compatTypes.Context = {
     messages: [
       {
-        role: "user",
         content:
           "Call get_circle_with_description, then describe both the tool text and the image. Mention the color and shape.",
-        timestamp: Date.now(),
+        role: "user",
+        timestamp: yield* Clock.currentTimeMillis,
       },
     ],
+    systemPrompt: "You are a helpful assistant that always uses the provided tool when asked.",
     tools: [getImageTool],
   };
-
-  const firstResponse = await complete(model, context, options);
+  const firstResponse = yield* Effect.promise(() => complete(model, context, options));
   expect(firstResponse.stopReason, `Error: ${firstResponse.errorMessage}`).toBe("toolUse");
-
   const toolCall = firstResponse.content.find((block) => block.type === "toolCall");
-  expect(toolCall).toBeTruthy();
-  if (!toolCall || toolCall.type !== "toolCall") {
-    throw new Error("Expected tool call");
-  }
-
-  context.messages.push(firstResponse);
-  context.messages.push({
-    role: "toolResult",
-    toolCallId: toolCall.id,
-    toolName: toolCall.name,
+  if (toolCall?.type !== "toolCall") throw new Error("Expected tool call");
+  context.messages.push(firstResponse, {
     content: [
-      { type: "text", text: toolText },
-      { type: "image", data: base64Image, mimeType: "image/png" },
+      { text: toolText, type: "text" },
+      { data: redCircle.data, mimeType: redCircle.mimeType, type: "image" },
     ],
     isError: false,
-    timestamp: Date.now(),
-  } satisfies ToolResultMessage);
-
-  let capturedPayload: unknown;
-  const secondResponse = await complete(model, context, {
-    ...options,
-    onPayload: (payload) => {
-      capturedPayload = payload;
-    },
+    role: "toolResult",
+    timestamp: yield* Clock.currentTimeMillis,
+    toolCallId: toolCall.id,
+    toolName: toolCall.name,
   });
-
-  expect(secondResponse.stopReason, `Error: ${secondResponse.errorMessage}`).toBe("stop");
-  expect(secondResponse.errorMessage).toBeFalsy();
-
-  const responsePayload = capturedPayload as CapturedResponsePayload | undefined;
-  expect(Array.isArray(responsePayload?.input)).toBe(true);
-  if (!Array.isArray(responsePayload?.input)) {
-    throw new Error("Expected payload with input array");
-  }
-  const responseInput = responsePayload.input;
-
-  const functionCallOutputIndex = responseInput.findIndex(
-    (item) => (item as { type?: unknown } | null)?.type === "function_call_output",
+  const captured: { payload?: unknown } = {};
+  const response = yield* Effect.promise(() =>
+    complete(model, context, {
+      ...options,
+      onPayload: (payload) => {
+        captured.payload = payload;
+      },
+    }),
   );
-  expect(functionCallOutputIndex).toBeGreaterThanOrEqual(0);
-  const functionCallOutput = responseInput[functionCallOutputIndex] as
-    | FunctionCallOutputItem
-    | undefined;
-  if (!functionCallOutput) {
-    throw new Error("Expected function_call_output item");
+  return { payload: captured.payload, response };
+});
+
+const responseInputOf = (payload: unknown): ResponseInputItem[] => {
+  const input = (payload as { input?: unknown } | undefined)?.input;
+  if (!Array.isArray(input)) throw new TypeError("Expected payload with input array");
+  return input as ResponseInputItem[];
+};
+
+const expectImageInFunctionCallOutput = (input: ResponseInputItem[]) => {
+  const outputIndex = input.findIndex((item) => item?.type === "function_call_output");
+  const functionCallOutput = input[outputIndex] as FunctionCallOutputItem | undefined;
+  if (!Array.isArray(functionCallOutput?.output)) {
+    throw new TypeError("Expected function_call_output output to be a content array");
   }
+  const items = functionCallOutput.output;
+  const textItem = items.find((item) => item.type === "input_text");
+  const imageItem = items.find((item) => item.type === "input_image");
+  expect(textItem?.type === "input_text" ? textItem.text : undefined).toContain(toolText);
+  expect(imageItem?.type === "input_image" ? imageItem.image_url : undefined).toMatch(
+    /^data:image\/png;base64,/u,
+  );
+  expect(input.slice(outputIndex + 1).filter((item) => item?.role === "user")).toHaveLength(0);
+};
 
-  expect(Array.isArray(functionCallOutput.output)).toBe(true);
-  if (!Array.isArray(functionCallOutput.output)) {
-    throw new Error("Expected function_call_output output to be a content array");
-  }
+const sendsToolResultImages =
+  <TApi extends compatTypes.Api>(
+    model: compatTypes.Model<TApi>,
+    options: StreamOptionsWithExtras,
+  ) =>
+  () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const { payload, response } = yield* answerWithToolImage(model, options);
+        expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
+        expect(response.errorMessage).toBeFalsy();
+        expectImageInFunctionCallOutput(responseInputOf(payload));
+        const responseText = response.content
+          .flatMap((block) => (block.type === "text" ? [block.text] : []))
+          .join(" ")
+          .toLowerCase();
+        expect(responseText).toContain("red");
+        expect(responseText).toContain("circle");
+      }),
+    );
 
-  const outputItems = functionCallOutput.output;
-  const textItem = outputItems.find(
-    (item) => (item as { type?: unknown } | null)?.type === "input_text",
-  ) as InputTextItem | undefined;
-  const imageItem = outputItems.find(
-    (item) => (item as { type?: unknown } | null)?.type === "input_image",
-  ) as InputImageItem | undefined;
-
-  expect(textItem).toBeTruthy();
-  expect(imageItem).toBeTruthy();
-  if (!textItem || !imageItem) {
-    throw new Error("Expected both input_text and input_image in function_call_output");
-  }
-
-  expect(textItem.text).toContain(toolText);
-  expect(imageItem.image_url.startsWith("data:image/png;base64,")).toBe(true);
-
-  const laterUserMessages = responseInput
-    .slice(functionCallOutputIndex + 1)
-    .filter((item) => (item as { role?: unknown } | null)?.role === "user");
-  expect(laterUserMessages).toHaveLength(0);
-
-  const responseText = secondResponse.content
-    .filter((block) => block.type === "text")
-    .map((block) => block.text)
-    .join(" ")
-    .toLowerCase();
-  expect(responseText).toContain("red");
-  expect(responseText).toContain("circle");
-}
+const openaiModel = chooseModel(
+  "openai",
+  "image-capable Responses reasoning",
+  (model): model is compatTypes.Model<"openai-responses"> =>
+    usesApi("openai-responses")(model) && model.input.includes("image") && model.reasoning,
+);
+const codexModel = chooseModel("openai-codex", "image-capable", (model) =>
+  model.input.includes("image"),
+);
 
 describe("Responses API tool result images", () => {
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Responses Provider (gpt-5-mini)", () => {
-    const model = getModel("openai", "gpt-5-mini");
-
-    it(
-      "should send tool result images in function_call_output",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await verifyToolResultImagesStayInFunctionCallOutput(model, { reasoningEffort: "low" });
-      },
-    );
-  });
-
-  describe("OpenAI Codex Responses Provider (gpt-5.5)", () => {
-    const model = getModel("openai-codex", "gpt-5.5");
-
-    it.skipIf(!openaiCodexToken)(
-      "should send tool result images in function_call_output",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await verifyToolResultImagesStayInFunctionCallOutput(model, {
-          apiKey: openaiCodexToken,
-          reasoningEffort: "low",
-        });
-      },
-    );
-  });
+  it.skipIf(!hasEnv("OPENAI_API_KEY"))(
+    "OpenAI Responses sends tool result images in function_call_output",
+    { retry: 3, timeout: 30000 },
+    sendsToolResultImages(openaiModel, { reasoningEffort: "low" }),
+  );
+  it.skipIf(!hasValue(openaiCodexToken))(
+    "OpenAI Codex Responses sends tool result images in function_call_output",
+    { retry: 3, timeout: 30000 },
+    sendsToolResultImages(codexModel, { apiKey: openaiCodexToken, reasoningEffort: "low" }),
+  );
 });

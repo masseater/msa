@@ -1,31 +1,7 @@
 import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 
-export interface PrWatchTarget {
-  readonly number: number;
-  readonly repository?: string | undefined;
-}
-
-export interface PrCheckCounts {
-  readonly total: number;
-  readonly passed: number;
-  readonly failed: number;
-  readonly pending: number;
-  readonly pendingNames: readonly string[];
-}
-
-export interface PrSnapshot {
-  readonly state: string;
-  readonly mergeable: string;
-  readonly mergeStateStatus: string;
-  readonly reviewDecision: string;
-  readonly updatedAt: string;
-  readonly comments: number;
-  readonly checks: PrCheckCounts;
-  readonly baseRefName: string;
-  readonly headRefOid: string;
-  readonly behindBy: number | undefined;
-}
+import type snapshotTypes from "./snapshot.types.ts";
 
 const PENDING_NAME_LIMIT = 3;
 
@@ -34,23 +10,23 @@ const optionalComments = Schema.Unknown.pipe(Schema.Array, Schema.NullOr, Schema
 
 const RollupEntry = Schema.Struct({
   __typename: Schema.optionalKey(Schema.String),
-  name: Schema.optionalKey(Schema.String),
-  context: Schema.optionalKey(Schema.String),
-  status: optionalString,
   conclusion: optionalString,
+  context: Schema.optionalKey(Schema.String),
+  name: Schema.optionalKey(Schema.String),
   state: optionalString,
+  status: optionalString,
 });
 
 const GhPrView = Schema.Struct({
-  state: Schema.String,
-  mergeable: Schema.optionalKey(Schema.String),
-  mergeStateStatus: Schema.optionalKey(Schema.String),
-  reviewDecision: optionalString,
+  baseRefName: Schema.optionalKey(Schema.String),
   comments: optionalComments,
+  headRefOid: Schema.optionalKey(Schema.String),
+  mergeStateStatus: Schema.optionalKey(Schema.String),
+  mergeable: Schema.optionalKey(Schema.String),
+  reviewDecision: optionalString,
+  state: Schema.String,
   statusCheckRollup: RollupEntry.pipe(Schema.Array, Schema.NullOr, Schema.optionalKey),
   updatedAt: Schema.optionalKey(Schema.String),
-  baseRefName: Schema.optionalKey(Schema.String),
-  headRefOid: Schema.optionalKey(Schema.String),
 });
 
 const GhPrViewJson = Schema.fromJsonString(GhPrView);
@@ -77,7 +53,7 @@ function rollupOutcome(entry: RollupEntryValue): CheckOutcome {
   const status = (entry.status ?? "").toUpperCase();
   const conclusion = (entry.conclusion ?? "").toUpperCase();
   const state = (entry.state ?? "").toUpperCase();
-  if (entry.__typename === "StatusContext" || (status === "" && state !== "")) {
+  if (entry["__typename"] === "StatusContext" || (status === "" && state !== "")) {
     return statusContextOutcome(state);
   }
   return checkRunOutcome(status, conclusion);
@@ -87,7 +63,7 @@ function rollupName(entry: RollupEntryValue): string {
   return entry.name ?? entry.context ?? "";
 }
 
-function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
+function countChecks(entries: readonly RollupEntryValue[]): snapshotTypes.PrCheckCounts {
   let passed = 0;
   let failed = 0;
   let pending = 0;
@@ -103,33 +79,33 @@ function countChecks(entries: readonly RollupEntryValue[]): PrCheckCounts {
       case "pending": {
         pending += 1;
         const name = rollupName(entry);
-        if (name && pendingNames.length < PENDING_NAME_LIMIT) pendingNames.push(name);
+        if (name !== "" && pendingNames.length < PENDING_NAME_LIMIT) pendingNames.push(name);
         break;
       }
     }
   }
-  return { total: entries.length, passed, failed, pending, pendingNames };
+  return { failed, passed, pending, pendingNames, total: entries.length };
 }
 
-export function parsePrView(json: string): PrSnapshot | undefined {
+function parsePrView(json: string): snapshotTypes.PrSnapshot | undefined {
   const decoded = Schema.decodeOption(GhPrViewJson)(json);
   if (Option.isNone(decoded)) return undefined;
   const value = decoded.value;
   return {
-    state: value.state.toUpperCase(),
-    mergeable: (value.mergeable ?? "UNKNOWN").toUpperCase(),
-    mergeStateStatus: (value.mergeStateStatus ?? "").toUpperCase(),
-    reviewDecision: (value.reviewDecision ?? "").toUpperCase(),
-    updatedAt: value.updatedAt ?? "",
-    comments: value.comments?.length ?? 0,
-    checks: countChecks(value.statusCheckRollup ?? []),
     baseRefName: value.baseRefName ?? "",
-    headRefOid: value.headRefOid ?? "",
     behindBy: undefined,
+    checks: countChecks(value.statusCheckRollup ?? []),
+    comments: value.comments?.length ?? 0,
+    headRefOid: value.headRefOid ?? "",
+    mergeStateStatus: (value.mergeStateStatus ?? "").toUpperCase(),
+    mergeable: (value.mergeable ?? "UNKNOWN").toUpperCase(),
+    reviewDecision: (value.reviewDecision ?? "").toUpperCase(),
+    state: value.state.toUpperCase(),
+    updatedAt: value.updatedAt ?? "",
   };
 }
 
-export function describeChecks(checks: PrCheckCounts): string {
+function describeChecks(checks: snapshotTypes.PrCheckCounts): string {
   const parts: string[] = [];
   if (checks.passed > 0) parts.push(`${checks.passed} passed`);
   if (checks.failed > 0) parts.push(`${checks.failed} failed`);
@@ -137,11 +113,20 @@ export function describeChecks(checks: PrCheckCounts): string {
   return parts.length > 0 ? parts.join(", ") : "no checks";
 }
 
-export function isBehind(snapshot: PrSnapshot): boolean {
+function isBehind(snapshot: snapshotTypes.PrSnapshot): boolean {
   if (snapshot.mergeStateStatus === "BEHIND") return true;
   return (snapshot.behindBy ?? 0) > 0;
 }
 
-export function isConflicting(snapshot: PrSnapshot): boolean {
+function isConflicting(snapshot: snapshotTypes.PrSnapshot): boolean {
   return snapshot.mergeable === "CONFLICTING" || snapshot.mergeStateStatus === "DIRTY";
 }
+
+const snapshot = {
+  describeChecks,
+  isBehind,
+  isConflicting,
+  parsePrView,
+};
+
+export default snapshot;

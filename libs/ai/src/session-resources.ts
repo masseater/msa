@@ -1,15 +1,17 @@
-export type SessionResourceCleanup = (sessionId?: string) => void;
+import type sessionResourcesTypes from "./session-resources.types.ts";
 
-const sessionResourceCleanups = new Set<SessionResourceCleanup>();
+const sessionResourceCleanups = new Set<sessionResourcesTypes.SessionResourceCleanup>();
 
-export function registerSessionResourceCleanup(cleanup: SessionResourceCleanup): () => void {
+function registerSessionResourceCleanup(
+  cleanup: sessionResourcesTypes.SessionResourceCleanup,
+): () => void {
   sessionResourceCleanups.add(cleanup);
   return () => {
     sessionResourceCleanups.delete(cleanup);
   };
 }
 
-export function cleanupSessionResources(sessionId?: string): void {
+function cleanupSessionResources(sessionId?: string): void {
   const errors: unknown[] = [];
   for (const cleanup of sessionResourceCleanups) {
     try {
@@ -22,3 +24,10 @@ export function cleanupSessionResources(sessionId?: string): void {
     throw new AggregateError(errors, "Failed to cleanup session resources");
   }
 }
+
+const sessionResources = {
+  cleanupSessionResources,
+  registerSessionResourceCleanup,
+};
+
+export default sessionResources;

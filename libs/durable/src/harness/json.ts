@@ -1,34 +1,49 @@
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import { Function } from "effect";
 
-type JsonContainer = Record<string, JsonValue> | JsonValue[];
+type JsonContainer = Record<string, chordTypes.JsonValue> | chordTypes.JsonValue[];
 
-/**
- * Assign `value` at `target[key]` leaf by leaf. Chord records a container assignment as one full set and only emits an
- * append when a string leaf is reassigned with a longer string, so writing the partial whole would store and publish the
- * complete message on every flush.
- * @param {JsonContainer} target - The container.
- * @param {string | number} key - The key.
- * @param {JsonValue} value - The value.
- */
-export function assignJson(target: JsonContainer, key: string | number, value: JsonValue): void {
-  const slots = target as Record<string | number, JsonValue>;
+const isRecord = (
+  value: chordTypes.JsonValue | undefined,
+): value is Record<string, chordTypes.JsonValue> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const assignRecord = (
+  current: Record<string, chordTypes.JsonValue>,
+  value: Record<string, chordTypes.JsonValue>,
+) => {
+  for (const name of Object.keys(current)) if (!Object.hasOwn(value, name)) delete current[name];
+  for (const [name, child] of Object.entries(value)) assign(current, name, child);
+};
+
+const assignArray = (items: chordTypes.JsonValue[], value: readonly chordTypes.JsonValue[]) => {
+  for (let index = 0; index < value.length; index++) {
+    if (index < items.length) assign(items, index, value[index]!);
+    else items.push(value[index]!);
+  }
+};
+
+function assign(target: JsonContainer, key: string | number, value: chordTypes.JsonValue): void {
+  const slots = target as Record<string | number, chordTypes.JsonValue>;
   const current = slots[key];
   if (isRecord(current) && isRecord(value)) {
-    for (const name of Object.keys(current)) if (!Object.hasOwn(value, name)) delete current[name];
-    for (const [name, child] of Object.entries(value)) assignJson(current, name, child);
+    assignRecord(current, value);
     return;
   }
   if (Array.isArray(current) && Array.isArray(value) && current.length <= value.length) {
-    const items = current as JsonValue[];
-    for (let index = 0; index < value.length; index++) {
-      if (index < items.length) assignJson(items, index, value[index]!);
-      else items.push(value[index]!);
-    }
+    assignArray(current as chordTypes.JsonValue[], value);
     return;
   }
   if (current !== value) slots[key] = value;
 }
 
-function isRecord(value: JsonValue | undefined): value is Record<string, JsonValue> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+const assignJson: {
+  (key: string | number, value: chordTypes.JsonValue): (target: JsonContainer) => void;
+  (target: JsonContainer, key: string | number, value: chordTypes.JsonValue): void;
+} = Function.dual(3, assign);
+
+const json = {
+  assignJson,
+};
+
+export default json;

@@ -1,23 +1,22 @@
-/**
- * Presentation for the ls tool.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `ls.ts` spreads these into its
- * definition, so the tool's public shape is unchanged.
- */
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { Text } from "@msa/tui";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import type lsTypesModule from "../ls.types.ts";
+import renderUtils from "../render-utils.ts";
+import truncate from "../truncate.ts";
+import listOutput from "./list-output.ts";
 
-import type { Theme } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import type { LsToolDetails } from "../ls.ts";
-import { getTextOutput, renderToolPath, str } from "../render-utils.ts";
-import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
-import { formatListResult } from "./list-output.ts";
+const { getTextOutput, renderToolPath, str } = renderUtils;
+const { DEFAULT_MAX_BYTES, formatSize } = truncate;
+const { formatListResult } = listOutput;
+
+const { Text } = tui;
 
 function formatLsCall(
   args: { path?: string; limit?: number } | undefined,
-  theme: Theme,
+  theme: themeTypes.Theme,
   cwd: string,
 ): string {
   const limit = args?.limit;
@@ -31,31 +30,40 @@ function formatLsCall(
 function formatLsResult(
   result: {
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-    details?: LsToolDetails;
+    details?: lsTypesModule.LsToolDetails;
   },
-  options: ToolRenderResultOptions,
-  theme: Theme,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
+  theme: themeTypes.Theme,
   showImages: boolean,
 ): string {
   const entryLimit = result.details?.entryLimitReached;
   const truncation = result.details?.truncation;
   const warnings: string[] = [];
-  if (entryLimit) warnings.push(`${entryLimit} entries limit`);
-  if (truncation?.truncated)
+  if (entryLimit !== undefined && entryLimit !== 0) warnings.push(`${entryLimit} entries limit`);
+  if (truncation?.truncated === true)
     warnings.push(`${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit`);
   const output = getTextOutput(result, showImages).trim();
-  return formatListResult(output, warnings, options.expanded, "entries", theme);
+  return formatListResult({ expanded: options.expanded, noun: "entries", output, theme, warnings });
 }
 
-export const lsRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {
+const lsRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, any>,
+  "renderCall" | "renderResult"
+> = {
   renderCall(args, theme, context) {
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(formatLsCall(args as any, theme, context.cwd));
     return text;
   },
   renderResult(result, options, theme, context) {
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(formatLsResult(result as any, options, theme, context.showImages));
     return text;
   },
 };
+
+const ls = {
+  lsRenderers,
+};
+
+export default ls;

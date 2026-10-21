@@ -1,21 +1,23 @@
-import { Box, Container, Markdown, type MarkdownTheme, MouseRegion, Spacer, Text } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { CompactionSummaryMessage } from "../../../core/messages.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
-import { keyText } from "./keybinding-hints.ts";
+import type messagesTypes from "../../../core/messages.types.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
 
-/**
- * Component that renders a compaction message with collapsed/expanded state.
- * Uses same background color as custom messages for visual consistency.
- */
-export class CompactionSummaryMessageComponent extends Box {
+const { getMarkdownTheme, theme } = themeModule;
+const { keyText } = keybindingHints;
+
+const { Container, Markdown, MouseRegion, Spacer, Text } = tui;
+
+export default class CompactionSummaryMessageComponent extends tui.Box {
   private expanded = false;
-  private message: CompactionSummaryMessage;
-  private markdownTheme: MarkdownTheme;
+  private message: messagesTypes.CompactionSummaryMessage;
+  private markdownTheme: tuiTypes.MarkdownTheme;
 
   constructor(
-    message: CompactionSummaryMessage,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    message: messagesTypes.CompactionSummaryMessage,
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {
     super(outputPad, 1, (t) => theme.bg("customMessageBg", t));

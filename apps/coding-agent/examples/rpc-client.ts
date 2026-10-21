@@ -1,21 +1,17 @@
-/**
- * Run one prompt through a msa RPC child process.
- *
- * Build the coding-agent package first, then run:
- * node examples/rpc-client.ts "Explain this repository"
- */
-
-import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { RpcClient } from "@msa/coding-agent";
+import codingAgent from "@msa/coding-agent";
+import { Effect } from "effect";
 
-const exampleDirectory = dirname(fileURLToPath(import.meta.url));
+const { RpcClient } = codingAgent;
+
+const cliPath = fileURLToPath(new URL("../dist/cli.js", import.meta.url));
+
 const prompt = process.argv.slice(2).join(" ") || "Explain this repository in one paragraph.";
 
 const client = new RpcClient({
-  cliPath: join(exampleDirectory, "../dist/cli.js"),
   args: ["--no-session"],
+  cliPath,
 });
 
 const unsubscribe = client.onEvent((event) => {
@@ -26,11 +22,15 @@ const unsubscribe = client.onEvent((event) => {
   }
 });
 
-try {
-  await client.start();
-  await client.promptAndWait(prompt);
-  process.stdout.write("\n");
-} finally {
-  unsubscribe();
-  await client.stop();
-}
+void Effect.runPromise(
+  Effect.gen(function* () {
+    try {
+      yield* Effect.promise(() => client.start());
+      yield* Effect.promise(() => client.promptAndWait(prompt));
+      process.stdout.write("\n");
+    } finally {
+      unsubscribe();
+      yield* Effect.promise(() => client.stop());
+    }
+  }),
+);

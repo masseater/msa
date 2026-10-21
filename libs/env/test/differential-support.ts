@@ -1,53 +1,56 @@
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import type { ExecutionEnv, FileError } from "@msa/durable/env";
-import { NodeExecutionEnv } from "@msa/durable/env/node";
+import contextModule from "@msa/chord/context";
+import type envTypes from "@msa/durable/env.types";
+import node from "@msa/durable/env/node";
+import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { Connection } from "../src/connection.ts";
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { daemon } from "./daemon.ts";
+import connectionModule from "../src/connection.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
+import daemon from "./daemon.ts";
+import type differentialSupportTypes from "./differential-support.types.ts";
+import platform from "./platform.ts";
 
-export const context = BACKGROUND_CONTEXT;
+const { BACKGROUND_CONTEXT } = contextModule;
 
-export interface Pair {
-  readonly local: ExecutionEnv;
-  readonly remote: ExecutionEnv;
-  readonly roots: [string, string];
-}
+const { NodeExecutionEnv } = node;
 
-export interface Pairs {
-  readonly pair: () => Pair;
-  readonly close: () => void;
-}
+const { Connection } = connectionModule;
 
-export function pairs(): Pairs {
+const { makeTempDirectory, realPath, removePath } = platform;
+
+const context = BACKGROUND_CONTEXT;
+
+const makeRoot = (prefix: string, dirs: string[]): Effect.Effect<differentialSupportTypes.Root> =>
+  Effect.gen(function* () {
+    const path = yield* makeTempDirectory(prefix);
+    dirs.push(path);
+    return { path, real: yield* realPath(path) };
+  });
+
+function pairs(): differentialSupportTypes.Pairs {
   const connection = new Connection({ command: [daemon] });
   const dirs: string[] = [];
   return {
-    pair: () => {
-      const localRoot = mkdtempSync(join(tmpdir(), "msa-env-local-"));
-      const remoteRoot = mkdtempSync(join(tmpdir(), "msa-env-remote-"));
-      dirs.push(localRoot, remoteRoot);
+    close: () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          connection.close();
+          for (const dir of dirs) yield* removePath(dir);
+        }),
+      ),
+    pair: Effect.gen(function* () {
+      const localRoot = yield* makeRoot("msa-env-local-", dirs);
+      const remoteRoot = yield* makeRoot("msa-env-remote-", dirs);
       return {
-        local: new NodeExecutionEnv({ cwd: localRoot }),
-        remote: new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd: remoteRoot }),
+        local: new NodeExecutionEnv({ cwd: localRoot.path }),
+        remote: new RemoteExecutionEnv({ connection, cwd: remoteRoot.path, id: "msa-env:test" }),
         roots: [localRoot, remoteRoot],
       };
-    },
-    close: () => {
-      connection.close();
-      for (const dir of dirs) {
-        rmSync(dir, { recursive: true, force: true, maxRetries: 50, retryDelay: 100 });
-      }
-    },
+    }),
   };
 }
 
-export function random(seed: number): () => number {
+function random(seed: number): () => number {
   let state = seed >>> 0;
   return () => {
     state = (state + 0x6d2b79f5) >>> 0;
@@ -62,24 +65,31 @@ function comparable(key: string, field: unknown): unknown {
   if (field instanceof Uint8Array) return { bytes: Buffer.from(field).toString("hex") };
   if (key === "mtimeMs") return "mtime";
   if (typeof field === "object" && field !== null && "ok" in field && field.ok === false) {
-    return { ok: false, code: (field as { ok: unknown; error: FileError }).error.code };
+    return { code: (field as { ok: unknown; error: envTypes.FileError }).error.code, ok: false };
   }
   return field;
 }
 
 const escaped = (path: string): string => JSON.stringify(path).slice(1, -1);
 
-function normalizeIn(value: unknown, root: string): unknown {
+function normalizeIn(value: unknown, root: differentialSupportTypes.Root): unknown {
   const json = JSON.stringify(value, comparable);
   if (json === undefined) return undefined;
   return JSON.parse(
-    json
-      .replaceAll(escaped(realpathSync.native(root)), "<root>")
-      .replaceAll(escaped(root), "<root>"),
+    json.replaceAll(escaped(root.real), "<root>").replaceAll(escaped(root.path), "<root>"),
   );
 }
 
-export const normalize: {
-  (root: string): (value: unknown) => unknown;
-  (value: unknown, root: string): unknown;
+const normalize: {
+  (root: differentialSupportTypes.Root): (value: unknown) => unknown;
+  (value: unknown, root: differentialSupportTypes.Root): unknown;
 } = dual(2, normalizeIn);
+
+const differentialSupport = {
+  context,
+  normalize,
+  pairs,
+  random,
+};
+
+export default differentialSupport;

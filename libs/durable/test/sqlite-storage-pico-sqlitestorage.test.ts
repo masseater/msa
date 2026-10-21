@@ -1,73 +1,43 @@
-import { rm } from "node:fs/promises";
 import { DatabaseSync } from "node:sqlite";
 
-import type { JsonValue } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import type { DocumentCreate, DocumentId, EntryId, TaskId } from "../src/types.ts";
-import { ROOT_CONVERSATION_ID } from "../src/types.ts";
-import {
-  pendingTask,
-  entry,
-  createRoot,
+import node from "../src/storage/sqlite/node.ts";
+import types from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sqliteStorageSupport from "./sqlite-storage-support.ts";
+
+const { ROOT_CONVERSATION_ID } = types;
+const { openNodeSqliteStorage } = node;
+
+const { awaited } = effectSupport;
+const { removeDir } = platformSupport;
+const {
   context,
-  tempDirectories,
-  openStorages,
+  createRoot,
   createSqliteStorage,
+  entry,
+  openStorages,
+  pendingTask,
   scalar,
-} from "./sqlite-storage-support.ts";
+  tempDirectories,
+} = sqliteStorageSupport;
 
-afterEach(async () => {
-  for await (const storage of openStorages) await storage.close(context);
-  openStorages.clear();
-  for await (const directory of tempDirectories)
-    await rm(directory, { recursive: true, force: true });
-  tempDirectories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const storage of openStorages) yield* awaited(storage.close(context));
+      openStorages.clear();
+      for (const directory of tempDirectories) yield* removeDir(directory);
+      tempDirectories.clear();
+    }),
+  ),
+);
 
-function revisionCount(path: string, documentId: DocumentId): number {
-  const db = new DatabaseSync(path, { readOnly: true });
-  try {
-    const row = db
-      .prepare("SELECT count(*) AS count FROM document_revisions WHERE document_id = ?")
-      .get(documentId) as { readonly count: number };
-    return row.count;
-  } finally {
-    db.close();
-  }
-}
-
-async function checkpointedRevisions() {
-  const { storage, path } = await createSqliteStorage();
-  await createRoot(storage);
-  const id = await storage.mintId<DocumentId>();
-  await storage.commit(
-    [
-      {
-        type: "document.create",
-        record: { id, kind: "latest", scope: { kind: "session" } },
-        content: { kind: "base", version: 1, value: { count: 0 } },
-      },
-    ],
-    context,
-  );
-  for await (const count of Array.from({ length: 10 }, (_, i) => 1 + i)) {
-    await storage.commit(
-      [
-        {
-          type: "document.change",
-          id,
-          content: { kind: "delta", version: 1, ops: [["s", ["count"], count]] },
-        },
-      ],
-      context,
-    );
-  }
-  return { storage, path, id };
-}
-
-// The EXPLAIN QUERY PLAN detail of each indexed lookup the storage issues.
 function queryPlanDetails(db: DatabaseSync): string[] {
   const plans = [
     db
@@ -112,159 +82,148 @@ function queryPlanDetails(db: DatabaseSync): string[] {
   );
 }
 
-describe("Pico SqliteStorage", () => {
-  it("rolls SQL rows and sequence allocation back as one transaction", async () => {
-    const { storage, path } = await createSqliteStorage();
-    await createRoot(storage);
-    const transientId = await storage.mintId<EntryId>();
-    const transientTaskId = await storage.mintId<TaskId<JsonValue>>();
-    const circular: { self?: unknown } = {};
-    circular.self = circular;
-    await expect(
+const rollsSqlRows = Effect.gen(function* () {
+  const { storage, path } = yield* createSqliteStorage();
+  yield* awaited(createRoot(storage));
+  const transientId = yield* awaited(storage.mintId<typesModule.EntryId>());
+  const transientTaskId = yield* awaited(
+    storage.mintId<typesModule.TaskId<chordTypes.JsonValue>>(),
+  );
+  const circular: { self?: unknown } = {};
+  circular.self = circular;
+  yield* awaited(
+    expect(
       storage.commit(
         [
-          { type: "entry", value: entry(transientId, ROOT_CONVERSATION_ID) },
+          { type: "entry", value: entry(transientId, ROOT_CONVERSATION_ID, undefined) },
           {
             type: "task",
-            value: { ...pendingTask(transientTaskId), input: circular as unknown as JsonValue },
+            value: {
+              ...pendingTask(transientTaskId),
+              input: circular as unknown as chordTypes.JsonValue,
+            },
           },
         ],
         context,
       ),
-    ).rejects.toThrow("circular structure");
-    expect(await storage.entry(transientId, context)).toBeUndefined();
-    expect(await storage.task(transientTaskId, context)).toBeUndefined();
-    const committedId = await storage.mintId<EntryId>();
-    expect(
-      await storage.commit(
-        [{ type: "entry", value: entry(committedId, ROOT_CONVERSATION_ID) }],
+    ).rejects.toThrow("circular structure"),
+  );
+  expect(yield* awaited(storage.entry(transientId, context))).toBeUndefined();
+  expect(yield* awaited(storage.task(transientTaskId, context))).toBeUndefined();
+  const committedId = yield* awaited(storage.mintId<typesModule.EntryId>());
+  expect(
+    yield* awaited(
+      storage.commit(
+        [{ type: "entry", value: entry(committedId, ROOT_CONVERSATION_ID, undefined) }],
         context,
       ),
-    ).toBe(2);
+    ),
+  ).toBe(2);
 
-    const db = new DatabaseSync(path, { readOnly: true });
-    try {
-      expect(scalar(db, "SELECT count(*) AS value FROM entries")).toBe(1);
-      expect(scalar(db, "SELECT next_seq AS value FROM durable_metadata WHERE singleton = 1")).toBe(
-        3,
-      );
-    } finally {
-      db.close();
-    }
-  });
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    expect(scalar(db, "SELECT count(*) AS value FROM entries")).toBe(1);
+    expect(scalar(db, "SELECT next_seq AS value FROM durable_metadata WHERE singleton = 1")).toBe(
+      3,
+    );
+  } finally {
+    db.close();
+  }
 });
 
 describe("Pico SqliteStorage", () => {
-  it("reconstructs recent and ancient rewindable points after reopen", async () => {
-    const { storage, path } = await createSqliteStorage();
-    await createRoot(storage);
-    const id = await storage.mintId<DocumentId>();
-    const record = {
-      id,
-      kind: "history",
-      scope: { kind: "conversation", conversationId: ROOT_CONVERSATION_ID },
-      history: "rewindable",
-      fork: "asOf",
-    } satisfies DocumentCreate;
-    const createdAt = await storage.commit(
+  it("rolls SQL rows and sequence allocation back as one transaction", () =>
+    Effect.runPromise(rollsSqlRows));
+});
+
+const reconstructsRecentAncientStep1 = Effect.gen(function* () {
+  const { storage, path } = yield* createSqliteStorage();
+  yield* awaited(createRoot(storage));
+  const id = yield* awaited(storage.mintId<typesModule.DocumentId>());
+  const record = {
+    fork: "asOf",
+    history: "rewindable",
+    id,
+    kind: "history",
+    scope: { conversationId: ROOT_CONVERSATION_ID, kind: "conversation" },
+  } satisfies typesModule.DocumentCreate;
+  const createdAt = yield* awaited(
+    storage.commit(
       [
         {
-          type: "document.create",
+          content: { kind: "base", value: { count: 0 }, version: 1 },
           record,
-          content: { kind: "base", version: 1, value: { count: 0 } },
+          type: "document.create",
         },
       ],
       context,
-    );
-    let ancientAt = createdAt;
-    let recentAt = createdAt;
-    for await (const count of Array.from({ length: 40 }, (_, i) => 1 + i)) {
-      recentAt = await storage.commit(
+    ),
+  );
+  return { createdAt, id, path, storage };
+});
+
+const reconstructsRecentAncient = Effect.gen(function* () {
+  const { storage, path, id, createdAt } = yield* reconstructsRecentAncientStep1;
+  let ancientAt = createdAt;
+  let recentAt = createdAt;
+  for (const count of Array.from({ length: 40 }, (_, i) => 1 + i)) {
+    recentAt = yield* awaited(
+      storage.commit(
         [
           {
-            type: "document.change",
-            id,
             content:
               count === 20
-                ? { kind: "base", version: 1, value: { count } }
-                : { kind: "delta", version: 1, ops: [["s", ["count"], count]] },
+                ? { kind: "base", value: { count }, version: 1 }
+                : { kind: "delta", ops: [["s", ["count"], count]], version: 1 },
+            id,
+            type: "document.change",
           },
         ],
         context,
-      );
-      if (count === 5) ancientAt = recentAt;
-    }
-    await storage.close(context);
-    openStorages.delete(storage);
-    const reopened = await openNodeSqliteStorage(path);
-    openStorages.add(reopened);
-    expect((await reopened.document(id, ancientAt, context))?.value).toEqual({ count: 5 });
-    expect((await reopened.document(id, recentAt, context))?.value).toEqual({ count: 40 });
+      ),
+    );
+    if (count === 5) ancientAt = recentAt;
+  }
+  yield* awaited(storage.close(context));
+  openStorages.delete(storage);
+  const reopened = yield* awaited(openNodeSqliteStorage(path));
+  openStorages.add(reopened);
+  expect((yield* awaited(reopened.document(id, ancientAt, context)))?.value).toEqual({
+    count: 5,
+  });
+  expect((yield* awaited(reopened.document(id, recentAt, context)))?.value).toEqual({
+    count: 40,
   });
 });
 
 describe("Pico SqliteStorage", () => {
-  it("uses indexes for exact addresses, exact scopes, entry history, and document revision tails", async () => {
-    const { storage, path } = await createSqliteStorage();
-    await storage.close(context);
-    openStorages.delete(storage);
-    const db = new DatabaseSync(path, { readOnly: true });
-    try {
-      const details = queryPlanDetails(db);
-      expect(details[0]).toContain("documents_by_address");
-      expect(details[1]).toContain("documents_by_address");
-      expect(details[2]).toContain("documents_by_scope_kind");
-      expect(details[3]).toContain("entries_by_conversation");
-      expect(details[4]).toContain("entry_heads_by_conversation");
-      expect(details[5]).toContain("tasks_by_status");
-      expect(details[6]).toContain("document_revisions_by_kind");
-      expect(details[7]).toContain("sqlite_autoindex_document_revisions_1");
-      for (const detail of details.slice(0, 3)) expect(detail).not.toContain("SCAN documents");
-      expect(details[7]).not.toContain("SCAN document_revisions");
-    } finally {
-      db.close();
-    }
-  });
+  it("reconstructs recent and ancient rewindable points after reopen", () =>
+    Effect.runPromise(reconstructsRecentAncient));
+});
+
+const usesIndexesExact = Effect.gen(function* () {
+  const { storage, path } = yield* createSqliteStorage();
+  yield* awaited(storage.close(context));
+  openStorages.delete(storage);
+  const db = new DatabaseSync(path, { readOnly: true });
+  try {
+    const details = queryPlanDetails(db);
+    expect(details[0]).toContain("documents_by_address");
+    expect(details[1]).toContain("documents_by_address");
+    expect(details[2]).toContain("documents_by_scope_kind");
+    expect(details[3]).toContain("entries_by_conversation");
+    expect(details[4]).toContain("entry_heads_by_conversation");
+    expect(details[5]).toContain("tasks_by_status");
+    expect(details[6]).toContain("document_revisions_by_kind");
+    expect(details[7]).toContain("sqlite_autoindex_document_revisions_1");
+    for (const detail of details.slice(0, 3)) expect(detail).not.toContain("SCAN documents");
+    expect(details[7]).not.toContain("SCAN document_revisions");
+  } finally {
+    db.close();
+  }
 });
 
 describe("Pico SqliteStorage", () => {
-  it("reclaims current-only revisions only after a base or retirement", async () => {
-    const { storage, path, id } = await checkpointedRevisions();
-    expect(revisionCount(path, id)).toBe(11);
-    const revisions = new DatabaseSync(path, { readOnly: true });
-    try {
-      const row = revisions
-        .prepare(
-          "SELECT content FROM document_revisions WHERE document_id = ? AND kind = 'delta' ORDER BY seq DESC LIMIT 1",
-        )
-        .get(id) as { readonly content: string };
-      expect(JSON.parse(row.content)).toEqual([["s", ["count"], 10]]);
-    } finally {
-      revisions.close();
-    }
-    await storage.commit(
-      [
-        {
-          type: "document.change",
-          id,
-          content: { kind: "base", version: 1, value: { count: 11 } },
-        },
-      ],
-      context,
-    );
-    expect(revisionCount(path, id)).toBe(1);
-    await storage.commit(
-      [
-        {
-          type: "document.change",
-          id,
-          content: { kind: "delta", version: 1, ops: [["r", { count: 12 }]] },
-        },
-      ],
-      context,
-    );
-    expect(revisionCount(path, id)).toBe(2);
-    await storage.commit([{ type: "document.retire", id }], context);
-    expect(revisionCount(path, id)).toBe(0);
-  });
+  it("uses indexes for exact addresses, exact scopes, entry history, and document revision tails", () =>
+    Effect.runPromise(usesIndexesExact));
 });

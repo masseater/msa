@@ -1,33 +1,22 @@
-import type { Ctx } from "./types.ts";
+import { dual } from "effect/Function";
 
-export interface Registry<V> {
-  readonly name: string;
-  readonly conflict: "error" | "last";
-  /** Type carrier only; never set. */
-  readonly value?: V;
-}
+import type registryTypes from "./registry.types.ts";
 
-/** `conflict: "error"` rejects two objects registering one key; `"last"` keeps the later registration. */
-export const defineRegistry = <V>(
+const registryOf = <V>(
   name: string,
   options: { conflict?: "error" | "last" } = {},
-): Registry<V> => ({
-  name,
+): registryTypes.Registry<V> => ({
   conflict: options.conflict ?? "error",
+  name,
 });
 
-export type RegistryTable<V> = ReadonlyMap<string, V>;
+const defineRegistry: {
+  (options?: { conflict?: "error" | "last" }): <V>(name: string) => registryTypes.Registry<V>;
+  <V>(name: string, options?: { conflict?: "error" | "last" }): registryTypes.Registry<V>;
+} = dual((args) => args.length >= 1, registryOf);
 
-export interface RegistryView<V> {
-  /** Table of `ctx.codeVersion`, or of the current code version without ctx. */
-  table(ctx?: Ctx): RegistryTable<V>;
-  get(key: string, ctx?: Ctx): V | undefined;
-  /** Called with the current table immediately and whenever a new table is installed. */
-  subscribe(listener: (table: RegistryTable<V>, codeVersion: number) => void): () => void;
-}
+const registryModule = {
+  defineRegistry,
+};
 
-export interface Registration {
-  readonly registry: Registry<unknown>;
-  readonly key: string;
-  readonly value: unknown;
-}
+export default registryModule;

@@ -1,12 +1,17 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
-
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
-import { getOrThrow, type ShellOutputInfo } from "@msa/durable/env";
+import contextModule from "@msa/chord/context";
+import envModule from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Clock, Effect, Exit, Scope } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { remoteEnvironments } from "./remote-environment.ts";
+import platform from "./platform.ts";
+import remoteEnvironments from "./remote-environment.ts";
+
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
+
+const { getOrThrow } = envModule;
+
+const { localPath, makeDirectory, writeText } = platform;
 
 const context = BACKGROUND_CONTEXT;
 const environments = remoteEnvironments();
@@ -16,7 +21,7 @@ const { environment } = environments;
 const run = (effect: Effect.Effect<void>): Promise<void> => Effect.runPromise(effect);
 
 const windowedOutput = Effect.gen(function* () {
-  const { env } = environment();
+  const { env } = yield* environment;
   const total = 5_000_000;
   let delivered = 0;
   let skipped = 0;
@@ -25,8 +30,7 @@ const windowedOutput = Effect.gen(function* () {
     env.exec(
       ["sh", "-c", `yes 0123456789abcdef | head -c ${total}`],
       {
-        window: { maxBytes: 1000, maxLines: 20, minIntervalMs: 20, bytesPerSecond: 1_000_000 },
-        onOutput: (text: string, _context, info: ShellOutputInfo) => {
+        onOutput: (text: string, _context, info: envTypes.ShellOutputInfo) => {
           delivered += Buffer.byteLength(text);
           if (info.skipped !== undefined) {
             skipped += info.skipped.bytes;
@@ -34,6 +38,7 @@ const windowedOutput = Effect.gen(function* () {
           }
           tail += text;
         },
+        window: { bytesPerSecond: 1_000_000, maxBytes: 1000, maxLines: 20, minIntervalMs: 20 },
       },
       context,
     ),
@@ -48,7 +53,7 @@ const windowedOutput = Effect.gen(function* () {
 });
 
 const abortRightAfterSend = Effect.gen(function* () {
-  const { env } = environment();
+  const { env } = yield* environment;
   const started = yield* Clock.currentTimeMillis;
   for (let attempt = 0; attempt < 20; attempt++) {
     const scope = yield* Scope.make();
@@ -64,10 +69,12 @@ const abortRightAfterSend = Effect.gen(function* () {
 });
 
 const cancelListing = Effect.gen(function* () {
-  const { env, connection } = environment();
+  const { env, connection } = yield* environment;
   for (let dir = 0; dir < 100; dir++) {
-    mkdirSync(join(env.cwd, `d${dir}`));
-    for (let file = 0; file < 100; file++) writeFileSync(join(env.cwd, `d${dir}`, `f${file}`), "");
+    yield* makeDirectory(localPath.join(env.cwd, `d${dir}`));
+    for (let file = 0; file < 100; file++) {
+      yield* writeText({ path: localPath.join(env.cwd, `d${dir}`, `f${file}`), text: "" });
+    }
   }
   const cancelled = connection.request(
     "listFiles",
@@ -84,7 +91,7 @@ const cancelListing = Effect.gen(function* () {
 });
 
 const silentTimeout = Effect.gen(function* () {
-  const { env } = environment();
+  const { env } = yield* environment;
   const started = yield* Clock.currentTimeMillis;
   const result = yield* Effect.promise(() => env.exec(["sleep", "5"], { timeout: 0.3 }, context));
   expect(result.ok ? "ok" : result.error.code).toBe("timeout");
@@ -95,7 +102,7 @@ const sameBytes = (left: Uint8Array, right: Uint8Array): number =>
   Buffer.compare(Buffer.from(left), Buffer.from(right));
 
 const largeFiles = Effect.gen(function* () {
-  const { env } = environment();
+  const { env } = yield* environment;
   const content = new Uint8Array(3_500_017);
   for (let index = 0; index < content.length; index++) content[index] = (index * 7919) % 251;
   getOrThrow(yield* Effect.promise(() => env.writeFile("big.bin", content, context)));

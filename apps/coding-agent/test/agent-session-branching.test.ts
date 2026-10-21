@@ -1,167 +1,225 @@
-/**
- * Tests for AgentSession forking behavior.
- *
- * These tests verify:
- * - Forking from a single message works
- * - Forking in --no-session mode (in-memory only)
- * - getUserMessagesForForking returns correct entries
- */
-
-import { existsSync, mkdirSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 
-import { getModel } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import {
-  type AgentSessionRuntime,
-  type CreateAgentSessionRuntimeFactory,
-  createAgentSessionFromServices,
-  createAgentSessionRuntime,
-  createAgentSessionServices,
-} from "../src/core/agent-session-runtime.ts";
-import type { AgentSession } from "../src/core/agent-session.ts";
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { API_KEY } from "./utilities.ts";
+import type agentSessionRuntimeTypes from "../src/core/agent-session-runtime.types.ts";
+import AuthStorage from "../src/core/auth-storage.ts";
+import codingAgent from "../src/index.ts";
+import type codingAgentTypes from "../src/index.types.ts";
+import utilities from "./utilities.ts";
 
-describe.skipIf(!API_KEY)("AgentSession forking", () => {
-  let session: AgentSession;
-  let runtimeHost: AgentSessionRuntime;
-  let tempDir: string;
-  let sessionManager: SessionManager;
+const { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSessionServices } =
+  codingAgent;
 
-  beforeEach(() => {
-    tempDir = join(tmpdir(), `msa-branching-test-${Date.now()}`);
-    mkdirSync(tempDir, { recursive: true });
-  });
+const { SessionManager } = codingAgent;
+const { getModel } = compat;
 
-  afterEach(async () => {
-    if (runtimeHost) {
-      await runtimeHost.dispose();
-    }
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true });
-    }
-  });
+const { API_KEY } = utilities;
 
-  async function createSession(noSession: boolean = false) {
+const { awaited, currentTimeMillis, joinPath, makeDirectory, pathExists, removePath, runTest } =
+  testing;
+
+let session: codingAgentTypes.AgentSession;
+
+let runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime;
+
+let tempDir: string;
+
+let sessionManager: codingAgentTypes.SessionManager;
+
+const createSessionSetup = (input: { readonly noSession: boolean }) =>
+  Effect.gen(function* () {
+    const { noSession } = input;
+    const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
     const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
     sessionManager = noSession ? SessionManager.inMemory(tempDir) : SessionManager.create(tempDir);
-    const authStorage = AuthStorage.create(join(tempDir, "auth.json"));
-    await authStorage.modify("anthropic-api", async () => ({ type: "api_key", key: API_KEY! }));
+    const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
+    yield* awaited(
+      authStorage.modify("anthropic-api", () =>
+        effectRunPromise(awaited({ key: API_KEY!, type: "api_key" as const })),
+      ),
+    );
 
     const servicesOptions = {
       agentDir: tempDir,
       authStorage,
       resourceLoaderOptions: {
         noExtensions: true,
-        noSkills: true,
         noPromptTemplates: true,
+        noSkills: true,
         noThemes: true,
       },
     };
-    const createRuntime: CreateAgentSessionRuntimeFactory = async ({
-      cwd,
-      sessionManager,
-      sessionStartEvent,
-    }) => {
-      const services = await createAgentSessionServices({
-        ...servicesOptions,
+    return { effectRunPromise, model, servicesOptions };
+  });
+
+function createSession(noSession: boolean = false) {
+  return runTest(
+    Effect.gen(function* () {
+      const { effectRunPromise, model, servicesOptions } = yield* createSessionSetup({ noSession });
+      const createRuntime: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = ({
         cwd,
-      });
-      return {
-        ...(await createAgentSessionFromServices({
-          services,
+        sessionManager: innerSessionManager,
+        sessionStartEvent,
+      }) =>
+        effectRunPromise(
+          Effect.gen(function* () {
+            const services = yield* awaited(
+              createAgentSessionServices({
+                ...servicesOptions,
+                cwd,
+              }),
+            );
+            return yield* awaited({
+              ...(yield* awaited(
+                createAgentSessionFromServices({
+                  services,
+                  sessionManager: innerSessionManager,
+                  ...(sessionStartEvent === undefined ? {} : { sessionStartEvent }),
+                  model,
+                  tools: ["read", "bash", "edit", "write"],
+                }),
+              )),
+              diagnostics: services.diagnostics,
+              services,
+            });
+          }),
+        );
+      runtimeHost = yield* awaited(
+        createAgentSessionRuntime(createRuntime, {
+          agentDir: tempDir,
+          cwd: tempDir,
           sessionManager,
-          ...(sessionStartEvent !== undefined ? { sessionStartEvent } : {}),
-          model,
-          tools: ["read", "bash", "edit", "write"],
-        })),
-        services,
-        diagnostics: services.diagnostics,
-      };
-    };
-    runtimeHost = await createAgentSessionRuntime(createRuntime, {
-      cwd: tempDir,
-      agentDir: tempDir,
-      sessionManager,
-    });
-    session = runtimeHost.session;
-    session.subscribe(() => {});
-    return session;
-  }
+        }),
+      );
+      session = runtimeHost.session;
+      session.subscribe(() => {});
+      return yield* awaited(session);
+    }),
+  );
+}
 
-  it("should allow forking from single message", async () => {
-    await createSession();
+const shouldAllowForkingFromSingleMessage = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(createSession());
 
-    await session.prompt("Say hello");
-    await session.agent.waitForIdle();
+      yield* awaited(session.run.prompting.prompt("Say hello"));
+      yield* awaited(session.agent.waitForIdle());
 
-    const userMessages = session.getUserMessagesForForking();
-    expect(userMessages.length).toBe(1);
-    const [userMessage] = userMessages;
-    if (userMessage === undefined) throw new Error("expected a user message to fork from");
-    expect(userMessage.text).toBe("Say hello");
+      const userMessages = session.context.transcript.getUserMessagesForForking();
+      expect(userMessages.length).toBe(1);
+      const [userMessage] = userMessages;
+      if (userMessage === undefined) throw new Error("expected a user message to fork from");
+      expect(userMessage.text).toBe("Say hello");
 
-    const result = await runtimeHost.fork(userMessage.entryId);
-    expect(result.cancelled).toBe(false);
-    session = runtimeHost.session;
-    expect(result.selectedText).toBe("Say hello");
+      const result = yield* awaited(runtimeHost.fork(userMessage.entryId));
+      expect(result.cancelled).toBe(false);
+      session = runtimeHost.session;
+      expect(result.selectedText).toBe("Say hello");
 
-    expect(session.messages.length).toBe(0);
-    expect(session.sessionFile).not.toBeNull();
-    expect(existsSync(session.sessionFile!)).toBe(false);
-  });
+      expect(session.messages.length).toBe(0);
+      expect(session.sessionFile).not.toBeNull();
+      expect(yield* pathExists(session.sessionFile!)).toBe(false);
+    }),
+  );
 
-  it("should support in-memory forking in --no-session mode", async () => {
-    await createSession(true);
+const shouldSupportInMemoryForkingInNo = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* awaited(createSession(true));
 
-    expect(session.sessionFile).toBeUndefined();
+      expect(session.sessionFile).toBeUndefined();
 
-    await session.prompt("Say hi");
-    await session.agent.waitForIdle();
+      yield* awaited(session.run.prompting.prompt("Say hi"));
+      yield* awaited(session.agent.waitForIdle());
 
-    const userMessages = session.getUserMessagesForForking();
-    expect(userMessages.length).toBe(1);
-    expect(session.messages.length).toBeGreaterThan(0);
+      const userMessages = session.context.transcript.getUserMessagesForForking();
+      expect(userMessages.length).toBe(1);
+      expect(session.messages.length).toBeGreaterThan(0);
 
-    const [userMessage] = userMessages;
-    if (userMessage === undefined) throw new Error("expected a user message to fork from");
-    const result = await runtimeHost.fork(userMessage.entryId);
-    expect(result.cancelled).toBe(false);
-    session = runtimeHost.session;
-    expect(result.selectedText).toBe("Say hi");
+      const [userMessage] = userMessages;
+      if (userMessage === undefined) throw new Error("expected a user message to fork from");
+      const result = yield* awaited(runtimeHost.fork(userMessage.entryId));
+      expect(result.cancelled).toBe(false);
+      session = runtimeHost.session;
+      expect(result.selectedText).toBe("Say hi");
 
-    expect(session.messages.length).toBe(0);
-    expect(session.sessionFile).toBeUndefined();
-  });
+      expect(session.messages.length).toBe(0);
+      expect(session.sessionFile).toBeUndefined();
+    }),
+  );
 
-  it("should fork from middle of conversation", async () => {
-    await createSession();
+const beforeEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      tempDir = joinPath(tmpdir(), `msa-branching-test-${currentTimeMillis()}`);
+      yield* makeDirectory(tempDir);
+    }),
+  );
 
-    await session.prompt("Say one");
-    await session.agent.waitForIdle();
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      if (runtimeHost !== null && runtimeHost !== undefined) {
+        yield* awaited(runtimeHost.dispose());
+      }
+      if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
+        yield* removePath(tempDir);
+      }
+    }),
+  );
 
-    await session.prompt("Say two");
-    await session.agent.waitForIdle();
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession forking", () => {
+  beforeEach(beforeEachHook);
 
-    await session.prompt("Say three");
-    await session.agent.waitForIdle();
+  afterEach(afterEachHook);
 
-    const userMessages = session.getUserMessagesForForking();
-    expect(userMessages.length).toBe(3);
+  it("should allow forking from single message", shouldAllowForkingFromSingleMessage);
 
-    const secondMessage = userMessages[1];
-    if (secondMessage === undefined) throw new Error("expected a second user message");
-    const result = await runtimeHost.fork(secondMessage.entryId);
-    expect(result.cancelled).toBe(false);
-    session = runtimeHost.session;
-    expect(result.selectedText).toBe("Say two");
+  it("should support in-memory forking in --no-session mode", shouldSupportInMemoryForkingInNo);
+});
 
-    expect(session.messages.length).toBe(2);
-    expect(session.messages[0]?.role).toBe("user");
-    expect(session.messages[1]?.role).toBe("assistant");
-  }, 60000);
+describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession forking", () => {
+  beforeEach(beforeEachHook);
+
+  afterEach(afterEachHook);
+
+  it(
+    "should fork from middle of conversation",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          yield* awaited(createSession());
+
+          yield* awaited(session.run.prompting.prompt("Say one"));
+          yield* awaited(session.agent.waitForIdle());
+
+          yield* awaited(session.run.prompting.prompt("Say two"));
+          yield* awaited(session.agent.waitForIdle());
+
+          yield* awaited(session.run.prompting.prompt("Say three"));
+          yield* awaited(session.agent.waitForIdle());
+
+          const userMessages = session.context.transcript.getUserMessagesForForking();
+          expect(userMessages.length).toBe(3);
+
+          const secondMessage = userMessages[1];
+          if (secondMessage === undefined) throw new Error("expected a second user message");
+          const result = yield* awaited(runtimeHost.fork(secondMessage.entryId));
+          expect(result.cancelled).toBe(false);
+          session = runtimeHost.session;
+          expect(result.selectedText).toBe("Say two");
+
+          expect(session.messages.length).toBe(2);
+          expect(session.messages[0]?.role).toBe("user");
+          expect(session.messages[1]?.role).toBe("assistant");
+        }),
+      ),
+    60000,
+  );
 });

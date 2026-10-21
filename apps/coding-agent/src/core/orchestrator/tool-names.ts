@@ -1,4 +1,4 @@
-export const ORCHESTRATOR_TOOL_NAMES = [
+const ORCHESTRATOR_TOOL_NAMES = [
   "create_task",
   "list_tasks",
   "read_task",
@@ -15,6 +15,13 @@ export const ORCHESTRATOR_TOOL_NAMES = [
   "handoff",
 ] as const;
 
-export function isOrchestratorTool(name: string): boolean {
+function isOrchestratorTool(name: string): boolean {
   return (ORCHESTRATOR_TOOL_NAMES as readonly string[]).includes(name);
 }
+
+const toolNames = {
+  ORCHESTRATOR_TOOL_NAMES,
+  isOrchestratorTool,
+};
+
+export default toolNames;

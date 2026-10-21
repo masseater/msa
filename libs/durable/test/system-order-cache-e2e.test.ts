@@ -1,33 +1,28 @@
-import {
-  type AssistantMessage,
-  type Message,
-  type Model,
-  type Models,
-  normalizeContext,
-  Type,
-  uuidv7,
-} from "@msa/ai";
-import { builtinModels } from "@msa/ai/providers/all";
-import {
-  AssistantEntry,
-  createRegistry,
-  defineExtension,
-  defineTool,
-  GenerationTask,
-  Harness,
-  hook,
-  MemoryStorage,
-} from "@msa/durable";
-import { describe, expect, it } from "vite-plus/test";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import all from "@msa/ai/providers/all";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { describe, expect, inject, it } from "vite-plus/test";
 
-import { streamSimple as streamSimpleAnthropic } from "../../ai/src/api/anthropic-messages.ts";
-import { resolveApiKey } from "../../ai/test/oauth.ts";
-import { context } from "./session-support.ts";
+import anthropicMessages from "../../ai/src/api/anthropic-messages.ts";
+import support from "./support.ts";
 
-const anthropicToken = await resolveApiKey("anthropic");
+const { Type, normalizeContext, uuidv7 } = ai;
+const { builtinModels } = all;
+const { streamSimple: streamSimpleAnthropic } = anthropicMessages;
 
-/** Sets both mid-conversation compat flags, so tool changes use Anthropic's native additions when allowed. */
-const MODEL = { provider: "anthropic", modelId: "claude-sonnet-5-5" } as const;
+const { AssistantEntry, defineExtension, defineTool, hook } = durable;
+const { GenerationTask, Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+
+const { awaited, context } = support;
+
+const anthropicToken = inject("storedApiKeys")["anthropic"];
+
+const MODEL = { modelId: "claude-sonnet-5-5", provider: "anthropic" } as const;
 
 function instructions(nonce: string): string {
   const lines = [
@@ -44,20 +39,19 @@ function instructions(nonce: string): string {
 
 const Parameters = Type.Object({ text: Type.String() });
 const first = defineTool({
-  name: "probe_first",
   description: "Unused probe tool.",
-  parameters: Parameters,
   execute: () => Promise.resolve({ output: [] }),
+  name: "probe_first",
+  parameters: Parameters,
 });
 const second = defineTool({
-  name: "probe_second",
   description: "Unused probe tool added on the second turn.",
-  parameters: Parameters,
   execute: () => Promise.resolve({ output: [] }),
+  name: "probe_second",
+  parameters: Parameters,
 });
 
-// Puts the leading system message back after the user messages before it: the request order before the fix.
-function committedOrder(messages: readonly Message[]): Message[] {
+function committedOrder(messages: readonly aiTypes.Message[]): aiTypes.Message[] {
   if (messages[0]?.role !== "system") return [...messages];
   const [system, ...rest] = messages;
   const users = rest.findIndex((message) => message.role !== "user");
@@ -65,102 +59,120 @@ function committedOrder(messages: readonly Message[]): Message[] {
   return [...rest.slice(0, at), system!, ...rest.slice(at)];
 }
 
-// Built-in models that stream Anthropic requests with `token`.
-function anthropicModels(token: string): Models {
+function anthropicModels(token: string): aiTypes.Models {
   const base = builtinModels();
   return new Proxy(base, {
     get(target, property) {
       if (property === "streamSimple") {
         return (
-          model: Parameters<Models["streamSimple"]>[0],
-          request: Parameters<Models["streamSimple"]>[1],
-          options?: Parameters<Models["streamSimple"]>[2],
+          model: Parameters<aiTypes.Models["streamSimple"]>[0],
+          request: Parameters<aiTypes.Models["streamSimple"]>[1],
+          options?: Parameters<aiTypes.Models["streamSimple"]>[2],
         ) =>
-          streamSimpleAnthropic(model as Model<"anthropic-messages">, normalizeContext(request), {
-            ...options,
-            apiKey: token,
-          });
+          streamSimpleAnthropic(
+            model as aiTypes.Model<"anthropic-messages">,
+            normalizeContext(request),
+            {
+              ...options,
+              apiKey: token,
+            },
+          );
       }
       const value = Reflect.get(target, property, target);
       return typeof value === "function" ? value.bind(target) : value;
     },
-  }) as Models;
+  }) as aiTypes.Models;
 }
 
-// The probe tools, and a hook restoring the committed request order.
 function probeRegistry() {
   const registry = createRegistry();
   const probe = defineExtension({ name: "probe", tools: [first, second] });
   const legacy = defineExtension({
-    name: "legacy-order",
     hooks: [
       hook(GenerationTask, {
         beforeRequest: ({ messages }) => ({ messages: committedOrder(messages) }),
       }),
     ],
+    name: "legacy-order",
   });
   registry.install(probe);
   registry.install(legacy);
-  return { registry, probe, legacy };
+  return { legacy, probe, registry };
 }
 
-// Share of the prompt the second turn read from cache after adding a tool.
-async function cacheReadAfterToolChange(token: string, legacyOrder: boolean): Promise<number> {
+const cacheReadAfterToolChangeStep1 = Effect.fn("cacheReadAfterToolChangeStep1")(function* (
+  token: string,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const models = anthropicModels(token);
   const { registry, probe, legacy } = probeRegistry();
-  const harness = await Harness.open(
-    new MemoryStorage(),
-    { models, registry, settings: { compaction: { enabled: false } } },
-    context,
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      { models, registry, settings: { compaction: { enabled: false } } },
+      context,
+    ),
   );
-  try {
-    const root = await harness.root(context, {
-      agent: {
-        model: MODEL,
-        thinkingLevel: "low",
-        instructions: instructions(uuidv7()),
-        extensions: legacyOrder ? [probe, legacy] : [probe],
-        tools: [first],
-      },
-    });
+  return { harness, legacy, probe, runPromise };
+});
+
+const cacheReadAfterToolChange = Effect.fn("cacheReadAfterToolChange")(function* (
+  token: string,
+  legacyOrder: boolean,
+) {
+  const { runPromise, probe, legacy, harness } = yield* cacheReadAfterToolChangeStep1(token);
+  return yield* Effect.gen(function* () {
+    const root = yield* awaited(
+      harness.root(context, {
+        agent: {
+          extensions: legacyOrder ? [probe, legacy] : [probe],
+          instructions: instructions(uuidv7()),
+          model: MODEL,
+          thinkingLevel: "low",
+          tools: [first],
+        },
+      }),
+    );
     harness.resume();
-    const ask = async (text: string): Promise<AssistantMessage> => {
-      const settled = await (
-        await root.submit({ type: "input", content: `Reply exactly: ${text}` }, context)
-      ).wait(context);
-      if (settled.status !== "done" || settled.type !== "input")
-        throw new Error(`Unexpected ${settled.status}`);
-      const record = await harness.commit(
-        (tx) => tx.entry(AssistantEntry, settled.answer),
-        context,
+    const ask = (text: string): Promise<aiTypes.AssistantMessage> =>
+      runPromise(
+        Effect.gen(function* () {
+          const settled = yield* awaited(
+            (yield* awaited(
+              root.submit({ content: `Reply exactly: ${text}`, type: "input" }, context),
+            )).wait(context),
+          );
+          if (settled.status !== "done" || settled.type !== "input")
+            throw new Error(`Unexpected ${settled.status}`);
+          const record = yield* awaited(
+            harness.commit((tx) => tx.entry(AssistantEntry, settled.answer), context),
+          );
+          const message = record?.model?.[0] as aiTypes.AssistantMessage | undefined;
+          expect(message?.stopReason, message?.errorMessage).toBe("stop");
+          return message!;
+        }),
       );
-      const message = record?.model?.[0] as AssistantMessage | undefined;
-      expect(message?.stopReason, message?.errorMessage).toBe("stop");
-      return message!;
-    };
-    const before = await ask("READY");
+    const before = yield* awaited(ask("READY"));
     expect(
       before.usage.input + before.usage.cacheRead + before.usage.cacheWrite,
     ).toBeGreaterThanOrEqual(4_000);
-    await root.configure({ tools: [first, second] }, context);
-    const after = (await ask("READY AGAIN")).usage;
+    yield* awaited(root.configure({ tools: [first, second] }, context));
+    const after = (yield* awaited(ask("READY AGAIN"))).usage;
     return after.cacheRead / (after.input + after.cacheRead + after.cacheWrite);
-  } finally {
-    await harness.close(context);
-  }
-}
+  }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => awaited(harness.close(context))))));
+});
 
 describe("Durable system message order e2e", () => {
-  // Live regression coverage for #10542; skipped without Anthropic credentials in ~/.msa/agent/auth.json.
-  it.skipIf(!anthropicToken)(
+  it.skipIf(anthropicToken === undefined || anthropicToken === "")(
     "keeps the prompt cache across a tool change only when the system message leads",
     { retry: 1, timeout: 180_000 },
-    async () => {
-      // Before the fix: the input precedes the system message, so Anthropic sends the tool list at the top of the
-      // request, and adding a tool changes the cached prefix from its first token.
-      expect(await cacheReadAfterToolChange(anthropicToken!, true)).toBeLessThan(0.2);
-      // The fix: the system message leads, the initial tools stay fixed, and the new tool arrives in the conversation.
-      expect(await cacheReadAfterToolChange(anthropicToken!, false)).toBeGreaterThan(0.8);
-    },
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          expect(yield* cacheReadAfterToolChange(anthropicToken!, true)).toBeLessThan(0.2);
+          expect(yield* cacheReadAfterToolChange(anthropicToken!, false)).toBeGreaterThan(0.8);
+        }),
+      ),
   );
 });

@@ -1,31 +1,44 @@
-import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect } from "effect";
 
-import { type FileError, type Result } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
-import { deferred } from "./tools-support.ts";
+import type envTypes from "../src/env/index.types.ts";
+import node from "../src/env/node.ts";
+import effectSupport from "./effect-support.ts";
+import toolsSupport from "./tools-support.ts";
 
-export class BlockingEditExecutionEnv extends NodeExecutionEnv {
+const { BACKGROUND_CONTEXT } = contextModule;
+const { awaited } = effectSupport;
+const { deferred } = toolsSupport;
+
+class BlockingEditExecutionEnv extends node.NodeExecutionEnv {
   readonly firstEditWriteStarted = deferred();
   readonly finishFirstEditWrite = deferred();
   firstEditWriteSettled = false;
   secondEditWriteStarted = false;
 
-  override async writeFile(
+  override writeFile(
     path: string,
     content: string | Uint8Array,
-    context: Context,
-  ): Promise<Result<void, FileError>> {
-    if (content === "ALPHA\nbeta\n") {
-      this.firstEditWriteStarted.resolve();
-      await this.finishFirstEditWrite.promise;
-      const result = await super.writeFile(path, content, BACKGROUND_CONTEXT);
-      this.firstEditWriteSettled = true;
-      return result;
-    }
-    if (content === "ALPHA\nBETA\n" || content === "alpha\nBETA\n") {
-      this.secondEditWriteStarted = true;
-    }
-    return super.writeFile(path, content, context);
+    context: chordTypes.Context,
+  ): Promise<envTypes.Result<void, envTypes.FileError>> {
+    const superWriteFile = super.writeFile.bind(this);
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (content === "ALPHA\nbeta\n") {
+          this.firstEditWriteStarted.resolve();
+          yield* awaited(this.finishFirstEditWrite.promise);
+          const result = yield* awaited(superWriteFile(path, content, BACKGROUND_CONTEXT));
+          this.firstEditWriteSettled = true;
+          return result;
+        }
+        if (content === "ALPHA\nBETA\n" || content === "alpha\nBETA\n") {
+          this.secondEditWriteStarted = true;
+        }
+        return yield* awaited(superWriteFile(path, content, context));
+      }),
+    );
   }
 }
+
+export default BlockingEditExecutionEnv;

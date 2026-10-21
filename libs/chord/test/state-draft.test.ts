@@ -1,86 +1,144 @@
+import { DateTime } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { applyImmutable, type Draft, type JsonValue, track } from "../src/delta/index.ts";
+import delta from "../src/delta/index.ts";
+import type deltaTypes from "../src/delta/index.types.ts";
+
+const { applyImmutable, track } = delta;
+
+const copiesOnlyChangedBranches = (): void => {
+  const tracker = track({
+    changed: { count: 1, sibling: { value: "kept" } },
+    untouched: { value: 2 },
+  });
+  const base = tracker.value;
+  const change = tracker.beginChange();
+  const first = change.state.changed;
+  expect(change.state.changed).toBe(first);
+  change.state.changed.count = 3;
+  const prepared = change.prepare();
+  expect(prepared.value).not.toBe(base);
+  expect(prepared.value.changed).not.toBe(base.changed);
+  expect(prepared.value.changed.sibling).toBe(base.changed.sibling);
+  expect(prepared.value.untouched).toBe(base.untouched);
+};
+
+const supportsFrozenBasesDeletionAndNative = (): void => {
+  const base: { optional?: string; values: number[] } = { optional: "remove", values: [3, 1, 2] };
+  const tracker = track(base);
+  const change = tracker.beginChange();
+  delete change.state.optional;
+  change.state.values.push(4);
+  expect(change.state.values.pop()).toBe(4);
+  change.state.values.unshift(0);
+  expect(change.state.values.shift()).toBe(0);
+  expect(change.state.values.splice(1, 1, 5, 4)).toEqual([1]);
+  change.state.values.sort((left, right) => left - right);
+  change.state.values.reverse();
+  change.state.values.fill(9, 1, 3);
+  change.state.values.copyWithin(1, 0, 2);
+  const prepared = change.prepare();
+  expect(prepared.value).toEqual({ values: [5, 5, 9, 2] });
+};
+
+const copiesInsertedDraftValuesWithoutAliasing = (): void => {
+  const tracker = track({ values: [{ value: 1 }, { value: 2 }] });
+  const change = tracker.beginChange();
+  const held = change.state.values[0]!;
+  change.state.values.unshift(held);
+  held.value = 9;
+  const prepared = change.prepare();
+  expect(prepared.value.values).toEqual([{ value: 1 }, { value: 9 }, { value: 2 }]);
+  expect(prepared.value.values[0]).not.toBe(prepared.value.values[1]);
+};
+
+const keepsComparatorEditsWhenSortingObject = (): void => {
+  const tracker = track({
+    rows: [
+      { comparisons: 0, rank: 2 },
+      { comparisons: 0, rank: 1 },
+    ],
+  });
+  const change = tracker.beginChange();
+  change.state.rows.sort((left, right) => {
+    left.comparisons++;
+    right.comparisons++;
+    return left.rank - right.rank;
+  });
+  const prepared = change.prepare();
+  expect(prepared.value.rows.map((row) => row.rank)).toEqual([1, 2]);
+  expect(prepared.value.rows.map((row) => row.comparisons)).toEqual([1, 1]);
+};
+
+const dropsWritesThroughDetachedChildReferences = (): void => {
+  const tracker = track({
+    child: { value: "removed" },
+    items: [{ value: "removed" }, { value: "kept" }],
+  });
+  const change = tracker.beginChange();
+  const child = change.state.child;
+  const shifted = change.state.items.shift();
+  delete (
+    change.state as {
+      child?: deltaTypes.Draft<{ value: string }>;
+      items: deltaTypes.Draft<{ value: string }[]>;
+    }
+  ).child;
+  child.value = "detached child";
+  if (shifted !== undefined) shifted.value = "detached item";
+  expect(change.prepare().value).toEqual({ items: [{ value: "kept" }] });
+};
+
+const rejectsNonStrictJsonPlacementsWithout = (): void => {
+  const tracker = track({
+    number: 0,
+    payload: null as deltaTypes.JsonValue,
+    values: [1, 2] as deltaTypes.JsonValue[],
+  });
+  const change = tracker.beginChange();
+  expect(() => {
+    change.state.values[0] = undefined as unknown as deltaTypes.JsonValue;
+  }).toThrow(/strict JSON/u);
+  expect(() =>
+    change.state.values.push({ nested: undefined } as unknown as deltaTypes.JsonValue),
+  ).toThrow(/strict JSON/u);
+  expect(() => {
+    change.state.number = Number.NaN;
+  }).toThrow(/strict JSON/u);
+  expect(() => {
+    change.state.payload = DateTime.toDateUtc(
+      DateTime.nowUnsafe(),
+    ) as unknown as deltaTypes.JsonValue;
+  }).toThrow(/plain objects/u);
+  expect(change.state).toEqual(tracker.value);
+  change.abort();
+  expect(tracker.value).toEqual({ number: 0, payload: null, values: [1, 2] });
+};
+
+const rejectsArrayHolesWithoutMutatingThe = (): void => {
+  const tracker = track({ values: [1, 2] });
+  const change = tracker.beginChange();
+  expect(() => delete change.state.values[0]).toThrow(/dense|holes/u);
+  change.abort();
+  expect(tracker.value.values).toEqual([1, 2]);
+};
 
 describe("transactional overlay drafts", () => {
-  it("copies only changed branches", () => {
-    const tracker = track({
-      changed: { count: 1, sibling: { value: "kept" } },
-      untouched: { value: 2 },
-    });
-    const base = tracker.value;
-    const change = tracker.beginChange();
-    const first = change.state.changed;
-    expect(change.state.changed).toBe(first);
-    change.state.changed.count = 3;
-    const prepared = change.prepare();
-    expect(prepared.value).not.toBe(base);
-    expect(prepared.value.changed).not.toBe(base.changed);
-    expect(prepared.value.changed.sibling).toBe(base.changed.sibling);
-    expect(prepared.value.untouched).toBe(base.untouched);
-  });
+  it("copies only changed branches", copiesOnlyChangedBranches);
 
-  it("supports frozen bases, deletion, and native array mutators", () => {
-    const base: { optional?: string; values: number[] } = { optional: "remove", values: [3, 1, 2] };
-    const tracker = track(base);
-    const change = tracker.beginChange();
-    delete change.state.optional;
-    change.state.values.push(4);
-    expect(change.state.values.pop()).toBe(4);
-    change.state.values.unshift(0);
-    expect(change.state.values.shift()).toBe(0);
-    expect(change.state.values.splice(1, 1, 5, 4)).toEqual([1]);
-    change.state.values.sort((left, right) => left - right);
-    change.state.values.reverse();
-    change.state.values.fill(9, 1, 3);
-    change.state.values.copyWithin(1, 0, 2);
-    const prepared = change.prepare();
-    expect(prepared.value).toEqual({ values: [5, 5, 9, 2] });
-  });
+  it(
+    "supports frozen bases, deletion, and native array mutators",
+    supportsFrozenBasesDeletionAndNative,
+  );
 
-  it("copies inserted draft values without aliasing their original reference", () => {
-    const tracker = track({ values: [{ value: 1 }, { value: 2 }] });
-    const change = tracker.beginChange();
-    const held = change.state.values[0]!;
-    change.state.values.unshift(held);
-    held.value = 9;
-    const prepared = change.prepare();
-    expect(prepared.value.values).toEqual([{ value: 1 }, { value: 9 }, { value: 2 }]);
-    expect(prepared.value.values[0]).not.toBe(prepared.value.values[1]);
-  });
+  it(
+    "copies inserted draft values without aliasing their original reference",
+    copiesInsertedDraftValuesWithoutAliasing,
+  );
 
-  it("keeps comparator edits when sorting object drafts", () => {
-    const tracker = track({
-      rows: [
-        { rank: 2, comparisons: 0 },
-        { rank: 1, comparisons: 0 },
-      ],
-    });
-    const change = tracker.beginChange();
-    change.state.rows.sort((left, right) => {
-      left.comparisons++;
-      right.comparisons++;
-      return left.rank - right.rank;
-    });
-    const prepared = change.prepare();
-    expect(prepared.value.rows.map((row) => row.rank)).toEqual([1, 2]);
-    expect(prepared.value.rows.map((row) => row.comparisons)).toEqual([1, 1]);
-  });
+  it("keeps comparator edits when sorting object drafts", keepsComparatorEditsWhenSortingObject);
 
-  it("drops writes through detached child references", () => {
-    const tracker = track({
-      child: { value: "removed" },
-      items: [{ value: "removed" }, { value: "kept" }],
-    });
-    const change = tracker.beginChange();
-    const child = change.state.child;
-    const shifted = change.state.items.shift();
-    delete (change.state as { child?: Draft<{ value: string }>; items: Draft<{ value: string }[]> })
-      .child;
-    child.value = "detached child";
-    if (shifted !== undefined) shifted.value = "detached item";
-    expect(change.prepare().value).toEqual({ items: [{ value: "kept" }] });
-  });
+  it("drops writes through detached child references", dropsWritesThroughDetachedChildReferences);
 
   it.each(["unshift", "splice"] as const)(
     "inserts 100,000 items with %s without argument overflow",
@@ -99,31 +157,13 @@ describe("transactional overlay drafts", () => {
     },
   );
 
-  it("rejects non-strict JSON placements without mutating the draft or base", () => {
-    const tracker = track({ number: 0, payload: null as JsonValue, values: [1, 2] as JsonValue[] });
-    const change = tracker.beginChange();
-    expect(() => {
-      change.state.values[0] = undefined as unknown as JsonValue;
-    }).toThrow(/strict JSON/);
-    expect(() => change.state.values.push({ nested: undefined } as unknown as JsonValue)).toThrow(
-      /strict JSON/,
-    );
-    expect(() => {
-      change.state.number = Number.NaN;
-    }).toThrow(/strict JSON/);
-    expect(() => {
-      change.state.payload = new Date() as unknown as JsonValue;
-    }).toThrow(/plain objects/);
-    expect(change.state).toEqual(tracker.value);
-    change.abort();
-    expect(tracker.value).toEqual({ number: 0, payload: null, values: [1, 2] });
-  });
+  it(
+    "rejects non-strict JSON placements without mutating the draft or base",
+    rejectsNonStrictJsonPlacementsWithout,
+  );
 
-  it("rejects array holes without mutating the committed base", () => {
-    const tracker = track({ values: [1, 2] });
-    const change = tracker.beginChange();
-    expect(() => delete change.state.values[0]).toThrow(/dense|holes/);
-    change.abort();
-    expect(tracker.value.values).toEqual([1, 2]);
-  });
+  it(
+    "rejects array holes without mutating the committed base",
+    rejectsArrayHolesWithoutMutatingThe,
+  );
 });

@@ -1,21 +1,8 @@
-/**
- * Merge and Resolve
- *
- * Keeps the working branch up to date with its upstream tracking ref.
- * After each agent turn, fetches and merges. Clean merges complete
- * silently. When conflicts arise, the working tree is left dirty and
- * the agent receives a follow-up message listing each conflict block
- * with file, line range, and ours/theirs sections so it can resolve them.
- * Also re-sends unresolved conflicts from a previous incomplete merge.
- *
- * Start msa with this extension:
- *   msa -e ./examples/extensions/git-merge-and-resolve.ts
- */
-import { createReadStream } from "node:fs";
-import { join } from "node:path";
-import { createInterface } from "node:readline";
+import { NodeServices } from "@effect/platform-node";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
+const runtime = ManagedRuntime.make(NodeServices.layer);
 
 interface ConflictBlock {
   file: string;
@@ -24,39 +11,48 @@ interface ConflictBlock {
   endLine: number;
 }
 
-/** Parse conflict markers from working tree files with unmerged paths. */
-async function findConflicts(msa: ExtensionAPI, cwd: string): Promise<ConflictBlock[]> {
-  const { stdout, code } = await msa.exec("git", ["diff", "--name-only", "--diff-filter=U"]);
-  if (code !== 0 || !stdout.trim()) return [];
-
+const collectBlocks = (file: string, content: string): ConflictBlock[] => {
   const blocks: ConflictBlock[] = [];
-  for (const file of stdout.trim().split("\n")) {
-    try {
-      const rl = createInterface({ input: createReadStream(join(cwd, file), "utf-8") });
-      let lineNo = 0;
-      let blockStart: number | undefined;
-      let separatorLine: number | undefined;
-      for await (const line of rl) {
-        lineNo++;
-        if (line.startsWith("<<<<<<<")) {
-          blockStart = lineNo;
-          separatorLine = undefined;
-        } else if (line.startsWith("=======") && blockStart !== undefined) {
-          separatorLine = lineNo;
-        } else if (
-          line.startsWith(">>>>>>>") &&
-          blockStart !== undefined &&
-          separatorLine !== undefined
-        ) {
-          blocks.push({ file, startLine: blockStart, separatorLine, endLine: lineNo });
-          blockStart = undefined;
-          separatorLine = undefined;
-        }
-      }
-    } catch {}
-  }
+  let blockStart: number | undefined;
+  let separatorLine: number | undefined;
+  content.split("\n").forEach((line, index) => {
+    const lineNo = index + 1;
+    if (line.startsWith("<<<<<<<")) {
+      blockStart = lineNo;
+      separatorLine = undefined;
+    } else if (line.startsWith("=======") && blockStart !== undefined) {
+      separatorLine = lineNo;
+    } else if (
+      line.startsWith(">>>>>>>") &&
+      blockStart !== undefined &&
+      separatorLine !== undefined
+    ) {
+      blocks.push({ endLine: lineNo, file, separatorLine, startLine: blockStart });
+      blockStart = undefined;
+      separatorLine = undefined;
+    }
+  });
   return blocks;
-}
+};
+
+const findConflicts = (msa: codingAgentTypes.ExtensionAPI, cwd: string) =>
+  Effect.gen(function* () {
+    const { stdout, code } = yield* Effect.promise(() =>
+      msa.exec("git", ["diff", "--name-only", "--diff-filter=U"]),
+    );
+    if (code !== 0 || stdout.trim().length === 0) return [];
+
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const blocks: ConflictBlock[] = [];
+    for (const file of stdout.trim().split("\n")) {
+      const content = yield* fs.readFileString(path.join(cwd, file)).pipe(Effect.option);
+      if (Option.isSome(content)) {
+        blocks.push(...collectBlocks(file, content.value));
+      }
+    }
+    return blocks;
+  });
 
 function formatRange(start: number, end: number): string {
   if (start > end) return "empty";
@@ -75,46 +71,57 @@ function formatConflicts(ref: string, blocks: ConflictBlock[]): string {
   return lines.join("\n");
 }
 
-export default function (msa: ExtensionAPI) {
-  msa.on("agent_end", async (_event, ctx) => {
-    const { code: revParseCode } = await msa.exec("git", ["rev-parse", "--git-dir"]);
-    if (revParseCode !== 0) return;
+const git = (msa: codingAgentTypes.ExtensionAPI, args: string[]) =>
+  Effect.promise(() => msa.exec("git", args));
 
-    let ref = "MERGE_HEAD";
+const findMergeRef = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: { cwd: string; ui: { notify: (m: string, l: "info" | "warning") => void } },
+) =>
+  Effect.gen(function* () {
+    const { code: revParseCode } = yield* git(msa, ["rev-parse", "--git-dir"]);
+    if (revParseCode !== 0) return undefined;
 
-    // If not already in a merge, attempt one
-    const { code: mergeHeadCode } = await msa.exec("git", ["rev-parse", "MERGE_HEAD"]);
-    if (mergeHeadCode !== 0) {
-      // Only attempt a new merge if the working tree is clean
-      const { stdout: status } = await msa.exec("git", ["status", "--porcelain"]);
-      if (status.trim()) return;
+    const { code: mergeHeadCode } = yield* git(msa, ["rev-parse", "MERGE_HEAD"]);
+    if (mergeHeadCode === 0) return "MERGE_HEAD";
 
-      const { stdout: upstream, code: upstreamCode } = await msa.exec("git", [
-        "rev-parse",
-        "--abbrev-ref",
-        "--symbolic-full-name",
-        "@{u}",
-      ]);
-      if (upstreamCode !== 0) return;
+    const { stdout: status } = yield* git(msa, ["status", "--porcelain"]);
+    if (status.trim().length > 0) return undefined;
 
-      ref = upstream.trim();
-      const remote = ref.split("/")[0] ?? "";
-      ctx.ui.notify(`git-merge-and-resolve: fetching ${remote}, merging ${ref}`, "info");
+    const { stdout: upstream, code: upstreamCode } = yield* git(msa, [
+      "rev-parse",
+      "--abbrev-ref",
+      "--symbolic-full-name",
+      "@{u}",
+    ]);
+    if (upstreamCode !== 0) return undefined;
 
-      const { code: fetchCode, stderr: fetchErr } = await msa.exec("git", ["fetch", remote]);
-      if (fetchCode !== 0) {
-        ctx.ui.notify(`git-merge-and-resolve: fetch failed: ${fetchErr.trim()}`, "warning");
-        return;
-      }
+    const ref = upstream.trim();
+    const remote = ref.split("/")[0] ?? "";
+    ctx.ui.notify(`git-merge-and-resolve: fetching ${remote}, merging ${ref}`, "info");
 
-      const { code: mergeCode } = await msa.exec("git", ["merge", "--no-ff", ref]);
-      if (mergeCode === 0) return;
+    const { code: fetchCode, stderr: fetchErr } = yield* git(msa, ["fetch", remote]);
+    if (fetchCode !== 0) {
+      ctx.ui.notify(`git-merge-and-resolve: fetch failed: ${fetchErr.trim()}`, "warning");
+      return undefined;
     }
 
-    // Either we just merged with conflicts, or we were already in an unfinished merge
-    const conflicts = await findConflicts(msa, ctx.cwd);
-    if (conflicts.length === 0) return;
-
-    msa.sendUserMessage(formatConflicts(ref, conflicts), { deliverAs: "followUp" });
+    const { code: mergeCode } = yield* git(msa, ["merge", "--no-ff", ref]);
+    return mergeCode === 0 ? undefined : ref;
   });
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.on("agent_end", (_event, ctx) =>
+    runtime.runPromise(
+      Effect.gen(function* () {
+        const ref = yield* findMergeRef(msa, ctx);
+        if (ref === undefined) return;
+
+        const conflicts = yield* findConflicts(msa, ctx.cwd);
+        if (conflicts.length === 0) return;
+
+        msa.sendUserMessage(formatConflicts(ref, conflicts), { deliverAs: "followUp" });
+      }),
+    ),
+  );
 }

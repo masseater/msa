@@ -1,7 +1,17 @@
-import { getCapabilities, type ImageTranscoder, setImageTranscoder } from "@msa/tui";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
-import { applyExifOrientation } from "./exif-orientation.ts";
-import { loadPhoton } from "./photon.ts";
+import awaitingModule from "../core/awaiting.ts";
+import exifOrientation from "./exif-orientation.ts";
+import photonModule from "./photon.ts";
+
+const { loadPhoton } = photonModule;
+const { applyExifOrientation } = exifOrientation;
+const { awaited, awaiting } = awaitingModule;
+
+const { getCapabilities, setImageTranscoder } = tui;
 
 type Photon = NonNullable<Awaited<ReturnType<typeof loadPhoton>>>;
 
@@ -16,75 +26,86 @@ function encodePng(photon: Photon, bytes: Uint8Array): Uint8Array | null {
       image.free();
     }
   } catch {
-    // Conversion failed
     return null;
   }
 }
 
-export async function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
-  const photon = await loadPhoton();
-  if (!photon) {
-    // Photon not available, can't convert
-    return null;
-  }
-  return encodePng(photon, bytes);
+function convertImageBytesToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const photon = yield* awaited(loadPhoton());
+      if (photon === null) {
+        return null;
+      }
+      return encodePng(photon, bytes);
+    }),
+  );
 }
 
-/**
- * Convert image to PNG format for terminal display.
- * Kitty graphics protocol requires PNG format (f=100).
- */
-export async function convertToPng(
+function convertToPngImpl(
   base64Data: string,
   mimeType: string,
 ): Promise<{ data: string; mimeType: string } | null> {
-  // Already PNG, no conversion needed
-  if (mimeType === "image/png") {
-    return { data: base64Data, mimeType };
-  }
+  return Effect.runPromise(
+    awaiting(function* () {
+      if (mimeType === "image/png") {
+        return { data: base64Data, mimeType };
+      }
 
-  const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
-  const pngBytes = await convertImageBytesToPng(bytes);
-  if (!pngBytes) {
-    return null;
-  }
+      const bytes = new Uint8Array(Buffer.from(base64Data, "base64"));
+      const pngBytes = yield* awaited(convertImageBytesToPng(bytes));
+      if (pngBytes === null) {
+        return null;
+      }
 
-  return {
-    data: Buffer.from(pngBytes).toString("base64"),
-    mimeType: "image/png",
-  };
+      return {
+        data: Buffer.from(pngBytes).toString("base64"),
+        mimeType: "image/png",
+      };
+    }),
+  );
 }
 
-/**
- * Load photon and return a synchronous PNG transcoder for msa-tui's Kitty image rendering.
- * Returns undefined if photon cannot be loaded.
- */
-export async function loadPngTranscoder(): Promise<ImageTranscoder | undefined> {
-  const photon = await loadPhoton();
-  if (!photon) return undefined;
-  return (base64Data) => {
-    const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
-    return pngBytes ? Buffer.from(pngBytes).toString("base64") : null;
-  };
+const convertToPng: {
+  (base64Data: string, mimeType: string): Promise<{ data: string; mimeType: string } | null>;
+  (mimeType: string): (base64Data: string) => Promise<{ data: string; mimeType: string } | null>;
+} = dual((args: IArguments) => args.length >= 2, convertToPngImpl);
+
+function loadPngTranscoder(): Promise<tuiTypes.ImageTranscoder | undefined> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const photon = yield* awaited(loadPhoton());
+      if (photon === null) return undefined;
+      return (base64Data) => {
+        const pngBytes = encodePng(photon, new Uint8Array(Buffer.from(base64Data, "base64")));
+        return pngBytes === null ? null : Buffer.from(pngBytes).toString("base64");
+      };
+    }),
+  );
 }
 
 let pngTranscoderLoad: Promise<boolean> | undefined;
 let pngTranscoderRegistered = false;
 
-/**
- * On Kitty-protocol terminals, register photon as msa-tui's image transcoder so non-PNG images render.
- * Loads photon once. `onRegistered` runs after registration so callers can re-render images that
- * showed text fallbacks; it is not called if the transcoder was already registered or cannot load.
- */
-export function ensurePngTranscoder(onRegistered: () => void): void {
+function ensurePngTranscoder(onRegistered: () => void): void {
   if (pngTranscoderRegistered || getCapabilities().images !== "kitty") return;
   pngTranscoderLoad ??= loadPngTranscoder().then((transcoder) => {
-    if (!transcoder) return false;
+    if (transcoder === undefined) return false;
     setImageTranscoder(transcoder);
     pngTranscoderRegistered = true;
     return true;
   });
   void pngTranscoderLoad.then((registered) => {
     if (registered) onRegistered();
+    return undefined;
   });
 }
+
+const imageConvert = {
+  convertImageBytesToPng,
+  convertToPng,
+  ensurePngTranscoder,
+  loadPngTranscoder,
+};
+
+export default imageConvert;

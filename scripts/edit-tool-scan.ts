@@ -1,73 +1,63 @@
-import { Effect, Predicate, Result, Schema, Stream } from "effect";
+import { Effect, Predicate, Schema } from "effect";
 
-import type { SinceFilter } from "./auto-since.ts";
-import { analyzeEditArguments } from "./edit-replacement.ts";
-import type { EditAnalysis } from "./edit-replacement.ts";
-import type { HostShape } from "./host.ts";
-import { jsonlFilesRecursive, sessionFileMillis } from "./sessions.ts";
+import editReplacement from "./edit-replacement.ts";
+import type editToolScanTypes from "./edit-tool-scan.types.ts";
+import type hostTypes from "./host.types.ts";
+import type scanOptionsTypes from "./scan-options.types.ts";
+import sessions from "./sessions.ts";
+import toolCalls from "./tool-calls.ts";
+import type toolCallsTypes from "./tool-calls.types.ts";
+
+const { callOriginOf, contentBlocks, toolCallEntrySchema, toolCallIdOf, toolCallsOf } = toolCalls;
+const { analyzeEditArguments } = editReplacement;
+const { collectSessionRecords, forEachDecodedLine, messageOf, sessionScanMeta } = sessions;
 
 const MULTIPLE_OCCURRENCES = /^found \d+ occurrences/mu;
 
-interface EditRecord extends EditAnalysis {
-  readonly sessionFile: string;
-  readonly assistantEntryId: string | undefined;
-  readonly toolCallId: string;
-  readonly timestamp: string | undefined;
-  readonly api: string | null;
-  readonly provider: string;
-  readonly model: string;
-  readonly providerModel: string;
-  success: boolean | null;
-  errorKind: string | null;
-  errorText: string;
-  resultSummary: string;
-  matchedResult: boolean;
-}
-
-interface EditScanMeta {
-  sessionsDir: string;
-  sessionFilesScanned: number;
-  sessionFilesIncluded: number;
-  sessionFilesSkippedOlderThanSince: number;
-  sessionFilesWithEditCalls: number;
-  since: SinceFilter | null;
-  malformedLines: number;
-  unmatchedToolResults: number;
-}
-
-const ContentBlock = Schema.Record(Schema.String, Schema.Unknown);
-
-const EntrySchema = Schema.Struct({
-  type: Schema.optional(Schema.String),
-  id: Schema.optional(Schema.String),
-  timestamp: Schema.optional(Schema.String),
-  message: Schema.optional(
-    Schema.Struct({
-      role: Schema.optional(Schema.String),
-      api: Schema.optional(Schema.String),
-      provider: Schema.optional(Schema.String),
-      model: Schema.optional(Schema.String),
-      toolName: Schema.optional(Schema.String),
-      toolCallId: Schema.optional(Schema.String),
-      isError: Schema.optional(Schema.Boolean),
-      content: Schema.optional(Schema.Union([Schema.String, Schema.Array(ContentBlock)])),
-    }),
-  ),
+const EntrySchema = toolCallEntrySchema({
+  isError: Schema.optional(Schema.Boolean),
+  toolCallId: Schema.optional(Schema.String),
+  toolName: Schema.optional(Schema.String),
 });
 
 type Entry = typeof EntrySchema.Type;
 type Message = NonNullable<Entry["message"]>;
 
+interface FileScan {
+  readonly host: hostTypes.HostShape;
+  readonly meta: editToolScanTypes.EditScanMeta;
+  readonly pending: Map<string, editToolScanTypes.EditRecord>;
+  readonly records: Array<editToolScanTypes.EditRecord>;
+  readonly sessionFile: string;
+}
+
 const decodeEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(EntrySchema));
 
-const textContentOf = (content: Message["content"]): string => {
-  if (content === undefined) return "";
-  if (Predicate.isString(content)) return content;
-  return content
-    .flatMap((block) =>
-      block.type === "text" && Predicate.isString(block.text) ? [block.text] : [],
-    )
-    .join("\n");
+const textContentOf = (content: Message["content"]): string =>
+  Predicate.isString(content)
+    ? content
+    : contentBlocks(content)
+        .flatMap((block) =>
+          block["type"] === "text" && Predicate.isString(block["text"]) ? [block["text"]] : [],
+        )
+        .join("\n");
+
+const ERROR_KINDS: ReadonlyArray<readonly [kind: string, matches: (text: string) => boolean]> = [
+  ["file_not_found", (text) => text.includes("file not found")],
+  ["not_found_exact_text", (text) => text.includes("could not find the exact text")],
+  [
+    "multiple_occurrences",
+    (text) => text.includes("found multiple occurrences") || MULTIPLE_OCCURRENCES.test(text),
+  ],
+  ["no_changes_made", (text) => text.includes("no changes made")],
+  ["invalid_input", (text) => text.includes("input is invalid")],
+  ["overlapping_edits", (text) => text.includes("must not overlap")],
+  ["aborted", (text) => text.includes("aborted")],
+];
+
+const classifyErrorText = (text: string): string => {
+  const normalized = text.toLowerCase();
+  return ERROR_KINDS.find(([, matches]) => matches(normalized))?.[0] ?? "other";
 };
 
 const errorKindOf = (options: {
@@ -76,68 +66,40 @@ const errorKindOf = (options: {
   readonly text: string;
 }): string | null => {
   if (!options.matchedResult) return "missing_result";
-  if (!options.isError) return null;
-  const normalized = options.text.toLowerCase();
-  if (normalized.includes("file not found")) return "file_not_found";
-  if (normalized.includes("could not find the exact text")) return "not_found_exact_text";
-  if (normalized.includes("found multiple occurrences") || MULTIPLE_OCCURRENCES.test(normalized)) {
-    return "multiple_occurrences";
-  }
-  if (normalized.includes("no changes made")) return "no_changes_made";
-  if (normalized.includes("input is invalid")) return "invalid_input";
-  if (normalized.includes("must not overlap")) return "overlapping_edits";
-  if (normalized.includes("aborted")) return "aborted";
-  return "other";
+  return options.isError ? classifyErrorText(options.text) : null;
 };
 
-const editCallRecords = (options: {
-  readonly entry: Entry;
-  readonly host: HostShape;
-  readonly message: Message;
-  readonly sessionFile: string;
-}): ReadonlyArray<EditRecord> => {
-  const { entry, host, message, sessionFile } = options;
-  const content = message.content;
-  if (message.role !== "assistant" || content === undefined || Predicate.isString(content)) {
-    return [];
+const editRecordOf = (
+  origin: toolCallsTypes.CallOrigin,
+  block: toolCallsTypes.Block,
+  host: hostTypes.HostShape,
+): editToolScanTypes.EditRecord => ({
+  api: origin.api,
+  assistantEntryId: origin.assistantEntryId,
+  errorKind: null,
+  errorText: "",
+  matchedResult: false,
+  model: origin.model,
+  provider: origin.provider,
+  providerModel: origin.providerModel,
+  resultSummary: "",
+  sessionFile: origin.sessionFile,
+  success: null,
+  timestamp: origin.timestamp,
+  toolCallId: toolCallIdOf(block),
+  ...analyzeEditArguments({ args: block["arguments"], host }),
+});
+
+const trackEditCalls = (scan: FileScan, entry: Entry, message: Message): void => {
+  const origin = callOriginOf({ entry, message, sessionFile: scan.sessionFile });
+  for (const block of toolCallsOf({ message, name: "edit" })) {
+    const record = editRecordOf(origin, block, scan.host);
+    scan.records.push(record);
+    if (record.toolCallId !== "") scan.pending.set(record.toolCallId, record);
   }
-  const provider = message.provider ?? "[unknown]";
-  const model = message.model ?? "[unknown]";
-  return content.flatMap((block) => {
-    if (block.type !== "toolCall" || block.name !== "edit") return [];
-    return [
-      {
-        sessionFile,
-        assistantEntryId: entry.id,
-        toolCallId: Predicate.isString(block.id) ? block.id : "",
-        timestamp: entry.timestamp,
-        api: message.api ?? null,
-        provider,
-        model,
-        providerModel: `${provider}/${model}`,
-        success: null,
-        errorKind: null,
-        errorText: "",
-        resultSummary: "",
-        matchedResult: false,
-        ...analyzeEditArguments({ args: block.arguments, host }),
-      },
-    ];
-  });
 };
 
-const applyToolResult = (options: {
-  readonly message: Message;
-  readonly meta: EditScanMeta;
-  readonly pending: Map<string, EditRecord>;
-}): void => {
-  const { message, meta, pending } = options;
-  const toolCallId = message.toolCallId ?? "";
-  const record = pending.get(toolCallId);
-  if (record === undefined) {
-    meta.unmatchedToolResults += 1;
-    return;
-  }
+const resolveRecord = (record: editToolScanTypes.EditRecord, message: Message): void => {
   const text = textContentOf(message.content);
   const isError = message.isError === true;
   record.matchedResult = true;
@@ -145,82 +107,74 @@ const applyToolResult = (options: {
   record.resultSummary = text;
   record.errorText = isError ? text : "";
   record.errorKind = errorKindOf({ isError, matchedResult: true, text });
-  pending.delete(toolCallId);
+};
+
+const applyToolResult = (scan: FileScan, message: Message): void => {
+  const toolCallId = message.toolCallId ?? "";
+  const record = scan.pending.get(toolCallId);
+  if (record === undefined) {
+    scan.meta.unmatchedToolResults += 1;
+    return;
+  }
+  resolveRecord(record, message);
+  scan.pending.delete(toolCallId);
+};
+
+const isEditResult = (message: Message): boolean =>
+  message.role === "toolResult" && message.toolName === "edit";
+
+const applyEntry = (scan: FileScan, entry: Entry): void => {
+  const message = messageOf(entry);
+  if (message === undefined) return;
+  trackEditCalls(scan, entry, message);
+  if (isEditResult(message)) applyToolResult(scan, message);
+};
+
+const markUnresolved = (record: editToolScanTypes.EditRecord): void => {
+  record.matchedResult = false;
+  record.success = null;
+  record.errorKind = errorKindOf({ isError: false, matchedResult: false, text: "" });
 };
 
 const scanFile = (options: {
-  readonly host: HostShape;
-  readonly meta: EditScanMeta;
+  readonly host: hostTypes.HostShape;
+  readonly meta: editToolScanTypes.EditScanMeta;
   readonly sessionFile: string;
 }) =>
   Effect.gen(function* () {
-    const { host, meta, sessionFile } = options;
-    const records: Array<EditRecord> = [];
-    const pending = new Map<string, EditRecord>();
-    yield* host.lines(sessionFile).pipe(
-      Stream.filter((line) => line.trim() !== ""),
-      Stream.runForEach((line) =>
-        Effect.gen(function* () {
-          const parsed = yield* Effect.result(decodeEntry(line));
-          if (!Result.isSuccess(parsed)) {
-            meta.malformedLines += 1;
-            return;
-          }
-          const entry = parsed.success;
-          const message = entry.message;
-          if (entry.type !== "message" || message === undefined) return;
-          for (const record of editCallRecords({ entry, host, message, sessionFile })) {
-            records.push(record);
-            if (record.toolCallId !== "") pending.set(record.toolCallId, record);
-          }
-          if (message.role === "toolResult" && message.toolName === "edit") {
-            applyToolResult({ message, meta, pending });
-          }
-        }),
-      ),
-    );
-    for (const record of pending.values()) {
-      record.matchedResult = false;
-      record.success = null;
-      record.errorKind = errorKindOf({ isError: false, matchedResult: false, text: "" });
-    }
-    if (records.length > 0) meta.sessionFilesWithEditCalls += 1;
-    return records;
+    const scan: FileScan = { ...options, pending: new Map(), records: [] };
+    yield* forEachDecodedLine({
+      decode: decodeEntry,
+      file: options.sessionFile,
+      host: options.host,
+      onEntry: (entry) => applyEntry(scan, entry),
+      onMalformed: () => {
+        options.meta.malformedLines += 1;
+      },
+    });
+    for (const record of scan.pending.values()) markUnresolved(record);
+    if (scan.records.length > 0) options.meta.sessionFilesWithEditCalls += 1;
+    return scan.records;
   });
 
-const scanEditCalls = (options: {
-  readonly host: HostShape;
-  readonly sessionsDir: string;
-  readonly since: SinceFilter | null;
-}) =>
+const scanEditCalls = (options: scanOptionsTypes.SessionScanRequest) =>
   Effect.gen(function* () {
-    const { host, sessionsDir, since } = options;
-    const meta: EditScanMeta = {
-      sessionsDir,
-      sessionFilesScanned: 0,
-      sessionFilesIncluded: 0,
-      sessionFilesSkippedOlderThanSince: 0,
+    const { host } = options;
+    const meta: editToolScanTypes.EditScanMeta = {
+      ...sessionScanMeta(options),
       sessionFilesWithEditCalls: 0,
-      since,
-      malformedLines: 0,
       unmatchedToolResults: 0,
     };
-    const records: Array<EditRecord> = [];
-    const files = yield* jsonlFilesRecursive({ directory: sessionsDir, host });
-    yield* Effect.forEach(files, (sessionFile) =>
-      Effect.gen(function* () {
-        meta.sessionFilesScanned += 1;
-        const sessionMillis = sessionFileMillis({ file: sessionFile, host });
-        if (since !== null && sessionMillis !== null && sessionMillis < since.ms) {
-          meta.sessionFilesSkippedOlderThanSince += 1;
-          return;
-        }
-        meta.sessionFilesIncluded += 1;
-        records.push(...(yield* scanFile({ host, meta, sessionFile })));
-      }),
-    );
+    const records = yield* collectSessionRecords({
+      ...options,
+      counts: meta,
+      scanFile: ({ sessionFile }) => scanFile({ host, meta, sessionFile }),
+    });
     return { meta, records };
   });
 
-export type { EditRecord, EditScanMeta };
-export { scanEditCalls };
+const editToolScan = {
+  scanEditCalls,
+};
+
+export default editToolScan;

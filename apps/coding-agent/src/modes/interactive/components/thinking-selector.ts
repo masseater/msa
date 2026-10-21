@@ -1,65 +1,56 @@
-import type { ThinkingLevel } from "@msa/agent-core";
-import {
-  Container,
-  type Focusable,
-  fuzzyFilter,
-  getKeybindings,
-  Input,
-  type SelectItem,
-  SelectList,
-  type SelectListLayoutOptions,
-  Spacer,
-  Text,
-} from "@msa/tui";
+import type agentTypes from "@msa/agent-core/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { getSelectListTheme, theme } from "../theme/theme.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyDisplayText } from "./keybinding-hints.ts";
+import themeModule from "../theme/theme.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { keyDisplayText } = keybindingHints;
+const { getSelectListTheme, theme } = themeModule;
 
-const THINKING_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
-  minPrimaryColumnWidth: 12,
+const { Input, SelectList, Spacer, Text, fuzzyFilter, getKeybindings } = tui;
+
+const THINKING_SELECT_LIST_LAYOUT: tuiTypes.SelectListLayoutOptions = {
   maxPrimaryColumnWidth: 32,
+  minPrimaryColumnWidth: 12,
 };
 
-const LEVEL_DESCRIPTIONS: Record<ThinkingLevel, string> = {
-  off: "No reasoning",
-  minimal: "Very brief reasoning (~1k tokens)",
-  low: "Light reasoning (~2k tokens)",
-  medium: "Moderate reasoning (~8k tokens)",
+const LEVEL_DESCRIPTIONS: Record<agentTypes.ThinkingLevel, string> = {
   high: "Deep reasoning (~16k tokens)",
-  xhigh: "Extra-high reasoning (~32k tokens)",
+  low: "Light reasoning (~2k tokens)",
   max: "Maximum reasoning",
+  medium: "Moderate reasoning (~8k tokens)",
+  minimal: "Very brief reasoning (~1k tokens)",
+  off: "No reasoning",
+  xhigh: "Extra-high reasoning (~32k tokens)",
 };
 
-/**
- * Component that renders a thinking level selector with borders
- */
-export class ThinkingSelectorComponent extends Container implements Focusable {
-  private searchInput: Input;
-  private selectList: SelectList;
+export default class ThinkingSelectorComponent extends tui.Container implements tuiTypes.Focusable {
+  private searchInput: tuiTypes.Input;
+  private selectList: tuiTypes.SelectList;
   private selectListChildIndex: number;
-  private allItems: SelectItem[];
-  private onSelect: (level: ThinkingLevel) => void;
+  private allItems: tuiTypes.SelectItem[];
+  private onSelect: (level: agentTypes.ThinkingLevel) => void;
   private onCancel: () => void;
-  private onSelectAsDefault?: ((level: ThinkingLevel) => void) | undefined;
-  private _focused = false;
+  private onSelectAsDefault?: ((level: agentTypes.ThinkingLevel) => void) | undefined;
+  private focusedState = false;
 
   get focused(): boolean {
-    return this._focused;
+    return this.focusedState;
   }
 
   set focused(value: boolean) {
-    this._focused = value;
+    this.focusedState = value;
     this.searchInput.focused = value;
   }
 
   constructor(
-    currentLevel: ThinkingLevel,
-    availableLevels: ThinkingLevel[],
-    onSelect: (level: ThinkingLevel) => void,
+    currentLevel: agentTypes.ThinkingLevel,
+    availableLevels: agentTypes.ThinkingLevel[],
+    onSelect: (level: agentTypes.ThinkingLevel) => void,
     onCancel: () => void,
-    onSelectAsDefault?: (level: ThinkingLevel) => void,
-    defaultThinkingLevel?: ThinkingLevel,
+    onSelectAsDefault?: (level: agentTypes.ThinkingLevel) => void,
+    defaultThinkingLevel?: agentTypes.ThinkingLevel,
   ) {
     super();
     this.onSelect = onSelect;
@@ -67,15 +58,14 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
     this.onSelectAsDefault = onSelectAsDefault;
 
     this.allItems = availableLevels.map((level) => ({
-      value: level,
-      label: `${level === currentLevel ? "✓ " : "  "}${level}`,
       description:
         level === defaultThinkingLevel
           ? `${LEVEL_DESCRIPTIONS[level]} · default`
           : LEVEL_DESCRIPTIONS[level],
+      label: `${level === currentLevel ? "✓ " : "  "}${level}`,
+      value: level,
     }));
 
-    // Add top border
     this.addChild(new DynamicBorder());
     this.addChild(new Spacer(1));
     this.addChild(new Text("Thinking Level", 0, 0));
@@ -90,12 +80,17 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
     this.addChild(this.searchInput);
     this.addChild(new Spacer(1));
 
-    // Create selector
     this.selectList = this.buildSelectList(this.allItems, currentLevel);
     this.selectListChildIndex = this.children.length;
-    this.addChild(this.selectList);
-    this.addChild(new Spacer(1));
-    this.addChild(
+    ThinkingSelectorComponent.addListWithHints(this);
+
+    this.addChild(new DynamicBorder());
+  }
+
+  private static addListWithHints(self: ThinkingSelectorComponent): void {
+    self.addChild(self.selectList);
+    self.addChild(new Spacer(1));
+    self.addChild(
       new Text(
         theme.fg(
           "dim",
@@ -105,12 +100,12 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
         0,
       ),
     );
-
-    // Add bottom border
-    this.addChild(new DynamicBorder());
   }
 
-  private buildSelectList(items: SelectItem[], preselect?: ThinkingLevel): SelectList {
+  private buildSelectList(
+    items: tuiTypes.SelectItem[],
+    preselect?: agentTypes.ThinkingLevel,
+  ): tuiTypes.SelectList {
     const list = new SelectList(
       items,
       Math.max(1, items.length),
@@ -121,16 +116,19 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
     if (currentIndex !== -1) {
       list.setSelectedIndex(currentIndex);
     }
-    list.onSelect = (item) => this.onSelect(item.value as ThinkingLevel);
+    list.onSelect = (item) => this.onSelect(item.value as agentTypes.ThinkingLevel);
     list.onCancel = () => this.onCancel();
     return list;
   }
 
   private applyFilter(query: string): void {
-    const filtered = query
-      ? fuzzyFilter(this.allItems, query, (item) => `${item.value} ${item.description ?? ""}`)
-      : this.allItems;
-    const selectedValue = this.selectList.getSelectedItem()?.value as ThinkingLevel | undefined;
+    const filtered =
+      query === ""
+        ? this.allItems
+        : fuzzyFilter(this.allItems, query, (item) => `${item.value} ${item.description ?? ""}`);
+    const selectedValue = this.selectList.getSelectedItem()?.value as
+      | agentTypes.ThinkingLevel
+      | undefined;
     const newList = this.buildSelectList(filtered, selectedValue);
     this.children[this.selectListChildIndex] = newList;
     this.selectList = newList;
@@ -138,9 +136,9 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
 
   handleInput(keyData: string): void {
     const kb = getKeybindings();
-    if (kb.matches(keyData, "app.thinking.save") && this.onSelectAsDefault) {
+    if (kb.matches(keyData, "app.thinking.save") && this.onSelectAsDefault !== undefined) {
       const item = this.selectList.getSelectedItem();
-      if (item) this.onSelectAsDefault(item.value as ThinkingLevel);
+      if (item !== null) this.onSelectAsDefault(item.value as agentTypes.ThinkingLevel);
       return;
     }
 
@@ -158,7 +156,7 @@ export class ThinkingSelectorComponent extends Container implements Focusable {
     this.applyFilter(this.searchInput.getValue());
   }
 
-  getSelectList(): SelectList {
+  getSelectList(): tuiTypes.SelectList {
     return this.selectList;
   }
 }

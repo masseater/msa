@@ -1,27 +1,19 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { fromPromise, fromSync, type McpForeignError } from "../foreign.ts";
-import { DEFAULT_MAX_MESSAGE_BYTES } from "./transport.ts";
+import foreignModule from "../foreign.ts";
+import type foreignTypes from "../foreign.types.ts";
+import type sseTypes from "./sse.types.ts";
+import transport from "./transport.ts";
 
-export interface SseEvent {
-  event?: string;
-  data: string;
-  id?: string;
-}
-
-export interface ConsumeSseOptions {
-  maxEventBytes?: number;
-  onEvent(event: SseEvent): void;
-  onId?(id: string): void;
-  onRetry?(delayMs: number): void;
-}
+const { DEFAULT_MAX_MESSAGE_BYTES } = transport;
+const { fromPromise, fromSync } = foreignModule;
 
 const exceeded = (maxEventBytes: number): Error =>
   new Error(`MCP SSE event exceeds ${maxEventBytes} bytes`);
 
 class SseParser {
-  private options: ConsumeSseOptions;
+  private options: sseTypes.ConsumeSseOptions;
   private maxEventBytes: number;
   private buffered = "";
   private eventName: string | undefined;
@@ -29,7 +21,7 @@ class SseParser {
   private dataLines: string[] = [];
   private dataBytes = 0;
 
-  constructor(options: ConsumeSseOptions) {
+  constructor(options: sseTypes.ConsumeSseOptions) {
     this.options = options;
     this.maxEventBytes = options.maxEventBytes ?? DEFAULT_MAX_MESSAGE_BYTES;
   }
@@ -96,8 +88,8 @@ class SseParser {
 
 const consume = (
   stream: ReadableStream<Uint8Array>,
-  options: ConsumeSseOptions,
-): Effect.Effect<void, McpForeignError> =>
+  options: sseTypes.ConsumeSseOptions,
+): Effect.Effect<void, foreignTypes.McpForeignError> =>
   Effect.suspend(() => {
     const reader = stream.getReader();
     const decoder = new TextDecoder();
@@ -113,12 +105,18 @@ const consume = (
     }).pipe(Effect.ensuring(Effect.sync(() => reader.releaseLock())));
   });
 
-export const consumeSseStream: {
+const consumeSseStream: {
   (
-    options: ConsumeSseOptions,
-  ): (stream: ReadableStream<Uint8Array>) => Effect.Effect<void, McpForeignError>;
+    options: sseTypes.ConsumeSseOptions,
+  ): (stream: ReadableStream<Uint8Array>) => Effect.Effect<void, foreignTypes.McpForeignError>;
   (
     stream: ReadableStream<Uint8Array>,
-    options: ConsumeSseOptions,
-  ): Effect.Effect<void, McpForeignError>;
+    options: sseTypes.ConsumeSseOptions,
+  ): Effect.Effect<void, foreignTypes.McpForeignError>;
 } = dual(2, consume);
+
+const sse = {
+  consumeSseStream,
+};
+
+export default sse;

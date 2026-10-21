@@ -3,10 +3,14 @@ import { fileURLToPath } from "node:url";
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { McpClient, StdioTransport } from "../src/index.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+
+const { McpClient, StdioTransport } = mcp;
 
 const fixture = fileURLToPath(new URL("./fixtures/stdio-server.mjs", import.meta.url));
 const stubborn = fileURLToPath(new URL("./fixtures/stubborn-server.mjs", import.meta.url));
+const childProcessTimeout = 30_000;
 
 function isAlive(pid: number): boolean {
   try {
@@ -20,17 +24,17 @@ function isAlive(pid: number): boolean {
 const connectsAndCapturesStderr = Effect.gen(function* () {
   const stderr: string[] = [];
   const transport = new StdioTransport({
-    command: process.execPath,
     args: [fixture],
+    command: process.execPath,
     onStderr: (chunk) => stderr.push(chunk),
   });
   const client = new McpClient({ name: "stdio-test", version: "1.0.0" });
   yield* Effect.promise(() => client.connect(transport));
   expect(yield* Effect.promise(() => client.listTools())).toEqual([
-    { name: "echo", inputSchema: { type: "object" } },
+    { inputSchema: { type: "object" }, name: "echo" },
   ]);
   expect(yield* Effect.promise(() => client.callTool("echo", { text: "hello" }))).toEqual({
-    content: [{ type: "text", text: "hello" }],
+    content: [{ text: "hello", type: "text" }],
   });
   expect(transport.pid).toBeTypeOf("number");
   yield* Effect.sleep("10 millis");
@@ -40,7 +44,7 @@ const connectsAndCapturesStderr = Effect.gen(function* () {
   expect(client.connectionState).toBe("closed");
 });
 
-const waitForGrandchild = (transport: StdioTransport) =>
+const waitForGrandchild = (transport: mcpTypes.StdioTransport) =>
   Effect.gen(function* () {
     for (let i = 0; i < 100; i++) {
       const match = /grandchild (\d+)/u.exec(transport.stderr);
@@ -52,9 +56,9 @@ const waitForGrandchild = (transport: StdioTransport) =>
 
 const killsStubbornServer = Effect.gen(function* () {
   const transport = new StdioTransport({
-    command: process.execPath,
     args: [stubborn],
     closeTimeoutMs: 100,
+    command: process.execPath,
   });
   const client = new McpClient({ name: "stdio-test", version: "1.0.0" });
   yield* Effect.promise(() => client.connect(transport));
@@ -73,12 +77,15 @@ const killsStubbornServer = Effect.gen(function* () {
 });
 
 describe("StdioTransport", () => {
-  it("connects to a newline-delimited MCP server and captures stderr", () =>
-    Effect.runPromise(connectsAndCapturesStderr));
+  it(
+    "connects to a newline-delimited MCP server and captures stderr",
+    () => Effect.runPromise(connectsAndCapturesStderr),
+    childProcessTimeout,
+  );
 
   it.skipIf(process.platform === "win32")(
     "kills a server that ignores shutdown, including its children",
     () => Effect.runPromise(killsStubbornServer),
-    10_000,
+    childProcessTimeout,
   );
 });

@@ -1,31 +1,20 @@
-/**
- * Model status extension - shows model changes in the status bar.
- *
- * Demonstrates the `model_select` hook which fires when the model changes
- * via /model command, Ctrl+P cycling, or session restore.
- *
- * Usage: msa -e ./model-status.ts
- */
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Console, Effect } from "effect";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
-
-export default function (msa: ExtensionAPI) {
-  msa.on("model_select", async (event, ctx) => {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.on("model_select", (event, ctx) => {
     const { model, previousModel, source } = event;
 
-    // Format model identifiers
     const next = `${model.provider}/${model.id}`;
-    const prev = previousModel ? `${previousModel.provider}/${previousModel.id}` : "none";
+    const prev =
+      previousModel === undefined ? "none" : `${previousModel.provider}/${previousModel.id}`;
 
-    // Show notification on change
     if (source !== "restore") {
       ctx.ui.notify(`Model: ${next}`, "info");
     }
 
-    // Update status bar with current model
     ctx.ui.setStatus("model", `🤖 ${model.id}`);
 
-    // Log change details (visible in debug output)
-    console.log(`[model_select] ${prev} → ${next} (${source})`);
+    Effect.runSync(Console.log(`[model_select] ${prev} → ${next} (${source})`));
   });
 }

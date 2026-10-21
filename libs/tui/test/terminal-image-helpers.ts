@@ -1,6 +1,12 @@
-import { Image } from "../src/components/image.ts";
+import { dual } from "effect/Function";
 
-export const ENV_KEYS = [
+import image from "../src/components/image.ts";
+import env from "../src/env.ts";
+
+const { overrideEnv } = env;
+const { Image } = image;
+
+const ENV_KEYS = [
   "TERM",
   "TERM_PROGRAM",
   "TERMINAL_EMULATOR",
@@ -19,38 +25,46 @@ export const ENV_KEYS = [
   "MSA_TRUE_COLOR",
 ] as const;
 
-export function withEnv<T>(overrides: Record<string, string | undefined>, fn: () => T): T {
-  const saved: Record<string, string | undefined> = {};
-  for (const key of ENV_KEYS) {
-    saved[key] = process.env[key];
-    delete process.env[key];
-  }
+const withEnv: {
+  <T>(overrides: Record<string, string | undefined>, fn: () => T): T;
+  <T>(fn: () => T): (overrides: Record<string, string | undefined>) => T;
+} = dual(2, <T>(overrides: Record<string, string | undefined>, fn: () => T): T => {
+  const restore = overrideEnv({
+    ...Object.fromEntries(ENV_KEYS.map((key) => [key, undefined])),
+    ...overrides,
+  });
   try {
-    for (const [k, v] of Object.entries(overrides)) {
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
     return fn();
   } finally {
-    for (const key of ENV_KEYS) {
-      if (saved[key] === undefined) delete process.env[key];
-      else process.env[key] = saved[key];
-    }
+    restore();
   }
-}
+});
 
-export const jpeg = Buffer.from("jpeg").toString("base64");
+const jpeg = Buffer.from("jpeg").toString("base64");
 
-// Minimal PNG header (signature + IHDR) for a 40x10 image. Enough for getPngDimensions.
-export const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000280000000a", "hex").toString(
+const png = Buffer.from("89504e470d0a1a0a0000000d49484452000000280000000a", "hex").toString(
   "base64",
 );
 
-export const render = (data: string, mimeType: string) =>
+const render: {
+  (data: string, mimeType: string): string[];
+  (mimeType: string): (data: string) => string[];
+} = dual(2, (data: string, mimeType: string): string[] =>
   new Image(
     data,
     mimeType,
     { fallbackColor: (value) => value },
     {},
-    { widthPx: 20, heightPx: 20 },
-  ).render(20);
+    { heightPx: 20, widthPx: 20 },
+  ).render(20),
+);
+
+const terminalImageHelpers = {
+  ENV_KEYS,
+  jpeg,
+  png,
+  render,
+  withEnv,
+};
+
+export default terminalImageHelpers;

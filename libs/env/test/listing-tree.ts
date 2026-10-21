@@ -1,25 +1,36 @@
-import { mkdirSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { Effect } from "effect";
 
-export const makeTree = (home: string): void => {
-  const tree = join(home, "tree");
-  for (const file of ["a/b.txt", "a/c/d.txt", ".hidden", "out/x.js", "skip/y.txt", ".git/HEAD"]) {
-    mkdirSync(join(tree, file, ".."), { recursive: true });
-    writeFileSync(join(tree, file), "");
-  }
-  mkdirSync(join(tree, "empty"));
-  writeFileSync(join(tree, ".gitignore"), "out/\n");
-};
+import platform from "./platform.ts";
 
-export const expectedListing = {
+const { localPath, makeDirectory, writeText } = platform;
+
+const makeTree = (home: string): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const tree = localPath.join(home, "tree");
+    for (const file of ["a/b.txt", "a/c/d.txt", ".hidden", "out/x.js", "skip/y.txt", ".git/HEAD"]) {
+      yield* makeDirectory(localPath.dirname(localPath.join(tree, file)));
+      yield* writeText({ path: localPath.join(tree, file), text: "" });
+    }
+    yield* makeDirectory(localPath.join(tree, "empty"));
+    yield* writeText({ path: localPath.join(tree, ".gitignore"), text: "out/\n" });
+  });
+
+const expectedListing = {
   entries: [
-    { path: ".gitignore", kind: "file" },
-    { path: ".hidden", kind: "file" },
-    { path: "a", kind: "directory" },
-    { path: "a/b.txt", kind: "file" },
-    { path: "a/c", kind: "directory" },
-    { path: "a/c/d.txt", kind: "file" },
-    { path: "empty", kind: "directory" },
+    { kind: "file", path: ".gitignore" },
+    { kind: "file", path: ".hidden" },
+    { kind: "directory", path: "a" },
+    { kind: "file", path: "a/b.txt" },
+    { kind: "directory", path: "a/c" },
+    { kind: "file", path: "a/c/d.txt" },
+    { kind: "directory", path: "empty" },
   ],
   truncated: false,
 };
+
+const listingTree = {
+  expectedListing,
+  makeTree,
+};
+
+export default listingTree;

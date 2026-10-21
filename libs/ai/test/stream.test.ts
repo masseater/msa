@@ -1,685 +1,131 @@
-import { type ChildProcess, execSync, spawn } from "child_process";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { Effect } from "effect";
+import { describe, inject, it } from "vite-plus/test";
 
-import { Type } from "typebox";
-import { afterAll, beforeAll, describe, expect, it } from "vite-plus/test";
+import type typesModule from "../src/types.types.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
+import streamScenarios from "./stream-scenarios.ts";
 
-import { complete, getModel, stream } from "../src/compat.ts";
-import type {
-  Api,
-  Context,
-  ImageContent,
-  Model,
-  StreamOptions,
-  Tool,
-  ToolResultMessage,
-} from "../src/types.ts";
+const { hasEnv, hasValue } = env;
+const { chooseModel, usesApi } = modelChoice;
+const {
+  basicTextGeneration,
+  handleImage,
+  handleStreaming,
+  handleThinking,
+  handleToolCall,
+  multiTurn,
+} = streamScenarios;
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
-import { StringEnum } from "../src/utils/typebox-helpers.ts";
-import { resolveApiKey } from "./oauth.ts";
+interface Target {
+  readonly available: boolean;
+  readonly basic?: StreamOptionsWithExtras;
+  readonly label: string;
+  readonly model: typesModule.Model<typesModule.Api>;
+  readonly options: StreamOptionsWithExtras;
+  readonly thinking?: StreamOptionsWithExtras;
+}
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-// Resolve OAuth tokens at module level (async, runs before tests)
-const openaiCodexToken = await resolveApiKey("openai-codex");
+const reasoningVision = (model: typesModule.Model<typesModule.Api>) =>
+  model.reasoning && model.input.includes("image");
 
-// Calculator tool definition (same as examples)
-// Note: Using StringEnum helper because Google's API doesn't support anyOf/const patterns
-// that Type.Enum generates. Google requires { type: "string", enum: [...] } format.
-const calculatorSchema = Type.Object({
-  a: Type.Number({ description: "First number" }),
-  b: Type.Number({ description: "Second number" }),
-  operation: StringEnum(["add", "subtract", "multiply", "divide"], {
-    description: "The operation to perform. One of 'add', 'subtract', 'multiply', 'divide'.",
-  }),
-});
-
-const calculatorTool: Tool<typeof calculatorSchema> = {
-  name: "math_operation",
-  description: "Perform basic arithmetic operations",
-  parameters: calculatorSchema,
+const directCompletions = (): typesModule.Model<"openai-completions"> => {
+  const { compat: _compat, ...baseModel } = chooseModel("openai", "direct OpenAI");
+  return { ...baseModel, api: "openai-completions" };
 };
 
-async function basicTextGeneration<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
-  const context: Context = {
-    systemPrompt: "You are a helpful assistant. Be concise.",
-    messages: [
-      {
-        role: "user",
-        content: "Reply with exactly: 'Hello test successful'",
-        timestamp: Date.now(),
-      },
-    ],
-  };
-  const response = await complete(model, context, options);
+const codexModel = chooseModel(
+  "openai-codex",
+  "xhigh vision Codex",
+  (model) => reasoningVision(model) && typeof model.thinkingLevelMap?.xhigh === "string",
+);
 
-  expect(response.role).toBe("assistant");
-  expect(response.content).toBeTruthy();
-  expect(response.usage.input + response.usage.cacheRead).toBeGreaterThan(0);
-  expect(response.usage.output).toBeGreaterThan(0);
-  expect(response.errorMessage).toBeFalsy();
-  expect(response.content.map((b) => (b.type === "text" ? b.text : "")).join("")).toContain(
-    "Hello test successful",
+const targets: Target[] = [
+  {
+    available: hasEnv("OPENAI_API_KEY"),
+    label: "OpenAI Completions",
+    model: directCompletions(),
+    options: {},
+  },
+  {
+    available: hasEnv("OPENAI_API_KEY"),
+    label: "OpenAI Responses",
+    model: chooseModel(
+      "openai",
+      "reasoning vision Responses",
+      (model) => usesApi("openai-responses")(model) && reasoningVision(model),
+    ),
+    options: {},
+    thinking: { reasoningEffort: "high" },
+  },
+  {
+    available: hasEnv("ANTHROPIC_API_KEY"),
+    basic: { thinkingEnabled: true },
+    label: "Anthropic",
+    model: chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages")),
+    options: {},
+  },
+  {
+    available: hasEnv("OPENROUTER_API_KEY"),
+    label: "OpenRouter",
+    model: chooseModel(
+      "openrouter",
+      "reasoning vision completions",
+      (model) => usesApi("openai-completions")(model) && reasoningVision(model),
+    ),
+    options: {},
+    thinking: { reasoningEffort: "medium" },
+  },
+  {
+    available: hasValue(openaiCodexToken),
+    label: "OpenAI Codex",
+    model: codexModel,
+    options: { apiKey: openaiCodexToken },
+    thinking: { reasoningEffort: "xhigh" },
+  },
+  {
+    available: hasValue(openaiCodexToken),
+    label: "OpenAI Codex via WebSocket",
+    model: codexModel,
+    options: { apiKey: openaiCodexToken, transport: "websocket" },
+    thinking: { reasoningEffort: "xhigh" },
+  },
+];
+
+describe.each(targets)("Generate E2E Tests: $label", (target) => {
+  const run =
+    (
+      scenario: (
+        model: typesModule.Model<typesModule.Api>,
+        options: StreamOptionsWithExtras,
+      ) => Effect.Effect<void>,
+      extra = {},
+    ) =>
+    () =>
+      Effect.runPromise(scenario(target.model, { ...target.options, ...extra }));
+  const skipped = !target.available;
+  const thinking = target.thinking;
+
+  it.skipIf(skipped)(
+    "should complete basic text generation",
+    { retry: 3 },
+    run(basicTextGeneration, target.basic),
   );
-
-  context.messages.push(response);
-  context.messages.push({
-    role: "user",
-    content: "Now say 'Goodbye test successful'",
-    timestamp: Date.now(),
-  });
-
-  const secondResponse = await complete(model, context, options);
-
-  expect(secondResponse.role).toBe("assistant");
-  expect(secondResponse.content).toBeTruthy();
-  expect(secondResponse.usage.input + secondResponse.usage.cacheRead).toBeGreaterThan(0);
-  expect(secondResponse.usage.output).toBeGreaterThan(0);
-  expect(secondResponse.errorMessage).toBeFalsy();
-  expect(secondResponse.content.map((b) => (b.type === "text" ? b.text : "")).join("")).toContain(
-    "Goodbye test successful",
+  it.skipIf(skipped)("should handle tool calling", { retry: 3 }, run(handleToolCall));
+  it.skipIf(skipped)("should handle streaming", { retry: 3 }, run(handleStreaming));
+  it.skipIf(skipped || thinking === undefined)(
+    "should handle thinking",
+    { retry: 2 },
+    run(handleThinking, thinking),
   );
-}
-
-async function handleToolCall<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
-  const context: Context = {
-    systemPrompt: "You are a helpful assistant that uses tools when asked.",
-    messages: [
-      {
-        role: "user",
-        content: "Calculate 15 + 27 using the math_operation tool.",
-        timestamp: Date.now(),
-      },
-    ],
-    tools: [calculatorTool],
-  };
-
-  const s = await stream(model, context, options);
-  let hasToolStart = false;
-  let hasToolDelta = false;
-  let hasToolEnd = false;
-  let accumulatedToolArgs = "";
-  let index = 0;
-  for await (const event of s) {
-    if (event.type === "toolcall_start") {
-      hasToolStart = true;
-      const toolCall = event.partial.content[event.contentIndex];
-      index = event.contentIndex;
-      expect(toolCall?.type).toBe("toolCall");
-      if (toolCall?.type === "toolCall") {
-        expect(toolCall.name).toBe("math_operation");
-        expect(toolCall.id).toBeTruthy();
-      }
-    }
-    if (event.type === "toolcall_delta") {
-      hasToolDelta = true;
-      const toolCall = event.partial.content[event.contentIndex];
-      expect(event.contentIndex).toBe(index);
-      expect(toolCall?.type).toBe("toolCall");
-      if (toolCall?.type === "toolCall") {
-        expect(toolCall.name).toBe("math_operation");
-        accumulatedToolArgs += event.delta;
-        // Check that we have a parsed arguments object during streaming
-        expect(toolCall.arguments).toBeDefined();
-        expect(typeof toolCall.arguments).toBe("object");
-        // The arguments should be partially populated as we stream
-        // At minimum it should be an empty object, never undefined
-        expect(toolCall.arguments).not.toBeNull();
-      }
-    }
-    if (event.type === "toolcall_end") {
-      hasToolEnd = true;
-      const toolCall = event.partial.content[event.contentIndex];
-      expect(event.contentIndex).toBe(index);
-      expect(toolCall?.type).toBe("toolCall");
-      if (toolCall?.type === "toolCall") {
-        expect(toolCall.name).toBe("math_operation");
-        JSON.parse(accumulatedToolArgs);
-        expect(toolCall.arguments).not.toBeUndefined();
-        expect((toolCall.arguments as any).a).toBe(15);
-        expect((toolCall.arguments as any).b).toBe(27);
-        expect((toolCall.arguments as any).operation).oneOf([
-          "add",
-          "subtract",
-          "multiply",
-          "divide",
-        ]);
-      }
-    }
-  }
-
-  expect(hasToolStart).toBe(true);
-  expect(hasToolDelta).toBe(true);
-  expect(hasToolEnd).toBe(true);
-
-  const response = await s.result();
-  expect(response.stopReason).toBe("toolUse");
-  expect(response.content.some((b) => b.type === "toolCall")).toBeTruthy();
-  const toolCall = response.content.find((b) => b.type === "toolCall");
-  if (toolCall && toolCall.type === "toolCall") {
-    expect(toolCall.name).toBe("math_operation");
-    expect(toolCall.id).toBeTruthy();
-  } else {
-    throw new Error("No tool call found in response");
-  }
-}
-
-async function handleStreaming<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
-  let textStarted = false;
-  let textChunks = "";
-  let textCompleted = false;
-
-  const context: Context = {
-    messages: [{ role: "user", content: "Count from 1 to 3", timestamp: Date.now() }],
-    systemPrompt: "You are a helpful assistant.",
-  };
-
-  const s = stream(model, context, options);
-
-  for await (const event of s) {
-    if (event.type === "text_start") {
-      textStarted = true;
-    } else if (event.type === "text_delta") {
-      textChunks += event.delta;
-    } else if (event.type === "text_end") {
-      textCompleted = true;
-    }
-  }
-
-  const response = await s.result();
-
-  expect(textStarted).toBe(true);
-  expect(textChunks.length).toBeGreaterThan(0);
-  expect(textCompleted).toBe(true);
-  expect(response.content.some((b) => b.type === "text")).toBeTruthy();
-}
-
-async function handleThinking<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
-  let thinkingStarted = false;
-  let thinkingChunks = "";
-  let thinkingCompleted = false;
-
-  const context: Context = {
-    messages: [
-      {
-        role: "user",
-        content: `Think long and hard about ${(Math.random() * 255) | 0} + 27. Think step by step. Then output the result.`,
-        timestamp: Date.now(),
-      },
-    ],
-    systemPrompt: "You are a helpful assistant.",
-  };
-
-  const s = stream(model, context, options);
-
-  for await (const event of s) {
-    if (event.type === "thinking_start") {
-      thinkingStarted = true;
-    } else if (event.type === "thinking_delta") {
-      thinkingChunks += event.delta;
-    } else if (event.type === "thinking_end") {
-      thinkingCompleted = true;
-    }
-  }
-
-  const response = await s.result();
-
-  expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
-  expect(thinkingStarted).toBe(true);
-  expect(thinkingChunks.length).toBeGreaterThan(0);
-  expect(thinkingCompleted).toBe(true);
-  expect(response.content.some((b) => b.type === "thinking")).toBeTruthy();
-}
-
-async function handleImage<TApi extends Api>(
-  model: Model<TApi>,
-  options?: StreamOptionsWithExtras,
-) {
-  // Check if the model supports images
-  if (!model.input.includes("image")) {
-    console.log(`Skipping image test - model ${model.id} doesn't support images`);
-    return;
-  }
-
-  // Read the test image
-  const imagePath = join(__dirname, "data", "red-circle.png");
-  const imageBuffer = readFileSync(imagePath);
-  const base64Image = imageBuffer.toString("base64");
-
-  const imageContent: ImageContent = {
-    type: "image",
-    data: base64Image,
-    mimeType: "image/png",
-  };
-
-  const context: Context = {
-    messages: [
-      {
-        role: "user",
-        content: [
-          {
-            type: "text",
-            text: "What do you see in this image? Please describe the shape (circle, rectangle, square, triangle, ...) and color (red, blue, green, ...). You MUST reply in English.",
-          },
-          imageContent,
-        ],
-        timestamp: Date.now(),
-      },
-    ],
-    systemPrompt: "You are a helpful assistant.",
-  };
-
-  const response = await complete(model, context, options);
-
-  // Check the response mentions red and circle
-  expect(response.content.length > 0).toBeTruthy();
-  const textContent = response.content.find((b) => b.type === "text");
-  if (textContent && textContent.type === "text") {
-    const lowerContent = textContent.text.toLowerCase();
-    expect(lowerContent).toContain("red");
-    expect(lowerContent).toContain("circle");
-  }
-}
-
-async function multiTurn<TApi extends Api>(model: Model<TApi>, options?: StreamOptionsWithExtras) {
-  const context: Context = {
-    systemPrompt: "You are a helpful assistant that can use tools to answer questions.",
-    messages: [
-      {
-        role: "user",
-        content:
-          "Think about this briefly, then calculate 42 * 17 and 453 + 434 using the math_operation tool.",
-        timestamp: Date.now(),
-      },
-    ],
-    tools: [calculatorTool],
-  };
-
-  // Collect all text content from all assistant responses
-  let allTextContent = "";
-  let hasSeenThinking = false;
-  let hasSeenToolCalls = false;
-  // Prevent infinite loops
-  const maxTurns = 5;
-
-  for (let turn = 0; turn < maxTurns; turn++) {
-    const response = await complete(model, context, options);
-
-    // Add the assistant response to context
-    context.messages.push(response);
-
-    // Process content blocks
-    const results: ToolResultMessage[] = [];
-    for (const block of response.content) {
-      if (block.type === "text") {
-        allTextContent += block.text;
-      } else if (block.type === "thinking") {
-        hasSeenThinking = true;
-      } else if (block.type === "toolCall") {
-        hasSeenToolCalls = true;
-
-        // Process the tool call
-        expect(block.name).toBe("math_operation");
-        expect(block.id).toBeTruthy();
-        expect(block.arguments).toBeTruthy();
-
-        const { a, b, operation } = block.arguments;
-        if (typeof a !== "number" || typeof b !== "number")
-          throw new Error("Invalid math arguments");
-        let result: number;
-        switch (operation) {
-          case "add":
-            result = a + b;
-            break;
-          case "multiply":
-            result = a * b;
-            break;
-          default:
-            result = 0;
-        }
-
-        // Add tool result to context
-        results.push({
-          role: "toolResult",
-          toolCallId: block.id,
-          toolName: block.name,
-          content: [{ type: "text", text: `${result}` }],
-          isError: false,
-          timestamp: Date.now(),
-        });
-      }
-    }
-    context.messages.push(...results);
-
-    // If we got a stop response with text content, we're likely done
-    expect(response.stopReason, `Error: ${response.errorMessage}`).not.toBe("error");
-    if (response.stopReason === "stop") {
-      break;
-    }
-  }
-
-  // Verify we got either thinking content or tool calls (or both)
-  expect(hasSeenThinking || hasSeenToolCalls).toBe(true);
-
-  // The accumulated text should reference both calculations
-  expect(allTextContent).toBeTruthy();
-  expect(allTextContent.includes("714")).toBe(true);
-  expect(allTextContent.includes("887")).toBe(true);
-}
-
-describe("Generate E2E Tests", () => {
-  describe.skipIf(!process.env["OPENAI_API_KEY"])(
-    "OpenAI Completions Provider (gpt-4o-mini)",
-    () => {
-      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini");
-      void _compat;
-      const llm: Model<"openai-completions"> = {
-        ...baseModel,
-        api: "openai-completions",
-      };
-
-      it("should complete basic text generation", { retry: 3 }, async () => {
-        await basicTextGeneration(llm);
-      });
-
-      it("should handle tool calling", { retry: 3 }, async () => {
-        await handleToolCall(llm);
-      });
-
-      it("should handle streaming", { retry: 3 }, async () => {
-        await handleStreaming(llm);
-      });
-
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImage(llm);
-      });
-    },
+  it.skipIf(skipped || thinking === undefined)(
+    "should handle multi-turn with thinking and tools",
+    { retry: 3 },
+    run(multiTurn, thinking),
   );
-
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Responses Provider (gpt-5.4)", () => {
-    const llm = getModel("openai", "gpt-5.4");
-
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm);
-    });
-
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm);
-    });
-
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm);
-    });
-
-    it("should handle thinking", { retry: 2 }, async () => {
-      await handleThinking(llm, { reasoningEffort: "high" });
-    });
-
-    it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-      await multiTurn(llm, { reasoningEffort: "high" });
-    });
-
-    it("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm);
-    });
-  });
-
-  describe.skipIf(!process.env["ANTHROPIC_API_KEY"])(
-    "Anthropic Provider (claude-haiku-4-5)",
-    () => {
-      const model = getModel("anthropic-api", "claude-haiku-4-5");
-
-      it("should complete basic text generation", { retry: 3 }, async () => {
-        await basicTextGeneration(model, { thinkingEnabled: true });
-      });
-
-      it("should handle tool calling", { retry: 3 }, async () => {
-        await handleToolCall(model);
-      });
-
-      it("should handle streaming", { retry: 3 }, async () => {
-        await handleStreaming(model);
-      });
-
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImage(model);
-      });
-    },
-  );
-
-  describe.skipIf(!process.env["OPENROUTER_API_KEY"])(
-    "OpenRouter Provider (glm-4.5v via OpenAI Completions)",
-    () => {
-      const llm = getModel("openrouter", "z-ai/glm-4.5v");
-
-      it("should complete basic text generation", { retry: 3 }, async () => {
-        await basicTextGeneration(llm);
-      });
-
-      it("should handle tool calling", { retry: 3 }, async () => {
-        await handleToolCall(llm);
-      });
-
-      it("should handle streaming", { retry: 3 }, async () => {
-        await handleStreaming(llm);
-      });
-
-      it("should handle thinking mode", { retry: 3 }, async () => {
-        await handleThinking(llm, { reasoningEffort: "medium" });
-      });
-
-      it("should handle multi-turn with thinking and tools", { retry: 2 }, async () => {
-        await multiTurn(llm, { reasoningEffort: "medium" });
-      });
-
-      it("should handle image input", { retry: 3 }, async () => {
-        await handleImage(llm);
-      });
-    },
-  );
-
-  // =========================================================================
-  // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
-  // Tokens are resolved at module level (see openaiCodexToken above)
-  // =========================================================================
-
-  describe("OpenAI Codex Provider (gpt-5.5)", () => {
-    const llm = getModel("openai-codex", "gpt-5.5");
-
-    it.skipIf(!openaiCodexToken)(
-      "should complete basic text generation",
-      { retry: 3 },
-      async () => {
-        await basicTextGeneration(llm, { apiKey: openaiCodexToken });
-      },
-    );
-
-    it.skipIf(!openaiCodexToken)("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm, { apiKey: openaiCodexToken });
-    });
-
-    it.skipIf(!openaiCodexToken)("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm, { apiKey: openaiCodexToken });
-    });
-
-    it.skipIf(!openaiCodexToken)(
-      "should handle thinking with reasoningEffort xhigh",
-      { retry: 3 },
-      async () => {
-        await handleThinking(llm, { apiKey: openaiCodexToken, reasoningEffort: "xhigh" });
-      },
-    );
-
-    it.skipIf(!openaiCodexToken)(
-      "should handle multi-turn with thinking and tools",
-      { retry: 3 },
-      async () => {
-        await multiTurn(llm, { apiKey: openaiCodexToken, reasoningEffort: "xhigh" });
-      },
-    );
-
-    it.skipIf(!openaiCodexToken)("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm, { apiKey: openaiCodexToken });
-    });
-  });
-
-  describe("OpenAI Codex Provider (gpt-5.5 via WebSocket)", () => {
-    const llm = getModel("openai-codex", "gpt-5.5");
-    const wsOptions = { apiKey: openaiCodexToken, transport: "websocket" as const };
-
-    it.skipIf(!openaiCodexToken)(
-      "should complete basic text generation",
-      { retry: 3 },
-      async () => {
-        await basicTextGeneration(llm, wsOptions);
-      },
-    );
-
-    it.skipIf(!openaiCodexToken)("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm, wsOptions);
-    });
-
-    it.skipIf(!openaiCodexToken)("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm, wsOptions);
-    });
-
-    it.skipIf(!openaiCodexToken)(
-      "should handle thinking with reasoningEffort xhigh",
-      { retry: 3 },
-      async () => {
-        await handleThinking(llm, { ...wsOptions, reasoningEffort: "xhigh" });
-      },
-    );
-
-    it.skipIf(!openaiCodexToken)(
-      "should handle multi-turn with thinking and tools",
-      { retry: 3 },
-      async () => {
-        await multiTurn(llm, { ...wsOptions, reasoningEffort: "xhigh" });
-      },
-    );
-
-    it.skipIf(!openaiCodexToken)("should handle image input", { retry: 3 }, async () => {
-      await handleImage(llm, wsOptions);
-    });
-  });
-
-  // Check if ollama is installed and local LLM tests are enabled
-  let ollamaInstalled = false;
-  if (!process.env["MSA_NO_LOCAL_LLM"]) {
-    try {
-      execSync("which ollama", { stdio: "ignore" });
-      ollamaInstalled = true;
-    } catch {
-      ollamaInstalled = false;
-    }
-  }
-
-  describe.skipIf(!ollamaInstalled)("Ollama Provider (gpt-oss-20b via OpenAI Completions)", () => {
-    let llm: Model<"openai-completions">;
-    let ollamaProcess: ChildProcess | null = null;
-
-    beforeAll(async () => {
-      // Check if model is available, if not pull it
-      try {
-        execSync("ollama list | grep -q 'gpt-oss:20b'", { stdio: "ignore" });
-      } catch {
-        console.log("Pulling gpt-oss:20b model for Ollama tests...");
-        try {
-          execSync("ollama pull gpt-oss:20b", { stdio: "inherit" });
-        } catch {
-          console.warn("Failed to pull gpt-oss:20b model, tests will be skipped");
-          return;
-        }
-      }
-
-      // Start ollama server
-      ollamaProcess = spawn("ollama", ["serve"], {
-        detached: false,
-        stdio: "ignore",
-      });
-
-      // Wait for server to be ready
-      await new Promise<void>((resolve) => {
-        const checkServer = async () => {
-          try {
-            const response = await fetch("http://localhost:11434/api/tags");
-            if (response.ok) {
-              resolve();
-            } else {
-              setTimeout(checkServer, 500);
-            }
-          } catch {
-            setTimeout(checkServer, 500);
-          }
-        };
-        // Initial delay
-        setTimeout(checkServer, 1000);
-      });
-
-      llm = {
-        id: "gpt-oss:20b",
-        api: "openai-completions",
-        provider: "ollama",
-        baseUrl: "http://localhost:11434/v1",
-        reasoning: true,
-        input: ["text"],
-        contextWindow: 128000,
-        maxTokens: 16000,
-        cost: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-        },
-        name: "Ollama GPT-OSS 20B",
-      };
-      // 30 second timeout for setup
-    }, 30000);
-
-    afterAll(() => {
-      // Kill ollama server
-      if (ollamaProcess) {
-        ollamaProcess.kill("SIGTERM");
-        ollamaProcess = null;
-      }
-    });
-
-    it("should complete basic text generation", { retry: 3 }, async () => {
-      await basicTextGeneration(llm, { apiKey: "test" });
-    });
-
-    it("should handle tool calling", { retry: 3 }, async () => {
-      await handleToolCall(llm, { apiKey: "test" });
-    });
-
-    it("should handle streaming", { retry: 3 }, async () => {
-      await handleStreaming(llm, { apiKey: "test" });
-    });
-
-    it("should handle thinking mode", { retry: 3 }, async () => {
-      await handleThinking(llm, { apiKey: "test", reasoningEffort: "medium" });
-    });
-
-    it("should handle multi-turn with thinking and tools", { retry: 3 }, async () => {
-      await multiTurn(llm, { apiKey: "test", reasoningEffort: "medium" });
-    });
-  });
+  it.skipIf(skipped)("should handle image input", { retry: 3 }, run(handleImage));
 });

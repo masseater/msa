@@ -1,34 +1,40 @@
 import { defineConfig } from "vite-plus";
 
-export const evalConfig = defineConfig({
+const evalConfig = defineConfig({
   test: {
-    watch: false,
+    fileParallelism: false,
+    maxWorkers: 1,
     passWithNoTests: false,
     pool: "forks",
-    maxWorkers: 1,
-    fileParallelism: false,
     projects: [
       {
         extends: true,
         test: {
-          name: "docs",
+          hookTimeout: 300_000,
           include: ["evals/**/*.docs.eval.ts"],
+          name: "docs",
           sequence: { concurrent: false },
           testTimeout: 300_000,
-          hookTimeout: 300_000,
         },
       },
       {
         extends: true,
         test: {
-          name: "host",
-          include: ["evals/**/*.eval.ts"],
           exclude: ["evals/**/*.docs.eval.ts"],
+          hookTimeout: 300_000,
+          include: ["evals/**/*.eval.ts"],
+          name: "host",
           sequence: { concurrent: false },
           testTimeout: 300_000,
-          hookTimeout: 300_000,
         },
       },
     ],
+    watch: false,
   },
 });
+
+const vitestEvals = {
+  evalConfig,
+};
+
+export default vitestEvals;

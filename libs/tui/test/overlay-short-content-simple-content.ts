@@ -1,6 +1,6 @@
-import type { Component } from "../src/tui.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
 
-export class SimpleContent implements Component {
+class SimpleContent implements tuiComponentTypes.Component {
   private lines: string[];
 
   constructor(lines: string[]) {
@@ -12,3 +12,5 @@ export class SimpleContent implements Component {
   }
   invalidate() {}
 }
+
+export default SimpleContent;

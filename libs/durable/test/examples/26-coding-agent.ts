@@ -1,93 +1,101 @@
-// A small coding agent: the built-in coding tools, a prompt that knows the working directory, settings backed by the
-// app's settings file, and an environment that follows the conversation's directory.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/26-coding-agent.ts
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import contextModule from "@msa/chord/context";
+import type durableTypes from "@msa/durable/index.types";
+import { Console, Effect } from "effect";
 
-import type { ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import durableKit from "../durable-kit.ts";
+import support from "../support.ts";
 
-import { NodeExecutionEnv } from "../../src/env/node.ts";
-import {
-  createRegistry,
-  defineExtension,
-  Harness,
-  type HarnessSettings,
-  MemoryStorage,
-  section,
-  ToolResultEntry,
-} from "../../src/index.ts";
-import { CodingTools } from "../../src/tools/index.ts";
+const { createModels, fauxAssistantMessage, fauxProvider, fauxToolCall } = ai;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { durable, envNode: node, harness: harnessModule, memory, tools: toolsModule } = durableKit;
+
+const { ToolResultEntry, defineExtension, section } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { CodingTools } = toolsModule;
+const { NodeExecutionEnv } = node;
+const { MemoryStorage } = memory;
+
+const { awaited, joinPath, makeDirectory, makeTempDir, removeDir } = support;
 
 const context = BACKGROUND_CONTEXT;
-const workspace = await mkdtemp(join(tmpdir(), "msa-durable-agent-"));
-await mkdir(join(workspace, "app"));
 
-// The app's own prompt, next to the coding tools.
-const Coding = defineExtension({
-  name: "coding",
-  sections: [
-    section("preamble", () => "You are a coding agent. Use the tools to inspect the project.", {
-      tag: false,
+const mainStep1 = Effect.gen(function* () {
+  const workspace = yield* makeTempDir("msa-durable-agent-");
+  yield* makeDirectory(joinPath(workspace, "app"));
+
+  const Coding = defineExtension({
+    name: "coding",
+    sections: [
+      section("preamble", () => "You are a coding agent. Use the tools to inspect the project.", {
+        tag: false,
+      }),
+      section("cwd", (input) => input.env?.cwd),
+    ],
+  });
+  const registry = createRegistry();
+  registry.install(CodingTools);
+  registry.install(Coding);
+
+  const userSettings = { maxRetries: 3, parallelTools: true };
+  const settings: durableTypes.HarnessSettings = {
+    get retry() {
+      return { maxRetries: userSettings.maxRetries };
+    },
+    get toolExecution() {
+      return userSettings.parallelTools ? "parallel" : "sequential";
+    },
+  };
+
+  const env = ({ cwd = workspace }: { readonly cwd?: string }) => new NodeExecutionEnv({ cwd });
+
+  const faux = fauxProvider();
+  const models = createModels();
+  models.setProvider(faux.provider);
+  const pwd = () =>
+    fauxAssistantMessage(fauxToolCall("bash", { command: "pwd" }), { stopReason: "toolUse" });
+  faux.setResponses([pwd(), fauxAssistantMessage("Done."), pwd(), fauxAssistantMessage("Done.")]);
+
+  const harness = yield* awaited(
+    Harness.open(new MemoryStorage(), { env, models, registry, settings }, context),
+  );
+  const root = yield* awaited(
+    harness.root(context, {
+      agent: { cwd: workspace, model: { modelId: "faux-1", provider: "faux" } },
     }),
-    section("cwd", (input) => input.env?.cwd),
-  ],
-});
-const registry = createRegistry();
-registry.install(CodingTools);
-registry.install(Coding);
-
-// Settings the user edits while the agent runs, like a settings.json the app watches. The getters make every
-// Harness read see the current file; nothing is copied or stored.
-const userSettings = { parallelTools: true, maxRetries: 3 };
-const settings: HarnessSettings = {
-  get toolExecution() {
-    return userSettings.parallelTools ? "parallel" : "sequential";
-  },
-  get retry() {
-    return { maxRetries: userSettings.maxRetries };
-  },
-};
-
-// The Harness calls this for every tool call and request with the conversation's `cwd`, so changing a conversation's
-// directory needs no restart.
-const env = ({ cwd = workspace }: { readonly cwd?: string }) => new NodeExecutionEnv({ cwd });
-
-const faux = fauxProvider();
-const models = createModels();
-models.setProvider(faux.provider);
-const pwd = () =>
-  fauxAssistantMessage(fauxToolCall("bash", { command: "pwd" }), { stopReason: "toolUse" });
-faux.setResponses([pwd(), fauxAssistantMessage("Done."), pwd(), fauxAssistantMessage("Done.")]);
-
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models, registry, settings, env },
-  context,
-);
-const root = await harness.root(context, {
-  agent: { model: { provider: "faux", modelId: "faux-1" }, cwd: workspace },
+  );
+  return { harness, root, userSettings, workspace };
 });
 
-const lastBashOutput = async () => {
-  const page = await root.entries({}, 10, undefined, context);
-  const result = page.items.find((entry) => ToolResultEntry.is(entry))
-    ?.model?.[0] as ToolResultMessage;
-  return result.content.map((part) => (part.type === "text" ? part.text.trim() : "")).join("");
-};
+const main = Effect.gen(function* () {
+  const { workspace, userSettings, harness, root } = yield* mainStep1;
+  const lastBashOutput = Effect.fn("lastBashOutput")(function* () {
+    const page = yield* awaited(root.entries({}, 10, undefined, context));
+    const result = page.items.find((entry) => ToolResultEntry.is(entry))
+      ?.model?.[0] as aiTypes.ToolResultMessage;
+    return result.content.map((part) => (part.type === "text" ? part.text.trim() : "")).join("");
+  });
 
-await (await root.submit({ type: "input", content: "Where are we?" }, context)).wait(context);
-console.log("bash ran in:", await lastBashOutput());
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "Where are we?", type: "input" }, context))).wait(
+      context,
+    ),
+  );
+  yield* Console.log("bash ran in:", yield* lastBashOutput());
 
-// The user switches the project directory and turns off parallel tools. Both apply from the next use.
-await root.configure({ cwd: join(workspace, "app") }, context);
-userSettings.parallelTools = false;
-await (await root.submit({ type: "input", content: "And now?" }, context)).wait(context);
-console.log("bash ran in:", await lastBashOutput());
+  yield* awaited(root.configure({ cwd: joinPath(workspace, "app") }, context));
+  userSettings.parallelTools = false;
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "And now?", type: "input" }, context))).wait(context),
+  );
+  yield* Console.log("bash ran in:", yield* lastBashOutput());
 
-await harness.close(context);
-await rm(workspace, { recursive: true, force: true });
+  yield* awaited(harness.close(context));
+  yield* removeDir(workspace);
+});
+
+NodeRuntime.runMain(main);

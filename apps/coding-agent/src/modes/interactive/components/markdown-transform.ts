@@ -1,21 +1,38 @@
-import type {
-  MarkdownTransformContext,
-  MarkdownTransformer,
-} from "../../../core/extensions/types.ts";
+import { dual } from "effect/Function";
 
-export function createMarkdownTransform(
-  messageType: MarkdownTransformContext["messageType"],
-  isStreaming: boolean,
-  transformers: readonly MarkdownTransformer[],
-): (markdown: string, availableWidth: number) => string {
-  return (markdown, availableWidth) =>
-    applyMarkdownTransformers(markdown, { messageType, isStreaming, availableWidth }, transformers);
-}
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+
+const createMarkdownTransform: {
+  (
+    isStreaming: boolean,
+    transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
+  ): (
+    messageType: extensionsTypesTypes.MarkdownTransformContext["messageType"],
+  ) => (markdown: string, availableWidth: number) => string;
+  (
+    messageType: extensionsTypesTypes.MarkdownTransformContext["messageType"],
+    isStreaming: boolean,
+    transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
+  ): (markdown: string, availableWidth: number) => string;
+} = dual(
+  3,
+  (
+    messageType: extensionsTypesTypes.MarkdownTransformContext["messageType"],
+    isStreaming: boolean,
+    transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
+  ): ((markdown: string, availableWidth: number) => string) =>
+    (markdown, availableWidth) =>
+      applyMarkdownTransformers(
+        markdown,
+        { availableWidth, isStreaming, messageType },
+        transformers,
+      ),
+);
 
 function applyMarkdownTransformers(
   markdown: string,
-  context: MarkdownTransformContext,
-  transformers: readonly MarkdownTransformer[],
+  context: extensionsTypesTypes.MarkdownTransformContext,
+  transformers: readonly extensionsTypesTypes.MarkdownTransformer[],
 ): string {
   let transformedMarkdown = markdown;
   for (const transformer of transformers) {
@@ -24,9 +41,13 @@ function applyMarkdownTransformers(
       if (typeof transformed === "string") {
         transformedMarkdown = transformed;
       }
-    } catch {
-      // Keep the current Markdown and continue with the next transformer.
-    }
+    } catch {}
   }
   return transformedMarkdown;
 }
+
+const markdownTransform = {
+  createMarkdownTransform,
+};
+
+export default markdownTransform;

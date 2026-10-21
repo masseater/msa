@@ -1,20 +1,17 @@
+import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type AuthProvider,
-  McpClient,
-  type McpFetch,
-  StreamableHttpTransport,
-} from "../src/index.ts";
-import { closeServers, readBody, readMessage } from "./helpers.ts";
-import {
-  protocolHandler,
-  protocolHandlerFor,
-  type RecordedRequest,
-  startServer,
-} from "./http-fixture.ts";
-import { webFetch } from "./web-fetch.ts";
+import mcp from "../src/index.ts";
+import type mcpTypes from "../src/index.types.ts";
+import httpFixture from "./http-fixture.ts";
+import type httpFixtureTypes from "./http-fixture.types.ts";
+import webFetch from "./web-fetch.ts";
+
+const { McpClient, StreamableHttpTransport } = mcp;
+
+const { closeServers, readBody, readMessage } = testing;
+const { protocolHandler, protocolHandlerFor, startServer } = httpFixture;
 
 const newClient = () => new McpClient({ name: "http-test", version: "1.0.0" });
 
@@ -22,15 +19,19 @@ const abortController = (): AbortController => new AbortController();
 
 const unauthorized = (authenticate: string) =>
   Effect.succeed(
-    new Response(null, { status: 401, headers: { "www-authenticate": authenticate } }),
+    new Response(null, { headers: { "www-authenticate": authenticate }, status: 401 }),
   );
 
-const connectWith = (client: McpClient, url: string, authProvider: AuthProvider) =>
+const connectWith = (
+  client: mcpTypes.McpClient,
+  url: string,
+  authProvider: mcpTypes.AuthProvider,
+) =>
   Effect.promise(() =>
-    client.connect(new StreamableHttpTransport({ url, openGetStream: false, authProvider })),
+    client.connect(new StreamableHttpTransport({ authProvider, openGetStream: false, url })),
   );
 
-const scopeHandler = (request: Request, requests: RecordedRequest[]) =>
+const scopeHandler = (request: Request, requests: httpFixtureTypes.RecordedRequest[]) =>
   Effect.gen(function* () {
     if (request.method !== "POST") return yield* protocolHandler(request, requests);
     const message = yield* readMessage(request);
@@ -38,8 +39,8 @@ const scopeHandler = (request: Request, requests: RecordedRequest[]) =>
     if (authorization === "Bearer old") return yield* unauthorized("Bearer");
     if (message["method"] === "tools/call" && authorization === "Bearer new")
       return new Response(null, {
-        status: 403,
         headers: { "www-authenticate": 'Bearer error="insufficient_scope", scope="admin"' },
+        status: 403,
       });
     return yield* protocolHandlerFor(message)(request, requests);
   });
@@ -50,15 +51,15 @@ const handsFailuresToProvider = Effect.gen(function* () {
   const { url } = yield* startServer(scopeHandler);
   const client = newClient();
   yield* connectWith(client, url, {
-    token: () => Promise.resolve(token),
     onUnauthorized: ({ response, token: rejected }) => {
       seen.push({ status: response.status, token: rejected });
       token = response.status === 401 ? "new" : "admin";
       return Promise.resolve();
     },
+    token: () => Promise.resolve(token),
   });
   expect(yield* Effect.promise(() => client.callTool("echo"))).toEqual({
-    content: [{ type: "text", text: "hello" }],
+    content: [{ text: "hello", type: "text" }],
   });
   expect(seen).toEqual([
     { status: 401, token: "old" },
@@ -67,24 +68,24 @@ const handsFailuresToProvider = Effect.gen(function* () {
   yield* Effect.promise(() => client.close());
 });
 
-const recordingHandler = (executed: unknown[]) => (request: Request, requests: RecordedRequest[]) =>
-  Effect.gen(function* () {
-    if (request.method !== "POST") return yield* protocolHandler(request, requests);
-    const message = yield* readMessage(request);
-    const isCall = message["method"] === "tools/call";
-    if (isCall && request.headers.get("authorization") === "Bearer old")
-      return yield* unauthorized("Bearer");
-    if (isCall) executed.push((message["params"] as { name: string }).name);
-    return yield* protocolHandlerFor(message)(request, requests);
-  });
+const recordingHandler =
+  (executed: unknown[]) => (request: Request, requests: httpFixtureTypes.RecordedRequest[]) =>
+    Effect.gen(function* () {
+      if (request.method !== "POST") return yield* protocolHandler(request, requests);
+      const message = yield* readMessage(request);
+      const isCall = message["method"] === "tools/call";
+      if (isCall && request.headers.get("authorization") === "Bearer old")
+        return yield* unauthorized("Bearer");
+      if (isCall) executed.push((message["params"] as { name: string }).name);
+      return yield* protocolHandlerFor(message)(request, requests);
+    });
 
 const recoveringProvider = () => {
-  const state = { token: "old", refreshes: 0, waiting: 0 };
+  const state = { refreshes: 0, token: "old", waiting: 0 };
   const refreshGate = Deferred.makeUnsafe<void>();
   const allWaiting = Deferred.makeUnsafe<void>();
   let refresh: Promise<void> | undefined;
-  const provider: AuthProvider = {
-    token: () => Promise.resolve(state.token),
+  const provider: mcpTypes.AuthProvider = {
     onUnauthorized: () => {
       if (refresh === undefined) {
         state.refreshes++;
@@ -101,8 +102,9 @@ const recoveringProvider = () => {
       if (++state.waiting === 3) Deferred.doneUnsafe(allWaiting, Effect.void);
       return refresh;
     },
+    token: () => Promise.resolve(state.token),
   };
-  return { state, refreshGate, allWaiting, provider };
+  return { allWaiting, provider, refreshGate, state };
 };
 
 const skipsCancelledRetries = Effect.gen(function* () {
@@ -122,7 +124,7 @@ const skipsCancelledRetries = Effect.gen(function* () {
   yield* Effect.promise(() => expect(aborted).rejects.toMatchObject({ name: "AbortError" }));
   yield* Effect.promise(() => timedOut);
   Deferred.doneUnsafe(refreshGate, Effect.void);
-  expect(yield* Effect.promise(() => kept)).toEqual({ content: [{ type: "text", text: "hello" }] });
+  expect(yield* Effect.promise(() => kept)).toEqual({ content: [{ text: "hello", type: "text" }] });
   expect(executed).toEqual(["kept"]);
   expect(state.refreshes).toBe(1);
   yield* Effect.promise(() => client.close());
@@ -146,20 +148,16 @@ const closesWithLastToken = Effect.gen(function* () {
 const strictFetch = function (this: unknown, input: string | URL, init?: RequestInit) {
   if (this !== undefined && this !== globalThis) throw new TypeError("Illegal invocation");
   return webFetch(new Request(input, init));
-} satisfies McpFetch;
+} satisfies mcpTypes.McpFetch;
 
-const connectThrough = (url: string, fetch: McpFetch | undefined) =>
+const connectThrough = (url: string, fetch: mcpTypes.McpFetch | undefined) =>
   Effect.gen(function* () {
     let token: string | undefined;
     const client = newClient();
     yield* Effect.promise(() =>
       client.connect(
         new StreamableHttpTransport({
-          url,
-          ...(fetch === undefined ? {} : { fetch }),
-          openGetStream: false,
           authProvider: {
-            token: () => Promise.resolve(token),
             onUnauthorized: (context) =>
               context
                 .fetch(url)
@@ -168,12 +166,16 @@ const connectThrough = (url: string, fetch: McpFetch | undefined) =>
                   token = "token";
                   return undefined;
                 }),
+            token: () => Promise.resolve(token),
           },
+          openGetStream: false,
+          url,
+          ...(fetch === undefined ? {} : { fetch }),
         }),
       ),
     );
     expect(yield* Effect.promise(() => client.listTools())).toEqual([
-      { name: "echo", inputSchema: { type: "object" } },
+      { inputSchema: { type: "object" }, name: "echo" },
     ]);
     yield* Effect.promise(() => client.close());
   });

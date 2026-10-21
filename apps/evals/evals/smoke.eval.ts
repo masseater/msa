@@ -1,19 +1,29 @@
+import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 import { describeEval } from "vitest-evals";
 
-import { createMsaCodingAgentHarness } from "../src/harness.ts";
+import harnessModule from "../src/harness.ts";
+import platform from "../src/platform.ts";
+
+const { createMsaCodingAgentHarness } = harnessModule;
+const { readEnv } = platform;
 
 const harness = createMsaCodingAgentHarness({ noTools: "all" });
 
 describeEval("Answer a basic prompt", { harness }, (it) => {
-  it("returns the expected answer", async ({ run }) => {
-    const result = await run("What's the capital of France? Respond with only the city name.");
-    expect(result.output.trim()).toBe("Paris");
-    expect(result.errors).toEqual([]);
-    expect(result.usage).toMatchObject({
-      provider: process.env["MSA_PROVIDER"],
-      model: process.env["MSA_MODEL"],
-    });
-    expect(result.usage.totalTokens).toBeGreaterThan(0);
-  });
+  it("returns the expected answer", ({ run }) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const result = yield* Effect.promise(() =>
+          run("What's the capital of France? Respond with only the city name."),
+        );
+        expect(result.output.trim()).toBe("Paris");
+        expect(result.errors).toEqual([]);
+        expect(result.usage).toMatchObject({
+          model: readEnv("MSA_MODEL"),
+          provider: readEnv("MSA_PROVIDER"),
+        });
+        expect(result.usage.totalTokens).toBeGreaterThan(0);
+      }),
+    ));
 });

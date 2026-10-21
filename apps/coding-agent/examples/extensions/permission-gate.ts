@@ -1,37 +1,37 @@
-/**
- * Permission Gate Extension
- *
- * Prompts for confirmation before running potentially dangerous bash commands.
- * Patterns checked: rm -rf, sudo, chmod/chown 777
- */
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  const dangerousPatterns = [
+    /\brm\s+(-rf?|--recursive)/iu,
+    /\bsudo\b/iu,
+    /\b(chmod|chown)\b.*777/iu,
+  ];
 
-export default function (msa: ExtensionAPI) {
-  const dangerousPatterns = [/\brm\s+(-rf?|--recursive)/i, /\bsudo\b/i, /\b(chmod|chown)\b.*777/i];
+  msa.on("tool_call", (event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        if (event.toolName !== "bash") return undefined;
 
-  msa.on("tool_call", async (event, ctx) => {
-    if (event.toolName !== "bash") return undefined;
+        const command = event.input.command as string;
+        const isDangerous = dangerousPatterns.some((p) => p.test(command));
 
-    const command = event.input.command as string;
-    const isDangerous = dangerousPatterns.some((p) => p.test(command));
+        if (isDangerous) {
+          if (!ctx.hasUI) {
+            return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
+          }
 
-    if (isDangerous) {
-      if (!ctx.hasUI) {
-        // In non-interactive mode, block by default
-        return { block: true, reason: "Dangerous command blocked (no UI for confirmation)" };
-      }
+          const choice = yield* Effect.promise(() =>
+            ctx.ui.select(`⚠️ Dangerous command:\n\n  ${command}\n\nAllow?`, ["Yes", "No"]),
+          );
 
-      const choice = await ctx.ui.select(`⚠️ Dangerous command:\n\n  ${command}\n\nAllow?`, [
-        "Yes",
-        "No",
-      ]);
+          if (choice !== "Yes") {
+            return { block: true, reason: "Blocked by user" };
+          }
+        }
 
-      if (choice !== "Yes") {
-        return { block: true, reason: "Blocked by user" };
-      }
-    }
-
-    return undefined;
-  });
+        return undefined;
+      }),
+    ),
+  );
 }

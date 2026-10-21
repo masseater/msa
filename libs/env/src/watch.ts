@@ -1,15 +1,19 @@
-import type { Context } from "@msa/chord";
-import { FileError, type FileWatcher, type WatchChange, type WatchTarget } from "@msa/durable/env";
+import type chordTypes from "@msa/chord/index.types";
+import sleep from "@msa/chord/sleep";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Cause, Deferred, Effect, Exit } from "effect";
 
-import { type Connection, isConnectionLost, type Json } from "./connection.ts";
-import { toFileError } from "./errors.ts";
+import connectionModule from "./connection.ts";
+import type connectionTypes from "./connection.types.ts";
+import errors from "./errors.ts";
+import type watchTypes from "./watch.types.ts";
 
-export interface RemoteWatchOptions {
-  mode?: "native" | "polling";
-  pollIntervalMs?: number;
-  maxDirectories?: number;
-}
+const { FileError } = env;
+
+const { isConnectionLost } = connectionModule;
+const { toFileError } = errors;
+const { unrefSleep } = sleep;
 
 const RECONNECT_FIRST_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;
@@ -17,19 +21,11 @@ const RECONNECT_MAX_MS = 30_000;
 const asError = (error: unknown): Error =>
   error instanceof Error ? error : new Error(String(error));
 
-function unrefTimer(delay: number, fire: () => void): () => void {
-  const timer = setTimeout(fire, delay);
-  timer.unref();
-  return () => {
-    clearTimeout(timer);
-  };
-}
-
-export class RemoteWatcher implements FileWatcher {
-  readonly #connection: Connection;
-  readonly #targets: readonly WatchTarget[];
-  readonly #onChange: (change: WatchChange) => void;
-  readonly #options: RemoteWatchOptions;
+export default class RemoteWatcher implements envTypes.FileWatcher {
+  readonly #connection: connectionTypes.Connection;
+  readonly #targets: readonly envTypes.WatchTarget[];
+  readonly #onChange: (change: envTypes.WatchChange) => void;
+  readonly #options: watchTypes.RemoteWatchOptions;
   #mode: "native" | "polling" = "native";
   #closed = false;
   #controller: AbortController | undefined;
@@ -37,10 +33,10 @@ export class RemoteWatcher implements FileWatcher {
   #wake: (() => void) | undefined;
 
   private constructor(
-    connection: Connection,
-    targets: readonly WatchTarget[],
-    onChange: (change: WatchChange) => void,
-    options: RemoteWatchOptions,
+    connection: connectionTypes.Connection,
+    targets: readonly envTypes.WatchTarget[],
+    onChange: (change: envTypes.WatchChange) => void,
+    options: watchTypes.RemoteWatchOptions,
   ) {
     this.#connection = connection;
     this.#targets = targets;
@@ -49,10 +45,10 @@ export class RemoteWatcher implements FileWatcher {
   }
 
   static open(
-    connection: Connection,
-    targets: readonly WatchTarget[],
-    onChange: (change: WatchChange) => void,
-    options: RemoteWatchOptions = {},
+    connection: connectionTypes.Connection,
+    targets: readonly envTypes.WatchTarget[],
+    onChange: (change: envTypes.WatchChange) => void,
+    options: watchTypes.RemoteWatchOptions = {},
   ): Promise<RemoteWatcher> {
     const watcher = new RemoteWatcher(connection, targets, onChange, options);
     return Effect.runPromise(Effect.as(watcher.#start(), watcher));
@@ -62,7 +58,7 @@ export class RemoteWatcher implements FileWatcher {
     return this.#mode;
   }
 
-  close(_context: Context): Promise<void> {
+  close(_context: chordTypes.Context): Promise<void> {
     if (this.#closed) return Promise.resolve();
     this.#closed = true;
     this.#wake?.();
@@ -70,7 +66,7 @@ export class RemoteWatcher implements FileWatcher {
     return this.#request ?? Promise.resolve();
   }
 
-  #deliver(change: WatchChange): boolean {
+  #deliver(change: envTypes.WatchChange): boolean {
     if (this.#closed) return false;
     try {
       this.#onChange(change);
@@ -80,7 +76,7 @@ export class RemoteWatcher implements FileWatcher {
     }
   }
 
-  #onEvent(event: Json, onReady: () => void): void {
+  #onEvent(event: connectionTypes.Json, onReady: () => void): void {
     if (event["kind"] === "ready") {
       this.#mode = event["mode"] === "polling" ? "polling" : "native";
       onReady();
@@ -118,23 +114,23 @@ export class RemoteWatcher implements FileWatcher {
       "watch",
       {
         targets: this.#targets.map((target) => ({
-          path: target.path,
-          recursive: target.recursive === true,
           exclude: {
             hidden: target.exclude?.hidden === true,
             names: [...(target.exclude?.names ?? [])],
           },
+          path: target.path,
+          recursive: target.recursive === true,
         })),
         ...this.#options,
       },
       {
-        signal: controller.signal,
         onEvent: (event) => {
           this.#onEvent(event, () => {
             ready = true;
             Deferred.doneUnsafe(started, Exit.void);
           });
         },
+        signal: controller.signal,
       },
     );
     this.#request = request.then(
@@ -147,14 +143,12 @@ export class RemoteWatcher implements FileWatcher {
   }
 
   #sleep(delay: number): Effect.Effect<void> {
-    return Effect.callback<void>((resume) => {
-      const cancel = unrefTimer(delay, () => {
-        resume(Effect.void);
-      });
+    return Effect.suspend(() => {
+      const woken = Deferred.makeUnsafe<void>();
       this.#wake = () => {
-        cancel();
-        resume(Effect.void);
+        Deferred.doneUnsafe(woken, Exit.void);
       };
+      return Effect.raceFirst(Deferred.await(woken), unrefSleep(delay));
     });
   }
 

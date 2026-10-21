@@ -1,149 +1,133 @@
-/**
- * Tool Override Example - Demonstrates overriding built-in tools
- *
- * Extensions can register tools with the same name as built-in tools to replace them.
- * This is useful for:
- * - Adding logging or auditing to tool calls
- * - Implementing access control or sandboxing
- * - Routing tool calls to remote systems (e.g., msa-ssh-remote)
- * - Modifying tool behavior for specific workflows
- *
- * This example overrides the `read` tool to:
- * 1. Log all file access to a log file
- * 2. Block access to sensitive paths (e.g., .env files)
- * 3. Delegate to the original read implementation for allowed files
- *
- * Since no custom renderCall/renderResult are provided, the built-in renderer
- * is used automatically (syntax highlighting, line numbers, truncation warnings).
- *
- * Usage:
- *   msa -e ./tool-override.ts
- */
-
-import { constants, readFileSync } from "fs";
-import { access, appendFile, readFile } from "fs/promises";
-import { join, resolve } from "path";
-
-import type { TextContent } from "@msa/ai";
-import { type ExtensionAPI, getAgentDir, withFileMutationQueue } from "@msa/coding-agent";
+import { NodeServices } from "@effect/platform-node";
+import type aiTypes from "@msa/ai/index.types";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { DateTime, Effect, FileSystem, ManagedRuntime, Option, Path } from "effect";
 import { Type } from "typebox";
 
-const LOG_FILE = join(getAgentDir(), "read-access.log");
+const { getAgentDir } = codingAgent;
 
-// Paths that are blocked from reading
+const runtime = ManagedRuntime.make(NodeServices.layer);
+
+const logPath = runtime.runSync(Path.Path);
+const LOG_FILE = logPath.join(getAgentDir(), "read-access.log");
+
 const BLOCKED_PATTERNS = [
-  /\.env$/,
-  /\.env\..+$/,
-  /secrets?\.(json|yaml|yml|toml)$/i,
-  /credentials?\.(json|yaml|yml|toml)$/i,
-  /\/\.ssh\//,
-  /\/\.aws\//,
-  /\/\.gnupg\//,
+  /\.env$/u,
+  /\.env\..+$/u,
+  /secrets?\.(json|yaml|yml|toml)$/iu,
+  /credentials?\.(json|yaml|yml|toml)$/iu,
+  /\/\.ssh\//u,
+  /\/\.aws\//u,
+  /\/\.gnupg\//u,
 ];
 
-function isBlockedPath(path: string): boolean {
-  return BLOCKED_PATTERNS.some((pattern) => pattern.test(path));
-}
+const isBlockedPath = (path: string): boolean =>
+  BLOCKED_PATTERNS.some((pattern) => pattern.test(path));
 
-async function logAccess(path: string, allowed: boolean, reason?: string) {
-  const timestamp = new Date().toISOString();
-  const status = allowed ? "ALLOWED" : "BLOCKED";
-  const msg = reason ? ` (${reason})` : "";
-  const line = `[${timestamp}] ${status}: ${path}${msg}\n`;
-
-  try {
-    await withFileMutationQueue(LOG_FILE, async () => {
-      await appendFile(LOG_FILE, line);
+const logAccess = (path: string, allowed: boolean, reason?: string) =>
+  Effect.gen(function* () {
+    const timestamp = DateTime.formatIso(DateTime.nowUnsafe());
+    const status = allowed ? "ALLOWED" : "BLOCKED";
+    const msg = reason !== undefined && reason.length > 0 ? ` (${reason})` : "";
+    const fs = yield* FileSystem.FileSystem;
+    yield* fs.writeFileString(LOG_FILE, `[${timestamp}] ${status}: ${path}${msg}\n`, {
+      flag: "a",
     });
-  } catch {
-    // Ignore logging errors
-  }
-}
+  }).pipe(Effect.ignore);
 
 const readSchema = Type.Object({
-  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
+  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
   offset: Type.Optional(
     Type.Number({ description: "Line number to start reading from (1-indexed)" }),
   ),
-  limit: Type.Optional(Type.Number({ description: "Maximum number of lines to read" })),
+  path: Type.String({ description: "Path to the file to read (relative or absolute)" }),
 });
 
-export default function (msa: ExtensionAPI) {
-  msa.registerTool({
-    name: "read", // Same name as built-in - this will override it
-    label: "read (audited)",
-    description:
-      "Read the contents of a file with access logging. Some sensitive paths (.env, secrets, credentials) are blocked.",
-    parameters: readSchema,
+const selectLines = (
+  content: string,
+  offset: number | undefined,
+  limit: number | undefined,
+): { text: string; lineCount: number } => {
+  const lines = content.split("\n");
+  const startLine = offset === undefined ? 0 : Math.max(0, offset - 1);
+  const endLine = limit === undefined ? lines.length : startLine + limit;
+  let text = lines.slice(startLine, endLine).join("\n");
+  const maxBytes = 50 * 1024;
+  if (Buffer.byteLength(text, "utf-8") > maxBytes) {
+    text = `${text.slice(0, maxBytes)}\n\n[Output truncated at 50KB]`;
+  }
+  return { lineCount: lines.length, text };
+};
 
-    async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-      const { path, offset, limit } = params;
-      const absolutePath = resolve(ctx.cwd, path);
-
-      // Check if path is blocked
-      if (isBlockedPath(absolutePath)) {
-        await logAccess(absolutePath, false, "matches blocked pattern");
-        return {
-          content: [
-            {
-              type: "text",
-              text: `Access denied: "${path}" matches a blocked pattern (sensitive file). This tool blocks access to .env files, secrets, credentials, and SSH/AWS/GPG directories.`,
-            },
-          ],
-          details: { blocked: true },
-        };
-      }
-
-      // Log allowed access
-      await logAccess(absolutePath, true);
-
-      // Perform the actual read (simplified implementation)
-      try {
-        await access(absolutePath, constants.R_OK);
-        const content = await readFile(absolutePath, "utf-8");
-        const lines = content.split("\n");
-
-        // Apply offset and limit
-        const startLine = offset ? Math.max(0, offset - 1) : 0;
-        const endLine = limit ? startLine + limit : lines.length;
-        const selectedLines = lines.slice(startLine, endLine);
-
-        // Basic truncation (50KB limit)
-        let text = selectedLines.join("\n");
-        const maxBytes = 50 * 1024;
-        if (Buffer.byteLength(text, "utf-8") > maxBytes) {
-          text = `${text.slice(0, maxBytes)}\n\n[Output truncated at 50KB]`;
-        }
-
-        return {
-          content: [{ type: "text", text }] as TextContent[],
-          details: { lines: lines.length },
-        };
-      } catch (error: any) {
-        return {
-          content: [
-            { type: "text", text: `Error reading file: ${error.message}` },
-          ] as TextContent[],
-          details: { error: true },
-        };
-      }
+const blockedResult = (path: string) => ({
+  content: [
+    {
+      text: `Access denied: "${path}" matches a blocked pattern (sensitive file). This tool blocks access to .env files, secrets, credentials, and SSH/AWS/GPG directories.`,
+      type: "text",
     },
+  ] as aiTypes.TextContent[],
+  details: { blocked: true },
+});
 
-    // No renderCall/renderResult - uses built-in renderer automatically
-    // (syntax highlighting, line numbers, truncation warnings, etc.)
+const errorResult = (message: string) => ({
+  content: [{ text: `Error reading file: ${message}`, type: "text" }] as aiTypes.TextContent[],
+  details: { error: true },
+});
+
+const readAudited = (
+  cwd: string,
+  params: { path: string; offset?: number | undefined; limit?: number | undefined },
+) =>
+  Effect.gen(function* () {
+    const pathService = yield* Path.Path;
+    const absolutePath = pathService.resolve(cwd, params.path);
+
+    if (isBlockedPath(absolutePath)) {
+      yield* logAccess(absolutePath, false, "matches blocked pattern");
+      return blockedResult(params.path);
+    }
+
+    yield* logAccess(absolutePath, true);
+
+    const fs = yield* FileSystem.FileSystem;
+    const content = yield* fs.readFileString(absolutePath).pipe(Effect.option);
+    if (Option.isNone(content)) {
+      return errorResult("could not read the file");
+    }
+
+    const { text, lineCount } = selectLines(content.value, params.offset, params.limit);
+    return {
+      content: [{ text, type: "text" }] as aiTypes.TextContent[],
+      details: { lines: lineCount },
+    };
   });
 
-  // Also register a command to view the access log
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  msa.registerTool({
+    description:
+      "Read the contents of a file with access logging. Some sensitive paths (.env, secrets, credentials) are blocked.",
+    execute: (_toolCallId, params, _signal, _onUpdate, ctx) =>
+      runtime.runPromise(readAudited(ctx.cwd, params)),
+    label: "read (audited)",
+    name: "read",
+    parameters: readSchema,
+  });
+
   msa.registerCommand("read-log", {
     description: "View the file access log",
-    handler: async (_args, ctx) => {
-      try {
-        const log = readFileSync(LOG_FILE, "utf-8");
-        const lines = log.trim().split("\n").slice(-20); // Last 20 entries
-        ctx.ui.notify(`Recent file access:\n${lines.join("\n")}`, "info");
-      } catch {
-        ctx.ui.notify("No access log found", "info");
-      }
-    },
+    handler: (_args, ctx) =>
+      runtime.runPromise(
+        Effect.gen(function* () {
+          const fs = yield* FileSystem.FileSystem;
+          const content = yield* fs.readFileString(LOG_FILE).pipe(Effect.option);
+          if (Option.isNone(content) || content.value.trim().length === 0) {
+            ctx.ui.notify("No access log found", "info");
+            return;
+          }
+          const lines = content.value.trim().split("\n").slice(-20);
+          ctx.ui.notify(`Recent file access:\n${lines.join("\n")}`, "info");
+        }),
+      ),
   });
 }

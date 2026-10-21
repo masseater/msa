@@ -1,58 +1,40 @@
-import { type Context, copyJson, type JsonRepresentation } from "@msa/chord";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect } from "effect";
 
-import { ConversationBusy } from "../errors.ts";
-import type { SessionImpl } from "../session/session.ts";
-import type {
-  CommitPublication,
-  ConversationId,
-  JsonObject,
-  Storage,
-  SubmissionId,
-  SubmissionRecord,
-  Tx,
-} from "../types.ts";
-import { startRun } from "./generation.ts";
-import {
-  appendInput,
-  applyBoundary,
-  hasQueuedReset,
-  InboxDoc,
-  isDisplayOnly,
-  isStale,
-  pickInputEntry,
-  prepareBoundary,
-  type QueueModes,
-  removeInboxItem,
-} from "./inbox.ts";
-import { LiveDoc } from "./live.ts";
-import type {
-  InputEntry,
-  SettledSubmissionRecord,
-  Submission,
-  SubmissionDraft,
-  UserInput,
-} from "./types.ts";
-import { closedError, Waiters } from "./util.ts";
+import type transactionTypes from "../session/transaction.types.ts";
+import bridge from "./bridge.ts";
+import inboxModule from "./inbox.ts";
+import SubmissionHandle from "./submission-handle.ts";
+import submissionsAdmit from "./submissions-admit.ts";
+import type submissionsTypes from "./submissions.types.ts";
+import type typesModule from "./types.types.ts";
+import util from "./util.ts";
 
-type AbortResult = "aborted" | "already_placed" | "settled";
+const { Waiters, closedError } = util;
+const { toPromise } = bridge;
+const { admitSubmission } = submissionsAdmit;
 
-/** Admission, waits, and withdrawal of the durable submissions of one Harness. */
-export class Submissions {
-  readonly #session: SessionImpl;
-  readonly #storage: Storage;
+const { removeInboxItem } = inboxModule;
+
+const isSettled = (
+  record: typesModule.SubmissionRecord,
+): record is typesModule.SettledSubmissionRecord =>
+  record.status === "done" || record.status === "unanswered";
+
+export default class Submissions {
+  readonly #session: submissionsTypes.SessionImpl;
+  readonly #storage: typesModule.Storage;
   readonly #now: () => number;
-  /** Read at each admission, on the Session line. */
-  readonly #queueModes: () => QueueModes;
-  /** Enable task scheduling; submitting or waiting asks for progress. */
+  readonly #queueModes: () => submissionsTypes.QueueModes;
   readonly #resume: () => void;
-  readonly #waiters = new Waiters<SubmissionId, SettledSubmissionRecord>();
+  readonly #waiters = new Waiters<typesModule.SubmissionId, typesModule.SettledSubmissionRecord>();
   #closed = false;
 
   constructor(
-    session: SessionImpl,
-    storage: Storage,
+    session: submissionsTypes.SessionImpl,
+    storage: typesModule.Storage,
     now: () => number,
-    queueModes: () => QueueModes,
+    queueModes: () => submissionsTypes.QueueModes,
     resume: () => void,
   ) {
     this.#session = session;
@@ -60,248 +42,140 @@ export class Submissions {
     this.#now = now;
     this.#queueModes = queueModes;
     this.#resume = resume;
-    session.observeCommits((publication) => this.#observe(publication));
+    session.observeCommits((publication) => {
+      this.#observe(publication);
+    });
     session.subscribeClose(() => {
       this.#closed = true;
       this.#waiters.rejectAll(closedError(this.#session));
     });
   }
 
-  /**
-   * Admit a submission in one commit; see `admitSubmission()`.
-   * @param {ConversationId} conversationId - The conversation.
-   * @param {SubmissionDraft} draft - The submission to admit.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<Submission>} The admitted submission's handle.
-   */
-  async submit(
-    conversationId: ConversationId,
-    draft: SubmissionDraft,
-    context: Context,
-  ): Promise<Submission> {
+  submit(
+    conversationId: typesModule.ConversationId,
+    draft: typesModule.SubmissionDraft,
+    context: chordTypes.Context,
+  ): Promise<typesModule.Submission> {
     this.#resume();
-    const id = await this.#session.commitWith(
-      (tx) => admitSubmission(tx, conversationId, draft, this.#now(), this.#queueModes()),
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const admit = yield* toPromise((tx: transactionTypes.Transaction) =>
+          admitSubmission(tx, conversationId, draft, this.#now(), this.#queueModes()),
+        );
+        const id = yield* Effect.promise(() => this.#session.commitWith(admit, context));
+        return new SubmissionHandle(id, this);
+      }),
+    );
+  }
+
+  get(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ): Promise<typesModule.Submission | undefined> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const record = yield* Effect.promise(() =>
+          this.#session.readOnLine(() => this.#storage.submission(id, context)),
+        );
+        return record === undefined ? undefined : new SubmissionHandle(record.id, this);
+      }),
+    );
+  }
+
+  status(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ): Promise<typesModule.SubmissionRecord> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const record = yield* Effect.promise(() =>
+          this.#session.readOnLine(() => this.#storage.submission(id, context)),
+        );
+        if (record === undefined)
+          return yield* Effect.die(new Error(`Submission ${id} does not exist`));
+        return record;
+      }),
+    );
+  }
+
+  wait(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ): Promise<typesModule.SettledSubmissionRecord> {
+    this.#resume();
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const pending = yield* toPromise(() => this.#pending(id, context));
+        const found = yield* Effect.promise(() => this.#session.readOnLine(pending));
+        return yield* Effect.promise(() => found.promise);
+      }),
+    );
+  }
+
+  abort(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+    conversationId?: typesModule.ConversationId,
+  ): Promise<submissionsTypes.AbortResult | "not_found"> {
+    return this.#session.commitWith(
+      (tx) => Effect.runPromise(this.#abort(tx, id, conversationId)),
       context,
     );
-    return new SubmissionHandle(id, this);
   }
 
-  /**
-   * Handle for an existing submission, or `undefined`.
-   * @param {SubmissionId} id - The submission.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<Submission | undefined>} Its handle.
-   */
-  async get(id: SubmissionId, context: Context): Promise<Submission | undefined> {
-    const record = await this.#session.readOnLine(() => this.#storage.submission(id, context));
-    return record === undefined ? undefined : new SubmissionHandle(record.id, this);
+  abortHandle(
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ): Promise<submissionsTypes.AbortResult> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const result = yield* Effect.promise(() => this.abort(id, context));
+        if (result === "not_found")
+          return yield* Effect.die(new Error(`Submission ${id} does not exist`));
+        return result;
+      }),
+    );
   }
 
-  async status(id: SubmissionId, context: Context): Promise<SubmissionRecord> {
-    const record = await this.#session.readOnLine(() => this.#storage.submission(id, context));
-    if (record === undefined) throw new Error(`Submission ${id} does not exist`);
-    return record;
-  }
+  #abort = Effect.fnUntraced(function* (
+    this: Submissions,
+    tx: transactionTypes.Transaction,
+    id: typesModule.SubmissionId,
+    conversationId: typesModule.ConversationId | undefined,
+  ) {
+    const record = yield* Effect.promise(() => tx.submission(id));
+    if (
+      record === undefined ||
+      (conversationId !== undefined && record.conversationId !== conversationId)
+    )
+      return yield* Effect.succeed<submissionsTypes.AbortResult | "not_found">("not_found");
+    if (record.status === "queued") {
+      tx.settleSubmission(id, { reason: "aborted", status: "unanswered" });
+      yield* removeInboxItem(tx, record.conversationId, id);
+      return yield* Effect.succeed<submissionsTypes.AbortResult | "not_found">("aborted");
+    }
+    return yield* Effect.succeed<submissionsTypes.AbortResult | "not_found">(
+      record.status === "placed" ? "already_placed" : "settled",
+    );
+  });
 
-  async wait(id: SubmissionId, context: Context): Promise<SettledSubmissionRecord> {
-    this.#resume();
-    // Check and register on the line so no settling publication falls between them.
-    const found = await this.#session.readOnLine(async () => {
-      const record = await this.#storage.submission(id, context);
-      if (record === undefined) throw new Error(`Submission ${id} does not exist`);
-      if (isSettled(record)) return { promise: Promise.resolve(record) };
-      // Close rejects registered waiters synchronously and may begin during the read.
-      if (this.#closed) throw closedError(this.#session);
-      return { promise: this.#waiters.add(id, context) };
-    });
-    return found.promise;
-  }
+  #pending = Effect.fnUntraced(function* (
+    this: Submissions,
+    id: typesModule.SubmissionId,
+    context: chordTypes.Context,
+  ) {
+    const record = yield* Effect.promise(() => this.#storage.submission(id, context));
+    if (record === undefined)
+      return yield* Effect.die(new Error(`Submission ${id} does not exist`));
+    if (isSettled(record)) return { promise: Promise.resolve(record) };
+    if (this.#closed) return yield* Effect.die(closedError(this.#session));
+    return { promise: this.#waiters.add(id, context) };
+  });
 
-  /**
-   * Withdraw a queued submission and remove its inbox item; placed inputs and settled submissions are reported.
-   * @param {SubmissionId} id - The submission.
-   * @param {Context} context - The caller's context.
-   * @param {ConversationId} conversationId - Its conversation, when known.
-   * @returns {Promise<AbortResult | "not_found">} How the submission ended, or `not_found`.
-   */
-  abort(
-    id: SubmissionId,
-    context: Context,
-    conversationId?: ConversationId,
-  ): Promise<AbortResult | "not_found"> {
-    return this.#session.commitWith(async (tx) => {
-      const record = await tx.submission(id);
-      if (
-        record === undefined ||
-        (conversationId !== undefined && record.conversationId !== conversationId)
-      ) {
-        return "not_found";
-      }
-      if (record.status === "queued") {
-        tx.settleSubmission(id, { status: "unanswered", reason: "aborted" });
-        await removeInboxItem(tx, record.conversationId, id);
-        return "aborted";
-      }
-      return record.status === "placed" ? "already_placed" : "settled";
-    }, context);
-  }
-
-  #observe(publication: CommitPublication): void {
+  #observe(publication: typesModule.CommitPublication): void {
     for (const change of publication.changes) {
       if (change.type !== "submission" || !isSettled(change.value)) continue;
       this.#waiters.resolve(change.value.id, change.value);
     }
   }
-}
-
-class SubmissionHandle implements Submission {
-  readonly id: SubmissionId;
-  readonly #submissions: Submissions;
-
-  constructor(id: SubmissionId, submissions: Submissions) {
-    this.id = id;
-    this.#submissions = submissions;
-  }
-
-  status(context: Context): Promise<SubmissionRecord> {
-    return this.#submissions.status(this.id, context);
-  }
-
-  wait(context: Context): Promise<SettledSubmissionRecord> {
-    return this.#submissions.wait(this.id, context);
-  }
-
-  async abort(context: Context): Promise<AbortResult> {
-    const result = await this.#submissions.abort(this.id, context);
-    if (result === "not_found") throw new Error(`Submission ${this.id} does not exist`);
-    return result;
-  }
-}
-
-function isSettled(record: SubmissionRecord): record is SettledSubmissionRecord {
-  return record.status === "done" || record.status === "unanswered";
-}
-
-/**
- * Reject an input entry an untyped caller got wrong: its kind must be a non-empty string outside the `msa.` prefix.
- * @param {InputEntry} entry - The input entry.
- */
-function checkInputEntry(entry: InputEntry): void {
-  const { kind } = entry;
-  if (typeof kind !== "string" || kind.length === 0 || kind.startsWith("msa.")) {
-    throw new TypeError(
-      `An input entry's kind must be a non-empty string not starting with "msa.", got ${String(kind)}`,
-    );
-  }
-}
-
-/**
- * Admit a submission inside a commit (spec §6); `Conversation.submit()` and conversation-owned compactions share it. A
- * known request ID returns its existing submission without writing. A display-only write (only `kind` and `data`) is
- * appended and settled `done` at once, busy or not, as it changes nothing the model sees; only behind a queued reset it
- * queues, so it lands after the reset instead of before it in the context the reset ends. A busy conversation queues anything else in
- * `msa.inbox`, or rejects `whenBusy: "reject"` input with `ConversationBusy`. An idle conversation with queued items
- * queues it behind them and runs a final boundary. Otherwise idle input places its entry (`msa.user`, or the input's
- * own) and starts a run, and an idle write appends its entry and settles `done`, or `stale` when its head reaches
- * before the active range.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {SubmissionDraft} draft - The submission to admit.
- * @param {number} now - The commit's time.
- * @param {QueueModes} queueModes - How queued items are placed.
- * @returns {Promise<SubmissionId>} The admitted or existing submission.
- */
-export async function admitSubmission(
-  tx: Tx,
-  conversationId: ConversationId,
-  draft: SubmissionDraft,
-  now: number,
-  queueModes: QueueModes,
-): Promise<SubmissionId> {
-  if (draft.type === "input" && draft.entry !== undefined) checkInputEntry(draft.entry);
-  if (draft.requestId !== undefined) {
-    const existing = await tx.submissionByRequest(conversationId, draft.requestId);
-    if (existing !== undefined) {
-      if (existing.type !== draft.type) {
-        throw new Error(
-          `Request ${draft.requestId} already identifies a submission of type ${existing.type}`,
-        );
-      }
-      return existing.id;
-    }
-  }
-  const requestId = draft.requestId === undefined ? {} : { requestId: draft.requestId };
-  if (
-    draft.type === "write" &&
-    isDisplayOnly(draft.entry) &&
-    !hasQueuedReset((await tx.doc(InboxDoc, conversationId)).items)
-  ) {
-    const entry = await tx.appendEntry(conversationId, draft.entry);
-    const write = {
-      conversationId,
-      ...requestId,
-      type: "write",
-      status: "done",
-      entry: entry.id,
-    } as const;
-    return (await tx.createSubmission(write)).id;
-  }
-  const live = await tx.doc(LiveDoc, conversationId);
-  const busy = live.run !== undefined;
-  if (busy && draft.type === "input" && draft.whenBusy === "reject")
-    throw new ConversationBusy(conversationId);
-  // A boundary reads the table, so it is prepared before the first table write; a busy one needs none.
-  const boundary = busy ? undefined : await prepareBoundary(tx, conversationId, queueModes);
-  if (boundary === undefined || boundary.inbox.items.length > 0) {
-    const { id } = await tx.createSubmission({
-      conversationId,
-      ...requestId,
-      type: draft.type,
-      status: "queued",
-    });
-    // Hosts may leave optional fields `undefined`; drafts take strict JSON.
-    const value = copyJson(draft.type === "write" ? draft.entry : draft.content, {
-      omitUndefinedProperties: true,
-    });
-    const items = (boundary?.inbox ?? (await tx.doc(InboxDoc, conversationId))).items;
-    if (draft.type === "write") items.push({ id, mode: "write", entry: value as JsonObject });
-    else {
-      const mode = draft.whenBusy === "steer" ? "steer" : "followUp";
-      const content = value as JsonRepresentation<UserInput>;
-      const entry = draft.entry === undefined ? {} : { entry: pickInputEntry(draft.entry) };
-      items.push({ id, mode, content, ...entry });
-    }
-    if (boundary === undefined) return id;
-    const { users } = await applyBoundary(tx, boundary, "final", now);
-    if (users.length > 0) await startRun(tx, conversationId, live, users);
-    return id;
-  }
-  if (draft.type === "write") {
-    if (isStale(boundary, draft.entry)) {
-      const stale = { status: "unanswered", reason: "stale" } as const;
-      return (await tx.createSubmission({ conversationId, ...requestId, type: "write", ...stale }))
-        .id;
-    }
-    const entry = await tx.appendEntry(conversationId, draft.entry);
-    const write = {
-      conversationId,
-      ...requestId,
-      type: "write",
-      status: "done",
-      entry: entry.id,
-    } as const;
-    return (await tx.createSubmission(write)).id;
-  }
-  const entry = await appendInput(tx, conversationId, draft.content, draft.entry, now);
-  const input = {
-    conversationId,
-    ...requestId,
-    type: "input",
-    status: "placed",
-    entry: entry.id,
-  } as const;
-  const { id } = await tx.createSubmission(input);
-  await startRun(tx, conversationId, live, [id]);
-  return id;
 }

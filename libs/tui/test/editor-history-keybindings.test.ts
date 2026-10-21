@@ -1,11 +1,16 @@
 import assert from "node:assert";
 import { afterEach, describe, it } from "node:test";
 
-import { Editor } from "../src/components/editor.ts";
-import { KeybindingsManager, setKeybindings, TUI_KEYBINDINGS } from "../src/keybindings.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import Editor from "../src/components/editor.ts";
+import keybindingDefinitions from "../src/keybinding-definitions.ts";
+import keybindingsModule from "../src/keybindings.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import testThemes from "./test-themes.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
+
+const { KeybindingsManager, setKeybindings } = keybindingsModule;
+const { TUI_KEYBINDINGS } = keybindingDefinitions;
+const { defaultEditorTheme } = testThemes;
 
 afterEach(() => {
   setKeybindings(new KeybindingsManager(TUI_KEYBINDINGS));
@@ -15,8 +20,8 @@ describe("Editor prompt history keybindings", () => {
   it("browses history directly without first moving the cursor", () => {
     setKeybindings(
       new KeybindingsManager(TUI_KEYBINDINGS, {
-        "tui.editor.historyPrevious": "ctrl+p",
         "tui.editor.historyNext": "ctrl+n",
+        "tui.editor.historyPrevious": "ctrl+p",
       }),
     );
     const editor = new Editor(new TuiMainScreen(new VirtualTerminal()), defaultEditorTheme);
@@ -26,23 +31,19 @@ describe("Editor prompt history keybindings", () => {
     editor.handleInput("\x1b[D");
     editor.handleInput("\x1b[D");
 
-    // Ctrl+P
     editor.handleInput("\x10");
     assert.strictEqual(editor.getText(), "newer\nmultiline prompt");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
-    // Ctrl+P
     editor.handleInput("\x10");
     assert.strictEqual(editor.getText(), "older prompt");
 
-    // Ctrl+N
     editor.handleInput("\x0e");
     assert.strictEqual(editor.getText(), "newer\nmultiline prompt");
-    assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 16 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 16, line: 1 });
 
-    // Ctrl+N
     editor.handleInput("\x0e");
     assert.strictEqual(editor.getText(), "draft");
-    assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+    assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
   });
 });

@@ -1,58 +1,148 @@
-import { spawnSync } from "node:child_process";
-import { mkdirSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { afterEach, beforeEach, it } from "node:test";
 
-import { CombinedAutocompleteProvider } from "../src/autocomplete.ts";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-export const resolveFdPath = (): string | null => {
-  const command = process.platform === "win32" ? "where" : "which";
-  const result = spawnSync(command, ["fd"], { encoding: "utf-8" });
-  if (result.status !== 0 || !result.stdout) {
-    return null;
-  }
+import CombinedAutocompleteProvider from "../src/autocomplete.ts";
+import type autocompleteTypes from "../src/autocomplete.types.ts";
+import platformModule from "../src/platform.ts";
+import type autocompleteHelpersTypes from "./autocomplete-helpers.types.ts";
+import testPlatform from "./test-platform.ts";
 
-  const firstLine = result.stdout.split(/\r?\n/u).find(Boolean);
-  return firstLine ? firstLine.trim() : null;
+const { pathOperations } = platformModule;
+
+const { makeDirectory, makeTempDirectory, removeRecursive, runCommand, writeFileString } =
+  testPlatform;
+
+const { join } = pathOperations;
+
+const locateFd = runCommand({
+  args: ["fd"],
+  file: process.platform === "win32" ? "where" : "which",
+}).pipe(
+  Effect.map(({ exitCode, stdout }) => {
+    if (exitCode !== 0 || stdout === "") {
+      return null;
+    }
+    const firstLine = stdout.split(/\r?\n/u).find(Boolean);
+    return firstLine !== undefined && firstLine !== "" ? firstLine.trim() : null;
+  }),
+  Effect.catchDefect(() => Effect.succeed(null)),
+);
+
+const setupFolder: {
+  (baseDir: string, structure?: autocompleteHelpersTypes.FolderStructure): Effect.Effect<void>;
+  (structure?: autocompleteHelpersTypes.FolderStructure): (baseDir: string) => Effect.Effect<void>;
+} = dual(
+  (args) => typeof args[0] === "string",
+  (
+    baseDir: string,
+    structure: autocompleteHelpersTypes.FolderStructure = {},
+  ): Effect.Effect<void> =>
+    Effect.gen(function* () {
+      yield* Effect.forEach(structure.dirs ?? [], (dir) => makeDirectory(join(baseDir, dir)));
+      yield* Effect.forEach(Object.entries(structure.files ?? {}), ([filePath, contents]) =>
+        writeFileString(join(baseDir, filePath), contents),
+      );
+    }),
+);
+
+const useTempDirectory = (prefix: string): autocompleteHelpersTypes.TempWorkspace => {
+  const workspace: autocompleteHelpersTypes.TempWorkspace = {
+    baseDir: "",
+    outsideDir: "",
+    rootDir: "",
+  };
+  beforeEach(() =>
+    Effect.runPromise(
+      Effect.map(makeTempDirectory(prefix), (directory) => {
+        workspace.rootDir = directory;
+        workspace.baseDir = directory;
+      }),
+    ),
+  );
+  afterEach(() => Effect.runPromise(removeRecursive(workspace.rootDir)));
+  return workspace;
 };
 
-export type FolderStructure = {
-  dirs?: string[];
-  files?: Record<string, string>;
+const useTempWorkspace = (): autocompleteHelpersTypes.TempWorkspace => {
+  const workspace: autocompleteHelpersTypes.TempWorkspace = {
+    baseDir: "",
+    outsideDir: "",
+    rootDir: "",
+  };
+  beforeEach(() =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        workspace.rootDir = yield* makeTempDirectory("msa-autocomplete-root-");
+        workspace.baseDir = join(workspace.rootDir, "cwd");
+        workspace.outsideDir = join(workspace.rootDir, "outside");
+        yield* makeDirectory(workspace.baseDir);
+        yield* makeDirectory(workspace.outsideDir);
+      }),
+    ),
+  );
+  afterEach(() => Effect.runPromise(removeRecursive(workspace.rootDir)));
+  return workspace;
 };
 
-export const setupFolder = (baseDir: string, structure: FolderStructure = {}): void => {
-  const dirs = structure.dirs ?? [];
-  const files = structure.files ?? {};
+const located: { fdPath: string | null } = { fdPath: null };
 
-  dirs.forEach((dir) => {
-    mkdirSync(join(baseDir, dir), { recursive: true });
-  });
-  Object.entries(files).forEach(([filePath, contents]) => {
-    const fullPath = join(baseDir, filePath);
-    mkdirSync(dirname(fullPath), { recursive: true });
-    writeFileSync(fullPath, contents);
-  });
-};
+const withFd = (register: () => void): Promise<void> =>
+  Effect.runPromise(
+    Effect.map(locateFd, (fdPath) => {
+      located.fdPath = fdPath;
+      if (fdPath === null || fdPath === "")
+        it("needs fd", { skip: "fd is not installed" }, () => {});
+      else register();
+    }),
+  );
 
-export const fdPath = resolveFdPath();
-
-export const isFdInstalled = Boolean(fdPath);
-
-export const requireFdPath = (): string => {
-  if (!fdPath) {
+const requireFdPath = (): string => {
+  if (located.fdPath === null || located.fdPath === "") {
     throw new Error("fd is not available");
   }
-  return fdPath;
+  return located.fdPath;
 };
 
-export const getSuggestions = (
-  provider: CombinedAutocompleteProvider,
-  lines: string[],
-  cursorLine: number,
-  cursorCol: number,
-  force: boolean = false,
-) =>
-  provider.getSuggestions(lines, cursorLine, cursorCol, {
-    signal: new AbortController().signal,
-    force,
-  });
+const getSuggestions: {
+  (
+    provider: autocompleteTypes.CombinedAutocompleteProvider,
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    force?: boolean,
+  ): Promise<autocompleteTypes.AutocompleteSuggestions | null>;
+  (
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    force?: boolean,
+  ): (
+    provider: autocompleteTypes.CombinedAutocompleteProvider,
+  ) => Promise<autocompleteTypes.AutocompleteSuggestions | null>;
+} = dual(
+  (args) => args[0] instanceof CombinedAutocompleteProvider,
+  (
+    provider: autocompleteTypes.CombinedAutocompleteProvider,
+    lines: string[],
+    cursorLine: number,
+    cursorCol: number,
+    force: boolean = false,
+  ): Promise<autocompleteTypes.AutocompleteSuggestions | null> =>
+    provider.getSuggestions(lines, cursorLine, cursorCol, {
+      force,
+      signal: new AbortController().signal,
+    }),
+);
+
+const autocompleteHelpers = {
+  getSuggestions,
+  requireFdPath,
+  setupFolder,
+  useTempDirectory,
+  useTempWorkspace,
+  withFd,
+};
+
+export default autocompleteHelpers;

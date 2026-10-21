@@ -3,10 +3,15 @@ import { homedir } from "node:os";
 import { NodeServices } from "@effect/platform-node";
 import { Console, Data, Effect, FileSystem, Layer, Path } from "effect";
 
-import { captureProcess, processRunnerLayer, runInherit } from "./capture-process.ts";
-import { Workspace, workspaceLayer } from "./coding-agent-package.ts";
-import { archiveFileNameFor, hostPlatformName, RELEASE_PLATFORMS } from "./release-platforms.ts";
-import { runMainWith } from "./run-main.ts";
+import captureProcessModule from "./capture-process.ts";
+import codingAgentPackage from "./coding-agent-package.ts";
+import releasePlatforms from "./release-platforms.ts";
+import runMain from "./run-main.ts";
+
+const { Workspace, workspaceLayer } = codingAgentPackage;
+const { RELEASE_PLATFORMS, archiveFileNameFor, hostPlatformName } = releasePlatforms;
+const { captureProcess, processRunnerLayer, runInherit } = captureProcessModule;
+const { runMainWith } = runMain;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 
@@ -35,14 +40,14 @@ const makeContext = () =>
     const archiveName = archiveFileNameFor(platform);
     const archivePath = path.join(outDir, archiveName);
     return {
-      fs,
-      path,
-      repoRoot,
       archivePath,
+      executable: platform.executable,
+      fs,
       installDir: path.join(homedir(), ".local", "share", "msa"),
       linkPath: path.join(homedir(), ".local", "bin", "msa"),
-      executable: platform.executable,
+      path,
       platformName: platform.name,
+      repoRoot,
       version,
     };
   });
@@ -51,7 +56,7 @@ type Context = Effect.Success<ReturnType<typeof makeContext>>;
 
 const install = (context: Context) =>
   Effect.gen(function* () {
-    yield* context.fs.remove(context.installDir, { recursive: true, force: true });
+    yield* context.fs.remove(context.installDir, { force: true, recursive: true });
     yield* context.fs.makeDirectory(context.installDir, { recursive: true });
     yield* runInherit({
       args: ["-xzf", context.archivePath, "-C", context.installDir, "--strip-components=1"],

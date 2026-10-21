@@ -1,6 +1,8 @@
 import { Data } from "effect";
 
-export class OAuthInsecureEndpointError extends Data.TaggedError("OAuthInsecureEndpointError")<{
+export default class OAuthInsecureEndpointError extends Data.TaggedError(
+  "OAuthInsecureEndpointError",
+)<{
   readonly endpoint: string;
   readonly message: string;
 }> {

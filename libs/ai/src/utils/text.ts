@@ -1,53 +1,35 @@
-import type {
-  ImageContent,
-  SystemMessage,
-  TextContent,
-  ThinkingContent,
-  ToolCall,
-} from "../types.ts";
+import { Function } from "effect";
 
-type Content = TextContent | ImageContent | ThinkingContent | ToolCall;
+import type typesModule from "../types.types.ts";
 
-/**
- * Extract and join text from message content.
- *
- * @param {string | readonly Content[]} content - message content
- * @param {string} [separator] - text placed between parts
- * @returns {string} the joined text
- */
-export function contentText(content: string | readonly Content[], separator = "\n"): string {
+type Content =
+  | typesModule.TextContent
+  | typesModule.ImageContent
+  | typesModule.ThinkingContent
+  | typesModule.ToolCall;
+
+const contentText: {
+  (separator: string): (content: string | readonly Content[]) => string;
+  (content: string | readonly Content[], separator: string): string;
+} = Function.dual(2, function (content: string | readonly Content[], separator: string): string {
   if (typeof content === "string") return content;
   return content
     .filter((block) => block.type === "text")
     .map((block) => block.text)
     .join(separator);
-}
+});
 
-/**
- * Render a system message as a complete prompt: its content followed by its sections.
- *
- * @param {SystemMessage} message - system message to render
- * @returns {string} the prompt text
- */
-export function getSystemMessageText(message: SystemMessage): string {
-  const parts = [contentText(message.content)];
+function getSystemMessageText(message: typesModule.SystemMessage): string {
+  const parts = [contentText(message.content, "\n")];
   for (const text of Object.values(message.sections ?? {})) {
     if (text !== null) parts.push(text);
   }
   return parts.filter((part) => part.length > 0).join("\n\n");
 }
 
-/**
- * Render a later system message for APIs that accept system messages mid-conversation.
- * Section changes are framed by name so the model can relate them to the leading prompt.
- * This framing is request-time only and may change between versions.
- *
- * @param {SystemMessage} message - later system message
- * @returns {string} the update text
- */
-export function renderSystemMessageUpdate(message: SystemMessage): string {
+function renderSystemMessageUpdate(message: typesModule.SystemMessage): string {
   const parts: string[] = [];
-  const text = contentText(message.content);
+  const text = contentText(message.content, "\n");
   if (text.length > 0) parts.push(text);
   for (const [name, value] of Object.entries(message.sections ?? {})) {
     parts.push(
@@ -58,3 +40,11 @@ export function renderSystemMessageUpdate(message: SystemMessage): string {
   }
   return parts.join("\n\n");
 }
+
+const textModule = {
+  contentText,
+  getSystemMessageText,
+  renderSystemMessageUpdate,
+};
+
+export default textModule;

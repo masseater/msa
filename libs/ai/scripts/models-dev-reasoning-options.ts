@@ -1,16 +1,7 @@
-import type { ThinkingLevel, ThinkingLevelMap } from "../src/types.ts";
+import type typesModule from "../src/types.types.ts";
+import type modelsDevReasoningOptionsTypes from "./models-dev-reasoning-options.types.ts";
 
-export type ModelsDevReasoningOption =
-  | { type: "toggle" }
-  | {
-      type: "effort";
-      values: Array<
-        "none" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max" | "default" | null
-      >;
-    }
-  | { type: "budget_tokens"; min?: number; max?: number };
-
-const THINKING_LEVELS: readonly ThinkingLevel[] = [
+const THINKING_LEVELS: readonly typesModule.ThinkingLevel[] = [
   "minimal",
   "low",
   "medium",
@@ -19,17 +10,9 @@ const THINKING_LEVELS: readonly ThinkingLevel[] = [
   "max",
 ];
 
-/**
- * Converts models.dev verified effort values into msa's selectable thinking levels.
- * Values without a msa equivalent (`default` and JSON `null`) are intentionally
- * omitted.
- *
- * @param {readonly ModelsDevReasoningOption[]} options - models.dev effort values
- * @returns {ThinkingLevelMap | undefined} the thinking level map, or undefined when no value maps
- */
-export function getEffortThinkingLevelMap(
-  options: readonly ModelsDevReasoningOption[],
-): ThinkingLevelMap | undefined {
+function getEffortThinkingLevelMap(
+  options: readonly modelsDevReasoningOptionsTypes.ModelsDevReasoningOption[],
+): typesModule.ThinkingLevelMap | undefined {
   const effortValues = options.flatMap((option) => (option.type === "effort" ? option.values : []));
   if (effortValues.length === 0) return undefined;
 
@@ -37,9 +20,11 @@ export function getEffortThinkingLevelMap(
   if (!THINKING_LEVELS.some((level) => supported.has(level)) && !supported.has("none"))
     return undefined;
 
-  const map: ThinkingLevelMap = { off: supported.has("none") ? "none" : null };
+  const map: typesModule.ThinkingLevelMap = { off: supported.has("none") ? "none" : null };
   for (const level of THINKING_LEVELS) {
     map[level] = supported.has(level) ? level : null;
   }
   return map;
 }
+
+export default getEffortThinkingLevelMap;

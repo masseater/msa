@@ -1,11 +1,18 @@
-import http from "node:http";
 import net from "node:net";
 import tls from "node:tls";
 
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import * as undici from "undici";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { applyHttpProxySettings, configureHttpDispatcher } from "../src/core/http-dispatcher.ts";
+import httpDispatcher from "../src/core/http-dispatcher.ts";
+import platform from "../src/core/platform/index.ts";
+
+const { applyHttpProxySettings, configureHttpDispatcher } = httpDispatcher;
+const { readEnv } = platform;
+
+const { awaited, deferredPromise, runTest } = testing;
 
 const PROXY_ENV_KEYS = ["HTTP_PROXY", "HTTPS_PROXY"] as const;
 const DISPATCHER_PROXY_ENV_KEYS = [
@@ -16,96 +23,75 @@ const DISPATCHER_PROXY_ENV_KEYS = [
   "no_proxy",
 ] as const;
 
+const clearEnv = (keys: readonly string[]): void => {
+  for (const key of keys) vi.stubEnv(key, undefined);
+};
+
+const ORIGIN_RESPONSE = "HTTP/1.1 200 OK\r\ncontent-length: 6\r\nconnection: close\r\n\r\norigin";
+
+const listenOnFreePort = (server: net.Server): Effect.Effect<number> =>
+  Effect.gen(function* () {
+    const listening = deferredPromise<void>();
+    server.listen(0, "127.0.0.1", () => listening.resolve(undefined));
+    yield* Effect.promise(() => listening.promise);
+    const address = server.address();
+    if (address === null || typeof address === "string") {
+      throw new Error("Server did not bind to a TCP port");
+    }
+    return address.port;
+  });
+
+const closeServer = (server: net.Server): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const closed = deferredPromise<void>();
+    server.close(() => closed.resolve(undefined));
+    yield* Effect.promise(() => closed.promise);
+  });
+
+const appliesHttpproxyToHttpProxyAndHttps = () => {
+  applyHttpProxySettings("http://127.0.0.1:7890");
+
+  expect(readEnv("HTTP_PROXY")).toBe("http://127.0.0.1:7890");
+  expect(readEnv("HTTPS_PROXY")).toBe("http://127.0.0.1:7890");
+};
+
+const doesNotOverrideExistingProxyEnvVars = () => {
+  vi.stubEnv("HTTP_PROXY", "http://env-http:8080");
+  vi.stubEnv("HTTPS_PROXY", "http://env-https:8080");
+
+  applyHttpProxySettings("http://settings:7890");
+
+  expect(readEnv("HTTP_PROXY")).toBe("http://env-http:8080");
+  expect(readEnv("HTTPS_PROXY")).toBe("http://env-https:8080");
+};
+
+const ignoresEmptyValues = () => {
+  applyHttpProxySettings("   ");
+
+  expect(readEnv("HTTP_PROXY")).toBeUndefined();
+  expect(readEnv("HTTPS_PROXY")).toBeUndefined();
+};
+
 describe("http proxy settings", () => {
-  let savedEnv: Record<(typeof PROXY_ENV_KEYS)[number], string | undefined>;
+  beforeEach(() => clearEnv(PROXY_ENV_KEYS));
 
-  beforeEach(() => {
-    savedEnv = Object.fromEntries(PROXY_ENV_KEYS.map((key) => [key, process.env[key]])) as Record<
-      (typeof PROXY_ENV_KEYS)[number],
-      string | undefined
-    >;
-    for (const key of PROXY_ENV_KEYS) {
-      delete process.env[key];
-    }
-  });
+  it("applies httpProxy to HTTP_PROXY and HTTPS_PROXY", appliesHttpproxyToHttpProxyAndHttps);
 
-  afterEach(() => {
-    for (const key of PROXY_ENV_KEYS) {
-      const value = savedEnv[key];
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-  });
+  it("does not override existing proxy env vars", doesNotOverrideExistingProxyEnvVars);
 
-  it("applies httpProxy to HTTP_PROXY and HTTPS_PROXY", () => {
-    applyHttpProxySettings("http://127.0.0.1:7890");
-
-    expect(process.env["HTTP_PROXY"]).toBe("http://127.0.0.1:7890");
-    expect(process.env["HTTPS_PROXY"]).toBe("http://127.0.0.1:7890");
-  });
-
-  it("does not override existing proxy env vars", () => {
-    process.env["HTTP_PROXY"] = "http://env-http:8080";
-    process.env["HTTPS_PROXY"] = "http://env-https:8080";
-
-    applyHttpProxySettings("http://settings:7890");
-
-    expect(process.env["HTTP_PROXY"]).toBe("http://env-http:8080");
-    expect(process.env["HTTPS_PROXY"]).toBe("http://env-https:8080");
-  });
-
-  it("ignores empty values", () => {
-    applyHttpProxySettings("   ");
-
-    expect(process.env["HTTP_PROXY"]).toBeUndefined();
-    expect(process.env["HTTPS_PROXY"]).toBeUndefined();
-  });
+  it("ignores empty values", ignoresEmptyValues);
 });
 
-describe("http dispatcher", () => {
-  const originalDispatcher = undici.getGlobalDispatcher();
-  const originalFetch = globalThis.fetch;
-  let savedProxyEnv: Record<(typeof DISPATCHER_PROXY_ENV_KEYS)[number], string | undefined>;
+const originalDispatcher = undici.getGlobalDispatcher();
 
-  beforeEach(() => {
-    savedProxyEnv = Object.fromEntries(
-      DISPATCHER_PROXY_ENV_KEYS.map((key) => [key, process.env[key]]),
-    ) as Record<(typeof DISPATCHER_PROXY_ENV_KEYS)[number], string | undefined>;
-    for (const key of DISPATCHER_PROXY_ENV_KEYS) {
-      delete process.env[key];
-    }
-  });
+const originalFetch = globalThis.fetch;
 
-  afterEach(async () => {
-    const dispatcher = undici.getGlobalDispatcher();
-    if (dispatcher !== originalDispatcher) {
-      await dispatcher.close();
-      undici.setGlobalDispatcher(originalDispatcher);
-    }
-    for (const key of DISPATCHER_PROXY_ENV_KEYS) {
-      const value = savedProxyEnv[key];
-      if (value === undefined) {
-        delete process.env[key];
-      } else {
-        process.env[key] = value;
-      }
-    }
-    globalThis.fetch = originalFetch;
-    vi.restoreAllMocks();
-  });
-
-  it("tunnels proxied HTTP origins", async () => {
-    const origin = http.createServer((_request, response) => {
-      response.end("origin");
+const tunnelsProxiedHttpOriginsSetup = () =>
+  Effect.gen(function* () {
+    const origin = net.createServer((socket) => {
+      socket.once("data", () => socket.end(ORIGIN_RESPONSE));
     });
-    await new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve));
-    const originAddress = origin.address();
-    if (!originAddress || typeof originAddress === "string") {
-      throw new Error("Origin did not bind to a TCP port");
-    }
+    const originPort = yield* listenOnFreePort(origin);
 
     const proxyRequestLines: string[] = [];
     const proxy = net.createServer((client) => {
@@ -119,66 +105,106 @@ describe("http dispatcher", () => {
           return;
         }
 
-        const upstream = net.connect(originAddress.port, "127.0.0.1", () => {
+        const upstream = net.connect(originPort, "127.0.0.1", () => {
           client.write("HTTP/1.1 200 Connection Established\r\n\r\n");
-          client.pipe(upstream).pipe(client);
+          client.pipe(upstream);
+          upstream.pipe(client);
         });
         upstream.on("error", () => client.destroy());
         client.on("error", () => upstream.destroy());
       });
     });
-    await new Promise<void>((resolve) => proxy.listen(0, "127.0.0.1", resolve));
-    const proxyAddress = proxy.address();
-    if (!proxyAddress || typeof proxyAddress === "string") {
-      throw new Error("Proxy did not bind to a TCP port");
-    }
-
-    process.env["HTTP_PROXY"] = `http://127.0.0.1:${proxyAddress.port}`;
-    configureHttpDispatcher();
-    const dispatcher = undici.getGlobalDispatcher();
-    try {
-      const originUrl = `http://127.0.0.1:${originAddress.port}/v1/chat/completions`;
-      await expect(undici.fetch(originUrl).then((response) => response.text())).resolves.toBe(
-        "origin",
-      );
-      await expect(undici.fetch(originUrl).then((response) => response.text())).resolves.toBe(
-        "origin",
-      );
-      expect(proxyRequestLines).not.toHaveLength(0);
-      expect(proxyRequestLines).toEqual(
-        expect.arrayContaining([
-          expect.stringMatching(`^CONNECT 127\\.0\\.0\\.1:${originAddress.port} HTTP/1\\.1$`),
-        ]),
-      );
-    } finally {
-      await dispatcher.close();
-      undici.setGlobalDispatcher(originalDispatcher);
-      await Promise.all([
-        new Promise<void>((resolve) => proxy.close(() => resolve())),
-        new Promise<void>((resolve) => origin.close(() => resolve())),
-      ]);
-    }
+    return { origin, originPort, proxy, proxyRequestLines };
   });
 
-  it("allows two seconds for HTTPS connection attempts without changing the Node default", async () => {
-    // Preserve a deliberate host fetch override while testing the dispatcher itself.
-    globalThis.fetch = async () => {
-      throw new Error("Unexpected global fetch");
-    };
-    const originalAttemptTimeoutMs = net.getDefaultAutoSelectFamilyAttemptTimeout();
-    const connectSpy = vi.spyOn(tls, "connect").mockImplementation(() => {
-      throw new Error("Connection captured");
-    });
+const tunnelsProxiedHttpOrigins = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { origin, originPort, proxy, proxyRequestLines } =
+        yield* tunnelsProxiedHttpOriginsSetup();
+      const proxyPort = yield* listenOnFreePort(proxy);
 
-    configureHttpDispatcher();
-    await expect(undici.fetch("https://example.invalid")).rejects.toThrow();
+      vi.stubEnv("HTTP_PROXY", `http://127.0.0.1:${proxyPort}`);
+      configureHttpDispatcher();
+      const dispatcher = undici.getGlobalDispatcher();
+      try {
+        const originUrl = `http://127.0.0.1:${originPort}/v1/chat/completions`;
+        yield* awaited(
+          expect(undici.fetch(originUrl).then((response) => response.text())).resolves.toBe(
+            "origin",
+          ),
+        );
+        yield* awaited(
+          expect(undici.fetch(originUrl).then((response) => response.text())).resolves.toBe(
+            "origin",
+          ),
+        );
+        expect(proxyRequestLines).not.toHaveLength(0);
+        expect(proxyRequestLines).toEqual(
+          expect.arrayContaining([
+            expect.stringMatching(`^CONNECT 127\\.0\\.0\\.1:${originPort} HTTP/1\\.1$`),
+          ]),
+        );
+      } finally {
+        yield* awaited(dispatcher.close());
+        undici.setGlobalDispatcher(originalDispatcher);
+        yield* closeServer(proxy);
+        yield* closeServer(origin);
+      }
+    }),
+  );
 
-    expect(connectSpy).toHaveBeenCalledWith(
-      expect.objectContaining({
-        autoSelectFamilyAttemptTimeout: 2_000,
-      }),
-    );
-    expect(connectSpy.mock.calls[0]?.[0]).not.toHaveProperty("autoSelectFamily");
-    expect(net.getDefaultAutoSelectFamilyAttemptTimeout()).toBe(originalAttemptTimeoutMs);
-  });
+const allowsTwoSecondsForHttpsConnectionAttempts = () =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      globalThis.fetch = () =>
+        effectRunPromise(
+          Effect.sync(() => {
+            throw new Error("Unexpected global fetch");
+          }),
+        );
+      const originalAttemptTimeoutMs = net.getDefaultAutoSelectFamilyAttemptTimeout();
+      const connectSpy = vi.spyOn(tls, "connect").mockImplementation(() => {
+        throw new Error("Connection captured");
+      });
+
+      configureHttpDispatcher();
+      yield* awaited(expect(undici.fetch("https://example.invalid")).rejects.toThrow());
+
+      expect(connectSpy).toHaveBeenCalledWith(
+        expect.objectContaining({
+          autoSelectFamilyAttemptTimeout: 2_000,
+        }),
+      );
+      expect(connectSpy.mock.calls[0]?.[0]).not.toHaveProperty("autoSelectFamily");
+      expect(net.getDefaultAutoSelectFamilyAttemptTimeout()).toBe(originalAttemptTimeoutMs);
+    }),
+  );
+
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      const dispatcher = undici.getGlobalDispatcher();
+      if (dispatcher !== originalDispatcher) {
+        yield* awaited(dispatcher.close());
+        undici.setGlobalDispatcher(originalDispatcher);
+      }
+      globalThis.fetch = originalFetch;
+      vi.restoreAllMocks();
+    }),
+  );
+
+describe("http dispatcher", () => {
+  beforeEach(() => clearEnv(DISPATCHER_PROXY_ENV_KEYS));
+
+  afterEach(afterEachHook);
+
+  it("tunnels proxied HTTP origins", tunnelsProxiedHttpOrigins);
+
+  it(
+    "allows two seconds for HTTPS connection attempts without changing the Node default",
+    allowsTwoSecondsForHttpsConnectionAttempts,
+  );
 });

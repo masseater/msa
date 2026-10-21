@@ -1,23 +1,14 @@
-// Unit tests for the shared provider error-body normalizer.
-//
-// See issues/provider-error-body-passthrough. These cover one synthesized error
-// object per SDK shape (msa HTTP error, openai APIError, @google/genai ApiError),
-// plus the non-Error fallback, truncation, the empty
-// parsed-body edge case, and the formatProviderError compose helper.
-
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  formatProviderError,
-  MAX_PROVIDER_ERROR_BODY_CHARS,
-  normalizeProviderError,
-} from "../src/utils/error-body.ts";
+import errorBody from "../src/utils/error-body.ts";
+
+const { MAX_PROVIDER_ERROR_BODY_CHARS, formatProviderError, normalizeProviderError } = errorBody;
 
 describe("normalizeProviderError", () => {
   it("extracts status and body from a string-body HTTP error", () => {
     const error = Object.assign(new Error("Classifier returned 403"), {
-      status: 403,
       body: '{"error":"blocked by gateway WAF"}',
+      status: 403,
     });
 
     const norm = normalizeProviderError(error);
@@ -28,11 +19,9 @@ describe("normalizeProviderError", () => {
   });
 
   it("reads the parsed body off an openai APIError when the message is opaque", () => {
-    // makeMessage(status, error, message) yields "<status> status code (no body)"
-    // when the parsed body is unparsed, while the body stays on error.error.
     const error = Object.assign(new Error("403 status code (no body)"), {
-      status: 403,
       error: { error: "blocked by gateway WAF" },
+      status: 403,
     });
 
     const norm = normalizeProviderError(error);
@@ -54,15 +43,17 @@ describe("normalizeProviderError", () => {
     expect(norm.messageCarriesBody).toBe(true);
     expect(norm.message).toBe(JSON.stringify(body));
   });
+});
 
+describe("normalizeProviderError", () => {
   it("ignores a class-instance `error` field instead of serializing it", () => {
     class SdkInnerError {
       code = "EPROTO";
       internalState = {};
     }
     const error = Object.assign(new Error("TLS handshake failed"), {
-      status: 502,
       error: new SdkInnerError(),
+      status: 502,
     });
 
     const norm = normalizeProviderError(error);
@@ -74,16 +65,18 @@ describe("normalizeProviderError", () => {
 
   it("still surfaces a plain parsed JSON body object", () => {
     const error = Object.assign(new Error("400 status code (no body)"), {
+      error: { field: "tools[0]", message: "schema validation failed" },
       status: 400,
-      error: { message: "schema validation failed", field: "tools[0]" },
     });
 
     const norm = normalizeProviderError(error);
 
-    expect(norm.body).toBe('{"message":"schema validation failed","field":"tools[0]"}');
+    expect(norm.body).toBe('{"field":"tools[0]","message":"schema validation failed"}');
     expect(norm.messageCarriesBody).toBe(false);
   });
+});
 
+describe("normalizeProviderError", () => {
   it("JSON-stringifies a non-Error thrown value", () => {
     const norm = normalizeProviderError({ reason: "boom" });
 
@@ -95,8 +88,8 @@ describe("normalizeProviderError", () => {
 
   it("treats an empty parsed body object as no body", () => {
     const error = Object.assign(new Error("403 status code (no body)"), {
-      status: 403,
       error: {},
+      status: 403,
     });
 
     const norm = normalizeProviderError(error);
@@ -108,8 +101,8 @@ describe("normalizeProviderError", () => {
   it("truncates the body at the cap", () => {
     const longBody = "x".repeat(MAX_PROVIDER_ERROR_BODY_CHARS + 50);
     const error = Object.assign(new Error("failed"), {
-      status: 500,
       body: longBody,
+      status: 500,
     });
 
     const norm = normalizeProviderError(error);
@@ -120,8 +113,8 @@ describe("normalizeProviderError", () => {
 
   it("sets messageCarriesBody when the message already contains the extracted body", () => {
     const error = Object.assign(new Error("500: upstream exploded"), {
-      status: 500,
       body: "upstream exploded",
+      status: 500,
     });
 
     const norm = normalizeProviderError(error);
@@ -134,8 +127,8 @@ describe("formatProviderError", () => {
   it("surfaces status and body without a prefix", () => {
     const norm = normalizeProviderError(
       Object.assign(new Error("403 status code (no body)"), {
-        status: 403,
         error: { error: "blocked by gateway WAF" },
+        status: 403,
       }),
     );
 
@@ -149,8 +142,8 @@ describe("formatProviderError", () => {
   it("applies a provider prefix with status and body", () => {
     const norm = normalizeProviderError(
       Object.assign(new Error("403 status code (no body)"), {
-        status: 403,
         error: { error: "blocked by gateway WAF" },
+        status: 403,
       }),
     );
 

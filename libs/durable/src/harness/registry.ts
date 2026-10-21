@@ -1,80 +1,19 @@
-import { INSTRUCTIONS_KEY } from "./agent.ts";
-import { CompactionTask } from "./compaction.ts";
-import { GenerationTask } from "./generation.ts";
-import { ToolTask } from "./tool.ts";
-import type {
-  AnyTask,
-  Extension,
-  PromptSection,
-  Registry,
-  RegistrySnapshot,
-  ToolRegistration,
-} from "./types.ts";
+import agentModule from "./agent.ts";
+import registryState from "./registry-state.ts";
+import type typesModule from "./types.types.ts";
+
+const { RegistryState } = registryState;
+const { INSTRUCTIONS_KEY } = agentModule;
 
 const SECTION_KEY = /^[a-z][a-z0-9_-]*$/u;
 
-/** Built-in task definitions every registry holds; they are not an extension and cannot be removed or replaced. */
-export const BUILTIN_TASKS: readonly AnyTask[] = [GenerationTask, ToolTask, CompactionTask];
-
-/** Immutable published registry state. */
-class RegistryState<Tool extends ToolRegistration> implements RegistrySnapshot<Tool> {
-  readonly #extensions: readonly Extension<Tool>[];
-  readonly #byName: ReadonlyMap<string, Extension<Tool>>;
-  readonly #tasks: ReadonlyMap<string, AnyTask>;
-
-  constructor(extensions: readonly Extension<Tool>[]) {
-    this.#extensions = extensions;
-    this.#byName = new Map(extensions.map((extension) => [extension.name, extension]));
-    const tasks = new Map<string, AnyTask>();
-    for (const task of BUILTIN_TASKS) tasks.set(task.definition.name, task);
-    for (const extension of extensions) {
-      for (const task of extension.tasks ?? []) {
-        const name = task.definition.name;
-        if (tasks.has(name))
-          throw new Error(`Task ${name} of extension ${extension.name} is already installed`);
-        tasks.set(name, task);
-      }
-    }
-    this.#tasks = tasks;
-  }
-
-  installed(): readonly Extension<Tool>[] {
-    return this.#extensions;
-  }
-
-  extension(name: string): Extension<Tool> | undefined {
-    return this.#byName.get(name);
-  }
-
-  tools(): readonly { readonly extension: Extension<Tool>; readonly tool: Tool }[] {
-    return this.#extensions.flatMap((extension) =>
-      (extension.tools ?? []).map((tool) => ({ extension, tool })),
-    );
-  }
-
-  sections(): readonly {
-    readonly extension: Extension<Tool>;
-    readonly section: PromptSection<Tool>;
-  }[] {
-    return this.#extensions.flatMap((extension) =>
-      (extension.sections ?? []).map((section) => ({ extension, section })),
-    );
-  }
-
-  tasks(): readonly AnyTask[] {
-    return [...this.#tasks.values()];
-  }
-
-  task(name: string): AnyTask | undefined {
-    return this.#tasks.get(name);
-  }
-}
-
-class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
+class RegistryImpl<
+  Tool extends typesModule.ToolRegistration,
+> implements typesModule.Registry<Tool> {
   #current = new RegistryState<Tool>([]);
   readonly #listeners = new Set<() => void>();
 
-  snapshot(): RegistrySnapshot<Tool> {
+  snapshot(): typesModule.RegistrySnapshot<Tool> {
     return this.#current;
   }
 
@@ -83,7 +22,7 @@ class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
     return () => this.#listeners.delete(listener);
   }
 
-  install(extension: Extension<Tool>): void {
+  install(extension: typesModule.Extension<Tool>): void {
     validateExtension(extension);
     const current = this.#current.installed();
     const index = current.findIndex((installed) => installed.name === extension.name);
@@ -94,27 +33,19 @@ class RegistryImpl<Tool extends ToolRegistration> implements Registry<Tool> {
     this.#publish(next);
   }
 
-  uninstall(extension: Extension): void {
+  uninstall(extension: typesModule.Extension): void {
     const current = this.#current.installed();
     if (!current.some((installed) => installed.name === extension.name)) return;
     this.#publish(current.filter((installed) => installed.name !== extension.name));
   }
 
-  /**
-   * Build and validate the next state, which throws on a task name collision, then publish it synchronously.
-   * @param {readonly Extension<Tool>[]} extensions - The installed extensions.
-   */
-  #publish(extensions: readonly Extension<Tool>[]): void {
+  #publish(extensions: readonly typesModule.Extension<Tool>[]): void {
     this.#current = new RegistryState(extensions);
     for (const listener of [...this.#listeners]) listener();
   }
 }
 
-/**
- * Unique tool names and section keys within one extension; valid, unreserved section keys.
- * @param {Extension} extension - The extension.
- */
-function validateExtension(extension: Extension): void {
+function validateExtension(extension: typesModule.Extension): void {
   const tools = new Set<string>();
   for (const tool of extension.tools ?? []) {
     if (tools.has(tool.name))
@@ -133,10 +64,15 @@ function validateExtension(extension: Extension): void {
   }
 }
 
-/**
- * Create an application-owned registry holding only the built-in tasks.
- * @returns {Registry<Tool>} The registry.
- */
-export function createRegistry<Tool extends ToolRegistration = ToolRegistration>(): Registry<Tool> {
+function createRegistry<
+  Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration,
+>(): typesModule.Registry<Tool> {
   return new RegistryImpl<Tool>();
 }
+
+const registry = {
+  BUILTIN_TASKS: registryState.BUILTIN_TASKS,
+  createRegistry,
+};
+
+export default registry;

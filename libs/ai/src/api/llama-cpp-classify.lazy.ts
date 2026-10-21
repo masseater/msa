@@ -1,6 +1,14 @@
-import type { ProviderClassifier } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
-export const llamaCppClassifyApi = (): ProviderClassifier => ({
-  classify: async (model, context, options) =>
-    (await import("./llama-cpp-classify.ts")).classify(model, context, options),
+const llamaCppClassifyApi = (): typesModule.ProviderClassifier => ({
+  classify: (model, context, options) =>
+    import("./llama-cpp-classify.ts").then((module) =>
+      module.default.classify(model, context, options),
+    ),
 });
+
+const llamaCppClassifyLazy = {
+  llamaCppClassifyApi,
+};
+
+export default llamaCppClassifyLazy;

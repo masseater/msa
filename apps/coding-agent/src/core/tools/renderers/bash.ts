@@ -1,31 +1,22 @@
-/**
- * Presentation for the shell tools.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `bash.ts` spreads these into the shell
- * tool definition, so the tool's public shape is unchanged.
- */
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { Container, Spacer, Text } from "@msa/tui";
+import SingleLine from "../../../modes/interactive/components/single-line.ts";
+import visualTruncate from "../../../modes/interactive/components/visual-truncate.ts";
+import themeModule from "../../../modes/interactive/theme/theme.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import type bashTypesModule from "../bash.types.ts";
+import renderUtils from "../render-utils.ts";
+import truncate from "../truncate.ts";
 
-import {
-  collapsedOutput,
-  SingleLine,
-} from "../../../modes/interactive/components/visual-truncate.ts";
-import { theme } from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import type { BashToolDetails } from "../bash.ts";
-import {
-  getTextOutput,
-  invalidArgText,
-  startToolTimer,
-  str,
-  toolTimerText,
-} from "../render-utils.ts";
-import { DEFAULT_MAX_BYTES, formatSize } from "../truncate.ts";
+const { getTextOutput, invalidArgText, startToolTimer, str, toolTimerText } = renderUtils;
+const { theme } = themeModule;
+const { DEFAULT_MAX_BYTES, formatSize } = truncate;
+const { collapsedOutput } = visualTruncate;
 
-export const BASH_UPDATE_THROTTLE_MS = 100;
-/** The command; collapsed, only its first line and how many lines follow. */
+const { Container, Spacer, Text } = tui;
+
+const BASH_UPDATE_THROTTLE_MS = 100;
 function formatShellCall(
   args: { command?: string; timeout?: number } | undefined,
   prompt: string,
@@ -33,10 +24,11 @@ function formatShellCall(
 ): string {
   const command = str(args?.command);
   const timeout = args?.timeout as number | undefined;
-  const timeoutSuffix = timeout ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
+  const timeoutSuffix =
+    timeout !== undefined && timeout !== 0 ? theme.fg("muted", ` (timeout ${timeout}s)`) : "";
   if (command === null)
     return theme.fg("toolTitle", theme.bold(`${prompt} ${invalidArgText(theme)}`));
-  if (!command)
+  if (command === "")
     return theme.fg("toolTitle", theme.bold(`${prompt} ${theme.fg("toolOutput", "...")}`));
   const lines = command.trimEnd().split("\n");
   const shown = expanded ? lines.join("\n") : lines[0];
@@ -44,27 +36,58 @@ function formatShellCall(
     !expanded && lines.length > 1 ? theme.fg("muted", ` (+${lines.length - 1} lines)`) : "";
   return theme.fg("toolTitle", theme.bold(`${prompt} ${shown}`)) + more + timeoutSuffix;
 }
+type BashResultDetails = bashTypesModule.BashToolDetails | undefined;
+
+function stripFullOutputFooter(output: string, details: BashResultDetails, isPartial: boolean) {
+  const fullOutputPath = details?.fullOutputPath;
+  if (
+    isPartial ||
+    details?.truncation?.truncated !== true ||
+    fullOutputPath === undefined ||
+    fullOutputPath === "" ||
+    !output.endsWith("]")
+  ) {
+    return output;
+  }
+  const footerStart = output.lastIndexOf("\n\n[");
+  return footerStart !== -1 && output.slice(footerStart).includes(fullOutputPath)
+    ? output.slice(0, footerStart).trimEnd()
+    : output;
+}
+
+function truncationWarnings(details: BashResultDetails): string[] {
+  const warnings: string[] = [];
+  const fullOutputPath = details?.fullOutputPath;
+  const truncation = details?.truncation;
+  if (fullOutputPath !== undefined && fullOutputPath !== "") {
+    warnings.push(`Full output: ${fullOutputPath}`);
+  }
+  if (truncation?.truncated === true) {
+    warnings.push(
+      truncation.truncatedBy === "lines"
+        ? `Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`
+        : `Truncated: ${truncation.outputLines} lines shown (${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit)`,
+    );
+  }
+  return warnings;
+}
+
 function rebuildBashResultRenderComponent(
-  component: Container,
+  component: tuiTypes.Container,
   result: {
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-    details?: BashToolDetails;
+    details?: bashTypesModule.BashToolDetails;
   },
-  options: ToolRenderResultOptions,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
   showImages: boolean,
   timerText: string | undefined,
 ): void {
   component.clear();
-
-  let output = getTextOutput(result as any, showImages).trim();
-  const truncation = result.details?.truncation;
-  const fullOutputPath = result.details?.fullOutputPath;
-  if (!options.isPartial && truncation?.truncated && fullOutputPath && output.endsWith("]")) {
-    const footerStart = output.lastIndexOf("\n\n[");
-    if (footerStart !== -1 && output.slice(footerStart).includes(fullOutputPath)) {
-      output = output.slice(0, footerStart).trimEnd();
-    }
-  }
+  const output = stripFullOutputFooter(
+    getTextOutput(result as any, showImages).trim(),
+    result.details,
+    options.isPartial,
+  );
 
   if (!options.expanded) {
     component.addChild(new Spacer(1));
@@ -72,7 +95,7 @@ function rebuildBashResultRenderComponent(
     return;
   }
 
-  if (output) {
+  if (output !== "") {
     const styledOutput = output
       .split("\n")
       .map((line) => theme.fg("toolOutput", line))
@@ -80,32 +103,18 @@ function rebuildBashResultRenderComponent(
     component.addChild(new Text(`\n${styledOutput}`, 0, 0));
   }
 
-  if (truncation?.truncated || fullOutputPath) {
-    const warnings: string[] = [];
-    if (fullOutputPath) {
-      warnings.push(`Full output: ${fullOutputPath}`);
-    }
-    if (truncation?.truncated) {
-      if (truncation.truncatedBy === "lines") {
-        warnings.push(
-          `Truncated: showing ${truncation.outputLines} of ${truncation.totalLines} lines`,
-        );
-      } else {
-        warnings.push(
-          `Truncated: ${truncation.outputLines} lines shown (${formatSize(truncation.maxBytes ?? DEFAULT_MAX_BYTES)} limit)`,
-        );
-      }
-    }
+  const warnings = truncationWarnings(result.details);
+  if (warnings.length > 0) {
     component.addChild(new Text(`\n${theme.fg("warning", `[${warnings.join(". ")}]`)}`, 0, 0));
   }
 
-  if (timerText) component.addChild(new Text(`\n${theme.fg("muted", timerText)}`, 0, 0));
+  if (timerText !== undefined && timerText !== "")
+    component.addChild(new Text(`\n${theme.fg("muted", timerText)}`, 0, 0));
 }
 
-/** Shell renderers are shared by bash and powershell, which differ only in the prompt they display. */
-export function createShellRenderers(
+function createShellRenderers(
   prompt: string,
-): Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> {
+): Pick<extensionsTypesTypes.ToolDefinition<any, any>, "renderCall" | "renderResult"> {
   return {
     renderCall(args, _theme, context) {
       startToolTimer(context);
@@ -122,7 +131,8 @@ export function createShellRenderers(
     },
     renderResult(result, options, _theme, context) {
       const timerText = toolTimerText(context, options.isPartial);
-      const component = (context.lastComponent as Container | undefined) ?? new Container();
+      const component =
+        (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
       rebuildBashResultRenderComponent(
         component,
         result as any,
@@ -135,3 +145,10 @@ export function createShellRenderers(
     },
   };
 }
+
+const bash = {
+  BASH_UPDATE_THROTTLE_MS,
+  createShellRenderers,
+};
+
+export default bash;

@@ -1,17 +1,18 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { TUI } from "../src/tui.ts";
-import {
-  extractSegments,
-  normalizeTerminalOutput,
-  sliceWithWidth,
-  visibleWidth,
-} from "../src/utils.ts";
-import { CapturingVirtualTerminal } from "./tab-width-capturing-virtual-terminal.ts";
-import { FullViewportContent } from "./tab-width-full-viewport-content.ts";
-import { TabStatusOverlay } from "./tab-width-tab-status-overlay.ts";
+import { Effect } from "effect";
+
+import textSlice from "../src/text-slice.ts";
+import type tuiInterfaceTypes from "../src/tui-interface.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import utils from "../src/utils.ts";
+import CapturingVirtualTerminal from "./tab-width-capturing-virtual-terminal.ts";
+import FullViewportContent from "./tab-width-full-viewport-content.ts";
+import TabStatusOverlay from "./tab-width-tab-status-overlay.ts";
+
+const { extractSegments, sliceWithWidth } = textSlice;
+const { normalizeTerminalOutput, visibleWidth } = utils;
 
 describe("tab width accounting", () => {
   it("keeps slice helper widths consistent with visible width", () => {
@@ -54,23 +55,30 @@ describe("tab width accounting", () => {
 });
 
 describe("tab width accounting", () => {
-  it("keeps tab-containing overlays on one physical terminal row", async () => {
-    const terminal = new CapturingVirtualTerminal(16, 3);
-    const tui: TUI = new TuiMainScreen(terminal);
-    tui.addChild(new FullViewportContent());
-    tui.showOverlay(new TabStatusOverlay(), { width: 4, row: 1, col: 4 });
-    tui.start();
+  it("keeps tab-containing overlays on one physical terminal row", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const terminal = new CapturingVirtualTerminal(16, 3);
+        const tui: tuiInterfaceTypes.TUI = new TuiMainScreen(terminal);
+        tui.addChild(new FullViewportContent());
+        tui.showOverlay(new TabStatusOverlay(), { col: 4, row: 1, width: 4 });
+        tui.start();
 
-    try {
-      await terminal.waitForRender();
-      assert.deepStrictEqual(terminal.getViewport(), [
-        "base 0          ",
-        "base   X        ",
-        "base 2          ",
-      ]);
-      assert.ok(!terminal.getOutput().includes("\t"));
-    } finally {
-      tui.stop();
-    }
-  });
+        yield* Effect.gen(function* () {
+          yield* Effect.promise(() => terminal.waitForRender());
+          assert.deepStrictEqual(terminal.getViewport(), [
+            "base 0          ",
+            "base   X        ",
+            "base 2          ",
+          ]);
+          assert.ok(!terminal.getOutput().includes("\t"));
+        }).pipe(
+          Effect.ensuring(
+            Effect.sync(() => {
+              tui.stop();
+            }),
+          ),
+        );
+      }),
+    ));
 });

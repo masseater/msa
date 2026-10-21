@@ -1,47 +1,44 @@
-/**
- * Context Files (AGENTS.md)
- *
- * Context files provide project-specific instructions loaded into the system prompt.
- */
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  getAgentDir,
-  SessionManager,
-} from "@msa/coding-agent";
+const { DefaultResourceLoader, SessionManager, createAgentSession, getAgentDir } = codingAgent;
 
-// Disable context files entirely by returning an empty list in agentsFilesOverride.
 const loader = new DefaultResourceLoader({
-  cwd: process.cwd(),
   agentDir: getAgentDir(),
   agentsFilesOverride: (current) => ({
     agentsFiles: [
       ...current.agentsFiles,
       {
-        path: "/virtual/AGENTS.md",
         content: `# Project Guidelines
 
 ## Code Style
 - Use TypeScript strict mode
 - No any types
 - Prefer const over let`,
+        path: "/virtual/AGENTS.md",
       },
     ],
   }),
+  cwd: process.cwd(),
 });
-await loader.reload();
 
-// Discover AGENTS.md files walking up from cwd
-const discovered = loader.getAgentsFiles().agentsFiles;
-console.log("Discovered context files:");
-for (const file of discovered) {
-  console.log(`  - ${file.path} (${file.content.length} chars)`);
-}
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => loader.reload());
 
-const { session } = await createAgentSession({
-  resourceLoader: loader,
-  sessionManager: SessionManager.inMemory(),
-});
-console.log(`Session created with ${discovered.length + 1} context files`);
-session.dispose();
+    const discovered = loader.getAgentsFiles().agentsFiles;
+    yield* Console.log("Discovered context files:");
+    for (const file of discovered) {
+      yield* Console.log(`  - ${file.path} (${file.content.length} chars)`);
+    }
+
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader: loader,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log(`Session created with ${discovered.length + 1} context files`);
+    session.dispose();
+  }),
+);

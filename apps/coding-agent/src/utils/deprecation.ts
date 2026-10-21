@@ -1,14 +1,24 @@
 import chalk from "chalk";
 
+import platform from "../core/platform/index.ts";
+
+const { writeWarn } = platform;
+
 const emittedDeprecationWarnings = new Set<string>();
 
-export function warnDeprecation(message: string): void {
+function warnDeprecation(message: string): void {
   if (emittedDeprecationWarnings.has(message)) return;
   emittedDeprecationWarnings.add(message);
-  console.warn(chalk.yellow(`Deprecation warning: ${message}`));
+  writeWarn(chalk.yellow(`Deprecation warning: ${message}`));
 }
 
-/** Clear deprecation warning state. Exported for tests. */
-export function clearDeprecationWarningsForTests(): void {
+function clearDeprecationWarningsForTests(): void {
   emittedDeprecationWarnings.clear();
 }
+
+const deprecation = {
+  clearDeprecationWarningsForTests,
+  warnDeprecation,
+};
+
+export default deprecation;

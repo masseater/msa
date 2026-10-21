@@ -1,153 +1,181 @@
-import type { AssistantMessage, Message, StopReason, ToolResultMessage } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-// Transcript history and model context.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/09-context.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import type aiTypes from "@msa/ai/index.types";
+import modelsModule from "@msa/ai/models";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import { createRegistry, Harness, MemoryStorage } from "../../src/index.ts";
+import harnessModule from "../../src/harness/index.ts";
+import memory from "../../src/storage/memory.ts";
+import effectSupport from "../effect-support.ts";
+
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models: createModels(), registry: createRegistry() },
-  context,
-);
 
-// Entries are immutable. `model` holds the messages an entry contributes to
-// the next model request; `data` is for the app only. context() turns the
-// stored transcript into those request messages:
-//   - an entry with `head` starts a new context; older entries stay stored,
-//   - `edits` replace or omit what an earlier entry contributes,
-//   - aborted, error, and deferred assistant messages are not sent,
-//   - tool results are sent right after their call, in call order,
-//   - a call without a result gets a synthesized error result.
-function assistantMessage(
-  text: string,
-  calls: readonly string[] = [],
-  stopReason?: StopReason,
-): AssistantMessage {
-  return {
-    role: "assistant",
-    content: [
-      { type: "text", text },
-      ...calls.map((id) => ({ type: "toolCall" as const, id, name: "read", arguments: {} })),
-    ],
-    api: "example",
-    provider: "example",
-    model: "example",
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-    stopReason: stopReason ?? (calls.length > 0 ? "toolUse" : "stop"),
-    timestamp: 2,
-  };
-}
+const mainStep1 = Effect.gen(function* () {
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      { models: createModels(), registry: createRegistry() },
+      context,
+    ),
+  );
 
-function toolResultMessage(id: string): ToolResultMessage {
-  return {
-    role: "toolResult",
-    toolCallId: id,
-    toolName: "read",
-    content: [{ type: "text", text: `file ${id}` }],
-    isError: false,
-    timestamp: 3,
-  };
-}
-
-function show(message: Message): string {
-  switch (message.role) {
-    case "user":
-      return `user: ${message.content as string}`;
-    case "system":
-      return `system: ${JSON.stringify(message.sections)}`;
-    case "assistant":
-      return `assistant: ${message.content
-        .map((part) =>
-          part.type === "text" ? part.text : part.type === "toolCall" ? `call(${part.id})` : "",
-        )
-        .join(" ")}`;
-    case "toolResult":
-      return `result(${message.toolCallId})${message.isError ? " error" : ""}`;
-  }
-}
-
-const transcript = await harness.createConversation({ ownership: { kind: "ownerless" } }, context);
-const say = (kind: string, ...model: Message[]) =>
-  transcript.commit((tx) => tx.appendEntry(transcript.id, { kind, model }), context);
-
-const question = await say("message", { role: "user", content: "read a and b", timestamp: 1 });
-// stored, never sent
-await say("message", assistantMessage("I crashed", [], "aborted"));
-const calls = await say("message", assistantMessage("reading", ["a", "b"]));
-// results finish out of order
-await say("message", toolResultMessage("b"));
-await say("msa.system", {
-  role: "system",
-  content: "",
-  sections: { cwd: "<cwd>/repo</cwd>" },
-  timestamp: 4,
-});
-await say("message", toolResultMessage("a"));
-await say("message", assistantMessage("a and b look fine"));
-await transcript.commit(
-  (tx) =>
-    tx.appendEntry(transcript.id, {
-      kind: "edit",
-      data: "user fixed a typo",
-      edits: [
-        {
-          target: question.id,
-          action: "replace",
-          messages: [{ role: "user", content: "read files a and b", timestamp: 1 }],
-        },
+  function assistantMessage(
+    text: string,
+    calls: readonly string[] = [],
+    stopReason?: aiTypes.StopReason,
+  ): aiTypes.AssistantMessage {
+    return {
+      api: "example",
+      content: [
+        { text, type: "text" },
+        ...calls.map((id) => ({ arguments: {}, id, name: "read", type: "toolCall" as const })),
       ],
+      model: "example",
+      provider: "example",
+      role: "assistant",
+      stopReason: stopReason ?? (calls.length > 0 ? "toolUse" : "stop"),
+      timestamp: 2,
+      usage: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 0,
+        output: 0,
+        totalTokens: 0,
+      },
+    };
+  }
+  return { assistantMessage, harness };
+});
+
+const mainStep2 = Effect.gen(function* () {
+  const { harness, assistantMessage } = yield* mainStep1;
+  function toolResultMessage(id: string): aiTypes.ToolResultMessage {
+    return {
+      content: [{ text: `file ${id}`, type: "text" }],
+      isError: false,
+      role: "toolResult",
+      timestamp: 3,
+      toolCallId: id,
+      toolName: "read",
+    };
+  }
+
+  function show(message: aiTypes.Message): string {
+    switch (message.role) {
+      case "user":
+        return `user: ${message.content as string}`;
+      case "system":
+        return `system: ${JSON.stringify(message.sections)}`;
+      case "assistant":
+        return `assistant: ${message.content
+          .map((part) =>
+            part.type === "text" ? part.text : part.type === "toolCall" ? `call(${part.id})` : "",
+          )
+          .join(" ")}`;
+      case "toolResult":
+        return `result(${message.toolCallId})${message.isError ? " error" : ""}`;
+    }
+  }
+
+  const transcript = yield* awaited(
+    harness.createConversation({ ownership: { kind: "ownerless" } }, context),
+  );
+  const say = (kind: string, ...model: aiTypes.Message[]) =>
+    transcript.commit((tx) => tx.appendEntry(transcript.id, { kind, model }), context);
+  return { assistantMessage, harness, say, show, toolResultMessage, transcript };
+});
+
+const mainStep3 = Effect.gen(function* () {
+  const { harness, assistantMessage, toolResultMessage, show, transcript, say } = yield* mainStep2;
+  const question = yield* awaited(
+    say("message", { content: "read a and b", role: "user", timestamp: 1 }),
+  );
+  yield* awaited(say("message", assistantMessage("I crashed", [], "aborted")));
+  const calls = yield* awaited(say("message", assistantMessage("reading", ["a", "b"])));
+  yield* awaited(say("message", toolResultMessage("b")));
+  yield* awaited(
+    say("msa.system", {
+      content: "",
+      role: "system",
+      sections: { cwd: "<cwd>/repo</cwd>" },
+      timestamp: 4,
     }),
-  context,
-);
-await transcript.commit(
-  (tx) => tx.appendEntry(transcript.id, { kind: "note", data: "display only" }),
-  context,
-);
+  );
+  yield* awaited(say("message", toolResultMessage("a")));
+  yield* awaited(say("message", assistantMessage("a and b look fine")));
+  yield* awaited(
+    transcript.commit(
+      (tx) =>
+        tx.appendEntry(transcript.id, {
+          data: "user fixed a typo",
+          edits: [
+            {
+              action: "replace",
+              messages: [{ content: "read files a and b", role: "user", timestamp: 1 }],
+              target: question.id,
+            },
+          ],
+          kind: "edit",
+        }),
+      context,
+    ),
+  );
+  yield* awaited(
+    transcript.commit(
+      (tx) => tx.appendEntry(transcript.id, { data: "display only", kind: "note" }),
+      context,
+    ),
+  );
+  return { calls, harness, show, transcript };
+});
 
-let view = await transcript.context(context);
-console.log(
-  "raw active entries:",
-  view.entries.map((entry) => entry.kind),
-);
-console.log("request messages:", view.messages.map(show));
+const main = Effect.gen(function* () {
+  const { harness, show, transcript, calls } = yield* mainStep3;
+  let view = yield* awaited(transcript.context(context));
+  yield* Console.log(
+    "raw active entries:",
+    view.entries.map((entry) => entry.kind),
+  );
+  yield* Console.log("request messages:", view.messages.map(show));
 
-// A fork at the tool call has no results yet; context() fills them in.
-const cut = await transcript.fork(calls.id, { ownership: { kind: "ownerless" } }, context);
-console.log("fork messages:", (await cut.context(context)).messages.map(show));
+  const cut = yield* awaited(
+    transcript.fork(calls.id, { ownership: { kind: "ownerless" } }, context),
+  );
+  yield* Console.log("fork messages:", (yield* awaited(cut.context(context))).messages.map(show));
 
-// A headed summary replaces everything before the entry it points at.
-// "self" points the head at the summary entry itself.
-await transcript.commit(
-  (tx) =>
-    tx.appendEntry(transcript.id, {
-      kind: "summary",
-      head: "self",
-      model: [{ role: "user", content: "Summary: a and b are fine.", timestamp: 5 }],
-    }),
-  context,
-);
-view = await transcript.context(context);
-console.log("after summary:", view.head?.kind, view.messages.map(show));
+  yield* awaited(
+    transcript.commit(
+      (tx) =>
+        tx.appendEntry(transcript.id, {
+          head: "self",
+          kind: "summary",
+          model: [{ content: "Summary: a and b are fine.", role: "user", timestamp: 5 }],
+        }),
+      context,
+    ),
+  );
+  view = yield* awaited(transcript.context(context));
+  yield* Console.log("after summary:", view.head?.kind, view.messages.map(show));
 
-// entries() pages the stored transcript, newest first, including inherited
-// parent entries. Nothing is ever deleted by heads or edits.
-const history = await transcript.entries({}, 3, undefined, context);
-console.log(
-  "newest stored entries:",
-  history.items.map((entry) => entry.kind),
-  "more:",
-  history.next !== undefined,
-);
+  const history = yield* awaited(transcript.entries({}, 3, undefined, context));
+  yield* Console.log(
+    "newest stored entries:",
+    history.items.map((entry) => entry.kind),
+    "more:",
+    history.next !== undefined,
+  );
 
-await harness.close(context);
+  yield* awaited(harness.close(context));
+});
+
+NodeRuntime.runMain(main);

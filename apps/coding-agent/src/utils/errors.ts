@@ -1,4 +1,9 @@
-/** The message of a thrown value, which need not be an `Error`. */
-export function toErrorMessage(error: unknown): string {
+function toErrorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
+
+const errors = {
+  toErrorMessage,
+};
+
+export default errors;

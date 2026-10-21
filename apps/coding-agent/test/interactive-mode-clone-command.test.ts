@@ -1,6 +1,12 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
-import { InteractiveMode } from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
+
+const { bindModeFake } = interactiveModeFake;
+
+const { awaited, runTest } = testing;
 
 type CloneCommandContext = {
   sessionManager: { getLeafId: () => string | null };
@@ -16,61 +22,66 @@ type CloneCommandContext = {
   showError: (message: string) => void;
   ui: { requestRender: () => void };
 };
+describe("InteractiveMode /clone", () => {
+  it("clones the current leaf into a new session", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-type InteractiveModePrototype = {
-  handleCloneCommand(this: CloneCommandContext): Promise<void>;
-};
+        const fork = vi.fn(() => effectRunPromise(awaited({ cancelled: false })));
+        const renderCurrentSessionState = vi.fn();
+        const setText = vi.fn();
+        const showStatus = vi.fn();
+        const showError = vi.fn();
+        const requestRender = vi.fn();
 
-const interactiveModePrototype = InteractiveMode.prototype as unknown as InteractiveModePrototype;
+        const context: CloneCommandContext = {
+          editor: { setText },
+          renderCurrentSessionState,
+          runtimeHost: { fork },
+          sessionManager: { getLeafId: () => "leaf-123" },
+          showError,
+          showStatus,
+          ui: { requestRender },
+        };
+
+        yield* awaited(bindModeFake(context).commands.session.handleCloneCommand());
+
+        expect(fork).toHaveBeenCalledWith("leaf-123", { position: "at" });
+        expect(renderCurrentSessionState).not.toHaveBeenCalled();
+        expect(setText).toHaveBeenCalledWith("");
+        expect(showStatus).toHaveBeenCalledWith("Cloned to new session");
+        expect(showError).not.toHaveBeenCalled();
+        expect(requestRender).not.toHaveBeenCalled();
+      }),
+    ));
+});
 
 describe("InteractiveMode /clone", () => {
-  it("clones the current leaf into a new session", async () => {
-    const fork = vi.fn(async () => ({ cancelled: false }));
-    const renderCurrentSessionState = vi.fn();
-    const setText = vi.fn();
-    const showStatus = vi.fn();
-    const showError = vi.fn();
-    const requestRender = vi.fn();
+  it("shows a status message when there is nothing to clone", () =>
+    runTest(
+      Effect.gen(function* () {
+        const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const context: CloneCommandContext = {
-      sessionManager: { getLeafId: () => "leaf-123" },
-      runtimeHost: { fork },
-      renderCurrentSessionState,
-      editor: { setText },
-      showStatus,
-      showError,
-      ui: { requestRender },
-    };
+        const fork = vi.fn(() => effectRunPromise(awaited({ cancelled: false })));
+        const showStatus = vi.fn();
+        const showError = vi.fn();
 
-    await interactiveModePrototype.handleCloneCommand.call(context);
+        const context: CloneCommandContext = {
+          editor: { setText: vi.fn() },
+          renderCurrentSessionState: vi.fn(),
+          runtimeHost: { fork },
+          sessionManager: { getLeafId: () => null },
+          showError,
+          showStatus,
+          ui: { requestRender: vi.fn() },
+        };
 
-    expect(fork).toHaveBeenCalledWith("leaf-123", { position: "at" });
-    expect(renderCurrentSessionState).not.toHaveBeenCalled();
-    expect(setText).toHaveBeenCalledWith("");
-    expect(showStatus).toHaveBeenCalledWith("Cloned to new session");
-    expect(showError).not.toHaveBeenCalled();
-    expect(requestRender).not.toHaveBeenCalled();
-  });
+        yield* awaited(bindModeFake(context).commands.session.handleCloneCommand());
 
-  it("shows a status message when there is nothing to clone", async () => {
-    const fork = vi.fn(async () => ({ cancelled: false }));
-    const showStatus = vi.fn();
-    const showError = vi.fn();
-
-    const context: CloneCommandContext = {
-      sessionManager: { getLeafId: () => null },
-      runtimeHost: { fork },
-      renderCurrentSessionState: vi.fn(),
-      editor: { setText: vi.fn() },
-      showStatus,
-      showError,
-      ui: { requestRender: vi.fn() },
-    };
-
-    await interactiveModePrototype.handleCloneCommand.call(context);
-
-    expect(fork).not.toHaveBeenCalled();
-    expect(showStatus).toHaveBeenCalledWith("Nothing to clone yet");
-    expect(showError).not.toHaveBeenCalled();
-  });
+        expect(fork).not.toHaveBeenCalled();
+        expect(showStatus).toHaveBeenCalledWith("Nothing to clone yet");
+        expect(showError).not.toHaveBeenCalled();
+      }),
+    ));
 });

@@ -3,18 +3,15 @@ import vm from "node:vm";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { PRELUDE_SOURCE } from "../src/runtime/prelude-source.ts";
-import {
-  closeSandboxes,
-  createSandbox,
-  describeBackends,
-  echo,
-  GIF,
-  JPEG,
-  PNG,
-  WEBP,
-} from "./sandbox-support.ts";
-import { toJson } from "./support.ts";
+import preludeSource from "../src/runtime/prelude-source.ts";
+import sandboxSupport from "./sandbox-support.ts";
+import support from "./support.ts";
+
+const { PRELUDE_SOURCE } = preludeSource;
+
+const { GIF, JPEG, PNG, WEBP, closeSandboxes, createSandbox, describeBackends, echo } =
+  sandboxSupport;
+const { toJson } = support;
 
 function parseAsJavascript(): void {
   expect(() => new vm.Script(PRELUDE_SOURCE, { filename: "prelude.js" })).not.toThrow();
@@ -25,10 +22,10 @@ const returnsTheScriptSReturnValue = Effect.gen(function* () {
   expect(
     yield* Effect.promise(() => sandbox.execute("return { a: 1, b: [true, 'x'] }")),
   ).toMatchObject({
-    ok: true,
-    value: { a: 1, b: [true, "x"] },
-    output: [],
     calls: [],
+    ok: true,
+    output: [],
+    value: { a: 1, b: [true, "x"] },
   });
   expect(yield* Effect.promise(() => sandbox.execute("return 'plain'"))).toMatchObject({
     ok: true,
@@ -67,20 +64,20 @@ const collectsTextImageAndConsoleOutput = Effect.gen(function* () {
   );
   expect(result.ok).toBe(true);
   expect(result.output.slice(0, -1)).toEqual([
-    { type: "text", text: 'hello 1 {"a":1}', console: true },
-    { type: "text", text: '{"json":true}' },
-    { type: "text", text: "undefined" },
-    { type: "text", text: "7" },
-    { type: "image", data: PNG, mimeType: "image/png" },
-    { type: "image", data: JPEG, mimeType: "image/jpeg" },
-    { type: "image", data: GIF, mimeType: "image/gif" },
-    { type: "image", data: WEBP, mimeType: "image/webp" },
-    { type: "image", data: PNG, mimeType: "image/png" },
+    { console: true, text: 'hello 1 {"a":1}', type: "text" },
+    { text: '{"json":true}', type: "text" },
+    { text: "undefined", type: "text" },
+    { text: "7", type: "text" },
+    { data: PNG, mimeType: "image/png", type: "image" },
+    { data: JPEG, mimeType: "image/jpeg", type: "image" },
+    { data: GIF, mimeType: "image/gif", type: "image" },
+    { data: WEBP, mimeType: "image/webp", type: "image" },
+    { data: PNG, mimeType: "image/png", type: "image" },
   ]);
   expect(result.output.at(-1)).toMatchObject({
-    type: "text",
-    text: expect.stringMatching(/^Error: bad/u),
     console: true,
+    text: expect.stringMatching(/^Error: bad/u),
+    type: "text",
   });
 });
 
@@ -146,8 +143,8 @@ const acceptsWrappedAndLargeBase64Image = Effect.gen(function* () {
   );
   expect(result.ok).toBe(true);
   expect(result.output).toEqual([
-    { type: "image", data: PNG, mimeType: "image/png" },
-    { type: "image", data: large, mimeType: "image/png" },
+    { data: PNG, mimeType: "image/png", type: "image" },
+    { data: large, mimeType: "image/png", type: "image" },
   ]);
 });
 
@@ -165,9 +162,9 @@ const endsTheScriptSuccessfullyOnExit = Effect.gen(function* () {
   );
   expect(result).toMatchObject({
     ok: true,
+    output: [{ text: "before", type: "text" }],
+    storeWrites: { delete: [], set: { k: 1 } },
     value: undefined,
-    output: [{ type: "text", text: "before" }],
-    storeWrites: { set: { k: 1 }, delete: [] },
   });
 });
 
@@ -176,7 +173,7 @@ const keepsOutputProducedBeforeAFailure = Effect.gen(function* () {
   const result = yield* Effect.promise(() =>
     sandbox.execute('text("partial");\nthrow new Error("boom")'),
   );
-  expect(result).toMatchObject({ ok: false, output: [{ type: "text", text: "partial" }] });
+  expect(result).toMatchObject({ ok: false, output: [{ text: "partial", type: "text" }] });
 });
 
 const reportsSyntaxErrorsWithTheScript = Effect.gen(function* () {
@@ -198,7 +195,7 @@ const reportsThrownErrorsWithTheScript = Effect.gen(function* () {
   );
   expect(result.ok).toBe(false);
   if (result.ok) return;
-  expect(result.error).toMatchObject({ kind: "script", name: "TypeError", message: "boom 1" });
+  expect(result.error).toMatchObject({ kind: "script", message: "boom 1", name: "TypeError" });
   expect(result.error.stack).toMatch(/codemode\.js:2/u);
 });
 
@@ -212,8 +209,8 @@ const formatsStacksLikeV8WithoutPrelude = Effect.gen(function* () {
   expect(result.error.stack).toMatch(/^RangeError: outer\n {4}at .*codemode\.js:2/u);
   expect(result.error.stack).not.toContain("codemode-prelude.js");
   expect(result.output[0]).toMatchObject({
-    type: "text",
     text: expect.stringMatching(/^Error: inner\n {4}at .*codemode\.js:1/u),
+    type: "text",
   });
   expect(yield* toJson(result.output)).not.toContain("codemode-prelude.js");
 });
@@ -221,13 +218,13 @@ const formatsStacksLikeV8WithoutPrelude = Effect.gen(function* () {
 const reportsNonErrorThrows = Effect.gen(function* () {
   const sandbox = createSandbox();
   const result = yield* Effect.promise(() => sandbox.execute("throw { code: 7 }"));
-  expect(result).toMatchObject({ ok: false, error: { kind: "script", message: '{"code":7}' } });
+  expect(result).toMatchObject({ error: { kind: "script", message: '{"code":7}' }, ok: false });
 });
 
 const reportsANonSerializableReturnValue = Effect.gen(function* () {
   const sandbox = createSandbox();
   const result = yield* Effect.promise(() => sandbox.execute("return 10n"));
-  expect(result).toMatchObject({ ok: false, error: { kind: "script", name: "TypeError" } });
+  expect(result).toMatchObject({ error: { kind: "script", name: "TypeError" }, ok: false });
 });
 
 afterEach(closeSandboxes);

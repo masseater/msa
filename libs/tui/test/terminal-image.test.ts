@@ -1,32 +1,30 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import {
-  detectCapabilities,
-  getCapabilities,
-  isImageLine,
-  resetCapabilitiesCache,
-  setCapabilityOverrides,
-} from "../src/terminal-image.ts";
-import { withEnv } from "./terminal-image-helpers.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImageKitty from "../src/terminal-image-kitty.ts";
+import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { isImageLine } = terminalImageKitty;
+const { detectCapabilities, getCapabilities, resetCapabilitiesCache, setCapabilityOverrides } =
+  terminalCapabilities;
+
+const { withEnv } = terminalImageHelpers;
 
 describe("isImageLine", () => {
   describe("iTerm2 image protocol", () => {
     it("should detect iTerm2 image escape sequence at start of line", () => {
-      // iTerm2 image escape sequence: ESC ]1337;File=...
       const iterm2ImageLine = "\x1b]1337;File=size=100,100;inline=1:base64encodeddata==\x07";
       assert.strictEqual(isImageLine(iterm2ImageLine), true);
     });
 
     it("should detect iTerm2 image escape sequence with text before it", () => {
-      // Simulating a line that has text then image data (bug scenario)
       const lineWithTextAndImage =
         "Some text \x1b]1337;File=size=100,100;inline=1:base64data==\x07 more text";
       assert.strictEqual(isImageLine(lineWithTextAndImage), true);
     });
 
     it("should detect iTerm2 image escape sequence in middle of long line", () => {
-      // Simulate a very long line with image data in the middle
       const longLineWithImage =
         "Text before image...\x1b]1337;File=inline=1:verylongbase64data==...text after";
       assert.strictEqual(isImageLine(longLineWithImage), true);
@@ -48,19 +46,16 @@ describe("isImageLine", () => {
 describe("isImageLine", () => {
   describe("Kitty image protocol", () => {
     it("should detect Kitty image escape sequence at start of line", () => {
-      // Kitty image escape sequence: ESC _G
       const kittyImageLine = "\x1b_Ga=T,f=100,t=f,d=base64data...\x1b\\\x1b_Gm=i=1;\x1b\\";
       assert.strictEqual(isImageLine(kittyImageLine), true);
     });
 
     it("should detect Kitty image escape sequence with text before it", () => {
-      // Bug scenario: text + image data in same line
       const lineWithTextAndKittyImage = "Output: \x1b_Ga=T,f=100;data...\x1b\\\x1b_Gm=i=1;\x1b\\";
       assert.strictEqual(isImageLine(lineWithTextAndKittyImage), true);
     });
 
     it("should detect Kitty image escape sequence with padding", () => {
-      // Kitty protocol adds padding to escape sequences
       const kittyWithPadding = "  \x1b_Ga=T,f=100...\x1b\\\x1b_Gm=i=1;\x1b\\  ";
       assert.strictEqual(isImageLine(kittyWithPadding), true);
     });
@@ -70,33 +65,21 @@ describe("isImageLine", () => {
 describe("isImageLine", () => {
   describe("Bug regression tests", () => {
     it("should detect image sequences in very long lines (304k+ chars)", () => {
-      // This simulates the crash scenario: a line with 304,401 chars
-      // containing image escape sequences somewhere
-      // 100 chars of base64-like data
       const base64Char = "A".repeat(100);
       const imageSequence = "\x1b]1337;File=size=800,600;inline=1:";
 
-      // Build a long line with image sequence
-      const longLine =
-        "Text prefix " +
-        imageSequence +
-        // ~300,000 chars
-        base64Char.repeat(3000) +
-        " suffix";
+      const longLine = "Text prefix " + imageSequence + base64Char.repeat(3000) + " suffix";
 
       assert.strictEqual(longLine.length > 300000, true);
       assert.strictEqual(isImageLine(longLine), true);
     });
 
     it("should detect image sequences when terminal doesn't support images", () => {
-      // The bug occurred when getImageEscapePrefix() returned null
-      // isImageLine should still detect image sequences regardless
       const lineWithImage = "Read image file [image/jpeg]\x1b]1337;File=inline=1:base64data==\x07";
       assert.strictEqual(isImageLine(lineWithImage), true);
     });
 
     it("should detect image sequences with ANSI codes before them", () => {
-      // Text might have ANSI styling before image data
       const lineWithAnsiAndImage = "\x1b[31mError output \x1b]1337;File=inline=1:image==\x07";
       assert.strictEqual(isImageLine(lineWithAnsiAndImage), true);
     });
@@ -126,13 +109,11 @@ describe("isImageLine", () => {
     });
 
     it("should not detect images in lines with partial iTerm2 sequences", () => {
-      // Similar prefix but missing the complete sequence
       const partialSequence = "Some text with ]1337;File but missing ESC at start";
       assert.strictEqual(isImageLine(partialSequence), false);
     });
 
     it("should not detect images in lines with partial Kitty sequences", () => {
-      // Similar prefix but missing the complete sequence
       const partialSequence = "Some text with _G but missing ESC at start";
       assert.strictEqual(isImageLine(partialSequence), false);
     });
@@ -162,7 +143,6 @@ describe("isImageLine", () => {
     });
 
     it("should not falsely detect image in line with file path containing keywords", () => {
-      // File path might contain "1337" or "File" but without escape sequences
       const filePathLine = "/path/to/File_1337_backup/image.jpg";
       assert.strictEqual(isImageLine(filePathLine), false);
     });
@@ -183,19 +163,19 @@ describe("detectCapabilities", () => {
       withEnv({ MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty", MSA_TRUE_COLOR: "1" }, () =>
         detectCapabilities(),
       ),
-      { images: "kitty", trueColor: true, hyperlinks: true },
+      { hyperlinks: true, images: "kitty", trueColor: true },
     );
     assert.deepStrictEqual(
       withEnv(
         {
-          TERM_PROGRAM: "iterm.app",
           MSA_HYPERLINKS: "0",
           MSA_IMAGE_PROTOCOL: "none",
           MSA_TRUE_COLOR: "0",
+          TERM_PROGRAM: "iterm.app",
         },
         () => detectCapabilities(),
       ),
-      { images: null, trueColor: false, hyperlinks: false },
+      { hyperlinks: false, images: null, trueColor: false },
     );
   });
 
@@ -203,14 +183,14 @@ describe("detectCapabilities", () => {
     assert.deepStrictEqual(
       withEnv(
         {
-          TERM_PROGRAM: "ghostty",
           MSA_HYPERLINKS: "auto",
           MSA_IMAGE_PROTOCOL: "auto",
           MSA_TRUE_COLOR: "auto",
+          TERM_PROGRAM: "ghostty",
         },
         () => detectCapabilities(),
       ),
-      { images: "kitty", trueColor: true, hyperlinks: true },
+      { hyperlinks: true, images: "kitty", trueColor: true },
     );
   });
 });
@@ -218,18 +198,18 @@ describe("detectCapabilities", () => {
 describe("detectCapabilities", () => {
   it("applies and clears programmatic overrides", () => {
     withEnv({ MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty", MSA_TRUE_COLOR: "1" }, () => {
-      setCapabilityOverrides({ images: null, trueColor: false, hyperlinks: false });
+      setCapabilityOverrides({ hyperlinks: false, images: null, trueColor: false });
       try {
         assert.deepStrictEqual(getCapabilities(), {
+          hyperlinks: false,
           images: null,
           trueColor: false,
-          hyperlinks: false,
         });
         setCapabilityOverrides({});
         assert.deepStrictEqual(getCapabilities(), {
+          hyperlinks: true,
           images: "kitty",
           trueColor: true,
-          hyperlinks: true,
         });
       } finally {
         setCapabilityOverrides({});
@@ -241,7 +221,7 @@ describe("detectCapabilities", () => {
   it("bypasses the tmux probe when hyperlinks are overridden", () => {
     let probed = false;
     const caps = withEnv(
-      { TMUX: "/tmp/tmux-1000/default,1234,0", MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty" },
+      { MSA_HYPERLINKS: "1", MSA_IMAGE_PROTOCOL: "kitty", TMUX: "/tmp/tmux-1000/default,1234,0" },
       () =>
         detectCapabilities(() => {
           probed = true;

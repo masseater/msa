@@ -1,20 +1,14 @@
 import { Effect } from "effect";
 
-import { HostKeyChangedError } from "./host-key-changed-error.ts";
-import { HostKeyUnknownError } from "./host-key-unknown-error.ts";
-import { powershell, runSsh, type SshFailure } from "./run-ssh.ts";
-import { SetupError } from "./setup-error.ts";
+import type detectTypes from "./detect.types.ts";
+import HostKeyChangedError from "./host-key-changed-error.ts";
+import HostKeyUnknownError from "./host-key-unknown-error.ts";
+import runSshModule from "./run-ssh.ts";
+import SetupError from "./setup-error.ts";
+import type setupErrorTypes from "./setup-error.types.ts";
+import type sshArgsTypes from "./ssh-args.types.ts";
 
-export { SetupError } from "./setup-error.ts";
-import type { SshTarget } from "./ssh-args.ts";
-
-export type RemotePlatform = {
-  platform: "linux" | "android" | "darwin" | "windows";
-  arch: "x64" | "arm64";
-  home: string;
-  shell?: "cmd" | "powershell";
-  warnings: string[];
-};
+const { powershell, runSsh } = runSshModule;
 
 const POSIX_PROBE = `sh -c 'echo MSA-ENV-PROBE; uname -s; uname -m; uname -o 2>/dev/null || echo -; printf "%s\\n" "$HOME" "\${TMPDIR:--}" "\${LD_PRELOAD:--}"'`;
 
@@ -22,7 +16,7 @@ const WINDOWS_PROBE = powershell(
   "'MSA-ENV-PROBE'; 'Windows'; [System.Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString(); '-'; $HOME; '-'; '-'",
 );
 
-export function normalizeArch(machine: string): RemotePlatform["arch"] {
+function normalizeArch(machine: string): detectTypes.RemotePlatform["arch"] {
   const lower = machine.toLowerCase();
   if (lower === "x86_64" || lower === "amd64" || lower === "x64") return "x64";
   if (lower === "aarch64" || lower === "arm64") return "arm64";
@@ -38,9 +32,10 @@ type Probe = {
   preload: string;
 };
 
-export type DetectFailure = SshFailure | SetupError;
-
-function parseProbe(target: SshTarget, output: string): Effect.Effect<Probe, SetupError> {
+function parseProbe(
+  target: sshArgsTypes.SshTarget,
+  output: string,
+): Effect.Effect<Probe, setupErrorTypes.SetupError> {
   const lines = output.split(/\r?\n/u);
   const start = lines.indexOf("MSA-ENV-PROBE");
   if (start === -1) {
@@ -49,7 +44,7 @@ function parseProbe(target: SshTarget, output: string): Effect.Effect<Probe, Set
   const [system = "", machine = "", os = "", home = "", tmp = "-", preload = "-"] = lines.slice(
     start + 1,
   );
-  return Effect.succeed({ system, machine, os, home, tmpdir: tmp, preload });
+  return Effect.succeed({ home, machine, os, preload, system, tmpdir: tmp });
 }
 
 function termuxWarnings(probe: Probe): string[] {
@@ -68,10 +63,15 @@ function termuxWarnings(probe: Probe): string[] {
   return warnings;
 }
 
-const probeWith = (target: SshTarget, command: string): Effect.Effect<Probe, DetectFailure> =>
-  runSsh({ target, command }).pipe(Effect.flatMap((output) => parseProbe(target, output)));
+const probeWith = (
+  target: sshArgsTypes.SshTarget,
+  command: string,
+): Effect.Effect<Probe, detectTypes.DetectFailure> =>
+  runSsh({ command, target }).pipe(Effect.flatMap((output) => parseProbe(target, output)));
 
-const probeTarget = (target: SshTarget): Effect.Effect<Probe, DetectFailure> =>
+const probeTarget = (
+  target: sshArgsTypes.SshTarget,
+): Effect.Effect<Probe, detectTypes.DetectFailure> =>
   probeWith(target, POSIX_PROBE).pipe(
     Effect.catchIf(
       (error) => !(error instanceof HostKeyUnknownError || error instanceof HostKeyChangedError),
@@ -84,35 +84,44 @@ const probeTarget = (target: SshTarget): Effect.Effect<Probe, DetectFailure> =>
   );
 
 const platformOf = (
-  target: SshTarget,
+  target: sshArgsTypes.SshTarget,
   probe: Probe,
-): Effect.Effect<RemotePlatform, DetectFailure> =>
+): Effect.Effect<detectTypes.RemotePlatform, detectTypes.DetectFailure> =>
   Effect.gen(function* () {
     const arch = normalizeArch(probe.machine);
     const { system, os, home } = probe;
     if (system === "Windows") {
-      const answer = yield* runSsh({ target, command: "echo %OS%" });
+      const answer = yield* runSsh({ command: "echo %OS%", target });
       const shell = answer.includes("Windows_NT") ? "cmd" : "powershell";
-      return { platform: "windows", arch, home, shell, warnings: [] };
+      return { arch, home, platform: "windows", shell, warnings: [] };
     }
-    if (system === "Darwin") return { platform: "darwin", arch, home, warnings: [] };
+    if (system === "Darwin") return { arch, home, platform: "darwin", warnings: [] };
     if (system === "Linux") {
       const android = os === "Android";
       return {
-        platform: android ? "android" : "linux",
         arch,
         home,
+        platform: android ? "android" : "linux",
         warnings: android ? termuxWarnings(probe) : [],
       };
     }
     return yield* new SetupError(`Unsupported remote system: ${system}`);
   });
 
-export const detectPlatformEffect = (
-  target: SshTarget,
-): Effect.Effect<RemotePlatform, DetectFailure> =>
+const detectPlatformEffect = (
+  target: sshArgsTypes.SshTarget,
+): Effect.Effect<detectTypes.RemotePlatform, detectTypes.DetectFailure> =>
   probeTarget(target).pipe(Effect.flatMap((probe) => platformOf(target, probe)));
 
-export function detectPlatform(target: SshTarget): Promise<RemotePlatform> {
+function detectPlatform(target: sshArgsTypes.SshTarget): Promise<detectTypes.RemotePlatform> {
   return Effect.runPromise(detectPlatformEffect(target));
 }
+
+const detect = {
+  SetupError: SetupError,
+  detectPlatform,
+  detectPlatformEffect,
+  normalizeArch,
+};
+
+export default detect;

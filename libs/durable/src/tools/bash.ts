@@ -1,10 +1,17 @@
-import type { Context } from "@msa/chord";
-import { type Static, Type } from "typebox";
+import type chordTypes from "@msa/chord/index.types";
+import { Effect } from "effect";
+import { Type } from "typebox";
 
-import { defineTool } from "../harness/define.ts";
-import type { ToolExecutionApi, ToolExecutionResult, ToolRegistration } from "../harness/types.ts";
-import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "../truncate.ts";
-import { requireEnv } from "./env.ts";
+import type envTypes from "../env/index.types.ts";
+import define from "../harness/define.ts";
+import type typesModule from "../harness/types.types.ts";
+import truncate from "../truncate.ts";
+import type bashTypes from "./bash.types.ts";
+import envModule from "./env.ts";
+
+const { requireEnv } = envModule;
+const { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } = truncate;
+const { defineTool } = define;
 
 const MAX_TIMEOUT_SECONDS = 2_147_483_647 / 1000;
 
@@ -22,48 +29,16 @@ const powershellSchema = Type.Object({
   ),
 });
 
-/** What a program that calls `bash` or `powershell` receives. */
 const shellStructuredOutputSchema = Type.Object({
+  exitCode: Type.Number(),
+  fullOutputPath: Type.Optional(
+    Type.String({ description: "File with the complete output, when it was spilled" }),
+  ),
   output: Type.String({
     description: "Combined stdout and stderr: the retained tail, as the model sees it",
   }),
   truncated: Type.Boolean({ description: "Whether earlier output was dropped" }),
-  fullOutputPath: Type.Optional(
-    Type.String({ description: "File with the complete output, when it was spilled" }),
-  ),
-  exitCode: Type.Number(),
 });
-
-export type BashToolInput = Static<typeof bashSchema>;
-export type PowerShellToolInput = Static<typeof powershellSchema>;
-export type ShellStructuredOutput = Static<typeof shellStructuredOutputSchema>;
-
-/** A command about to run, which `prepare` may change: the script, its working directory and environment. */
-export interface BashExecution {
-  command: string;
-  cwd: string;
-  env: Record<string, string>;
-  inheritEnv: boolean;
-}
-
-export type BashPrepare = (
-  execution: BashExecution,
-  api: ToolExecutionApi,
-  context: Context,
-) => void | Promise<void>;
-
-export interface BashToolOptions {
-  commandPrefix?: string;
-  prepare?: BashPrepare;
-}
-
-export interface PowerShellToolOptions {
-  /** Lines run before each command. */
-  commandPrefix?: string;
-  prepare?: BashPrepare;
-  /** PowerShell programs to try in order; default `pwsh`, then `powershell`. A program that cannot start is skipped. */
-  programs?: readonly string[];
-}
 
 function validateTimeout(timeout: number | undefined): void {
   if (timeout === undefined) return;
@@ -75,75 +50,69 @@ function validateTimeout(timeout: number | undefined): void {
   }
 }
 
-/**
- * The execution of one call: the command with its prefix, in the environment's working directory, then `prepare`.
- * @param {string} command - The model's command.
- * @param {{ commandPrefix?: string; prepare?: BashPrepare } | undefined} options - The tool's options.
- * @param {ToolExecutionApi} api - The tool call's API.
- * @param {Context} context - The caller's context.
- * @returns {Promise<BashExecution>} The execution.
- */
-async function prepareExecution(
+const prepareExecution = Effect.fnUntraced(function* (
   command: string,
-  options: { commandPrefix?: string; prepare?: BashPrepare } | undefined,
-  api: ToolExecutionApi,
-  context: Context,
-): Promise<BashExecution> {
-  const execution: BashExecution = {
-    command: options?.commandPrefix ? `${options.commandPrefix}\n${command}` : command,
+  options: { commandPrefix?: string; prepare?: bashTypes.BashPrepare } | undefined,
+  api: typesModule.ToolExecutionApi,
+  context: chordTypes.Context,
+) {
+  const prefix = options?.commandPrefix;
+  const execution: bashTypes.BashExecution = {
+    command: prefix === undefined || prefix === "" ? command : `${prefix}\n${command}`,
     cwd: requireEnv(api).cwd,
     env: {},
     inheritEnv: true,
   };
-  await options?.prepare?.(execution, api, context);
+  yield* Effect.promise(() => Promise.resolve(options?.prepare?.(execution, api, context)));
   return execution;
-}
+});
 
-/**
- * Run each command form in turn until one starts, streaming output to `api.output()` within the retained window, and
- * turn the result into the tool's result: a spill diagnostic, an error result for a nonzero exit, and a thrown error for
- * a failure such as a timeout. The structured output repeats the retained output with the exit code.
- * @param {readonly (string | readonly string[])[]} commands - The command forms to try.
- * @param {BashExecution} execution - The prepared execution.
- * @param {number | undefined} timeout - The timeout in seconds.
- * @param {ToolExecutionApi} api - The tool call's API.
- * @param {Context} context - The caller's context.
- * @returns {Promise<ToolExecutionResult>} The tool's result.
- */
-async function runCommand(
+type ExecResult = Awaited<ReturnType<envTypes.ExecutionEnv["exec"]>>;
+
+const execFirst = Effect.fnUntraced(function* (
   commands: readonly (string | readonly string[])[],
-  execution: BashExecution,
+  execution: bashTypes.BashExecution,
   timeout: number | undefined,
-  api: ToolExecutionApi,
-  context: Context,
-): Promise<ToolExecutionResult> {
+  api: typesModule.ToolExecutionApi,
+  context: chordTypes.Context,
+) {
   const env = requireEnv(api);
-  let result: Awaited<ReturnType<typeof env.exec>> | undefined;
-  for await (const command of commands) {
-    result = await env.exec(
-      command,
-      {
-        cwd: execution.cwd,
-        env: execution.env,
-        inheritEnv: execution.inheritEnv,
-        ...(timeout === undefined ? {} : { timeout }),
-        onOutput: (text, _context, info) => api.output(text, info.skipped),
-        spill: { afterBytes: DEFAULT_MAX_BYTES, afterLines: DEFAULT_MAX_LINES },
-        // An environment may then omit output outside the retained tail and report the omission.
-        ...(api.outputWindow === undefined ? {} : { window: api.outputWindow }),
-      },
-      context,
+  let result: ExecResult | undefined;
+  for (const command of commands) {
+    result = yield* Effect.promise(() =>
+      env.exec(
+        command,
+        {
+          cwd: execution.cwd,
+          env: execution.env,
+          inheritEnv: execution.inheritEnv,
+          ...(timeout === undefined ? {} : { timeout }),
+          onOutput: (text, _context, info) => api.output(text, info.skipped),
+          spill: { afterBytes: DEFAULT_MAX_BYTES, afterLines: DEFAULT_MAX_LINES },
+          ...(api.outputWindow === undefined ? {} : { window: api.outputWindow }),
+        },
+        context,
+      ),
     );
-    // A program that could not start produced no output; the next form may.
     if (result.ok || result.error.code !== "spawn_error") break;
   }
   if (result === undefined) throw new Error("No command to run");
+  return result;
+});
+
+function commandResult(
+  result: ExecResult,
+  timeout: number | undefined,
+  api: typesModule.ToolExecutionApi,
+  context: chordTypes.Context,
+): typesModule.ToolExecutionResult {
   const spillPath = result.ok ? result.value.spillPath : result.error.spillPath;
   if (spillPath !== undefined) {
-    api.diagnostic({ severity: "info", code: "full_output", message: `Full output: ${spillPath}` });
+    api.diagnostic({ code: "full_output", message: `Full output: ${spillPath}`, severity: "info" });
   }
   if (!result.ok) {
-    if (result.error.code === "aborted" && context.abortSignal?.aborted) throw result.error;
+    if (result.error.code === "aborted" && context.abortSignal?.aborted === true)
+      throw result.error;
     if (result.error.code === "timeout")
       throw new Error(`Command timed out after ${timeout} seconds`);
     if (result.error.code === "aborted") throw new Error("Command aborted");
@@ -151,7 +120,7 @@ async function runCommand(
   }
   const exitCode = result.value.exitCode;
   const retained = api.retainedOutput();
-  const structuredOutput: ShellStructuredOutput = {
+  const structuredOutput: bashTypes.ShellStructuredOutput = {
     output: retained.text,
     truncated: retained.truncated,
     ...(spillPath === undefined ? {} : { fullOutputPath: spillPath }),
@@ -159,38 +128,41 @@ async function runCommand(
   };
   if (exitCode === 0) return { structuredOutput };
   const exited = {
-    severity: "error",
     code: "exit_code",
     message: `Command exited with code ${exitCode}`,
+    severity: "error",
   } as const;
-  return { structuredOutput, isError: true, diagnostics: [exited] };
+  return { diagnostics: [exited], isError: true, structuredOutput };
 }
 
-/**
- * Runs a command through the environment's shell. Its output streams to `api.output()`, where the Harness keeps the
- * tail within the default limits; the result content is that retained output. The retained window goes to the
- * environment, which may omit output outside it and report how much it omitted, so dropped counts stay exact. Output
- * beyond the limits is spilled to a file whose path is reported as a diagnostic. A nonzero exit is an error result with
- * the exit code; a timeout throws, which makes an error result that still carries the output and diagnostics.
- * @param {BashToolOptions} options - The tool's options.
- * @returns {ToolRegistration<typeof bashSchema>} The tool.
- */
-export function createBashTool(options?: BashToolOptions): ToolRegistration<typeof bashSchema> {
+function createBashTool(
+  options?: bashTypes.BashToolOptions,
+): typesModule.ToolRegistration<typeof bashSchema> {
   return defineTool({
-    name: "bash",
     description: `Execute a bash command in the current working directory. Returns combined stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
+    execute(args, api, context) {
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          validateTimeout(args.timeout);
+          const execution = yield* prepareExecution(args.command, options, api, context);
+          const result = yield* execFirst(
+            [execution.command],
+            execution,
+            args.timeout,
+            api,
+            context,
+          );
+          return commandResult(result, args.timeout, api, context);
+        }),
+      );
+    },
+    name: "bash",
+    outputLimits: { retain: "tail" },
     parameters: bashSchema,
     structuredOutputSchema: shellStructuredOutputSchema,
-    outputLimits: { retain: "tail" },
-    async execute(args, api, context) {
-      validateTimeout(args.timeout);
-      const execution = await prepareExecution(args.command, options, api, context);
-      return runCommand([execution.command], execution, args.timeout, api, context);
-    },
   });
 }
 
-/** Output in UTF-8 whatever the console's code page, as the coding agent's `powershell` tool does. */
 const UTF8_OUTPUT = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}";
 const POWERSHELL_ARGS = [
   "-NoProfile",
@@ -200,28 +172,37 @@ const POWERSHELL_ARGS = [
   "-Command",
 ] as const;
 
-/**
- * Runs a PowerShell command, like `bash` but through PowerShell instead of the environment's shell: `pwsh` (PowerShell
- * 7), else Windows PowerShell, started directly with the command as an argument, so no other shell parses it.
- * @param {PowerShellToolOptions} options - The tool's options.
- * @returns {ToolRegistration<typeof powershellSchema>} The tool.
- */
-export function createPowerShellTool(
-  options?: PowerShellToolOptions,
-): ToolRegistration<typeof powershellSchema> {
+function createPowerShellTool(
+  options?: bashTypes.PowerShellToolOptions,
+): typesModule.ToolRegistration<typeof powershellSchema> {
   const programs = options?.programs ?? ["pwsh", "powershell"];
   return defineTool({
-    name: "powershell",
     description: `Execute a PowerShell command in the current working directory. Returns combined stdout and stderr. Output is truncated to last ${DEFAULT_MAX_LINES} lines or ${DEFAULT_MAX_BYTES / 1024}KB (whichever is hit first). If truncated, full output is saved to a temp file. Optionally provide a timeout in seconds.`,
+    execute(args, api, context) {
+      return Effect.runPromise(
+        Effect.gen(function* () {
+          validateTimeout(args.timeout);
+          const execution = yield* prepareExecution(args.command, options, api, context);
+          const script = `${UTF8_OUTPUT}\n${execution.command}`;
+          const commands = programs.map((program) => [program].concat(POWERSHELL_ARGS, script));
+          const result = yield* execFirst(commands, execution, args.timeout, api, context);
+          return commandResult(result, args.timeout, api, context);
+        }),
+      );
+    },
+    name: "powershell",
+    outputLimits: { retain: "tail" },
     parameters: powershellSchema,
     structuredOutputSchema: shellStructuredOutputSchema,
-    outputLimits: { retain: "tail" },
-    async execute(args, api, context) {
-      validateTimeout(args.timeout);
-      const execution = await prepareExecution(args.command, options, api, context);
-      const script = `${UTF8_OUTPUT}\n${execution.command}`;
-      const commands = programs.map((program) => [program].concat(POWERSHELL_ARGS, script));
-      return runCommand(commands, execution, args.timeout, api, context);
-    },
   });
 }
+
+const bash = {
+  bashSchema,
+  createBashTool,
+  createPowerShellTool,
+  powershellSchema,
+  shellStructuredOutputSchema,
+};
+
+export default bash;

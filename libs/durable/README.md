@@ -43,13 +43,24 @@ Built on [`@msa/ai`](../ai/README.md) for model access and `@msa/chord` for docu
 npm install @msa/durable @msa/ai @msa/chord
 ```
 
+| Import                        | Contents                                                                                                                                                                                                                                                                                      |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@msa/durable`                | Definitions and types: `defineDoc`, `defineDocFamily`, `defineEntry` and the entry kinds, `defineTask`, `defineTool`, `defineExtension`, hooks, sections, errors, and the harness documents (`AgentDoc`, `LiveDoc`, `InboxDoc`, `ProviderDoc`, `UsageDoc`, `NestedCallDoc`) with `configure`. |
+| `@msa/durable/harness`        | The runtime: `Harness`, `createRegistry`, `watchEvents`, and the built-in tasks `GenerationTask`, `CompactionTask`, `ToolTask`.                                                                                                                                                               |
+| `@msa/durable/session`        | `createSession`, a session over a storage without the Harness.                                                                                                                                                                                                                                |
+| `@msa/durable/storage/memory` | `MemoryStorage`. The other backends are listed under [Storage](#storage).                                                                                                                                                                                                                     |
+
 ## Quick Start
 
 ```typescript
 import { createModels } from "@msa/ai/models";
 import { openaiProvider } from "@msa/ai/providers/openai";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { AssistantEntry, createRegistry, Harness, MemoryStorage } from "@msa/durable";
+import context from "@msa/chord/context";
+
+const { BACKGROUND_CONTEXT } = context;
+import { AssistantEntry } from "@msa/durable";
+import { createRegistry, Harness } from "@msa/durable/harness";
+import { MemoryStorage } from "@msa/durable/storage/memory";
 
 const context = BACKGROUND_CONTEXT;
 
@@ -149,7 +160,8 @@ const again = await root.submit(
 Code the Harness runs, other than its built-in tasks, comes in named extensions installed in a registry your process owns:
 
 ```typescript
-import { createRegistry, defineExtension, defineTool, hook, section, ToolTask } from "@msa/durable";
+import { defineExtension, defineTool, hook, section } from "@msa/durable";
+import { createRegistry, ToolTask } from "@msa/durable/harness";
 import { CodingTools } from "@msa/durable/tools";
 
 const Coding = defineExtension({
@@ -551,7 +563,7 @@ Running compactions are listed in `docs["msa.live"].compactions` with their reas
 For consumers that want coding-agent style events (`message_start`, `message_update`, `tool_execution_start`, ...) instead of structural state:
 
 ```typescript
-import { watchEvents } from "@msa/durable";
+import { watchEvents } from "@msa/durable/harness";
 
 const stream = await watchEvents(harness, root.id, context);
 initialize(stream.snapshot); // entries, run, in-flight generation, tools, compactions, inbox, agent, usage
@@ -567,7 +579,8 @@ Events are derived from commits, one batch per commit, and apply on top of the s
 Hooks let extensions observe or adjust the built-in tasks, in the conversations that select them:
 
 ```typescript
-import { GenerationTask, hook, ToolTask } from "@msa/durable";
+import { hook } from "@msa/durable";
+import { GenerationTask, ToolTask } from "@msa/durable/harness";
 
 const Guard = defineExtension({
   name: "guard",
@@ -736,7 +749,7 @@ const usage = await harness.usage(context); // { models: { "openai/gpt-6-sol": U
 
 | Backend                   | Import                                                                                      | Notes                                                                                                                                                                                              |
 | ------------------------- | ------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Memory                    | `MemoryStorage` from the package root                                                       | Nothing is persisted.                                                                                                                                                                              |
+| Memory                    | `MemoryStorage` from `@msa/durable/storage/memory`                                          | Nothing is persisted.                                                                                                                                                                              |
 | SQLite                    | `openNodeSqliteStorage(file)` from `@msa/durable/storage/sqlite/node`                       | One database file. WAL mode with `synchronous = NORMAL`: commits survive process crashes; the newest may be lost on power or host failure.                                                         |
 | JSONL                     | `openNodeJsonlStorage(directory, context)` from `@msa/durable/storage/jsonl/node`           | Append-only files in one directory. Pass `{ fsync: true }` to flush before each commit marker. Keeps the whole history in memory too, so memory grows with it; use SQLite for long-running agents. |
 | Cloudflare Durable Object | `openDurableObjectSqliteStorage(ctx.storage)` from `@msa/durable/storage/sqlite/cloudflare` | The SQLite storage of one SQLite-backed Durable Object; commits are its storage transactions.                                                                                                      |
@@ -768,7 +781,7 @@ registerStorageConformance({ describe, expect, it }, "My Storage", async (use) =
 });
 ```
 
-The package root loads TypeBox, because the tool task validates arguments with msa-ai's `validateToolArguments()`. That costs about 23 MB of peak RSS unbundled, about 4 MB in a tree-shaken bundle.
+`@msa/durable/harness` loads TypeBox, because the tool task validates arguments with msa-ai's `validateToolArguments()`. The package root holds only definitions, documents, errors, and types, so importing it loads none of the runtime. That costs about 23 MB of peak RSS unbundled, about 4 MB in a tree-shaken bundle.
 
 ## Errors
 

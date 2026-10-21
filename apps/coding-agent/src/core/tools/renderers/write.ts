@@ -1,21 +1,17 @@
-/**
- * Presentation for the write tool.
- *
- * Renderers live apart from the implementation so a process that only displays tool output does not
- * load the execution path or its typebox parameter schema. `write.ts` spreads these into its
- * definition, so the tool's public shape is unchanged.
- */
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { Container, Text } from "@msa/tui";
+import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
+import themeModule from "../../../modes/interactive/theme/theme.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
+import type extensionsTypesTypes from "../../extensions/types.types.ts";
+import renderUtils from "../render-utils.ts";
 
-import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
-import {
-  getLanguageFromPath,
-  highlightCode,
-  type Theme,
-} from "../../../modes/interactive/theme/theme.ts";
-import type { ToolDefinition, ToolRenderResultOptions } from "../../extensions/types.ts";
-import { normalizeDisplayText, renderToolPath, replaceTabs, str } from "../render-utils.ts";
+const { getLanguageFromPath, highlightCode } = themeModule;
+const { normalizeDisplayText, renderToolPath, replaceTabs, str } = renderUtils;
+const { expandHint } = keybindingHints;
+
+const { Container, Text } = tui;
 
 type WriteHighlightCache = {
   rawPath: string | null;
@@ -24,7 +20,7 @@ type WriteHighlightCache = {
   normalizedLines: string[];
   highlightedLines: string[];
 };
-class WriteCallRenderComponent extends Text {
+class WriteCallRenderComponent extends tui.Text {
   cache?: WriteHighlightCache | undefined;
 
   constructor() {
@@ -50,16 +46,16 @@ function rebuildWriteHighlightCacheFull(
   rawPath: string | null,
   fileContent: string,
 ): WriteHighlightCache | undefined {
-  const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
-  if (!lang) return undefined;
+  const lang = rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
+  if (lang === undefined || lang === "") return undefined;
   const displayContent = normalizeDisplayText(fileContent);
   const normalized = replaceTabs(displayContent);
   return {
-    rawPath,
-    lang,
-    rawContent: fileContent,
-    normalizedLines: normalized.split("\n"),
     highlightedLines: highlightCode(normalized, lang),
+    lang,
+    normalizedLines: normalized.split("\n"),
+    rawContent: fileContent,
+    rawPath,
   };
 }
 function updateWriteHighlightCacheIncremental(
@@ -67,9 +63,9 @@ function updateWriteHighlightCacheIncremental(
   rawPath: string | null,
   fileContent: string,
 ): WriteHighlightCache | undefined {
-  const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
-  if (!lang) return undefined;
-  if (!cache) return rebuildWriteHighlightCacheFull(rawPath, fileContent);
+  const lang = rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
+  if (lang === undefined || lang === "") return undefined;
+  if (cache === undefined) return rebuildWriteHighlightCacheFull(rawPath, fileContent);
   if (cache.lang !== lang || cache.rawPath !== rawPath)
     return rebuildWriteHighlightCacheFull(rawPath, fileContent);
   if (!fileContent.startsWith(cache.rawContent))
@@ -106,8 +102,8 @@ function trimTrailingEmptyLines(lines: string[]): string[] {
 }
 function formatWriteCall(
   args: { path?: string; file_path?: string; content?: string } | undefined,
-  options: ToolRenderResultOptions,
-  theme: Theme,
+  options: extensionsTypesTypes.ToolRenderResultOptions,
+  theme: themeTypes.Theme,
   cache: WriteHighlightCache | undefined,
   cwd: string,
 ): string {
@@ -118,17 +114,17 @@ function formatWriteCall(
 
   if (fileContent === null) {
     text += `\n\n${theme.fg("error", "[invalid content arg - expected string]")}`;
-  } else if (fileContent) {
-    const lang = rawPath ? getLanguageFromPath(rawPath) : undefined;
-    const renderedLines = lang
-      ? (cache?.highlightedLines ??
-        highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
-      : normalizeDisplayText(fileContent).split("\n");
+  } else if (fileContent !== "") {
+    const lang = rawPath !== null && rawPath !== "" ? getLanguageFromPath(rawPath) : undefined;
+    const renderedLines =
+      lang !== undefined && lang !== ""
+        ? (cache?.highlightedLines ??
+          highlightCode(replaceTabs(normalizeDisplayText(fileContent)), lang))
+        : normalizeDisplayText(fileContent).split("\n");
     const lines = trimTrailingEmptyLines(renderedLines);
-    // Count source lines: a highlighted blank line is not empty, so `lines` may keep a trailing one.
-    const count = normalizeDisplayText(fileContent).replace(/\n+$/, "").split("\n").length;
+    const count = normalizeDisplayText(fileContent).replace(/\n+$/u, "").split("\n").length;
     text += options.expanded
-      ? `\n\n${lines.map((line) => (lang ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`
+      ? `\n\n${lines.map((line) => (lang !== undefined && lang !== "" ? line : theme.fg("toolOutput", replaceTabs(line)))).join("\n")}`
       : `\n${expandHint(`${count} ${count === 1 ? "line" : "lines"}`)}`;
   }
 
@@ -139,22 +135,25 @@ function formatWriteResult(
     content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
     isError?: boolean;
   },
-  theme: Theme,
+  theme: themeTypes.Theme,
 ): string | undefined {
-  if (!result.isError) {
+  if (result.isError !== true) {
     return undefined;
   }
   const output = result.content
     .filter((c) => c.type === "text")
     .map((c) => c.text || "")
     .join("\n");
-  if (!output) {
+  if (output === "") {
     return undefined;
   }
   return `\n${theme.fg("error", output)}`;
 }
 
-export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "renderResult"> = {
+const writeRenderers: Pick<
+  extensionsTypesTypes.ToolDefinition<any, any>,
+  "renderCall" | "renderResult"
+> = {
   renderCall(args, theme, context) {
     const renderArgs = args as { path?: string; file_path?: string; content?: string } | undefined;
     const rawPath = str(renderArgs?.file_path ?? renderArgs?.path);
@@ -162,12 +161,12 @@ export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rend
     const component =
       (context.lastComponent as WriteCallRenderComponent | undefined) ??
       new WriteCallRenderComponent();
-    if (fileContent !== null) {
+    if (fileContent === null) {
+      component.cache = undefined;
+    } else {
       component.cache = context.argsComplete
         ? rebuildWriteHighlightCacheFull(rawPath, fileContent)
         : updateWriteHighlightCacheIncremental(component.cache, rawPath, fileContent);
-    } else {
-      component.cache = undefined;
     }
     component.setText(
       formatWriteCall(
@@ -182,13 +181,20 @@ export const writeRenderers: Pick<ToolDefinition<any, any>, "renderCall" | "rend
   },
   renderResult(result, _options, theme, context) {
     const output = formatWriteResult({ ...result, isError: context.isError }, theme);
-    if (!output) {
-      const component = (context.lastComponent as Container | undefined) ?? new Container();
+    if (output === undefined || output === "") {
+      const component =
+        (context.lastComponent as tuiTypes.Container | undefined) ?? new Container();
       component.clear();
       return component;
     }
-    const text = (context.lastComponent as Text | undefined) ?? new Text("", 0, 0);
+    const text = (context.lastComponent as tuiTypes.Text | undefined) ?? new Text("", 0, 0);
     text.setText(output);
     return text;
   },
 };
+
+const write = {
+  writeRenderers,
+};
+
+export default write;

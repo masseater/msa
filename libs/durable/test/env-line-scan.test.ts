@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { StreamDecoder } from "../src/env/decode.ts";
-import { LineScanner } from "../src/env/line-scan.ts";
+import LineScanner from "../src/env/line-scan.ts";
+import StreamDecoder from "../src/env/stream-decoder.ts";
 
 function random(seed: number): () => number {
   let state = seed >>> 0;
@@ -14,7 +14,6 @@ function random(seed: number): () => number {
   };
 }
 
-// Newlines, ASCII, a byte-order mark, valid multi-byte sequences, and bytes that form invalid or truncated sequences.
 const PIECES = [
   [0x0a],
   [0x0a],
@@ -42,7 +41,6 @@ function randomFile(next: () => number): Uint8Array {
 const utf8 = (text: string): number => new TextEncoder().encode(text).length;
 
 describe("StreamDecoder", () => {
-  // Node's streaming TextDecoder with BOM handling dropped this U+FEFF, which follows an invalid sequence.
   it("keeps a U+FEFF that does not start the stream", () => {
     const bytes = Uint8Array.from([0xe2, 0x82, 0xef, 0xbb, 0xbf, 0x61]);
     const decoder = new StreamDecoder();
@@ -100,9 +98,9 @@ describe("LineScanner", () => {
         expect(decode(scan.lastLineStart, lastEnd), message).toBe(lines[lastLine]);
       } else {
         expect(scan, message).toMatchObject({
-          start: file.length,
           end: file.length,
           selectedBytes: 0,
+          start: file.length,
         });
       }
     }

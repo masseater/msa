@@ -1,43 +1,27 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type { McpFetch } from "../auth-provider.ts";
-import { fromPromise, fromSync, McpForeignError } from "../foreign.ts";
-import { LATEST_PROTOCOL_VERSION } from "../protocol/types.ts";
-import { isServerUrl } from "./endpoint.ts";
-import { OAuthFlowError, OAuthIssuerMismatchError } from "./errors.ts";
-import {
-  type AuthorizationServerMetadata,
-  type OAuthChallenge,
-  type OAuthProtectedResourceMetadata,
-  type OAuthServerInfo,
-  parseAuthorizationServerMetadata,
-  parseProtectedResourceMetadata,
-} from "./types.ts";
+import type authProviderTypes from "../auth-provider.ts";
+import type foreignTypes from "../foreign.types.ts";
+import discoveryKit from "./discovery-kit.ts";
+import type discoveryTypes from "./discovery.types.ts";
+import type errorsTypes from "./errors.types.ts";
+import resourceModule from "./resource.ts";
+import typesModule2 from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-export interface ProtectedResourceDiscoveryOptions {
-  resourceMetadataUrl?: string | URL | undefined;
-  protocolVersion?: string | undefined;
-  fetch?: McpFetch | undefined;
-  signal?: AbortSignal | undefined;
-}
+const { endpoint, errors, foreign: foreignModule, types } = discoveryKit;
 
-export interface AuthorizationServerDiscoveryOptions {
-  fetch?: McpFetch | undefined;
-  protocolVersion?: string | undefined;
-  skipIssuerValidation?: boolean | undefined;
-  signal?: AbortSignal | undefined;
-}
+const { McpForeignError, fromPromise, fromSync } = foreignModule;
+const { LATEST_PROTOCOL_VERSION } = types;
+const { OAuthFlowError, OAuthIssuerMismatchError } = errors;
+const { parseAuthorizationServerMetadata, parseProtectedResourceMetadata } = typesModule2;
+const { isServerUrl } = endpoint;
 
-export interface OAuthServerInfoDiscoveryOptions {
-  resourceMetadataUrl?: URL | undefined;
-  authorizationServerMetadataUrl?: URL | undefined;
-  fetch?: McpFetch | undefined;
-  skipIssuerValidation?: boolean | undefined;
-  signal?: AbortSignal | undefined;
-}
-
-type DiscoveryError = McpForeignError | OAuthFlowError | OAuthIssuerMismatchError;
+type DiscoveryError =
+  | foreignTypes.McpForeignError
+  | errorsTypes.OAuthFlowError
+  | errorsTypes.OAuthIssuerMismatchError;
 
 function discard(response: Response | undefined): void {
   void response?.body?.cancel().catch(() => undefined);
@@ -59,7 +43,7 @@ function field(header: string, name: string): string | undefined {
   return value === undefined || value === "" ? undefined : value;
 }
 
-export function parseWwwAuthenticate(header: string | null): OAuthChallenge {
+function parseWwwAuthenticate(header: string | null): typesModule.OAuthChallenge {
   if (header === null || header === "") return {};
   const scheme = header.trimStart().split(/\s+/u, 1)[0]?.toLowerCase();
   if (scheme !== "bearer" && scheme !== "dpop") return {};
@@ -69,19 +53,19 @@ export function parseWwwAuthenticate(header: string | null): OAuthChallenge {
       ? new URL(resourceMetadata)
       : undefined;
   return {
-    resourceMetadataUrl,
-    scope: field(header, "scope"),
     error: field(header, "error"),
     errorDescription: field(header, "error_description"),
+    resourceMetadataUrl,
+    scope: field(header, "scope"),
   };
 }
 
 const fetchMetadata = (
   url: URL,
-  fetch: McpFetch,
+  fetch: authProviderTypes.McpFetch,
   protocolVersion: string,
   signal: AbortSignal | undefined,
-): Effect.Effect<Response, McpForeignError> =>
+): Effect.Effect<Response, foreignTypes.McpForeignError> =>
   fromPromise(() =>
     fetch(url, {
       headers: { Accept: "application/json", "MCP-Protocol-Version": protocolVersion },
@@ -89,11 +73,14 @@ const fetchMetadata = (
     }),
   );
 
-const readJson = (response: Response): Effect.Effect<unknown, McpForeignError> =>
+const readJson = (response: Response): Effect.Effect<unknown, foreignTypes.McpForeignError> =>
   fromPromise((): Promise<unknown> => response.json());
 
 const discoverProtectedResourceMetadataEffect = Effect.fn("discoverProtectedResourceMetadata")(
-  function* (serverUrl: string | URL, options: ProtectedResourceDiscoveryOptions = {}) {
+  function* (
+    serverUrl: string | URL,
+    options: discoveryTypes.ProtectedResourceDiscoveryOptions = {},
+  ) {
     const server = new URL(serverUrl);
     const fetch = options.fetch ?? globalThis.fetch;
     const version = options.protocolVersion ?? LATEST_PROTOCOL_VERSION;
@@ -129,34 +116,40 @@ const discoverProtectedResourceMetadataEffect = Effect.fn("discoverProtectedReso
   },
 );
 
-export const discoverProtectedResourceMetadata: {
+const discoverProtectedResourceMetadata: {
   (
-    options?: ProtectedResourceDiscoveryOptions,
+    options?: discoveryTypes.ProtectedResourceDiscoveryOptions,
   ): (
     serverUrl: string | URL,
-  ) => Effect.Effect<OAuthProtectedResourceMetadata, McpForeignError | OAuthFlowError>;
+  ) => Effect.Effect<
+    typesModule.OAuthProtectedResourceMetadata,
+    foreignTypes.McpForeignError | errorsTypes.OAuthFlowError
+  >;
   (
     serverUrl: string | URL,
-    options?: ProtectedResourceDiscoveryOptions,
-  ): Effect.Effect<OAuthProtectedResourceMetadata, McpForeignError | OAuthFlowError>;
+    options?: discoveryTypes.ProtectedResourceDiscoveryOptions,
+  ): Effect.Effect<
+    typesModule.OAuthProtectedResourceMetadata,
+    foreignTypes.McpForeignError | errorsTypes.OAuthFlowError
+  >;
 } = dual(isServerUrl, discoverProtectedResourceMetadataEffect);
 
-export function buildAuthorizationServerDiscoveryUrls(
+function buildAuthorizationServerDiscoveryUrls(
   authorizationServerUrl: string | URL,
 ): { url: URL; type: "oauth" | "oidc" }[] {
   const issuer = new URL(authorizationServerUrl);
   const path = pathSuffix(issuer.pathname);
   const urls: { url: URL; type: "oauth" | "oidc" }[] = [
     {
-      url: new URL(`/.well-known/oauth-authorization-server${path}`, issuer.origin),
       type: "oauth",
+      url: new URL(`/.well-known/oauth-authorization-server${path}`, issuer.origin),
     },
-    { url: new URL(`/.well-known/openid-configuration${path}`, issuer.origin), type: "oidc" },
+    { type: "oidc", url: new URL(`/.well-known/openid-configuration${path}`, issuer.origin) },
   ];
   if (path !== "")
     urls.push({
-      url: new URL(`${path}/.well-known/openid-configuration`, issuer.origin),
       type: "oidc",
+      url: new URL(`${path}/.well-known/openid-configuration`, issuer.origin),
     });
   return urls;
 }
@@ -166,7 +159,7 @@ const trimSlash = (value: string): string => (value.endsWith("/") ? value.slice(
 const discoverAuthorizationServerMetadataEffect = Effect.fn("discoverAuthorizationServerMetadata")(
   function* (
     authorizationServerUrl: string | URL,
-    options: AuthorizationServerDiscoveryOptions = {},
+    options: discoveryTypes.AuthorizationServerDiscoveryOptions = {},
   ) {
     const fetch = options.fetch ?? globalThis.fetch;
     for (const { url } of buildAuthorizationServerDiscoveryUrls(authorizationServerUrl)) {
@@ -196,16 +189,16 @@ const discoverAuthorizationServerMetadataEffect = Effect.fn("discoverAuthorizati
   },
 );
 
-export const discoverAuthorizationServerMetadata: {
+const discoverAuthorizationServerMetadata: {
   (
-    options?: AuthorizationServerDiscoveryOptions,
+    options?: discoveryTypes.AuthorizationServerDiscoveryOptions,
   ): (
     authorizationServerUrl: string | URL,
-  ) => Effect.Effect<AuthorizationServerMetadata | undefined, DiscoveryError>;
+  ) => Effect.Effect<typesModule.AuthorizationServerMetadata | undefined, DiscoveryError>;
   (
     authorizationServerUrl: string | URL,
-    options?: AuthorizationServerDiscoveryOptions,
-  ): Effect.Effect<AuthorizationServerMetadata | undefined, DiscoveryError>;
+    options?: discoveryTypes.AuthorizationServerDiscoveryOptions,
+  ): Effect.Effect<typesModule.AuthorizationServerMetadata | undefined, DiscoveryError>;
 } = dual(isServerUrl, discoverAuthorizationServerMetadataEffect);
 
 const isNetworkFailure = (error: unknown): boolean =>
@@ -213,8 +206,8 @@ const isNetworkFailure = (error: unknown): boolean =>
 
 const configuredServerInfo = Effect.fn("configuredServerInfo")(function* (
   url: URL,
-  options: OAuthServerInfoDiscoveryOptions,
-  resourceMetadata: OAuthProtectedResourceMetadata | undefined,
+  options: discoveryTypes.OAuthServerInfoDiscoveryOptions,
+  resourceMetadata: typesModule.OAuthProtectedResourceMetadata | undefined,
 ) {
   const response = yield* fetchMetadata(
     url,
@@ -231,19 +224,19 @@ const configuredServerInfo = Effect.fn("configuredServerInfo")(function* (
   const body = yield* readJson(response);
   const metadata = yield* fromSync(() => parseAuthorizationServerMetadata(body));
   return {
-    authorizationServerUrl: metadata.issuer,
     authorizationServerMetadata: metadata,
+    authorizationServerUrl: metadata.issuer,
     resourceMetadata,
-  } satisfies OAuthServerInfo;
+  } satisfies typesModule.OAuthServerInfo;
 });
 
 const discoverOAuthServerInfoEffect = Effect.fn("discoverOAuthServerInfo")(function* (
   serverUrl: string | URL,
-  options: OAuthServerInfoDiscoveryOptions = {},
+  options: discoveryTypes.OAuthServerInfoDiscoveryOptions = {},
 ) {
   const resourceMetadata = yield* discoverProtectedResourceMetadata(serverUrl, {
-    resourceMetadataUrl: options.resourceMetadataUrl,
     fetch: options.fetch,
+    resourceMetadataUrl: options.resourceMetadataUrl,
     signal: options.signal,
   }).pipe(
     Effect.catchIf(
@@ -259,29 +252,39 @@ const discoverOAuthServerInfoEffect = Effect.fn("discoverOAuthServerInfo")(funct
     );
   const authorizationServerUrl =
     resourceMetadata?.authorization_servers?.[0] ?? String(new URL("/", serverUrl));
-  const info: OAuthServerInfo = {
-    authorizationServerUrl,
+  const info: typesModule.OAuthServerInfo = {
     authorizationServerMetadata: yield* discoverAuthorizationServerMetadata(
       authorizationServerUrl,
       {
         fetch: options.fetch,
-        skipIssuerValidation: options.skipIssuerValidation,
         signal: options.signal,
+        skipIssuerValidation: options.skipIssuerValidation,
       },
     ),
+    authorizationServerUrl,
     resourceMetadata,
   };
   return info;
 });
 
-export const discoverOAuthServerInfo: {
+const discoverOAuthServerInfo: {
   (
-    options?: OAuthServerInfoDiscoveryOptions,
-  ): (serverUrl: string | URL) => Effect.Effect<OAuthServerInfo, DiscoveryError>;
+    options?: discoveryTypes.OAuthServerInfoDiscoveryOptions,
+  ): (serverUrl: string | URL) => Effect.Effect<typesModule.OAuthServerInfo, DiscoveryError>;
   (
     serverUrl: string | URL,
-    options?: OAuthServerInfoDiscoveryOptions,
-  ): Effect.Effect<OAuthServerInfo, DiscoveryError>;
+    options?: discoveryTypes.OAuthServerInfoDiscoveryOptions,
+  ): Effect.Effect<typesModule.OAuthServerInfo, DiscoveryError>;
 } = dual(isServerUrl, discoverOAuthServerInfoEffect);
 
-export { resourceUrlFromServerUrl, selectResource } from "./resource.ts";
+const discovery = {
+  buildAuthorizationServerDiscoveryUrls,
+  discoverAuthorizationServerMetadata,
+  discoverOAuthServerInfo,
+  discoverProtectedResourceMetadata,
+  parseWwwAuthenticate,
+  resourceUrlFromServerUrl: resourceModule.resourceUrlFromServerUrl,
+  selectResource: resourceModule.selectResource,
+};
+
+export default discovery;

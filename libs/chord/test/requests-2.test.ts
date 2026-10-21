@@ -1,0 +1,171 @@
+import assert from "node:assert/strict";
+
+import { Effect } from "effect";
+import { Type } from "typebox";
+import { describe, it } from "vite-plus/test";
+
+import delta from "../src/delta/index.ts";
+import chord from "../src/index.ts";
+import type chordTypes from "../src/index.types.ts";
+import requests from "./fixtures/requests.ts";
+import timing from "./fixtures/timing.ts";
+
+const { createHost, hostNamed, isChordError, local, memoryLinkPair, method, opaque, remote } =
+  chord;
+const { applyImmutable } = delta;
+
+const { until } = requests;
+const { latch, tick } = timing;
+
+const case4ReplaceDiffsANewRevision = Effect.gen(function* () {
+  const Mirror = local("t.mirror", {
+    input: Type.Object({}),
+    members: { doc: Type.Unknown(), set: method(Type.Unknown()) },
+    version: 1,
+  });
+  const Doc = Type.Object({ entries: Type.Array(Type.String()), status: Type.String() });
+  let lastOptions: { diff?: boolean } | undefined;
+  const host = createHost({ onError: () => {}, self: { kind: "host" } });
+  host.serve(Mirror, (_input, _principal, self) => {
+    const doc = self.state("doc", Doc, { entries: ["a", "b"], status: "idle" });
+    return {
+      doc,
+      set: (value: unknown, ctx: chordTypes.Ctx) => {
+        doc.replace(ctx, value as never, lastOptions);
+      },
+    };
+  });
+  const ref = host.hold(Mirror, {});
+  yield* Effect.promise(() => ref.ready);
+  const events: chordTypes.StateEvent<unknown>[] = [];
+  let replica: unknown;
+  ref.doc.events((event) => {
+    replica = event.type === "ops" ? applyImmutable(replica, event.ops) : event.value;
+    events.push(event);
+  });
+  const opsOf = (event: chordTypes.StateEvent<unknown> | undefined) =>
+    event?.type === "ops" ? event.ops : [];
+  const current = ref.doc.value as { entries: string[]; status: string };
+  yield* Effect.promise(() => ref.set({ entries: current.entries, status: "running" }));
+  assert.deepEqual(opsOf(events.at(-1)), [["s", ["status"], "running"]]);
+  yield* Effect.promise(() => ref.set({ entries: ["a", "b", "c"], status: "running" }));
+  assert.equal(opsOf(events.at(-1))[0]?.[0], "r");
+  lastOptions = { diff: true };
+  yield* Effect.promise(() => ref.set({ entries: ["a", "b", "c", "d"], status: "running" }));
+  assert.notEqual(opsOf(events.at(-1))[0]?.[0], "r");
+  lastOptions = { diff: false };
+  const shared = ref.doc.value as { entries: string[] };
+  yield* Effect.promise(() => ref.set({ entries: shared.entries, status: "done" }));
+  assert.equal(opsOf(events.at(-1))[0]?.[0], "r");
+  yield* tick;
+  assert.deepEqual(replica, ref.doc.value);
+});
+
+const Echo = remote("t.echo", {
+  host: hostNamed("server"),
+  input: Type.Object({}),
+  variants: { main: { methods: { codeVersion: method(undefined, Type.Number()) } } },
+  version: 1,
+});
+
+const case5RootsOfAChildThat = Effect.gen(function* () {
+  const services = yield* Effect.context<never>();
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
+  const echoFacet: chordTypes.Facet = {
+    name: "echo",
+    setup: (api) =>
+      api.serve(Echo, () => ({
+        codeVersion: (ctx: chordTypes.Ctx) => ctx.codeVersion,
+        variant: "main",
+      })),
+  };
+  server.install(echoFacet);
+  yield* Effect.promise(() => server.reload([echoFacet]));
+  assert.equal(server.codeVersion, 2);
+  assert.equal(server.previousCodeVersion, undefined);
+  const loader: chordTypes.FacetLoader = () =>
+    Effect.runPromiseWith(services)(Effect.sync(() => []));
+  const worker = createHost({
+    loader,
+    name: "session:S1",
+    onError: () => {},
+    self: { kind: "host" },
+  });
+  const go = latch();
+  const call = worker.root((ctx) =>
+    Effect.runPromiseWith(services)(
+      Effect.gen(function* () {
+        yield* go.wait;
+        const peer = yield* Effect.promise(() => ctx.get(Echo, {}));
+        return yield* Effect.promise(() => peer.codeVersion(ctx));
+      }),
+    ),
+  );
+  const [down, up] = memoryLinkPair();
+  server.accept(down, { kind: "host", name: "session:S1", principal: { worker: "S1" } });
+  worker.connect(up, { principal: { kind: "server" } });
+  go.open();
+  assert.equal(yield* Effect.promise(() => call), 2);
+  yield* until(() => worker.codeVersion === 2);
+  yield* Effect.promise(() =>
+    assert.rejects(
+      server.root(() => 0, { codeVersion: 1 }),
+      (error) => isChordError(error, "superseded"),
+    ),
+  );
+});
+
+describe("application requests", () => {
+  it("#4 replace diffs a new revision that shares structure; unrelated values replace", () =>
+    Effect.runPromise(case4ReplaceDiffsANewRevision));
+
+  it("#5 roots of a child that connected behind the server are admitted in the server's code version", () =>
+    Effect.runPromise(case5RootsOfAChildThat));
+});
+
+describe("application requests", () => {
+  it("#6 self.expose: an opaque member backed by a resource, readable once live", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const services = yield* Effect.context<never>();
+        const Store = local("t.store", {
+          input: Type.Object({}),
+          members: { db: opaque<{ readonly queries: string[] }>("t.db@1") },
+          version: 1,
+        });
+        const gate = latch();
+        const native = { queries: [] as string[] };
+        const host = createHost({ onError: () => {}, self: { kind: "host" } });
+        host.serve(Store, (_input, _principal, self) => {
+          const db = self.resource("db", {
+            open: () =>
+              Effect.runPromiseWith(services)(
+                Effect.gen(function* () {
+                  yield* gate.wait;
+                  return native;
+                }),
+              ),
+            version: 1,
+          });
+          return { db: self.expose(db) };
+        });
+        const ref = host.hold(Store, {});
+        assert.equal(ref.db, undefined);
+        gate.open();
+        yield* Effect.promise(() => ref.ready);
+        assert.equal(ref.db, native);
+
+        const Other = local("t.other", { input: Type.Object({}), version: 1 });
+        host.serve(Other, (_input, _principal, self) => {
+          self.expose({ key: "x", value: 1 });
+          return {};
+        });
+        yield* Effect.promise(() =>
+          assert.rejects(
+            host.hold(Other, {}).ready,
+            /expose takes a resource declared by this object/u,
+          ),
+        );
+      }),
+    ));
+});

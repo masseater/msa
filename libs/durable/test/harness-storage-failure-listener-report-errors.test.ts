@@ -1,125 +1,193 @@
 import { runInNewContext } from "node:vm";
 
-import { createModels } from "@msa/ai";
-import {
-  createRegistry,
-  defineExtension,
-  defineTask,
-  Harness,
-  LiveDoc,
-  MemoryStorage,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { safeNow } from "../src/harness/harness.ts";
-import { contained } from "../src/session/session.ts";
-import { running, Waiting, started } from "./harness-storage-failure-support.ts";
-import { context } from "./session-support.ts";
-import { openTasks } from "./task-support.ts";
+import harnessStorageFailureSupport from "./harness-storage-failure-support.ts";
+import support from "./support.ts";
 
-describe("listener and report errors", () => {
-  it("contains a fulfilled thenable that calls only its fulfillment handler", async () => {
-    const unhandled: unknown[] = [];
-    const onUnhandled = (error: unknown) => unhandled.push(error);
-    process.on("uncaughtException", onUnhandled);
-    process.on("unhandledRejection", onUnhandled);
-    try {
-      const errors: unknown[] = [];
-      // A thenable that, like some libraries' promises, calls only the handler it settles with.
-      // biome-ignore lint/suspicious/noThenProperty: the test is about a thenable
-      const thenable = { then: (resolve: () => void) => queueMicrotask(() => resolve()) };
-      contained(
-        () => thenable,
-        (error) => errors.push(error),
-      );
-      await new Promise((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      expect(errors).toEqual([]);
-      expect(unhandled).toEqual([]);
-    } finally {
-      process.off("uncaughtException", onUnhandled);
-      process.off("unhandledRejection", onUnhandled);
-    }
-  });
+const { createModels } = ai;
 
-  it("contains a rejected promise from another realm", async () => {
-    const unhandled: unknown[] = [];
-    const onUnhandled = (error: unknown) => unhandled.push(error);
-    process.on("unhandledRejection", onUnhandled);
-    try {
-      const foreign = runInNewContext("Promise.reject(new Error('foreign'))") as Promise<never>;
-      const errors: unknown[] = [];
-      contained(
-        () => foreign,
-        (error) => errors.push(error),
-      );
-      await new Promise((resolve) => {
-        setTimeout(resolve, 10);
-      });
-      expect(errors.map(String)).toEqual(["Error: foreign"]);
-      expect(unhandled).toEqual([]);
-    } finally {
-      process.off("unhandledRejection", onUnhandled);
-    }
-  });
+const { MemoryStorage } = memory;
+const { LiveDoc, defineExtension, defineTask } = durable;
+const { Harness, createRegistry } = harnessModule;
+
+const { Waiting, contained, running, safeNow, started } = harnessStorageFailureSupport;
+const { awaited, context, openTasks } = support;
+
+const containsFulfilledThenable = Effect.gen(function* () {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (error: unknown) => unhandled.push(error);
+  process.on("uncaughtException", onUnhandled);
+  process.on("unhandledRejection", onUnhandled);
+  yield* Effect.gen(function* () {
+    const errors: unknown[] = [];
+    const thenable = { then: (resolve: () => void) => queueMicrotask(() => resolve()) };
+    contained(
+      () => thenable,
+      (error) => errors.push(error),
+    );
+    yield* Effect.sleep(10);
+    expect(errors).toEqual([]);
+    expect(unhandled).toEqual([]);
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        process.off("uncaughtException", onUnhandled);
+        process.off("unhandledRejection", onUnhandled);
+      }),
+    ),
+  );
+});
+
+const containsRejectedPromise = Effect.gen(function* () {
+  const unhandled: unknown[] = [];
+  const onUnhandled = (error: unknown) => unhandled.push(error);
+  process.on("unhandledRejection", onUnhandled);
+  yield* Effect.gen(function* () {
+    const foreign = runInNewContext("Promise.reject(new Error('foreign'))") as Promise<never>;
+    const errors: unknown[] = [];
+    contained(
+      () => foreign,
+      (error) => errors.push(error),
+    );
+    yield* Effect.sleep(10);
+    expect(errors.map(String)).toEqual(["Error: foreign"]);
+    expect(unhandled).toEqual([]);
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        process.off("unhandledRejection", onUnhandled);
+      }),
+    ),
+  );
 });
 
 describe("listener and report errors", () => {
-  it("reports a throwing watch listener, which ends that watch", async () => {
-    const { harness, root, reports } = await started(new MemoryStorage());
-    const watch = (await harness.watchDoc(LiveDoc, root.id, context))!;
-    const failure = new Error("listener broke");
-    watch.start(() => {
-      return Promise.reject(failure);
-    });
-    await root.commit(async (tx) => {
-      (await tx.doc(LiveDoc, root.id)).compactions = [];
-    }, context);
-    expect(await watch.closed).toEqual({ reason: "listener_error", error: failure });
-    expect(reports).toEqual([failure]);
-    await harness.close(context);
-  });
+  it("contains a fulfilled thenable that calls only its fulfillment handler", () =>
+    Effect.runPromise(containsFulfilledThenable));
+
+  it("contains a rejected promise from another realm", () =>
+    Effect.runPromise(containsRejectedPromise));
+});
+
+const reportsThrowingWatch = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const { harness, root, reports } = yield* started(new MemoryStorage());
+  const watch = (yield* awaited(harness.watchDoc(LiveDoc, root.id, context)))!;
+  const failure = new Error("listener broke");
+  watch.start(() => Promise.reject(failure));
+  yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(LiveDoc, root.id))).compactions = [];
+          }),
+        ),
+      context,
+    ),
+  );
+  expect(yield* awaited(watch.closed)).toEqual({ error: failure, reason: "listener_error" });
+  expect(reports).toEqual([failure]);
+  yield* awaited(harness.close(context));
 });
 
 describe("listener and report errors", () => {
-  it("faults only the task, and ends only the watch, for a thrown value that cannot be formatted", async () => {
-    const unformattable = Object.create(null) as object;
-    const Throws = defineTask<null, { phase: "work" }, null>({
-      name: "test.throws-unformattable",
-      version: 1,
-      initial: () => ({ phase: "work" }),
-      phases: {
-        work: () => {
-          return Promise.reject(unformattable);
-        },
-      },
-      abort: async () => {},
-    });
-    const opened = await openTasks(new MemoryStorage(), [Throws]);
-    const root = await opened.harness.root(context);
-    const watch = (await opened.harness.watchDoc(LiveDoc, root.id, context))!;
-    watch.start(() => {
-      return Promise.reject(unformattable);
-    });
-    const id = await root.commit(
+  it("reports a throwing watch listener, which ends that watch", () =>
+    Effect.runPromise(reportsThrowingWatch));
+});
+
+const faultsOnlyTask = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const unformattable = Object.create(null) as object;
+  const Throws = defineTask<null, { phase: "work" }, null>({
+    abort: () => Promise.resolve(),
+    initial: () => ({ phase: "work" }),
+    name: "test.throws-unformattable",
+    phases: {
+      work: () => Promise.reject(unformattable),
+    },
+    version: 1,
+  });
+  const opened = yield* openTasks(new MemoryStorage(), [Throws]);
+  const root = yield* awaited(opened.harness.root(context));
+  const watch = (yield* awaited(opened.harness.watchDoc(LiveDoc, root.id, context)))!;
+  watch.start(() => Promise.reject(unformattable));
+  const id = yield* awaited(
+    root.commit(
       (tx) => tx.createTask(Throws, null, { ownership: { kind: "conversation" } }),
       context,
-    );
-    opened.harness.resume();
-    expect((await opened.harness.waitForTask(id, context)).state.outcome).toEqual({
-      status: "faulted",
-      error: { message: "[object Object]" },
-    });
-    await root.commit(async (tx) => {
-      (await tx.doc(LiveDoc, root.id)).compactions = [];
-    }, context);
-    expect(await watch.closed).toMatchObject({ reason: "listener_error" });
-    await expect(
-      root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context),
-    ).resolves.toBeDefined();
-    await opened.harness.close(context);
+    ),
+  );
+  opened.harness.resume();
+  expect((yield* awaited(opened.harness.waitForTask(id, context))).state.outcome).toEqual({
+    error: { message: "[object Object]" },
+    status: "faulted",
   });
+  yield* awaited(
+    root.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(LiveDoc, root.id))).compactions = [];
+          }),
+        ),
+      context,
+    ),
+  );
+  expect(yield* awaited(watch.closed)).toMatchObject({ reason: "listener_error" });
+  yield* awaited(
+    expect(
+      root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context),
+    ).resolves.toBeDefined(),
+  );
+  yield* awaited(opened.harness.close(context));
+});
+
+describe("listener and report errors", () => {
+  it("faults only the task, and ends only the watch, for a thrown value that cannot be formatted", () =>
+    Effect.runPromise(faultsOnlyTask));
+});
+
+const keepsWorkingOnReport = Effect.gen(function* () {
+  const registry = createRegistry();
+  registry.install(defineExtension({ name: "tasks", tasks: [Waiting] }));
+  const harness = yield* awaited(
+    Harness.open(
+      new MemoryStorage(),
+      {
+        models: createModels(),
+        now: () => {
+          throw new Error("clock broke");
+        },
+        onReport: () => {
+          throw new Error("report broke");
+        },
+        registry,
+      },
+      context,
+    ),
+  );
+  const root = yield* awaited(harness.root(context));
+  const id = yield* awaited(
+    root.commit(
+      (tx) => tx.createTask(Waiting, null, { ownership: { kind: "conversation" } }),
+      context,
+    ),
+  );
+  harness.resume();
+  yield* running(harness, id);
+  expect((yield* awaited(harness.getTask(id, context)))?.startedAt).toEqual(expect.any(Number));
+  yield* awaited(harness.abortTask(id, context));
+  expect((yield* awaited(harness.waitForTask(id, context))).state.outcome.status).toBe("aborted");
+  yield* awaited(harness.close(context));
 });
 
 describe("listener and report errors", () => {
@@ -131,7 +199,6 @@ describe("listener and report errors", () => {
       },
       (error) => {
         reports.push(error);
-        // Reentry, as a handler that commits does: the clock is read again before this report returns.
         if (reports.length < 5) clock();
       },
     );
@@ -140,33 +207,6 @@ describe("listener and report errors", () => {
     expect(reports.map(String)).toEqual(["Error: clock broke"]);
   });
 
-  it("keeps working when onReport throws, and falls back to Date.now when the clock throws", async () => {
-    const registry = createRegistry();
-    registry.install(defineExtension({ name: "tasks", tasks: [Waiting] }));
-    const harness = await Harness.open(
-      new MemoryStorage(),
-      {
-        models: createModels(),
-        registry,
-        now: () => {
-          throw new Error("clock broke");
-        },
-        onReport: () => {
-          throw new Error("report broke");
-        },
-      },
-      context,
-    );
-    const root = await harness.root(context);
-    const id = await root.commit(
-      (tx) => tx.createTask(Waiting, null, { ownership: { kind: "conversation" } }),
-      context,
-    );
-    harness.resume();
-    await running(harness, id);
-    expect((await harness.getTask(id, context))?.startedAt).toEqual(expect.any(Number));
-    await harness.abortTask(id, context);
-    expect((await harness.waitForTask(id, context)).state.outcome.status).toBe("aborted");
-    await harness.close(context);
-  });
+  it("keeps working when onReport throws, and falls back to Date.now when the clock throws", () =>
+    Effect.runPromise(keepsWorkingOnReport));
 });

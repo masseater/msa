@@ -1,16 +1,9 @@
-/**
- * Bash Spawn Hook Example
- *
- * Adjusts command, cwd, and env before execution.
- *
- * Usage:
- *   msa -e ./bash-spawn-hook.ts
- */
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
-import { createBashTool } from "@msa/coding-agent";
+const { createBashTool } = codingAgent;
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   const cwd = process.cwd();
 
   const bashTool = createBashTool(cwd, {
@@ -23,8 +16,6 @@ export default function (msa: ExtensionAPI) {
 
   msa.registerTool({
     ...bashTool,
-    execute: async (id, params, signal, onUpdate, _ctx) => {
-      return bashTool.execute(id, params, signal, onUpdate);
-    },
+    execute: (id, params, signal, onUpdate) => bashTool.execute(id, params, signal, onUpdate),
   });
 }

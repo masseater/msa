@@ -1,86 +1,93 @@
-import { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } from "@msa/ai/utils/retry";
+import retryModule from "@msa/ai/utils/retry";
 
-/** Runtime defaults shared by settings accessors and the published JSON Schema. */
-export const SETTINGS_DEFAULTS = {
-  transport: "auto",
-  steeringMode: "one-at-a-time",
-  followUpMode: "one-at-a-time",
-  compaction: {
-    enabled: true,
-    reserveTokens: 16384,
-    keepRecentTokens: 20000,
-  },
+const { DEFAULT_MAX_AGENT_RETRY_DELAY_MS } = retryModule;
+
+const SETTINGS_DEFAULTS = {
+  autocompleteMaxVisible: 5,
   branchSummary: {
     reserveTokens: 16384,
     skipPrompt: false,
   },
-  retry: {
-    enabled: true,
-    maxRetries: 3,
-    baseDelayMs: 2000,
-    maxAgentDelayMs: DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
-    provider: {
-      maxRetryDelayMs: 60000,
-    },
+  cacheWarming: "streaming",
+  codemode: {
+    inlineBudget: 3000,
+    mode: "on",
   },
-  orchestrator: {
-    maxConcurrentThreads: 4,
-  },
-  hideThinkingBlock: true,
-  showCacheMissNotices: false,
-  quietStartup: false,
-  defaultProjectTrust: "ask",
   collapseChangelog: false,
-  enableInstallTelemetry: true,
-  enableAnalytics: false,
-  enableSkillCommands: true,
-  terminal: {
-    showImages: true,
-    imageWidthCells: 60,
-    clearOnShrink: false,
-    showTerminalProgress: false,
+  compaction: {
+    enabled: true,
+    keepRecentTokens: 20000,
+    reserveTokens: 16384,
   },
+  defaultProjectTrust: "ask",
+  doubleEscapeAction: "tree",
+  editorPaddingX: 0,
+  enableAnalytics: false,
+  enableInstallTelemetry: true,
+  enableSkillCommands: true,
+  followUpMode: "one-at-a-time",
+  fullscreenCopyOnSelect: true,
+  fullscreenExitOutput: "transcript",
+  fullscreenScrollbar: "auto",
+  fullscreenWheelScrollLines: "auto",
+  hideThinkingBlock: true,
   images: {
     autoResize: true,
     blockImages: false,
   },
+  markdown: {
+    codeBlockIndent: "  ",
+    mermaid: "streaming",
+  },
   memory: {
-    enabled: true,
     embedding: {
-      enabled: true,
       baseUrl: "http://127.0.0.1:11434/v1",
+      documentPrefix: "title: none | text: ",
+      enabled: true,
       model: "embeddinggemma-2",
       queryPrefix: "task: search result | query: ",
-      documentPrefix: "title: none | text: ",
       timeoutMs: 5000,
     },
+    enabled: true,
     recall: {
       enabled: true,
       limit: 5,
       minScore: 0.72,
     },
   },
-  doubleEscapeAction: "tree",
-  treeFilterMode: "default",
-  editorPaddingX: 0,
+  orchestrator: {
+    maxConcurrentThreads: 4,
+  },
   outputPad: 1,
-  autocompleteMaxVisible: 5,
-  markdown: {
-    codeBlockIndent: "  ",
-    mermaid: "streaming",
-  },
-  codemode: {
-    mode: "on",
-    inlineBudget: 3000,
-  },
   prWatch: {
     intervalSeconds: 45,
     statusIntervalSeconds: 300,
   },
-  cacheWarming: "streaming",
+  quietStartup: false,
+  retry: {
+    baseDelayMs: 2000,
+    enabled: true,
+    maxAgentDelayMs: DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+    maxRetries: 3,
+    provider: {
+      maxRetryDelayMs: 60000,
+    },
+  },
+  showCacheMissNotices: false,
+  steeringMode: "one-at-a-time",
+  terminal: {
+    clearOnShrink: false,
+    imageWidthCells: 60,
+    showImages: true,
+    showTerminalProgress: false,
+  },
+  transport: "auto",
+  treeFilterMode: "default",
   tuiMode: "fullscreen",
-  fullscreenExitOutput: "transcript",
-  fullscreenScrollbar: "auto",
-  fullscreenCopyOnSelect: true,
-  fullscreenWheelScrollLines: "auto",
 } as const;
+
+const settingsDefaults = {
+  SETTINGS_DEFAULTS,
+};
+
+export default settingsDefaults;

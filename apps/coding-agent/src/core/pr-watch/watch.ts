@@ -1,91 +1,71 @@
 import { Clock, Duration, Effect, Option, Result } from "effect";
 
-import { describeChanges, describeChangeText, isTerminalChange } from "./changes.ts";
-import type { PrWatchFailure, PrWatchGh, PrWatchGhError } from "./gh.ts";
-import { isBehind, type PrSnapshot, type PrWatchTarget } from "./snapshot.ts";
-import { describeWatchStatus } from "./summary.ts";
+import changesModule from "./changes.ts";
+import type ghTypes from "./gh.types.ts";
+import snapshotModule from "./snapshot.ts";
+import type snapshotTypes from "./snapshot.types.ts";
+import summary from "./summary.ts";
+import type watchTypes from "./watch.types.ts";
 
-export interface PrNotification {
-  readonly label: string;
-  readonly text: string;
-  readonly wake: boolean;
-  /** Set when checks finished: how long they were pending and how they ended. */
-  readonly ci?: { readonly durationMs: number; readonly conclusion: "passed" | "failed" };
-}
-
-export interface PrWatchHost {
-  notify: (notification: PrNotification) => void;
-  changed: () => void;
-}
-
-export type PrWatchStatus = "watching" | "stopped";
-
-export interface PrWatchEntry {
-  readonly target: PrWatchTarget;
-  readonly key: string;
-  readonly label: string;
-  readonly baseIntervalMs: number;
-  readonly statusIntervalMs: number;
-  intervalMs: number;
-  status: PrWatchStatus;
-  snapshot: PrSnapshot | undefined;
-  lastNotification: PrNotification | undefined;
-  error: string | undefined;
-  notifiedError: string | undefined;
-  polls: number;
-  startedAt: number | undefined;
-  lastNotificationAt: number | undefined;
-  pendingSince: number | undefined;
-  baseMovedAt: number | undefined;
-}
+const { isBehind } = snapshotModule;
+const { describeChangeText, describeChanges, isTerminalChange } = changesModule;
+const { describeWatchStatus } = summary;
 
 const MAX_INTERVAL_MS = 10 * 60_000;
 
-const FATAL_FAILURES: ReadonlySet<PrWatchFailure> = new Set(["missing", "auth", "not-found"]);
+const FATAL_FAILURES: ReadonlySet<ghTypes.PrWatchFailure> = new Set([
+  "missing",
+  "auth",
+  "not-found",
+]);
 
 const RATE_LIMIT_BACKOFF = 4;
 const ERROR_BACKOFF = 2;
 
-export function prWatchKey(target: PrWatchTarget): string {
+function prWatchKey(target: snapshotTypes.PrWatchTarget): string {
   return `${target.repository ?? ""}#${target.number}`;
 }
 
-export function prWatchLabel(target: PrWatchTarget): string {
+function prWatchLabel(target: snapshotTypes.PrWatchTarget): string {
   return target.repository === undefined
     ? `#${target.number}`
     : `${target.repository}#${target.number}`;
 }
 
-export function createPrWatchEntry(
-  target: PrWatchTarget,
+function createPrWatchEntry(
+  target: snapshotTypes.PrWatchTarget,
   intervalMs: number,
   statusIntervalMs: number,
-): PrWatchEntry {
+): watchTypes.PrWatchEntry {
   return {
-    target,
+    baseIntervalMs: intervalMs,
+    baseMovedAt: undefined,
+    error: undefined,
+    intervalMs,
     key: prWatchKey(target),
     label: prWatchLabel(target),
-    baseIntervalMs: intervalMs,
-    statusIntervalMs,
-    intervalMs,
-    status: "watching",
-    snapshot: undefined,
     lastNotification: undefined,
-    error: undefined,
-    notifiedError: undefined,
-    polls: 0,
-    startedAt: undefined,
     lastNotificationAt: undefined,
+    notifiedError: undefined,
     pendingSince: undefined,
-    baseMovedAt: undefined,
+    polls: 0,
+    snapshot: undefined,
+    startedAt: undefined,
+    status: "watching",
+    statusIntervalMs,
+    target,
   };
 }
 
-function retryNotice(entry: PrWatchEntry): string {
+function retryNotice(entry: watchTypes.PrWatchEntry): string {
   return `Retrying every ${Math.round(entry.intervalMs / 1000)}s.`;
 }
 
-function handleFailure(entry: PrWatchEntry, host: PrWatchHost, failure: PrWatchGhError): boolean {
+function handleFailure(
+  entry: watchTypes.PrWatchEntry,
+  host: watchTypes.PrWatchHost,
+  failure: ghTypes.PrWatchGhError,
+): boolean {
   entry.error = failure.message;
   if (FATAL_FAILURES.has(failure.kind)) {
     entry.status = "stopped";
@@ -109,9 +89,9 @@ function handleFailure(entry: PrWatchEntry, host: PrWatchHost, failure: PrWatchG
 }
 
 function trackTimers(
-  entry: PrWatchEntry,
-  previous: PrSnapshot | undefined,
-  current: PrSnapshot,
+  entry: watchTypes.PrWatchEntry,
+  previous: snapshotTypes.PrSnapshot | undefined,
+  current: snapshotTypes.PrSnapshot,
   now: number,
 ): void {
   if (current.checks.pending > 0) {
@@ -127,9 +107,9 @@ function trackTimers(
 }
 
 function applySnapshot(
-  entry: PrWatchEntry,
-  host: PrWatchHost,
-  current: PrSnapshot,
+  entry: watchTypes.PrWatchEntry,
+  host: watchTypes.PrWatchHost,
+  current: snapshotTypes.PrSnapshot,
   now: number,
 ): boolean {
   const previous = entry.snapshot;
@@ -142,7 +122,7 @@ function applySnapshot(
   const checks = changes.find(
     (change) => change.kind === "checks-passed" || change.kind === "checks-failed",
   );
-  const notification: PrNotification = {
+  const notification: watchTypes.PrNotification = {
     label: changes.map((change) => change.label).join(", "),
     text: describeChangeText(entry.label, changes),
     wake: true,
@@ -150,8 +130,8 @@ function applySnapshot(
       ? {}
       : {
           ci: {
-            durationMs: now - pendingSince,
             conclusion: checks.kind === "checks-passed" ? "passed" : "failed",
+            durationMs: now - pendingSince,
           },
         }),
   };
@@ -162,8 +142,8 @@ function applySnapshot(
 }
 
 function readBehind(
-  options: PrWatchLoopOptions,
-  current: PrSnapshot,
+  options: watchTypes.PrWatchLoopOptions,
+  current: snapshotTypes.PrSnapshot,
 ): Effect.Effect<Option.Option<number>> {
   const worthAsking = isBehind(current) || current.mergeStateStatus === "UNKNOWN";
   if (!worthAsking || current.baseRefName === "" || current.headRefOid === "") {
@@ -175,8 +155,8 @@ function readBehind(
 }
 
 function handleSnapshot(
-  options: PrWatchLoopOptions,
-  current: PrSnapshot,
+  options: watchTypes.PrWatchLoopOptions,
+  current: snapshotTypes.PrSnapshot,
   now: number,
 ): Effect.Effect<boolean> {
   const { entry, host } = options;
@@ -195,10 +175,14 @@ function handleSnapshot(
   );
 }
 
-function notifyStatus(entry: PrWatchEntry, host: PrWatchHost, now: number): boolean {
+function notifyStatus(
+  entry: watchTypes.PrWatchEntry,
+  host: watchTypes.PrWatchHost,
+  now: number,
+): boolean {
   const status = describeWatchStatus(entry, now);
   if (status === undefined) return false;
-  const notification: PrNotification = {
+  const notification: watchTypes.PrNotification = {
     label: "status",
     text: `${entry.label}: ${status}`,
     wake: false,
@@ -208,7 +192,7 @@ function notifyStatus(entry: PrWatchEntry, host: PrWatchHost, now: number): bool
   return true;
 }
 
-function poll(options: PrWatchLoopOptions): Effect.Effect<void> {
+function poll(options: watchTypes.PrWatchLoopOptions): Effect.Effect<void> {
   return Effect.gen(function* () {
     const { entry, host } = options;
     const now = yield* Clock.currentTimeMillis;
@@ -228,16 +212,19 @@ function poll(options: PrWatchLoopOptions): Effect.Effect<void> {
   });
 }
 
-export interface PrWatchLoopOptions {
-  readonly gh: PrWatchGh;
-  readonly entry: PrWatchEntry;
-  readonly host: PrWatchHost;
-}
-
-export function prWatchLoop(options: PrWatchLoopOptions): Effect.Effect<void> {
+function prWatchLoop(options: watchTypes.PrWatchLoopOptions): Effect.Effect<void> {
   return Effect.whileLoop({
-    while: () => options.entry.status === "watching",
     body: () => poll(options),
     step: () => undefined,
+    while: () => options.entry.status === "watching",
   });
 }
+
+const watch = {
+  createPrWatchEntry,
+  prWatchKey,
+  prWatchLabel,
+  prWatchLoop,
+};
+
+export default watch;

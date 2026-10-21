@@ -1,6 +1,6 @@
 import { Data } from "effect";
 
-export class McpOAuthAuthorizationRequiredError extends Data.TaggedError(
+export default class McpOAuthAuthorizationRequiredError extends Data.TaggedError(
   "McpOAuthAuthorizationRequiredError",
 )<{ readonly message: string }> {
   constructor() {

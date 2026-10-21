@@ -1,23 +1,26 @@
 import assert from "node:assert/strict";
-import { mkdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { describe, it } from "vite-plus/test";
+import { Effect } from "effect";
+import { describe, it, vi } from "vite-plus/test";
 
-import { createHost, ipcLink, isChordError } from "../src/index.ts";
-import {
-  type ControlMessage,
-  createHostManager,
-  type Driver,
-  forkDriver,
-  processLock,
-} from "../src/manager.ts";
-import { Echo } from "./fixtures/echo.ts";
+import type managerTypes from "../src/manager.types.ts";
+import Echo from "./fixtures/echo.ts";
+import platform from "./fixtures/platform.ts";
+import timing from "./fixtures/timing.ts";
+import managerKit from "./manager-kit.ts";
+
+const { manager: managerModule, src: chord } = managerKit;
+
+const { createHostManager, forkDriver, processLock } = managerModule;
+const { createHost, ipcLink, isChordError } = chord;
+
+const { makeDirectory, readText, removeAll } = platform;
+const { latch, tick } = timing;
 
 const entry = fileURLToPath(new URL("./fixtures/worker.ts", import.meta.url));
-const scratch = (name: string) => join(tmpdir(), `chord2-${process.pid}-${name}`);
+const scratch = (name: string) => `${tmpdir()}/chord2-${process.pid}-${name}`;
 
 const alive = (pid: number): boolean => {
   try {
@@ -28,180 +31,228 @@ const alive = (pid: number): boolean => {
   }
 };
 
-const driver = (env: Record<string, string> = {}, lock?: string): Driver =>
+const driver = (env: Record<string, string> = {}, lock?: string): managerTypes.Driver =>
   forkDriver({ entry, env: { HOST_NAME: "w1", ...env }, init: { greeting: "hi" }, lock });
 
-describe("processLock", () => {
-  // A socket path over 104 bytes failed with EINVAL on macOS when TMPDIR was deep (./test.sh below macOS's TMPDIR).
-  it("admits one holder when the temporary directory is too deep for a socket path", async () => {
-    const deep = join(scratch("deep"), "a".repeat(60), "b".repeat(60));
-    mkdirSync(deep, { recursive: true });
-    const previous = process.env["TMPDIR"];
-    process.env["TMPDIR"] = deep;
-    try {
-      const name = `deep-${process.pid}`;
-      const release = await processLock(name);
-      await assert.rejects(
+const admitsOneHolderWhenTheTemporary = Effect.gen(function* () {
+  const deep = `${scratch("deep")}/${"a".repeat(60)}/${"b".repeat(60)}`;
+  yield* makeDirectory(deep);
+  vi.stubEnv("TMPDIR", deep);
+  yield* Effect.gen(function* () {
+    const name = `deep-${process.pid}`;
+    const release = yield* Effect.promise(() => processLock(name));
+    yield* Effect.promise(() =>
+      assert.rejects(
         processLock(name),
         (error) => isChordError(error) && error.reason === "locked",
-      );
-      await release();
-      await (
-        await processLock(name)
-      )();
-    } finally {
-      if (previous === undefined) delete process.env["TMPDIR"];
-      else process.env["TMPDIR"] = previous;
-      rmSync(scratch("deep"), { recursive: true, force: true });
-    }
+      ),
+    );
+    yield* Effect.promise(() => release());
+    const again = yield* Effect.promise(() => processLock(name));
+    yield* Effect.promise(() => again());
+  }).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        vi.unstubAllEnvs();
+      }).pipe(Effect.andThen(removeAll(scratch("deep")))),
+    ),
+  );
+});
+
+describe("processLock", () => {
+  it("admits one holder when the temporary directory is too deep for a socket path", () =>
+    Effect.runPromise(admitsOneHolderWhenTheTemporary));
+});
+
+const aChildWithoutALockDoes = Effect.gen(function* () {
+  const name = `chord2-test-${process.pid}-inherited`;
+  const release = yield* Effect.promise(() => processLock(name));
+  vi.stubEnv("CHORD2_LOCK", name);
+  const manager = createHostManager({ driver: driver() });
+  yield* Effect.gen(function* () {
+    yield* Effect.promise(() => manager.start());
+    assert.equal(manager.status, "running");
+  }).pipe(
+    Effect.ensuring(
+      Effect.gen(function* () {
+        vi.unstubAllEnvs();
+        yield* Effect.promise(() => manager.stop());
+        yield* Effect.promise(() => release());
+      }),
+    ),
+  );
+});
+
+const startsAChildHostLinksIt = Effect.gen(function* () {
+  const manager = createHostManager({ driver: driver() });
+  const instance = yield* Effect.promise(() => manager.start());
+  assert.equal(manager.status, "running");
+  const server = createHost({ name: "server", onError: () => {}, self: { kind: "host" } });
+  server.accept(instance.link, { kind: "host", name: "w1", principal: { worker: "w1" } });
+  const echo = server.hold(Echo, {});
+  assert.equal(yield* Effect.promise(() => echo.echo("x")), `hi x from ${instance.pid}`);
+  assert.equal(yield* Effect.promise(() => manager.start()), instance);
+  yield* Effect.promise(() => manager.stop());
+  assert.equal(manager.status, "stopped");
+  assert.deepEqual(yield* Effect.promise(() => instance.exited), { code: 0, signal: null });
+  yield* Effect.promise(() => server.close());
+});
+
+const aChildOwnedKernelLockAdmits = Effect.gen(function* () {
+  const lock = `chord2-test-${process.pid}-lock`;
+  const pids: number[] = [];
+  const base = driver({}, lock);
+  const watched: managerTypes.Driver = {
+    spawn() {
+      for (const pid of pids) assert.ok(!alive(pid), `pid ${pid} still alive`);
+      return base.spawn().then((instance) => {
+        pids.push(instance.pid);
+        return instance;
+      });
+    },
+  };
+  const first = createHostManager({ driver: watched });
+  const second = createHostManager({ driver: driver({}, lock) });
+  const a = yield* Effect.promise(() => first.start());
+  yield* Effect.promise(() =>
+    assert.rejects(
+      second.start(),
+      (error) => isChordError(error, "unavailable") && error.reason === "locked",
+    ),
+  );
+  const b = yield* Effect.promise(() => first.replace());
+  assert.notEqual(a.pid, b.pid);
+  yield* Effect.promise(() => first.stop());
+  yield* Effect.promise(() => second.start());
+  yield* Effect.promise(() => second.stop());
+});
+
+const aGracefulExitStillTakesThe = Effect.gen(function* () {
+  const file = scratch("grandchild-graceful");
+  yield* removeAll(file);
+  const manager = createHostManager({ driver: driver({ GRANDCHILD_FILE: file }) });
+  yield* Effect.promise(() => manager.start());
+  const grandchild = Number(yield* readText(file));
+  assert.ok(alive(grandchild));
+  yield* Effect.promise(() => manager.stop());
+  for (let i = 0; i < 50 && alive(grandchild); i++) yield* Effect.sleep(20);
+  assert.ok(!alive(grandchild));
+  yield* removeAll(file);
+});
+
+const idleforCountsFromTheBusyIdle = Effect.gen(function* () {
+  const listeners = new Set<(message: managerTypes.ControlMessage) => void>();
+  const fake: managerTypes.Driver = {
+    spawn: () =>
+      Promise.resolve({
+        exited: latch<managerTypes.Exit>().promise,
+        killTree: () => {},
+        link: ipcLink({
+          connected: false,
+          off: () => undefined,
+          on: () => undefined,
+          send: () => false,
+        }),
+        onControl: (listener) => listeners.add(listener),
+        pid: 0,
+        send: () => {},
+      }),
+  };
+  const emit = (message: managerTypes.ControlMessage) => {
+    for (const listener of listeners) listener(message);
+  };
+  const manager = createHostManager({ driver: fake });
+  const started = manager.start();
+  for (let i = 0; i < 20 && listeners.size === 0; i++) yield* tick;
+  emit({ type: "ready" });
+  yield* Effect.promise(() => started);
+  emit({ activeCalls: 1, type: "status" });
+  yield* Effect.sleep(120);
+  assert.equal(manager.liveness.idleFor, 0);
+  emit({ activeCalls: 0, type: "status" });
+  assert.ok(manager.liveness.idleFor < 60, `idleFor ${manager.liveness.idleFor}`);
+});
+
+const killsTheProcessTreeWhenA = Effect.gen(function* () {
+  const file = scratch("grandchild");
+  yield* removeAll(file);
+  const manager = createHostManager({
+    driver: driver({ FIXTURE_MODE: "ignore-shutdown", GRANDCHILD_FILE: file }),
+    grace: 300,
   });
+  const instance = yield* Effect.promise(() => manager.start());
+  const grandchild = Number(yield* readText(file));
+  assert.ok(alive(grandchild));
+  yield* Effect.promise(() => manager.stop());
+  assert.equal((yield* Effect.promise(() => instance.exited)).signal, "SIGKILL");
+  for (let i = 0; i < 50 && alive(grandchild); i++) yield* Effect.sleep(20);
+  assert.ok(!alive(grandchild));
+  yield* removeAll(file);
+});
+
+const reportsAFatalChildAsA = Effect.gen(function* () {
+  const manager = createHostManager({ driver: driver({ FIXTURE_MODE: "fatal" }) });
+  yield* Effect.promise(() => assert.rejects(manager.start(), /fixture refuses to start/u));
+  assert.equal(manager.status, "stopped");
+});
+
+const stopsAnIdleChildWhenKeepalive = Effect.gen(function* () {
+  const exits: unknown[] = [];
+  const manager = createHostManager({
+    checkInterval: 50,
+    driver: driver(),
+    keepAlive: (liveness) => !liveness.booting && liveness.idleFor < 150,
+    onExit: (exit) => exits.push(exit),
+  });
+  yield* Effect.promise(() => manager.start());
+  for (let i = 0; i < 100 && manager.status !== "stopped"; i++) yield* Effect.sleep(20);
+  assert.equal(manager.status, "stopped");
+  assert.equal(exits.length, 1);
 });
 
 describe("host manager (real child processes)", () => {
-  // A child host that forks its own children used to pass its CHORD2_LOCK on, so they failed with "locked".
-  it("a child without a lock does not inherit the parent's lock", async () => {
-    const name = `chord2-test-${process.pid}-inherited`;
-    const release = await processLock(name);
-    const previous = process.env["CHORD2_LOCK"];
-    process.env["CHORD2_LOCK"] = name;
-    const manager = createHostManager({ driver: driver() });
-    try {
-      await manager.start();
-      assert.equal(manager.status, "running");
-    } finally {
-      if (previous === undefined) delete process.env["CHORD2_LOCK"];
-      else process.env["CHORD2_LOCK"] = previous;
-      await manager.stop();
-      await release();
-    }
-  }, 20_000);
+  it(
+    "a child without a lock does not inherit the parent's lock",
+    () => Effect.runPromise(aChildWithoutALockDoes),
+    20_000,
+  );
 
-  it("starts a child host, links it, stops it gracefully", async () => {
-    const manager = createHostManager({ driver: driver() });
-    const instance = await manager.start();
-    assert.equal(manager.status, "running");
-    const server = createHost({ self: { kind: "host" }, name: "server", onError: () => {} });
-    server.accept(instance.link, { principal: { worker: "w1" }, kind: "host", name: "w1" });
-    const echo = server.hold(Echo, {});
-    assert.equal(await echo.echo("x"), `hi x from ${instance.pid}`);
-    assert.equal(await manager.start(), instance);
-    await manager.stop();
-    assert.equal(manager.status, "stopped");
-    assert.deepEqual(await instance.exited, { code: 0, signal: null });
-    await server.close();
-  }, 20_000);
+  it(
+    "starts a child host, links it, stops it gracefully",
+    () => Effect.runPromise(startsAChildHostLinksIt),
+    20_000,
+  );
 
-  it("a child-owned kernel lock admits one live process; replace waits for the exit before the next start", async () => {
-    const lock = `chord2-test-${process.pid}-lock`;
-    const pids: number[] = [];
-    const base = driver({}, lock);
-    const watched: Driver = {
-      spawn() {
-        // Exit before replace: the previous child is gone when the next one spawns.
-        for (const pid of pids) assert.ok(!alive(pid), `pid ${pid} still alive`);
-        const instance = base.spawn();
-        pids.push(instance.pid);
-        return instance;
-      },
-    };
-    const first = createHostManager({ driver: watched });
-    const second = createHostManager({ driver: driver({}, lock) });
-    const a = await first.start();
-    // Both managers race for the same lock; only the kernel decides, so the second child cannot start.
-    await assert.rejects(
-      second.start(),
-      (error) => isChordError(error, "unavailable") && error.reason === "locked",
-    );
-    const b = await first.replace();
-    assert.notEqual(a.pid, b.pid);
-    await first.stop();
-    await second.start();
-    await second.stop();
-  }, 20_000);
+  it(
+    "a child-owned kernel lock admits one live process; replace waits for the exit before the next start",
+    () => Effect.runPromise(aChildOwnedKernelLockAdmits),
+    20_000,
+  );
 
-  it("a graceful exit still takes the child's descendants with it", async () => {
-    const file = scratch("grandchild-graceful");
-    rmSync(file, { force: true });
-    const manager = createHostManager({ driver: driver({ GRANDCHILD_FILE: file }) });
-    await manager.start();
-    const grandchild = Number(readFileSync(file, "utf8"));
-    assert.ok(alive(grandchild));
-    await manager.stop();
-    for (let i = 0; i < 50 && alive(grandchild); i++)
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.ok(!alive(grandchild));
-    rmSync(file, { force: true });
-  }, 20_000);
+  it(
+    "a graceful exit still takes the child's descendants with it",
+    () => Effect.runPromise(aGracefulExitStillTakesThe),
+    20_000,
+  );
 
-  it("idleFor counts from the busy → idle transition", async () => {
-    const listeners = new Set<(message: ControlMessage) => void>();
-    const fake: Driver = {
-      spawn: () => ({
-        pid: 0,
-        link: ipcLink({
-          connected: false,
-          send: () => false,
-          on: () => undefined,
-          off: () => undefined,
-        }),
-        exited: new Promise(() => {}),
-        send: () => {},
-        killTree: () => {},
-        onControl: (listener) => listeners.add(listener),
-      }),
-    };
-    const emit = (message: ControlMessage) => {
-      for (const listener of listeners) listener(message);
-    };
-    const manager = createHostManager({ driver: fake });
-    const started = manager.start();
-    for (let i = 0; i < 20 && listeners.size === 0; i++)
-      await new Promise((resolve) => setImmediate(resolve));
-    emit({ type: "ready" });
-    await started;
-    emit({ type: "status", activeCalls: 1 });
-    await new Promise((resolve) => setTimeout(resolve, 120));
-    assert.equal(manager.liveness.idleFor, 0);
-    emit({ type: "status", activeCalls: 0 });
-    assert.ok(manager.liveness.idleFor < 60, `idleFor ${manager.liveness.idleFor}`);
-  });
+  it("idleFor counts from the busy → idle transition", () =>
+    Effect.runPromise(idleforCountsFromTheBusyIdle));
 
-  it("kills the process tree when a child ignores shutdown past the grace period", async () => {
-    const file = scratch("grandchild");
-    rmSync(file, { force: true });
-    const manager = createHostManager({
-      driver: driver({ FIXTURE_MODE: "ignore-shutdown", GRANDCHILD_FILE: file }),
-      grace: 300,
-    });
-    const instance = await manager.start();
-    const grandchild = Number(readFileSync(file, "utf8"));
-    assert.ok(alive(grandchild));
-    await manager.stop();
-    assert.equal((await instance.exited).signal, "SIGKILL");
-    for (let i = 0; i < 50 && alive(grandchild); i++)
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.ok(!alive(grandchild));
-    rmSync(file, { force: true });
-  }, 20_000);
+  it(
+    "kills the process tree when a child ignores shutdown past the grace period",
+    () => Effect.runPromise(killsTheProcessTreeWhenA),
+    20_000,
+  );
 
-  it("reports a fatal child as a failed start", async () => {
-    const manager = createHostManager({ driver: driver({ FIXTURE_MODE: "fatal" }) });
-    await assert.rejects(manager.start(), /fixture refuses to start/);
-    assert.equal(manager.status, "stopped");
-  }, 20_000);
+  it(
+    "reports a fatal child as a failed start",
+    () => Effect.runPromise(reportsAFatalChildAsA),
+    20_000,
+  );
 
-  it("stops an idle child when keepAlive says so", async () => {
-    const exits: unknown[] = [];
-    const manager = createHostManager({
-      driver: driver(),
-      keepAlive: (liveness) => !liveness.booting && liveness.idleFor < 150,
-      checkInterval: 50,
-      onExit: (exit) => exits.push(exit),
-    });
-    await manager.start();
-    for (let i = 0; i < 100 && manager.status !== "stopped"; i++)
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    assert.equal(manager.status, "stopped");
-    assert.equal(exits.length, 1);
-  }, 20_000);
+  it(
+    "stops an idle child when keepAlive says so",
+    () => Effect.runPromise(stopsAnIdleChildWhenKeepalive),
+    20_000,
+  );
 });

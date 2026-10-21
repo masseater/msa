@@ -28,6 +28,10 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
+    "./index.types": {
+      "types": "./dist/index.types.d.ts",
+      "import": "./dist/index.types.js"
+    },
     "./package.json": "./package.json"
   },
   "scripts": {
@@ -41,6 +45,7 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
     "@types/node": "catalog:",
     "vitest": "catalog:"

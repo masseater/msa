@@ -1,85 +1,114 @@
-import type { TSchema } from "@msa/ai";
-import type { JsonValue } from "@msa/chord";
+import type aiTypes from "@msa/ai/index.types";
+import type chordTypes from "@msa/chord/index.types";
+import { Function } from "effect";
 
-import type {
-  AnyTask,
-  Extension,
-  HookRegistration,
-  HooksOf,
-  PromptSection,
-  ToolRegistration,
-  Wrap,
-} from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-/**
- * Identity function that types an extension.
- * @param {Extension<Tool>} extension - The extension.
- * @returns {Extension<Tool>} The extension.
- */
-export function defineExtension<Tool extends ToolRegistration = ToolRegistration>(
-  extension: Extension<Tool>,
-): Extension<Tool> {
+function defineExtension<Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration>(
+  extension: typesModule.Extension<Tool>,
+): typesModule.Extension<Tool> {
   return extension;
 }
 
-/**
- * Identity function that types a tool: `args` from `parameters`, details from what it reports.
- * @param {ToolRegistration<TParameters, TDetails>} tool - The tool.
- * @returns {ToolRegistration<TParameters, TDetails>} The tool.
- */
-export function defineTool<TParameters extends TSchema, TDetails extends JsonValue = JsonValue>(
-  tool: ToolRegistration<TParameters, TDetails>,
-): ToolRegistration<TParameters, TDetails> {
+function defineTool<
+  TParameters extends aiTypes.TSchema,
+  TDetails extends chordTypes.JsonValue = chordTypes.JsonValue,
+>(
+  tool: typesModule.ToolRegistration<TParameters, TDetails>,
+): typesModule.ToolRegistration<TParameters, TDetails> {
   return tool;
 }
 
-/**
- * A prompt section; tagged unless `tag` is false.
- * @param {string} key - The section key.
- * @param {PromptSection<Tool>["render"]} render - Renders it.
- * @param {{ readonly tag?: boolean }} options - Whether to tag it.
- * @returns {PromptSection<Tool>} The section.
- */
-export function section<Tool extends ToolRegistration = ToolRegistration>(
-  key: string,
-  render: PromptSection<Tool>["render"],
-  options?: { readonly tag?: boolean },
-): PromptSection<Tool> {
-  return options?.tag === undefined ? { key, render } : { key, render, tag: options.tag };
-}
+type SectionOptions = { readonly tag?: boolean };
 
-/**
- * Hook handlers for tasks with `task`'s name.
- * @param {K} task - The task.
- * @param {Partial<HooksOf<K>>} handlers - The handlers.
- * @returns {HookRegistration} The registration.
- */
-export function hook<K extends AnyTask>(task: K, handlers: Partial<HooksOf<K>>): HookRegistration {
-  return { task: task.definition.name, handlers };
-}
+type SectionRender<Tool extends typesModule.ToolRegistration> = (
+  input: typesModule.PromptInput<Tool>,
+  context: chordTypes.Context,
+) => string | undefined | Promise<string | undefined>;
 
-/**
- * Wrap the tool named like `tool` wherever the wrapping extension is selected.
- * @param {Tool} tool - The tool.
- * @param {(tool: Tool) => Tool} wrapper - Wraps it.
- * @returns {Wrap<Tool>} The wrap.
- */
-export function wrapTool<Tool extends ToolRegistration>(
-  tool: Tool,
-  wrapper: (tool: Tool) => Tool,
-): Wrap<Tool> {
-  return { tool: tool.name, wrap: wrapper };
-}
+type Section = {
+  <Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration>(
+    render: SectionRender<Tool>,
+    options?: SectionOptions,
+  ): (key: string) => typesModule.PromptSection<Tool>;
+  <Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration>(
+    key: string,
+    render: SectionRender<Tool>,
+    options?: SectionOptions,
+  ): typesModule.PromptSection<Tool>;
+};
 
-/**
- * Wrap the section `key` wherever the wrapping extension is selected.
- * @param {string} key - The section key.
- * @param {(section: PromptSection<Tool>) => PromptSection<Tool>} wrapper - Wraps it.
- * @returns {Wrap<Tool>} The wrap.
- */
-export function wrapSection<Tool extends ToolRegistration = ToolRegistration>(
-  key: string,
-  wrapper: (section: PromptSection<Tool>) => PromptSection<Tool>,
-): Wrap<Tool> {
-  return { section: key, wrap: wrapper };
-}
+const section: Section = Function.dual(
+  (args: IArguments) => typeof args[0] === "string",
+  <Tool extends typesModule.ToolRegistration>(
+    key: string,
+    render: SectionRender<Tool>,
+    options?: SectionOptions,
+  ): typesModule.PromptSection<Tool> =>
+    options?.tag === undefined ? { key, render } : { key, render, tag: options.tag },
+);
+
+const hook: {
+  <K extends typesModule.AnyTask>(
+    handlers: Partial<typesModule.HooksOf<K>>,
+  ): (task: K) => typesModule.HookRegistration;
+  <K extends typesModule.AnyTask>(
+    task: K,
+    handlers: Partial<typesModule.HooksOf<K>>,
+  ): typesModule.HookRegistration;
+} = Function.dual(
+  2,
+  <K extends typesModule.AnyTask>(
+    task: K,
+    handlers: Partial<typesModule.HooksOf<K>>,
+  ): typesModule.HookRegistration => ({
+    handlers,
+    task: task.definition.name,
+  }),
+);
+
+const wrapTool: {
+  <Tool extends typesModule.ToolRegistration>(
+    wrapper: (tool: Tool) => Tool,
+  ): (tool: Tool) => typesModule.Wrap<Tool>;
+  <Tool extends typesModule.ToolRegistration>(
+    tool: Tool,
+    wrapper: (tool: Tool) => Tool,
+  ): typesModule.Wrap<Tool>;
+} = Function.dual(
+  2,
+  <Tool extends typesModule.ToolRegistration>(
+    tool: Tool,
+    wrapper: (tool: Tool) => Tool,
+  ): typesModule.Wrap<Tool> => ({
+    tool: tool.name,
+    wrap: wrapper,
+  }),
+);
+
+const wrapSection: {
+  <Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration>(
+    wrapper: (section: typesModule.PromptSection<Tool>) => typesModule.PromptSection<Tool>,
+  ): (key: string) => typesModule.Wrap<Tool>;
+  <Tool extends typesModule.ToolRegistration = typesModule.ToolRegistration>(
+    key: string,
+    wrapper: (section: typesModule.PromptSection<Tool>) => typesModule.PromptSection<Tool>,
+  ): typesModule.Wrap<Tool>;
+} = Function.dual(
+  2,
+  <Tool extends typesModule.ToolRegistration>(
+    key: string,
+    wrapper: (section: typesModule.PromptSection<Tool>) => typesModule.PromptSection<Tool>,
+  ): typesModule.Wrap<Tool> => ({ section: key, wrap: wrapper }),
+);
+
+const define = {
+  defineExtension,
+  defineTool,
+  hook,
+  section,
+  wrapSection,
+  wrapTool,
+};
+
+export default define;

@@ -1,13 +1,13 @@
-import { SelectList } from "../src/components/select-list.ts";
-import { Container } from "../src/tui.ts";
-import { selectTheme } from "./mouse-components-helpers.ts";
+import SelectList from "../src/components/select-list.ts";
+import tuiComponent from "../src/tui-component.ts";
+import mouseComponentsHelpers from "./mouse-components-helpers.ts";
+const { selectTheme } = mouseComponentsHelpers;
 
-/** A settings submenu that routes keys to its nested list, like the coding agent's theme submenu. */
-export class SubmenuHost extends Container {
+class SubmenuHost extends tuiComponent.Container {
   readonly list = new SelectList(
     [
-      { value: "first", label: "First" },
-      { value: "second", label: "Second" },
+      { label: "First", value: "first" },
+      { label: "Second", value: "second" },
     ],
     5,
     selectTheme,
@@ -24,3 +24,5 @@ export class SubmenuHost extends Container {
     this.list.handleInput(data);
   }
 }
+
+export default SubmenuHost;

@@ -1,84 +1,121 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, test, vi } from "vite-plus/test";
 
-import {
-  formatCrashExtensionHint,
-  InteractiveMode,
-} from "../src/modes/interactive/interactive-mode.ts";
+import interactiveModeSupport from "../src/modes/interactive/interactive-mode-support.ts";
+import interactiveModeFake from "./interactive-mode-fake.ts";
 
-type BugReportHintContext = {
-  suggestBugReport(): void;
-  maybeShowInstallChangeWarning(): boolean;
-};
+const { bindModeFake } = interactiveModeFake;
+const { runTest } = testing;
 
-const maybeSuggestBugReport = Reflect.get(InteractiveMode.prototype, "maybeSuggestBugReport") as (
-  this: BugReportHintContext,
-  message: AssistantMessage,
-) => void;
+const suggest = (context: object, message: aiTypes.AssistantMessage) =>
+  Effect.promise(() =>
+    bindModeFake(context).display.notices.warnings.maybeSuggestBugReport(message),
+  );
 
-function errorMessage(errorMessage: string): AssistantMessage {
-  return fauxAssistantMessage("", { stopReason: "error", errorMessage });
+const { formatCrashExtensionHint } = interactiveModeSupport;
+
+const { fauxAssistantMessage } = ai;
+
+function errorMessage(message: string): aiTypes.AssistantMessage {
+  return fauxAssistantMessage("", { errorMessage: message, stopReason: "error" });
 }
 
+const identifiesExtensionsWithFramesInACrash = () => {
+  expect(formatCrashExtensionHint(["npm:msa-observational-memory"])).toBe(
+    "A stack frame came from loaded extension `npm:msa-observational-memory`, which may be involved. Try disabling it with `msa config`, or run `msa -ne` to confirm.",
+  );
+  expect(formatCrashExtensionHint(undefined)).toBeUndefined();
+};
+
+const doesNotSuggestReportsForRetryableProvider = () =>
+  runTest(
+    Effect.gen(function* () {
+      const context = {
+        maybeShowInstallChangeWarning: vi.fn(() => false),
+        suggestBugReport: vi.fn(),
+      };
+      const failures = [
+        "500 Internal Server Error",
+        "502 Bad Gateway",
+        "503 Service Unavailable",
+        "504 Gateway Timeout",
+        "429 Too Many Requests",
+        "Provider overloaded",
+        "Network connection lost",
+        "Request timed out",
+      ];
+
+      for (const failure of failures) yield* suggest(context, errorMessage(failure));
+
+      expect(context.suggestBugReport).not.toHaveBeenCalled();
+    }),
+  );
+
+const doesNotSuggestReportsForCancellations = () =>
+  runTest(
+    Effect.gen(function* () {
+      const context = {
+        maybeShowInstallChangeWarning: vi.fn(() => false),
+        suggestBugReport: vi.fn(),
+      };
+
+      yield* suggest(context, errorMessage("This operation was aborted"));
+      yield* suggest(context, errorMessage("Request cancelled"));
+      yield* suggest(context, fauxAssistantMessage("", { stopReason: "aborted" }));
+
+      expect(context.suggestBugReport).not.toHaveBeenCalled();
+    }),
+  );
+
+const suggestsReportsForUnexpectedErrors = () =>
+  runTest(
+    Effect.gen(function* () {
+      const context = {
+        maybeShowInstallChangeWarning: vi.fn(() => false),
+        suggestBugReport: vi.fn(),
+      };
+
+      yield* suggest(context, errorMessage("Unexpected internal state"));
+
+      expect(context.suggestBugReport).toHaveBeenCalledOnce();
+    }),
+  );
+
+const showsTheInstallChangeWarningInsteadOf = () =>
+  runTest(
+    Effect.gen(function* () {
+      const context = {
+        maybeShowInstallChangeWarning: vi.fn(() => true),
+        suggestBugReport: vi.fn(),
+      };
+
+      yield* suggest(context, errorMessage("Cannot find module './worker.js'"));
+
+      expect(context.maybeShowInstallChangeWarning).toHaveBeenCalledOnce();
+      expect(context.suggestBugReport).not.toHaveBeenCalled();
+    }),
+  );
+
 describe("InteractiveMode bug report hints", () => {
-  test("identifies extensions with frames in a crash stack", () => {
-    expect(formatCrashExtensionHint(["npm:msa-observational-memory"])).toBe(
-      "A stack frame came from loaded extension `npm:msa-observational-memory`, which may be involved. Try disabling it with `msa config`, or run `msa -ne` to confirm.",
-    );
-    expect(formatCrashExtensionHint(undefined)).toBeUndefined();
-  });
+  test(
+    "identifies extensions with frames in a crash stack",
+    identifiesExtensionsWithFramesInACrash,
+  );
 
-  test("does not suggest reports for retryable provider failures", () => {
-    const context = {
-      suggestBugReport: vi.fn(),
-      maybeShowInstallChangeWarning: vi.fn(() => false),
-    };
-    const failures = [
-      "500 Internal Server Error",
-      "502 Bad Gateway",
-      "503 Service Unavailable",
-      "504 Gateway Timeout",
-      "429 Too Many Requests",
-      "Provider overloaded",
-      "Network connection lost",
-      "Request timed out",
-    ];
+  test(
+    "does not suggest reports for retryable provider failures",
+    doesNotSuggestReportsForRetryableProvider,
+  );
 
-    for (const failure of failures) maybeSuggestBugReport.call(context, errorMessage(failure));
+  test("does not suggest reports for cancellations", doesNotSuggestReportsForCancellations);
 
-    expect(context.suggestBugReport).not.toHaveBeenCalled();
-  });
+  test("suggests reports for unexpected errors", suggestsReportsForUnexpectedErrors);
 
-  test("does not suggest reports for cancellations", () => {
-    const context = {
-      suggestBugReport: vi.fn(),
-      maybeShowInstallChangeWarning: vi.fn(() => false),
-    };
-
-    maybeSuggestBugReport.call(context, errorMessage("This operation was aborted"));
-    maybeSuggestBugReport.call(context, errorMessage("Request cancelled"));
-    maybeSuggestBugReport.call(context, fauxAssistantMessage("", { stopReason: "aborted" }));
-
-    expect(context.suggestBugReport).not.toHaveBeenCalled();
-  });
-
-  test("suggests reports for unexpected errors", () => {
-    const context = {
-      suggestBugReport: vi.fn(),
-      maybeShowInstallChangeWarning: vi.fn(() => false),
-    };
-
-    maybeSuggestBugReport.call(context, errorMessage("Unexpected internal state"));
-
-    expect(context.suggestBugReport).toHaveBeenCalledOnce();
-  });
-
-  test("shows the install change warning instead of a bug report hint", () => {
-    const context = { suggestBugReport: vi.fn(), maybeShowInstallChangeWarning: vi.fn(() => true) };
-
-    maybeSuggestBugReport.call(context, errorMessage("Cannot find module './worker.js'"));
-
-    expect(context.maybeShowInstallChangeWarning).toHaveBeenCalledOnce();
-    expect(context.suggestBugReport).not.toHaveBeenCalled();
-  });
+  test(
+    "shows the install change warning instead of a bug report hint",
+    showsTheInstallChangeWarningInsteadOf,
+  );
 });

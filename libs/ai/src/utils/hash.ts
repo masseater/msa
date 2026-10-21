@@ -1,10 +1,4 @@
-/**
- * Fast deterministic hash to shorten long strings
- *
- * @param {string} str - string to hash
- * @returns {string} a short hash of the string
- */
-export function shortHash(str: string): string {
+function shortHash(str: string): string {
   let h1 = 0xdeadbeef;
   let h2 = 0x41c6ce57;
   for (let i = 0; i < str.length; i++) {
@@ -16,3 +10,9 @@ export function shortHash(str: string): string {
   h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
   return (h2 >>> 0).toString(36) + (h1 >>> 0).toString(36);
 }
+
+const hash = {
+  shortHash,
+};
+
+export default hash;

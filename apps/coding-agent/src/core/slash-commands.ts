@@ -1,114 +1,99 @@
-import { APP_NAME } from "../config.ts";
-import { ACCOUNTS_DESCRIPTION } from "./accounts.ts";
-import type { SourceInfo } from "./source-info.ts";
+import config from "../config.ts";
+import accounts from "./accounts.ts";
+import type slashCommandsTypes from "./slash-commands.types.ts";
 
-export type SlashCommandSource = "extension" | "prompt" | "skill";
+const { ACCOUNTS_DESCRIPTION } = accounts;
+const { APP_NAME } = config;
 
-export interface SlashCommandInfo {
-  name: string;
-  description?: string | undefined;
-  source: SlashCommandSource;
-  sourceInfo: SourceInfo;
-}
-
-export interface BuiltinSlashCommand {
-  name: string;
-  description: string;
-  argumentHint?: string;
-  /** Other names that run this command. */
-  aliases?: readonly string[];
-}
-
-/** Named, grouped, and aliased as in Claude Code. */
-export const BUILTIN_SLASH_COMMANDS: ReadonlyArray<BuiltinSlashCommand> = [
-  { name: "help", description: "Show the available commands" },
-  { name: "config", description: "Open settings", aliases: ["settings", "theme"] },
+const BUILTIN_SLASH_COMMANDS: ReadonlyArray<slashCommandsTypes.BuiltinSlashCommand> = [
+  { description: "Show the available commands", name: "help" },
+  { aliases: ["settings", "theme"], description: "Open settings", name: "config" },
   {
-    name: "model",
-    description: "Select model (opens selector UI)",
     argumentHint: "<provider/model>|upgrade",
+    description: "Select model (opens selector UI)",
+    name: "model",
   },
   {
-    name: "effort",
-    description: "Set thinking level",
     argumentHint: "<level>",
+    description: "Set thinking level",
+    name: "effort",
   },
-  { name: "scoped-models", description: "Enable/disable models for Ctrl+P cycling" },
-  { name: "login", description: "Configure provider authentication", argumentHint: "<provider>" },
-  { name: "logout", description: "Remove provider authentication" },
+  { description: "Enable/disable models for Ctrl+P cycling", name: "scoped-models" },
+  { argumentHint: "<provider>", description: "Configure provider authentication", name: "login" },
+  { description: "Remove provider authentication", name: "logout" },
   {
-    name: "accounts",
-    description: ACCOUNTS_DESCRIPTION,
     argumentHint: "[<kind> <action> <name>]",
+    description: ACCOUNTS_DESCRIPTION,
+    name: "accounts",
   },
-  { name: "clear", description: "Start a new session", aliases: ["new", "reset"] },
-  { name: "resume", description: "Resume a different session", aliases: ["continue"] },
+  { aliases: ["new", "reset"], description: "Start a new session", name: "clear" },
+  { aliases: ["continue"], description: "Resume a different session", name: "resume" },
   {
-    name: "rename",
-    description: "Set session display name",
     argumentHint: "<name>",
+    description: "Set session display name",
+    name: "rename",
   },
   {
-    name: "status",
-    description: "Show session info, usage, and cost",
     aliases: ["usage", "cost", "stats", "context"],
+    description: "Show session info, usage, and cost",
+    name: "status",
   },
   {
-    name: "rewind",
-    description: "Go back to an earlier point in the session tree",
     aliases: ["checkpoint", "undo"],
+    description: "Go back to an earlier point in the session tree",
+    name: "rewind",
   },
-  { name: "fork", description: "Create a new session from an earlier user message" },
+  { description: "Create a new session from an earlier user message", name: "fork" },
   {
-    name: "branch",
     description: "Duplicate the current session at the current position",
+    name: "branch",
   },
   {
-    name: "compact",
-    description: "Manually compact the session context",
     argumentHint: "<instructions>",
+    description: "Manually compact the session context",
+    name: "compact",
   },
   {
-    name: "goal",
-    description: "Keep working until a condition is met; no argument shows status",
     argumentHint: "<condition>|clear",
+    description: "Keep working until a condition is met; no argument shows status",
+    name: "goal",
   },
   {
-    name: "ask",
-    description: "Ask a question; the model can only answer, not change anything",
     argumentHint: "<question>",
+    description: "Ask a question; the model can only answer, not change anything",
+    name: "ask",
   },
-  { name: "init", description: "Write an AGENTS.md that describes this repository" },
-  { name: "copy", description: "Copy last agent message to clipboard" },
-  { name: "export", description: "Export session (HTML default, or specify path: .html/.jsonl)" },
-  { name: "import", description: "Import and resume a session from a JSONL file" },
-  { name: "share", description: "Share session via a GitHub gist" },
+  { description: "Write an AGENTS.md that describes this repository", name: "init" },
+  { description: "Copy last agent message to clipboard", name: "copy" },
+  { description: "Export session (HTML default, or specify path: .html/.jsonl)", name: "export" },
+  { description: "Import and resume a session from a JSONL file", name: "import" },
+  { description: "Share session via a GitHub gist", name: "share" },
   {
-    name: "bug",
-    description: "Export a bug report as a zip archive",
-    argumentHint: "<description>",
     aliases: ["feedback"],
+    argumentHint: "<description>",
+    description: "Export a bug report as a zip archive",
+    name: "bug",
   },
-  { name: "trust", description: "Save project trust decision for future sessions" },
+  { description: "Save project trust decision for future sessions", name: "trust" },
   {
-    name: "memory",
-    description: "Open the memory view, or manage long-term memory with an argument",
     argumentHint: "[list|search <query>|forget <id>|stats]",
+    description: "Open the memory view, or manage long-term memory with an argument",
+    name: "memory",
   },
-  { name: "tasks", description: "Show the task DAG the orchestrator runs", aliases: ["threads"] },
+  { aliases: ["threads"], description: "Show the task DAG the orchestrator runs", name: "tasks" },
   {
-    name: "handoff",
-    description: "Write the orchestrator's state to a file the next session resumes from",
     argumentHint: "[path]",
+    description: "Write the orchestrator's state to a file the next session resumes from",
+    name: "handoff",
   },
   {
-    name: "reload",
-    description: "Reload keybindings, extensions, skills, prompts, themes, and context files",
     aliases: ["reload-skills", "reload-plugins"],
+    description: "Reload keybindings, extensions, skills, prompts, themes, and context files",
+    name: "reload",
   },
-  { name: "keybindings", description: "Show all keyboard shortcuts" },
-  { name: "release-notes", description: "Show changelog entries" },
-  { name: "exit", description: `Exit ${APP_NAME}`, aliases: ["quit"] },
+  { description: "Show all keyboard shortcuts", name: "keybindings" },
+  { description: "Show changelog entries", name: "release-notes" },
+  { aliases: ["quit"], description: `Exit ${APP_NAME}`, name: "exit" },
 ];
 
 const BUILTIN_NAMES: ReadonlyMap<string, string> = new Map(
@@ -118,31 +103,23 @@ const BUILTIN_NAMES: ReadonlyMap<string, string> = new Map(
   ]),
 );
 
-/** Whether `name` (without the slash) is a built-in command or one of its aliases. */
-export function isBuiltinSlashCommandName(name: string): boolean {
+function isBuiltinSlashCommandName(name: string): boolean {
   return BUILTIN_NAMES.has(name);
 }
 
-/**
- * Rewrites a built-in command typed by one of its aliases to the command's own name, keeping its
- * arguments: `/quit` becomes `/exit`, `/cost` becomes `/status`. Other text is
- * returned unchanged.
- */
-export function canonicalizeBuiltinSlashCommand(text: string): string {
+function canonicalizeBuiltinSlashCommand(text: string): string {
   const typed = slashCommandName(text);
   if (typed === undefined) return text;
   const name = BUILTIN_NAMES.get(typed);
   return name === undefined ? text : `/${name}${text.slice(typed.length + 1)}`;
 }
 
-/** The path `/handoff` was typed with (empty for the default), or undefined when `text` is not `/handoff`. */
-export function parseHandoffCommand(text: string): { path: string } | undefined {
+function parseHandoffCommand(text: string): { path: string } | undefined {
   const match = /^\/handoff(?:\s+([\s\S]*))?$/u.exec(text.trim());
-  return match ? { path: (match[1] ?? "").trim() } : undefined;
+  return match === null ? undefined : { path: (match[1] ?? "").trim() };
 }
 
-/** What `/handoff` sends: the model writes the three sections, and the `handoff` tool does the rest. */
-export function handoffPrompt(path: string): string {
+function handoffPrompt(path: string): string {
   return [
     "Hand this orchestrator over to the next msa session. Call the `handoff` tool once.",
     "Write `premise` (what the next session must take as given), `goals` (the goal states in dependency order), and `donts` (what must not be started, and why) from this conversation. The tool fills in everything else.",
@@ -153,18 +130,13 @@ export function handoffPrompt(path: string): string {
     .join("\n");
 }
 
-/** What `/init` sends: the model writes the repository's AGENTS.md. */
-export const INIT_PROMPT =
+const INIT_PROMPT =
   "Analyze this repository and write an AGENTS.md at its root for future sessions: the setup " +
   "commands, how to build, test, and lint, the layout of the code, and the conventions to follow. " +
   "Read package.json (or the equivalent), the build and test configuration, and AGENTS.md and " +
   "CLAUDE.md if they already exist. Keep it short and specific to this repository.";
 
-/**
- * The `/help` text: built-in commands with their aliases, then the commands resources added. A
- * built-in command whose name an added command (a skill) took is left out.
- */
-export function formatHelpMarkdown(
+function formatHelpMarkdown(
   added: ReadonlyArray<{ name: string; description?: string | undefined }>,
 ): string {
   const row = (name: string, description = "") =>
@@ -175,31 +147,44 @@ export function formatHelpMarkdown(
     if (taken.has(command.name)) continue;
     const aliases = command.aliases?.map((alias) => `\`/${alias}\``).join(", ");
     lines.push(
-      row(command.name, aliases ? `${command.description} (${aliases})` : command.description),
+      row(
+        command.name,
+        aliases !== undefined && aliases !== ""
+          ? `${command.description} (${aliases})`
+          : command.description,
+      ),
     );
   }
-  // Skill descriptions run to paragraphs; the first sentence is enough to pick one.
   for (const command of added) {
     lines.push(row(command.name, command.description?.split(/(?<=[.。])\s*|\n/u)[0]));
   }
   return lines.join("\n");
 }
 
-/** The command name at the start of `text` (`/name args` gives `name`), or undefined for other text. */
-export function slashCommandName(text: string): string | undefined {
+function slashCommandName(text: string): string | undefined {
   if (!text.startsWith("/")) return undefined;
   const end = text.search(/\s/u);
   return end === -1 ? text.slice(1) : text.slice(1, end);
 }
 
-/**
- * The commands `/name` runs: a skill takes its name from any extension command or prompt template
- * of the same name, as a Claude Code skill does from a command file.
- */
-export function withSkillCommands<T extends { name: string }>(
+function withSkillCommands<T extends { name: string }>(
   commands: readonly T[],
   skills: readonly T[],
 ): T[] {
   const skillNames = new Set(skills.map((skill) => skill.name));
   return [...commands.filter((command) => !skillNames.has(command.name)), ...skills];
 }
+
+const slashCommands = {
+  BUILTIN_SLASH_COMMANDS,
+  INIT_PROMPT,
+  canonicalizeBuiltinSlashCommand,
+  formatHelpMarkdown,
+  handoffPrompt,
+  isBuiltinSlashCommandName,
+  parseHandoffCommand,
+  slashCommandName,
+  withSkillCommands,
+};
+
+export default slashCommands;

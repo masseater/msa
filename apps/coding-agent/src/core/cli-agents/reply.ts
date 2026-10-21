@@ -1,171 +1,172 @@
-/**
- * Builds one msa assistant reply from incremental pieces and emits the matching
- * stream events: blocks are opened lazily, closed in order, and the stream ends
- * with exactly one terminal event.
- */
-import { createAssistantMessageEventStream } from "@msa/ai/compat";
-import type { AssistantMessage, JsonObject, Model } from "@msa/ai/compat";
+import compat from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
-export interface Usage {
-  input: number;
-  output: number;
-  cacheRead: number;
-  cacheWrite: number;
-  reasoning?: number;
-}
+import platform from "../platform/index.ts";
+import type replyTypes from "./reply.types.ts";
 
-export type ReplyBuilder = ReturnType<typeof createReply>;
+const { nowMs } = platform;
+const { createAssistantMessageEventStream } = compat;
 
-export function createReply(model: Model<string>) {
-  const stream = createAssistantMessageEventStream();
-  const message: AssistantMessage = {
-    role: "assistant",
-    content: [],
+type Kind = "text" | "thinking";
+type Content = compatTypes.AssistantMessage["content"][number];
+
+const emptyMessage = (model: compatTypes.Model<string>): compatTypes.AssistantMessage =>
+  ({
     api: model.api,
-    provider: model.provider,
+    content: [],
     model: model.id,
+    provider: model.provider,
+    role: "assistant",
+    stopReason: "pending",
+    timestamp: nowMs(),
     usage: {
-      input: 0,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
       totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-    stopReason: "pending",
-    timestamp: Date.now(),
-  } as AssistantMessage;
+  }) as compatTypes.AssistantMessage;
 
-  let started = false;
-  let ended = false;
-  const open = new Map<string, { index: number; kind: "text" | "thinking" }>();
+class Reply {
+  readonly stream = createAssistantMessageEventStream();
+  readonly message: compatTypes.AssistantMessage;
+  private started = false;
+  private ended = false;
+  private readonly open = new Map<string, { index: number; kind: Kind }>();
 
-  const start = () => {
-    if (started) return;
-    started = true;
-    stream.push({ type: "start", partial: message });
+  constructor(model: compatTypes.Model<string>) {
+    this.message = emptyMessage(model);
+  }
+
+  get hasContent(): boolean {
+    return this.message.content.length > 0;
+  }
+
+  readonly addUsage = (usage: Partial<replyTypes.Usage>): void => {
+    const total = this.message.usage;
+    total.input += usage.input ?? 0;
+    total.output += usage.output ?? 0;
+    total.cacheRead += usage.cacheRead ?? 0;
+    total.cacheWrite += usage.cacheWrite ?? 0;
+    if (usage.reasoning !== undefined) total.reasoning = (total.reasoning ?? 0) + usage.reasoning;
   };
 
-  const block = (key: string, kind: "text" | "thinking") => {
+  readonly replaceUsage = (usage: replyTypes.Usage): void => {
+    Object.assign(this.message.usage, usage);
+  };
+
+  readonly appendText = (key: string, delta: string): void => {
+    if (delta === "") return;
+    const index = this.block(key, "text");
+    (this.message.content[index] as { text: string }).text += delta;
+    this.stream.push({ contentIndex: index, delta, partial: this.message, type: "text_delta" });
+  };
+
+  readonly appendThinking = (key: string, delta: string): void => {
+    if (delta === "") return;
+    const index = this.block(key, "thinking");
+    (this.message.content[index] as { thinking: string }).thinking += delta;
+    this.stream.push({ contentIndex: index, delta, partial: this.message, type: "thinking_delta" });
+  };
+
+  readonly setText = (key: string, full: string): void => {
+    const current = this.open.get(`text:${key}`);
+    const have =
+      current === undefined ? "" : (this.message.content[current.index] as { text: string }).text;
+    if (full.length > have.length && full.startsWith(have))
+      this.appendText(key, full.slice(have.length));
+  };
+
+  readonly toolCall = (id: string, name: string, args: compatTypes.JsonObject): void => {
+    this.closeBlocks();
+    this.start();
+    const index = this.message.content.length;
+    const call = { arguments: args, id, name, type: "toolCall" } as Content;
+    this.message.content.push(call);
+    const partial = this.message;
+    this.stream.push({ contentIndex: index, partial, type: "toolcall_start" });
+    this.stream.push({
+      contentIndex: index,
+      delta: JSON.stringify(args),
+      partial,
+      type: "toolcall_delta",
+    });
+    this.stream.push({
+      contentIndex: index,
+      partial,
+      toolCall: call as never,
+      type: "toolcall_end",
+    });
+  };
+
+  readonly done = (reason: "stop" | "toolUse" | "length"): void => {
+    if (this.ended) return;
+    this.ended = true;
+    if (reason === "stop" && !this.message.content.some((part) => part.type === "text"))
+      this.appendText("fallback", "(no reply text)");
+    this.finish(reason);
+    this.stream.push({ message: this.message, reason, type: "done" });
+    this.stream.end();
+  };
+
+  readonly fail = (reason: "error" | "aborted", errorMessage: string): void => {
+    if (this.ended) return;
+    this.ended = true;
+    this.finish(reason);
+    this.message.errorMessage = errorMessage;
+    this.stream.push({ error: this.message, reason, type: "error" });
+    this.stream.end();
+  };
+
+  private start(): void {
+    if (this.started) return;
+    this.started = true;
+    this.stream.push({ partial: this.message, type: "start" });
+  }
+
+  private block(key: string, kind: Kind): number {
     const mapKey = `${kind}:${key}`;
-    let entry = open.get(mapKey);
-    if (!entry) {
-      start();
-      entry = { index: message.content.length, kind };
-      message.content.push(
-        (kind === "text"
-          ? { type: "text", text: "" }
-          : { type: "thinking", thinking: "" }) as AssistantMessage["content"][number],
-      );
-      open.set(mapKey, entry);
-      stream.push({ type: `${kind}_start`, contentIndex: entry.index, partial: message });
-    }
+    const existing = this.open.get(mapKey);
+    if (existing !== undefined) return existing.index;
+    this.start();
+    const entry = { index: this.message.content.length, kind };
+    this.message.content.push(
+      (kind === "text"
+        ? { text: "", type: "text" }
+        : { thinking: "", type: "thinking" }) as Content,
+    );
+    this.open.set(mapKey, entry);
+    this.stream.push({ contentIndex: entry.index, partial: this.message, type: `${kind}_start` });
     return entry.index;
-  };
+  }
 
-  const closeBlocks = () => {
-    for (const { index, kind } of open.values()) {
-      const content = message.content[index] as { text?: string; thinking?: string };
-      stream.push({
-        type: `${kind}_end`,
-        contentIndex: index,
+  private closeBlocks(): void {
+    for (const { index, kind } of this.open.values()) {
+      const content = this.message.content[index] as { text?: string; thinking?: string };
+      this.stream.push({
         content: (kind === "text" ? content.text : content.thinking) ?? "",
-        partial: message,
+        contentIndex: index,
+        partial: this.message,
+        type: `${kind}_end`,
       });
     }
-    open.clear();
-  };
+    this.open.clear();
+  }
 
-  const appendText = (key: string, delta: string) => {
-    if (!delta) return;
-    const index = block(key, "text");
-    (message.content[index] as { text: string }).text += delta;
-    stream.push({ type: "text_delta", contentIndex: index, delta, partial: message });
-  };
-
-  const finalizeUsage = () => {
-    const usage = message.usage;
+  private finish(reason: compatTypes.AssistantMessage["stopReason"]): void {
+    this.closeBlocks();
+    const usage = this.message.usage;
     usage.totalTokens = usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
-  };
-
-  return {
-    stream,
-    message,
-    get hasContent() {
-      return message.content.length > 0;
-    },
-    /** Set a text block's full text; only the part beyond what was already emitted is streamed. */
-    setText(key: string, full: string) {
-      const current = open.get(`text:${key}`);
-      const have = current ? (message.content[current.index] as { text: string }).text : "";
-      if (full.length > have.length && full.startsWith(have))
-        appendText(key, full.slice(have.length));
-    },
-    appendText,
-    appendThinking(key: string, delta: string) {
-      if (!delta) return;
-      const index = block(key, "thinking");
-      (message.content[index] as { thinking: string }).thinking += delta;
-      stream.push({ type: "thinking_delta", contentIndex: index, delta, partial: message });
-    },
-    toolCall(id: string, name: string, args: JsonObject) {
-      closeBlocks();
-      start();
-      const index = message.content.length;
-      const call = {
-        type: "toolCall",
-        id,
-        name,
-        arguments: args,
-      } as AssistantMessage["content"][number];
-      message.content.push(call);
-      stream.push({ type: "toolcall_start", contentIndex: index, partial: message });
-      stream.push({
-        type: "toolcall_delta",
-        contentIndex: index,
-        delta: JSON.stringify(args),
-        partial: message,
-      });
-      stream.push({
-        type: "toolcall_end",
-        contentIndex: index,
-        toolCall: call as never,
-        partial: message,
-      });
-    },
-    addUsage(usage: Partial<Usage>) {
-      message.usage.input += usage.input ?? 0;
-      message.usage.output += usage.output ?? 0;
-      message.usage.cacheRead += usage.cacheRead ?? 0;
-      message.usage.cacheWrite += usage.cacheWrite ?? 0;
-      if (usage.reasoning !== undefined) {
-        message.usage.reasoning = (message.usage.reasoning ?? 0) + usage.reasoning;
-      }
-    },
-    replaceUsage(usage: Usage) {
-      Object.assign(message.usage, usage);
-    },
-    done(reason: "stop" | "toolUse" | "length") {
-      if (ended) return;
-      ended = true;
-      if (reason === "stop" && !message.content.some((part) => part.type === "text")) {
-        appendText("fallback", "(no reply text)");
-      }
-      closeBlocks();
-      finalizeUsage();
-      message.stopReason = reason;
-      stream.push({ type: "done", reason, message });
-      stream.end();
-    },
-    fail(reason: "error" | "aborted", errorMessage: string) {
-      if (ended) return;
-      ended = true;
-      closeBlocks();
-      finalizeUsage();
-      message.stopReason = reason;
-      message.errorMessage = errorMessage;
-      stream.push({ type: "error", reason, error: message });
-      stream.end();
-    },
-  };
+    this.message.stopReason = reason;
+  }
 }
+
+const createReply = (model: compatTypes.Model<string>) => new Reply(model);
+
+const reply = {
+  createReply,
+};
+
+export default reply;

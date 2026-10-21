@@ -1,43 +1,45 @@
 import { Deferred, Effect } from "effect";
 
-import type { McpRequestFailure } from "./client-results.ts";
-import { foreign, fromPromise, type McpForeignError, toPromise } from "./foreign.ts";
-import { IncomingRequests, type RequestHandler } from "./incoming-requests.ts";
-import { type PendingRequest, PendingRequests } from "./pending-requests.ts";
-import {
+import clientCoreKit from "./client-core-kit.ts";
+import type clientCoreTypes from "./client-core.types.ts";
+import type clientResultsTypes from "./client-results.types.ts";
+import type foreignTypes from "./foreign.types.ts";
+import type incomingRequestsTypes from "./incoming-requests.types.ts";
+import type pendingRequestsTypes from "./pending-requests.types.ts";
+import type jsonrpcTypes from "./protocol/jsonrpc.types.ts";
+import type typesModule from "./protocol/types.types.ts";
+import type transportTypes from "./transports/transport.types.ts";
+
+const {
+  foreign: foreignModule,
+  IncomingRequests,
+  jsonrpc: jsonrpcModule,
+  PendingRequests,
+} = clientCoreKit;
+
+const { foreign, fromPromise, toPromise } = foreignModule;
+const {
+  JSON_RPC_ERROR_CODES,
+  McpAbortError,
+  McpConnectionClosedError,
+  McpError,
   isJsonRpcId,
   isJsonRpcNotification,
   isJsonRpcRequest,
   isJsonRpcResponse,
   isObject,
-  JSON_RPC_ERROR_CODES,
-  type JsonRpcMessage,
-  type JsonRpcRequest,
-  type JsonRpcResponse,
-  McpAbortError,
-  McpConnectionClosedError,
-  McpError,
   toError,
-} from "./protocol/jsonrpc.ts";
-import type { ProgressNotification } from "./protocol/types.ts";
-import type { McpTransport } from "./transports/transport.ts";
+} = jsonrpcModule;
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
-export type ClientState = "idle" | "connecting" | "connected" | "closed";
 type NotificationListener = (params: unknown) => void;
 type ErrorListener = (error: Error) => void;
 type CloseListener = () => void;
 
-export interface McpRequestOptions {
-  signal?: AbortSignal | undefined;
-  timeoutMs?: number;
-  onProgress?: (progress: ProgressNotification) => void;
-}
-
-export abstract class McpClientCore {
-  protected state: ClientState = "idle";
-  protected transport: McpTransport | undefined;
+export default abstract class McpClientCore {
+  protected state: clientCoreTypes.ClientState = "idle";
+  protected transport: transportTypes.McpTransport | undefined;
   protected disposers: (() => void)[] = [];
   protected incoming = new IncomingRequests((error) => this.emitError(error));
   private nextRequestId = 1;
@@ -59,14 +61,14 @@ export abstract class McpClientCore {
     this.requestTimeoutMs = requestTimeoutMs;
   }
 
-  get connectionState(): ClientState {
+  get connectionState(): clientCoreTypes.ClientState {
     return this.state;
   }
 
   request<Result = unknown>(
     method: string,
     params?: Record<string, unknown>,
-    options: McpRequestOptions = {},
+    options: clientCoreTypes.McpRequestOptions = {},
   ): Promise<Result> {
     return toPromise(this.requestEffect(method, params, options, false)) as Promise<Result>;
   }
@@ -75,7 +77,7 @@ export abstract class McpClientCore {
     return toPromise(this.notifyEffect(method, params, false));
   }
 
-  setRequestHandler(method: string, handler: RequestHandler): () => void {
+  setRequestHandler(method: string, handler: incomingRequestsTypes.RequestHandler): () => void {
     return this.incoming.setHandler(method, handler);
   }
 
@@ -110,10 +112,10 @@ export abstract class McpClientCore {
   protected requestEffect(
     method: string,
     params: Record<string, unknown> | undefined,
-    options: McpRequestOptions,
+    options: clientCoreTypes.McpRequestOptions,
     allowConnecting: boolean,
-  ): Effect.Effect<unknown, McpRequestFailure> {
-    return Effect.suspend((): Effect.Effect<unknown, McpRequestFailure> => {
+  ): Effect.Effect<unknown, clientResultsTypes.McpRequestFailure> {
+    return Effect.suspend((): Effect.Effect<unknown, clientResultsTypes.McpRequestFailure> => {
       const transport = this.requireTransport(allowConnecting);
       if (transport === undefined)
         return Effect.fail(new McpConnectionClosedError(`MCP client is ${this.state}`));
@@ -125,17 +127,15 @@ export abstract class McpClientCore {
         progressToken === undefined
           ? params
           : { ...params, _meta: { ...(isObject(meta) ? meta : {}), progressToken } };
-      const message: JsonRpcRequest = {
-        jsonrpc: "2.0",
+      const message: jsonrpcTypes.JsonRpcRequest = {
         id,
+        jsonrpc: "2.0",
         method,
         ...(requestParams === undefined ? {} : { params: requestParams }),
       };
-      const entry: PendingRequest = {
-        deferred: Deferred.makeUnsafe<unknown, McpForeignError>(),
-        timeoutMs: options.timeoutMs ?? this.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
-        timer: undefined,
-        signal: options.signal,
+      const entry: pendingRequestsTypes.PendingRequest = {
+        cancellable: method !== "initialize",
+        deferred: Deferred.makeUnsafe<unknown, foreignTypes.McpForeignError>(),
         onAbort: () =>
           this.pending.cancel(
             id,
@@ -143,10 +143,12 @@ export abstract class McpClientCore {
             method !== "initialize",
             String(options.signal?.reason ?? "Aborted"),
           ),
-        sendController: new AbortController(),
-        cancellable: method !== "initialize",
         onProgress: options.onProgress,
         progressToken,
+        sendController: new AbortController(),
+        signal: options.signal,
+        timeoutMs: options.timeoutMs ?? this.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS,
+        timer: undefined,
       };
       this.pending.add(id, entry);
       transport
@@ -160,18 +162,23 @@ export abstract class McpClientCore {
     method: string,
     params: Record<string, unknown> | undefined,
     allowConnecting: boolean,
-  ): Effect.Effect<void, McpForeignError | McpConnectionClosedError> {
-    return Effect.suspend((): Effect.Effect<void, McpForeignError | McpConnectionClosedError> => {
-      const transport = this.requireTransport(allowConnecting);
-      if (transport === undefined)
-        return Effect.fail(new McpConnectionClosedError(`MCP client is ${this.state}`));
-      return fromPromise(() =>
-        transport.send({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) }),
-      );
-    });
+  ): Effect.Effect<void, foreignTypes.McpForeignError | jsonrpcTypes.McpConnectionClosedError> {
+    return Effect.suspend(
+      (): Effect.Effect<
+        void,
+        foreignTypes.McpForeignError | jsonrpcTypes.McpConnectionClosedError
+      > => {
+        const transport = this.requireTransport(allowConnecting);
+        if (transport === undefined)
+          return Effect.fail(new McpConnectionClosedError(`MCP client is ${this.state}`));
+        return fromPromise(() =>
+          transport.send({ jsonrpc: "2.0", method, ...(params === undefined ? {} : { params }) }),
+        );
+      },
+    );
   }
 
-  protected handleMessage(message: JsonRpcMessage): void {
+  protected handleMessage(message: jsonrpcTypes.JsonRpcMessage): void {
     if (isJsonRpcResponse(message)) this.handleResponse(message);
     else if (isJsonRpcRequest(message)) {
       const transport = this.transport;
@@ -204,16 +211,19 @@ export abstract class McpClientCore {
     for (const listener of this.errorListeners) listener(normalized);
   }
 
-  private requireTransport(allowConnecting: boolean): McpTransport | undefined {
+  private requireTransport(allowConnecting: boolean): transportTypes.McpTransport | undefined {
     const usable = this.state === "connected" || (allowConnecting && this.state === "connecting");
     return usable ? this.transport : undefined;
   }
 
-  private sendQuietly(transport: McpTransport, message: JsonRpcMessage): void {
+  private sendQuietly(
+    transport: transportTypes.McpTransport,
+    message: jsonrpcTypes.JsonRpcMessage,
+  ): void {
     transport.send(message).catch((error: unknown) => this.emitError(error));
   }
 
-  private handleResponse(message: JsonRpcResponse): void {
+  private handleResponse(message: jsonrpcTypes.JsonRpcResponse): void {
     const outcome =
       "error" in message
         ? Effect.fail(
@@ -245,7 +255,7 @@ export abstract class McpClientCore {
       return;
     const entry = this.pending.progress(params["progressToken"]);
     try {
-      entry?.onProgress?.(params as unknown as ProgressNotification);
+      entry?.onProgress?.(params as unknown as typesModule.ProgressNotification);
     } catch (error) {
       this.emitError(error);
     }

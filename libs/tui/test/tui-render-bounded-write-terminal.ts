@@ -1,6 +1,8 @@
-import type { Terminal } from "../src/terminal.ts";
+import { Effect } from "effect";
 
-export class BoundedWriteTerminal implements Terminal {
+import type terminalProtocolTypes from "../src/terminal-protocol.types.ts";
+
+class BoundedWriteTerminal implements terminalProtocolTypes.Terminal {
   readonly writes: string[] = [];
   columns = 80;
   rows = 24;
@@ -8,7 +10,9 @@ export class BoundedWriteTerminal implements Terminal {
 
   start(_onInput: (data: string) => void, _onResize: () => void): void {}
   stop(): void {}
-  async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {}
+  drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {
+    return Effect.runPromise(Effect.sync(() => {}));
+  }
   write(data: string): void {
     this.writes.push(data);
   }
@@ -22,3 +26,5 @@ export class BoundedWriteTerminal implements Terminal {
   setProgress(_active: boolean): void {}
   setProgramStatus(): void {}
 }
+
+export default BoundedWriteTerminal;

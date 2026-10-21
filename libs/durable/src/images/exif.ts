@@ -1,11 +1,4 @@
-// EXIF orientation of JPEG and WebP files, read from the bytes without decoding the image.
-
-/**
- * The EXIF orientation of a JPEG or WebP, 1 to 8; 1 when absent or unreadable.
- * @param {Uint8Array} bytes - The image bytes.
- * @returns {number} The orientation.
- */
-export function exifOrientation(bytes: Uint8Array): number {
+function exifOrientation(bytes: Uint8Array): number {
   const tiff = tiffStart(bytes);
   if (tiff < 0 || tiff + 8 > bytes.length) return 1;
   const little = bytes[tiff] === 0x49 && bytes[tiff + 1] === 0x49;
@@ -22,7 +15,6 @@ export function exifOrientation(bytes: Uint8Array): number {
   for (let index = 0; index < entries; index++) {
     const entry = directory + 2 + index * 12;
     if (entry + 12 > bytes.length) return 1;
-    // Tag 0x0112 is Orientation, a SHORT whose value sits in the entry.
     if (u16(entry) === 0x0112) {
       const value = u16(entry + 8);
       return value >= 1 && value <= 8 ? value : 1;
@@ -31,11 +23,6 @@ export function exifOrientation(bytes: Uint8Array): number {
   return 1;
 }
 
-/**
- * Where the TIFF header of a JPEG's APP1 or a WebP's EXIF chunk starts; -1 when there is none.
- * @param {Uint8Array} bytes - The image bytes.
- * @returns {number} The offset.
- */
 function tiffStart(bytes: Uint8Array): number {
   if (bytes[0] === 0xff && bytes[1] === 0xd8) {
     for (let offset = 2; offset + 4 <= bytes.length;) {
@@ -58,10 +45,8 @@ function tiffStart(bytes: Uint8Array): number {
           (bytes[offset + 6]! << 16) |
           (bytes[offset + 7]! << 24)) >>>
         0;
-      // Some WebP files prefix the TIFF header with "Exif\0\0".
       if (ascii(bytes, offset, "EXIF"))
         return isExifHeader(bytes, offset + 8) ? offset + 14 : offset + 8;
-      // RIFF chunks are padded to an even size.
       offset += 8 + size + (size % 2);
     }
   }
@@ -78,3 +63,9 @@ function ascii(bytes: Uint8Array, offset: number, text: string): boolean {
   }
   return true;
 }
+
+const exif = {
+  exifOrientation,
+};
+
+export default exif;

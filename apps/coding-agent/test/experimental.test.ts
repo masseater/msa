@@ -1,45 +1,30 @@
-import { afterEach, describe, expect, it } from "vite-plus/test";
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { describe, expect, it } from "vite-plus/test";
 
-import { areExperimentalFeaturesEnabled } from "../src/core/experimental.ts";
+import experimental from "../src/core/experimental.ts";
+import platform from "../src/core/platform/index.ts";
+
+const { areExperimentalFeaturesEnabled } = experimental;
+const { withEnv } = platform;
+
+const { runTest } = testing;
+
+const expectEnabled = (value: string | undefined, expected: boolean) => () =>
+  runTest(
+    Effect.sync(() => expect(areExperimentalFeaturesEnabled()).toBe(expected)).pipe(
+      withEnv({ MSA_EXPERIMENTAL: value }),
+    ),
+  );
 
 describe("areExperimentalFeaturesEnabled", () => {
-  const originalMsaExperimental = process.env["MSA_EXPERIMENTAL"];
+  it("returns false when MSA_EXPERIMENTAL is unset", expectEnabled(undefined, false));
 
-  afterEach(() => {
-    if (originalMsaExperimental === undefined) {
-      delete process.env["MSA_EXPERIMENTAL"];
-    } else {
-      process.env["MSA_EXPERIMENTAL"] = originalMsaExperimental;
-    }
-  });
+  it("returns false when MSA_EXPERIMENTAL is empty", expectEnabled("", false));
 
-  it("returns false when MSA_EXPERIMENTAL is unset", () => {
-    delete process.env["MSA_EXPERIMENTAL"];
+  it("returns true when MSA_EXPERIMENTAL is set to 1", expectEnabled("1", true));
 
-    expect(areExperimentalFeaturesEnabled()).toBe(false);
-  });
+  it("returns false when MSA_EXPERIMENTAL is set to 0", expectEnabled("0", false));
 
-  it("returns false when MSA_EXPERIMENTAL is empty", () => {
-    process.env["MSA_EXPERIMENTAL"] = "";
-
-    expect(areExperimentalFeaturesEnabled()).toBe(false);
-  });
-
-  it("returns true when MSA_EXPERIMENTAL is set to 1", () => {
-    process.env["MSA_EXPERIMENTAL"] = "1";
-
-    expect(areExperimentalFeaturesEnabled()).toBe(true);
-  });
-
-  it("returns false when MSA_EXPERIMENTAL is set to 0", () => {
-    process.env["MSA_EXPERIMENTAL"] = "0";
-
-    expect(areExperimentalFeaturesEnabled()).toBe(false);
-  });
-
-  it("returns false when MSA_EXPERIMENTAL is set to a non-1 value", () => {
-    process.env["MSA_EXPERIMENTAL"] = "true";
-
-    expect(areExperimentalFeaturesEnabled()).toBe(false);
-  });
+  it("returns false when MSA_EXPERIMENTAL is set to a non-1 value", expectEnabled("true", false));
 });

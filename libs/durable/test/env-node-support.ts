@@ -1,76 +1,103 @@
-import { mkdirSync, rmSync } from "node:fs";
-import { type FileHandle, open } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import contextModule from "@msa/chord/context";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
+import { vi } from "vite-plus/test";
 
-import { BACKGROUND_CONTEXT, withAbortSignal } from "@msa/chord/context";
+import type envTypes from "../src/env/index.types.ts";
+import type nodeTypes from "../src/env/node.types.ts";
+import effectSupport from "./effect-support.ts";
+import type envNodeSupportTypes from "./env-node-support.types.ts";
+import nodeFsPromisesCapture from "./node-fs-promises-capture.ts";
+import platformSupport from "./platform-support.ts";
 
-import { type ShellExecOptions } from "../src/env/index.ts";
-import { NodeExecutionEnv } from "../src/env/node.ts";
+const { BACKGROUND_CONTEXT, withAbortSignal } = contextModule;
 
-export const tempDirs: string[] = [];
+const { awaited } = effectSupport;
+const { openFile } = nodeFsPromisesCapture;
+const { makeTempDir, removeDirRetrying, restoreWritable } = platformSupport;
 
-export const chmodRestorePaths: string[] = [];
+const tempDirs: string[] = [];
 
-export function createTempDir(): string {
-  const dir = join(
-    tmpdir(),
-    `msa-durable-env-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-  );
-  mkdirSync(dir, { recursive: true });
-  tempDirs.push(dir);
-  return dir;
-}
+const chmodRestorePaths: string[] = [];
 
-// Remove a test directory. On Windows, `taskkill /T` runs asynchronously and can miss descendants such as Git Bash's
-// `sleep`, so a killed command's processes can hold the directory for a while after `exec` settles; retry until they
-// exit.
-export async function removeTempDir(dir: string, attempt = 0): Promise<void> {
-  try {
-    rmSync(dir, { recursive: true, force: true });
-  } catch (error) {
-    const code = (error as NodeJS.ErrnoException).code;
-    if (attempt >= 80 || (code !== "EBUSY" && code !== "EPERM" && code !== "ENOTEMPTY"))
-      throw error;
-    await new Promise((resolve) => {
-      setTimeout(resolve, 100);
-    });
-    await removeTempDir(dir, attempt + 1);
-  }
-}
+const createTempDir: Effect.Effect<string> = makeTempDir("msa-durable-env-").pipe(
+  Effect.tap((dir) => Effect.sync(() => tempDirs.push(dir))),
+);
 
-export function abortedContext() {
+const removeTempDir = removeDirRetrying;
+
+const cleanUpEnvTests: Effect.Effect<void> = Effect.gen(function* () {
+  vi.restoreAllMocks();
+  yield* Effect.forEach(chmodRestorePaths.splice(0), restoreWritable, { discard: true });
+  yield* Effect.forEach(tempDirs.splice(0), removeTempDir, { discard: true });
+});
+
+function abortedContext() {
   const controller = new AbortController();
   controller.abort();
   return withAbortSignal(controller.signal, BACKGROUND_CONTEXT);
 }
 
-export async function fileHandlePrototype(path: string): Promise<FileHandle> {
-  const handle = await open(path, "r");
-  await handle.close();
-  return Object.getPrototypeOf(handle) as FileHandle;
-}
+const fileHandlePrototype = Effect.fn("fileHandlePrototype")(function* (path: string) {
+  const handle = yield* awaited(openFile(path, "r"));
+  yield* awaited(handle.close());
+  return Object.getPrototypeOf(handle) as envNodeSupportTypes.NodeFileHandle;
+});
 
-export async function collectShellOutput(
-  env: NodeExecutionEnv,
+function collectShellOutputImpl(
+  env: nodeTypes.NodeExecutionEnv,
   command: string,
-  options: ShellExecOptions | undefined,
-  context: Parameters<NodeExecutionEnv["exec"]>[2],
-): Promise<{ result: Awaited<ReturnType<NodeExecutionEnv["exec"]>>; output: string }> {
-  let output = "";
-  const result = await env.exec(
-    command,
-    {
-      ...options,
-      onOutput: (text) => {
-        output += text;
-      },
-    },
-    context,
+  options: envTypes.ShellExecOptions | undefined,
+  context: Parameters<nodeTypes.NodeExecutionEnv["exec"]>[2],
+): Promise<{ result: Awaited<ReturnType<nodeTypes.NodeExecutionEnv["exec"]>>; output: string }> {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      let output = "";
+      const result = yield* awaited(
+        env.exec(
+          command,
+          {
+            ...options,
+            onOutput: (text) => {
+              output += text;
+            },
+          },
+          context,
+        ),
+      );
+      return { output, result };
+    }),
   );
-  return { result, output };
 }
 
-export function toBashSingleQuotedArg(value: string): string {
+const collectShellOutput: {
+  (
+    command: string,
+    options: envTypes.ShellExecOptions | undefined,
+    context: Parameters<nodeTypes.NodeExecutionEnv["exec"]>[2],
+  ): (env: nodeTypes.NodeExecutionEnv) => ReturnType<typeof collectShellOutputImpl>;
+  (
+    env: nodeTypes.NodeExecutionEnv,
+    command: string,
+    options: envTypes.ShellExecOptions | undefined,
+    context: Parameters<nodeTypes.NodeExecutionEnv["exec"]>[2],
+  ): ReturnType<typeof collectShellOutputImpl>;
+} = dual(4, collectShellOutputImpl);
+
+function toBashSingleQuotedArg(value: string): string {
   return `'${value.replace(/\\/gu, "/").replace(/'/gu, `'"'"'`)}'`;
 }
+
+const envNodeSupport = {
+  abortedContext,
+  chmodRestorePaths,
+  cleanUpEnvTests,
+  collectShellOutput,
+  createTempDir,
+  fileHandlePrototype,
+  removeTempDir,
+  tempDirs,
+  toBashSingleQuotedArg,
+};
+
+export default envNodeSupport;

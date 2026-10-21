@@ -1,6 +1,8 @@
-import { type StorageWrite } from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
 
-export function documentWrites(writes: readonly StorageWrite[]): readonly StorageWrite[] {
+function documentWrites(
+  writes: readonly durableTypes.StorageWrite[],
+): readonly durableTypes.StorageWrite[] {
   return writes.filter(
     (write) =>
       write.type === "document.create" ||
@@ -8,3 +10,5 @@ export function documentWrites(writes: readonly StorageWrite[]): readonly Storag
       write.type === "document.retire",
   );
 }
+
+export default documentWrites;

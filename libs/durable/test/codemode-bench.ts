@@ -1,57 +1,61 @@
-/**
- * Durable code mode overhead. One model-issued call makes N calls of a trivial `echo` tool, either sequentially or all at
- * once, in two ways: a code mode script (`tools.echo()`, journaled and replayable) and a plain tool calling
- * `api.executeTool()` the same way (nested calls, no journal). Reports wall time and commits per call on SQLite.
- *
- *   node --conditions=source --experimental-strip-types test/codemode-bench.ts [N,...]
- */
-import { join } from "node:path";
-
-import { createModels } from "@msa/ai/models";
-import { fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } from "@msa/ai/providers/faux";
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
-import { CodemodeSandbox } from "@msa/codemode";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import codemodeModule from "@msa/codemode";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import { Console, Effect } from "effect";
 import { Type } from "typebox";
 
-import { createCodemodeTool } from "../src/codemode/codemode.ts";
-import { createRegistry, defineExtension, defineTool, Harness } from "../src/index.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { makeTempDir, removeDir } from "./temp-support.ts";
+import codemode from "../src/codemode/codemode.ts";
+import node from "../src/storage/sqlite/node.ts";
+import support from "./support.ts";
+
+const { createModels, fauxAssistantMessage, fauxProvider, fauxText, fauxToolCall } = ai;
+
+const { CodemodeSandbox } = codemodeModule;
+
+const { defineExtension, defineTool } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { createCodemodeTool } = codemode;
+const { openNodeSqliteStorage } = node;
+
+const { BACKGROUND_CONTEXT: context, awaited, joinPath, makeTempDir, removeDir } = support;
 
 type Shape = "sequential" | "parallel";
 
 const echo = defineTool({
-  name: "echo",
   description: "echo",
+  execute: (args) => Promise.resolve({ output: [{ text: String(args.i), type: "text" }] }),
+  name: "echo",
   parameters: Type.Object({ i: Type.Number() }),
-  execute: (args) => Promise.resolve({ output: [{ type: "text", text: String(args.i) }] }),
 });
 
 const plain = defineTool({
-  name: "plain",
   description: "plain",
+  execute: (args, api, callContext) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        if (args.shape === "sequential") {
+          for (const i of Array.from({ length: args.n }, (_, iInner) => iInner))
+            yield* awaited(api.executeTool("echo", { i }, callContext));
+        } else {
+          yield* awaited(
+            Promise.all(
+              Array.from({ length: args.n }, (_, i) => api.executeTool("echo", { i }, callContext)),
+            ),
+          );
+        }
+        return { output: [{ text: "done", type: "text" }] };
+      }),
+    ),
+  name: "plain",
   parameters: Type.Object({ n: Type.Number(), shape: Type.String() }),
   replay: "safe",
-  execute: async (args, api, callContext) => {
-    if (args.shape === "sequential") {
-      for await (const i of Array.from({ length: args.n }, (_, i) => i))
-        await api.executeTool("echo", { i }, callContext);
-    } else {
-      await Promise.all(
-        Array.from({ length: args.n }, (_, i) => api.executeTool("echo", { i }, callContext)),
-      );
-    }
-    return { output: [{ type: "text", text: "done" }] };
-  },
 });
 
-async function run(
-  mode: "codemode" | "plain",
-  shape: Shape,
-  n: number,
-): Promise<{ ms: number; commits: number }> {
-  const directory = await makeTempDir("msa-codemode-bench-");
-  try {
+const run = Effect.fn("run")(function* (mode: "codemode" | "plain", shape: Shape, n: number) {
+  const directory = yield* makeTempDir("msa-codemode-bench-");
+  return yield* Effect.gen(function* () {
     const faux = fauxProvider();
     const models = createModels();
     models.setProvider(faux.provider);
@@ -72,34 +76,43 @@ async function run(
       fauxAssistantMessage([call], { stopReason: "toolUse" }),
       fauxAssistantMessage([fauxText("ok")]),
     ]);
-    const storage = await openNodeSqliteStorage(join(directory, "session.sqlite"));
-    const harness = await Harness.open(storage, { models, registry, settings: {} }, context);
-    const root = await harness.root(context, {
-      agent: { model: { provider: "faux", modelId: "faux-1" } },
-    });
+    const storage = yield* awaited(openNodeSqliteStorage(joinPath(directory, "session.sqlite")));
+    const harness = yield* awaited(
+      Harness.open(storage, { models, registry, settings: {} }, context),
+    );
+    const root = yield* awaited(
+      harness.root(context, {
+        agent: { model: { modelId: "faux-1", provider: "faux" } },
+      }),
+    );
     let commits = 0;
     harness.subscribeCommits(() => {
       commits++;
     });
     const started = performance.now();
-    await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
+    yield* awaited(
+      (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+    );
     const ms = performance.now() - started;
-    await harness.close(context);
-    await sandbox.close();
-    return { ms, commits };
-  } finally {
-    await removeDir(directory);
-  }
-}
+    yield* awaited(harness.close(context));
+    yield* awaited(sandbox.close());
+    return { commits, ms };
+  }).pipe(Effect.ensuring(Effect.asVoid(Effect.suspend(() => removeDir(directory)))));
+});
 
 const sizes = (process.argv[2] ?? "100,1000").split(",").map(Number);
-for await (const shape of ["sequential", "parallel"] as const) {
-  for await (const n of sizes) {
-    const plainRun = await run("plain", shape, n);
-    const codemodeRun = await run("codemode", shape, n);
-    const per = (value: number) => (value / n).toFixed(2);
-    console.log(
-      `${shape} n=${n}: plain ${plainRun.ms.toFixed(0)} ms (${per(plainRun.ms)} ms, ${per(plainRun.commits)} commits/call), codemode ${codemodeRun.ms.toFixed(0)} ms (${per(codemodeRun.ms)} ms, ${per(codemodeRun.commits)} commits/call)`,
-    );
+
+const main = Effect.gen(function* () {
+  for (const shape of ["sequential", "parallel"] as const) {
+    for (const n of sizes) {
+      const plainRun = yield* run("plain", shape, n);
+      const codemodeRun = yield* run("codemode", shape, n);
+      const per = (value: number) => (value / n).toFixed(2);
+      yield* Console.log(
+        `${shape} n=${n}: plain ${plainRun.ms.toFixed(0)} ms (${per(plainRun.ms)} ms, ${per(plainRun.commits)} commits/call), codemode ${codemodeRun.ms.toFixed(0)} ms (${per(codemodeRun.ms)} ms, ${per(codemodeRun.commits)} commits/call)`,
+      );
+    }
   }
-}
+});
+
+NodeRuntime.runMain(main);

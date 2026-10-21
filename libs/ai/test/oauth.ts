@@ -1,18 +1,15 @@
-/**
- * Test helper for resolving API keys from ~/.msa/agent/auth.json
- *
- * Supports both API key and OAuth credentials.
- * OAuth tokens are automatically refreshed if expired and saved back to auth.json.
- */
+import * as NodeServices from "@effect/platform-node/NodeServices";
+import { Cause, Console, Effect, FileSystem, ManagedRuntime, Path, Schema } from "effect";
 
-import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import { dirname, join } from "path";
+import type typesModule from "../src/auth/types.ts";
+import all from "../src/providers/all.ts";
+import clock from "../src/utils/clock.ts";
+import env from "./env.ts";
 
-import type { OAuthCredentials } from "../src/auth/types.ts";
-import { builtinProviders } from "../src/providers/all.ts";
+const { builtinProviders } = all;
+const { currentTimeMillis } = clock;
 
-const AUTH_PATH = join(homedir(), ".msa", "agent", "auth.json");
+const { envValue } = env;
 
 type ApiKeyCredential = {
   type: "api_key";
@@ -21,68 +18,78 @@ type ApiKeyCredential = {
 
 type OAuthCredentialEntry = {
   type: "oauth";
-} & OAuthCredentials;
+} & typesModule.OAuthCredentials;
 
 type AuthCredential = ApiKeyCredential | OAuthCredentialEntry;
 
 type AuthStorage = Record<string, AuthCredential>;
 
-function loadAuthStorage(): AuthStorage {
-  if (!existsSync(AUTH_PATH)) {
-    return {};
-  }
-  try {
-    const content = readFileSync(AUTH_PATH, "utf-8");
-    return JSON.parse(content);
-  } catch {
-    return {};
-  }
-}
+const decodeStorage = Schema.decodeUnknownEffect(
+  Schema.fromJsonString(Schema.Record(Schema.String, Schema.Unknown)),
+);
 
-function saveAuthStorage(storage: AuthStorage): void {
-  const configDir = dirname(AUTH_PATH);
-  if (!existsSync(configDir)) {
-    mkdirSync(configDir, { recursive: true, mode: 0o700 });
-  }
-  writeFileSync(AUTH_PATH, JSON.stringify(storage, null, 2), "utf-8");
-  chmodSync(AUTH_PATH, 0o600);
-}
+const encodeStorage = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
-/**
- * Resolve API key for a provider from ~/.msa/agent/auth.json
- *
- * For API key credentials, returns the key directly.
- * For OAuth credentials, returns the access token (refreshing if expired and saving back).
- *
- * @param {string} provider - provider id
- * @returns {Promise<string | undefined>} the API key or access token, or undefined when none is stored
- */
-export async function resolveApiKey(provider: string): Promise<string | undefined> {
-  const storage = loadAuthStorage();
-  const entry = storage[provider];
+const authPath = Effect.gen(function* () {
+  const path = yield* Path.Path;
+  const home = envValue("HOME") ?? envValue("USERPROFILE") ?? "";
+  return path.join(home, ".msa", "agent", "auth.json");
+});
 
-  if (!entry) return undefined;
+const loadAuthStorage = Effect.gen(function* () {
+  const fs = yield* FileSystem.FileSystem;
+  const file = yield* authPath;
+  if (!(yield* Effect.orElseSucceed(fs.exists(file), () => false))) return {};
+  return yield* fs.readFileString(file).pipe(
+    Effect.flatMap(decodeStorage),
+    Effect.map((value) => value as AuthStorage),
+    Effect.orElseSucceed((): AuthStorage => ({})),
+  );
+});
 
-  if (entry.type === "api_key") {
-    return entry.key;
-  }
+const saveAuthStorage = (storage: AuthStorage) =>
+  Effect.gen(function* () {
+    const fs = yield* FileSystem.FileSystem;
+    const path = yield* Path.Path;
+    const file = yield* authPath;
+    yield* fs.makeDirectory(path.dirname(file), { mode: 0o700, recursive: true });
+    yield* fs.writeFileString(file, yield* encodeStorage(storage));
+    yield* fs.chmod(file, 0o600);
+  });
 
-  if (entry.type === "oauth") {
+const refreshed = (provider: string, entry: OAuthCredentialEntry) =>
+  Effect.gen(function* () {
     const oauth = builtinProviders().find((candidate) => candidate.id === provider)?.auth.oauth;
-    if (!oauth) return undefined;
-    let credential = entry;
-    try {
-      if (Date.now() >= credential.expires) {
-        credential = await oauth.refresh(credential, new AbortController().signal);
-      }
-    } catch (error) {
-      console.log(JSON.stringify(error));
-      return undefined;
-    }
-    storage[provider] = credential;
-    saveAuthStorage(storage);
-    return (await oauth.toAuth(credential)).apiKey;
-  }
+    if (oauth === undefined) return undefined;
+    const credential: OAuthCredentialEntry =
+      currentTimeMillis() >= entry.expires
+        ? {
+            ...(yield* Effect.promise(() => oauth.refresh(entry, new AbortController().signal))),
+            type: "oauth",
+          }
+        : entry;
+    return { credential, oauth };
+  });
 
-  return undefined;
-}
+const resolveStored = (provider: string) =>
+  Effect.gen(function* () {
+    const storage = yield* loadAuthStorage;
+    const entry = storage[provider];
+    if (entry === undefined) return undefined;
+    if (entry.type === "api_key") return entry.key;
+    const resolved = yield* refreshed(provider, entry);
+    if (resolved === undefined) return undefined;
+    yield* Effect.orDie(saveAuthStorage({ ...storage, [provider]: resolved.credential }));
+    return (yield* Effect.promise(() => resolved.oauth.toAuth(resolved.credential))).apiKey;
+  });
+
+const runtime = ManagedRuntime.make(NodeServices.layer);
+
+const resolveApiKey = (provider: string): Promise<string | undefined> =>
+  runtime.runPromise(
+    resolveStored(provider).pipe(
+      Effect.catchCause((cause) => Effect.as(Console.log(Cause.pretty(cause)), undefined)),
+    ),
+  );
+
+export default resolveApiKey;

@@ -1,12 +1,48 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import {
+import slashCommands from "../src/core/slash-commands.ts";
+
+const {
   canonicalizeBuiltinSlashCommand,
   formatHelpMarkdown,
   handoffPrompt,
   parseHandoffCommand,
   withSkillCommands,
-} from "../src/core/slash-commands.ts";
+} = slashCommands;
+
+const listsEverySkillUnderItsNameTaking = () => {
+  const commands = [
+    { name: "review", source: "prompt" },
+    { name: "lint", source: "extension" },
+  ];
+  const skills = [
+    { name: "review", source: "skill" },
+    { name: "deploy", source: "skill" },
+  ];
+  expect(withSkillCommands(commands, skills)).toEqual([
+    { name: "lint", source: "extension" },
+    { name: "review", source: "skill" },
+    { name: "deploy", source: "skill" },
+  ]);
+};
+
+const listsASkillInsteadOfTheBuilt = () => {
+  const help = formatHelpMarkdown([{ description: "Project status.", name: "status" }]);
+  expect(help).not.toContain("Show session info");
+  expect(help).toContain("| `/status` | Project status. |");
+};
+
+const showsAliasesNextToEachCommandIn = () => {
+  const help = formatHelpMarkdown([
+    { description: "Ship | release. Use when a change is merged.", name: "deploy" },
+    { description: "文章を書くときに読む。記事も対象である。", name: "writing" },
+  ]);
+  expect(help).toContain("| `/exit` | Exit msa (`/quit`) |");
+  expect(help.split("\n").slice(-2)).toEqual([
+    "| `/deploy` | Ship \\| release. |",
+    "| `/writing` | 文章を書くときに読む。 |",
+  ]);
+};
 
 describe("built-in slash commands", () => {
   it.each([
@@ -36,55 +72,43 @@ describe("built-in slash commands", () => {
     },
   );
 
-  it("lists every skill under its name, taking the name from a command", () => {
-    const commands = [
-      { name: "review", source: "prompt" },
-      { name: "lint", source: "extension" },
-    ];
-    const skills = [
-      { name: "review", source: "skill" },
-      { name: "deploy", source: "skill" },
-    ];
-    expect(withSkillCommands(commands, skills)).toEqual([
-      { name: "lint", source: "extension" },
-      { name: "review", source: "skill" },
-      { name: "deploy", source: "skill" },
-    ]);
-  });
+  it(
+    "lists every skill under its name, taking the name from a command",
+    listsEverySkillUnderItsNameTaking,
+  );
 
-  it("lists a skill instead of the built-in command whose name it took in /help", () => {
-    const help = formatHelpMarkdown([{ name: "status", description: "Project status." }]);
-    expect(help).not.toContain("Show session info");
-    expect(help).toContain("| `/status` | Project status. |");
-  });
+  it(
+    "lists a skill instead of the built-in command whose name it took in /help",
+    listsASkillInsteadOfTheBuilt,
+  );
 
-  it("shows aliases next to each command in /help, then the first sentence of added commands", () => {
-    const help = formatHelpMarkdown([
-      { name: "deploy", description: "Ship | release. Use when a change is merged." },
-      { name: "writing", description: "文章を書くときに読む。記事も対象である。" },
-    ]);
-    expect(help).toContain("| `/exit` | Exit msa (`/quit`) |");
-    expect(help.split("\n").slice(-2)).toEqual([
-      "| `/deploy` | Ship \\| release. |",
-      "| `/writing` | 文章を書くときに読む。 |",
-    ]);
-  });
+  it(
+    "shows aliases next to each command in /help, then the first sentence of added commands",
+    showsAliasesNextToEachCommandIn,
+  );
 });
 
+const isHandoffAloneOrHandoffWithThe = () => {
+  expect(parseHandoffCommand("/handoff")).toEqual({ path: "" });
+  expect(parseHandoffCommand("/handoff  ~/notes/next.md ")).toEqual({ path: "~/notes/next.md" });
+};
+
+const asksTheModelForTheThreeSections = () => {
+  const prompt = handoffPrompt("");
+  for (const word of ["`handoff`", "premise", "goals", "donts"]) expect(prompt).toContain(word);
+  expect(prompt).not.toContain("path");
+  expect(handoffPrompt("~/notes/next.md")).toContain('Pass path: "~/notes/next.md".');
+};
+
 describe("/handoff", () => {
-  it("is /handoff alone, or /handoff with the path to write to", () => {
-    expect(parseHandoffCommand("/handoff")).toEqual({ path: "" });
-    expect(parseHandoffCommand("/handoff  ~/notes/next.md ")).toEqual({ path: "~/notes/next.md" });
-  });
+  it("is /handoff alone, or /handoff with the path to write to", isHandoffAloneOrHandoffWithThe);
 
   it.each(["/handoffs", "/handoff-now x", "handoff", "/init"])("does not take %j", (text) => {
     expect(parseHandoffCommand(text)).toBeUndefined();
   });
 
-  it("asks the model for the three sections through the handoff tool, and passes the path on", () => {
-    const prompt = handoffPrompt("");
-    for (const word of ["`handoff`", "premise", "goals", "donts"]) expect(prompt).toContain(word);
-    expect(prompt).not.toContain("path");
-    expect(handoffPrompt("~/notes/next.md")).toContain('Pass path: "~/notes/next.md".');
-  });
+  it(
+    "asks the model for the three sections through the handoff tool, and passes the path on",
+    asksTheModelForTheThreeSections,
+  );
 });

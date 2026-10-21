@@ -1,60 +1,73 @@
-import { Container } from "@msa/tui";
+import testing from "@msa/testing";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type { AgentSessionRuntimeDiagnostic } from "../../../src/core/agent-session-services.ts";
-import { InteractiveMode } from "../../../src/modes/interactive/interactive-mode.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { createHarness } from "../harness.ts";
+import type agentSessionServicesTypes from "../../../src/core/agent-session-services.types.ts";
+import themeModule from "../../../src/modes/interactive/theme/theme.ts";
+import interactiveModeFake from "../../interactive-mode-fake.ts";
+import harnessModule from "../harness.ts";
 
-function render(container: Container): string {
+const { bindModeFake } = interactiveModeFake;
+const { initTheme } = themeModule;
+
+const { Container } = tui;
+
+const { createHarness } = harnessModule;
+
+const { neverPromise } = testing;
+
+function render(container: tuiTypes.Container): string {
   return container.children.flatMap((child) => child.render(120)).join("\n");
 }
 
-describe("issue #7829 invalid settings warning", () => {
-  beforeAll(() => initTheme("dark"));
+const rendersStartupDiagnosticsInsideTheTranscript = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const harness = yield* Effect.promise(() => createHarness());
+  vi.stubEnv("MSA_OFFLINE", "1");
+  try {
+    const chatContainer = new Container();
+    const startupDiagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[] = [
+      {
+        message: "Invalid settings file /tmp/settings.json: malformed JSON",
+        type: "warning",
+      },
+    ];
+    const context = {
+      chatContainer,
+      checkForPackageUpdates: vi.fn().mockResolvedValue([]),
+      checkTmuxKeyboardSetup: vi.fn().mockResolvedValue(undefined),
+      getUserInput: vi.fn(() => neverPromise<string>()),
+      init: vi.fn(() => runPromise(Effect.sync(() => {}))),
+      options: { startupDiagnostics },
+      outputPad: 1,
+      session: harness.session,
+      ui: { requestRender: vi.fn() },
+      version: "test",
+    };
+    void bindModeFake(context).lifecycle.runLoop.run();
 
-  it("renders startup diagnostics inside the transcript", async () => {
-    const harness = await createHarness();
-    const previousOffline = process.env["MSA_OFFLINE"];
-    process.env["MSA_OFFLINE"] = "1";
-    try {
-      const chatContainer = new Container();
-      const startupDiagnostics: AgentSessionRuntimeDiagnostic[] = [
-        {
-          type: "warning",
-          message: "Invalid settings file /tmp/settings.json: malformed JSON",
-        },
-      ];
-      const context = {
-        init: vi.fn(async () => {}),
-        options: { startupDiagnostics },
-        chatContainer,
-        outputPad: 1,
-        ui: { requestRender: vi.fn() },
-        version: "test",
-        showWarning: (
-          InteractiveMode.prototype as unknown as { showWarning(message: string): void }
-        ).showWarning,
-        session: harness.session,
-        checkForPackageUpdates: vi.fn().mockResolvedValue([]),
-        checkTmuxKeyboardSetup: vi.fn().mockResolvedValue(undefined),
-        getUserInput: vi.fn(() => new Promise<string>(() => {})),
-      };
-      const run = (
-        InteractiveMode.prototype as unknown as { run(this: typeof context): Promise<void> }
-      ).run;
-
-      void run.call(context);
-
-      await vi.waitFor(() => {
+    yield* Effect.promise(() =>
+      vi.waitFor(() => {
         expect(render(chatContainer)).toContain(
           "Warning: Invalid settings file /tmp/settings.json: malformed JSON",
         );
-      });
-    } finally {
-      if (previousOffline === undefined) delete process.env["MSA_OFFLINE"];
-      else process.env["MSA_OFFLINE"] = previousOffline;
-      harness.cleanup();
-    }
-  });
+      }),
+    );
+  } finally {
+    vi.unstubAllEnvs();
+    harness.cleanup();
+  }
+});
+
+const rendersStartupDiagnosticsInsideTheTranscript2 = () =>
+  Effect.runPromise(rendersStartupDiagnosticsInsideTheTranscript);
+
+describe("issue #7829 invalid settings warning", () => {
+  beforeAll(() => initTheme("dark"));
+  it(
+    "renders startup diagnostics inside the transcript",
+    rendersStartupDiagnosticsInsideTheTranscript2,
+  );
 });

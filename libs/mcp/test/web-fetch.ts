@@ -6,7 +6,7 @@ const runtime = ManagedRuntime.make(NodeHttpClient.layerUndici);
 
 const NULL_BODY_STATUSES = new Set([101, 103, 204, 205, 304]);
 
-export const webFetch = (request: Request): Promise<Response> =>
+const webFetch = (request: Request): Promise<Response> =>
   runtime.runPromise(
     HttpClient.execute(HttpClientRequest.fromWeb(request)).pipe(
       Effect.map(
@@ -15,9 +15,11 @@ export const webFetch = (request: Request): Promise<Response> =>
             NULL_BODY_STATUSES.has(response.status)
               ? null
               : Stream.toReadableStream(response.stream),
-            { status: response.status, headers: response.headers },
+            { headers: response.headers, status: response.status },
           ),
       ),
     ),
     { signal: request.signal },
   );
+
+export default webFetch;

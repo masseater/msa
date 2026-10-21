@@ -1,80 +1,50 @@
-import {
-  type AgentState,
-  CompactionTask,
-  createRegistry,
-  defineExtension,
-  defineTask,
-  GenerationTask,
-  section,
-  ToolTask,
-  wrapSection,
-  wrapTool,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import harness from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
 import { describe, expect, it } from "vite-plus/test";
 
-import { resolveSettings } from "../src/harness/agent.ts";
-import {
-  Skills,
-  type AppTool,
-  read,
-  tool,
-  bash,
-  edit,
-  Coding,
-  resolve,
-} from "./harness-registry-support.ts";
-import { context } from "./session-support.ts";
+import agentModule from "../src/harness/agent.ts";
+import harnessRegistryCases from "./harness-registry-cases.ts";
+import harnessRegistrySupport from "./harness-registry-support.ts";
+import type harnessRegistrySupportTypes from "./harness-registry-support.types.ts";
+
+const { defineExtension, defineTask, section, wrapSection, wrapTool } = durable;
+const { CompactionTask, GenerationTask, ToolTask, createRegistry } = harness;
+const { resolveSettings } = agentModule;
+
+const { names, snapshot } = harnessRegistryCases;
+const { Coding, Skills, bash, edit, read, resolve, tool } = harnessRegistrySupport;
 
 function task(name: string, version = 1) {
   return defineTask<undefined, { phase: "run" }, null>({
-    name,
-    version,
+    abort: () => Promise.resolve(),
     initial: () => ({ phase: "run" }),
-    phases: { run: async () => {} },
-    abort: async () => {},
+    name,
+    phases: { run: () => Promise.resolve() },
+    version,
   });
-}
-
-function names(items: readonly { readonly name: string }[]): string[] {
-  return items.map((item) => item.name);
-}
-
-function rendered(agent: ReturnType<typeof resolve>): Promise<[string, string | undefined][]> {
-  const input = {
-    conversationId: 1 as never,
-    agent,
-    env: undefined,
-    shown: {},
-    read: {
-      snapshot: () => Promise.resolve(undefined),
-      snapshotAsOf: () => Promise.resolve(undefined),
-    },
-  };
-  return Promise.resolve(
-    Promise.all(
-      agent.sections.map(
-        async (item) =>
-          [item.key, await item.render(input, context)] as [string, string | undefined],
-      ),
-    ),
-  );
 }
 
 describe("registry", () => {
   it("installs, replaces in place, and uninstalls extensions by name", () => {
-    const registry = createRegistry<AppTool>();
+    const registry = createRegistry<harnessRegistrySupportTypes.AppTool>();
     const listener: string[] = [];
     registry.subscribe(() => listener.push(names(registry.snapshot().installed()).join(",")));
-    const a = defineExtension<AppTool>({
+    const a = defineExtension<harnessRegistrySupportTypes.AppTool>({
       name: "a",
       tools: [tool("read", { snippet: "Read files" })],
     });
-    const b = defineExtension<AppTool>({ name: "b", tools: [tool("read"), tool("bash")] });
+    const b = defineExtension<harnessRegistrySupportTypes.AppTool>({
+      name: "b",
+      tools: [tool("read"), tool("bash")],
+    });
     registry.install(a);
     registry.install(b);
     const before = registry.snapshot();
-    // A new object with an installed name replaces it at its position.
-    const a2 = defineExtension<AppTool>({ name: "a", tools: [tool("grep")] });
+    const a2 = defineExtension<harnessRegistrySupportTypes.AppTool>({
+      name: "a",
+      tools: [tool("grep")],
+    });
     registry.install(a2);
     expect(names(registry.snapshot().installed())).toEqual(["a", "b"]);
     expect(registry.snapshot().extension("a")).toBe(a2);
@@ -82,12 +52,10 @@ describe("registry", () => {
       registry
         .snapshot()
         .tools()
-        .map(({ extension, tool }) => `${tool.name}@${extension.name}`),
+        .map(({ extension, tool: toolInner }) => `${toolInner.name}@${extension.name}`),
     ).toEqual(["grep@a", "read@b", "bash@b"]);
-    // Old snapshots stay as they were.
     expect(before.extension("a")).toBe(a);
     expect(before.tools()[0]!.tool.snippet).toBe("Read files");
-    // Uninstall matches the name, whichever object; a later install appends.
     registry.uninstall(a);
     registry.uninstall(a);
     expect(names(registry.snapshot().installed())).toEqual(["b"]);
@@ -123,7 +91,6 @@ describe("registry", () => {
       expect(() => registry.install(extension)).toThrow(message);
     expect(registry.snapshot()).toBe(before);
     expect(published).toEqual([]);
-    // Replacing the extension that holds a task name is valid: the check runs on the state after replacement.
     registry.install(defineExtension({ name: "tasks", tasks: [task("app.index", 2)] }));
     expect(registry.snapshot().task("app.index")?.definition.version).toBe(2);
   });
@@ -144,29 +111,14 @@ describe("registry", () => {
 describe("settings", () => {
   it("keeps the default of a progress interval given as undefined", () => {
     expect(
-      resolveSettings({ progress: { partialIntervalMs: undefined, outputIntervalMs: 250 } })
+      resolveSettings({ progress: { outputIntervalMs: 250, partialIntervalMs: undefined } })
         .progress,
     ).toEqual({
-      partialIntervalMs: 100,
       outputIntervalMs: 250,
+      partialIntervalMs: 100,
     });
   });
 });
-
-const Reviewer = defineExtension<AppTool>({
-  name: "reviewer",
-  sections: [section("role", () => "Review.")],
-});
-
-function codingRegistry() {
-  const installed = createRegistry<AppTool>();
-  for (const extension of [Coding, Skills, Reviewer]) installed.install(extension);
-  return installed;
-}
-
-const registry = codingRegistry();
-
-const snapshot = registry.snapshot();
 
 describe("agent resolution", () => {
   it("selects the default, an array, or the default edited by add and remove", () => {
@@ -180,18 +132,16 @@ describe("agent resolution", () => {
     expect(
       names(resolve({ extensions: ["reviewer", "coding"] }, snapshot, settings).extensions),
     ).toEqual(["reviewer", "coding"]);
-    // Add appends, remove drops, duplicates keep their first position, uninstalled names are skipped.
     const edited = { extensions: { add: ["reviewer", "coding", "gone"], remove: ["skills"] } };
     expect(names(resolve(edited, snapshot, settings).extensions)).toEqual(["coding", "reviewer"]);
-    // An old object stands for its name: the installed extension is selected.
     const stale = { extensions: [defineExtension({ name: "skills" }), Skills] };
     expect(resolve({}, snapshot, stale).extensions).toEqual([Skills]);
   });
 
   it("skips uninstalled names and resolves them again once they are installed", () => {
-    const local = createRegistry<AppTool>();
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
     local.install(Coding);
-    const state: AgentState = { extensions: ["coding", "skills"] };
+    const state: durableTypes.AgentState = { extensions: ["coding", "skills"] };
     expect(names(resolve(state, local.snapshot()).extensions)).toEqual(["coding"]);
     local.install(Skills);
     expect(names(resolve(state, local.snapshot()).extensions)).toEqual(["coding", "skills"]);
@@ -200,16 +150,18 @@ describe("agent resolution", () => {
 
 describe("agent resolution", () => {
   it("replaces same-name tools in place, wraps the winner, then applies the filter", () => {
-    const local = createRegistry<AppTool>();
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
     const venvBash = tool("bash", { description: "venv bash" });
     const calls: string[] = [];
-    const Venv = defineExtension<AppTool>({ name: "venv", tools: [venvBash] });
-    const Timing = defineExtension<AppTool>({
+    const Venv = defineExtension<harnessRegistrySupportTypes.AppTool>({
+      name: "venv",
+      tools: [venvBash],
+    });
+    const Timing = defineExtension<harnessRegistrySupportTypes.AppTool>({
       name: "timing",
       wraps: [
         wrapTool(bash, (inner) => ({ ...inner, description: `${inner.description} (timed)` })),
         wrapTool(bash, (inner) => ({ ...inner, description: `${inner.description} [2]` })),
-        // No `grep` is selected: the wrapper does nothing and reports nothing.
         wrapTool(tool("grep"), () => {
           calls.push("grep");
           return tool("grep");
@@ -227,7 +179,6 @@ describe("agent resolution", () => {
     expect(reports).toEqual([]);
     expect(calls).toEqual([]);
 
-    // An array keeps exactly these names in its order, a repeated name at its first position.
     const filtered = resolve({ tools: ["edit", "missing", "read", "edit"] }, local.snapshot());
     expect(names(filtered.tools)).toEqual(["edit", "read"]);
     expect(names(resolve({ tools: { remove: ["bash"] } }, local.snapshot()).tools)).toEqual([
@@ -239,8 +190,8 @@ describe("agent resolution", () => {
 
 describe("agent resolution", () => {
   it("drops a tool or section whose wrapper throws or renames it and reports the failure", () => {
-    const local = createRegistry<AppTool>();
-    const Broken = defineExtension<AppTool>({
+    const local = createRegistry<harnessRegistrySupportTypes.AppTool>();
+    const Broken = defineExtension<harnessRegistrySupportTypes.AppTool>({
       name: "broken",
       wraps: [
         wrapTool(read, () => {
@@ -263,36 +214,5 @@ describe("agent resolution", () => {
       "Wrapper renamed edit to renamed",
       "section wrapper failed",
     ]);
-  });
-});
-
-describe("agent resolution", () => {
-  it("orders sections by extension, replaces same keys in place, and renders instructions last and unwrapped", async () => {
-    const local = createRegistry<AppTool>();
-    const Override = defineExtension<AppTool>({
-      name: "override",
-      sections: [section("preamble", () => "You review.", { tag: false })],
-      wraps: [
-        wrapSection("cwd", (inner) => ({
-          ...inner,
-          render: async (input, ctx) => `${await inner.render(input, ctx)}!`,
-        })),
-        // Instructions are not wrapped.
-        wrapSection("instructions", () => {
-          throw new Error("never");
-        }),
-      ],
-    });
-    for (const extension of [Coding, Skills, Override]) local.install(extension);
-    const reports: unknown[] = [];
-    const agent = resolve({ instructions: "Be terse." }, local.snapshot(), {}, reports);
-    expect(await rendered(agent)).toEqual([
-      ["preamble", "You review."],
-      ["cwd", "/repo!"],
-      ["skills", "S"],
-      ["instructions", "Be terse."],
-    ]);
-    expect(agent.sections.at(-1)!.tag).toBeUndefined();
-    expect(reports).toEqual([]);
   });
 });

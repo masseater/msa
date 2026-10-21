@@ -1,50 +1,24 @@
 import { Effect, Fiber, Layer, ManagedRuntime } from "effect";
 
-import type { PrWatchGh } from "./gh.ts";
-import type { PrWatchTarget } from "./snapshot.ts";
-import {
-  createPrWatchEntry,
-  type PrNotification,
-  type PrWatchEntry,
-  type PrWatchHost,
-  prWatchKey,
-  prWatchLoop,
-} from "./watch.ts";
+import type ghTypes from "./gh.types.ts";
+import type serviceTypes from "./service.types.ts";
+import type snapshotTypes from "./snapshot.types.ts";
+import watchModule from "./watch.ts";
+import type watchTypes from "./watch.types.ts";
 
-export interface PrWatchOptions {
-  readonly gh: PrWatchGh;
-  readonly host: PrWatchHost;
-  readonly defaultIntervalMs: () => number;
-  readonly statusIntervalMs: () => number;
-}
+const { createPrWatchEntry, prWatchKey, prWatchLoop } = watchModule;
 
-export interface PrWatchStart {
-  readonly entry: PrWatchEntry;
-  readonly started: boolean;
-}
-
-export interface PrWatchLastNotification {
-  readonly key: string;
-  readonly target: string;
-  readonly change: string;
-}
-
-export interface PrWatchSnapshot {
-  readonly entries: readonly PrWatchEntry[];
-  readonly last: PrWatchLastNotification | undefined;
-}
-
-export class PrWatch {
-  readonly #entries = new Map<string, PrWatchEntry>();
+export default class PrWatch {
+  readonly #entries = new Map<string, watchTypes.PrWatchEntry>();
   readonly #fibers = new Map<string, Fiber.Fiber<void, never>>();
-  readonly #gh: PrWatchGh;
-  readonly #host: PrWatchHost;
+  readonly #gh: ghTypes.PrWatchGh;
+  readonly #host: watchTypes.PrWatchHost;
   readonly #defaultIntervalMs: () => number;
   readonly #statusIntervalMs: () => number;
   readonly #runtime: ManagedRuntime.ManagedRuntime<never, never>;
-  #last: PrWatchLastNotification | undefined;
+  #last: serviceTypes.PrWatchLastNotification | undefined;
 
-  constructor(options: PrWatchOptions) {
+  constructor(options: serviceTypes.PrWatchOptions) {
     this.#gh = options.gh;
     this.#host = options.host;
     this.#defaultIntervalMs = options.defaultIntervalMs;
@@ -52,7 +26,7 @@ export class PrWatch {
     this.#runtime = ManagedRuntime.make(Layer.empty);
   }
 
-  watch(target: PrWatchTarget, intervalMs?: number): PrWatchStart {
+  watch(target: snapshotTypes.PrWatchTarget, intervalMs?: number): serviceTypes.PrWatchStart {
     const key = prWatchKey(target);
     const existing = this.#entries.get(key);
     if (existing !== undefined && existing.status === "watching") {
@@ -65,13 +39,13 @@ export class PrWatch {
     );
     this.#entries.set(key, entry);
     const fiber = this.#runtime.runFork(
-      prWatchLoop({ gh: this.#gh, entry, host: this.#hostFor(entry) }),
+      prWatchLoop({ entry, gh: this.#gh, host: this.#hostFor(entry) }),
     );
     this.#fibers.set(key, fiber);
     return { entry, started: true };
   }
 
-  stop(target: PrWatchTarget): boolean {
+  stop(target: snapshotTypes.PrWatchTarget): boolean {
     const key = prWatchKey(target);
     const fiber = this.#fibers.get(key);
     this.#fibers.delete(key);
@@ -80,7 +54,7 @@ export class PrWatch {
     return removed;
   }
 
-  snapshot(): PrWatchSnapshot {
+  snapshot(): serviceTypes.PrWatchSnapshot {
     return { entries: [...this.#entries.values()], last: this.#last };
   }
 
@@ -92,13 +66,13 @@ export class PrWatch {
     return this.#runtime.dispose();
   }
 
-  #hostFor(entry: PrWatchEntry): PrWatchHost {
+  #hostFor(entry: watchTypes.PrWatchEntry): watchTypes.PrWatchHost {
     return {
-      notify: (notification: PrNotification) => {
-        this.#last = { key: entry.key, target: entry.label, change: notification.label };
+      changed: () => this.#host.changed(),
+      notify: (notification: watchTypes.PrNotification) => {
+        this.#last = { change: notification.label, key: entry.key, target: entry.label };
         this.#host.notify(notification);
       },
-      changed: () => this.#host.changed(),
     };
   }
 }

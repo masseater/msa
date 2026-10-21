@@ -1,18 +1,17 @@
 import { Clock, Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { CodemodeSandbox } from "../src/index.ts";
-import {
-  BACKENDS,
-  type Create,
-  remoteDelayingFirst,
-  STARTED_AT,
-  start,
-  waitFor,
-} from "./deterministic-support.ts";
-import { abortController } from "./support.ts";
+import codemode from "../src/index.ts";
+import deterministicSupport from "./deterministic-support.ts";
+import type deterministicSupportTypes from "./deterministic-support.types.ts";
+import support from "./support.ts";
 
-const leavesACallWaitingWhenIts = (create: Create) =>
+const { CodemodeSandbox } = codemode;
+
+const { BACKENDS, STARTED_AT, remoteDelayingFirst, start, waitFor } = deterministicSupport;
+const { abortController } = support;
+
+const leavesACallWaitingWhenIts = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(sandbox, "return await tools.wait(1)");
@@ -20,8 +19,8 @@ const leavesACallWaitingWhenIts = (create: Create) =>
     expect(() => recorded.run.deliver(1, STARTED_AT, 1, { ok: true, value: 1n })).toThrow();
     expect(() =>
       recorded.run.deliver(1, STARTED_AT, 1, {
-        ok: false,
         message: "x",
+        ok: false,
         properties: { big: 1n },
       }),
     ).toThrow();
@@ -32,7 +31,7 @@ const leavesACallWaitingWhenIts = (create: Create) =>
     });
   });
 
-const rejectsWithAnErrorCarryingThe = (create: Create) =>
+const rejectsWithAnErrorCarryingThe = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(
@@ -40,9 +39,9 @@ const rejectsWithAnErrorCarryingThe = (create: Create) =>
       "try { await tools.echo(1); } catch (e) { return [e instanceof Error, e.message, e.name, e.structuredOutput]; }",
       {
         answer: () => ({
-          ok: false,
           message: "denied",
-          properties: { structuredOutput: { code: 7 }, name: "Ignored", message: "ignored" },
+          ok: false,
+          properties: { message: "ignored", name: "Ignored", structuredOutput: { code: 7 } },
         }),
       },
     );
@@ -52,36 +51,36 @@ const rejectsWithAnErrorCarryingThe = (create: Create) =>
     });
   });
 
-const rejectsRejectionPropertiesThatAreNot = (create: Create) =>
+const rejectsRejectionPropertiesThatAreNot = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(sandbox, "return await tools.wait(1)");
     yield* waitFor(() => recorded.calls.length === 1);
     for (const properties of [null, [1]] as unknown as Record<string, unknown>[]) {
       expect(() =>
-        recorded.run.deliver(1, STARTED_AT, 1, { ok: false, message: "x", properties }),
+        recorded.run.deliver(1, STARTED_AT, 1, { message: "x", ok: false, properties }),
       ).toThrow("not an object");
     }
     recorded.run.deliver(1, STARTED_AT, 1, { ok: true, value: 1 });
     expect(yield* Effect.promise(() => recorded.run.result)).toMatchObject({ ok: true, value: 1 });
     expect(() =>
       sandbox.start("", {
-        startedAt: STARTED_AT,
-        seed: 1,
-        tools: [{ name: "a-b" }, { name: "a_b" }],
         onCall: () => {},
+        seed: 1,
+        startedAt: STARTED_AT,
+        tools: [{ name: "a-b" }, { name: "a_b" }],
       }),
     ).toThrow("script names must be unique");
   });
 
-const usesTheScriptNamesTheRun = (create: Create) =>
+const usesTheScriptNamesTheRun = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(
       sandbox,
       "return [typeof tools.renamed, Object.keys(tools), ALL_TOOLS.map((tool) => tool.name)]",
       {
-        tools: [{ name: "my-tool", jsName: "renamed" }],
+        tools: [{ jsName: "renamed", name: "my-tool" }],
       },
     );
     expect(yield* Effect.promise(() => recorded.run.result)).toMatchObject({
@@ -90,7 +89,7 @@ const usesTheScriptNamesTheRun = (create: Create) =>
     });
   });
 
-const endsWithAnErrorTheScript = (create: Create) =>
+const endsWithAnErrorTheScript = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const controller = abortController();
@@ -104,14 +103,14 @@ const endsWithAnErrorTheScript = (create: Create) =>
     controller.abort(new Error("diverged"));
     const result = yield* Effect.promise(() => recorded.run.result);
     expect(result).toMatchObject({
-      ok: false,
       error: { kind: "aborted", message: "diverged" },
+      ok: false,
       output: [],
     });
     expect(() => recorded.run.deliver(1, STARTED_AT, 1, { ok: true, value: null })).not.toThrow();
   });
 
-const isFinishedOnceItHasIts = (create: Create) =>
+const isFinishedOnceItHasIts = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(sandbox, "await tools.wait(1); return 2");
@@ -122,7 +121,7 @@ const isFinishedOnceItHasIts = (create: Create) =>
     expect(recorded.run.finished).toBe(true);
   });
 
-const rejectsACallThatIsNot = (create: Create) =>
+const rejectsACallThatIsNot = (create: deterministicSupportTypes.Create) =>
   Effect.gen(function* () {
     const sandbox = create();
     const recorded = start(sandbox, "await Promise.all([tools.wait(1), tools.wait(2)])");

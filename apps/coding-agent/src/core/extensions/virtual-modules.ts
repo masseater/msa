@@ -1,47 +1,46 @@
-import * as bundledMsaAgentCore from "@msa/agent-core";
-import * as bundledMsaAiCompat from "@msa/ai/compat";
-import * as bundledMsaAiOauth from "@msa/ai/oauth";
-import * as bundledMsaAiProviders from "@msa/ai/providers/all";
-import * as bundledMsaTui from "@msa/tui";
+import agent from "@msa/agent-core";
+import compat from "@msa/ai/compat";
+import oauth from "@msa/ai/oauth";
+import all from "@msa/ai/providers/all";
+import tui from "@msa/tui";
 import * as bundledTypebox from "typebox";
 import * as bundledTypeboxCompile from "typebox/compile";
 import * as bundledTypeboxValue from "typebox/value";
 
-// This import is safe because loader.ts exports are not re-exported from index.ts.
-// Extensions can therefore import from @msa/coding-agent.
-import * as bundledMsaCodingAgent from "../../index.ts";
+import bundledMsaCodingAgent from "../../index.ts";
 
-/** Modules available to extensions in source and compiled binary runtimes. */
-export const VIRTUAL_MODULES: Record<string, unknown> = {
-  typebox: bundledTypebox,
-  "typebox/compile": bundledTypeboxCompile,
-  "typebox/value": bundledTypeboxValue,
+const VIRTUAL_MODULES: Record<string, unknown> = {
+  "@earendil-works/pi-agent-core": agent,
+  "@earendil-works/pi-ai": compat,
+  "@earendil-works/pi-ai/compat": compat,
+  "@earendil-works/pi-ai/oauth": oauth,
+  "@earendil-works/pi-ai/providers/all": all,
+  "@earendil-works/pi-coding-agent": bundledMsaCodingAgent,
+  "@earendil-works/pi-tui": tui,
+  "@mariozechner/pi-agent-core": agent,
+  "@mariozechner/pi-ai": compat,
+  "@mariozechner/pi-ai/compat": compat,
+  "@mariozechner/pi-ai/oauth": oauth,
+  "@mariozechner/pi-ai/providers/all": all,
+  "@mariozechner/pi-coding-agent": bundledMsaCodingAgent,
+  "@mariozechner/pi-tui": tui,
+  "@msa/agent-core": agent,
+  "@msa/ai": compat,
+  "@msa/ai/compat": compat,
+  "@msa/ai/oauth": oauth,
+  "@msa/ai/providers/all": all,
+  "@msa/coding-agent": bundledMsaCodingAgent,
+  "@msa/tui": tui,
   "@sinclair/typebox": bundledTypebox,
   "@sinclair/typebox/compile": bundledTypeboxCompile,
   "@sinclair/typebox/value": bundledTypeboxValue,
-  "@msa/agent-core": bundledMsaAgentCore,
-  "@msa/tui": bundledMsaTui,
-  // Extensions resolve the msa-ai root to the compat entrypoint (a strict
-  // superset of the core entrypoint): existing extensions using the old
-  // global API keep working at runtime until compat is removed.
-  "@msa/ai": bundledMsaAiCompat,
-  "@msa/ai/compat": bundledMsaAiCompat,
-  "@msa/ai/oauth": bundledMsaAiOauth,
-  "@msa/ai/providers/all": bundledMsaAiProviders,
-  "@msa/coding-agent": bundledMsaCodingAgent,
-  "@mariozechner/pi-agent-core": bundledMsaAgentCore,
-  "@mariozechner/pi-tui": bundledMsaTui,
-  "@mariozechner/pi-ai": bundledMsaAiCompat,
-  "@mariozechner/pi-ai/compat": bundledMsaAiCompat,
-  "@mariozechner/pi-ai/oauth": bundledMsaAiOauth,
-  "@mariozechner/pi-ai/providers/all": bundledMsaAiProviders,
-  "@mariozechner/pi-coding-agent": bundledMsaCodingAgent,
-  // Packages written for pi keep resolving through its previous scope names.
-  "@earendil-works/pi-agent-core": bundledMsaAgentCore,
-  "@earendil-works/pi-tui": bundledMsaTui,
-  "@earendil-works/pi-ai": bundledMsaAiCompat,
-  "@earendil-works/pi-ai/compat": bundledMsaAiCompat,
-  "@earendil-works/pi-ai/oauth": bundledMsaAiOauth,
-  "@earendil-works/pi-ai/providers/all": bundledMsaAiProviders,
-  "@earendil-works/pi-coding-agent": bundledMsaCodingAgent,
+  typebox: bundledTypebox,
+  "typebox/compile": bundledTypeboxCompile,
+  "typebox/value": bundledTypeboxValue,
 };
+
+const virtualModules = {
+  VIRTUAL_MODULES,
+};
+
+export default virtualModules;

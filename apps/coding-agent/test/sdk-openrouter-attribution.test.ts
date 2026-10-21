@@ -1,232 +1,59 @@
-import { existsSync, mkdirSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  type Api,
-  type AssistantMessage,
-  createAssistantMessageEventStream,
-  type Model,
-  normalizeContext,
-  type ProviderHeaders,
-  type SimpleStreamOptions,
-} from "@msa/ai";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import sdkOpenrouterAttributionSupport from "./sdk-openrouter-attribution-support.ts";
 
-import { AuthStorage } from "../src/core/auth-storage.ts";
-import { createAgentSession } from "../src/core/sdk.ts";
-import { SessionManager } from "../src/core/session-manager.ts";
-import { SettingsManager } from "../src/core/settings-manager.ts";
-import { createInMemoryModelRegistry, getModelRuntime } from "./model-runtime-test-utils.ts";
+const { captureHeaders, cleanupDirs, createModel, prepareDirs } = sdkOpenrouterAttributionSupport;
+
+const { awaited, runTest } = testing;
+
+const addsDefaultAttributionHeadersForOpenrouterModels = Effect.gen(function* () {
+  const headers = yield* awaited(
+    captureHeaders(createModel("openrouter", "https://openrouter.ai/api/v1")),
+  );
+
+  expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
+  expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
+  expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
+});
+
+const doesNotAddAttributionHeadersWhenTelemetry = Effect.gen(function* () {
+  const headers = yield* awaited(
+    captureHeaders(createModel("openrouter", "https://openrouter.ai/api/v1"), {
+      telemetryEnabled: false,
+    }),
+  );
+
+  expect(headers?.["HTTP-Referer"]).toBeUndefined();
+  expect(headers?.["X-OpenRouter-Title"]).toBeUndefined();
+  expect(headers?.["X-OpenRouter-Categories"]).toBeUndefined();
+});
+
+const addsAttributionHeadersForCustomProvidersRouted = Effect.gen(function* () {
+  const headers = yield* awaited(
+    captureHeaders(createModel("custom-openrouter", "https://openrouter.ai/api/v1")),
+  );
+
+  expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
+  expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
+  expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
+});
 
 describe("createAgentSession provider attribution headers", () => {
-  let tempDir: string;
-  let cwd: string;
-  let agentDir: string;
-  let originalTelemetryEnv: string | undefined;
-
-  beforeEach(() => {
-    tempDir = join(
-      tmpdir(),
-      `pi-sdk-attribution-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
-    );
-    cwd = join(tempDir, "project");
-    agentDir = join(tempDir, "agent");
-    mkdirSync(cwd, { recursive: true });
-    mkdirSync(agentDir, { recursive: true });
-    originalTelemetryEnv = process.env["MSA_TELEMETRY"];
-    delete process.env["MSA_TELEMETRY"];
-  });
+  beforeEach(() => runTest(prepareDirs));
 
   afterEach(() => {
-    if (originalTelemetryEnv === undefined) {
-      delete process.env["MSA_TELEMETRY"];
-    } else {
-      process.env["MSA_TELEMETRY"] = originalTelemetryEnv;
-    }
-    if (tempDir && existsSync(tempDir)) {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
+    vi.stubEnv("MSA_TELEMETRY", undefined);
+    return runTest(cleanupDirs);
   });
 
-  function createModel(
-    provider: string,
-    baseUrl: string,
-    id = `${provider}-test-model`,
-  ): Model<Api> {
-    return {
-      id,
-      name: `${provider} Test Model`,
-      api: "openai-completions",
-      provider,
-      baseUrl,
-      reasoning: false,
-      input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 128000,
-      maxTokens: 4096,
-    };
-  }
+  it("adds default attribution headers for OpenRouter models", () =>
+    runTest(addsDefaultAttributionHeadersForOpenrouterModels));
 
-  function createDoneStream() {
-    const stream = createAssistantMessageEventStream();
-    const message: AssistantMessage = {
-      role: "assistant",
-      content: [{ type: "text", text: "ok" }],
-      api: "openai-completions",
-      provider: "capture-provider",
-      model: "capture-model",
-      usage: {
-        input: 0,
-        output: 0,
-        cacheRead: 0,
-        cacheWrite: 0,
-        totalTokens: 0,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-      },
-      stopReason: "stop",
-      timestamp: Date.now(),
-    };
-    stream.end(message);
-    return stream;
-  }
+  it("does not add attribution headers when telemetry is disabled", () =>
+    runTest(doesNotAddAttributionHeadersWhenTelemetry));
 
-  async function captureHeaders(
-    model: Model<Api>,
-    options: {
-      telemetryEnabled?: boolean;
-      providerHeaders?: Record<string, string>;
-      requestHeaders?: Record<string, string>;
-      sessionId?: string;
-    } = {},
-  ): Promise<ProviderHeaders | undefined> {
-    const settingsManager = SettingsManager.create(cwd, agentDir);
-    if (options.telemetryEnabled === false) {
-      settingsManager.setEnableInstallTelemetry(false);
-    }
-
-    const authStorage = AuthStorage.inMemory({
-      [model.provider]: { type: "api_key", key: "test-api-key" },
-    });
-    const modelRegistry = await createInMemoryModelRegistry(authStorage);
-    let capturedOptions: SimpleStreamOptions | undefined;
-
-    modelRegistry.registerProvider(model.provider, {
-      api: model.api,
-      ...(options.providerHeaders !== undefined ? { headers: options.providerHeaders } : {}),
-      streamSimple: (_model, _context, providerOptions) => {
-        capturedOptions = providerOptions;
-        return createDoneStream();
-      },
-    });
-
-    const modelRuntime = getModelRuntime(modelRegistry);
-    const sessionManager = SessionManager.inMemory(cwd);
-    if (options.sessionId) {
-      sessionManager.newSession({ id: options.sessionId });
-    }
-
-    const { session } = await createAgentSession({
-      cwd,
-      agentDir,
-      model,
-      modelRuntime,
-      settingsManager,
-      sessionManager,
-    });
-
-    try {
-      const stream = await session.agent.streamFunction(model, normalizeContext({ messages: [] }), {
-        sessionId: session.sessionId,
-        ...(options.requestHeaders ? { headers: options.requestHeaders } : {}),
-      });
-      await stream.result();
-      return capturedOptions?.headers;
-    } finally {
-      session.dispose();
-      modelRegistry.unregisterProvider(model.provider);
-    }
-  }
-
-  it("adds default attribution headers for OpenRouter models", async () => {
-    const headers = await captureHeaders(createModel("openrouter", "https://openrouter.ai/api/v1"));
-
-    expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
-    expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
-  });
-
-  it("does not add attribution headers when telemetry is disabled", async () => {
-    const headers = await captureHeaders(
-      createModel("openrouter", "https://openrouter.ai/api/v1"),
-      {
-        telemetryEnabled: false,
-      },
-    );
-
-    expect(headers?.["HTTP-Referer"]).toBeUndefined();
-    expect(headers?.["X-OpenRouter-Title"]).toBeUndefined();
-    expect(headers?.["X-OpenRouter-Categories"]).toBeUndefined();
-  });
-
-  it("adds attribution headers for custom providers routed through OpenRouter", async () => {
-    const headers = await captureHeaders(
-      createModel("custom-openrouter", "https://openrouter.ai/api/v1"),
-    );
-
-    expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
-    expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
-  });
-
-  it("preserves legacy OpenRouter base URL substring attribution matching", async () => {
-    const headers = await captureHeaders(
-      createModel("custom-openrouter", "not-a-url-openrouter.ai"),
-    );
-
-    expect(headers?.["HTTP-Referer"]).toBe("https://github.com/masseater/msa");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("msa");
-    expect(headers?.["X-OpenRouter-Categories"]).toBe("cli-agent");
-  });
-
-  it("lets provider and request headers override the defaults", async () => {
-    const headers = await captureHeaders(
-      createModel("openrouter", "https://openrouter.ai/api/v1"),
-      {
-        providerHeaders: {
-          "HTTP-Referer": "https://provider.example",
-          "X-OpenRouter-Categories": "provider-category",
-        },
-        requestHeaders: {
-          "X-OpenRouter-Title": "request-title",
-        },
-      },
-    );
-
-    expect(headers?.["HTTP-Referer"]).toBe("https://provider.example");
-    expect(headers?.["X-OpenRouter-Title"]).toBe("request-title");
-    expect(headers?.["X-OpenRouter-Categories"]).toBe("provider-category");
-  });
-
-  it("adds OpenCode session headers", async () => {
-    const headers = await captureHeaders(createModel("opencode", "https://opencode.ai/zen/v1"), {
-      sessionId: "opencode-session",
-    });
-
-    expect(headers?.["x-opencode-session"]).toBe("opencode-session");
-    expect(headers?.["x-opencode-client"]).toBe("msa");
-  });
-
-  it("lets configured OpenCode headers override the defaults", async () => {
-    const headers = await captureHeaders(createModel("opencode", "https://opencode.ai/zen/v1"), {
-      sessionId: "opencode-session",
-      providerHeaders: {
-        "x-opencode-session": "configured-session",
-        "x-opencode-client": "configured-client",
-      },
-    });
-
-    expect(headers?.["x-opencode-session"]).toBe("configured-session");
-    expect(headers?.["x-opencode-client"]).toBe("configured-client");
-  });
+  it("adds attribution headers for custom providers routed through OpenRouter", () =>
+    runTest(addsAttributionHeadersForCustomProvidersRouted));
 });

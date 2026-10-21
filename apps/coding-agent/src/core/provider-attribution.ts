@@ -1,8 +1,11 @@
-import type { Api, Model, ProviderHeaders } from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
 
-import { APP_NAME } from "../config.ts";
-import type { SettingsManager } from "./settings-manager.ts";
-import { isInstallTelemetryEnabled } from "./telemetry.ts";
+import config from "../config.ts";
+import type settingsManagerTypes from "./settings-manager.types.ts";
+import telemetry from "./telemetry.ts";
+
+const { isInstallTelemetryEnabled } = telemetry;
+const { APP_NAME } = config;
 
 const APP_URL = "https://github.com/masseater/msa";
 const OPENROUTER_HOST = "openrouter.ai";
@@ -16,13 +19,13 @@ function matchesHost(baseUrl: string, expectedHost: string): boolean {
   }
 }
 
-function isOpenRouterModel(model: Model<Api>): boolean {
+function isOpenRouterModel(model: aiTypes.Model<aiTypes.Api>): boolean {
   return model.provider === "openrouter" || model.baseUrl.includes(OPENROUTER_HOST);
 }
 
 function getDefaultAttributionHeaders(
-  model: Model<Api>,
-  settingsManager: SettingsManager,
+  model: aiTypes.Model<aiTypes.Api>,
+  settingsManager: settingsManagerTypes.SettingsManager,
 ): Record<string, string> | undefined {
   if (!isInstallTelemetryEnabled(settingsManager)) {
     return undefined;
@@ -31,8 +34,8 @@ function getDefaultAttributionHeaders(
   if (isOpenRouterModel(model)) {
     return {
       "HTTP-Referer": APP_URL,
-      "X-OpenRouter-Title": APP_NAME,
       "X-OpenRouter-Categories": "cli-agent",
+      "X-OpenRouter-Title": APP_NAME,
     };
   }
 
@@ -40,10 +43,10 @@ function getDefaultAttributionHeaders(
 }
 
 function getSessionHeaders(
-  model: Model<Api>,
+  model: aiTypes.Model<aiTypes.Api>,
   sessionId: string | undefined,
 ): Record<string, string> | undefined {
-  if (!sessionId) return undefined;
+  if (sessionId === undefined || sessionId === "") return undefined;
   if (
     model.provider !== "opencode" &&
     model.provider !== "opencode-go" &&
@@ -51,25 +54,31 @@ function getSessionHeaders(
   ) {
     return undefined;
   }
-  return { "x-opencode-session": sessionId, "x-opencode-client": APP_NAME };
+  return { "x-opencode-client": APP_NAME, "x-opencode-session": sessionId };
 }
 
-export function mergeProviderAttributionHeaders(
-  model: Model<Api>,
-  settingsManager: SettingsManager,
+function mergeProviderAttributionHeaders(
+  model: aiTypes.Model<aiTypes.Api>,
+  settingsManager: settingsManagerTypes.SettingsManager,
   sessionId: string | undefined,
-  ...headerSources: Array<ProviderHeaders | undefined>
-): ProviderHeaders | undefined {
-  const merged: ProviderHeaders = {
+  ...headerSources: Array<aiTypes.ProviderHeaders | undefined>
+): aiTypes.ProviderHeaders | undefined {
+  const merged: aiTypes.ProviderHeaders = {
     ...getSessionHeaders(model, sessionId),
     ...getDefaultAttributionHeaders(model, settingsManager),
   };
 
   for (const headers of headerSources) {
-    if (headers) {
+    if (headers !== undefined) {
       Object.assign(merged, headers);
     }
   }
 
   return Object.keys(merged).length > 0 ? merged : undefined;
 }
+
+const providerAttribution = {
+  mergeProviderAttributionHeaders,
+};
+
+export default providerAttribution;

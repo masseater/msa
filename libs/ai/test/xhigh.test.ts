@@ -1,71 +1,123 @@
+import { Effect, Stream } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { getModel, stream } from "../src/compat.ts";
-import type { Context, Model } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import random from "../src/utils/random.ts";
+import env from "./env.ts";
+import modelChoice from "./model-choice.ts";
 
-function makeContext(): Context {
+const { nextRandom } = random;
+const { currentTimeMillis } = clock;
+const { stream } = compatModule;
+
+const { chooseModel, usesApi } = modelChoice;
+
+const { envValue } = env;
+
+const withoutXhigh = () =>
+  chooseModel(
+    "openai",
+    "reasoning Responses without xhigh",
+    (candidate) =>
+      usesApi("openai-responses")(candidate) &&
+      candidate.reasoning &&
+      candidate.thinkingLevelMap?.xhigh === null,
+  );
+
+function makeContext(): typesModule.Context {
   return {
     messages: [
       {
+        content: `What is ${(nextRandom() * 100) | 0} + ${(nextRandom() * 100) | 0}? Think step by step.`,
         role: "user",
-        content: `What is ${(Math.random() * 100) | 0} + ${(Math.random() * 100) | 0}? Think step by step.`,
-        timestamp: Date.now(),
+        timestamp: currentTimeMillis(),
       },
     ],
   };
 }
 
-describe.skipIf(!process.env["OPENAI_API_KEY"])("xhigh reasoning", () => {
-  describe("gpt 5.5 (supports xhigh)", () => {
-    // Note: codex models only support the responses API, not chat completions
-    it("should work with openai-responses", async () => {
-      const model = getModel("openai", "gpt-5.5");
-      const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
-      let hasThinking = false;
+describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+  "xhigh reasoning",
+  () => {
+    describe("gpt 5.5 (supports xhigh)", () => {
+      it("should work with openai-responses", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const model = chooseModel(
+              "openai",
+              "xhigh Responses",
+              (candidate) =>
+                usesApi("openai-responses")(candidate) &&
+                typeof candidate.thinkingLevelMap?.xhigh === "string",
+            );
+            const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
+            let hasThinking = false;
 
-      for await (const event of s) {
-        if (event.type === "thinking_start" || event.type === "thinking_delta") {
-          hasThinking = true;
-        }
-      }
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runForEach((event) =>
+                Effect.sync(() => {
+                  if (event.type === "thinking_start" || event.type === "thinking_delta") {
+                    hasThinking = true;
+                  }
+                }),
+              ),
+            );
 
-      const response = await s.result();
-      expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
-      expect(response.content.some((b) => b.type === "text")).toBe(true);
-      expect(hasThinking || response.content.some((b) => b.type === "thinking")).toBe(true);
+            const response = yield* Effect.promise(() => s.result());
+            expect(response.stopReason, `Error: ${response.errorMessage}`).toBe("stop");
+            expect(response.content.some((b) => b.type === "text")).toBe(true);
+            expect(hasThinking || response.content.some((b) => b.type === "thinking")).toBe(true);
+          }),
+        ));
     });
-  });
+  },
+);
 
-  describe("gpt-5-mini (does not support xhigh)", () => {
-    it("should error with openai-responses when using xhigh", async () => {
-      const model = getModel("openai", "gpt-5-mini");
-      const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
+describe.skipIf(envValue("OPENAI_API_KEY") === undefined || envValue("OPENAI_API_KEY") === "")(
+  "xhigh reasoning",
+  () => {
+    describe("gpt-5-mini (does not support xhigh)", () => {
+      it("should error with openai-responses when using xhigh", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const model = withoutXhigh();
+            const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
 
-      for await (const _ of s) {
-        // drain events
-      }
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
 
-      const response = await s.result();
-      expect(response.stopReason).toBe("error");
-      expect(response.errorMessage).toContain("xhigh");
+            const response = yield* Effect.promise(() => s.result());
+            expect(response.stopReason).toBe("error");
+            expect(response.errorMessage).toContain("xhigh");
+          }),
+        ));
+
+      it("should error with openai-completions when using xhigh", () =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const { compat: _compat, ...baseModel } = withoutXhigh();
+            void _compat;
+            const model: typesModule.Model<"openai-completions"> = {
+              ...baseModel,
+              api: "openai-completions",
+            };
+            const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
+
+            yield* Stream.fromAsyncIterable(s, (error) => error).pipe(
+              Stream.orDie,
+              Stream.runDrain,
+            );
+
+            const response = yield* Effect.promise(() => s.result());
+            expect(response.stopReason).toBe("error");
+            expect(response.errorMessage).toContain("xhigh");
+          }),
+        ));
     });
-
-    it("should error with openai-completions when using xhigh", async () => {
-      const { compat: _compat, ...baseModel } = getModel("openai", "gpt-5-mini");
-      void _compat;
-      const model: Model<"openai-completions"> = {
-        ...baseModel,
-        api: "openai-completions",
-      };
-      const s = stream(model, makeContext(), { reasoningEffort: "xhigh" });
-
-      for await (const _ of s) {
-        // drain events
-      }
-
-      const response = await s.result();
-      expect(response.stopReason).toBe("error");
-      expect(response.errorMessage).toContain("xhigh");
-    });
-  });
-});
+  },
+);

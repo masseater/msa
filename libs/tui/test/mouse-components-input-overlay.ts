@@ -1,7 +1,7 @@
-import { Input } from "../src/components/input.ts";
-import { Container } from "../src/tui.ts";
+import Input from "../src/components/input.ts";
+import tuiComponent from "../src/tui-component.ts";
 
-export class InputOverlay extends Container {
+class InputOverlay extends tuiComponent.Container {
   readonly input = new Input();
 
   constructor() {
@@ -13,3 +13,5 @@ export class InputOverlay extends Container {
     this.input.handleInput(data);
   }
 }
+
+export default InputOverlay;

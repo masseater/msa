@@ -1,99 +1,45 @@
-/**
- * Extensions Configuration
- *
- * Extensions intercept agent events and can register custom tools.
- * They provide a unified system for extensions, custom tools, commands, and more.
- *
- * By default, extension files are discovered from:
- * - ~/.msa/agent/extensions/
- * - <cwd>/.msa/extensions/
- * - Paths specified in settings.json "extensions" array
- *
- * An extension is a TypeScript file that exports a default function:
- *   export default function (msa: ExtensionAPI) { ... }
- */
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-import {
-  createAgentSession,
-  DefaultResourceLoader,
-  getAgentDir,
-  SessionManager,
-} from "@msa/coding-agent";
-
-// Extensions are discovered automatically from standard locations.
-// You can also add paths via settings.json or DefaultResourceLoader options.
+const { DefaultResourceLoader, SessionManager, createAgentSession, getAgentDir } = codingAgent;
 
 const resourceLoader = new DefaultResourceLoader({
-  cwd: process.cwd(),
-  agentDir: getAgentDir(),
   additionalExtensionPaths: ["./my-logging-extension.ts", "./my-safety-extension.ts"],
+  agentDir: getAgentDir(),
+  cwd: process.cwd(),
   extensionFactories: [
     (msa) => {
       msa.on("agent_start", () => {
-        console.log("[Inline Extension] Agent starting");
+        Effect.runSync(Console.log("[Inline Extension] Agent starting"));
       });
     },
   ],
 });
-await resourceLoader.reload();
 
-const { session } = await createAgentSession({
-  resourceLoader,
-  sessionManager: SessionManager.inMemory(),
-});
+void Effect.runPromise(
+  Effect.gen(function* () {
+    yield* Effect.promise(() => resourceLoader.reload());
 
-try {
-  session.subscribe((event) => {
-    if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
-      process.stdout.write(event.assistantMessageEvent.delta);
+    const { session } = yield* Effect.promise(() =>
+      createAgentSession({
+        resourceLoader,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+
+    try {
+      session.subscribe((event) => {
+        if (event.type === "message_update" && event.assistantMessageEvent.type === "text_delta") {
+          process.stdout.write(event.assistantMessageEvent.delta);
+        }
+      });
+
+      yield* Effect.promise(() =>
+        session.run.prompting.prompt("List files in the current directory."),
+      );
+      yield* Console.log();
+    } finally {
+      session.dispose();
     }
-  });
-
-  await session.prompt("List files in the current directory.");
-  console.log();
-} finally {
-  session.dispose();
-}
-
-// Example extension file (./my-logging-extension.ts):
-/*
-import type { ExtensionAPI } from "@msa/coding-agent";
-
-export default function (msa: ExtensionAPI) {
-	msa.on("agent_start", async () => {
-		console.log("[Extension] Agent starting");
-	});
-
-	msa.on("tool_call", async (event) => {
-		console.log(\`[Extension] Tool: \${event.toolName}\`);
-		// Return { block: true, reason: "..." } to block execution
-		return undefined;
-	});
-
-	msa.on("agent_end", async (event) => {
-		console.log(\`[Extension] Low-level run ended, \${event.messages.length} messages\`);
-	});
-
-	// Register a custom tool
-	msa.registerTool({
-		name: "my_tool",
-		label: "My Tool",
-		description: "Does something useful",
-		parameters: Type.Object({
-			input: Type.String(),
-		}),
-		execute: async (_toolCallId, params, _signal, _onUpdate, _ctx) => ({
-			content: [{ type: "text", text: \`Processed: \${params.input}\` }],
-			details: {},
-		}),
-	});
-
-	// Register a command
-	msa.registerCommand("mycommand", {
-		description: "Do something",
-		handler: async (args, ctx) => {
-			ctx.ui.notify(\`Command executed with: \${args}\`);
-		},
-	});
-}
-*/
+  }),
+);

@@ -1,150 +1,131 @@
+import { Clock, Console, Effect } from "effect";
 import { Type } from "typebox";
-import { describe, expect, it } from "vite-plus/test";
+import { describe, expect, inject, it } from "vite-plus/test";
 
-import { complete, getModel } from "../src/compat.ts";
-import type { Api, Context, Model, StreamOptions, Tool } from "../src/types.ts";
+import compatModule from "../src/compat.ts";
+import type typesModule from "../src/types.types.ts";
+import env from "./env.ts";
+import jsonCodec from "./json-codec.ts";
+import modelChoice from "./model-choice.ts";
 
-type StreamOptionsWithExtras = StreamOptions & Record<string, unknown>;
+const { complete } = compatModule;
 
-import { resolveApiKey } from "./oauth.ts";
+type StreamOptionsWithExtras = typesModule.StreamOptions & Record<string, unknown>;
 
-// Resolve OAuth tokens at module level (async, runs before tests)
-const openaiCodexToken = await resolveApiKey("openai-codex");
+const { hasEnv } = env;
+const { encodeJsonPretty } = jsonCodec;
+const { chooseModel } = modelChoice;
 
-// Simple calculate tool
-const calculateSchema = Type.Object({
-  expression: Type.String({ description: "The mathematical expression to evaluate" }),
-});
+const openaiCodexToken = inject("storedApiKeys")["openai-codex"];
 
-const calculateTool: Tool = {
-  name: "calculate",
+const calculateTool: typesModule.Tool = {
   description: "Evaluate mathematical expressions",
-  parameters: calculateSchema,
+  name: "calculate",
+  parameters: Type.Object({
+    expression: Type.String({ description: "The mathematical expression to evaluate" }),
+  }),
 };
 
-async function testToolCallWithoutResult<TApi extends Api>(
-  model: Model<TApi>,
+const conversation = (): typesModule.Context => ({
+  messages: [],
+  systemPrompt:
+    "You are a helpful assistant. Use the calculate tool when asked to perform calculations.",
+  tools: [calculateTool],
+});
+
+const askForToolCall = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options: StreamOptionsWithExtras,
+  context: typesModule.Context,
+) =>
+  Effect.gen(function* () {
+    context.messages.push({
+      content: "Please calculate 25 * 18 using the calculate tool.",
+      role: "user",
+      timestamp: yield* Clock.currentTimeMillis,
+    });
+    const firstResponse = yield* Effect.promise(() => complete(model, context, options));
+    context.messages.push(firstResponse);
+    yield* Console.log("First response:", yield* encodeJsonPretty(firstResponse));
+    const hasToolCall = firstResponse.content.some((block) => block.type === "toolCall");
+    expect(hasToolCall).toBe(true);
+    if (!hasToolCall)
+      return yield* Effect.die(
+        new Error("Expected assistant to make a tool call, but none was found"),
+      );
+  });
+
+const continueWithoutToolResult = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
+  options: StreamOptionsWithExtras,
+  context: typesModule.Context,
+) =>
+  Effect.gen(function* () {
+    context.messages.push({
+      content: "Never mind, just tell me what is 2+2?",
+      role: "user",
+      timestamp: yield* Clock.currentTimeMillis,
+    });
+    const secondResponse = yield* Effect.promise(() => complete(model, context, options));
+    yield* Console.log("Second response:", yield* encodeJsonPretty(secondResponse));
+    expect(secondResponse.stopReason).not.toBe("error");
+    expect(secondResponse.content.length).toBeGreaterThan(0);
+    const textContent = secondResponse.content
+      .flatMap((block) => (block.type === "text" ? [block.text] : []))
+      .join(" ");
+    const toolCalls = secondResponse.content.filter((block) => block.type === "toolCall").length;
+    expect(toolCalls || textContent.length).toBeGreaterThan(0);
+    yield* Console.log("Answer:", textContent);
+    expect(["stop", "toolUse"]).toContain(secondResponse.stopReason);
+  });
+
+const testToolCallWithoutResult = <TApi extends typesModule.Api>(
+  model: typesModule.Model<TApi>,
   options: StreamOptionsWithExtras = {},
-) {
-  // Step 1: Create context with the calculate tool
-  const context: Context = {
-    systemPrompt:
-      "You are a helpful assistant. Use the calculate tool when asked to perform calculations.",
-    messages: [],
-    tools: [calculateTool],
-  };
-
-  // Step 2: Ask the LLM to make a tool call
-  context.messages.push({
-    role: "user",
-    content: "Please calculate 25 * 18 using the calculate tool.",
-    timestamp: Date.now(),
+) =>
+  Effect.suspend(() => {
+    const context = conversation();
+    return Effect.andThen(
+      askForToolCall(model, options, context),
+      continueWithoutToolResult(model, options, context),
+    );
   });
 
-  // Step 3: Get the assistant's response (should contain a tool call)
-  const firstResponse = await complete(model, context, options);
-  context.messages.push(firstResponse);
+const runWith =
+  <TApi extends typesModule.Api>(
+    model: typesModule.Model<TApi>,
+    options: StreamOptionsWithExtras = {},
+  ) =>
+  () =>
+    Effect.runPromise(testToolCallWithoutResult(model, options));
 
-  console.log("First response:", JSON.stringify(firstResponse, null, 2));
-
-  // Verify the response contains a tool call
-  const hasToolCall = firstResponse.content.some((block) => block.type === "toolCall");
-  expect(hasToolCall).toBe(true);
-
-  if (!hasToolCall) {
-    throw new Error("Expected assistant to make a tool call, but none was found");
-  }
-
-  // Step 4: Send a user message WITHOUT providing tool result
-  // This simulates the scenario where a tool call was aborted/cancelled
-  context.messages.push({
-    role: "user",
-    content: "Never mind, just tell me what is 2+2?",
-    timestamp: Date.now(),
-  });
-
-  // Step 5: The fix should filter out the orphaned tool call, and the request should succeed
-  const secondResponse = await complete(model, context, options);
-  console.log("Second response:", JSON.stringify(secondResponse, null, 2));
-
-  // The request should succeed (not error) - that's the main thing we're testing
-  expect(secondResponse.stopReason).not.toBe("error");
-
-  // Should have some content in the response
-  expect(secondResponse.content.length).toBeGreaterThan(0);
-
-  // The LLM may choose to answer directly or make a new tool call - either is fine
-  // The important thing is it didn't fail with the orphaned tool call error
-  const textContent = secondResponse.content
-    .filter((block) => block.type === "text")
-    .map((block) => (block.type === "text" ? block.text : ""))
-    .join(" ");
-  const toolCalls = secondResponse.content.filter((block) => block.type === "toolCall").length;
-  expect(toolCalls || textContent.length).toBeGreaterThan(0);
-  console.log("Answer:", textContent);
-
-  // Verify the stop reason is either "stop" or "toolUse" (new tool call)
-  expect(["stop", "toolUse"]).toContain(secondResponse.stopReason);
-}
+const title = "should filter out tool calls without corresponding tool results";
+const retried = { retry: 3, timeout: 30000 };
 
 describe("Tool Call Without Result Tests", () => {
-  // =========================================================================
-  // API Key-based providers
-  // =========================================================================
-
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Completions Provider", () => {
-    const { compat: _compat, ...baseModel } = getModel("openai", "gpt-4o-mini")!;
-    void _compat;
-    const model: Model<"openai-completions"> = {
-      ...baseModel,
-      api: "openai-completions",
-    };
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
+  describe.skipIf(!hasEnv("OPENAI_API_KEY"))("OpenAI Completions Provider", () => {
+    const { compat: _compat, ...baseModel } = chooseModel(
+      "openai",
+      "non-reasoning",
+      (model) => !model.reasoning,
     );
+    it(title, retried, runWith({ ...baseModel, api: "openai-completions" }));
   });
 
-  describe.skipIf(!process.env["OPENAI_API_KEY"])("OpenAI Responses Provider", () => {
-    const model = getModel("openai", "gpt-5-mini");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
+  describe.skipIf(!hasEnv("OPENAI_API_KEY"))("OpenAI Responses Provider", () => {
+    it(title, retried, runWith(chooseModel("openai", "reasoning", (model) => model.reasoning)));
   });
 
-  describe.skipIf(!process.env["ANTHROPIC_API_KEY"])("Anthropic Provider", () => {
-    const model = getModel("anthropic-api", "claude-haiku-4-5");
-
-    it(
-      "should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        await testToolCallWithoutResult(model);
-      },
-    );
+  describe.skipIf(!hasEnv("ANTHROPIC_API_KEY"))("Anthropic Provider", () => {
+    it(title, retried, runWith(chooseModel("anthropic-api", "chat")));
   });
-
-  // =========================================================================
-  // OAuth-based providers (credentials from ~/.msa/agent/oauth.json)
-  // =========================================================================
 
   describe("OpenAI Codex Provider", () => {
-    it.skipIf(!openaiCodexToken)(
-      "gpt-5.5 - should filter out tool calls without corresponding tool results",
-      { retry: 3, timeout: 30000 },
-      async () => {
-        const model = getModel("openai-codex", "gpt-5.5");
-        await testToolCallWithoutResult(model, { apiKey: openaiCodexToken });
-      },
+    const model = chooseModel("openai-codex", "chat");
+    it.skipIf(openaiCodexToken === undefined || openaiCodexToken === "")(
+      `${model.id} - ${title}`,
+      retried,
+      runWith(model, { apiKey: openaiCodexToken }),
     );
   });
 });

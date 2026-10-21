@@ -276,4 +276,4 @@ type AgentMessage =
   | CompactionSummaryMessage;
 ```
 
-At the lower-level agent package, `AgentMessage` is `Message | CustomAgentMessages[keyof CustomAgentMessages]`. Applications can add roles through TypeScript declaration merging, so consumers should tolerate unknown custom roles when they accept messages from an augmented host.
+At the lower-level agent package, `AgentMessage` is `Message | MsaAgentCustomMessages[keyof MsaAgentCustomMessages]`. Applications can add roles by merging into the global `MsaAgentCustomMessages` interface, so consumers should tolerate unknown custom roles when they accept messages from an augmented host.

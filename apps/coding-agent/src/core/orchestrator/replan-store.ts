@@ -1,6 +1,5 @@
-import type { DatabaseSync } from "node:sqlite";
-
-import type { ReplanChanges, ReplanRecord, ReplanView } from "./types.ts";
+import type DatabaseSync from "../platform/node/sqlite.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
 interface ReplanRow {
   id: string;
@@ -10,30 +9,30 @@ interface ReplanRow {
   created_at: number;
 }
 
-function toRecord(row: ReplanRow): ReplanRecord {
+function toRecord(row: ReplanRow): orchestratorTypesTypes.ReplanRecord {
   return {
+    after: JSON.parse(row.after_state) as orchestratorTypesTypes.ReplanChanges,
+    createdAt: row.created_at,
     id: row.id,
     project: row.project,
     reason: row.reason,
-    after: JSON.parse(row.after_state) as ReplanChanges,
-    createdAt: row.created_at,
   };
 }
 
-function toView(record: ReplanRecord): ReplanView {
+function toView(record: orchestratorTypesTypes.ReplanRecord): orchestratorTypesTypes.ReplanView {
   return {
-    id: record.id,
-    reason: record.reason,
-    createdAt: record.createdAt,
-    stopped: record.after.stopped,
     created: record.after.created,
+    createdAt: record.createdAt,
     dropped: record.after.dropped,
+    id: record.id,
     kept: record.after.kept,
+    reason: record.reason,
     rewired: record.after.rewired,
+    stopped: record.after.stopped,
   };
 }
 
-function insertReplan(database: DatabaseSync, record: ReplanRecord): void {
+function insertReplan(database: DatabaseSync, record: orchestratorTypesTypes.ReplanRecord): void {
   database
     .prepare(
       `INSERT INTO replans (id, project, reason, after_state, created_at)
@@ -42,14 +41,24 @@ function insertReplan(database: DatabaseSync, record: ReplanRecord): void {
     .run(record.id, record.project, record.reason, JSON.stringify(record.after), record.createdAt);
 }
 
-function listReplans(database: DatabaseSync, project: string, limit: number): ReplanView[] {
+function listReplans(
+  database: DatabaseSync,
+  project: string,
+  limit: number,
+): orchestratorTypesTypes.ReplanView[] {
   const rows = database
     .prepare("SELECT * FROM replans WHERE project = ? ORDER BY created_at DESC, id DESC LIMIT ?")
     .all(project, limit) as unknown as ReplanRow[];
   return rows.map((row) => toView(toRecord(row)));
 }
 
-export const replanStore = {
+const replanStore = {
   insertReplan,
   listReplans,
 };
+
+const replanStoreModule = {
+  replanStore,
+};
+
+export default replanStoreModule;

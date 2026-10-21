@@ -1,79 +1,85 @@
-// Requires GitHub CLI (`gh`) and a GitHub repository checkout.
-// Preloads the latest open issues once per session, then filters them locally for fast `#...` completion.
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect, Option, Schema } from "effect";
 
-import type { ExtensionAPI } from "@msa/coding-agent";
-import {
-  type AutocompleteItem,
-  type AutocompleteProvider,
-  type AutocompleteSuggestions,
-  fuzzyFilter,
-} from "@msa/tui";
+const { fuzzyFilter } = tui;
 
-type GitHubIssue = {
-  number: number;
-  title: string;
-  state: string;
-};
+const GitHubIssueSchema = Schema.Struct({
+  number: Schema.Finite,
+  state: Schema.String,
+  title: Schema.String,
+});
+
+type GitHubIssue = typeof GitHubIssueSchema.Type;
+
+const parseIssues = Schema.decodeUnknownOption(
+  Schema.fromJsonString(Schema.Array(GitHubIssueSchema)),
+);
 
 type RepoResolution = { ok: true; repo: string } | { ok: false; error: string };
 
 const MAX_ISSUES = 100;
 const MAX_SUGGESTIONS = 20;
 
-function extractIssueToken(textBeforeCursor: string): string | undefined {
-  const match = textBeforeCursor.match(/(?:^|[ \t])#([^\s#]*)$/);
+const extractIssueToken = (textBeforeCursor: string): string | undefined => {
+  const match = textBeforeCursor.match(/(?:^|[ \t])#([^\s#]*)$/u);
   return match?.[1];
-}
+};
 
-function parseGitHubRepo(remoteUrl: string): string | undefined {
-  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (sshMatch) {
+const parseGitHubRepo = (remoteUrl: string): string | undefined => {
+  const sshMatch = remoteUrl.match(/^git@github\.com:([^/]+\/[^/]+?)(?:\.git)?$/u);
+  if (sshMatch !== null) {
     return sshMatch[1];
   }
 
-  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (httpsMatch) {
+  const httpsMatch = remoteUrl.match(/^https?:\/\/github\.com\/([^/]+\/[^/]+?)(?:\.git)?$/u);
+  if (httpsMatch !== null) {
     return httpsMatch[1];
   }
 
   return undefined;
-}
+};
 
-async function resolveGitHubRepo(msa: ExtensionAPI, cwd: string): Promise<RepoResolution> {
-  const result = await msa.exec("git", ["remote", "-v"], { cwd, timeout: 5_000 });
-  if (result.code !== 0) {
-    return { ok: false, error: "github-issue-autocomplete: cwd is not a git repository" };
-  }
-
-  for (const line of result.stdout.split("\n")) {
-    const columns = line.trim().split(/\s+/);
-    const remoteUrl = columns[1];
-    if (!remoteUrl) {
-      continue;
+const resolveGitHubRepo = (msa: codingAgentTypes.ExtensionAPI, cwd: string) =>
+  Effect.gen(function* () {
+    const result = yield* Effect.promise(() =>
+      msa.exec("git", ["remote", "-v"], { cwd, timeout: 5_000 }),
+    );
+    if (result.code !== 0) {
+      return {
+        error: "github-issue-autocomplete: cwd is not a git repository",
+        ok: false,
+      } satisfies RepoResolution;
     }
-    const repo = parseGitHubRepo(remoteUrl);
-    if (repo) {
-      return { ok: true, repo };
+
+    for (const line of result.stdout.split("\n")) {
+      const remoteUrl = line.trim().split(/\s+/u)[1];
+      if (remoteUrl === undefined || remoteUrl.length === 0) continue;
+      const repo = parseGitHubRepo(remoteUrl);
+      if (repo !== undefined && repo.length > 0) {
+        return { ok: true, repo } satisfies RepoResolution;
+      }
     }
-  }
 
-  return { ok: false, error: "github-issue-autocomplete: cwd is not a GitHub repository" };
-}
+    return {
+      error: "github-issue-autocomplete: cwd is not a GitHub repository",
+      ok: false,
+    } satisfies RepoResolution;
+  });
 
-function formatIssueItem(issue: GitHubIssue): AutocompleteItem {
-  return {
-    value: `#${issue.number}`,
-    label: `#${issue.number}`,
-    description: `[${issue.state.toLowerCase()}] ${issue.title}`,
-  };
-}
+const formatIssueItem = (issue: GitHubIssue): tuiTypes.AutocompleteItem => ({
+  description: `[${issue.state.toLowerCase()}] ${issue.title}`,
+  label: `#${issue.number}`,
+  value: `#${issue.number}`,
+});
 
-function filterIssues(issues: GitHubIssue[], query: string): AutocompleteItem[] {
-  if (!query.trim()) {
+const filterIssues = (issues: GitHubIssue[], query: string): tuiTypes.AutocompleteItem[] => {
+  if (query.trim().length === 0) {
     return issues.slice(0, MAX_SUGGESTIONS).map(formatIssueItem);
   }
 
-  if (/^\d+$/.test(query)) {
+  if (/^\d+$/u.test(query)) {
     const numericMatches = issues
       .filter((issue) => String(issue.number).startsWith(query))
       .slice(0, MAX_SUGGESTIONS)
@@ -86,110 +92,125 @@ function filterIssues(issues: GitHubIssue[], query: string): AutocompleteItem[] 
   return fuzzyFilter(issues, query, (issue) => `${issue.number} ${issue.title}`)
     .slice(0, MAX_SUGGESTIONS)
     .map(formatIssueItem);
-}
+};
 
-function createIssueAutocompleteProvider(
-  current: AutocompleteProvider,
-  getIssues: () => Promise<GitHubIssue[] | undefined>,
-): AutocompleteProvider {
-  return {
-    async getSuggestions(
-      lines,
-      cursorLine,
-      cursorCol,
-      options,
-    ): Promise<AutocompleteSuggestions | null> {
-      const currentLine = lines[cursorLine] ?? "";
-      const textBeforeCursor = currentLine.slice(0, cursorCol);
-      const token = extractIssueToken(textBeforeCursor);
-      if (token === undefined) {
-        return current.getSuggestions(lines, cursorLine, cursorCol, options);
-      }
+const makeIssueLoader = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
+  repo: string,
+) => {
+  let issuesPromise: Promise<GitHubIssue[] | undefined> | undefined;
+  const notifyError = createErrorNotifier(ctx);
 
-      const issues = await getIssues();
-      if (options.signal.aborted || !issues || issues.length === 0) {
-        return current.getSuggestions(lines, cursorLine, cursorCol, options);
-      }
+  const load = Effect.gen(function* () {
+    const result = yield* Effect.promise(() =>
+      msa.exec(
+        "gh",
+        [
+          "issue",
+          "list",
+          "--repo",
+          repo,
+          "--state",
+          "open",
+          "--limit",
+          String(MAX_ISSUES),
+          "--json",
+          "number,title,state",
+        ],
+        { cwd: ctx.cwd, timeout: 5_000 },
+      ),
+    );
 
-      const suggestions = filterIssues(issues, token);
-      if (suggestions.length === 0) {
-        return current.getSuggestions(lines, cursorLine, cursorCol, options);
-      }
-
-      return {
-        items: suggestions,
-        prefix: `#${token}`,
-      };
-    },
-
-    applyCompletion(lines, cursorLine, cursorCol, item, prefix) {
-      return current.applyCompletion(lines, cursorLine, cursorCol, item, prefix);
-    },
-
-    shouldTriggerFileCompletion(lines, cursorLine, cursorCol) {
-      return current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true;
-    },
-  };
-}
-
-export default function (msa: ExtensionAPI): void {
-  msa.on("session_start", async (_event, ctx) => {
-    const resolvedRepo = await resolveGitHubRepo(msa, ctx.cwd);
-    if (!resolvedRepo.ok) {
-      ctx.ui.notify(resolvedRepo.error, "error");
-      return;
+    if (result.code !== 0) {
+      notifyError(`failed to load issues: ${result.stderr.trim() || `exit code ${result.code}`}`);
+      return undefined;
     }
 
-    const repo = resolvedRepo.repo;
-    let issuesPromise: Promise<GitHubIssue[] | undefined> | undefined;
-    let loadErrorShown = false;
-
-    const getIssues = async (): Promise<GitHubIssue[] | undefined> => {
-      issuesPromise ||= (async () => {
-        const result = await msa.exec(
-          "gh",
-          [
-            "issue",
-            "list",
-            "--repo",
-            repo,
-            "--state",
-            "open",
-            "--limit",
-            String(MAX_ISSUES),
-            "--json",
-            "number,title,state",
-          ],
-          { cwd: ctx.cwd, timeout: 5_000 },
-        );
-        if (result.code !== 0) {
-          if (!loadErrorShown) {
-            loadErrorShown = true;
-            const details = result.stderr.trim() || `exit code ${result.code}`;
-            ctx.ui.notify(`github-issue-autocomplete: failed to load issues: ${details}`, "error");
-          }
-          return undefined;
-        }
-
-        try {
-          return JSON.parse(result.stdout) as GitHubIssue[];
-        } catch {
-          if (!loadErrorShown) {
-            loadErrorShown = true;
-            ctx.ui.notify(
-              "github-issue-autocomplete: failed to parse gh issue list output",
-              "error",
-            );
-          }
-          return undefined;
-        }
-      })();
-      return issuesPromise;
-    };
-
-    void getIssues();
-    ctx.ui.addAutocompleteProvider((current) =>
-      createIssueAutocompleteProvider(current, getIssues),
-    );
+    const parsed = parseIssues(result.stdout);
+    if (Option.isNone(parsed)) {
+      notifyError("failed to parse gh issue list output");
+      return undefined;
+    }
+    return [...parsed.value];
   });
+
+  return (): Promise<GitHubIssue[] | undefined> => {
+    issuesPromise ??= Effect.runPromise(load);
+    return issuesPromise;
+  };
+};
+
+const createIssueAutocompleteProvider = (
+  current: tuiTypes.AutocompleteProvider,
+  getIssues: () => Promise<GitHubIssue[] | undefined>,
+): tuiTypes.AutocompleteProvider => ({
+  applyCompletion: (lines, cursorLine, cursorCol, item, prefix) =>
+    current.applyCompletion(lines, cursorLine, cursorCol, item, prefix),
+
+  getSuggestions: (lines, cursorLine, cursorCol, options) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const currentLine = lines[cursorLine] ?? "";
+        const token = extractIssueToken(currentLine.slice(0, cursorCol));
+        if (token === undefined) {
+          return yield* Effect.promise(() =>
+            current.getSuggestions(lines, cursorLine, cursorCol, options),
+          );
+        }
+
+        const issues = yield* Effect.promise(getIssues);
+        if (options.signal.aborted || issues === undefined || issues.length === 0) {
+          return yield* Effect.promise(() =>
+            current.getSuggestions(lines, cursorLine, cursorCol, options),
+          );
+        }
+
+        const suggestions = filterIssues(issues, token);
+        if (suggestions.length === 0) {
+          return yield* Effect.promise(() =>
+            current.getSuggestions(lines, cursorLine, cursorCol, options),
+          );
+        }
+
+        return {
+          items: suggestions,
+          prefix: `#${token}`,
+        } satisfies tuiTypes.AutocompleteSuggestions;
+      }),
+    ),
+
+  shouldTriggerFileCompletion: (lines, cursorLine, cursorCol) =>
+    current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true,
+});
+
+function createErrorNotifier(ctx: codingAgentTypes.ExtensionContext) {
+  let errorShown = false;
+
+  const notifyError = (message: string): void => {
+    if (errorShown) return;
+    errorShown = true;
+    ctx.ui.notify(`github-issue-autocomplete: ${message}`, "error");
+  };
+  return notifyError;
+}
+
+export default function (msa: codingAgentTypes.ExtensionAPI): void {
+  msa.on("session_start", (_event, ctx) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const resolvedRepo = yield* resolveGitHubRepo(msa, ctx.cwd);
+        if (!resolvedRepo.ok) {
+          ctx.ui.notify(resolvedRepo.error, "error");
+          return;
+        }
+
+        const getIssues = makeIssueLoader(msa, ctx, resolvedRepo.repo);
+        void getIssues();
+        ctx.ui.addAutocompleteProvider((current) =>
+          createIssueAutocompleteProvider(current, getIssues),
+        );
+      }),
+    ),
+  );
 }

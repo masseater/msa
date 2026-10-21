@@ -1,11 +1,12 @@
-import {
-  CustomEditor,
-  type ExtensionAPI,
-  type ExtensionContext,
-  type KeybindingsManager,
-} from "@msa/coding-agent";
-import type { Component, EditorTheme, TUI } from "@msa/tui";
-import { truncateToWidth, visibleWidth } from "@msa/tui";
+import env from "@msa/ai/utils/env";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import { Effect, type Fiber, Option } from "effect";
+const { readProcessEnv } = env;
+
+const { truncateToWidth, visibleWidth } = tuiModule;
 
 function fitBorder(
   left: string,
@@ -43,17 +44,17 @@ function fitBorder(
 }
 
 function formatCwd(cwd: string): string {
-  const home = process.env["HOME"];
-  if (home && cwd.startsWith(home)) {
+  const home = readProcessEnv("HOME");
+  if (home !== undefined && home.length > 0 && cwd.startsWith(home)) {
     return `~${cwd.slice(home.length)}`;
   }
   return cwd;
 }
 
-function formatContext(ctx: ExtensionContext): string {
+function formatContext(ctx: codingAgentTypes.ExtensionContext): string {
   const usage = ctx.getContextUsage();
   const contextWindow = usage?.contextWindow ?? ctx.model?.contextWindow;
-  if (!contextWindow || !usage || usage.percent === null) {
+  if (contextWindow === undefined || usage === undefined || usage.percent === null) {
     return "ctx ?";
   }
   return `ctx ${Math.round(usage.percent)}%/${(contextWindow / 1000).toFixed(0)}k`;
@@ -63,95 +64,136 @@ function formatThinking(level: string): string {
   return level === "off" ? "off" : level;
 }
 
-class EmptyFooter implements Component {
-  render(): string[] {
-    return [];
-  }
+const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
 
-  invalidate(): void {}
+interface StatusState {
+  isWorking: boolean;
+  spinnerIndex: number;
+  branch: string | undefined;
+  activeTui: tuiTypes.TUI | undefined;
+  spinnerFiber: Fiber.Fiber<never> | undefined;
 }
 
-export default function (msa: ExtensionAPI) {
-  let isWorking = false;
-  let spinnerIndex = 0;
-  let spinnerTimer: ReturnType<typeof setInterval> | undefined;
-  let activeTui: TUI | undefined;
-  const spinnerFrames = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+interface EditorDeps {
+  readonly msa: codingAgentTypes.ExtensionAPI;
+  readonly ctx: codingAgentTypes.ExtensionContext;
+  readonly state: StatusState;
+}
 
-  const stopSpinner = () => {
-    if (spinnerTimer) {
-      clearInterval(spinnerTimer);
-      spinnerTimer = undefined;
-    }
-  };
+class BorderStatusEditor extends codingAgent.CustomEditor {
+  private readonly deps: EditorDeps;
 
+  constructor(
+    tui: tuiTypes.TUI,
+    theme: tuiTypes.EditorTheme,
+    keybindings: codingAgentTypes.KeybindingsManager,
+    deps: EditorDeps,
+  ) {
+    super(tui, theme, keybindings, { paddingX: 0 });
+    this.deps = deps;
+    deps.state.activeTui = tui;
+  }
+
+  override render(width: number): string[] {
+    const lines = super.render(width);
+    if (lines.length < 2) return lines;
+
+    const { msa, ctx, state } = this.deps;
+    const thm = ctx.ui.theme;
+    const model = ctx.model === undefined ? "no model" : `${ctx.model.provider}/${ctx.model.id}`;
+    const thinking = msa.getThinkingLevel();
+    const topLeft = state.isWorking
+      ? thm.fg("accent", ` ${spinnerFrames[state.spinnerIndex]} `)
+      : "";
+    const topRight = "";
+    const bottomLeft = thm.fg("muted", ` ${model} · ${formatThinking(thinking)} `);
+    const bottomRight = thm.fg(
+      "muted",
+      ` ${formatContext(ctx)} · ${formatCwd(ctx.cwd)}${state.branch !== undefined && state.branch.length > 0 ? ` (${state.branch})` : ""} `,
+    );
+    const borderColor = (text: string) => this.borderColor(text);
+
+    lines[0] = fitBorder(topLeft, topRight, width, borderColor);
+    lines[lines.length - 1] = fitBorder(bottomLeft, bottomRight, width, borderColor);
+    return lines;
+  }
+}
+
+const startSpinner = (state: StatusState) => {
+  state.spinnerFiber?.interruptUnsafe();
+  state.spinnerFiber = Effect.runFork(
+    Effect.forever(
+      Effect.sync(() => {
+        state.spinnerIndex = (state.spinnerIndex + 1) % spinnerFrames.length;
+        state.activeTui?.requestRender();
+      }).pipe(Effect.andThen(Effect.sleep(80))),
+    ),
+  );
+};
+
+const stopSpinner = (state: StatusState) => {
+  state.spinnerFiber?.interruptUnsafe();
+  state.spinnerFiber = undefined;
+};
+
+const refreshBranch = (
+  msa: codingAgentTypes.ExtensionAPI,
+  ctx: codingAgentTypes.ExtensionContext,
+  state: StatusState,
+) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const result = yield* Effect.promise(() =>
+        msa.exec("git", ["branch", "--show-current"], { cwd: ctx.cwd }),
+      ).pipe(Effect.option);
+      const stdout = Option.isSome(result) ? result.value.stdout.trim() : undefined;
+      state.branch = stdout !== undefined && stdout.length > 0 ? stdout : undefined;
+      state.activeTui?.requestRender();
+    }),
+  );
+
+const registerAgentEvents = (msa: codingAgentTypes.ExtensionAPI, state: StatusState): void => {
   msa.on("agent_start", () => {
-    isWorking = true;
-    stopSpinner();
-    spinnerTimer = setInterval(() => {
-      spinnerIndex = (spinnerIndex + 1) % spinnerFrames.length;
-      activeTui?.requestRender();
-    }, 80);
-    activeTui?.requestRender();
+    state.isWorking = true;
+    startSpinner(state);
+    state.activeTui?.requestRender();
   });
 
   msa.on("agent_settled", () => {
-    isWorking = false;
-    stopSpinner();
-    activeTui?.requestRender();
+    state.isWorking = false;
+    stopSpinner(state);
+    state.activeTui?.requestRender();
   });
 
   msa.on("session_shutdown", () => {
-    stopSpinner();
-    activeTui = undefined;
+    stopSpinner(state);
+    state.activeTui = undefined;
   });
+};
 
+const registerSessionStart = (msa: codingAgentTypes.ExtensionAPI, state: StatusState): void => {
   msa.on("session_start", (_event, ctx) => {
     ctx.ui.setWorkingVisible(false);
-    ctx.ui.setFooter(() => new EmptyFooter());
+    ctx.ui.setFooter(() => ({ invalidate: () => {}, render: () => [] }));
 
-    let branch: string | undefined;
-
-    const refreshBranch = async () => {
-      const result = await msa
-        .exec("git", ["branch", "--show-current"], { cwd: ctx.cwd })
-        .catch(() => undefined);
-      const stdout = result?.stdout.trim();
-      branch = stdout && stdout.length > 0 ? stdout : undefined;
-      activeTui?.requestRender();
-    };
-    void refreshBranch();
-
-    class BorderStatusEditor extends CustomEditor {
-      constructor(tui: TUI, theme: EditorTheme, keybindings: KeybindingsManager) {
-        super(tui, theme, keybindings, { paddingX: 0 });
-        activeTui = tui;
-      }
-
-      override render(width: number): string[] {
-        const lines = super.render(width);
-        if (lines.length < 2) return lines;
-
-        const thm = ctx.ui.theme;
-        const model = ctx.model ? `${ctx.model.provider}/${ctx.model.id}` : "no model";
-        const thinking = msa.getThinkingLevel();
-        const topLeft = isWorking ? thm.fg("accent", ` ${spinnerFrames[spinnerIndex]} `) : "";
-        const topRight = "";
-        const bottomLeft = thm.fg("muted", ` ${model} · ${formatThinking(thinking)} `);
-        const bottomRight = thm.fg(
-          "muted",
-          ` ${formatContext(ctx)} · ${formatCwd(ctx.cwd)}${branch ? ` (${branch})` : ""} `,
-        );
-        const borderColor = (text: string) => this.borderColor(text);
-
-        lines[0] = fitBorder(topLeft, topRight, width, borderColor);
-        lines[lines.length - 1] = fitBorder(bottomLeft, bottomRight, width, borderColor);
-        return lines;
-      }
-    }
+    void refreshBranch(msa, ctx, state);
 
     ctx.ui.setEditorComponent(
-      (tui, theme, keybindings) => new BorderStatusEditor(tui, theme, keybindings),
+      (tui, theme, keybindings) =>
+        new BorderStatusEditor(tui, theme, keybindings, { ctx, msa, state }),
     );
   });
+};
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  const state: StatusState = {
+    activeTui: undefined,
+    branch: undefined,
+    isWorking: false,
+    spinnerFiber: undefined,
+    spinnerIndex: 0,
+  };
+
+  registerAgentEvents(msa, state);
+  registerSessionStart(msa, state);
 }

@@ -9,7 +9,9 @@ import type {
 } from "@yarnpkg/parsers";
 import { Array as Arr, Effect, Match, Option, Schema } from "effect";
 
-import { blockWhen, readHookInput, runHook } from "./env.ts";
+import hookEnv from "./env.ts";
+
+const { blockWhen, readHookInput, runHook } = hookEnv;
 
 type Frozen<Value> = { readonly [Key in keyof Value]: Frozen<Value[Key]> };
 type Line = Frozen<ShellLine>;
@@ -123,10 +125,10 @@ const chainsOf = (commandLine: Frozen<CommandLine>): Frozen<CommandChain>[] => [
 
 const linesOfChain = Match.type<Frozen<CommandChain>>().pipe(
   Match.discriminatorsExhaustive("type")({
-    subshell: (command): Line[] => [command.subshell],
-    group: (command): Line[] => [command.group],
-    envs: (command): Line[] => linesInEnvs(command.envs),
     command: (command): Line[] => linesInCommand(command.args, command.envs),
+    envs: (command): Line[] => linesInEnvs(command.envs),
+    group: (command): Line[] => [command.group],
+    subshell: (command): Line[] => [command.subshell],
   }),
 );
 

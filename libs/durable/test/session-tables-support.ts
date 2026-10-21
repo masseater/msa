@@ -1,82 +1,111 @@
-import type { JsonValue } from "@msa/chord";
-import {
-  type ConversationId,
-  defineDoc,
-  defineDocFamily,
-  defineTask,
-  type TaskId,
-  type TaskRecord,
-} from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { context, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import type sessionTablesSupportTypes from "./session-tables-support.types.ts";
 
-export type Checkpoint = { phase: "start" } | { phase: "next"; step: number };
+const { defineDoc, defineDocFamily, defineTask } = durable;
 
-export const WorkTask = defineTask<{ path: string }, Checkpoint, { ok: boolean }>({
-  name: "test.work",
-  version: 1,
+const { awaited } = effectSupport;
+const { context, openTestSession } = sessionSupport;
+
+const WorkTask = defineTask<
+  { path: string },
+  sessionTablesSupportTypes.Checkpoint,
+  { ok: boolean }
+>({
+  abort: () => Promise.resolve(),
   initial: () => ({ phase: "start" }),
-  phases: { start: async () => {}, next: async () => {} },
-  abort: async () => {},
+  name: "test.work",
+  phases: { next: () => Promise.resolve(), start: () => Promise.resolve() },
+  version: 1,
 });
 
-export type Progress = { lines: string[] };
-
-export const ProgressDoc = defineDoc<Progress>({
+const ProgressDoc = defineDoc<sessionTablesSupportTypes.Progress>({
+  initial: () => ({ lines: [] }),
   kind: "test.progress",
-  version: 1,
   scope: "task",
-  initial: () => ({ lines: [] }),
+  version: 1,
 });
 
-export const StepDoc = defineDocFamily<Progress, null>({
-  kind: "test.step",
-  version: 1,
+const StepDoc = defineDocFamily<sessionTablesSupportTypes.Progress, null>({
   family: true,
-  scope: "task",
   initial: () => ({ lines: [] }),
-});
-
-export type Notes = { text: string };
-
-export const NotesDoc = defineDoc<Notes>({
-  kind: "test.notes",
+  kind: "test.step",
+  scope: "task",
   version: 1,
-  scope: "conversation",
-  history: "rewindable",
-  fork: "asOf",
-  initial: () => ({ text: "" }),
 });
 
-export type AnyTask = TaskRecord<JsonValue, JsonValue, JsonValue>;
+const NotesDoc = defineDoc<sessionTablesSupportTypes.Notes>({
+  fork: "asOf",
+  history: "rewindable",
+  initial: () => ({ text: "" }),
+  kind: "test.notes",
+  scope: "conversation",
+  version: 1,
+});
 
-export function terminal(task: AnyTask): AnyTask {
+function terminal(task: sessionTablesSupportTypes.AnyTask): sessionTablesSupportTypes.AnyTask {
   return {
-    id: task.id,
-    conversationId: task.conversationId,
-    kind: task.kind,
-    version: task.version,
-    input: task.input,
-    background: task.background,
     abortRequested: task.abortRequested,
-    state: { status: "terminal", outcome: { status: "completed", result: { ok: true } } },
+    background: task.background,
+    conversationId: task.conversationId,
+    id: task.id,
+    input: task.input,
+    kind: task.kind,
+    state: { outcome: { result: { ok: true }, status: "completed" }, status: "terminal" },
+    version: task.version,
   };
 }
 
-export function createTask(
+function createTaskImpl(
   session: ReturnType<typeof openTestSession>["session"],
-  conversationId: ConversationId,
+  conversationId: durableTypes.ConversationId,
   withDocument = false,
-): Promise<TaskId<{ ok: boolean }>> {
+): Promise<durableTypes.TaskId<{ ok: boolean }>> {
   return Promise.resolve(
-    session.commit(async (tx) => {
-      const taskId = await tx.createTask(
-        WorkTask,
-        { path: "a" },
-        { ownership: { kind: "conversation" }, conversationId },
-      );
-      if (withDocument) (await tx.doc(ProgressDoc, taskId)).lines.push("started");
-      return taskId;
-    }, context),
+    session.commit(
+      (tx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            const taskId = yield* awaited(
+              tx.createTask(
+                WorkTask,
+                { path: "a" },
+                { conversationId, ownership: { kind: "conversation" } },
+              ),
+            );
+            if (withDocument) (yield* awaited(tx.doc(ProgressDoc, taskId))).lines.push("started");
+            return taskId;
+          }),
+        ),
+      context,
+    ),
   );
 }
+
+const createTask: {
+  (
+    conversationId: durableTypes.ConversationId,
+    withDocument?: boolean,
+  ): (session: ReturnType<typeof openTestSession>["session"]) => ReturnType<typeof createTaskImpl>;
+  (
+    session: ReturnType<typeof openTestSession>["session"],
+    conversationId: durableTypes.ConversationId,
+    withDocument?: boolean,
+  ): ReturnType<typeof createTaskImpl>;
+} = dual((args) => typeof args[0] === "object" && args[0] !== null, createTaskImpl);
+
+const sessionTablesSupport = {
+  NotesDoc,
+  ProgressDoc,
+  StepDoc,
+  WorkTask,
+  createTask,
+  terminal,
+};
+
+export default sessionTablesSupport;

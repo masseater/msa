@@ -1,75 +1,82 @@
-import type { Context } from "@msa/chord";
-import { type ContextView, type EntryDraft, type EntryId } from "@msa/durable";
+import type chordTypes from "@msa/chord/index.types";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import {
-  setup,
-  countingSetup,
-  type Counting,
-  type RunRuntime,
-  runInRoot,
-} from "./harness-context-support.ts";
-import { assistant, describeMessage, system, toolResult, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import harnessContextSupport from "./harness-context-support.ts";
+import type harnessContextSupportTypes from "./harness-context-support.types.ts";
+import harnessSupport from "./harness-support.ts";
+import sessionSupport from "./session-support.ts";
+
+const { awaited } = effectSupport;
+const { countingSetup, runInRoot, setup } = harnessContextSupport;
+const { assistant, describeMessage, system, toolResult, user } = harnessSupport;
+const { context } = sessionSupport;
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-async function checkExtendedReads(
-  { root, first, scanned }: Counting,
-  runtime: RunRuntime,
-  taskContext: Context,
+function checkExtendedReads(
+  { root, first, scanned }: harnessContextSupportTypes.Counting,
+  runtime: harnessContextSupportTypes.RunRuntime,
+  taskContext: chordTypes.Context,
 ): Promise<void> {
-  const write = (draft: EntryDraft) =>
-    runtime.commit(async (tx) => {
-      await tx.appendEntry(root.id, draft);
-      return undefined;
-    }, taskContext);
-  const read = async (at?: EntryId): Promise<{ view: ContextView; rows: number }> => {
-    const before = scanned.rows;
-    const view = await runtime.context(root.id, taskContext, at === undefined ? {} : { at });
-    return { view, rows: scanned.rows - before };
-  };
-  const initial = await read();
-  expect(initial.view).toEqual(await root.context(taskContext));
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-  // Three new entries: the bounds probe reads one row, the extension the three new ones.
-  await write({ kind: "message", model: [user("new")] });
-  await write({ kind: "note", data: { text: "display only" } });
-  await write({ kind: "message", model: [assistant("answer")] });
-  const extended = await read();
-  expect(extended.rows).toBe(4);
-  expect(extended.view).toEqual(await root.context(taskContext));
+      const write = (draft: durableTypes.EntryDraft) =>
+        runtime.commit((tx) => tx.appendEntry(root.id, draft).then(() => undefined), taskContext);
+      const read = (
+        at?: durableTypes.EntryId,
+      ): Promise<{ view: durableTypes.ContextView; rows: number }> =>
+        runPromise(
+          Effect.gen(function* () {
+            const before = scanned.rows;
+            const view = yield* awaited(
+              runtime.context(root.id, taskContext, at === undefined ? {} : { at }),
+            );
+            return { rows: scanned.rows - before, view };
+          }),
+        );
+      const initial = yield* awaited(read());
+      expect(initial.view).toEqual(yield* awaited(root.context(taskContext)));
 
-  // A newer edit of an older entry applies to the extended range.
-  await write({ kind: "edit", edits: [{ target: first.id, action: "omit" }] });
-  const edited = await read();
-  expect(edited.rows).toBe(2);
-  expect(edited.view).toEqual(await root.context(taskContext));
-  expect(edited.view.messages.map(describeMessage)).not.toContain("user:first");
+      yield* awaited(write({ kind: "message", model: [user("new")] }));
+      yield* awaited(write({ data: { text: "display only" }, kind: "note" }));
+      yield* awaited(write({ kind: "message", model: [assistant("answer")] }));
+      const extended = yield* awaited(read());
+      expect(extended.rows).toBe(4);
+      expect(extended.view).toEqual(yield* awaited(root.context(taskContext)));
 
-  // An earlier cutoff reuses the range.
-  const cutoff = await read(extended.view.entries.at(-1)!.id);
-  expect(cutoff.rows).toBe(0);
-  expect(cutoff.view).toEqual(extended.view);
+      yield* awaited(write({ edits: [{ action: "omit", target: first.id }], kind: "edit" }));
+      const edited = yield* awaited(read());
+      expect(edited.rows).toBe(2);
+      expect(edited.view).toEqual(yield* awaited(root.context(taskContext)));
+      expect(edited.view.messages.map(describeMessage)).not.toContain("user:first");
 
-  // A new head marker changes the range: read it whole.
-  await write({ kind: "reset", head: "self", model: [user("fresh")] });
-  const reset = await read();
-  expect(reset.view).toEqual(await root.context(taskContext));
-  expect(reset.view.messages.map(describeMessage)).toEqual(["user:fresh"]);
+      const cutoff = yield* awaited(read(extended.view.entries.at(-1)!.id));
+      expect(cutoff.rows).toBe(0);
+      expect(cutoff.view).toEqual(extended.view);
+
+      yield* awaited(write({ head: "self", kind: "reset", model: [user("fresh")] }));
+      const reset = yield* awaited(read());
+      expect(reset.view).toEqual(yield* awaited(root.context(taskContext)));
+      expect(reset.view.messages.map(describeMessage)).toEqual(["user:fresh"]);
+    }),
+  );
 }
 
-async function summaryOverRetainedSystem() {
-  const { root, message, append } = await setup();
-  const kept = await message(user("kept"));
-  await message(assistant("answer"));
-  const retained = await message(system({ cwd: "/repo" }), "msa.system");
-  // Before generation writes the baseline after the head marker, a retained system entry stays in place.
-  await append({ kind: "summary", head: kept.id, model: [user("summary")] });
-  await message(user("next"));
-  const view = await root.context(context);
+const summaryOverRetainedSystem = Effect.fn("summaryOverRetainedSystem")(function* () {
+  const { root, message, append } = yield* setup();
+  const kept = yield* awaited(message(user("kept")));
+  yield* awaited(message(assistant("answer")));
+  const retained = yield* awaited(message(system({ cwd: "/repo" }), "msa.system"));
+  yield* awaited(append({ head: kept.id, kind: "summary", model: [user("summary")] }));
+  yield* awaited(message(user("next")));
+  const view = yield* awaited(root.context(context));
   expect(view.messages.map(describeMessage)).toEqual([
     "user:summary",
     "user:kept",
@@ -77,181 +84,201 @@ async function summaryOverRetainedSystem() {
     "system:cwd",
     "user:next",
   ]);
-  return { root, message, append, retained };
-}
+  return { append, message, retained, root };
+});
 
-async function baselineOverRetainedSystem() {
-  const { root, message, append, retained } = await summaryOverRetainedSystem();
+const baselineOverRetainedSystem = Effect.fn("baselineOverRetainedSystem")(function* () {
+  const { root, message, append, retained } = yield* summaryOverRetainedSystem();
 
-  // The baseline omits the retained entry, as generation writes it, and leads.
-  const baseline = await append({
-    kind: "msa.system",
-    model: [system({ preamble: "Baseline." })],
-    edits: [{ target: retained.id, action: "omit" }],
-  });
-  await message(assistant("done"));
-  await message(system({ preamble: null }), "msa.system");
-  return { root, append, baseline };
-}
+  const baseline = yield* awaited(
+    append({
+      edits: [{ action: "omit", target: retained.id }],
+      kind: "msa.system",
+      model: [system({ preamble: "Baseline." })],
+    }),
+  );
+  yield* awaited(message(assistant("done")));
+  yield* awaited(message(system({ preamble: null }), "msa.system"));
+  return { append, baseline, root };
+});
 
-describe("conversation context", () => {
-  // #10904
-  it("does not lead with a first system entry written after another system message, even once that is omitted", async () => {
-    const { root, message, append } = await setup();
-    const host = await message(system({ legacy: "Use the legacy format." }), "host.system");
-    await message(user("first"));
-    await message(assistant("answer"));
-    // Generation wrote this entry against the host's message: it only removes a section, so it is no baseline.
-    await message(system({ legacy: null }), "msa.system");
-    await append({ kind: "edit", edits: [{ target: host.id, action: "omit" }] });
-    let view = await root.context(context);
-    expect(view.messages.map(describeMessage)).toEqual([
-      "user:first",
-      "assistant:answer",
-      "system:legacy",
-    ]);
+const doesNotLead = Effect.gen(function* () {
+  const { root, message, append } = yield* setup();
+  const host = yield* awaited(message(system({ legacy: "Use the legacy format." }), "host.system"));
+  yield* awaited(message(user("first")));
+  yield* awaited(message(assistant("answer")));
+  yield* awaited(message(system({ legacy: null }), "msa.system"));
+  yield* awaited(append({ edits: [{ action: "omit", target: host.id }], kind: "edit" }));
+  let view = yield* awaited(root.context(context));
+  expect(view.messages.map(describeMessage)).toEqual([
+    "user:first",
+    "assistant:answer",
+    "system:legacy",
+  ]);
 
-    // The same holds for a system message an edit put before it.
-    const other = await setup();
-    const first = await other.message(user("first"));
-    await other.append({
-      kind: "edit",
+  const other = yield* setup();
+  const first = yield* awaited(other.message(user("first")));
+  yield* awaited(
+    other.append({
       edits: [
         {
-          target: first.id,
           action: "replace",
           messages: [user("first"), system({ note: "Note." })],
+          target: first.id,
         },
       ],
-    });
-    await other.message(assistant("answer"));
-    await other.message(system({ note: null }), "msa.system");
-    await other.append({
       kind: "edit",
-      edits: [{ target: first.id, action: "replace", messages: [user("first")] }],
-    });
-    view = await other.root.context(context);
-    expect(view.messages.map(describeMessage)).toEqual([
-      "user:first",
-      "assistant:answer",
-      "system:note",
-    ]);
-  });
+    }),
+  );
+  yield* awaited(other.message(assistant("answer")));
+  yield* awaited(other.message(system({ note: null }), "msa.system"));
+  yield* awaited(
+    other.append({
+      edits: [{ action: "replace", messages: [user("first")], target: first.id }],
+      kind: "edit",
+    }),
+  );
+  view = yield* awaited(other.root.context(context));
+  expect(view.messages.map(describeMessage)).toEqual([
+    "user:first",
+    "assistant:answer",
+    "system:note",
+  ]);
 });
 
 describe("conversation context", () => {
-  // #10904
-  it("does not lead with a retained, edited, or later system entry in place of the baseline", async () => {
-    const { root, append, baseline } = await baselineOverRetainedSystem();
-    let view = await root.context(context);
-    expect(view.messages.map(describeMessage)).toEqual([
-      "system:preamble",
-      "user:summary",
-      "user:kept",
-      "assistant:answer",
-      "user:next",
-      "assistant:done",
-      "system:preamble",
-    ]);
+  it("does not lead with a first system entry written after another system message, even once that is omitted", () =>
+    Effect.runPromise(doesNotLead));
+});
 
-    // An omitted baseline leaves no message to lead; the delta after it is not a baseline and stays in place.
-    await append({ kind: "edit", edits: [{ target: baseline.id, action: "omit" }] });
-    view = await root.context(context);
-    expect(view.messages.map(describeMessage)).toEqual([
-      "user:summary",
-      "user:kept",
-      "assistant:answer",
-      "user:next",
-      "assistant:done",
-      "system:preamble",
-    ]);
+const doesNotLeadRetained = Effect.gen(function* () {
+  const { root, append, baseline } = yield* baselineOverRetainedSystem();
+  let view = yield* awaited(root.context(context));
+  expect(view.messages.map(describeMessage)).toEqual([
+    "system:preamble",
+    "user:summary",
+    "user:kept",
+    "assistant:answer",
+    "user:next",
+    "assistant:done",
+    "system:preamble",
+  ]);
 
-    // A replacement of the baseline is not one either.
-    await append({
+  yield* awaited(append({ edits: [{ action: "omit", target: baseline.id }], kind: "edit" }));
+  view = yield* awaited(root.context(context));
+  expect(view.messages.map(describeMessage)).toEqual([
+    "user:summary",
+    "user:kept",
+    "assistant:answer",
+    "user:next",
+    "assistant:done",
+    "system:preamble",
+  ]);
+
+  yield* awaited(
+    append({
+      edits: [{ action: "replace", messages: [system({ other: "Other." })], target: baseline.id }],
       kind: "edit",
-      edits: [{ target: baseline.id, action: "replace", messages: [system({ other: "Other." })] }],
-    });
-    view = await root.context(context);
-    expect(view.messages.map(describeMessage)).toEqual([
-      "user:summary",
-      "user:kept",
-      "assistant:answer",
-      "user:next",
-      "system:other",
-      "assistant:done",
-      "system:preamble",
-    ]);
-  });
+    }),
+  );
+  view = yield* awaited(root.context(context));
+  expect(view.messages.map(describeMessage)).toEqual([
+    "user:summary",
+    "user:kept",
+    "assistant:answer",
+    "user:next",
+    "system:other",
+    "assistant:done",
+    "system:preamble",
+  ]);
 });
 
 describe("conversation context", () => {
-  it("synthesizes missing tool results after a fork and drops results cut from their call", async () => {
-    const { root, message } = await setup();
-    await message(user("go"));
-    const call = await message(assistant("calling", { calls: ["x", "y"] }));
-    await message(toolResult("x"));
-    const second = await message(toolResult("y"));
-    const child = await root.fork(call.id, { ownership: { kind: "ownerless" } }, context);
-    const childView = await child.context(context);
-    expect(childView.messages.map(describeMessage)).toEqual([
-      "user:go",
-      "assistant:calling",
-      "result:x:error",
-      "result:y:error",
-    ]);
-    const missing = childView.messages[2]!;
-    expect(missing).toMatchObject({
-      role: "toolResult",
-      toolName: "tool-x",
-      details: { reason: "missing_result" },
-    });
+  it("does not lead with a retained, edited, or later system entry in place of the baseline", () =>
+    Effect.runPromise(doesNotLeadRetained));
+});
 
-    // A head between a call and its results leaves stray results that are not sent.
-    await root.commit((tx) => tx.appendEntry(root.id, { kind: "reset", head: second.id }), context);
-    const parentView = await root.context(context);
-    expect(parentView.messages.map(describeMessage)).toEqual([]);
-    expect(parentView.entries.map((entry) => entry.kind)).toEqual(["reset", "message"]);
+const synthesizesMissingTool = Effect.gen(function* () {
+  const { root, message } = yield* setup();
+  yield* awaited(message(user("go")));
+  const call = yield* awaited(message(assistant("calling", { calls: ["x", "y"] })));
+  yield* awaited(message(toolResult("x")));
+  const second = yield* awaited(message(toolResult("y")));
+  const child = yield* awaited(root.fork(call.id, { ownership: { kind: "ownerless" } }, context));
+  const childView = yield* awaited(child.context(context));
+  expect(childView.messages.map(describeMessage)).toEqual([
+    "user:go",
+    "assistant:calling",
+    "result:x:error",
+    "result:y:error",
+  ]);
+  const missing = childView.messages[2]!;
+  expect(missing).toMatchObject({
+    details: { reason: "missing_result" },
+    role: "toolResult",
+    toolName: "tool-x",
   });
+
+  yield* awaited(
+    root.commit((tx) => tx.appendEntry(root.id, { head: second.id, kind: "reset" }), context),
+  );
+  const parentView = yield* awaited(root.context(context));
+  expect(parentView.messages.map(describeMessage)).toEqual([]);
+  expect(parentView.entries.map((entry) => entry.kind)).toEqual(["reset", "message"]);
 });
 
 describe("conversation context", () => {
-  // #10512
-  it("reads the context as of an earlier entry, as a fork at that entry starts", async () => {
-    const { root, append, message } = await setup();
-    const first = await message(user("first"));
-    const call = await message(assistant("calling", { calls: ["x", "y"] }));
-    const result = await message(toolResult("x"));
-    await message(toolResult("y"));
-    const edit = await append({
+  it("synthesizes missing tool results after a fork and drops results cut from their call", () =>
+    Effect.runPromise(synthesizesMissingTool));
+});
+
+const readsContextEarlier = Effect.gen(function* () {
+  const { root, append, message } = yield* setup();
+  const first = yield* awaited(message(user("first")));
+  const call = yield* awaited(message(assistant("calling", { calls: ["x", "y"] })));
+  const result = yield* awaited(message(toolResult("x")));
+  yield* awaited(message(toolResult("y")));
+  const edit = yield* awaited(
+    append({
+      edits: [{ action: "replace", messages: [user("first v2")], target: first.id }],
       kind: "edit",
-      edits: [{ target: first.id, action: "replace", messages: [user("first v2")] }],
-    });
-    const reset = await append({ kind: "reset", head: "self", model: [user("fresh start")] });
-    const tail = await message(assistant("after reset"));
+    }),
+  );
+  const reset = yield* awaited(
+    append({ head: "self", kind: "reset", model: [user("fresh start")] }),
+  );
+  const tail = yield* awaited(message(assistant("after reset")));
 
-    for await (const at of [first, call, result, edit, reset, tail]) {
-      const fork = await root.fork(at.id, { ownership: { kind: "ownerless" } }, context);
-      expect(await root.context(context, { at: at.id })).toEqual(await fork.context(context));
-    }
-    // Stepped back before the edit and the reset: neither applies, and a cut call gets synthesized results.
-    expect((await root.context(context, { at: call.id })).messages.map(describeMessage)).toEqual([
-      "user:first",
-      "assistant:calling",
-      "result:x:error",
-      "result:y:error",
-    ]);
-    expect(await root.context(context, { at: tail.id })).toEqual(await root.context(context));
-    expect(await root.context(context, {})).toEqual(await root.context(context));
-
-    const other = await root.fork(first.id, { ownership: { kind: "ownerless" } }, context);
-    await expect(other.context(context, { at: tail.id })).rejects.toThrow("is not visible");
-  });
-
-  it("extends a task's context read with only newer entries", async () => {
-    const opened = await countingSetup();
-    await runInRoot(opened, "test.context-reads", (runtime, taskContext) =>
-      checkExtendedReads(opened, runtime, taskContext),
+  for (const at of [first, call, result, edit, reset, tail]) {
+    const fork = yield* awaited(root.fork(at.id, { ownership: { kind: "ownerless" } }, context));
+    expect(yield* awaited(root.context(context, { at: at.id }))).toEqual(
+      yield* awaited(fork.context(context)),
     );
-    await opened.harness.close(context);
-  });
+  }
+  expect(
+    (yield* awaited(root.context(context, { at: call.id }))).messages.map(describeMessage),
+  ).toEqual(["user:first", "assistant:calling", "result:x:error", "result:y:error"]);
+  expect(yield* awaited(root.context(context, { at: tail.id }))).toEqual(
+    yield* awaited(root.context(context)),
+  );
+  expect(yield* awaited(root.context(context, {}))).toEqual(yield* awaited(root.context(context)));
+
+  const other = yield* awaited(root.fork(first.id, { ownership: { kind: "ownerless" } }, context));
+  yield* awaited(expect(other.context(context, { at: tail.id })).rejects.toThrow("is not visible"));
+});
+
+const extendsTaskContext = Effect.gen(function* () {
+  const opened = yield* countingSetup();
+  yield* runInRoot(opened, "test.context-reads", (runtime, taskContext) =>
+    checkExtendedReads(opened, runtime, taskContext),
+  );
+  yield* awaited(opened.harness.close(context));
+});
+
+describe("conversation context", () => {
+  it("reads the context as of an earlier entry, as a fork at that entry starts", () =>
+    Effect.runPromise(readsContextEarlier));
+
+  it("extends a task's context read with only newer entries", () =>
+    Effect.runPromise(extendsTaskContext));
 });

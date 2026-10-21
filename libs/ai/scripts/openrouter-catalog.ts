@@ -1,22 +1,10 @@
-import { type OpenRouterModel, openRouterCost } from "../src/providers/openrouter-api.ts";
-import type { ClassifierModel, ImageModel, Model } from "../src/types.ts";
-import {
-  getOpenRouterThinkingLevelMap,
-  type OpenRouterReasoningMetadata,
-} from "./openrouter-reasoning-options.ts";
+import { Function } from "effect";
 
-export interface OpenRouterModelListItem extends OpenRouterModel {
-  name: string;
-  supported_parameters?: string[];
-  architecture?: { modality?: string; input_modalities?: string[]; output_modalities?: string[] };
-  reasoning?: OpenRouterReasoningMetadata;
-}
+import openrouterApi from "../src/providers/openrouter-api.ts";
+import type openrouterCatalogTypes from "./openrouter-catalog.types.ts";
+import getOpenRouterThinkingLevelMap from "./openrouter-reasoning-options.ts";
 
-export interface OpenRouterCatalog {
-  chat: Model<"anthropic-messages" | "openai-completions">[];
-  images: ImageModel<"openrouter-images">[];
-  classifiers: ClassifierModel<"typesafe-system-one">[];
-}
+const { openRouterCost } = openrouterApi;
 
 function modalities(values: string[] | undefined): ("text" | "image")[] {
   return Array.from(
@@ -28,90 +16,113 @@ function modalities(values: string[] | undefined): ("text" | "image")[] {
   );
 }
 
-/**
- * Build the OpenRouter catalog from the default listing and the
- * `output_modalities=image` and `output_modalities=decisions` listings. The
- * default listing omits image-only and decision models, so those come from
- * the other listings. An upstream model may appear in several results; it then
- * gets separate entries per operation.
- *
- * @param {readonly OpenRouterModelListItem[]} listed - default listing
- * @param {readonly OpenRouterModelListItem[]} imageListed - image listing
- * @param {readonly OpenRouterModelListItem[]} decisionListed - decisions listing
- * @returns {OpenRouterCatalog} the catalog
- */
-export function buildOpenRouterCatalog(
-  listed: readonly OpenRouterModelListItem[],
-  imageListed: readonly OpenRouterModelListItem[],
-  decisionListed: readonly OpenRouterModelListItem[],
-): OpenRouterCatalog {
-  const chat: OpenRouterCatalog["chat"] = [];
-
-  for (const model of listed) {
-    // Only include models that support tools
-    if (!model.supported_parameters?.includes("tools")) continue;
-    // Parse input modalities
-    const input: ("text" | "image")[] = ["text"];
-    if (model.architecture?.modality?.includes("image")) {
-      input.push("image");
-    }
-
-    const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
-    const useAnthropicMessages = /^anthropic\//u.test(model.id) && !model.id.endsWith(":batch");
-    chat.push({
-      type: "chat",
-      id: model.id,
-      name: model.name,
-      api: useAnthropicMessages ? "anthropic-messages" : "openai-completions",
-      baseUrl: useAnthropicMessages ? "https://openrouter.ai/api" : "https://openrouter.ai/api/v1",
-      provider: "openrouter",
-      reasoning: model.supported_parameters?.includes("reasoning") || false,
-      ...(thinkingLevelMap && { thinkingLevelMap }),
-      input,
-      cost: openRouterCost(model.pricing),
-      contextWindow: model.top_provider?.context_length || model.context_length || 4096,
-      maxTokens: model.top_provider?.max_completion_tokens || 4096,
-    });
-  }
-
-  const images: OpenRouterCatalog["images"] = [];
-  for (const model of imageListed) {
-    if (images.some((entry) => entry.id === model.id)) continue;
-    const output = modalities(model.architecture?.output_modalities);
-    if (!output.includes("image")) continue;
-    const input = modalities(model.architecture?.input_modalities);
-    images.push({
-      type: "image",
-      id: model.id,
-      name: model.name,
-      api: "openrouter-images",
-      provider: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      input: input.length > 0 ? input : ["text"],
-      output,
-      cost: openRouterCost(model.pricing),
-    });
-  }
-
-  // Decision models such as TypeSafe's Jev are served through OpenRouter's
-  // TypeSafe-compatible System One endpoint.
-  const classifiers: OpenRouterCatalog["classifiers"] = [];
-  for (const model of decisionListed) {
-    if (classifiers.some((entry) => entry.id === model.id)) continue;
-    if (!model.architecture?.output_modalities?.includes("decisions")) continue;
-    const input = modalities(model.architecture.input_modalities);
-    classifiers.push({
-      type: "classifier",
-      id: model.id,
-      name: model.name,
-      api: "typesafe-system-one",
-      provider: "openrouter",
-      baseUrl: "https://openrouter.ai/api/v1",
-      input: input.length > 0 ? input : ["text"],
-      cost: openRouterCost(model.pricing),
-      contextWindow: model.top_provider?.context_length || model.context_length || 4096,
-    });
-  }
-
-  return { chat, images, classifiers };
+function openRouterInput(values: string[] | undefined): ("text" | "image")[] {
+  const input = modalities(values);
+  return input.length > 0 ? input : ["text"];
 }
+
+function openRouterChatModel(
+  model: openrouterCatalogTypes.OpenRouterModelListItem,
+): openrouterCatalogTypes.OpenRouterCatalog["chat"][number] {
+  const thinkingLevelMap = getOpenRouterThinkingLevelMap(model.reasoning);
+  const useAnthropicMessages = model.id.startsWith("anthropic/") && !model.id.endsWith(":batch");
+  return {
+    api: useAnthropicMessages ? "anthropic-messages" : "openai-completions",
+    baseUrl: useAnthropicMessages ? "https://openrouter.ai/api" : "https://openrouter.ai/api/v1",
+    id: model.id,
+    name: model.name,
+    provider: "openrouter",
+    reasoning: model.supported_parameters?.includes("reasoning") || false,
+    type: "chat",
+    ...(thinkingLevelMap && { thinkingLevelMap }),
+    contextWindow: model.top_provider?.context_length || model.context_length || 4096,
+    cost: openRouterCost(model.pricing),
+    input: model.architecture?.modality?.includes("image") === true ? ["text", "image"] : ["text"],
+    maxTokens: model.top_provider?.max_completion_tokens || 4096,
+  };
+}
+
+function openRouterChatModels(
+  listed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+): openrouterCatalogTypes.OpenRouterCatalog["chat"] {
+  return listed
+    .filter((model) => model.supported_parameters?.includes("tools") === true)
+    .map(openRouterChatModel);
+}
+
+function firstById<A extends { readonly id: string }>(models: readonly A[]): A[] {
+  return models.filter(
+    (model, index) => models.findIndex((entry) => entry.id === model.id) === index,
+  );
+}
+
+function openRouterImageModels(
+  imageListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+): openrouterCatalogTypes.OpenRouterCatalog["images"] {
+  return firstById(
+    imageListed.flatMap((model): openrouterCatalogTypes.OpenRouterCatalog["images"] => {
+      const output = modalities(model.architecture?.output_modalities);
+      if (!output.includes("image")) return [];
+      return [
+        {
+          api: "openrouter-images",
+          baseUrl: "https://openrouter.ai/api/v1",
+          cost: openRouterCost(model.pricing),
+          id: model.id,
+          input: openRouterInput(model.architecture?.input_modalities),
+          name: model.name,
+          output,
+          provider: "openrouter",
+          type: "image",
+        },
+      ];
+    }),
+  );
+}
+
+function openRouterClassifierModels(
+  decisionListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+): openrouterCatalogTypes.OpenRouterCatalog["classifiers"] {
+  return firstById(
+    decisionListed.filter(
+      (model) => model.architecture?.output_modalities?.includes("decisions") === true,
+    ),
+  ).map((model) => ({
+    api: "typesafe-system-one",
+    baseUrl: "https://openrouter.ai/api/v1",
+    contextWindow: model.top_provider?.context_length || model.context_length || 4096,
+    cost: openRouterCost(model.pricing),
+    id: model.id,
+    input: openRouterInput(model.architecture?.input_modalities),
+    name: model.name,
+    provider: "openrouter",
+    type: "classifier",
+  }));
+}
+
+const buildOpenRouterCatalog: {
+  (
+    imageListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+    decisionListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+  ): (
+    listed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+  ) => openrouterCatalogTypes.OpenRouterCatalog;
+  (
+    listed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+    imageListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+    decisionListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+  ): openrouterCatalogTypes.OpenRouterCatalog;
+} = Function.dual(
+  3,
+  (
+    listed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+    imageListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+    decisionListed: readonly openrouterCatalogTypes.OpenRouterModelListItem[],
+  ): openrouterCatalogTypes.OpenRouterCatalog => ({
+    chat: openRouterChatModels(listed),
+    classifiers: openRouterClassifierModels(decisionListed),
+    images: openRouterImageModels(imageListed),
+  }),
+);
+
+export default buildOpenRouterCatalog;

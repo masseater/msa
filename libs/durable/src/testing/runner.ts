@@ -1,57 +1,80 @@
-import { createExpectAssertions, type ExpectLike } from "./assertions.ts";
-import { createEnvConformance } from "./env-conformance.ts";
-import { createStorageConformance } from "./storage-conformance.ts";
-import type {
-  EnvConformanceOptions,
-  EnvConformanceProvider,
-  StorageConformanceProvider,
-} from "./types.ts";
+import { Function } from "effect";
 
-export interface StorageConformanceRunner {
-  readonly describe: (name: string, suite: () => void) => unknown;
-  readonly expect: ExpectLike;
-  readonly it: (name: string, test: () => Promise<void>, timeoutMs?: number) => unknown;
-}
+import assertionsModule from "./assertions.ts";
+import envConformance from "./env-conformance.ts";
+import type runnerTypes from "./runner.types.ts";
+import storageConformance from "./storage-conformance.ts";
+import type typesModule from "./types.ts";
 
-/**
- * Registers the runner-independent cases with a Vitest/Jest-compatible test runner.
- * @param {StorageConformanceRunner} runner - The test runner.
- * @param {string} name - The suite name.
- * @param {StorageConformanceProvider} withStorage - Provides the storage.
- */
-export function registerStorageConformance(
-  runner: StorageConformanceRunner,
-  name: string,
-  withStorage: StorageConformanceProvider,
-): void {
-  const cases = createStorageConformance({
-    assertions: createExpectAssertions(runner.expect),
-    withStorage,
-  });
-  runner.describe(name, () => {
-    for (const testCase of cases) runner.it(testCase.name, testCase.run);
-  });
-}
+const { createStorageConformance } = storageConformance;
+const { createExpectAssertions } = assertionsModule;
+const { createEnvConformance } = envConformance;
 
-/**
- * Registers the runner-independent `ExecutionEnv` cases with a Vitest/Jest-compatible test runner.
- * @param {StorageConformanceRunner} runner - The test runner.
- * @param {string} name - The suite name.
- * @param {EnvConformanceProvider} withEnv - Provides the environment.
- * @param {Pick<EnvConformanceOptions, "shell" | "symlinks" | "listFiles">} options - The environment's capabilities.
- */
-export function registerEnvConformance(
-  runner: StorageConformanceRunner,
-  name: string,
-  withEnv: EnvConformanceProvider,
-  options: Pick<EnvConformanceOptions, "shell" | "symlinks" | "listFiles"> = {},
-): void {
-  const cases = createEnvConformance({
-    ...options,
-    assertions: createExpectAssertions(runner.expect),
-    withEnv,
-  });
-  runner.describe(name, () => {
-    for (const testCase of cases) runner.it(testCase.name, testCase.run, testCase.timeoutMs);
-  });
-}
+const hasRunner = (args: IArguments): boolean => typeof args[0] !== "string";
+
+const registerStorageConformance: {
+  (
+    name: string,
+    withStorage: typesModule.StorageConformanceProvider,
+  ): (runner: runnerTypes.StorageConformanceRunner) => void;
+  (
+    runner: runnerTypes.StorageConformanceRunner,
+    name: string,
+    withStorage: typesModule.StorageConformanceProvider,
+  ): void;
+} = Function.dual(
+  hasRunner,
+  (
+    runner: runnerTypes.StorageConformanceRunner,
+    name: string,
+    withStorage: typesModule.StorageConformanceProvider,
+  ) => {
+    const cases = createStorageConformance({
+      assertions: createExpectAssertions(runner.expect),
+      withStorage,
+    });
+    runner.describe(name, () => {
+      for (const testCase of cases) runner.it(testCase.name, testCase.run);
+    });
+  },
+);
+
+type EnvRunnerOptions = Pick<typesModule.EnvConformanceOptions, "shell" | "symlinks" | "listFiles">;
+
+const registerEnvConformance: {
+  (
+    name: string,
+    withEnv: typesModule.EnvConformanceProvider,
+    options?: EnvRunnerOptions,
+  ): (runner: runnerTypes.StorageConformanceRunner) => void;
+  (
+    runner: runnerTypes.StorageConformanceRunner,
+    name: string,
+    withEnv: typesModule.EnvConformanceProvider,
+    options?: EnvRunnerOptions,
+  ): void;
+} = Function.dual(
+  hasRunner,
+  (
+    runner: runnerTypes.StorageConformanceRunner,
+    name: string,
+    withEnv: typesModule.EnvConformanceProvider,
+    options: EnvRunnerOptions = {},
+  ) => {
+    const cases = createEnvConformance({
+      ...options,
+      assertions: createExpectAssertions(runner.expect),
+      withEnv,
+    });
+    runner.describe(name, () => {
+      for (const testCase of cases) runner.it(testCase.name, testCase.run, testCase.timeoutMs);
+    });
+  },
+);
+
+const runnerModule = {
+  registerEnvConformance,
+  registerStorageConformance,
+};
+
+export default runnerModule;

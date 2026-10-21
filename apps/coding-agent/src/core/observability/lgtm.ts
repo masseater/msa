@@ -1,48 +1,41 @@
-import { existsSync } from "node:fs";
-import { delimiter, join } from "node:path";
+import { Effect } from "effect";
 
-import { Data, Effect } from "effect";
+import exec from "../exec.ts";
+import platform from "../platform/index.ts";
+import type lgtmTypes from "./lgtm.types.ts";
+import PodmanError from "./podman-error.ts";
 
-import { execCommand } from "../exec.ts";
+const { exists } = platform.files;
+const { delimiter, join } = platform;
+const { execCommand } = exec;
 
-export const LGTM_CONTAINER = "msa-grafana-lgtm";
-export const LGTM_IMAGE = "docker.io/grafana/otel-lgtm:latest";
-export const LGTM_OTLP_ENDPOINT = "http://localhost:4318";
-export const GRAFANA_URL = "http://localhost:3000";
-
-/** Ports published on localhost: Grafana, OTLP/HTTP, Tempo, Loki, and Prometheus. */
+const LGTM_CONTAINER = "msa-grafana-lgtm";
+const LGTM_IMAGE = "docker.io/grafana/otel-lgtm:latest";
+const LGTM_OTLP_ENDPOINT = "http://localhost:4318";
+const GRAFANA_URL = "http://localhost:3000";
 const PUBLISHED_PORTS = [3000, 4318, 3200, 3100, 9090] as const;
-
-export class PodmanError extends Data.TaggedError("PodmanError")<{
-  readonly message: string;
-}> {}
-
-export type ContainerState = "missing" | "running" | "stopped";
-
-/** What to do with the existing container: use it, start it, or create it. */
-export type LgtmAction = "reuse" | "start" | "run";
-
-export function lgtmAction(state: ContainerState): LgtmAction {
+function lgtmAction(state: lgtmTypes.ContainerState): lgtmTypes.LgtmAction {
   if (state === "running") return "reuse";
   return state === "stopped" ? "start" : "run";
 }
-
-export function findPodman(path: string | undefined): string | undefined {
-  const names = process.platform === "win32" ? ["podman.exe"] : ["podman"];
-  for (const directory of (path ?? "").split(delimiter)) {
-    if (directory === "") continue;
-    for (const name of names) {
-      const candidate = join(directory, name);
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return undefined;
+function firstExisting(candidates: readonly string[]): Promise<string | undefined> {
+  const [candidate, ...rest] = candidates;
+  if (candidate === undefined) return Promise.resolve(undefined);
+  return exists(candidate).then((found) => (found ? candidate : firstExisting(rest)));
 }
-
+function findPodman(path: string | undefined): Promise<string | undefined> {
+  const name = process.platform === "win32" ? "podman.exe" : "podman";
+  return firstExisting(
+    (path ?? "")
+      .split(delimiter)
+      .filter((directory) => directory !== "")
+      .map((directory) => join(directory, name)),
+  );
+}
 function podman(binary: string, args: readonly string[]): Effect.Effect<string, PodmanError> {
   return Effect.tryPromise({
-    try: (signal) => execCommand(binary, [...args], process.cwd(), { signal }),
     catch: (error) => new PodmanError({ message: String(error) }),
+    try: (signal) => execCommand(binary, [...args], process.cwd(), { signal }),
   }).pipe(
     Effect.flatMap((result) =>
       result.code === 0
@@ -55,12 +48,10 @@ function podman(binary: string, args: readonly string[]): Effect.Effect<string, 
     ),
   );
 }
-
-/** Reads the state of `name` from `podman ps`. */
-export function containerState(
+function containerState(
   binary: string,
   name: string,
-): Effect.Effect<ContainerState, PodmanError> {
+): Effect.Effect<lgtmTypes.ContainerState, PodmanError> {
   return podman(binary, [
     "ps",
     "--all",
@@ -76,9 +67,7 @@ export function containerState(
     }),
   );
 }
-
-/** `podman ps` fails when the podman machine (macOS, Windows) is not running. */
-function reachablePodman(binary: string): Effect.Effect<ContainerState, PodmanError> {
+function reachablePodman(binary: string): Effect.Effect<lgtmTypes.ContainerState, PodmanError> {
   return containerState(binary, LGTM_CONTAINER).pipe(
     Effect.catch(() =>
       podman(binary, ["machine", "start"]).pipe(
@@ -88,7 +77,6 @@ function reachablePodman(binary: string): Effect.Effect<ContainerState, PodmanEr
     ),
   );
 }
-
 function runArgs(): string[] {
   return [
     "run",
@@ -104,9 +92,7 @@ function runArgs(): string[] {
     LGTM_IMAGE,
   ];
 }
-
-/** Starts or creates the `msa-grafana-lgtm` container, reusing it when it already runs. */
-export function ensureLgtm(binary: string): Effect.Effect<LgtmAction, PodmanError> {
+function ensureLgtm(binary: string): Effect.Effect<lgtmTypes.LgtmAction, PodmanError> {
   return Effect.gen(function* () {
     const action = lgtmAction(yield* reachablePodman(binary));
     if (action === "start") yield* podman(binary, ["start", LGTM_CONTAINER]);
@@ -114,3 +100,16 @@ export function ensureLgtm(binary: string): Effect.Effect<LgtmAction, PodmanErro
     return action;
   });
 }
+
+const lgtm = {
+  GRAFANA_URL,
+  LGTM_CONTAINER,
+  LGTM_IMAGE,
+  LGTM_OTLP_ENDPOINT,
+  containerState,
+  ensureLgtm,
+  findPodman,
+  lgtmAction,
+};
+
+export default lgtm;

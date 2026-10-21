@@ -1,34 +1,37 @@
-import { Type } from "@msa/ai";
-import { createModels } from "@msa/ai/models";
-// Per-conversation agent choices and Harness-wide settings.
-// Run from libs/durable:
-//   node --conditions=source --experimental-strip-types test/examples/07-configuration.ts
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
+import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
+import ai from "@msa/ai";
+import modelsModule from "@msa/ai/models";
+import contextModule from "@msa/chord/context";
+import { Console, Effect } from "effect";
 
-import {
-  AgentDoc,
-  createRegistry,
-  defineExtension,
-  defineTool,
-  Harness,
-  type HarnessSettings,
-  MemoryStorage,
-  section,
-  type ToolRegistration,
-} from "../../src/index.ts";
+import harnessModule from "../../src/harness/index.ts";
+import durable from "../../src/index.ts";
+import type durableTypes from "../../src/index.types.ts";
+import memory from "../../src/storage/memory.ts";
+import effectSupport from "../effect-support.ts";
+
+const { Type } = ai;
+const { createModels } = modelsModule;
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { AgentDoc, defineExtension, defineTool, section } = durable;
+const { Harness, createRegistry } = harnessModule;
+const { MemoryStorage } = memory;
+
+const { awaited } = effectSupport;
 
 const context = BACKGROUND_CONTEXT;
 
-// Apps may attach their own metadata to tools, such as a prompt snippet.
-type AppTool = ToolRegistration & { readonly snippet?: string };
+type AppTool = durableTypes.ToolRegistration & { readonly snippet?: string };
 
 function exampleTool(name: string, description: string): AppTool {
   const tool = defineTool({
-    name,
     description,
-    parameters: Type.Object({ path: Type.String() }),
     execute: (args) =>
-      Promise.resolve({ output: [{ type: "text", text: `${name} ${args.path}` }] }),
+      Promise.resolve({ output: [{ text: `${name} ${args.path}`, type: "text" }] }),
+    name,
+    parameters: Type.Object({ path: Type.String() }),
   });
   return { ...tool, snippet: `Use ${name} for files.` };
 }
@@ -38,7 +41,6 @@ const write = exampleTool("write", "Write a file");
 const grep = exampleTool("grep", "Search files");
 const Files = defineExtension<AppTool>({ name: "files", tools: [read, write] });
 const Search = defineExtension<AppTool>({ name: "search", tools: [grep] });
-// Sections see the offered tools as app tools, so one can render their snippets.
 const Snippets = defineExtension<AppTool>({
   name: "snippets",
   sections: [
@@ -51,57 +53,59 @@ registry.install(Files);
 registry.install(Search);
 registry.install(Snippets);
 
-// Settings are Harness-wide run policy, read at every use and never stored.
-// A getter makes a value live, such as one backed by the app's settings file.
 let timeoutMs = 60_000;
-const settings: HarnessSettings = {
+const settings: durableTypes.HarnessSettings = {
+  retry: { maxRetries: 5 },
   get stream() {
     return { timeoutMs };
   },
-  retry: { maxRetries: 5 },
   toolExecution: "sequential",
 };
-const harness = await Harness.open(
-  new MemoryStorage(),
-  { models: createModels(), registry, settings },
-  context,
-);
-const root = await harness.root(context);
 
-// A new conversation stores no choices and follows the host: every installed
-// extension, all of their tools.
-const tools = async () => (await root.agent(context)).tools.map((tool) => tool.name);
-console.log("default tools:", await tools());
+const main = Effect.gen(function* () {
+  const harness = yield* awaited(
+    Harness.open(new MemoryStorage(), { models: createModels(), registry, settings }, context),
+  );
+  const root = yield* awaited(harness.root(context));
 
-// configure() stores choices in the conversation's msa.agent document, one
-// commit per call. Extensions and tools are passed as objects and stored by
-// name, so a typo cannot slip in.
-await root.configure(
-  {
-    model: { provider: "anthropic", modelId: "claude-sonnet-4-5" },
-    thinkingLevel: "high",
-    tools: [write, read],
-  },
-  context,
-);
-console.log("stored:", await harness.snapshot(AgentDoc, root.id, context));
-const agent = await root.agent(context);
-console.log("model:", agent.model, "thinking:", agent.thinkingLevel, "tools:", await tools());
+  const tools = Effect.fn("tools")(function* () {
+    return (yield* awaited(root.agent(context))).tools.map((tool) => tool.name);
+  });
+  yield* Console.log("default tools:", yield* tools());
 
-// Deselect an extension; `null` clears a stored field back to the host default.
-await root.configure({ extensions: { remove: [Search] }, tools: null }, context);
-console.log("without search:", await tools());
+  yield* awaited(
+    root.configure(
+      {
+        model: { modelId: "claude-sonnet-4-5", provider: "anthropic" },
+        thinkingLevel: "high",
+        tools: [write, read],
+      },
+      context,
+    ),
+  );
+  yield* Console.log("stored:", yield* awaited(harness.snapshot(AgentDoc, root.id, context)));
+  const agent = yield* awaited(root.agent(context));
+  yield* Console.log(
+    "model:",
+    agent.model,
+    "thinking:",
+    agent.thinkingLevel,
+    "tools:",
+    yield* tools(),
+  );
 
-// Stored names outlive the code. The conversation selects exactly these two
-// extensions; uninstalling "files" leaves it selected, and requests just stop
-// offering its tools until it is back.
-await root.configure({ extensions: [Files, Search] }, context);
-registry.uninstall(Files);
-console.log("files uninstalled:", await tools());
-registry.install(Files);
-console.log("files reinstalled:", await tools());
+  yield* awaited(root.configure({ extensions: { remove: [Search] }, tools: null }, context));
+  yield* Console.log("without search:", yield* tools());
 
-// Settings changes need no commit; the next request uses the new timeout.
-timeoutMs = 120_000;
+  yield* awaited(root.configure({ extensions: [Files, Search] }, context));
+  registry.uninstall(Files);
+  yield* Console.log("files uninstalled:", yield* tools());
+  registry.install(Files);
+  yield* Console.log("files reinstalled:", yield* tools());
 
-await harness.close(context);
+  timeoutMs = 120_000;
+
+  yield* awaited(harness.close(context));
+});
+
+NodeRuntime.runMain(main);

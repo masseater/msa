@@ -1,42 +1,25 @@
 import { homedir } from "node:os";
 
-import { DateTime, Effect, Filter, Option, Schema, Stream } from "effect";
+import { DateTime, Effect, Filter, Option, Result, Schema, Stream } from "effect";
 
-import type { HostShape } from "./host.ts";
+import type autoSinceTypes from "./auto-since.types.ts";
+import type hostTypes from "./host.types.ts";
+import sessionsSchema from "./sessions-schema.ts";
+import type sessionsTypes from "./sessions.types.ts";
 
-const CostSchema = Schema.Struct({
-  input: Schema.optional(Schema.Finite),
-  output: Schema.optional(Schema.Finite),
-  cacheRead: Schema.optional(Schema.Finite),
-  cacheWrite: Schema.optional(Schema.Finite),
-  total: Schema.optional(Schema.Finite),
-});
+const { CostSchema, SessionEntrySchema, UsageSchema } = sessionsSchema;
 
-const UsageSchema = Schema.Struct({
-  input: Schema.optional(Schema.Finite),
-  output: Schema.optional(Schema.Finite),
-  cacheRead: Schema.optional(Schema.Finite),
-  cacheWrite: Schema.optional(Schema.Finite),
-  totalTokens: Schema.optional(Schema.Finite),
-  cost: Schema.optional(CostSchema),
-});
+const messageOf = <M>(entry: {
+  readonly message?: M | undefined;
+  readonly type?: string | undefined;
+}): M | undefined => (entry.type === "message" ? entry.message : undefined);
 
-const MessageSchema = Schema.Struct({
-  role: Schema.optional(Schema.String),
-  provider: Schema.optional(Schema.String),
-  usage: Schema.optional(UsageSchema),
-  timestamp: Schema.optional(Schema.Finite),
-});
-
-const SessionEntrySchema = Schema.Struct({
-  type: Schema.optional(Schema.String),
-  timestamp: Schema.optional(Schema.String),
-  message: Schema.optional(MessageSchema),
-});
-
-type Cost = typeof CostSchema.Type;
-type Usage = typeof UsageSchema.Type;
-type SessionEntry = typeof SessionEntrySchema.Type;
+const assistantMessageOf = (
+  entry: sessionsTypes.SessionEntry,
+): NonNullable<sessionsTypes.SessionEntry["message"]> | undefined => {
+  const message = messageOf(entry);
+  return message?.role === "assistant" ? message : undefined;
+};
 
 const decodeSessionEntry = Schema.decodeUnknownEffect(Schema.fromJsonString(SessionEntrySchema));
 
@@ -44,8 +27,8 @@ const sessionEntryOf = Filter.makeEffect((line: string) => Effect.result(decodeS
 
 const sessionEntries = (options: {
   readonly file: string;
-  readonly host: HostShape;
-}): Stream.Stream<SessionEntry> =>
+  readonly host: hostTypes.HostShape;
+}): Stream.Stream<sessionsTypes.SessionEntry> =>
   options.host.lines(options.file).pipe(
     Stream.filter((line) => line.trim() !== ""),
     Stream.filterMapEffect(sessionEntryOf),
@@ -54,10 +37,10 @@ const sessionEntries = (options: {
 const encodeSessionDir = (cwd: string): string =>
   `--${(cwd.startsWith("/") ? cwd.slice(1) : cwd).replaceAll("/", "-")}--`;
 
-const defaultSessionsBase = (host: HostShape): string =>
+const defaultSessionsBase = (host: hostTypes.HostShape): string =>
   host.join(homedir(), ".msa", "agent", "sessions");
 
-const jsonlFiles = (options: { readonly directory: string; readonly host: HostShape }) =>
+const jsonlFiles = (options: { readonly directory: string; readonly host: hostTypes.HostShape }) =>
   Effect.map(options.host.readDirectory(options.directory), (names) =>
     [...names.filter((name) => name.endsWith(".jsonl"))].sort(),
   );
@@ -69,9 +52,28 @@ const parseMillis = (value: string): number | null => {
   return Option.isSome(parsed) ? DateTime.toEpochMillis(parsed.value) : null;
 };
 
+const timestampMillis = (timestamp: string | undefined): number | null =>
+  timestamp === undefined ? null : parseMillis(timestamp);
+
+const forEachDecodedLine = <A, E>(options: {
+  readonly decode: (line: string) => Effect.Effect<A, E>;
+  readonly file: string;
+  readonly host: hostTypes.HostShape;
+  readonly onEntry: (entry: A) => void;
+  readonly onMalformed: () => void;
+}): Effect.Effect<void> =>
+  options.host.lines(options.file).pipe(
+    Stream.filter((line) => line.trim() !== ""),
+    Stream.runForEach((line) =>
+      Effect.result(options.decode(line)).pipe(
+        Effect.map(Result.match({ onFailure: options.onMalformed, onSuccess: options.onEntry })),
+      ),
+    ),
+  );
+
 const sessionFileMillis = (options: {
   readonly file: string;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
 }): number | null => {
   const raw = options.host.basename(options.file).split("_")[0];
   if (raw === undefined || raw === "") return null;
@@ -80,29 +82,121 @@ const sessionFileMillis = (options: {
 
 const jsonlFilesRecursive = (options: {
   readonly directory: string;
-  readonly host: HostShape;
+  readonly host: hostTypes.HostShape;
 }): Effect.Effect<ReadonlyArray<string>> =>
   Effect.gen(function* () {
     const { directory, host } = options;
-    const names = yield* host.readDirectory(directory);
-    const found = yield* Effect.forEach([...names].sort(), (name) =>
-      Effect.gen(function* () {
-        const path = host.join(directory, name);
-        const info = yield* host.stat(path);
-        if (info.isDirectory) return yield* jsonlFilesRecursive({ directory: path, host });
-        return info.isFile && name.endsWith(".jsonl") ? [path] : [];
-      }),
+    const names = yield* host.readDirectory(directory, { recursive: true });
+    const paths = [...names]
+      .filter((name) => name.endsWith(".jsonl"))
+      .sort()
+      .map((name) => host.join(directory, name));
+    const found = yield* Effect.forEach(paths, (path) =>
+      Effect.map(host.stat(path), (info) => (info.isFile ? [path] : [])),
     );
     return found.flat();
   });
 
-export type { Cost, SessionEntry, Usage };
-export {
+const isOlderThan = (fileMillis: number | null, sinceMs: number | null): boolean =>
+  sinceMs !== null && fileMillis !== null && fileMillis < sinceMs;
+
+const forEachSessionFile = (options: {
+  readonly counts: sessionsTypes.SessionFileCounts;
+  readonly host: hostTypes.HostShape;
+  readonly scan: (file: {
+    readonly sessionFile: string;
+    readonly sessionMillis: number | null;
+  }) => Effect.Effect<void>;
+  readonly sessionsDir: string;
+  readonly sinceMs: number | null;
+}): Effect.Effect<void> =>
+  Effect.gen(function* () {
+    const { counts, host } = options;
+    const files = yield* jsonlFilesRecursive({ directory: options.sessionsDir, host });
+    yield* Effect.forEach(files, (sessionFile) =>
+      Effect.gen(function* () {
+        counts.sessionFilesScanned += 1;
+        const sessionMillis = sessionFileMillis({ file: sessionFile, host });
+        if (isOlderThan(sessionMillis, options.sinceMs)) {
+          counts.sessionFilesSkippedOlderThanSince += 1;
+          return;
+        }
+        counts.sessionFilesIncluded += 1;
+        yield* options.scan({ sessionFile, sessionMillis });
+      }),
+    );
+  });
+
+const emptySessionFileCounts = (): sessionsTypes.SessionFileCounts => ({
+  sessionFilesIncluded: 0,
+  sessionFilesScanned: 0,
+  sessionFilesSkippedOlderThanSince: 0,
+});
+
+const sessionScanMeta = (options: {
+  readonly sessionsDir: string;
+  readonly since: autoSinceTypes.SinceFilter | null;
+}) => ({
+  sessionsDir: options.sessionsDir,
+  ...emptySessionFileCounts(),
+  malformedLines: 0,
+  since: options.since,
+});
+
+const collectSessionRecords = <R>(options: {
+  readonly counts: sessionsTypes.SessionFileCounts;
+  readonly host: hostTypes.HostShape;
+  readonly scanFile: (file: {
+    readonly sessionFile: string;
+    readonly sessionMillis: number | null;
+  }) => Effect.Effect<ReadonlyArray<R>>;
+  readonly sessionsDir: string;
+  readonly since: autoSinceTypes.SinceFilter | null;
+}): Effect.Effect<ReadonlyArray<R>> => {
+  const records: Array<R> = [];
+  return forEachSessionFile({
+    counts: options.counts,
+    host: options.host,
+    scan: (file) =>
+      Effect.map(options.scanFile(file), (found) => {
+        records.push(...found);
+      }),
+    sessionsDir: options.sessionsDir,
+    sinceMs: options.since === null ? null : options.since.ms,
+  }).pipe(Effect.as(records));
+};
+
+const requireSessionsDir = <E>(options: {
+  readonly fail: (message: string) => E;
+  readonly host: hostTypes.HostShape;
+  readonly sessionsDir: string;
+}): Effect.Effect<void, E> =>
+  Effect.flatMap(options.host.exists(options.sessionsDir), (exists) =>
+    exists
+      ? Effect.void
+      : Effect.fail(options.fail(`Sessions directory not found: ${options.sessionsDir}`)),
+  );
+
+const sessions = {
+  CostSchema,
+  SessionEntrySchema,
+  UsageSchema,
+  assistantMessageOf,
+  collectSessionRecords,
   defaultSessionsBase,
+  emptySessionFileCounts,
   encodeSessionDir,
+  forEachDecodedLine,
+  forEachSessionFile,
   jsonlFiles,
   jsonlFilesRecursive,
+  messageOf,
   parseMillis,
+  requireSessionsDir,
   sessionEntries,
   sessionFileMillis,
+  sessionScanMeta,
+  timestampMillis,
 };
+
+export default sessions;

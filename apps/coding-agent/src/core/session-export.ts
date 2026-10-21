@@ -1,27 +1,27 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { dirname } from "node:path";
+import paths from "../utils/paths.ts";
+import platform from "./platform/index.ts";
+import type sessionManagerTypes from "./session-manager.types.ts";
+import sessionFormat from "./session-manager/session-format.ts";
 
-import { resolvePath } from "../utils/paths.ts";
-import {
-  CURRENT_SESSION_VERSION,
-  type SessionHeader,
-  type SessionManager,
-} from "./session-manager.ts";
+const { makeDirectory, writeFile } = platform.files;
+
+const { CURRENT_SESSION_VERSION } = sessionFormat;
+const { dirname, nowIso } = platform;
+const { resolvePath } = paths;
 
 type TrailingEntries = (parentId: string | null, timestamp: string) => readonly object[];
 
-/** Serialize the current branch and optional export-only entries as JSONL. */
-export function serializeSessionBranch(
-  sessionManager: SessionManager,
+function serializeSessionBranch(
+  sessionManager: sessionManagerTypes.SessionManager,
   createTrailingEntries?: TrailingEntries,
 ): string {
-  const timestamp = new Date().toISOString();
-  const header: SessionHeader = {
-    type: "session",
-    version: CURRENT_SESSION_VERSION,
+  const timestamp = nowIso();
+  const header: sessionManagerTypes.SessionHeader = {
+    cwd: sessionManager.getCwd(),
     id: sessionManager.getSessionId(),
     timestamp,
-    cwd: sessionManager.getCwd(),
+    type: "session",
+    version: CURRENT_SESSION_VERSION,
   };
   const entries: object[] = [header];
   let parentId: string | null = null;
@@ -33,14 +33,22 @@ export function serializeSessionBranch(
   return `${entries.map((entry) => JSON.stringify(entry)).join("\n")}\n`;
 }
 
-/** Write the current session branch as JSONL. */
-export function exportSessionToJsonl(sessionManager: SessionManager, outputPath?: string): string {
+function exportSessionToJsonl(
+  sessionManager: sessionManagerTypes.SessionManager,
+  outputPath?: string,
+): Promise<string> {
   const filePath = resolvePath(
-    outputPath ?? `session-${new Date().toISOString().replace(/[:.]/g, "-")}.jsonl`,
+    outputPath ?? `session-${nowIso().replace(/[:.]/gu, "-")}.jsonl`,
     process.cwd(),
   );
-  const dir = dirname(filePath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, serializeSessionBranch(sessionManager));
-  return filePath;
+  return makeDirectory({ path: dirname(filePath) })
+    .then(() => writeFile({ data: serializeSessionBranch(sessionManager), path: filePath }))
+    .then(() => filePath);
 }
+
+const sessionExport = {
+  exportSessionToJsonl,
+  serializeSessionBranch,
+};
+
+export default sessionExport;

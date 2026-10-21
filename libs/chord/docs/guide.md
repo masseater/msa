@@ -36,7 +36,9 @@ Chord builds applications out of **objects** that live in several processes (a s
 ## Quick start
 
 ```ts
-import { createHost, method, remote } from "@msa/chord";
+import chord from "@msa/chord";
+
+const { createHost, method, remote } = chord;
 import { Type } from "typebox";
 
 // contract.ts: shared by provider and consumers
@@ -628,7 +630,9 @@ plugins/chat/
 
 ```ts
 // plugins/chat/worker.ts
-import { defineFacet } from "@msa/chord";
+import chord from "@msa/chord";
+
+const { defineFacet } = chord;
 
 import { Chat, Conversation } from "./contract.ts";
 
@@ -781,7 +785,7 @@ const worker = createHost<Principal>({
   name: `session:${id}`,
   self: { kind: "host" },
   principalKey,
-  upstream: { link: ipcLink(process), principal: { kind: "server" } }, // the server's own requests act as this
+  upstream: { link: ipcLink(parentChannel()), principal: { kind: "server" } }, // the server's own requests act as this
 });
 
 // anywhere
@@ -808,6 +812,7 @@ const sessions = self.get(Sessions, {}); // `hostNamed("server")`: worker → se
   ```
 
 - **Browsers** don't take part in commits. They learn about new code through shape and `reset` messages, and an incompatible contract makes their calls fail with `upgrade_required`.
+- **Compression:** payloads over `PACK_THRESHOLD` are deflated only on links given a `compression` (`ipcLink`, `memoryLinkPair`, `webSocketLink`, `acceptWebSockets`, `forkDriver`). On Node pass `zlibCompression` from `@msa/chord/node`. Both ends of an IPC or memory link need it; a WebSocket client without it inflates what the server sends through `DecompressionStream`.
 
 ## Durable
 

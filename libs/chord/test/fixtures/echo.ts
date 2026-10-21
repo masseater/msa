@@ -1,11 +1,12 @@
 import { Type } from "typebox";
 
-import { hostNamed, method, remote } from "../../src/index.ts";
+import chord from "../../src/index.ts";
 
-export const Echo = remote("t.echo", {
-  version: 1,
-  input: Type.Object({}),
+const { hostNamed, method, remote } = chord;
+
+const Echo = remote("t.echo", {
   host: hostNamed("w1"),
+  input: Type.Object({}),
   variants: {
     main: {
       methods: {
@@ -14,4 +15,7 @@ export const Echo = remote("t.echo", {
       },
     },
   },
+  version: 1,
 });
+
+export default Echo;

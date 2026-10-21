@@ -1,28 +1,28 @@
-import type { TextContent } from "@msa/ai";
-import type { Component } from "@msa/tui";
-import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import type { MessageRenderer } from "../../../core/extensions/types.ts";
-import type { CustomMessage } from "../../../core/messages.ts";
-import { getMarkdownTheme, theme } from "../theme/theme.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import type messagesTypes from "../../../core/messages.types.ts";
+import themeModule from "../theme/theme.ts";
 
-/**
- * Component that renders a custom message entry from extensions.
- * Uses distinct styling to differentiate from user messages.
- */
-export class CustomMessageComponent extends Container {
-  private message: CustomMessage<unknown>;
-  private customRenderer?: MessageRenderer | undefined;
-  private box: Box;
-  private customComponent?: Component | undefined;
-  private markdownTheme: MarkdownTheme;
-  private _expanded = false;
+const { getMarkdownTheme, theme } = themeModule;
+
+const { Box, Markdown, Spacer, Text } = tui;
+
+export default class CustomMessageComponent extends tui.Container {
+  private message: messagesTypes.CustomMessage<unknown>;
+  private customRenderer?: extensionsTypesTypes.MessageRenderer | undefined;
+  private box: tuiTypes.Box;
+  private customComponent?: tuiTypes.Component | undefined;
+  private markdownTheme: tuiTypes.MarkdownTheme;
+  private expandedState = false;
   private outputPad: number;
 
   constructor(
-    message: CustomMessage<unknown>,
-    customRenderer?: MessageRenderer,
-    markdownTheme: MarkdownTheme = getMarkdownTheme(),
+    message: messagesTypes.CustomMessage<unknown>,
+    customRenderer?: extensionsTypesTypes.MessageRenderer,
+    markdownTheme: tuiTypes.MarkdownTheme = getMarkdownTheme(),
     outputPad = 1,
   ) {
     super();
@@ -33,15 +33,14 @@ export class CustomMessageComponent extends Container {
 
     this.addChild(new Spacer(1));
 
-    // Create box with purple background (used for default rendering)
     this.box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
 
     this.rebuild();
   }
 
   setExpanded(expanded: boolean): void {
-    if (this._expanded !== expanded) {
-      this._expanded = expanded;
+    if (this.expandedState !== expanded) {
+      this.expandedState = expanded;
       this.rebuild();
     }
   }
@@ -59,49 +58,41 @@ export class CustomMessageComponent extends Container {
   }
 
   private rebuild(): void {
-    // Remove previous content component
-    if (this.customComponent) {
+    if (this.customComponent !== undefined) {
       this.removeChild(this.customComponent);
       this.customComponent = undefined;
     }
     this.removeChild(this.box);
 
-    // Try custom renderer first - it handles its own styling
-    if (this.customRenderer) {
+    if (this.customRenderer !== undefined) {
       try {
         const component = this.customRenderer(
           this.message,
-          { expanded: this._expanded, outputPad: this.outputPad },
+          { expanded: this.expandedState, outputPad: this.outputPad },
           theme,
         );
-        if (component) {
-          // Custom renderer provides its own styled component
+        if (component !== undefined) {
           this.customComponent = component;
           this.addChild(component);
           return;
         }
-      } catch {
-        // Fall through to default rendering
-      }
+      } catch {}
     }
 
-    // Default rendering uses our box
     this.addChild(this.box);
     this.box.clear();
     this.box.setPaddingX(this.outputPad);
 
-    // Default rendering: label + content
     const label = theme.fg("customMessageLabel", `\x1b[1m[${this.message.customType}]\x1b[22m`);
     this.box.addChild(new Text(label, 0, 0));
     this.box.addChild(new Spacer(1));
 
-    // Extract text content
     let text: string;
     if (typeof this.message.content === "string") {
       text = this.message.content;
     } else {
       text = this.message.content
-        .filter((c): c is TextContent => c.type === "text")
+        .filter((c): c is aiTypes.TextContent => c.type === "text")
         .map((c) => c.text)
         .join("\n");
     }

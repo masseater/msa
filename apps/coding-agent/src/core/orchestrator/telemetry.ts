@@ -1,78 +1,69 @@
-import type { SpanAttributes, TelemetryContext } from "@msa/telemetry";
+import type telemetryTypes from "@msa/telemetry/index.types";
 
-import { type OpenSpan, openSpan } from "../observability/open-span.ts";
-import type { SessionTelemetryOptions } from "../observability/session-telemetry.ts";
-import type {
-  OrchestratorSnapshot,
-  ReplanInput,
-  ReplanResult,
-  ThreadRole,
-  ThreadStatus,
-  Task,
-  TaskStatus,
-} from "./types.ts";
-import type { OrchestratorReport } from "./worker.ts";
+import openSpanModule from "../observability/open-span.ts";
+import type openSpanTypes from "../observability/open-span.types.ts";
+import type sessionTelemetryTypes from "../observability/session-telemetry.types.ts";
+import type telemetryTypesNs from "./telemetry.types.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
+import type workerTypes from "./worker.ts";
 
-const FINISHED_TASK: ReadonlySet<TaskStatus> = new Set(["completed", "failed", "stopped"]);
+const { openSpan } = openSpanModule;
 
-export interface ThreadPlanTelemetry {
-  readonly threadId: string;
-  readonly role: ThreadRole;
-  readonly model: string;
-  readonly thinkingLevel: string;
-}
+const FINISHED_TASK: ReadonlySet<orchestratorTypesTypes.TaskStatus> = new Set([
+  "completed",
+  "failed",
+  "stopped",
+]);
 
 function endStatus(
-  status: ThreadStatus | TaskStatus,
+  status: orchestratorTypesTypes.ThreadStatus | orchestratorTypesTypes.TaskStatus,
   name: string,
-): Parameters<OpenSpan["end"]>[0] {
+): Parameters<openSpanTypes.OpenSpan["end"]>[0] {
   if (status === "completed") return undefined;
-  return { status: "error", error: { name, message: status } };
+  return { error: { message: status, name }, status: "error" };
 }
 
-/**
- * Keeps the Task → Thread spans of one orchestrator. A Task span stays open from its first
- * thread until the task finishes; each Thread span lives from launch until the thread settles.
- * Both end when a published snapshot shows them finished, whichever action finished them.
- */
-export class OrchestratorTelemetry {
-  readonly context: TelemetryContext;
-  readonly #tasks = new Map<string, OpenSpan>();
-  readonly #threads = new Map<string, OpenSpan>();
+export default class OrchestratorTelemetry {
+  readonly context: telemetryTypes.TelemetryContext;
+  readonly #tasks = new Map<string, openSpanTypes.OpenSpan>();
+  readonly #threads = new Map<string, openSpanTypes.OpenSpan>();
 
-  constructor(context: TelemetryContext) {
+  constructor(context: telemetryTypes.TelemetryContext) {
     this.context = context;
   }
 
-  threadStarted(plan: ThreadPlanTelemetry, task: Task): SessionTelemetryOptions {
+  threadStarted(
+    plan: telemetryTypesNs.ThreadPlanTelemetry,
+    task: orchestratorTypesTypes.Task,
+  ): sessionTelemetryTypes.SessionTelemetryOptions {
     const taskSpan =
       this.#tasks.get(task.id) ??
       openSpan(this.context, {
-        name: "msa.task",
         attributes: {
           "msa.task.id": task.id,
           "msa.task.kind": task.kind,
-          "msa.task.title": task.title,
           "msa.task.round": task.round,
+          "msa.task.title": task.title,
         },
+        name: "msa.task",
       });
     this.#tasks.set(task.id, taskSpan);
     this.#threads.get(plan.threadId)?.end();
     const thread = openSpan(taskSpan.span, {
-      name: "msa.thread",
       attributes: {
+        "gen_ai.request.model": plan.model,
+        "msa.task.id": task.id,
+        "msa.thinking_level": plan.thinkingLevel,
         "msa.thread.id": plan.threadId,
         "msa.thread.role": plan.role,
-        "msa.task.id": task.id,
-        "gen_ai.request.model": plan.model,
-        "msa.thinking_level": plan.thinkingLevel,
       },
+      name: "msa.thread",
     });
     this.#threads.set(plan.threadId, thread);
     return { context: thread.span, role: plan.role };
   }
 
-  published(snapshot: OrchestratorSnapshot, activeThreads: number): void {
+  published(snapshot: orchestratorTypesTypes.OrchestratorSnapshot, activeThreads: number): void {
     for (const thread of snapshot.threads) {
       const span = this.#threads.get(thread.id);
       if (span === undefined || thread.status === "running") continue;
@@ -88,47 +79,49 @@ export class OrchestratorTelemetry {
       this.#tasks.delete(task.id);
     }
     this.context.recordMetric({
+      description: "Orchestrator threads running now",
       kind: "gauge",
       name: "msa.orchestrator.threads.active",
-      value: activeThreads,
       unit: "{thread}",
-      description: "Orchestrator threads running now",
+      value: activeThreads,
     });
   }
 
-  reported(text: string, details: OrchestratorReport): void {
-    const attributes: SpanAttributes = {
+  reported(text: string, details: workerTypes.OrchestratorReport): void {
+    const attributes: telemetryTypes.SpanAttributes = {
+      "msa.report.started": [...details.started],
+      "msa.report.status": details.status,
+      "msa.report.text": text,
       "msa.task.id": details.taskId,
       "msa.thread.role": details.role,
-      "msa.report.status": details.status,
-      "msa.report.started": [...details.started],
-      "msa.report.text": text,
     };
     const task = this.#tasks.get(details.taskId);
     (task?.span ?? this.context).log({
-      severity: details.status === "completed" ? "info" : "warn",
-      body: "msa.orchestrator.report",
       attributes,
+      body: "msa.orchestrator.report",
+      severity: details.status === "completed" ? "info" : "warn",
     });
   }
 
-  replanned(input: ReplanInput, result: ReplanResult): void {
+  replanned(
+    input: orchestratorTypesTypes.ReplanInput,
+    result: orchestratorTypesTypes.ReplanResult,
+  ): void {
     this.context.log({
-      severity: result.aborted === null ? "info" : "warn",
-      body: "msa.orchestrator.replan",
       attributes: {
-        "msa.replan.id": result.replanId ?? undefined,
-        "msa.replan.reason": input.reason,
         "msa.replan.aborted": result.aborted ?? undefined,
-        "msa.replan.stopped": result.stopped.length,
         "msa.replan.created": result.created.length,
         "msa.replan.dropped": result.dropped.length,
+        "msa.replan.id": result.replanId ?? undefined,
+        "msa.replan.reason": input.reason,
         "msa.replan.started": result.started.length,
+        "msa.replan.stopped": result.stopped.length,
       },
+      body: "msa.orchestrator.replan",
+      severity: result.aborted === null ? "info" : "warn",
     });
   }
 
-  /** Ends whatever is still open; msa is shutting down. */
   close(): void {
     for (const span of [...this.#threads.values(), ...this.#tasks.values()]) {
       span.span.setAttributes({ "msa.unfinished": true });

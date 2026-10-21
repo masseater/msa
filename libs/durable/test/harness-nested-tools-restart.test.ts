@@ -1,74 +1,76 @@
-import { rm } from "node:fs/promises";
-
-import type { Context } from "@msa/chord";
-import {
-  type AgentEvent,
-  defineExtension,
-  defineTask,
-  type Harness,
-  LiveDoc,
-  ToolTask,
-  watchEvents,
-} from "@msa/durable";
+import type chordTypes from "@msa/chord/index.types";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { allEntries, chatSetup } from "./chat-support.ts";
-import {
-  spawnThroughBatch,
+import harnessNestedToolsRestartSupport from "./harness-nested-tools-restart-support.ts";
+import support from "./support.ts";
+
+const { ToolTask, watchEvents } = harnessModule;
+const { LiveDoc, defineExtension, defineTask } = durable;
+
+const {
   DONE,
   call,
-  tool,
-  Parameters,
-  directories,
-  sqlitePath,
-  results,
   codes,
+  directories,
   nestedTasks,
   restartDuring,
-  open,
-} from "./harness-nested-tools-restart-support.ts";
-import { addHooks, addTool } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, deferred, eventually } from "./task-support.ts";
+  results,
+  spawnThroughBatch,
+  sqlitePath,
+  tool,
+} = harnessNestedToolsRestartSupport;
+const { aborted, addHooks, addTool, allEntries, awaited, chatSetup, context, deferred, removeDir } =
+  support;
 
-afterEach(async () => {
-  for await (const directory of directories) await rm(directory, { recursive: true, force: true });
-  directories.clear();
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      for (const directory of directories) yield* removeDir(directory);
+      directories.clear();
+    }),
+  ),
+);
 
-// Collect tool end events from now on.
-async function collectEnds(
-  harness: Harness,
-  conversationId: Parameters<Harness["conversation"]>[0],
+const collectEnds = Effect.fn("collectEnds")(function* (
+  harness: durableTypes.Harness,
+  conversationId: Parameters<durableTypes.Harness["conversation"]>[0],
 ) {
-  const ends: Extract<AgentEvent, { type: "tool_execution_end" }>[] = [];
-  const stream = await watchEvents(harness, conversationId, context);
+  const ends: Extract<durableTypes.AgentEvent, { type: "tool_execution_end" }>[] = [];
+  const stream = yield* awaited(watchEvents(harness, conversationId, context));
   stream.start((batch) => {
     for (const event of batch) if (event.type === "tool_execution_end") ends.push(event);
 
     return Promise.resolve();
   });
   return { ends, stop: () => stream.stop() };
-}
+});
 
-async function replayUnsafeBatch() {
-  const path = await sqlitePath();
+const replayUnsafeBatchStep1 = Effect.fn("replayUnsafeBatchStep1")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const path = yield* sqlitePath();
   const setup = chatSetup();
-  const runs = { started: 0, gated: 0 };
+  const runs = { gated: 0, started: 0 };
   const running = deferred();
   const gated = deferred();
-  // Replay-safe, so only the abandonment keeps it from rerunning.
   addTool(
     setup.registry,
     tool(
       "started",
-      async (_args, api, callContext) => {
-        runs.started++;
-        api.output("partial\n");
-        await api.details({ step: 1 }, callContext);
-        running.resolve();
-        return aborted(callContext.abortSignal!);
-      },
+      (_args, api, callContext) =>
+        runPromise(
+          Effect.gen(function* () {
+            runs.started++;
+            api.output("partial\n");
+            yield* awaited(api.details({ step: 1 }, callContext));
+            running.resolve();
+            return yield* awaited(aborted(callContext.abortSignal!));
+          }),
+        ),
       { replay: "safe" },
     ),
   );
@@ -79,218 +81,135 @@ async function replayUnsafeBatch() {
       return Promise.resolve({});
     }),
   );
-  // Holds `gated` in its `call` phase, before intent, until the Harness closes.
   addHooks(setup.registry, ToolTask, {
-    beforeTool: (hookCall, _api, hookContext: Context) => {
+    beforeTool: (hookCall, _api, hookContext: chordTypes.Context) => {
       if (hookCall.name !== "gated") return Promise.resolve(undefined);
       gated.resolve();
       return Promise.resolve(aborted(hookContext.abortSignal!));
     },
   });
+  return { gated, path, runPromise, running, runs, setup };
+});
+
+const replayUnsafeBatch = Effect.fn("replayUnsafeBatch")(function* () {
+  const { runPromise, path, setup, runs, running, gated } = yield* replayUnsafeBatchStep1();
   addTool(
     setup.registry,
-    tool("batch", async (_args, api, callContext) => {
-      const first = api.executeTool("started", {}, callContext);
-      const second = api.executeTool("gated", {}, callContext);
-      await Promise.all([first, second]);
-      return {};
-    }),
+    tool("batch", (_args, api, callContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          const first = api.executeTool("started", {}, callContext);
+          const second = api.executeTool("gated", {}, callContext);
+          yield* awaited(Promise.all([first, second]));
+          return {};
+        }),
+      ),
+    ),
   );
   setup.faux.setResponses([call("batch"), DONE]);
-  return { path, setup, runs, running, gated };
-}
+  return { gated, path, running, runs, setup };
+});
 
-async function lateWorkerSetup() {
-  const path = await sqlitePath();
+const abandonsReplayUnsafe = Effect.gen(function* () {
+  const { path, setup, runs, running, gated } = yield* replayUnsafeBatch();
+  const { opened, id } = yield* restartDuring(
+    path,
+    setup,
+    Promise.all([running.promise, gated.promise]),
+  );
+  const { ends, stop } = yield* collectEnds(opened.harness, opened.root.id);
+  opened.harness.resume();
+  expect(
+    (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
+      .status,
+  ).toBe("done");
+  yield* awaited(opened.harness.waitForIdle(context));
+  yield* awaited(stop());
+  expect(runs).toEqual({ gated: 0, started: 1 });
+  const [started, gate] = yield* nestedTasks(opened.harness);
+  for (const task of [started, gate]) {
+    expect(task).toMatchObject({
+      abandonOnRestart: true,
+      abortReason: "restart",
+      abortRequested: true,
+    });
+    expect(task!.state).toMatchObject({ outcome: { status: "aborted" }, status: "terminal" });
+  }
+  const end = (callId: string) => ends.find((event) => event.toolCallId === callId)?.result;
+  expect(codes(end("c1/1"))).toEqual(["interrupted"]);
+  expect(end("c1/1")).toMatchObject({ details: { step: 1 }, isError: true });
+  expect(end("c1/1")).not.toHaveProperty("structuredOutput");
+  expect(codes(end("c1/2"))).toEqual(["abandoned"]);
+  const [result] = results(yield* allEntries(opened.root));
+  expect(result).toMatchObject({ isError: true, toolCallId: "c1" });
+  expect(yield* awaited(opened.harness.snapshot(LiveDoc, opened.root.id, context))).toEqual({});
+  yield* awaited(opened.harness.close(context));
+});
+
+describe("nested tool calls across a restart", () => {
+  it("abandons a replay-unsafe caller's unfinished nested calls before they run again", () =>
+    Effect.runPromise(abandonsReplayUnsafe));
+});
+
+const abandonsWorkAbandonedStep1 = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  const path = yield* sqlitePath();
   const setup = chatSetup();
+  const phases: string[] = [];
   const aborts: (string | undefined)[] = [];
   const started = deferred();
   const Worker = defineTask<null, { phase: "work" }, null>({
-    name: "test.late",
-    version: 1,
+    abort: (task, runtime, abortContext) =>
+      runPromise(
+        Effect.gen(function* () {
+          aborts.push(task.abortReason);
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+              abortContext,
+            ),
+          );
+        }),
+      ),
     initial: () => ({ phase: "work" }),
+    name: "test.worker",
     phases: {
-      work: async (_task, runtime) => {
-        started.resolve();
-        await aborted(runtime.signal);
-      },
+      work: (_task, runtime) =>
+        runPromise(
+          Effect.gen(function* () {
+            phases.push("work");
+            started.resolve();
+            return yield* awaited(aborted(runtime.signal));
+          }),
+        ),
     },
-    abort: async (task, runtime, abortContext) => {
-      aborts.push(task.abortReason);
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "aborted" } }),
-        abortContext,
-      );
-    },
+    version: 1,
   });
-  const extension = defineExtension({ name: "late", tasks: [Worker] });
-  setup.registry.install(extension);
-  return { path, setup, aborts, started, Worker, extension };
-}
+  setup.registry.install(defineExtension({ name: "worker", tasks: [Worker] }));
+  const spawned = spawnThroughBatch(setup, Worker);
+  const { opened, id } = yield* restartDuring(path, setup, started.promise);
+  opened.harness.resume();
+  expect(
+    (yield* awaited((yield* awaited(opened.harness.submission(id, context)))!.wait(context)))
+      .status,
+  ).toBe("done");
+  yield* awaited(opened.harness.waitForIdle(context));
+  return { aborts, opened, phases, spawned };
+});
 
-describe("nested tool calls across a restart", () => {
-  it("abandons a replay-unsafe caller's unfinished nested calls before they run again", async () => {
-    const { path, setup, runs, running, gated } = await replayUnsafeBatch();
-    const { opened, id } = await restartDuring(
-      path,
-      setup,
-      Promise.all([running.promise, gated.promise]),
-    );
-    const { ends, stop } = await collectEnds(opened.harness, opened.root.id);
-    opened.harness.resume();
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-      "done",
-    );
-    await opened.harness.waitForIdle(context);
-    await stop();
-    expect(runs).toEqual({ started: 1, gated: 0 });
-    const [started, gate] = await nestedTasks(opened.harness);
-    for (const task of [started, gate]) {
-      expect(task).toMatchObject({
-        abandonOnRestart: true,
-        abortRequested: true,
-        abortReason: "restart",
-      });
-      expect(task!.state).toMatchObject({ status: "terminal", outcome: { status: "aborted" } });
-    }
-    const end = (callId: string) => ends.find((event) => event.toolCallId === callId)?.result;
-    expect(codes(end("c1/1"))).toEqual(["interrupted"]);
-    expect(end("c1/1")).toMatchObject({ isError: true, details: { step: 1 } });
-    expect(end("c1/1")).not.toHaveProperty("structuredOutput");
-    expect(codes(end("c1/2"))).toEqual(["abandoned"]);
-    // The caller reports the interruption.
-    const [result] = results(await allEntries(opened.root));
-    expect(result).toMatchObject({ toolCallId: "c1", isError: true });
-    expect(await opened.harness.snapshot(LiveDoc, opened.root.id, context)).toEqual({});
-    await opened.harness.close(context);
+const abandonsWorkAbandoned = Effect.gen(function* () {
+  const { phases, aborts, spawned, opened } = yield* abandonsWorkAbandonedStep1;
+  expect(phases).toEqual(["work"]);
+  expect(aborts).toEqual(["restart"]);
+  expect((yield* awaited(opened.harness.getTask(spawned.worker!, context)))?.state).toMatchObject({
+    outcome: { status: "aborted" },
+    status: "terminal",
   });
+  yield* awaited(opened.harness.close(context));
 });
 
 describe("nested tool calls across a restart", () => {
-  it("abandons the work an abandoned nested call owns, which never runs a phase again", async () => {
-    const path = await sqlitePath();
-    const setup = chatSetup();
-    const phases: string[] = [];
-    const aborts: (string | undefined)[] = [];
-    const started = deferred();
-    const Worker = defineTask<null, { phase: "work" }, null>({
-      name: "test.worker",
-      version: 1,
-      initial: () => ({ phase: "work" }),
-      phases: {
-        work: async (_task, runtime) => {
-          phases.push("work");
-          started.resolve();
-          await aborted(runtime.signal);
-        },
-      },
-      abort: async (task, runtime, abortContext) => {
-        aborts.push(task.abortReason);
-        await runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "aborted" } }),
-          abortContext,
-        );
-      },
-    });
-    setup.registry.install(defineExtension({ name: "worker", tasks: [Worker] }));
-    const spawned = spawnThroughBatch(setup, Worker);
-    const { opened, id } = await restartDuring(path, setup, started.promise);
-    opened.harness.resume();
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-      "done",
-    );
-    await opened.harness.waitForIdle(context);
-    expect(phases).toEqual(["work"]);
-    // The cascade passed the restart reason on.
-    expect(aborts).toEqual(["restart"]);
-    expect((await opened.harness.getTask(spawned.worker!, context))?.state).toMatchObject({
-      status: "terminal",
-      outcome: { status: "aborted" },
-    });
-    await opened.harness.close(context);
-  });
-});
-
-describe("nested tool calls across a restart", () => {
-  it("keeps an abandoned task whose definition is missing waiting until it is installed, then runs its abort", async () => {
-    const { path, setup, aborts, started, Worker, extension } = await lateWorkerSetup();
-    const spawned = spawnThroughBatch(setup, Worker);
-    let opened = await open(path, setup);
-    const id = (await opened.root.submit({ type: "input", content: "go" }, context)).id;
-    await started.promise;
-    await opened.harness.close(context);
-
-    setup.registry.uninstall(extension);
-    opened = await open(path, setup);
-    opened.harness.resume();
-    await eventually(async () => {
-      const inspected = (await opened.harness.inspect(context)).tasks.find(
-        (task) => task.record.id === spawned.worker,
-      );
-      return inspected?.state.kind === "blocked";
-    });
-    expect((await opened.harness.getTask(spawned.worker!, context))?.state.status).not.toBe(
-      "terminal",
-    );
-    expect(aborts).toEqual([]);
-    setup.registry.install(extension);
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-      "done",
-    );
-    expect(aborts).toEqual(["restart"]);
-    expect((await opened.harness.getTask(spawned.worker!, context))?.state).toMatchObject({
-      status: "terminal",
-      outcome: { status: "aborted" },
-    });
-    await opened.harness.close(context);
-  });
-});
-
-describe("nested tool calls across a restart", () => {
-  it("orphans an abandoned task whose definition is missing once an abort is requested", async () => {
-    const path = await sqlitePath();
-    const setup = chatSetup();
-    const started = deferred();
-    const Worker = defineTask<null, { phase: "work" }, null>({
-      name: "test.gone",
-      version: 1,
-      initial: () => ({ phase: "work" }),
-      phases: {
-        work: async (_task, runtime) => {
-          started.resolve();
-          await aborted(runtime.signal);
-        },
-      },
-      abort: async (_task, runtime, abortContext) => {
-        await runtime.commit(
-          () => ({ status: "terminal", outcome: { status: "aborted" } }),
-          abortContext,
-        );
-      },
-    });
-    const extension = defineExtension({ name: "gone", tasks: [Worker] });
-    setup.registry.install(extension);
-    const spawned = spawnThroughBatch(setup, Worker);
-    let opened = await open(path, setup);
-    const id = (await opened.root.submit({ type: "input", content: "go" }, context)).id;
-    await started.promise;
-    await opened.harness.close(context);
-
-    setup.registry.uninstall(extension);
-    opened = await open(path, setup);
-    opened.harness.resume();
-    await eventually(async () => {
-      const record = await opened.harness.getTask(spawned.worker!, context);
-      return record?.abortReason === "restart";
-    });
-    await opened.root.abort(context);
-    expect((await opened.harness.getTask(spawned.worker!, context))?.state).toMatchObject({
-      status: "terminal",
-      outcome: { status: "orphaned", reason: "missing_task" },
-    });
-    expect((await (await opened.harness.submission(id, context))!.wait(context)).status).toBe(
-      "unanswered",
-    );
-    await opened.harness.close(context);
-  });
+  it("abandons the work an abandoned nested call owns, which never runs a phase again", () =>
+    Effect.runPromise(abandonsWorkAbandoned));
 });

@@ -2,12 +2,11 @@ import type { Static } from "typebox";
 import { Compile } from "typebox/compile";
 import { describe, expect, expectTypeOf, it } from "vite-plus/test";
 
-import {
-  AnthropicMessagesCompatSchema,
-  OpenAICompletionsCompatSchema,
-  OpenAIResponsesCompatSchema,
-  ProviderCompatSchema,
-} from "../src/providers/compat-schema.ts";
+import compatSchema from "../src/providers/compat-schema.ts";
+import openaiCompatSchema from "../src/providers/openai-compat-schema.ts";
+
+const { AnthropicMessagesCompatSchema, ProviderCompatSchema } = compatSchema;
+const { OpenAICompletionsCompatSchema, OpenAIResponsesCompatSchema } = openaiCompatSchema;
 
 type ProviderCompat = Static<typeof ProviderCompatSchema>;
 

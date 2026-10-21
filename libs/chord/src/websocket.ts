@@ -1,37 +1,44 @@
-import type { AcceptOptions } from "./connection.ts";
-import type { Host } from "./host.ts";
-import { type WebSocketLike, webSocketLink } from "./link.ts";
+import { dual } from "effect/Function";
 
-/** A WebSocket server (e.g. `ws`'s `WebSocketServer`), structurally: Chord does not depend on `ws`. */
-export interface WebSocketServerLike<Request> {
-  on(event: "connection", listener: (socket: WebSocketLike, request: Request) => void): unknown;
-}
+import type hostTypesModule from "./host-types.types.ts";
+import linkModule from "./link.ts";
+import type websocketTypes from "./websocket.types.ts";
 
-/** WebSocket peers are always accepted as clients: no roots, no code versions, no reload votes, not addressable. */
-export interface WebSocketAcceptOptions<Request, P = unknown> extends Omit<
-  AcceptOptions<P>,
-  "principal" | "kind" | "name"
-> {
-  /** The authenticator: the principal of the connecting client, or undefined to refuse it. */
-  principal(request: Request): P | undefined | Promise<P | undefined>;
-}
+const { webSocketLink } = linkModule;
 
-/** Accepts every connection of `server` on `host` as a client link stamped with the authenticated principal. */
-export function acceptWebSockets<Request, P = unknown>(
-  server: WebSocketServerLike<Request>,
-  host: Host<P>,
-  options: WebSocketAcceptOptions<Request, P>,
+function webSocketsAccepted<Request, P = unknown>(
+  server: websocketTypes.WebSocketServerLike<Request>,
+  host: hostTypesModule.Host<P>,
+  options: websocketTypes.WebSocketAcceptOptions<Request, P>,
 ): void {
+  const { compression, ...accept } = options;
   server.on("connection", (socket, request) => {
-    // Wrap at once so frames sent while authenticating are queued, not lost. Large payloads go out deflated; clients
-    // may not send packed frames (a small message could inflate to anything).
-    const link = webSocketLink(socket, { compress: true, acceptPacked: false });
-    Promise.resolve(options.principal(request)).then(
+    const link = webSocketLink(socket, { acceptPacked: false, compress: true, compression });
+    Promise.resolve(accept.principal(request)).then(
       (principal) => {
         if (principal === undefined) link.close("unauthorized");
-        else host.accept(link, { ...options, principal, kind: "client" });
+        else host.accept(link, { ...accept, kind: "client", principal });
+        return undefined;
       },
       () => link.close("authentication failed"),
     );
   });
 }
+
+const acceptWebSockets: {
+  <Request, P = unknown>(
+    host: hostTypesModule.Host<P>,
+    options: websocketTypes.WebSocketAcceptOptions<Request, P>,
+  ): (server: websocketTypes.WebSocketServerLike<Request>) => void;
+  <Request, P = unknown>(
+    server: websocketTypes.WebSocketServerLike<Request>,
+    host: hostTypesModule.Host<P>,
+    options: websocketTypes.WebSocketAcceptOptions<Request, P>,
+  ): void;
+} = dual(3, webSocketsAccepted);
+
+const websocket = {
+  acceptWebSockets,
+};
+
+export default websocket;

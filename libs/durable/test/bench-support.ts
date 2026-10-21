@@ -1,60 +1,74 @@
-import { readdir, stat } from "node:fs/promises";
-import { join } from "node:path";
+import contextModule from "@msa/chord/context";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { BACKGROUND_CONTEXT as context } from "@msa/chord/context";
+import type durableTypes from "../src/index.types.ts";
+import nodeModule from "../src/storage/jsonl/node.ts";
+import node from "../src/storage/sqlite/node.ts";
+import type benchSupportTypes from "./bench-support.types.ts";
+import platformSupport from "./platform-support.ts";
 
-import type { Storage, StorageWrite } from "../src/index.ts";
-import { openNodeJsonlStorage } from "../src/storage/jsonl/node.ts";
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
+const { BACKGROUND_CONTEXT: context } = contextModule;
 
-export type Backend = "sqlite" | "jsonl";
-export type Written = Record<StorageWrite["type"], number>;
+const { openNodeSqliteStorage } = node;
+const { openNodeJsonlStorage } = nodeModule;
+
+const { fileSize, isDirectory, joinPath, listTree } = platformSupport;
 
 const gc = (globalThis as { gc?: () => void }).gc;
 
-export function requireGc(): void {
+function requireGc(): void {
   if (gc === undefined) throw new Error("Run with --expose-gc");
 }
 
-export function heapAfterGc(): number {
+function heapAfterGc(): number {
   gc!();
   return process.memoryUsage().heapUsed;
 }
 
-export async function directorySize(path: string): Promise<number> {
+const directorySize = Effect.fn("directorySize")(function* (path: string) {
   let total = 0;
-  for await (const entry of await readdir(path, { withFileTypes: true })) {
-    const full = join(path, entry.name);
-    total += entry.isDirectory() ? await directorySize(full) : (await stat(full)).size;
+  for (const entry of yield* listTree(path)) {
+    const full = joinPath(path, entry);
+    if (!(yield* isDirectory(full))) total += yield* fileSize(full);
   }
   return total;
-}
+});
 
-export function openBenchStorage(backend: Backend, directory: string): Promise<Storage> {
+function openBenchStorageImpl(
+  backend: benchSupportTypes.Backend,
+  directory: string,
+): Promise<durableTypes.Storage> {
   return Promise.resolve(
     backend === "sqlite"
-      ? openNodeSqliteStorage(join(directory, "session.sqlite"))
+      ? openNodeSqliteStorage(joinPath(directory, "session.sqlite"))
       : openNodeJsonlStorage(directory, context),
   );
 }
 
-export function noWrites(): Written {
+const openBenchStorage: {
+  (
+    directory: string,
+  ): (backend: benchSupportTypes.Backend) => ReturnType<typeof openBenchStorageImpl>;
+  (backend: benchSupportTypes.Backend, directory: string): ReturnType<typeof openBenchStorageImpl>;
+} = dual(2, openBenchStorageImpl);
+
+function noWrites(): benchSupportTypes.Written {
   return {
     conversation: 0,
-    entry: 0,
-    task: 0,
-    submission: 0,
-    "document.create": 0,
-    "document.copy": 0,
     "document.change": 0,
+    "document.copy": 0,
+    "document.create": 0,
     "document.retire": 0,
+    entry: 0,
+    submission: 0,
+    task: 0,
   };
 }
 
-// Counts each commit of `storage` in `meter`, calls `onCommit`, and adds the JSON characters of its writes per type.
-export function meterCommits(
-  storage: Storage,
-  meter: { commits: number; readonly written: Written },
+function meterCommitsImpl(
+  storage: durableTypes.Storage,
+  meter: { commits: number; readonly written: benchSupportTypes.Written },
   onCommit?: () => void,
 ): void {
   const commit = storage.commit.bind(storage);
@@ -65,3 +79,26 @@ export function meterCommits(
     return commit(writes, commitContext);
   };
 }
+
+const meterCommits: {
+  (
+    meter: { commits: number; readonly written: benchSupportTypes.Written },
+    onCommit?: () => void,
+  ): (storage: durableTypes.Storage) => ReturnType<typeof meterCommitsImpl>;
+  (
+    storage: durableTypes.Storage,
+    meter: { commits: number; readonly written: benchSupportTypes.Written },
+    onCommit?: () => void,
+  ): ReturnType<typeof meterCommitsImpl>;
+} = dual((args) => typeof args[1] === "object", meterCommitsImpl);
+
+const benchSupport = {
+  directorySize,
+  heapAfterGc,
+  meterCommits,
+  noWrites,
+  openBenchStorage,
+  requireGc,
+};
+
+export default benchSupport;

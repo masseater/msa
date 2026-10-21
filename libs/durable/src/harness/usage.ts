@@ -1,89 +1,99 @@
-import type { Usage } from "@msa/ai";
-import { copyJson, type Draft, type JsonRepresentation } from "@msa/chord";
+import type aiTypes from "@msa/ai/index.types";
+import type chordTypes from "@msa/chord/index.types";
+import json from "@msa/chord/json";
+import { Effect, Function } from "effect";
 
-import { defineDoc } from "../documents.ts";
-import type { ConversationId, Tx } from "../types.ts";
+import documents from "../documents.ts";
+import type typesModule from "./types.types.ts";
+import type usageTypes from "./usage.types.ts";
 
-/** Ledger of one conversation's own spend: its entries, and compaction summarization attempts, which have none. */
-export type UsageState = {
-  /** Assistant entries and summarization attempts, keyed `provider/modelId`. */
-  models: Record<string, JsonRepresentation<Usage>>;
-  /** Tool results, keyed by tool name; their usage has no model identity. */
-  tools: Record<string, JsonRepresentation<Usage>>;
-};
+const { copyJson } = json;
 
-export const UsageDoc = defineDoc<UsageState>({
-  kind: "msa.usage",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
-  fork: "initial",
-  initial: () => ({ models: {}, tools: {} }),
+const { defineDoc } = documents;
+
+const UsageDoc = defineDoc<usageTypes.UsageState>({
   checkpointWhen: () => true,
+  fork: "initial",
+  history: "latest",
+  initial: () => ({ models: {}, tools: {} }),
+  kind: "msa.usage",
+  scope: "conversation",
+  version: 1,
 });
 
-/**
- * Add `usage` to one bucket of the conversation's `msa.usage`, in the commit that records the response.
- * @param {Tx} tx - The commit's transaction.
- * @param {ConversationId} conversationId - The conversation.
- * @param {keyof UsageState} bucket - The bucket.
- * @param {string} key - The model or tool.
- * @param {Usage} usage - The usage.
- */
-export async function recordUsage(
-  tx: Tx,
-  conversationId: ConversationId,
-  bucket: keyof UsageState,
-  key: string,
-  usage: Usage,
-): Promise<void> {
-  const totals = (await tx.doc(UsageDoc, conversationId))[bucket];
-  // Own keys only: a tool may be called `toString`.
-  const total = Object.hasOwn(totals, key) ? totals[key] : undefined;
-  // Providers may leave optional counters `undefined`; drafts take strict JSON.
-  if (total === undefined)
-    totals[key] = copyJson(usage, { omitUndefinedProperties: true }) as JsonRepresentation<Usage>;
-  else addUsage(total, usage);
-}
+const recordUsage: typesModule.Dual5<
+  typesModule.Tx,
+  typesModule.ConversationId,
+  keyof usageTypes.UsageState,
+  string,
+  aiTypes.Usage,
+  Effect.Effect<void>
+> = Function.dual(
+  5,
+  Effect.fnUntraced(function* (
+    tx: typesModule.Tx,
+    conversationId: typesModule.ConversationId,
+    bucket: keyof usageTypes.UsageState,
+    key: string,
+    usage: aiTypes.Usage,
+  ) {
+    const totals = (yield* Effect.promise(() => tx.doc(UsageDoc, conversationId)))[bucket];
+    const total = Object.hasOwn(totals, key) ? totals[key] : undefined;
+    if (total === undefined)
+      totals[key] = copyJson(usage, {
+        omitUndefinedProperties: true,
+      }) as chordTypes.JsonRepresentation<aiTypes.Usage>;
+    else addUsage(total, usage);
+  }),
+);
 
-/**
- * Add every counter of `usage` to `total`; optional counters are added once either side reports them.
- * @param {Draft<Usage> | Usage} total - The total.
- * @param {Usage} usage - The usage to add.
- */
-export function addUsage(total: Draft<Usage> | Usage, usage: Usage): void {
-  total.input += usage.input;
-  total.output += usage.output;
-  total.cacheRead += usage.cacheRead;
-  total.cacheWrite += usage.cacheWrite;
-  total.totalTokens += usage.totalTokens;
-  if (usage.cacheWrite1h !== undefined)
-    total.cacheWrite1h = (total.cacheWrite1h ?? 0) + usage.cacheWrite1h;
-  if (usage.reasoning !== undefined) total.reasoning = (total.reasoning ?? 0) + usage.reasoning;
-  total.cost.input += usage.cost.input;
-  total.cost.output += usage.cost.output;
-  total.cost.cacheRead += usage.cost.cacheRead;
-  total.cost.cacheWrite += usage.cost.cacheWrite;
-  total.cost.total += usage.cost.total;
-}
+const addUsage: typesModule.Dual2<
+  chordTypes.Draft<aiTypes.Usage> | aiTypes.Usage,
+  aiTypes.Usage,
+  void
+> = Function.dual(
+  2,
+  (total: chordTypes.Draft<aiTypes.Usage> | aiTypes.Usage, usage: aiTypes.Usage): void => {
+    total.input += usage.input;
+    total.output += usage.output;
+    total.cacheRead += usage.cacheRead;
+    total.cacheWrite += usage.cacheWrite;
+    total.totalTokens += usage.totalTokens;
+    if (usage.cacheWrite1h !== undefined)
+      total.cacheWrite1h = (total.cacheWrite1h ?? 0) + usage.cacheWrite1h;
+    if (usage.reasoning !== undefined) total.reasoning = (total.reasoning ?? 0) + usage.reasoning;
+    total.cost.input += usage.cost.input;
+    total.cost.output += usage.cost.output;
+    total.cost.cacheRead += usage.cost.cacheRead;
+    total.cost.cacheWrite += usage.cost.cacheWrite;
+    total.cost.total += usage.cost.total;
+  },
+);
 
-/**
- * Add every bucket of `state` into `sum`.
- * @param {UsageState} sum - The sum.
- * @param {Readonly<UsageState>} state - The state to add.
- */
-export function addUsageState(sum: UsageState, state: Readonly<UsageState>): void {
+const addUsageState: typesModule.Dual2<
+  usageTypes.UsageState,
+  Readonly<usageTypes.UsageState>,
+  void
+> = Function.dual(2, (sum: usageTypes.UsageState, state: Readonly<usageTypes.UsageState>): void => {
   for (const bucket of ["models", "tools"] as const) {
     for (const [key, usage] of Object.entries(state[bucket])) {
       const total = Object.hasOwn(sum[bucket], key) ? sum[bucket][key] : undefined;
-      // Define rather than assign: assigning a tool named `__proto__` would set the prototype.
       if (total === undefined)
         Object.defineProperty(sum[bucket], key, {
-          value: structuredClone(usage),
           enumerable: true,
+          value: structuredClone(usage),
           writable: true,
         });
       else addUsage(total, usage);
     }
   }
-}
+});
+
+const usageModule = {
+  UsageDoc,
+  addUsage,
+  addUsageState,
+  recordUsage,
+};
+
+export default usageModule;

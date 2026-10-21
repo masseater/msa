@@ -1,12 +1,13 @@
-import type { Task, TaskDefinition } from "./types.ts";
+import type typesModule from "./types.types.ts";
 
-/**
- * Define an executable task. Register it in the registry so a Harness can run tasks of its kind.
- * @param {TaskDefinition<I, S, R, H>} definition - The task's definition.
- * @returns {Task<I, S, R, H>} The task.
- */
-export function defineTask<I, S extends { phase: string }, R, H extends object = object>(
-  definition: TaskDefinition<I, S, R, H>,
-): Task<I, S, R, H> {
+function defineTask<I, S extends { phase: string }, R, H extends object = object>(
+  definition: typesModule.TaskDefinition<I, S, R, H>,
+): typesModule.Task<I, S, R, H> {
   return { definition };
 }
+
+const tasks = {
+  defineTask,
+};
+
+export default tasks;

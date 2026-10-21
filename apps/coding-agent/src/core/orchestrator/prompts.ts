@@ -1,4 +1,4 @@
-import type { Note, ReplanResult, Report, Task, TaskView } from "./types.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
 const REPORT_LIMIT = 6000;
 
@@ -6,7 +6,7 @@ function truncateReport(text: string): string {
   return text.length <= REPORT_LIMIT ? text : `${text.slice(0, REPORT_LIMIT)}\n[truncated]`;
 }
 
-function notesBlock(notes: readonly Note[]): string {
+function notesBlock(notes: readonly orchestratorTypesTypes.Note[]): string {
   if (notes.length === 0) return "";
   return [
     "<shared-notes>",
@@ -18,7 +18,7 @@ function notesBlock(notes: readonly Note[]): string {
   ].join("\n");
 }
 
-function dependencyBlock(dependencies: readonly TaskView[]): string {
+function dependencyBlock(dependencies: readonly orchestratorTypesTypes.TaskView[]): string {
   if (dependencies.length === 0) return "";
   return [
     "<dependency-reports>",
@@ -30,7 +30,9 @@ function dependencyBlock(dependencies: readonly TaskView[]): string {
   ].join("\n");
 }
 
-function latestReport(task: TaskView): Report | undefined {
+function latestReport(
+  task: orchestratorTypesTypes.TaskView,
+): orchestratorTypesTypes.Report | undefined {
   return task.reports.at(-1);
 }
 
@@ -39,9 +41,9 @@ function stateBlock(tag: string, value: string): string {
 }
 
 function workerPrompt(
-  task: TaskView,
-  dependencies: readonly TaskView[],
-  notes: readonly Note[],
+  task: orchestratorTypesTypes.TaskView,
+  dependencies: readonly orchestratorTypesTypes.TaskView[],
+  notes: readonly orchestratorTypesTypes.Note[],
 ): string {
   return [
     stateBlock("current-state", task.currentState),
@@ -53,7 +55,11 @@ function workerPrompt(
     .join("\n\n");
 }
 
-function taskReviewerPrompt(task: TaskView, workerReport: string, notes: readonly Note[]): string {
+function taskReviewerPrompt(
+  task: orchestratorTypesTypes.TaskView,
+  workerReport: string,
+  notes: readonly orchestratorTypesTypes.Note[],
+): string {
   const work = [
     `<task id="${task.id}" title="${task.title}">`,
     stateBlock("current-state", task.currentState),
@@ -75,8 +81,8 @@ function taskReviewerPrompt(task: TaskView, workerReport: string, notes: readonl
 
 function roundReviewPrompt(
   round: string,
-  tasks: readonly TaskView[],
-  notes: readonly Note[],
+  tasks: readonly orchestratorTypesTypes.TaskView[],
+  notes: readonly orchestratorTypesTypes.Note[],
 ): string {
   const reports = tasks
     .map(
@@ -100,27 +106,30 @@ function roundReviewPrompt(
     .join("\n");
 }
 
-function taskHeading(task: Task): string {
+function taskHeading(task: orchestratorTypesTypes.Task): string {
   return `${task.id} [${task.kind}, ${task.status}, round ${task.round}] ${task.title}`;
 }
 
-function formatTaskList(tasks: readonly TaskView[]): string {
+function formatTaskList(tasks: readonly orchestratorTypesTypes.TaskView[]): string {
   if (tasks.length === 0) return "No tasks.";
   return tasks.map(describeTask).join("\n");
 }
 
-function assignmentText(task: TaskView): string {
+function assignmentText(task: orchestratorTypesTypes.TaskView): string {
   const threads = task.assignments.map((assignment) => `${assignment.role} ${assignment.threadId}`);
   return threads.length > 0 ? threads.join(", ") : "unassigned";
 }
 
-function describeTask(task: TaskView): string {
+function describeTask(task: orchestratorTypesTypes.TaskView): string {
   const dependencies = task.dependsOn.length > 0 ? task.dependsOn.join(", ") : "-";
   const condition = task.condition === null ? "" : ` condition "${task.condition}"`;
   return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}`;
 }
 
-function formatTaskDetail(task: TaskView, threads: readonly string[]): string {
+function formatTaskDetail(
+  task: orchestratorTypesTypes.TaskView,
+  threads: readonly string[],
+): string {
   const reports = task.reports.map(
     (report) =>
       `<report role="${report.role}" status="${report.status}">\n${report.content}\n</report>`,
@@ -140,7 +149,7 @@ function memoFirstLine(memo: string): string {
   return line?.trim() ?? "(no memo)";
 }
 
-function formatReplan(result: ReplanResult): string {
+function formatReplan(result: orchestratorTypesTypes.ReplanResult): string {
   if (result.aborted !== null) {
     return `Replan aborted: ${result.aborted}. No task was created, dropped, or rewired.`;
   }
@@ -183,16 +192,22 @@ function formatReplan(result: ReplanResult): string {
   return lines.join("\n");
 }
 
-export const prompts = {
-  stateBlock,
-  notesBlock,
+const prompts = {
   dependencyBlock,
-  latestReport,
-  workerPrompt,
-  taskReviewerPrompt,
-  roundReviewPrompt,
-  taskHeading,
-  formatTaskList,
-  formatTaskDetail,
   formatReplan,
+  formatTaskDetail,
+  formatTaskList,
+  latestReport,
+  notesBlock,
+  roundReviewPrompt,
+  stateBlock,
+  taskHeading,
+  taskReviewerPrompt,
+  workerPrompt,
 };
+
+const promptsModule = {
+  prompts,
+};
+
+export default promptsModule;

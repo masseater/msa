@@ -1,114 +1,136 @@
-import {
-  type AssistantImages,
-  type ClassifierResult,
-  createProvider,
-  type CreateProviderOptions,
-  fauxAssistantMessage,
-  fauxText,
-  fauxToolCall,
-  type MutableModels,
-} from "@msa/ai";
-import { CodemodeSandbox } from "@msa/codemode";
-import { MemoryStorage, ToolResultEntry, UsageDoc } from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import codemodeModule from "@msa/codemode";
+import durable from "@msa/durable";
+import memory from "@msa/durable/storage/memory";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import { createCodemodeExtension } from "../src/codemode/codemode.ts";
-import type { ExecutionEnv } from "../src/env/index.ts";
-import { allEntries, chatSetup, openChat } from "./chat-support.ts";
-import { context } from "./session-support.ts";
-import { type Deferred, deferred } from "./task-support.ts";
+import type envTypes from "../src/env/index.types.ts";
+import codemodeModelsSupportKit from "./codemode-models-support-kit.ts";
+import type codemodeModelsSupportTypes from "./codemode-models-support.types.ts";
 
-export const COST = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+const { codemode, support } = codemodeModelsSupportKit;
 
-export const USAGE = {
-  input: 10,
-  output: 2,
+const { createProvider, fauxAssistantMessage, fauxText, fauxToolCall } = ai;
+
+const { CodemodeSandbox } = codemodeModule;
+
+const { createCodemodeExtension } = codemode;
+const { MemoryStorage } = memory;
+const { ToolResultEntry, UsageDoc } = durable;
+
+const { allEntries, awaited, chatSetup, context, deferred, openChat } = support;
+
+const COST = { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 };
+
+const USAGE = {
   cacheRead: 0,
   cacheWrite: 0,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0.001, output: 0.0002, total: 0.0012 },
+  input: 10,
+  output: 2,
   totalTokens: 12,
-  cost: { input: 0.001, output: 0.0002, cacheRead: 0, cacheWrite: 0, total: 0.0012 },
 };
 
-export const PNG =
+const PNG =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==";
 
-export type Calls = { classify: number; images: number; inFlight: number; maxInFlight: number };
-
-export function testModels(): CreateProviderOptions["models"] {
+function testModels(): aiTypes.CreateProviderOptions["models"] {
   return [
     {
-      id: "judge",
-      name: "Judge",
       api: "test-classifier",
-      provider: "test",
       baseUrl: "https://example.invalid",
-      input: ["text"],
+      contextWindow: 1000,
       cost: COST,
       headers: { authorization: "secret" },
+      id: "judge",
+      input: ["text"],
+      name: "Judge",
+      provider: "test",
       type: "classifier",
-      contextWindow: 1000,
     },
     {
-      id: "painter",
-      name: "Painter",
       api: "test-images",
-      provider: "test",
       baseUrl: "https://example.invalid",
-      input: ["text"],
       cost: COST,
-      type: "image",
+      id: "painter",
+      input: ["text"],
+      name: "Painter",
       output: ["image"],
+      provider: "test",
+      type: "image",
     },
   ];
 }
 
-export function testClassifiers(
-  calls: Calls,
-  gate: { readonly open: Deferred<void>; readonly atFour: boolean },
-): CreateProviderOptions["classifiers"] {
+function testClassifiersImpl(
+  calls: codemodeModelsSupportTypes.Calls,
+  gate: { readonly open: PromiseWithResolvers<void>; readonly atFour: boolean },
+): aiTypes.CreateProviderOptions["classifiers"] {
   return {
     "test-classifier": {
-      classify: async (model, classifierContext): Promise<ClassifierResult> => {
-        calls.classify++;
-        if ((classifierContext.state as { fail?: boolean }).fail === true) {
-          return {
-            api: model.api,
-            provider: model.provider,
-            model: model.id,
-            answers: {},
-            stopReason: "error",
-            errorMessage: "quota exceeded",
-            timestamp: 0,
-          };
-        }
-        calls.inFlight++;
-        calls.maxInFlight = Math.max(calls.maxInFlight, calls.inFlight);
-        if (gate.atFour && calls.inFlight === 4) setTimeout(() => gate.open.resolve(), 50);
-        await gate.open.promise;
-        calls.inFlight--;
-        return {
-          api: model.api,
-          provider: model.provider,
-          model: model.id,
-          answers: { good: { value: true } } as unknown as ClassifierResult["answers"],
-          usage: USAGE,
-          stopReason: "stop",
-          timestamp: 0,
-        };
-      },
+      classify: (model, classifierContext): Promise<aiTypes.ClassifierResult> =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            calls.classify++;
+            if ((classifierContext.state as { fail?: boolean }).fail === true) {
+              return {
+                answers: {},
+                api: model.api,
+                errorMessage: "quota exceeded",
+                model: model.id,
+                provider: model.provider,
+                stopReason: "error",
+                timestamp: 0,
+              };
+            }
+            calls.inFlight++;
+            calls.maxInFlight = Math.max(calls.maxInFlight, calls.inFlight);
+            if (gate.atFour && calls.inFlight === 4)
+              yield* Effect.forkDetach(
+                Effect.sleep(50).pipe(Effect.andThen(Effect.sync(() => gate.open.resolve()))),
+              );
+            yield* awaited(gate.open.promise);
+            calls.inFlight--;
+            return {
+              answers: { good: { value: true } } as unknown as aiTypes.ClassifierResult["answers"],
+              api: model.api,
+              model: model.id,
+              provider: model.provider,
+              stopReason: "stop",
+              timestamp: 0,
+              usage: USAGE,
+            };
+          }),
+        ),
     },
   };
 }
 
-export function testImages(calls: Calls): CreateProviderOptions["images"] {
+const testClassifiers: {
+  (gate: {
+    readonly open: PromiseWithResolvers<void>;
+    readonly atFour: boolean;
+  }): (calls: codemodeModelsSupportTypes.Calls) => ReturnType<typeof testClassifiersImpl>;
+  (
+    calls: codemodeModelsSupportTypes.Calls,
+    gate: { readonly open: PromiseWithResolvers<void>; readonly atFour: boolean },
+  ): ReturnType<typeof testClassifiersImpl>;
+} = dual(2, testClassifiersImpl);
+
+function testImages(
+  calls: codemodeModelsSupportTypes.Calls,
+): aiTypes.CreateProviderOptions["images"] {
   return {
     "test-images": {
-      generateImages: (model): Promise<AssistantImages> => {
+      generateImages: (model): Promise<aiTypes.AssistantImages> => {
         calls.images++;
         return Promise.resolve({
           api: model.api,
-          provider: model.provider,
           model: model.id,
-          output: [{ type: "image", data: PNG, mimeType: "image/png" }],
+          output: [{ data: PNG, mimeType: "image/png", type: "image" }],
+          provider: model.provider,
           stopReason: "stop",
           timestamp: 0,
         });
@@ -117,40 +139,44 @@ export function testImages(calls: Calls): CreateProviderOptions["images"] {
   };
 }
 
-// A chat whose models also have a classifier and an image model of a test provider, and the code mode extension.
-export function modelsChat() {
+function modelsChat() {
   const setup = chatSetup();
   const calls = { classify: 0, images: 0, inFlight: 0, maxInFlight: 0 };
-  // \`atFour\`: hold classifier calls until four run, then a little longer, so a fifth would show up.
-  const gate = { open: deferred(), atFour: false };
+  const gate = { atFour: false, open: deferred() };
   gate.open.resolve();
-  (setup.models as MutableModels).setProvider(
+  (setup.models as aiTypes.MutableModels).setProvider(
     createProvider({
-      id: "test",
       auth: { apiKey: { name: "Test", resolve: () => Promise.resolve({ auth: {} }) } },
-      models: testModels(),
       classifiers: testClassifiers(calls, gate),
+      id: "test",
       images: testImages(calls),
+      models: testModels(),
     }),
   );
   setup.registry.install(createCodemodeExtension({ sandbox: new CodemodeSandbox() }));
-  return { setup, calls, gate };
+  return { calls, gate, setup };
 }
 
-export async function run(chat: ReturnType<typeof modelsChat>, code: string, env?: ExecutionEnv) {
+const run = Effect.fn("run")(function* (
+  chat: ReturnType<typeof modelsChat>,
+  code: string,
+  env?: envTypes.ExecutionEnv,
+) {
   chat.setup.faux.setResponses([
     fauxAssistantMessage([fauxToolCall("codemode", { code }, { id: "s1" })], {
       stopReason: "toolUse",
     }),
     fauxAssistantMessage([fauxText("done")]),
   ]);
-  const { harness, root } = await openChat(
+  const { harness, root } = yield* openChat(
     new MemoryStorage(),
     chat.setup,
     env === undefined ? {} : { env },
   );
-  await (await root.submit({ type: "input", content: "go" }, context)).wait(context);
-  const entry = (await allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
+  yield* awaited(
+    (yield* awaited(root.submit({ content: "go", type: "input" }, context))).wait(context),
+  );
+  const entry = (yield* allEntries(root)).find((candidate) => ToolResultEntry.is(candidate))!;
   const message = entry.model![0] as {
     content: { type: string; text?: string }[];
     details?: unknown;
@@ -159,7 +185,20 @@ export async function run(chat: ReturnType<typeof modelsChat>, code: string, env
     .map((item) => item.text ?? `<${item.type}>`)
     .join("")
     .replace(/^Script (completed|failed)\nWall time [\d.]+ seconds\nOutput:\n/u, "");
-  const usage = await harness.snapshot(UsageDoc, root.id, context);
-  await harness.close(context);
-  return { text, message, usage };
-}
+  const usage = yield* awaited(harness.snapshot(UsageDoc, root.id, context));
+  yield* awaited(harness.close(context));
+  return { message, text, usage };
+});
+
+const codemodeModelsSupport = {
+  COST,
+  PNG,
+  USAGE,
+  modelsChat,
+  run,
+  testClassifiers,
+  testImages,
+  testModels,
+};
+
+export default codemodeModelsSupport;

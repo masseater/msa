@@ -1,77 +1,45 @@
-import {
-  type AttachedReplicatedState,
-  type Context,
-  type JsonValue,
-  replicatedState,
-} from "@msa/chord";
-import { withoutAbortSignal } from "@msa/chord/context";
-import { applyImmutable, type Op } from "@msa/chord/delta";
+import contextModule from "@msa/chord/context";
+import type deltaTypes from "@msa/chord/delta.types";
+import applyModule from "@msa/chord/delta/apply";
+import type chordTypes from "@msa/chord/index.types";
+import stateModule from "@msa/chord/state";
+import { Effect } from "effect";
 
-import { CommittedStateSource, CommittedWatch } from "../session/observation.ts";
-import { contained, type SessionImpl } from "../session/session.ts";
-import type {
-  CommitPublication,
-  ConversationId,
-  JoinPolicy,
-  Storage,
-  TaskId,
-  TaskOutcome,
-  TaskRecord,
-  WatchHandle,
-} from "../types.ts";
-import { closedError, scanAll } from "./util.ts";
+import type observationTypes from "../session/observation.types.ts";
+import sessionKit from "./session-kit.ts";
+import type taskGraphTypes from "./task-graph.types.ts";
+import util from "./util.ts";
 
-/** A live task's durable status without its checkpoint and outcome payloads (spec §9.5). */
-export type TaskGraphState =
-  | { readonly status: "pending" | "running"; readonly phase: string }
-  | {
-      readonly status: "waiting";
-      readonly phase: string;
-      readonly on: readonly TaskId[];
-      readonly policy: JoinPolicy;
-    }
-  /** Outcome held until its ordinary owned work drains. */
-  | { readonly status: "completing"; readonly outcome: TaskOutcome<JsonValue>["status"] };
+const { replicatedState } = stateModule;
+const { applyImmutable } = applyModule;
+const { withoutAbortSignal } = contextModule;
 
-export type TaskGraphNode = {
-  readonly id: TaskId;
-  readonly kind: string;
-  readonly conversationId: ConversationId;
-  /** Owner task; absent for a conversation-owned task. */
-  readonly owner?: TaskId;
-  readonly background: boolean;
-  readonly abortRequested: boolean;
-  readonly state: TaskGraphState;
-  /** Conversations this task owns, in ID order. */
-  readonly conversations: readonly ConversationId[];
-};
+const { observation, sessionState } = sessionKit;
 
-/** Every live task of the Session (spec §9.5). */
-export type TaskGraph = {
-  /** Every live task, keyed by its decimal ID. */
-  readonly tasks: Readonly<Record<string, TaskGraphNode>>;
-};
+const { contained } = sessionState;
+const { CommittedStateSource, CommittedWatch } = observation;
+const { closedError, scanAll } = util;
 
-export type TaskGraphWatch = WatchHandle<TaskGraph>;
-
-type AnyTaskRecord = TaskRecord<JsonValue, JsonValue, JsonValue>;
-type Observer = CommittedStateSource<TaskGraph> | CommittedWatch<TaskGraph>;
-type Mount = { value: TaskGraph; readonly observers: Set<Observer> };
+type AnyTaskRecord = taskGraphTypes.TaskRecord<
+  chordTypes.JsonValue,
+  chordTypes.JsonValue,
+  chordTypes.JsonValue
+>;
+type Observer =
+  | observationTypes.CommittedStateSource<taskGraphTypes.TaskGraph>
+  | observationTypes.CommittedWatch<taskGraphTypes.TaskGraph>;
+type Mount = { value: taskGraphTypes.TaskGraph; readonly observers: Set<Observer> };
 
 const LIVE_STATUSES = ["pending", "running", "waiting", "completing"] as const;
 const SCAN_PAGE_SIZE = 256;
 
-/**
- * The Harness's task graph mount: built on the Session line by its first observer and dropped with its last. It
- * advances from the Session's commit publications, which are durable.
- */
-export class TaskGraphView {
-  readonly #session: SessionImpl;
-  readonly #storage: Storage;
+export default class TaskGraphView {
+  readonly #session: taskGraphTypes.SessionImpl;
+  readonly #storage: taskGraphTypes.Storage;
   #mount: Mount | undefined;
   #closed = false;
 
-  constructor(session: SessionImpl, storage: Storage) {
+  constructor(session: taskGraphTypes.SessionImpl, storage: taskGraphTypes.Storage) {
     this.#session = session;
     this.#storage = storage;
     session.observeCommits((publication, context) => {
@@ -90,118 +58,118 @@ export class TaskGraphView {
     });
   }
 
-  /**
-   * A disposable read-only Chord state of the graph.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<AttachedReplicatedState<TaskGraph>>} The state.
-   */
-  async state(context: Context): Promise<AttachedReplicatedState<TaskGraph>> {
-    const { observer, detach } = await this.#attach(
-      (value, release) => new CommittedStateSource<TaskGraph>(value, release),
-      context,
+  state(
+    context: chordTypes.Context,
+  ): Promise<chordTypes.AttachedReplicatedState<taskGraphTypes.TaskGraph>> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const { observer, detach } = yield* this.#attach(
+          (value, release) => new CommittedStateSource<taskGraphTypes.TaskGraph>(value, release),
+          context,
+        );
+        return yield* Effect.sync(() =>
+          replicatedState(observer, { onError: (error) => this.#session.report(error) }),
+        ).pipe(Effect.onError(() => Effect.sync(detach)));
+      }),
     );
-    try {
-      return replicatedState(observer, { onError: (error) => this.#session.report(error) });
-    } catch (error) {
-      detach();
-      throw error;
-    }
   }
 
-  /**
-   * A serialized exact-frame watch of the graph; cancelling `context` stops it.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<TaskGraphWatch>} The watch.
-   */
-  async watch(context: Context): Promise<TaskGraphWatch> {
-    const { observer } = await this.#attach(
-      (value, release) =>
-        new CommittedWatch<TaskGraph>(value, release, (error) => this.#session.report(error)),
-      context,
+  watch(context: chordTypes.Context): Promise<taskGraphTypes.TaskGraphWatch> {
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        const { observer } = yield* this.#attach(
+          (value, release) =>
+            new CommittedWatch<taskGraphTypes.TaskGraph>(value, release, (error) =>
+              this.#session.report(error),
+            ),
+          context,
+        );
+        const signal = context.abortSignal;
+        if (signal?.aborted === true) {
+          observer.cancel();
+          return yield* Effect.die(signal.reason);
+        }
+        if (signal !== undefined) observer.observeCancellation(signal);
+        return observer;
+      }),
     );
-    const signal = context.abortSignal;
-    if (signal?.aborted) {
-      observer.cancel();
-      throw signal.reason;
-    }
-    if (signal !== undefined) observer.observeCancellation(signal);
-    return observer;
   }
 
-  /**
-   * Register an observer created from the current revision, atomically on the Session line.
-   * @param {(value: TaskGraph, release: () => void) => O} create - Creates the observer.
-   * @param {Context} context - The caller's context.
-   * @returns {Promise<{ observer: O; detach: () => void }>} The observer and its detach.
-   */
   #attach<O extends Observer>(
-    create: (value: TaskGraph, release: () => void) => O,
-    context: Context,
-  ): Promise<{ observer: O; detach: () => void }> {
-    return this.#session.readOnLine(async () => {
+    create: (value: taskGraphTypes.TaskGraph, release: () => void) => O,
+    context: chordTypes.Context,
+  ): Effect.Effect<{ observer: O; detach: () => void }> {
+    return Effect.promise(() =>
+      this.#session.readOnLine(() => Effect.runPromise(this.#mountObserver(create, context))),
+    );
+  }
+
+  #mountObserver<O extends Observer>(
+    create: (value: taskGraphTypes.TaskGraph, release: () => void) => O,
+    context: chordTypes.Context,
+  ): Effect.Effect<{ observer: O; detach: () => void }> {
+    return Effect.gen({ self: this }, function* () {
       const mount = this.#mount ?? {
-        value: await this.#build(context),
         observers: new Set<Observer>(),
+        value: yield* this.#build(context),
       };
       const detach = (): void => {
         mount.observers.delete(observer);
         if (mount.observers.size === 0 && this.#mount === mount) this.#mount = undefined;
       };
       const observer = create(mount.value, detach);
-      // Close or cancellation may begin while the mount builds; register nothing then.
       if (this.#closed) throw closedError(this.#session);
       context.abortSignal?.throwIfAborted();
       this.#mount = mount;
       mount.observers.add(observer);
-      return { observer, detach };
+      return { detach, observer };
     });
   }
 
-  async #build(context: Context): Promise<TaskGraph> {
-    const tasks: Record<string, TaskGraphNode> = {};
-    const records: AnyTaskRecord[] = [];
-    for await (const status of LIVE_STATUSES) {
-      records.push(
-        ...(await scanAll((cursor) =>
-          this.#storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context),
-        )),
+  #build(context: chordTypes.Context): Effect.Effect<taskGraphTypes.TaskGraph> {
+    const storage = this.#storage;
+    return Effect.gen(function* () {
+      const tasks: Record<string, taskGraphTypes.TaskGraphNode> = {};
+      const scans = yield* Effect.forEach(LIVE_STATUSES, (status) =>
+        scanAll((cursor) => storage.scanTasks({ status }, SCAN_PAGE_SIZE, cursor, context)),
       );
-    }
-    records.sort((a, b) => a.id - b.id);
-    for await (const record of records) {
-      const owned = await scanAll((cursor) =>
-        this.#storage.scanConversations(
-          { ownerTaskId: record.id },
-          SCAN_PAGE_SIZE,
-          cursor,
-          context,
-        ),
+      const records: AnyTaskRecord[] = scans.flat();
+      records.sort((a, b) => a.id - b.id);
+      yield* Effect.forEach(
+        records,
+        (record) =>
+          Effect.map(
+            scanAll((cursor) =>
+              storage.scanConversations(
+                { ownerTaskId: record.id },
+                SCAN_PAGE_SIZE,
+                cursor,
+                context,
+              ),
+            ),
+            (owned) => {
+              const conversations = owned
+                .map((conversation) => conversation.id)
+                .sort((a, b) => a - b);
+              tasks[String(record.id)] = nodeOf(record, conversations);
+            },
+          ),
+        { discard: true },
       );
-      const conversations = owned.map((conversation) => conversation.id).sort((a, b) => a - b);
-      tasks[String(record.id)] = nodeOf(record, conversations);
-    }
-    return { tasks };
+      return { tasks };
+    });
   }
 }
 
-/**
- * Derive the mount's operations from one publication, apply them, and hand the revision to every observer; one that
- * throws is reported through `report`, and the others still get it.
- * @param {Mount} mount - The mount.
- * @param {CommitPublication} publication - The publication.
- * @param {Context} context - The caller's context.
- * @param {(error: unknown) => void} report - Receives errors that must not fail the caller.
- */
 function advance(
   mount: Mount,
-  publication: CommitPublication,
-  context: Context,
+  publication: taskGraphTypes.CommitPublication,
+  context: chordTypes.Context,
   report: (error: unknown) => void,
 ): void {
-  const ops: Op[] = [];
-  // Nodes this publication set or deleted, over the mount's value.
-  const changed = new Map<string, TaskGraphNode | undefined>();
-  const node = (key: string): TaskGraphNode | undefined =>
+  const ops: deltaTypes.Op[] = [];
+  const changed = new Map<string, taskGraphTypes.TaskGraphNode | undefined>();
+  const node = (key: string): taskGraphTypes.TaskGraphNode | undefined =>
     changed.has(key) ? changed.get(key) : mount.value.tasks[key];
   for (const change of publication.changes) {
     if (change.type !== "task") continue;
@@ -216,12 +184,10 @@ function advance(
     }
     const next = nodeOf(record, previous?.conversations ?? []);
     if (previous !== undefined && JSON.stringify(next) === JSON.stringify(previous)) continue;
-    ops.push(["s", ["tasks", key], next as unknown as JsonValue]);
+    ops.push(["s", ["tasks", key], next as unknown as chordTypes.JsonValue]);
     changed.set(key, next);
   }
-  // After the tasks, so a conversation created with its owner task in one commit finds the owner's node. Change order
-  // within a publication is unspecified, so each owner's list is sorted again.
-  const created = new Map<string, ConversationId[]>();
+  const created = new Map<string, taskGraphTypes.ConversationId[]>();
   for (const change of publication.changes) {
     if (change.type !== "conversation" || change.value.owner === undefined) continue;
     const key = String(change.value.owner.taskId);
@@ -238,39 +204,41 @@ function advance(
     contained(() => observer.advance(mount.value, ops, frameContext), report);
 }
 
-function nodeOf(record: AnyTaskRecord, conversations: readonly ConversationId[]): TaskGraphNode {
+function nodeOf(
+  record: AnyTaskRecord,
+  conversations: readonly taskGraphTypes.ConversationId[],
+): taskGraphTypes.TaskGraphNode {
   return {
+    conversationId: record.conversationId,
     id: record.id,
     kind: record.kind,
-    conversationId: record.conversationId,
     ...(record.owner === undefined ? {} : { owner: record.owner }),
-    background: record.background,
     abortRequested: record.abortRequested,
-    state: stateOf(record),
+    background: record.background,
     conversations,
+    state: stateOf(record),
   };
 }
 
-function stateOf(record: AnyTaskRecord): TaskGraphState {
+function stateOf(record: AnyTaskRecord): taskGraphTypes.TaskGraphState {
   const state = record.state;
   switch (state.status) {
     case "pending":
     case "running":
-      return { status: state.status, phase: phaseOf(state.checkpoint) };
+      return { phase: phaseOf(state.checkpoint), status: state.status };
     case "waiting":
       return {
-        status: "waiting",
-        phase: phaseOf(state.checkpoint),
         on: [...state.on],
+        phase: phaseOf(state.checkpoint),
         policy: state.policy,
+        status: "waiting",
       };
-    // Terminal records never reach here: they leave the graph.
     case "completing":
     case "terminal":
-      return { status: "completing", outcome: state.outcome.status };
+      return { outcome: state.outcome.status, status: "completing" };
   }
 }
 
-function phaseOf(checkpoint: JsonValue): string {
+function phaseOf(checkpoint: chordTypes.JsonValue): string {
   return (checkpoint as { readonly phase: string }).phase;
 }

@@ -1,7 +1,11 @@
 import { defineConfig, mergeConfig } from "vite-plus";
 
-import { testBaseConfig, workspaceSourcePaths } from "../../vite.config.ts";
-import { evalConfig } from "./src/vitest-evals.ts";
+import vitestShared from "../../vitest.shared.ts";
+import vitestEvals from "./src/vitest-evals.ts";
+
+const { evalConfig } = vitestEvals;
+
+const { testBaseConfig, workspaceSourcePaths } = vitestShared;
 
 const localConfig = mergeConfig(
   testBaseConfig,
@@ -9,7 +13,7 @@ const localConfig = mergeConfig(
     resolve: {
       alias: [
         {
-          find: /^@msa\/coding-agent$/,
+          find: /^@msa\/coding-agent$/u,
           replacement: workspaceSourcePaths.codingAgentIndex,
         },
       ],

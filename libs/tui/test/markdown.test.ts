@@ -1,9 +1,15 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Markdown } from "../src/components/markdown.ts";
-import { stripAnsi } from "./markdown-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
+import ansiSequences from "../src/ansi-sequences.ts";
+import Markdown from "../src/components/markdown.ts";
+import markdownHelpers from "./markdown-helpers.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultMarkdownTheme } = testThemes;
+const { stripStyleSequences } = ansiSequences;
+
+const { stripAnsi } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("Transforms", () => {
@@ -11,7 +17,7 @@ describe("Markdown component", () => {
       const calls: Array<{ source: string; availableWidth: number }> = [];
       const markdown = new Markdown("source", 2, 0, defaultMarkdownTheme, undefined, {
         transform: (source, availableWidth) => {
-          calls.push({ source, availableWidth });
+          calls.push({ availableWidth, source });
           return `${source} ${availableWidth}`;
         },
       });
@@ -26,8 +32,8 @@ describe("Markdown component", () => {
         ["source 56"],
       );
       assert.deepStrictEqual(calls, [
-        { source: "source", availableWidth: 76 },
-        { source: "source", availableWidth: 56 },
+        { availableWidth: 76, source: "source" },
+        { availableWidth: 56, source: "source" },
       ]);
 
       markdown.setText("updated");
@@ -35,11 +41,11 @@ describe("Markdown component", () => {
         markdown.render(60).map((line) => stripAnsi(line).trim()),
         ["updated 56"],
       );
-      assert.deepStrictEqual(calls.at(-1), { source: "updated", availableWidth: 56 });
+      assert.deepStrictEqual(calls.at(-1), { availableWidth: 56, source: "updated" });
 
       markdown.invalidate();
       markdown.render(60);
-      assert.deepStrictEqual(calls.at(-1), { source: "updated", availableWidth: 56 });
+      assert.deepStrictEqual(calls.at(-1), { availableWidth: 56, source: "updated" });
       assert.strictEqual(calls.length, 4);
     });
   });
@@ -60,13 +66,10 @@ describe("Markdown component", () => {
 
       const lines = markdown.render(80);
 
-      // Check that we have content
       assert.ok(lines.length > 0);
 
-      // Strip ANSI codes for checking
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
-      // Check structure
       assert.ok(plainLines.some((line) => line.includes("- Item 1")));
       assert.ok(plainLines.some((line) => line.includes("    - Nested 1.1")));
       assert.ok(plainLines.some((line) => line.includes("    - Nested 1.2")));
@@ -89,9 +92,8 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
-      // Check proper indentation
       assert.ok(plainLines.some((line) => line.includes("- Level 1")));
       assert.ok(plainLines.some((line) => line.includes("    - Level 2")));
       assert.ok(plainLines.some((line) => line.includes("        - Level 3")));
@@ -110,7 +112,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
       assert.ok(plainLines.some((line) => line.includes("1. First")));
       assert.ok(plainLines.some((line) => line.includes("    1. Nested first")));
@@ -175,7 +177,7 @@ describe("Markdown component", () => {
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, ""));
+      const plainLines = lines.map((line) => stripStyleSequences(line));
 
       assert.ok(plainLines.some((line) => line.includes("1. Ordered item")));
       assert.ok(plainLines.some((line) => line.includes("    - Unordered nested")));

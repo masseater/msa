@@ -1,15 +1,22 @@
-import { mkdtemp } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 
-import { defineTask, type Harness, type TaskId, type TaskRuntime } from "@msa/durable";
+import effectSupport from "./effect-support.ts";
+import platformSupport from "./platform-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
+const { defineTask } = durable;
 
-export const gates = new Map<string, Deferred<void>>();
+const { awaited } = effectSupport;
+const { joinPath, makeTempDir } = platformSupport;
+const { context } = sessionSupport;
+const { aborted, deferred } = taskSupport;
 
-export function gate(name: string): Deferred<void> {
+const gates = new Map<string, PromiseWithResolvers<void>>();
+
+function gate(name: string): PromiseWithResolvers<void> {
   let found = gates.get(name);
   if (found === undefined) {
     found = deferred<void>();
@@ -18,46 +25,64 @@ export function gate(name: string): Deferred<void> {
   return found;
 }
 
-/** Holds until its gate opens, then completes; its abort handler ends it `aborted`. */
-export const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
-  name: "test.index.hold",
-  version: 1,
-  initial: () => ({ phase: "hold" }),
-  phases: {
-    hold: async (task, runtime, ctx) => {
-      const opened = await Promise.race([
-        gate(task.input.name).promise.then(() => true),
-        aborted(runtime.signal),
-      ]);
-      if (opened !== true) return;
-      await runtime.commit(
-        () => ({ status: "terminal", outcome: { status: "completed", result: null } }),
-        ctx,
-      );
-    },
-  },
+const Hold = defineTask<{ name: string }, { phase: "hold" }, null>({
   abort: (_task, runtime, ctx) =>
     Promise.resolve(
-      runtime.commit(() => ({ status: "terminal", outcome: { status: "aborted" } }), ctx),
+      runtime.commit(() => ({ outcome: { status: "aborted" }, status: "terminal" }), ctx),
     ),
+  initial: () => ({ phase: "hold" }),
+  name: "test.index.hold",
+  phases: {
+    hold: (task, runtime, ctx) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const opened = yield* awaited(
+            Promise.race([gate(task.input.name).promise.then(() => true), aborted(runtime.signal)]),
+          );
+          if (opened !== true) return;
+          yield* awaited(
+            runtime.commit(
+              () => ({ outcome: { result: null, status: "completed" }, status: "terminal" }),
+              ctx,
+            ),
+          );
+        }),
+      ),
+  },
+  version: 1,
 });
 
-/** What `ownedTasks()` returned to each run of a `Probe`, by its name, and the runtime of its last run. */
-export const owned = new Map<string, TaskId[]>();
+const owned = new Map<string, durableTypes.TaskId[]>();
 
-export const runtimes = new Map<
+const runtimes = new Map<
   string,
-  Pick<TaskRuntime<unknown, unknown, unknown, object>, "ownedTasks">
+  Pick<durableTypes.TaskRuntime<unknown, unknown, unknown, object>, "ownedTasks">
 >();
 
-export const directories: string[] = [];
+const directories: string[] = [];
 
-export async function sqlitePath(): Promise<string> {
-  const directory = await mkdtemp(join(tmpdir(), "msa-durable-indexes-"));
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const directory = yield* makeTempDir("msa-durable-indexes-");
   directories.push(directory);
-  return join(directory, "session.sqlite");
-}
+  return joinPath(directory, "session.sqlite");
+});
 
-export async function state(harness: Harness, id: TaskId) {
-  return (await harness.getTask(id, context))!;
-}
+const state = Effect.fn("state")(function* (
+  harness: durableTypes.Harness,
+  id: durableTypes.TaskId,
+) {
+  return (yield* awaited(harness.getTask(id, context)))!;
+});
+
+const harnessSchedulerIndexesSupport = {
+  Hold,
+  directories,
+  gate,
+  gates,
+  owned,
+  runtimes,
+  sqlitePath,
+  state,
+};
+
+export default harnessSchedulerIndexesSupport;

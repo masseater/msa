@@ -1,91 +1,68 @@
-import { join } from "node:path";
-
-import {
-  type AssistantMessage,
-  fauxAssistantMessage,
-  type Message,
-  type SimpleStreamOptions,
-  type TranscriptContext,
-  type UserMessage,
-} from "@msa/ai";
-import {
-  type CompactionPolicy,
-  type CompactionResult,
-  type Conversation,
-  type Harness,
-  LiveDoc,
-  MemoryStorage,
-  type TaskId,
-  UsageDoc,
-} from "@msa/durable";
+import type aiTypes from "@msa/ai/index.types";
+import type durableTypes from "@msa/durable/index.types";
+import type memoryTypes from "@msa/durable/storage/memory.types";
+import { Effect } from "effect";
+import { dual } from "effect/Function";
 import { expect } from "vite-plus/test";
 
-import { openNodeSqliteStorage } from "../src/storage/sqlite/node.ts";
-import { allEntries, type ChatSetup, chatSetup, openChat, textOf } from "./chat-support.ts";
-import { addSection } from "./harness-support.ts";
-import { context } from "./session-support.ts";
-import { aborted, type Deferred, deferred } from "./task-support.ts";
-import { makeTempDir } from "./temp-support.ts";
+import durableKit from "./durable-kit.ts";
+import harnessCompactionMessages from "./harness-compaction-messages.ts";
+import type harnessCompactionSupportTypes from "./harness-compaction-support.types.ts";
+import support from "./support.ts";
 
-export const directories = new Set<string>();
+const { durable, memory, sqliteNode: node } = durableKit;
 
-export async function sqlitePath(): Promise<string> {
-  const directory = await makeTempDir("msa-durable-compaction-");
+const { MemoryStorage } = memory;
+const { LiveDoc, UsageDoc } = durable;
+const { openNodeSqliteStorage } = node;
+
+const { BLOCKING, MANUAL, answer, isSummaryRequest, summary, text } = harnessCompactionMessages;
+
+const {
+  aborted,
+  addSection,
+  allEntries,
+  awaited,
+  chatSetup,
+  context,
+  deferred,
+  joinPath,
+  makeTempDir,
+  openChat,
+} = support;
+
+const directories = new Set<string>();
+
+const sqlitePath = Effect.fn("sqlitePath")(function* () {
+  const directory = yield* makeTempDir("msa-durable-compaction-");
   directories.add(directory);
-  return join(directory, "session.sqlite");
-}
+  return joinPath(directory, "session.sqlite");
+});
 
-// Text of about `tokens` estimated tokens, starting with `label`.
-export function text(label: string, tokens: number): string {
-  return `${label} ${"x".repeat(Math.max(0, tokens * 4 - label.length - 1))}`;
-}
-
-export type Request = {
-  readonly messages: readonly Message[];
-  readonly options: SimpleStreamOptions | undefined;
-  readonly model: string;
-};
-
-export type Step =
-  | AssistantMessage
-  | ((request: Request) => AssistantMessage | Promise<AssistantMessage>);
-
-/** Scripted faux model that answers agent requests and summarization requests from separate queues. */
-export type Script = {
-  readonly agent: Step[];
-  readonly summaries: Step[];
-  readonly agentRequests: Request[];
-  readonly summaryRequests: Request[];
-};
-
-export function isSummaryRequest(messages: readonly Message[]): boolean {
-  const first = messages[0];
-  return (
-    first?.role === "system" &&
-    typeof first.content === "string" &&
-    first.content.startsWith("You are a context summarization assistant")
-  );
-}
-
-export function script(setup: ChatSetup): Script {
-  const result: Script = { agent: [], summaries: [], agentRequests: [], summaryRequests: [] };
+function script(setup: ReturnType<typeof chatSetup>): harnessCompactionSupportTypes.Script {
+  const result: harnessCompactionSupportTypes.Script = {
+    agent: [],
+    agentRequests: [],
+    summaries: [],
+    summaryRequests: [],
+  };
   setup.faux.setResponses(
     Array.from(
       { length: 500 },
       () =>
         (
-          transcript: TranscriptContext,
-          options?: SimpleStreamOptions,
+          transcript: aiTypes.TranscriptContext,
+          options?: aiTypes.SimpleStreamOptions,
           _state?: unknown,
           model?: { id: string },
         ) => {
-          const request = { messages: [...transcript.messages], options, model: model!.id };
-          const summary = isSummaryRequest(request.messages);
-          (summary ? result.summaryRequests : result.agentRequests).push(request);
-          const step = (summary ? result.summaries : result.agent).shift();
+          const request = { messages: [...transcript.messages], model: model!.id, options };
+          const summarizing = isSummaryRequest(request.messages);
+          (summarizing ? result.summaryRequests : result.agentRequests).push(request);
+          const step = (summarizing ? result.summaries : result.agent).shift();
           if (step === undefined)
             return Promise.reject(
-              new Error(`No scripted ${summary ? "summary" : "agent"} response`),
+              new Error(`No scripted ${summarizing ? "summary" : "agent"} response`),
             );
           return Promise.resolve(typeof step === "function" ? step(request) : step);
         },
@@ -94,160 +71,193 @@ export function script(setup: ChatSetup): Script {
   return result;
 }
 
-// A step that waits for `gate`, or rejects when the request is cancelled.
-export function gated(gate: Deferred, message: AssistantMessage, reached?: Deferred): Step {
-  return async ({ options }) => {
-    reached?.resolve();
-    await Promise.race([gate.promise, aborted(options!.signal!)]);
-    return message;
-  };
+function gatedImpl(
+  gate: PromiseWithResolvers<void>,
+  message: aiTypes.AssistantMessage,
+  reached?: PromiseWithResolvers<void>,
+): harnessCompactionSupportTypes.Step {
+  return ({ options }) =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        reached?.resolve();
+        yield* awaited(Promise.race([gate.promise, aborted(options!.signal!)]));
+        return message;
+      }),
+    );
 }
 
-export const answer = (content: string) => fauxAssistantMessage(content);
+const gated: {
+  (
+    message: aiTypes.AssistantMessage,
+    reached?: PromiseWithResolvers<void>,
+  ): (gate: PromiseWithResolvers<void>) => ReturnType<typeof gatedImpl>;
+  (
+    gate: PromiseWithResolvers<void>,
+    message: aiTypes.AssistantMessage,
+    reached?: PromiseWithResolvers<void>,
+  ): ReturnType<typeof gatedImpl>;
+} = dual((args) => "resolve" in args[0], gatedImpl);
 
-export const failure = (errorMessage: string) =>
-  fauxAssistantMessage("", { stopReason: "error", errorMessage });
-
-export const OVERFLOW = "prompt is too long: 250000 tokens > 200000 maximum";
-
-/** Small thresholds: no automatic compaction unless a test enables it. */
-export const MANUAL: CompactionPolicy = {
-  enabled: false,
-  reserveTokens: 1000,
-  keepRecentTokens: 150,
-  backgroundTokens: 0,
-};
-
-export type Chat = {
-  readonly harness: Harness;
-  readonly root: Conversation;
-  readonly setup: ChatSetup;
-  readonly faux: Script;
-};
-
-export async function open(
+const open = Effect.fn("open")(function* (
   options: {
-    readonly policy?: CompactionPolicy;
+    readonly policy?: durableTypes.CompactionPolicy;
     readonly contextWindow?: number;
-    readonly storage?: MemoryStorage;
+    readonly storage?: memoryTypes.MemoryStorage;
   } = {},
-  setup = chatSetup({
-    models: [{ id: "faux-1", contextWindow: options.contextWindow ?? 100_000, maxTokens: 900 }],
+  setup: ReturnType<typeof chatSetup> = chatSetup({
+    models: [{ contextWindow: options.contextWindow ?? 100_000, id: "faux-1", maxTokens: 900 }],
   }),
-  faux = script(setup),
-): Promise<Chat> {
+  faux: harnessCompactionSupportTypes.Script = script(setup),
+) {
   addSection(setup.registry, "preamble", () => "You are helpful.", { tag: false });
-  const { harness, root } = await openChat(options.storage ?? new MemoryStorage(), setup);
-  // These tests exercise compaction accounting and thresholds, not the faux provider's cache simulation.
+  const { harness, root } = yield* openChat(options.storage ?? new MemoryStorage(), setup);
   setup.settings.stream = { cacheRetention: "none" };
   setup.settings.compaction = options.policy ?? MANUAL;
-  setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 1 };
+  setup.settings.retry = { baseDelayMs: 1, enabled: true, maxRetries: 2 };
   harness.resume();
-  return { harness, root, setup, faux };
-}
+  return { faux, harness, root, setup };
+});
 
-// Run one turn: `user` answered by `reply`.
-export async function turn(chat: Chat, user: string, reply: string): Promise<void> {
+const turn = Effect.fn("turn")(function* (
+  chat: harnessCompactionSupportTypes.Chat,
+  user: string,
+  reply: string,
+) {
   chat.faux.agent.push(answer(reply));
-  const submission = await chat.root.submit({ type: "input", content: user }, context);
-  expect((await submission.wait(context)).status).toBe("done");
+  const submission = yield* awaited(chat.root.submit({ content: user, type: "input" }, context));
+  expect((yield* awaited(submission.wait(context))).status).toBe("done");
+});
+
+const history = Effect.fn("history")(function* (chat: harnessCompactionSupportTypes.Chat) {
+  yield* turn(chat, text("u1", 100), text("a1", 100));
+  yield* turn(chat, text("u2", 100), text("a2", 100));
+  yield* turn(chat, text("u3", 100), text("a3", 100));
+});
+
+function resultImpl(
+  chat: harnessCompactionSupportTypes.Chat,
+  id: durableTypes.TaskId<durableTypes.CompactionResult>,
+) {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const record = yield* awaited(chat.harness.waitForTask(id, context));
+      return record.state.outcome;
+    }),
+  );
 }
 
-// Three turns of about 100-token messages.
-export async function history(chat: Chat): Promise<void> {
-  await turn(chat, text("u1", 100), text("a1", 100));
-  await turn(chat, text("u2", 100), text("a2", 100));
-  await turn(chat, text("u3", 100), text("a3", 100));
+const result: {
+  (
+    id: durableTypes.TaskId<durableTypes.CompactionResult>,
+  ): (chat: harnessCompactionSupportTypes.Chat) => ReturnType<typeof resultImpl>;
+  (
+    chat: harnessCompactionSupportTypes.Chat,
+    id: durableTypes.TaskId<durableTypes.CompactionResult>,
+  ): ReturnType<typeof resultImpl>;
+} = dual(2, resultImpl);
+
+const kinds = Effect.fn("kinds")(function* (conversation: durableTypes.Conversation) {
+  return (yield* allEntries(conversation)).map((entry) => entry.kind);
+});
+
+function live(chat: harnessCompactionSupportTypes.Chat) {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      return (yield* awaited(chat.harness.snapshot(LiveDoc, chat.root.id, context))) ?? {};
+    }),
+  );
 }
 
-export const summary = (content = "SUMMARY") => answer(content);
+const compactionInput = Effect.fn("compactionInput")(function* (
+  chat: harnessCompactionSupportTypes.Chat,
+  run: () => Promise<unknown>,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-export async function result(chat: Chat, id: TaskId<CompactionResult>) {
-  const record = await chat.harness.waitForTask(id, context);
-  return record.state.outcome;
-}
+  const input = () =>
+    runPromise(
+      Effect.gen(function* () {
+        return (yield* awaited(chat.harness.snapshot(UsageDoc, chat.root.id, context)))!.models[
+          "faux/faux-1"
+        ]!.input;
+      }),
+    );
+  const before = yield* awaited(input());
+  yield* awaited(run());
+  return (yield* awaited(input())) - before;
+});
 
-export async function kinds(conversation: Conversation): Promise<string[]> {
-  return (await allEntries(conversation)).map((entry) => entry.kind);
-}
-
-export async function live(chat: Chat) {
-  return (await chat.harness.snapshot(LiveDoc, chat.root.id, context)) ?? {};
-}
-
-export function userText(message: Message | undefined): string {
-  return textOf(message) ?? "";
-}
-
-// Text of the first user message; a leading baseline system message comes before it.
-export function firstUserText(messages: readonly Message[]): string {
-  return userText(messages.find((message) => message.role === "user"));
-}
-
-export const user = (content: string): UserMessage => ({ role: "user", content, timestamp: 0 });
-
-// Input tokens a compaction added to the ledger.
-export async function compactionInput(chat: Chat, run: () => Promise<unknown>): Promise<number> {
-  const input = async () =>
-    (await chat.harness.snapshot(UsageDoc, chat.root.id, context))!.models["faux/faux-1"]!.input;
-  const before = await input();
-  await run();
-  return (await input()) - before;
-}
-
-/** Background threshold at 500 and blocking threshold at 1500 tokens of a 2000-token window. */
-export const BACKGROUND: CompactionPolicy = {
-  enabled: true,
-  reserveTokens: 500,
-  keepRecentTokens: 150,
-  backgroundTokens: 1000,
-};
-
-/** Blocking threshold at 700 tokens of a 1000-token window, no background compaction. */
-export const BLOCKING: CompactionPolicy = {
-  enabled: true,
-  reserveTokens: 300,
-  keepRecentTokens: 150,
-  backgroundTokens: 0,
-};
-
-export async function compactionTasks(chat: Chat) {
-  const inspection = await chat.harness.inspect(context);
+const compactionTasks = Effect.fn("compactionTasks")(function* (
+  chat: harnessCompactionSupportTypes.Chat,
+) {
+  const inspection = yield* awaited(chat.harness.inspect(context));
   return inspection.tasks
     .map((task) => task.record)
     .filter((record) => record.kind === "msa.compaction");
-}
+});
 
-export const ENABLED: CompactionPolicy = { ...MANUAL, enabled: true };
-
-export async function reopen(path: string, setup: ChatSetup, faux: Script): Promise<Chat> {
-  const { harness, root } = await openChat(await openNodeSqliteStorage(path), setup);
+const reopen = Effect.fn("reopen")(function* (
+  path: string,
+  setup: ReturnType<typeof chatSetup>,
+  faux: harnessCompactionSupportTypes.Script,
+) {
+  const { harness, root } = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
   harness.resume();
-  return { harness, root, setup, faux };
+  return { faux, harness, root, setup };
+});
+
+function first(path: string) {
+  return Effect.runPromise(
+    Effect.gen(function* () {
+      const setup = chatSetup();
+      addSection(setup.registry, "preamble", () => "You are helpful.", { tag: false });
+      const faux = script(setup);
+      const { harness, root } = yield* openChat(yield* awaited(openNodeSqliteStorage(path)), setup);
+      setup.settings.compaction = MANUAL;
+      setup.settings.retry = { baseDelayMs: 1, enabled: true, maxRetries: 2 };
+      harness.resume();
+      const chat = { faux, harness, root, setup };
+      yield* history(chat);
+      return chat;
+    }),
+  );
 }
 
-export async function first(path: string) {
-  const setup = chatSetup();
-  addSection(setup.registry, "preamble", () => "You are helpful.", { tag: false });
-  const faux = script(setup);
-  const { harness, root } = await openChat(await openNodeSqliteStorage(path), setup);
-  setup.settings.compaction = MANUAL;
-  setup.settings.retry = { enabled: true, maxRetries: 2, baseDelayMs: 1 };
-  harness.resume();
-  const chat = { harness, root, setup, faux };
-  await history(chat);
-  return chat;
-}
-
-// A run whose generation waits on a blocking compaction whose summary is held; returns the input and gate.
-export async function blockingRun(chat: Chat) {
-  await history(chat);
+const blockingRun = Effect.fn("blockingRun")(function* (chat: harnessCompactionSupportTypes.Chat) {
+  yield* history(chat);
   chat.setup.settings.compaction = BLOCKING;
   const gate = deferred();
   const reached = deferred();
   chat.faux.summaries.push(gated(gate, summary("BLOCKING"), reached));
-  const input = await chat.root.submit({ type: "input", content: text("u4", 200) }, context);
-  await reached.promise;
-  const [blocking] = await compactionTasks(chat);
-  return { input, gate, blocking: blocking!.id as TaskId<CompactionResult> };
-}
+  const input = yield* awaited(
+    chat.root.submit({ content: text("u4", 200), type: "input" }, context),
+  );
+  yield* awaited(reached.promise);
+  const [blocking] = yield* compactionTasks(chat);
+  return {
+    blocking: blocking!.id as durableTypes.TaskId<durableTypes.CompactionResult>,
+    gate,
+    input,
+  };
+});
+
+const harnessCompactionSupport = {
+  ...harnessCompactionMessages,
+  blockingRun,
+  compactionInput,
+  compactionTasks,
+  directories,
+  first,
+  gated,
+  history,
+  kinds,
+  live,
+  open,
+  reopen,
+  result,
+  script,
+  sqlitePath,
+  turn,
+};
+
+export default harnessCompactionSupport;

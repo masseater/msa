@@ -1,33 +1,121 @@
-import { setKeybindings } from "@msa/tui";
+import testing from "@msa/testing";
+import tui from "@msa/tui";
+import { Effect } from "effect";
 import { beforeAll, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import type { SessionInfo } from "../src/core/session-manager.ts";
-import { SessionSelectorComponent } from "../src/modes/interactive/components/session-selector.ts";
-import { initTheme } from "../src/modes/interactive/theme/theme.ts";
+import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import SessionSelectorComponent from "../src/modes/interactive/components/session-selector.ts";
+import themeModule from "../src/modes/interactive/theme/theme.ts";
+const { initTheme } = themeModule;
 
-async function flushPromises(): Promise<void> {
-  await new Promise<void>((resolve) => {
-    setImmediate(resolve);
-  });
-}
+const { setKeybindings } = tui;
 
-function makeSession(overrides: Partial<SessionInfo> & { id: string }): SessionInfo {
+const { awaited, dateFromMillis, runTest, sleep } = testing;
+
+const flushPromises = sleep("1 millis");
+
+function makeSession(
+  overrides: Partial<sessionManagerTypes.SessionInfo> & { id: string },
+): sessionManagerTypes.SessionInfo {
   return {
-    path: overrides.path ?? `/tmp/${overrides.id}.jsonl`,
-    id: overrides.id,
     cwd: overrides.cwd ?? "",
-    ...(overrides.name !== undefined ? { name: overrides.name } : {}),
-    created: overrides.created ?? new Date(0),
-    modified: overrides.modified ?? new Date(0),
-    messageCount: overrides.messageCount ?? 1,
-    firstMessage: overrides.firstMessage ?? "hello",
+    id: overrides.id,
+    path: overrides.path ?? `/tmp/${overrides.id}.jsonl`,
+    ...(overrides.name === undefined ? {} : { name: overrides.name }),
     allMessagesText: overrides.allMessagesText ?? "hello",
+    created: overrides.created ?? dateFromMillis(0),
+    firstMessage: overrides.firstMessage ?? "hello",
+    messageCount: overrides.messageCount ?? 1,
+    modified: overrides.modified ?? dateFromMillis(0),
   };
 }
 
-// Kitty keyboard protocol encoding for Ctrl+R
 const CTRL_R = "\x1b[114;5u";
+
+const showsRenameHintInInteractiveResumePicker = () =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const sessions = [makeSession({ id: "a" })];
+      const keybindings = new KeybindingsManager();
+      const selector = new SessionSelectorComponent(
+        () => effectRunPromise(awaited(sessions)),
+        () => effectRunPromise(awaited([])),
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        { keybindings, showRenameHint: true },
+      );
+      yield* flushPromises;
+
+      const output = selector.render(120).join("\n");
+      expect(output).toContain("ctrl+r");
+      expect(output).toContain("rename");
+    }),
+  );
+
+const doesNotShowRenameHintInResume = () =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const sessions = [makeSession({ id: "a" })];
+      const keybindings = new KeybindingsManager();
+      const selector = new SessionSelectorComponent(
+        () => effectRunPromise(awaited(sessions)),
+        () => effectRunPromise(awaited([])),
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        { keybindings, showRenameHint: false },
+      );
+      yield* flushPromises;
+
+      const output = selector.render(120).join("\n");
+      expect(output).not.toContain("ctrl+r");
+      expect(output).not.toContain("rename");
+    }),
+  );
+
+const entersRenameModeOnCtrlRAnd = () =>
+  runTest(
+    Effect.gen(function* () {
+      const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+      const sessions = [makeSession({ id: "a", name: "Old" })];
+      const renameSession = vi.fn(() => effectRunPromise(Effect.sync(() => {})));
+
+      const keybindings = new KeybindingsManager();
+      const selector = new SessionSelectorComponent(
+        () => effectRunPromise(awaited(sessions)),
+        () => effectRunPromise(awaited([])),
+        () => {},
+        () => {},
+        () => {},
+        () => {},
+        { keybindings, renameSession, showRenameHint: true },
+      );
+      yield* flushPromises;
+
+      selector.getSessionList().input.handleInput(CTRL_R);
+      yield* flushPromises;
+
+      const output = selector.render(120).join("\n");
+      expect(output).toContain("Rename Session");
+      expect(output).not.toContain("Resume Session");
+
+      selector.handleInput("X");
+      selector.handleInput("\r");
+      yield* flushPromises;
+
+      expect(renameSession).toHaveBeenCalledTimes(1);
+      expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "OldX");
+    }),
+  );
 
 describe("session selector rename", () => {
   beforeAll(() => {
@@ -35,78 +123,15 @@ describe("session selector rename", () => {
   });
 
   beforeEach(() => {
-    // Ensure test isolation: keybindings are a global singleton
     setKeybindings(new KeybindingsManager());
   });
 
-  it("shows rename hint in interactive /resume picker configuration", async () => {
-    const sessions = [makeSession({ id: "a" })];
-    const keybindings = new KeybindingsManager();
-    const selector = new SessionSelectorComponent(
-      async () => sessions,
-      async () => [],
-      () => {},
-      () => {},
-      () => {},
-      () => {},
-      { showRenameHint: true, keybindings },
-    );
-    await flushPromises();
+  it(
+    "shows rename hint in interactive /resume picker configuration",
+    showsRenameHintInInteractiveResumePicker,
+  );
 
-    const output = selector.render(120).join("\n");
-    expect(output).toContain("ctrl+r");
-    expect(output).toContain("rename");
-  });
+  it("does not show rename hint in --resume picker configuration", doesNotShowRenameHintInResume);
 
-  it("does not show rename hint in --resume picker configuration", async () => {
-    const sessions = [makeSession({ id: "a" })];
-    const keybindings = new KeybindingsManager();
-    const selector = new SessionSelectorComponent(
-      async () => sessions,
-      async () => [],
-      () => {},
-      () => {},
-      () => {},
-      () => {},
-      { showRenameHint: false, keybindings },
-    );
-    await flushPromises();
-
-    const output = selector.render(120).join("\n");
-    expect(output).not.toContain("ctrl+r");
-    expect(output).not.toContain("rename");
-  });
-
-  it("enters rename mode on Ctrl+R and submits with Enter", async () => {
-    const sessions = [makeSession({ id: "a", name: "Old" })];
-    const renameSession = vi.fn(async () => {});
-
-    const keybindings = new KeybindingsManager();
-    const selector = new SessionSelectorComponent(
-      async () => sessions,
-      async () => [],
-      () => {},
-      () => {},
-      () => {},
-      () => {},
-      { renameSession, showRenameHint: true, keybindings },
-    );
-    await flushPromises();
-
-    selector.getSessionList().handleInput(CTRL_R);
-    await flushPromises();
-
-    // Rename mode layout
-    const output = selector.render(120).join("\n");
-    expect(output).toContain("Rename Session");
-    expect(output).not.toContain("Resume Session");
-
-    // Type and submit
-    selector.handleInput("X");
-    selector.handleInput("\r");
-    await flushPromises();
-
-    expect(renameSession).toHaveBeenCalledTimes(1);
-    expect(renameSession).toHaveBeenCalledWith(sessions[0]!.path, "OldX");
-  });
+  it("enters rename mode on Ctrl+R and submits with Enter", entersRenameModeOnCtrlRAnd);
 });

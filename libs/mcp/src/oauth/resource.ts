@@ -1,9 +1,11 @@
 import { dual } from "effect/Function";
 
-import { isServerUrl } from "./endpoint.ts";
-import type { OAuthProtectedResourceMetadata } from "./types.ts";
+import endpoint from "./endpoint.ts";
+import type typesModule from "./types.types.ts";
 
-export function resourceUrlFromServerUrl(value: string | URL): URL {
+const { isServerUrl } = endpoint;
+
+function resourceUrlFromServerUrl(value: string | URL): URL {
   const url = new URL(value);
   url.hash = "";
   return url;
@@ -14,7 +16,7 @@ const withTrailingSlash = (pathname: string): string =>
 
 const selectResourceFor = (
   serverUrl: string | URL,
-  metadata?: OAuthProtectedResourceMetadata,
+  metadata?: typesModule.OAuthProtectedResourceMetadata,
 ): string | undefined => {
   if (metadata === undefined) return undefined;
   const requested = resourceUrlFromServerUrl(serverUrl);
@@ -30,7 +32,19 @@ const selectResourceFor = (
   return metadata.resource;
 };
 
-export const selectResource: {
-  (metadata?: OAuthProtectedResourceMetadata): (serverUrl: string | URL) => string | undefined;
-  (serverUrl: string | URL, metadata?: OAuthProtectedResourceMetadata): string | undefined;
+const selectResource: {
+  (
+    metadata?: typesModule.OAuthProtectedResourceMetadata,
+  ): (serverUrl: string | URL) => string | undefined;
+  (
+    serverUrl: string | URL,
+    metadata?: typesModule.OAuthProtectedResourceMetadata,
+  ): string | undefined;
 } = dual(isServerUrl, selectResourceFor);
+
+const resourceModule = {
+  resourceUrlFromServerUrl,
+  selectResource,
+};
+
+export default resourceModule;

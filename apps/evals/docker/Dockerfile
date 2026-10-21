@@ -1,12 +1,19 @@
 FROM node:24-slim AS builder
 WORKDIR /work
-# Build against an ephemeral repository mount. Only outputs staged under
+RUN npm install -g pnpm@12.10.1 vite-plus@1.1.0
+# Build against an ephemeral copy of the repository. Only outputs staged under
 # /opt/evaluator persist; node_modules and dist created in /repo are discarded.
-RUN --mount=type=bind,source=.,target=/repo,rw \
-    --mount=type=cache,target=/root/.npm \
-    cd /repo \
-    && npm ci --ignore-scripts \
-    && npm run build:offline \
+# The copy is required because the build-context mount and its writable upper
+# are different devices, so renaming a directory out of the mount fails EXDEV.
+RUN --mount=type=bind,source=.,target=/src \
+    --mount=type=cache,target=/root/.local/share/pnpm/store \
+    --mount=type=cache,target=/root/.cache/vite-plus \
+    cp -a /src /repo \
+    && cd /repo \
+    && vp install --frozen-lockfile --ignore-scripts \
+    && vp run hydrate:model-data \
+    && vp run --filter @msa/telemetry build \
+    && vp run build:offline \
     && node apps/evals/docker/install-runtime.mjs /opt/evaluator
 
 # Both variants use the same installed runtime. The control removes only the

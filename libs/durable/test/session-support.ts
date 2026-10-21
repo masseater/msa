@@ -1,171 +1,74 @@
-import type { Context } from "@msa/chord";
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import {
-  type CommitPublication,
-  type ConversationId,
-  type DocumentAddress,
-  type DocumentCommitChange,
-  type DocumentId,
-  type DocumentPoint,
-  type DocumentRecord,
-  type Id,
-  MemoryStorage,
-  type Seq,
-  type StorageWrite,
-} from "@msa/durable";
+import contextModule from "@msa/chord/context";
+import type chordTypes from "@msa/chord/index.types";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 
-import { SessionImpl } from "../src/session/session.ts";
+import clockModule from "../src/clock.ts";
+import SessionImpl from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
+import ControlledStorage from "./controlled-storage.ts";
+import effectSupport from "./effect-support.ts";
 
-export const context: Context = BACKGROUND_CONTEXT;
+const { BACKGROUND_CONTEXT } = contextModule;
+const { currentTimeMillis } = clockModule;
+const { awaited } = effectSupport;
 
-type Deferred = { readonly promise: Promise<void>; readonly resolve: () => void };
-
-function deferred(): Deferred {
-  let resolve!: () => void;
-  const promise = new Promise<void>((done) => {
-    resolve = done;
-  });
-  return { promise, resolve };
-}
-
-/** A gate that holds calls until released and reports when the first held call arrives. */
-export type Gate = {
-  readonly entered: Promise<void>;
-  release(): void;
-};
-
-/** Memory storage with observable commits, held calls, and injected commit failures. */
-export class ControlledStorage extends MemoryStorage {
-  /** Exact borrowed batches admitted by Session. */
-  readonly admittedCommits: (readonly StorageWrite[])[] = [];
-  /** Detached batches for value assertions. */
-  readonly commits: (readonly StorageWrite[])[] = [];
-  mintCount = 0;
-  documentReadCount = 0;
-  #commitGate: { gate: Deferred; entered: Deferred } | undefined;
-  #findGate: { gate: Deferred; entered: Deferred } | undefined;
-  #commitFailure: Error | undefined;
-
-  holdCommits(): Gate {
-    const held = { gate: deferred(), entered: deferred() };
-    this.#commitGate = held;
-    return { entered: held.entered.promise, release: () => this.#release("commit", held) };
-  }
-
-  holdFindDocument(): Gate {
-    const held = { gate: deferred(), entered: deferred() };
-    this.#findGate = held;
-    return { entered: held.entered.promise, release: () => this.#release("find", held) };
-  }
-
-  /** Simulate a crash during the held commit: it never reaches storage, and later commits proceed. */
-  crash(): void {
-    this.#commitGate = undefined;
-  }
-
-  failNextCommit(error: Error): void {
-    this.#commitFailure = error;
-  }
-
-  // Reopen after `close()`, as a fresh process would reopen the same database, keeping every committed record.
-  reopen(): this {
-    (this as unknown as { closed: boolean }).closed = false;
-    return this;
-  }
-
-  #release(kind: "commit" | "find", held: { gate: Deferred }): void {
-    if (kind === "commit" && this.#commitGate === held) this.#commitGate = undefined;
-    if (kind === "find" && this.#findGate === held) this.#findGate = undefined;
-    held.gate.resolve();
-  }
-
-  override async commit(writes: readonly StorageWrite[], commitContext: Context): Promise<Seq> {
-    this.admittedCommits.push(writes);
-    this.commits.push(structuredClone(writes));
-    const held = this.#commitGate;
-    if (held !== undefined) {
-      held.entered.resolve();
-      await held.gate.promise;
-    }
-    const failure = this.#commitFailure;
-    if (failure !== undefined) {
-      this.#commitFailure = undefined;
-      throw failure;
-    }
-    return super.commit(writes, commitContext);
-  }
-
-  override mintId<I extends Id<string>>(): Promise<I> {
-    this.mintCount++;
-    return super.mintId<I>();
-  }
-
-  override document(id: DocumentId, at: DocumentPoint, callContext: Context) {
-    this.documentReadCount++;
-    return super.document(id, at, callContext);
-  }
-
-  override async findDocument(
-    address: DocumentAddress,
-    at: DocumentPoint,
-    callContext: Context,
-  ): Promise<DocumentRecord | undefined> {
-    const held = this.#findGate;
-    if (held !== undefined) {
-      held.entered.resolve();
-      await held.gate.promise;
-    }
-    return super.findDocument(address, at, callContext);
-  }
-}
-
-// Session kernel plus its controlled storage and every committed publication.
-export function openTestSession(): {
+const context: chordTypes.Context = BACKGROUND_CONTEXT;
+function openTestSession(): {
   readonly storage: ControlledStorage;
-  readonly session: SessionImpl;
-  readonly publications: CommitPublication[];
+  readonly session: sessionTypes.SessionImpl;
+  readonly publications: durableTypes.CommitPublication[];
 } {
   const storage = new ControlledStorage();
-  // These tests pin the cache's identities and loads, so documents stay as long as the default keeps them.
-  const session = new SessionImpl(storage, Date.now, () => 600_000);
-  const publications: CommitPublication[] = [];
+  const session = new SessionImpl(storage, currentTimeMillis, () => 600_000);
+  const publications: durableTypes.CommitPublication[] = [];
   session.subscribeCommits((publication) => {
     publications.push(publication);
   });
-  return { storage, session, publications };
+  return { publications, session, storage };
 }
-
-export function documentChanges(
-  publication: CommitPublication,
-): readonly Extract<DocumentCommitChange, { readonly type: "document" }>[] {
+function documentChanges(
+  publication: durableTypes.CommitPublication,
+): readonly Extract<durableTypes.DocumentCommitChange, { readonly type: "document" }>[] {
   return publication.changes.filter(
-    (change): change is Extract<DocumentCommitChange, { readonly type: "document" }> =>
+    (change): change is Extract<durableTypes.DocumentCommitChange, { readonly type: "document" }> =>
       change.type === "document",
   );
 }
-
-export function documentCopyChanges(
-  publication: CommitPublication,
-): readonly Extract<DocumentCommitChange, { readonly type: "document.copy" }>[] {
+function documentCopyChanges(
+  publication: durableTypes.CommitPublication,
+): readonly Extract<durableTypes.DocumentCommitChange, { readonly type: "document.copy" }>[] {
   return publication.changes.filter(
-    (change): change is Extract<DocumentCommitChange, { readonly type: "document.copy" }> =>
+    (
+      change,
+    ): change is Extract<durableTypes.DocumentCommitChange, { readonly type: "document.copy" }> =>
       change.type === "document.copy",
   );
 }
-
-// Create one conversation and return its ID.
-export function createConversation(session: SessionImpl): Promise<ConversationId> {
+function createConversation(
+  session: sessionTypes.SessionImpl,
+): Promise<durableTypes.ConversationId> {
   return Promise.resolve(
     session.commit(
-      async (tx) => (await tx.createConversation({ ownership: { kind: "ownerless" } })).id,
+      (tx) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            return (yield* awaited(tx.createConversation({ ownership: { kind: "ownerless" } }))).id;
+          }),
+        ),
       context,
     ),
   );
 }
+const flush: Effect.Effect<void> = Effect.sleep(1);
 
-// Resolve after pending microtasks and one macrotask turn.
-export function flush(): Promise<void> {
-  return new Promise((resolve) => {
-    setTimeout(resolve, 0);
-  });
-}
+const sessionSupport = {
+  context,
+  createConversation,
+  documentChanges,
+  documentCopyChanges,
+  flush,
+  openTestSession,
+};
+
+export default sessionSupport;

@@ -1,22 +1,5 @@
-/**
- * Working Indicator Extension
- *
- * Demonstrates `ctx.ui.setWorkingIndicator()` for customizing the inline
- * working indicator shown while msa is streaming a response.
- *
- * Usage:
- *   msa --extension examples/extensions/working-indicator.ts
- *
- * Commands:
- *   /working-indicator           Show current mode
- *   /working-indicator dot       Use a static dot indicator
- *   /working-indicator pulse     Use a custom animated indicator
- *   /working-indicator none      Hide the indicator entirely
- *   /working-indicator spinner   Restore an animated spinner
- *   /working-indicator reset     Restore msa's default spinner
- */
-
-import type { ExtensionAPI, ExtensionContext, WorkingIndicatorOptions } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
 
 type WorkingIndicatorMode = "dot" | "none" | "pulse" | "spinner" | "default";
 
@@ -30,7 +13,7 @@ const PASTEL_RAINBOW = [
   "\x1b[38;2;218;186;255m",
 ] as const;
 const RESET_FG = "\x1b[39m";
-const HIDDEN_INDICATOR: WorkingIndicatorOptions = {
+const HIDDEN_INDICATOR: codingAgentTypes.WorkingIndicatorOptions = {
   frames: [],
 };
 
@@ -38,7 +21,9 @@ function colorize(text: string, color: string): string {
   return `${color}${text}${RESET_FG}`;
 }
 
-function getIndicator(mode: WorkingIndicatorMode): WorkingIndicatorOptions | undefined {
+function getIndicator(
+  mode: WorkingIndicatorMode,
+): codingAgentTypes.WorkingIndicatorOptions | undefined {
   switch (mode) {
     case "dot":
       return {
@@ -83,10 +68,10 @@ function describeMode(mode: WorkingIndicatorMode): string {
   }
 }
 
-export default function (msa: ExtensionAPI) {
+export default function (msa: codingAgentTypes.ExtensionAPI) {
   let mode: WorkingIndicatorMode = "spinner";
 
-  const applyIndicator = (ctx: ExtensionContext) => {
+  const applyIndicator = (ctx: codingAgentTypes.ExtensionContext) => {
     ctx.ui.setWorkingIndicator(getIndicator(mode));
     ctx.ui.setStatus(
       "working-indicator",
@@ -94,33 +79,36 @@ export default function (msa: ExtensionAPI) {
     );
   };
 
-  msa.on("session_start", async (_event, ctx) => {
+  msa.on("session_start", (_event, ctx) => {
     applyIndicator(ctx);
   });
 
   msa.registerCommand("working-indicator", {
     description: "Set the streaming working indicator: dot, pulse, none, spinner, or reset.",
-    handler: async (args, ctx) => {
-      const nextMode = args.trim().toLowerCase();
-      if (!nextMode) {
-        ctx.ui.notify(`Working indicator: ${describeMode(mode)}`, "info");
-        return;
-      }
+    handler: (args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          const nextMode = args.trim().toLowerCase();
+          if (nextMode.length === 0) {
+            ctx.ui.notify(`Working indicator: ${describeMode(mode)}`, "info");
+            return;
+          }
 
-      if (
-        nextMode !== "dot" &&
-        nextMode !== "none" &&
-        nextMode !== "pulse" &&
-        nextMode !== "spinner" &&
-        nextMode !== "reset"
-      ) {
-        ctx.ui.notify("Usage: /working-indicator [dot|pulse|none|spinner|reset]", "error");
-        return;
-      }
+          if (
+            nextMode !== "dot" &&
+            nextMode !== "none" &&
+            nextMode !== "pulse" &&
+            nextMode !== "spinner" &&
+            nextMode !== "reset"
+          ) {
+            ctx.ui.notify("Usage: /working-indicator [dot|pulse|none|spinner|reset]", "error");
+            return;
+          }
 
-      mode = nextMode === "reset" ? "default" : nextMode;
-      applyIndicator(ctx);
-      ctx.ui.notify(`Working indicator set to: ${describeMode(mode)}`, "info");
-    },
+          mode = nextMode === "reset" ? "default" : nextMode;
+          applyIndicator(ctx);
+          ctx.ui.notify(`Working indicator set to: ${describeMode(mode)}`, "info");
+        }),
+      ),
   });
 }

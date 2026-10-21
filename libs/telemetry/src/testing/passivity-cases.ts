@@ -2,22 +2,18 @@ import { deepStrictEqual, doesNotThrow, strictEqual } from "node:assert/strict";
 
 import { Effect } from "effect";
 
-import type { SpanAttributes, SpanOptions, SpanStatus } from "../context.ts";
-import type { ConformanceCaseDefinition, ConformanceTest } from "./support.ts";
-import {
-  findSpan,
-  recordedSpans,
-  rejectsWithSameValue,
-  rejectWith,
-  unreadable,
-} from "./support.ts";
+import type contextTypes from "../context.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
 
-const suppressesUnreadablePayloads: ConformanceTest = (fixture) =>
+const { findSpan, recordedSpans, rejectWith, rejectsWithSameValue, unreadable } = support;
+
+const suppressesUnreadablePayloads: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     let calls = 0;
-    const options = unreadable<SpanOptions>({
-      name: "unreadable-options",
+    const options = unreadable<contextTypes.SpanOptions>({
       attributes: { secret: "value" },
+      name: "unreadable-options",
     });
     const result = fixture.context.startSpan(options, () => {
       calls++;
@@ -30,8 +26,8 @@ const suppressesUnreadablePayloads: ConformanceTest = (fixture) =>
 
     yield* Effect.promise(() =>
       fixture.context.startSpan({ name: "unreadable-recording" }, (span) => {
-        const attributes = unreadable<SpanAttributes>({ secret: "value" });
-        const status = unreadable<SpanStatus>({ status: "ok" });
+        const attributes = unreadable<contextTypes.SpanAttributes>({ secret: "value" });
+        const status = unreadable<contextTypes.SpanStatus>({ status: "ok" });
         doesNotThrow(() => span.setAttributes(attributes));
         doesNotThrow(() => span.addEvent("unreadable-event", attributes));
         doesNotThrow(() => span.setStatus(status));
@@ -45,13 +41,13 @@ const suppressesUnreadablePayloads: ConformanceTest = (fixture) =>
     deepStrictEqual(recorded[0]?.status, { status: "ok" });
   });
 
-const ignoresFailedStatus: ConformanceTest = (fixture) =>
+const ignoresFailedStatus: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     const rejection = new Error("rejected after unreadable status");
     yield* rejectsWithSameValue(
       () =>
         fixture.context.startSpan({ name: "unreadable-status" }, (span) => {
-          const status = unreadable<SpanStatus>({ status: "ok" });
+          const status = unreadable<contextTypes.SpanStatus>({ status: "ok" });
           doesNotThrow(() => span.setStatus(status));
           return rejectWith(rejection);
         }),
@@ -64,7 +60,7 @@ const ignoresFailedStatus: ConformanceTest = (fixture) =>
     );
   });
 
-export const passivityCases: readonly ConformanceCaseDefinition[] = [
+const passivityCases: readonly supportTypes.ConformanceCaseDefinition[] = [
   {
     group: "passivity",
     name: "suppresses unreadable telemetry payload failures",
@@ -76,3 +72,9 @@ export const passivityCases: readonly ConformanceCaseDefinition[] = [
     test: ignoresFailedStatus,
   },
 ];
+
+const passivityCasesModule = {
+  passivityCases,
+};
+
+export default passivityCasesModule;

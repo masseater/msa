@@ -1,14 +1,16 @@
 import assert from "node:assert";
 import { afterEach, beforeEach, describe, it } from "node:test";
 
-import { Image, setImageTranscoder } from "../src/components/image.ts";
-import {
-  hyperlink,
-  resetCapabilitiesCache,
-  setCapabilities,
-  setCellDimensions,
-} from "../src/terminal-image.ts";
-import { jpeg, png, render } from "./terminal-image-helpers.ts";
+import imageModule from "../src/components/image.ts";
+import terminalCapabilities from "../src/terminal-capabilities.ts";
+import terminalImage from "../src/terminal-image.ts";
+import terminalImageHelpers from "./terminal-image-helpers.ts";
+
+const { resetCapabilitiesCache, setCapabilities, setCellDimensions } = terminalCapabilities;
+const { Image, setImageTranscoder } = imageModule;
+const { hyperlink } = terminalImage;
+
+const { jpeg, png, render } = terminalImageHelpers;
 
 describe("Image transcoding", () => {
   let calls: string[];
@@ -18,19 +20,18 @@ describe("Image transcoding", () => {
   };
   beforeEach(() => {
     calls = [];
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
   });
   afterEach(() => {
     setImageTranscoder(undefined);
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   it("sends converted PNG data sized from the PNG", () => {
     setImageTranscoder(transcode);
     const lines = render(jpeg, "image/jpeg");
     assert.ok(lines[0]?.includes("f=100") && lines[0]?.includes(`;${png}\x1b\\`));
-    // 40x10 PNG at 18 columns: 5 rows, not the 18 rows of the 20x20 source dimensions.
     assert.strictEqual(lines.length, 5);
   });
 
@@ -54,24 +55,21 @@ describe("Image transcoding", () => {
   };
   beforeEach(() => {
     calls = [];
-    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
-    setCellDimensions({ widthPx: 10, heightPx: 10 });
+    setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+    setCellDimensions({ heightPx: 10, widthPx: 10 });
   });
   afterEach(() => {
     setImageTranscoder(undefined);
     resetCapabilitiesCache();
-    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    setCellDimensions({ heightPx: 18, widthPx: 9 });
   });
   it("converts each image once", () => {
     setImageTranscoder(transcode);
     const image = new Image(jpeg, "image/jpeg", { fallbackColor: (value) => value });
     image.render(80);
-    // New instance hits the shared cache.
     render(jpeg, "image/jpeg");
-    // Evicts the shared entry.
     for (let i = 0; i < 40; i++) render(`other-${i}`, "image/jpeg");
     image.invalidate();
-    // Instance keeps its own PNG.
     image.render(40);
     assert.strictEqual(calls.filter((data) => data === jpeg).length, 1);
   });
@@ -79,7 +77,7 @@ describe("Image transcoding", () => {
   it("does not convert PNG data or iTerm2 output", () => {
     setImageTranscoder(transcode);
     assert.ok(render(png, "image/png")[0]?.includes(`;${png}\x1b\\`));
-    setCapabilities({ images: "iterm2", trueColor: true, hyperlinks: true });
+    setCapabilities({ hyperlinks: true, images: "iterm2", trueColor: true });
     assert.ok(render(jpeg, "image/jpeg").at(-1)?.endsWith(`:${jpeg}\x07`));
     assert.deepStrictEqual(calls, []);
   });

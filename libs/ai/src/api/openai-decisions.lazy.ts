@@ -1,6 +1,14 @@
-import type { ProviderClassifier } from "../types.ts";
+import type typesModule from "../types.types.ts";
 
-export const openAIDecisionsApi = (): ProviderClassifier => ({
-  classify: async (model, context, options) =>
-    (await import("./openai-decisions.ts")).classify(model, context, options),
+const openAIDecisionsApi = (): typesModule.ProviderClassifier => ({
+  classify: (model, context, options) =>
+    import("./openai-decisions.ts").then((module) =>
+      module.default.classify(model, context, options),
+    ),
 });
+
+const openaiDecisionsLazy = {
+  openAIDecisionsApi,
+};
+
+export default openaiDecisionsLazy;

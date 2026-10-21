@@ -1,10 +1,15 @@
 import { Worker } from "node:worker_threads";
 
 import { Deferred, Effect, Latch } from "effect";
-import { afterEach, describe, expect, it, type MockInstance, vi } from "vite-plus/test";
+import { type MockInstance, afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { type CodemodeResult, CodemodeSandbox } from "../src/index.ts";
-import { abortController, hang } from "./support.ts";
+import codemode from "../src/index.ts";
+import type codemodeTypes from "../src/index.types.ts";
+import support from "./support.ts";
+
+const { CodemodeSandbox } = codemode;
+
+const { abortController, hang } = support;
 
 afterEach(() => {
   vi.useRealTimers();
@@ -19,8 +24,8 @@ const doesNotStartAWorkerWhen = Effect.gen(function* () {
   const sandbox = new CodemodeSandbox({ acquireWorker, onWorkerStarted });
   try {
     expect(yield* Effect.promise(() => sandbox.execute("while (true) {}"))).toMatchObject({
-      ok: false,
       error: { kind: "sandbox", message: "worker capacity exhausted" },
+      ok: false,
     });
     expect(acquireWorker).toHaveBeenCalledTimes(1);
     expect(onWorkerStarted).not.toHaveBeenCalled();
@@ -38,8 +43,8 @@ const releasesAdmissionWhenWorkerConstructionFails = Effect.gen(function* () {
   });
   try {
     expect(yield* Effect.promise(() => sandbox.execute("return 1"))).toMatchObject({
-      ok: false,
       error: { kind: "sandbox", message: expect.stringContaining("Failed to start worker:") },
+      ok: false,
     });
     expect(acquireWorker).toHaveBeenCalledTimes(1);
     expect(releaseWorker).toHaveBeenCalledTimes(1);
@@ -56,8 +61,8 @@ const doesNotAcquireAdmissionWhenWasm = Effect.gen(function* () {
   });
   try {
     expect(yield* Effect.promise(() => sandbox.execute("return 1"))).toMatchObject({
-      ok: false,
       error: { kind: "sandbox", message: "Failed to load QuickJS: wasm unavailable" },
+      ok: false,
     });
     expect(acquireWorker).not.toHaveBeenCalled();
   } finally {
@@ -78,7 +83,7 @@ const reportsTheActualExitOfExecute = Effect.gen(function* () {
       ok: true,
       value: 1,
     });
-    const run = sandbox.start("return 2", { startedAt: 0, seed: 0, onCall: () => {} });
+    const run = sandbox.start("return 2", { onCall: () => {}, seed: 0, startedAt: 0 });
     expect(yield* Effect.promise(() => run.result)).toMatchObject({ ok: true, value: 2 });
     expect(run.finished).toBe(true);
     expect(exits).toHaveLength(2);
@@ -102,8 +107,8 @@ const requestsTerminationWhenOnworkerstartedThrows = Effect.gen(function* () {
   });
   try {
     expect(yield* Effect.promise(() => sandbox.execute("while (true) {}"))).toMatchObject({
-      ok: false,
       error: { kind: "sandbox", message: "lifetime hook failed" },
+      ok: false,
     });
     const started = exited;
     expect(started).toBeDefined();
@@ -120,17 +125,17 @@ interface Observed {
   toolSignal: AbortSignal | undefined;
   exited: Promise<void> | undefined;
   didExit: boolean;
-  result: CodemodeResult | undefined;
+  result: codemodeTypes.CodemodeResult | undefined;
   didClose: boolean;
 }
 
 function newObserved(): Observed {
   return {
-    toolSignal: undefined,
-    exited: undefined,
-    didExit: false,
-    result: undefined,
     didClose: false,
+    didExit: false,
+    exited: undefined,
+    result: undefined,
+    toolSignal: undefined,
   };
 }
 
@@ -150,12 +155,11 @@ function spyOnTermination() {
       Effect.flatMap((code) => Deferred.succeed(termination, code)),
     );
   });
-  return { spy, spied, release };
+  return { release, spied, spy };
 }
 
-function hangingSandbox(observed: Observed, called: Latch.Latch): CodemodeSandbox {
+function hangingSandbox(observed: Observed, called: Latch.Latch): codemodeTypes.CodemodeSandbox {
   return new CodemodeSandbox({
-    timeoutMs: 100,
     onWorkerStarted: (promise) => {
       observed.exited = promise;
       void promise.then(() => {
@@ -163,14 +167,15 @@ function hangingSandbox(observed: Observed, called: Latch.Latch): CodemodeSandbo
         return observed.didExit;
       });
     },
+    timeoutMs: 100,
     tools: [
       {
-        name: "hang",
         execute: (_args, { signal }) => {
           observed.toolSignal = signal;
           called.openUnsafe();
           return hang();
         },
+        name: "hang",
       },
     ],
   });
@@ -178,7 +183,7 @@ function hangingSandbox(observed: Observed, called: Latch.Latch): CodemodeSandbo
 
 const stop = Effect.fn(function* (
   how: StopMode,
-  sandbox: CodemodeSandbox,
+  sandbox: codemodeTypes.CodemodeSandbox,
   controller: AbortController,
   observed: Observed,
 ) {
@@ -200,10 +205,10 @@ interface WorkerSpies {
 
 function expectSettledEarly(how: StopMode, observed: Observed, spies: WorkerSpies): void {
   expect(observed.result).toMatchObject({
-    ok: false,
-    error: { kind: how === "timeout" ? "timeout" : "aborted" },
-    output: [{ type: "text", text: "partial" }],
     calls: [{ name: "hang", status: "cancelled" }],
+    error: { kind: how === "timeout" ? "timeout" : "aborted" },
+    ok: false,
+    output: [{ text: "partial", type: "text" }],
   });
   expect(observed.toolSignal?.aborted).toBe(true);
   expect(spies.terminate).toHaveBeenCalledTimes(1);
@@ -221,8 +226,8 @@ const settlesWithoutWaitingForExit = Effect.fn(function* (how: StopMode) {
   vi.useFakeTimers();
   const termination = spyOnTermination();
   const spies = {
-    terminate: termination.spy,
     ref: vi.spyOn(Worker.prototype, "ref"),
+    terminate: termination.spy,
     unref: vi.spyOn(Worker.prototype, "unref"),
   };
   const called = Latch.makeUnsafe(false);
@@ -243,8 +248,8 @@ const settlesWithoutWaitingForExit = Effect.fn(function* (how: StopMode) {
     expectSettledEarly(how, observed, spies);
     yield* Effect.promise(() => sandbox.close());
     termination.spied.worker?.emit("message", {
-      type: "done",
       ok: true,
+      type: "done",
       value: "42",
       writes: "[]",
     });

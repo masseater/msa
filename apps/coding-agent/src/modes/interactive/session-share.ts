@@ -1,144 +1,81 @@
-import { spawn, spawnSync } from "node:child_process";
-import * as crypto from "node:crypto";
-import * as fs from "node:fs";
-import * as os from "node:os";
-import * as path from "node:path";
+import tui from "@msa/tui";
+import { Effect } from "effect";
 
-import { hyperlink, type TUI } from "@msa/tui";
+import config from "../../config.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import BorderedLoader from "./components/bordered-loader.ts";
+import githubGist from "./github-gist.ts";
+import sessionHtmlExport from "./session-html-export.ts";
+import type sessionShareTypes from "./session-share.types.ts";
+import themeModule from "./theme/theme.ts";
 
-import { getShareViewerUrl } from "../../config.ts";
-import type { AgentSession } from "../../core/agent-session.ts";
-import { BorderedLoader } from "./components/bordered-loader.ts";
-import type { EditorSlot } from "./editor-slot.ts";
-import { theme } from "./theme/theme.ts";
+const { performed, awaiting } = awaitingModule;
+const { theme } = themeModule;
 
-interface SessionShareContext {
-  session: AgentSession;
-  ui: TUI;
-  editorSlot: EditorSlot;
-  showStatus: (message: string) => void;
-  showError: (message: string) => void;
-}
+type Context = sessionShareTypes.SessionShareContext;
 
-/** Trailing `msa.share` entry carrying the system prompt and tool schemas for the session viewer. */
-export function createShareTrailingEntries(
-  session: AgentSession,
-  parentId: string | null,
-  timestamp: string,
-): object[] {
-  return [
-    {
-      type: "custom",
-      customType: "msa.share",
-      id: crypto.randomUUID().slice(0, 8),
-      parentId,
-      timestamp,
-      data: {
-        systemPrompt: session.state.systemPrompt,
-        tools: session.state.tools.map((tool) => ({
-          name: tool.name,
-          description: tool.description,
-          parameters: tool.parameters,
-        })),
-      },
-    },
-  ];
-}
-
-/** Share the current session as a private gist. */
-export async function shareSession(context: SessionShareContext): Promise<void> {
-  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "msa-share-"));
-  const htmlFile = path.join(tempDir, "session.html");
-
-  try {
-    try {
-      const authResult = spawnSync("gh", ["auth", "status"], { encoding: "utf-8" });
-      if (authResult.status !== 0) {
-        context.showError("GitHub CLI is not logged in. Run 'gh auth login' first.");
-        return;
-      }
-    } catch {
-      context.showError(
-        "GitHub CLI (gh) is not installed. Install it from https://cli.github.com/",
-      );
-      return;
-    }
-
-    try {
-      await context.session.exportToHtml(htmlFile, { themeName: theme.name });
-    } catch (error: unknown) {
-      context.showError(
-        `Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-      return;
-    }
-    await shareViaGist(htmlFile, context);
-  } finally {
-    try {
-      fs.rmSync(tempDir, { recursive: true, force: true });
-    } catch {
-      // Ignore cleanup errors
-    }
-  }
-}
-
-async function shareViaGist(tmpFile: string, context: SessionShareContext): Promise<void> {
-  const loader = new BorderedLoader(context.ui, theme, "Creating gist...");
-  context.editorSlot.show(loader);
-
-  let proc: ReturnType<typeof spawn> | null = null;
-  loader.onAbort = () => {
-    proc?.kill();
-    restoreEditor(loader, context);
-    context.showStatus("Share cancelled");
-  };
-
-  try {
-    const result = await new Promise<{ stdout: string; stderr: string; code: number | null }>(
-      (resolve) => {
-        proc = spawn("gh", ["gist", "create", "--public=false", tmpFile]);
-        let stdout = "";
-        let stderr = "";
-        proc.stdout?.on("data", (data) => {
-          stdout += data.toString();
-        });
-        proc.stderr?.on("data", (data) => {
-          stderr += data.toString();
-        });
-        proc.on("close", (code) => resolve({ stdout, stderr, code }));
-      },
-    );
-
-    if (loader.signal.aborted) return;
-    restoreEditor(loader, context);
-
-    if (result.code !== 0) {
-      context.showError(`Failed to create gist: ${result.stderr?.trim() || "Unknown error"}`);
-      return;
-    }
-
-    const gistUrl = result.stdout?.trim();
-    const gistId = gistUrl?.split("/").pop();
-    if (!gistId) {
-      context.showError("Failed to parse gist ID from gh output");
-      return;
-    }
-
-    const previewUrl = getShareViewerUrl(gistId);
-    context.showStatus(
-      `Share URL: ${hyperlink(previewUrl, previewUrl)}\nGist: ${hyperlink(gistUrl, gistUrl)}`,
-    );
-  } catch (error: unknown) {
-    if (!loader.signal.aborted) {
-      restoreEditor(loader, context);
-      context.showError(
-        `Failed to create gist: ${error instanceof Error ? error.message : "Unknown error"}`,
-      );
-    }
-  }
-}
-
-function restoreEditor(loader: BorderedLoader, context: SessionShareContext): void {
+function restoreEditor(loader: BorderedLoader, context: Context): void {
   loader.dispose();
   context.editorSlot.restoreEditor();
 }
+
+function reportGist(result: sessionShareTypes.GistResult, context: Context): void {
+  if (result.code !== 0) {
+    context.showError(`Failed to create gist: ${result.stderr?.trim() || "Unknown error"}`);
+    return;
+  }
+  const gistUrl = result.stdout?.trim();
+  const gistId = gistUrl?.split("/").pop();
+  if (gistId === undefined || gistId === "") {
+    context.showError("Failed to parse gist ID from gh output");
+    return;
+  }
+  const previewUrl = config.getShareViewerUrl(gistId);
+  context.showStatus(
+    `Share URL: ${tui.hyperlink(previewUrl, previewUrl)}\nGist: ${tui.hyperlink(gistUrl, gistUrl)}`,
+  );
+}
+
+function shareViaGist(htmlFile: string, context: Context): Effect.Effect<void> {
+  return awaiting(function* () {
+    const loader = new BorderedLoader(context.ui, theme, "Creating gist...");
+    context.editorSlot.show(loader);
+    const gist = githubGist.createSecretGist(htmlFile);
+    loader.onAbort = () => {
+      gist.cancel();
+      restoreEditor(loader, context);
+      context.showStatus("Share cancelled");
+    };
+    try {
+      const result = yield* performed(gist.result);
+      if (loader.signal.aborted) return;
+      restoreEditor(loader, context);
+      reportGist(result, context);
+    } catch (error: unknown) {
+      if (!loader.signal.aborted) {
+        restoreEditor(loader, context);
+        const reason = error instanceof Error ? error.message : "Unknown error";
+        context.showError(`Failed to create gist: ${reason}`);
+      }
+    }
+  });
+}
+
+function shareSession(context: Context): Promise<void> {
+  const problem = githubGist.githubCliProblem();
+  if (problem !== undefined) {
+    context.showError(problem);
+    return Promise.resolve();
+  }
+  return Effect.runPromise(
+    sessionHtmlExport.withExportedHtml(context.session, context.showError, (htmlFile) =>
+      shareViaGist(htmlFile, context),
+    ),
+  );
+}
+
+const sessionShare = {
+  shareSession,
+};
+
+export default sessionShare;

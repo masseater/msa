@@ -1,19 +1,28 @@
-// For benchmarks: the bytes live objects hold, from a heap snapshot. `heapUsed` after `gc()` also counts what the
-// collector has not compacted yet, which hides a small leak or invents a large one.
 import { Session } from "node:inspector/promises";
 
-// Sum of the self sizes of every object in a fresh heap snapshot, which collects garbage first.
-export async function retainedBytes(): Promise<number> {
+import { Effect } from "effect";
+
+import effectSupport from "./effect-support.ts";
+
+const { awaited, fromJsonText } = effectSupport;
+
+const retainedBytes = Effect.fn("retainedBytes")(function* () {
   const inspector = new Session();
   inspector.connect();
   const chunks: string[] = [];
   inspector.on("HeapProfiler.addHeapSnapshotChunk", (message) => chunks.push(message.params.chunk));
-  try {
-    await inspector.post("HeapProfiler.takeHeapSnapshot", { reportProgress: false });
-  } finally {
-    inspector.disconnect();
-  }
-  const snapshot = JSON.parse(chunks.join("")) as {
+  yield* Effect.asVoid(
+    Effect.suspend(() =>
+      awaited(inspector.post("HeapProfiler.takeHeapSnapshot", { reportProgress: false })),
+    ),
+  ).pipe(
+    Effect.ensuring(
+      Effect.sync(() => {
+        inspector.disconnect();
+      }),
+    ),
+  );
+  const snapshot = (yield* fromJsonText(chunks.join(""))) as {
     snapshot: { meta: { node_fields: string[] } };
     nodes: number[];
   };
@@ -24,4 +33,6 @@ export async function retainedBytes(): Promise<number> {
   for (let index = size; index < snapshot.nodes.length; index += width)
     total += snapshot.nodes[index]!;
   return total;
-}
+});
+
+export default retainedBytes;

@@ -1,172 +1,210 @@
-/**
- * The Message types require `content` to always be present, but untyped JS
- * extension tools, hand-built histories, and old or hand-edited session files
- * can violate that contract. We are intentionally lax at the ingestion
- * boundaries and normalize null/missing content to an empty array so it never
- * reaches rendering, compaction, or provider request conversion
- * (issues #6259, #6276).
- */
-
-import type { AgentMessage, AgentToolResult } from "@msa/agent-core";
-import { fauxAssistantMessage, fauxToolCall } from "@msa/ai";
+import type agentTypes from "@msa/agent-core/index.types";
+import ai from "@msa/ai";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import {
-  type SessionEntry,
-  sessionEntryToContextMessages,
-} from "../../src/core/session-manager.ts";
-import type { ExtensionFactory } from "../../src/index.ts";
-import { createHarness } from "./harness.ts";
+import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import sessionContext from "../../src/core/session-manager/session-context.ts";
+import type srcTypes from "../../src/index.types.ts";
+import harnessModule from "./harness.ts";
 
-function messageEntry(message: Record<string, unknown>): SessionEntry {
+const { sessionEntryToContextMessages } = sessionContext;
+
+const { fauxAssistantMessage, fauxToolCall } = ai;
+
+const { createHarness } = harnessModule;
+
+const { currentTimeMillis, nowIso } = testing;
+
+function messageEntry(message: Record<string, unknown>): sessionManagerTypes.SessionEntry {
   return {
-    type: "message",
     id: "entry-1",
-    parentId: null,
-    timestamp: new Date().toISOString(),
     message,
-  } as unknown as SessionEntry;
+    parentId: null,
+    timestamp: nowIso(),
+    type: "message",
+  } as unknown as sessionManagerTypes.SessionEntry;
 }
 
-describe("lax message content handling", () => {
-  it("normalizes tool results from untyped tools that omit content", async () => {
-    const extensionFactories: ExtensionFactory[] = [
-      (msa) => {
-        msa.registerTool({
-          name: "web_search",
-          label: "Web Search",
-          description: "Custom tool that returns a result without content",
-          parameters: Type.Object({}),
-          // Simulate an untyped JS extension tool that omits content.
-          execute: async () => ({ details: {} }) as unknown as AgentToolResult<unknown>,
-        });
-      },
-    ];
-    const harness = await createHarness({ extensionFactories });
-
-    try {
-      harness.setResponses([
-        fauxAssistantMessage(fauxToolCall("web_search", {}), { stopReason: "toolUse" }),
-        fauxAssistantMessage("done"),
-      ]);
-
-      await harness.session.prompt("search something");
-
-      const toolResults = harness.session.messages.filter(
-        (message) => message.role === "toolResult",
-      );
-      expect(toolResults).toHaveLength(1);
-      expect(toolResults[0]?.content).toEqual([]);
-      // The follow-up turn consumed the normalized tool result without crashing.
-      expect(harness.getPendingResponseCount()).toBe(0);
-    } finally {
-      harness.cleanup();
-    }
-  });
-
-  it("normalizes null content in message_end extension replacements", async () => {
-    const extensionFactories: ExtensionFactory[] = [
-      (msa) => {
-        msa.on("message_end", async (event) => {
-          if (event.message.role !== "assistant") return undefined;
-          // Simulate an untyped JS extension replacing a message without content.
-          return { message: { ...event.message, content: null } as unknown as AgentMessage };
-        });
-      },
-    ];
-    const harness = await createHarness({ extensionFactories });
-
-    try {
-      harness.setResponses([fauxAssistantMessage("hello")]);
-      await harness.session.prompt("hi");
-
-      const assistantMessages = harness.session.messages.filter(
-        (message) => message.role === "assistant",
-      );
-      expect(assistantMessages).toHaveLength(1);
-      expect(assistantMessages[0]?.content).toEqual([]);
-    } finally {
-      harness.cleanup();
-    }
-  });
-
-  it("normalizes null content in custom messages from extensions", async () => {
-    const harness = await createHarness();
-
-    try {
-      await harness.session.sendCustomMessage({
-        customType: "test",
-        content: null as unknown as string,
-        display: false,
-        details: undefined,
+const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
+  const extensionFactories: srcTypes.ExtensionFactory[] = [
+    (msa) => {
+      msa.registerTool({
+        description: "Custom tool that returns a result without content",
+        execute: () =>
+          Promise.resolve({ details: {} } as unknown as agentTypes.AgentToolResult<unknown>),
+        label: "Web Search",
+        name: "web_search",
+        parameters: Type.Object({}),
       });
+    },
+  ];
+  const harness = yield* Effect.promise(() => createHarness({ extensionFactories }));
 
-      const customMessages = harness.session.messages.filter(
-        (message) => message.role === "custom",
+  try {
+    harness.setResponses([
+      fauxAssistantMessage(fauxToolCall("web_search", {}), { stopReason: "toolUse" }),
+      fauxAssistantMessage("done"),
+    ]);
+
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("search something"));
+
+    const toolResults = harness.session.messages.filter((message) => message.role === "toolResult");
+    expect(toolResults).toHaveLength(1);
+    expect(toolResults[0]?.content).toEqual([]);
+
+    expect(harness.getPendingResponseCount()).toBe(0);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+const normalizesNullContentInMessageEnd = Effect.gen(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+  const extensionFactories: srcTypes.ExtensionFactory[] = [
+    (msa) => {
+      msa.on("message_end", (event) =>
+        runPromise(
+          Effect.sync(() => {
+            if (event.message.role !== "assistant") return undefined;
+
+            return {
+              message: { ...event.message, content: null } as unknown as agentTypes.AgentMessage,
+            };
+          }),
+        ),
       );
-      expect(customMessages).toHaveLength(1);
-      expect(customMessages[0]?.content).toEqual([]);
-    } finally {
-      harness.cleanup();
-    }
-  });
+    },
+  ];
+  const harness = yield* Effect.promise(() => createHarness({ extensionFactories }));
 
-  it("normalizes null or missing content when loading session message entries", () => {
-    const badMessages = [
-      { role: "user", content: null, timestamp: Date.now() },
-      {
-        role: "assistant",
-        content: null,
-        api: "openai-completions",
-        provider: "openai",
-        model: "test-model",
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
-        stopReason: "stop",
-        timestamp: Date.now(),
-      },
-      {
-        role: "toolResult",
-        toolCallId: "call_1",
-        toolName: "web_search",
-        isError: false,
-        timestamp: Date.now(),
-      },
-    ];
+  try {
+    harness.setResponses([fauxAssistantMessage("hello")]);
+    yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
 
-    for (const badMessage of badMessages) {
-      const [message] = sessionEntryToContextMessages(messageEntry(badMessage));
-      expect(message).toMatchObject({ role: badMessage.role, content: [] });
-    }
-  });
-
-  it("normalizes null content when loading custom message entries", () => {
-    const entry = {
-      type: "custom_message",
-      id: "entry-1",
-      parentId: null,
-      timestamp: new Date().toISOString(),
-      customType: "test",
-      content: null,
-      display: false,
-      details: undefined,
-    } as unknown as SessionEntry;
-
-    const [message] = sessionEntryToContextMessages(entry);
-    expect(message).toMatchObject({ role: "custom", content: [] });
-  });
-
-  it("keeps valid message content untouched when loading session entries", () => {
-    const [message] = sessionEntryToContextMessages(
-      messageEntry({ role: "user", content: "hello", timestamp: Date.now() }),
+    const assistantMessages = harness.session.messages.filter(
+      (message) => message.role === "assistant",
     );
-    expect(message).toMatchObject({ role: "user", content: "hello" });
-  });
+    expect(assistantMessages).toHaveLength(1);
+    expect(assistantMessages[0]?.content).toEqual([]);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+const normalizesNullContentInCustomMessages = Effect.gen(function* () {
+  const harness = yield* Effect.promise(() => createHarness());
+
+  try {
+    yield* Effect.promise(() =>
+      harness.session.run.prompting.sendCustomMessage({
+        content: null as unknown as string,
+        customType: "test",
+        details: undefined,
+        display: false,
+      }),
+    );
+
+    const customMessages = harness.session.messages.filter((message) => message.role === "custom");
+    expect(customMessages).toHaveLength(1);
+    expect(customMessages[0]?.content).toEqual([]);
+  } finally {
+    harness.cleanup();
+  }
+});
+
+const normalizesNullOrMissingContentWhen = () => {
+  const badMessages = [
+    { content: null, role: "user", timestamp: currentTimeMillis() },
+    {
+      api: "openai-completions",
+      content: null,
+      model: "test-model",
+      provider: "openai",
+      role: "assistant",
+      stopReason: "stop",
+      timestamp: currentTimeMillis(),
+      usage: {
+        cacheRead: 0,
+        cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+        input: 0,
+        output: 0,
+        totalTokens: 0,
+      },
+    },
+    {
+      isError: false,
+      role: "toolResult",
+      timestamp: currentTimeMillis(),
+      toolCallId: "call_1",
+      toolName: "web_search",
+    },
+  ];
+
+  for (const badMessage of badMessages) {
+    const [message] = sessionEntryToContextMessages(messageEntry(badMessage));
+    expect(message).toMatchObject({ content: [], role: badMessage.role });
+  }
+};
+
+const normalizesNullContentWhenLoadingCustom = () => {
+  const entry = {
+    content: null,
+    customType: "test",
+    details: undefined,
+    display: false,
+    id: "entry-1",
+    parentId: null,
+    timestamp: nowIso(),
+    type: "custom_message",
+  } as unknown as sessionManagerTypes.SessionEntry;
+
+  const [message] = sessionEntryToContextMessages(entry);
+  expect(message).toMatchObject({ content: [], role: "custom" });
+};
+
+const normalizesToolResultsFromUntypedToolsThat = () =>
+  Effect.runPromise(normalizesToolResultsFromUntypedTools);
+
+const normalizesNullContentInMessageEndExtension = () =>
+  Effect.runPromise(normalizesNullContentInMessageEnd);
+
+const normalizesNullContentInCustomMessagesFrom = () =>
+  Effect.runPromise(normalizesNullContentInCustomMessages);
+
+const keepsValidMessageContentUntouchedWhenLoading = () => {
+  const [message] = sessionEntryToContextMessages(
+    messageEntry({ content: "hello", role: "user", timestamp: currentTimeMillis() }),
+  );
+  expect(message).toMatchObject({ content: "hello", role: "user" });
+};
+
+describe("lax message content handling", () => {
+  it(
+    "normalizes tool results from untyped tools that omit content",
+    normalizesToolResultsFromUntypedToolsThat,
+  );
+  it(
+    "normalizes null content in message_end extension replacements",
+    normalizesNullContentInMessageEndExtension,
+  );
+  it(
+    "normalizes null content in custom messages from extensions",
+    normalizesNullContentInCustomMessagesFrom,
+  );
+  it(
+    "normalizes null or missing content when loading session message entries",
+    normalizesNullOrMissingContentWhen,
+  );
+  it(
+    "normalizes null content when loading custom message entries",
+    normalizesNullContentWhenLoadingCustom,
+  );
+  it(
+    "keeps valid message content untouched when loading session entries",
+    keepsValidMessageContentUntouchedWhenLoading,
+  );
 });

@@ -1,15 +1,23 @@
-import { join } from "node:path";
-
-import { BACKGROUND_CONTEXT } from "@msa/chord/context";
-import { getOrThrow } from "@msa/durable/env";
+import contextModule from "@msa/chord/context";
+import envModule from "@msa/durable/env";
 import { Effect } from "effect";
 import { afterAll, describe, expect, it } from "vite-plus/test";
 
-import { Connection } from "../src/connection.ts";
-import { RemoteExecutionEnv } from "../src/remote-env.ts";
-import { nodePlatform } from "../src/remote-info.ts";
-import { daemon } from "./daemon.ts";
-import { remoteEnvironments } from "./remote-environment.ts";
+import connectionModule from "../src/connection.ts";
+import RemoteExecutionEnv from "../src/remote-env.ts";
+import remoteInfo from "../src/remote-info.ts";
+import daemon from "./daemon.ts";
+import platformModule from "./platform.ts";
+import remoteEnvironments from "./remote-environment.ts";
+
+const { BACKGROUND_CONTEXT } = contextModule;
+
+const { getOrThrow } = envModule;
+
+const { nodePlatform } = remoteInfo;
+const { Connection } = connectionModule;
+
+const { localPath } = platformModule;
 
 const context = BACKGROUND_CONTEXT;
 const environments = remoteEnvironments();
@@ -19,35 +27,35 @@ const { environment } = environments;
 const run = (effect: Effect.Effect<void>): Promise<void> => Effect.runPromise(effect);
 
 const nodeNames = Effect.gen(function* () {
-  const { connection } = environment();
+  const { connection } = yield* environment;
   const { platform, arch } = nodePlatform(yield* Effect.promise(() => connection.info()));
   expect(platform).toBe(process.platform);
   const rosetta = process.platform === "darwin" && process.arch === "arm64" && arch === "x64";
   if (!rosetta) expect(arch).toBe(process.arch);
-  expect(nodePlatform({ os: "windows", arch: "aarch64" })).toEqual({
-    platform: "win32",
+  expect(nodePlatform({ arch: "aarch64", os: "windows" })).toEqual({
     arch: "arm64",
+    platform: "win32",
   });
-  expect(nodePlatform({ os: "macos", arch: "x86_64" })).toEqual({
-    platform: "darwin",
+  expect(nodePlatform({ arch: "x86_64", os: "macos" })).toEqual({
     arch: "x64",
+    platform: "darwin",
   });
 });
 
 const oldDaemonListing = Effect.gen(function* () {
-  const { env } = environment();
+  const { env } = yield* environment;
   expect((yield* Effect.promise(() => env.connection.info())).features).toContain("listFiles");
   const connection = new Connection({
-    command: [process.execPath, join(import.meta.dirname, "old-daemon.ts")],
+    command: [process.execPath, localPath.join(import.meta.dirname, "old-daemon.ts")],
   });
   environments.track(connection);
-  const old = new RemoteExecutionEnv({ connection, id: "msa-env:old", cwd: env.cwd });
+  const old = new RemoteExecutionEnv({ connection, cwd: env.cwd, id: "msa-env:old" });
   const listed = yield* Effect.promise(() => old.listFiles(".", undefined, context));
   expect(listed.ok ? "ok" : listed.error.code).toBe("not_supported");
 });
 
 const lostHandles = Effect.gen(function* () {
-  const { env, connection } = environment();
+  const { env, connection } = yield* environment;
   getOrThrow(yield* Effect.promise(() => env.writeFile("a.txt", "AAA", context)));
   getOrThrow(yield* Effect.promise(() => env.writeFile("b.txt", "BBB", context)));
   const a = getOrThrow(
@@ -69,7 +77,7 @@ const lostHandles = Effect.gen(function* () {
 });
 
 const retriedStart = Effect.gen(function* () {
-  const cwd = environments.tempDir();
+  const cwd = yield* environments.tempDir;
   let starts = 0;
   const connection = new Connection({
     command: () => {
@@ -81,7 +89,7 @@ const retriedStart = Effect.gen(function* () {
     },
   });
   environments.track(connection);
-  const env = new RemoteExecutionEnv({ connection, id: "msa-env:test", cwd });
+  const env = new RemoteExecutionEnv({ connection, cwd, id: "msa-env:test" });
   const offline = yield* Effect.promise(() => env.readTextFile("missing.txt", context));
   expect(offline.ok ? "ok" : [offline.error.code, offline.error.message]).toEqual([
     "unknown",

@@ -1,31 +1,32 @@
-import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type { EvalTask } from "../src/plan.ts";
-import {
-  classifyCaseStatus,
-  MSA_SESSION_SNAPSHOT_ARTIFACT,
-  readTaskObservation,
-} from "../src/report.ts";
+import type planTypes from "../src/plan.types.ts";
+import platform from "../src/platform.ts";
+import reportRead from "../src/report-read.ts";
+import reportTypes from "../src/report-types.ts";
+
+const { files, pathOperations } = platform;
+const { MSA_SESSION_SNAPSHOT_ARTIFACT } = reportTypes;
+const { classifyCaseStatus, readTaskObservation } = reportRead;
 
 const temporaryDirectories: string[] = [];
-afterEach(async () => {
-  await Promise.all(
-    temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true, force: true })),
-  );
-});
+afterEach(() =>
+  Effect.runPromise(
+    Effect.forEach(temporaryDirectories.splice(0), files.remove, { discard: true }),
+  ),
+);
 
-const task: EvalTask = {
+const run = (effect: Effect.Effect<void>) => Effect.runPromise(effect);
+
+const task: planTypes.EvalTask = {
+  caseId: "handles the case",
+  evalSet: "Example workflow",
   file: "evals/example.docs.eval.ts",
   fullName: "Example workflow > handles the case",
-  evalSet: "Example workflow",
-  caseId: "handles the case",
-  variant: "without_docs",
   model: "fixture/model",
   runNumber: 1,
+  variant: "without_docs",
 };
 const SESSION = '{"type":"session"}\n';
 
@@ -34,42 +35,44 @@ type ReportAssertion = {
   meta?: Record<string, unknown>;
 };
 
-async function writeTaskReport(assertion: ReportAssertion = {}) {
-  const directory = await mkdtemp(join(tmpdir(), "msa-eval-report-test-"));
-  temporaryDirectories.push(directory);
-  const reportPath = join(directory, "vitest.json");
+function reportJson(assertion: ReportAssertion): string {
   const status = assertion.status ?? "passed";
-  await writeFile(
-    reportPath,
-    JSON.stringify({
-      numFailedTests: 0,
-      numPassedTests: status === "passed" ? 1 : 0,
-      numPendingTests: status === "pending" || status === "skipped" ? 1 : 0,
-      numTodoTests: 0,
-      numTotalTests: 1,
-      startTime: 0,
-      success: true,
-      testResults: [
-        {
-          message: "",
-          name: "/repo/apps/evals/evals/example.docs.eval.ts",
-          status: "passed",
-          assertionResults: [
-            {
-              ancestorTitles: [task.evalSet],
-              fullName: `${task.evalSet} ${task.caseId}`,
-              status,
-              title: task.caseId,
-              failureMessages: [],
-              meta: assertion.meta ?? {},
-            },
-          ],
-        },
-      ],
-    }),
-  );
-  return { directory, reportPath };
+  return JSON.stringify({
+    numFailedTests: 0,
+    numPassedTests: status === "passed" ? 1 : 0,
+    numPendingTests: status === "pending" || status === "skipped" ? 1 : 0,
+    numTodoTests: 0,
+    numTotalTests: 1,
+    startTime: 0,
+    success: true,
+    testResults: [
+      {
+        assertionResults: [
+          {
+            ancestorTitles: [task.evalSet],
+            failureMessages: [],
+            fullName: `${task.evalSet} ${task.caseId}`,
+            meta: assertion.meta ?? {},
+            status,
+            title: task.caseId,
+          },
+        ],
+        message: "",
+        name: "/repo/apps/evals/evals/example.docs.eval.ts",
+        status: "passed",
+      },
+    ],
+  });
 }
+
+const writeTaskReport = (assertion: ReportAssertion = {}) =>
+  Effect.gen(function* () {
+    const directory = yield* files.makeTempDirectory("msa-eval-report-test-");
+    temporaryDirectories.push(directory);
+    const reportPath = pathOperations.join(directory, "vitest.json");
+    yield* files.writeFileString(reportPath, reportJson(assertion));
+    return { directory, reportPath };
+  });
 
 function scoredMeta(overrides?: {
   avgScore?: number | null;
@@ -79,39 +82,77 @@ function scoredMeta(overrides?: {
 }): Record<string, unknown> {
   return {
     eval: {
-      avgScore: overrides && "avgScore" in overrides ? overrides.avgScore : 0.5,
+      avgScore: overrides !== undefined && "avgScore" in overrides ? overrides.avgScore : 0.5,
       scores: [{ name: "StructuredOutputJudge", score: 0.5 }],
       thresholdFailed: false,
     },
     harness: {
       name: "without_docs",
       run: {
-        output: { ok: true },
-        session: { events: [{ type: "message", role: "user", content: "prompt" }] },
-        usage: {
-          provider: "fixture",
-          model: overrides?.model ?? "model",
-          inputTokens: 10,
-          outputTokens: 5,
-          totalTokens: 15,
-          toolCalls: 1,
-          metadata: { cacheReadTokens: 2, cacheWriteTokens: 3, estimatedCostUsd: 0.01 },
-        },
-        timings: { totalMs: 1234 },
         artifacts: overrides?.artifacts ?? {
           runId: "run-1",
           [MSA_SESSION_SNAPSHOT_ARTIFACT]: SESSION,
         },
         errors: overrides?.errors ?? [],
+        output: { ok: true },
+        session: { events: [{ content: "prompt", role: "user", type: "message" }] },
+        timings: { totalMs: 1234 },
+        usage: {
+          inputTokens: 10,
+          metadata: { cacheReadTokens: 2, cacheWriteTokens: 3, estimatedCostUsd: 0.01 },
+          model: overrides?.model ?? "model",
+          outputTokens: 5,
+          provider: "fixture",
+          toolCalls: 1,
+          totalTokens: 15,
+        },
       },
     },
   };
 }
 
-async function readObservation(assertion?: ReportAssertion) {
-  const { directory, reportPath } = await writeTaskReport(assertion);
-  return { directory, observation: await readTaskObservation(task, reportPath, directory) };
-}
+const readObservation = (assertion?: ReportAssertion) =>
+  Effect.gen(function* () {
+    const { directory, reportPath } = yield* writeTaskReport(assertion);
+    const observation = yield* readTaskObservation({
+      artifactDirectory: directory,
+      reportPath,
+      task,
+    });
+    return { directory, observation };
+  });
+
+const persistedSession = (directory: string) =>
+  Effect.gen(function* () {
+    const sessions = pathOperations.join(directory, task.variant, "sessions");
+    const hashes = yield* files.readDirectory(sessions);
+    const [hash] = hashes;
+    if (hash === undefined)
+      return yield* Effect.die(new Error("Expected a persisted session directory."));
+    return {
+      content: yield* files.readFileString(pathOperations.join(sessions, hash, "session.jsonl")),
+      count: hashes.length,
+    };
+  });
+
+const expectedIdentity = {
+  caseId: task.caseId,
+  evalSet: task.evalSet,
+  model: task.model,
+  runNumber: task.runNumber,
+  variant: task.variant,
+};
+
+const expectedMetrics = {
+  cacheReadTokens: 2,
+  cacheWriteTokens: 3,
+  estimatedCostUsd: 0.01,
+  inputTokens: 10,
+  outputTokens: 5,
+  toolCalls: 1,
+  totalMs: 1234,
+  totalTokens: 15,
+};
 
 describe("classifyCaseStatus", () => {
   it.each(["skipped", "todo", "disabled"] as const)("maps %s to skipped", (status) => {
@@ -123,105 +164,108 @@ describe("classifyCaseStatus", () => {
   });
 });
 
-describe("readTaskObservation", () => {
-  it("preserves a skipped outcome when no harness run exists", async () => {
-    const { observation } = await readObservation({ status: "skipped" });
-    expect(observation).toMatchObject({ outcome: "skipped" });
-  });
+describe("readTaskObservation without a harness run", () => {
+  it("preserves a skipped outcome when no harness run exists", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({ status: "skipped" });
+        expect(observation).toMatchObject({ outcome: "skipped" });
+      }),
+    ));
 
-  it("preserves a pending outcome when no harness run exists", async () => {
-    const { observation } = await readObservation({ status: "pending" });
-    expect(observation).toMatchObject({ outcome: "pending" });
-  });
+  it("preserves a pending outcome when no harness run exists", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({ status: "pending" });
+        expect(observation).toMatchObject({ outcome: "pending" });
+      }),
+    ));
 
-  it("preserves metrics from a failed eval with a partial harness run", async () => {
-    const { directory, observation } = await readObservation({
-      status: "failed",
-      meta: scoredMeta({ errors: [{ message: "Prompt verification failed" }] }),
-    });
-    expect(observation).toEqual({
-      evalSet: task.evalSet,
-      caseId: task.caseId,
-      variant: task.variant,
-      model: task.model,
-      runNumber: task.runNumber,
-      outcome: "errored",
-      inputTokens: 10,
-      outputTokens: 5,
-      cacheReadTokens: 2,
-      cacheWriteTokens: 3,
-      totalTokens: 15,
-      toolCalls: 1,
-      totalMs: 1234,
-      estimatedCostUsd: 0.01,
-    });
-    const hashes = await readdir(join(directory, task.variant, "sessions"));
-    const [hash] = hashes;
-    if (hash === undefined) throw new Error("Expected a persisted session directory.");
-    await expect(
-      readFile(join(directory, task.variant, "sessions", hash, "session.jsonl"), "utf8"),
-    ).resolves.toBe(SESSION);
-  });
+  it("records an errored outcome when a passed eval has no harness run", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({ status: "passed" });
+        expect(observation).toMatchObject({ outcome: "errored" });
+      }),
+    ));
+});
 
-  it("records an errored outcome when a passed eval has no harness run", async () => {
-    const { observation } = await readObservation({ status: "passed" });
-    expect(observation).toMatchObject({ outcome: "errored" });
-  });
+describe("readTaskObservation with a harness run", () => {
+  it("preserves metrics from a failed eval with a partial harness run", () =>
+    run(
+      Effect.gen(function* () {
+        const { directory, observation } = yield* readObservation({
+          meta: scoredMeta({ errors: [{ message: "Prompt verification failed" }] }),
+          status: "failed",
+        });
+        expect(observation).toEqual({
+          ...expectedIdentity,
+          outcome: "errored",
+          ...expectedMetrics,
+        });
+        expect((yield* persistedSession(directory)).content).toBe(SESSION);
+      }),
+    ));
 
-  it("reads a scored harness run and persists the session artifact", async () => {
-    const { directory, observation } = await readObservation({ meta: scoredMeta() });
-    expect(observation).toEqual({
-      evalSet: task.evalSet,
-      caseId: task.caseId,
-      variant: task.variant,
-      model: task.model,
-      runNumber: task.runNumber,
-      outcome: "scored",
-      score: 0.5,
-      inputTokens: 10,
-      outputTokens: 5,
-      cacheReadTokens: 2,
-      cacheWriteTokens: 3,
-      totalTokens: 15,
-      toolCalls: 1,
-      totalMs: 1234,
-      estimatedCostUsd: 0.01,
-    });
-    const hashes = await readdir(join(directory, task.variant, "sessions"));
-    expect(hashes).toHaveLength(1);
-    const [hash] = hashes;
-    if (hash === undefined) throw new Error("Expected a persisted session directory.");
-    await expect(
-      readFile(join(directory, task.variant, "sessions", hash, "session.jsonl"), "utf8"),
-    ).resolves.toBe(SESSION);
-  });
+  it("reads a scored harness run and persists the session artifact", () =>
+    run(
+      Effect.gen(function* () {
+        const { directory, observation } = yield* readObservation({ meta: scoredMeta() });
+        expect(observation).toEqual({
+          ...expectedIdentity,
+          outcome: "scored",
+          score: 0.5,
+          ...expectedMetrics,
+        });
+        const session = yield* persistedSession(directory);
+        expect(session.count).toBe(1);
+        expect(session.content).toBe(SESSION);
+      }),
+    ));
 
-  it("treats a zero score as scored data", async () => {
-    const { observation } = await readObservation({ meta: scoredMeta({ avgScore: 0 }) });
-    expect(observation).toMatchObject({ outcome: "scored", score: 0 });
-  });
+  it("treats a zero score as scored data", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({ meta: scoredMeta({ avgScore: 0 }) });
+        expect(observation).toMatchObject({ outcome: "scored", score: 0 });
+      }),
+    ));
 
-  it("records an unscored outcome when a completed eval has no score", async () => {
-    const { observation } = await readObservation({ meta: scoredMeta({ avgScore: null }) });
-    expect(observation).toMatchObject({ outcome: "unscored" });
-  });
+  it("records an unscored outcome when a completed eval has no score", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({ meta: scoredMeta({ avgScore: null }) });
+        expect(observation).toMatchObject({ outcome: "unscored" });
+      }),
+    ));
+});
 
-  it("records an errored outcome when the reported model does not match the task", async () => {
-    const { observation } = await readObservation({ meta: scoredMeta({ model: "other" }) });
-    expect(observation).toMatchObject({ outcome: "errored" });
-  });
+describe("readTaskObservation validation", () => {
+  it("records an errored outcome when the reported model does not match the task", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({ meta: scoredMeta({ model: "other" }) });
+        expect(observation).toMatchObject({ outcome: "errored" });
+      }),
+    ));
 
-  it("records an errored outcome when a completed harness run contains errors", async () => {
-    const { observation } = await readObservation({
-      meta: scoredMeta({ errors: [{ message: "boom" }] }),
-    });
-    expect(observation).toMatchObject({ outcome: "errored" });
-  });
+  it("records an errored outcome when a completed harness run contains errors", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({
+          meta: scoredMeta({ errors: [{ message: "boom" }] }),
+        });
+        expect(observation).toMatchObject({ outcome: "errored" });
+      }),
+    ));
 
-  it("still scores a completed eval when the session artifact is missing", async () => {
-    const { observation } = await readObservation({
-      meta: scoredMeta({ artifacts: { runId: "run-1" } }),
-    });
-    expect(observation).toMatchObject({ outcome: "scored", score: 0.5 });
-  });
+  it("still scores a completed eval when the session artifact is missing", () =>
+    run(
+      Effect.gen(function* () {
+        const { observation } = yield* readObservation({
+          meta: scoredMeta({ artifacts: { runId: "run-1" } }),
+        });
+        expect(observation).toMatchObject({ outcome: "scored", score: 0.5 });
+      }),
+    ));
 });

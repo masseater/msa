@@ -1,92 +1,53 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
-
-import { Agent } from "@msa/agent-core";
-import { fauxAssistantMessage, registerFauxProvider, streamSimple } from "@msa/ai/compat";
+import ai from "@msa/ai";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { AgentSession } from "../../../src/core/agent-session.ts";
-import { AuthStorage } from "../../../src/core/auth-storage.ts";
-import { convertToLlm } from "../../../src/core/messages.ts";
-import { SessionManager } from "../../../src/core/session-manager.ts";
-import { SettingsManager } from "../../../src/core/settings-manager.ts";
-import { initTheme } from "../../../src/modes/interactive/theme/theme.ts";
-import { createInMemoryModelRegistry, getModelRuntime } from "../../model-runtime-test-utils.ts";
-import { createTestResourceLoader } from "../../utilities.ts";
+import SessionManager from "../../../src/core/session-manager.ts";
+import tuiKit from "../../tui-kit.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
+const { fauxAssistantMessage } = ai;
+
+const { awaited, joinPath, makeTempDir, pathExists, removeDirs, runTest } = testing;
+
+const { initTheme } = tuiKit;
+
+const { createHarness } = harnessModule;
+
+const harnesses: harnessTypes.Harness[] = [];
+
+const sessionDirs: string[] = [];
+
+const exportsWithTheActiveFallbackTheme = Effect.gen(function* () {
+  const sessionDir = yield* makeTempDir("msa-5596-");
+  sessionDirs.push(sessionDir);
+  const harness = yield* awaited(
+    createHarness({
+      sessionManager: SessionManager.create(sessionDir, joinPath(sessionDir, "sessions")),
+      settings: { theme: "missing-theme" },
+    }),
+  );
+  harnesses.push(harness);
+  harness.setResponses([fauxAssistantMessage("hello")]);
+  yield* awaited(harness.session.run.prompting.prompt("hi"));
+  initTheme(harness.settingsManager.display.getTheme());
+  const outputPath = joinPath(sessionDir, "export.html");
+  yield* awaited(
+    expect(harness.session.context.exports.exportToHtml(outputPath)).resolves.toBe(outputPath),
+  );
+  expect(yield* pathExists(outputPath)).toBe(true);
+  expect(harness.settingsManager.display.getTheme()).toBe("missing-theme");
+});
+
+const afterEachHook = () => {
+  while (harnesses.length > 0) harnesses.pop()?.cleanup();
+  initTheme("dark");
+  return runTest(removeDirs(sessionDirs.splice(0)));
+};
 
 describe("regression #5596: missing configured theme export", () => {
-  const cleanups: Array<() => void> = [];
-
-  afterEach(() => {
-    while (cleanups.length > 0) {
-      cleanups.pop()?.();
-    }
-    initTheme("dark");
-  });
-
-  it("exports with the active fallback theme when the configured theme is missing", async () => {
-    const tempDir = mkdtempSync(join(tmpdir(), "msa-5596-"));
-    const faux = registerFauxProvider({
-      models: [{ id: "faux-1", reasoning: false }],
-    });
-    faux.setResponses([fauxAssistantMessage("hello")]);
-
-    const model = faux.getModel();
-    const authStorage = AuthStorage.inMemory();
-    await authStorage.modify(model.provider, async () => ({ type: "api_key", key: "faux-key" }));
-    const modelRegistry = await createInMemoryModelRegistry(authStorage);
-    modelRegistry.registerProvider(model.provider, {
-      baseUrl: model.baseUrl,
-      apiKey: "faux-key",
-      api: faux.api,
-      models: faux.models.map((registeredModel) => ({
-        id: registeredModel.id,
-        name: registeredModel.name,
-        api: registeredModel.api,
-        reasoning: registeredModel.reasoning,
-        input: registeredModel.input,
-        cost: registeredModel.cost,
-        contextWindow: registeredModel.contextWindow,
-        maxTokens: registeredModel.maxTokens,
-        baseUrl: registeredModel.baseUrl,
-      })),
-    });
-
-    const settingsManager = SettingsManager.inMemory({ theme: "missing-theme" });
-    const sessionManager = SessionManager.create(tempDir, join(tempDir, "sessions"));
-    const agent = new Agent({
-      getApiKey: () => "faux-key",
-      initialState: {
-        model,
-        systemPrompt: "You are a test assistant.",
-        tools: [],
-      },
-      convertToLlm,
-      streamFn: streamSimple,
-    });
-    const session = new AgentSession({
-      agent,
-      sessionManager,
-      settingsManager,
-      cwd: tempDir,
-      modelRuntime: getModelRuntime(modelRegistry),
-      resourceLoader: createTestResourceLoader(),
-    });
-    cleanups.push(() => {
-      session.dispose();
-      faux.unregister();
-      if (existsSync(tempDir)) {
-        rmSync(tempDir, { recursive: true, force: true });
-      }
-    });
-
-    await session.prompt("hi");
-    initTheme(settingsManager.getTheme());
-
-    const outputPath = join(tempDir, "export.html");
-    await expect(session.exportToHtml(outputPath)).resolves.toBe(outputPath);
-    expect(existsSync(outputPath)).toBe(true);
-    expect(settingsManager.getTheme()).toBe("missing-theme");
-  });
+  afterEach(afterEachHook);
+  it("exports with the active fallback theme when the configured theme is missing", () =>
+    runTest(exportsWithTheActiveFallbackTheme));
 });

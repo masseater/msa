@@ -1,13 +1,13 @@
-import type { McpOAuthState, McpOAuthStateStore } from "./provider-types.ts";
+import type providerTypesModule from "./provider-types.ts";
 
-export class MemoryOAuthStateStore implements McpOAuthStateStore {
-  private value: McpOAuthState | undefined;
+export default class MemoryOAuthStateStore implements providerTypesModule.McpOAuthStateStore {
+  private value: providerTypesModule.McpOAuthState | undefined;
 
-  load(): McpOAuthState | undefined {
+  load(): providerTypesModule.McpOAuthState | undefined {
     return this.value === undefined ? undefined : structuredClone(this.value);
   }
 
-  save(state: McpOAuthState): void {
+  save(state: providerTypesModule.McpOAuthState): void {
     this.value = structuredClone(state);
   }
 }

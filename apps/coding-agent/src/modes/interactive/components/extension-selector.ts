@@ -1,31 +1,26 @@
-/**
- * Generic selector component for extensions.
- * Displays a list of string options with keyboard navigation.
- */
+import tuiModule from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
 
-import { Container, getKeybindings, Spacer, Text, type TUI } from "@msa/tui";
+import themeModule from "../theme/theme.ts";
+import CountdownTimer from "./countdown-timer.ts";
+import type countdownTimerTypes from "./countdown-timer.types.ts";
+import DynamicBorder from "./dynamic-border.ts";
+import type extensionSelectorTypes from "./extension-selector.types.ts";
+import keybindingHints from "./keybinding-hints.ts";
+const { theme } = themeModule;
+const { keyHint, rawKeyHint } = keybindingHints;
 
-import { theme } from "../theme/theme.ts";
-import { CountdownTimer } from "./countdown-timer.ts";
-import { DynamicBorder } from "./dynamic-border.ts";
-import { keyHint, rawKeyHint } from "./keybinding-hints.ts";
+const { Container, Spacer, Text, getKeybindings } = tuiModule;
 
-export interface ExtensionSelectorOptions {
-  tui?: TUI | undefined;
-  timeout?: number | undefined;
-  onToggleToolsExpanded?: (() => void) | undefined;
-  description?: string | undefined;
-}
-
-export class ExtensionSelectorComponent extends Container {
+export default class ExtensionSelectorComponent extends tuiModule.Container {
   private options: string[];
   private selectedIndex = 0;
-  private listContainer: Container;
+  private listContainer: tuiTypes.Container;
   private onSelectCallback: (option: string) => void;
   private onCancelCallback: () => void;
-  private titleText: Text;
+  private titleText: tuiTypes.Text;
   private baseTitle: string;
-  private countdown: CountdownTimer | undefined;
+  private countdown: countdownTimerTypes.CountdownTimer | undefined;
   private onToggleToolsExpanded: (() => void) | undefined;
 
   constructor(
@@ -33,7 +28,7 @@ export class ExtensionSelectorComponent extends Container {
     options: string[],
     onSelect: (option: string) => void,
     onCancel: () => void,
-    opts?: ExtensionSelectorOptions,
+    opts?: extensionSelectorTypes.ExtensionSelectorOptions,
   ) {
     super();
 
@@ -48,13 +43,18 @@ export class ExtensionSelectorComponent extends Container {
 
     this.titleText = new Text(theme.fg("accent", theme.bold(title)), 1, 0);
     this.addChild(this.titleText);
-    if (opts?.description) {
+    if (opts?.description !== undefined && opts?.description !== "") {
       this.addChild(new Spacer(1));
       this.addChild(new Text(theme.fg("text", opts.description), 1, 0));
     }
     this.addChild(new Spacer(1));
 
-    if (opts?.timeout && opts.timeout > 0 && opts.tui) {
+    if (
+      opts?.timeout !== undefined &&
+      opts?.timeout !== 0 &&
+      opts.timeout > 0 &&
+      opts.tui !== undefined
+    ) {
       this.countdown = new CountdownTimer(
         opts.timeout,
         opts.tui,
@@ -66,7 +66,11 @@ export class ExtensionSelectorComponent extends Container {
     this.listContainer = new Container();
     this.addChild(this.listContainer);
     this.addChild(new Spacer(1));
-    this.addChild(
+    ExtensionSelectorComponent.addHintsAndBorder(this);
+  }
+
+  private static addHintsAndBorder(self: ExtensionSelectorComponent): void {
+    self.addChild(
       new Text(
         rawKeyHint("↑↓", "navigate") +
           "  " +
@@ -77,10 +81,10 @@ export class ExtensionSelectorComponent extends Container {
         0,
       ),
     );
-    this.addChild(new Spacer(1));
-    this.addChild(new DynamicBorder());
+    self.addChild(new Spacer(1));
+    self.addChild(new DynamicBorder());
 
-    this.updateList();
+    self.updateList();
   }
 
   private updateList(): void {
@@ -106,7 +110,7 @@ export class ExtensionSelectorComponent extends Container {
       this.updateList();
     } else if (kb.matches(keyData, "tui.select.confirm") || keyData === "\n") {
       const selected = this.options[this.selectedIndex];
-      if (selected) this.onSelectCallback(selected);
+      if (selected !== undefined && selected !== "") this.onSelectCallback(selected);
     } else if (kb.matches(keyData, "tui.select.cancel")) {
       this.onCancelCallback();
     }

@@ -1,0 +1,50 @@
+import type oauthErrorsKitTypes from "./index-kit/errors.types.ts";
+import type oauthFlowKitTypes from "./index-kit/flow.types.ts";
+import type oauthProviderKitTypes from "./index-kit/provider.types.ts";
+
+declare namespace oauthTypes {
+  type OAuthCallback = oauthFlowKitTypes.OAuthCallback;
+  type OAuthCallbackPage = oauthFlowKitTypes.OAuthCallbackPage;
+  type OAuthCallbackServerOptions = oauthFlowKitTypes.OAuthCallbackServerOptions;
+  type AuthorizationServerDiscoveryOptions = oauthFlowKitTypes.AuthorizationServerDiscoveryOptions;
+  type OAuthServerInfoDiscoveryOptions = oauthFlowKitTypes.OAuthServerInfoDiscoveryOptions;
+  type ProtectedResourceDiscoveryOptions = oauthFlowKitTypes.ProtectedResourceDiscoveryOptions;
+  type AuthorizationRequest = oauthFlowKitTypes.AuthorizationRequest;
+  type AuthorizationStart = oauthFlowKitTypes.AuthorizationStart;
+  type ClientRegistrationRequest = oauthFlowKitTypes.ClientRegistrationRequest;
+  type OAuthFlowFailure = oauthFlowKitTypes.OAuthFlowFailure;
+  type AddClientAuthentication = oauthFlowKitTypes.AddClientAuthentication;
+  type OAuthClientMetadataDocument = oauthFlowKitTypes.OAuthClientMetadataDocument;
+  type OAuthClientProvider = oauthFlowKitTypes.OAuthClientProvider;
+  type OAuthFlowOptions = oauthFlowKitTypes.OAuthFlowOptions;
+  type OAuthFlowResult = oauthFlowKitTypes.OAuthFlowResult;
+  type TokenRequestOptions = oauthFlowKitTypes.TokenRequestOptions;
+  type AuthorizationCodeExchange = oauthFlowKitTypes.AuthorizationCodeExchange;
+  type RefreshRequest = oauthFlowKitTypes.RefreshRequest;
+  type TokenRequestError = oauthFlowKitTypes.TokenRequestError;
+  type McpOAuthProviderOptions = oauthProviderKitTypes.McpOAuthProviderOptions;
+  type McpOAuthState = oauthProviderKitTypes.McpOAuthState;
+  type McpOAuthStateStore = oauthProviderKitTypes.McpOAuthStateStore;
+  type AuthorizationServerMetadata = oauthProviderKitTypes.AuthorizationServerMetadata;
+  type OAuthChallenge = oauthProviderKitTypes.OAuthChallenge;
+  type OAuthClientInformation = oauthProviderKitTypes.OAuthClientInformation;
+  type OAuthClientInformationFull = oauthProviderKitTypes.OAuthClientInformationFull;
+  type OAuthClientInformationMixed = oauthProviderKitTypes.OAuthClientInformationMixed;
+  type OAuthClientMetadata = oauthProviderKitTypes.OAuthClientMetadata;
+  type OAuthDiscoveryState = oauthProviderKitTypes.OAuthDiscoveryState;
+  type OAuthProtectedResourceMetadata = oauthProviderKitTypes.OAuthProtectedResourceMetadata;
+  type OAuthServerInfo = oauthProviderKitTypes.OAuthServerInfo;
+  type OAuthTokens = oauthProviderKitTypes.OAuthTokens;
+  type OAuthCallbackServer = oauthFlowKitTypes.OAuthCallbackServer;
+  type McpOAuthAuthorizationRequiredError = oauthErrorsKitTypes.McpOAuthAuthorizationRequiredError;
+  type OAuthCallbackError = oauthErrorsKitTypes.OAuthCallbackError;
+  type OAuthError = oauthErrorsKitTypes.OAuthError;
+  type OAuthFlowError = oauthErrorsKitTypes.OAuthFlowError;
+  type OAuthInsecureEndpointError = oauthErrorsKitTypes.OAuthInsecureEndpointError;
+  type OAuthIssuerMismatchError = oauthErrorsKitTypes.OAuthIssuerMismatchError;
+  type OAuthRegistrationError = oauthErrorsKitTypes.OAuthRegistrationError;
+  type McpOAuthProvider = oauthProviderKitTypes.McpOAuthProvider;
+  type MemoryOAuthStateStore = oauthProviderKitTypes.MemoryOAuthStateStore;
+}
+
+export type { oauthTypes as default };

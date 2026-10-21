@@ -1,10 +1,9 @@
-/** Renders an msa transcript as plain text, for backends that start from a prompt. */
-import type { Message } from "@msa/ai/compat";
+import type compatTypes from "@msa/ai/compat.types";
 
 const MAX_TRANSCRIPT_CHARS = 200_000;
 const MAX_TOOL_RESULT_CHARS = 800;
 
-export function textFromContent(content: Message["content"]): string {
+function textFromContent(content: compatTypes.Message["content"]): string {
   if (typeof content === "string") return content;
   const parts: string[] = [];
   for (const part of content) {
@@ -15,11 +14,11 @@ export function textFromContent(content: Message["content"]): string {
   return parts.filter((value) => value.length > 0).join("\n");
 }
 
-export function flattenTranscript(messages: readonly Message[]): string {
+function flattenTranscript(messages: readonly compatTypes.Message[]): string {
   const blocks: string[] = [];
   for (const message of messages) {
     let text = textFromContent(message.content).trim();
-    if (!text) continue;
+    if (text === "") continue;
     if (message.role === "user") blocks.push(`User: ${text}`);
     else if (message.role === "assistant") blocks.push(`Assistant: ${text}`);
     else if (message.role === "toolResult") {
@@ -33,3 +32,10 @@ export function flattenTranscript(messages: readonly Message[]): string {
     transcript.length - MAX_TRANSCRIPT_CHARS,
   )}`;
 }
+
+const transcript = {
+  flattenTranscript,
+  textFromContent,
+};
+
+export default transcript;

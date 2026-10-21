@@ -1,29 +1,29 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Editor } from "../src/components/editor.ts";
-import { createTestTUI, typeText } from "./editor-helpers.ts";
-import { defaultEditorTheme } from "./test-themes.ts";
+import Editor from "../src/components/editor.ts";
+import editorHelpers from "./editor-helpers.ts";
+import testThemes from "./test-themes.ts";
+
+const { defaultEditorTheme } = testThemes;
+
+const { createTestTUI, typeText } = editorHelpers;
 
 describe("Editor component", () => {
   describe("Prompt history navigation", () => {
     it("limits history to 100 entries", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      // Add 105 entries
       for (let i = 0; i < 105; i++) {
         editor.addToHistory(`prompt ${i}`);
       }
 
-      // Navigate to oldest
       for (let i = 0; i < 100; i++) {
         editor.handleInput("\x1b[A");
       }
 
-      // Should be at entry 5 (oldest kept), not entry 0
       assert.strictEqual(editor.getText(), "prompt 5");
 
-      // One more Up should not change anything
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "prompt 5");
     });
@@ -34,15 +34,13 @@ describe("Editor component", () => {
       editor.addToHistory("older entry");
       editor.addToHistory("line1\nline2\nline3");
 
-      // Up - shows multi-line entry at start
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
-      // Up again - immediately navigates to older entry
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "older entry");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
     });
   });
 });
@@ -56,19 +54,14 @@ describe("Editor component", () => {
       editor.addToHistory("line1\nline2\nline3");
       editor.addToHistory("newer entry");
 
-      // newer entry
       editor.handleInput("\x1b[A");
-      // multi-line entry
       editor.handleInput("\x1b[A");
-      // older entry
       editor.handleInput("\x1b[A");
 
-      // Down - shows multi-line entry at end
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 2, col: 5 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 5, line: 2 });
 
-      // Down again - immediately navigates to newer entry
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "newer entry");
     });
@@ -82,19 +75,16 @@ describe("Editor component", () => {
 
       editor.addToHistory("line1\nline2\nline3");
 
-      // Up - shows entry at start
       editor.handleInput("\x1b[A");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
-      // Down - cursor moves to line2
       editor.handleInput("\x1b[B");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 1, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 1 });
 
-      // Up - cursor moves back to line1
       editor.handleInput("\x1b[A");
       assert.strictEqual(editor.getText(), "line1\nline2\nline3");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
     });
   });
 });
@@ -104,15 +94,14 @@ describe("Editor component", () => {
     it("returns cursor position", () => {
       const editor = new Editor(createTestTUI(), defaultEditorTheme);
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 0 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 0, line: 0 });
 
       typeText(editor, "abc");
 
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 3 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 3, line: 0 });
 
-      // Left
       editor.handleInput("\x1b[D");
-      assert.deepStrictEqual(editor.getCursor(), { line: 0, col: 2 });
+      assert.deepStrictEqual(editor.getCursor(), { col: 2, line: 0 });
     });
 
     it("returns lines as a defensive copy", () => {
@@ -135,7 +124,6 @@ describe("Editor component", () => {
 
       editor.handleInput("\\");
 
-      // Backslash should be visible immediately, not buffered
       assert.strictEqual(editor.getText(), "\\");
     });
 
@@ -173,7 +161,6 @@ describe("Editor component", () => {
       editor.handleInput("x");
       editor.handleInput("\r");
 
-      // Should submit, not insert newline (backslash not at cursor)
       assert.strictEqual(submitted, true);
     });
 
@@ -186,7 +173,6 @@ describe("Editor component", () => {
       assert.strictEqual(editor.getText(), "\\\\\\");
 
       editor.handleInput("\r");
-      // Only the last backslash is removed, newline inserted
       assert.strictEqual(editor.getText(), "\\\\\n");
     });
   });

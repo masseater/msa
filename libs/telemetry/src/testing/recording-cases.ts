@@ -2,42 +2,44 @@ import { deepStrictEqual, doesNotThrow, ok, strictEqual } from "node:assert/stri
 
 import { Deferred, Effect } from "effect";
 
-import type { SpanAttributes, TelemetrySpan } from "../context.ts";
-import type { ConformanceCaseDefinition, ConformanceTest } from "./support.ts";
-import { findSpan, recordedSpans, unreadable } from "./support.ts";
+import type contextTypes from "../context.ts";
+import support from "./support.ts";
+import type supportTypes from "./support.types.ts";
 
-const mergesAttributes: ConformanceTest = (fixture) =>
+const { findSpan, recordedSpans, unreadable } = support;
+
+const mergesAttributes: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       fixture.context.startSpan(
         {
+          attributes: { ignored: undefined, overwrite: "start", start: "value" },
           name: "recording",
-          attributes: { start: "value", overwrite: "start", ignored: undefined },
         },
         (span) => {
           span.setAttributes({ count: 1, overwrite: "middle" });
           span.setAttributes({ count: undefined, overwrite: "end" });
-          span.addEvent("first", { index: 1, ignored: undefined });
+          span.addEvent("first", { ignored: undefined, index: 1 });
           span.addEvent("second", { index: 2 });
         },
       ),
     );
 
     const span = findSpan(yield* recordedSpans(fixture), "recording");
-    deepStrictEqual(span.attributes, { start: "value", overwrite: "end", count: 1 });
+    deepStrictEqual(span.attributes, { count: 1, overwrite: "end", start: "value" });
     deepStrictEqual(span.events, [
-      { name: "first", attributes: { index: 1 } },
-      { name: "second", attributes: { index: 2 } },
+      { attributes: { index: 1 }, name: "first" },
+      { attributes: { index: 2 }, name: "second" },
     ]);
   });
 
-const ignoresFailedAttributes: ConformanceTest = (fixture) =>
+const ignoresFailedAttributes: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       fixture.context.startSpan(
-        { name: "atomic-attributes", attributes: { retained: "value" } },
+        { attributes: { retained: "value" }, name: "atomic-attributes" },
         (span) => {
-          const attributes: SpanAttributes = {
+          const attributes: contextTypes.SpanAttributes = {
             partial: "must not survive",
             unreadable: unreadable(["value"]),
           };
@@ -51,11 +53,13 @@ const ignoresFailedAttributes: ConformanceTest = (fixture) =>
     });
   });
 
-const settledSpan = (fixture: Parameters<ConformanceTest>[0]): Effect.Effect<TelemetrySpan> =>
+const settledSpan = (
+  fixture: Parameters<supportTypes.ConformanceTest>[0],
+): Effect.Effect<contextTypes.TelemetrySpan> =>
   Effect.gen(function* () {
-    let captured: TelemetrySpan | undefined;
+    let captured: contextTypes.TelemetrySpan | undefined;
     yield* Effect.promise(() =>
-      fixture.context.startSpan({ name: "settled", attributes: { value: "initial" } }, (span) => {
+      fixture.context.startSpan({ attributes: { value: "initial" }, name: "settled" }, (span) => {
         captured = span;
       }),
     );
@@ -63,7 +67,7 @@ const settledSpan = (fixture: Parameters<ConformanceTest>[0]): Effect.Effect<Tel
     return captured;
   });
 
-const makesSettledCallsInert: ConformanceTest = (fixture) =>
+const makesSettledCallsInert: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     const capturedSpan = yield* settledSpan(fixture);
 
@@ -85,7 +89,9 @@ const makesSettledCallsInert: ConformanceTest = (fixture) =>
     deepStrictEqual(spans[0]?.status, { status: "ok" });
   });
 
-const runNestedSpans = (fixture: Parameters<ConformanceTest>[0]): Effect.Effect<void> =>
+const runNestedSpans = (
+  fixture: Parameters<supportTypes.ConformanceTest>[0],
+): Effect.Effect<void> =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context());
     const firstGate = yield* Deferred.make<void>();
@@ -106,7 +112,7 @@ const runNestedSpans = (fixture: Parameters<ConformanceTest>[0]): Effect.Effect<
     );
   });
 
-const recordsParentage: ConformanceTest = (fixture) =>
+const recordsParentage: supportTypes.ConformanceTest = (fixture) =>
   Effect.gen(function* () {
     yield* runNestedSpans(fixture);
 
@@ -126,7 +132,7 @@ const recordsParentage: ConformanceTest = (fixture) =>
     ok(first.endSequence < parent.endSequence);
   });
 
-export const recordingCases: readonly ConformanceCaseDefinition[] = [
+const recordingCases: readonly supportTypes.ConformanceCaseDefinition[] = [
   {
     group: "recording",
     name: "merges attributes and records ordered events",
@@ -144,3 +150,9 @@ export const recordingCases: readonly ConformanceCaseDefinition[] = [
     test: recordsParentage,
   },
 ];
+
+const recordingCasesModule = {
+  recordingCases,
+};
+
+export default recordingCasesModule;

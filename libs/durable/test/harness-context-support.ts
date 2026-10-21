@@ -1,134 +1,182 @@
-import { createModels, type Message } from "@msa/ai";
-import type { Context } from "@msa/chord";
-import {
-  type ContextView,
-  createRegistry,
-  defineTask,
-  type EntryDraft,
-  type EntryRecord,
-  Harness,
-  type HarnessSettings,
-  MemoryStorage,
-  type Storage,
-  type TaskRuntime,
-} from "@msa/durable";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import durable from "@msa/durable";
+import harnessModule from "@msa/durable/harness";
+import memoryModule from "@msa/durable/storage/memory";
+import { Effect } from "effect";
 import { expect } from "vite-plus/test";
 
-import { addTask, assistant, openHarness, user } from "./harness-support.ts";
-import { context } from "./session-support.ts";
+import harnessContextSupportKit from "./harness-context-support-kit.ts";
+import type harnessContextSupportTypes from "./harness-context-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export async function setup() {
-  const { harness } = await openHarness(new MemoryStorage());
-  const root = await harness.root(context);
-  const append = (draft: EntryDraft): Promise<EntryRecord> =>
+const { effectSupport, harnessSupport } = harnessContextSupportKit;
+
+const { createModels } = ai;
+
+const { MemoryStorage } = memoryModule;
+const { Harness, createRegistry } = harnessModule;
+const { defineTask } = durable;
+
+const { awaited } = effectSupport;
+const { addTask, assistant, openHarness, user } = harnessSupport;
+const { context } = sessionSupport;
+
+const setup = Effect.fn("setup")(function* () {
+  const { harness } = yield* openHarness(new MemoryStorage());
+  const root = yield* awaited(harness.root(context));
+  const append = (
+    draft: harnessContextSupportTypes.EntryDraft,
+  ): Promise<harnessContextSupportTypes.EntryRecord> =>
     root.commit((tx) => tx.appendEntry(root.id, draft), context);
-  const message = (model: Message, kind = "message"): Promise<EntryRecord> =>
-    append({ kind, model: [model] });
-  return { harness, root, append, message };
-}
+  const message = (
+    model: aiTypes.Message,
+    kind = "message",
+  ): Promise<harnessContextSupportTypes.EntryRecord> => append({ kind, model: [model] });
+  return { append, harness, message, root };
+});
 
-// A Harness over MemoryStorage that counts scanned entry rows, with a 21-entry root transcript.
-export async function countingSetup(
-  options: { readonly settings?: HarnessSettings; readonly now?: () => number } = {},
-) {
-  const scanned = { rows: 0 };
-  /** When set, the next range scan waits for it; bounds probes (one row, on the Session line) do not. */
-  const hold: { scan?: Promise<void> | undefined } = {};
-  const memory = new MemoryStorage();
-  const storage = new Proxy<Storage>(memory, {
-    get(target, key) {
-      const value: unknown = Reflect.get(target, key, target);
-      if (key === "scanEntries") {
-        return async (...args: Parameters<Storage["scanEntries"]>) => {
-          const held = args[1] > 1 ? hold.scan : undefined;
-          if (held !== undefined) hold.scan = undefined;
-          await held;
-          const page = await target.scanEntries(...args);
-          scanned.rows += page.items.length;
-          return page;
-        };
-      }
-      return typeof value === "function" ? value.bind(target) : value;
-    },
+const countingSetupStep = () =>
+  Effect.gen(function* () {
+    const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+    const scanned = { rows: 0 };
+    const hold: { scan?: Promise<void> | undefined } = {};
+    const memory = new MemoryStorage();
+    const storage = new Proxy<harnessContextSupportTypes.Storage>(memory, {
+      get(target, key) {
+        const value: unknown = Reflect.get(target, key, target);
+        if (key === "scanEntries") {
+          return (...args: Parameters<harnessContextSupportTypes.Storage["scanEntries"]>) =>
+            runPromise(
+              Effect.gen(function* () {
+                const held = args[1] > 1 ? hold.scan : undefined;
+                if (held !== undefined) hold.scan = undefined;
+                yield* awaited(held);
+                const page = yield* awaited(target.scanEntries(...args));
+                scanned.rows += page.items.length;
+                return page;
+              }),
+            );
+        }
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+    return { hold, scanned, storage };
   });
+
+const countingSetup = Effect.fn("countingSetup")(function* (
+  options: {
+    readonly settings?: harnessContextSupportTypes.HarnessSettings;
+    readonly now?: () => number;
+  } = {},
+) {
+  const { hold, scanned, storage } = yield* countingSetupStep();
   const registry = createRegistry();
-  const harness = await Harness.open(
-    storage,
-    { models: createModels(), registry, ...options },
-    context,
+  const harness = yield* awaited(
+    Harness.open(storage, { models: createModels(), registry, ...options }, context),
   );
-  const root = await harness.root(context);
-  const first = await root.commit(
-    (tx) => tx.appendEntry(root.id, { kind: "message", model: [user("first")] }),
-    context,
-  );
-  for await (const index of Array.from({ length: 20 }, (_, i) => i)) {
-    await root.commit(
-      (tx) => tx.appendEntry(root.id, { kind: "message", model: [assistant(`old ${index}`)] }),
+  const root = yield* awaited(harness.root(context));
+  const first = yield* awaited(
+    root.commit(
+      (tx) => tx.appendEntry(root.id, { kind: "message", model: [user("first")] }),
       context,
+    ),
+  );
+  for (const index of Array.from({ length: 20 }, (_, i) => i)) {
+    yield* awaited(
+      root.commit(
+        (tx) => tx.appendEntry(root.id, { kind: "message", model: [assistant(`old ${index}`)] }),
+        context,
+      ),
     );
   }
-  return { harness, registry, root, first, scanned, hold };
-}
+  return { first, harness, hold, registry, root, scanned };
+});
 
-export type Counting = Awaited<ReturnType<typeof countingSetup>>;
-
-export type RunRuntime = TaskRuntime<Record<string, never>, { phase: "run" }, null, object>;
-
-// Run `run` as a one-phase task `name` in the root conversation, then expect it completed.
-export async function runInRoot(
-  { harness, registry, root }: Pick<Counting, "harness" | "registry" | "root">,
+const runInRoot = Effect.fn("runInRoot")(function* (
+  { harness, registry, root }: harnessContextSupportTypes.RootHandles,
   name: string,
-  run: (runtime: RunRuntime, taskContext: Context) => Promise<void>,
-): Promise<void> {
+  run: (
+    runtime: harnessContextSupportTypes.RunRuntime,
+    taskContext: harnessContextSupportTypes.Context,
+  ) => Promise<void>,
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const Run = defineTask<Record<string, never>, { phase: "run" }, null>({
-    name,
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      runPromise(
+        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      ),
     initial: () => ({ phase: "run" }),
+    name,
     phases: {
-      run: async (_task, runtime, taskContext) => {
-        await run(runtime, taskContext);
-        await runtime.commit(() => DONE, taskContext);
-      },
+      run: (_task, runtime, taskContext) =>
+        runPromise(
+          Effect.gen(function* () {
+            yield* awaited(run(runtime, taskContext));
+            yield* awaited(runtime.commit(() => DONE, taskContext));
+          }),
+        ),
     },
-    abort: async (_task, runtime, taskContext) => {
-      await runtime.commit(() => ABORTED, taskContext);
-    },
+    version: 1,
   });
   addTask(registry, Run);
   harness.resume();
-  const id = await harness.commit(
-    (tx) =>
-      tx.createTask(Run, {}, { ownership: { kind: "conversation" }, conversationId: root.id }),
-    context,
+  const id = yield* awaited(
+    harness.commit(
+      (tx) =>
+        tx.createTask(Run, {}, { conversationId: root.id, ownership: { kind: "conversation" } }),
+      context,
+    ),
   );
-  expect((await harness.waitForTask(id, context)).state.outcome).toEqual(DONE.outcome);
-}
+  expect((yield* awaited(harness.waitForTask(id, context))).state.outcome).toEqual(DONE.outcome);
+});
 
-export const DONE = { status: "terminal", outcome: { status: "completed", result: null } } as const;
+const DONE = { outcome: { result: null, status: "completed" }, status: "terminal" } as const;
 
-export const ABORTED = { status: "terminal", outcome: { status: "aborted" } } as const;
+const ABORTED = { outcome: { status: "aborted" }, status: "terminal" } as const;
 
-// A task that reads its conversation's context once, named by its input.
-export function probeTask(
-  read: (name: string, load: () => Promise<ContextView>, taskContext: Context) => Promise<void>,
+function probeTask(
+  read: (
+    name: string,
+    load: () => Promise<harnessContextSupportTypes.ContextView>,
+    taskContext: harnessContextSupportTypes.Context,
+  ) => Promise<void>,
 ) {
   return defineTask<{ name: string }, { phase: "run" }, null>({
-    name: "test.context-probe",
-    version: 1,
+    abort: (_task, runtime, taskContext) =>
+      Effect.runPromise(
+        Effect.asVoid(Effect.suspend(() => awaited(runtime.commit(() => ABORTED, taskContext)))),
+      ),
     initial: () => ({ phase: "run" }),
+    name: "test.context-probe",
     phases: {
-      run: async (task, runtime, taskContext) => {
-        await read(
-          task.input.name,
-          () => runtime.context(runtime.conversationId, taskContext),
-          taskContext,
-        );
-        await runtime.commit(() => DONE, taskContext);
-      },
+      run: (task, runtime, taskContext) =>
+        Effect.runPromise(
+          Effect.gen(function* () {
+            yield* awaited(
+              read(
+                task.input.name,
+                () => runtime.context(runtime.conversationId, taskContext),
+                taskContext,
+              ),
+            );
+            yield* awaited(runtime.commit(() => DONE, taskContext));
+          }),
+        ),
     },
-    abort: async (_task, runtime, taskContext) => {
-      await runtime.commit(() => ABORTED, taskContext);
-    },
+    version: 1,
   });
 }
+
+const harnessContextSupport = {
+  ABORTED,
+  DONE,
+  countingSetup,
+  probeTask,
+  runInRoot,
+  setup,
+};
+
+export default harnessContextSupport;

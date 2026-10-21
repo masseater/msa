@@ -1,93 +1,60 @@
-/**
- * A script's result as the model reads it, copied from the coding agent's code mode: a "Script completed/failed"
- * header with the wall time, the script's text items (`==> text N/M <==` when there are several), its `console` lines
- * in one `<console_output>` block, the returned value, and on failure the error with the calls already made. Text past
- * the token budget is cut to its start and end, with the complete text in a temp file; images are saved to temp files
- * too, with their path next to them, because a script has no other way to hand their bytes on.
- */
-import type { ImageContent, TextContent } from "@msa/ai";
-import type { CodemodeOutputItem, CodemodeResult } from "@msa/codemode/portable";
+import type aiTypes from "@msa/ai/index.types";
+import type portableTypes from "@msa/codemode/portable.types";
+import { Effect } from "effect";
 
-type Item = TextContent | ImageContent;
+import type outputTypes from "./output.types.ts";
 
-/** Writes a file of the result under a fixed name; its path, or why it could not be written. */
-export type OutputFile = (
-  name: string,
-  data: string | Uint8Array,
-) => Promise<{ path: string } | { error: string }>;
+type Item = aiTypes.TextContent | aiTypes.ImageContent;
 
-/** The tool's output limits, which the Harness enforces by cutting without a spill file: results stay inside them. */
 type Limits = { readonly maxBytes: number; readonly maxLines: number };
-/** Lines of the result besides the script's text: the header, markers, notes. */
 const LINE_MARGIN = 100;
 
-/** Default token budget for script output. */
-export const DEFAULT_MAX_OUTPUT_TOKENS = 10_000;
-/** Characters per token when estimating. */
+const DEFAULT_MAX_OUTPUT_TOKENS = 10_000;
 const CHARS_PER_TOKEN = 4;
 
-/** File extensions of the image types `image()` accepts. */
 const IMAGE_EXTENSIONS: Record<string, string> = {
-  "image/png": ".png",
-  "image/jpeg": ".jpg",
   "image/gif": ".gif",
+  "image/jpeg": ".jpg",
+  "image/png": ".png",
   "image/webp": ".webp",
 };
 
-/**
- * Like the script's `text()`: strings as is, other values as compact JSON.
- * @param {unknown} value - The value.
- * @returns {string} The text.
- */
 function valueText(value: unknown): string {
   if (typeof value === "string") return value;
   return JSON.stringify(value) ?? String(value);
 }
 
-/**
- * Lay out the script's output so the model can tell items apart: with more than one text item, each starts with a
- * `==> text N/M <==` line; `console` lines follow all other output in one `<console_output>` block.
- * @param {readonly CodemodeOutputItem[]} output - The script's output.
- * @returns {Item[]} The items.
- */
-function formatItems(output: readonly CodemodeOutputItem[]): Item[] {
-  const total = output.filter((item) => item.type === "text" && !item.console).length;
+function formatItems(output: readonly portableTypes.CodemodeOutputItem[]): Item[] {
+  const total = output.filter((item) => item.type === "text" && item.console !== true).length;
   const items: Item[] = [];
   const consoleLines: string[] = [];
   let index = 0;
   for (const item of output) {
     if (item.type === "image") items.push(item);
-    else if (item.console) consoleLines.push(item.text);
+    else if (item.console === true) consoleLines.push(item.text);
     else {
       index++;
       items.push({
-        type: "text",
         text: total > 1 ? `==> text ${index}/${total} <==\n${item.text}` : item.text,
+        type: "text",
       });
     }
   }
   if (consoleLines.length > 0) {
     items.push({
-      type: "text",
       text: `<console_output>\n${consoleLines.join("\n")}\n</console_output>`,
+      type: "text",
     });
   }
   return items;
 }
 
-/**
- * Join adjacent text items into one, each part starting on its own line. The separator check looks at the last
- * non-empty part, not the joined text: reading the end of a growing concatenation makes V8 copy it on every item, which
- * is quadratic.
- * @param {readonly Item[]} items - The output items.
- * @returns {Item[]} The joined items.
- */
 function joinAdjacentText(items: readonly Item[]): Item[] {
   const joined: Item[] = [];
   let parts: string[] = [];
   let lastPart = "";
   const flush = () => {
-    if (parts.length > 0) joined.push({ type: "text", text: parts.join("") });
+    if (parts.length > 0) joined.push({ text: parts.join(""), type: "text" });
     parts = [];
     lastPart = "";
   };
@@ -108,31 +75,25 @@ function joinAdjacentText(items: readonly Item[]): Item[] {
   return joined;
 }
 
-/**
- * Apply the token budget: when the combined text exceeds it, the text items become one item that keeps the start and
- * end of the text, and images follow it. The complete text is written to a temp file.
- * @param {readonly Item[]} items - The output items.
- * @param {number} maxTokens - The token budget.
- * @param {Limits} limits - The byte and line limits.
- * @param {OutputFile} write - Writes a file into the run's output directory.
- * @returns {Promise<{ items: Item[]; fullOutputPath?: string }>} The items and the full text's path.
- */
-async function truncate(
+type Truncated = { items: Item[]; fullOutputPath?: string };
+
+const truncate = Effect.fnUntraced(function* (
   items: readonly Item[],
   maxTokens: number,
   limits: Limits,
-  write: OutputFile,
-): Promise<{ items: Item[]; fullOutputPath?: string }> {
+  write: outputTypes.OutputFile,
+) {
   const texts = items
-    .filter((item): item is TextContent => item.type === "text")
+    .filter((item): item is aiTypes.TextContent => item.type === "text")
     .map((item) => item.text);
   const combined = texts.join("\n");
-  // Within the limits too: a UTF-16 unit is at most 3 UTF-8 bytes, and the rest of the result is a few short lines.
   const budget = Math.min(maxTokens * CHARS_PER_TOKEN, Math.floor(limits.maxBytes / 4));
   const lineBudget = Math.floor((limits.maxLines - LINE_MARGIN) / 2);
   const lines = combined.split("\n").length;
-  if (texts.length === 0 || (combined.length <= budget && lines <= 2 * lineBudget))
-    return { items: [...items] };
+  if (texts.length === 0 || (combined.length <= budget && lines <= 2 * lineBudget)) {
+    const kept: Truncated = { items: [...items] };
+    return kept;
+  }
   const headChars = Math.floor(budget / 2);
   const tailChars = budget - headChars;
   const head = combined.slice(0, headChars).split("\n").slice(0, lineBudget).join("\n");
@@ -140,50 +101,53 @@ async function truncate(
     tailChars > 0 ? combined.slice(-tailChars).split("\n").slice(-lineBudget).join("\n") : "";
   const removed = combined.length - head.length - tail.length;
   let text = `Warning: truncated output (original token count: ${Math.ceil(combined.length / CHARS_PER_TOKEN)})\nTotal output lines: ${combined.split("\n").length}\n\n${head}…${Math.ceil(removed / CHARS_PER_TOKEN)} tokens truncated…${tail}`;
-  const spilled = await write("output.txt", combined);
+  const spilled = yield* Effect.promise(() => write("output.txt", combined));
   text +=
     "path" in spilled
       ? `\n\n[Full output: ${spilled.path} (read with offset/limit)]`
       : `\n\n[Could not save the full output: ${spilled.error}]`;
-  return {
-    items: [{ type: "text", text }, ...items.filter((item) => item.type === "image")],
+  const truncated: Truncated = {
+    items: [{ text, type: "text" }, ...items.filter((item) => item.type === "image")],
     ...("path" in spilled ? { fullOutputPath: spilled.path } : {}),
   };
-}
+  return truncated;
+});
 
-/**
- * Save each image to a file and put a text item with its path before it; an image shown twice is saved once.
- * @param {readonly Item[]} items - The output items.
- * @param {OutputFile} write - Writes a file into the run's output directory.
- * @returns {Promise<Item[]>} The items.
- */
-async function saveImages(items: readonly Item[], write: OutputFile): Promise<Item[]> {
-  const labels = new Map<string, Promise<string>>();
-  const label = async ({ data, mimeType }: ImageContent, index: number): Promise<string> => {
-    const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
-    const kind = `${mimeType}, ${bytes.length} bytes`;
-    // A failed write must not discard the result of a script whose calls already ran: it becomes part of the label.
-    const saved = await write(`image-${index}${IMAGE_EXTENSIONS[mimeType] ?? ".bin"}`, bytes);
-    return "path" in saved
-      ? `[Image saved to ${saved.path} (${kind})]`
-      : `[Image (${kind}) could not be saved: ${saved.error}]`;
-  };
-  const result = await Promise.all(
-    items.map(async (item): Promise<Item[]> => {
-      if (item.type !== "image") return [item];
-      let pending = labels.get(item.data);
-      if (pending === undefined) {
-        pending = label(item, labels.size + 1);
-        labels.set(item.data, pending);
-      }
-      return [{ type: "text", text: await pending }, item];
-    }),
+const imageLabel = Effect.fnUntraced(function* (
+  { data, mimeType }: aiTypes.ImageContent,
+  index: number,
+  write: outputTypes.OutputFile,
+) {
+  const bytes = Uint8Array.from(atob(data), (char) => char.charCodeAt(0));
+  const kind = `${mimeType}, ${bytes.length} bytes`;
+  const name = `image-${index}${IMAGE_EXTENSIONS[mimeType] ?? ".bin"}`;
+  const saved = yield* Effect.promise(() => write(name, bytes));
+  return "path" in saved
+    ? `[Image saved to ${saved.path} (${kind})]`
+    : `[Image (${kind}) could not be saved: ${saved.error}]`;
+});
+
+const saveImages = Effect.fnUntraced(function* (
+  items: readonly Item[],
+  write: outputTypes.OutputFile,
+) {
+  const images = new Map<string, aiTypes.ImageContent>();
+  for (const item of items) {
+    if (item.type === "image" && !images.has(item.data)) images.set(item.data, item);
+  }
+  const labels = yield* Effect.forEach(
+    [...images.values()],
+    (image, index) => imageLabel(image, index + 1, write),
+    { concurrency: "unbounded" },
   );
-  return result.flat();
-}
+  const labelOf = new Map([...images.keys()].map((data, index) => [data, labels[index]!]));
+  return items.flatMap((item): Item[] =>
+    item.type === "image" ? [{ text: labelOf.get(item.data)!, type: "text" }, item] : [item],
+  );
+});
 
 function formatError(
-  result: Extract<CodemodeResult, { ok: false }>,
+  result: Extract<portableTypes.CodemodeResult, { ok: false }>,
   calls: readonly { name: string; status: string }[],
 ) {
   const { error } = result;
@@ -202,48 +166,48 @@ function formatError(
   return `${head}\n\n${summary}`;
 }
 
-/**
- * The tool result's content for a script's result, and the path of the complete text when it was cut.
- * @param {CodemodeResult} result - The script's result.
- * @param {FormatOptions} options - The run's images, time, budget, calls, limits, and writer.
- * @returns {Promise<{ content: Item[]; fullOutputPath?: string }>} The content and the full text's path.
- */
-export async function formatResult(
-  result: CodemodeResult,
+const formatResult = Effect.fnUntraced(function* (
+  result: portableTypes.CodemodeResult,
   options: {
-    /** Images `models.generateImages()` returned; when the script showed none, the result says so. */
     readonly generatedImages: number;
     readonly wallMs: number;
     readonly maxOutputTokens: number;
     readonly calls: readonly { name: string; status: string }[];
     readonly limits: Limits;
-    readonly write: OutputFile;
+    readonly write: outputTypes.OutputFile;
   },
-): Promise<{ content: Item[]; fullOutputPath?: string }> {
+) {
   const output = [...result.output];
   if (result.ok && result.value !== undefined)
-    output.push({ type: "text", text: valueText(result.value) });
+    output.push({ text: valueText(result.value), type: "text" });
   const items = formatItems(output);
   if (!result.ok)
-    items.push({ type: "text", text: `Script error:\n${formatError(result, options.calls)}` });
+    items.push({ text: `Script error:\n${formatError(result, options.calls)}`, type: "text" });
   const generated = options.generatedImages;
   if (generated > 0 && !items.some((item) => item.type === "image")) {
     items.push({
-      type: "text",
       text: `Note: models.generateImages() returned ${generated} image${generated === 1 ? "" : "s"} that the script did not show. Show each image block of result.output with image(block).`,
+      type: "text",
     });
   }
-  const truncated = await truncate(
+  const truncated = yield* truncate(
     joinAdjacentText(items),
     options.maxOutputTokens,
     options.limits,
     options.write,
   );
-  // After truncation, which joins the text items and moves images after them, so each path stays next to its image.
-  const content = joinAdjacentText(await saveImages(truncated.items, options.write));
+  const content = joinAdjacentText(yield* saveImages(truncated.items, options.write));
   const header = `${result.ok ? "Script completed" : "Script failed"}\nWall time ${(options.wallMs / 1000).toFixed(1)} seconds\nOutput:\n`;
-  return {
-    content: [{ type: "text", text: header }, ...content],
+  const formatted: { content: Item[]; fullOutputPath?: string } = {
+    content: [{ text: header, type: "text" }, ...content],
     ...(truncated.fullOutputPath === undefined ? {} : { fullOutputPath: truncated.fullOutputPath }),
   };
-}
+  return formatted;
+});
+
+const outputModule = {
+  DEFAULT_MAX_OUTPUT_TOKENS,
+  formatResult,
+};
+
+export default outputModule;

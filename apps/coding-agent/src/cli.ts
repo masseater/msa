@@ -1,6 +1,8 @@
-#!/usr/bin/env node
-import { setupCli } from "./cli/setup.ts";
-import { main } from "./main.ts";
+import setup from "./cli/setup.ts";
+import mainModule from "./main.ts";
+
+const { setupCli } = setup;
+const { main } = mainModule;
 
 setupCli();
 main(process.argv.slice(2));

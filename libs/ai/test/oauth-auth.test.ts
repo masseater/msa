@@ -1,22 +1,31 @@
+import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
-import { InMemoryCredentialStore } from "../src/auth/credential-store.ts";
-import { openaiChatGPTOAuth } from "../src/auth/oauth/openai-chatgpt.ts";
-import { openaiCodexOAuth } from "../src/auth/oauth/openai-codex.ts";
-import { openRouterOAuth } from "../src/auth/oauth/openrouter.ts";
-import { createModels } from "../src/models.ts";
-import * as extensionOAuthCompatibility from "../src/oauth.ts";
-import { openaiProvider } from "../src/providers/openai.ts";
+import credentialStore from "../src/auth/credential-store.ts";
+import openaiChatgpt from "../src/auth/oauth/openai-chatgpt.ts";
+import openaiCodex from "../src/auth/oauth/openai-codex.ts";
+import openrouter from "../src/auth/oauth/openrouter.ts";
+import modelsModule from "../src/models.ts";
+import * as oauthModule from "../src/oauth.ts";
+import openai from "../src/providers/openai.ts";
+import clock from "../src/utils/clock.ts";
+
+const { openaiChatGPTOAuth } = openaiChatgpt;
+const { openaiCodexOAuth } = openaiCodex;
+const { openRouterOAuth } = openrouter;
+const { openaiProvider } = openai;
+const { InMemoryCredentialStore } = credentialStore;
+const { currentTimeMillis } = clock;
+const { createModels } = modelsModule;
 
 const neverAbortedSignal = new AbortController().signal;
 
 describe("OAuthAuth adapters", () => {
-  it("keeps the extension OAuth barrel free of built-in flow implementations", () => {
-    expect(extensionOAuthCompatibility).not.toHaveProperty("openaiCodexOAuth");
-  });
-
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+  it("keeps the extension OAuth barrel free of built-in flow implementations", () => {
+    expect(oauthModule).not.toHaveProperty("openaiCodexOAuth");
   });
 
   it("identifies only subscription-backed OAuth flows as subscriptions", () => {
@@ -30,54 +39,75 @@ describe("OAuthAuth adapters", () => {
     const provider = openaiProvider();
     expect(provider.auth.apiKey).toBeDefined();
     expect(provider.auth.oauth).toMatchObject({
-      name: "OpenAI (ChatGPT subscription)",
       isSubscription: true,
       loginLabel: "Sign in with ChatGPT",
+      name: "OpenAI (ChatGPT subscription)",
     });
-  });
-
-  it("openai-codex toAuth derives the api key from the access token", async () => {
-    const auth = await openaiCodexOAuth.toAuth({
-      type: "oauth",
-      access: "token",
-      refresh: "r",
-      expires: 0,
-    });
-    expect(auth).toEqual({ apiKey: "token" });
-  });
-
-  it("openrouter derives the api key and keeps the permanent credential on refresh", async () => {
-    const credential = {
-      type: "oauth" as const,
-      access: "token",
-      refresh: "",
-      expires: Number.MAX_SAFE_INTEGER,
-    };
-    expect(await openRouterOAuth.toAuth(credential)).toEqual({ apiKey: "token" });
-    expect(await openRouterOAuth.refresh(credential, neverAbortedSignal)).toBe(credential);
   });
 });
 
-describe("OAuth through Models.getAuth (lazy load chain)", () => {
-  it("resolves stored ChatGPT oauth credentials via the lazy flow import", async () => {
-    const credentials = new InMemoryCredentialStore();
-    await credentials.modify("openai", () =>
-      Promise.resolve({
-        type: "oauth",
-        access: "oauth-access-token",
-        refresh: "r",
-        // Keep this beyond getAuth()'s refresh window.
-        expires: Date.now() + 10 * 60_000,
-      }),
-    );
-    const models = createModels({ credentials });
-    models.setProvider(openaiProvider());
-
-    const model = models.getModels("openai")[0];
-
-    if (!model) throw new Error("Expected a model");
-    const result = await models.getAuth(model.provider);
-    expect(result?.auth.apiKey).toBe("oauth-access-token");
-    expect(result?.source).toBe("OAuth");
+describe("OAuthAuth adapters", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
   });
+  it("openai-codex toAuth derives the api key from the access token", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const auth = yield* Effect.promise(() =>
+          openaiCodexOAuth.toAuth({
+            access: "token",
+            expires: 0,
+            refresh: "r",
+            type: "oauth",
+          }),
+        );
+        expect(auth).toEqual({ apiKey: "token" });
+      }),
+    ));
+
+  it("openrouter derives the api key and keeps the permanent credential on refresh", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const credential = {
+          access: "token",
+          expires: Number.MAX_SAFE_INTEGER,
+          refresh: "",
+          type: "oauth" as const,
+        };
+        expect(yield* Effect.promise(() => openRouterOAuth.toAuth(credential))).toEqual({
+          apiKey: "token",
+        });
+        expect(
+          yield* Effect.promise(() => openRouterOAuth.refresh(credential, neverAbortedSignal)),
+        ).toBe(credential);
+      }),
+    ));
+});
+
+describe("OAuth through Models.getAuth (lazy load chain)", () => {
+  it("resolves stored ChatGPT oauth credentials via the lazy flow import", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        const credentials = new InMemoryCredentialStore();
+        yield* Effect.promise(() =>
+          credentials.modify("openai", () =>
+            Promise.resolve({
+              access: "oauth-access-token",
+              expires: currentTimeMillis() + 10 * 60_000,
+              refresh: "r",
+              type: "oauth",
+            }),
+          ),
+        );
+        const models = createModels({ credentials });
+        models.setProvider(openaiProvider());
+
+        const model = models.getModels("openai")[0];
+
+        if (model === undefined) throw new Error("Expected a model");
+        const result = yield* Effect.promise(() => models.getAuth(model.provider));
+        expect(result?.auth.apiKey).toBe("oauth-access-token");
+        expect(result?.source).toBe("OAuth");
+      }),
+    ));
 });

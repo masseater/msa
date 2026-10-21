@@ -1,45 +1,34 @@
-import {
-  type BinaryReader,
-  type DirReader,
-  type FileError,
-  ok,
-  type Result,
-  type TextLineReader,
-} from "@msa/durable/env";
+import env from "@msa/durable/env";
+import type envTypes from "@msa/durable/env.types";
 import { Effect } from "effect";
 
-import { RemoteBinaryReader } from "./binary-reader.ts";
-import { RemoteDirReader } from "./dir-reader.ts";
-import { openDir, openFile, openReader, type PathRequest, run, runFileOp } from "./file-op.ts";
-import { readOpenedFile } from "./read-file.ts";
-import { RemoteTextLineReader } from "./text-line-reader.ts";
+import RemoteBinaryReader from "./binary-reader.ts";
+import RemoteDirReader from "./dir-reader.ts";
+import fileOp from "./file-op.ts";
+import type fileOpTypes from "./file-op.types.ts";
+import readFile from "./read-file.ts";
+import type readOpsTypes from "./read-ops.types.ts";
+import RemoteTextLineReader from "./text-line-reader.ts";
 
-export interface FileReadRequest extends PathRequest {
-  readonly encoding: boolean;
-}
+const { ok } = env;
 
-export interface BinaryReaderRequest extends PathRequest {
-  readonly noFollow: boolean;
-}
+const { openDir, openFile, openReader, run, runFileOp } = fileOp;
+const { readOpenedFile } = readFile;
 
-export interface TextLinesRequest extends PathRequest {
-  readonly maxLines: number | undefined;
-}
-
-export const readFileAt = (
-  request: FileReadRequest,
-): Promise<Result<Uint8Array | string, FileError>> => {
+const readFileAt = (
+  request: readOpsTypes.FileReadRequest,
+): Promise<envTypes.Result<Uint8Array | string, envTypes.FileError>> => {
   const { connection } = request.target;
   return run(
     runFileOp({
       ...request,
       operation: (resolved) =>
-        openFile({ connection, resolved, json: { mode: "read" } }).pipe(
+        openFile({ connection, json: { mode: "read" }, resolved }).pipe(
           Effect.flatMap(({ handle, json }) =>
             readOpenedFile({
+              encoding: request.encoding,
               handle,
               opened: json,
-              encoding: request.encoding,
               signal: request.context.abortSignal,
             }),
           ),
@@ -48,37 +37,39 @@ export const readFileAt = (
   );
 };
 
-export const openBinaryReaderAt = (
-  request: BinaryReaderRequest,
-): Promise<Result<BinaryReader, FileError>> => {
+const openBinaryReaderAt = (
+  request: readOpsTypes.BinaryReaderRequest,
+): Promise<envTypes.Result<envTypes.BinaryReader, envTypes.FileError>> => {
   const { connection } = request.target;
-  return openReader<BinaryReader>({
+  return openReader<envTypes.BinaryReader>({
     ...request,
     open: (resolved) =>
-      openFile({ connection, resolved, json: { noFollow: request.noFollow } }).pipe(
+      openFile({ connection, json: { noFollow: request.noFollow }, resolved }).pipe(
         Effect.map(({ handle }) => handle),
       ),
     wrap: (handle) => new RemoteBinaryReader(handle),
   });
 };
 
-export const openTextLineReaderAt = (
-  request: PathRequest,
-): Promise<Result<TextLineReader, FileError>> => {
+const openTextLineReaderAt = (
+  request: fileOpTypes.PathRequest,
+): Promise<envTypes.Result<envTypes.TextLineReader, envTypes.FileError>> => {
   const { connection } = request.target;
-  return openReader<TextLineReader>({
+  return openReader<envTypes.TextLineReader>({
     ...request,
     open: (resolved) =>
-      openFile({ connection, resolved, json: { mode: "read" } }).pipe(
+      openFile({ connection, json: { mode: "read" }, resolved }).pipe(
         Effect.map(({ handle }) => handle),
       ),
     wrap: (handle) => new RemoteTextLineReader(handle),
   });
 };
 
-export const openDirReaderAt = (request: PathRequest): Promise<Result<DirReader, FileError>> => {
+const openDirReaderAt = (
+  request: fileOpTypes.PathRequest,
+): Promise<envTypes.Result<envTypes.DirReader, envTypes.FileError>> => {
   const { connection } = request.target;
-  return openReader<DirReader>({
+  return openReader<envTypes.DirReader>({
     ...request,
     open: (resolved) => openDir({ connection, resolved }),
     wrap: (handle) => new RemoteDirReader(handle),
@@ -86,9 +77,9 @@ export const openDirReaderAt = (request: PathRequest): Promise<Result<DirReader,
 };
 
 const readLines = (
-  reader: TextLineReader,
-  request: TextLinesRequest,
-): Effect.Effect<Result<string[], FileError>> =>
+  reader: envTypes.TextLineReader,
+  request: readOpsTypes.TextLinesRequest,
+): Effect.Effect<envTypes.Result<string[], envTypes.FileError>> =>
   Effect.gen(function* () {
     const max = request.maxLines ?? Number.POSITIVE_INFINITY;
     const lines: string[] = [];
@@ -98,10 +89,12 @@ const readLines = (
       if (line.value === undefined) break;
       lines.push(line.value.text);
     }
-    return ok<string[], FileError>(lines);
+    return ok<string[], envTypes.FileError>(lines);
   }).pipe(Effect.ensuring(Effect.promise(() => reader.close(request.context))));
 
-export const readTextLinesAt = (request: TextLinesRequest): Promise<Result<string[], FileError>> =>
+const readTextLinesAt = (
+  request: readOpsTypes.TextLinesRequest,
+): Promise<envTypes.Result<string[], envTypes.FileError>> =>
   run(
     Effect.gen(function* () {
       const opened = yield* Effect.promise(() => openTextLineReaderAt(request));
@@ -109,3 +102,13 @@ export const readTextLinesAt = (request: TextLinesRequest): Promise<Result<strin
       return yield* readLines(opened.value, request);
     }),
   );
+
+const readOps = {
+  openBinaryReaderAt,
+  openDirReaderAt,
+  openTextLineReaderAt,
+  readFileAt,
+  readTextLinesAt,
+};
+
+export default readOps;

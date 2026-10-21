@@ -1,27 +1,35 @@
-import { type ConversationId, defineDoc } from "@msa/durable";
+import durable from "@msa/durable";
+import type durableTypes from "@msa/durable/index.types";
+import { Effect } from "effect";
 
-import { SessionImpl } from "../src/session/session.ts";
-import { ControlledStorage, context } from "./session-support.ts";
+import nodeProcess from "../src/env/node/node-process.ts";
+import SessionImpl from "../src/session/session.ts";
+import type sessionTypes from "../src/session/session.types.ts";
+import ControlledStorage from "./controlled-storage.ts";
+import effectSupport from "./effect-support.ts";
+import type sessionDocumentRetentionSupportTypes from "./session-document-retention-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export type Counter = { count: number };
+const { defineDoc } = durable;
+const { environmentVariable } = nodeProcess;
 
-export const CounterDoc = defineDoc<Counter>({
-  kind: "test.retention.counter",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+
+const CounterDoc = defineDoc<sessionDocumentRetentionSupportTypes.Counter>({
   fork: "initial",
+  history: "latest",
   initial: () => ({ count: 0 }),
+  kind: "test.retention.counter",
+  scope: "conversation",
+  version: 1,
 });
 
-/** The default retention of this run, as the setup file set it. */
-export const defaultForRun =
-  process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"] === undefined
-    ? 600_000
-    : Number(process.env["MSA_DURABLE_DOCUMENT_RETENTION_MS"]);
+const forcedRetention = environmentVariable("MSA_DURABLE_DOCUMENT_RETENTION_MS", true);
 
-// A Session with a controllable clock and retention.
-export function open(retentionMs: number) {
+const defaultForRun = forcedRetention === undefined ? 600_000 : Number(forcedRetention);
+
+function open(retentionMs: number) {
   const clock = { now: 1_000 };
   const storage = new ControlledStorage();
   const session = new SessionImpl(
@@ -30,20 +38,39 @@ export function open(retentionMs: number) {
     () => retentionMs,
   );
   const sizes = () => session.documentCacheSizes;
-  return { storage, session, clock, sizes };
+  return { clock, session, sizes, storage };
 }
 
-// Let the line run what is queued on it: an eviction job, then return.
-export async function settleLine(session: SessionImpl): Promise<void> {
-  await session.readOnLine(async () => {});
-}
+const settleLine = Effect.fn("settleLine")(function* (session: sessionTypes.SessionImpl) {
+  yield* awaited(session.readOnLine(() => Promise.resolve()));
+});
 
-export async function bump(
-  session: SessionImpl,
-  conversationId: ConversationId,
+const bump = Effect.fn("bump")(function* (
+  session: sessionTypes.SessionImpl,
+  conversationId: durableTypes.ConversationId,
   by = 1,
-): Promise<void> {
-  await session.commit(async (tx) => {
-    (await tx.doc(CounterDoc, conversationId)).count += by;
-  }, context);
-}
+) {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
+  yield* awaited(
+    session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            (yield* awaited(tx.doc(CounterDoc, conversationId))).count += by;
+          }),
+        ),
+      context,
+    ),
+  );
+});
+
+const sessionDocumentRetentionSupport = {
+  CounterDoc,
+  bump,
+  defaultForRun,
+  open,
+  settleLine,
+};
+
+export default sessionDocumentRetentionSupport;

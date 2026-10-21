@@ -1,8 +1,11 @@
-export type { SqliteDatabase, SqliteExecutor, SqliteValue } from "./database.ts";
-export {
-  applySqliteMigrations,
-  CURRENT_SQLITE_SCHEMA_VERSION,
-  SQLITE_MIGRATIONS,
-  type SqliteMigration,
-} from "./migrations.ts";
-export { SqliteStorage } from "./storage.ts";
+import migrationsModule from "./migrations.ts";
+import SqliteStorage from "./storage.ts";
+
+const sqlite = {
+  CURRENT_SQLITE_SCHEMA_VERSION: migrationsModule.CURRENT_SQLITE_SCHEMA_VERSION,
+  SQLITE_MIGRATIONS: migrationsModule.SQLITE_MIGRATIONS,
+  SqliteStorage: SqliteStorage,
+  applySqliteMigrations: migrationsModule.applySqliteMigrations,
+};
+
+export default sqlite;

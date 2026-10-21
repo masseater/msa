@@ -1,73 +1,40 @@
-import type { Context } from "@msa/chord";
+import { Effect } from "effect";
 
-import { SessionFailed } from "../errors.ts";
-import type { Cursor, Page } from "../types.ts";
+import errors from "../errors.ts";
+import type typesModule from "./types.types.ts";
+import Waiters from "./waiters.ts";
 
-/** Pending waits by key. Each settles once: through `resolve`, `rejectAll`, or cancellation of its context. */
-export class Waiters<K, T> {
-  readonly #sets = new Map<K, Set<PromiseWithResolvers<T>>>();
+const { SessionFailed } = errors;
 
-  add(key: K, context: Context): Promise<T> {
-    const signal = context.abortSignal;
-    if (signal?.aborted) return Promise.reject(signal.reason);
-    const waiter = Promise.withResolvers<T>();
-    const set = this.#sets.get(key) ?? new Set();
-    this.#sets.set(key, set.add(waiter));
-    if (signal !== undefined) {
-      const onAbort = (): void => {
-        set.delete(waiter);
-        if (set.size === 0 && this.#sets.get(key) === set) this.#sets.delete(key);
-        waiter.reject(signal.reason);
-      };
-      signal.addEventListener("abort", onAbort, { once: true });
-      const detach = (): void => signal.removeEventListener("abort", onAbort);
-      waiter.promise.then(detach, detach);
-    }
-    return waiter.promise;
-  }
+type Scan<T> = (
+  cursor: typesModule.Cursor | undefined,
+) => Promise<typesModule.Page<T, typesModule.Cursor>>;
 
-  keys(): K[] {
-    return [...this.#sets.keys()];
-  }
+const scanPage = <T>(scan: Scan<T>, cursor: typesModule.Cursor | undefined) =>
+  Effect.promise(() => scan(cursor));
 
-  resolve(key: K, value: T): void {
-    const set = this.#sets.get(key);
-    this.#sets.delete(key);
-    for (const waiter of set ?? []) waiter.resolve(value);
-  }
-
-  rejectAll(error: unknown): void {
-    const sets = [...this.#sets.values()];
-    this.#sets.clear();
-    for (const set of sets) for (const waiter of set) waiter.reject(error);
-  }
-}
-
-/**
- * Every item of a paginated scan, in page order.
- * @param {(cursor: Cursor | undefined) => Promise<Page<T, Cursor>>} scan - Reads one page.
- * @returns {Promise<T[]>} The items.
- */
-export function scanAll<T>(
-  scan: (cursor: Cursor | undefined) => Promise<Page<T, Cursor>>,
-): Promise<T[]> {
+const scanAll = Effect.fnUntraced(function* <T>(scan: Scan<T>) {
   const items: T[] = [];
-  const scanFrom = async (cursor: Cursor | undefined): Promise<T[]> => {
-    const page = await scan(cursor);
+  let cursor: typesModule.Cursor | undefined;
+  do {
+    const page = yield* scanPage(scan, cursor);
     items.push(...page.items);
-    return page.next === undefined ? items : scanFrom(page.next);
-  };
-  return scanFrom(undefined);
-}
+    cursor = page.next;
+  } while (cursor !== undefined);
+  return items;
+});
 
-/**
- * What a closed Harness rejects with: `SessionFailed` with the cause when it closed because the Session failed.
- * @param {{ readonly failure: { readonly error: unknown } | undefined; }} session - The Session.
- * @returns {Error} The error.
- */
-export function closedError(session: {
+function closedError(session: {
   readonly failure: { readonly error: unknown } | undefined;
 }): Error {
   const failure = session.failure;
   return failure === undefined ? new Error("Harness is closed") : new SessionFailed(failure.error);
 }
+
+const util = {
+  Waiters,
+  closedError,
+  scanAll,
+};
+
+export default util;

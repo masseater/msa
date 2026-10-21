@@ -1,127 +1,88 @@
-/**
- * List available models with optional fuzzy search
- */
-
-import type { Api, Model } from "@msa/ai";
-import { fuzzyFilter } from "@msa/tui";
 import chalk from "chalk";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
-import { formatNoModelsAvailableMessage } from "../core/auth-guidance.ts";
-import { hiddenModelsByPolicy } from "../core/model-policy.ts";
-import type { ModelRuntime } from "../core/model-runtime.ts";
+import authGuidance from "../core/auth-guidance.ts";
+import awaitingModule from "../core/awaiting.ts";
+import modelPolicy from "../core/model-policy.ts";
+import type modelRuntimeTypes from "../core/model-runtime.types.ts";
+import platform from "../core/platform/index.ts";
+import modelTable from "./model-table.ts";
 
-/**
- * Format a number as human-readable (e.g., 200000 -> "200K", 1000000 -> "1M")
- */
-function formatTokenCount(count: number): string {
-  if (count >= 1_000_000) {
-    const millions = count / 1_000_000;
-    return millions % 1 === 0 ? `${millions}M` : `${millions.toFixed(1)}M`;
-  }
-  if (count >= 1_000) {
-    const thousands = count / 1_000;
-    return thousands % 1 === 0 ? `${thousands}K` : `${thousands.toFixed(1)}K`;
-  }
-  return count.toString();
+const { awaited, awaiting } = awaitingModule;
+const { writeError, writeLog } = platform;
+const { formatNoModelsAvailableMessage } = authGuidance;
+const { hiddenModelsByPolicy } = modelPolicy;
+
+const { formatModelTable, matchingModels } = modelTable;
+
+function hiddenModelsNotice(modelRuntime: modelRuntimeTypes.ModelRuntime): string | undefined {
+  const hidden = hiddenModelsByPolicy(
+    modelRuntime.getModelPolicy(),
+    modelRuntime.getCatalogModels(),
+  );
+  if (hidden.length === 0) return undefined;
+  const patterns = [
+    ...new Set(hidden.map((entry) => (entry.pattern === "" ? "allow list" : entry.pattern))),
+  ];
+  return `\n${hidden.length} model${hidden.length === 1 ? "" : "s"} hidden by model policy (${patterns.join(", ")}). See /model.`;
 }
 
-/**
- * List available models, optionally filtered by search pattern
- */
-export async function listModels(
-  modelRuntime: ModelRuntime,
+function listModelsImpl(
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
   searchPattern?: string,
   signal?: AbortSignal,
 ): Promise<void> {
-  const loadError = modelRuntime.getError();
-  if (loadError) {
-    console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
-  }
-
-  const models = [...(await modelRuntime.getAvailable(undefined, signal ? { signal } : {}))];
-
-  if (models.length === 0) {
-    console.log(formatNoModelsAvailableMessage());
-    return;
-  }
-
-  // Apply fuzzy filter if search pattern provided
-  let filteredModels: Model<Api>[] = models;
-  if (searchPattern) {
-    filteredModels = fuzzyFilter(models, searchPattern, (m) => `${m.provider} ${m.id}`);
-  }
-
-  if (filteredModels.length === 0) {
-    console.log(`No models matching "${searchPattern}"`);
-    return;
-  }
-
-  // Sort by provider, then by model id
-  filteredModels.sort((a, b) => {
-    const providerCmp = a.provider.localeCompare(b.provider);
-    if (providerCmp !== 0) return providerCmp;
-    return a.id.localeCompare(b.id);
-  });
-
-  // Calculate column widths
-  const rows = filteredModels.map((m) => ({
-    provider: m.provider,
-    model: m.id,
-    context: formatTokenCount(m.contextWindow),
-    maxOut: formatTokenCount(m.maxTokens),
-    thinking: m.reasoning ? "yes" : "no",
-    images: m.input.includes("image") ? "yes" : "no",
-  }));
-
-  const headers = {
-    provider: "provider",
-    model: "model",
-    context: "context",
-    maxOut: "max-out",
-    thinking: "thinking",
-    images: "images",
-  };
-
-  const widths = {
-    provider: Math.max(headers.provider.length, ...rows.map((r) => r.provider.length)),
-    model: Math.max(headers.model.length, ...rows.map((r) => r.model.length)),
-    context: Math.max(headers.context.length, ...rows.map((r) => r.context.length)),
-    maxOut: Math.max(headers.maxOut.length, ...rows.map((r) => r.maxOut.length)),
-    thinking: Math.max(headers.thinking.length, ...rows.map((r) => r.thinking.length)),
-    images: Math.max(headers.images.length, ...rows.map((r) => r.images.length)),
-  };
-
-  // Print header
-  const headerLine = [
-    headers.provider.padEnd(widths.provider),
-    headers.model.padEnd(widths.model),
-    headers.context.padEnd(widths.context),
-    headers.maxOut.padEnd(widths.maxOut),
-    headers.thinking.padEnd(widths.thinking),
-    headers.images.padEnd(widths.images),
-  ].join("  ");
-  console.log(headerLine);
-
-  // Print rows
-  for (const row of rows) {
-    const line = [
-      row.provider.padEnd(widths.provider),
-      row.model.padEnd(widths.model),
-      row.context.padEnd(widths.context),
-      row.maxOut.padEnd(widths.maxOut),
-      row.thinking.padEnd(widths.thinking),
-      row.images.padEnd(widths.images),
-    ].join("  ");
-    console.log(line);
-  }
-
-  const policy = modelRuntime.getModelPolicy();
-  const hidden = hiddenModelsByPolicy(policy, modelRuntime.getCatalogModels());
-  if (hidden.length === 0) return;
-  const patterns = [...new Set(hidden.map((entry) => entry.pattern || "allow list"))];
-  console.log(
-    chalk.dim(
-      `\n${hidden.length} model${hidden.length === 1 ? "" : "s"} hidden by model policy (${patterns.join(", ")}). See /model.`,
-    ),
+  return Effect.runPromise(
+    awaiting(function* () {
+      const models = yield* loadAvailableModels(modelRuntime, signal);
+      if (models.length === 0) {
+        writeLog(formatNoModelsAvailableMessage());
+        return;
+      }
+      const filteredModels = matchingModels(models, searchPattern);
+      if (filteredModels.length === 0) {
+        writeLog(`No models matching "${searchPattern}"`);
+        return;
+      }
+      for (const line of formatModelTable(filteredModels)) writeLog(line);
+      const notice = hiddenModelsNotice(modelRuntime);
+      if (notice !== undefined) writeLog(chalk.dim(notice));
+    }),
   );
+}
+
+const listModels: {
+  (
+    modelRuntime: modelRuntimeTypes.ModelRuntime,
+    searchPattern?: string,
+    signal?: AbortSignal,
+  ): Promise<void>;
+  (
+    searchPattern?: string,
+    signal?: AbortSignal,
+  ): (modelRuntime: modelRuntimeTypes.ModelRuntime) => Promise<void>;
+} = dual((args: IArguments) => args.length >= 1, listModelsImpl);
+
+const listModelsModule = {
+  listModels,
+};
+
+export default listModelsModule;
+
+function* loadAvailableModels(
+  modelRuntime: modelRuntimeTypes.ModelRuntime,
+  signal: AbortSignal | undefined,
+) {
+  const loadError = modelRuntime.getError();
+  if (loadError !== undefined && loadError !== "") {
+    writeError(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
+  }
+
+  const models = [
+    ...(yield* awaited(
+      modelRuntime.getAvailable(undefined, signal === undefined ? {} : { signal }),
+    )),
+  ];
+  return models;
 }

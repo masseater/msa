@@ -1,40 +1,34 @@
-import { Deferred, Effect, type Fiber } from "effect";
+import { Deferred, Effect } from "effect";
 
-import { foreign, type McpForeignError } from "./foreign.ts";
-import { type JsonRpcId, McpTimeoutError } from "./protocol/jsonrpc.ts";
-import type { ProgressNotification } from "./protocol/types.ts";
+import foreignModule from "./foreign.ts";
+import type foreignTypes from "./foreign.types.ts";
+import type pendingRequestsTypes from "./pending-requests.types.ts";
+import jsonrpcModule from "./protocol/jsonrpc.ts";
+import type jsonrpcTypes from "./protocol/jsonrpc.types.ts";
 
-export interface PendingRequest {
-  deferred: Deferred.Deferred<unknown, McpForeignError>;
-  timeoutMs: number;
-  timer: Fiber.Fiber<void> | undefined;
-  signal: AbortSignal | undefined;
-  onAbort: () => void;
-  sendController: AbortController;
-  cancellable: boolean;
-  onProgress: ((progress: ProgressNotification) => void) | undefined;
-  progressToken: JsonRpcId | undefined;
-}
+const { foreign } = foreignModule;
+const { McpTimeoutError } = jsonrpcModule;
 
-export type CancelNotifier = (id: JsonRpcId, reason: string | undefined) => void;
+export default class PendingRequests {
+  private pending = new Map<jsonrpcTypes.JsonRpcId, pendingRequestsTypes.PendingRequest>();
+  private progressRequests = new Map<jsonrpcTypes.JsonRpcId, jsonrpcTypes.JsonRpcId>();
+  private notifyCancel: pendingRequestsTypes.CancelNotifier;
 
-export class PendingRequests {
-  private pending = new Map<JsonRpcId, PendingRequest>();
-  private progressRequests = new Map<JsonRpcId, JsonRpcId>();
-  private notifyCancel: CancelNotifier;
-
-  constructor(notifyCancel: CancelNotifier) {
+  constructor(notifyCancel: pendingRequestsTypes.CancelNotifier) {
     this.notifyCancel = notifyCancel;
   }
 
-  add(id: JsonRpcId, entry: PendingRequest): void {
+  add(id: jsonrpcTypes.JsonRpcId, entry: pendingRequestsTypes.PendingRequest): void {
     this.pending.set(id, entry);
     if (entry.progressToken !== undefined) this.progressRequests.set(entry.progressToken, id);
     entry.signal?.addEventListener("abort", entry.onAbort, { once: true });
     this.armTimeout(id, entry);
   }
 
-  resolve(id: JsonRpcId, outcome: Effect.Effect<unknown, McpForeignError>): boolean {
+  resolve(
+    id: jsonrpcTypes.JsonRpcId,
+    outcome: Effect.Effect<unknown, foreignTypes.McpForeignError>,
+  ): boolean {
     const entry = this.pending.get(id);
     if (entry === undefined) return false;
     this.remove(id, entry);
@@ -42,7 +36,7 @@ export class PendingRequests {
     return true;
   }
 
-  progress(token: JsonRpcId): PendingRequest | undefined {
+  progress(token: jsonrpcTypes.JsonRpcId): pendingRequestsTypes.PendingRequest | undefined {
     const requestId = this.progressRequests.get(token);
     const entry = requestId === undefined ? undefined : this.pending.get(requestId);
     if (requestId === undefined || entry === undefined) return undefined;
@@ -50,7 +44,7 @@ export class PendingRequests {
     return entry;
   }
 
-  cancel(id: JsonRpcId, error: unknown, notifyServer: boolean, reason?: string): void {
+  cancel(id: jsonrpcTypes.JsonRpcId, error: unknown, notifyServer: boolean, reason?: string): void {
     if (!this.resolve(id, Effect.fail(foreign(error)))) return;
     if (notifyServer) this.notifyCancel(id, reason);
   }
@@ -62,7 +56,7 @@ export class PendingRequests {
     }
   }
 
-  private armTimeout(id: JsonRpcId, entry: PendingRequest): void {
+  private armTimeout(id: jsonrpcTypes.JsonRpcId, entry: pendingRequestsTypes.PendingRequest): void {
     entry.timer?.interruptUnsafe();
     entry.timer = undefined;
     if (!Number.isFinite(entry.timeoutMs) || entry.timeoutMs <= 0) return;
@@ -72,7 +66,7 @@ export class PendingRequests {
     entry.timer = Effect.runFork(Effect.delay(timedOut, entry.timeoutMs));
   }
 
-  private remove(id: JsonRpcId, entry: PendingRequest): void {
+  private remove(id: jsonrpcTypes.JsonRpcId, entry: pendingRequestsTypes.PendingRequest): void {
     this.pending.delete(id);
     entry.timer?.interruptUnsafe();
     if (entry.progressToken !== undefined) this.progressRequests.delete(entry.progressToken);

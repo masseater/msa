@@ -1,12 +1,22 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
-import { Markdown } from "../src/components/markdown.ts";
-import { TuiMainScreen } from "../src/tui-main-screen.ts";
-import type { Component, TUI } from "../src/tui.ts";
-import { chalk, getCell, stripAnsi } from "./markdown-helpers.ts";
-import { defaultMarkdownTheme } from "./test-themes.ts";
-import { VirtualTerminal } from "./virtual-terminal.ts";
+import { Effect } from "effect";
+
+import type markdownTypes from "../src/components/markdown.types.ts";
+import type tuiComponentTypes from "../src/tui-component.types.ts";
+import TuiMainScreen from "../src/tui-main-screen.ts";
+import markdownHelpers from "./markdown-helpers.ts";
+import markdownLatexMathKit from "./markdown-latex-math-kit.ts";
+import testThemes from "./test-themes.ts";
+import VirtualTerminal from "./virtual-terminal.ts";
+
+const { ansiSequences, Markdown } = markdownLatexMathKit;
+
+const { defaultMarkdownTheme } = testThemes;
+const { stripStyleSequences } = ansiSequences;
+
+const { chalk, getCell, stripAnsi } = markdownHelpers;
 
 describe("Markdown component", () => {
   describe("LaTeX math", () => {
@@ -88,7 +98,6 @@ describe("Markdown component", () => {
 describe("Markdown component", () => {
   describe("Pre-styled text (thinking traces)", () => {
     it("should preserve gray italic styling after inline code", () => {
-      // This replicates how thinking content is rendered in assistant-message.ts
       const markdown = new Markdown(
         "This is thinking with `inline code` and more text after",
         1,
@@ -103,14 +112,11 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
 
-      // Should contain the inline code block
       assert.ok(joinedOutput.includes("inline code"));
 
-      // The output should have ANSI codes for gray (90) and italic (3)
       assert.ok(joinedOutput.includes("\x1b[90m"), "Should have gray color code");
       assert.ok(joinedOutput.includes("\x1b[3m"), "Should have italic code");
 
-      // Verify that inline code is styled (theme uses yellow)
       const hasCodeColor = joinedOutput.includes("\x1b[33m");
       assert.ok(hasCodeColor, "Should style inline code");
     });
@@ -134,14 +140,11 @@ describe("Markdown component", () => {
       const lines = markdown.render(80);
       const joinedOutput = lines.join("\n");
 
-      // Should contain bold text
       assert.ok(joinedOutput.includes("bold text"));
 
-      // The output should have ANSI codes for gray (90) and italic (3)
       assert.ok(joinedOutput.includes("\x1b[90m"), "Should have gray color code");
       assert.ok(joinedOutput.includes("\x1b[3m"), "Should have italic code");
 
-      // Should have bold codes (1 or 22 for bold on/off)
       assert.ok(joinedOutput.includes("\x1b[1m"), "Should have bold code");
     });
   });
@@ -154,49 +157,52 @@ describe("Markdown component", () => {
 });
 
 function preStyledTextThinkingCases4(): void {
-  it("should not leak styles into following lines when rendered in TUI", async () => {
-    class MarkdownWithInput implements Component {
-      public markdownLineCount = 0;
-      private readonly markdown: Markdown;
+  it("should not leak styles into following lines when rendered in TUI", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        class MarkdownWithInput implements tuiComponentTypes.Component {
+          public markdownLineCount = 0;
+          private readonly markdown: markdownTypes.Markdown;
 
-      constructor(markdown: Markdown) {
-        this.markdown = markdown;
-      }
+          constructor(markdown: markdownTypes.Markdown) {
+            this.markdown = markdown;
+          }
 
-      render(width: number): string[] {
-        const lines = this.markdown.render(width);
-        this.markdownLineCount = lines.length;
-        return [...lines, "INPUT"];
-      }
+          render(width: number): string[] {
+            const lines = this.markdown.render(width);
+            this.markdownLineCount = lines.length;
+            return [...lines, "INPUT"];
+          }
 
-      invalidate(): void {
-        this.markdown.invalidate();
-      }
-    }
+          invalidate(): void {
+            this.markdown.invalidate();
+          }
+        }
 
-    const markdown = new Markdown(
-      "This is thinking with `inline code`",
-      1,
-      0,
-      defaultMarkdownTheme,
-      {
-        color: (text) => chalk.gray(text),
-        italic: true,
-      },
-    );
+        const markdown = new Markdown(
+          "This is thinking with `inline code`",
+          1,
+          0,
+          defaultMarkdownTheme,
+          {
+            color: (text) => chalk.gray(text),
+            italic: true,
+          },
+        );
 
-    const terminal = new VirtualTerminal(80, 6);
-    const tui: TUI = new TuiMainScreen(terminal);
-    const component = new MarkdownWithInput(markdown);
-    tui.addChild(component);
-    tui.start();
-    await terminal.waitForRender();
+        const terminal = new VirtualTerminal(80, 6);
+        const tui = new TuiMainScreen(terminal);
+        const component = new MarkdownWithInput(markdown);
+        tui.addChild(component);
+        tui.start();
+        yield* Effect.promise(() => terminal.waitForRender());
 
-    assert.ok(component.markdownLineCount > 0);
-    const inputRow = component.markdownLineCount;
-    assert.strictEqual(getCell(terminal, inputRow, 0).isItalic(), 0);
-    tui.stop();
-  });
+        assert.ok(component.markdownLineCount > 0);
+        const inputRow = component.markdownLineCount;
+        assert.strictEqual(getCell(terminal, inputRow, 0).isItalic(), 0);
+        tui.stop();
+      }),
+    ));
 }
 
 describe("Markdown component", () => {
@@ -216,7 +222,7 @@ again, hello world`,
       );
 
       const lines = markdown.render(80);
-      const plainLines = lines.map((line) => line.replace(/\x1b\[[0-9;]*m/gu, "").trimEnd());
+      const plainLines = lines.map((line) => stripStyleSequences(line).trimEnd());
 
       const closingBackticksIndex = plainLines.indexOf("```");
       assert.ok(closingBackticksIndex !== -1, "Should have closing backticks");

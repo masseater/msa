@@ -1,51 +1,67 @@
-import { type AssistantMessage, fauxAssistantMessage } from "@msa/ai";
+import ai from "@msa/ai";
+import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import { createHarness, type Harness } from "../harness.ts";
+import harnessModule from "../harness.ts";
+import type harnessTypes from "../harness.types.ts";
 
-function seedCompactableSession(harness: Harness): void {
+const { fauxAssistantMessage } = ai;
+
+const { createHarness } = harnessModule;
+
+const { currentTimeMillis } = testing;
+
+function seedCompactableSession(harness: harnessTypes.Harness): void {
   harness.settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
-  const now = Date.now();
+  const now = currentTimeMillis();
   harness.sessionManager.appendMessage({
+    content: [{ text: "message to compact", type: "text" }],
     role: "user",
-    content: [{ type: "text", text: "message to compact" }],
     timestamp: now - 1000,
   });
   const model = harness.getModel();
-  const assistant: AssistantMessage = {
+  const assistant: aiTypes.AssistantMessage = {
     ...fauxAssistantMessage("assistant response to compact", { timestamp: now - 500 }),
     api: model.api,
-    provider: model.provider,
     model: model.id,
+    provider: model.provider,
     usage: {
-      input: 100,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 100,
+      output: 0,
       totalTokens: 100,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
   harness.sessionManager.appendMessage(assistant);
   harness.session.agent.state.messages = harness.sessionManager.buildSessionContext().messages;
 }
 
-describe("#7048 truncated compaction summaries", () => {
-  let harness: Harness | undefined;
+let harness!: harnessTypes.Harness;
 
+const doesNotPersistALengthLimited = Effect.gen(function* () {
+  harness = yield* Effect.promise(() => createHarness());
+  seedCompactableSession(harness);
+  harness.setResponses([fauxAssistantMessage("partial summar", { stopReason: "length" })]);
+
+  yield* Effect.promise(() =>
+    expect(harness.session.compaction.manual.compact()).rejects.toThrow(
+      "generation hit the token cap",
+    ),
+  );
+  expect(
+    harness.sessionManager.getEntries().filter((entry) => entry.type === "compaction"),
+  ).toHaveLength(0);
+});
+
+const doesNotPersistALengthLimitedSummary = () => Effect.runPromise(doesNotPersistALengthLimited);
+
+describe("#7048 truncated compaction summaries", () => {
   afterEach(() => {
     harness?.cleanup();
-    harness = undefined;
   });
-
-  it("does not persist a length-limited summary", async () => {
-    harness = await createHarness();
-    seedCompactableSession(harness);
-    harness.setResponses([fauxAssistantMessage("partial summar", { stopReason: "length" })]);
-
-    await expect(harness.session.compact()).rejects.toThrow("generation hit the token cap");
-    expect(
-      harness.sessionManager.getEntries().filter((entry) => entry.type === "compaction"),
-    ).toHaveLength(0);
-  });
+  it("does not persist a length-limited summary", doesNotPersistALengthLimitedSummary);
 });

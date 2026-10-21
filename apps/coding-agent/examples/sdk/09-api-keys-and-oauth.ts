@@ -1,34 +1,43 @@
-/**
- * API Keys and OAuth
- *
- * Configure provider auth through ModelRuntime.
- */
+import codingAgent from "@msa/coding-agent";
+import { Console, Effect } from "effect";
 
-import { createAgentSession, ModelRuntime, SessionManager } from "@msa/coding-agent";
+const { ModelRuntime, SessionManager, createAgentSession } = codingAgent;
 
-const modelRuntime = await ModelRuntime.create();
-const { session: defaultAuthSession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  modelRuntime,
-});
-console.log("Session with default model runtime");
-defaultAuthSession.dispose();
+void Effect.runPromise(
+  Effect.gen(function* () {
+    const modelRuntime = yield* Effect.promise(() => ModelRuntime.create());
+    const { session: defaultAuthSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        modelRuntime,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log("Session with default model runtime");
+    defaultAuthSession.dispose();
 
-const customRuntime = await ModelRuntime.create({
-  authPath: "/tmp/my-app/auth.json",
-  modelsPath: "/tmp/my-app/models.json",
-});
-const { session: customAuthSession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  modelRuntime: customRuntime,
-});
-console.log("Session with custom auth and models locations");
-customAuthSession.dispose();
+    const customRuntime = yield* Effect.promise(() =>
+      ModelRuntime.create({
+        authPath: "/tmp/my-app/auth.json",
+        modelsPath: "/tmp/my-app/models.json",
+      }),
+    );
+    const { session: customAuthSession } = yield* Effect.promise(() =>
+      createAgentSession({
+        modelRuntime: customRuntime,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log("Session with custom auth and models locations");
+    customAuthSession.dispose();
 
-await modelRuntime.setRuntimeApiKey("anthropic-api", "sk-my-temp-key");
-const { session: runtimeKeySession } = await createAgentSession({
-  sessionManager: SessionManager.inMemory(),
-  modelRuntime,
-});
-console.log("Session with runtime API key override");
-runtimeKeySession.dispose();
+    yield* Effect.promise(() => modelRuntime.setRuntimeApiKey("anthropic-api", "sk-my-temp-key"));
+    const { session: runtimeKeySession } = yield* Effect.promise(() =>
+      createAgentSession({
+        modelRuntime,
+        sessionManager: SessionManager.inMemory(),
+      }),
+    );
+    yield* Console.log("Session with runtime API key override");
+    runtimeKeySession.dispose();
+  }),
+);

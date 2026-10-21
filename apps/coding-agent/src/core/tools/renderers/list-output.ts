@@ -1,18 +1,18 @@
-import { expandHint } from "../../../modes/interactive/components/keybinding-hints.ts";
-import type { Theme } from "../../../modes/interactive/theme/theme.ts";
+import keybindingHints from "../../../modes/interactive/components/keybinding-hints.ts";
+import type themeTypes from "../../../modes/interactive/theme/theme.types.ts";
 
-/**
- * Results that are a list of lines (grep, find, ls). Collapsed, a count of the lines; expanded,
- * every line and the limits that cut the list short.
- */
-export function formatListResult(
-  output: string,
-  warnings: string[],
-  expanded: boolean,
-  noun: string,
-  theme: Theme,
-): string {
-  const lines = output ? output.split("\n") : [];
+const { expandHint } = keybindingHints;
+
+interface ListResultInput {
+  output: string;
+  warnings: string[];
+  expanded: boolean;
+  noun: string;
+  theme: themeTypes.Theme;
+}
+
+function formatListResult({ output, warnings, expanded, noun, theme }: ListResultInput): string {
+  const lines = output === "" ? [] : output.split("\n");
   if (!expanded) {
     if (lines.length === 0) return "";
     const truncated = warnings.length > 0 ? ", truncated" : "";
@@ -24,3 +24,9 @@ export function formatListResult(
     text += `\n${theme.fg("warning", `[Truncated: ${warnings.join(", ")}]`)}`;
   return text;
 }
+
+const listOutput = {
+  formatListResult,
+};
+
+export default listOutput;

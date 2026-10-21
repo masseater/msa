@@ -1,28 +1,9 @@
-import type { Usage } from "@msa/ai";
-
-import type { AgentSessionEvent } from "../core/agent-session.ts";
-
-type WithoutPartial<T> = T extends { partial: unknown } ? Omit<T, "partial"> : T;
-
-type ToJsonAssistantMessageEvent<T> = T extends { type: "toolcall_start"; partial: unknown }
-  ? WithoutPartial<T> & { id: string; toolName: string }
-  : WithoutPartial<T>;
-
-type MessageUpdateEvent = Extract<AgentSessionEvent, { type: "message_update" }>;
-type JsonMessageUpdateEvent = {
-  type: "message_update";
-  usage: Usage;
-  assistantMessageEvent: ToJsonAssistantMessageEvent<MessageUpdateEvent["assistantMessageEvent"]>;
-};
-
-/** Session event shape emitted by the JSON and RPC stdout protocols. */
-export type JsonAgentSessionEvent =
-  | Exclude<AgentSessionEvent, { type: "message_update" }>
-  | JsonMessageUpdateEvent;
+import type agentSessionTypes from "../core/agent-session.types.ts";
+import type jsonEventTypes from "./json-event.types.ts";
 
 function toJsonAssistantMessageEvent(
-  event: MessageUpdateEvent["assistantMessageEvent"],
-): JsonMessageUpdateEvent["assistantMessageEvent"] {
+  event: jsonEventTypes.MessageUpdateEvent["assistantMessageEvent"],
+): jsonEventTypes.JsonMessageUpdateEvent["assistantMessageEvent"] {
   if (event.type === "toolcall_start") {
     const toolCall = event.partial.content[event.contentIndex];
     if (toolCall?.type !== "toolCall") {
@@ -40,15 +21,15 @@ function toJsonAssistantMessageEvent(
   return deltaEvent;
 }
 
-/**
- * Remove cumulative assistant snapshots from streaming wire events.
- * `message_start` provides the initial message, deltas build it, and
- * `message_end` provides the final authoritative message. Cumulative usage,
- * tool-call ids, and tool names remain available because their size is constant.
- */
-export function toJsonEvent(event: MessageUpdateEvent): JsonMessageUpdateEvent;
-export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent;
-export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent {
+function toJsonEvent(
+  event: jsonEventTypes.MessageUpdateEvent,
+): jsonEventTypes.JsonMessageUpdateEvent;
+function toJsonEvent(
+  event: agentSessionTypes.AgentSessionEvent,
+): jsonEventTypes.JsonAgentSessionEvent;
+function toJsonEvent(
+  event: agentSessionTypes.AgentSessionEvent,
+): jsonEventTypes.JsonAgentSessionEvent {
   if (event.type !== "message_update") {
     return event;
   }
@@ -57,8 +38,14 @@ export function toJsonEvent(event: AgentSessionEvent): JsonAgentSessionEvent {
   }
 
   return {
+    assistantMessageEvent: toJsonAssistantMessageEvent(event.assistantMessageEvent),
     type: "message_update",
     usage: event.message.usage,
-    assistantMessageEvent: toJsonAssistantMessageEvent(event.assistantMessageEvent),
   };
 }
+
+const jsonEvent = {
+  toJsonEvent,
+};
+
+export default jsonEvent;

@@ -1,27 +1,26 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import { convertMessages } from "../src/api/google-shared.ts";
-import type { AssistantMessage, Context, Model } from "../src/types.ts";
-import { normalizeContext } from "../src/utils/transcript.ts";
+import googleMessages from "../src/api/google-messages.ts";
+import type typesModule from "../src/types.types.ts";
+import clock from "../src/utils/clock.ts";
+import transcript from "../src/utils/transcript.ts";
 
-// Gemini can attach `thoughtSignature` to a response part whose visible text is empty (e.g. a
-// thought burst preceding a function call) and requires the signature echoed back on the next
-// request. Dropping such blocks while rebuilding history silently breaks the reasoning chain:
-// the model then intermittently ends a mid-task turn with a thought-only STOP and no tool call.
-// These tests pin the rule: an empty text/thinking block is skipped only when it is UNSIGNED.
+const { currentTimeMillis } = clock;
+const { convertMessages } = googleMessages;
+const { normalizeContext } = transcript;
 
-function makeModel(id = "gemini-3-pro-preview"): Model<"google-generative-ai"> {
+function makeModel(id = "gemini-3-pro-preview"): typesModule.Model<"google-generative-ai"> {
   return {
-    id,
-    name: id,
     api: "google-generative-ai",
-    provider: "google",
     baseUrl: "https://example.com",
-    reasoning: true,
-    input: ["text"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow: 128000,
+    cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+    id,
+    input: ["text"],
     maxTokens: 8192,
+    name: id,
+    provider: "google",
+    reasoning: true,
   };
 }
 
@@ -29,28 +28,28 @@ const VALID_SIG = "AAAAAAAAAAAAAAAAAAAAAA==";
 
 function makeContext(
   model: { api: string; provider: string; id: string },
-  content: AssistantMessage["content"],
-): Context {
-  const now = Date.now();
+  content: typesModule.AssistantMessage["content"],
+): typesModule.Context {
+  const now = currentTimeMillis();
   return {
     messages: [
-      { role: "user", content: "Hi", timestamp: now },
+      { content: "Hi", role: "user", timestamp: now },
       {
-        role: "assistant",
+        api: model.api as typesModule.AssistantMessage["api"],
         content,
-        api: model.api as AssistantMessage["api"],
-        provider: model.provider,
         model: model.id,
-        usage: {
-          input: 0,
-          output: 0,
-          cacheRead: 0,
-          cacheWrite: 0,
-          totalTokens: 0,
-          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-        },
+        provider: model.provider,
+        role: "assistant",
         stopReason: "toolUse",
         timestamp: now,
+        usage: {
+          cacheRead: 0,
+          cacheWrite: 0,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+          input: 0,
+          output: 0,
+          totalTokens: 0,
+        },
       },
     ],
   };
@@ -63,8 +62,8 @@ describe("google-shared convertMessages — signed empty blocks", () => {
       model,
       normalizeContext(
         makeContext(model, [
-          { type: "thinking", thinking: "", thinkingSignature: VALID_SIG },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { thinking: "", thinkingSignature: VALID_SIG, type: "thinking" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );
@@ -80,8 +79,8 @@ describe("google-shared convertMessages — signed empty blocks", () => {
       model,
       normalizeContext(
         makeContext(model, [
-          { type: "text", text: "", textSignature: VALID_SIG },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { text: "", textSignature: VALID_SIG, type: "text" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );
@@ -89,16 +88,18 @@ describe("google-shared convertMessages — signed empty blocks", () => {
     const signed = modelTurn?.parts?.filter((p) => p.thoughtSignature === VALID_SIG) ?? [];
     expect(signed).toHaveLength(1);
   });
+});
 
+describe("google-shared convertMessages — signed empty blocks", () => {
   it("still drops unsigned empty blocks", () => {
     const model = makeModel();
     const contents = convertMessages(
       model,
       normalizeContext(
         makeContext(model, [
-          { type: "thinking", thinking: "" },
-          { type: "text", text: "   " },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { thinking: "", type: "thinking" },
+          { text: "   ", type: "text" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );
@@ -106,16 +107,18 @@ describe("google-shared convertMessages — signed empty blocks", () => {
     expect(modelTurn?.parts).toHaveLength(1);
     expect(modelTurn?.parts?.[0]?.functionCall).toBeTruthy();
   });
+});
 
+describe("google-shared convertMessages — signed empty blocks", () => {
   it("still drops signed empty blocks from a different provider/model (signature unusable)", () => {
     const model = makeModel();
     const contents = convertMessages(
       model,
       normalizeContext(
         makeContext({ ...model, id: "other-model" }, [
-          { type: "thinking", thinking: "", thinkingSignature: VALID_SIG },
-          { type: "text", text: "", textSignature: VALID_SIG },
-          { type: "toolCall", id: "call_1", name: "bash", arguments: { command: "ls" } },
+          { thinking: "", thinkingSignature: VALID_SIG, type: "thinking" },
+          { text: "", textSignature: VALID_SIG, type: "text" },
+          { arguments: { command: "ls" }, id: "call_1", name: "bash", type: "toolCall" },
         ]),
       ),
     );

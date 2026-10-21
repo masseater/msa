@@ -1,71 +1,81 @@
-import { Container, Editor, setKeybindings, TuiMainScreen } from "@msa/tui";
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import { VirtualTerminal } from "../../../libs/tui/test/virtual-terminal.ts";
-import type { AgentSession } from "../src/core/agent-session.ts";
-import { KeybindingsManager } from "../src/core/keybindings.ts";
-import { LoginDialogComponent } from "../src/modes/interactive/components/login-dialog.ts";
-import { EditorSlot } from "../src/modes/interactive/editor-slot.ts";
-import { LoginFlow } from "../src/modes/interactive/login-flow.ts";
-import type { ProgramStatusReporter } from "../src/modes/interactive/program-status-reporter.ts";
-import { getEditorTheme, initTheme } from "../src/modes/interactive/theme/theme.ts";
+import type agentSessionTypes from "../src/core/agent-session.types.ts";
+import LoginDialogComponent from "../src/modes/interactive/components/login-dialog.ts";
+import LoginFlow from "../src/modes/interactive/login-flow.ts";
+import type programStatusReporterTypes from "../src/modes/interactive/program-status-reporter.types.ts";
+import editorSlotUi from "./editor-slot-ui.ts";
+const { awaited, runTest } = testing;
 
-beforeAll(() => initTheme("dark"));
+const { createEditorSlotUi, prepareTheme } = editorSlotUi;
 
-describe("LoginFlow", () => {
-  it("treats Escape in the credential prompt as a cancellation, not a failure", async () => {
-    setKeybindings(new KeybindingsManager());
-    const ui = new TuiMainScreen(new VirtualTerminal());
-    const container = new Container();
-    const editor = new Editor(ui, getEditorTheme());
-    const editorSlot = new EditorSlot(container, ui, () => editor);
-    editorSlot.show(editor);
-    const provider = {
-      id: "acme",
-      name: "Acme",
-      auth: { apiKey: { name: "Acme API key", login: async () => ({}) } },
-    };
-    const session = {
-      model: undefined,
-      settingsManager: { getOrCreateDeviceId: () => "device" },
-      getExternalServices: () => [],
-      modelRuntime: {
-        getProviders: () => [provider],
-        getProviderAuthStatus: () => ({ configured: false }),
-        isUsingOAuth: () => false,
-        // Like the real runtime, the login rejects with the signal's AbortError once the dialog aborts it.
-        login: async (
-          _id: string,
-          _method: string,
-          callbacks: { signal: AbortSignal; prompt: (prompt: unknown) => Promise<string> },
-        ) => {
-          void callbacks.prompt({ type: "text", message: "Enter Acme API key" }).catch(() => {});
-          await new Promise((_resolve, reject) => {
-            callbacks.signal.addEventListener("abort", () => reject(callbacks.signal.reason), {
-              once: true,
-            });
-          });
+beforeAll(prepareTheme);
+
+interface LoginCallbacks {
+  signal: AbortSignal;
+  prompt: (prompt: unknown) => Promise<string>;
+}
+
+const untilAborted = (signal: AbortSignal) =>
+  Effect.callback<never>((resume) => {
+    signal.addEventListener("abort", () => resume(Effect.die(signal.reason)), { once: true });
+  });
+
+const promptingSession = (): agentSessionTypes.AgentSession => {
+  const provider = {
+    auth: { apiKey: { login: () => Promise.resolve({}), name: "Acme API key" } },
+    id: "acme",
+    name: "Acme",
+  };
+  return {
+    model: undefined,
+    models: {
+      selection: {
+        modelRuntime: {
+          getProviderAuthStatus: () => ({ configured: false }),
+          getProviders: () => [provider],
+          isUsingOAuth: () => false,
+          login: (_id: string, _method: string, callbacks: LoginCallbacks) => {
+            void callbacks.prompt({ message: "Enter Acme API key", type: "text" }).catch(() => {});
+            return runTest(untilAborted(callbacks.signal));
+          },
         },
       },
-    } as unknown as AgentSession;
-    const showError = vi.fn();
-    const flow = new LoginFlow({
-      ui,
-      session,
-      programStatus: { setBlocked: () => {} } as unknown as ProgramStatusReporter,
-      editorSlot,
-      showStatus: () => {},
-      showWarning: () => {},
-      showError,
-      refreshAuthState: () => {},
-    });
+    },
+    settingsManager: { getOrCreateDeviceId: () => "device" },
+    tools: { externalServices: { getExternalServices: () => [] } },
+  } as unknown as agentSessionTypes.AgentSession;
+};
 
-    const login = flow.login("acme");
-    await vi.waitFor(() => expect(container.children[0]).toBeInstanceOf(LoginDialogComponent));
-    container.children[0]!.handleInput!("\x1b");
-    await login;
-
-    expect(showError).not.toHaveBeenCalled();
-    expect(container.children).toEqual([editor]);
+const treatsEscapeInTheCredentialPromptAs = Effect.gen(function* () {
+  const { container, editor, editorSlot, ui } = createEditorSlotUi();
+  editorSlot.show(editor);
+  const showError = vi.fn();
+  const flow = new LoginFlow({
+    editorSlot,
+    programStatus: {
+      setBlocked: () => {},
+    } as unknown as programStatusReporterTypes.ProgramStatusReporter,
+    refreshAuthState: () => {},
+    session: promptingSession(),
+    showError,
+    showStatus: () => {},
+    showWarning: () => {},
+    ui,
   });
+  const login = flow.login("acme");
+  yield* awaited(
+    vi.waitFor(() => expect(container.children[0]).toBeInstanceOf(LoginDialogComponent)),
+  );
+  container.children[0]?.handleInput?.("\x1b");
+  yield* awaited(login);
+  expect(showError).not.toHaveBeenCalled();
+  expect(container.children).toEqual([editor]);
+});
+
+describe("LoginFlow", () => {
+  it("treats Escape in the credential prompt as a cancellation, not a failure", () =>
+    runTest(treatsEscapeInTheCredentialPromptAs));
 });

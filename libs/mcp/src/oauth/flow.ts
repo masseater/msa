@@ -1,53 +1,40 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import { fromPromise, type McpForeignError } from "../foreign.ts";
-import { registerClient, startAuthorization } from "./authorization.ts";
-import { discover } from "./discover.ts";
-import { present } from "./endpoint.ts";
-import {
-  OAuthError,
-  OAuthFlowError,
-  OAuthInsecureEndpointError,
-  OAuthIssuerMismatchError,
-  type OAuthRegistrationError,
-} from "./errors.ts";
-import type {
-  OAuthClientMetadataDocument,
-  OAuthClientProvider,
-  OAuthFlowOptions,
-  OAuthFlowResult,
-  TokenRequestOptions,
-} from "./flow-types.ts";
-import { exchangeAuthorizationCode, refreshAuthorization } from "./token.ts";
-import type {
-  AuthorizationServerMetadata,
-  OAuthClientInformationMixed,
-  OAuthServerInfo,
-  OAuthTokens,
-} from "./types.ts";
+import discoverModule from "./discover.ts";
+import endpoint from "./endpoint.ts";
+import errors from "./errors.ts";
+import flowKit from "./flow-kit.ts";
+import type flowTypesModule from "./flow-types.ts";
+import type flowTypes from "./flow.types.ts";
+import token from "./token.ts";
+import type typesModule from "./types.types.ts";
 
-export type OAuthFlowFailure =
-  | McpForeignError
-  | OAuthError
-  | OAuthFlowError
-  | OAuthInsecureEndpointError
-  | OAuthIssuerMismatchError
-  | OAuthRegistrationError;
+const { authorization: authorizationModule, foreign: foreignModule } = flowKit;
+
+const { present } = endpoint;
+const { fromPromise } = foreignModule;
+const { OAuthError, OAuthFlowError, OAuthInsecureEndpointError, OAuthIssuerMismatchError } = errors;
+const { registerClient, startAuthorization } = authorizationModule;
+const { exchangeAuthorizationCode, refreshAuthorization } = token;
+const { discover } = discoverModule;
 
 interface FlowContext {
-  provider: OAuthClientProvider;
-  options: OAuthFlowOptions;
-  discovered: OAuthServerInfo;
-  metadata: AuthorizationServerMetadata | undefined;
+  provider: flowTypesModule.OAuthClientProvider;
+  options: flowTypesModule.OAuthFlowOptions;
+  discovered: typesModule.OAuthServerInfo;
+  metadata: typesModule.AuthorizationServerMetadata | undefined;
   scope: string | undefined;
 }
 
-function withScope(tokens: OAuthTokens, scope: string | undefined): OAuthTokens {
+function withScope(
+  tokens: typesModule.OAuthTokens,
+  scope: string | undefined,
+): typesModule.OAuthTokens {
   return tokens.scope === undefined && present(scope) ? { ...tokens, scope } : tokens;
 }
 
-export const stepUpScope: {
+const stepUpScope: {
   (challenged: string | undefined): (granted: string | undefined) => string | undefined;
   (granted: string | undefined, challenged: string | undefined): string | undefined;
 } = dual(2, (granted: string | undefined, challenged: string | undefined) => {
@@ -61,14 +48,14 @@ export const stepUpScope: {
 const resolveClient = Effect.fn("resolveClient")(function* (context: FlowContext) {
   const { provider, options, discovered, metadata, scope } = context;
   const stored = yield* fromPromise(() => provider.clientInformation());
-  const clientDocument: OAuthClientMetadataDocument | undefined =
+  const clientDocument: flowTypesModule.OAuthClientMetadataDocument | undefined =
     stored === undefined ? provider.clientMetadataDocument?.(metadata) : undefined;
   if (clientDocument !== undefined) {
     const url = new URL(clientDocument.url);
     if (url.protocol !== "https:" || url.pathname === "/")
       return yield* new OAuthFlowError("Invalid OAuth client metadata URL");
   }
-  const known: OAuthClientInformationMixed | undefined =
+  const known: typesModule.OAuthClientInformationMixed | undefined =
     stored ?? (clientDocument === undefined ? undefined : { client_id: clientDocument.url });
   if (known !== undefined) return { client: known, clientDocument };
   if (present(options.authorizationCode))
@@ -77,10 +64,10 @@ const resolveClient = Effect.fn("resolveClient")(function* (context: FlowContext
   if (saveClientInformation === undefined)
     return yield* new OAuthFlowError("OAuth client information cannot be persisted");
   const registered = yield* registerClient(discovered.authorizationServerUrl, {
-    metadata,
     clientMetadata: provider.clientMetadata,
-    scope,
     fetch: options.fetch,
+    metadata,
+    scope,
     signal: options.signal,
   });
   yield* fromPromise(() => saveClientInformation(registered));
@@ -90,7 +77,7 @@ const resolveClient = Effect.fn("resolveClient")(function* (context: FlowContext
 const exchangeCode = Effect.fn("exchangeCode")(function* (
   context: FlowContext,
   code: string,
-  tokenOptions: TokenRequestOptions,
+  tokenOptions: flowTypesModule.TokenRequestOptions,
   redirectUrl: string | URL,
 ) {
   const { provider, options, discovered, metadata, scope } = context;
@@ -112,14 +99,17 @@ const exchangeCode = Effect.fn("exchangeCode")(function* (
   return "AUTHORIZED" as const;
 });
 
-const refreshIsFatal = (options: OAuthFlowOptions, error: OAuthFlowFailure): boolean =>
+const refreshIsFatal = (
+  options: flowTypesModule.OAuthFlowOptions,
+  error: flowTypes.OAuthFlowFailure,
+): boolean =>
   options.signal?.aborted === true ||
   error instanceof OAuthInsecureEndpointError ||
   (error instanceof OAuthError && error.code !== "server_error");
 
 const tryRefresh = Effect.fn("tryRefresh")(function* (
   context: FlowContext,
-  tokenOptions: TokenRequestOptions,
+  tokenOptions: flowTypesModule.TokenRequestOptions,
 ) {
   const { provider, options, discovered } = context;
   const existing =
@@ -143,19 +133,19 @@ const tryRefresh = Effect.fn("tryRefresh")(function* (
 
 const redirect = Effect.fn("redirect")(function* (
   context: FlowContext,
-  client: OAuthClientInformationMixed,
+  client: typesModule.OAuthClientInformationMixed,
   redirectUrl: string | URL,
   resource: string | undefined,
 ) {
   const { provider, discovered, metadata, scope } = context;
   const state = yield* fromPromise(() => provider.state?.());
   const authorization = yield* startAuthorization(discovered.authorizationServerUrl, {
-    metadata,
     clientInformation: client,
+    metadata,
     redirectUrl,
+    resource,
     scope,
     state,
-    resource,
   });
   yield* fromPromise(() => provider.saveCodeVerifier(authorization.codeVerifier));
   yield* fromPromise(() => provider.redirectToAuthorization(authorization.authorizationUrl));
@@ -166,8 +156,8 @@ const firstScope = (...scopes: (string | undefined)[]): string | undefined =>
   scopes.find((scope) => present(scope)) ?? scopes.at(-1);
 
 const runFlow = Effect.fn("runFlow")(function* (
-  provider: OAuthClientProvider,
-  options: OAuthFlowOptions,
+  provider: flowTypesModule.OAuthClientProvider,
+  options: flowTypesModule.OAuthFlowOptions,
 ) {
   const { discovered, resource } = yield* discover(provider, options);
   const metadata = discovered.authorizationServerMetadata;
@@ -176,15 +166,15 @@ const runFlow = Effect.fn("runFlow")(function* (
     discovered.resourceMetadata?.scopes_supported?.join(" "),
     provider.clientMetadata.scope,
   );
-  const context: FlowContext = { provider, options, discovered, metadata, scope };
+  const context: FlowContext = { discovered, metadata, options, provider, scope };
   const { client, clientDocument } = yield* resolveClient(context);
   const redirectUrl = clientDocument?.redirectUrl ?? provider.redirectUrl;
-  const tokenOptions: TokenRequestOptions = {
-    metadata,
-    clientInformation: client,
-    resource,
+  const tokenOptions: flowTypesModule.TokenRequestOptions = {
     addClientAuthentication: provider.addClientAuthentication,
+    clientInformation: client,
     fetch: options.fetch,
+    metadata,
+    resource,
     signal: options.signal,
   };
   const code = options.authorizationCode;
@@ -193,7 +183,7 @@ const runFlow = Effect.fn("runFlow")(function* (
   return yield* redirect(context, client, redirectUrl, resource);
 });
 
-const invalidationFor = (error: OAuthFlowFailure): "all" | "tokens" | undefined => {
+const invalidationFor = (error: flowTypes.OAuthFlowFailure): "all" | "tokens" | undefined => {
   if (!(error instanceof OAuthError)) return undefined;
   if (error.code === "invalid_client" || error.code === "unauthorized_client") return "all";
   if (error.code === "invalid_grant") return "tokens";
@@ -201,9 +191,9 @@ const invalidationFor = (error: OAuthFlowFailure): "all" | "tokens" | undefined 
 };
 
 const authorizeMcpEffect = (
-  provider: OAuthClientProvider,
-  options: OAuthFlowOptions,
-): Effect.Effect<OAuthFlowResult, OAuthFlowFailure> =>
+  provider: flowTypesModule.OAuthClientProvider,
+  options: flowTypesModule.OAuthFlowOptions,
+): Effect.Effect<flowTypesModule.OAuthFlowResult, flowTypes.OAuthFlowFailure> =>
   runFlow(provider, options).pipe(
     Effect.catch((error) => {
       const kind = invalidationFor(error);
@@ -214,12 +204,21 @@ const authorizeMcpEffect = (
     }),
   );
 
-export const authorizeMcp: {
+const authorizeMcp: {
   (
-    options: OAuthFlowOptions,
-  ): (provider: OAuthClientProvider) => Effect.Effect<OAuthFlowResult, OAuthFlowFailure>;
+    options: flowTypesModule.OAuthFlowOptions,
+  ): (
+    provider: flowTypesModule.OAuthClientProvider,
+  ) => Effect.Effect<flowTypesModule.OAuthFlowResult, flowTypes.OAuthFlowFailure>;
   (
-    provider: OAuthClientProvider,
-    options: OAuthFlowOptions,
-  ): Effect.Effect<OAuthFlowResult, OAuthFlowFailure>;
+    provider: flowTypesModule.OAuthClientProvider,
+    options: flowTypesModule.OAuthFlowOptions,
+  ): Effect.Effect<flowTypesModule.OAuthFlowResult, flowTypes.OAuthFlowFailure>;
 } = dual(2, authorizeMcpEffect);
+
+const flow = {
+  authorizeMcp,
+  stepUpScope,
+};
+
+export default flow;

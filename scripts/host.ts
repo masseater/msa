@@ -14,94 +14,45 @@ import {
 import type { Scope } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-import { runMainWith } from "../tools/run-main.ts";
+import runMain from "../tools/run-main.ts";
+import type hostTypes from "./host.types.ts";
 
-interface FileInfo {
-  readonly birthtimeMs: number | undefined;
-  readonly isDirectory: boolean;
-  readonly isFile: boolean;
-  readonly mtimeMs: number | undefined;
-  readonly size: number;
-}
+const { runMainWith } = runMain;
 
-type InputMode = "ignore" | "inherit" | "pipe";
-type OutputMode = "ignore" | "inherit" | "pipe";
+class Host extends Context.Service<Host, hostTypes.HostShape>()("msa-monorepo/scripts/host") {}
 
-interface CommandOptions {
-  readonly args: ReadonlyArray<string>;
-  readonly command: string;
-  readonly cwd?: string;
-  readonly env?: Readonly<Record<string, string | undefined>>;
-  readonly extendEnv?: boolean;
-  readonly shell?: boolean;
-  readonly stderr?: OutputMode;
-  readonly stdin?: InputMode;
-  readonly stdout?: OutputMode;
-}
+const outputOption = (mode: hostTypes.OutputMode | undefined) => ({ stream: mode ?? "pipe" });
 
-interface CommandResult {
-  readonly exitCode: number;
-  readonly stderr: string;
-  readonly stdout: string;
-}
+const stdinOption = (
+  mode: hostTypes.CommandOptions["stdin"],
+  input: Queue.Queue<string, Cause.Done>,
+) =>
+  mode === "pipe"
+    ? { endOnDone: true, stream: Stream.fromQueue(input).pipe(Stream.encodeText) }
+    : { stream: mode ?? "ignore" };
 
-interface RunningCommand {
-  readonly endInput: Effect.Effect<void>;
-  readonly exitCode: Effect.Effect<number>;
-  readonly kill: Effect.Effect<void>;
-  readonly stderrChunks: Stream.Stream<string>;
-  readonly stderrText: Effect.Effect<string>;
-  readonly stdoutLines: Stream.Stream<string>;
-  readonly stdoutText: Effect.Effect<string>;
-  readonly write: (text: string) => Effect.Effect<void>;
-}
-
-interface HostShape {
-  readonly basename: (path: string, suffix?: string) => string;
-  readonly chmod: (path: string, mode: number) => Effect.Effect<void>;
-  readonly dirname: (path: string) => string;
-  readonly exists: (path: string) => Effect.Effect<boolean>;
-  readonly extname: (path: string) => string;
-  readonly isAbsolute: (path: string) => boolean;
-  readonly join: (...paths: ReadonlyArray<string>) => string;
-  readonly lines: (path: string) => Stream.Stream<string>;
-  readonly makeDirectory: (path: string) => Effect.Effect<void>;
-  readonly makeTempDirectory: (prefix: string) => Effect.Effect<string>;
-  readonly readDirectory: (path: string) => Effect.Effect<ReadonlyArray<string>>;
-  readonly readText: (path: string) => Effect.Effect<string>;
-  readonly relative: (from: string, to: string) => string;
-  readonly remove: (path: string) => Effect.Effect<void>;
-  readonly resolve: (...segments: ReadonlyArray<string>) => string;
-  readonly run: (options: CommandOptions) => Effect.Effect<CommandResult>;
-  readonly sep: string;
-  readonly spawn: (options: CommandOptions) => Effect.Effect<RunningCommand, never, Scope.Scope>;
-  readonly stat: (path: string) => Effect.Effect<FileInfo>;
-  readonly writeText: (path: string, data: string) => Effect.Effect<void>;
-}
-
-class Host extends Context.Service<Host, HostShape>()("msa-monorepo/scripts/host") {}
-
-const outputOption = (mode: OutputMode | undefined) => ({ stream: mode ?? "pipe" });
+const processOptions = (
+  options: hostTypes.CommandOptions,
+  input: Queue.Queue<string, Cause.Done>,
+) => ({
+  cwd: options.cwd,
+  env: options.env === undefined ? undefined : { ...options.env },
+  extendEnv: options.extendEnv ?? true,
+  shell: options.shell ?? false,
+  stderr: outputOption(options.stderr),
+  stdin: stdinOption(options.stdin, input),
+  stdout: outputOption(options.stdout),
+});
 
 const makeSpawn = Effect.gen(function* () {
   const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-  return (options: CommandOptions): Effect.Effect<RunningCommand, never, Scope.Scope> =>
+  return (
+    options: hostTypes.CommandOptions,
+  ): Effect.Effect<hostTypes.RunningCommand, never, Scope.Scope> =>
     Effect.gen(function* () {
       const input = yield* Queue.unbounded<string, Cause.Done>();
-      const stdin =
-        options.stdin === "pipe"
-          ? { stream: Stream.fromQueue(input).pipe(Stream.encodeText), endOnDone: true }
-          : { stream: options.stdin ?? "ignore" };
       const handle = yield* spawner.spawn(
-        ChildProcess.make(options.command, options.args, {
-          cwd: options.cwd,
-          env: options.env === undefined ? undefined : { ...options.env },
-          extendEnv: options.extendEnv ?? true,
-          shell: options.shell ?? false,
-          stdin,
-          stdout: outputOption(options.stdout),
-          stderr: outputOption(options.stderr),
-        }),
+        ChildProcess.make(options.command, options.args, processOptions(options, input)),
       );
       return {
         endInput: Queue.end(input).pipe(Effect.asVoid),
@@ -126,13 +77,14 @@ const makeFiles = Effect.gen(function* () {
     makeDirectory: (target: string) =>
       fs.makeDirectory(target, { recursive: true }).pipe(Effect.orDie),
     makeTempDirectory: (prefix: string) => fs.makeTempDirectory({ prefix }).pipe(Effect.orDie),
-    readDirectory: (target: string) => fs.readDirectory(target).pipe(Effect.orDie),
+    readDirectory: (target: string, options?: { readonly recursive?: boolean }) =>
+      fs.readDirectory(target, options).pipe(Effect.orDie),
     readText: (target: string) => fs.readFileString(target).pipe(Effect.orDie),
     remove: (target: string) =>
-      fs.remove(target, { recursive: true, force: true }).pipe(Effect.orDie),
+      fs.remove(target, { force: true, recursive: true }).pipe(Effect.orDie),
     stat: (target: string) =>
       fs.stat(target).pipe(
-        Effect.map((info): FileInfo => ({
+        Effect.map((info): hostTypes.FileInfo => ({
           birthtimeMs: Option.getOrUndefined(Option.map(info.birthtime, (date) => date.getTime())),
           isDirectory: info.type === "Directory",
           isFile: info.type === "File",
@@ -164,7 +116,7 @@ const hostLayer: Layer.Layer<Host> = Layer.effect(
   Host,
   Effect.gen(function* () {
     const spawn = yield* makeSpawn;
-    const run = (options: CommandOptions): Effect.Effect<CommandResult> =>
+    const run = (options: hostTypes.CommandOptions): Effect.Effect<hostTypes.CommandResult> =>
       Effect.scoped(
         Effect.gen(function* () {
           const running = yield* spawn(options);
@@ -186,5 +138,10 @@ const runScript = runMainWith(scriptLayer);
 const runScriptWith = <ROut, E>(layer: Layer.Layer<ROut, E>) =>
   runMainWith(Layer.mergeAll(scriptLayer, layer));
 
-export type { CommandOptions, CommandResult, FileInfo, HostShape, RunningCommand };
-export { Host, runScript, runScriptWith };
+const host = {
+  Host,
+  runScript,
+  runScriptWith,
+};
+
+export default host;

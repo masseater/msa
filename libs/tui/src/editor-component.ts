@@ -1,74 +1,32 @@
-import type { AutocompleteProvider } from "./autocomplete.ts";
-import type { Component } from "./tui.ts";
+import type autocompleteTypes from "./autocomplete.types.ts";
+import type tuiComponentTypes from "./tui-component.types.ts";
 
-/**
- * Interface for custom editor components.
- *
- * This allows extensions to provide their own editor implementation
- * (e.g., vim mode, emacs mode, custom keybindings) while maintaining
- * compatibility with the core application.
- */
-export interface EditorComponent extends Component {
-  // =========================================================================
-  // Core text access (required)
-  // =========================================================================
+declare namespace editorComponentTypes {
+  interface EditorComponent extends tuiComponentTypes.Component {
+    getText(): string;
 
-  /** Get the current text content */
-  getText(): string;
+    setText(text: string): void;
 
-  /** Set the text content */
-  setText(text: string): void;
+    handleInput(data: string): void;
 
-  /** Handle raw terminal input (key presses, paste sequences, etc.) */
-  handleInput(data: string): void;
+    onSubmit?: (text: string) => void;
 
-  // =========================================================================
-  // Callbacks (required)
-  // =========================================================================
+    onChange?: (text: string) => void;
 
-  /** Called when user submits (e.g., Enter key) */
-  onSubmit?: (text: string) => void;
+    addToHistory?(text: string): void;
 
-  /** Called when text changes */
-  onChange?: (text: string) => void;
+    insertTextAtCursor?(text: string): void;
 
-  // =========================================================================
-  // History support (optional)
-  // =========================================================================
+    getExpandedText?(): string;
 
-  /** Add text to history for up/down navigation */
-  addToHistory?(text: string): void;
+    setAutocompleteProvider?(provider: autocompleteTypes.AutocompleteProvider): void;
 
-  // =========================================================================
-  // Advanced text manipulation (optional)
-  // =========================================================================
+    borderColor?: (str: string) => string;
 
-  /** Insert text at current cursor position */
-  insertTextAtCursor?(text: string): void;
+    setPaddingX?(padding: number): void;
 
-  /**
-   * Get text with any markers expanded (e.g., paste markers).
-   * Falls back to getText() if not implemented.
-   */
-  getExpandedText?(): string;
-
-  // =========================================================================
-  // Autocomplete support (optional)
-  // =========================================================================
-
-  /** Set the autocomplete provider */
-  setAutocompleteProvider?(provider: AutocompleteProvider): void;
-
-  // =========================================================================
-  // Appearance (optional)
-  // =========================================================================
-
-  /** Border color function */
-  borderColor?: (str: string) => string;
-
-  /** Set horizontal padding */
-  setPaddingX?(padding: number): void;
-
-  /** Set max visible items in autocomplete dropdown */
-  setAutocompleteMaxVisible?(maxVisible: number): void;
+    setAutocompleteMaxVisible?(maxVisible: number): void;
+  }
 }
+
+export type { editorComponentTypes as default };

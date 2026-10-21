@@ -1,59 +1,87 @@
-/**
- * TUI session selector for --resume flag
- */
+import tui from "@msa/tui";
+import * as Effect from "effect/Effect";
+import { dual } from "effect/Function";
 
-import { setKeybindings } from "@msa/tui";
+import awaitingModule from "../core/awaiting.ts";
+import KeybindingsManager from "../core/keybindings-manager.ts";
+import type sessionManagerTypes from "../core/session-manager.types.ts";
+import type settingsManagerTypes from "../core/settings-manager.types.ts";
+import SessionSelectorComponent from "../modes/interactive/components/session-selector.ts";
+import interop from "../utils/interop.ts";
+import startupUi from "./startup-ui.ts";
 
-import { KeybindingsManager } from "../core/keybindings.ts";
-import type { SessionInfo, SessionListProgress } from "../core/session-manager.ts";
-import type { SettingsManager } from "../core/settings-manager.ts";
-import { SessionSelectorComponent } from "../modes/interactive/components/session-selector.ts";
-import { createStartupTui, startStartupTui } from "./startup-ui.ts";
+const { awaited, awaiting } = awaitingModule;
+const { createStartupTui, startStartupTui } = startupUi;
+const { callbackPromise } = interop;
+const { setKeybindings } = tui;
 
 type SessionsLoader = (
-  onProgress?: SessionListProgress,
+  onProgress?: sessionManagerTypes.SessionListProgress,
   signal?: AbortSignal,
-) => Promise<SessionInfo[]>;
+) => Promise<sessionManagerTypes.SessionInfo[]>;
 
-/** Show TUI session selector and return selected session path or null if cancelled */
-export async function selectSession(
+function selectSessionImpl(
   currentSessionsLoader: SessionsLoader,
   allSessionsLoader: SessionsLoader,
-  settingsManager: SettingsManager,
+  settingsManager: settingsManagerTypes.SettingsManager,
 ): Promise<string | null> {
-  const ui = await createStartupTui(settingsManager);
-  return new Promise((resolve) => {
-    const keybindings = KeybindingsManager.create();
-    setKeybindings(keybindings);
-    let resolved = false;
+  return Effect.runPromise(
+    awaiting(function* () {
+      const ui = yield* awaited(createStartupTui(settingsManager));
+      return yield* awaited(
+        callbackPromise((resolve) => {
+          const keybindings = KeybindingsManager.create();
+          setKeybindings(keybindings);
+          let resolved = false;
 
-    const selector = new SessionSelectorComponent(
-      currentSessionsLoader,
-      allSessionsLoader,
-      (path: string) => {
-        if (!resolved) {
-          resolved = true;
-          ui.stop();
-          resolve(path);
-        }
-      },
-      () => {
-        if (!resolved) {
-          resolved = true;
-          ui.stop();
-          resolve(null);
-        }
-      },
-      () => {
-        ui.stop();
-        process.exit(0);
-      },
-      () => ui.requestRender(),
-      { showRenameHint: false, keybindings },
-    );
+          const selector = new SessionSelectorComponent(
+            currentSessionsLoader,
+            allSessionsLoader,
+            (path: string) => {
+              if (!resolved) {
+                resolved = true;
+                ui.stop();
+                resolve(path);
+              }
+            },
+            () => {
+              if (!resolved) {
+                resolved = true;
+                ui.stop();
+                resolve(null);
+              }
+            },
+            () => {
+              ui.stop();
+              process.exit(0);
+            },
+            () => ui.requestRender(),
+            { keybindings, showRenameHint: false },
+          );
 
-    ui.addChild(selector);
-    ui.setFocus(selector.getSessionList());
-    startStartupTui(ui, settingsManager);
-  });
+          ui.addChild(selector);
+          ui.setFocus(selector.getSessionList());
+          startStartupTui(ui, settingsManager);
+        }),
+      );
+    }),
+  );
 }
+
+const selectSession: {
+  (
+    currentSessionsLoader: SessionsLoader,
+    allSessionsLoader: SessionsLoader,
+    settingsManager: settingsManagerTypes.SettingsManager,
+  ): Promise<string | null>;
+  (
+    allSessionsLoader: SessionsLoader,
+    settingsManager: settingsManagerTypes.SettingsManager,
+  ): (currentSessionsLoader: SessionsLoader) => Promise<string | null>;
+} = dual((args: IArguments) => args.length >= 3, selectSessionImpl);
+
+const sessionPicker = {
+  selectSession,
+};
+
+export default sessionPicker;

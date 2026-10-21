@@ -2,23 +2,15 @@ import { NodeServices } from "@effect/platform-node";
 import { Context, Effect, Layer, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
-interface ProcessOptions {
-  readonly args: ReadonlyArray<string>;
-  readonly command: string;
-  readonly cwd: string;
-}
-
-interface CaptureResult {
-  readonly exitCode: number;
-  readonly stderr: string;
-  readonly stdout: string;
-}
+import type captureProcessTypes from "./capture-process.types.ts";
 
 class ProcessRunner extends Context.Service<
   ProcessRunner,
   {
-    readonly capture: (options: ProcessOptions) => Effect.Effect<CaptureResult>;
-    readonly inherit: (options: ProcessOptions) => Effect.Effect<void>;
+    readonly capture: (
+      options: captureProcessTypes.ProcessOptions,
+    ) => Effect.Effect<captureProcessTypes.CaptureResult>;
+    readonly inherit: (options: captureProcessTypes.ProcessOptions) => Effect.Effect<void>;
   }
 >()("msa-monorepo/tools/capture-process/ProcessRunner") {}
 
@@ -26,7 +18,7 @@ const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
   ProcessRunner,
   Effect.gen(function* () {
     const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
-    const spawn = (options: ProcessOptions, inheritStdio: boolean) =>
+    const spawn = (options: captureProcessTypes.ProcessOptions, inheritStdio: boolean) =>
       spawner.spawn(
         ChildProcess.make(options.command, options.args, {
           cwd: options.cwd,
@@ -63,12 +55,20 @@ const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
 ).pipe(Layer.provide(NodeServices.layer));
 
 const captureProcess = (
-  options: ProcessOptions,
-): Effect.Effect<CaptureResult, never, ProcessRunner> =>
+  options: captureProcessTypes.ProcessOptions,
+): Effect.Effect<captureProcessTypes.CaptureResult, never, ProcessRunner> =>
   ProcessRunner.use((runner) => runner.capture(options));
 
-const runInherit = (options: ProcessOptions): Effect.Effect<void, never, ProcessRunner> =>
+const runInherit = (
+  options: captureProcessTypes.ProcessOptions,
+): Effect.Effect<void, never, ProcessRunner> =>
   ProcessRunner.use((runner) => runner.inherit(options));
 
-export type { CaptureResult, ProcessOptions };
-export { captureProcess, ProcessRunner, processRunnerLayer, runInherit };
+const captureProcessModule = {
+  ProcessRunner,
+  captureProcess,
+  processRunnerLayer,
+  runInherit,
+};
+
+export default captureProcessModule;

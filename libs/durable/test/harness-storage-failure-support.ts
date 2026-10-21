@@ -1,34 +1,55 @@
-import { defineTask, Harness, type Id, MemoryStorage, type TaskId } from "@msa/durable";
+import durable from "@msa/durable";
+import type harnessTypes from "@msa/durable/harness.types";
+import type durableTypes from "@msa/durable/index.types";
+import type memoryTypes from "@msa/durable/storage/memory.types";
+import { Effect } from "effect";
 
-import { ControlledStorage, context } from "./session-support.ts";
-import { aborted, deferred, openTasks } from "./task-support.ts";
+import harnessModule from "../src/harness/harness.ts";
+import session from "../src/session/session-state.ts";
+import ControlledStorage from "./controlled-storage.ts";
+import effectSupport from "./effect-support.ts";
+import sessionSupport from "./session-support.ts";
+import taskSupport from "./task-support.ts";
 
-/** Waits for its signal, records that it saw it, and ends `aborted` through its abort handler. */
-export const signals: string[] = [];
+const { defineTask } = durable;
+const { contained: containedModule } = session;
+const { safeNow: safeNowModule } = harnessModule;
 
-export const Waiting = defineTask<null, { phase: "work" }, null>({
-  name: "test.waiting",
-  version: 1,
+const { awaited } = effectSupport;
+const { context } = sessionSupport;
+const { aborted, deferred, openTasks } = taskSupport;
+
+const signals: string[] = [];
+
+const Waiting = defineTask<null, { phase: "work" }, null>({
+  abort: (_task, runtime, abortContext) =>
+    Effect.runPromise(
+      Effect.asVoid(
+        Effect.suspend(() =>
+          awaited(
+            runtime.commit(
+              () => ({ outcome: { status: "aborted" }, status: "terminal" }),
+              abortContext,
+            ),
+          ),
+        ),
+      ),
+    ),
   initial: () => ({ phase: "work" }),
+  name: "test.waiting",
   phases: {
-    work: async (_task, runtime) => {
-      await aborted(runtime.signal).catch(() => {});
-      signals.push("aborted");
-    },
+    work: (_task, runtime) =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* awaited(aborted(runtime.signal).catch(() => {}));
+          signals.push("aborted");
+        }),
+      ),
   },
-  abort: async (_task, runtime, abortContext) => {
-    await runtime.commit(
-      () => ({ status: "terminal", outcome: { status: "aborted" } }),
-      abortContext,
-    );
-  },
+  version: 1,
 });
 
-/**
- * Fails each Storage method named in `failing` once, with `error`. A scan of entries with a limit above 1 is the context
- * read's scan of its range, off the Session line; `heldRange` holds it until released.
- */
-export class FailingCalls extends ControlledStorage {
+class FailingCalls extends ControlledStorage {
   readonly error = new Error("disk gone");
   readonly failing = new Set<string>();
   heldRange:
@@ -37,38 +58,55 @@ export class FailingCalls extends ControlledStorage {
   #fail(method: string): void {
     if (this.failing.delete(method)) throw this.error;
   }
-  override task(...args: Parameters<MemoryStorage["task"]>) {
+  override task(...args: Parameters<memoryTypes.MemoryStorage["task"]>) {
     this.#fail("task");
     return Promise.resolve(super.task(...args));
   }
-  override async scanEntries(...args: Parameters<MemoryStorage["scanEntries"]>) {
-    if (args[1] > 1) {
-      const held = this.heldRange;
-      if (held !== undefined) {
-        held.entered.resolve();
-        await held.release;
-      }
-      this.#fail("scanRange");
-    }
-    return super.scanEntries(...args);
+  override scanEntries(...args: Parameters<memoryTypes.MemoryStorage["scanEntries"]>) {
+    const superScanEntries = super.scanEntries.bind(this);
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (args[1] > 1) {
+          const held = this.heldRange;
+          if (held !== undefined) {
+            held.entered.resolve();
+            yield* awaited(held.release);
+          }
+          this.#fail("scanRange");
+        }
+        return yield* awaited(superScanEntries(...args));
+      }),
+    );
   }
-  override mintId<I extends Id<string>>(): Promise<I> {
+  override mintId<I extends durableTypes.Id<string>>(): Promise<I> {
     this.#fail("mintId");
     return Promise.resolve(super.mintId<I>());
   }
 }
 
-export async function started(storage: MemoryStorage) {
+const started = Effect.fn("started")(function* (storage: memoryTypes.MemoryStorage) {
   signals.length = 0;
-  const opened = await openTasks(storage, [Waiting]);
-  const root = await opened.harness.root(context);
+  const opened = yield* openTasks(storage, [Waiting]);
+  const root = yield* awaited(opened.harness.root(context));
   return { ...opened, root };
-}
+});
 
-export async function running(harness: Harness, id: TaskId): Promise<void> {
-  if ((await harness.getTask(id, context))?.state.status === "running") return;
-  await new Promise((resolve) => {
-    setTimeout(resolve, 1);
-  });
-  await running(harness, id);
-}
+const running = Effect.fn("running")(function* (
+  harness: harnessTypes.Harness,
+  id: durableTypes.TaskId,
+) {
+  while ((yield* awaited(harness.getTask(id, context)))?.state.status !== "running")
+    yield* Effect.sleep(1);
+});
+
+const harnessStorageFailureSupport = {
+  FailingCalls,
+  Waiting,
+  contained: containedModule,
+  running,
+  safeNow: safeNowModule,
+  signals,
+  started,
+};
+
+export default harnessStorageFailureSupport;

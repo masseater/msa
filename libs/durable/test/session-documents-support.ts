@@ -1,60 +1,76 @@
-import { type ConversationId, defineDoc, defineDocFamily } from "@msa/durable";
+import durable from "@msa/durable";
+import { Effect } from "effect";
 
-import { context, createConversation, openTestSession } from "./session-support.ts";
+import effectSupport from "./effect-support.ts";
+import type sessionDocumentsSupportTypes from "./session-documents-support.types.ts";
+import sessionSupport from "./session-support.ts";
 
-export type Live = {
-  message?: string;
-  items: string[];
-  nested: { count: number };
-  other: { label: string };
-};
+const { defineDoc, defineDocFamily } = durable;
 
-export let liveInitCount = 0;
+const { awaited } = effectSupport;
+const { context, createConversation, openTestSession } = sessionSupport;
 
-export const LiveDoc = defineDoc<Live>({
-  kind: "test.live",
-  version: 1,
-  scope: "conversation",
-  history: "latest",
+const liveInits = { count: 0 };
+
+const LiveDoc = defineDoc<sessionDocumentsSupportTypes.Live>({
   fork: "initial",
+  history: "latest",
   initial: () => {
-    liveInitCount++;
+    liveInits.count++;
     return { items: [], nested: { count: 0 }, other: { label: "x" } };
   },
+  kind: "test.live",
+  scope: "conversation",
+  version: 1,
 });
 
-export type Counter = { count: number };
-
-export const CounterDoc = defineDoc<Counter>({
-  kind: "test.counter",
-  version: 1,
-  scope: "session",
+const CounterDoc = defineDoc<sessionDocumentsSupportTypes.Counter>({
   initial: () => ({ count: 0 }),
+  kind: "test.counter",
+  scope: "session",
+  version: 1,
 });
 
-export type Member = { seed: string; hits: number };
+const seeds: string[] = [];
 
-export const seeds: string[] = [];
-
-export const MemberDoc = defineDocFamily<Member, string>({
-  kind: "test.member",
-  version: 1,
+const MemberDoc = defineDocFamily<sessionDocumentsSupportTypes.Member, string>({
   family: true,
-  scope: "session",
   initial: (seed) => {
     seeds.push(seed);
-    return { seed, hits: 0 };
+    return { hits: 0, seed };
   },
+  kind: "test.member",
+  scope: "session",
+  version: 1,
 });
 
-export async function setupLive(): Promise<
-  ReturnType<typeof openTestSession> & { readonly conversationId: ConversationId }
-> {
+const setupLive = Effect.fn("setupLive")(function* () {
+  const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
+
   const harness = openTestSession();
-  const conversationId = await createConversation(harness.session);
-  await harness.session.commit(async (tx) => {
-    const live = await tx.doc(LiveDoc, conversationId);
-    live.items.push("a", "b");
-  }, context);
+  const conversationId = yield* awaited(createConversation(harness.session));
+  yield* awaited(
+    harness.session.commit(
+      (tx) =>
+        runPromise(
+          Effect.gen(function* () {
+            const live = yield* awaited(tx.doc(LiveDoc, conversationId));
+            live.items.push("a", "b");
+          }),
+        ),
+      context,
+    ),
+  );
   return { ...harness, conversationId };
-}
+});
+
+const sessionDocumentsSupport = {
+  CounterDoc,
+  LiveDoc,
+  MemberDoc,
+  liveInits,
+  seeds,
+  setupLive,
+};
+
+export default sessionDocumentsSupport;

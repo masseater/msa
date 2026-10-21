@@ -1,83 +1,26 @@
-import { setTimeout } from "node:timers/promises";
-import { stripVTControlCharacters } from "node:util";
-
-import type { AssistantMessage } from "@msa/ai";
-import {
-  type AgentSession,
-  AgentSessionRuntime,
-  type AgentSessionServices,
-  InteractiveMode,
-  SessionManager,
-  createAgentSessionFromServices,
-} from "@msa/coding-agent";
-import type { ProgramStatus } from "@msa/tui";
+import type aiTypes from "@msa/ai/index.types";
+import codingAgent from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Levenshtein } from "autoevals";
+import { Clock, Effect } from "effect";
 import { createJudge, describeEval } from "vitest-evals";
 
-import { createMsaDocumentationEvalHarness, type MsaCodingAgentInput } from "../src/harness.ts";
+import type harnessTypesTypes from "../src/harness-types.ts";
+import harnessModule from "../src/harness.ts";
+import RecordingTerminal from "./recording-terminal.ts";
+import type recordingTerminalTypes from "./recording-terminal.types.ts";
+
+const { AgentSessionRuntime, InteractiveMode, SessionManager, createAgentSessionFromServices } =
+  codingAgent;
+const { createMsaDocumentationEvalHarness } = harnessModule;
 
 const CONTEXT_WINDOW = 272_000;
-const BUILT_IN_CONTEXT_PATTERN = /\d+(?:\.\d+)?%\/272k(?: \(auto\))?/;
+const BUILT_IN_CONTEXT_PATTERN = /\d+(?:\.\d+)?%\/272k(?: \(auto\))?/u;
 const CONTEXT_FIXTURES = [
-  { percent: 42.2, expectedBar: "████░░░░░░ 42%" },
-  { percent: 65, expectedBar: "███████░░░ 65%" },
-  { percent: 120, expectedBar: "██████████ 100%" },
+  { expectedBar: "████░░░░░░ 42%", percent: 42.2 },
+  { expectedBar: "███████░░░ 65%", percent: 65 },
+  { expectedBar: "██████████ 100%", percent: 120 },
 ] as const;
-
-class RecordingTerminal {
-  readonly columns = 100;
-  readonly rows = 30;
-  readonly kittyProtocolActive = true;
-  private writes: string[] = [];
-  private resizeHandler: (() => void) | undefined;
-
-  start(_onInput: (data: string) => void, onResize: () => void): void {
-    this.resizeHandler = onResize;
-  }
-
-  stop(): void {
-    this.resizeHandler = undefined;
-  }
-
-  async drainInput(_maxMs?: number, _idleMs?: number): Promise<void> {}
-
-  write(data: string): void {
-    this.writes.push(data);
-  }
-
-  moveBy(_lines: number): void {}
-  hideCursor(): void {}
-  showCursor(): void {}
-  clearLine(): void {}
-  clearFromCursor(): void {}
-  clearScreen(): void {}
-  setTitle(_title: string): void {}
-  setProgress(_active: boolean): void {}
-  setProgramStatus(_status: ProgramStatus): void {}
-
-  requestResize(): void {
-    this.resizeHandler?.();
-  }
-
-  async takeRenders(): Promise<string[]> {
-    await setTimeout(30);
-    const output = this.writes.join("");
-    this.writes = [];
-    const startMarker = "\x1b[?2026h";
-    const endMarker = "\x1b[?2026l";
-    const renders: string[] = [];
-    let offset = 0;
-    while (true) {
-      const start = output.indexOf(startMarker, offset);
-      if (start === -1) return renders;
-      const contentStart = start + startMarker.length;
-      const end = output.indexOf(endMarker, contentStart);
-      if (end === -1) throw new Error("TUI emitted an incomplete synchronized render.");
-      renders.push(stripVTControlCharacters(output.slice(contentStart, end)));
-      offset = end + endMarker.length;
-    }
-  }
-}
 
 type TuiFooterOutput = {
   builtInStatusLine: string | null;
@@ -90,190 +33,222 @@ type TuiFooterOutput = {
 };
 
 function lines(output: string): string[] {
-  return output.split(/[\r\n]+/).filter((line) => line.trim().length > 0);
+  return output.split(/[\r\n]+/u).filter((line) => line.trim().length > 0);
+}
+
+function normalizeWhitespace(text: string): string {
+  return text.trim().replaceAll(/\s+/gu, " ");
 }
 
 function createContextMessage(
-  model: NonNullable<AgentSession["model"]>,
+  model: NonNullable<codingAgentTypes.AgentSession["model"]>,
   percent: number,
-): AssistantMessage {
+  timestamp: number,
+): aiTypes.AssistantMessage {
   const tokens = Math.round((model.contextWindow * percent) / 100);
   return {
-    role: "assistant",
-    content: [{ type: "text", text: "Context usage fixture" }],
     api: model.api,
-    provider: model.provider,
+    content: [{ text: "Context usage fixture", type: "text" }],
     model: model.id,
+    provider: model.provider,
+    role: "assistant",
+    stopReason: "stop",
+    timestamp,
     usage: {
-      input: tokens,
-      output: 0,
       cacheRead: 0,
       cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: tokens,
+      output: 0,
       totalTokens: tokens,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
-    stopReason: "stop",
-    timestamp: Date.now(),
   };
 }
 
-async function inspectContextFooter(
-  session: AgentSession,
+const createOracleRuntime = (
+  session: codingAgentTypes.AgentSession,
   agentDir: string,
-): Promise<TuiFooterOutput> {
-  const activeModel = session.model;
-  if (!activeModel) throw new Error("TUI footer oracle requires an active model.");
-  const model = { ...activeModel, contextWindow: CONTEXT_WINDOW };
-  const services: AgentSessionServices = {
-    cwd: session.sessionManager.getCwd(),
-    agentDir,
-    modelRuntime: session.modelRuntime,
-    settingsManager: session.settingsManager,
-    resourceLoader: session.resourceLoader,
-    diagnostics: [],
-  };
-  const oracleSession = (
-    await createAgentSessionFromServices({
-      services,
-      sessionManager: SessionManager.inMemory(services.cwd),
-      model,
-      thinkingLevel: "high",
-      noTools: "all",
-    })
-  ).session;
-  const runtime = new AgentSessionRuntime(oracleSession, services, async () => {
-    throw new Error("The TUI footer oracle does not replace sessions.");
+  model: NonNullable<codingAgentTypes.AgentSession["model"]>,
+) =>
+  Effect.gen(function* () {
+    const services: codingAgentTypes.AgentSessionServices = {
+      agentDir,
+      cwd: session.sessionManager.getCwd(),
+      diagnostics: [],
+      modelRuntime: session.models.selection.modelRuntime,
+      resourceLoader: session.resourceLoader,
+      settingsManager: session.settingsManager,
+    };
+    const { session: oracleSession } = yield* Effect.promise(() =>
+      createAgentSessionFromServices({
+        model,
+        noTools: "all",
+        services,
+        sessionManager: SessionManager.inMemory(services.cwd),
+        thinkingLevel: "high",
+      }),
+    );
+    const runtime = new AgentSessionRuntime(oracleSession, services, () =>
+      Promise.reject(new Error("The TUI footer oracle does not replace sessions.")),
+    );
+    return { oracleSession, runtime };
   });
-  const terminal = new RecordingTerminal();
-  const mode = new InteractiveMode(runtime, { tuiMode: "regular", terminal });
-  const previousOffline = process.env["MSA_OFFLINE"];
-  process.env["MSA_OFFLINE"] = "1";
-  try {
+
+const observeFooter = (
+  session: codingAgentTypes.AgentSession,
+  oracleSession: codingAgentTypes.AgentSession,
+  model: NonNullable<codingAgentTypes.AgentSession["model"]>,
+  mode: codingAgentTypes.InteractiveMode,
+  terminal: recordingTerminalTypes.RecordingTerminal,
+): Effect.Effect<TuiFooterOutput> =>
+  Effect.gen(function* () {
+    const now = yield* Clock.currentTimeMillis;
     oracleSession.sessionManager.appendMessage({
-      ...createContextMessage(model, 0),
+      ...createContextMessage(model, 0, now),
       usage: {
-        input: 106_000,
-        output: 5_800,
         cacheRead: 606_000,
         cacheWrite: 0,
+        cost: { cacheRead: 0, cacheWrite: 0, input: 1.008, output: 0, total: 1.008 },
+        input: 106_000,
+        output: 5_800,
         totalTokens: 717_800,
-        cost: { input: 1.008, output: 0, cacheRead: 0, cacheWrite: 0, total: 1.008 },
       },
     });
     let builtInStatusLine: string | null = null;
     const observations: TuiFooterOutput["observations"] = [];
     for (const [index, { percent }] of CONTEXT_FIXTURES.entries()) {
-      oracleSession.agent.state.messages = [createContextMessage(model, percent)];
-      if (index === 0) await mode.init();
+      oracleSession.agent.state.messages = [createContextMessage(model, percent, now)];
+      if (index === 0) yield* Effect.promise(() => mode.lifecycle.startup.init());
       else terminal.requestResize();
-      const renders = await terminal.takeRenders();
+      const renders = yield* terminal.takeRenders();
       if (index === 0) {
         builtInStatusLine =
           renders.flatMap(lines).find((line) => BUILT_IN_CONTEXT_PATTERN.test(line)) ?? null;
       }
       observations.push({
+        contextUsage: oracleSession.context.stats.getContextUsage() ?? null,
         percent,
         renderedOutput: renders.at(-1) ?? "",
-        contextUsage: oracleSession.getContextUsage() ?? null,
       });
     }
     return {
       builtInStatusLine,
-      observations,
       extensionErrors: session.resourceLoader.getExtensions().errors.map(({ error }) => error),
+      observations,
     };
-  } finally {
-    try {
-      mode.stop("resume-hint");
-    } finally {
-      try {
-        await runtime.dispose();
-      } finally {
-        if (previousOffline === undefined) delete process.env["MSA_OFFLINE"];
-        else process.env["MSA_OFFLINE"] = previousOffline;
-      }
+  });
+
+const inspectContextFooter = (
+  session: codingAgentTypes.AgentSession,
+  agentDir: string,
+): Effect.Effect<TuiFooterOutput> =>
+  Effect.gen(function* () {
+    const activeModel = session.model;
+    if (activeModel === undefined) {
+      return yield* Effect.die(new Error("TUI footer oracle requires an active model."));
     }
-  }
-}
+    const model = { ...activeModel, contextWindow: CONTEXT_WINDOW };
+    const { oracleSession, runtime } = yield* createOracleRuntime(session, agentDir, model);
+    const terminal = new RecordingTerminal();
+    const mode = new InteractiveMode(runtime, { terminal, tuiMode: "regular" });
+    const disposeRuntime = Effect.promise(() => runtime.dispose());
+    return yield* observeFooter(session, oracleSession, model, mode, terminal).pipe(
+      Effect.ensuring(
+        Effect.sync(() => mode.lifecycle.shutdown.stop("resume-hint")).pipe(
+          Effect.ensuring(disposeRuntime),
+        ),
+      ),
+    );
+  });
 
 const harness = createMsaDocumentationEvalHarness({
   output: ({ session, agentDir }) => inspectContextFooter(session, agentDir),
 });
 
-const contextFooterJudge = createJudge<MsaCodingAgentInput, TuiFooterOutput>(
-  "ContextFooterJudge",
-  async ({ output }) => {
-    let valid = output.extensionErrors.length === 0;
-    const similarities: number[] = [];
+type FixtureCheck = { valid: boolean; similarity: number | undefined };
+
+const checkFixture = (
+  output: TuiFooterOutput,
+  index: number,
+  fixture: (typeof CONTEXT_FIXTURES)[number],
+  reference: string | undefined,
+): Effect.Effect<FixtureCheck> =>
+  Effect.gen(function* () {
+    const { percent, expectedBar } = fixture;
+    const invalid: FixtureCheck = { similarity: undefined, valid: false };
+    const observation = output.observations[index];
+    if (observation === undefined || observation.percent !== percent) return invalid;
+    let valid =
+      observation.contextUsage?.contextWindow === CONTEXT_WINDOW &&
+      Math.round((observation.contextUsage?.percent ?? -1) * 10) / 10 === percent;
+    const actualStatusLine = lines(observation.renderedOutput).find(
+      (line) => line.includes(expectedBar) || BUILT_IN_CONTEXT_PATTERN.test(line),
+    );
+    if (actualStatusLine === undefined) return invalid;
+    const normalized = normalizeWhitespace(actualStatusLine);
+    if (!normalized.includes(expectedBar) || BUILT_IN_CONTEXT_PATTERN.test(normalized)) {
+      return invalid;
+    }
+    for (const { expectedBar: otherBar } of CONTEXT_FIXTURES) {
+      if (otherBar !== expectedBar && normalized.includes(otherBar)) valid = false;
+    }
+    if (reference === undefined) return { similarity: undefined, valid };
+    const result = yield* Effect.promise(() =>
+      Promise.resolve(
+        Levenshtein({ expected: reference, output: normalized.replace(expectedBar, "{context}") }),
+      ),
+    );
+    return { similarity: result.score ?? undefined, valid };
+  });
+
+const judgeFooter = (output: TuiFooterOutput) =>
+  Effect.gen(function* () {
     const contextMarker = "{context}";
-    const builtInStatusLine = output.builtInStatusLine?.trim().replace(/\s+/g, " ");
-    const reference = builtInStatusLine?.replace(BUILT_IN_CONTEXT_PATTERN, contextMarker);
-    if (!reference?.includes(contextMarker)) valid = false;
-    for (const [index, { percent, expectedBar }] of CONTEXT_FIXTURES.entries()) {
-      const observation = output.observations[index];
-      if (!observation || observation.percent !== percent) {
-        valid = false;
-        continue;
-      }
-      if (
-        observation.contextUsage?.contextWindow !== CONTEXT_WINDOW ||
-        Math.round((observation.contextUsage?.percent ?? -1) * 10) / 10 !== percent
-      ) {
-        valid = false;
-      }
-      const actualStatusLine = lines(observation.renderedOutput).find(
-        (line) => line.includes(expectedBar) || BUILT_IN_CONTEXT_PATTERN.test(line),
-      );
-      if (!actualStatusLine) {
-        valid = false;
-        continue;
-      }
-      const normalizedStatusLine = actualStatusLine.trim().replace(/\s+/g, " ");
-      if (
-        !normalizedStatusLine.includes(expectedBar) ||
-        BUILT_IN_CONTEXT_PATTERN.test(normalizedStatusLine)
-      ) {
-        valid = false;
-        continue;
-      }
-      for (const { expectedBar: otherBar } of CONTEXT_FIXTURES) {
-        if (otherBar !== expectedBar && normalizedStatusLine.includes(otherBar)) valid = false;
-      }
-      if (reference) {
-        const result = await Levenshtein({
-          expected: reference,
-          output: normalizedStatusLine.replace(expectedBar, contextMarker),
-        });
-        if (result.score !== null) similarities.push(result.score);
-      }
+    const builtInStatusLine = output.builtInStatusLine;
+    const reference =
+      builtInStatusLine === null
+        ? undefined
+        : normalizeWhitespace(builtInStatusLine).replace(BUILT_IN_CONTEXT_PATTERN, contextMarker);
+    let valid =
+      output.extensionErrors.length === 0 &&
+      reference !== undefined &&
+      reference.includes(contextMarker);
+    const similarities: number[] = [];
+    for (const [index, fixture] of CONTEXT_FIXTURES.entries()) {
+      const check = yield* checkFixture(output, index, fixture, reference);
+      valid = valid && check.valid;
+      if (check.similarity !== undefined) similarities.push(check.similarity);
     }
     const retained =
       similarities.length === CONTEXT_FIXTURES.length ? Math.min(...similarities) : 0;
     return {
-      score: valid ? 1 : 0,
       metadata: {
         rationale: valid
           ? `Footer retained ${Math.round(retained * 100)}% of the built-in status text.`
           : "Context progress behavior was incorrect.",
         retainedPercent: Math.round(retained * 100),
       },
+      score: valid ? 1 : 0,
     };
-  },
+  });
+
+const contextFooterJudge = createJudge<harnessTypesTypes.MsaCodingAgentInput, TuiFooterOutput>(
+  "ContextFooterJudge",
+  ({ output }) => Effect.runPromise(judgeFooter(output)),
 );
 
 describeEval(
   "Customize the interactive context footer",
-  { harness, judges: [contextFooterJudge], judgeThreshold: null },
+  { harness, judgeThreshold: null, judges: [contextFooterJudge] },
   (it) => {
-    it("replaces numeric context usage with a progress bar", async ({ run }) => {
-      await run([
+    it("replaces numeric context usage with a progress bar", ({ run }) =>
+      run([
         {
-          type: "prompt",
           content:
             "Change the msa footer replacing the built-in context info, e.g. `42.2%/272k (auto)`, with a ten-cell progress bar to make it show ████░░░░░░ 42% instead. Clamp percentages to the 0-100 range. Just replace the context. Otherwise leave everything else the same.",
+          type: "prompt",
         },
         { type: "reload" },
-      ]);
-    });
+      ]));
   },
 );

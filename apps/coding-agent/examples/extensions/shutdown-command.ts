@@ -1,69 +1,72 @@
-/**
- * Shutdown Command Extension
- *
- * Adds a /quit command that allows extensions to trigger clean shutdown.
- * Demonstrates how extensions can use ctx.shutdown() to exit msa cleanly.
- */
-
-import type { ExtensionAPI } from "@msa/coding-agent";
+import type codingAgentTypes from "@msa/coding-agent/index.types";
+import { Effect } from "effect";
 import { Type } from "typebox";
 
-export default function (msa: ExtensionAPI) {
-  // Register a /quit command that cleanly exits msa
+const registerQuit = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerCommand("quit", {
     description: "Exit msa cleanly",
-    handler: async (_args, ctx) => {
-      ctx.shutdown();
-    },
+    handler: (_args, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          ctx.shutdown();
+        }),
+      ),
   });
+};
 
-  // You can also create a tool that shuts down after completing work
+const registerFinishAndExit = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerTool({
-    name: "finish_and_exit",
-    label: "Finish and Exit",
     description: "Complete a task and exit msa",
+    execute: (_toolCallId, _params, _signal, _onUpdate, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          ctx.shutdown();
+
+          return {
+            content: [{ text: "Shutdown requested. Exiting after this response.", type: "text" }],
+            details: {},
+          };
+        }),
+      ),
+    label: "Finish and Exit",
+    name: "finish_and_exit",
     parameters: Type.Object({}),
-    async execute(_toolCallId, _params, _signal, _onUpdate, ctx) {
-      // Do any final work here...
-      // Request graceful shutdown (deferred until agent is idle)
-      ctx.shutdown();
-
-      // This return is sent to the LLM before shutdown occurs
-      return {
-        content: [{ type: "text", text: "Shutdown requested. Exiting after this response." }],
-        details: {},
-      };
-    },
   });
+};
 
-  // You could also create a more complex tool with parameters
+const registerDeployAndExit = (msa: codingAgentTypes.ExtensionAPI): void => {
   msa.registerTool({
-    name: "deploy_and_exit",
-    label: "Deploy and Exit",
     description: "Deploy the application and exit msa",
+    execute: (_toolCallId, params, _signal, onUpdate, ctx) =>
+      Effect.runPromise(
+        Effect.sync(() => {
+          onUpdate?.({
+            content: [{ text: `Deploying to ${params.environment}...`, type: "text" }],
+            details: {},
+          });
+
+          onUpdate?.({
+            content: [{ text: "Deployment complete, exiting...", type: "text" }],
+            details: {},
+          });
+          ctx.shutdown();
+
+          return {
+            content: [{ text: "Done! Shutdown requested.", type: "text" }],
+            details: { environment: params.environment },
+          };
+        }),
+      ),
+    label: "Deploy and Exit",
+    name: "deploy_and_exit",
     parameters: Type.Object({
       environment: Type.String({ description: "Target environment (e.g., production, staging)" }),
     }),
-    async execute(_toolCallId, params, _signal, onUpdate, ctx) {
-      onUpdate?.({
-        content: [{ type: "text", text: `Deploying to ${params.environment}...` }],
-        details: {},
-      });
-
-      // Example deployment logic
-      // const result = await msa.exec("npm", ["run", "deploy", params.environment], { signal });
-
-      // On success, request graceful shutdown
-      onUpdate?.({
-        content: [{ type: "text", text: "Deployment complete, exiting..." }],
-        details: {},
-      });
-      ctx.shutdown();
-
-      return {
-        content: [{ type: "text", text: "Done! Shutdown requested." }],
-        details: { environment: params.environment },
-      };
-    },
   });
+};
+
+export default function (msa: codingAgentTypes.ExtensionAPI) {
+  registerQuit(msa);
+  registerFinishAndExit(msa);
+  registerDeployAndExit(msa);
 }

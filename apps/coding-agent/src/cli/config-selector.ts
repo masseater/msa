@@ -1,65 +1,69 @@
-/**
- * TUI config selector for `msa config` command
- */
+import tui from "@msa/tui";
+import type tuiTypes from "@msa/tui/index.types";
+import * as Effect from "effect/Effect";
 
-import { ProcessTerminal, type TUI, TuiMainScreen } from "@msa/tui";
+import awaitingModule from "../core/awaiting.ts";
+import ConfigSelectorComponent from "../modes/interactive/components/config-selector.ts";
+import themeModule from "../modes/interactive/theme/theme.ts";
+import interop from "../utils/interop.ts";
+import type configSelectorTypes from "./config-selector.types.ts";
 
-import type { SettingsManager } from "../core/settings-manager.ts";
-import {
-  ConfigSelectorComponent,
-  type ScopedResolvedPaths,
-} from "../modes/interactive/components/config-selector.ts";
-import { initTheme, stopThemeWatcher } from "../modes/interactive/theme/theme.ts";
+const { awaited, awaiting } = awaitingModule;
+const { initTheme, refreshCustomThemes, stopThemeWatcher } = themeModule;
+const { callbackPromise } = interop;
+const { ProcessTerminal, TuiMainScreen } = tui;
 
-export interface ConfigSelectorOptions {
-  resolvedPaths: ScopedResolvedPaths;
-  settingsManager: SettingsManager;
-  cwd: string;
-  agentDir: string;
-  writeScope: "global" | "project";
-  projectModeAvailable: boolean;
+function selectConfig(options: configSelectorTypes.ConfigSelectorOptions): Promise<void> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(refreshCustomThemes());
+      initTheme(options.settingsManager.display.getTheme(), true);
+
+      return yield* awaited(
+        callbackPromise((resolve) => {
+          const ui: tuiTypes.TUI = new TuiMainScreen(
+            new ProcessTerminal(),
+            options.settingsManager.terminal.getShowHardwareCursor(),
+            options.agentDir,
+          );
+          ui.setClearOnShrink(options.settingsManager.terminal.getClearOnShrink());
+          let resolved = false;
+
+          const selector = new ConfigSelectorComponent(
+            options.resolvedPaths,
+            options.settingsManager,
+            options.cwd,
+            options.agentDir,
+            () => {
+              if (!resolved) {
+                resolved = true;
+                ui.stop();
+                stopThemeWatcher();
+                resolve();
+              }
+            },
+            () => {
+              ui.stop();
+              stopThemeWatcher();
+              void options.settingsManager.persistence.flush().then(() => process.exit(0));
+            },
+            () => ui.requestRender(),
+            ui.terminal.rows,
+            options.writeScope,
+            options.projectModeAvailable,
+          );
+
+          ui.addChild(selector);
+          ui.setFocus(selector.getResourceList());
+          ui.start();
+        }),
+      );
+    }),
+  );
 }
 
-/** Show TUI config selector and return when closed */
-export async function selectConfig(options: ConfigSelectorOptions): Promise<void> {
-  // Initialize theme before showing TUI
-  initTheme(options.settingsManager.getTheme(), true);
+const configSelector = {
+  selectConfig,
+};
 
-  return new Promise((resolve) => {
-    const ui: TUI = new TuiMainScreen(
-      new ProcessTerminal(),
-      options.settingsManager.getShowHardwareCursor(),
-      options.agentDir,
-    );
-    ui.setClearOnShrink(options.settingsManager.getClearOnShrink());
-    let resolved = false;
-
-    const selector = new ConfigSelectorComponent(
-      options.resolvedPaths,
-      options.settingsManager,
-      options.cwd,
-      options.agentDir,
-      () => {
-        if (!resolved) {
-          resolved = true;
-          ui.stop();
-          stopThemeWatcher();
-          resolve();
-        }
-      },
-      () => {
-        ui.stop();
-        stopThemeWatcher();
-        process.exit(0);
-      },
-      () => ui.requestRender(),
-      ui.terminal.rows,
-      options.writeScope,
-      options.projectModeAvailable,
-    );
-
-    ui.addChild(selector);
-    ui.setFocus(selector.getResourceList());
-    ui.start();
-  });
-}
+export default configSelector;

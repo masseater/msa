@@ -1,7 +1,14 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import { createPowerShellTool } from "../src/core/tools/powershell.ts";
-import { getPowerShellConfig, POWERSHELL_ARGS } from "../src/utils/shell.ts";
+import powershell from "../src/core/tools/powershell.ts";
+import shell from "../src/utils/shell.ts";
+
+const { POWERSHELL_ARGS, getPowerShellConfig } = shell;
+const { createPowerShellTool } = powershell;
+
+const { awaited, runTest } = testing;
 
 function getTextOutput(result: { content: Array<{ type: string; text?: string }> }): string {
   return result.content
@@ -10,31 +17,40 @@ function getTextOutput(result: { content: Array<{ type: string; text?: string }>
     .join("\n");
 }
 
-describe("powershell tool", () => {
-  it("uses process-local execution policy bypass", () => {
-    expect(POWERSHELL_ARGS).toEqual([
-      "-NoProfile",
-      "-NonInteractive",
-      "-ExecutionPolicy",
-      "Bypass",
-      "-Command",
-    ]);
-  });
+const usesProcessLocalExecutionPolicyBypass = () => {
+  expect(POWERSHELL_ARGS).toEqual([
+    "-NoProfile",
+    "-NonInteractive",
+    "-ExecutionPolicy",
+    "Bypass",
+    "-Command",
+  ]);
+};
 
-  it.skipIf(process.platform !== "win32")(
-    "executes PowerShell commands with UTF-8 output",
-    async () => {
+const executesPowershellCommandsWithUtf8Output = () =>
+  runTest(
+    Effect.gen(function* () {
       const config = getPowerShellConfig();
       expect(config.args).toEqual(POWERSHELL_ARGS);
 
       const tool = createPowerShellTool(process.cwd());
-      const result = await tool.execute("powershell-test", {
-        command: "Write-Output 'héllo €'; Get-ExecutionPolicy -Scope Process",
-      });
+      const result = yield* awaited(
+        tool.execute("powershell-test", {
+          command: "Write-Output 'héllo €'; Get-ExecutionPolicy -Scope Process",
+        }),
+      );
       const output = getTextOutput(result);
 
       expect(output).toContain("héllo €");
       expect(output).toContain("Bypass");
-    },
+    }),
+  );
+
+describe("powershell tool", () => {
+  it("uses process-local execution policy bypass", usesProcessLocalExecutionPolicyBypass);
+
+  it.skipIf(process.platform !== "win32")(
+    "executes PowerShell commands with UTF-8 output",
+    executesPowershellCommandsWithUtf8Output,
   );
 });
