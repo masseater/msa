@@ -6,12 +6,13 @@ import type orchestratorTypes from "./orchestrator.types.ts";
 import promptsModule from "./prompts.ts";
 import toolSupport from "./tool-support.ts";
 
-const { modelSchema, taskIdSchema, tool } = toolSupport;
+const { checksSchema, modelSchema, taskIdSchema, tool } = toolSupport;
 const { prompts } = promptsModule;
 
 const { ModelThinkingLevelSchema } = modelSchemaModule;
 
 const replanTaskSchema = Type.Object({
+  checks: Type.Optional(checksSchema),
   currentState: Type.Optional(
     Type.String({
       description:
@@ -104,7 +105,7 @@ function replanTools(
       promptGuidelines: [
         "Use replan when the plan itself is wrong, not to nudge one task: send_message and send_note steer work that stays as it is.",
         "Every running task must be kept, replaced by a task with from, or dropped. The call is rejected otherwise.",
-        "A task you replace keeps its round, dependencies, and states unless you say otherwise.",
+        "A task you replace keeps its round, dependencies, states, and checks unless you say otherwise. Pass checks to replace them; [] removes them.",
         "Write each new task as a currentState and a goalState, never as a procedure. Use the handoff memo to say what is true now.",
       ],
       promptSnippet: "Stop the work, rewrite the task DAG, and resume it",

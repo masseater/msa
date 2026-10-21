@@ -1,13 +1,13 @@
 import type { Deferred } from "effect";
 import { Effect } from "effect";
 
-import type errorsTypes from "./errors.types.ts";
 import replanApply from "./replan-apply.ts";
 import replanSupport from "./replan-support.ts";
 import type replanTypes from "./replan.types.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import snapshot from "./snapshot.ts";
 import storeModule from "./store.ts";
+import text from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import wrapUp from "./wrap-up.ts";
 
@@ -16,6 +16,7 @@ const { wrapping } = wrapUp;
 const { snapshots } = snapshot;
 const { store } = storeModule;
 const { applying } = replanApply;
+const { requireChecks } = text;
 
 function assertKnown(
   views: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
@@ -84,6 +85,7 @@ function validateEntries(
       throw fail(`Task ${entry.input.title} needs a current state and a goal state`);
     }
     if (entry.input.model !== undefined) runtime.options.resolveModel(entry.input.model);
+    requireChecks(`Task ${entry.input.title}`, entry.input.checks);
     resolveRefs(entry.input.dependsOn ?? [], keys, views, "dependsOn");
   }
 }
@@ -150,7 +152,7 @@ function register(
 function prepare(
   runtime: runtimeTypes.Runtime,
   input: orchestratorTypesTypes.ReplanInput,
-): Effect.Effect<replanTypes.Prepared, errorsTypes.OrchestratorError> {
+): Effect.Effect<replanTypes.Prepared, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const views = new Map(
       snapshots

@@ -57,7 +57,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
       if (found === undefined) throw new Error(`"${reference}" is not an available model`);
       return found;
     },
-    runCondition: options.runCondition ?? (() => Promise.resolve(true)),
+    runCommand: options.runCommand ?? (() => Promise.resolve({ exitCode: 0, output: "" })),
     telemetry,
     version: "0.0.0-test",
     watchdog: options.watchdog ?? null,

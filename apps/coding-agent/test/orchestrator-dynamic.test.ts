@@ -144,9 +144,9 @@ const waitsForAnExternalCommandToExit = () =>
       let checks = 0;
       const { orchestrator, workers } = setup({
         pollIntervalMs: 5,
-        runCondition: () => {
+        runCommand: () => {
           checks += 1;
-          return Promise.resolve(checks >= 20);
+          return Promise.resolve({ exitCode: checks >= 20 ? 0 : 1, output: "" });
         },
       });
       try {

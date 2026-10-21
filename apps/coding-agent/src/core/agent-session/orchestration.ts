@@ -67,7 +67,7 @@ export default class SessionOrchestration {
           { deliverAs: "followUp", triggerTurn: true },
         ),
       resolveModel: (reference) => orchestratorCallbacks.resolveModel(session, reference),
-      runCondition: orchestratorCallbacks.runCondition,
+      runCommand: orchestratorCallbacks.runCommand,
       telemetry,
       version: VERSION,
     });

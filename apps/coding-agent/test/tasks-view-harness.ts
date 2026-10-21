@@ -20,6 +20,7 @@ function task(
 ): orchestratorTypesTypes.TaskSnapshot {
   return {
     assignments: [],
+    checks: [],
     condition: null,
     createdAt: 0,
     currentState: `${id} is not written`,

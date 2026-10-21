@@ -7,6 +7,7 @@ import promptsModule from "./prompts.ts";
 import toolSupport from "./tool-support.ts";
 
 const {
+  checksSchema,
   dependsSchema,
   modelChangeSchema,
   modelSchema,
@@ -20,6 +21,7 @@ const { prompts } = promptsModule;
 const { ModelThinkingLevelSchema } = modelSchemaModule;
 
 const createSchema = Type.Object({
+  checks: Type.Optional(checksSchema),
   condition: Type.Optional(
     Type.String({
       description:
@@ -64,6 +66,7 @@ function createAndReadTaskTools(
       promptGuidelines: [
         "Answer simple questions yourself; put new work into tasks with create_task, one task per independent piece.",
         "Write currentState and goalState only. Never list steps; say what holds now and what must hold at the end.",
+        "Give every part of the goal that a command can measure as a check: a command and the exit code or output it must give, such as a lint count of 0, a config with no override for a path, or a search for a workaround pattern that finds nothing. The harness runs them when the worker reports and sends a failing result back to the worker, so the reviewer only judges what a command cannot.",
         "The scheduler owns assignment and start; do not start threads yourself.",
         "When a closing review reports, act on it: create the next round's tasks, or tell the user the work is done.",
       ],
@@ -137,7 +140,7 @@ const setTaskModelTool = (orchestrator: orchestratorTypes.Orchestrator) =>
 const setTaskStateTool = (orchestrator: orchestratorTypes.Orchestrator) =>
   tool({
     description:
-      "Rewrite the current state or the goal state of a task that has not started. Write states, not steps: steps break once the starting state is not what you assumed. A running task is rejected: stop it first, or steer it with send_message.",
+      "Rewrite the current state, the goal state, or the checks of a task that has not started. Write states, not steps: steps break once the starting state is not what you assumed. A running task is rejected: stop it first, or steer it with send_message.",
     label: "set task state",
     name: "set_task_state",
     parameters: stateSchema,
@@ -147,7 +150,7 @@ const setTaskStateTool = (orchestrator: orchestratorTypes.Orchestrator) =>
         .setState(params)
         .then(
           (task) =>
-            `${task.id} ${task.title}\nCurrent state: ${task.currentState}\nGoal state: ${task.goalState}`,
+            `${task.id} ${task.title}\nCurrent state: ${task.currentState}\nGoal state: ${task.goalState}\nChecks: ${task.checks.length}`,
         ),
   });
 

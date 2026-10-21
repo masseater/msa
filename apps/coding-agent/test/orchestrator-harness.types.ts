@@ -7,7 +7,7 @@ declare namespace orchestratorHarnessTypes {
     pollIntervalMs?: number | null;
     watchdog?: orchestratorTypes.OrchestratorOptions["watchdog"];
     project?: string;
-    runCondition?: (command: string, cwd: string) => Promise<boolean>;
+    runCommand?: orchestratorTypes.OrchestratorOptions["runCommand"];
     databasePath?: string;
     handoffDirectory?: string;
     cwd?: string;

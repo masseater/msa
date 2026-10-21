@@ -1,3 +1,5 @@
+import type orchestratorTypesTypes from "./types.types.ts";
+
 const segmenter = new Intl.Segmenter("ja", { granularity: "word" });
 
 function segmentWords(text: string): string[] {
@@ -36,9 +38,43 @@ function requireStates(
   return { currentState, goalState };
 }
 
+function outputPattern(pattern: string): RegExp {
+  return new RegExp(pattern, "mu");
+}
+
+function checkedPattern(label: string, command: string, pattern: string): string {
+  try {
+    outputPattern(pattern);
+    return pattern;
+  } catch (error) {
+    throw new Error(
+      `${label}: output of "${command}" is not a regular expression: ${error instanceof Error ? error.message : String(error)}`,
+      { cause: error },
+    );
+  }
+}
+
+function requireChecks(
+  label: string,
+  inputs: readonly orchestratorTypesTypes.TaskCheckInput[] | undefined,
+): orchestratorTypesTypes.TaskCheck[] {
+  return (inputs ?? []).map((input) => {
+    if (input.command.trim() === "") throw new Error(`${label} has a check without a command`);
+    const exitCode = input.exitCode ?? 0;
+    if (!Number.isInteger(exitCode) || exitCode < 0 || exitCode > 255) {
+      throw new Error(`${label}: exitCode of "${input.command}" must be an integer from 0 to 255`);
+    }
+    const output =
+      input.output === undefined ? null : checkedPattern(label, input.command, input.output);
+    return { command: input.command, exitCode, output };
+  });
+}
+
 const text = {
   firstLine,
+  outputPattern,
   phrase,
+  requireChecks,
   requireStates,
   searchQuery,
   segmentWords,

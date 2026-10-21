@@ -13,7 +13,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { orchestratorError } = errors;
-const { requireStates } = text;
+const { requireChecks, requireStates } = text;
 const { scheduling } = schedule;
 const { actionHelpers } = actionHelpersModule;
 
@@ -104,8 +104,12 @@ function setDepends(
 function setState(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.SetTaskStateInput) {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
-    if (input.currentState === undefined && input.goalState === undefined) {
-      throw new Error("Pass the current state, the goal state, or both");
+    if (
+      input.currentState === undefined &&
+      input.goalState === undefined &&
+      input.checks === undefined
+    ) {
+      throw new Error("Pass the current state, the goal state, the checks, or several of them");
     }
     const task = yield* Effect.sync(() => taskOf(runtime, input.taskId, "taskId"));
     if (task.kind === "review") {
@@ -121,7 +125,11 @@ function setState(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.S
       input.currentState ?? task.currentState,
       input.goalState ?? task.goalState,
     );
-    yield* Effect.sync(() => store.updateTask(runtime.database, task.id, states, now));
+    const checks =
+      input.checks === undefined ? task.checks : requireChecks(`Task ${task.id}`, input.checks);
+    yield* Effect.sync(() =>
+      store.updateTask(runtime.database, task.id, { ...states, checks }, now),
+    );
     yield* Effect.sync(() => runtime.publish());
     return actionHelpers.taskView(runtime, task.id);
   });

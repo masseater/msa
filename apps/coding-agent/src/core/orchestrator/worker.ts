@@ -40,6 +40,11 @@ declare namespace workerTypes {
     maxConcurrentThreads: number;
   }
 
+  interface CommandResult {
+    exitCode: number | null;
+    output: string;
+  }
+
   interface OrchestratorReport {
     taskId: string;
     role: "worker" | "reviewer";
@@ -64,7 +69,12 @@ declare namespace workerTypes {
     resolveModel: (reference: string) => compatTypes.Model<any>;
     defaults: () => OrchestratorDefaults;
     report: (text: string, details: OrchestratorReport) => void;
-    runCondition: (command: string, cwd: string) => Promise<boolean>;
+    runCommand: (
+      command: string,
+      cwd: string,
+      timeoutMs: number,
+      signal: AbortSignal,
+    ) => Promise<CommandResult>;
     pollIntervalMs?: number | null;
     watchdog?: WatchdogOptions | null;
 

@@ -9,6 +9,33 @@ const modelSchema = Type.String({ description: 'Model as "provider/id".' });
 const taskIdSchema = Type.String({ description: "Task id." });
 const taskIdObject = Type.Object({ taskId: taskIdSchema });
 
+const checksSchema = Type.Array(
+  Type.Object({
+    command: Type.String({
+      description:
+        "Shell command run with /bin/sh in the task's working directory, such as `vp lint`, `vp test apps/x`, or `rg -c 'layer-[0-9]' src`.",
+    }),
+    exitCode: Type.Optional(
+      Type.Integer({
+        description:
+          "Exit code the command must return. Default 0. Use 1 for a search that must find nothing, such as rg or grep.",
+        maximum: 255,
+        minimum: 0,
+      }),
+    ),
+    output: Type.Optional(
+      Type.String({
+        description:
+          "Regular expression (multiline) that stdout and stderr together must match, such as `Found 0 errors and 0 warnings`.",
+      }),
+    ),
+  }),
+  {
+    description:
+      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the task's working directory before the reviewer starts; if one gives another result, the worker gets the results back and keeps working, and after 3 such rounds the task fails. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only.",
+  },
+);
+
 const dependsSchema = Type.Object({
   add: Type.Optional(
     Type.Array(taskIdSchema, {
@@ -23,6 +50,7 @@ const dependsSchema = Type.Object({
 });
 
 const stateSchema = Type.Object({
+  checks: Type.Optional(checksSchema),
   currentState: Type.Optional(
     Type.String({
       description: "What is true now. Replaces the task's current state. Facts, not steps.",
@@ -64,6 +92,7 @@ function tool<TParams extends TSchema>(
 }
 
 const toolSupport = {
+  checksSchema,
   dependsSchema,
   modelChangeSchema,
   modelSchema,
