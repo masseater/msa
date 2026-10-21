@@ -1,24 +1,18 @@
-import providerComposerPart1 from "./provider-composer-part1.ts";
-import providerComposerPart2 from "./provider-composer-part2.ts";
-import providerComposerPart3 from "./provider-composer-part3.ts";
-import providerComposerPart4 from "./provider-composer-part4.ts";
+import type aiTypes from "@msa/ai/index.types";
 
-const { clearApiKeyCache } = providerComposerPart1;
-const { composeModelProvider } = providerComposerPart3;
-const {
-  configuredRequestAuthStatus,
-  resolveCompatibilityRequestConfig,
-  resolveConfiguredModelHeaders,
-} = providerComposerPart4;
-const { validateExtensionProvider } = providerComposerPart2;
+import type modelConfigTypes from "./model-config.types.ts";
+import type providerComposerTypes from "./provider-composer.types.ts";
+import ComposedProvider from "./provider-composer/composed-provider.ts";
 
-const providerComposer = {
-  clearApiKeyCache,
-  composeModelProvider,
-  configuredRequestAuthStatus,
-  resolveCompatibilityRequestConfig,
-  resolveConfiguredModelHeaders,
-  validateExtensionProvider,
-};
+function composeModelProvider(
+  providerId: string,
+  base: aiTypes.Provider | undefined,
+  modelConfig: modelConfigTypes.ModelConfig,
+  extension: providerComposerTypes.ProviderConfigInput | undefined,
+): aiTypes.Provider {
+  return new ComposedProvider(providerId, base, modelConfig, extension).build();
+}
+
+const providerComposer = { composeModelProvider };
 
 export default providerComposer;

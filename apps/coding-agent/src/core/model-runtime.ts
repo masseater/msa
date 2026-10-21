@@ -24,6 +24,8 @@ import platform from "./platform.ts";
 import processEnv from "./process-env.ts";
 import providerComposer from "./provider-composer.ts";
 import type providerComposerTypes from "./provider-composer.types.ts";
+import providerModels from "./provider-composer/provider-models.ts";
+import requestConfig from "./provider-composer/request-config.ts";
 import remoteCatalogProvider from "./remote-catalog-provider.ts";
 import RuntimeCredentials from "./runtime-credentials.ts";
 import type runtimeCredentialsTypes from "./runtime-credentials.types.ts";
@@ -32,13 +34,13 @@ import type virtualModelsTypes from "./virtual-models.types.ts";
 
 const { createVirtualModel, findLatestResponse, isVirtualModel, withVirtualModels } =
   virtualModelsModule;
+const { composeModelProvider } = providerComposer;
 const {
-  composeModelProvider,
   configuredRequestAuthStatus,
   resolveCompatibilityRequestConfig,
   resolveConfiguredModelHeaders,
-  validateExtensionProvider,
-} = providerComposer;
+} = requestConfig;
+const { validateExtensionProvider } = providerModels;
 const { EMPTY_MODEL_POLICY, withModelPolicy } = modelPolicy;
 const { awaited, awaiting, awaitingWith, performed } = awaitingModule;
 const { dirname, join } = platformNode;

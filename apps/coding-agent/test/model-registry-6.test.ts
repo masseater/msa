@@ -7,9 +7,9 @@ import AuthStorage from "../src/core/auth-storage.ts";
 import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import type modelConfigTypes from "../src/core/model-config.types.ts";
 import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerComposer from "../src/core/provider-composer.ts";
+import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerComposer;
+const { clearApiKeyCache } = providerAuth;
 
 const { createModelRegistry } = modelRuntimeTestUtils;
 

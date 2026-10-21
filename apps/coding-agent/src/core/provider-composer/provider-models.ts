@@ -1,122 +1,15 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 
-import type modelConfigTypes from "./model-config.types.ts";
-import type providerComposerTypes from "./provider-composer.types.ts";
-import resolveConfigValueModule from "./resolve-config-value.ts";
+import type modelConfigTypes from "../model-config.types.ts";
+import type providerComposerTypes from "../provider-composer.types.ts";
+import modelOverrides from "./model-overrides.ts";
 
-const { clearConfigValueCache } = resolveConfigValueModule;
 const { isModelType } = ai;
-
-const clearApiKeyCache = clearConfigValueCache;
+const { mergeCompat } = modelOverrides;
 
 function getAllProviderModels(provider: aiTypes.Provider | undefined): readonly aiTypes.AnyModel[] {
   return provider === undefined ? [] : (provider.getAllModels?.() ?? provider.getModels());
-}
-
-function mergeCompat(
-  base: aiTypes.Model<aiTypes.Api>["compat"],
-  override:
-    | aiTypes.Model<aiTypes.Api>["compat"]
-    | modelConfigTypes.ModelsJsonModelOverride["compat"],
-): aiTypes.Model<aiTypes.Api>["compat"] {
-  if (override === undefined) return base;
-  const merged = { ...base, ...override } as NonNullable<aiTypes.Model<aiTypes.Api>["compat"]>;
-  const baseNested = base as Record<string, unknown> | undefined;
-  const overrideNested = override as Record<string, unknown>;
-  const mergedNested = merged as Record<string, unknown>;
-  for (const key of ["openRouterRouting", "chatTemplateKwargs"] as const) {
-    const baseValue = baseNested?.[key];
-    const overrideValue = overrideNested[key];
-    if (
-      (typeof baseValue === "object" && baseValue !== null) ||
-      (typeof overrideValue === "object" && overrideValue !== null)
-    ) {
-      mergedNested[key] = {
-        ...(baseValue as object | undefined),
-        ...(overrideValue as object | undefined),
-      };
-    }
-  }
-  return merged;
-}
-
-function mergeInputLimits(
-  base: aiTypes.Model<aiTypes.Api>["inputLimits"],
-  override: modelConfigTypes.ModelsJsonModelOverride["inputLimits"],
-): aiTypes.Model<aiTypes.Api>["inputLimits"] {
-  if (override === undefined) return base;
-  return {
-    ...base,
-    ...override,
-    ...(override.images === undefined
-      ? {}
-      : {
-          images: {
-            ...base?.images,
-            ...override.images,
-            ...(override.images.resize === undefined
-              ? {}
-              : { resize: { ...base?.images?.resize, ...override.images.resize } }),
-          },
-        }),
-  };
-}
-
-function mergeSamplingParamsByThinkingLevel(
-  base: aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"],
-  override: aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"],
-): aiTypes.Model<aiTypes.Api>["samplingParamsByThinkingLevel"] {
-  if (override === undefined) return base;
-  const merged = { ...base };
-  for (const level of ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const) {
-    const params = override[level];
-    if (params !== undefined) merged[level] = { ...base?.[level], ...params };
-  }
-  return merged;
-}
-
-function applyModelOverride(
-  model: aiTypes.Model<aiTypes.Api>,
-  override: modelConfigTypes.ModelsJsonModelOverride,
-): aiTypes.Model<aiTypes.Api> {
-  const inputLimits = mergeInputLimits(model.inputLimits, override.inputLimits);
-  const tiers = override.cost?.tiers ?? model.cost.tiers;
-  const samplingParamsByThinkingLevel = mergeSamplingParamsByThinkingLevel(
-    model.samplingParamsByThinkingLevel,
-    override.samplingParamsByThinkingLevel,
-  );
-  const compat = mergeCompat(model.compat, override.compat);
-  return {
-    ...model,
-    name: override.name ?? model.name,
-    reasoning: override.reasoning ?? model.reasoning,
-    ...(override.thinkingLevelMap === undefined
-      ? {}
-      : { thinkingLevelMap: { ...model.thinkingLevelMap, ...override.thinkingLevelMap } }),
-    input: (override.input as ("text" | "image")[] | undefined) ?? model.input,
-    ...(inputLimits === undefined ? {} : { inputLimits }),
-    cost:
-      override.cost === undefined
-        ? model.cost
-        : {
-            cacheRead: override.cost.cacheRead ?? model.cost.cacheRead,
-            cacheWrite: override.cost.cacheWrite ?? model.cost.cacheWrite,
-            input: override.cost.input ?? model.cost.input,
-            output: override.cost.output ?? model.cost.output,
-            ...(tiers === undefined ? {} : { tiers }),
-          },
-    ...(override.promptCache === undefined
-      ? {}
-      : { promptCache: { ...model.promptCache, ...override.promptCache } }),
-    contextWindow: override.contextWindow ?? model.contextWindow,
-    maxTokens: override.maxTokens ?? model.maxTokens,
-    ...(override.samplingParams === undefined
-      ? {}
-      : { samplingParams: { ...model.samplingParams, ...override.samplingParams } }),
-    ...(samplingParamsByThinkingLevel === undefined ? {} : { samplingParamsByThinkingLevel }),
-    ...(compat === undefined ? {} : { compat }),
-  };
 }
 
 function modelFromJson(
@@ -265,12 +158,43 @@ function applyModelsJson(
   return models;
 }
 
-const providerComposerPart1 = {
-  applyModelOverride,
+function applyExtension(
+  providerId: string,
+  models: readonly aiTypes.AnyModel[],
+  config: providerComposerTypes.ProviderConfigInput | undefined,
+): aiTypes.AnyModel[] {
+  if (config === undefined) return [...models];
+  if (config.models === undefined) {
+    return config.baseUrl !== undefined && config.baseUrl !== ""
+      ? models.map((model) => ({ ...model, baseUrl: config.baseUrl! }))
+      : [...models];
+  }
+  return config.models.map((definition) =>
+    extensionModelFromDefinition(providerId, models, config, definition),
+  );
+}
+
+function validateExtensionProvider(
+  providerId: string,
+  base: aiTypes.Provider | undefined,
+  modelsConfig: modelConfigTypes.ModelsJsonProvider | undefined,
+  extension: providerComposerTypes.ProviderConfigInput,
+): void {
+  if (extension.streamSimple !== undefined && extension.api === undefined) {
+    throw new Error(`Provider ${providerId}: "api" is required when registering streamSimple.`);
+  }
+  applyExtension(
+    providerId,
+    applyModelsJson(providerId, getAllProviderModels(base), modelsConfig),
+    extension,
+  );
+}
+
+const providerModels = {
+  applyExtension,
   applyModelsJson,
-  clearApiKeyCache,
-  extensionModelFromDefinition,
   getAllProviderModels,
+  validateExtensionProvider,
 };
 
-export default providerComposerPart1;
+export default providerModels;

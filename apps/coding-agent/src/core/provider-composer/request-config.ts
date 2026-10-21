@@ -1,17 +1,38 @@
+import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 
-import type modelConfigTypes from "./model-config.types.ts";
-import providerComposerPart2 from "./provider-composer-part2.ts";
-import type providerComposerTypes from "./provider-composer.types.ts";
-import resolveConfigValueModule from "./resolve-config-value.ts";
+import type modelConfigTypes from "../model-config.types.ts";
+import type providerComposerTypes from "../provider-composer.types.ts";
+import resolveConfigValueModule from "../resolve-config-value.ts";
+import providerAuth from "./provider-auth.ts";
 
 const {
+  isConfigValueConfigured,
   getConfigValueEnvVarNames,
   isCommandConfigValue,
-  isConfigValueConfigured,
   resolveHeadersOrThrow,
 } = resolveConfigValueModule;
-const { configuredApiKey, configuredHeaders, rawModelHeaders } = providerComposerPart2;
+const { isModelType } = ai;
+const { configuredApiKey, configuredHeaders } = providerAuth;
+
+function rawModelHeaders(
+  model: aiTypes.AnyModel,
+  config: modelConfigTypes.ModelsJsonProvider | undefined,
+  extension: providerComposerTypes.ProviderConfigInput | undefined,
+): Record<string, string> | undefined {
+  const chatDefinition = isModelType(model, "chat")
+    ? config?.models?.find((entry) => entry.id === model.id)
+    : undefined;
+  const extensionModel = extension?.models?.find(
+    (entry) => (entry.type ?? "chat") === (model.type ?? "chat") && entry.id === model.id,
+  );
+  const headers = {
+    ...(isModelType(model, "chat") ? config?.modelOverrides?.[model.id]?.headers : undefined),
+    ...chatDefinition?.headers,
+    ...extensionModel?.headers,
+  };
+  return Object.keys(headers).length > 0 ? headers : undefined;
+}
 
 function resolveConfiguredModelHeaders(
   model: aiTypes.AnyModel,
@@ -63,10 +84,10 @@ function configuredRequestAuthStatus(
   };
 }
 
-const providerComposerPart4 = {
+const requestConfig = {
   configuredRequestAuthStatus,
   resolveCompatibilityRequestConfig,
   resolveConfiguredModelHeaders,
 };
 
-export default providerComposerPart4;
+export default requestConfig;
