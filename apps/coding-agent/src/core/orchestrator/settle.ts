@@ -1,6 +1,5 @@
 import { Effect } from "effect";
 
-import type errorsTypes from "./errors.types.ts";
 import outcomeModule from "./outcome.ts";
 import promptsModule from "./prompts.ts";
 import runtimeModule from "./runtime.ts";
@@ -8,7 +7,6 @@ import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
 import start from "./start.ts";
 import storeModule from "./store.ts";
-import type workerTypes from "./worker.ts";
 import wrapUp from "./wrap-up.ts";
 
 const { nowMillis } = runtimeModule;
@@ -23,9 +21,9 @@ function settleEffect(
   runtime: runtimeTypes.Runtime,
   threadId: string,
   run: number,
-  worker: workerTypes.WorkerSession,
+  worker: runtimeTypes.WorkerSession,
   error: unknown,
-): Effect.Effect<void, errorsTypes.OrchestratorError> {
+): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     if (runtime.runs.get(threadId) !== run) return;
     const now = yield* nowMillis;
@@ -63,7 +61,7 @@ function settle(
   runtime: runtimeTypes.Runtime,
   threadId: string,
   run: number,
-  worker: workerTypes.WorkerSession,
+  worker: runtimeTypes.WorkerSession,
   error: unknown,
 ): Promise<void> {
   return runtime.exclusive(settleEffect(runtime, threadId, run, worker, error));
@@ -73,7 +71,7 @@ function afterTurn(
   runtime: runtimeTypes.Runtime,
   threadId: string,
   run: number,
-  worker: workerTypes.WorkerSession,
+  worker: runtimeTypes.WorkerSession,
 ): void {
   if (runtime.runs.get(threadId) !== run) return;
   const handled = wrapping.takeOver(runtime, threadId, worker, {

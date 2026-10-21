@@ -44,66 +44,59 @@ function saveProjectTrustPromptResult(
   }
 }
 
+function* trustFromExtensions(options: projectTrustTypes.ResolveProjectTrustedOptions) {
+  if (options.extensionsResult === undefined) return undefined;
+  const { result, errors } = yield* awaited(
+    emitProjectTrustEvent(
+      options.extensionsResult,
+      { cwd: options.cwd, type: "project_trust" },
+      options.projectTrustContext,
+    ),
+  );
+  for (const error of errors) {
+    options.onExtensionError?.(
+      `Extension "${error.extensionPath}" project_trust error: ${error.error}`,
+    );
+  }
+  if (result === undefined) return undefined;
+  const trusted = result.trusted === "yes";
+  if (result.remember === true) options.trustStore.set(options.cwd, trusted);
+  return trusted;
+}
+
+function storedOrDefaultTrust(
+  options: projectTrustTypes.ResolveProjectTrustedOptions,
+): boolean | "ask" {
+  const decision = options.trustStore.get(options.cwd);
+  if (decision !== null) return decision;
+  switch (options.defaultProjectTrust ?? SETTINGS_DEFAULTS.defaultProjectTrust) {
+    case "always":
+      return true;
+    case "never":
+      return false;
+    case "ask":
+      return "ask";
+  }
+}
+
 function resolveProjectTrusted(
   options: projectTrustTypes.ResolveProjectTrustedOptions,
 ): Promise<boolean> {
   return Effect.runPromise(
     awaiting(function* () {
-      if (options.trustOverride !== undefined) {
-        return options.trustOverride;
-      }
-      if (!hasTrustRequiringProjectResources(options.cwd)) {
-        return true;
-      }
-
-      if (options.extensionsResult !== undefined) {
-        const { result, errors } = yield* awaited(
-          emitProjectTrustEvent(
-            options.extensionsResult,
-            { cwd: options.cwd, type: "project_trust" },
-            options.projectTrustContext,
-          ),
-        );
-        for (const error of errors) {
-          options.onExtensionError?.(
-            `Extension "${error.extensionPath}" project_trust error: ${error.error}`,
-          );
-        }
-        if (result !== undefined) {
-          const trusted = result.trusted === "yes";
-          if (result.remember === true) {
-            options.trustStore.set(options.cwd, trusted);
-          }
-          return trusted;
-        }
-      }
-
-      const decision = options.trustStore.get(options.cwd);
-      if (decision !== null) {
-        return decision;
-      }
-
-      switch (options.defaultProjectTrust ?? SETTINGS_DEFAULTS.defaultProjectTrust) {
-        case "always":
-          return true;
-        case "never":
-          return false;
-        case "ask":
-          break;
-      }
-
-      if (!options.projectTrustContext.hasUI) {
-        return false;
-      }
-
+      if (options.trustOverride !== undefined) return options.trustOverride;
+      if (!hasTrustRequiringProjectResources(options.cwd)) return true;
+      const fromExtensions = yield* trustFromExtensions(options);
+      if (fromExtensions !== undefined) return fromExtensions;
+      const stored = storedOrDefaultTrust(options);
+      if (stored !== "ask") return stored;
+      if (!options.projectTrustContext.hasUI) return false;
       const selected = yield* performed(
         selectProjectTrustOption(options.cwd, options.projectTrustContext),
       );
-      if (selected !== undefined) {
-        saveProjectTrustPromptResult(options.trustStore, selected);
-        return selected.trusted;
-      }
-      return false;
+      if (selected === undefined) return false;
+      saveProjectTrustPromptResult(options.trustStore, selected);
+      return selected.trusted;
     }),
   );
 }

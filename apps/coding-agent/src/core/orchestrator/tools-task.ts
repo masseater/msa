@@ -51,7 +51,7 @@ const createSchema = Type.Object({
   title: Type.String({ description: "Short name of the work." }),
 });
 
-function taskToolsA(
+function createAndReadTaskTools(
   orchestrator: orchestratorTypes.Orchestrator,
 ): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
@@ -99,62 +99,71 @@ function taskToolsA(
   };
 }
 
-function taskToolsB(
+const setTaskDependsTool = (orchestrator: orchestratorTypes.Orchestrator) =>
+  tool({
+    description:
+      "Add and drop the tasks one or more tasks wait for. A task that has not started changes freely; a running task only gains a dependency that already finished, because waiting for anything else means stopping it first. Cycles are rejected.",
+    label: "set task dependencies",
+    name: "set_task_depends",
+    parameters: dependsSchema,
+    promptGuidelines: [
+      "Dependencies and states can change after creation: while a task has not started, set_task_depends and set_task_state rewrite them in place. Stop a running task before changing what it waits for or where it must end up.",
+    ],
+    promptSnippet: "Change what tasks wait for",
+    run: (params) =>
+      orchestrator
+        .setDepends(params)
+        .then((tasks) =>
+          tasks
+            .map((task) => `${task.id} depends on ${task.dependsOn.join(", ") || "-"}.`)
+            .join("\n"),
+        ),
+  });
+
+const setTaskModelTool = (orchestrator: orchestratorTypes.Orchestrator) =>
+  tool({
+    description:
+      "Change the model and thinking level of a task, including one that is running. It applies to the task's next session and to the running one.",
+    label: "set task model",
+    name: "set_task_model",
+    parameters: modelChangeSchema,
+    promptSnippet: "Change a task's model",
+    run: ({ taskId, model, thinkingLevel }) =>
+      orchestrator
+        .setModel(taskId, model, thinkingLevel)
+        .then((task) => `${task.id} now uses ${task.model} (thinking ${task.thinkingLevel}).`),
+  });
+
+const setTaskStateTool = (orchestrator: orchestratorTypes.Orchestrator) =>
+  tool({
+    description:
+      "Rewrite the current state or the goal state of a task that has not started. Write states, not steps: steps break once the starting state is not what you assumed. A running task is rejected: stop it first, or steer it with send_message.",
+    label: "set task state",
+    name: "set_task_state",
+    parameters: stateSchema,
+    promptSnippet: "Rewrite the states of a task that has not started",
+    run: (params) =>
+      orchestrator
+        .setState(params)
+        .then(
+          (task) =>
+            `${task.id} ${task.title}\nCurrent state: ${task.currentState}\nGoal state: ${task.goalState}`,
+        ),
+  });
+
+function editTaskTools(
   orchestrator: orchestratorTypes.Orchestrator,
 ): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
-    set_task_depends: tool({
-      description:
-        "Add and drop the tasks one or more tasks wait for. A task that has not started changes freely; a running task only gains a dependency that already finished, because waiting for anything else means stopping it first. Cycles are rejected.",
-      label: "set task dependencies",
-      name: "set_task_depends",
-      parameters: dependsSchema,
-      promptGuidelines: [
-        "Dependencies and states can change after creation: while a task has not started, set_task_depends and set_task_state rewrite them in place. Stop a running task before changing what it waits for or where it must end up.",
-      ],
-      promptSnippet: "Change what tasks wait for",
-      run: (params) =>
-        orchestrator
-          .setDepends(params)
-          .then((tasks) =>
-            tasks
-              .map((task) => `${task.id} depends on ${task.dependsOn.join(", ") || "-"}.`)
-              .join("\n"),
-          ),
-    }),
-    set_task_model: tool({
-      description:
-        "Change the model and thinking level of a task, including one that is running. It applies to the task's next session and to the running one.",
-      label: "set task model",
-      name: "set_task_model",
-      parameters: modelChangeSchema,
-      promptSnippet: "Change a task's model",
-      run: ({ taskId, model, thinkingLevel }) =>
-        orchestrator
-          .setModel(taskId, model, thinkingLevel)
-          .then((task) => `${task.id} now uses ${task.model} (thinking ${task.thinkingLevel}).`),
-    }),
-    set_task_state: tool({
-      description:
-        "Rewrite the current state or the goal state of a task that has not started. Write states, not steps: steps break once the starting state is not what you assumed. A running task is rejected: stop it first, or steer it with send_message.",
-      label: "set task state",
-      name: "set_task_state",
-      parameters: stateSchema,
-      promptSnippet: "Rewrite the states of a task that has not started",
-      run: (params) =>
-        orchestrator
-          .setState(params)
-          .then(
-            (task) =>
-              `${task.id} ${task.title}\nCurrent state: ${task.currentState}\nGoal state: ${task.goalState}`,
-          ),
-    }),
+    set_task_depends: setTaskDependsTool(orchestrator),
+    set_task_model: setTaskModelTool(orchestrator),
+    set_task_state: setTaskStateTool(orchestrator),
   };
 }
 
 const toolsTask = {
-  taskToolsA,
-  taskToolsB,
+  createAndReadTaskTools,
+  editTaskTools,
 };
 
 export default toolsTask;

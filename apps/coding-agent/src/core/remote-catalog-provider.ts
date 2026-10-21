@@ -2,115 +2,87 @@ import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
-import config from "../config.ts";
-import managementHttp from "../utils/management-http.ts";
-import userAgent from "../utils/user-agent.ts";
 import awaitingModule from "./awaiting.ts";
 import platform from "./platform.ts";
 import type remoteCatalogProviderTypes from "./remote-catalog-provider.types.ts";
+import remoteCatalog from "./remote-catalog.ts";
 
 const { awaited, awaiting, performed } = awaitingModule;
-const { fetchWithRetry } = managementHttp;
-const { getMsaUserAgent } = userAgent;
-const { VERSION } = config;
 const { nowMs } = platform;
+const { isModelType } = ai;
+const {
+  DEFAULT_CATALOG_BASE_URL,
+  REMOTE_CATALOG_MODEL_TYPES,
+  isNewer,
+  mergeModels,
+  readCatalog,
+  remoteModels,
+  requestCatalog,
+} = remoteCatalog;
 
-const { getModelType, isModelType } = ai;
-
-const DEFAULT_CATALOG_BASE_URL = "https://pi.dev";
-const REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS = 4_000;
 const REMOTE_CATALOG_REFRESH_INTERVAL_MS = 4 * 60 * 60 * 1000;
-const REMOTE_CATALOG_MODEL_TYPES: readonly aiTypes.ModelType[] = ["chat", "image", "classifier"];
 
-function isSupportedModelType(model: { type?: unknown }): boolean {
-  return (
-    model.type === undefined ||
-    (typeof model.type === "string" &&
-      REMOTE_CATALOG_MODEL_TYPES.includes(model.type as aiTypes.ModelType))
+type RefreshContext = Parameters<NonNullable<aiTypes.Provider["refreshModels"]>>[0];
+type SetModels = (models: readonly aiTypes.AnyModel[]) => () => void;
+
+interface RefreshInput {
+  providerId: string;
+  catalogBaseUrl: string;
+  localGeneratedAt: number | undefined;
+  context: RefreshContext;
+  setModels: SetModels;
+}
+
+const isFresh = (stored: aiTypes.ModelsStoreEntry | undefined, force: boolean | undefined) =>
+  force !== true &&
+  stored?.checkedAt !== undefined &&
+  stored.lastModified !== undefined &&
+  nowMs() - stored.checkedAt < REMOTE_CATALOG_REFRESH_INTERVAL_MS;
+
+function* publishCatalogResponse(input: RefreshInput, response: Response) {
+  const { context, providerId } = input;
+  const { stored } = context;
+  const checkedAt = nowMs();
+  if (response.status === 304 && stored !== undefined) {
+    yield* awaited(context.publish({ persist: { ...stored, checkedAt } }));
+    return;
+  }
+  if (response.status === 404 || response.status === 501) {
+    const { etag: _etag, ...withoutEtag }: aiTypes.ModelsStoreEntry = stored ?? { models: [] };
+    yield* awaited(context.publish({ persist: { ...withoutEtag, checkedAt, lastModified: 0 } }));
+    return;
+  }
+  if (!response.ok) {
+    yield* awaited(context.publish({ persist: { ...(stored ?? { models: [] }), checkedAt } }));
+    throw new Error(`Model catalog request failed for ${providerId}: ${response.status}`);
+  }
+  const catalog = yield* performed(readCatalog(providerId, response));
+  if (context.signal.aborted) return;
+  const entry: aiTypes.ModelsStoreEntry = { ...catalog, checkedAt };
+  yield* awaited(
+    context.publish({
+      persist: entry,
+      update: input.setModels(remoteModels(entry, input.localGeneratedAt)),
+    }),
   );
 }
 
-function mergeModels<TModel extends aiTypes.AnyModel>(
-  baseline: readonly TModel[],
-  dynamic: readonly TModel[],
-): TModel[] {
-  const merged = new Map<string, TModel>();
-  for (const model of [...baseline, ...dynamic])
-    merged.set(`${getModelType(model)}\0${model.id}`, model);
-  return [...merged.values()];
-}
-
-function parseCatalog(providerId: string, value: unknown): aiTypes.AnyModel[] {
-  const entries = Array.isArray(value)
-    ? value
-    : typeof value === "object" &&
-        value !== null &&
-        "models" in value &&
-        Array.isArray(value.models)
-      ? value.models
-      : typeof value === "object" && value !== null
-        ? Object.values(value)
-        : undefined;
-  if (entries === undefined) throw new Error(`Invalid model catalog for provider "${providerId}"`);
-  return entries
-    .filter(
-      (entry): entry is Record<string, unknown> =>
-        typeof entry === "object" && entry !== null && "id" in entry,
-    )
-    .filter(isSupportedModelType)
-    .map((model) => Object.assign(model, { provider: providerId }) as unknown as aiTypes.AnyModel);
-}
-
-function readCatalog(
-  providerId: string,
-  response: Response,
-): Effect.Effect<{ models: aiTypes.AnyModel[]; lastModified: number; etag?: string }> {
-  return awaiting(function* () {
-    const lastModified = Date.parse(response.headers.get("last-modified") ?? "");
-    const etag = response.headers.get("etag");
-    return {
-      lastModified: Number.isNaN(lastModified) ? 0 : lastModified,
-      models: parseCatalog(providerId, yield* awaited(response.json())),
-      ...(etag === null ? {} : { etag }),
-    };
+const refreshRemoteCatalog = (input: RefreshInput) =>
+  awaiting(function* () {
+    const { context } = input;
+    const { stored } = context;
+    const restored = remoteModels(stored, input.localGeneratedAt).filter(
+      (model) => model.provider === input.providerId,
+    );
+    if (!(yield* awaited(context.publish({ update: input.setModels(restored) })))) return;
+    if (!context.allowNetwork || context.signal.aborted || isFresh(stored, context.force)) return;
+    const validator = stored !== undefined && stored.models.length > 0 ? stored.etag : undefined;
+    const response = yield* awaited(
+      requestCatalog(input.providerId, input.catalogBaseUrl, context.signal, validator),
+    );
+    if (context.signal.aborted) return;
+    yield* publishCatalogResponse(input, response);
   });
-}
-
-function isNewer(lastModified: number | undefined, localGeneratedAt: number | undefined): boolean {
-  return (
-    localGeneratedAt === undefined ||
-    (lastModified !== undefined && lastModified > localGeneratedAt)
-  );
-}
-
-function remoteModels(
-  entry: aiTypes.ModelsStoreEntry | undefined,
-  localGeneratedAt: number | undefined,
-): readonly aiTypes.AnyModel[] {
-  return entry !== undefined && isNewer(entry.lastModified, localGeneratedAt) ? entry.models : [];
-}
-
-function requestCatalog(
-  providerId: string,
-  catalogBaseUrl: string,
-  signal: AbortSignal,
-  validator?: string,
-): Promise<Response> {
-  const url = new URL(`/api/models/providers/${encodeURIComponent(providerId)}`, catalogBaseUrl);
-  url.searchParams.set("types", REMOTE_CATALOG_MODEL_TYPES.join(","));
-  return fetchWithRetry(
-    url,
-    {
-      headers: {
-        "User-Agent": getMsaUserAgent(VERSION),
-        accept: "application/json",
-        ...(validator !== undefined && validator !== "" ? { "if-none-match": validator } : {}),
-      },
-      signal,
-    },
-    { attemptTimeoutMs: REMOTE_CATALOG_ATTEMPT_TIMEOUT_MS },
-  );
-}
 
 function withRemoteCatalog(
   provider: aiTypes.Provider,
@@ -118,7 +90,9 @@ function withRemoteCatalog(
   localGeneratedAt?: number,
 ): aiTypes.Provider {
   let dynamicModels: readonly aiTypes.AnyModel[] = [];
-
+  const setModels: SetModels = (models) => () => {
+    dynamicModels = models;
+  };
   return {
     ...provider,
     getAllModels: () =>
@@ -130,74 +104,52 @@ function withRemoteCatalog(
       ),
     refreshModels: (context) =>
       Effect.runPromise(
-        awaiting(function* () {
-          const stored = context.stored;
-          const restored = remoteModels(stored, localGeneratedAt).filter(
-            (model) => model.provider === provider.id,
-          );
-          if (
-            !(yield* awaited(
-              context.publish({
-                update: () => {
-                  dynamicModels = restored;
-                },
-              }),
-            ))
-          ) {
-            return;
-          }
-          if (!context.allowNetwork || context.signal.aborted) return;
-          if (
-            context.force !== true &&
-            stored?.checkedAt !== undefined &&
-            stored.lastModified !== undefined &&
-            nowMs() - stored.checkedAt < REMOTE_CATALOG_REFRESH_INTERVAL_MS
-          ) {
-            return;
-          }
-
-          const validator =
-            stored !== undefined && stored.models.length > 0 ? stored.etag : undefined;
-          const response = yield* awaited(
-            requestCatalog(provider.id, catalogBaseUrl, context.signal, validator),
-          );
-          if (context.signal.aborted) return;
-          const checkedAt = nowMs();
-          if (response.status === 304 && stored !== undefined) {
-            yield* awaited(context.publish({ persist: { ...stored, checkedAt } }));
-            return;
-          }
-          if (response.status === 404 || response.status === 501) {
-            const { etag: _etag, ...withoutEtag }: aiTypes.ModelsStoreEntry = stored ?? {
-              models: [],
-            };
-            yield* awaited(
-              context.publish({ persist: { ...withoutEtag, checkedAt, lastModified: 0 } }),
-            );
-            return;
-          }
-          if (!response.ok) {
-            yield* awaited(
-              context.publish({ persist: { ...(stored ?? { models: [] }), checkedAt } }),
-            );
-            throw new Error(`Model catalog request failed for ${provider.id}: ${response.status}`);
-          }
-          const catalog = yield* performed(readCatalog(provider.id, response));
-          if (context.signal.aborted) return;
-          const entry: aiTypes.ModelsStoreEntry = { ...catalog, checkedAt };
-          const published = remoteModels(entry, localGeneratedAt);
-          yield* awaited(
-            context.publish({
-              persist: entry,
-              update: () => {
-                dynamicModels = published;
-              },
-            }),
-          );
+        refreshRemoteCatalog({
+          catalogBaseUrl,
+          context,
+          localGeneratedAt,
+          providerId: provider.id,
+          setModels,
         }),
       ),
   };
 }
+
+function* fetchNewerCatalog(input: RefreshInput) {
+  const { context, providerId } = input;
+  const response = yield* awaited(requestCatalog(providerId, input.catalogBaseUrl, context.signal));
+  if (context.signal.aborted) return undefined;
+  if (response.status === 404 || response.status === 501) return [];
+  if (!response.ok) {
+    throw new Error(`Model catalog request failed for ${providerId}: ${response.status}`);
+  }
+  const catalog = yield* performed(readCatalog(providerId, response));
+  return isNewer(catalog.lastModified, input.localGeneratedAt) ? catalog.models : [];
+}
+
+const refreshPersonalizedCatalog = (
+  input: RefreshInput,
+  personalize: remoteCatalogProviderTypes.PersonalizeCatalog,
+  builtinModels: () => readonly aiTypes.AnyModel[],
+) =>
+  awaiting(function* () {
+    const { context } = input;
+    const restored = (context.stored?.models ?? []).filter(
+      (model) => model.provider === input.providerId,
+    );
+    if (!(yield* awaited(context.publish({ update: input.setModels(restored) })))) return;
+    if (!context.allowNetwork || context.signal.aborted) return;
+    const remote = yield* fetchNewerCatalog(input);
+    if (remote === undefined) return;
+    const personalized = yield* awaited(personalize(mergeModels(builtinModels(), remote), context));
+    if (context.signal.aborted) return;
+    yield* awaited(
+      context.publish({
+        persist: { checkedAt: nowMs(), models: personalized },
+        update: input.setModels(personalized),
+      }),
+    );
+  });
 
 function withPersonalizedCatalog(
   provider: aiTypes.Provider,
@@ -206,60 +158,24 @@ function withPersonalizedCatalog(
   localGeneratedAt?: number,
 ): aiTypes.Provider {
   let personalModels: readonly aiTypes.AnyModel[] = [];
+  const setModels: SetModels = (models) => () => {
+    personalModels = models;
+  };
   const builtinModels = (): readonly aiTypes.AnyModel[] =>
     provider.getAllModels?.() ?? provider.getModels();
   const getAllModels = (): readonly aiTypes.AnyModel[] =>
     personalModels.length > 0 ? personalModels : builtinModels();
-
   return {
     ...provider,
     getAllModels,
     getModels: () => getAllModels().filter((model) => isModelType(model, "chat")),
     refreshModels: (context) =>
       Effect.runPromise(
-        awaiting(function* () {
-          const restored = (context.stored?.models ?? []).filter(
-            (model) => model.provider === provider.id,
-          );
-          if (
-            !(yield* awaited(
-              context.publish({
-                update: () => {
-                  personalModels = restored;
-                },
-              }),
-            ))
-          ) {
-            return;
-          }
-          if (!context.allowNetwork || context.signal.aborted) return;
-
-          const response = yield* awaited(
-            requestCatalog(provider.id, catalogBaseUrl, context.signal),
-          );
-          if (context.signal.aborted) return;
-          let remote: readonly aiTypes.AnyModel[] = [];
-          if (response.status !== 404 && response.status !== 501) {
-            if (!response.ok)
-              throw new Error(
-                `Model catalog request failed for ${provider.id}: ${response.status}`,
-              );
-            const catalog = yield* performed(readCatalog(provider.id, response));
-            if (isNewer(catalog.lastModified, localGeneratedAt)) remote = catalog.models;
-          }
-          const personalized = yield* awaited(
-            personalize(mergeModels(builtinModels(), remote), context),
-          );
-          if (context.signal.aborted) return;
-          yield* awaited(
-            context.publish({
-              persist: { checkedAt: nowMs(), models: personalized },
-              update: () => {
-                personalModels = personalized;
-              },
-            }),
-          );
-        }),
+        refreshPersonalizedCatalog(
+          { catalogBaseUrl, context, localGeneratedAt, providerId: provider.id, setModels },
+          personalize,
+          builtinModels,
+        ),
       ),
   };
 }

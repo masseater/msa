@@ -50,29 +50,17 @@ export default class NestedToolCallRunner {
         let outcome: agentTypes.AgentToolCallOutcome;
         try {
           outcome = yield* awaited(
-            this.host.runToolCall(toolCall, callerId, options.signal, (partialResult) =>
-              Effect.runPromise(
-                awaitingWith(function* () {
-                  options.onUpdate?.(partialResult);
-                  yield* awaited(
-                    this.host.emit({
-                      args: toolCall.arguments,
-                      parentToolCallId: callerId,
-                      partialResult,
-                      toolCallId: toolCall.id,
-                      toolName: name,
-                      type: "tool_execution_update",
-                    }),
-                  );
-                }, this),
-              ),
+            this.host.runToolCall(
+              toolCall,
+              callerId,
+              options.signal,
+              this.forwardUpdate(toolCall, callerId, name, options),
             ),
           );
         } finally {
           this.scopes.delete(toolCall.id);
           release?.();
         }
-
         scope.recorder.finish(record, outcome.isError, textOf(outcome.result));
         if (outcome.result.usage !== undefined) scope.recorder.addUsage(outcome.result.usage);
         yield* awaited(
@@ -89,6 +77,30 @@ export default class NestedToolCallRunner {
         return outcome;
       }, this),
     );
+  }
+
+  private forwardUpdate(
+    toolCall: agentTypes.AgentToolCall,
+    callerId: string,
+    name: string,
+    options: nestedToolCallsTypes.NestedToolCallOptions,
+  ) {
+    return (partialResult: agentTypes.AgentToolResult<unknown>) =>
+      Effect.runPromise(
+        awaitingWith(function* () {
+          options.onUpdate?.(partialResult);
+          yield* awaited(
+            this.host.emit({
+              args: toolCall.arguments,
+              parentToolCallId: callerId,
+              partialResult,
+              toolCallId: toolCall.id,
+              toolName: name,
+              type: "tool_execution_update",
+            }),
+          );
+        }, this),
+      );
   }
 
   private *startNestedCall(

@@ -1,7 +1,6 @@
 import { Effect, Result } from "effect";
 
 import errors from "./errors.ts";
-import type errorsTypes from "./errors.types.ts";
 import ids from "./ids.ts";
 import promptsModule from "./prompts.ts";
 import runtimeModule from "./runtime.ts";
@@ -9,7 +8,6 @@ import type runtimeTypes from "./runtime.types.ts";
 import snapshot from "./snapshot.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
-import type workerTypes from "./worker.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
@@ -162,7 +160,7 @@ function openWorker(
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<workerTypes.WorkerSession | undefined, errorsTypes.OrchestratorError> {
+): Effect.Effect<runtimeTypes.WorkerSession | undefined, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
@@ -193,7 +191,7 @@ function openWorker(
 function launch(
   runtime: runtimeTypes.Runtime,
   threadId: string,
-  worker: workerTypes.WorkerSession,
+  worker: runtimeTypes.WorkerSession,
   prompt: string,
   now: number,
 ): void {
@@ -215,7 +213,7 @@ function startTasks(
   role: orchestratorTypesTypes.ThreadRole,
   workerReport = "",
   extra = "",
-): Effect.Effect<void, errorsTypes.OrchestratorError> {
+): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const plan = planThread(runtime, task, role, workerReport, extra);

@@ -155,6 +155,44 @@ function describeFailure(status: number, body: unknown): string {
   return status === 401 ? `${message}. Sign in with \`treg login\` or set TREG_TOKEN.` : message;
 }
 
+const tregCallArgs = (job: string, body: Readonly<Record<string, unknown>>) => [
+  "--json",
+  "call",
+  job,
+  "--method",
+  "POST",
+  "--data",
+  JSON.stringify(body),
+  "--header",
+  `X-Treg-Route-Prefer: ${PREFERRED_VENDOR}`,
+  "--header",
+  `X-Treg-Route-Max-Cost: ${MAX_COST_USD}`,
+];
+
+function parseTregOutput(stdout: string, stderr: string, exitCode: unknown): tregTypes.TregResult {
+  const line = stdout.trim().split("\n").at(-1) ?? "";
+  const envelope = Schema.decodeOption(CliEnvelope)(line);
+  if (Option.isNone(envelope)) {
+    throw new Error(
+      `treg exited ${exitCode} without a result: ${(stderr || stdout).trim().slice(0, 2000)}`,
+    );
+  }
+  const { result, _treg: meta } = envelope.value;
+  if (meta.http_status >= 400) throw new Error(describeFailure(meta.http_status, result));
+  const decoded = Schema.decodeUnknownOption(RoutedResult)(result);
+  if (Option.isNone(decoded)) {
+    throw new Error(`treg returned an unexpected result: ${JSON.stringify(result).slice(0, 2000)}`);
+  }
+  const { output, _treg: routedMeta } = decoded.value;
+  const tregResult: tregTypes.TregResult = { output: output ?? {} };
+  const servedBy = routedMeta?.served_by;
+  if (servedBy !== undefined && servedBy !== null && servedBy !== "") {
+    tregResult.servedBy = servedBy;
+  }
+  if (meta.charged_micro !== undefined) tregResult.costMicro = meta.charged_micro;
+  return tregResult;
+}
+
 function callTreg(
   options: tregTypes.TregOptions,
   job: string,
@@ -164,46 +202,9 @@ function callTreg(
   return Effect.runPromise(
     awaiting(function* () {
       const { stdout, stderr, exitCode } = yield* awaited(
-        options.run(
-          [
-            "--json",
-            "call",
-            job,
-            "--method",
-            "POST",
-            "--data",
-            JSON.stringify(body),
-            "--header",
-            `X-Treg-Route-Prefer: ${PREFERRED_VENDOR}`,
-            "--header",
-            `X-Treg-Route-Max-Cost: ${MAX_COST_USD}`,
-          ],
-          signal,
-        ),
+        options.run(tregCallArgs(job, body), signal),
       );
-      const line = stdout.trim().split("\n").at(-1) ?? "";
-      const envelope = Schema.decodeOption(CliEnvelope)(line);
-      if (Option.isNone(envelope)) {
-        throw new Error(
-          `treg exited ${exitCode} without a result: ${(stderr || stdout).trim().slice(0, 2000)}`,
-        );
-      }
-      const { result, _treg: meta } = envelope.value;
-      if (meta.http_status >= 400) throw new Error(describeFailure(meta.http_status, result));
-      const decoded = Schema.decodeUnknownOption(RoutedResult)(result);
-      if (Option.isNone(decoded)) {
-        throw new Error(
-          `treg returned an unexpected result: ${JSON.stringify(result).slice(0, 2000)}`,
-        );
-      }
-      const { output, _treg: routedMeta } = decoded.value;
-      const tregResult: tregTypes.TregResult = { output: output ?? {} };
-      const servedBy = routedMeta?.served_by;
-      if (servedBy !== undefined && servedBy !== null && servedBy !== "") {
-        tregResult.servedBy = servedBy;
-      }
-      if (meta.charged_micro !== undefined) tregResult.costMicro = meta.charged_micro;
-      return tregResult;
+      return parseTregOutput(stdout, stderr, exitCode);
     }),
   );
 }

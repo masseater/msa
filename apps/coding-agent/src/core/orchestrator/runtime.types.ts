@@ -2,11 +2,16 @@ import type { DatabaseSync } from "node:sqlite";
 
 import type { Effect } from "effect";
 
+import type errorsTypes from "./errors.types.ts";
 import type telemetryTypesNs from "./telemetry.types.ts";
 import type workerTypes from "./worker.ts";
 import type wrapUpTypes from "./wrap-up.types.ts";
 
 declare namespace runtimeTypes {
+  type OrchestratorError = errorsTypes.OrchestratorError;
+
+  type WorkerSession = workerTypes.WorkerSession;
+
   interface Runtime {
     database: DatabaseSync;
     options: workerTypes.OrchestratorOptions;

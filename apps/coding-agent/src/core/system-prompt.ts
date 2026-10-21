@@ -138,6 +138,39 @@ function buildSystemPromptSections(
   return sections;
 }
 
+const docsSection = (): string =>
+  `msa documentation (read only when the user asks about msa itself, its SDK, extensions, themes, skills, or TUI):
+- Main documentation: ${getReadmePath()}
+- Additional docs: ${getDocsPath()}
+- Examples: ${getExamplesPath()} (extensions, custom tools, SDK)
+- When reading msa docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory
+- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), msa packages (docs/packages.md), environment variables (docs/environment-variables.md), MCP servers (docs/mcp.md), long-term memory (docs/memory.md), codemode scripts and non-LLM models such as classifiers and image models (docs/codemode.md)
+- When working on msa topics, read the docs and examples, and follow .md cross-references before implementing
+- Always read msa .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
+
+function addDefaultSections(
+  promptSections: Record<string, string>,
+  declaredTools: string[],
+  toolSnippets: Record<string, string>,
+  guidelines: { toolGuidelines: Record<string, string[]>; promptGuidelines: string[] },
+): void {
+  const visibleTools = declaredTools.filter(
+    (name) => !(toolSnippets[name] === undefined || toolSnippets[name] === ""),
+  );
+  const tools =
+    visibleTools.length > 0
+      ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n")
+      : "(none)";
+  promptSections["tools"] =
+    `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
+  promptSections["rules"] = buildRules(
+    declaredTools,
+    guidelines.toolGuidelines,
+    guidelines.promptGuidelines,
+  );
+  promptSections["docs"] = docsSection();
+}
+
 function fillPromptSections(
   customPrompt: string | undefined,
   promptSections: Record<string, string>,
@@ -152,31 +185,18 @@ function fillPromptSections(
   cwd: string,
   customSections: Record<string, string>,
 ) {
-  if (customPrompt !== undefined && customPrompt !== "") {
-    promptSections["preamble"] = customPrompt;
-  } else {
-    promptSections["preamble"] = declaredTools.includes("create_task")
+  const hasCustomPrompt = customPrompt !== undefined && customPrompt !== "";
+  const preamble = hasCustomPrompt
+    ? customPrompt
+    : declaredTools.includes("create_task")
       ? ORCHESTRATOR_PREAMBLE
       : CODING_PREAMBLE;
-    const visibleTools = declaredTools.filter(
-      (name) => !(toolSnippets[name] === undefined || toolSnippets[name] === ""),
-    );
-    const tools =
-      visibleTools.length > 0
-        ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n")
-        : "(none)";
-    promptSections["tools"] =
-      `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
-    promptSections["rules"] = buildRules(declaredTools, toolGuidelines, promptGuidelines);
-    promptSections["docs"] =
-      `msa documentation (read only when the user asks about msa itself, its SDK, extensions, themes, skills, or TUI):
-- Main documentation: ${getReadmePath()}
-- Additional docs: ${getDocsPath()}
-- Examples: ${getExamplesPath()} (extensions, custom tools, SDK)
-- When reading msa docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory
-- When asked about: extensions (docs/extensions.md, examples/extensions/), themes (docs/themes.md), skills (docs/skills.md), prompt templates (docs/prompt-templates.md), TUI components (docs/tui.md), keybindings (docs/keybindings.md), SDK integrations (docs/sdk.md), custom providers (docs/custom-provider.md), adding models (docs/models.md), msa packages (docs/packages.md), environment variables (docs/environment-variables.md), MCP servers (docs/mcp.md), long-term memory (docs/memory.md), codemode scripts and non-LLM models such as classifiers and image models (docs/codemode.md)
-- When working on msa topics, read the docs and examples, and follow .md cross-references before implementing
-- Always read msa .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
+  promptSections["preamble"] = preamble;
+  if (!hasCustomPrompt) {
+    addDefaultSections(promptSections, declaredTools, toolSnippets, {
+      promptGuidelines,
+      toolGuidelines,
+    });
   }
 
   if (appendSystemPrompt !== "") promptSections["addendum"] = appendSystemPrompt;
@@ -190,7 +210,7 @@ function fillPromptSections(
     customSections,
   );
 
-  const sections: systemPromptTypes.SystemPromptSections = { preamble: promptSections["preamble"] };
+  const sections: systemPromptTypes.SystemPromptSections = { preamble };
   return sections;
 }
 

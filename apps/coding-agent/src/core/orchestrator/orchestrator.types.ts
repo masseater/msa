@@ -24,6 +24,12 @@ declare namespace orchestratorTypes {
 
   type SetTaskStateInput = orchestratorTypesTypes.SetTaskStateInput;
 
+  type OrchestratorSnapshot = orchestratorTypesTypes.OrchestratorSnapshot;
+
+  type ReportHit = orchestratorTypesTypes.ReportHit;
+
+  type TaskView = orchestratorTypesTypes.TaskView;
+
   type CreateWorkerOptions = workerTypes.CreateWorkerOptions;
 
   type OrchestratorDefaults = workerTypes.OrchestratorDefaults;
