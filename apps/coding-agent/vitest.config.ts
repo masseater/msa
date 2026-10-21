@@ -1,8 +1,12 @@
+import { tmpdir } from "node:os";
+
 import { defineConfig, mergeConfig } from "vite-plus";
 
 import vitestShared from "../../vitest.shared.ts";
 
 const { onGitHubActions, testBaseConfig, workspaceSourcePaths } = vitestShared;
+
+const agentDir = `${tmpdir()}/msa-test-agent-${process.pid}`;
 
 export default mergeConfig(
   testBaseConfig,
@@ -20,10 +24,12 @@ export default mergeConfig(
     test: {
       env: {
         CLAUDE_BIN: "/nonexistent/claude",
+        MSA_CODING_AGENT_DIR: agentDir,
         MSA_OFFLINE: "1",
         OPENCODE_BIN: "/nonexistent/opencode",
       },
       environment: "node",
+      globalSetup: ["./test/global-setup.ts"],
       globals: true,
       reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
       server: {

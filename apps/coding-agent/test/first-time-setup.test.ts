@@ -59,7 +59,7 @@ const beforeEachHook = () =>
       tempDir = yield* makeTempDir("msa-first-time-setup-");
       settingsPath = joinPath(tempDir, "settings.json");
       writeEnv("MSA_EXPERIMENTAL", "1");
-      deleteEnv(ENV_AGENT_DIR);
+      writeEnv(ENV_AGENT_DIR, "");
     }),
   );
 
