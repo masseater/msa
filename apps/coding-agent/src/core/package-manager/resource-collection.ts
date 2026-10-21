@@ -2,7 +2,7 @@ import type defaultPackageManagerInternalTypes from "../default-package-manager-
 import type DefaultPackageManager from "../default-package-manager.ts";
 import manifestModule from "../manifest.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import resolvedResourcePaths from "./resolved-resource-paths.ts";
 import resourceEntries from "./resource-entries.ts";
@@ -10,7 +10,7 @@ import resourceFiles from "./resource-files.ts";
 import resourcePatterns from "./resource-patterns.ts";
 
 const { resolvedPathsOf } = resolvedResourcePaths;
-const { dirname, join } = platformNode;
+const { dirname, join } = platformModule;
 const { existsSync, statSync } = nodeFs;
 const { applyPatterns, splitPatterns } = resourcePatterns;
 const { collectResourceFiles } = resourceEntries;

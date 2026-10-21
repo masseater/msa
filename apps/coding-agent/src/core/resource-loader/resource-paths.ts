@@ -1,14 +1,14 @@
 import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import sourceInfoModule from "../source-info.ts";
 import type sourceInfoTypes from "../source-info.types.ts";
 import type ResourceEnvironment from "./resource-environment.ts";
 
 const { existsSync, statSync } = nodeFs;
-const { join, resolve, sep } = platformNode;
+const { join, resolve, sep } = platformModule;
 const { CONFIG_DIR_NAME } = config;
 const { createSourceInfo, getSyntheticPathSource, isSyntheticPath } = sourceInfoModule;
 const { canonicalizePath, isLocalPath, resolvePath } = pathsModule;

@@ -8,7 +8,7 @@ import { Effect, Function as Fn } from "effect";
 import platform from "../platform/index.ts";
 import utils from "./utils.ts";
 
-const { currentTimeMillis, fromPromise, unwrapForeign } = platform;
+const { fromPromise, nowMs, unwrapForeign } = platform;
 const { SUMMARIZATION_SYSTEM_PROMPT } = utils;
 const { normalizeContext, retryAssistantCall, uuidv7 } = ai;
 const { completeSimple } = compat;
@@ -101,7 +101,7 @@ function buildSummarizationContext(promptText: string): compatTypes.TranscriptCo
       {
         content: [{ text: promptText, type: "text" }],
         role: "user",
-        timestamp: currentTimeMillis(),
+        timestamp: nowMs(),
       },
     ],
     systemPrompt: SUMMARIZATION_SYSTEM_PROMPT,

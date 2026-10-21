@@ -1,4 +1,4 @@
-import platform from "../../../../core/platform.ts";
+import platform from "../../../../core/platform/index.ts";
 import type sessionManagerTypes from "../../../../core/session-manager.types.ts";
 import renderUtils from "../../../../core/tools/render-utils.ts";
 import themeModule from "../../theme/theme.ts";

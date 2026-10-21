@@ -1,12 +1,12 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import processEnv from "../process-env.ts";
+import platform from "../platform/index.ts";
 import settingsDefaults from "../settings-defaults.ts";
 import type SettingsManager from "../settings-manager.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 
 const { SETTINGS_DEFAULTS } = settingsDefaults;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 export default class TerminalSettings {
   private readonly manager: SettingsManager;

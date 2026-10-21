@@ -7,7 +7,7 @@ import authGuidance from "../auth-guidance.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import type messagesTypes from "../messages.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import promptTemplates from "../prompt-templates.ts";
 
 const { nowMs } = platform;

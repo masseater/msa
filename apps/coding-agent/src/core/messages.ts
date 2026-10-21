@@ -2,7 +2,7 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
 import type messagesTypes from "./messages.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 
 const { toEpochMs } = platform;
 

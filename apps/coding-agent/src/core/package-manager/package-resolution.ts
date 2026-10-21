@@ -5,12 +5,12 @@ import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 import sourceInfo from "../source-info.ts";
 
-const { join } = platformNode;
+const { join } = platform;
 const { CONFIG_DIR_NAME } = config;
 const { awaitingWith, performed } = awaitingModule;
 const { BUILTIN_PATH_PREFIX } = sourceInfo;

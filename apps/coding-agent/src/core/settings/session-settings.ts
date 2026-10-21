@@ -1,7 +1,7 @@
 import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import httpDispatcher from "../http-dispatcher.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import settingsDefaults from "../settings-defaults.ts";
 import settingsManagerHelpers from "../settings-manager-helpers.ts";
 import settingsManagerSupport from "../settings-manager-support.ts";
@@ -12,7 +12,7 @@ const { parseTimeoutSetting } = settingsManagerHelpers;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 const { normalizePath, resolvePath } = pathsModule;
 const { CACHE_WARMING_MODES } = settingsManagerSupport;
-const { dirname, join } = platformNode;
+const { dirname, join } = platform;
 const { getAgentDir } = config;
 const { DEFAULT_HTTP_IDLE_TIMEOUT_MS } = httpDispatcher;
 

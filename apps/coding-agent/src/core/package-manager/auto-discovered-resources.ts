@@ -1,7 +1,7 @@
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 import sourceInfo from "../source-info.ts";
@@ -9,7 +9,7 @@ import packageEnv from "./package-env.ts";
 import resourceEntries from "./resource-entries.ts";
 import resourcePatterns from "./resource-patterns.ts";
 
-const { dirname, join, resolve } = platformNode;
+const { dirname, join, resolve } = platform;
 const { getHomeDir } = packageEnv;
 const {
   collectAncestorAgentsSkillDirs,

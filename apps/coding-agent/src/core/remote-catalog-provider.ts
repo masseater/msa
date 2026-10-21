@@ -3,7 +3,7 @@ import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import type remoteCatalogProviderTypes from "./remote-catalog-provider.types.ts";
 import remoteCatalog from "./remote-catalog.ts";
 

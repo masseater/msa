@@ -3,7 +3,7 @@ import { Effect, Function as Fn } from "effect";
 import type agentSessionRuntimeTypes from "../core/agent-session-runtime.types.ts";
 import awaitingModule from "../core/awaiting.ts";
 import outputGuard from "../core/output-guard.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import errors from "../utils/errors.ts";
 import shell from "../utils/shell.ts";
 import printModeOutput from "./print-mode-output.ts";
@@ -63,7 +63,7 @@ const runPrintMode: {
       try {
         return yield* performed(promptAll(binding, options));
       } catch (error: unknown) {
-        platformModule.writeError(errors.toErrorMessage(error));
+        platform.writeError(errors.toErrorMessage(error));
         return 1;
       } finally {
         removeSignalHandlers();

@@ -2,7 +2,7 @@ import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
-import platform from "../../core/platform.ts";
+import platform from "../../core/platform/index.ts";
 import clientModule from "./client.ts";
 import LlamaClient from "./llama-client.ts";
 import llamaModels from "./llama-models.ts";

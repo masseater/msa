@@ -3,8 +3,7 @@ import type aiTypes from "@msa/ai/index.types";
 import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import type memoryTypes from "../memory/memory.types.ts";
-import platformNode from "../platform-node.ts";
-import processEnv from "../process-env.ts";
+import platform from "../platform/index.ts";
 import settingsDefaults from "../settings-defaults.ts";
 import settingsManagerHelpers from "../settings-manager-helpers.ts";
 import type SettingsManager from "../settings-manager.ts";
@@ -13,8 +12,7 @@ import type settingsSchemaTypes from "../settings-schema.types.ts";
 const { DEFAULT_COMPACTION_TOKEN_SETTINGS, isMergeableObject } = settingsManagerHelpers;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 const { resolvePath } = pathsModule;
-const { readEnv } = processEnv;
-const { dirname, join } = platformNode;
+const { dirname, join, readEnv } = platform;
 const { getAgentDir } = config;
 
 export default class ContextSettings {

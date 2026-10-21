@@ -4,11 +4,11 @@ import text from "../../utils/text.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 
 const { markPathIgnoredByCloudSync } = pathsModule;
-const { join } = platformNode;
+const { join } = platformModule;
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 const { stripBom } = text;
 const { CONFIG_DIR_NAME } = config;

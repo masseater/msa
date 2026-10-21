@@ -1,4 +1,4 @@
-import platform from "../../core/platform.ts";
+import platform from "../../core/platform/index.ts";
 import interop from "../../utils/interop.ts";
 import client from "./client.ts";
 import type clientTypes from "./client.types.ts";

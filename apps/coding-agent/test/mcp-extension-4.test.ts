@@ -4,11 +4,11 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import runtime from "../src/extensions/mcp/runtime.ts";
 import mcpConnectionSupport from "./mcp-connection-support.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { McpOAuthCredentialStore, McpServerConnection, createDefaultTransport } = runtime;
 const { McpHttpError } = mcp;
 

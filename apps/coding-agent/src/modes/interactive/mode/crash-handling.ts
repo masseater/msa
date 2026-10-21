@@ -1,6 +1,6 @@
 import config from "../../../config.ts";
 import crashLog from "../../../core/crash-log.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import shell from "../../../utils/shell.ts";
 import interactiveModeHelpers from "../interactive-mode-helpers.ts";
 import interactiveModeSupport from "../interactive-mode-support.ts";
@@ -10,7 +10,7 @@ const { killTrackedDetachedChildren } = shell;
 const { isDeadTerminalError } = interactiveModeHelpers;
 const { formatCrashExtensionHint } = interactiveModeSupport;
 const { findExtensionStackMatches, recordCrash } = crashLog;
-const { writeError } = platformModule;
+const { writeError } = platform;
 
 export default class CrashHandling {
   private readonly mode: InteractiveMode;

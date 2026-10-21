@@ -1,7 +1,7 @@
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import skillDirectory from "./skill-directory.ts";
 import skillFile from "./skill-file.ts";
@@ -9,7 +9,7 @@ import type skillsTypes from "./skills.types.ts";
 
 const { statSync, existsSync } = nodeFs;
 const { canonicalizePath, isPathWithin, resolvePath } = paths;
-const { resolve, join } = platformNode;
+const { join, resolve } = platformModule;
 const { CONFIG_DIR_NAME, getAgentDir } = config;
 const { loadSkillFromFile } = skillFile;
 const { loadSkillsFromDirInternal } = skillDirectory;

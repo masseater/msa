@@ -1,9 +1,9 @@
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import type skillsInternalTypes from "./skills-internal.types.ts";
 
 const { readFileSync, existsSync } = nodeFs;
-const { join, relative, sep } = platformNode;
+const { join, relative, sep } = platformModule;
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
 

@@ -5,13 +5,13 @@ import * as Schema from "effect/Schema";
 import childProcess from "../utils/child-process.ts";
 import shell from "../utils/shell.ts";
 import awaitingModule from "./awaiting.ts";
-import processEnv from "./process-env.ts";
+import platform from "./platform/index.ts";
 import type tregTypes from "./treg.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { spawnProcess, spawnProcessSync, waitForChildProcess } = childProcess;
 const { findExecutableOnPath } = shell;
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platform;
 
 const PREFERRED_VENDOR = "tinyfish";
 const MAX_COST_USD = "0.05";

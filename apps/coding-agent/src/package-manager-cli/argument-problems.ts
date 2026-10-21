@@ -1,11 +1,11 @@
 import chalk from "chalk";
 
 import config from "../config.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type packageManagerCliInternalTypes from "../package-manager-cli-internal.types.ts";
 import help from "./help.ts";
 
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { APP_NAME } = config;
 const { getPackageCommandUsage } = help;
 

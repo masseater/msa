@@ -1,14 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import editApply from "./edit-apply.ts";
 import editInput from "./edit-input.ts";
 import type editTypes from "./edit.types.ts";
 import fileMutationQueue from "./file-mutation-queue.ts";
 import pathUtils from "./path-utils.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const { performEdit } = editApply;
 const { validateEditInput } = editInput;

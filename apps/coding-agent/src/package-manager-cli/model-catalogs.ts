@@ -3,11 +3,9 @@ import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
 import ModelRuntime from "../core/model-runtime.ts";
-import platformNode from "../core/platform-node.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 
-const { join } = platformNode;
-const { writeLog, writeError } = platformModule;
+const { join, writeError, writeLog } = platform;
 const { awaited, awaiting } = awaitingModule;
 
 import srcConfig from "../config.ts";

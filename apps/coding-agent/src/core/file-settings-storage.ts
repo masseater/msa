@@ -2,16 +2,14 @@ import lockfile from "proper-lockfile";
 
 import config from "../config.ts";
 import pathsModule from "../utils/paths.ts";
-import platformNode from "./platform-node.ts";
-import platformModule from "./platform.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import type settingsManagerTypes from "./settings-manager.types.ts";
 
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 const { resolvePath } = pathsModule;
-const { dirname, join } = platformNode;
+const { dirname, join, nowMs } = platformModule;
 const { CONFIG_DIR_NAME } = config;
-const { nowMs } = platformModule;
 
 export default class FileSettingsStorage implements settingsManagerTypes.SettingsStorage {
   private globalSettingsPath: string;

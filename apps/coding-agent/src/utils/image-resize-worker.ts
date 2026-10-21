@@ -1,11 +1,12 @@
-import { parentPort } from "node:worker_threads";
-
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
+import nodeWorkerThreads from "../core/platform/node/worker-threads.ts";
 import errors from "./errors.ts";
 import imageResizeCore from "./image-resize-core.ts";
 import type imageResizeCoreTypes from "./image-resize-core.types.ts";
+
+const { parentPort } = nodeWorkerThreads;
 
 const { IMAGE_RESIZE_WORKER_RESPONSE_TYPE, resizeImageInProcess } = imageResizeCore;
 const { awaited, awaiting } = awaitingModule;

@@ -2,19 +2,16 @@ import type aiTypes from "@msa/ai/index.types";
 import chalk from "chalk";
 
 import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import pathUtils from "../core/tools/path-utils.ts";
 import errors from "../utils/errors.ts";
 import imageProcess from "../utils/image-process.ts";
-import nodeFs from "../utils/node-fs.ts";
 import textModule from "../utils/text.ts";
 
 const { awaited } = awaitingModule;
-const { resolve } = platformNode;
+const { resolve, writeError } = platform;
 const { resolveReadPath } = pathUtils;
-const { access, fileSize, readFile, readText } = nodeFs;
-const { writeError } = platform;
+const { access, fileSize, readFile, readText } = platform.files;
 const { processImage } = imageProcess;
 const { stripBom } = textModule;
 const { toErrorMessage } = errors;

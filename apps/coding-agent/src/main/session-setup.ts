@@ -2,7 +2,7 @@ import chalk from "chalk";
 
 import argsModule from "../cli/args.ts";
 import type argsTypes from "../cli/args.types.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import ProjectTrustStore from "../core/project-trust-store.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
 import timings from "../core/timings.ts";
@@ -11,7 +11,7 @@ import sessionCwdCheck from "./session-cwd-check.ts";
 import sessionLocation from "./session-location.ts";
 
 const { normalizeSessionName } = argsModule;
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { time } = timings;
 const { hasTrustRequiringProjectResources } = trustManager;
 const { ensureSessionCwd } = sessionCwdCheck;

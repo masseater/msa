@@ -1,14 +1,14 @@
-import { registerHooks } from "node:module";
-import { fileURLToPath, pathToFileURL } from "node:url";
-
-import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform/index.ts";
 import nodeFs from "../core/platform/node/fs.ts";
-import platformExtra from "../utils/platform-extra.ts";
+import nodeModule from "../core/platform/node/module.ts";
+import nodeUrl from "../core/platform/node/url.ts";
+
+const { registerHooks } = nodeModule;
+const { fileURLToPath, pathToFileURL } = nodeUrl;
 
 const { existsSync, readFileSync, statSync } = nodeFs;
 
-const { resolve, sep } = platformNode;
-const { extname } = platformExtra;
+const { extname, resolve, sep } = platformModule;
 
 interface TsConfig {
   readonly compilerOptions?: {

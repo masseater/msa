@@ -2,7 +2,7 @@ import { RealFSProvider, VM } from "@earendil-works/gondolin";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect } from "effect";
 
-import nodePath from "../../../src/core/platform/node/path.ts";
+import platform from "../../../src/core/platform/index.ts";
 import paths from "./paths.ts";
 
 const { GUEST_WORKSPACE } = paths;
@@ -24,7 +24,7 @@ const startVm = (state: VmState, localCwd: string, ctx: Context): Promise<VM> =>
       );
       const created = yield* Effect.promise(() =>
         VM.create({
-          sessionLabel: `msa ${nodePath.basename(localCwd)}`,
+          sessionLabel: `msa ${platform.basename(localCwd)}`,
           vfs: { mounts: { [GUEST_WORKSPACE]: new RealFSProvider(localCwd) } },
         }),
       );

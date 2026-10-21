@@ -1,6 +1,6 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import platform from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import type treeListInternalTypes from "./tree-list-internal.types.ts";
 import TreeEntryText from "./tree-list/tree-entry-text.ts";
 import TreeFilter from "./tree-list/tree-filter.ts";

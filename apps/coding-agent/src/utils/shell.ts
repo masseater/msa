@@ -1,18 +1,14 @@
 import config from "../config.ts";
-import platformNode from "../core/platform-node.ts";
-import platformModule from "../core/platform.ts";
+import platformModule from "../core/platform/index.ts";
 import nodeChildProcess from "../core/platform/node/child-process.ts";
 import nodeFs from "../core/platform/node/fs.ts";
-import platformExtra from "./platform-extra.ts";
 import type shellTypes from "./shell.types.ts";
 
 const { spawn, spawnSync } = nodeChildProcess;
 const { existsSync } = nodeFs;
 
-const { readEnv } = platformModule;
+const { delimiter, join, readEnv } = platformModule;
 const { getBinDir } = config;
-const { delimiter } = platformExtra;
-const { join } = platformNode;
 
 function isLegacyWslBashPath(path: string): boolean {
   const normalized = path.replace(/\//gu, "\\").toLowerCase();

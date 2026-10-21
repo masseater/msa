@@ -1,7 +1,6 @@
-import type { DatabaseSync } from "node:sqlite";
-
 import type { Effect } from "effect";
 
+import type DatabaseSync from "../platform/node/sqlite.ts";
 import type errorsTypes from "./errors.types.ts";
 import type telemetryTypesNs from "./telemetry.types.ts";
 import type workerTypes from "./worker.ts";

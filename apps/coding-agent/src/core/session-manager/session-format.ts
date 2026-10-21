@@ -1,10 +1,10 @@
 import ai from "@msa/ai";
 
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 
 const { uuidv7 } = ai;
-const { randomUuid } = platformNode;
+const { randomUuid } = platform;
 
 const CURRENT_SESSION_VERSION = 3;
 

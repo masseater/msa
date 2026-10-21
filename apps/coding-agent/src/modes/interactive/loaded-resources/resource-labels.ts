@@ -1,11 +1,11 @@
+import platform from "../../../core/platform/index.ts";
 import type sourceInfoTypes from "../../../core/source-info.types.ts";
 import git from "../../../utils/git.ts";
 import pathsModule from "../../../utils/paths.ts";
-import pathModule from "../../path.ts";
 import type loadedResourcesTypes from "../loaded-resources.types.ts";
 
 const { abbreviateHomePath, getCwdRelativePath } = pathsModule;
-const { isAbsolute, posixParse, posixRelative, relative, resolve } = pathModule;
+const { isAbsolute, posix, relative, resolve } = platform;
 const { parseGitUrl } = git;
 
 const toPosix = (p: string): string => p.replace(/\\/gu, "/");
@@ -38,7 +38,7 @@ function getShortPath(fullPath: string, sourceInfo?: sourceInfoTypes.SourceInfo)
       npmRootMatch?.[1] !== "" &&
       normalizedFullPath.startsWith(`${npmRootMatch[1]}/`)
     ) {
-      return posixRelative(normalizedBaseDir, normalizedFullPath);
+      return posix.relative(normalizedBaseDir, normalizedFullPath);
     }
 
     const relativePath = relative(resolve(baseDir), resolve(fullPath));
@@ -101,7 +101,7 @@ function getCompactPackageExtensionLabel(
   const packagePath = shortPath.startsWith("extensions/")
     ? shortPath.slice("extensions/".length)
     : shortPath;
-  const parsedPath = posixParse(packagePath);
+  const parsedPath = posix.parse(packagePath);
   if (parsedPath.name !== "index") {
     return `${sourceLabel}:${packagePath}`;
   }

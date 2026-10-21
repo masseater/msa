@@ -1,12 +1,12 @@
-import { crc32, deflateRawSync } from "node:zlib";
-
 import { dual } from "effect/Function";
 
-import platform from "../core/platform.ts";
-import nodeFs from "./node-fs.ts";
+import platform from "../core/platform/index.ts";
+import nodeZlib from "../core/platform/node/zlib.ts";
+
+const { crc32, deflateRawSync } = nodeZlib;
 
 const { nowMs, toDate } = platform;
-const { writeFile } = nodeFs;
+const { writeFile } = platform.files;
 
 interface ZipEntry {
   name: string;

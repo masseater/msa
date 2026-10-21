@@ -3,13 +3,13 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import externalServices from "../src/core/external-services.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import tregModule from "../src/core/treg.ts";
 import webToolsSupport from "./web-tools-support.ts";
 
 const { EXTERNAL_SERVICES, findExternalService } = externalServices;
 const { loginTreg, logoutTreg } = tregModule;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 const { fakeTreg } = webToolsSupport;
 

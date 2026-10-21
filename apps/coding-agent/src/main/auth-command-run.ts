@@ -6,12 +6,12 @@ import type authCommandTypes from "../cli/auth-command.types.ts";
 import credentialPrint from "../cli/credential-print.ts";
 import awaitingModule from "../core/awaiting.ts";
 import ModelRuntime from "../core/model-runtime.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import authCheckRun from "./auth-check-run.ts";
 
 const { resolveCredentialForPrint } = credentialPrint;
 const { awaited } = awaitingModule;
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { checkAuthAndPrint } = authCheckRun;
 
 function* printCredential(

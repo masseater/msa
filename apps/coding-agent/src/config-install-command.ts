@@ -1,14 +1,10 @@
 import type configInstallCommandTypes from "./config-install-command.types.ts";
 import configPackage from "./config-package.ts";
-import platformNode from "./core/platform-node.ts";
-import platformModule from "./core/platform.ts";
+import platform from "./core/platform/index.ts";
 import childProcess from "./utils/child-process.ts";
-import platformExtra from "./utils/platform-extra.ts";
 
 const { getPackageDir, isBunBinary, isBunRuntime, moduleDirname } = configPackage;
-const { windowsBasename, windowsDirname } = platformExtra;
-const { basename, dirname } = platformNode;
-const { readEnv } = platformModule;
+const { basename, dirname, readEnv, windowsBasename, windowsDirname } = platform;
 const { spawnProcessSync } = childProcess;
 
 function normalizeSelfUpdatePackageTarget(

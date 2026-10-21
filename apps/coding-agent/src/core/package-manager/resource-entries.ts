@@ -4,12 +4,12 @@ import type defaultPackageManagerInternalTypes from "../default-package-manager-
 import directoryEntry from "../directory-entry.ts";
 import ignoreRules from "../ignore-rules.ts";
 import manifestModule from "../manifest.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import resourceFiles from "./resource-files.ts";
 
 const { readMsaManifest } = manifestModule;
-const { dirname, resolve, relative, join } = platformNode;
+const { dirname, join, relative, resolve } = platformModule;
 const { readdirSync, existsSync, statSync } = nodeFs;
 const { FILE_PATTERNS, collectFiles } = resourceFiles;
 const { toPosixPath, addIgnoreRules } = ignoreRules;

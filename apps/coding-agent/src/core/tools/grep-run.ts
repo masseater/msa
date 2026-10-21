@@ -1,16 +1,14 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import toolsManager from "../../utils/tools-manager.ts";
 import command from "../platform/command.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import GrepFormatter from "./grep-format.ts";
 import grepSupport from "./grep-support.ts";
 import type grepSupportTypes from "./grep-support.types.ts";
 import pathUtils from "./path-utils.ts";
 import RgMatchCollector from "./rg-match-collector.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const { DEFAULT_GREP_LIMIT, formatGrepOutput, rgArguments } = grepSupport;
 const { ToolFailure, abortedBy, fromPromise, nonEmptyOr, rethrowCause, unwrapForeign } = platform;

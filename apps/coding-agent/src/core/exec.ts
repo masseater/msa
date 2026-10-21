@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import childProcess from "../utils/child-process.ts";
 import awaitingModule from "./awaiting.ts";
 import type execTypes from "./exec.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import nodeChildProcess from "./platform/node/child-process.ts";
 import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
 

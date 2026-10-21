@@ -3,7 +3,7 @@ import tui from "@msa/tui";
 
 import experimental from "../../../../core/experimental.ts";
 import goalModule from "../../../../core/goal.ts";
-import platform from "../../../../core/platform.ts";
+import platform from "../../../../core/platform/index.ts";
 import summary from "../../../../core/pr-watch/summary.ts";
 import themeModule from "../../theme/theme.ts";
 import type FooterComponent from "../footer.ts";

@@ -1,14 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import outputFiles from "../../utils/output-files.ts";
 import type outputFilesTypes from "../../utils/output-files.types.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import type outputAccumulatorTypes from "./output-accumulator.types.ts";
 import truncate from "./truncate.ts";
 import type truncateTypes from "./truncate.types.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const { createOutputFileStream } = outputFiles;
 const { rethrowCause } = platform;

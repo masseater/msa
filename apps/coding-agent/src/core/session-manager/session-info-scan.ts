@@ -1,7 +1,7 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import type nodeFsTypes from "../platform/node/fs.types.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 

@@ -1,14 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import fileMutationQueue from "./file-mutation-queue.ts";
 import pathUtils from "./path-utils.ts";
 import type writeTypes from "./write.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
-const { ToolFailure, fromMaybePromise, pathOperations, rethrowCause } = platform;
+const { ToolFailure, fromMaybePromise, rethrowCause } = platform;
 const { resolveToCwd } = pathUtils;
 const { withFileMutationQueue } = fileMutationQueue;
 
@@ -59,7 +57,7 @@ interface WriteFileRequest {
 
 const writeFile = ({ cwd, path, content, ops, signal }: WriteFileRequest) => {
   const absolutePath = resolveToCwd(path, cwd);
-  const dir = pathOperations.dirname(absolutePath);
+  const dir = platform.dirname(absolutePath);
   return withFileMutationQueue(absolutePath, () =>
     nodeRuntime.runPromise(writeUnderQueue(ops, dir, absolutePath, content, path, signal)),
   );

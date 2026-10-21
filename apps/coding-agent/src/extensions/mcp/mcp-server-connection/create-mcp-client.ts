@@ -1,14 +1,15 @@
-import { pathToFileURL } from "node:url";
-
 import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
 
 import configModule from "../../../config.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
+import nodeUrl from "../../../core/platform/node/url.ts";
 import type McpServerConnection from "../mcp-server-connection.ts";
 
+const { pathToFileURL } = nodeUrl;
+
 const { McpClient } = mcp;
-const { basename } = platformNode;
+const { basename } = platform;
 const { VERSION } = configModule;
 
 const createMcpClient = (connection: McpServerConnection): mcpTypes.McpClient => {

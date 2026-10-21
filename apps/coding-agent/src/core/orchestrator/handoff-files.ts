@@ -4,16 +4,15 @@ import * as Schema from "effect/Schema";
 
 import paths from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
-import nodeCrypto from "../platform/node/crypto.ts";
+import platform from "../platform/index.ts";
 import nodeFsPromises from "../platform/node/fs-promises.ts";
-import nodePath from "../platform/node/path.ts";
 import type handoffFilesTypes from "./handoff-files.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
 
-const { randomUUID } = nodeCrypto;
+const { randomUuid } = platform;
 const { mkdir, readFile, readdir, stat, writeFile } = nodeFsPromises;
-const { basename, dirname, join, resolve } = nodePath;
+const { basename, dirname, join, resolve } = platform;
 
 const { resolvePath } = paths;
 
@@ -34,7 +33,7 @@ function handoffFileName(createdAt: number): string {
   const parts = DateTime.toPartsUtc(DateTime.makeUnsafe(createdAt));
   const day = `${parts.year}${pad(parts.month)}${pad(parts.day)}`;
   const time = `${pad(parts.hour)}${pad(parts.minute)}${pad(parts.second)}`;
-  return `${day}T${time}Z-${randomUUID().slice(0, 6)}.md`;
+  return `${day}T${time}Z-${randomUuid().slice(0, 6)}.md`;
 }
 
 function isDirectory(path: string): Promise<boolean> {

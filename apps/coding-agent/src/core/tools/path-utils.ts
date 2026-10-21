@@ -1,10 +1,8 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 import { dual } from "effect/Function";
 
 import paths from "../../utils/paths.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+import nodeRuntime from "../platform/runtime.ts";
 
 const { normalizePath, resolvePath } = paths;
 

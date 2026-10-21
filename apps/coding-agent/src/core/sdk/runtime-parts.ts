@@ -2,7 +2,7 @@ import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
 import ModelRuntime from "../model-runtime.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import SessionManager from "../session-manager.ts";
 import sessionFiles from "../session-manager/session-files.ts";
 import SettingsManager from "../settings-manager.ts";
@@ -11,7 +11,7 @@ import type sdkInternalTypes from "./sdk-internal.types.ts";
 const { getAgentDir } = config;
 const { awaited } = awaitingModule;
 const { resolvePath } = paths;
-const { join } = platformNode;
+const { join } = platform;
 const { getDefaultSessionDir } = sessionFiles;
 
 function* createRuntimeParts(options: sdkInternalTypes.Options) {

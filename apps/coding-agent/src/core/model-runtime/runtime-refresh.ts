@@ -5,7 +5,7 @@ import abortModule from "../../utils/abort.ts";
 import awaitingModule from "../awaiting.ts";
 import ModelConfig from "../model-config.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import type ModelAvailability from "./model-availability.ts";
 import type ProviderCatalog from "./provider-catalog.ts";
 

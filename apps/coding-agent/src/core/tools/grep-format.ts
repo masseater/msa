@@ -5,7 +5,7 @@ import type grepFormatTypes from "./grep-format.types.ts";
 import type grepSupportTypes from "./grep-support.types.ts";
 import truncate from "./truncate.ts";
 
-const { fromPromise, pathOperations } = platform;
+const { fromPromise } = platform;
 const { truncateLine } = truncate;
 
 export default class GrepFormatter {
@@ -19,12 +19,12 @@ export default class GrepFormatter {
 
   formatPath(filePath: string): string {
     if (this.options.isDirectory) {
-      const relative = pathOperations.relative(this.options.searchPath, filePath);
+      const relative = platform.relative(this.options.searchPath, filePath);
       if (relative !== "" && !relative.startsWith("..")) {
         return relative.replace(/\\/gu, "/");
       }
     }
-    return pathOperations.basename(filePath);
+    return platform.basename(filePath);
   }
 
   formatMatch(match: grepSupportTypes.RgMatch): Effect.Effect<string[]> {

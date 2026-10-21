@@ -4,7 +4,7 @@ import paths from "../../utils/paths.ts";
 import type AgentSessionRuntime from "../agent-session-runtime.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import sessionCwd from "../session-cwd.ts";
 import SessionImportFileNotFoundError from "../session-import-file-not-found-error.ts";
@@ -14,7 +14,7 @@ const { awaitingWith, performed } = awaitingModule;
 const { assertSessionCwdExists } = sessionCwd;
 const { existsSync, constants, copyFileSync, mkdirSync } = nodeFs;
 const { resolvePath } = paths;
-const { basename, join, parse, resolve } = platformNode;
+const { basename, join, parse, resolve } = platformModule;
 
 const importDestination = (
   resolvedPath: string,

@@ -2,8 +2,8 @@ import * as Effect from "effect/Effect";
 
 import configModule from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
+import platform from "../../../core/platform/index.ts";
 import ProjectTrustStore from "../../../core/project-trust-store.ts";
-import nodeFs from "../../../utils/node-fs.ts";
 import type cliInternalTypes from "../cli-internal.types.ts";
 import type cliTypes from "../cli.types.ts";
 import mcpConfig from "../config.ts";
@@ -11,7 +11,7 @@ import runtime from "../runtime.ts";
 
 const { APP_NAME } = configModule;
 const { awaited, awaiting } = awaitingModule;
-const { exists } = nodeFs;
+const { exists } = platform.files;
 const { loadMcpConfig } = mcpConfig;
 const { McpOAuthCredentialStore } = runtime;
 

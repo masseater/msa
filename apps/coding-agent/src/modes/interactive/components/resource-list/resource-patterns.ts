@@ -1,11 +1,11 @@
 import config from "../../../../config.ts";
+import platform from "../../../../core/platform/index.ts";
 import type settingsManagerTypes from "../../../../core/settings-manager.types.ts";
 import pathsModule from "../../../../utils/paths.ts";
-import pathModule from "../../../path.ts";
 import type resourceListInternalTypes from "../resource-list-internal.types.ts";
 import type ResourceList from "../resource-list.ts";
 
-const { dirname, join, relative } = pathModule;
+const { dirname, join, relative } = platform;
 const { canonicalizePath, isLocalPath, resolvePath } = pathsModule;
 const { CONFIG_DIR_NAME } = config;
 

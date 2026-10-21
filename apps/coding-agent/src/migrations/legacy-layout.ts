@@ -2,8 +2,7 @@ import chalk from "chalk";
 
 import configModule from "../config.ts";
 import keybindings from "../core/keybindings.ts";
-import platformNode from "../core/platform-node.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import nodeFs from "../core/platform/node/fs.ts";
 import text from "../utils/text.ts";
 
@@ -11,8 +10,7 @@ const { rmSync, readdirSync, mkdirSync, writeFileSync, renameSync, readFileSync,
   nodeFs;
 const { getBinDir, getAgentDir } = configModule;
 const { migrateKeybindingsConfig } = keybindings;
-const { writeLog } = platform;
-const { dirname, join } = platformNode;
+const { dirname, join, writeLog } = platform;
 const { stripBom } = text;
 
 function migrateApiKeys(

@@ -1,18 +1,19 @@
-import { createInterface } from "node:readline";
-
 import type compatTypes from "@msa/ai/compat.types";
 import { Effect, Option, Schema, Stream } from "effect";
 
-import processEnv from "../../core/process-env.ts";
 import childProcess from "../../utils/child-process.ts";
+import platformModule from "../platform/index.ts";
 import type nodeChildProcessTypes from "../platform/node/child-process.types.ts";
+import nodeReadline from "../platform/node/readline.ts";
 import replyModule from "./reply.ts";
 import type replyTypes from "./reply.types.ts";
 import type runTypes from "./run.types.ts";
 
+const { createInterface } = nodeReadline;
+
 const { createReply } = replyModule;
 const { spawnProcess, waitForChildProcess } = childProcess;
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platformModule;
 
 const SPAWN_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1500;

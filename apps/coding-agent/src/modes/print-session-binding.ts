@@ -5,7 +5,7 @@ import type agentSessionTypes from "../core/agent-session.types.ts";
 import awaitingModule from "../core/awaiting.ts";
 import type extensionsTypes from "../core/extensions/index.types.ts";
 import outputGuard from "../core/output-guard.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import printModeOutput from "./print-mode-output.ts";
 import type printModeTypes from "./print-mode.types.ts";
 
@@ -42,7 +42,7 @@ export default class PrintSessionBinding {
             commandContextActions: this.commandContextActions(),
             mode: this.mode === "json" ? "json" : "print",
             onError: (err) => {
-              platformModule.writeError(`Extension error (${err.extensionPath}): ${err.error}`);
+              platform.writeError(`Extension error (${err.extensionPath}): ${err.error}`);
             },
           }),
         );

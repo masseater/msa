@@ -1,5 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
-
+import type DatabaseSync from "../platform/node/sqlite.ts";
 import dbModule from "./db.ts";
 import taskRows from "./task-rows.ts";
 import type taskStoreInternalTypes from "./task-store-internal.types.ts";

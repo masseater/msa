@@ -5,7 +5,7 @@ import * as Effect from "effect/Effect";
 import awaitingModule from "./awaiting.ts";
 import NestedCallRecorder from "./nested-call-recorder.ts";
 import type nestedToolCallsTypes from "./nested-tool-calls.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 const { awaited, awaitingWith } = awaitingModule;
 const { makeLatch } = platform;
 

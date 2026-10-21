@@ -8,7 +8,7 @@ import awaitingModule from "../awaiting.ts";
 import type runnerTypes from "../extensions/runner.types.ts";
 import memoryFormat from "../memory/memory-format.ts";
 import memoryModule from "../memory/memory.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 
 const { nowMs } = platform;
 const { awaited, awaitingWith, performed } = awaitingModule;

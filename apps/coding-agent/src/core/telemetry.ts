@@ -1,7 +1,7 @@
-import processEnv from "./process-env.ts";
+import platform from "./platform/index.ts";
 import type settingsManagerTypes from "./settings-manager.types.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
   if (value === undefined || value === "") return false;

@@ -2,10 +2,10 @@ import type { ContentBlockParam } from "@anthropic-ai/sdk/resources/messages";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type compatTypes from "@msa/ai/compat.types";
 
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import transcript from "./transcript.ts";
 
-const { sha256Hex } = platformNode;
+const { sha256Hex } = platform;
 const { textFromContent } = transcript;
 
 type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";

@@ -2,13 +2,13 @@ import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import defaultResourceLoaderHelpers from "../default-resource-loader-helpers.ts";
 import type DefaultResourceLoader from "../default-resource-loader.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import resourceLoader from "../resource-loader.ts";
 import type resourceLoaderTypes from "../resource-loader.types.ts";
 
 const { existsSync } = nodeFs;
-const { join } = platformNode;
+const { join } = platformModule;
 const { CONFIG_DIR_NAME } = config;
 const { resolvePath } = pathsModule;
 const { resolvePromptInput } = defaultResourceLoaderHelpers;

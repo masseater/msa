@@ -6,7 +6,7 @@ import * as Effect from "effect/Effect";
 
 import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 
 const { sleepFor } = platform;
 const { retryDelayMs } = ai;

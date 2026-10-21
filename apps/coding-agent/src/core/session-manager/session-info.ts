@@ -1,14 +1,15 @@
-import { createInterface } from "readline";
-
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import nodeFsPromises from "../platform/node/fs-promises.ts";
 import nodeFs from "../platform/node/fs.ts";
 import type nodeFsTypes from "../platform/node/fs.types.ts";
+import nodeReadline from "../platform/node/readline.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionFormat from "./session-format.ts";
 import SessionInfoScan from "./session-info-scan.ts";
+
+const { createInterface } = nodeReadline;
 
 const { stat } = nodeFsPromises;
 const { awaited, awaiting } = awaitingModule;

@@ -1,8 +1,7 @@
-import { EventEmitter } from "node:events";
-
 import * as undici from "undici";
 
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
+import EventEmitter from "./platform/node/events.ts";
 
 const { readEnv } = platform;
 

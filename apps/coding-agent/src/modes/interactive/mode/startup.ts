@@ -2,7 +2,7 @@ import tuiModule from "@msa/tui";
 import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import syntaxHighlight from "../../../utils/syntax-highlight.ts";
 import toolsManager from "../../../utils/tools-manager.ts";
 import chatViewport from "../chat-viewport.ts";
@@ -13,7 +13,7 @@ import themeModule from "../theme/theme.ts";
 const { theme, onThemeChange } = themeModule;
 const { Text } = tuiModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { writeLog } = platformModule;
+const { writeLog } = platform;
 const { formatKeyText } = keybindingHints;
 const { createChatViewport } = chatViewport;
 const { ensureTool } = toolsManager;

@@ -1,9 +1,9 @@
 import configModule from "../config.ts";
-import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform/index.ts";
 import nodeFs from "../core/platform/node/fs.ts";
 import text from "../utils/text.ts";
 
-const { join } = platformNode;
+const { join } = platformModule;
 const { getAgentDir } = configModule;
 const { writeFileSync, readFileSync, existsSync } = nodeFs;
 const { stripBom } = text;

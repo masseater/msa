@@ -1,6 +1,6 @@
 import { Effect } from "effect";
 
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import claudeCodeContent from "./claude-code-content.ts";
 import Input from "./claude-code-input.ts";
 import claudeCodeQuery from "./claude-code-query.ts";

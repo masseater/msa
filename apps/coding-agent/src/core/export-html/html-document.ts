@@ -1,16 +1,14 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime, Schema } from "effect";
+import { Effect, FileSystem, Schema } from "effect";
 
 import config from "../../config.ts";
 import themeModule from "../../modes/interactive/theme/theme.ts";
 import paths from "../../utils/paths.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import exportColors from "./export-colors.ts";
 import type exportTypesTypes from "./export-types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
-const { nonEmptyOr, pathOperations, rethrowCause } = platform;
+const { nonEmptyOr, rethrowCause } = platform;
 const { APP_NAME, getExportTemplateDir } = config;
 const { deriveExportColors, generateThemeVars } = exportColors;
 const { getResolvedThemeColors, getThemeExportColors } = themeModule;
@@ -20,7 +18,7 @@ const readTemplates = (templateDir: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const read = (...segments: string[]) =>
-      fs.readFileString(pathOperations.join(templateDir, ...segments), "utf-8");
+      fs.readFileString(platform.join(templateDir, ...segments), "utf-8");
     return {
       hljsJs: yield* read("vendor", "highlight.min.js"),
       markedJs: yield* read("vendor", "marked.min.js"),
@@ -75,7 +73,7 @@ const writeExport = Effect.fn("writeExport")(function* (
   const outputPath =
     opts.outputPath !== undefined && opts.outputPath !== ""
       ? normalizePath(opts.outputPath)
-      : `${APP_NAME}-session-${pathOperations.basename(inputFile, ".jsonl")}.html`;
+      : `${APP_NAME}-session-${platform.basename(inputFile, ".jsonl")}.html`;
   yield* FileSystem.FileSystem.use((fs) => fs.writeFileString(outputPath, html));
   return outputPath;
 });

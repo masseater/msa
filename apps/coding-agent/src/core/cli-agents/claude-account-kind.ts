@@ -2,7 +2,7 @@ import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 
 import type accountsTypes from "../accounts.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import claudeAccountsModule from "./claude-accounts.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 

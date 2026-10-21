@@ -1,6 +1,6 @@
-import nodeFs from "./node-fs.ts";
+import platform from "../core/platform/index.ts";
 
-const { readHead } = nodeFs;
+const { readHead } = platform.files;
 
 const IMAGE_TYPE_SNIFF_BYTES = 4100;
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];

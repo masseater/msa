@@ -1,16 +1,15 @@
 import config from "../../../config.ts";
-import platform from "../../../core/platform.ts";
-import type platformTypes from "../../../core/platform.types.ts";
+import platform from "../../../core/platform/index.ts";
+import type platformTypes from "../../../core/platform/index.types.ts";
 import nodeFs from "../../../core/platform/node/fs.ts";
 import type nodeFsTypes from "../../../core/platform/node/fs.types.ts";
 import fsWatch from "../../../utils/fs-watch.ts";
-import pathModule from "../../path.ts";
 import systemTheme from "./system-theme.ts";
 import themeLoader from "./theme-loader.ts";
 import themeState from "./theme-state.ts";
 
 const { getCustomThemesDir } = config;
-const { join } = pathModule;
+const { join } = platform;
 const { closeWatcher, watchWithErrorHandler } = fsWatch;
 const { selection } = themeState;
 

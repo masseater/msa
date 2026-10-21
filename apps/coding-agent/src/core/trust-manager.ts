@@ -1,16 +1,15 @@
-import { homedir } from "node:os";
-
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
-import processEnv from "./process-env.ts";
+import nodeOs from "./platform/node/os.ts";
 import type trustManagerTypes from "./trust-manager.types.ts";
+
+const { homedir } = nodeOs;
 
 const { existsSync } = nodeFs;
 const { canonicalizePath, resolvePath } = paths;
-const { dirname, join } = platformNode;
-const { readEnv } = processEnv;
+const { dirname, join, readEnv } = platformModule;
 const { CONFIG_DIR_NAME } = config;
 
 const TRUST_REQUIRING_PROJECT_CONFIG_RESOURCES = [

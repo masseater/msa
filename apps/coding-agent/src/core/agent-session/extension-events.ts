@@ -5,7 +5,7 @@ import { isNullish } from "effect/Predicate";
 import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 
 const { nowMs } = platform;
 const { awaited, awaitingWith, performed } = awaitingModule;

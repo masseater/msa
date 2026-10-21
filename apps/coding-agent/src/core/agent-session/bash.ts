@@ -5,7 +5,7 @@ import awaitingModule from "../awaiting.ts";
 import bashExecutor from "../bash-executor.ts";
 import type bashExecutorTypes from "../bash-executor.types.ts";
 import type messagesTypes from "../messages.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import bashModule from "../tools/bash.ts";
 import type bashTypes from "../tools/bash.types.ts";
 

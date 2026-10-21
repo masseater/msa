@@ -1,20 +1,21 @@
-import { createRequire } from "module";
-import { homedir } from "os";
-import { fileURLToPath } from "url";
-
 import { dual } from "effect/Function";
 
 import type configPackageTypes from "./config-package.types.ts";
-import platformNode from "./core/platform-node.ts";
-import platform from "./core/platform.ts";
+import platform from "./core/platform/index.ts";
 import nodeFs from "./core/platform/node/fs.ts";
+import nodeModule from "./core/platform/node/module.ts";
+import nodeOs from "./core/platform/node/os.ts";
+import nodeUrl from "./core/platform/node/url.ts";
 import paths from "./utils/paths.ts";
 import text from "./utils/text.ts";
 
+const { createRequire } = nodeModule;
+const { homedir } = nodeOs;
+const { fileURLToPath } = nodeUrl;
+
 const { existsSync, readFileSync } = nodeFs;
 
-const { basename, dirname, join, resolve } = platformNode;
-const { readEnv } = platform;
+const { basename, dirname, join, readEnv, resolve } = platform;
 const { normalizePath } = paths;
 const { stripBom } = text;
 

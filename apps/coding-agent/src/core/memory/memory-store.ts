@@ -1,6 +1,6 @@
-import { DatabaseSync, type StatementSync } from "node:sqlite";
-
 import platform from "../platform/index.ts";
+import DatabaseSync from "../platform/node/sqlite.ts";
+import type nodeSqliteTypes from "../platform/node/sqlite.types.ts";
 import storeRow from "./store-row.ts";
 import type storeRowTypes from "./store-row.types.ts";
 import type storeTypesTypes from "./store-types.types.ts";
@@ -8,12 +8,12 @@ import storeVectors from "./store-vectors.ts";
 
 const { cosineSimilarity, encodeVector, phrase, reciprocalRankFusion, segmentWords } = storeVectors;
 const { toRecord } = storeRow;
-const { currentTimeMillis, randomHex } = platform;
+const { nowMs, randomHex } = platform;
 
 export default class MemoryStore {
   readonly databasePath: string;
   private readonly database: DatabaseSync;
-  private readonly statements = new Map<string, StatementSync>();
+  private readonly statements = new Map<string, nodeSqliteTypes.Statement>();
   private closed = false;
 
   constructor(databasePath: string) {
@@ -52,7 +52,7 @@ export default class MemoryStore {
     });
   }
 
-  private statement(sql: string): StatementSync {
+  private statement(sql: string): nodeSqliteTypes.Statement {
     let statement = this.statements.get(sql);
     if (statement === undefined) {
       statement = this.database.prepare(sql);
@@ -95,7 +95,7 @@ export default class MemoryStore {
   }
 
   save(input: storeTypesTypes.MemorySaveInput): storeTypesTypes.MemorySaveResult {
-    const now = input.now ?? currentTimeMillis();
+    const now = input.now ?? nowMs();
     const content = input.content.trim();
     const project = input.scope === "project" ? input.project : null;
     const existing = this.statement(
@@ -230,7 +230,7 @@ export default class MemoryStore {
     return true;
   }
 
-  markUsed(ids: readonly string[], now = currentTimeMillis()): void {
+  markUsed(ids: readonly string[], now = nowMs()): void {
     const statement = this.statement(
       `UPDATE memories SET use_count = use_count + 1, last_used_at = ? WHERE id = ?`,
     );

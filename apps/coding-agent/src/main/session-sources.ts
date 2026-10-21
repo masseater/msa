@@ -2,7 +2,7 @@ import chalk from "chalk";
 
 import sessionPicker from "../cli/session-picker.ts";
 import awaitingModule from "../core/awaiting.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import SessionManager from "../core/session-manager.ts";
 import type sessionManagerTypes from "../core/session-manager.types.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
@@ -11,7 +11,7 @@ import errorsModule from "../utils/errors.ts";
 import sessionLookup from "./session-lookup.ts";
 
 const { awaited } = awaitingModule;
-const { writeLog, writeError } = platformModule;
+const { writeError, writeLog } = platform;
 const { selectSession } = sessionPicker;
 const { stopThemeWatcher } = themeModule;
 const { toErrorMessage } = errorsModule;

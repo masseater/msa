@@ -1,7 +1,7 @@
-import processEnv from "./process-env.ts";
+import platform from "./platform/index.ts";
 import type resolveConfigValueInternalTypes from "./resolve-config-value-internal.types.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 const ENV_VAR_NAME_RE = /^[A-Za-z_][A-Za-z0-9_]*$/u;
 

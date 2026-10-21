@@ -1,18 +1,18 @@
-import { homedir } from "node:os";
-
 import type aiTypes from "@msa/ai/index.types";
 import all from "@msa/ai/providers/all";
 
-import nodePath from "../platform/node/path.ts";
-import processEnv from "../process-env.ts";
+import platformModule from "../platform/index.ts";
+import nodeOs from "../platform/node/os.ts";
 import provider from "./provider.ts";
 import run from "./run.ts";
 import type runTypes from "./run.types.ts";
 import transcript from "./transcript.ts";
 
-const { join } = nodePath;
+const { homedir } = nodeOs;
 
-const { envSnapshot, readEnv } = processEnv;
+const { join } = platformModule;
+
+const { envSnapshot, readEnv } = platformModule;
 const { flattenTranscript } = transcript;
 const { streamViaCli } = run;
 const { cliAgentProvider } = provider;

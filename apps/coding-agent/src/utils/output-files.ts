@@ -1,21 +1,19 @@
-import { tmpdir } from "node:os";
-
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform/index.ts";
 import platformNodeFs from "../core/platform/node/fs.ts";
-import nodeFs from "./node-fs.ts";
+import nodeOs from "../core/platform/node/os.ts";
 import type outputFilesTypes from "./output-files.types.ts";
-import platformExtra from "./platform-extra.ts";
+
+const { tmpdir } = nodeOs;
 
 const { createWriteStream } = platformNodeFs;
 
-const { join } = platformNode;
-const { randomHex } = platformExtra;
+const { join, randomHex } = platformModule;
 const { awaited, awaiting } = awaitingModule;
-const { writeFile } = nodeFs;
+const { writeFile } = platformModule.files;
 
 const OUTPUT_FILE_MODE = 0o600;
 

@@ -3,13 +3,13 @@ import * as Effect from "effect/Effect";
 
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type packageManagerCliInternalTypes from "../package-manager-cli-internal.types.ts";
 import versionCheck from "../utils/version-check.ts";
 import type versionCheckTypes from "../utils/version-check.types.ts";
 
 const { VERSION, APP_NAME, PACKAGE_NAME } = config;
-const { writeLog } = platformModule;
+const { writeLog } = platform;
 const { isNewerPackageVersion, formatVersionCheckError, getLatestMsaRelease } = versionCheck;
 const { awaited, awaiting } = awaitingModule;
 

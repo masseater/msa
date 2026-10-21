@@ -1,8 +1,8 @@
 import config from "../../../config.ts";
 import type packageManagerTypes from "../../../core/package-manager.types.ts";
+import platform from "../../../core/platform/index.ts";
 import sourceInfo from "../../../core/source-info.ts";
 import pathsModule from "../../../utils/paths.ts";
-import pathModule from "../../path.ts";
 import type resourceListInternalTypes from "./resource-list-internal.types.ts";
 
 type ResourceType = resourceListInternalTypes.ResourceType;
@@ -10,7 +10,7 @@ type ResourceGroup = resourceListInternalTypes.ResourceGroup;
 type ResourceSubgroup = resourceListInternalTypes.ResourceSubgroup;
 type PathMetadata = packageManagerTypes.PathMetadata;
 
-const { basename, dirname } = pathModule;
+const { basename, dirname } = platform;
 
 const RESOURCE_TYPES: ResourceType[] = ["extensions", "skills", "prompts", "themes"];
 const RESOURCE_TYPE_LABELS: Record<ResourceType, string> = {

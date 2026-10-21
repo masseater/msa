@@ -6,7 +6,7 @@ import type agentSessionTypes from "../agent-session.types.ts";
 import orchestratorSupport from "../orchestrator/orchestrator-support.ts";
 import Orchestrator from "../orchestrator/orchestrator.ts";
 import type orchestratorTypes from "../orchestrator/orchestrator.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import orchestratorCallbacks from "./orchestrator-callbacks.ts";
 
 const { schedule } = platform;

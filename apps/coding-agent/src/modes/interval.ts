@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
-import type platformTypes from "../core/platform.types.ts";
+import type platformTypes from "../core/platform/index.types.ts";
 
 const every: {
   (periodMs: number): (run: () => void) => platformTypes.Scheduled;

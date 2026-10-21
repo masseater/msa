@@ -1,13 +1,14 @@
-import { promisify } from "node:util";
-
 import crossSpawn from "cross-spawn";
 import { dual } from "effect/Function";
 
 import nodeChildProcess from "../core/platform/node/child-process.ts";
 import type nodeChildProcessTypes from "../core/platform/node/child-process.types.ts";
 import type nodeStreamTypes from "../core/platform/node/stream.types.ts";
+import nodeUtil from "../core/platform/node/util.ts";
 import ChildExit from "./child-exit.ts";
 import interop from "./interop.ts";
+
+const { promisify } = nodeUtil;
 
 const { execFile, spawn: nodeSpawn, spawnSync: nodeSpawnSync } = nodeChildProcess;
 

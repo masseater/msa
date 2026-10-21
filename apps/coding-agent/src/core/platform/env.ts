@@ -1,7 +1,7 @@
 import { ConfigProvider, Effect, Predicate } from "effect";
 import { dual } from "effect/Function";
 
-import type processEnvTypes from "./process-env.types.ts";
+import type platformTypes from "./index.types.ts";
 
 let overrides: Readonly<Record<string, string>> = {};
 
@@ -56,7 +56,7 @@ const envSnapshot = (): Record<string, string> => ({ ...liveSnapshot(), ...overr
 
 const envNames = (): ReadonlyArray<string> => Object.keys(envSnapshot());
 
-const applyValues = (values: processEnvTypes.EnvValues): void => {
+const applyValues = (values: platformTypes.EnvValues): void => {
   const next: Record<string, string> = { ...overrides };
   for (const [name, value] of Object.entries(values)) {
     if (value === undefined) delete next[name];
@@ -66,7 +66,7 @@ const applyValues = (values: processEnvTypes.EnvValues): void => {
 };
 
 const withEnv =
-  (values: processEnvTypes.EnvValues) =>
+  (values: platformTypes.EnvValues) =>
   <A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, R> =>
     Effect.acquireUseRelease(
       Effect.sync(() => {
@@ -81,7 +81,7 @@ const withEnv =
         }),
     );
 
-const processEnv = {
+const platformEnv = {
   deleteEnv,
   envNames,
   envSnapshot,
@@ -90,4 +90,4 @@ const processEnv = {
   writeEnv,
 };
 
-export default processEnv;
+export default platformEnv;

@@ -1,12 +1,10 @@
-import platformNode from "../platform-node.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import type SessionManager from "../session-manager.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionFormat from "./session-format.ts";
 
 const { generateId, CURRENT_SESSION_VERSION, createSessionId } = sessionFormat;
-const { nowIso } = platform;
-const { join } = platformNode;
+const { join, nowIso } = platform;
 
 const withoutLabels = (
   path: readonly sessionManagerTypes.SessionEntry[],

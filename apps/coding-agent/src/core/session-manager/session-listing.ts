@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionFiles from "./session-files.ts";
@@ -14,7 +14,7 @@ const { getSessionsDir } = config;
 const { loadAllSessions, listSessionsFromDir } = sessionInfoLoading;
 const { resolvePath, normalizePath } = paths;
 const { awaiting, performed } = awaitingModule;
-const { join } = platformNode;
+const { join } = platformModule;
 const { existsSync, readdirSync } = nodeFs;
 const { sortSessionInfos } = sessionInfo;
 const {

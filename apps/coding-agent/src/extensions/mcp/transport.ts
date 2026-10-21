@@ -1,14 +1,15 @@
-import { homedir } from "node:os";
-
 import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
 import { dual } from "effect/Function";
 
-import platformNode from "../../core/platform-node.ts";
+import platform from "../../core/platform/index.ts";
+import nodeOs from "../../core/platform/node/os.ts";
 import resolveConfigValueModule from "../../core/resolve-config-value.ts";
 import type configTypes from "./config.types.ts";
 
-const { join, resolve } = platformNode;
+const { homedir } = nodeOs;
+
+const { join, resolve } = platform;
 const { resolveConfigValueOrThrow, resolveHeadersOrThrow } = resolveConfigValueModule;
 
 const { StdioTransport, StreamableHttpTransport } = mcp;

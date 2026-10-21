@@ -1,12 +1,13 @@
-import { homedir } from "os";
-
 import { dual } from "effect/Function";
 
 import configInstallCommand from "./config-install-command.ts";
 import type configInstallCommandTypes from "./config-install-command.types.ts";
 import configPackage from "./config-package.ts";
-import platformNode from "./core/platform-node.ts";
+import platformModule from "./core/platform/index.ts";
 import nodeFs from "./core/platform/node/fs.ts";
+import nodeOs from "./core/platform/node/os.ts";
+
+const { homedir } = nodeOs;
 
 const { accessSync, constants, existsSync, realpathSync } = nodeFs;
 
@@ -17,7 +18,7 @@ const {
   normalizeSelfUpdatePackageTarget,
   readCommandOutput,
 } = configInstallCommand;
-const { dirname, join, resolve, sep } = platformNode;
+const { dirname, join, resolve, sep } = platformModule;
 const { RELEASES_URL, getPackageDir } = configPackage;
 
 function getGlobalPackageRoots(

@@ -1,10 +1,10 @@
 import config from "../../config.ts";
+import platform from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
-import nodePath from "../platform/node/path.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 
 const { mkdirSync, readFileSync, writeFileSync } = nodeFs;
-const { dirname, join } = nodePath;
+const { dirname, join } = platform;
 const { expandTildePath, getAgentDir } = config;
 
 type Account = claudeAccountsTypes.Account;

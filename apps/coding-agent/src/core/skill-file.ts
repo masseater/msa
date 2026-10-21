@@ -1,12 +1,12 @@
 import frontmatterModule from "../utils/frontmatter.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import type skillsTypes from "./skills.types.ts";
 import sourceInfoModule from "./source-info.ts";
 import type sourceInfoTypes from "./source-info.types.ts";
 
-const { dirname, basename } = platformNode;
+const { basename, dirname } = platformModule;
 const { parseFrontmatter } = frontmatterModule;
 const { readFileSync } = nodeFs;
 const { createSyntheticSourceInfo } = sourceInfoModule;

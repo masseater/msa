@@ -5,7 +5,7 @@ import type oauthTypes from "@msa/mcp/oauth.types";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
-import platform from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import type oauthTypesNs from "../oauth.types.ts";
 import oauthClient from "./oauth-client.ts";
 

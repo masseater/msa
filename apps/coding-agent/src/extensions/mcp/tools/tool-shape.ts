@@ -3,10 +3,10 @@ import { dual } from "effect/Function";
 import type { TSchema } from "typebox";
 
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import type configTypes from "../config.types.ts";
 
-const { sha256Hex } = platformNode;
+const { sha256Hex } = platform;
 
 function toToolExposure(exposure: configTypes.McpExposure): extensionsTypesTypes.ToolExposure {
   return exposure === "codemode" ? "deferred" : exposure;

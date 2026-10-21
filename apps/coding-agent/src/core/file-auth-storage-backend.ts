@@ -6,15 +6,13 @@ import config from "../config.ts";
 import paths from "../utils/paths.ts";
 import type authStorageTypes from "./auth-storage.types.ts";
 import awaitingModule from "./awaiting.ts";
-import platformNode from "./platform-node.ts";
-import platformModule from "./platform.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
-const { dirname } = platformNode;
+const { dirname, nowMs, randomUnit, sleepFor } = platformModule;
 const { getAuthPath } = config;
 const { normalizePath } = paths;
-const { nowMs, randomUnit, sleepFor } = platformModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const MAX_EPERM_RETRIES = 5;
 function getRetryableLockErrorCode(error: unknown): "ELOCKED" | "EPERM" | undefined {

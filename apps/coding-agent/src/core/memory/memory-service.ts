@@ -1,7 +1,7 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Fiber, FileSystem, ManagedRuntime } from "effect";
+import { Effect, Fiber, FileSystem } from "effect";
 
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import MemoryEmbedder from "./memory-embedder.ts";
 import memoryFormat from "./memory-format.ts";
 import memoryProject from "./memory-project.ts";
@@ -10,12 +10,10 @@ import type memoryTypesTypes from "./memory-types.ts";
 import storeTypesModule from "./store-types.ts";
 import type storeTypes from "./store.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
 const { projectNameOf } = memoryProject;
 const { formatMemoryStats, formatMemoryStatus, isMemoryKind } = memoryFormat;
 const { MEMORY_KINDS } = storeTypesModule;
-const { ToolFailure, fromPromise, pathOperations, unwrapForeign } = platform;
+const { ToolFailure, fromPromise, unwrapForeign } = platform;
 
 const REEMBED_BATCH_LIMIT = 25;
 const EXPLICIT_SEARCH_MIN_SCORE = 0.1;
@@ -31,7 +29,7 @@ export default class MemoryService {
 
   constructor(options: memoryTypesTypes.MemoryServiceOptions) {
     this.settings = options.settings;
-    this.projectName = options.project ?? (pathOperations.basename(options.cwd) || options.cwd);
+    this.projectName = options.project ?? (platform.basename(options.cwd) || options.cwd);
     this.embedder = new MemoryEmbedder(this.settings.embedding);
     this.preparing = nodeRuntime.runFork(this.prepare(options));
     this.ready = nodeRuntime.runPromise(Effect.asVoid(Fiber.await(this.preparing)));
@@ -118,7 +116,7 @@ export default class MemoryService {
         if (name !== undefined) this.projectName = name;
       }
       if (this.settings.database !== ":memory:") {
-        const directory = pathOperations.dirname(this.settings.database);
+        const directory = platform.dirname(this.settings.database);
         yield* FileSystem.FileSystem.use((fs) => fs.makeDirectory(directory, { recursive: true }));
       }
     }).pipe(Effect.ignore);

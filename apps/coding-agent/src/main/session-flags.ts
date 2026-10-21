@@ -1,11 +1,11 @@
 import chalk from "chalk";
 
 import type argsTypes from "../cli/args.types.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import sessionFormat from "../core/session-manager/session-format.ts";
 import errorsModule from "../utils/errors.ts";
 
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { assertValidSessionId } = sessionFormat;
 const { toErrorMessage } = errorsModule;
 

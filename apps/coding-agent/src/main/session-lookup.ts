@@ -1,12 +1,13 @@
-import { createInterface } from "node:readline";
-
 import { Effect } from "effect";
 
 import awaitingModule from "../core/awaiting.ts";
+import nodeReadline from "../core/platform/node/readline.ts";
 import SessionManager from "../core/session-manager.ts";
 import type mainInternalTypes from "../main-internal.types.ts";
 import interop from "../utils/interop.ts";
 import pathsModule from "../utils/paths.ts";
+
+const { createInterface } = nodeReadline;
 
 const { awaited, awaiting } = awaitingModule;
 const { callbackPromise } = interop;

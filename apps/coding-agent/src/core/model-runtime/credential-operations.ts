@@ -5,7 +5,7 @@ import abortModule from "../../utils/abort.ts";
 import awaitingModule from "../awaiting.ts";
 import CredentialSynchronizationError from "../credential-synchronization-error.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import type runtimeCredentialsTypes from "../runtime-credentials.types.ts";
 import type ModelAvailability from "./model-availability.ts";
 import type ProviderCatalog from "./provider-catalog.ts";

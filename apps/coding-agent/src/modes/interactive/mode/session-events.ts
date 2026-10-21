@@ -3,16 +3,16 @@ import { Effect } from "effect";
 import config from "../../../config.ts";
 import type agentSessionTypes from "../../../core/agent-session.types.ts";
 import awaitingModule from "../../../core/awaiting.ts";
-import type platformTypes from "../../../core/platform.types.ts";
+import platformModule from "../../../core/platform/index.ts";
+import type platformTypes from "../../../core/platform/index.types.ts";
 import interval from "../../interval.ts";
-import pathModule from "../../path.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
 const { theme } = themeModule;
 const { APP_TITLE } = config;
 const { every } = interval;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { basename } = pathModule;
+const { basename } = platformModule;
 
 export default class SessionEventRouter {
   private readonly mode: InteractiveMode;

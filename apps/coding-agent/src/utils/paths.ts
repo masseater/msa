@@ -1,18 +1,18 @@
-import { homedir } from "node:os";
-import { fileURLToPath } from "node:url";
-
 import { dual } from "effect/Function";
 
-import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform/index.ts";
 import nodeFs from "../core/platform/node/fs.ts";
+import nodeOs from "../core/platform/node/os.ts";
+import nodeUrl from "../core/platform/node/url.ts";
 import childProcess from "./child-process.ts";
 import type pathsTypes from "./paths.types.ts";
-import platformExtra from "./platform-extra.ts";
+
+const { homedir } = nodeOs;
+const { fileURLToPath } = nodeUrl;
 
 const { realpathSync, statSync } = nodeFs;
 
-const { join, relative, resolve: nodeResolvePath, sep } = platformNode;
-const { isAbsolute } = platformExtra;
+const { isAbsolute, join, relative, resolve: nodeResolvePath, sep } = platformModule;
 const { spawnProcessSync } = childProcess;
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;

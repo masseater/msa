@@ -5,13 +5,13 @@ import type agentSessionTypes from "../agent-session.types.ts";
 import awaitingModule from "../awaiting.ts";
 import type DefaultResourceLoader from "../default-resource-loader.ts";
 import toolNames from "../orchestrator/tool-names.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import SessionManager from "../session-manager.ts";
 import sessionFiles from "../session-manager/session-files.ts";
 import type sdkInternalTypes from "./sdk-internal.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
-const { join } = platformNode;
+const { join } = platform;
 const { getDefaultSessionDir } = sessionFiles;
 const { ORCHESTRATOR_TOOL_NAMES, isOrchestratorTool } = toolNames;
 

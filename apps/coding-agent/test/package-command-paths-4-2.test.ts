@@ -3,12 +3,12 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import packageCommandPathsSupport from "./package-command-paths-support.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 
 const { PACKAGE_NAME, VERSION } = config;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 const { getNewerPatchVersion, runPackageCommandDirectly, setupPackageTest, teardownPackageTest } =
   packageCommandPathsSupport;

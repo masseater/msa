@@ -2,10 +2,10 @@ import chalk from "chalk";
 
 import config from "../config.ts";
 import type agentSessionServicesTypes from "../core/agent-session-services.types.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 
 const { APP_NAME } = config;
-const { writeError } = platformModule;
+const { writeError } = platform;
 
 const EXTENSION_LOAD_FAILURE_HINT = `Hint: Start without extensions using "${APP_NAME} -ne".`;
 

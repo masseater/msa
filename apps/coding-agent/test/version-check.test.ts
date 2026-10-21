@@ -2,11 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import versionCheck from "../src/utils/version-check.ts";
 import testNetworkEnv from "./test-network-env.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const {
   checkForNewMsaVersion,
   comparePackageVersions,

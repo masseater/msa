@@ -5,7 +5,7 @@ import errors from "../utils/errors.ts";
 import awaitingModule from "./awaiting.ts";
 import goalModule from "./goal.ts";
 import type goalTypes from "./goal.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { nowMs, sleepFor } = platform;
 const { toErrorMessage } = errors;

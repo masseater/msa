@@ -6,7 +6,7 @@ import type cacheWarmerInternalTypes from "./cache-warmer-internal.types.ts";
 import cacheWarmerSupport from "./cache-warmer-support.ts";
 import type cacheWarmerTypes from "./cache-warmer.types.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 import type settingsManagerTypes from "./settings-manager.types.ts";
 

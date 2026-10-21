@@ -1,7 +1,7 @@
 import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import errorsModule from "../../../utils/errors.ts";
 import externalEditor from "../external-editor.ts";
 import type InteractiveMode from "../interactive-mode.ts";
@@ -10,7 +10,7 @@ import themeModule from "../theme/theme.ts";
 const { theme } = themeModule;
 const { awaited, awaitingWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
-const { nowMs, schedule } = platformModule;
+const { nowMs, schedule } = platform;
 const { editWhileSuspended } = externalEditor;
 
 export default class KeyHandlers {

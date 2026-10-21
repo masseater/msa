@@ -7,7 +7,7 @@ import type AgentSession from "../agent-session.ts";
 import type agentSessionTypes from "../agent-session.types.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import promptTemplates from "../prompt-templates.ts";
 
 const { nowMs } = platform;

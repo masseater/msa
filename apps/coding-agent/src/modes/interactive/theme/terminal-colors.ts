@@ -1,12 +1,12 @@
 import type tuiTypes from "@msa/tui/index.types";
 import { dual } from "effect/Function";
 
-import processEnv from "../../../core/process-env.ts";
+import platform from "../../../core/platform/index.ts";
 import systemTheme from "./system-theme.ts";
 import type themeTypes from "./theme.types.ts";
 
 const { terminalAppearance } = systemTheme;
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platform;
 let terminalColors: tuiTypes.TerminalColors = {};
 let terminalColorsPending = false;
 let terminalColorScheme: themeTypes.TerminalTheme | undefined;

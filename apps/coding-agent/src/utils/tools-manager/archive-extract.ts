@@ -1,16 +1,15 @@
-import { platform } from "os";
-
-import platformNode from "../../core/platform-node.ts";
-import platformModule from "../../core/platform.ts";
+import platformModule from "../../core/platform/index.ts";
 import nodeChildProcess from "../../core/platform/node/child-process.ts";
 import type nodeChildProcessTypes from "../../core/platform/node/child-process.types.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
+import nodeOs from "../../core/platform/node/os.ts";
 import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 
+const { platform } = nodeOs;
+
 const { chmodSync, renameSync, existsSync, readdirSync } = nodeFs;
-const { readEnv } = platformModule;
+const { join, readEnv } = platformModule;
 const { spawnSync } = nodeChildProcess;
-const { join } = platformNode;
 
 function findBinaryRecursively(rootDir: string, binaryFileName: string): string | null {
   const stack: string[] = [rootDir];

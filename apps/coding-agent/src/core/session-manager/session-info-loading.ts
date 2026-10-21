@@ -1,14 +1,14 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFsPromises from "../platform/node/fs-promises.ts";
 import nodeFs from "../platform/node/fs.ts";
 import type sessionManagerInternalTypes from "../session-manager-internal.types.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionInfo from "./session-info.ts";
 
-const { basename, join } = platformNode;
+const { basename, join } = platformModule;
 const { stat, readdir } = nodeFsPromises;
 const { sortSessionInfos, buildSessionInfo } = sessionInfo;
 const { existsSync } = nodeFs;

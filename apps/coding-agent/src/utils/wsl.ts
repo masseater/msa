@@ -1,10 +1,9 @@
 import * as Effect from "effect/Effect";
 
-import processEnv from "../core/process-env.ts";
-import nodeFs from "./node-fs.ts";
+import platform from "../core/platform/index.ts";
 
-const { envSnapshot } = processEnv;
-const { readText } = nodeFs;
+const { envSnapshot } = platform;
+const { readText } = platform.files;
 
 function isWSL(env: NodeJS.ProcessEnv = envSnapshot()): Promise<boolean> {
   if (

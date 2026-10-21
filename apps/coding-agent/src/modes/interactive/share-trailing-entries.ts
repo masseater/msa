@@ -1,7 +1,7 @@
 import { Function as Fn } from "effect";
 
 import type agentSessionTypes from "../../core/agent-session.types.ts";
-import path from "../path.ts";
+import platform from "../../core/platform/index.ts";
 
 type Session = agentSessionTypes.AgentSession;
 
@@ -19,7 +19,7 @@ const createShareTrailingEntries: {
         parameters: tool.parameters,
       })),
     },
-    id: path.randomUuid().slice(0, 8),
+    id: platform.randomUuid().slice(0, 8),
     parentId,
     timestamp,
     type: "custom",

@@ -1,17 +1,15 @@
 import config from "../config.ts";
 import type crashLogTypes from "./crash-log.types.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
-import platformNode from "./platform-node.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import sourceInfoModule from "./source-info.ts";
 
 const { mkdirSync, readFileSync, rmSync, writeFileSync } = nodeFs;
 
 const { VERSION, getAgentDir } = config;
-const { dirname, join } = platformNode;
+const { dirname, join, nowIso, nowMs } = platform;
 const { isSyntheticPath } = sourceInfoModule;
-const { nowIso, nowMs } = platform;
 
 const MAX_CRASH_RECORDS = 5;
 const MAX_AGE = 7 * 24 * 60 * 60 * 1000;

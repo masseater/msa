@@ -7,7 +7,7 @@ import type findSupportTypes from "./find-support.types.ts";
 import truncate from "./truncate.ts";
 
 const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
-const { ToolFailure, fromPromise, pathOperations } = platform;
+const { ToolFailure, fromPromise } = platform;
 
 const findSchema = Type.Object({
   limit: Type.Optional(Type.Number({ description: "Maximum number of results (default: 1000)" })),
@@ -61,7 +61,7 @@ const relativizeFindResultPath: {
   (
     resultPath: string,
     searchPath: string,
-    pathModule: findSupportTypes.FindPathModule = pathOperations,
+    pathModule: findSupportTypes.FindPathModule = platform,
   ): string => {
     const hadTrailingSeparator =
       resultPath.endsWith(pathModule.sep) || (pathModule.sep === "\\" && resultPath.endsWith("/"));

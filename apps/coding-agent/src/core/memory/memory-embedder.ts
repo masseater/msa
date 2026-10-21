@@ -4,7 +4,7 @@ import platform from "../platform/index.ts";
 import EmbeddingClient from "./embeddings.ts";
 import type memoryTypesTypes from "./memory-types.ts";
 
-const { currentTimeMillis, fromPromise } = platform;
+const { fromPromise, nowMs } = platform;
 
 const EMBEDDING_FAILURE_COOLDOWN_MS = 60_000;
 
@@ -48,10 +48,7 @@ export default class MemoryEmbedder {
     return Effect.gen({ self: this }, function* () {
       const { client, failedAt } = this;
       if (client === undefined) return undefined;
-      if (
-        failedAt !== undefined &&
-        currentTimeMillis() - failedAt < EMBEDDING_FAILURE_COOLDOWN_MS
-      ) {
+      if (failedAt !== undefined && nowMs() - failedAt < EMBEDDING_FAILURE_COOLDOWN_MS) {
         return undefined;
       }
       return yield* fromPromise(() => client.embed(text, signal)).pipe(
@@ -62,7 +59,7 @@ export default class MemoryEmbedder {
         }),
         Effect.catchTag("ForeignError", (failure) =>
           Effect.sync(() => {
-            this.failedAt = currentTimeMillis();
+            this.failedAt = nowMs();
             this.failure = failure.message;
             return undefined;
           }),

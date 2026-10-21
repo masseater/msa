@@ -2,7 +2,7 @@ import type aiTypes from "@msa/ai/index.types";
 import { dual } from "effect/Function";
 
 import config from "../config.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type argsTypes from "./args.types.ts";
 import AuthCommandError from "./auth-command-error.ts";
 import type authCommandTypes from "./auth-command.types.ts";

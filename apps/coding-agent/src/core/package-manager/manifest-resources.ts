@@ -3,13 +3,13 @@ import type DefaultPackageManager from "../default-package-manager.ts";
 import manifestModule from "../manifest.ts";
 import type manifestTypes from "../manifest.types.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import resourceEntries from "./resource-entries.ts";
 import resourceFiles from "./resource-files.ts";
 import resourcePatterns from "./resource-patterns.ts";
 
-const { join, resolve } = platformNode;
+const { join, resolve } = platformModule;
 const { existsSync, statSync } = nodeFs;
 const { applyPatterns, hasGlobPattern, isOverridePattern, applyAutoloadDisabledPatterns } =
   resourcePatterns;

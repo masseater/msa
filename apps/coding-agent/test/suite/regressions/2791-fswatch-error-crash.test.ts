@@ -4,9 +4,9 @@ import { Cause, Effect, Exit, FileSystem, ManagedRuntime, Stream } from "effect"
 import { ChildProcess } from "effect/process";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import processEnv from "../../../src/core/process-env.ts";
+import platformModule from "../../../src/core/platform/index.ts";
 
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platformModule;
 
 const { fromJsonText, joinPath, toJsonText } = testing;
 

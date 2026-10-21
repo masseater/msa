@@ -8,11 +8,11 @@ import type bugReportInternalTypes from "./bug-report-internal.types.ts";
 import compaction from "./compaction/compaction.ts";
 import utils from "./compaction/utils.ts";
 import messagesModule from "./messages.ts";
-import platformModule from "./platform.ts";
+import platform from "./platform/index.ts";
 
 const { contentText, normalizeContext } = ai;
 const { getSummarizationFailure, completeSummarization, estimateTokens } = compaction;
-const { nowMs } = platformModule;
+const { nowMs } = platform;
 const { awaited, awaiting } = awaitingModule;
 const { convertToLlm } = messagesModule;
 const { serializeConversation } = utils;

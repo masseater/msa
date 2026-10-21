@@ -3,10 +3,10 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import experimental from "../src/core/experimental.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 
 const { areExperimentalFeaturesEnabled } = experimental;
-const { withEnv } = processEnv;
+const { withEnv } = platform;
 
 const { runTest } = testing;
 

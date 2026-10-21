@@ -1,12 +1,12 @@
 import config from "../../config.ts";
 import experimental from "../../core/experimental.ts";
+import platformModule from "../../core/platform/index.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
-import processEnv from "../../core/process-env.ts";
 import type startupUiInternalTypes from "../startup-ui-internal.types.ts";
 
 const { existsSync } = nodeFs;
 const { ENV_AGENT_DIR, PACKAGE_NAME, CONFIG_DIR_NAME, APP_NAME, getSettingsPath } = config;
-const { readEnv } = processEnv;
+const { readEnv } = platformModule;
 const { areExperimentalFeaturesEnabled } = experimental;
 
 const OFFICIAL_PACKAGE_NAME = "@msa/coding-agent";

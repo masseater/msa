@@ -1,16 +1,14 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import errors from "../../utils/errors.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import type lsTypes from "./ls.types.ts";
 import pathUtils from "./path-utils.ts";
 import truncate from "./truncate.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
 const { pathExists, resolveToCwd } = pathUtils;
-const { ToolFailure, abortedBy, fromMaybePromise, pathOperations, rethrowCause } = platform;
+const { ToolFailure, abortedBy, fromMaybePromise, rethrowCause } = platform;
 const { toErrorMessage } = errors;
 const { DEFAULT_MAX_BYTES, formatSize, truncateHead } = truncate;
 
@@ -48,9 +46,9 @@ const listEntries = Effect.fn("listEntries")(function* (
       entryLimitReached = true;
       break;
     }
-    const entryStat = yield* fromMaybePromise(() =>
-      ops.stat(pathOperations.join(dirPath, entry)),
-    ).pipe(Effect.catchDefect(() => Effect.void));
+    const entryStat = yield* fromMaybePromise(() => ops.stat(platform.join(dirPath, entry))).pipe(
+      Effect.catchDefect(() => Effect.void),
+    );
     if (entryStat === undefined) continue;
     results.push(entry + (entryStat.isDirectory() ? "/" : ""));
   }

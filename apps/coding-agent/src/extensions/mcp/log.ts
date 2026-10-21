@@ -1,11 +1,9 @@
-import platformNode from "../../core/platform-node.ts";
-import platform from "../../core/platform.ts";
+import platform from "../../core/platform/index.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
 
 const { appendFileSync, mkdirSync, renameSync, statSync } = nodeFs;
 
-const { nowMs, toDate } = platform;
-const { dirname } = platformNode;
+const { dirname, nowMs, toDate } = platform;
 
 const MAX_LOG_BYTES = 5 * 1024 * 1024;
 

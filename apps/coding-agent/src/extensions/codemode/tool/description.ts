@@ -4,7 +4,7 @@ import type codemodeTypes from "@msa/codemode/index.types";
 import { dual } from "effect/Function";
 
 import config from "../../../config.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import settingsDefaults from "../../../core/settings-defaults.ts";
 import type toolInternalTypes from "../tool-internal.types.ts";
 import type toolTypes from "../tool.types.ts";
@@ -13,7 +13,7 @@ import toolDeclarations from "./declarations.ts";
 const { renderToolSample, toCodemodeIdentifier } = declarationsModule;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 const { getDocsPath } = config;
-const { join } = platformNode;
+const { join } = platform;
 const { toCodemodeDeclaration, getCodemodeCallableTools } = toolDeclarations;
 
 const CODEMODE_DOCS_PATH = join(getDocsPath(), "codemode.md");

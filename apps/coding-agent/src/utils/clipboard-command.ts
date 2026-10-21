@@ -1,6 +1,6 @@
 import { dual } from "effect/Function";
 
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import childProcess from "./child-process.ts";
 import interop from "./interop.ts";
 

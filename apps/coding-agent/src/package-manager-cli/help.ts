@@ -1,11 +1,11 @@
 import chalk from "chalk";
 
 import config from "../config.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type packageManagerCliTypes from "../package-manager-cli.types.ts";
 
 const { CONFIG_DIR_NAME, APP_NAME } = config;
-const { writeLog } = platformModule;
+const { writeLog } = platform;
 
 function getPackageCommandUsage(command: packageManagerCliTypes.PackageCommand): string {
   switch (command) {

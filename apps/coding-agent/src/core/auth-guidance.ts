@@ -1,7 +1,7 @@
 import config from "../config.ts";
-import platformNode from "./platform-node.ts";
+import platform from "./platform/index.ts";
 
-const { join } = platformNode;
+const { join } = platform;
 const { getDocsPath } = config;
 
 const UNKNOWN_PROVIDER = "unknown";

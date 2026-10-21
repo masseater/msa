@@ -16,9 +16,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import startupUi from "../src/cli/startup-ui.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 
-const { deleteEnv, readEnv, writeEnv } = processEnv;
+const { deleteEnv, readEnv, writeEnv } = platform;
 const { shouldRunFirstTimeSetup } = startupUi;
 
 const { joinPath, makeTempDir, removePath, runTest } = testing;

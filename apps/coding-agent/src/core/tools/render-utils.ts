@@ -1,5 +1,3 @@
-import { pathToFileURL } from "node:url";
-
 import tui from "@msa/tui";
 import { Effect, type Fiber, Function as Fn, Predicate, Schedule } from "effect";
 
@@ -9,11 +7,14 @@ import paths from "../../utils/paths.ts";
 import shell from "../../utils/shell.ts";
 import type extensionsTypesTypes from "../extensions/types.types.ts";
 import platform from "../platform/index.ts";
+import nodeUrl from "../platform/node/url.ts";
+
+const { pathToFileURL } = nodeUrl;
 
 const { abbreviateHomePath, resolvePath } = paths;
 const { sanitizeBinaryOutput } = shell;
 const { stripAnsi } = ansi;
-const { currentTimeMillis } = platform;
+const { nowMs } = platform;
 
 const { getCapabilities, getImageDimensions, hyperlink, imageFallback } = tui;
 
@@ -157,7 +158,7 @@ interface ToolTimerState {
 function startToolTimer(context: extensionsTypesTypes.ToolRenderContext<ToolTimerState>): void {
   const state = context.state;
   if (context.executionStarted && state.startedAt === undefined) {
-    state.startedAt = currentTimeMillis();
+    state.startedAt = nowMs();
     state.endedAt = undefined;
   }
 }
@@ -192,7 +193,7 @@ const toolTimerText: {
       state.interval = startTicker(context);
     }
     if (!isPartial || context.isError) {
-      state.endedAt ??= currentTimeMillis();
+      state.endedAt ??= nowMs();
       if (state.interval !== undefined) {
         state.interval.interruptUnsafe();
         state.interval = undefined;
@@ -201,7 +202,7 @@ const toolTimerText: {
     if (!isPartial && context.durationMs !== undefined)
       return `Took ${formatToolDuration(context.durationMs)}`;
     if (state.startedAt === undefined) return undefined;
-    const endTime = state.endedAt ?? currentTimeMillis();
+    const endTime = state.endedAt ?? nowMs();
     return `${isPartial ? "Elapsed" : "Took"} ${formatToolDuration(endTime - state.startedAt)}`;
   },
 );

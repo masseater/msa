@@ -3,11 +3,11 @@ import ignore from "ignore";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import ignoreRules from "../ignore-rules.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 
 const { statSync, readdirSync, existsSync, globSync } = nodeFs;
-const { join, sep, relative, resolve } = platformNode;
+const { join, relative, resolve, sep } = platformModule;
 const { toPosixPath, addIgnoreRules } = ignoreRules;
 
 const RESOURCE_TYPES: defaultPackageManagerInternalTypes.ResourceType[] = [

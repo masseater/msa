@@ -2,12 +2,11 @@ import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import awaitingModule from "../../core/awaiting.ts";
-import platformNode from "../../core/platform-node.ts";
-import nodeFs from "../../utils/node-fs.ts";
+import platform from "../../core/platform/index.ts";
 
-const { join, sha256Hex } = platformNode;
+const { join, sha256Hex } = platform;
 const { awaited, awaiting } = awaitingModule;
-const { makeDirectory } = nodeFs;
+const { makeDirectory } = platform.files;
 
 const REFRESH_LOCK_STALE_MS = 20_000;
 const REFRESH_LOCK_WAIT_MS = 25_000;

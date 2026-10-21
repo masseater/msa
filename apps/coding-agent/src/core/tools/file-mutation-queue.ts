@@ -1,18 +1,16 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Deferred, Effect, FileSystem, ManagedRuntime, Semaphore } from "effect";
+import { Deferred, Effect, FileSystem, Semaphore } from "effect";
 import { dual } from "effect/Function";
 
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
-const { isMissingPath, pathOperations } = platform;
+const { isMissingPath } = platform;
 
 const fileMutationQueues = new Map<string, Deferred.Deferred<void>>();
 const registration = Semaphore.makeUnsafe(1);
 
 const mutationQueueKey = (filePath: string) => {
-  const resolvedPath = pathOperations.resolve(filePath);
+  const resolvedPath = platform.resolve(filePath);
   return FileSystem.FileSystem.use((fs) => fs.realPath(resolvedPath)).pipe(
     Effect.catch((error) =>
       isMissingPath(error) ? Effect.succeed(resolvedPath) : Effect.die(error),

@@ -5,8 +5,8 @@ import awaitingModule from "../../../core/awaiting.ts";
 import bugReportModule from "../../../core/bug-report.ts";
 import type bugReportTypesModule from "../../../core/bug-report.types.ts";
 import crashLog from "../../../core/crash-log.ts";
+import platform from "../../../core/platform/index.ts";
 import sessionExport from "../../../core/session-export.ts";
-import pathModule from "../../path.ts";
 import type bugReportInternalTypes from "../bug-report-internal.types.ts";
 import shareTrailingEntries from "../share-trailing-entries.ts";
 
@@ -18,7 +18,7 @@ const {
   collectBugReportDiagnostics,
 } = bugReportModule;
 const { awaited, awaiting } = awaitingModule;
-const { join } = pathModule;
+const { join } = platform;
 const { clearCrashLog, readCrashLog } = crashLog;
 const { createShareTrailingEntries } = shareTrailingEntries;
 const { serializeSessionBranch } = sessionExport;

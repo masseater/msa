@@ -6,7 +6,7 @@ import awaitingModule from "./awaiting.ts";
 import type modelResolverTypes from "./model-resolver.types.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
 import modelScope from "./model-scope.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 
 const { writeWarn } = platform;
 const { awaited, awaiting } = awaitingModule;

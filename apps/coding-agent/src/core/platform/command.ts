@@ -1,11 +1,9 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, Fiber, ManagedRuntime, Stream } from "effect";
+import { Effect, Fiber, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import type commandTypes from "./command.types.ts";
+import platformRuntime from "./runtime.ts";
 import ToolFailure from "./tool-failure.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const collect = (request: commandTypes.CommandRequest) =>
   Effect.scoped(
@@ -30,7 +28,7 @@ const collect = (request: commandTypes.CommandRequest) =>
   );
 
 const runCommand = (request: commandTypes.CommandRequest): Promise<commandTypes.CommandOutput> =>
-  nodeRuntime.runPromise(
+  platformRuntime.runPromise(
     collect(request).pipe(
       Effect.mapError(
         (error) =>
@@ -72,7 +70,7 @@ const streamLines = (request: commandTypes.StreamRequest) =>
   );
 
 const streamCommand = (request: commandTypes.StreamRequest): Promise<commandTypes.StreamOutput> =>
-  nodeRuntime.runPromise(
+  platformRuntime.runPromise(
     streamLines(request).pipe(
       Effect.mapError(
         (error) =>

@@ -1,8 +1,7 @@
-import { createInterface } from "node:readline/promises";
-
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
+import nodeReadline from "../../../core/platform/node/readline.ts";
 import errorsModule from "../../../utils/errors.ts";
 import interop from "../../../utils/interop.ts";
 import openBrowserModule from "../../../utils/open-browser.ts";
@@ -10,6 +9,8 @@ import type cliTypes from "../cli.types.ts";
 import type configTypes from "../config.types.ts";
 import runtime from "../runtime.ts";
 import type runtimeTypes from "../runtime.types.ts";
+
+const { createPromiseInterface: createInterface } = nodeReadline;
 
 const { awaited, awaiting } = awaitingModule;
 const { toErrorMessage } = errorsModule;

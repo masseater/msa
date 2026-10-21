@@ -1,31 +1,8 @@
-import {
-  Clock,
-  Console,
-  DateTime,
-  Deferred,
-  Effect,
-  Exit,
-  Function as Fn,
-  Option,
-  Random,
-} from "effect";
+import { Clock, DateTime, Deferred, Effect, Exit, Function as Fn, Option } from "effect";
 
-import type platformTypes from "./platform.types.ts";
-import processEnv from "./process-env.ts";
+import type platformTypes from "./index.types.ts";
 
 const nowMs = (): number => Effect.runSync(Clock.currentTimeMillis);
-
-const writeLog = (...args: readonly unknown[]): void => {
-  Effect.runSync(Console.log(...args));
-};
-
-const writeWarn = (...args: readonly unknown[]): void => {
-  Effect.runSync(Console.warn(...args));
-};
-
-const writeError = (...args: readonly unknown[]): void => {
-  Effect.runSync(Console.error(...args));
-};
 
 const nowIso = (): string => DateTime.now.pipe(Effect.runSync, DateTime.formatIso);
 
@@ -34,10 +11,6 @@ const toEpochMs = (value: string | number): number =>
 
 const toDate = (value: string | number): Date =>
   DateTime.toDate(Option.getOrElse(DateTime.make(value), () => DateTime.makeUnsafe(0)));
-
-const { readEnv } = processEnv;
-
-const randomUnit = (): number => Effect.runSync(Random.next);
 
 const schedule: {
   (delayMs: number): (run: () => void) => platformTypes.Scheduled;
@@ -92,19 +65,14 @@ const sleepFor: {
   }),
 );
 
-const platform = {
+const platformTime = {
   makeLatch,
   nowIso,
   nowMs,
-  randomUnit,
-  readEnv,
   schedule,
   sleepFor,
   toDate,
   toEpochMs,
-  writeError,
-  writeLog,
-  writeWarn,
 };
 
-export default platform;
+export default platformTime;

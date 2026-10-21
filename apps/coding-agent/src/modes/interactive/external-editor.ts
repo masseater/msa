@@ -1,13 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 import { ChildProcess } from "effect/process";
 
+import platformModule from "../../core/platform/index.ts";
+import nodeRuntime from "../../core/platform/runtime.ts";
 import text from "../../utils/text.ts";
-import path from "../path.ts";
 import type externalEditorTypes from "./external-editor.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-const { join } = path;
+const { join } = platformModule;
 const { stripBom } = text;
 
 function editInExternalEditor(

@@ -2,7 +2,7 @@ import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import modelScope from "../../../core/model-scope.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import errorsModule from "../../../utils/errors.ts";
 import ScopedModelsSelectorComponent from "../components/scoped-models-selector.ts";
 import type scopedModelsSelectorTypes from "../components/scoped-models-selector.types.ts";
@@ -12,7 +12,7 @@ import modelCatalogRefresh from "../model-catalog-refresh.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
-const { schedule } = platformModule;
+const { schedule } = platform;
 const { resolveModelScopeFromModels } = modelScope;
 const { refreshModelCatalogs } = modelCatalogRefresh;
 

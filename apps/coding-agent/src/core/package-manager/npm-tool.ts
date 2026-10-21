@@ -2,10 +2,10 @@ import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import commandRunner from "./command-runner.ts";
 
-const { basename, dirname, join } = platformNode;
+const { basename, dirname, join } = platform;
 const { awaited, awaitingWith } = awaitingModule;
 
 export default class NpmTool {

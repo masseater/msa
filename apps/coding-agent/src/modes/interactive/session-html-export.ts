@@ -1,11 +1,10 @@
-import * as os from "node:os";
-
 import { Effect } from "effect";
 
 import type agentSessionTypes from "../../core/agent-session.types.ts";
 import awaitingModule from "../../core/awaiting.ts";
+import platformModule from "../../core/platform/index.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
-import path from "../path.ts";
+import os from "../../core/platform/node/os.ts";
 import themeModule from "./theme/theme.ts";
 
 const { awaited, awaiting, performed } = awaitingModule;
@@ -16,8 +15,8 @@ function withExportedHtml(
   use: (htmlFile: string) => Effect.Effect<void>,
 ): Effect.Effect<void> {
   return awaiting(function* () {
-    const tempDir = nodeFs.mkdtempSync(path.join(os.tmpdir(), "msa-share-"));
-    const htmlFile = path.join(tempDir, "session.html");
+    const tempDir = nodeFs.mkdtempSync(platformModule.join(os.tmpdir(), "msa-share-"));
+    const htmlFile = platformModule.join(tempDir, "session.html");
     try {
       try {
         yield* awaited(

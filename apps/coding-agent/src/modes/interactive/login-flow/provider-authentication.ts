@@ -4,7 +4,7 @@ import { Effect } from "effect";
 import config from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import modelResolver from "../../../core/model-resolver.ts";
-import platform from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import errorsModule from "../../../utils/errors.ts";
 import loginFlowHelpers from "../login-flow-helpers.ts";
 import type LoginFlow from "../login-flow.ts";

@@ -1,15 +1,14 @@
-import { platform } from "os";
-
 import configModule from "../../config.ts";
-import platformNode from "../../core/platform-node.ts";
-import platformModule from "../../core/platform.ts";
+import platformModule from "../../core/platform/index.ts";
 import nodeChildProcess from "../../core/platform/node/child-process.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
+import nodeOs from "../../core/platform/node/os.ts";
 import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 
-const { readEnv } = platformModule;
+const { platform } = nodeOs;
+
+const { join, readEnv } = platformModule;
 const { existsSync } = nodeFs;
-const { join } = platformNode;
 const { spawnSync } = nodeChildProcess;
 const { getBinDir } = configModule;
 

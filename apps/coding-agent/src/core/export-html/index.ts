@@ -1,16 +1,14 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import type agentTypes from "@msa/agent-core/index.types";
-import { Effect, FileSystem, Function as Fn, ManagedRuntime } from "effect";
+import { Effect, FileSystem, Function as Fn } from "effect";
 
 import paths from "../../utils/paths.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import SessionManager from "../session-manager.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import type exportTypesTypes from "./export-types.ts";
 import htmlDocument from "./html-document.ts";
 import renderCustomTools from "./render-custom-tools.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const { ToolFailure, fromMaybePromise, rethrowCause } = platform;
 const { resolvePath } = paths;

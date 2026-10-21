@@ -1,14 +1,14 @@
 import type tuiTypes from "@msa/tui/index.types";
 
 import srcConfig from "../../../config.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import type extensionInternalTypes from "../extension-internal.types.ts";
 import type uiTypes from "../ui.types.ts";
 import type McpExtensionState from "./host-state.ts";
 import serverState from "./server-state.ts";
 
 const { describeState, describeTransport, exposureOf, isEnabled } = serverState;
-const { resolve } = platformNode;
+const { resolve } = platform;
 const { getAgentDir } = srcConfig;
 
 type Server = extensionInternalTypes.McpServer;

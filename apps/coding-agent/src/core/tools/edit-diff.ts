@@ -1,16 +1,14 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, Function, ManagedRuntime, Predicate, Result } from "effect";
+import { Effect, FileSystem, Function, Predicate, Result } from "effect";
 
 import errors from "../../utils/errors.ts";
 import textModule from "../../utils/text.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import diffFormat from "./diff-format.ts";
 import type diffFormatTypes from "./diff-format.types.ts";
 import type editDiffTypes from "./edit-diff.types.ts";
 import editMatch from "./edit-match.ts";
 import editText from "./edit-text.ts";
 import pathUtils from "./path-utils.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const { generateDiffString } = diffFormat;
 const { detectLineEnding, normalizeToLF, restoreLineEndings } = editText;

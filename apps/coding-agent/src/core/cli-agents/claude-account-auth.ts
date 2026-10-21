@@ -1,14 +1,15 @@
-import { promisify } from "node:util";
-
-import processEnv from "../../core/process-env.ts";
 import childProcess from "../../utils/child-process.ts";
 import shell from "../../utils/shell.ts";
+import platformModule from "../platform/index.ts";
 import nodeChildProcess from "../platform/node/child-process.ts";
 import nodeFs from "../platform/node/fs.ts";
+import nodeUtil from "../platform/node/util.ts";
 import claudeAccountBlocks from "./claude-account-blocks.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 
-const { envSnapshot, readEnv } = processEnv;
+const { promisify } = nodeUtil;
+
+const { envSnapshot, readEnv } = platformModule;
 const { spawnProcess, waitForChildProcess } = childProcess;
 const { findExecutableOnPath } = shell;
 const { execFile } = nodeChildProcess;

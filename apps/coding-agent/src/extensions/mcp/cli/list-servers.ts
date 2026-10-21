@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 
 import configModule from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import type cliInternalTypes from "../cli-internal.types.ts";
 import type cliTypes from "../cli.types.ts";
 import mcpConfig from "../config.ts";
@@ -12,7 +12,7 @@ import serverConnection from "./server-connection.ts";
 
 const { APP_NAME } = configModule;
 const { awaited, awaiting } = awaitingModule;
-const { join } = platformNode;
+const { join } = platform;
 const { getMcpToolExposure } = mcpConfig;
 const { createConnection, describeTransport } = serverConnection;
 

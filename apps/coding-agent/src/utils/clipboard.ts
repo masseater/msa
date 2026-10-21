@@ -1,20 +1,18 @@
-import { platform, tmpdir } from "node:os";
-
 import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
-import platformModule from "../core/platform.ts";
+import platformModule from "../core/platform/index.ts";
+import nodeOs from "../core/platform/node/os.ts";
 import clipboardCommand from "./clipboard-command.ts";
-import nodeFs from "./node-fs.ts";
 import wsl from "./wsl.ts";
 
+const { platform, tmpdir } = nodeOs;
+
 const { awaited, awaiting } = awaitingModule;
-const { join, randomUuid } = platformNode;
-const { remove, writeFile } = nodeFs;
+const { join, randomUuid, readEnv } = platformModule;
+const { remove, writeFile } = platformModule.files;
 const { runClipboardCommand } = clipboardCommand;
-const { readEnv } = platformModule;
 const { isWSL } = wsl;
 
 const { getNativeClipboard } = tui;

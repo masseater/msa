@@ -3,13 +3,13 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import bashExecutor from "../src/core/bash-executor.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import bashModule from "../src/core/tools/bash.ts";
 import type bashTypes from "../src/core/tools/bash.types.ts";
 import tools5Support from "./tools-5-support.ts";
 
 const { createBashTool, createLocalBashOperations } = bashModule;
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platform;
 const { executeBashWithOperations } = bashExecutor;
 
 const { getTextOutput } = tools5Support;

@@ -5,7 +5,7 @@ import type AgentSession from "../agent-session.ts";
 import GoalLoop from "../goal-loop.ts";
 import goalModule from "../goal.ts";
 import type goalTypes from "../goal.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 
 const { nowMs } = platform;
 const { GOAL_ENTRY_TYPE, GOAL_CONTINUE_MESSAGE_TYPE, findActiveGoalCondition } = goalModule;

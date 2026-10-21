@@ -1,9 +1,9 @@
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import settingsDefaults from "../settings-defaults.ts";
 import type SettingsManager from "../settings-manager.ts";
 
 const { SETTINGS_DEFAULTS } = settingsDefaults;
-const { randomUuid } = platformNode;
+const { randomUuid } = platform;
 
 export default class TelemetrySettings {
   private readonly manager: SettingsManager;

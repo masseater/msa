@@ -1,9 +1,9 @@
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import restoreSandboxEnvModule from "../src/bun/restore-sandbox-env.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 
-const { envNames, envSnapshot, readEnv } = processEnv;
+const { envNames, envSnapshot, readEnv } = platform;
 const { restoreSandboxEnv } = restoreSandboxEnvModule;
 
 const readFileSync = vi.hoisted(() => vi.fn());

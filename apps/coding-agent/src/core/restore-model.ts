@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 
 import modelResolver from "./model-resolver.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 
 const { writeError, writeLog } = platform;
 const { preferredAvailableModel } = modelResolver;

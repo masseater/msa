@@ -3,11 +3,11 @@ import type tuiTypes from "@msa/tui/index.types";
 import themeModule from "../../modes/interactive/theme/theme.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 import type diagnosticsTypes from "../diagnostics.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 
 const { existsSync, statSync, readdirSync } = nodeFs;
-const { join } = platformNode;
+const { join } = platformModule;
 const { loadThemeFromPath } = themeModule;
 
 const dedupeThemes = (

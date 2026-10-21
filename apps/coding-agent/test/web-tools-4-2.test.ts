@@ -4,13 +4,13 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import DefaultResourceLoader from "../src/core/default-resource-loader.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import sdk from "../src/core/sdk.ts";
 import SessionManager from "../src/core/session-manager.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import webToolsSupport from "./web-tools-support.ts";
 const { createAgentSession } = sdk;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 const { getModel } = compat;
 

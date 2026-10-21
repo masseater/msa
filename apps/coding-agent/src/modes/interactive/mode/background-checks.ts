@@ -3,16 +3,14 @@ import { Effect } from "effect";
 import config from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import DefaultPackageManager from "../../../core/default-package-manager.ts";
-import platformModule from "../../../core/platform.ts";
-import processEnv from "../../../core/process-env.ts";
+import platform from "../../../core/platform/index.ts";
 import versionCheck from "../../../utils/version-check.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import modelCatalogRefresh from "../model-catalog-refresh.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
-const { schedule } = platformModule;
+const { readEnv, schedule } = platform;
 const { refreshModelCatalogs } = modelCatalogRefresh;
-const { readEnv } = processEnv;
 const { checkForNewMsaVersion } = versionCheck;
 
 const { getAgentDir, VERSION } = config;

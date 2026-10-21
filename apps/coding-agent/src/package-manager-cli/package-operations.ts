@@ -4,11 +4,11 @@ import * as Effect from "effect/Effect";
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
 import type DefaultPackageManager from "../core/default-package-manager.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type packageManagerCliInternalTypes from "../package-manager-cli-internal.types.ts";
 import selfUpdate from "./self-update.ts";
 
-const { writeLog, writeError } = platformModule;
+const { writeError, writeLog } = platform;
 const { APP_NAME } = config;
 const { awaited, awaiting } = awaitingModule;
 const { performSelfUpdate } = selfUpdate;

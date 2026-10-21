@@ -1,6 +1,6 @@
 import tui from "@msa/tui";
 
-import platform from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import themeModule from "../theme/theme.ts";
 import DynamicBorder from "./dynamic-border.ts";
 import UserMessageList from "./user-message-list.ts";

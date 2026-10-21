@@ -1,14 +1,14 @@
 import type agentTypes from "@msa/agent-core/index.types";
 
 import type typesUiTypes from "../../../../core/extensions/types-ui.ts";
-import processEnv from "../../../../core/process-env.ts";
+import platform from "../../../../core/platform/index.ts";
 import type usageTotalsTypes from "../../../../core/usage-totals.types.ts";
 import themeModule from "../../theme/theme.ts";
 import footerSupport from "../footer-support.ts";
 import type FooterComponent from "../footer.ts";
 
 const { formatCwdForFooter, formatTokens } = footerSupport;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 const { theme } = themeModule;
 

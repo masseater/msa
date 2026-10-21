@@ -5,13 +5,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test"
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import parsedSource from "./parsed-source.ts";
 
 const { asLocal } = parsedSource;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 const { awaited, joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
 

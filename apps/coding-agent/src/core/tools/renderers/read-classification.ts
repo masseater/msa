@@ -5,7 +5,6 @@ import pathUtils from "../path-utils.ts";
 import renderUtils from "../render-utils.ts";
 import type readClassificationTypes from "./read-classification.types.ts";
 
-const { pathOperations } = platform;
 const { getReadmePath } = config;
 const { str } = renderUtils;
 const { resolveToCwd } = pathUtils;
@@ -21,21 +20,21 @@ const COMPACT_RESOURCE_FILE_NAMES = new Set([
 type ClassificationArgs = { path?: string; file_path?: string };
 
 function toPosixPath(filePath: string): string {
-  return filePath.split(pathOperations.sep).join("/");
+  return filePath.split(platform.sep).join("/");
 }
 function getMsaDocsClassification(
   absolutePath: string,
 ): readClassificationTypes.CompactReadClassification | undefined {
-  const packageRoot = pathOperations.dirname(getReadmePath());
-  const relativePath = pathOperations.relative(
-    pathOperations.resolve(packageRoot),
-    pathOperations.resolve(absolutePath),
+  const packageRoot = platform.dirname(getReadmePath());
+  const relativePath = platform.relative(
+    platform.resolve(packageRoot),
+    platform.resolve(absolutePath),
   );
   if (
     relativePath === "" ||
     relativePath === ".." ||
-    relativePath.startsWith(`..${pathOperations.sep}`) ||
-    pathOperations.isAbsolute(relativePath)
+    relativePath.startsWith(`..${platform.sep}`) ||
+    platform.isAbsolute(relativePath)
   ) {
     return undefined;
   }
@@ -57,11 +56,11 @@ function getCompactReadClassification({
   if (rawPath === null || rawPath === "") return undefined;
 
   const absolutePath = resolveToCwd(rawPath, cwd);
-  const fileName = pathOperations.basename(absolutePath);
+  const fileName = platform.basename(absolutePath);
   if (fileName === "SKILL.md") {
     return {
       kind: "skill",
-      label: pathOperations.basename(pathOperations.dirname(absolutePath)) || fileName,
+      label: platform.basename(platform.dirname(absolutePath)) || fileName,
     };
   }
 

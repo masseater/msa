@@ -1,9 +1,8 @@
-import { Worker } from "node:worker_threads";
-
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
+import Worker from "../core/platform/node/worker.ts";
 import imageResizeCore from "./image-resize-core.ts";
 import type imageResizeCoreTypes from "./image-resize-core.types.ts";
 import interop from "./interop.ts";

@@ -3,7 +3,7 @@ import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, Option } from "effect";
 
-import nodePath from "../../../src/core/platform/node/path.ts";
+import platform from "../../../src/core/platform/index.ts";
 import ops from "./ops.ts";
 import paths from "./paths.ts";
 
@@ -72,7 +72,7 @@ const grepFile = (
     const lines = content.value.replace(/\r\n/gu, "\n").replace(/\r/gu, "\n").split("\n");
     const path = state.rootIsDirectory
       ? file.relativePath
-      : nodePath.posix.basename(file.guestPath);
+      : platform.posix.basename(file.guestPath);
     for (const [index, line] of lines.entries()) {
       yield* failIfAborted(signal);
       if (!state.matcher(line)) continue;

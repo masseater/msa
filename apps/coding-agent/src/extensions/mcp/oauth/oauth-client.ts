@@ -3,11 +3,11 @@ import oauth from "@msa/mcp/oauth";
 import type oauthTypes from "@msa/mcp/oauth.types";
 
 import config from "../../../config.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import type oauthInternalTypes from "../oauth-internal.types.ts";
 import type oauthTypesNs from "../oauth.types.ts";
 
-const { sha256Hex } = platformNode;
+const { sha256Hex } = platform;
 const { McpOAuthProvider } = oauth;
 const { APP_NAME } = config;
 

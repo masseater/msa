@@ -1,13 +1,11 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import mime from "../../utils/mime.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import pathUtils from "./path-utils.ts";
 import readContent from "./read-content.ts";
 import type readTypes from "./read.types.ts";
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 const { readImageContent, readTextContent, toReadOutput } = readContent;
 const { abortedBy, fromPromise, nonEmptyOr, rethrowCause, unwrapForeign } = platform;

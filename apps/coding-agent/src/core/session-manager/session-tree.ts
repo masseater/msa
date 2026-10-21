@@ -1,4 +1,4 @@
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionContext from "./session-context.ts";
 

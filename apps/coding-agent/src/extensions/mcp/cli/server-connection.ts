@@ -1,10 +1,10 @@
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import type cliTypes from "../cli.types.ts";
 import type configTypes from "../config.types.ts";
 import runtime from "../runtime.ts";
 import type runtimeTypes from "../runtime.types.ts";
 
-const { join } = platformNode;
+const { join } = platform;
 const { McpServerConnection, McpServerLog, createDefaultTransport } = runtime;
 
 function createConnection(

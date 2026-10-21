@@ -1,13 +1,12 @@
 import config from "../../config.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
-import nodePath from "../platform/node/path.ts";
 import type claudeAccountsTypes from "./claude-accounts.types.ts";
 
 const { getAgentDir } = config;
 const { nowMs } = platform;
 const { mkdirSync, readFileSync, writeFileSync } = nodeFs;
-const { dirname, join } = nodePath;
+const { dirname, join } = platform;
 
 const blocksFile = () => join(getAgentDir(), "state", "claude-code-blocks.json");
 const FALLBACK_BLOCK_MS = 60 * 60_000;

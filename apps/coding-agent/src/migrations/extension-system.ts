@@ -3,18 +3,16 @@ import * as Effect from "effect/Effect";
 
 import configModule from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import nodeFs from "../core/platform/node/fs.ts";
 import interop from "../utils/interop.ts";
 import legacyLayout from "./legacy-layout.ts";
 
 const { callbackPromise } = interop;
 const { awaited, awaiting } = awaitingModule;
-const { writeLog } = platform;
+const { join, writeLog } = platform;
 const { CONFIG_DIR_NAME, getAgentDir } = configModule;
 const { readdirSync, existsSync } = nodeFs;
-const { join } = platformNode;
 const { migrateCommandsToPrompts } = legacyLayout;
 
 const MIGRATION_GUIDE_URL =

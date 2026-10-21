@@ -1,7 +1,7 @@
 import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import claudeCodeContent from "./claude-code-content.ts";
 import claudeCodeSessionOpen from "./claude-code-session-open.ts";
 import type claudeCodeSessionTypes from "./claude-code-session.types.ts";

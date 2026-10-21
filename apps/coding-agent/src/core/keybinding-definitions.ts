@@ -1,9 +1,9 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import processEnv from "./process-env.ts";
+import platformModule from "./platform/index.ts";
 
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platformModule;
 const { TUI_KEYBINDINGS } = tui;
 
 function useWindowsKeybindings(

@@ -3,7 +3,7 @@ import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
 import type extensionsTypesTypes from "../core/extensions/types.types.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type projectTrustTypesModule from "../core/project-trust.types.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
 import startupUi from "./startup-ui.ts";

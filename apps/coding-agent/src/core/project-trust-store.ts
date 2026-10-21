@@ -3,18 +3,16 @@ import lockfile from "proper-lockfile";
 import errors from "../utils/errors.ts";
 import paths from "../utils/paths.ts";
 import text from "../utils/text.ts";
-import platformNode from "./platform-node.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import trustManager from "./trust-manager.ts";
 import type trustManagerTypes from "./trust-manager.types.ts";
 
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 const { resolvePath } = paths;
-const { dirname, join } = platformNode;
+const { dirname, join, nowMs } = platform;
 const { stripBom } = text;
 const { toErrorMessage } = errors;
-const { nowMs } = platform;
 const { normalizeCwd } = trustManager;
 
 type TrustFile = Record<string, boolean | null | undefined>;

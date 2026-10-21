@@ -1,4 +1,4 @@
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 
 const { nowMs } = platform;
 

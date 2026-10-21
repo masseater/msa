@@ -1,15 +1,16 @@
-import { platform } from "os";
-
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
 import nodeFs from "../core/platform/node/fs.ts";
+import nodeOs from "../core/platform/node/os.ts";
 import type toolsManagerTypes from "./tools-manager.types.ts";
 import archiveExtract from "./tools-manager/archive-extract.ts";
 import latestVersion from "./tools-manager/latest-version.ts";
 import releaseDownload from "./tools-manager/release-download.ts";
 import toolCatalog from "./tools-manager/tool-catalog.ts";
+
+const { platform } = nodeOs;
 
 const { awaited, awaiting } = awaitingModule;
 const { rmSync, mkdirSync } = nodeFs;

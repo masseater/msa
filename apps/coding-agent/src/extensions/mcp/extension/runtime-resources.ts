@@ -1,11 +1,11 @@
 import srcConfig from "../../../config.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import type oauthTypesNs from "../oauth.types.ts";
 import type McpRuntime from "../runtime.ts";
 import type runtimeTypes from "../runtime.types.ts";
 import type McpExtensionHost from "./host.ts";
 
-const { join } = platformNode;
+const { join } = platform;
 const { getAgentDir } = srcConfig;
 
 export default class McpRuntimeResources {

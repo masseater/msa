@@ -3,7 +3,7 @@ import { dual } from "effect/Function";
 import { compare, valid } from "semver";
 
 import awaitingModule from "../core/awaiting.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import managementHttp from "./management-http.ts";
 import userAgent from "./user-agent.ts";
 import type versionCheckTypes from "./version-check.types.ts";

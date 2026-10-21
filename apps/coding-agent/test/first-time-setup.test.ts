@@ -4,10 +4,10 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import startupUi from "../src/cli/startup-ui.ts";
 import config from "../src/config.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 
-const { deleteEnv, readEnv, writeEnv } = processEnv;
+const { deleteEnv, readEnv, writeEnv } = platform;
 const { ENV_AGENT_DIR } = config;
 const { shouldRunFirstTimeSetup } = startupUi;
 const { joinPath, makeTempDir, removePath, runTest, writeTextFile } = testing;

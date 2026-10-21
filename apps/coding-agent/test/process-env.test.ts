@@ -2,9 +2,9 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 
-const { deleteEnv, envNames, envSnapshot, readEnv, withEnv, writeEnv } = processEnv;
+const { deleteEnv, envNames, envSnapshot, readEnv, withEnv, writeEnv } = platform;
 
 const { runTest } = testing;
 

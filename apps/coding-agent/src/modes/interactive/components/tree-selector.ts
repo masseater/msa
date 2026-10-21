@@ -1,7 +1,7 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import platform from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import type sessionManagerTypes from "../../../core/session-manager.types.ts";
 import DynamicBorder from "./dynamic-border.ts";
 import LabelInput from "./label-input.ts";

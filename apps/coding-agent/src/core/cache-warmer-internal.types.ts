@@ -1,7 +1,7 @@
 import type aiTypes from "@msa/ai/index.types";
 
 import type cacheWarmerTypes from "./cache-warmer.types.ts";
-import type platformTypes from "./platform.types.ts";
+import type platformTypes from "./platform/index.types.ts";
 
 declare namespace cacheWarmerInternalTypes {
   interface ActiveRun extends cacheWarmerTypes.CacheWarmRequest {

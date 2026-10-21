@@ -2,7 +2,7 @@ import type { VM } from "@earendil-works/gondolin";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import { Effect, Option } from "effect";
 
-import nodePath from "../../../src/core/platform/node/path.ts";
+import platform from "../../../src/core/platform/index.ts";
 import GondolinAborted from "./gondolin-aborted.ts";
 import paths from "./paths.ts";
 
@@ -30,7 +30,7 @@ function createGondolinReadOps(vm: VM, localCwd: string): codingAgentTypes.ReadO
     access: (filePath) => vm.fs.access(toGuestPath(localCwd, filePath)),
     detectImageMimeType: (filePath) =>
       Promise.resolve(
-        IMAGE_MIME_TYPES[nodePath.posix.extname(toGuestPath(localCwd, filePath)).toLowerCase()] ??
+        IMAGE_MIME_TYPES[platform.posix.extname(toGuestPath(localCwd, filePath)).toLowerCase()] ??
           null,
       ),
     readFile: (filePath) => vm.fs.readFile(toGuestPath(localCwd, filePath)),
@@ -71,8 +71,8 @@ const walkDirectory = (
     const entries = yield* Effect.promise(() => vm.fs.listDir(dir, signalOption(signal)));
     for (const entry of entries) {
       if (entry === ".git" || entry === "node_modules") continue;
-      const guestPath = nodePath.posix.join(dir, entry);
-      const relativePath = relativeDir === "" ? entry : nodePath.posix.join(relativeDir, entry);
+      const guestPath = platform.posix.join(dir, entry);
+      const relativePath = relativeDir === "" ? entry : platform.posix.join(relativeDir, entry);
       const entryStat = yield* Effect.option(
         Effect.tryPromise(() => vm.fs.stat(guestPath, signalOption(signal))),
       );
@@ -93,7 +93,7 @@ const walkGuestFiles = (
   Effect.gen(function* () {
     yield* failIfAborted(signal);
     const stat = yield* Effect.promise(() => vm.fs.stat(root, signalOption(signal)));
-    if (!stat.isDirectory()) return yield* visit(root, nodePath.posix.basename(root));
+    if (!stat.isDirectory()) return yield* visit(root, platform.posix.basename(root));
     return yield* walkDirectory({ signal, visit, vm }, root, "");
   });
 function createGondolinFindOps(vm: VM, localCwd: string): codingAgentTypes.FindOperations {

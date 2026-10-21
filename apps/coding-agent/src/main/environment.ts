@@ -1,11 +1,11 @@
-import processEnv from "../core/process-env.ts";
+import platform from "../core/platform/index.ts";
 import timings from "../core/timings.ts";
 import themeSchema from "../modes/interactive/theme/theme-schema.ts";
 import themeModule from "../modes/interactive/theme/theme.ts";
 import cliInput from "./cli-input.ts";
 
 const { resetTimings } = timings;
-const { writeEnv, readEnv } = processEnv;
+const { readEnv, writeEnv } = platform;
 const { validateThemeJson } = themeSchema;
 const { setThemeJsonValidator } = themeModule;
 const { isTruthyEnvFlag } = cliInput;

@@ -1,17 +1,13 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
-import platform from "../core/platform.ts";
-import nodeFs from "./node-fs.ts";
+import platform from "../core/platform/index.ts";
 import paths from "./paths.ts";
-import platformExtra from "./platform-extra.ts";
 
-const { toNamespacedPath } = platformExtra;
-const { basename, dirname, join, randomUuid, relative, resolve } = platformNode;
+const { basename, dirname, join, nowMs, randomUuid, relative, resolve, toNamespacedPath } =
+  platform;
 const { getCwdRelativePath } = paths;
-const { copyFile, exists, makeDirectory, remove, rename } = nodeFs;
-const { nowMs } = platform;
+const { copyFile, exists, makeDirectory, remove, rename } = platform.files;
 const { awaited, awaiting } = awaitingModule;
 
 const QUARANTINE_DIR_NAME = ".msa-native-quarantine";

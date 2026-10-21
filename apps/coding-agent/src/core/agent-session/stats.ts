@@ -4,7 +4,7 @@ import type AgentSession from "../agent-session.ts";
 import type agentSessionTypes from "../agent-session.types.ts";
 import compactionModule from "../compaction/index.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionContext from "../session-manager/session-context.ts";
 import usageTotalsModule from "../usage-totals.ts";

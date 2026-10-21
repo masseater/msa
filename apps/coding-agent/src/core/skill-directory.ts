@@ -3,13 +3,13 @@ import ignore from "ignore";
 import type diagnosticsTypes from "./diagnostics.ts";
 import directoryEntry from "./directory-entry.ts";
 import ignoreRules from "./ignore-rules.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import skillFile from "./skill-file.ts";
 import type skillsInternalTypes from "./skills-internal.types.ts";
 import type skillsTypes from "./skills.types.ts";
 
-const { relative } = platformNode;
+const { relative } = platformModule;
 const { readdirSync, existsSync } = nodeFs;
 const { resolveEntry } = directoryEntry;
 const { loadSkillFromFile } = skillFile;

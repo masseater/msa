@@ -3,11 +3,11 @@ import type aiTypes from "@msa/ai/index.types";
 import type agentSessionTypes from "../core/agent-session.types.ts";
 import goalModule from "../core/goal.ts";
 import outputGuard from "../core/output-guard.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import jsonEvent from "./json-event.ts";
 import type printModeTypes from "./print-mode.types.ts";
 
-const { nowMs, writeError } = platformModule;
+const { nowMs, writeError } = platform;
 const { writeRawStdout } = outputGuard;
 
 type Mode = printModeTypes.PrintModeOptions["mode"];

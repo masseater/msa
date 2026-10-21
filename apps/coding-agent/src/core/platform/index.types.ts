@@ -2,16 +2,23 @@ import type foreignErrorTypes from "./foreign-error.types.ts";
 import type toolFailureTypes from "./tool-failure.types.ts";
 
 declare namespace platformTypes {
-  interface PathOperations {
-    readonly join: (...segments: ReadonlyArray<string>) => string;
-    readonly resolve: (...segments: ReadonlyArray<string>) => string;
-    readonly dirname: (path: string) => string;
-    readonly basename: (path: string, suffix?: string) => string;
-    readonly extname: (path: string) => string;
-    readonly relative: (from: string, to: string) => string;
-    readonly isAbsolute: (path: string) => boolean;
-    readonly normalize: (path: string) => string;
-    readonly sep: string;
+  type EnvValues = Readonly<Record<string, string | undefined>>;
+
+  interface Latch {
+    readonly promise: Promise<void>;
+    readonly open: () => void;
+  }
+
+  interface ParsedPath {
+    readonly root: string;
+    readonly dir: string;
+    readonly base: string;
+    readonly ext: string;
+    readonly name: string;
+  }
+
+  interface Scheduled {
+    readonly cancel: () => void;
   }
 
   type ForeignError = foreignErrorTypes.ForeignError;

@@ -1,18 +1,20 @@
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
-
 import { Effect } from "effect";
 import type { createJiti } from "jiti";
 
 import config from "../../config.ts";
 import platform from "../platform/index.ts";
+import nodeModule from "../platform/node/module.ts";
+import nodeUrl from "../platform/node/url.ts";
 import pathUtils from "../tools/path-utils.ts";
 import loaderCache from "./loader-cache.ts";
 import type loaderCacheTypes from "./loader-cache.types.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
+const { createRequire } = nodeModule;
+const { fileURLToPath } = nodeUrl;
+
 const { isBunBinary, isBundledNode } = config;
-const { fromPromise, isSea, pathOperations } = platform;
+const { fromPromise, isSea } = platform;
 const { pathExists } = pathUtils;
 const { extensionCache, isCurrentCacheToken } = loaderCache;
 
@@ -20,7 +22,7 @@ const require = createRequire(import.meta.url);
 
 const isNodeSeaBinary = ("sea" in process.features && process.features.sea === true) || isSea();
 const isTypeScriptSourceRuntime =
-  !isBunBinary && pathOperations.extname(fileURLToPath(import.meta.url)) === ".ts";
+  !isBunBinary && platform.extname(fileURLToPath(import.meta.url)) === ".ts";
 const usesEmbeddedModules = isBunBinary || isNodeSeaBinary || isBundledNode;
 
 let createJitiPromise: Promise<typeof createJiti> | undefined;
@@ -45,17 +47,17 @@ let cachedAliases: Record<string, string> | undefined;
 
 const resolveWorkspaceOrImport = (packagesRoot: string, relativePath: string, specifier: string) =>
   Effect.gen(function* () {
-    const workspacePath = pathOperations.join(packagesRoot, relativePath);
+    const workspacePath = platform.join(packagesRoot, relativePath);
     const exists = yield* fromPromise(() => pathExists(workspacePath));
     return exists ? workspacePath : fileURLToPath(import.meta.resolve(specifier));
   });
 
 const buildAliases = Effect.gen(function* () {
-  const here = pathOperations.dirname(fileURLToPath(import.meta.url));
-  const packagesRoot = pathOperations.resolve(here, "../../../../");
+  const here = platform.dirname(fileURLToPath(import.meta.url));
+  const packagesRoot = platform.resolve(here, "../../../../");
   const resolveEntry = (relativePath: string, specifier: string) =>
     resolveWorkspaceOrImport(packagesRoot, relativePath, specifier);
-  const msaCodingAgentEntry = pathOperations.resolve(here, "../..", "index.js");
+  const msaCodingAgentEntry = platform.resolve(here, "../..", "index.js");
   const msaAgentCoreEntry = yield* resolveEntry("agent/dist/index.js", "@msa/agent-core");
   const msaTuiEntry = yield* resolveEntry("tui/dist/index.js", "@msa/tui");
   const msaAiCompatEntry = yield* resolveEntry("ai/dist/compat.js", "@msa/ai/compat");

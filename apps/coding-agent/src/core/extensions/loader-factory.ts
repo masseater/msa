@@ -9,7 +9,7 @@ import loaderApi from "./loader-api.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
 const { createSyntheticSourceInfo, getSyntheticPathSource, isSyntheticPath } = sourceInfoModule;
-const { fromPromise, pathOperations, unwrapForeign } = platform;
+const { fromPromise, unwrapForeign } = platform;
 const { resolvePath } = paths;
 const { createExtensionAPI } = loaderApi;
 const { time } = timings;
@@ -19,7 +19,7 @@ function createExtension(
   resolvedPath: string,
 ): extensionsTypesTypes.Extension {
   const source = getSyntheticPathSource(extensionPath) ?? "local";
-  const baseDir = isSyntheticPath(extensionPath) ? undefined : pathOperations.dirname(resolvedPath);
+  const baseDir = isSyntheticPath(extensionPath) ? undefined : platform.dirname(resolvedPath);
 
   return {
     commands: new Map(),

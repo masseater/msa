@@ -83,7 +83,7 @@ release. Add a tool name to select part of the graph. For example, run
 ## 環境変数
 
 - 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
-- 読み書きは `apps/coding-agent/src/core/process-env.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
+- 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
 
 ## テスト
 

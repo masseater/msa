@@ -9,7 +9,7 @@ import bash from "./renderers/bash.ts";
 import truncate from "./truncate.ts";
 import type truncateTypes from "./truncate.types.ts";
 
-const { currentTimeMillis, fromPromise } = platform;
+const { fromPromise, nowMs } = platform;
 const { BASH_UPDATE_THROTTLE_MS } = bash;
 const { DEFAULT_MAX_BYTES, formatSize } = truncate;
 
@@ -68,7 +68,7 @@ export default class BashOutputReporter {
   private emitUpdate(): void {
     if (this.onUpdate === undefined || !this.updateDirty) return;
     this.updateDirty = false;
-    this.lastUpdateAt = currentTimeMillis();
+    this.lastUpdateAt = nowMs();
     const snapshot = this.output.snapshot({ persistIfTruncated: true });
     this.onUpdate({
       content: [{ text: snapshot.content, type: "text" }],
@@ -82,7 +82,7 @@ export default class BashOutputReporter {
   private scheduleUpdate(): void {
     if (this.onUpdate === undefined) return;
     this.updateDirty = true;
-    const delay = BASH_UPDATE_THROTTLE_MS - (currentTimeMillis() - this.lastUpdateAt);
+    const delay = BASH_UPDATE_THROTTLE_MS - (nowMs() - this.lastUpdateAt);
     if (delay <= 0) {
       this.clearTimer();
       this.emitUpdate();

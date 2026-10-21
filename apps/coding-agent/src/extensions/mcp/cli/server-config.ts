@@ -1,7 +1,7 @@
 import configModule from "../../../config.ts";
 import mcpServers from "../../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../../core/mcp-servers.types.ts";
-import platformNode from "../../../core/platform-node.ts";
+import platform from "../../../core/platform/index.ts";
 import ProjectTrustStore from "../../../core/project-trust-store.ts";
 import errorsModule from "../../../utils/errors.ts";
 import type cliInternalTypes from "../cli-internal.types.ts";
@@ -11,7 +11,7 @@ import cliOptions from "./cli-options.ts";
 
 const { APP_NAME, CONFIG_DIR_NAME } = configModule;
 const { validateMcpServerConfig } = mcpServers;
-const { join } = platformNode;
+const { join } = platform;
 const { toErrorMessage } = errorsModule;
 const { addMcpServerConfig, loadMcpConfig, removeMcpServerConfig } = mcpConfig;
 const { HELP_HINT, parseOptions, parsePairs } = cliOptions;

@@ -2,13 +2,13 @@ import * as Effect from "effect/Effect";
 
 import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import type resourceLoaderTypes from "../resource-loader.types.ts";
 import sourceInfoModule from "../source-info.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
 const { isSyntheticPath } = sourceInfoModule;
-const { basename, dirname } = platformNode;
+const { basename, dirname } = platform;
 
 export default class SessionExtensionResources {
   private readonly session: AgentSession;

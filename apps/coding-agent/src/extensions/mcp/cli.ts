@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../../core/awaiting.ts";
-import platform from "../../core/platform.ts";
+import platform from "../../core/platform/index.ts";
 import type cliTypes from "./cli.types.ts";
 import cliOptions from "./cli/cli-options.ts";
 import commandContext from "./cli/command-context.ts";

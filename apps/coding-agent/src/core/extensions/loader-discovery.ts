@@ -1,15 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
 import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import manifestModule from "../manifest.ts";
 import platform from "../platform/index.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import type loaderDiscoveryTypes from "./loader-discovery.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
-const { pathOperations } = platform;
 const { readMsaManifest } = manifestModule;
 const { CONFIG_DIR_NAME, getAgentDir } = config;
 const { resolvePath } = pathsModule;
@@ -21,12 +18,12 @@ const existsOrFalse = (path: string) =>
 
 const manifestEntries = (dir: string) =>
   Effect.gen(function* () {
-    const packageJsonPath = pathOperations.join(dir, "package.json");
+    const packageJsonPath = platform.join(dir, "package.json");
     if (!(yield* existsOrFalse(packageJsonPath))) return [];
     const manifest = yield* Effect.sync(() => readMsaManifest(packageJsonPath));
     const entries: string[] = [];
     for (const extPath of manifest?.extensions ?? []) {
-      const resolvedExtPath = pathOperations.resolve(dir, extPath);
+      const resolvedExtPath = platform.resolve(dir, extPath);
       if (yield* existsOrFalse(resolvedExtPath)) entries.push(resolvedExtPath);
     }
     return entries;
@@ -36,9 +33,9 @@ const resolveExtensionEntries = (dir: string) =>
   Effect.gen(function* () {
     const fromManifest = yield* manifestEntries(dir);
     if (fromManifest.length > 0) return fromManifest;
-    const indexTs = pathOperations.join(dir, "index.ts");
+    const indexTs = platform.join(dir, "index.ts");
     if (yield* existsOrFalse(indexTs)) return [indexTs];
-    const indexJs = pathOperations.join(dir, "index.js");
+    const indexJs = platform.join(dir, "index.js");
     if (yield* existsOrFalse(indexJs)) return [indexJs];
     return null;
   });
@@ -65,7 +62,7 @@ const discoverInDir = (dir: string) =>
     const names = yield* fs.readDirectory(dir);
     const discovered: string[] = [];
     for (const name of names) {
-      const entryPath = pathOperations.join(dir, name);
+      const entryPath = platform.join(dir, name);
       const kind = yield* entryKind(entryPath);
       if ((kind === "file" || kind === "symlink") && isExtensionFile(name)) {
         discovered.push(entryPath);
@@ -100,15 +97,15 @@ const discover = ({
     const seen = new Set<string>();
     const addPaths = (paths: string[]) => {
       for (const p of paths) {
-        const resolved = pathOperations.resolve(p);
+        const resolved = platform.resolve(p);
         if (!seen.has(resolved)) {
           seen.add(resolved);
           allPaths.push(p);
         }
       }
     };
-    addPaths(yield* discoverInDir(pathOperations.join(resolvedCwd, CONFIG_DIR_NAME, "extensions")));
-    addPaths(yield* discoverInDir(pathOperations.join(resolvedAgentDir, "extensions")));
+    addPaths(yield* discoverInDir(platform.join(resolvedCwd, CONFIG_DIR_NAME, "extensions")));
+    addPaths(yield* discoverInDir(platform.join(resolvedAgentDir, "extensions")));
     for (const p of configuredPaths) {
       const resolved = resolvePath(p, resolvedCwd, { normalizeUnicodeSpaces: true });
       addPaths(yield* configuredEntries(resolved));

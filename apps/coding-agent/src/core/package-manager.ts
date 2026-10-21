@@ -1,8 +1,8 @@
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 
 const { chmodSync, mkdirSync } = nodeFs;
-const { join } = platformNode;
+const { join } = platformModule;
 
 function getExtensionTempFolder(agentDir: string): string {
   const tempFolder = join(agentDir, "tmp", "extensions");

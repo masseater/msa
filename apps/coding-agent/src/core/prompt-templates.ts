@@ -1,7 +1,7 @@
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import promptTemplateArgs from "./prompt-template-args.ts";
 import promptTemplateFiles from "./prompt-template-files.ts";
@@ -9,7 +9,7 @@ import type promptTemplatesTypes from "./prompt-templates.types.ts";
 import sourceInfoModule from "./source-info.ts";
 import type sourceInfoTypes from "./source-info.types.ts";
 
-const { dirname, resolve, join } = platformNode;
+const { dirname, join, resolve } = platformModule;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 const { isPathWithin, resolvePath } = paths;
 const { statSync, existsSync } = nodeFs;

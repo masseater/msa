@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import configModule from "../src/config.ts";
 import KeybindingsManager from "../src/core/keybindings-manager.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import migrations from "../src/migrations.ts";
 
 const { runMigrations } = migrations;
-const { withEnv } = processEnv;
+const { withEnv } = platform;
 const { ENV_AGENT_DIR } = configModule;
 const { joinPath, makeTempDir, readJsonFile, removeDirs, runTest, writeJsonFile } = testing;
 

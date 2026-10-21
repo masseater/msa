@@ -3,16 +3,14 @@ import chalk from "chalk";
 import text from "../utils/text.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 import type packageManagerTypes from "./package-manager.types.ts";
-import platformNode from "./platform-node.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import sourceInfoModule from "./source-info.ts";
 
-const { join } = platformNode;
+const { join, writeError } = platform;
 const { existsSync, readFileSync } = nodeFs;
 const { stripBom } = text;
 const { BUILTIN_PATH_PREFIX } = sourceInfoModule;
-const { writeError } = platform;
 
 const HOST_PROVIDED_EXTENSION_PACKAGES = new Set([
   "@msa/agent-core",

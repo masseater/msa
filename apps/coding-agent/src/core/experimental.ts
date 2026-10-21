@@ -1,6 +1,6 @@
-import processEnv from "./process-env.ts";
+import platform from "./platform/index.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 
 function areExperimentalFeaturesEnabled(): boolean {
   return readEnv("MSA_EXPERIMENTAL") === "1";

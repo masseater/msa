@@ -7,7 +7,7 @@ import findSupport from "./find-support.ts";
 import type findSupportTypes from "./find-support.types.ts";
 import pathUtils from "./path-utils.ts";
 
-const { ToolFailure, fromPromise, pathOperations } = platformModule;
+const { ToolFailure, fromPromise } = platformModule;
 const { pathExists } = pathUtils;
 const { formatFindOutput, noFilesFound, relativizeFindResultPath } = findSupport;
 const { ensureTool } = toolsManager;
@@ -16,9 +16,9 @@ const { runCommand } = command;
 const isInsideGitRepo = (searchPath: string) =>
   Effect.gen(function* () {
     for (let current = searchPath; ;) {
-      const hasGit = yield* fromPromise(() => pathExists(pathOperations.join(current, ".git")));
+      const hasGit = yield* fromPromise(() => pathExists(platformModule.join(current, ".git")));
       if (hasGit) return true;
-      const parent = pathOperations.dirname(current);
+      const parent = platformModule.dirname(current);
       if (parent === current) return false;
       current = parent;
     }

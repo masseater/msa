@@ -6,7 +6,7 @@ import authGuidance from "../core/auth-guidance.ts";
 import awaitingModule from "../core/awaiting.ts";
 import modelPolicy from "../core/model-policy.ts";
 import type modelRuntimeTypes from "../core/model-runtime.types.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import modelTable from "./model-table.ts";
 
 const { awaited, awaiting } = awaitingModule;

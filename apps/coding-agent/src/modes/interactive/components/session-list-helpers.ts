@@ -1,6 +1,6 @@
 import tui from "@msa/tui";
 
-import platform from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import type sessionManagerTypes from "../../../core/session-manager.types.ts";
 import paths from "../../../utils/paths.ts";
 import themeModule from "../theme/theme.ts";

@@ -4,13 +4,13 @@ import { Effect } from "effect";
 
 import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import type extensionsTypes from "../src/core/extensions/index.types.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import sourceInfoModule from "../src/core/source-info.ts";
 import src from "../src/index.ts";
 import type compactionExtensionsSupportTypes from "./compaction-extensions-support.types.ts";
 import sessionKit from "./session-kit.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 const { createCodingTools } = src;
 

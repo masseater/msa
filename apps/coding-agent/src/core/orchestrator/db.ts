@@ -1,10 +1,9 @@
-import { DatabaseSync } from "node:sqlite";
-
+import platform from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
-import nodePath from "../platform/node/path.ts";
+import DatabaseSync from "../platform/node/sqlite.ts";
 
 const { mkdirSync } = nodeFs;
-const { dirname } = nodePath;
+const { dirname } = platform;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (

@@ -7,12 +7,12 @@ import bugReportRedaction from "./bug-report-redaction.ts";
 import type crashLogTypes from "./crash-log.types.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
-import platformModule from "./platform.ts";
+import platform from "./platform/index.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 
 const { redactSettings, redactJsonValue, redactUrl } = bugReportRedaction;
 const { uuidv7 } = ai;
-const { nowIso } = platformModule;
+const { nowIso } = platform;
 const { collectEnvironment } = bugReportEnvironment;
 
 const BUG_REPORT_CUSTOM_ENTRY_TYPE = "msa.bug-report";

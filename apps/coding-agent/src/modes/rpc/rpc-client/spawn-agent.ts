@@ -1,10 +1,10 @@
+import platformModule from "../../../core/platform/index.ts";
 import nodeChildProcess from "../../../core/platform/node/child-process.ts";
 import type nodeChildProcessTypes from "../../../core/platform/node/child-process.types.ts";
-import processEnv from "../../../core/process-env.ts";
 import type rpcClientTypes from "../rpc-client.types.ts";
 
 const { spawn } = nodeChildProcess;
-const { envSnapshot } = processEnv;
+const { envSnapshot } = platformModule;
 
 const agentArgs = (options: rpcClientTypes.RpcClientOptions): string[] => {
   const args = ["--mode", "rpc"];

@@ -1,13 +1,12 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, ManagedRuntime, Option, Stream } from "effect";
+import { Effect, Option, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 
 import awaitingModule from "../../../core/awaiting.ts";
-import processEnv from "../../../core/process-env.ts";
+import platformModule from "../../../core/platform/index.ts";
+import nodeRuntime from "../../../core/platform/runtime.ts";
 
 const { awaited, awaiting } = awaitingModule;
-const { readEnv } = processEnv;
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+const { readEnv } = platformModule;
 
 function checkTmuxKeyboardSetup(): Promise<string | undefined> {
   return Effect.runPromise(

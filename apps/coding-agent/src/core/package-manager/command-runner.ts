@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 
 import childProcess from "../../utils/child-process.ts";
 import outputGuard from "../output-guard.ts";
-import platformModule from "../platform.ts";
+import platformModule from "../platform/index.ts";
 import type nodeChildProcessTypes from "../platform/node/child-process.types.ts";
 import type nodeStreamTypes from "../platform/node/stream.types.ts";
 import packageEnv from "./package-env.ts";

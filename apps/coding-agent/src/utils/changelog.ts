@@ -1,15 +1,13 @@
 import { dual } from "effect/Function";
 
 import config from "../config.ts";
-import platform from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import nodeFs from "../core/platform/node/fs.ts";
 import type changelogTypes from "./changelog.types.ts";
-import platformExtra from "./platform-extra.ts";
 
 const { existsSync, readFileSync } = nodeFs;
 
-const { posix } = platformExtra;
-const { writeError } = platform;
+const { posix, writeError } = platform;
 
 const GITHUB_REPO = "masseater/msa";
 const CHANGELOG_LINK_BASE_PATH = "apps/coding-agent";

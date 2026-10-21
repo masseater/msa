@@ -1,13 +1,13 @@
 import { Effect } from "effect";
 
 import exec from "../exec.ts";
+import platform from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
-import nodePath from "../platform/node/path.ts";
 import type lgtmTypes from "./lgtm.types.ts";
 import PodmanError from "./podman-error.ts";
 
 const { existsSync } = nodeFs;
-const { delimiter, join } = nodePath;
+const { delimiter, join } = platform;
 const { execCommand } = exec;
 
 const LGTM_CONTAINER = "msa-grafana-lgtm";

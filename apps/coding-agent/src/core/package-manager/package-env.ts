@@ -1,11 +1,12 @@
-import { homedir } from "node:os";
-
 import { valid, validRange } from "semver";
 
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
-import processEnv from "../process-env.ts";
+import nodeOs from "../platform/node/os.ts";
 
-const { readEnv, envSnapshot, envNames } = processEnv;
+const { homedir } = nodeOs;
+
+const { envNames, envSnapshot, readEnv } = platformModule;
 const { readFileSync } = nodeFs;
 
 function getEnv(): NodeJS.ProcessEnv {

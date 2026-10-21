@@ -2,12 +2,12 @@ import chalk from "chalk";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
 import type packageManagerCliInternalTypes from "../package-manager-cli-internal.types.ts";
 import commandSettings from "./command-settings.ts";
 
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { awaited, awaiting } = awaitingModule;
 const { createCommandSettingsManager } = commandSettings;
 

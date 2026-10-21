@@ -4,12 +4,12 @@ import config from "../../config.ts";
 import type authStorageTypes from "../../core/auth-storage.types.ts";
 import FileAuthStorageBackend from "../../core/file-auth-storage-backend.ts";
 import mcpServers from "../../core/mcp-servers.ts";
-import platformNode from "../../core/platform-node.ts";
+import platform from "../../core/platform/index.ts";
 import mcpRefreshLock from "./mcp-refresh-lock.ts";
 import type oauthTypesNs from "./oauth.types.ts";
 
 const { mcpNamespace } = mcpServers;
-const { join } = platformNode;
+const { join } = platform;
 const { getAgentDir } = config;
 const { withRefreshLock } = mcpRefreshLock;
 type StoredStates = Record<string, oauthTypes.McpOAuthState>;

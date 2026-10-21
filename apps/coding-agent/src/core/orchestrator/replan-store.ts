@@ -1,5 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
-
+import type DatabaseSync from "../platform/node/sqlite.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 interface ReplanRow {

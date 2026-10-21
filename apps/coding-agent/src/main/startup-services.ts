@@ -5,7 +5,7 @@ import startupUi from "../cli/startup-ui.ts";
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
 import telemetrySupport from "../core/observability/telemetry-support.ts";
-import processEnv from "../core/process-env.ts";
+import platform from "../core/platform/index.ts";
 import type SettingsManager from "../core/settings-manager.ts";
 import timings from "../core/timings.ts";
 
@@ -13,7 +13,7 @@ const { showFirstTimeSetup, shouldRunFirstTimeSetup } = startupUi;
 const { VERSION } = config;
 const { awaited, awaiting } = awaitingModule;
 const { startTelemetry } = telemetrySupport;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { time } = timings;
 
 function setUpInteractiveStart(

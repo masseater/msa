@@ -4,8 +4,8 @@ import { Effect } from "effect";
 
 import awaitingModule from "../../core/awaiting.ts";
 import type keybindingsTypes from "../../core/keybindings.types.ts";
-import platform from "../../core/platform.ts";
-import type platformTypes from "../../core/platform.types.ts";
+import platform from "../../core/platform/index.ts";
+import type platformTypes from "../../core/platform/index.types.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 import errors from "../../utils/errors.ts";
 import type huggingfaceTypes from "./huggingface.types.ts";

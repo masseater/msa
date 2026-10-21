@@ -4,11 +4,11 @@ import { afterEach, beforeEach, vi } from "vite-plus/test";
 
 import DefaultPackageManager from "../src/core/default-package-manager.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { joinPath, makeDirectory, makeTempDir, removePath, runTest } = testing;
 
 interface PackageManagerFixture {

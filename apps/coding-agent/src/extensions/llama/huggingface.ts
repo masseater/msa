@@ -1,14 +1,14 @@
-import { homedir } from "node:os";
-
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
-import platformNode from "../../core/platform-node.ts";
-import nodeFs from "../../utils/node-fs.ts";
+import platform from "../../core/platform/index.ts";
+import nodeOs from "../../core/platform/node/os.ts";
+
+const { homedir } = nodeOs;
 
 const { awaited, awaiting } = awaitingModule;
-const { readText } = nodeFs;
-const { join } = platformNode;
+const { readText } = platform.files;
+const { join } = platform;
 
 function readToken(path: string): Promise<string | undefined> {
   return Effect.runPromise(

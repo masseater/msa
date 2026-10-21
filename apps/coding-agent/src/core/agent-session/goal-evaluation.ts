@@ -8,7 +8,7 @@ import awaitingModule from "../awaiting.ts";
 import compactionModule from "../compaction/index.ts";
 import goalModule from "../goal.ts";
 import modelResolver from "../model-resolver.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 
 const { nowMs } = platform;
 const { pickEvaluatorModel, GOAL_EVALUATOR_SYSTEM_PROMPT } = goalModule;

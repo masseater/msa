@@ -1,12 +1,14 @@
-import { createRequire } from "module";
-import { fileURLToPath } from "url";
-
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
+import platform from "../core/platform/index.ts";
+import nodeModule from "../core/platform/node/module.ts";
+import nodeUrl from "../core/platform/node/url.ts";
 
-const { dirname, join } = platformNode;
+const { createRequire } = nodeModule;
+const { fileURLToPath } = nodeUrl;
+
+const { dirname, join } = platform;
 const { awaited, awaiting } = awaitingModule;
 
 const require = createRequire(import.meta.url);

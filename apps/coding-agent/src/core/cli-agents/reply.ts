@@ -1,7 +1,7 @@
 import compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
 
-import platform from "../../core/platform.ts";
+import platform from "../platform/index.ts";
 import type replyTypes from "./reply.types.ts";
 
 const { nowMs } = platform;

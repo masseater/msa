@@ -4,12 +4,12 @@ import { vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import type packageManagerTypes from "../src/core/package-manager.types.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import packageManagerCli from "../src/package-manager-cli.ts";
 import type packageCommandPathsSupportTypes from "./package-command-paths-support.types.ts";
 import testNetworkEnv from "./test-network-env.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { ENV_AGENT_DIR, VERSION } = config;
 const { handlePackageCommand } = packageManagerCli;
 

@@ -1,20 +1,20 @@
-import { tmpdir } from "os";
-
 import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../core/awaiting.ts";
-import platformNode from "../../core/platform-node.ts";
+import platform from "../../core/platform/index.ts";
+import nodeOs from "../../core/platform/node/os.ts";
 import clipboardCommand from "../clipboard-command.ts";
 import type clipboardImageTypes from "../clipboard-image.types.ts";
 import mime from "../mime.ts";
-import nodeFs from "../node-fs.ts";
 import imageMime from "./image-mime.ts";
+
+const { tmpdir } = nodeOs;
 
 const { detectSupportedImageMimeType } = mime;
 const { getNativeClipboard } = tui;
-const { remove, readFile } = nodeFs;
-const { randomUuid, join } = platformNode;
+const { remove, readFile } = platform.files;
+const { join, randomUuid } = platform;
 const { runClipboardCommand } = clipboardCommand;
 const { awaited, awaiting } = awaitingModule;
 const { baseMimeType, selectPreferredImageMimeType } = imageMime;

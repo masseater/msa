@@ -1,6 +1,5 @@
 import paths from "../utils/paths.ts";
-import platformNode from "./platform-node.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 import sessionFormat from "./session-manager/session-format.ts";
@@ -8,9 +7,8 @@ import sessionFormat from "./session-manager/session-format.ts";
 const { existsSync, mkdirSync, writeFileSync } = nodeFs;
 
 const { CURRENT_SESSION_VERSION } = sessionFormat;
-const { nowIso } = platform;
+const { dirname, nowIso } = platform;
 const { resolvePath } = paths;
-const { dirname } = platformNode;
 
 type TrailingEntries = (parentId: string | null, timestamp: string) => readonly object[];
 

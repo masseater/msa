@@ -3,7 +3,7 @@ import { dual } from "effect/Function";
 import configModule from "../../config.ts";
 import mcpServers from "../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../core/mcp-servers.types.ts";
-import platformNode from "../../core/platform-node.ts";
+import platformModule from "../../core/platform/index.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
 import errorsModule from "../../utils/errors.ts";
 import type configTypes from "./config.types.ts";
@@ -12,7 +12,7 @@ const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 
 const { mcpNamespace, validateMcpServerConfig } = mcpServers;
 const { toErrorMessage } = errorsModule;
-const { dirname, join } = platformNode;
+const { dirname, join } = platformModule;
 const { CONFIG_DIR_NAME } = configModule;
 
 const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"];

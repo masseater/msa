@@ -1,12 +1,12 @@
 import frontmatterModule from "../utils/frontmatter.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 import type promptTemplatesTypes from "./prompt-templates.types.ts";
 import type sourceInfoTypes from "./source-info.types.ts";
 
 const { statSync, readdirSync, existsSync, readFileSync } = nodeFs;
-const { join, basename } = platformNode;
+const { basename, join } = platformModule;
 const { parseFrontmatter } = frontmatterModule;
 
 function loadTemplateFromFile(

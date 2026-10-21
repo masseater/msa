@@ -1,11 +1,11 @@
 import * as Effect from "effect/Effect";
 
+import platformModule from "./platform/index.ts";
 import nodeChildProcess from "./platform/node/child-process.ts";
 import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
-import processEnv from "./process-env.ts";
 
 const { execFile, spawnSync } = nodeChildProcess;
-const { readEnv } = processEnv;
+const { readEnv } = platformModule;
 
 function resolveBranchWithGitSync(repoDir: string): string | null {
   const result = spawnSync(

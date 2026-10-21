@@ -4,7 +4,7 @@ import type compatTypes from "@msa/ai/compat.types";
 
 import type agentSessionInternalTypes from "../agent-session-internal.types.ts";
 import type AgentSession from "../agent-session.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import systemPromptModule from "../system-prompt.ts";
 import type systemPromptTypes from "../system-prompt.types.ts";
 

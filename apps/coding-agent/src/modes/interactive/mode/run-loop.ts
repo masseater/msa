@@ -5,7 +5,7 @@ import config from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import crashLog from "../../../core/crash-log.ts";
 import type crashLogTypes from "../../../core/crash-log.types.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import handoffResume from "../handoff-resume.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import tmuxKeyboard from "./tmux-keyboard.ts";
@@ -13,7 +13,7 @@ import tmuxKeyboard from "./tmux-keyboard.ts";
 const { APP_NAME } = config;
 const { takeUnnotifiedCrash } = crashLog;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { toDate } = platformModule;
+const { toDate } = platform;
 const { offerHandoff } = handoffResume;
 const { checkTmuxKeyboardSetup } = tmuxKeyboard;
 

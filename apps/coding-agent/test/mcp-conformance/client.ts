@@ -3,7 +3,7 @@ import { Cause, Data, Effect, Exit, ManagedRuntime } from "effect";
 import { FetchHttpClient, HttpClient } from "effect/http";
 
 import InMemoryAuthStorageBackend from "../../src/core/in-memory-auth-storage-backend.ts";
-import processEnv from "../../src/core/process-env.ts";
+import platform from "../../src/core/platform/index.ts";
 import type configTypes from "../../src/extensions/mcp/config.types.ts";
 import type oauthTypesNs from "../../src/extensions/mcp/oauth.types.ts";
 import runtimeModule from "../../src/extensions/mcp/runtime.ts";
@@ -11,7 +11,7 @@ import type runtimeTypes from "../../src/extensions/mcp/runtime.types.ts";
 
 const { McpOAuthCredentialStore, McpServerConnection, createDefaultTransport, signInMcpServer } =
   runtimeModule;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { fromJsonText, tempRoot, toJsonText, writeTextFile } = testing;
 
 const MAX_SIGN_INS = 3;

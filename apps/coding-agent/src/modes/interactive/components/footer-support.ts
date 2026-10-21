@@ -1,8 +1,8 @@
 import { dual } from "effect/Function";
 
-import path from "../../path.ts";
+import platform from "../../../core/platform/index.ts";
 
-const { isAbsolute, relative, resolve, sep } = path;
+const { isAbsolute, relative, resolve, sep } = platform;
 
 function formatTokens(count: number): string {
   if (count < 1000) return count.toString();

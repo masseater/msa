@@ -1,9 +1,8 @@
 import tuiModule from "@msa/tui";
 
 import config from "../../../config.ts";
-import platformModule from "../../../core/platform.ts";
+import platformModule from "../../../core/platform/index.ts";
 import nodeFs from "../../../core/platform/node/fs.ts";
-import pathModule from "../../path.ts";
 import ThemedText from "../components/themed-text.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
@@ -12,7 +11,7 @@ const { theme } = themeModule;
 const { getDebugLogPath } = config;
 const { Spacer, visibleWidth } = tuiModule;
 const { nowIso } = platformModule;
-const { dirname } = pathModule;
+const { dirname } = platformModule;
 
 export default class DebugCommand {
   private readonly mode: InteractiveMode;

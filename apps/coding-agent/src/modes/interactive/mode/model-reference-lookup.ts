@@ -3,7 +3,7 @@ import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import modelResolver from "../../../core/model-resolver.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import errorsModule from "../../../utils/errors.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import modelCatalogRefresh from "../model-catalog-refresh.ts";
@@ -29,7 +29,7 @@ function refreshCatalogs(mode: InteractiveMode): Effect.Effect<void> {
     status.showStatus("Refreshing model catalogs…");
     const controller = new AbortController();
     let timedOut = false;
-    const timeout = platformModule.schedule(() => {
+    const timeout = platform.schedule(() => {
       timedOut = true;
       controller.abort();
     }, REFRESH_TIMEOUT_MS);

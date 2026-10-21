@@ -1,8 +1,7 @@
-import { StringDecoder } from "node:string_decoder";
-
 import { dual } from "effect/Function";
 
 import type nodeStreamTypes from "../../core/platform/node/stream.types.ts";
+import StringDecoder from "../../core/platform/node/string-decoder.ts";
 
 function serializeJsonLine(value: unknown): string {
   return `${JSON.stringify(value)}\n`;

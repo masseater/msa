@@ -4,17 +4,15 @@ import fsWatch from "../../utils/fs-watch.ts";
 import awaitingModule from "../awaiting.ts";
 import footerDataProviderHelpers from "../footer-data-provider-helpers.ts";
 import type FooterDataProvider from "../footer-data-provider.ts";
-import platformNode from "../platform-node.ts";
-import platformModule from "../platform.ts";
-import type platformTypes from "../platform.types.ts";
+import platformModule from "../platform/index.ts";
+import type platformTypes from "../platform/index.types.ts";
 import nodeFs from "../platform/node/fs.ts";
 import type nodeFsTypes from "../platform/node/fs.types.ts";
 
-const { schedule } = platformModule;
+const { dirname, join, schedule } = platformModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { existsSync, readFileSync, unwatchFile, watchFile } = nodeFs;
 const { FS_WATCH_RETRY_DELAY_MS, closeWatcher, watchWithErrorHandler } = fsWatch;
-const { dirname, join } = platformNode;
 const { resolveBranchWithGitAsync, resolveBranchWithGitSync, shouldPollGitHead } =
   footerDataProviderHelpers;
 

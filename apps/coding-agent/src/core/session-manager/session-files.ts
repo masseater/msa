@@ -1,9 +1,8 @@
-import { StringDecoder } from "string_decoder";
-
 import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
+import StringDecoder from "../platform/node/string-decoder.ts";
 import SessionHeaderScanLimitError from "../session-header-scan-limit-error.ts";
 import sessionManagerShared from "../session-manager-shared.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
@@ -21,7 +20,7 @@ const {
 } = nodeFs;
 const { MAX_SESSION_HEADER_SCAN_BYTES } = sessionManagerShared;
 const { normalizePath, resolvePath } = paths;
-const { join } = platformNode;
+const { join } = platformModule;
 const { getAgentDir: getDefaultAgentDir } = config;
 const { parseSessionHeaderCandidate, parseSessionEntryLine } = sessionFormat;
 

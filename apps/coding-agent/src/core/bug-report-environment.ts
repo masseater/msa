@@ -1,12 +1,11 @@
-import * as os from "node:os";
-
 import config from "../config.ts";
 import userAgentModule from "../utils/user-agent.ts";
-import processEnv from "./process-env.ts";
+import platformModule from "./platform/index.ts";
+import os from "./platform/node/os.ts";
 
 const { VERSION } = config;
 const { getMsaUserAgent } = userAgentModule;
-const { envNames, readEnv } = processEnv;
+const { envNames, readEnv } = platformModule;
 
 function collectEnvironment() {
   const env = (name: string): string | null => readEnv(name) || null;

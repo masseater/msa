@@ -1,13 +1,13 @@
 import { Effect, Option } from "effect";
 
 import type extensionsTypes from "../../../core/extensions/index.types.ts";
+import platform from "../../../core/platform/index.ts";
 import themeModule from "../../interactive/theme/theme.ts";
 import type themeTypes from "../../interactive/theme/theme.types.ts";
-import pathModule from "../../path.ts";
 import type rpcTypesTypes from "../rpc-types.ts";
 import rpcOutput from "./rpc-output.ts";
 
-const { randomUuid } = pathModule;
+const { randomUuid } = platform;
 const { theme } = themeModule;
 const { output } = rpcOutput;
 

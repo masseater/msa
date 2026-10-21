@@ -3,11 +3,11 @@ import * as Effect from "effect/Effect";
 import text from "../../utils/text.ts";
 import awaitingModule from "../awaiting.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import commandRunner from "./command-runner.ts";
 
-const { join, resolve, sep } = platformNode;
+const { join, resolve, sep } = platformModule;
 const { existsSync, readFileSync, rmSync } = nodeFs;
 const { stripBom } = text;
 const { awaited, awaitingWith, performed } = awaitingModule;

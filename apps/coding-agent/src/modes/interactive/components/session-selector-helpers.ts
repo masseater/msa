@@ -1,12 +1,10 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime, Stream } from "effect";
+import { Effect, FileSystem, Stream } from "effect";
 import { ChildProcess } from "effect/process";
 
+import nodeRuntime from "../../../core/platform/runtime.ts";
 import errors from "../../../utils/errors.ts";
 
 const { toErrorMessage } = errors;
-
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
 function deleteSessionFile(
   sessionPath: string,

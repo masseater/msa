@@ -2,7 +2,7 @@ import chalk from "chalk";
 
 import config from "../../config.ts";
 import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
-import platform from "../../core/platform.ts";
+import platform from "../../core/platform/index.ts";
 
 const { writeLog } = platform;
 const { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } = config;

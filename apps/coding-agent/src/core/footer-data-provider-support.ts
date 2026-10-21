@@ -1,8 +1,8 @@
 import type footerDataProviderTypes from "./footer-data-provider.types.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 const { existsSync, readFileSync, statSync } = nodeFs;
-const { dirname, join, resolve } = platformNode;
+const { dirname, join, resolve } = platformModule;
 
 function gitPathsFromFile(
   dir: string,

@@ -4,13 +4,13 @@ import type agentSessionServicesTypes from "./agent-session-services.types.ts";
 import awaitingModule from "./awaiting.ts";
 import DefaultResourceLoader from "./default-resource-loader.ts";
 import ModelRuntime from "./model-runtime.ts";
-import platformNode from "./platform-node.ts";
+import platform from "./platform/index.ts";
 import SettingsManager from "./settings-manager.ts";
 
 const { awaited } = awaitingModule;
 const { resolvePath } = paths;
 const { getAgentDir } = configModule;
-const { join } = platformNode;
+const { join } = platform;
 
 function* loadAgentSessionServices(
   options: agentSessionServicesTypes.CreateAgentSessionServicesOptions,

@@ -1,8 +1,8 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import platform from "../../../core/platform.ts";
-import type platformTypes from "../../../core/platform.types.ts";
+import platform from "../../../core/platform/index.ts";
+import type platformTypes from "../../../core/platform/index.types.ts";
 import paths from "../../../utils/paths.ts";
 import themeModule from "../theme/theme.ts";
 import keybindingHints from "./keybinding-hints.ts";

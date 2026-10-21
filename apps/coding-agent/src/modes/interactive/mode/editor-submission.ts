@@ -2,7 +2,7 @@ import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import slashCommandsModule from "../../../core/slash-commands.ts";
 import emptyEnterBurstModule from "../empty-enter-burst.ts";
 import type emptyEnterBurstTypes from "../empty-enter-burst.types.ts";
@@ -12,7 +12,7 @@ const { EMPTY_ENTER_BURST_IDLE, registerEmptyEnter } = emptyEnterBurstModule;
 const { INIT_PROMPT, canonicalizeBuiltinSlashCommand, handoffPrompt, parseHandoffCommand } =
   slashCommandsModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { nowMs } = platformModule;
+const { nowMs } = platform;
 
 export default class EditorSubmission {
   private readonly mode: InteractiveMode;

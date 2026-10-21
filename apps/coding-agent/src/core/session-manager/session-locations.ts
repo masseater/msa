@@ -1,6 +1,5 @@
 import paths from "../../utils/paths.ts";
-import platformNode from "../platform-node.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import SessionHeaderScanLimitError from "../session-header-scan-limit-error.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
@@ -17,8 +16,7 @@ const {
   readSessionHeader,
 } = sessionFiles;
 const { CURRENT_SESSION_VERSION, assertValidSessionId, createSessionId } = sessionFormat;
-const { nowIso } = platform;
-const { join, resolve } = platformNode;
+const { join, nowIso, resolve } = platform;
 const { resolvePath, normalizePath } = paths;
 
 type SessionLocation = {

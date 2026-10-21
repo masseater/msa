@@ -4,14 +4,14 @@ import { dual } from "effect/Function";
 
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type packageManagerCliTypes from "../package-manager-cli.types.ts";
 import configResources from "./config-resources.ts";
 import help from "./help.ts";
 import trustedSettings from "./trusted-settings.ts";
 
 const { getAgentDir, APP_NAME } = config;
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { awaiting, awaited } = awaitingModule;
 const { trustedSettingsManager } = trustedSettings;
 const { selectPackageResources } = configResources;

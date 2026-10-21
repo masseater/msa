@@ -1,14 +1,14 @@
 import type argsTypes from "../cli/args.types.ts";
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
-import processEnv from "../core/process-env.ts";
+import platform from "../core/platform/index.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
 import pathsModule from "../utils/paths.ts";
 import sessionOpen from "./session-open.ts";
 
 const { expandTildePath, ENV_SESSION_DIR } = config;
 const { awaited } = awaitingModule;
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { normalizePath } = pathsModule;
 const { createSessionManager } = sessionOpen;
 

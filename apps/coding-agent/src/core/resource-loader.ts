@@ -4,14 +4,12 @@ import pathsModule from "../utils/paths.ts";
 import text from "../utils/text.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 import footerDataProviderSupport from "./footer-data-provider-support.ts";
-import platformNode from "./platform-node.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 
 const { existsSync, readFileSync, statSync } = nodeFs;
-const { basename, dirname, join, sep } = platformNode;
+const { basename, dirname, join, sep, writeError } = platform;
 const { stripBom } = text;
-const { writeError } = platform;
 const { findGitPaths } = footerDataProviderSupport;
 const { canonicalizePath, resolvePath } = pathsModule;
 type BuiltinExtension = Exclude<

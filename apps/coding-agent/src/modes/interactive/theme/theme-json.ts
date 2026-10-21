@@ -1,13 +1,13 @@
 import config from "../../../config.ts";
+import platformModule from "../../../core/platform/index.ts";
 import nodeFs from "../../../core/platform/node/fs.ts";
 import textModule from "../../../utils/text.ts";
-import pathModule from "../../path.ts";
 import type themeSchemaTypes from "./theme-schema.types.ts";
 import themeState from "./theme-state.ts";
 import type themeTypes from "./theme.types.ts";
 
 const { getCustomThemesDir, getThemesDir } = config;
-const { join } = pathModule;
+const { join } = platformModule;
 const { stripBom } = textModule;
 const { registeredThemes } = themeState;
 

@@ -3,7 +3,7 @@ import pathsModule from "../../utils/paths.ts";
 import text from "../../utils/text.ts";
 import FileSettingsStorage from "../file-settings-storage.ts";
 import InMemorySettingsStorage from "../in-memory-settings-storage.ts";
-import platformNode from "../platform-node.ts";
+import platform from "../platform/index.ts";
 import settingsManagerHelpers from "../settings-manager-helpers.ts";
 import type settingsManagerInternalTypes from "../settings-manager-internal.types.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
@@ -12,7 +12,7 @@ import type settingsSchemaTypes from "../settings-schema.types.ts";
 const { stripBom } = text;
 const { deepMergeSettings, toSettingsError } = settingsManagerHelpers;
 const { resolvePath } = pathsModule;
-const { join } = platformNode;
+const { join } = platform;
 const { getAgentDir, CONFIG_DIR_NAME } = config;
 
 function migrateSettings(settings: Record<string, unknown>): settingsSchemaTypes.Settings {

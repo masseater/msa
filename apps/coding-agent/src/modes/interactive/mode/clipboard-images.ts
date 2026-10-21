@@ -1,16 +1,15 @@
-import * as os from "node:os";
-
 import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
+import platformModule from "../../../core/platform/index.ts";
 import nodeFs from "../../../core/platform/node/fs.ts";
+import os from "../../../core/platform/node/os.ts";
 import clipboardImage from "../../../utils/clipboard-image.ts";
 import type clipboardImageTypes from "../../../utils/clipboard-image.types.ts";
-import pathModule from "../../path.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
-const { join, randomUuid } = pathModule;
+const { join, randomUuid } = platformModule;
 const { extensionForImageMimeType, readClipboardImageFromCommand } = clipboardImage;
 
 export default class ClipboardImages {

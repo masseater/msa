@@ -4,10 +4,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { getAvailableThemes, getAvailableThemesWithPaths, setRegisteredThemes } = themeModule;
 
 const { joinPath, makeDirectory, makeTempDir, readJsonFile, removePath, runTest, writeJsonFile } =

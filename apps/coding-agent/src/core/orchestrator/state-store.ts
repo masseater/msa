@@ -1,4 +1,4 @@
-import type { DatabaseSync } from "node:sqlite";
+import type DatabaseSync from "../platform/node/sqlite.ts";
 
 function storedMaxConcurrent(database: DatabaseSync, project: string): number | null {
   const row = database

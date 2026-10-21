@@ -1,16 +1,15 @@
-import { arch } from "os";
-
 import awaitingModule from "../../core/awaiting.ts";
-import platformNode from "../../core/platform-node.ts";
-import platformModule from "../../core/platform.ts";
+import platformModule from "../../core/platform/index.ts";
 import nodeFs from "../../core/platform/node/fs.ts";
+import nodeOs from "../../core/platform/node/os.ts";
 import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 import downloadFileModule from "./download-file.ts";
 import latestVersion from "./latest-version.ts";
 import toolCatalog from "./tool-catalog.ts";
 
-const { randomUnit, nowMs } = platformModule;
-const { join } = platformNode;
+const { arch } = nodeOs;
+
+const { join, nowMs, randomUnit } = platformModule;
 const { mkdirSync } = nodeFs;
 const { awaited } = awaitingModule;
 const { TOOLS_DIR } = toolCatalog;

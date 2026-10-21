@@ -4,14 +4,12 @@ import FileModelsStore from "../file-models-store.ts";
 import InMemoryCodingAgentModelsStore from "../in-memory-coding-agent-models-store.ts";
 import ModelConfig from "../model-config.ts";
 import type modelRuntimeTypes from "../model-runtime.types.ts";
-import platformNode from "../platform-node.ts";
-import processEnv from "../process-env.ts";
+import platform from "../platform/index.ts";
 import RuntimeCredentials from "../runtime-credentials.ts";
 import catalogProviders from "./catalog-providers.ts";
 
-const { dirname, join } = platformNode;
+const { dirname, join, readEnv } = platform;
 const { getModelsPath } = configModule;
-const { readEnv } = processEnv;
 const { builtinCatalogProviders } = catalogProviders;
 
 const modelsStoreFor = (

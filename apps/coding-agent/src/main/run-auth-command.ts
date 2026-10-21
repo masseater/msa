@@ -7,7 +7,7 @@ import authCommand from "../cli/auth-command.ts";
 import type authCommandTypes from "../cli/auth-command.types.ts";
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import authCommandRun from "./auth-command-run.ts";
 
 const {
@@ -19,7 +19,7 @@ const {
 } = authCommand;
 const { APP_NAME } = config;
 const { parseArgs } = argsModule;
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { awaiting } = awaitingModule;
 const { runParsedAuthCommand } = authCommandRun;
 

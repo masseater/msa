@@ -4,12 +4,12 @@ import * as Effect from "effect/Effect";
 import config from "../config.ts";
 import awaitingModule from "../core/awaiting.ts";
 import DefaultPackageManager from "../core/default-package-manager.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import type packageManagerCliInternalTypes from "../package-manager-cli-internal.types.ts";
 import type packageManagerCliTypes from "../package-manager-cli.types.ts";
 import packageOperations from "./package-operations.ts";
 
-const { writeError } = platformModule;
+const { writeError } = platform;
 const { getAgentDir } = config;
 const { awaited, awaiting } = awaitingModule;
 const { runOperation } = packageOperations;

@@ -1,5 +1,5 @@
-import platformModule from "../core/platform.ts";
-import type platformTypes from "../core/platform.types.ts";
+import platformModule from "../core/platform/index.ts";
+import type platformTypes from "../core/platform/index.types.ts";
 import type nodeChildProcessTypes from "../core/platform/node/child-process.types.ts";
 
 const { schedule } = platformModule;

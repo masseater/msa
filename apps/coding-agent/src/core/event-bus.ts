@@ -1,10 +1,9 @@
-import { EventEmitter } from "node:events";
-
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
 import type eventBusTypes from "./event-bus.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
+import EventEmitter from "./platform/node/events.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { writeError } = platform;

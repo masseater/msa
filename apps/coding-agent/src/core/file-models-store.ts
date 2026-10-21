@@ -8,9 +8,9 @@ import text from "../utils/text.ts";
 import type authStorageTypes from "./auth-storage.types.ts";
 import awaitingModule from "./awaiting.ts";
 import FileAuthStorageBackend from "./file-auth-storage-backend.ts";
-import platformNode from "./platform-node.ts";
+import platform from "./platform/index.ts";
 
-const { join } = platformNode;
+const { join } = platform;
 const { getAgentDir } = config;
 const { getFileRevision, normalizePath } = paths;
 const { stripBom } = text;

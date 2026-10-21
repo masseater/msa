@@ -1,6 +1,6 @@
 import config from "../../../config.ts";
+import platformModule from "../../../core/platform/index.ts";
 import nodeFs from "../../../core/platform/node/fs.ts";
-import pathModule from "../../path.ts";
 import systemTheme from "./system-theme.ts";
 import type Theme from "./theme-class.ts";
 import themeJson from "./theme-json.ts";
@@ -9,7 +9,7 @@ import themeState from "./theme-state.ts";
 import type themeTypes from "./theme.types.ts";
 
 const { getCustomThemesDir, getThemesDir } = config;
-const { join } = pathModule;
+const { join } = platformModule;
 const { SYSTEM_THEME_NAME } = systemTheme;
 const { registeredThemes } = themeState;
 

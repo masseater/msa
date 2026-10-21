@@ -3,9 +3,9 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 
-const { readEnv } = processEnv;
+const { readEnv } = platform;
 const { detectInstallMethod, getSelfUpdateCommand } = config;
 
 const {

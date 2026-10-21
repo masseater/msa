@@ -6,14 +6,14 @@ import configModule from "../config.ts";
 import text from "../utils/text.ts";
 import keyIdSchema from "./key-id-schema.ts";
 import keybindings from "./keybindings.ts";
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 
 const { existsSync, readFileSync } = nodeFs;
 const { KeybindingValueSchema } = keyIdSchema;
 const { stripBom } = text;
 const { getAgentDir } = configModule;
-const { join } = platformNode;
+const { join } = platformModule;
 const { KEYBINDINGS, migrateKeybindingsConfig } = keybindings;
 
 const validateKeybindingValue = Compile(KeybindingValueSchema);

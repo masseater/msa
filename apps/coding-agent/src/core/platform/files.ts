@@ -1,10 +1,9 @@
-import * as NodeFileSystem from "@effect/platform-node/NodeFileSystem";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 
-const runtime = ManagedRuntime.make(NodeFileSystem.layer);
+import platformRuntime from "./runtime.ts";
 
 const run = <A, E>(use: (fileSystem: FileSystem.FileSystem) => Effect.Effect<A, E>): Promise<A> =>
-  runtime.runPromise(FileSystem.FileSystem.use(use));
+  platformRuntime.runPromise(FileSystem.FileSystem.use(use));
 
 const exists = (path: string): Promise<boolean> => run((fileSystem) => fileSystem.exists(path));
 
@@ -74,7 +73,7 @@ const rename = (options: { from: string; to: string }): Promise<void> =>
 const copyFile = (options: { from: string; to: string }): Promise<void> =>
   run((fileSystem) => fileSystem.copyFile(options.from, options.to));
 
-const nodeFs = {
+const platformFiles = {
   access,
   copyFile,
   exists,
@@ -88,4 +87,4 @@ const nodeFs = {
   writeFile,
 };
 
-export default nodeFs;
+export default platformFiles;

@@ -1,6 +1,6 @@
 import type tuiTypes from "@msa/tui/index.types";
 
-import type platformTypes from "../../../core/platform.types.ts";
+import type platformTypes from "../../../core/platform/index.types.ts";
 import interval from "../../interval.ts";
 
 const { every } = interval;

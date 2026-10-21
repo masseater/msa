@@ -1,7 +1,7 @@
-import platformNode from "./platform-node.ts";
+import platformModule from "./platform/index.ts";
 import nodeFs from "./platform/node/fs.ts";
 
-const { join } = platformNode;
+const { join } = platformModule;
 const { statSync } = nodeFs;
 
 type DirectoryEntry = {

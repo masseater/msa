@@ -2,7 +2,7 @@ import tuiModule from "@msa/tui";
 
 import goalModule from "../../../core/goal.ts";
 import type goalTypes from "../../../core/goal.types.ts";
-import platformModule from "../../../core/platform.ts";
+import platform from "../../../core/platform/index.ts";
 import DynamicBorder from "../components/dynamic-border.ts";
 import ThemedText from "../components/themed-text.ts";
 import type InteractiveMode from "../interactive-mode.ts";
@@ -10,7 +10,7 @@ import themeModule from "../theme/theme.ts";
 
 const { theme } = themeModule;
 const { Spacer, Markdown } = tuiModule;
-const { nowMs } = platformModule;
+const { nowMs } = platform;
 const { describeGoalStatus } = goalModule;
 
 export default class ChatPanels {

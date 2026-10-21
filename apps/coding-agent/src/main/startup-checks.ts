@@ -2,8 +2,7 @@ import chalk from "chalk";
 
 import authGuidance from "../core/auth-guidance.ts";
 import telemetrySupport from "../core/observability/telemetry-support.ts";
-import platformModule from "../core/platform.ts";
-import processEnv from "../core/process-env.ts";
+import platform from "../core/platform/index.ts";
 import settingsDiagnostics from "../core/settings-diagnostics.ts";
 import timings from "../core/timings.ts";
 import cliInput from "./cli-input.ts";
@@ -12,8 +11,7 @@ import type mainInternalTypes from "./main-internal.types.ts";
 
 const { formatNoModelsAvailableMessage } = authGuidance;
 const { describeTelemetry } = telemetrySupport;
-const { writeError } = platformModule;
-const { readEnv } = processEnv;
+const { readEnv, writeError } = platform;
 const { deduplicateDiagnostics } = settingsDiagnostics;
 const { time } = timings;
 const { isTruthyEnvFlag } = cliInput;

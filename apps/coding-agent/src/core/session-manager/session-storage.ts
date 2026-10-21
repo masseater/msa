@@ -1,7 +1,6 @@
 import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
-import platformNode from "../platform-node.ts";
-import platform from "../platform.ts";
+import platform from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 import type SessionManager from "../session-manager.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
@@ -13,8 +12,7 @@ const { appendFileSync, closeSync, existsSync, mkdirSync, openSync, statSync, wr
 const { getDefaultSessionDirPath, loadEntriesFromFile } = sessionFiles;
 const { CURRENT_SESSION_VERSION, assertValidSessionId, migrateToCurrentVersion, createSessionId } =
   sessionFormat;
-const { nowIso } = platform;
-const { join } = platformNode;
+const { join, nowIso } = platform;
 const { normalizePath, resolvePath } = paths;
 const { APP_NAME } = config;
 

@@ -4,7 +4,7 @@ import * as Effect from "effect/Effect";
 import config from "../config.ts";
 import type configTypes from "../config.types.ts";
 import awaitingModule from "../core/awaiting.ts";
-import platformModule from "../core/platform.ts";
+import platform from "../core/platform/index.ts";
 import childProcess from "../utils/child-process.ts";
 import interop from "../utils/interop.ts";
 import windowsSelfUpdate from "../utils/windows-self-update.ts";
@@ -23,7 +23,7 @@ const { spawnProcess } = childProcess;
 const { callbackPromise } = interop;
 const { quarantineWindowsNativeDependencies, cleanupWindowsSelfUpdateQuarantine } =
   windowsSelfUpdate;
-const { writeLog, writeError } = platformModule;
+const { writeError, writeLog } = platform;
 const { awaited, awaiting } = awaitingModule;
 
 const { getSelfUpdatePlan } = selfUpdatePlanModule;

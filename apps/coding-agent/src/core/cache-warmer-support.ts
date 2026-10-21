@@ -2,7 +2,7 @@ import type aiTypes from "@msa/ai/index.types";
 import providerEnv from "@msa/ai/utils/provider-env";
 
 import type cacheWarmerTypes from "./cache-warmer.types.ts";
-import platform from "./platform.ts";
+import platform from "./platform/index.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 
 const { nowMs } = platform;

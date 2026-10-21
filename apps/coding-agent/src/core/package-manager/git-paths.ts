@@ -2,10 +2,10 @@ import config from "../../config.ts";
 import type gitTypes from "../../utils/git.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import platformNode from "../platform-node.ts";
+import platformModule from "../platform/index.ts";
 import nodeFs from "../platform/node/fs.ts";
 
-const { basename, dirname, join, resolve } = platformNode;
+const { basename, dirname, join, resolve } = platformModule;
 const { existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } = nodeFs;
 const { CONFIG_DIR_NAME } = config;
 

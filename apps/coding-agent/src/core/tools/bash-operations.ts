@@ -1,7 +1,4 @@
-import { constants as osConstants } from "node:os";
-
-import * as NodeServices from "@effect/platform-node/NodeServices";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
+import { Effect, FileSystem } from "effect";
 import { dual } from "effect/Function";
 
 import childProcess from "../../utils/child-process.ts";
@@ -9,9 +6,11 @@ import type childProcessTypes from "../../utils/child-process.types.ts";
 import shellModule from "../../utils/shell.ts";
 import type shellTypes from "../../utils/shell.types.ts";
 import platformModule from "../platform/index.ts";
+import nodeOs from "../platform/node/os.ts";
+import nodeRuntime from "../platform/runtime.ts";
 import type bashOperationsTypes from "./bash-operations.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
+const { constants: osConstants } = nodeOs;
 
 const { spawnProcess, waitForChildProcess } = childProcess;
 const { ToolFailure, fromPromise, unwrapForeign } = platformModule;

@@ -4,11 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import config from "../src/config.ts";
 import AuthStorage from "../src/core/auth-storage.ts";
-import processEnv from "../src/core/process-env.ts";
+import platform from "../src/core/platform/index.ts";
 import migrations from "../src/migrations.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { deleteEnv, readEnv, writeEnv } = processEnv;
+const { deleteEnv, readEnv, writeEnv } = platform;
 const { ENV_AGENT_DIR } = config;
 const { runMigrations } = migrations;
 const { createModelRegistry } = modelRuntimeTestUtils;
