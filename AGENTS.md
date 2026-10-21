@@ -79,6 +79,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 - msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
 - 機能はコマンドラインやツールだけで終わらせず、人間が使う画面（TUI）も作る。状態をひと目で見られ、キー操作で覗く・指示する・止められるようにする。
+- `apps/coding-agent/src` では、同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む（`msa/no-local-class-extends`）。`tui.Container` や `Data.TaggedError` のような、別パッケージが継承して使う前提で出している基底は継承してよい。
 
 ## 環境変数
 

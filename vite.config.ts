@@ -63,6 +63,7 @@ export default defineConfig({
         rules: {
           "eslint/no-restricted-imports": ["error", platformOnlyImports],
           "msa/no-builtin-require": ["error", { modules: builtinModuleBases }],
+          "msa/no-local-class-extends": "error",
         },
       },
       {

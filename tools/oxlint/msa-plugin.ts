@@ -1,6 +1,7 @@
 import type { Context, ESTree } from "vite-plus/lint/plugins";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
+import classOrigin from "./class-origin.ts";
 import type flowTypes from "./flow.types.ts";
 import LookupFlow from "./lookup-flow.ts";
 import RequireFlow from "./require-flow.ts";
@@ -15,6 +16,8 @@ const REQUIRE_MESSAGE =
   "require や動的 import で組み込みを読まない。Effect の API か platform 層を通して使う";
 const REQUIRE_UNKNOWN_MESSAGE =
   "require・createRequire・import() をこの形で使うと読み込む先を判定できない。文字列リテラルで直接呼ぶ";
+const LOCAL_EXTENDS_MESSAGE =
+  "同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む";
 const SYNC_FS_MESSAGE =
   "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
 
@@ -115,11 +118,23 @@ const noSyncFs = defineRule({
   meta: { schema: listSchema("names"), type: "problem" },
 });
 
+const noLocalClassExtends = defineRule({
+  create(context) {
+    const check = (node: ESTree.Class): void => {
+      if (node.superClass !== null && classOrigin.declaredInPackage(context, node.superClass))
+        context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
+    };
+    return { ClassDeclaration: check, ClassExpression: check };
+  },
+  meta: { type: "problem" },
+});
+
 const msaPlugin = definePlugin({
   meta: { name: "msa" },
   rules: {
     "no-builtin-module-lookup": noBuiltinModuleLookup,
     "no-builtin-require": noBuiltinRequire,
+    "no-local-class-extends": noLocalClassExtends,
     "no-sync-fs": noSyncFs,
   },
 });
