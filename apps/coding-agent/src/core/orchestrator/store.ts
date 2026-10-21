@@ -9,7 +9,7 @@ const { db } = dbModule;
 const { taskStore } = taskStoreModule;
 const { threadStore } = threadStoreModule;
 const { noteStore } = noteStoreModule;
-const { recovery, stateStore } = stateStoreModule;
+const { stateStore } = stateStoreModule;
 
 const store = {
   ...db,
@@ -17,7 +17,6 @@ const store = {
   ...threadStore,
   ...noteStore,
   ...stateStore,
-  ...recovery,
   ...watchdogStore,
 };
 

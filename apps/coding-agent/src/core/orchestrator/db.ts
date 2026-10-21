@@ -98,6 +98,14 @@ CREATE TABLE IF NOT EXISTS replans (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS replans_project ON replans(project, created_at);
+CREATE TABLE IF NOT EXISTS recovery_notices (
+  task_id TEXT PRIMARY KEY,
+  project TEXT NOT NULL,
+  title TEXT NOT NULL,
+  cause TEXT NOT NULL,
+  last_update INTEGER NOT NULL,
+  recovered_at INTEGER NOT NULL
+);
 `;
 
 function dropReplanUndoColumns(database: DatabaseSync): void {
@@ -155,6 +163,13 @@ function addOwnerPid(database: DatabaseSync): void {
 function addTaskChecks(database: DatabaseSync): void {
   if (columnNames(database, "tasks").includes("checks")) return;
   database.exec("ALTER TABLE tasks ADD COLUMN checks TEXT NOT NULL DEFAULT '[]'");
+}
+
+function addMissingRounds(database: DatabaseSync): void {
+  database.exec(
+    `INSERT OR IGNORE INTO rounds (id, project, title, created_at)
+     SELECT round, project, round, MIN(created_at) FROM tasks GROUP BY project, round`,
+  );
 }
 
 const THREAD_ID_TABLES = ["assignments", "reports", "note_reads"] as const;
@@ -218,6 +233,7 @@ function openDatabase(path: string): DatabaseSync {
   migrateTasks(database);
   addOwnerPid(database);
   addTaskChecks(database);
+  addMissingRounds(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;
 }

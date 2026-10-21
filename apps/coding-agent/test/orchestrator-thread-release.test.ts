@@ -1,16 +1,18 @@
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { expect, it } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorReplanSupport from "./orchestrator-replan-support.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
+import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
 const { runTest } = testing;
 const { create } = orchestratorSupport;
 const { replan, stopAndWrapUp } = orchestratorReplanSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
+const { advance, fakeClock } = watchdogSupport;
 
 const twoTasks = Effect.gen(function* () {
   const { orchestrator, workers } = setup();
@@ -61,15 +63,21 @@ it("stops the pr watches of a thread whose task is stopped", () =>
 it("stops the pr watches of a thread the watchdog stops", () =>
   runTest(
     Effect.gen(function* () {
-      const { orchestrator, workers } = setup({ watchdog: { idleMs: 50, intervalMs: 10 } });
-      const a = yield* create(orchestrator, {
-        currentState: "a is not written",
-        goalState: "a works",
-        title: "a",
-      });
-      yield* waitFor(() => taskStatus(orchestrator, a.id) === "stopped");
-      expect(workers[0]?.prWatchClosed).toBe(1);
-      yield* Effect.promise(() => orchestrator.dispose());
+      yield* fakeClock();
+      const { orchestrator, workers } = setup();
+      try {
+        const a = yield* create(orchestrator, {
+          currentState: "a is not written",
+          goalState: "a works",
+          title: "a",
+        });
+        yield* advance(31 * 60_000);
+        expect(taskStatus(orchestrator, a.id)).toBe("stopped");
+        expect(workers[0]?.prWatchClosed).toBe(1);
+      } finally {
+        yield* Effect.promise(() => orchestrator.dispose());
+        vi.useRealTimers();
+      }
     }),
   ));
 

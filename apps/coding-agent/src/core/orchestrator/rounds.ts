@@ -13,6 +13,7 @@ function ensureReview(
 ): orchestratorTypesTypes.Task {
   const database = runtime.database;
   const project = runtime.options.project;
+  store.insertRound(database, project, round, round, now);
   const existing = store.reviewTaskOfRound(database, project, round);
   if (existing !== undefined) return existing;
   const review: orchestratorTypesTypes.Task = {

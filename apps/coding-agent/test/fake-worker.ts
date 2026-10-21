@@ -7,6 +7,7 @@ import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.
 const { fauxAssistantMessage } = ai;
 
 export default class FakeWorker implements orchestratorTypes.WorkerSession {
+  compaction = { manual: { isCompacting: false } };
   isStreaming = false;
   messages: agentTypes.AgentMessage[] = [];
   sessionFile: string;

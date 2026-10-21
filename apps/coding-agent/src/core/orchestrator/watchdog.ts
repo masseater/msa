@@ -1,6 +1,7 @@
 import { Effect, Fiber } from "effect";
 
 import elapsedModule from "../../utils/elapsed.ts";
+import processAliveModule from "../platform/node/process-alive.ts";
 import errors from "./errors.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -8,16 +9,14 @@ import schedule from "./schedule.ts";
 import storeModule from "./store.ts";
 import watchdogInspect from "./watchdog-inspect.ts";
 import type watchdogTypes from "./watchdog.types.ts";
-import type workerTypes from "./worker.ts";
 
 const { nowMillis, releaseThread } = runtimeModule;
 const { orchestratorError } = errors;
 const { store } = storeModule;
 const { scheduling } = schedule;
 const { formatElapsed } = elapsedModule;
-const { inspect } = watchdogInspect;
-
-const DEFAULTS: workerTypes.WatchdogOptions = { idleMs: 30 * 60_000, intervalMs: 60_000 };
+const { INTERVAL_MS, inspect } = watchdogInspect;
+const { currentPid, processAlive } = processAliveModule;
 
 function release(runtime: runtimeTypes.Runtime, threadId: string): void {
   const worker = runtime.workers.get(threadId);
@@ -88,15 +87,30 @@ function resolveTaskWithoutThread(
   );
 }
 
-function sweepEffect(runtime: runtimeTypes.Runtime, options: workerTypes.WatchdogOptions) {
+function recoverElsewhere(runtime: runtimeTypes.Runtime, now: number): number {
+  const dead = store
+    .deadOwnerProjects(runtime.database, runtime.options.project)
+    .filter(({ ownerPid }) => !processAlive(ownerPid));
+  for (const { ownerPid, project } of dead) {
+    store.recoverProject(
+      runtime.database,
+      project,
+      `its orchestrator process ${ownerPid} was gone`,
+      now,
+    );
+  }
+  return dead.length;
+}
+
+function sweepEffect(runtime: runtimeTypes.Runtime) {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const changed = yield* Effect.sync(() => {
-      const findings = inspect(runtime, options, now);
+      const findings = inspect(runtime, now);
       for (const finding of findings) resolveFinding(runtime, finding, now);
       const taskIds = store.runningTasksWithoutThread(runtime.database, runtime.options.project);
       for (const taskId of taskIds) resolveTaskWithoutThread(runtime, taskId, now);
-      return findings.length + taskIds.length;
+      return findings.length + taskIds.length + recoverElsewhere(runtime, now);
     });
     if (changed === 0) return;
     yield* scheduling.scheduleEffect(runtime);
@@ -104,17 +118,14 @@ function sweepEffect(runtime: runtimeTypes.Runtime, options: workerTypes.Watchdo
   });
 }
 
-function startWatchdog(
-  runtime: runtimeTypes.Runtime,
-  options: workerTypes.WatchdogOptions,
-): Fiber.Fiber<never, never> {
+function startWatchdog(runtime: runtimeTypes.Runtime): Fiber.Fiber<never, never> {
   return Effect.runFork(
     Effect.forever(
-      Effect.sleep(options.intervalMs).pipe(
+      Effect.sleep(INTERVAL_MS).pipe(
         Effect.andThen(
           Effect.tryPromise({
             catch: orchestratorError,
-            try: () => runtime.exclusive(sweepEffect(runtime, options)),
+            try: () => runtime.exclusive(sweepEffect(runtime)),
           }).pipe(Effect.ignore),
         ),
       ),
@@ -122,7 +133,35 @@ function startWatchdog(
   );
 }
 
-const watchdog = { DEFAULTS, startWatchdog };
+function reportRecovered(runtime: runtimeTypes.Runtime): void {
+  if (!runtime.database.isOpen) return;
+  const notices = store.takeRecoveryNotices(runtime.database, runtime.options.project);
+  const first = notices[0];
+  if (first === undefined) return;
+  const lines = notices.map(
+    (notice) =>
+      `- ${notice.title} (${notice.taskId}): running when ${notice.cause}, ${formatElapsed(notice.recoveredAt - notice.lastUpdate)} after its last update`,
+  );
+  runtime.options.report(
+    [
+      `${notices.length === 1 ? "A task was" : `${notices.length} tasks were`} left running by an earlier orchestrator and are waiting again; the scheduler restarts them.`,
+      lines.join("\n"),
+    ].join("\n\n"),
+    { role: "worker", started: [], status: "failed", taskId: first.taskId },
+  );
+}
+
+function open(runtime: runtimeTypes.Runtime, now: number): void {
+  store.recoverProject(runtime.database, runtime.options.project, "the session reopened", now);
+  store.claimProject(runtime.database, runtime.options.project, currentPid());
+}
+
+function close(runtime: runtimeTypes.Runtime, now: number): void {
+  store.recoverProject(runtime.database, runtime.options.project, "the session closed", now);
+  store.releaseProject(runtime.database, runtime.options.project, currentPid());
+}
+
+const watchdog = { close, open, reportRecovered, startWatchdog };
 
 const watchdogModule = {
   watchdog,
