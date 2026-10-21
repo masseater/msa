@@ -1,17 +1,19 @@
 import testing from "@msa/testing";
 import { Effect, Result } from "effect";
-import { expect, it } from "vite-plus/test";
+import { expect, it, vi } from "vite-plus/test";
 
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import errors from "../src/core/orchestrator/errors.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
+import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
 const { joinPath, makeTempDir, removePath, writeTextFile } = testing;
 const { orchestratorError } = errors;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
+const { advance, fakeClock } = watchdogSupport;
 
 const LINT_CHECK = { command: "cat lint.txt", output: "^0 errors$" };
 const SHORTCUT_CHECK = { command: "grep -c 'layer-[0-9]' src.txt", exitCode: 1 };
@@ -184,11 +186,9 @@ it(
 const keepsAThreadAliveWhileItsChecksRun = () =>
   Effect.runPromise(
     Effect.gen(function* () {
+      yield* fakeClock();
       const held = heldCommand();
-      const { orchestrator, workers } = setup({
-        runCommand: held.runCommand,
-        watchdog: { idleMs: 300, intervalMs: 10 },
-      });
+      const { orchestrator, workers } = setup({ runCommand: held.runCommand });
       try {
         const task = yield* create(orchestrator, {
           checks: [LINT_CHECK],
@@ -197,14 +197,17 @@ const keepsAThreadAliveWhileItsChecksRun = () =>
           title: "lint",
         });
         workers[0]?.complete("lint is clean");
-        yield* waitFor(() => held.calls.length === 1);
-        yield* Effect.sleep(900);
+        yield* advance(0);
+        expect(held.calls).toHaveLength(1);
+        yield* advance(2 * 60 * 60_000);
         expect(held.calls[0]?.signal.aborted).toBe(false);
         expect(taskStatus(orchestrator, task.id)).toBe("running");
         held.calls[0]?.release();
-        yield* waitFor(() => workers.length === 2);
+        yield* advance(1000);
+        expect(workers).toHaveLength(2);
       } finally {
         yield* Effect.promise(() => orchestrator.dispose());
+        vi.useRealTimers();
       }
     }),
   );

@@ -53,12 +53,11 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
       },
     };
     this.database = store.openDatabase(options.databasePath);
-    store.recoverRunning(this.database, options.project, Effect.runSync(nowMillis));
     this.maxConcurrentThreads =
       store.storedMaxConcurrent(this.database, options.project) ??
       options.defaults().maxConcurrentThreads;
+    this.fibers = background.start(this, Effect.runSync(nowMillis));
     this.publish();
-    this.fibers = background.start(this);
   }
 
   nextRun(): number {
@@ -115,7 +114,11 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
           worker.dispose();
         }
         self.workers.clear();
-        yield* Effect.sync(() => self.database.close());
+        const now = yield* nowMillis;
+        yield* Effect.sync(() => {
+          background.close(self, now);
+          self.database.close();
+        });
       }),
     );
   }

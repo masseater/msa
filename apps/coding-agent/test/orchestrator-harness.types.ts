@@ -5,7 +5,6 @@ declare namespace orchestratorHarnessTypes {
   interface HarnessOptions {
     maxConcurrent?: number;
     pollIntervalMs?: number | null;
-    watchdog?: orchestratorTypes.OrchestratorOptions["watchdog"];
     project?: string;
     runCommand?: orchestratorTypes.OrchestratorOptions["runCommand"];
     databasePath?: string;

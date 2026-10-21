@@ -66,7 +66,6 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     };
     yield* Effect.sync(() => {
       store.transaction(database, () => {
-        store.insertRound(database, project, round, round, now);
         const review = rounds.ensureReview(runtime, round, now);
         store.insertTask(database, task);
         for (const dependency of input.dependsOn ?? []) {

@@ -60,7 +60,6 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     runCommand: options.runCommand ?? (() => Promise.resolve({ exitCode: 0, output: "" })),
     telemetry,
     version: "0.0.0-test",
-    watchdog: options.watchdog ?? null,
   });
   return { orchestrator, reports, telemetry, workers };
 }

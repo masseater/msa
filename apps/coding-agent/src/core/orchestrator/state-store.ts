@@ -18,23 +18,7 @@ function storeMaxConcurrent(database: DatabaseSync, project: string, value: numb
 
 const stateStore = { storeMaxConcurrent, storedMaxConcurrent };
 
-function recoverRunning(database: DatabaseSync, project: string, now: number): void {
-  database
-    .prepare(
-      "UPDATE threads SET status = 'stopped', updated_at = ? WHERE project = ? AND status = 'running'",
-    )
-    .run(now, project);
-  database
-    .prepare(
-      "UPDATE tasks SET status = 'waiting', updated_at = ? WHERE project = ? AND status = 'running'",
-    )
-    .run(now, project);
-}
-
-const recovery = { recoverRunning };
-
 const stateStoreModule = {
-  recovery,
   stateStore,
 };
 

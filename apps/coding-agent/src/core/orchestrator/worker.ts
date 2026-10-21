@@ -17,6 +17,7 @@ declare namespace workerTypes {
       selection: { setModel(model: compatTypes.Model<any>): Promise<unknown> };
       thinking: { setThinkingLevel(level: agentTypes.ThinkingLevel): void };
     };
+    compaction: { manual: { isCompacting: boolean } };
     isStreaming: boolean;
     messages: readonly agentTypes.AgentMessage[];
     sessionFile?: string | undefined;
@@ -53,11 +54,6 @@ declare namespace workerTypes {
     started: readonly string[];
   }
 
-  interface WatchdogOptions {
-    intervalMs: number;
-    idleMs: number;
-  }
-
   interface OrchestratorOptions {
     project: string;
     cwd: string;
@@ -77,7 +73,6 @@ declare namespace workerTypes {
       signal: AbortSignal,
     ) => Promise<CommandResult>;
     pollIntervalMs?: number | null;
-    watchdog?: WatchdogOptions | null;
 
     telemetry: telemetryTypes.TelemetryContext;
   }

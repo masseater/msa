@@ -1,74 +1,97 @@
 import ai from "@msa/ai";
-import testing from "@msa/testing";
 import { Clock, Effect } from "effect";
-import { ChildProcess } from "effect/process";
-import { expect, it } from "vite-plus/test";
+import { afterEach, expect, it, vi } from "vite-plus/test";
 
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
+import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
 const { fauxAssistantMessage } = ai;
-const { makeTempDir, provideNode, removePath } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
-const { setup, taskStatus, waitFor } = harness;
+const { setup, taskStatus } = harness;
+const { TASK, advance, fakeClock } = watchdogSupport;
 
-const HOUR = 60 * 60_000;
+const MINUTE = 60_000;
+const HOUR = 60 * MINUTE;
 
-const TASK = {
-  currentState: "src/cache.ts has no cache",
-  goalState: "repeated reads hit the cache",
-  title: "cache reads",
-};
+type Setup = ReturnType<typeof setup>;
 
-const threadStatus = (orchestrator: ReturnType<typeof setup>["orchestrator"], taskId: string) =>
+afterEach(() => {
+  vi.useRealTimers();
+});
+
+const threadStatus = (orchestrator: Setup["orchestrator"], taskId: string) =>
   orchestrator.snapshot.threads.find((thread) =>
     thread.tasks.some((assignment) => assignment.taskId === taskId),
   )?.status;
 
-const stopsAThreadThatMakesNoToolCall = () =>
+const startedTask = Effect.gen(function* () {
+  yield* fakeClock();
+  const started = setup();
+  const task = yield* create(started.orchestrator, TASK);
+  const worker = started.workers[0];
+  if (worker === undefined) throw new Error("no worker started");
+  expect(taskStatus(started.orchestrator, task.id)).toBe("running");
+  return { ...started, task, worker };
+});
+
+const stopsAThreadThatMakesNoToolCallFor30Minutes = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, reports, workers } = setup({
-        watchdog: { idleMs: 50, intervalMs: 10 },
-      });
-      const task = yield* create(orchestrator, TASK);
+      const { orchestrator, reports, task } = yield* startedTask;
+
+      yield* advance(29 * MINUTE);
       expect(taskStatus(orchestrator, task.id)).toBe("running");
+      yield* advance(2 * MINUTE);
 
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "stopped");
-
+      expect(taskStatus(orchestrator, task.id)).toBe("stopped");
       expect(threadStatus(orchestrator, task.id)).toBe("stopped");
-      expect(workers[0]?.isStreaming).toBe(false);
       expect(reports.at(-1)?.details).toMatchObject({ status: "failed", taskId: task.id });
-      expect(reports.at(-1)?.text).toMatch(/no tool call or message for \d+s \(running \d+s\)/u);
+      expect(reports.at(-1)?.text).toMatch(/no tool call or message for 30m \(running 30m\)/u);
       yield* Effect.promise(() => orchestrator.dispose());
     }),
   );
 
-it("stops a thread that makes no tool call for the idle time", stopsAThreadThatMakesNoToolCall);
+it(
+  "stops a thread that makes no tool call for 30 minutes",
+  stopsAThreadThatMakesNoToolCallFor30Minutes,
+);
+
+const givesARunningToolCall60Minutes = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, reports, task, worker } = yield* startedTask;
+      worker.messages = [fauxAssistantMessage("", { stopReason: "toolUse" })];
+
+      yield* advance(59 * MINUTE);
+      expect(taskStatus(orchestrator, task.id)).toBe("running");
+      yield* advance(2 * MINUTE);
+
+      expect(taskStatus(orchestrator, task.id)).toBe("stopped");
+      expect(reports.at(-1)?.text).toMatch(/one tool call has run for 1h 0m \(running 1h 0m\)/u);
+      yield* Effect.promise(() => orchestrator.dispose());
+    }),
+  );
+
+it("gives a running tool call 60 minutes", givesARunningToolCall60Minutes);
+
+const abortedTurn = () =>
+  fauxAssistantMessage("", { errorMessage: "The operation was aborted.", stopReason: "aborted" });
 
 const failsAThreadWhoseTurnAbortedWithoutSettling = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, reports, workers } = setup({
-        watchdog: { idleMs: HOUR, intervalMs: 10 },
-      });
-      const task = yield* create(orchestrator, TASK);
-      const worker = workers[0];
-      if (worker === undefined) throw new Error("no worker started");
-      worker.messages = [
-        fauxAssistantMessage("", {
-          errorMessage: "The operation was aborted.",
-          stopReason: "aborted",
-        }),
-      ];
+      const { orchestrator, reports, task, worker } = yield* startedTask;
+      worker.messages = [abortedTurn()];
       worker.isStreaming = false;
 
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "failed");
+      yield* advance(2 * MINUTE);
 
+      expect(taskStatus(orchestrator, task.id)).toBe("failed");
       expect(threadStatus(orchestrator, task.id)).toBe("failed");
       expect(reports.at(-1)?.text).toMatch(
-        /the last turn ended with aborted: The operation was aborted\. \d+s ago/u,
+        /the last turn ended with aborted: The operation was aborted\. 1m ago/u,
       );
       const view = yield* Effect.promise(() => orchestrator.read(task.id));
       expect(view.reports.at(-1)?.content).toContain("aborted");
@@ -81,18 +104,40 @@ it(
   failsAThreadWhoseTurnAbortedWithoutSettling,
 );
 
+const leavesACompactingThreadAlone = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, task, worker } = yield* startedTask;
+      worker.messages = [abortedTurn()];
+      worker.isStreaming = false;
+      worker.compaction.manual.isCompacting = true;
+
+      yield* advance(2 * HOUR);
+      expect(taskStatus(orchestrator, task.id)).toBe("running");
+
+      worker.compaction.manual.isCompacting = false;
+      yield* advance(MINUTE);
+      expect(taskStatus(orchestrator, task.id)).toBe("failed");
+      yield* Effect.promise(() => orchestrator.dispose());
+    }),
+  );
+
+it("leaves a compacting thread alone", leavesACompactingThreadAlone);
+
 const reportsHowLongAFailedThreadRan = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, reports, workers } = setup();
-      const task = yield* create(orchestrator, TASK);
+      const { orchestrator, reports, task, worker } = yield* startedTask;
+      yield* advance(90_000);
 
-      workers[0]?.fail(new Error("You've hit your session limit"));
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "failed");
+      worker.fail(new Error("You've hit your session limit"));
+      yield* advance(0);
 
+      expect(taskStatus(orchestrator, task.id)).toBe("failed");
       expect(reports.at(-1)?.text).toMatch(
-        /^cache reads \(worker\) failed\. The thread ran for \d+s\.\n\n<report>\nYou've hit your session limit/u,
+        /^cache reads \(worker\) failed\. The thread ran for 1m\.\n\n<report>\nYou've hit your session limit/u,
       );
+      yield* Effect.promise(() => orchestrator.dispose());
     }),
   );
 
@@ -101,19 +146,17 @@ it("reports how long a failed thread ran", reportsHowLongAFailedThreadRan);
 const stopsATaskLeftRunningAfterItsThreadEnded = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, reports } = setup({ watchdog: { idleMs: HOUR, intervalMs: 10 } });
-      const task = yield* create(orchestrator, TASK);
+      const { orchestrator, reports, task } = yield* startedTask;
       yield* Effect.promise(() => orchestrator.stop(task.id));
       const now = yield* Clock.currentTimeMillis;
       orchestrator.database
         .prepare("UPDATE tasks SET status = 'running', updated_at = ? WHERE id = ?")
         .run(now - 2 * HOUR, task.id);
-      yield* Effect.promise(() => orchestrator.refresh());
-      expect(taskStatus(orchestrator, task.id)).toBe("running");
 
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "stopped");
+      yield* advance(MINUTE);
 
-      expect(reports.at(-1)?.text).toMatch(/running with no running thread for 2h 0m/u);
+      expect(taskStatus(orchestrator, task.id)).toBe("stopped");
+      expect(reports.at(-1)?.text).toMatch(/running with no running thread for 2h 1m/u);
       yield* Effect.promise(() => orchestrator.dispose());
     }),
   );
@@ -123,8 +166,7 @@ it("stops a task left running after its thread ended", stopsATaskLeftRunningAfte
 const stopsAThreadTheDatabaseMarksRunningWithoutARun = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, reports } = setup({ watchdog: { idleMs: HOUR, intervalMs: 10 } });
-      const task = yield* create(orchestrator, TASK);
+      const { orchestrator, reports, task } = yield* startedTask;
       yield* Effect.promise(() => orchestrator.stop(task.id));
       orchestrator.database
         .prepare("UPDATE tasks SET status = 'running' WHERE id = ?")
@@ -133,14 +175,13 @@ const stopsAThreadTheDatabaseMarksRunningWithoutARun = () =>
       orchestrator.database
         .prepare("UPDATE threads SET status = 'running', updated_at = ?")
         .run(now - 7 * HOUR);
-      yield* Effect.promise(() => orchestrator.refresh());
-      expect(threadStatus(orchestrator, task.id)).toBe("running");
 
-      yield* waitFor(() => taskStatus(orchestrator, task.id) === "stopped");
+      yield* advance(MINUTE);
 
+      expect(taskStatus(orchestrator, task.id)).toBe("stopped");
       expect(threadStatus(orchestrator, task.id)).toBe("stopped");
       expect(reports.at(-1)?.text).toMatch(
-        /no live run in this orchestrator; last update 7h 0m ago/u,
+        /no live run in this orchestrator; last update 7h 1m ago/u,
       );
       yield* Effect.promise(() => orchestrator.dispose());
     }),
@@ -150,79 +191,3 @@ it(
   "stops a thread the database marks running without a run",
   stopsAThreadTheDatabaseMarksRunningWithoutARun,
 );
-
-const deadPid = provideNode(
-  Effect.scoped(
-    Effect.gen(function* () {
-      const child = yield* ChildProcess.make("node", ["-e", ""], {
-        stderr: "ignore",
-        stdin: "ignore",
-        stdout: "ignore",
-      });
-      yield* child.exitCode;
-      return Number(child.pid);
-    }),
-  ),
-).pipe(Effect.orDie);
-
-const stopsThreadsWhoseOrchestratorProcessIsGone = () =>
-  Effect.gen(function* () {
-    const directory = yield* makeTempDir("msa-orchestrator-watchdog-");
-    const databasePath = `${directory}/orchestrator.db`;
-    const previous = setup({ databasePath, project: "previous" });
-    const task = yield* create(previous.orchestrator, TASK);
-    yield* Effect.promise(() => previous.orchestrator.dispose());
-
-    const current = setup({
-      databasePath,
-      project: "current",
-      watchdog: { idleMs: HOUR, intervalMs: 10 },
-    });
-    const pid = yield* deadPid;
-    current.orchestrator.database
-      .prepare("UPDATE orchestrator_state SET owner_pid = ? WHERE project = 'previous'")
-      .run(pid);
-    const status = () =>
-      (
-        current.orchestrator.database
-          .prepare("SELECT status FROM tasks WHERE id = ?")
-          .get(task.id) as { status: string }
-      ).status;
-    expect(status()).toBe("running");
-
-    yield* waitFor(() => status() === "stopped");
-
-    expect(current.reports.at(-1)?.text).toMatch(
-      new RegExp(`orchestrator process ${pid} is gone \\(project previous\\); last update`, "u"),
-    );
-    yield* Effect.promise(() => current.orchestrator.dispose());
-    yield* removePath(directory);
-  });
-
-it("stops threads whose orchestrator process is gone", () =>
-  Effect.runPromise(Effect.scoped(stopsThreadsWhoseOrchestratorProcessIsGone())));
-
-const leavesALiveOrchestratorsThreadsAlone = () =>
-  Effect.gen(function* () {
-    const directory = yield* makeTempDir("msa-orchestrator-watchdog-");
-    const databasePath = `${directory}/orchestrator.db`;
-    const other = setup({ databasePath, project: "other" });
-    const task = yield* create(other.orchestrator, TASK);
-    const current = setup({
-      databasePath,
-      project: "current",
-      watchdog: { idleMs: HOUR, intervalMs: 10 },
-    });
-
-    yield* Effect.sleep(50);
-
-    yield* Effect.promise(() => other.orchestrator.refresh());
-    expect(taskStatus(other.orchestrator, task.id)).toBe("running");
-    expect(current.reports).toEqual([]);
-    yield* Effect.promise(() => current.orchestrator.dispose());
-    yield* Effect.promise(() => other.orchestrator.dispose());
-    yield* removePath(directory);
-  });
-
-it("leaves the threads of a live orchestrator alone", () =>
-  Effect.runPromise(Effect.scoped(leavesALiveOrchestratorsThreadsAlone())));

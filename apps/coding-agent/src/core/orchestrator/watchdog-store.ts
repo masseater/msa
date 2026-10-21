@@ -1,17 +1,21 @@
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import dbModule from "./db.ts";
+import type watchdogTypes from "./watchdog.types.ts";
 
-function runningThreadsElsewhere(
+const { db } = dbModule;
+
+function deadOwnerProjects(
   database: DatabaseSync,
   project: string,
-): { threadId: string; ownerPid: number | null }[] {
+): { project: string; ownerPid: number }[] {
   const rows = database
     .prepare(
-      `SELECT t.id, s.owner_pid FROM threads t
-       LEFT JOIN orchestrator_state s ON s.project = t.project
-       WHERE t.project != ? AND t.status = 'running'`,
+      `SELECT s.project, s.owner_pid FROM orchestrator_state s
+       WHERE s.project != ? AND s.owner_pid IS NOT NULL AND EXISTS (
+         SELECT 1 FROM threads t WHERE t.project = s.project AND t.status = 'running')`,
     )
-    .all(project) as unknown as { id: string; owner_pid: number | null }[];
-  return rows.map((row) => ({ ownerPid: row.owner_pid, threadId: row.id }));
+    .all(project) as unknown as { project: string; owner_pid: number }[];
+  return rows.map((row) => ({ ownerPid: row.owner_pid, project: row.project }));
 }
 
 function runningTasksWithoutThread(database: DatabaseSync, project: string): string[] {
@@ -35,6 +39,71 @@ function claimProject(database: DatabaseSync, project: string, pid: number): voi
     .run(project, pid);
 }
 
-const watchdogStore = { claimProject, runningTasksWithoutThread, runningThreadsElsewhere };
+function releaseProject(database: DatabaseSync, project: string, pid: number): void {
+  database
+    .prepare("UPDATE orchestrator_state SET owner_pid = NULL WHERE project = ? AND owner_pid = ?")
+    .run(project, pid);
+}
+
+function recoverProject(database: DatabaseSync, project: string, cause: string, now: number): void {
+  db.transaction(database, () => {
+    const tasks = database
+      .prepare(
+        "SELECT id, title, updated_at FROM tasks WHERE project = ? AND status = 'running' ORDER BY created_at, id",
+      )
+      .all(project) as unknown as { id: string; title: string; updated_at: number }[];
+    const notice = database.prepare(
+      `INSERT OR REPLACE INTO recovery_notices (task_id, project, title, cause, last_update, recovered_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+    );
+    for (const task of tasks) notice.run(task.id, project, task.title, cause, task.updated_at, now);
+    database
+      .prepare(
+        "UPDATE threads SET status = 'stopped', updated_at = ? WHERE project = ? AND status = 'running'",
+      )
+      .run(now, project);
+    database
+      .prepare(
+        "UPDATE tasks SET status = 'waiting', updated_at = ? WHERE project = ? AND status = 'running'",
+      )
+      .run(now, project);
+  });
+}
+
+function takeRecoveryNotices(
+  database: DatabaseSync,
+  project: string,
+): watchdogTypes.RecoveryNotice[] {
+  return db.transaction(database, () => {
+    const rows = database
+      .prepare(
+        "SELECT * FROM recovery_notices WHERE project = ? ORDER BY recovered_at, last_update, task_id",
+      )
+      .all(project) as unknown as {
+      task_id: string;
+      title: string;
+      cause: string;
+      last_update: number;
+      recovered_at: number;
+    }[];
+    database.prepare("DELETE FROM recovery_notices WHERE project = ?").run(project);
+    return rows.map((row) => ({
+      cause: row.cause,
+      lastUpdate: row.last_update,
+      recoveredAt: row.recovered_at,
+      taskId: row.task_id,
+      title: row.title,
+    }));
+  });
+}
+
+const watchdogStore = {
+  claimProject,
+  deadOwnerProjects,
+  recoverProject,
+  releaseProject,
+  runningTasksWithoutThread,
+  takeRecoveryNotices,
+};
 
 export default watchdogStore;
