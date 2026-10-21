@@ -24,6 +24,7 @@ declare namespace platformTypes {
     readonly basename: (path: string, suffix?: string) => string;
     readonly isAbsolute: (path: string) => boolean;
     readonly resolve: (...segments: ReadonlyArray<string>) => string;
+    readonly toNamespacedPath: (path: string) => string;
   }
 
   type PlatformFailure = platformFailureTypes.PlatformFailure;

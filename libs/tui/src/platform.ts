@@ -71,6 +71,7 @@ const pathOperations: platformTypes.PathOperations = {
   isAbsolute: (path) => nodePath.isAbsolute(path),
   join: (...segments) => nodePath.join(...segments),
   resolve: (...segments) => nodePath.resolve(...segments),
+  toNamespacedPath: (path) => nodePath.toNamespacedPath(path),
 };
 
 const platform = {

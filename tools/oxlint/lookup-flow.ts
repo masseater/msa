@@ -5,7 +5,7 @@ import scopeLookup from "./scope-lookup.ts";
 import StaticString from "./static-string.ts";
 import ValueFlow from "./value-flow.ts";
 
-type Kind = "global" | "process";
+type Kind = "binding" | "global" | "process";
 type Outcome = flowTypes.Outcome<Kind>;
 type ReflectiveCall = {
   readonly holder: flowTypes.Holder;
@@ -15,6 +15,7 @@ type ReflectiveCall = {
 };
 
 const LOOKUP = "getBuiltinModule";
+const BINDINGS: ReadonlySet<string> = new Set(["_linkedBinding", "binding"]);
 const PROCESS_SPECIFIERS: ReadonlySet<string> = new Set(["node:process", "process"]);
 const GLOBAL_OBJECTS: readonly string[] = ["global", "globalThis", "self", "window"];
 const REFLECTIVE_OWNERS: ReadonlySet<string> = new Set(["Object", "Reflect"]);
@@ -33,33 +34,47 @@ const SPILLING_REFLECTION: ReadonlySet<string> = new Set([
   "values",
 ]);
 
-const HIDDEN_KEY: Readonly<Record<Kind, string>> = { global: "process", process: LOOKUP };
+const HIDDEN_KEYS: Readonly<Record<Kind, readonly string[]>> = {
+  binding: [],
+  global: ["process"],
+  process: [LOOKUP, ...BINDINGS],
+};
 
-const hiddenOutcome = (kind: Kind, key: flowTypes.Key): Outcome =>
-  kind === "global" && key.name !== undefined ? "process" : "unknown";
+const hiddenOutcome = (kind: Kind, key: flowTypes.Key): Outcome => {
+  if (key.name === undefined) return "unknown";
+  if (kind === "global") return "process";
+  return BINDINGS.has(key.name) ? "binding" : "unknown";
+};
 
-const memberOutcome = (kind: Kind, key: flowTypes.Key): Outcome =>
-  key.mayBe(HIDDEN_KEY[kind]) ? hiddenOutcome(kind, key) : "ok";
+const mayBeHidden = (kind: Kind, key: flowTypes.Key): boolean =>
+  HIDDEN_KEYS[kind].some((name) => key.mayBe(name));
+
+const memberOutcome = (kind: Kind, key: flowTypes.Key): Outcome => {
+  if (kind === "binding") return "unknown";
+  return mayBeHidden(kind, key) ? hiddenOutcome(kind, key) : "ok";
+};
 
 class LookupFlow {
   readonly #context: Context;
   readonly #strings: StaticString;
   readonly #values: ValueFlow<Kind>;
 
-  constructor(options: {
-    readonly context: Context;
-    readonly unknown: (node: flowTypes.Node) => void;
-  }) {
+  constructor(options: { readonly context: Context; readonly report: flowTypes.Reporters }) {
     this.#context = options.context;
     this.#strings = new StaticString(options.context);
     this.#values = new ValueFlow<Kind>({
       context: options.context,
       flow: {
-        argument: (kind, holder, index) => this.#argumentOutcome(kind, holder, index),
-        call: () => "unknown",
-        escape: () => "ok",
+        argument: (kind, holder, index) =>
+          kind === "binding" ? "unknown" : this.#argumentOutcome(kind, holder, index),
+        call: (kind, call) => {
+          if (kind !== "binding") return "unknown";
+          options.report.restricted(call);
+          return "ok";
+        },
+        escape: (kind) => (kind === "binding" ? "unknown" : "ok"),
         member: memberOutcome,
-        unknown: options.unknown,
+        unknown: options.report.unknown,
       },
     });
   }
@@ -106,7 +121,7 @@ class LookupFlow {
 
   #keyedOutcome(call: ReflectiveCall): Outcome {
     const [, keyNode] = (call.holder as ESTree.CallExpression).arguments;
-    return this.#values.key(keyNode).mayBe(HIDDEN_KEY[call.kind]) ? "unknown" : "ok";
+    return mayBeHidden(call.kind, this.#values.key(keyNode)) ? "unknown" : "ok";
   }
 }
 

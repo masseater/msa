@@ -1,6 +1,5 @@
-import { createRequire } from "node:module";
-
 import env from "./env.ts";
+import nativeAddon from "./native-addon.ts";
 import nativeModulePath from "./native-module-path.ts";
 import type nativePlatformTypes from "./native-platform.types.ts";
 import platformModule from "./platform.ts";
@@ -8,8 +7,7 @@ import platformModule from "./platform.ts";
 const { pathOperations } = platformModule;
 const { getNativeModuleCandidates } = nativeModulePath;
 const { isEnvSet } = env;
-
-const cjsRequire = createRequire(import.meta.url);
+const { loadNativeAddon } = nativeAddon;
 
 type NativePlatformHelper = nativePlatformTypes.NativeClipboard & {
   enableVirtualTerminalInput?: () => boolean;
@@ -32,8 +30,7 @@ function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatform
 
   for (const modulePath of getNativeModuleCandidates(nativePath)) {
     try {
-      // oxlint-disable-next-line msa/no-builtin-require
-      const helper = cjsRequire(modulePath) as Partial<NativePlatformHelper> | null;
+      const helper = loadNativeAddon(modulePath) as Partial<NativePlatformHelper> | null;
       if (typeof helper?.getText === "function" && typeof helper.getImage === "function") {
         helpers.set(nativePath, helper as NativePlatformHelper);
         return helper as NativePlatformHelper;

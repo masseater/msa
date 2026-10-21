@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { Module, createRequire } from "node:module";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -94,7 +93,6 @@ test(
   (t) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const require = createRequire(import.meta.url);
         const platform = Object.getOwnPropertyDescriptor(process, "platform")!;
         const modulePath = fileURLToPath(
           new URL(
@@ -102,16 +100,10 @@ test(
             import.meta.url,
           ),
         );
-        const previous = require.cache[modulePath];
         const restoreEnv = overrideEnv({ DISPLAY: undefined, WAYLAND_DISPLAY: "wayland-0" });
         t.after(() => {
           Object.defineProperty(process, "platform", platform);
           restoreEnv();
-          if (previous === undefined) {
-            delete require.cache[modulePath];
-          } else {
-            require.cache[modulePath] = previous;
-          }
         });
         Object.defineProperty(process, "platform", { value: "linux" });
         assert.equal(getNativeClipboard(), undefined);
@@ -120,9 +112,10 @@ test(
           getImage: t.mock.fn(() => Promise.resolve(null)),
           getText: t.mock.fn(() => Promise.resolve(available ? "X11" : undefined)),
         };
-        const module = new Module(modulePath);
-        module.exports = helper;
-        require.cache[modulePath] = module;
+        t.mock.method(process, "dlopen", (module: { exports: unknown }, filename: string) => {
+          if (filename !== modulePath) throw new Error(`no addon at ${filename}`);
+          module.exports = helper;
+        });
         overrideEnv({ DISPLAY: ":0" });
         const clipboard = getNativeClipboard()!;
         assert.equal(clipboard, helper);

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
 import { once } from "node:events";
-import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 
 import { Cause, Console, Effect } from "effect";
 
+import nativeAddon from "../../src/native-addon.ts";
 import testPlatform from "../test-platform.ts";
 
 const { readFileBytes } = testPlatform;
@@ -17,10 +17,9 @@ interface WorkerTestHelper {
   release(): void;
 }
 
-const require = createRequire(import.meta.url);
+const { loadNativeAddon } = nativeAddon;
 const selfPath = fileURLToPath(import.meta.url);
-// oxlint-disable-next-line msa/no-builtin-require
-const loadHelper = (addon: string): WorkerTestHelper => require(addon);
+const loadHelper = (addon: string): WorkerTestHelper => loadNativeAddon(addon) as WorkerTestHelper;
 
 const waitFor = (
   predicate: () => boolean,

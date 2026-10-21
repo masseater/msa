@@ -112,7 +112,7 @@ export default defineConfig({
       "msa/no-builtin-module-lookup": "error",
       "msa/no-builtin-require": ["error", { modules: effectReplaceableBuiltins }],
       "msa/no-sync-fs": ["error", { names: fsSyncFunctions }],
-      "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
+      "no-comments/disallowComments": "error",
       "node/no-top-level-await": "error",
       "promise/always-return": "error",
       "vite-plus/prefer-vite-plus-imports": "error",

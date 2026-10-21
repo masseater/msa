@@ -1,5 +1,4 @@
-import { createRequire } from "node:module";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { NodeServices } from "@effect/platform-node";
 import { Effect, FileSystem, ManagedRuntime, Path } from "effect";
@@ -13,20 +12,8 @@ const runtime = ManagedRuntime.make(NodeServices.layer);
 const pathService = runtime.runSync(Path.Path);
 const fsService = runtime.runSync(FileSystem.FileSystem);
 
-const loadDoomFactory = (buildDir: string, doomJsPath: string, doomJsCode: string): DoomFactory => {
-  const moduleExports: { exports: unknown } = { exports: {} };
-  const moduleFunc = new Function(
-    "module",
-    "exports",
-    "__dirname",
-    "__filename",
-    "require",
-    doomJsCode,
-  );
-  // oxlint-disable-next-line msa/no-builtin-require
-  moduleFunc(moduleExports, moduleExports.exports, buildDir, doomJsPath, createRequire(doomJsPath));
-  return moduleExports.exports as DoomFactory;
-};
+const loadDoomFactory = (doomPath: string): Promise<DoomFactory> =>
+  import(pathToFileURL(doomPath).href).then((loaded: { default: DoomFactory }) => loaded.default);
 
 const moduleConfig = (buildDir: string, wadArray: number[]) => ({
   locateFile: (path: string) => (path.endsWith(".wasm") ? pathService.join(buildDir, path) : path),
@@ -63,24 +50,25 @@ export default class DoomEngine {
   init(): Promise<void> {
     const here = fileURLToPath(new URL(".", import.meta.url));
     const buildDir = pathService.join(here, "doom", "build");
-    const doomJsPath = pathService.join(buildDir, "doom.js");
+    const doomPath = pathService.join(buildDir, "doom.cjs");
 
     const wadPath = this.wadPath;
     return runtime
       .runPromise(
         Effect.gen(function* () {
-          if (!(yield* fsService.exists(doomJsPath).pipe(Effect.orElseSucceed(() => false)))) {
+          if (!(yield* fsService.exists(doomPath).pipe(Effect.orElseSucceed(() => false)))) {
             return yield* new DoomEngineError({
-              message: `WASM not found at ${doomJsPath}. Run ./doom/build.sh first`,
+              message: `WASM not found at ${doomPath}. Run ./doom/build.sh first`,
             });
           }
-          const doomJsCode = yield* fsService.readFileString(doomJsPath);
           const wad = yield* fsService.readFile(wadPath);
-          return { doomJsCode, wadArray: Array.from(wad) };
+          return Array.from(wad);
         }),
       )
-      .then(({ doomJsCode, wadArray }) =>
-        loadDoomFactory(buildDir, doomJsPath, doomJsCode)(moduleConfig(buildDir, wadArray)),
+      .then((wadArray) =>
+        loadDoomFactory(doomPath).then((createDoom) =>
+          createDoom(moduleConfig(buildDir, wadArray)),
+        ),
       )
       .then((module) => {
         this.module = module;

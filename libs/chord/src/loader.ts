@@ -1,5 +1,5 @@
 import { registerHooks } from "node:module";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { Effect } from "effect";
 
@@ -29,18 +29,17 @@ function hook(): void {
   });
 }
 
-const toUrl = (module: string | URL): URL =>
-  module instanceof URL
-    ? new URL(module.href)
-    : new URL(module.startsWith("file:") ? module : pathToFileURL(module).href);
+const toPath = (module: string | URL): string =>
+  module instanceof URL || module.startsWith("file:") ? fileURLToPath(module) : module;
 
-const loadFacet = (url: URL, version: string): Effect.Effect<hostTypesModule.Facet> =>
+const loadFacet = (path: string, version: string): Effect.Effect<hostTypesModule.Facet> =>
   Effect.gen(function* () {
-    const name = url.href;
-    url.searchParams.set(PARAM, version);
+    const name = pathToFileURL(path).href;
     const loaded = yield* Effect.promise(
-      // oxlint-disable-next-line msa/no-builtin-require
-      () => import(url.href) as Promise<{ default?: hostTypesModule.FacetDefinition }>,
+      () =>
+        import(`${pathToFileURL(path).href}?${PARAM}=${version}`) as Promise<{
+          default?: hostTypesModule.FacetDefinition;
+        }>,
     );
     const definition = loaded.default;
     if (definition === undefined || typeof definition.setup !== "function") {
@@ -55,13 +54,9 @@ const nodeLoader: hostTypesModule.FacetLoader = (modules) =>
       hook();
       generation += 1;
       const version = String(generation);
-      const urls = modules.map((module) => {
-        const url = toUrl(module);
-        url.search = "";
-        return url;
-      });
-      for (const url of urls) roots.add(new URL(".", url).href);
-      return yield* Effect.forEach(urls, (url) => loadFacet(url, version));
+      const paths = modules.map(toPath);
+      for (const path of paths) roots.add(new URL(".", pathToFileURL(path)).href);
+      return yield* Effect.forEach(paths, (path) => loadFacet(path, version));
     }),
   );
 

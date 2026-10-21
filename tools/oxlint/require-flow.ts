@@ -1,5 +1,6 @@
 import type { Context, ESTree } from "vite-plus/lint/plugins";
 
+import fileUrl from "./file-url.ts";
 import type flowTypes from "./flow.types.ts";
 import scopeLookup from "./scope-lookup.ts";
 import StaticString from "./static-string.ts";
@@ -83,10 +84,18 @@ class RequireFlow {
   }
 
   #specifier(node: flowTypes.MaybeNode, at: flowTypes.Node): Outcome {
+    return this.#isFileUrl(node) ? "ok" : this.#namedSpecifier(node, at);
+  }
+
+  #namedSpecifier(node: flowTypes.MaybeNode, at: flowTypes.Node): Outcome {
     const specifier = this.#strings.fold(node);
     if (specifier === undefined) return "unknown";
     if (this.#modules.has(moduleBase(specifier))) this.#report.restricted(at);
     return MODULE_SPECIFIERS.has(specifier) ? "module" : "ok";
+  }
+
+  #isFileUrl(node: flowTypes.MaybeNode): boolean {
+    return node !== null && node !== undefined && fileUrl.isFileUrl(this.#context, node);
   }
 
   fromImport(node: ESTree.ImportDeclaration): void {

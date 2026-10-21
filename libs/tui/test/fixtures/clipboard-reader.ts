@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
-import { createRequire } from "node:module";
 
 import { Cause, Console, Effect, Fiber, Schedule, Schema } from "effect";
 
+import nativeAddon from "../../src/native-addon.ts";
 import testPlatform from "../test-platform.ts";
 
 const { readFileString, sha256Hex } = testPlatform;
@@ -11,12 +11,11 @@ type ClipboardValue = string | Buffer | null | undefined;
 
 type ClipboardReader = Record<string, () => unknown>;
 
-const require = createRequire(import.meta.url);
+const { loadNativeAddon } = nativeAddon;
 const toJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const read = Effect.gen(function* () {
-  // oxlint-disable-next-line msa/no-builtin-require
-  const helper: ClipboardReader = require(process.argv[2] ?? "");
+  const helper = loadNativeAddon(process.argv[2] ?? "") as ClipboardReader;
   const pending = helper[process.argv[3] ?? ""]?.();
   assert.ok(pending instanceof Promise, "Native reads must return promises");
   const value: ClipboardValue = yield* Effect.promise((): Promise<ClipboardValue> => pending);

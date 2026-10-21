@@ -1,29 +1,19 @@
 import { NodeServices } from "@effect/platform-node";
-import { Effect, FileSystem, Layer, ManagedRuntime, Schema } from "effect";
+import { Effect, Layer, ManagedRuntime } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import lintConfig from "../../lint.config.ts";
 import captureProcessModule from "../capture-process.ts";
+import lintProbe from "./lint-probe.ts";
 
 const { captureProcess, processRunnerLayer } = captureProcessModule;
+const { lintProbes, msaCodesOnLine, probePath, repoRoot } = lintProbe;
 const { builtinModuleBases, effectReplaceableBuiltins, fsSyncFunctions } = lintConfig;
 
 const LOOKUP = "msa(no-builtin-module-lookup)";
 const REQUIRE = "msa(no-builtin-require)";
 const SYNC_FS = "msa(no-sync-fs)";
 const NODE_BUILTIN_IMPORT = "effecttsgo(node-builtin-import)";
-
-const LintReport = Schema.fromJsonString(
-  Schema.Struct({
-    diagnostics: Schema.Array(
-      Schema.Struct({
-        code: Schema.String,
-        filename: Schema.String,
-        labels: Schema.Array(Schema.Struct({ span: Schema.Struct({ line: Schema.Finite }) })),
-      }),
-    ),
-  }),
-);
 
 const cases: readonly (readonly [statement: string, expected: string | undefined])[] = [
   ['void Reflect.get(process, "getBuiltinModule");', LOOKUP],
@@ -45,6 +35,15 @@ const cases: readonly (readonly [statement: string, expected: string | undefined
     "void (globalThis as { process?: { getBuiltinModule?(id: string): unknown } }).process;",
     LOOKUP,
   ],
+  ['void process.binding("fs");', LOOKUP],
+  ['void process._linkedBinding("fs");', LOOKUP],
+  ['void process["bind" + "ing"]("fs");', LOOKUP],
+  ['{ const { binding } = process; void binding("fs"); }', LOOKUP],
+  ['{ const b = process.binding; void b("fs"); }', LOOKUP],
+  ['void globalThis.process.binding("fs");', LOOKUP],
+  ["void [process.binding];", LOOKUP],
+  ['void Reflect.get(process, "binding");', LOOKUP],
+  ['{ const binding = (id: string) => id; void binding("fs"); }', undefined],
   ['void Object.getOwnPropertyDescriptor(process, "platform");', undefined],
   ['void globalThis[Symbol.for("msa")];', undefined],
   ["void globalThis[`msa_${dynamicKey}`];", undefined],
@@ -84,6 +83,15 @@ const cases: readonly (readonly [statement: string, expected: string | undefined
   ['export * from "node:module";', REQUIRE],
   ['export { platform } from "node:os";', undefined],
   ["void import(dynamicKey);", REQUIRE],
+  ["void import(pathToFileURL(dynamicKey).href);", undefined],
+  ["void import(pathToFileURL(dynamicKey));", undefined],
+  ["void import(`${pathToFileURL(dynamicKey).href}?v=${dynamicKey}`);", undefined],
+  ['void import(pathToFileURL(dynamicKey).href + "?v=1");', undefined],
+  ["void import(nodeUrl.pathToFileURL(dynamicKey).href);", undefined],
+  ["void import(new URL(dynamicKey).href);", REQUIRE],
+  ["void import(`${dynamicKey}${pathToFileURL(dynamicKey).href}`);", REQUIRE],
+  ['void import(dynamicKey + pathToFileURL("x").href);', REQUIRE],
+  ["void import(fileUrlLike(dynamicKey).href);", REQUIRE],
   ['void load("node:os");', undefined],
   ['void load.resolve("node:fs");', undefined],
   ['void existsSync("/");', SYNC_FS],
@@ -97,6 +105,8 @@ const HEADER = [
   'import nodeModule, { Module, createRequire, createRequire as aliasedFactory } from "node:module";',
   'import * as moduleNamespace from "node:module";',
   'import fs, { existsSync } from "node:fs";',
+  'import nodeUrl, { pathToFileURL } from "node:url";',
+  "const fileUrlLike = (path: string) => new URL(path);",
   "const load = createRequire(import.meta.url);",
   "const dynamicKey = String(Date.now());",
 ];
@@ -110,52 +120,8 @@ const importProbe = [
   `export default [${importedBases.map((_, index) => `m${index}`).join(", ")}];`,
 ].join("\n");
 
-const probeName = (kind: string) => `tools/checks/builtin-lint-${kind}-probe-${process.pid}.ts`;
-const BYPASS_PROBE = probeName("bypass");
-const IMPORT_PROBE = probeName("import");
-
-const repoRoot = `${import.meta.dirname}/../..`;
-
-const writeProbes = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  yield* fs.writeFileString(`${repoRoot}/${BYPASS_PROBE}`, bypassProbe);
-  yield* fs.writeFileString(`${repoRoot}/${IMPORT_PROBE}`, importProbe);
-});
-
-const removeProbes = Effect.gen(function* () {
-  const fs = yield* FileSystem.FileSystem;
-  yield* fs.remove(`${repoRoot}/${BYPASS_PROBE}`, { force: true });
-  yield* fs.remove(`${repoRoot}/${IMPORT_PROBE}`, { force: true });
-}).pipe(Effect.orDie);
-
-const lintProbes = Effect.gen(function* () {
-  const { stdout } = yield* captureProcess({
-    args: ["lint", "--format=json", BYPASS_PROBE, IMPORT_PROBE],
-    command: "vp",
-    cwd: repoRoot,
-  });
-  return (yield* Schema.decodeEffect(LintReport)(stdout)).diagnostics;
-});
-
-const diagnostics = Effect.acquireUseRelease(
-  writeProbes,
-  () => lintProbes,
-  () => removeProbes,
-);
-
-const codesOnLine = (
-  report: (typeof LintReport.Type)["diagnostics"],
-  file: string,
-  line: number,
-): readonly string[] =>
-  report
-    .filter(
-      (diagnostic) =>
-        diagnostic.filename === file &&
-        diagnostic.labels[0]?.span.line === line &&
-        diagnostic.code.startsWith("msa("),
-    )
-    .map((diagnostic) => diagnostic.code);
+const BYPASS_PROBE = probePath("tools/checks", "bypass");
+const IMPORT_PROBE = probePath("tools/checks", "import");
 
 const SYNC_NAMES_SCRIPT =
   'console.log(Object.keys(require("fs")).filter((key) => key.endsWith("Sync")).join(" "))';
@@ -167,10 +133,12 @@ const runtimeSyncNames = captureProcess({
 }).pipe(Effect.map(({ stdout }) => stdout.trim().split(" ")));
 
 const checkProbes = Effect.gen(function* () {
-  const report = yield* diagnostics;
+  const report = yield* Effect.promise(() =>
+    lintProbes({ [BYPASS_PROBE]: bypassProbe, [IMPORT_PROBE]: importProbe }),
+  );
   for (const [index, [statement, expected]] of cases.entries()) {
-    const codes = codesOnLine(report, BYPASS_PROBE, HEADER.length + index + 1);
-    expect({ codes: [...new Set(codes)], statement }).toEqual({
+    const codes = msaCodesOnLine(report, BYPASS_PROBE, HEADER.length + index + 1);
+    expect({ codes, statement }).toEqual({
       codes: expected === undefined ? [] : [expected],
       statement,
     });

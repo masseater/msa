@@ -8,9 +8,9 @@ import StaticString from "./static-string.ts";
 
 const LOOKUP = "getBuiltinModule";
 const LOOKUP_MESSAGE =
-  "process.getBuiltinModule で組み込みを探さない。静的 import で読み、platform 層を通して使う";
+  "process.getBuiltinModule や process.binding で組み込みを探さない。静的 import で読み、platform 層を通して使う";
 const LOOKUP_UNKNOWN_MESSAGE =
-  "process や globalThis をこの形で使うと getBuiltinModule に届くかを判定できない。静的なキーで読む";
+  "process や globalThis をこの形で使うと getBuiltinModule や binding に届くかを判定できない。静的なキーで読む";
 const REQUIRE_MESSAGE =
   "require や動的 import で組み込みを読まない。Effect の API か platform 層を通して使う";
 const REQUIRE_UNKNOWN_MESSAGE =
@@ -47,7 +47,7 @@ const noBuiltinModuleLookup = defineRule({
     const report = createReporter(context, LOOKUP_MESSAGE);
     const lookup = new LookupFlow({
       context,
-      unknown: createReporter(context, LOOKUP_UNKNOWN_MESSAGE),
+      report: { restricted: report, unknown: createReporter(context, LOOKUP_UNKNOWN_MESSAGE) },
     });
     const reportLookup = (node: Node): void => {
       if (lookup.isLookup(node)) report(node);
