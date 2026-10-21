@@ -6,7 +6,7 @@ import scopeLookup from "./scope-lookup.ts";
 type Node = flowTypes.Node;
 
 type Walk = {
-  readonly visited: Set<Node>;
+  readonly visited: { readonly functions: Set<Node>; readonly classes: Set<Node> };
   readonly functionsCount: boolean;
 };
 
@@ -67,13 +67,17 @@ const NODES: Readonly<Partial<Record<Node["type"], NodeCheck>>> = {
 };
 
 function declaredIn(context: Context, node: Node, walk: Walk): boolean {
-  if (walk.visited.has(node)) return false;
-  walk.visited.add(node);
+  const visited = walk.functionsCount ? walk.visited.functions : walk.visited.classes;
+  if (visited.has(node)) return false;
+  visited.add(node);
   return NODES[node.type]?.(context, node, walk) === true;
 }
 
 const declaredInPackage = (context: Context, node: Node): boolean =>
-  declaredIn(context, node, { functionsCount: true, visited: new Set() });
+  declaredIn(context, node, {
+    functionsCount: true,
+    visited: { classes: new Set(), functions: new Set() },
+  });
 
 const classOrigin = { declaredInPackage };
 
