@@ -2,7 +2,7 @@ import { defineConfig } from "vite-plus";
 
 import vitestShared from "../../vitest.shared.ts";
 
-const { onGitHubActions } = vitestShared;
+const { onGitHubActions, testTimeout } = vitestShared;
 
 export default defineConfig({
   resolve: { conditions: ["source"] },
@@ -11,5 +11,6 @@ export default defineConfig({
     environment: "node",
     globals: true,
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
+    testTimeout,
   },
 });

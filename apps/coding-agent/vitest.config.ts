@@ -32,7 +32,6 @@ export default mergeConfig(
         },
       },
       silent: "passed-only",
-      testTimeout: 30000,
       unstubEnvs: true,
     },
   }),

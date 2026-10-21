@@ -4,7 +4,7 @@ import { defineConfig } from "vite-plus";
 
 import vitestShared from "../../vitest.shared.ts";
 
-const { onGitHubActions } = vitestShared;
+const { onGitHubActions, testTimeout } = vitestShared;
 
 const telemetrySrcIndex = fileURLToPath(new URL("../telemetry/src/index.ts", import.meta.url));
 
@@ -18,6 +18,6 @@ export default defineConfig({
     globals: true,
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
     silent: "passed-only",
-    testTimeout: 30000,
+    testTimeout,
   },
 });
