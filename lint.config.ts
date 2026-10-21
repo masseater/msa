@@ -71,6 +71,22 @@ const restrictedImports = {
 
 const NODE_BUILTINS_VIA_PLATFORM = "node の組み込みは core/platform/node/ を通して使う";
 
+const effectReplaceableBuiltins: readonly string[] = [
+  "child_process",
+  "console",
+  "crypto",
+  "fs",
+  "http",
+  "https",
+  "path",
+  "stream",
+  "timers",
+];
+
+const builtinModuleBases: readonly string[] = [
+  ...new Set(builtinModules.map((name) => name.replace(/^node:/u, "").split("/")[0] ?? name)),
+];
+
 const platformOnlyImports = {
   paths: [
     ...restrictedImports.paths,
@@ -164,6 +180,8 @@ const strictCategoryRules = [
 ];
 
 const lintConfig = {
+  builtinModuleBases,
+  effectReplaceableBuiltins,
   generated,
   lintPlugins,
   platformOnlyImports,

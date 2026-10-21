@@ -85,6 +85,11 @@ release. Add a tool name to select part of the graph. For example, run
 - 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
 - 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
 
+## node の組み込み
+
+- Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。
+- import 文だけでなく、`require`・`createRequire(...)(...)`・動的 `import()`・`process.getBuiltinModule` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。規則は `tools/oxlint/msa-plugin.ts` にあり、すり抜けの書き方と一覧が effecttsgo とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。
+
 ## テスト
 
 - テストは `Effect.gen` と `@msa/testing` で書く。`it` には `runTest(effect)` を渡し、`async` 関数と `await` は使わない。

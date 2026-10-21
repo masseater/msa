@@ -4,8 +4,15 @@ import { defineConfig } from "vite-plus";
 import lintConfig from "./lint.config.ts";
 import vitestShared from "./vitest.shared.ts";
 
-const { generated, lintPlugins, platformOnlyImports, restrictedImports, strictCategoryRules } =
-  lintConfig;
+const {
+  builtinModuleBases,
+  effectReplaceableBuiltins,
+  generated,
+  lintPlugins,
+  platformOnlyImports,
+  restrictedImports,
+  strictCategoryRules,
+} = lintConfig;
 const { onGitHubActions } = vitestShared;
 
 type Rules = Readonly<Record<string, "error">>;
@@ -35,6 +42,7 @@ export default defineConfig({
     jsPlugins: [
       { name: "vite-plus", specifier: "vite-plus/oxlint-plugin" },
       { name: "no-comments", specifier: "eslint-plugin-no-comments" },
+      { name: "msa", specifier: "./tools/oxlint/msa-plugin.ts" },
     ],
     options: {
       denyWarnings: true,
@@ -51,14 +59,22 @@ export default defineConfig({
       },
       {
         files: ["apps/coding-agent/src/**"],
-        rules: { "eslint/no-restricted-imports": ["error", platformOnlyImports] },
+        rules: {
+          "eslint/no-restricted-imports": ["error", platformOnlyImports],
+          "msa/no-builtin-require": ["error", { modules: builtinModuleBases }],
+        },
       },
       {
         files: ["libs/durable/src/env/node/**", "apps/coding-agent/src/core/platform/node/**"],
         rules: {
           "effecttsgo/node-builtin-import": "off",
           "eslint/no-restricted-imports": ["error", restrictedImports],
+          "msa/no-builtin-require": "off",
         },
+      },
+      {
+        files: ["tools/oxlint/msa-plugin.ts"],
+        rules: { "msa/no-builtin-module-lookup": "off" },
       },
       {
         files: ["scripts/**"],
@@ -78,14 +94,6 @@ export default defineConfig({
       "eslint/no-control-regex": "error",
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
       "eslint/no-restricted-imports": ["error", restrictedImports],
-      "eslint/no-restricted-properties": [
-        "error",
-        {
-          message: "node の組み込みは Effect の platform 経由で使う",
-          object: "process",
-          property: "getBuiltinModule",
-        },
-      ],
       "eslint/no-shadow": "error",
       "eslint/no-undef": "error",
       "eslint/no-underscore-dangle": "error",
@@ -95,6 +103,8 @@ export default defineConfig({
       "eslint/sort-keys": "error",
       "import/no-named-export": "error",
       "import/prefer-default-export": "error",
+      "msa/no-builtin-module-lookup": "error",
+      "msa/no-builtin-require": ["error", { modules: effectReplaceableBuiltins }],
       "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
       "node/no-top-level-await": "error",
       "promise/always-return": "error",
