@@ -2,17 +2,14 @@ import * as Effect from "effect/Effect";
 
 import awaitingModule from "../core/awaiting.ts";
 import platform from "../core/platform/index.ts";
-import nodeModule from "../core/platform/node/module.ts";
+import nodeFsModule from "../core/platform/node/fs-module.ts";
 import nodeUrl from "../core/platform/node/url.ts";
 
-const { createRequire } = nodeModule;
+const { fsModule: fs } = nodeFsModule;
 const { fileURLToPath } = nodeUrl;
 
 const { dirname, join } = platform;
 const { awaited, awaiting } = awaitingModule;
-
-const require = createRequire(import.meta.url);
-const fs = require("fs") as typeof import("fs");
 
 type ReadFileSync = typeof fs.readFileSync;
 type PathOrFileDescriptor = Parameters<ReadFileSync>[0];

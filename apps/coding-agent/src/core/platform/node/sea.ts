@@ -1,9 +1,10 @@
-type BuiltinLookup = (id: string) => unknown;
+import { createRequire } from "node:module";
+
+const load = createRequire(import.meta.url);
 
 function isSea(): boolean {
-  const lookup = Reflect.get(process, "getBuiltinModule") as BuiltinLookup | undefined;
-  const sea = lookup?.call(process, "node:sea") as { isSea(): boolean } | undefined;
-  return sea?.isSea() === true;
+  if (process.versions["bun"] !== undefined) return false;
+  return (load("node:sea") as { isSea(): boolean }).isSea();
 }
 
 const nodeSea = { isSea };

@@ -1,21 +1,17 @@
 import { Effect } from "effect";
-import { afterAll, describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it, vi } from "vite-plus/test";
 
-const state = vi.hoisted(() => {
-  const builtin = Reflect.get(process, "getBuiltinModule") as (id: string) => unknown;
-  const builtinSpy = vi
-    .spyOn(process, "getBuiltinModule")
-    .mockImplementation(((id: string) =>
-      id === "node:sea" ? { isSea: () => true } : builtin.call(process, id)) as never);
-  return {
-    builtinSpy,
-    createJiti: vi.fn((_id: unknown, _options: unknown) => ({
-      import: vi.fn(() => Promise.resolve(() => {})),
-    })),
-    jitiModuleLoads: 0,
-    virtualModulesLoads: 0,
-  };
-});
+const state = vi.hoisted(() => ({
+  createJiti: vi.fn((_id: unknown, _options: unknown) => ({
+    import: vi.fn(() => Promise.resolve(() => {})),
+  })),
+  jitiModuleLoads: 0,
+  virtualModulesLoads: 0,
+}));
+
+vi.mock("../../../src/core/platform/node/sea.ts", () => ({
+  default: { isSea: () => true },
+}));
 
 vi.mock("jiti/static", () => {
   state.jitiModuleLoads++;
@@ -43,10 +39,6 @@ interface JitiOptionsProbe {
   tryNative?: boolean;
   virtualModules?: Record<string, unknown>;
 }
-
-afterAll(() => {
-  state.builtinSpy.mockRestore();
-});
 
 const loadsJitiAndBundledVirtualModules = Effect.gen(function* () {
   expect(state.jitiModuleLoads).toBe(0);
