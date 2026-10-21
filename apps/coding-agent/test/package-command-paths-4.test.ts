@@ -99,7 +99,7 @@ const retriesATransientSelfUpdateVersionCheck = Effect.gen(function* () {
   }
 });
 
-const selfUpdatesThroughTheGlobalNpmPrefixPart1 = () =>
+const selfUpdatesThroughTheGlobalNpmPrefixSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -129,7 +129,7 @@ else fs.writeFileSync(${yield* toJsonText(recordPath)},JSON.stringify(args));
 
 const selfUpdatesThroughTheGlobalNpmPrefix = Effect.gen(function* () {
   const { effectRunPromise, fakeNpmPath, globalPrefix, projectPrefix, recordPath, selfPackageDir } =
-    yield* selfUpdatesThroughTheGlobalNpmPrefixPart1();
+    yield* selfUpdatesThroughTheGlobalNpmPrefixSetup();
   yield* writeTextFile(
     joinPath(agentDir, "settings.json"),
     yield* toJsonText({
@@ -174,7 +174,7 @@ const selfUpdatesThroughTheGlobalNpmPrefix = Effect.gen(function* () {
   }
 });
 
-const installsTheLatestReleaseOfTheCurrentPart1 = () =>
+const installsTheLatestReleaseOfTheCurrentSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -191,7 +191,7 @@ const installsTheLatestReleaseOfTheCurrentPart1 = () =>
 
 const installsTheLatestReleaseOfTheCurrent = Effect.gen(function* () {
   const { effectRunPromise, globalPrefix, selfPackageDir } =
-    yield* installsTheLatestReleaseOfTheCurrentPart1();
+    yield* installsTheLatestReleaseOfTheCurrentSetup();
   const fakeNpmPath = joinPath(tempDir, "fake-npm.cjs");
   const recordPath = joinPath(tempDir, "self-update.json");
   yield* makeDirectory(selfPackageDir);

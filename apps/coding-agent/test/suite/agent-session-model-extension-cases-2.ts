@@ -14,7 +14,7 @@ const { fauxAssistantMessage, fauxToolCall } = ai;
 const { createHarness, getAssistantTexts } = harnessModule;
 const { harnesses } = agentSessionModelExtensionCases1;
 
-const allowsExtensionToolCallHandlersToPart2 = (harness: harnessTypes.Harness) =>
+const expectBlockedToolCall = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     harness.setResponses([
       fauxAssistantMessage([fauxToolCall("echo", { text: "hello" })], {
@@ -63,7 +63,7 @@ const allowsExtensionToolCallHandlersTo = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  return yield* allowsExtensionToolCallHandlersToPart2(harness);
+  return yield* expectBlockedToolCall(harness);
 });
 const toolUsage: aiTypes.Usage = {
   cacheRead: 3,
@@ -200,8 +200,8 @@ const allowsExtensionContextHandlersToModify = Effect.gen(function* () {
 const agentSessionModelExtensionCases2 = {
   allowsExtensionContextHandlersToModify,
   allowsExtensionToolCallHandlersTo,
-  allowsExtensionToolCallHandlersToPart2,
   allowsExtensionToolResultHandlersTo,
+  expectBlockedToolCall,
 };
 
 export default agentSessionModelExtensionCases2;

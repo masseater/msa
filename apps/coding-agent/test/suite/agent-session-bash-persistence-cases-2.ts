@@ -15,7 +15,7 @@ const { getEntryTypes, harnesses } = agentSessionBashPersistenceCases1;
 
 const { gate } = testing;
 
-const defersBashResultsWhileStreamingAndPart1 = () =>
+const defersBashResultsWhileStreamingAndSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const toolRelease = gate();
@@ -39,7 +39,7 @@ const defersBashResultsWhileStreamingAndPart1 = () =>
   });
 
 const defersBashResultsWhileStreamingAnd = Effect.gen(function* () {
-  const { toolRelease, waitTool } = yield* defersBashResultsWhileStreamingAndPart1();
+  const { toolRelease, waitTool } = yield* defersBashResultsWhileStreamingAndSetup();
   const harness = yield* Effect.promise(() => createHarness({ tools: [waitTool] }));
   harnesses.push(harness);
   harness.setResponses([

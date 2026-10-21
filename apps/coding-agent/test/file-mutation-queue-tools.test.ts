@@ -86,7 +86,7 @@ const preservesBothParallelEditsOnTheSame = Effect.gen(function* () {
   expect(content).toBe("ALPHA\nBETA\ngamma\n");
 });
 
-const sharesTheQueueBetweenEditAndWritePart1 = () =>
+const sharesTheQueueBetweenEditAndWriteSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -119,7 +119,7 @@ const sharesTheQueueBetweenEditAndWritePart1 = () =>
 
 const sharesTheQueueBetweenEditAndWrite = Effect.gen(function* () {
   const { dir, editTool, effectRunPromise, filePath } =
-    yield* sharesTheQueueBetweenEditAndWritePart1();
+    yield* sharesTheQueueBetweenEditAndWriteSetup();
   const writeTool = createWriteTool(dir, {
     operations: {
       mkdir: () => effectRunPromise(Effect.sync(() => {})),

@@ -33,7 +33,7 @@ const {
   writeTextFile,
 } = testing;
 
-const reconstructsTheBoxedPreviewFromASettledPart1 = () =>
+const reconstructsTheBoxedPreviewFromASettledSetup = () =>
   Effect.gen(function* () {
     const dir = yield* makeTempDir("msa-edit-replay-");
     tempDirs.push(dir);
@@ -49,7 +49,7 @@ const reconstructsTheBoxedPreviewFromASettledPart1 = () =>
   });
 
 const reconstructsTheBoxedPreviewFromASettled = Effect.gen(function* () {
-  const { edits, filePath } = yield* reconstructsTheBoxedPreviewFromASettledPart1();
+  const { edits, filePath } = yield* reconstructsTheBoxedPreviewFromASettledSetup();
   const diff = yield* awaited(computeEditsDiff(filePath, edits, process.cwd()));
   if ("error" in diff) {
     throw new Error(diff.error);

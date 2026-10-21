@@ -55,7 +55,7 @@ const enumerationMergesOverridesWithoutExposingKeys = () =>
     }),
   );
 
-const forwardsOperationSignalsToThePersistentStorePart1 = () =>
+const forwardsOperationSignalsToThePersistentStoreSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -97,7 +97,7 @@ const forwardsOperationSignalsToThePersistentStore = () =>
   runTest(
     Effect.gen(function* () {
       const { controller, effectRunPromise, received, storage } =
-        yield* forwardsOperationSignalsToThePersistentStorePart1();
+        yield* forwardsOperationSignalsToThePersistentStoreSetup();
       const credentials = new RuntimeCredentials(storage);
 
       yield* awaited(credentials.read("anthropic-api", { signal: controller.signal }));

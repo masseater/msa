@@ -105,7 +105,7 @@ const deliversFollowUpMessagesOnlyAfter = Effect.gen(function* () {
   expect(assistantSeenBeforeFollowUp).toContain("");
   expect(getAssistantTexts(harness)).toContain("follow-up response");
 });
-const runsDirectSteeringAndFollowUpPart1 = () =>
+const runsDirectSteeringAndFollowUpSetup = () =>
   Effect.gen(function* () {
     const inputEvents: Array<
       Pick<codingAgentTypes.InputEvent, "text" | "source" | "streamingBehavior">
@@ -133,7 +133,7 @@ const runsDirectSteeringAndFollowUpPart1 = () =>
   });
 
 const runsDirectSteeringAndFollowUp = Effect.gen(function* () {
-  const { inputEvents, waiting } = yield* runsDirectSteeringAndFollowUpPart1();
+  const { inputEvents, waiting } = yield* runsDirectSteeringAndFollowUpSetup();
   const { harness, waitForToolStart, promptPromise, releaseToolExecution } = waiting;
   harnesses.push(harness);
   harness.setResponses([

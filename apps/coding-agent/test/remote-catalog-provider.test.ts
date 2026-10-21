@@ -56,7 +56,7 @@ const parsesKeyedCatalogsSendsVersionHeadersObserves = () =>
     }),
   );
 
-const overlaysImageAndClassifierModelsAndDropsPart1 = () =>
+const mockRemoteCatalog = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -100,7 +100,7 @@ const overlaysImageAndClassifierModelsAndDropsPart1 = () =>
 const overlaysImageAndClassifierModelsAndDrops = () =>
   runTest(
     Effect.gen(function* () {
-      yield* overlaysImageAndClassifierModelsAndDropsPart1();
+      yield* mockRemoteCatalog();
       const provider = testProvider();
       const store = new InMemoryModelsStore();
       yield* awaited(refreshProvider(provider, store));

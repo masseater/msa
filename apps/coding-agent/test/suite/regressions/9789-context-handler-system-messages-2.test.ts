@@ -13,7 +13,7 @@ const { createHarness } = harnessModule;
 
 const harnesses3: harnessTypes.Harness[] = [];
 
-const runsAfterContextHandlersOnThePart1 = () =>
+const runsAfterContextHandlersOnTheSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const seen: agentTypes.AgentMessage[][] = [];
@@ -58,7 +58,7 @@ const runsAfterContextHandlersOnThePart1 = () =>
   });
 
 const runsAfterContextHandlersOnThe = Effect.gen(function* () {
-  const { harness, seen } = yield* runsAfterContextHandlersOnThePart1();
+  const { harness, seen } = yield* runsAfterContextHandlersOnTheSetup();
   harnesses3.push(harness);
   yield* Effect.promise(() => compactSession(harness));
   const getRequest = captureRequest(harness, "after compaction");

@@ -23,7 +23,7 @@ let sessionManager: sessionManagerTypes.SessionManager;
 
 let modelRegistry: modelRegistryTypes.ModelRegistry;
 
-const chainsContentModificationsAcrossHandlersPart1 = () =>
+const chainsContentModificationsAcrossHandlersSetup = () =>
   Effect.sync(() => {
     const extCode1 = `
 				export default function(msa) {
@@ -38,7 +38,7 @@ const chainsContentModificationsAcrossHandlersPart1 = () =>
   });
 
 const chainsContentModificationsAcrossHandlers = Effect.gen(function* () {
-  const { extCode1 } = yield* chainsContentModificationsAcrossHandlersPart1();
+  const { extCode1 } = yield* chainsContentModificationsAcrossHandlersSetup();
   const extCode2 = `
 				export default function(msa) {
 					msa.on("tool_result", async (event) => {

@@ -54,7 +54,7 @@ function named(
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const nestsLlmRequestsAndToolCallsUnderPart1 = Effect.gen(function* () {
+const runToolTurnWithTelemetry = Effect.gen(function* () {
   const telemetry = new InMemoryTelemetryContext();
   const harness = yield* awaited(
     createHarness({
@@ -88,7 +88,7 @@ const nestsLlmRequestsAndToolCallsUnderPart1 = Effect.gen(function* () {
 
 const nestsLlmRequestsAndToolCallsUnder = Effect.gen(function* () {
   const { requests, spans, telemetry, tools, turns } = yield* awaited(
-    runTest(nestsLlmRequestsAndToolCallsUnderPart1),
+    runTest(runToolTurnWithTelemetry),
   );
   expect(requests[0]?.attributes["gen_ai.usage.input_tokens"]).toBeGreaterThan(0);
   expect(turns[0]?.attributes).toMatchObject({ "msa.session.role": "worker" });

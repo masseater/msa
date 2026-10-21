@@ -68,7 +68,7 @@ function orchestratorExtension(msa: extensionsTypesTypes.ExtensionAPI): void {
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const supportsToolsThatCallOtherToolsPart1 = () =>
+const supportsToolsThatCallOtherToolsSetup = () =>
   Effect.gen(function* () {
     const toolCalls: string[] = [];
     const harness = yield* Effect.promise(() =>
@@ -88,7 +88,7 @@ const supportsToolsThatCallOtherToolsPart1 = () =>
   });
 
 const supportsToolsThatCallOtherTools = Effect.gen(function* () {
-  const { harness, toolCalls } = yield* supportsToolsThatCallOtherToolsPart1();
+  const { harness, toolCalls } = yield* supportsToolsThatCallOtherToolsSetup();
   harnesses.push(harness);
   yield* Effect.promise(() => harness.session.extensions.binding.bindExtensions({}));
 

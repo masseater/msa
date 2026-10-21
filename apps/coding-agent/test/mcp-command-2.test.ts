@@ -58,7 +58,7 @@ const addsStdioServersAndPassesOptionsAfter = () =>
     }),
   );
 
-const addsHttpServersAndKeepsOtherContentPart1 = () =>
+const addsHttpServersAndKeepsOtherContentSetup = () =>
   Effect.gen(function* () {
     const { exitCode, output, agentDir } = yield* awaited(
       run(
@@ -85,7 +85,7 @@ const addsHttpServersAndKeepsOtherContentPart1 = () =>
 const addsHttpServersAndKeepsOtherContent = () =>
   runTest(
     Effect.gen(function* () {
-      const { agentDir, exitCode, output } = yield* addsHttpServersAndKeepsOtherContentPart1();
+      const { agentDir, exitCode, output } = yield* addsHttpServersAndKeepsOtherContentSetup();
       expect(exitCode).toBe(0);
       expect(output).not.toContain("mcp login");
       expect(yield* readConfig(joinPath(agentDir, "mcp.json"))).toEqual({

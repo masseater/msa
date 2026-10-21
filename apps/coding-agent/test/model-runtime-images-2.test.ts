@@ -19,7 +19,7 @@ const storedAuth = (key: string | undefined) =>
     ? undefined
     : { auth: { apiKey: key }, source: "stored" as const };
 
-const generatesImagesThroughANativeProviderWithPart1 = () =>
+const generatesImagesThroughANativeProviderWithSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -60,7 +60,7 @@ const generatesImagesThroughANativeProviderWithPart1 = () =>
   });
 
 const generatesImagesThroughANativeProviderWith = Effect.gen(function* () {
-  const { calls, runtime } = yield* generatesImagesThroughANativeProviderWithPart1();
+  const { calls, runtime } = yield* generatesImagesThroughANativeProviderWithSetup();
   const model = runtime.getModelOfType("image", "pixels", "flux")!;
 
   const unconfigured = yield* awaited(runtime.generateImages(model, context));

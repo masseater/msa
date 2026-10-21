@@ -11,15 +11,13 @@ const agentSessionRetryEventsCases = {
   emitsAgentEndForErrorResponses: agentSessionRetryEventsCases2.emitsAgentEndForErrorResponses,
   emitsExtensionEventsBeforePublicEvent:
     agentSessionRetryEventsCases2.emitsExtensionEventsBeforePublicEvent,
-  emitsExtensionEventsBeforePublicEventPart2:
-    agentSessionRetryEventsCases2.emitsExtensionEventsBeforePublicEventPart2,
   emitsStreamingDeltasForTextThinking:
     agentSessionRetryEventsCases2.emitsStreamingDeltasForTextThinking,
   emitsTheExpectedEventOrderFor: agentSessionRetryEventsCases2.emitsTheExpectedEventOrderFor,
   emitsTheExpectedEventOrderFor2: agentSessionRetryEventsCases2.emitsTheExpectedEventOrderFor2,
-  emitsTheExpectedEventOrderFor2Part2:
-    agentSessionRetryEventsCases2.emitsTheExpectedEventOrderFor2Part2,
   exhaustsMaxRetriesAndEmitsA: agentSessionRetryEventsCases1.exhaustsMaxRetriesAndEmitsA,
+  expectExtensionEventsFirst: agentSessionRetryEventsCases2.expectExtensionEventsFirst,
+  expectToolTurnEventOrder: agentSessionRetryEventsCases2.expectToolTurnEventOrder,
   finalizesRetryStateWhenAbortIs: agentSessionRetryEventsCases1.finalizesRetryStateWhenAbortIs,
   harnesses: agentSessionRetryEventsCases1.harnesses,
   normalizeEventOrder: agentSessionRetryEventsCases1.normalizeEventOrder,

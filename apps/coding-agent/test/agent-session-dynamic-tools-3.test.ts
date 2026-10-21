@@ -30,7 +30,7 @@ let tempDir: string;
 
 let agentDir: string;
 
-const refreshesToolRegistryWhenToolsAreRegisteredPart1 = () =>
+const refreshesToolRegistryWhenToolsAreRegisteredSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -68,7 +68,7 @@ const refreshesToolRegistryWhenToolsAreRegisteredPart1 = () =>
 
 const refreshesToolRegistryWhenToolsAreRegistered = Effect.gen(function* () {
   const { resourceLoader, sessionManager, settingsManager } =
-    yield* refreshesToolRegistryWhenToolsAreRegisteredPart1();
+    yield* refreshesToolRegistryWhenToolsAreRegisteredSetup();
   yield* awaited(resourceLoader.reload());
 
   const { session } = yield* awaited(

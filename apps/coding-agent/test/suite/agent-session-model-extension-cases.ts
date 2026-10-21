@@ -13,8 +13,6 @@ const agentSessionModelExtensionCases = {
     agentSessionModelExtensionCases3.allowsExtensionInputHandlersToTransform,
   allowsExtensionToolCallHandlersTo:
     agentSessionModelExtensionCases2.allowsExtensionToolCallHandlersTo,
-  allowsExtensionToolCallHandlersToPart2:
-    agentSessionModelExtensionCases2.allowsExtensionToolCallHandlersToPart2,
   allowsExtensionToolResultHandlersTo:
     agentSessionModelExtensionCases2.allowsExtensionToolResultHandlersTo,
   appliesPerModelThinkingLevelOverride:
@@ -28,6 +26,7 @@ const agentSessionModelExtensionCases = {
   cyclesThroughScopedModelsAndPreserves:
     agentSessionModelExtensionCases1.cyclesThroughScopedModelsAndPreserves,
   cyclesXhighBeforeMaxWhenBoth: agentSessionModelExtensionCases1.cyclesXhighBeforeMaxWhenBoth,
+  expectBlockedToolCall: agentSessionModelExtensionCases2.expectBlockedToolCall,
   fallsBackToCurrentSessionThinking:
     agentSessionModelExtensionCases1.fallsBackToCurrentSessionThinking,
   harnesses: agentSessionModelExtensionCases1.harnesses,

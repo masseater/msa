@@ -11,7 +11,7 @@ const { awaited, runTest } = testing;
 
 let harness: testHarnessTypes.Harness;
 
-const loadsInlineExtensionFactoriesAndDisambiguatesDuplicatePart1 = () =>
+const loadsInlineExtensionFactoriesAndDisambiguatesDuplicateSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -57,7 +57,7 @@ const loadsInlineExtensionFactoriesAndDisambiguatesDuplicatePart1 = () =>
 const loadsInlineExtensionFactoriesAndDisambiguatesDuplicate = () =>
   runTest(
     Effect.gen(function* () {
-      const { calls } = yield* loadsInlineExtensionFactoriesAndDisambiguatesDuplicatePart1();
+      const { calls } = yield* loadsInlineExtensionFactoriesAndDisambiguatesDuplicateSetup();
 
       const runner = harness.session.extensions.binding.extensionRunner;
       expect(runner).toBeDefined();

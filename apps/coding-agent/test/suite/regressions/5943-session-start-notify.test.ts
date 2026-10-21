@@ -122,7 +122,7 @@ const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
   }
 });
 
-const subscribesBeforeReplacementSessionStartHandlersPart1 = () =>
+const subscribesBeforeReplacementSessionStartHandlersSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const events: string[] = [];
@@ -146,7 +146,7 @@ const subscribesBeforeReplacementSessionStartHandlersPart1 = () =>
 
 const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () {
   const { events, harness, runPromise } =
-    yield* subscribesBeforeReplacementSessionStartHandlersPart1();
+    yield* subscribesBeforeReplacementSessionStartHandlersSetup();
 
   try {
     const context: SessionStartNotifySupportTypes.RebindContext = {

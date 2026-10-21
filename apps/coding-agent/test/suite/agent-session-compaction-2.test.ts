@@ -29,7 +29,7 @@ const autoCompactsWithACustomStreamfn = Effect.gen(function* () {
   expect(getStreamCallCount()).toBe(1);
 });
 
-const notifiesExtensionsWhenAutoCompactionFailsPart1 = () =>
+const notifiesExtensionsWhenAutoCompactionFailsSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const failedEvents: Array<{
@@ -43,7 +43,7 @@ const notifiesExtensionsWhenAutoCompactionFailsPart1 = () =>
   });
 
 const notifiesExtensionsWhenAutoCompactionFails = Effect.gen(function* () {
-  const { failedEvents, runPromise } = yield* notifiesExtensionsWhenAutoCompactionFailsPart1();
+  const { failedEvents, runPromise } = yield* notifiesExtensionsWhenAutoCompactionFailsSetup();
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [

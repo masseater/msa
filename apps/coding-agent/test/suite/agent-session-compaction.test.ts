@@ -23,7 +23,7 @@ const { createHarness, getUserTexts } = harnessModule;
 
 const { currentTimeMillis } = testing;
 
-const manuallyCompactsUsingAnExtensionProvidedPart1 = () =>
+const manuallyCompactsUsingAnExtensionProvidedSetup = () =>
   Effect.gen(function* () {
     const summaryUsage = {
       cacheRead: 30,
@@ -57,7 +57,7 @@ const manuallyCompactsUsingAnExtensionProvidedPart1 = () =>
   });
 
 const manuallyCompactsUsingAnExtensionProvided = Effect.gen(function* () {
-  const { harness, summaryUsage } = yield* manuallyCompactsUsingAnExtensionProvidedPart1();
+  const { harness, summaryUsage } = yield* manuallyCompactsUsingAnExtensionProvidedSetup();
   harnesses.push(harness);
 
   yield* Effect.promise(() => harness.session.run.prompting.prompt("one"));

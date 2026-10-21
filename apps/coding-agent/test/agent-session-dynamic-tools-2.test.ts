@@ -30,7 +30,7 @@ let tempDir: string;
 
 let agentDir: string;
 
-const keepsCustomToolsActiveButOmitsThemPart1 = () =>
+const keepsCustomToolsActiveButOmitsThemSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -68,7 +68,7 @@ const keepsCustomToolsActiveButOmitsThem = () =>
   runTest(
     Effect.gen(function* () {
       const { resourceLoader, sessionManager, settingsManager } =
-        yield* keepsCustomToolsActiveButOmitsThemPart1();
+        yield* keepsCustomToolsActiveButOmitsThemSetup();
       yield* awaited(resourceLoader.reload());
 
       const { session } = yield* awaited(

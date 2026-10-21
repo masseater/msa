@@ -20,7 +20,7 @@ const { createHarness } = harnessModule;
 
 const { gate } = testing;
 
-const includesSteeringQueuedDuringCompactionInPart1 = () =>
+const includesSteeringQueuedDuringCompactionInSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const largeTool: agentTypes.AgentTool = {
@@ -68,7 +68,7 @@ const includesSteeringQueuedDuringCompactionInPart1 = () =>
 
 const includesSteeringQueuedDuringCompactionIn = Effect.gen(function* () {
   const { compactionReleased, compactionStarted, harness } =
-    yield* includesSteeringQueuedDuringCompactionInPart1();
+    yield* includesSteeringQueuedDuringCompactionInSetup();
   harnesses.push(harness);
   let resumedRequest = "";
   harness.setResponses([

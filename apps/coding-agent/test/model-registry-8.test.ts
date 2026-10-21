@@ -48,7 +48,7 @@ function providerConfig(
 const writeRawModelsJson = (providers: Record<string, unknown>) =>
   writeJsonFile(modelsJsonPath, { providers });
 
-const modeloverridesApplyToDynamicallyRegisteredProviderModelsPart1 = () =>
+const writeExtensionModelOverride = () =>
   writeRawModelsJson({
     "extension-provider": {
       modelOverrides: {
@@ -68,7 +68,7 @@ const modeloverridesApplyToDynamicallyRegisteredProviderModelsPart1 = () =>
   });
 
 const modeloverridesApplyToDynamicallyRegisteredProviderModels = Effect.gen(function* () {
-  yield* modeloverridesApplyToDynamicallyRegisteredProviderModelsPart1();
+  yield* writeExtensionModelOverride();
 
   const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
   registry.registerProvider("extension-provider", {

@@ -15,7 +15,7 @@ const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 let tempRoot: string;
 
-const processShouldSurviveAnErrorEventPart1 = () =>
+const processShouldSurviveAnErrorEventSetup = () =>
   Effect.gen(function* () {
     const themeModulePath = joinPath(
       __dirname,
@@ -66,7 +66,7 @@ process.exit(0);
 const processShouldSurviveAnErrorEvent = () =>
   runtime.runPromise(
     Effect.gen(function* () {
-      const { agentDir, scriptPath } = yield* processShouldSurviveAnErrorEventPart1();
+      const { agentDir, scriptPath } = yield* processShouldSurviveAnErrorEventSetup();
 
       let stderr: string;
       let exitCode: number;

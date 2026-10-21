@@ -9,7 +9,7 @@ const { setup, taskStatus, waitFor } = harness;
 
 const TASK = { currentState: "a is not done", goalState: "a is done", title: "a" };
 
-const tracesATaskThroughItsWorkerAndPart1 = () =>
+const tracesATaskThroughItsWorkerAndSetup = () =>
   Effect.gen(function* () {
     const { orchestrator, workers, telemetry } = setup();
     const task = yield* Effect.promise(() => orchestrator.createTask(TASK));
@@ -28,7 +28,7 @@ const tracesATaskThroughItsWorkerAndPart1 = () =>
 const tracesATaskThroughItsWorkerAnd = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { spans, task, telemetry, workers } = yield* tracesATaskThroughItsWorkerAndPart1();
+      const { spans, task, telemetry, workers } = yield* tracesATaskThroughItsWorkerAndSetup();
       const taskSpan = spans.find((span) => span.name === "msa.task");
       expect(taskSpan).toMatchObject({
         attributes: { "msa.task.id": task.id, "msa.task.status": "completed" },

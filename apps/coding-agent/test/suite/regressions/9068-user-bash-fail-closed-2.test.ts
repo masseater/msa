@@ -71,7 +71,7 @@ afterEach(() => {
   rpcIo.lineHandler = undefined;
 });
 
-const partPart1 = () =>
+const harnessRecordingEvents = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const events: extensionsTypesTypes.UserBashEvent[] = [];
@@ -101,7 +101,7 @@ describe("Interactive user_bash failure handling (#9068)", () => {
   ])("fails closed for %s when a handler returns an empty result", (input, excludeFromContext) =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { events, harness } = yield* partPart1();
+        const { events, harness } = yield* harnessRecordingEvents();
         const executeBash = vi
           .spyOn(harness.session.context.bash, "executeBash")
           .mockResolvedValue(localResult);

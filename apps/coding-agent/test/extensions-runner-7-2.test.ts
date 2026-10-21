@@ -27,7 +27,7 @@ let sessionManager: codingAgentTypes.SessionManager;
 
 let modelRegistry: codingAgentTypes.ModelRegistry;
 
-const chainsSharedDraftProposalsAndPreservesOmittedPart1 = () =>
+const chainsSharedDraftProposalsAndPreservesOmittedSetup = () =>
   Effect.gen(function* () {
     const runtime = createExtensionRuntime();
     const eventBus = createEventBus();
@@ -74,7 +74,7 @@ const chainsSharedDraftProposalsAndPreservesOmittedPart1 = () =>
 
 const chainsSharedDraftProposalsAndPreservesOmitted = Effect.gen(function* () {
   const { first, observations, runtime, second } =
-    yield* chainsSharedDraftProposalsAndPreservesOmittedPart1();
+    yield* chainsSharedDraftProposalsAndPreservesOmittedSetup();
   const runner = new ExtensionRunner(
     [first, second],
     runtime,

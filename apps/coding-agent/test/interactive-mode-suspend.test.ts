@@ -61,7 +61,7 @@ describe("InteractiveMode.handleCtrlZ", () => {
   });
 });
 
-const partPart1 = () => {
+const createFakeUi = () => {
   const ui: FakeUi = {
     requestRender: vi.fn(),
     start: vi.fn(),
@@ -90,7 +90,7 @@ const captureSignalHandlers = () => {
   return { handlers, processOnSpy, processOnceSpy };
 };
 
-const partPart2 = (input: { readonly context: HandleCtrlZThis; readonly ui: FakeUi }) => {
+const suspendAndResume = (input: { readonly context: HandleCtrlZThis; readonly ui: FakeUi }) => {
   const { context, ui } = input;
 
   vi.useFakeTimers();
@@ -125,9 +125,9 @@ describe("InteractiveMode.handleCtrlZ", () => {
   });
 
   test("keeps the process alive while suspended and restores the TUI on SIGCONT", () => {
-    const { context, ui } = partPart1();
+    const { context, ui } = createFakeUi();
 
-    partPart2({ context, ui });
+    suspendAndResume({ context, ui });
     expect(ui.start).toHaveBeenCalledTimes(1);
     expect(ui.requestRender).toHaveBeenCalledWith(true);
   });

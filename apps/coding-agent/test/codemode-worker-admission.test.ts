@@ -89,7 +89,7 @@ const admitsOnlyTwoWorkersFromAConcurrent = () =>
     }),
   );
 
-const partPart1 = (input: { readonly how: "timeout" | "abort" | "success" }) =>
+const expectBoundedWorkers = (input: { readonly how: "timeout" | "abort" | "success" }) =>
   Effect.gen(function* () {
     const { how } = input;
     const once = vi.spyOn(Worker.prototype, "once");
@@ -133,7 +133,7 @@ describe("codemode worker admission", () => {
   it.each(["timeout", "abort", "success"] as const)("bounds surviving workers after %s", (how) =>
     runTest(
       Effect.gen(function* () {
-        yield* partPart1({ how });
+        yield* expectBoundedWorkers({ how });
 
         const blocked = yield* awaited(run("return 3"));
         expect(blocked).toMatchObject({ details: { calls: [] }, isError: true });

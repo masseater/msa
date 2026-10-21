@@ -153,7 +153,7 @@ const removesMcpToolsMatchingExcludeTools = Effect.gen(function* () {
   expect(registered).not.toContain("mcp__docs__fail");
 });
 
-const exposesCodemodeOnlyMcpToolsThroughPart1 = () =>
+const exposesCodemodeOnlyMcpToolsThroughSetup = () =>
   Effect.gen(function* () {
     const { harness, calls } = yield* Effect.promise(() => setup("codemode"));
     const searchName = createMcpToolName("docs", "search");
@@ -187,7 +187,7 @@ const exposesCodemodeOnlyMcpToolsThroughPart1 = () =>
   });
 
 const exposesCodemodeOnlyMcpToolsThrough = Effect.gen(function* () {
-  const { calls, harness, searchName } = yield* exposesCodemodeOnlyMcpToolsThroughPart1();
+  const { calls, harness, searchName } = yield* exposesCodemodeOnlyMcpToolsThroughSetup();
 
   yield* Effect.promise(() => harness.session.run.prompting.prompt("search the docs"));
 

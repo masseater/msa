@@ -18,7 +18,7 @@ function createDeferred(): { promise: Promise<void>; resolve: () => void } {
 
 let harness!: harnessTypes.Harness;
 
-const rejectsNavigationBeforeTheActiveLeafPart1 = () =>
+const rejectsNavigationBeforeTheActiveLeafSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const compactionStarted = createDeferred();
@@ -54,7 +54,7 @@ const rejectsNavigationBeforeTheActiveLeafPart1 = () =>
 
 const rejectsNavigationBeforeTheActiveLeaf = Effect.gen(function* () {
   const { compactionReleased, compactionStarted } =
-    yield* rejectsNavigationBeforeTheActiveLeafPart1();
+    yield* rejectsNavigationBeforeTheActiveLeafSetup();
 
   harness.sessionManager.appendMessage(userMsg("first user"));
   const navigationTargetId = harness.sessionManager.appendMessage(assistantMsg("first assistant"));

@@ -46,7 +46,7 @@ const listScenarios = (mode: string, workDir: string) =>
     return [...result.stdout.matchAll(/^\s+- (\S+)/gmu)].flatMap((match) => match[1] ?? []);
   });
 
-const runScenarioPart1 = (input: {
+const runScenarioSetup = (input: {
   readonly launcher: string;
   readonly mode: string;
   readonly scenario: string;
@@ -102,7 +102,7 @@ const runScenario = (
   verbose: boolean,
 ) =>
   Effect.gen(function* () {
-    const { reportPath, result, run, scenarioDir } = yield* runScenarioPart1({
+    const { reportPath, result, run, scenarioDir } = yield* runScenarioSetup({
       launcher,
       mode,
       scenario,

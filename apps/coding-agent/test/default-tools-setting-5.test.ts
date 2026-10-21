@@ -13,7 +13,7 @@ const { cleanupDirs, createSession, prepareDirs } = defaultToolsSettingSupport;
 
 const { awaited, runTest } = testing;
 
-const appliesNameAndNameToolOptionsToPart1 = () =>
+const appliesNameAndNameToolOptionsToSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -44,7 +44,7 @@ const appliesNameAndNameToolOptionsToPart1 = () =>
   });
 
 const appliesNameAndNameToolOptionsTo = Effect.gen(function* () {
-  const { inactiveTool } = yield* appliesNameAndNameToolOptionsToPart1();
+  const { inactiveTool } = yield* appliesNameAndNameToolOptionsToSetup();
 
   const session = yield* awaited(
     createSession(["+grep"], { tools: ["+inactive_tool", "-write"] }, [inactiveTool]),

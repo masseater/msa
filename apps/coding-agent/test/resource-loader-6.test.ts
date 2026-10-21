@@ -73,7 +73,7 @@ execute: async () => ({ result: "2" }),
   ).toBe(true);
 });
 
-const shouldPreferExplicitCliExtensionsOverDiscoveredPart1 = () =>
+const shouldPreferExplicitCliExtensionsOverDiscoveredSetup = () =>
   Effect.gen(function* () {
     const globalExtDir = joinPath(agentDir, "extensions");
     yield* makeDirectory(globalExtDir);
@@ -101,7 +101,7 @@ export default function(msa: ExtensionAPI) {
   });
 
 const shouldPreferExplicitCliExtensionsOverDiscovered = Effect.gen(function* () {
-  const { explicitExtPath } = yield* shouldPreferExplicitCliExtensionsOverDiscoveredPart1();
+  const { explicitExtPath } = yield* shouldPreferExplicitCliExtensionsOverDiscoveredSetup();
 
   yield* writeTextFile(
     explicitExtPath,
@@ -148,7 +148,7 @@ handler: async () => {},
   expect(runner.getToolDefinition("duplicate-tool")?.description).toBe("explicit tool");
 });
 
-const shouldLeaveOutReplaceableExtensionsWhoseNamesPart1 = () =>
+const shouldLeaveOutReplaceableExtensionsWhoseNamesSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -167,7 +167,7 @@ export default function(msa: ExtensionAPI) {
 
 const shouldLeaveOutReplaceableExtensionsWhoseNames = Effect.gen(function* () {
   const { effectRunPromise, globalExtDir } =
-    yield* shouldLeaveOutReplaceableExtensionsWhoseNamesPart1();
+    yield* shouldLeaveOutReplaceableExtensionsWhoseNamesSetup();
 
   const loader = new DefaultResourceLoader({
     agentDir,

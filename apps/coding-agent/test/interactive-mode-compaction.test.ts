@@ -60,7 +60,7 @@ const usesTheCacheMissNoticeSettingFor = () => {
   expect(disabled.chatContainer.children).toHaveLength(0);
 };
 
-const rendersEachCompactionCostAfterItsSummaryPart1 = () => {
+const rendersEachCompactionCostAfterItsSummarySetup = () => {
   const currentUsage: aiTypes.Usage = {
     cacheRead: 30,
     cacheWrite: 40,
@@ -81,7 +81,7 @@ const rendersEachCompactionCostAfterItsSummaryPart1 = () => {
 };
 
 const rendersEachCompactionCostAfterItsSummary = () => {
-  const { currentUsage, previousUsage } = rendersEachCompactionCostAfterItsSummaryPart1();
+  const { currentUsage, previousUsage } = rendersEachCompactionCostAfterItsSummarySetup();
   const entries: sessionManagerTypes.SessionEntry[] = [
     {
       firstKeptEntryId: "kept",

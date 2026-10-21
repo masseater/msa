@@ -82,7 +82,7 @@ const preservesTheStoredCredentialAfterCancellingAn = () =>
     }),
   );
 
-const translatesACredentialStoreRefreshFailureAndPart1 = () =>
+const translatesACredentialStoreRefreshFailureAndSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -115,7 +115,7 @@ const translatesACredentialStoreRefreshFailureAnd = () =>
   runTest(
     Effect.gen(function* () {
       const { credentials, effectRunPromise, providerId } =
-        yield* translatesACredentialStoreRefreshFailureAndPart1();
+        yield* translatesACredentialStoreRefreshFailureAndSetup();
       const provider: aiTypes.Provider = {
         auth: {
           oauth: {

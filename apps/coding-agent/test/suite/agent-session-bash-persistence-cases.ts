@@ -16,6 +16,7 @@ const agentSessionBashPersistenceCases = {
   doesNotHoldBackOutputBehind: agentSessionBashPersistenceCases6.doesNotHoldBackOutputBehind,
   executesBashCommandsAndRecordsThe:
     agentSessionBashPersistenceCases3.executesBashCommandsAndRecordsThe,
+  expectPersistedEntryOrder: agentSessionBashPersistenceCases3.expectPersistedEntryOrder,
   flushesAnIncompleteMultiByteCharacter:
     agentSessionBashPersistenceCases6.flushesAnIncompleteMultiByteCharacter,
   getEntryTypes: agentSessionBashPersistenceCases1.getEntryTypes,
@@ -26,8 +27,6 @@ const agentSessionBashPersistenceCases = {
     agentSessionBashPersistenceCases5.persistsAbortedAssistantMessages,
   persistsUserAssistantToolresultAndCustom:
     agentSessionBashPersistenceCases4.persistsUserAssistantToolresultAndCustom,
-  persistsUserAssistantToolresultAndCustomPart2:
-    agentSessionBashPersistenceCases3.persistsUserAssistantToolresultAndCustomPart2,
   recordsBashOutputThroughCustomOperations:
     agentSessionBashPersistenceCases6.recordsBashOutputThroughCustomOperations,
   recordsBashResultsImmediatelyWhileIdle:

@@ -141,7 +141,9 @@ const usesTheNewlySelectedModelWithoutChanging = () =>
 const capturesModelIdentityBeforeAwaitingSummarizationAuth = () =>
   Effect.runPromise(capturesModelIdentityBeforeAwaitingSummarization);
 
-const partPart1 = (input: { readonly path: "manual" | "pre-prompt" | "post-run" | "overflow" }) =>
+const harnessRecordingPreparations = (input: {
+  readonly path: "manual" | "pre-prompt" | "post-run" | "overflow";
+}) =>
   Effect.gen(function* () {
     const { path } = input;
     const preparations: extensionsTypes.SessionBeforeCompactEvent[] = [];
@@ -206,7 +208,7 @@ describe("AgentSession compaction model overrides", () => {
     (path) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { harness, preparations } = yield* partPart1({ path });
+          const { harness, preparations } = yield* harnessRecordingPreparations({ path });
           harnesses.push(harness);
           const recentUserId = seedHistory(harness, path === "pre-prompt" ? 2500 : 650);
 

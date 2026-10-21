@@ -14,7 +14,7 @@ const { awaited, runTest } = testing;
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const persistsExtensionProvidedSummaryUsageInSessionPart1 = () =>
+const persistsExtensionProvidedSummaryUsageInSessionSetup = () =>
   Effect.sync(() => {
     const usage: compatTypes.Usage = {
       cacheRead: 30,
@@ -30,7 +30,7 @@ const persistsExtensionProvidedSummaryUsageInSessionPart1 = () =>
 const persistsExtensionProvidedSummaryUsageInSession = () =>
   runTest(
     Effect.gen(function* () {
-      const { usage } = yield* persistsExtensionProvidedSummaryUsageInSessionPart1();
+      const { usage } = yield* persistsExtensionProvidedSummaryUsageInSessionSetup();
       const harness = yield* awaited(
         createHarness({
           extensionFactories: [

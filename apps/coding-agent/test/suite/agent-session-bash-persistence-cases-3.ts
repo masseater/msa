@@ -98,7 +98,7 @@ const abortsAllActiveBashExecutions = Effect.gen(function* () {
   expect(results.map((result) => result.cancelled)).toEqual([true, true]);
   expect(harness.session.context.bash.isBashRunning).toBe(false);
 });
-const persistsUserAssistantToolresultAndCustomPart2 = (harness: harnessTypes.Harness) =>
+const expectPersistedEntryOrder = (harness: harnessTypes.Harness) =>
   Effect.gen(function* () {
     yield* Effect.promise(() =>
       harness.session.run.prompting.sendCustomMessage({
@@ -132,8 +132,8 @@ const agentSessionBashPersistenceCases3 = {
   abortsAllActiveBashExecutions,
   cancelsRunningBashCommandsWithAbortbash,
   executesBashCommandsAndRecordsThe,
+  expectPersistedEntryOrder,
   keepsNewerBashExecutionTrackedWhen,
-  persistsUserAssistantToolresultAndCustomPart2,
 };
 
 export default agentSessionBashPersistenceCases3;

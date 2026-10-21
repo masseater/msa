@@ -38,7 +38,7 @@ let settingsManager: settingsManagerTypes.SettingsManager;
 
 let packageManager: packageManagerTypes.DefaultPackageManager;
 
-const partPart1 = () =>
+const writeStaleGitCache = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const cachedDir = packageManager.git.paths.getGitInstallPath(
@@ -86,7 +86,7 @@ const afterEachHook4 = () =>
 const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
   runTest(
     Effect.gen(function* () {
-      const { cachedDir, effectRunPromise, extensionFile } = yield* partPart1();
+      const { cachedDir, effectRunPromise, extensionFile } = yield* writeStaleGitCache();
 
       const executedCommands: string[] = [];
       commandRunner.runCommand = (command, args) =>

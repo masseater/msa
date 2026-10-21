@@ -101,7 +101,7 @@ const settlesOnlyAfterFollowUpsQueued = Effect.gen(function* () {
   expect(settledIdleStates).toEqual([true]);
 });
 
-const extensionCommandWaitforidleWaitsForSessionPart1 = () =>
+const extensionCommandWaitforidleWaitsForSessionSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const released = gate();
@@ -132,7 +132,7 @@ const extensionCommandWaitforidleWaitsForSessionPart1 = () =>
 
 const extensionCommandWaitforidleWaitsForSession = Effect.gen(function* () {
   const { commandResults, commandStarted, harness, released, runPromise } =
-    yield* extensionCommandWaitforidleWaitsForSessionPart1();
+    yield* extensionCommandWaitforidleWaitsForSessionSetup();
   harnesses.push(harness);
   yield* Effect.promise(() =>
     harness.session.extensions.binding.bindExtensions({

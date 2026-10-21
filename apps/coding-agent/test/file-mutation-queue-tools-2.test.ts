@@ -38,7 +38,7 @@ function createTempDir(): Promise<string> {
 
 afterEach(() => runTest(removeDirs(tempDirs.splice(0))));
 
-const partPart1 = () =>
+const setUpBlockingEditTool = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -81,7 +81,7 @@ const keepsEditQueueLockedWhileAnAborted = () =>
   runTest(
     Effect.gen(function* () {
       const { editTool, filePath, finishFirstWrite, firstWriteStarted, secondWriteStarted } =
-        yield* partPart1();
+        yield* setUpBlockingEditTool();
 
       const controller = abortController();
       const firstEdit = editTool.execute(

@@ -68,7 +68,7 @@ const keepsACoalescedReloadAliveWhileAnother = Effect.gen(function* () {
   expect(release).toHaveBeenCalledTimes(1);
 });
 
-const holdsTheFileLockUntilACancelledPart1 = () =>
+const holdsTheFileLockUntilACancelledSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -78,7 +78,7 @@ const holdsTheFileLockUntilACancelledPart1 = () =>
   });
 
 const holdsTheFileLockUntilACancelled = Effect.gen(function* () {
-  const { backend, effectRunPromise } = yield* holdsTheFileLockUntilACancelledPart1();
+  const { backend, effectRunPromise } = yield* holdsTheFileLockUntilACancelledSetup();
   const controller = abortController();
   const started = deferredPromise<void>();
   const blocked = deferredPromise<void>();

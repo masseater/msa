@@ -59,7 +59,7 @@ const declaresTheCalltoolresultScriptsReceiveKeepingReferences = () => {
   );
 };
 
-const convertsResultsPassingTheCalltoolresultToScriptsPart1 = () =>
+const expectBlocksConvertedToText = () =>
   Effect.gen(function* () {
     const blocks = [
       { name: "a", type: "resource_link" as const, uri: "file:///a" },
@@ -87,7 +87,7 @@ const convertsResultsPassingTheCalltoolresultToScriptsPart1 = () =>
   });
 
 const convertsResultsPassingTheCalltoolresultToScripts = Effect.gen(function* () {
-  yield* convertsResultsPassingTheCalltoolresultToScriptsPart1();
+  yield* expectBlocksConvertedToText();
   expect(
     (yield* awaited(convertMcpResult("docs", "t", { content: [], structuredContent: { n: 1 } })))
       .content,
@@ -118,7 +118,7 @@ const convertsResultsPassingTheCalltoolresultToScripts = Effect.gen(function* ()
   ).toEqual([{ text: "MCP tool docs/t returned an error", type: "text" }]);
 });
 
-const pointsResourceLinksToReadMcpResourcePart1 = () =>
+const pointsResourceLinksToReadMcpResourceSetup = () =>
   Effect.sync(() => {
     const saved: [string | Uint8Array, string][] = [];
     const saveOutput = (data: string | Uint8Array, extension: string) =>
@@ -132,7 +132,7 @@ const pointsResourceLinksToReadMcpResourcePart1 = () =>
   });
 
 const pointsResourceLinksToReadMcpResource = Effect.gen(function* () {
-  const { saveOutput, saved } = yield* pointsResourceLinksToReadMcpResourcePart1();
+  const { saveOutput, saved } = yield* pointsResourceLinksToReadMcpResourceSetup();
   const converted = yield* awaited(
     convertMcpResult(
       "docs",

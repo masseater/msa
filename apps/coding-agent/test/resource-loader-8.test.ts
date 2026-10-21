@@ -71,7 +71,7 @@ const shouldReportInvalidPromptFrontmatterWhileLoading = Effect.gen(function* ()
   ]);
 });
 
-const shouldPreferProjectResourcesOverUserOnPart1 = () =>
+const shouldPreferProjectResourcesOverUserOnSetup = () =>
   Effect.gen(function* () {
     const userPromptsDir = joinPath(agentDir, "prompts");
     const projectPromptsDir = joinPath(cwd, ".msa", "prompts");
@@ -93,7 +93,7 @@ const shouldPreferProjectResourcesOverUserOnPart1 = () =>
 
 const shouldPreferProjectResourcesOverUserOn = Effect.gen(function* () {
   const { projectPromptPath, projectSkillPath, userSkillPath } =
-    yield* shouldPreferProjectResourcesOverUserOnPart1();
+    yield* shouldPreferProjectResourcesOverUserOnSetup();
   yield* writeTextFile(
     userSkillPath,
     `---

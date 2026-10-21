@@ -100,7 +100,7 @@ function createTreeUI() {
   return {
     onEscape,
     select() {
-      return createTreeUIPart1(selector, targetId);
+      return selectTreeEntry(selector, targetId);
     },
     targetId,
     ui,
@@ -233,7 +233,7 @@ describe("InteractiveMode tree navigation availability", () => {
     ));
 });
 
-function createTreeUIPart1(selector: TreeSelectorComponent | undefined, targetId: string) {
+function selectTreeEntry(selector: TreeSelectorComponent | undefined, targetId: string) {
   return runTest(
     Effect.gen(function* () {
       expect(selector).toBeDefined();

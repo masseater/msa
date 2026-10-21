@@ -60,7 +60,7 @@ function createRunner(tools: agentTypes.AgentTool[], options: { sequential?: boo
   return { events, runner: new NestedToolCallRunner(host) };
 }
 
-const assignsIdsBelowTheCallerEmitsEventsPart1 = () =>
+const assignsIdsBelowTheCallerEmitsEventsSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -85,7 +85,7 @@ const assignsIdsBelowTheCallerEmitsEventsPart1 = () =>
   });
 
 const assignsIdsBelowTheCallerEmitsEvents = Effect.gen(function* () {
-  const { echo } = yield* assignsIdsBelowTheCallerEmitsEventsPart1();
+  const { echo } = yield* assignsIdsBelowTheCallerEmitsEventsSetup();
   const { runner, events } = createRunner([echo]);
   const updates: unknown[] = [];
 

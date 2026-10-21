@@ -23,7 +23,7 @@ const { createLargeEdits, tempDirs, waitForRender, waitForRenderedText } =
 const { awaited, joinPath, makeTempDir, readTextFile, removeDirs, runTest, writeTextFile } =
   testing;
 
-const partPart1 = () =>
+const renderLargeEditPreview = () =>
   Effect.gen(function* () {
     const dir = yield* makeTempDir("msa-edit-redraw-");
     tempDirs.push(dir);
@@ -63,7 +63,7 @@ const partPart1 = () =>
 const afterEachHook = () => runTest(removeDirs(tempDirs.splice(0)));
 
 const rendersTheLargeDiffInTheCall = Effect.gen(function* () {
-  const { component, diff, edits, filePath, root, terminal, tui } = yield* partPart1();
+  const { component, diff, edits, filePath, root, terminal, tui } = yield* renderLargeEditPreview();
   root.addChild(component);
   tui.addChild(root);
   tui.start();

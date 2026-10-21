@@ -45,7 +45,7 @@ it(
   buildsTheWorkerPromptFromTheTwo,
 );
 
-const opensADatabaseFromBeforeTheTaskPart1 = () =>
+const opensADatabaseFromBeforeTheTaskSetup = () =>
   Effect.gen(function* () {
     const directory = yield* makeTempDir("msa-orchestrator-legacy-");
     const path = `${directory}/orchestrator.db`;
@@ -83,7 +83,7 @@ const opensADatabaseFromBeforeTheTaskPart1 = () =>
 const opensADatabaseFromBeforeTheTask = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { directory, legacy, path } = yield* opensADatabaseFromBeforeTheTaskPart1();
+      const { directory, legacy, path } = yield* opensADatabaseFromBeforeTheTaskSetup();
       legacy.close();
       const { orchestrator } = setup({ databasePath: path });
       try {

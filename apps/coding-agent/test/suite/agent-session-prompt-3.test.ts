@@ -70,7 +70,7 @@ const doesNotReportStreamingbehaviorToInput = Effect.gen(function* () {
   expect(inputEvents[0]?.streamingBehavior).toBeUndefined();
 });
 
-const reportsStreamingbehaviorToInputHandlersWhilePart1 = () =>
+const reportsStreamingbehaviorToInputHandlersWhileSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const toolRelease = gate();
@@ -96,7 +96,7 @@ const reportsStreamingbehaviorToInputHandlersWhilePart1 = () =>
 
 const reportsStreamingbehaviorToInputHandlersWhile = Effect.gen(function* () {
   const { inputEvents, toolRelease, waitTool } =
-    yield* reportsStreamingbehaviorToInputHandlersWhilePart1();
+    yield* reportsStreamingbehaviorToInputHandlersWhileSetup();
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [

@@ -24,7 +24,7 @@ let agentDir: string;
 
 let cwd: string;
 
-const shouldLoadSkillsAndPromptsWithExtensionPart1 = () =>
+const shouldLoadSkillsAndPromptsWithExtensionSetup = () =>
   Effect.gen(function* () {
     const extraSkillDir = joinPath(tempDir, "extra-skills", "extra-skill");
     yield* makeDirectory(extraSkillDir);
@@ -53,7 +53,7 @@ Extra prompt content`,
 
 const shouldLoadSkillsAndPromptsWithExtension = Effect.gen(function* () {
   const { extraPromptDir, extraSkillDir, promptPath, skillPath } =
-    yield* shouldLoadSkillsAndPromptsWithExtensionPart1();
+    yield* shouldLoadSkillsAndPromptsWithExtensionSetup();
 
   const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* awaited(loader.reload());

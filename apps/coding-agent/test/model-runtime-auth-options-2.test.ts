@@ -96,7 +96,7 @@ const letsAnExplicitAuthorizationHeaderOverrideAuthheader = Effect.gen(function*
   expect(capturedHeaders).toEqual({ authorization: "Explicit token" });
 });
 
-const transformsFullyAssembledHeadersOnceWithoutForwardingPart1 = () =>
+const transformsFullyAssembledHeadersOnceWithoutForwardingSetup = () =>
   Effect.gen(function* () {
     const runtime = yield* awaited(
       ModelRuntime.create({
@@ -108,7 +108,7 @@ const transformsFullyAssembledHeadersOnceWithoutForwardingPart1 = () =>
   });
 
 const transformsFullyAssembledHeadersOnceWithoutForwarding = Effect.gen(function* () {
-  const { runtime } = yield* transformsFullyAssembledHeadersOnceWithoutForwardingPart1();
+  const { runtime } = yield* transformsFullyAssembledHeadersOnceWithoutForwardingSetup();
   let capturedHeaders: Record<string, string | null> | undefined;
   let transforms = 0;
   runtime.registerProvider("header-provider", {

@@ -62,7 +62,7 @@ const serializesConcurrentModifications = () =>
     }),
   );
 
-const coalescesFileReloadsAcrossConcurrentReadersAndPart1 = () =>
+const coalescesFileReloadsAcrossConcurrentReadersAndSetup = () =>
   Effect.gen(function* () {
     yield* writeAuthJson({ "anthropic-api": { key: "old", type: "api_key" as const } });
     const first = AuthStorage.create(authJsonPath);
@@ -80,7 +80,7 @@ const coalescesFileReloadsAcrossConcurrentReadersAnd = () =>
   runTest(
     Effect.gen(function* () {
       const { first, lockSpy, second } =
-        yield* coalescesFileReloadsAcrossConcurrentReadersAndPart1();
+        yield* coalescesFileReloadsAcrossConcurrentReadersAndSetup();
 
       const [anthropic, openai, credentials] = yield* awaited(
         Promise.all([

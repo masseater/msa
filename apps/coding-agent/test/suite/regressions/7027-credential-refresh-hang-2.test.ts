@@ -17,7 +17,7 @@ const { deferredPromise } = testing;
 
 let harness3!: harnessTypes.Harness;
 
-const startLoginPart1 = () =>
+const startLoginSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     harness3 = yield* Effect.promise(() => createHarness());
@@ -53,7 +53,7 @@ function startLogin() {
   return Effect.runPromise(
     Effect.gen(function* () {
       const { availableModels, currentModel, model, runPromise, session, unknownModel } =
-        yield* startLoginPart1();
+        yield* startLoginSetup();
       const finishRefresh = holdRefresh(session);
       const setModel = vi.spyOn(session.models.selection, "setModel").mockResolvedValue();
       const context = {

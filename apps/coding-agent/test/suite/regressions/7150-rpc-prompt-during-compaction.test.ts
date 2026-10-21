@@ -15,7 +15,7 @@ const { currentTimeMillis, gate } = testing;
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const rejectsAnRpcPromptWhileManualPart1 = () =>
+const rejectsAnRpcPromptWhileManualSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const compactionStarted = gate();
@@ -63,7 +63,7 @@ const rejectsAnRpcPromptWhileManualPart1 = () =>
 
 const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
   const { compactionReleased, compactionStarted, harness } =
-    yield* rejectsAnRpcPromptWhileManualPart1();
+    yield* rejectsAnRpcPromptWhileManualSetup();
   harness.setResponses([fauxAssistantMessage("probe response")]);
 
   const compactPromise = harness.session.compaction.manual.compact();

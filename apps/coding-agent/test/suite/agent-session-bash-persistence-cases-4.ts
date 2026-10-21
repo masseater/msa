@@ -12,7 +12,7 @@ const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
 const { harnesses } = agentSessionBashPersistenceCases1;
-const { persistsUserAssistantToolresultAndCustomPart2 } = agentSessionBashPersistenceCases3;
+const { expectPersistedEntryOrder } = agentSessionBashPersistenceCases3;
 
 const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -40,7 +40,7 @@ const persistsUserAssistantToolresultAndCustom = Effect.gen(function* () {
     }),
     fauxAssistantMessage("done"),
   ]);
-  return yield* persistsUserAssistantToolresultAndCustomPart2(harness);
+  return yield* expectPersistedEntryOrder(harness);
 });
 const doesNotEmitMessageEndFor = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());

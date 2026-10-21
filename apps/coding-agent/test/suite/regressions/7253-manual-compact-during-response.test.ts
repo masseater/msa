@@ -26,7 +26,7 @@ function createNoopTool(): agentTypes.AgentTool {
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const persistsTheAbortedResponseBeforeRunningPart1 = () =>
+const persistsTheAbortedResponseBeforeRunningSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const secondResponseStarted = gate();
@@ -58,7 +58,7 @@ const persistsTheAbortedResponseBeforeRunningPart1 = () =>
 
 const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
   const { harness, runPromise, secondResponseReleased, secondResponseStarted } =
-    yield* persistsTheAbortedResponseBeforeRunningPart1();
+    yield* persistsTheAbortedResponseBeforeRunningSetup();
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage(fauxToolCall("noop", {}), { stopReason: "toolUse" }),

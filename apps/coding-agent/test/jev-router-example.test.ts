@@ -53,7 +53,7 @@ const jevModel: aiTypes.ClassifierModel<string> = {
 
 const harnesses: harnessTypes.Harness[] = [];
 
-const setupPart1 = (input: { readonly complex: number }) =>
+const setupSetup = (input: { readonly complex: number }) =>
   Effect.gen(function* () {
     const { complex } = input;
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -100,7 +100,7 @@ const setupPart1 = (input: { readonly complex: number }) =>
 function setup(complex: number, tools: agentTypes.AgentTool[]) {
   return runTest(
     Effect.gen(function* () {
-      const { codex, openrouter } = yield* setupPart1({ complex });
+      const { codex, openrouter } = yield* setupSetup({ complex });
       const harness = yield* awaited(
         createHarness({
           extensionFactories: [

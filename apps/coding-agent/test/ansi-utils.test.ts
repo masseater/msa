@@ -20,7 +20,7 @@ function referenceStripAnsi(value: string): string {
   return value.replace(referenceRegex, "");
 }
 
-const partPart1 = () => {
+const ansiEscapeSamples = () => {
   const inputs = [
     "plain",
     "a\x1b[31mred\x1b[0mz",
@@ -44,7 +44,7 @@ const partPart1 = () => {
 };
 
 function getCompatibilityInputs(): string[] {
-  const { inputs } = partPart1();
+  const { inputs } = ansiEscapeSamples();
   const chars = [
     "a",
     "f",

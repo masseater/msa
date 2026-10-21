@@ -57,7 +57,7 @@ describe("interactive model catalog refresh", () => {
   it("shares one runtime refresh between concurrent callers", () =>
     runTest(
       Effect.gen(function* () {
-        const { runtime, firstController, secondController, deferred } = helperPart1();
+        const { runtime, firstController, secondController, deferred } = pendingRefreshRuntime();
 
         const first = refreshModelCatalogs(runtime, firstController.signal);
         const second = refreshModelCatalogs(runtime, secondController.signal);
@@ -100,7 +100,7 @@ describe("interactive model catalog refresh", () => {
   );
 });
 
-function helperPart1() {
+function pendingRefreshRuntime() {
   const deferred = createDeferred<aiTypes.ModelsRefreshResult>();
   const runtime = {
     refresh: vi.fn((_options?: aiTypes.ModelsRefreshOptions) => deferred.promise),

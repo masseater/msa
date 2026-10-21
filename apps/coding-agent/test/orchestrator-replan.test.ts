@@ -17,7 +17,7 @@ const { harness } = orchestratorHarness;
 
 const { setup, taskStatus, waitFor } = harness;
 
-const stopsAtTheTurnBoundaryHandsThePart1 = () =>
+const stopsAtTheTurnBoundaryHandsTheSetup = () =>
   Effect.gen(function* () {
     const { orchestrator, workers } = setup();
     const a = yield* create(orchestrator, {
@@ -29,7 +29,7 @@ const stopsAtTheTurnBoundaryHandsThePart1 = () =>
   });
 
 const stopsAtTheTurnBoundaryHandsThe = Effect.gen(function* () {
-  const { a, orchestrator, workers } = yield* stopsAtTheTurnBoundaryHandsThePart1();
+  const { a, orchestrator, workers } = yield* stopsAtTheTurnBoundaryHandsTheSetup();
   const memo = "branch feat/a, commit abc123 port the client, 2 checks still failing";
 
   const pending = replan(orchestrator, {

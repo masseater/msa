@@ -139,7 +139,7 @@ const reportsUnknownAuthOptionsLikePackageCommands = () =>
     }),
   );
 
-const parsesCredentialCommandsAndRejectsInvalidArgumentsPart1 = () =>
+const parsesCredentialCommandsAndRejectsInvalidArgumentsSetup = () =>
   Effect.gen(function* () {
     const runtime = yield* awaited(
       createRuntime(
@@ -159,7 +159,7 @@ const parsesCredentialCommandsAndRejectsInvalidArgumentsPart1 = () =>
 const parsesCredentialCommandsAndRejectsInvalidArguments = () =>
   runTest(
     Effect.gen(function* () {
-      const { runtime } = yield* parsesCredentialCommandsAndRejectsInvalidArgumentsPart1();
+      const { runtime } = yield* parsesCredentialCommandsAndRejectsInvalidArgumentsSetup();
 
       expect(parseAuthCommand(["auth", "print-api-key", "--provider", "openai"])).toEqual({
         args: ["--provider", "openai"],

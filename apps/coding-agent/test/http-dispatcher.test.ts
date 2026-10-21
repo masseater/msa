@@ -86,7 +86,7 @@ const originalDispatcher = undici.getGlobalDispatcher();
 
 const originalFetch = globalThis.fetch;
 
-const tunnelsProxiedHttpOriginsPart1 = () =>
+const tunnelsProxiedHttpOriginsSetup = () =>
   Effect.gen(function* () {
     const origin = net.createServer((socket) => {
       socket.once("data", () => socket.end(ORIGIN_RESPONSE));
@@ -121,7 +121,7 @@ const tunnelsProxiedHttpOrigins = () =>
   runTest(
     Effect.gen(function* () {
       const { origin, originPort, proxy, proxyRequestLines } =
-        yield* tunnelsProxiedHttpOriginsPart1();
+        yield* tunnelsProxiedHttpOriginsSetup();
       const proxyPort = yield* listenOnFreePort(proxy);
 
       vi.stubEnv("HTTP_PROXY", `http://127.0.0.1:${proxyPort}`);

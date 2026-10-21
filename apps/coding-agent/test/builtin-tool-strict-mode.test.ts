@@ -37,7 +37,7 @@ const preservesExplicitOptOutsWhenWrappingDefinitions = () => {
   }
 };
 
-const partPart1 = (input: { readonly activeTools: string[] }) =>
+const createSessionWithNonStrictTools = (input: { readonly activeTools: string[] }) =>
   Effect.gen(function* () {
     const { activeTools } = input;
     const cwd = yield* makeTempDir("msa-non-strict-tools-");
@@ -105,9 +105,10 @@ describe("strict built-in tools", () => {
     ({ activeTools }) =>
       runTest(
         Effect.gen(function* () {
-          const { agentDir, cwd, resourceLoader, settingsManager } = yield* partPart1({
-            activeTools,
-          });
+          const { agentDir, cwd, resourceLoader, settingsManager } =
+            yield* createSessionWithNonStrictTools({
+              activeTools,
+            });
           try {
             yield* awaited(resourceLoader.reload());
             const { session } = yield* awaited(

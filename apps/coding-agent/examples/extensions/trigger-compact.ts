@@ -45,10 +45,10 @@ export default function (msa: codingAgentTypes.ExtensionAPI) {
     triggerCompaction(ctx);
   });
 
-  helperPart1(msa, triggerCompaction);
+  registerTriggerCompactCommand(msa, triggerCompaction);
 }
 
-function helperPart1(
+function registerTriggerCompactCommand(
   msa: codingAgentTypes.ExtensionAPI,
   triggerCompaction: (ctx: codingAgentTypes.ExtensionContext, customInstructions?: string) => void,
 ) {

@@ -124,7 +124,7 @@ const requests2: string[] = [];
 
 let catalogBaseUrl: string;
 
-const partPart1 = () =>
+const createOfflineRuntime = () =>
   Effect.gen(function* () {
     allowNetwork();
     const runtime = yield* awaited(
@@ -162,7 +162,7 @@ const captureProviderUrl = Effect.fn("captureProviderUrl")(function* (
 });
 
 const negotiatesTheCatalogForItsVersion = Effect.gen(function* () {
-  const { runtime } = yield* partPart1();
+  const { runtime } = yield* createOfflineRuntime();
   yield* awaited(runtime.setRuntimeApiKey("openrouter", "test-key"));
   const refresh = yield* awaited(
     runtime.refresh({ allowNetwork: true, force: true, providers: ["openrouter"] }),

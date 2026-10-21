@@ -56,7 +56,7 @@ const waitsForTheFullLoopWhen = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.run.prompting.prompt("follow-up"));
   expect(harness.faux.state.callCount).toBe(4);
 });
-const emitsExtensionEventsBeforePublicEventPart2 = (entry: {
+const expectExtensionEventsFirst = (entry: {
   order: string[];
   harness: harnessTypes.Harness;
 }): Effect.Effect<void, never, never> => {
@@ -111,7 +111,7 @@ const emitsExtensionEventsBeforePublicEvent = Effect.gen(function* () {
     }),
   );
   harnesses.push(harness);
-  return yield* emitsExtensionEventsBeforePublicEventPart2({ harness: harness, order: order });
+  return yield* expectExtensionEventsFirst({ harness: harness, order: order });
 });
 const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -135,7 +135,7 @@ const emitsTheExpectedEventOrderFor = Effect.gen(function* () {
     "agent_settled",
   ]);
 });
-const emitsTheExpectedEventOrderFor2Part2 = (entry: {
+const expectToolTurnEventOrder = (entry: {
   toolRuns: string[];
   harness: harnessTypes.Harness;
 }): Effect.Effect<void, never, never> => {
@@ -196,7 +196,7 @@ const emitsTheExpectedEventOrderFor2 = Effect.gen(function* () {
     fauxAssistantMessage("done"),
   ]);
   yield* Effect.promise(() => harness.session.run.prompting.prompt("hi"));
-  return yield* emitsTheExpectedEventOrderFor2Part2({ harness: harness, toolRuns: toolRuns });
+  return yield* expectToolTurnEventOrder({ harness: harness, toolRuns: toolRuns });
 });
 const emitsStreamingDeltasForTextThinking = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness());
@@ -237,11 +237,11 @@ const emitsAgentEndForErrorResponses = Effect.gen(function* () {
 const agentSessionRetryEventsCases2 = {
   emitsAgentEndForErrorResponses,
   emitsExtensionEventsBeforePublicEvent,
-  emitsExtensionEventsBeforePublicEventPart2,
   emitsStreamingDeltasForTextThinking,
   emitsTheExpectedEventOrderFor,
   emitsTheExpectedEventOrderFor2,
-  emitsTheExpectedEventOrderFor2Part2,
+  expectExtensionEventsFirst,
+  expectToolTurnEventOrder,
   waitsForTheFullLoopWhen,
 };
 

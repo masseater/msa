@@ -14,7 +14,7 @@ const { createHarness } = harnessModule;
 
 const { currentTimeMillis } = testing;
 
-const keepsABoundaryReplacementVerbatimThroughPart1 = () =>
+const keepsABoundaryReplacementVerbatimThroughSetup = () =>
   Effect.gen(function* () {
     let handled = false;
     const requests: string[] = [];
@@ -60,7 +60,7 @@ const keepsABoundaryReplacementVerbatimThroughPart1 = () =>
   });
 
 const keepsABoundaryReplacementVerbatimThrough = Effect.gen(function* () {
-  const { harness, requests } = yield* keepsABoundaryReplacementVerbatimThroughPart1();
+  const { harness, requests } = yield* keepsABoundaryReplacementVerbatimThroughSetup();
   harnesses.push(harness);
   harness.sessionManager.appendMessage({
     content: "older input",
@@ -86,7 +86,7 @@ const keepsABoundaryReplacementVerbatimThrough = Effect.gen(function* () {
   expect(requests[0]).toContain("EXACT-REPLACEMENT-INSTRUCTION");
 });
 
-const keepsBoundaryInputVerbatimThroughThresholdPart1 = () =>
+const keepsBoundaryInputVerbatimThroughThresholdSetup = () =>
   Effect.gen(function* () {
     let handled = false;
     const requests: string[] = [];
@@ -128,7 +128,7 @@ const keepsBoundaryInputVerbatimThroughThresholdPart1 = () =>
   });
 
 const keepsBoundaryInputVerbatimThroughThreshold = Effect.gen(function* () {
-  const { harness, requests } = yield* keepsBoundaryInputVerbatimThroughThresholdPart1();
+  const { harness, requests } = yield* keepsBoundaryInputVerbatimThroughThresholdSetup();
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage("first"),

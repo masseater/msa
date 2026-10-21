@@ -69,7 +69,7 @@ const shouldExpandPositiveGlobManifestEntriesBefore = () =>
     }),
   );
 
-const shouldSortManifestGlobMatchesAndUsePart1 = () =>
+const shouldSortManifestGlobMatchesAndUseSetup = () =>
   Effect.gen(function* () {
     const pkgDir = joinPath(tempDir, "manifest-glob-semantics-pkg");
     const extensionFilesDir = joinPath(pkgDir, "extension-files");
@@ -100,7 +100,7 @@ const shouldSortManifestGlobMatchesAndUsePart1 = () =>
 const shouldSortManifestGlobMatchesAndUse = () =>
   runTest(
     Effect.gen(function* () {
-      const { linkedPluginSource, pkgDir } = yield* shouldSortManifestGlobMatchesAndUsePart1();
+      const { linkedPluginSource, pkgDir } = yield* shouldSortManifestGlobMatchesAndUseSetup();
       yield* writeTextFile(
         joinPath(linkedPluginSource, "skills", "linked-skill", "SKILL.md"),
         "---\nname: linked-skill\ndescription: Linked\n---\n",

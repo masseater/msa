@@ -110,7 +110,7 @@ const shouldDisablePeerInstallationThroughWrappedPnpm = () =>
     }),
   );
 
-const shouldUseNpmcommandArgvForNpmRootPart1 = () => {
+const useMiseNpmCommand = () => {
   settingsManager = SettingsManager.inMemory({
     npmCommand: ["mise", "exec", "node@20", "--", "npm"],
   });
@@ -122,7 +122,7 @@ const shouldUseNpmcommandArgvForNpmRootPart1 = () => {
 };
 
 const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
-  shouldUseNpmcommandArgvForNpmRootPart1();
+  useMiseNpmCommand();
 
   const root20 = joinPath(tempDir, "node20", "lib", "node_modules");
   const root22 = joinPath(tempDir, "node22", "lib", "node_modules");
@@ -169,7 +169,7 @@ const shouldUseNpmcommandArgvForNpmRoot = Effect.gen(function* () {
   ]);
 });
 
-const shouldInstallUserNpmPackagesIntoThePart1 = () =>
+const shouldInstallUserNpmPackagesIntoTheSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -193,7 +193,7 @@ const shouldInstallUserNpmPackagesIntoThePart1 = () =>
 const shouldInstallUserNpmPackagesIntoThe = () =>
   runTest(
     Effect.gen(function* () {
-      const { effectRunPromise, packagePath } = yield* shouldInstallUserNpmPackagesIntoThePart1();
+      const { effectRunPromise, packagePath } = yield* shouldInstallUserNpmPackagesIntoTheSetup();
       const runCommandSpy = vi
         .spyOn(commandRunner, "runCommand")
         .mockImplementation((...callArgs: unknown[]) =>

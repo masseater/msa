@@ -23,7 +23,7 @@ const createRuntimeHost = (extensionFactory: srcTypes.ExtensionFactory) =>
     ),
   );
 
-const emitsSessionBeforeSwitchAndSessionStartPart1 = () =>
+const promptWithRecordedEvents = () =>
   Effect.gen(function* () {
     const events: RecordedSessionEvent[] = [];
     const { runtimeHost } = yield* awaited(
@@ -48,7 +48,7 @@ const emitsSessionBeforeSwitchAndSessionStartPart1 = () =>
   });
 
 const emitsSessionBeforeSwitchAndSessionStart = Effect.gen(function* () {
-  const { events, runtimeHost } = yield* emitsSessionBeforeSwitchAndSessionStartPart1();
+  const { events, runtimeHost } = yield* promptWithRecordedEvents();
   const originalSessionFile = runtimeHost.session.sessionFile;
   expect(originalSessionFile).toBeTruthy();
 

@@ -13,7 +13,7 @@ const { CombinedAutocompleteProvider } = tui;
 
 const { awaited, runTest } = testing;
 
-const stacksWrapperFactoriesOverAFreshBasePart1 = () => {
+const stacksWrapperFactoriesOverAFreshBaseSetup = () => {
   const defaultEditor = { setAutocompleteProvider: vi.fn() };
   const customEditor = { setAutocompleteProvider: vi.fn() };
   const calls: string[] = [];
@@ -42,7 +42,7 @@ const stacksWrapperFactoriesOverAFreshBasePart1 = () => {
 };
 
 const stacksWrapperFactoriesOverAFreshBase = () => {
-  const { calls, customEditor, defaultEditor, wrap1 } = stacksWrapperFactoriesOverAFreshBasePart1();
+  const { calls, customEditor, defaultEditor, wrap1 } = stacksWrapperFactoriesOverAFreshBaseSetup();
   const wrap2: extensionsTypesTypes.AutocompleteProviderFactory = (
     current,
   ): tuiTypes.AutocompleteProvider => ({

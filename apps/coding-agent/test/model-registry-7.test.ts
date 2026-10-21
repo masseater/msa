@@ -129,7 +129,7 @@ const removingModelOverrideRestoresBuiltInValues = () =>
     }),
   );
 
-const getproviderdisplaynameResolvesRegisteredOauthBuiltInAndPart1 = () =>
+const expectBuiltInNamesAndRegisterProvider = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -162,8 +162,7 @@ const getproviderdisplaynameResolvesRegisteredOauthBuiltInAndPart1 = () =>
 const getproviderdisplaynameResolvesRegisteredOauthBuiltInAnd = () =>
   runTest(
     Effect.gen(function* () {
-      const { effectRunPromise, registry } =
-        yield* getproviderdisplaynameResolvesRegisteredOauthBuiltInAndPart1();
+      const { effectRunPromise, registry } = yield* expectBuiltInNamesAndRegisterProvider();
       expect(registry.getProviderDisplayName("named-provider")).toBe("Named Provider");
 
       registry.registerProvider("oauth-provider", {

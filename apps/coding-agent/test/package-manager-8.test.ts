@@ -31,7 +31,7 @@ let packageManager: packageManagerTypes.DefaultPackageManager;
 
 let previousOfflineEnv: string | undefined;
 
-const shouldLoadLegacyPnpmGlobalPackagePathsPart1 = () =>
+const usePnpmCommand = () =>
   Effect.sync(() => {
     settingsManager = SettingsManager.inMemory({
       npmCommand: ["pnpm"],
@@ -47,7 +47,7 @@ const shouldLoadLegacyPnpmGlobalPackagePathsPart1 = () =>
 const shouldLoadLegacyPnpmGlobalPackagePaths = () =>
   runTest(
     Effect.gen(function* () {
-      yield* shouldLoadLegacyPnpmGlobalPackagePathsPart1();
+      yield* usePnpmCommand();
 
       const pnpmRoot = joinPath(tempDir, "pnpm", "global", "v11");
       const packagePath = joinPath(pnpmRoot, "20-hash", "node_modules", "pnpm-pkg");

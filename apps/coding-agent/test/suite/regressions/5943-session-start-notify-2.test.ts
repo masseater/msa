@@ -18,7 +18,7 @@ const { createReloadCommandContext, getMessageText } = SessionStartNotifySupport
 
 const { createHarness, createTestUiContext } = harnessModule;
 
-const subscribesBeforeReplacementSessionStartHandlers2Part1 = () =>
+const subscribesBeforeReplacementSessionStartHandlers2Setup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const events: string[] = [];
@@ -38,7 +38,7 @@ const subscribesBeforeReplacementSessionStartHandlers2Part1 = () =>
 
 const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* () {
   const { events, harness, runPromise } =
-    yield* subscribesBeforeReplacementSessionStartHandlers2Part1();
+    yield* subscribesBeforeReplacementSessionStartHandlers2Setup();
   harness.setResponses([fauxAssistantMessage("assistant from start")]);
 
   try {

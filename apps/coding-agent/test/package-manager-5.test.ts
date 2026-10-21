@@ -93,7 +93,7 @@ const shouldRemoveANewlyClonedCheckoutWhen = Effect.gen(function* () {
   expect(yield* pathExists(targetDir)).toBe(false);
 });
 
-const shouldReconcileAnExistingGitCheckoutToPart1 = () =>
+const shouldReconcileAnExistingGitCheckoutToSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -104,7 +104,7 @@ const shouldReconcileAnExistingGitCheckoutToPart1 = () =>
 
 const shouldReconcileAnExistingGitCheckoutTo = Effect.gen(function* () {
   const { effectRunPromise, source, targetDir } =
-    yield* shouldReconcileAnExistingGitCheckoutToPart1();
+    yield* shouldReconcileAnExistingGitCheckoutToSetup();
   yield* makeDirectory(targetDir);
   yield* writeTextFile(
     joinPath(targetDir, "package.json"),

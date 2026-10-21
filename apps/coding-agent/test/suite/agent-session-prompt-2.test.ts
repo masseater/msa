@@ -43,7 +43,7 @@ const processImage = vi.hoisted(() =>
 
 vi.mock("../../src/utils/image-process.ts", () => ({ default: { processImage } }));
 
-const expandsSkillCommandsBeforeSendingThePart1 = () =>
+const expandsSkillCommandsBeforeSendingTheSetup = () =>
   Effect.gen(function* () {
     const tempDir = yield* makeTempDir(`msa-skill-`);
     yield* makeDirectory(tempDir);
@@ -66,7 +66,7 @@ const expandsSkillCommandsBeforeSendingThePart1 = () =>
   });
 
 const expandsSkillCommandsBeforeSendingThe = Effect.gen(function* () {
-  const { skillPath, tempDir, template } = yield* expandsSkillCommandsBeforeSendingThePart1();
+  const { skillPath, tempDir, template } = yield* expandsSkillCommandsBeforeSendingTheSetup();
   const resourceLoader = {
     ...createTestResourceLoader(),
     getPrompts: () => ({ diagnostics: [], prompts: [template] }),

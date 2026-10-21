@@ -117,7 +117,7 @@ const shouldDisablePeerInstallationForGitPackage = Effect.gen(function* () {
   });
 });
 
-const shouldUpdateGitPackageDependenciesWithoutAutoPart1 = () =>
+const shouldUpdateGitPackageDependenciesWithoutAutoSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -128,7 +128,7 @@ const shouldUpdateGitPackageDependenciesWithoutAutoPart1 = () =>
 
 const shouldUpdateGitPackageDependenciesWithoutAuto = Effect.gen(function* () {
   const { effectRunPromise, source, targetDir } =
-    yield* shouldUpdateGitPackageDependenciesWithoutAutoPart1();
+    yield* shouldUpdateGitPackageDependenciesWithoutAutoSetup();
   yield* makeDirectory(targetDir);
   yield* writeTextFile(
     joinPath(targetDir, "package.json"),

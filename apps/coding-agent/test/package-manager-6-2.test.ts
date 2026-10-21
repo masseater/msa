@@ -74,7 +74,7 @@ const shouldRepairMissingGitPackageDependenciesWhen = Effect.gen(function* () {
   });
 });
 
-const shouldRepairDeletedGitPackageDependenciesWhenPart1 = () =>
+const shouldRepairDeletedGitPackageDependenciesWhenSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -92,7 +92,7 @@ const shouldRepairDeletedGitPackageDependenciesWhenPart1 = () =>
 
 const shouldRepairDeletedGitPackageDependenciesWhen = Effect.gen(function* () {
   const { effectRunPromise, fetchArgs, source, targetDir } =
-    yield* shouldRepairDeletedGitPackageDependenciesWhenPart1();
+    yield* shouldRepairDeletedGitPackageDependenciesWhenSetup();
   yield* makeDirectory(targetDir);
   yield* writeTextFile(
     joinPath(targetDir, "package.json"),

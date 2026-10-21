@@ -100,7 +100,7 @@ const makeIssueLoader = (
   repo: string,
 ) => {
   let issuesPromise: Promise<GitHubIssue[] | undefined> | undefined;
-  const notifyError = makeIssueLoaderPart1(ctx);
+  const notifyError = createErrorNotifier(ctx);
 
   const load = Effect.gen(function* () {
     const result = yield* Effect.promise(() =>
@@ -184,7 +184,7 @@ const createIssueAutocompleteProvider = (
     current.shouldTriggerFileCompletion?.(lines, cursorLine, cursorCol) ?? true,
 });
 
-function makeIssueLoaderPart1(ctx: codingAgentTypes.ExtensionContext) {
+function createErrorNotifier(ctx: codingAgentTypes.ExtensionContext) {
   let errorShown = false;
 
   const notifyError = (message: string): void => {

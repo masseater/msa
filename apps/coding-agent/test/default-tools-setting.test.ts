@@ -112,7 +112,7 @@ const staticAndDynamicTools: sdkTypes.InlineExtension = (msa) => {
   });
 };
 
-const keepsExtensionAndSdkCustomToolsEnabledPart1 = () =>
+const keepsExtensionAndSdkCustomToolsEnabledSetup = () =>
   Effect.map(
     awaited(
       createSession(
@@ -125,7 +125,7 @@ const keepsExtensionAndSdkCustomToolsEnabledPart1 = () =>
   );
 
 const keepsExtensionAndSdkCustomToolsEnabled = Effect.gen(function* () {
-  const { session } = yield* keepsExtensionAndSdkCustomToolsEnabledPart1();
+  const { session } = yield* keepsExtensionAndSdkCustomToolsEnabledSetup();
   yield* awaited(session.extensions.binding.bindExtensions({}));
 
   expect(session.tools.loadout.getActiveToolNames().sort()).toEqual([

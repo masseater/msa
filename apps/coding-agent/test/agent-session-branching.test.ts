@@ -30,7 +30,7 @@ let tempDir: string;
 
 let sessionManager: codingAgentTypes.SessionManager;
 
-const createSessionPart1 = (input: { readonly noSession: boolean }) =>
+const createSessionSetup = (input: { readonly noSession: boolean }) =>
   Effect.gen(function* () {
     const { noSession } = input;
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
@@ -60,7 +60,7 @@ const createSessionPart1 = (input: { readonly noSession: boolean }) =>
 function createSession(noSession: boolean = false) {
   return runTest(
     Effect.gen(function* () {
-      const { effectRunPromise, model, servicesOptions } = yield* createSessionPart1({ noSession });
+      const { effectRunPromise, model, servicesOptions } = yield* createSessionSetup({ noSession });
       const createRuntime: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = ({
         cwd,
         sessionManager: innerSessionManager,

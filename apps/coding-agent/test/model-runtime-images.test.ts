@@ -40,7 +40,7 @@ const listsBuiltInOpenrouterImageModelsSeparately = () =>
     }),
   );
 
-const extensionModelListsReplaceUndeclaredModelsOfPart1 = () =>
+const extensionModelListsReplaceUndeclaredModelsOfSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -64,7 +64,7 @@ const extensionModelListsReplaceUndeclaredModelsOf = () =>
   runTest(
     Effect.gen(function* () {
       const { chat, effectRunPromise, runtime } =
-        yield* extensionModelListsReplaceUndeclaredModelsOfPart1();
+        yield* extensionModelListsReplaceUndeclaredModelsOfSetup();
       runtime.registerNativeProvider(
         createProvider({
           auth: {
@@ -107,7 +107,7 @@ const extensionModelListsReplaceUndeclaredModelsOf = () =>
     }),
   );
 
-const registersExtensionImageAndClassifierModelsWithPart1 = () =>
+const registersExtensionImageAndClassifierModelsWithSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -155,7 +155,7 @@ const registersExtensionImageAndClassifierModelsWithPart1 = () =>
 const registersExtensionImageAndClassifierModelsWith = () =>
   runTest(
     Effect.gen(function* () {
-      const { observed, runtime } = yield* registersExtensionImageAndClassifierModelsWithPart1();
+      const { observed, runtime } = yield* registersExtensionImageAndClassifierModelsWithSetup();
 
       const image = runtime.getModelOfType("image", "extension-operations", "shared")!;
       const classifier = runtime.getModelOfType("classifier", "extension-operations", "shared")!;

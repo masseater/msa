@@ -20,7 +20,7 @@ const { createHarness } = harnessModule;
 
 const { awaited, runTest } = testing;
 
-const aForcedPromptIsSentAsThePart1 = () =>
+const aForcedPromptIsSentAsTheSetup = () =>
   Effect.gen(function* () {
     let turn = 0;
     const extension: srcTypes.ExtensionFactory = (msa) => {
@@ -34,9 +34,9 @@ const aForcedPromptIsSentAsThePart1 = () =>
   });
 
 const aForcedPromptIsSentAsThe = Effect.gen(function* () {
-  const { harness } = yield* aForcedPromptIsSentAsThePart1();
+  const { harness } = yield* aForcedPromptIsSentAsTheSetup();
   try {
-    const requests: aiTypes.TranscriptContext[] = aForcedPromptIsSentAsThePart2(harness);
+    const requests: aiTypes.TranscriptContext[] = recordFourResponses(harness);
     for (const text of ["one", "two", "three", "four"])
       yield* awaited(harness.session.run.prompting.prompt(text));
     const systemMessages = requests.map((request) =>
@@ -221,7 +221,7 @@ describe("system prompt updates", () => {
     runTest(setactivetoolsInBeforeAgentStartControlsThe));
 });
 
-function aForcedPromptIsSentAsThePart2(harness: any) {
+function recordFourResponses(harness: any) {
   const requests: aiTypes.TranscriptContext[] = [];
   harness.setResponses(
     ["one", "two", "three", "four"].map((text) => (providerContext: aiTypes.TranscriptContext) => {

@@ -82,7 +82,7 @@ const keepsTheSameSystemPromptFor = Effect.gen(function* () {
   expect(customEvent?.messageType === "custom" && customEvent.message.customType).toBe("task-done");
 });
 
-const queuesACustomMessageSentWhilePart1 = () =>
+const createGatedHarness = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     let releaseHandler: () => void = () => {};
@@ -131,7 +131,7 @@ const queuesACustomMessageSentWhilePart1 = () =>
   });
 
 const queuesACustomMessageSentWhile = Effect.gen(function* () {
-  const { first, requests, second } = yield* queuesACustomMessageSentWhilePart1();
+  const { first, requests, second } = yield* createGatedHarness();
   yield* Effect.promise(() => Promise.all([first, second]));
 
   expect(requests).toHaveLength(1);

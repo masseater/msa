@@ -29,7 +29,7 @@ let agentDir: string;
 
 let cwd: string;
 
-const shouldSkipProjectResourcesThatRequireTrustPart1 = () =>
+const shouldSkipProjectResourcesThatRequireTrustSetup = () =>
   Effect.gen(function* () {
     const msaDir = joinPath(cwd, ".msa");
     const extensionsDir = joinPath(msaDir, "extensions");
@@ -45,7 +45,7 @@ const shouldSkipProjectResourcesThatRequireTrustPart1 = () =>
 
 const shouldSkipProjectResourcesThatRequireTrust = Effect.gen(function* () {
   const { extensionsDir, msaDir, promptsDir, skillDir, themesDir } =
-    yield* shouldSkipProjectResourcesThatRequireTrustPart1();
+    yield* shouldSkipProjectResourcesThatRequireTrustSetup();
   yield* writeTextFile(joinPath(msaDir, "SYSTEM.md"), "Project system prompt.");
   yield* writeTextFile(joinPath(agentDir, "SYSTEM.md"), "Global system prompt.");
   yield* writeTextFile(joinPath(agentDir, "AGENTS.md"), "Global instructions");

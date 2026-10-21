@@ -29,7 +29,7 @@ const dynamicModel: aiTypes.Model<"openai-completions"> = {
 
 let harness!: harnessTypes.Harness;
 
-const doesNotHoldLoginBehindAnPart1 = () =>
+const doesNotHoldLoginBehindAnSetup = () =>
   Effect.gen(function* () {
     const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
     const networkStarted = gate();
@@ -76,7 +76,7 @@ const doesNotHoldLoginBehindAnPart1 = () =>
   });
 
 const doesNotHoldLoginBehindAn = Effect.gen(function* () {
-  const { networkStarted, provider } = yield* doesNotHoldLoginBehindAnPart1();
+  const { networkStarted, provider } = yield* doesNotHoldLoginBehindAnSetup();
   const credentials = AuthStorage.inMemory();
   const runtime = yield* Effect.promise(() =>
     ModelRuntime.create({

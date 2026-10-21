@@ -42,7 +42,7 @@ const writeModels = (dir: string, value: unknown): Effect.Effect<string> =>
     return modelsPath;
   });
 
-const appliesModelsJsonOverridesAboveNativeProvidersPart1 = () =>
+const appliesModelsJsonOverridesAboveNativeProvidersSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -52,7 +52,7 @@ const appliesModelsJsonOverridesAboveNativeProvidersPart1 = () =>
 
 const appliesModelsJsonOverridesAboveNativeProviders = Effect.gen(function* () {
   const { effectRunPromise, tempDir } =
-    yield* appliesModelsJsonOverridesAboveNativeProvidersPart1();
+    yield* appliesModelsJsonOverridesAboveNativeProvidersSetup();
   try {
     const modelsPath = yield* writeModels(tempDir, {
       providers: {

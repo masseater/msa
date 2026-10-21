@@ -85,7 +85,9 @@ describe("AgentSession actionable boundaries", () => {
   );
 });
 
-const partPart1 = (input: { readonly queueKind: "steering" | "both" | "follow-up" }) =>
+const harnessRecordingRequests = (input: {
+  readonly queueKind: "steering" | "both" | "follow-up";
+}) =>
   Effect.gen(function* () {
     const { queueKind } = input;
     let handled = false;
@@ -125,7 +127,7 @@ describe("AgentSession actionable boundaries", () => {
     (queueKind) =>
       Effect.runPromise(
         Effect.gen(function* () {
-          const { harness, requests } = yield* partPart1({ queueKind });
+          const { harness, requests } = yield* harnessRecordingRequests({ queueKind });
           harnesses.push(harness);
           harness.setResponses([
             fauxAssistantMessage("first"),

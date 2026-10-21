@@ -19,7 +19,7 @@ const { extensionActions, extensionContextActions } = extensionsRunnerSupport;
 
 const { awaited, joinPath, runTest, writeTextFile } = testing;
 
-const keepsCtxGetsystempromptInSyncWithChainedPart1 = () =>
+const keepsCtxGetsystempromptInSyncWithChainedSetup = () =>
   Effect.sync(() => {
     const extCode1 = `
 				export default function(msa) {
@@ -34,7 +34,7 @@ const keepsCtxGetsystempromptInSyncWithChainedPart1 = () =>
   });
 
 const keepsCtxGetsystempromptInSyncWithChained = Effect.gen(function* () {
-  const { extCode1 } = yield* keepsCtxGetsystempromptInSyncWithChainedPart1();
+  const { extCode1 } = yield* keepsCtxGetsystempromptInSyncWithChainedSetup();
   const extCode2 = `
 				export default function(msa) {
 					msa.on("before_agent_start", async (_event, ctx) => {

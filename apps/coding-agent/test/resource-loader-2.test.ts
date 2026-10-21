@@ -61,7 +61,7 @@ const shouldLoadSymlinkedUserAndProjectExtensions = Effect.gen(function* () {
   );
 });
 
-const shouldLoadUserExtensionsBeforeTrustAndPart1 = () =>
+const shouldLoadUserExtensionsBeforeTrustAndSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
@@ -74,7 +74,7 @@ const shouldLoadUserExtensionsBeforeTrustAndPart1 = () =>
 
 const shouldLoadUserExtensionsBeforeTrustAnd = Effect.gen(function* () {
   const { effectRunPromise, projectExtDir, userExtDir } =
-    yield* shouldLoadUserExtensionsBeforeTrustAndPart1();
+    yield* shouldLoadUserExtensionsBeforeTrustAndSetup();
   const loadCountKey = `__piTrustPreloadCount_${currentTimeMillis()}_${yield* randomSuffix}`;
   const globalState = globalThis as typeof globalThis & Record<string, number | undefined>;
 
@@ -122,7 +122,7 @@ export default function(msa) {
   expect(globalState[loadCountKey]).toBe(1);
 });
 
-const shouldKeepBothExtensionsLoadedWhenCommandPart1 = () =>
+const writeConflictingCommandExtensions = () =>
   Effect.gen(function* () {
     const userExtDir = joinPath(agentDir, "extensions");
     const projectExtDir = joinPath(cwd, ".msa", "extensions");
@@ -159,7 +159,7 @@ const shouldKeepBothExtensionsLoadedWhenCommandPart1 = () =>
   });
 
 const shouldKeepBothExtensionsLoadedWhenCommand = Effect.gen(function* () {
-  yield* shouldKeepBothExtensionsLoadedWhenCommandPart1();
+  yield* writeConflictingCommandExtensions();
 
   const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* awaited(loader.reload());

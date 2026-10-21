@@ -102,7 +102,7 @@ const continuesFromAnAgentBeforeSettleStep1 = (requests: string[], harness: harn
     expect(harness.eventsOfType("agent_settled")).toHaveLength(1);
   });
 
-const persistsCustomContextQueuedByAgentPart1 = () =>
+const harnessQueuingContextAfterAgentEnd = () =>
   Effect.gen(function* () {
     let firstRun = true;
     let continued = false;
@@ -142,7 +142,7 @@ const persistsCustomContextQueuedByAgentPart1 = () =>
   });
 
 const persistsCustomContextQueuedByAgent = Effect.gen(function* () {
-  const { harness, requests } = yield* persistsCustomContextQueuedByAgentPart1();
+  const { harness, requests } = yield* harnessQueuingContextAfterAgentEnd();
   harnesses.push(harness);
   harness.setResponses([
     fauxAssistantMessage("first"),
