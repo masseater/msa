@@ -2,6 +2,7 @@ import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
 import type storeTypes from "../../../core/memory/store.types.ts";
+import errors from "../../../utils/errors.ts";
 import memoryViewHelpers from "./memory-view-helpers.ts";
 import type memoryViewTypes from "./memory-view.types.ts";
 import MemoryViewInput from "./memory-view/memory-view-input.ts";
@@ -9,6 +10,7 @@ import MemoryViewRendering from "./memory-view/memory-view-rendering.ts";
 import scrollWindow from "./scroll-window.ts";
 
 const { Input } = tui;
+const { toErrorMessage } = errors;
 const { LIST_LIMIT } = memoryViewHelpers;
 const { fitView } = scrollWindow;
 
@@ -38,6 +40,8 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
 
   scroll = 0;
 
+  private generation = 0;
+
   room = 0;
 
   focusedState = false;
@@ -65,8 +69,25 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
     return rows.find((record) => record.id === this.selectedId) ?? rows[0];
   }
 
+  showRecords(records: storeTypes.MemoryRecord[]): void {
+    this.generation += 1;
+    this.records = records;
+  }
+
   reload(): void {
-    this.records = this.options.service.list(LIST_LIMIT);
+    this.generation += 1;
+    const generation = this.generation;
+    this.options.service.list(LIST_LIMIT).then(
+      (records) => {
+        if (generation !== this.generation) return undefined;
+        this.records = records;
+        this.options.requestRender();
+        return undefined;
+      },
+      (error: unknown) => {
+        this.options.onError(toErrorMessage(error));
+      },
+    );
   }
 
   handleInput(data: string): void {
@@ -95,7 +116,8 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
     this.rendering = new MemoryViewRendering(this);
     this.input = new MemoryViewInput(this);
     this.options = options;
-    this.records = options.service.list(LIST_LIMIT);
+    this.records = [];
+    this.reload();
     for (const input of [this.searchInput, this.addInput]) {
       input.onSubmit = (value) => this.input.submit(value);
       input.onEscape = () => this.input.stopInput();

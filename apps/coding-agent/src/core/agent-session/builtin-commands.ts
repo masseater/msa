@@ -29,13 +29,13 @@ export default class SessionBuiltinCommands {
       } else {
         switch (command.kind) {
           case "status":
-            text = memory.describeStatus();
+            text = yield* awaited(memory.describeStatus());
             break;
           case "stats":
             text = memory.describeStats();
             break;
           case "list":
-            text = formatMemoryList(memory.list(20));
+            text = formatMemoryList(yield* awaited(memory.list(20)));
             break;
           case "search":
             text = formatSearchResults(yield* awaited(memory.search(command.query, 10)));

@@ -165,10 +165,10 @@ const forgetMemory = Effect.fn("memoryForget")(function* (
 });
 
 const listMemory = (service: memoryTypesModule.MemoryService, params: MemoryParams) =>
-  Effect.sync(() => {
-    const records = service.list(params.limit ?? 20);
-    return textResult(formatMemoryList(records), { action: "list", count: records.length });
-  });
+  Effect.map(
+    fromPromise(() => service.list(params.limit ?? 20)),
+    (records) => textResult(formatMemoryList(records), { action: "list", count: records.length }),
+  );
 
 const runMemoryAction = (
   service: memoryTypesModule.MemoryService,

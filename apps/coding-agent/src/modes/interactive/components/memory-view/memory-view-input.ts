@@ -146,7 +146,7 @@ export default class MemoryViewInput {
       .search(text, SEARCH_LIMIT)
       .then((scores) => {
         this.view.busy = false;
-        this.view.records = scores.map((scored) => scored.record);
+        this.view.showRecords(scores.map((scored) => scored.record));
         this.view.selectedId = undefined;
         return undefined;
       })

@@ -74,9 +74,9 @@ const savesWithAnEmbeddingAndRecallsBy = () =>
         expect(saved.embedded).toBe(true);
         const recalled = yield* awaited(service.recall("パッケージの配布方法は？"));
         expect(recalled.map((record) => record.id)).toContain(saved.record.id);
-        expect(service.list()).toHaveLength(1);
+        expect(yield* awaited(service.list())).toHaveLength(1);
         expect(service.forget(saved.record.id)).toBe(true);
-        expect(service.describeStatus()).toContain("Memory is enabled.");
+        expect(yield* awaited(service.describeStatus())).toContain("Memory is enabled.");
         expect(inputs).toEqual([
           "D: リリースは Homebrew tap に配信する",
           "Q: パッケージの配布方法は？",
@@ -163,7 +163,7 @@ const reportsDisabledMemoryWithoutAStore = () =>
       Effect.gen(function* () {
         const workspace = yield* makeWorkspace();
         const service = yield* openService(workspace, settings(workspace, { enabled: false }));
-        expect(service.describeStatus()).toContain("disabled");
+        expect(yield* awaited(service.describeStatus())).toContain("disabled");
       }),
     ),
   );

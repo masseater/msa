@@ -84,14 +84,16 @@ const setup = Effect.fn("setup")(function* (extraContent?: string) {
   services.push(service);
   const onClose = vi.fn();
   const confirm = vi.fn((_message: string) => Promise.resolve(true));
+  const requestRender = vi.fn();
   const view = new MemoryView({
     confirm,
     maxHeight: () => 40,
     onClose,
     onError: vi.fn(),
-    requestRender: () => {},
+    requestRender,
     service,
   });
+  yield* awaited(vi.waitFor(() => expect(requestRender).toHaveBeenCalled()));
   const screen = () => view.render(100).map((line) => stripAnsi(line).trimEnd());
   return { confirm, onClose, screen, view };
 });
@@ -190,7 +192,7 @@ const searchesWithAndReturnsToTheFull = () =>
       );
       expect(screen().join("\n")).toContain("the release goes to the Homebrew tap");
       view.handleInput(ESC);
-      expect(screen().join("\n")).toContain("answer in Japanese");
+      yield* awaited(vi.waitFor(() => expect(screen().join("\n")).toContain("answer in Japanese")));
     }),
   );
 

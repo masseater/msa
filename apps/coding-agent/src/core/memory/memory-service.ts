@@ -72,8 +72,8 @@ export default class MemoryService {
     return nodeRuntime.runPromise(unwrapForeign(this.searchEffect(query, limit)));
   }
 
-  list(limit = 20): storeTypes.MemoryRecord[] {
-    return this.ensureStore().list({ limit, project: this.project });
+  list(limit = 20): Promise<storeTypes.MemoryRecord[]> {
+    return this.ready.then(() => this.ensureStore().list({ limit, project: this.project }));
   }
 
   stats(): storeTypes.MemoryStoreStats {
@@ -84,14 +84,18 @@ export default class MemoryService {
     return this.ensureStore().forget(id);
   }
 
-  describeStatus(): string {
-    if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
-    return formatMemoryStatus({
-      lastEmbeddingError: this.embedder.lastError,
-      project: this.project,
-      settings: this.settings,
-      stats: this.ensureStore().stats(),
-    });
+  describeStatus(): Promise<string> {
+    if (!this.settings.enabled) {
+      return Promise.resolve("Memory is disabled (settings: memory.enabled).");
+    }
+    return this.ready.then(() =>
+      formatMemoryStatus({
+        lastEmbeddingError: this.embedder.lastError,
+        project: this.project,
+        settings: this.settings,
+        stats: this.ensureStore().stats(),
+      }),
+    );
   }
 
   describeStats(): string {
@@ -153,6 +157,7 @@ export default class MemoryService {
   private recallEffect(query: string, signal: AbortSignal | undefined) {
     return Effect.gen({ self: this }, function* () {
       if (!this.recallEnabled || query.trim() === "" || this.storeIsEmpty()) return [];
+      yield* fromPromise(() => this.ready);
       const embedding = yield* this.embedder.embedQuery(query, signal);
       const scores = this.ensureStore().search({
         text: query,
