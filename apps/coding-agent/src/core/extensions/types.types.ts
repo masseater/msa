@@ -1,385 +1,198 @@
-import type agentTypes from "@msa/agent-core/index.types";
 import type aiTypes from "@msa/ai/index.types";
 import type { TSchema } from "typebox";
 
-import type execTypes from "../exec.types.ts";
-import type keybindingsTypes from "../keybindings.types.ts";
-import type systemPromptTypes from "../system-prompt.types.ts";
-import type typesActionsTypes from "./types-actions.ts";
-import type typesAgentEventsTypes from "./types-agent-events.ts";
-import type typesApiTypes from "./types-api.ts";
-import type typesContextActionsTypes from "./types-context-actions.ts";
-import type typesContextTypes from "./types-context.ts";
-import type typesExtensionTypes from "./types-extension.ts";
-import type typesProviderTypes from "./types-provider.ts";
-import type typesRenderTypes from "./types-render.ts";
-import type typesResultsTypes from "./types-results.ts";
-import type typesRuntimeTypes from "./types-runtime.ts";
-import type typesSessionEventsTypes from "./types-session-events.ts";
-import type typesToolsTypes from "./types-tools.types.ts";
-import type typesUiTypes from "./types-ui.ts";
+import type extensionsContextKit from "./types-kit/context.types.ts";
+import type extensionsDefinitionsKit from "./types-kit/definitions.types.ts";
+import type extensionsEventsKit from "./types-kit/events.types.ts";
+import type extensionsToolsKit from "./types-kit/tools.types.ts";
 
 declare namespace extensionsTypesTypes {
-  type AgentToolResult<T = aiTypes.JsonValue | undefined> = agentTypes.AgentToolResult<T>;
-
-  type AgentToolUpdateCallback<T = any> = agentTypes.AgentToolUpdateCallback<T>;
-
-  type ToolExecutionMode = agentTypes.ToolExecutionMode;
-
-  type ExecOptions = execTypes.ExecOptions;
-
-  type ExecResult = execTypes.ExecResult;
-
-  type AppKeybinding = keybindingsTypes.AppKeybinding;
-
-  type KeybindingsManager = keybindingsTypes.KeybindingsManager;
-
-  type BuildSystemPromptOptions = systemPromptTypes.BuildSystemPromptOptions;
-
-  type NormalizedBuildSystemPromptOptions = systemPromptTypes.NormalizedBuildSystemPromptOptions;
-
-  type ExtensionRuntimeState = typesActionsTypes.ExtensionRuntimeState;
-
-  type ExtensionActions = typesActionsTypes.ExtensionActions;
-
-  type TurnStartEvent = typesAgentEventsTypes.TurnStartEvent;
-
-  type TurnEndEvent = typesAgentEventsTypes.TurnEndEvent;
-
-  type MessageStartEvent = typesAgentEventsTypes.MessageStartEvent;
-
-  type MessageUpdateEvent = typesAgentEventsTypes.MessageUpdateEvent;
-
-  type MessageEndEvent = typesAgentEventsTypes.MessageEndEvent;
-
-  type ToolExecutionStartEvent = typesAgentEventsTypes.ToolExecutionStartEvent;
-
-  type ToolExecutionUpdateEvent = typesAgentEventsTypes.ToolExecutionUpdateEvent;
-
-  type ToolExecutionEndEvent = typesAgentEventsTypes.ToolExecutionEndEvent;
-
-  type ModelSelectSource = typesAgentEventsTypes.ModelSelectSource;
-
-  type ModelSelectEvent = typesAgentEventsTypes.ModelSelectEvent;
-
-  type ThinkingLevelSelectEvent = typesAgentEventsTypes.ThinkingLevelSelectEvent;
-
-  type UserBashEvent = typesAgentEventsTypes.UserBashEvent;
-
-  type InputSource = typesAgentEventsTypes.InputSource;
-
-  type InputEvent = typesAgentEventsTypes.InputEvent;
-
-  type InputEventResult = typesAgentEventsTypes.InputEventResult;
-
-  type BashToolCallEvent = typesAgentEventsTypes.BashToolCallEvent;
-
-  type PowerShellToolCallEvent = typesAgentEventsTypes.PowerShellToolCallEvent;
-
-  type ReadToolCallEvent = typesAgentEventsTypes.ReadToolCallEvent;
-
-  type EditToolCallEvent = typesAgentEventsTypes.EditToolCallEvent;
-
-  type WriteToolCallEvent = typesAgentEventsTypes.WriteToolCallEvent;
-
-  type GrepToolCallEvent = typesAgentEventsTypes.GrepToolCallEvent;
-
-  type FindToolCallEvent = typesAgentEventsTypes.FindToolCallEvent;
-
-  type LsToolCallEvent = typesAgentEventsTypes.LsToolCallEvent;
-
-  type CustomToolCallEvent = typesAgentEventsTypes.CustomToolCallEvent;
-
-  type ToolCallEvent = typesAgentEventsTypes.ToolCallEvent;
-
-  type BashToolResultEvent = typesAgentEventsTypes.BashToolResultEvent;
-
-  type PowerShellToolResultEvent = typesAgentEventsTypes.PowerShellToolResultEvent;
-
-  type ReadToolResultEvent = typesAgentEventsTypes.ReadToolResultEvent;
-
-  type EditToolResultEvent = typesAgentEventsTypes.EditToolResultEvent;
-
-  type WriteToolResultEvent = typesAgentEventsTypes.WriteToolResultEvent;
-
-  type GrepToolResultEvent = typesAgentEventsTypes.GrepToolResultEvent;
-
-  type FindToolResultEvent = typesAgentEventsTypes.FindToolResultEvent;
-
-  type LsToolResultEvent = typesAgentEventsTypes.LsToolResultEvent;
-
-  type CustomToolResultEvent = typesAgentEventsTypes.CustomToolResultEvent;
-
-  type ToolResultEvent = typesAgentEventsTypes.ToolResultEvent;
-
-  type ExtensionAPI = typesApiTypes.ExtensionAPI;
-
-  type ExtensionContextActions = typesContextActionsTypes.ExtensionContextActions;
-
-  type ExtensionCommandContextActions = typesContextActionsTypes.ExtensionCommandContextActions;
-
-  type ExtensionRuntime = typesContextActionsTypes.ExtensionRuntime;
-
-  type ExtensionContext = typesContextTypes.ExtensionContext;
-
-  type ExecuteToolOptions = typesContextTypes.ExecuteToolOptions;
-
-  type ExtensionToolContext = typesContextTypes.ExtensionToolContext;
-
-  type ExtensionCommandContext = typesContextTypes.ExtensionCommandContext;
-
-  type ReplacedSessionContext = typesContextTypes.ReplacedSessionContext;
-
-  type Extension = typesExtensionTypes.Extension;
-
-  type LoadExtensionsResult = typesExtensionTypes.LoadExtensionsResult;
-
-  type ExtensionError = typesExtensionTypes.ExtensionError;
-
-  type ExtensionVirtualModel<TState = unknown> = typesProviderTypes.ExtensionVirtualModel<TState>;
-
-  type ProviderConfig = typesProviderTypes.ProviderConfig;
-
-  type ProviderChatModelConfig = typesProviderTypes.ProviderChatModelConfig;
-
-  type ProviderImageModelConfig = typesProviderTypes.ProviderImageModelConfig;
-
-  type ProviderClassifierModelConfig = typesProviderTypes.ProviderClassifierModelConfig;
-
-  type ProviderModelConfig = typesProviderTypes.ProviderModelConfig;
-
-  type ExtensionFactory = typesProviderTypes.ExtensionFactory;
-
-  type InlineExtension = typesProviderTypes.InlineExtension;
-
-  type RegisteredTool = typesProviderTypes.RegisteredTool;
-
-  type ExtensionFlag = typesProviderTypes.ExtensionFlag;
-
-  type ExtensionShortcut = typesProviderTypes.ExtensionShortcut;
-
-  type MessageRenderOptions = typesRenderTypes.MessageRenderOptions;
-
-  type MarkdownTransformContext = typesRenderTypes.MarkdownTransformContext;
-
-  type MarkdownTransformer = typesRenderTypes.MarkdownTransformer;
-
-  type EntryRenderOptions = typesRenderTypes.EntryRenderOptions;
-
-  type MessageRenderer<T = unknown> = typesRenderTypes.MessageRenderer<T>;
-
-  type EntryRenderer<T = unknown> = typesRenderTypes.EntryRenderer<T>;
-
-  type RegisteredCommand = typesRenderTypes.RegisteredCommand;
-
-  type ResolvedCommand = typesRenderTypes.ResolvedCommand;
-
-  type ExtensionHandler<E, R = undefined> = typesRenderTypes.ExtensionHandler<E, R>;
-
-  type ExtensionEvent = typesResultsTypes.ExtensionEvent;
-
-  type ContextEventResult = typesResultsTypes.ContextEventResult;
-
-  type TurnEndEventResult = typesResultsTypes.TurnEndEventResult;
-
-  type AgentBeforeSettleEventResult = typesResultsTypes.AgentBeforeSettleEventResult;
-
-  type BeforeProviderRequestEventResult = typesResultsTypes.BeforeProviderRequestEventResult;
-
-  type CacheWarmingDecisionEvent = typesResultsTypes.CacheWarmingDecisionEvent;
-
-  type CacheWarmingDecisionEventResult = typesResultsTypes.CacheWarmingDecisionEventResult;
-
-  type ToolCallEventResult = typesResultsTypes.ToolCallEventResult;
-
-  type UserBashEventResult = typesResultsTypes.UserBashEventResult;
-
-  type ToolResultEventResult = typesResultsTypes.ToolResultEventResult;
-
-  type MessageEndEventResult = typesResultsTypes.MessageEndEventResult;
-
-  type BeforeAgentStartEventResult = typesResultsTypes.BeforeAgentStartEventResult;
-
-  type SessionBeforeSwitchResult = typesResultsTypes.SessionBeforeSwitchResult;
-
-  type SessionBeforeForkResult = typesResultsTypes.SessionBeforeForkResult;
-
-  type SessionBeforeCompactResult = typesResultsTypes.SessionBeforeCompactResult;
-
-  type SessionBeforeTreeResult = typesResultsTypes.SessionBeforeTreeResult;
-
-  type HandlerFn = typesRuntimeTypes.HandlerFn;
-
-  type SendMessageHandler = typesRuntimeTypes.SendMessageHandler;
-
-  type SendUserMessageHandler = typesRuntimeTypes.SendUserMessageHandler;
-
-  type AppendEntryHandler = typesRuntimeTypes.AppendEntryHandler;
-
-  type SetSessionNameHandler = typesRuntimeTypes.SetSessionNameHandler;
-
-  type GetSessionNameHandler = typesRuntimeTypes.GetSessionNameHandler;
-
-  type GetActiveToolsHandler = typesRuntimeTypes.GetActiveToolsHandler;
-
-  type ToolInfo = typesRuntimeTypes.ToolInfo;
-
-  type GetAllToolsHandler = typesRuntimeTypes.GetAllToolsHandler;
-
-  type GetSettingsHandler = typesRuntimeTypes.GetSettingsHandler;
-
-  type GetCommandsHandler = typesRuntimeTypes.GetCommandsHandler;
-
-  type SetActiveToolsHandler = typesRuntimeTypes.SetActiveToolsHandler;
-
-  type RefreshToolsHandler = typesRuntimeTypes.RefreshToolsHandler;
-
-  type SetModelHandler = typesRuntimeTypes.SetModelHandler;
-
-  type GetThinkingLevelHandler = typesRuntimeTypes.GetThinkingLevelHandler;
-
-  type SetThinkingLevelHandler = typesRuntimeTypes.SetThinkingLevelHandler;
-
-  type SetLabelHandler = typesRuntimeTypes.SetLabelHandler;
-
-  type ProjectTrustEvent = typesSessionEventsTypes.ProjectTrustEvent;
-
-  type ProjectTrustEventDecision = typesSessionEventsTypes.ProjectTrustEventDecision;
-
-  type ProjectTrustEventResult = typesSessionEventsTypes.ProjectTrustEventResult;
-
-  type ProjectTrustContext = typesSessionEventsTypes.ProjectTrustContext;
-
-  type ProjectTrustHandler = typesSessionEventsTypes.ProjectTrustHandler;
-
-  type ResourcesDiscoverEvent = typesSessionEventsTypes.ResourcesDiscoverEvent;
-
-  type ResourcesDiscoverResult = typesSessionEventsTypes.ResourcesDiscoverResult;
-
-  type McpServersChangeEvent = typesSessionEventsTypes.McpServersChangeEvent;
-
-  type SessionStartEvent = typesSessionEventsTypes.SessionStartEvent;
-
-  type SessionInfoChangedEvent = typesSessionEventsTypes.SessionInfoChangedEvent;
-
-  type SessionBeforeSwitchEvent = typesSessionEventsTypes.SessionBeforeSwitchEvent;
-
-  type SessionBeforeForkEvent = typesSessionEventsTypes.SessionBeforeForkEvent;
-
-  type SessionBeforeCompactEvent = typesSessionEventsTypes.SessionBeforeCompactEvent;
-
-  type SessionCompactEvent = typesSessionEventsTypes.SessionCompactEvent;
-
-  type SessionCompactFailedEvent = typesSessionEventsTypes.SessionCompactFailedEvent;
-
-  type SessionShutdownEvent = typesSessionEventsTypes.SessionShutdownEvent;
-
-  type TreePreparation = typesSessionEventsTypes.TreePreparation;
-
-  type SessionBeforeTreeEvent = typesSessionEventsTypes.SessionBeforeTreeEvent;
-
-  type SessionTreeEvent = typesSessionEventsTypes.SessionTreeEvent;
-
-  type SessionEvent = typesSessionEventsTypes.SessionEvent;
-
-  type ContextEvent = typesSessionEventsTypes.ContextEvent;
-
-  type ContextWithSystemEvent = typesSessionEventsTypes.ContextWithSystemEvent;
-
-  type BeforeProviderRequestEvent = typesSessionEventsTypes.BeforeProviderRequestEvent;
-
-  type BeforeProviderHeadersEvent = typesSessionEventsTypes.BeforeProviderHeadersEvent;
-
-  type AfterProviderResponseEvent = typesSessionEventsTypes.AfterProviderResponseEvent;
-
-  type ProviderStreamEvent = typesSessionEventsTypes.ProviderStreamEvent;
-
-  type BeforeAgentStartUserEvent = typesSessionEventsTypes.BeforeAgentStartUserEvent;
-
-  type BeforeAgentStartCustomEvent = typesSessionEventsTypes.BeforeAgentStartCustomEvent;
-
-  type BeforeAgentStartEvent = typesSessionEventsTypes.BeforeAgentStartEvent;
-
-  type AgentStartEvent = typesSessionEventsTypes.AgentStartEvent;
-
-  type AgentEndEvent = typesSessionEventsTypes.AgentEndEvent;
-
-  type AgentActivityOutcome = typesSessionEventsTypes.AgentActivityOutcome;
-
-  type CustomEntryDraft = typesSessionEventsTypes.CustomEntryDraft;
-
-  type CustomMessageEntryDraft = typesSessionEventsTypes.CustomMessageEntryDraft;
-
-  type ContextEditEntryDraft = typesSessionEventsTypes.ContextEditEntryDraft;
-
-  type CompactionEntryDraft = typesSessionEventsTypes.CompactionEntryDraft;
-
-  type SessionBoundaryDraft = typesSessionEventsTypes.SessionBoundaryDraft;
-
-  type BoundaryContextPreview = typesSessionEventsTypes.BoundaryContextPreview;
-
-  type BoundaryState = typesSessionEventsTypes.BoundaryState;
-
-  type BoundaryResult = typesSessionEventsTypes.BoundaryResult;
-
-  type AgentBeforeSettleEvent = typesSessionEventsTypes.AgentBeforeSettleEvent;
-
-  type AgentSettledEvent = typesSessionEventsTypes.AgentSettledEvent;
-
-  type UIPromptKind = typesSessionEventsTypes.UIPromptKind;
-
-  type UIPromptStartEvent = typesSessionEventsTypes.UIPromptStartEvent;
-
-  type UIPromptEndEvent = typesSessionEventsTypes.UIPromptEndEvent;
-
-  type ToolRenderResultOptions = typesToolsTypes.ToolRenderResultOptions;
-
-  type ToolRenderContext<TState = any, TArgs = any> = typesToolsTypes.ToolRenderContext<
+  type AgentToolResult<T = aiTypes.JsonValue | undefined> = extensionsToolsKit.AgentToolResult<T>;
+  type AgentToolUpdateCallback<T = any> = extensionsToolsKit.AgentToolUpdateCallback<T>;
+  type ToolExecutionMode = extensionsToolsKit.ToolExecutionMode;
+  type ExecOptions = extensionsContextKit.ExecOptions;
+  type ExecResult = extensionsContextKit.ExecResult;
+  type AppKeybinding = extensionsContextKit.AppKeybinding;
+  type KeybindingsManager = extensionsContextKit.KeybindingsManager;
+  type BuildSystemPromptOptions = extensionsDefinitionsKit.BuildSystemPromptOptions;
+  type NormalizedBuildSystemPromptOptions =
+    extensionsDefinitionsKit.NormalizedBuildSystemPromptOptions;
+  type ExtensionRuntimeState = extensionsEventsKit.ExtensionRuntimeState;
+  type ExtensionActions = extensionsEventsKit.ExtensionActions;
+  type TurnStartEvent = extensionsEventsKit.TurnStartEvent;
+  type TurnEndEvent = extensionsEventsKit.TurnEndEvent;
+  type MessageStartEvent = extensionsEventsKit.MessageStartEvent;
+  type MessageUpdateEvent = extensionsEventsKit.MessageUpdateEvent;
+  type MessageEndEvent = extensionsEventsKit.MessageEndEvent;
+  type ToolExecutionStartEvent = extensionsEventsKit.ToolExecutionStartEvent;
+  type ToolExecutionUpdateEvent = extensionsEventsKit.ToolExecutionUpdateEvent;
+  type ToolExecutionEndEvent = extensionsEventsKit.ToolExecutionEndEvent;
+  type ModelSelectSource = extensionsEventsKit.ModelSelectSource;
+  type ModelSelectEvent = extensionsEventsKit.ModelSelectEvent;
+  type ThinkingLevelSelectEvent = extensionsEventsKit.ThinkingLevelSelectEvent;
+  type UserBashEvent = extensionsEventsKit.UserBashEvent;
+  type InputSource = extensionsEventsKit.InputSource;
+  type InputEvent = extensionsEventsKit.InputEvent;
+  type InputEventResult = extensionsEventsKit.InputEventResult;
+  type BashToolCallEvent = extensionsEventsKit.BashToolCallEvent;
+  type PowerShellToolCallEvent = extensionsEventsKit.PowerShellToolCallEvent;
+  type ReadToolCallEvent = extensionsEventsKit.ReadToolCallEvent;
+  type EditToolCallEvent = extensionsEventsKit.EditToolCallEvent;
+  type WriteToolCallEvent = extensionsEventsKit.WriteToolCallEvent;
+  type GrepToolCallEvent = extensionsEventsKit.GrepToolCallEvent;
+  type FindToolCallEvent = extensionsEventsKit.FindToolCallEvent;
+  type LsToolCallEvent = extensionsEventsKit.LsToolCallEvent;
+  type CustomToolCallEvent = extensionsEventsKit.CustomToolCallEvent;
+  type ToolCallEvent = extensionsEventsKit.ToolCallEvent;
+  type BashToolResultEvent = extensionsEventsKit.BashToolResultEvent;
+  type PowerShellToolResultEvent = extensionsEventsKit.PowerShellToolResultEvent;
+  type ReadToolResultEvent = extensionsEventsKit.ReadToolResultEvent;
+  type EditToolResultEvent = extensionsEventsKit.EditToolResultEvent;
+  type WriteToolResultEvent = extensionsEventsKit.WriteToolResultEvent;
+  type GrepToolResultEvent = extensionsEventsKit.GrepToolResultEvent;
+  type FindToolResultEvent = extensionsEventsKit.FindToolResultEvent;
+  type LsToolResultEvent = extensionsEventsKit.LsToolResultEvent;
+  type CustomToolResultEvent = extensionsEventsKit.CustomToolResultEvent;
+  type ToolResultEvent = extensionsEventsKit.ToolResultEvent;
+  type ExtensionAPI = extensionsDefinitionsKit.ExtensionAPI;
+  type ExtensionContextActions = extensionsContextKit.ExtensionContextActions;
+  type ExtensionCommandContextActions = extensionsContextKit.ExtensionCommandContextActions;
+  type ExtensionRuntime = extensionsContextKit.ExtensionRuntime;
+  type ExtensionContext = extensionsContextKit.ExtensionContext;
+  type ExecuteToolOptions = extensionsContextKit.ExecuteToolOptions;
+  type ExtensionToolContext = extensionsContextKit.ExtensionToolContext;
+  type ExtensionCommandContext = extensionsContextKit.ExtensionCommandContext;
+  type ReplacedSessionContext = extensionsContextKit.ReplacedSessionContext;
+  type Extension = extensionsDefinitionsKit.Extension;
+  type LoadExtensionsResult = extensionsDefinitionsKit.LoadExtensionsResult;
+  type ExtensionError = extensionsDefinitionsKit.ExtensionError;
+  type ExtensionVirtualModel<TState = unknown> =
+    extensionsDefinitionsKit.ExtensionVirtualModel<TState>;
+  type ProviderConfig = extensionsDefinitionsKit.ProviderConfig;
+  type ProviderChatModelConfig = extensionsDefinitionsKit.ProviderChatModelConfig;
+  type ProviderImageModelConfig = extensionsDefinitionsKit.ProviderImageModelConfig;
+  type ProviderClassifierModelConfig = extensionsDefinitionsKit.ProviderClassifierModelConfig;
+  type ProviderModelConfig = extensionsDefinitionsKit.ProviderModelConfig;
+  type ExtensionFactory = extensionsDefinitionsKit.ExtensionFactory;
+  type InlineExtension = extensionsDefinitionsKit.InlineExtension;
+  type RegisteredTool = extensionsDefinitionsKit.RegisteredTool;
+  type ExtensionFlag = extensionsDefinitionsKit.ExtensionFlag;
+  type ExtensionShortcut = extensionsDefinitionsKit.ExtensionShortcut;
+  type MessageRenderOptions = extensionsToolsKit.MessageRenderOptions;
+  type MarkdownTransformContext = extensionsToolsKit.MarkdownTransformContext;
+  type MarkdownTransformer = extensionsToolsKit.MarkdownTransformer;
+  type EntryRenderOptions = extensionsToolsKit.EntryRenderOptions;
+  type MessageRenderer<T = unknown> = extensionsToolsKit.MessageRenderer<T>;
+  type EntryRenderer<T = unknown> = extensionsToolsKit.EntryRenderer<T>;
+  type RegisteredCommand = extensionsToolsKit.RegisteredCommand;
+  type ResolvedCommand = extensionsToolsKit.ResolvedCommand;
+  type ExtensionHandler<E, R = undefined> = extensionsToolsKit.ExtensionHandler<E, R>;
+  type ExtensionEvent = extensionsEventsKit.ExtensionEvent;
+  type ContextEventResult = extensionsEventsKit.ContextEventResult;
+  type TurnEndEventResult = extensionsEventsKit.TurnEndEventResult;
+  type AgentBeforeSettleEventResult = extensionsEventsKit.AgentBeforeSettleEventResult;
+  type BeforeProviderRequestEventResult = extensionsEventsKit.BeforeProviderRequestEventResult;
+  type CacheWarmingDecisionEvent = extensionsEventsKit.CacheWarmingDecisionEvent;
+  type CacheWarmingDecisionEventResult = extensionsEventsKit.CacheWarmingDecisionEventResult;
+  type ToolCallEventResult = extensionsEventsKit.ToolCallEventResult;
+  type UserBashEventResult = extensionsEventsKit.UserBashEventResult;
+  type ToolResultEventResult = extensionsEventsKit.ToolResultEventResult;
+  type MessageEndEventResult = extensionsEventsKit.MessageEndEventResult;
+  type BeforeAgentStartEventResult = extensionsEventsKit.BeforeAgentStartEventResult;
+  type SessionBeforeSwitchResult = extensionsEventsKit.SessionBeforeSwitchResult;
+  type SessionBeforeForkResult = extensionsEventsKit.SessionBeforeForkResult;
+  type SessionBeforeCompactResult = extensionsEventsKit.SessionBeforeCompactResult;
+  type SessionBeforeTreeResult = extensionsEventsKit.SessionBeforeTreeResult;
+  type HandlerFn = extensionsDefinitionsKit.HandlerFn;
+  type SendMessageHandler = extensionsDefinitionsKit.SendMessageHandler;
+  type SendUserMessageHandler = extensionsDefinitionsKit.SendUserMessageHandler;
+  type AppendEntryHandler = extensionsDefinitionsKit.AppendEntryHandler;
+  type SetSessionNameHandler = extensionsDefinitionsKit.SetSessionNameHandler;
+  type GetSessionNameHandler = extensionsDefinitionsKit.GetSessionNameHandler;
+  type GetActiveToolsHandler = extensionsDefinitionsKit.GetActiveToolsHandler;
+  type ToolInfo = extensionsDefinitionsKit.ToolInfo;
+  type GetAllToolsHandler = extensionsDefinitionsKit.GetAllToolsHandler;
+  type GetSettingsHandler = extensionsDefinitionsKit.GetSettingsHandler;
+  type GetCommandsHandler = extensionsDefinitionsKit.GetCommandsHandler;
+  type SetActiveToolsHandler = extensionsDefinitionsKit.SetActiveToolsHandler;
+  type RefreshToolsHandler = extensionsDefinitionsKit.RefreshToolsHandler;
+  type SetModelHandler = extensionsDefinitionsKit.SetModelHandler;
+  type GetThinkingLevelHandler = extensionsDefinitionsKit.GetThinkingLevelHandler;
+  type SetThinkingLevelHandler = extensionsDefinitionsKit.SetThinkingLevelHandler;
+  type SetLabelHandler = extensionsDefinitionsKit.SetLabelHandler;
+  type ProjectTrustEvent = extensionsEventsKit.ProjectTrustEvent;
+  type ProjectTrustEventDecision = extensionsEventsKit.ProjectTrustEventDecision;
+  type ProjectTrustEventResult = extensionsEventsKit.ProjectTrustEventResult;
+  type ProjectTrustContext = extensionsEventsKit.ProjectTrustContext;
+  type ProjectTrustHandler = extensionsEventsKit.ProjectTrustHandler;
+  type ResourcesDiscoverEvent = extensionsEventsKit.ResourcesDiscoverEvent;
+  type ResourcesDiscoverResult = extensionsEventsKit.ResourcesDiscoverResult;
+  type McpServersChangeEvent = extensionsEventsKit.McpServersChangeEvent;
+  type SessionStartEvent = extensionsEventsKit.SessionStartEvent;
+  type SessionInfoChangedEvent = extensionsEventsKit.SessionInfoChangedEvent;
+  type SessionBeforeSwitchEvent = extensionsEventsKit.SessionBeforeSwitchEvent;
+  type SessionBeforeForkEvent = extensionsEventsKit.SessionBeforeForkEvent;
+  type SessionBeforeCompactEvent = extensionsEventsKit.SessionBeforeCompactEvent;
+  type SessionCompactEvent = extensionsEventsKit.SessionCompactEvent;
+  type SessionCompactFailedEvent = extensionsEventsKit.SessionCompactFailedEvent;
+  type SessionShutdownEvent = extensionsEventsKit.SessionShutdownEvent;
+  type TreePreparation = extensionsEventsKit.TreePreparation;
+  type SessionBeforeTreeEvent = extensionsEventsKit.SessionBeforeTreeEvent;
+  type SessionTreeEvent = extensionsEventsKit.SessionTreeEvent;
+  type SessionEvent = extensionsEventsKit.SessionEvent;
+  type ContextEvent = extensionsEventsKit.ContextEvent;
+  type ContextWithSystemEvent = extensionsEventsKit.ContextWithSystemEvent;
+  type BeforeProviderRequestEvent = extensionsEventsKit.BeforeProviderRequestEvent;
+  type BeforeProviderHeadersEvent = extensionsEventsKit.BeforeProviderHeadersEvent;
+  type AfterProviderResponseEvent = extensionsEventsKit.AfterProviderResponseEvent;
+  type ProviderStreamEvent = extensionsEventsKit.ProviderStreamEvent;
+  type BeforeAgentStartUserEvent = extensionsEventsKit.BeforeAgentStartUserEvent;
+  type BeforeAgentStartCustomEvent = extensionsEventsKit.BeforeAgentStartCustomEvent;
+  type BeforeAgentStartEvent = extensionsEventsKit.BeforeAgentStartEvent;
+  type AgentStartEvent = extensionsEventsKit.AgentStartEvent;
+  type AgentEndEvent = extensionsEventsKit.AgentEndEvent;
+  type AgentActivityOutcome = extensionsEventsKit.AgentActivityOutcome;
+  type CustomEntryDraft = extensionsEventsKit.CustomEntryDraft;
+  type CustomMessageEntryDraft = extensionsEventsKit.CustomMessageEntryDraft;
+  type ContextEditEntryDraft = extensionsEventsKit.ContextEditEntryDraft;
+  type CompactionEntryDraft = extensionsEventsKit.CompactionEntryDraft;
+  type SessionBoundaryDraft = extensionsEventsKit.SessionBoundaryDraft;
+  type BoundaryContextPreview = extensionsEventsKit.BoundaryContextPreview;
+  type BoundaryState = extensionsEventsKit.BoundaryState;
+  type BoundaryResult = extensionsEventsKit.BoundaryResult;
+  type AgentBeforeSettleEvent = extensionsEventsKit.AgentBeforeSettleEvent;
+  type AgentSettledEvent = extensionsEventsKit.AgentSettledEvent;
+  type UIPromptKind = extensionsEventsKit.UIPromptKind;
+  type UIPromptStartEvent = extensionsEventsKit.UIPromptStartEvent;
+  type UIPromptEndEvent = extensionsEventsKit.UIPromptEndEvent;
+  type ToolRenderResultOptions = extensionsToolsKit.ToolRenderResultOptions;
+  type ToolRenderContext<TState = any, TArgs = any> = extensionsToolsKit.ToolRenderContext<
     TState,
     TArgs
   >;
-
-  type ToolExposure = typesToolsTypes.ToolExposure;
-
-  type ToolAnnotations = typesToolsTypes.ToolAnnotations;
-
-  type ToolNamespace = typesToolsTypes.ToolNamespace;
-
-  type ToolLoadout = typesToolsTypes.ToolLoadout;
-
-  type ToolLoadoutChanges = typesToolsTypes.ToolLoadoutChanges;
-
+  type ToolExposure = extensionsToolsKit.ToolExposure;
+  type ToolAnnotations = extensionsToolsKit.ToolAnnotations;
+  type ToolNamespace = extensionsToolsKit.ToolNamespace;
+  type ToolLoadout = extensionsToolsKit.ToolLoadout;
+  type ToolLoadoutChanges = extensionsToolsKit.ToolLoadoutChanges;
   type ToolDefinition<
     TParams extends TSchema = TSchema,
     TDetails = unknown,
     TState = any,
-  > = typesToolsTypes.ToolDefinition<TParams, TDetails, TState>;
-
-  type ToolRenderers = typesToolsTypes.ToolRenderers;
-
-  type ToolRendererResolver = typesToolsTypes.ToolRendererResolver;
-
-  type ExtensionUIDialogOptions = typesUiTypes.ExtensionUIDialogOptions;
-
-  type WidgetPlacement = typesUiTypes.WidgetPlacement;
-
-  type ExtensionWidgetOptions = typesUiTypes.ExtensionWidgetOptions;
-
-  type TerminalInputHandler = typesUiTypes.TerminalInputHandler;
-
-  type WorkingIndicatorOptions = typesUiTypes.WorkingIndicatorOptions;
-
-  type AutocompleteProviderFactory = typesUiTypes.AutocompleteProviderFactory;
-
-  type EditorFactory = typesUiTypes.EditorFactory;
-
-  type ExtensionUIContext = typesUiTypes.ExtensionUIContext;
-
-  type ContextUsage = typesUiTypes.ContextUsage;
-
-  type CompactOptions = typesUiTypes.CompactOptions;
-
-  type ExtensionMode = typesUiTypes.ExtensionMode;
+  > = extensionsToolsKit.ToolDefinition<TParams, TDetails, TState>;
+  type ToolRenderers = extensionsToolsKit.ToolRenderers;
+  type ToolRendererResolver = extensionsToolsKit.ToolRendererResolver;
+  type ExtensionUIDialogOptions = extensionsContextKit.ExtensionUIDialogOptions;
+  type WidgetPlacement = extensionsContextKit.WidgetPlacement;
+  type ExtensionWidgetOptions = extensionsContextKit.ExtensionWidgetOptions;
+  type TerminalInputHandler = extensionsContextKit.TerminalInputHandler;
+  type WorkingIndicatorOptions = extensionsContextKit.WorkingIndicatorOptions;
+  type AutocompleteProviderFactory = extensionsContextKit.AutocompleteProviderFactory;
+  type EditorFactory = extensionsContextKit.EditorFactory;
+  type ExtensionUIContext = extensionsContextKit.ExtensionUIContext;
+  type ContextUsage = extensionsContextKit.ContextUsage;
+  type CompactOptions = extensionsContextKit.CompactOptions;
+  type ExtensionMode = extensionsContextKit.ExtensionMode;
 }
 
 export type { extensionsTypesTypes as default };

@@ -4,7 +4,6 @@ import { Effect } from "effect";
 
 import type cacheWarmerTypes from "../cache-warmer.types.ts";
 import platform from "../platform/index.ts";
-import type systemPromptTypes from "../system-prompt.types.ts";
 import runnerEmitters from "./runner-emitters.ts";
 import type runnerEmittersTypes from "./runner-emitters.types.ts";
 import RunnerQueries from "./runner-queries.ts";
@@ -73,7 +72,7 @@ export default abstract class RunnerEmitApi extends RunnerQueries {
 
   emitBeforeAgentStart(
     trigger: runnerTypesTypes.BeforeAgentStartTrigger,
-    options: systemPromptTypes.BuildSystemPromptOptions,
+    options: extensionsTypesTypes.BuildSystemPromptOptions,
   ) {
     return this.run(this.emitters().context.emitBeforeAgentStart(trigger, options));
   }

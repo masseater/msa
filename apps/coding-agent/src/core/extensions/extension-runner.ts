@@ -1,15 +1,11 @@
 import type modelRegistryTypes from "../model-registry.types.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import runnerBindings from "./runner-bindings.ts";
-import type runnerBindingsTypes from "./runner-bindings.types.ts";
 import ContextFactory from "./runner-context.ts";
-import type runnerContextTypes from "./runner-context.types.ts";
 import RunnerEmitApi from "./runner-emit-api.ts";
 import ProviderBinder from "./runner-providers.ts";
-import type runnerProvidersTypes from "./runner-providers.types.ts";
 import type runnerTypesTypes from "./runner-types.ts";
 import UIPromptTracker from "./runner-ui-prompts.ts";
-import type runnerUiPromptsTypes from "./runner-ui-prompts.types.ts";
 import runnerUi from "./runner-ui.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
@@ -24,9 +20,9 @@ export default class ExtensionRunner extends RunnerEmitApi {
   private readonly errorListeners = new Set<runnerTypesTypes.ExtensionErrorListener>();
   private readonly reportedMcpServers = new Set<string>();
   private staleMessage: string | undefined;
-  private readonly bindings: runnerBindingsTypes.RunnerBindings;
-  private readonly contextFactory: runnerContextTypes.ContextFactory;
-  private readonly prompts: runnerUiPromptsTypes.UIPromptTracker;
+  private readonly bindings: ReturnType<typeof createBindings>;
+  private readonly contextFactory: ContextFactory;
+  private readonly prompts: UIPromptTracker;
 
   constructor(
     extensions: extensionsTypesTypes.Extension[],
@@ -58,7 +54,7 @@ export default class ExtensionRunner extends RunnerEmitApi {
   bindCore(
     actions: extensionsTypesTypes.ExtensionActions,
     contextActions: extensionsTypesTypes.ExtensionContextActions,
-    providerActions?: runnerProvidersTypes.ProviderActions,
+    providerActions?: ConstructorParameters<typeof ProviderBinder>[2],
   ): void {
     const { runtime } = this;
     runtime.sendMessage = actions.sendMessage;
