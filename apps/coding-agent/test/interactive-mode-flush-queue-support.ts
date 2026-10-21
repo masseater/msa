@@ -5,7 +5,6 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
-import AuthStorage from "../src/core/auth-storage.ts";
 import codingAgent from "../src/index.ts";
 import type codingAgentTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
@@ -17,8 +16,8 @@ const { createAssistantMessageEventStream, getModel } = compat;
 
 const { Agent } = agentModule;
 
-const { awaited, currentTimeMillis, gate, joinPath, pollUntil, runTest } = testing;
-const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
+const { awaited, currentTimeMillis, gate, pollUntil } = testing;
+const { createKeyedModelRuntime } = modelRuntimeTestUtils;
 const { createTestResourceLoader } = utilities;
 
 type SubmitHandler = (text: string) => unknown;
@@ -76,17 +75,11 @@ const createSession = Effect.fn("createSession")(function* (
   tempDir: string,
   agent: agentTypes.Agent,
 ) {
-  const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
-  const modelRegistry = yield* awaited(createModelRegistry(authStorage, tempDir));
-  yield* awaited(
-    authStorage.modify("anthropic-api", () =>
-      runTest(Effect.succeed({ key: "test-key", type: "api_key" as const })),
-    ),
-  );
+  const { modelRuntime } = yield* createKeyedModelRuntime(tempDir);
   return new AgentSession({
     agent,
     cwd: tempDir,
-    modelRuntime: getModelRuntime(modelRegistry),
+    modelRuntime,
     resourceLoader: createTestResourceLoader(),
     sessionManager: SessionManager.inMemory(),
     settingsManager: SettingsManager.create(tempDir, tempDir),

@@ -245,60 +245,31 @@ const keepsCodemodeOnlyMcpToolsCallable = Effect.gen(function* () {
   expect(nestedToolNames(harness)).toContain(searchName);
 });
 
-const keepsMcpToolsWhenToolsNamesNo = () => Effect.runPromise(keepsMcpToolsWhenToolsNames);
-
-const removesMcpToolsWithNoTools2 = () => Effect.runPromise(removesMcpToolsWithNoTools);
-
-const doesNotDeclareUnnamedMcpToolsRestored = () =>
-  Effect.runPromise(doesNotDeclareUnnamedMcpTools);
-
-const letsToolSearchDeclareUnnamedMcpTools = () =>
-  Effect.runPromise(letsToolSearchDeclareUnnamedMcp);
-
-const filtersMcpToolsByTheMcpEntries = () => Effect.runPromise(filtersMcpToolsByTheMcp);
-
-const removesMcpToolsMatchingExcludeToolsPatterns = () =>
-  Effect.runPromise(removesMcpToolsMatchingExcludeTools);
-
-const exposesCodemodeOnlyMcpToolsThroughCodemode = () =>
-  Effect.runPromise(exposesCodemodeOnlyMcpToolsThrough);
-
-const keepsCodemodeOnlyMcpToolsCallableAcross = () =>
-  Effect.runPromise(keepsCodemodeOnlyMcpToolsCallable);
-
 describe("AgentSession MCP integration", () => {
   afterEach(() => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
 
-  it("keeps MCP tools when --tools names no MCP tool", keepsMcpToolsWhenToolsNamesNo);
+  it("keeps MCP tools when --tools names no MCP tool", () =>
+    Effect.runPromise(keepsMcpToolsWhenToolsNames));
 
-  it("removes MCP tools with --no-tools", removesMcpToolsWithNoTools2);
+  it("removes MCP tools with --no-tools", () => Effect.runPromise(removesMcpToolsWithNoTools));
 
-  it(
-    "does not declare unnamed MCP tools restored from the transcript",
-    doesNotDeclareUnnamedMcpToolsRestored,
-  );
+  it("does not declare unnamed MCP tools restored from the transcript", () =>
+    Effect.runPromise(doesNotDeclareUnnamedMcpTools));
 
-  it(
-    "lets tool_search declare unnamed MCP tools when --tools names it",
-    letsToolSearchDeclareUnnamedMcpTools,
-  );
+  it("lets tool_search declare unnamed MCP tools when --tools names it", () =>
+    Effect.runPromise(letsToolSearchDeclareUnnamedMcp));
 
-  it("filters MCP tools by the mcp__ entries of --tools", filtersMcpToolsByTheMcpEntries);
+  it("filters MCP tools by the mcp__ entries of --tools", () =>
+    Effect.runPromise(filtersMcpToolsByTheMcp));
 
-  it(
-    "removes MCP tools matching --exclude-tools patterns",
-    removesMcpToolsMatchingExcludeToolsPatterns,
-  );
+  it("removes MCP tools matching --exclude-tools patterns", () =>
+    Effect.runPromise(removesMcpToolsMatchingExcludeTools));
 
-  it(
-    "exposes codemode-only MCP tools through codemode and hides them from the model",
-    exposesCodemodeOnlyMcpToolsThroughCodemode,
-  );
+  it("exposes codemode-only MCP tools through codemode and hides them from the model", () =>
+    Effect.runPromise(exposesCodemodeOnlyMcpToolsThrough));
 
-  it(
-    "keeps codemode-only MCP tools callable across tree navigation",
-    keepsCodemodeOnlyMcpToolsCallableAcross,
-  );
+  it("keeps codemode-only MCP tools callable across tree navigation", () =>
+    Effect.runPromise(keepsCodemodeOnlyMcpToolsCallable));
 });

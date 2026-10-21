@@ -6,7 +6,6 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import agentSessionCompactionSupport2 from "./agent-session-compaction-support2.ts";
 import harnessModule from "./harness.ts";
 
 const {
@@ -16,9 +15,7 @@ const {
   getCurrentTools,
 } = ai;
 
-const { afterEachHook } = agentSessionCompactionSupport2;
-
-const { createUsage, harnesses, seedCompactableSession, useSummaryStreamFn } =
+const { afterEachHook, createUsage, harnesses, seedCompactableSession, useSummaryStreamFn } =
   agentSessionCompactionSupport;
 
 const { createHarness } = harnessModule;

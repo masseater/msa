@@ -3,19 +3,15 @@ import tui from "@msa/tui";
 import { Effect } from "effect";
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import KeybindingsManager from "../src/core/keybindings-manager.ts";
-import codingAgent from "../src/index.ts";
 import components from "../src/modes/interactive/components/index.ts";
 import type scopedModelsSelectorTypes from "../src/modes/interactive/components/scoped-models-selector.types.ts";
-import ansi from "../src/utils/ansi.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
+import tuiKit from "./tui-kit.ts";
 
 const { ScopedModelsSelectorComponent } = components;
 
-const { initTheme } = codingAgent;
-
-const { stripAnsi } = ansi;
+const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
 const { setKeybindings } = tui;
 
 const { createHarness } = harnessModule;

@@ -4,13 +4,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
-import McpOAuthCredentialStore from "../src/extensions/mcp/mcp-oauth-credential-store.ts";
 import oauthModule from "../src/extensions/mcp/oauth.ts";
 import type oauthTypesNs from "../src/extensions/mcp/oauth.types.ts";
+import mcpOAuthMemoryStore from "./mcp-oauth-memory-store.ts";
 import mcpOauthBrowser from "./suite/mcp-oauth-browser.ts";
 import mcpOauthServer from "./suite/mcp-oauth-server.ts";
 const { createMcpAuthProvider, signInMcpServer } = oauthModule;
+const { memoryBackend, memoryServerStore } = mcpOAuthMemoryStore;
 
 const { OAuthIssuerMismatchError } = oauth;
 
@@ -30,9 +30,9 @@ function signedIn() {
       const lockDir = yield* makeTempDir("msa-mcp-refresh-");
       cleanups2.push(() => runTest(removeDir(lockDir)));
 
-      const backend = new InMemoryAuthStorageBackend();
+      const backend = memoryBackend();
       const process = () => {
-        const store = new McpOAuthCredentialStore(backend, lockDir).forServer("test", server.url);
+        const store = memoryServerStore(server.url, { backend, lockDir });
         const provider = createMcpAuthProvider({
           onChallenge: () => {},
           serverUrl: server.url,
@@ -132,10 +132,7 @@ function signIn2(
             prompt: browserPrompt(),
             serverUrl: server.url,
             settings: settings(server.url),
-            store: new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()).forServer(
-              "test",
-              server.url,
-            ),
+            store: memoryServerStore(server.url),
           }),
         );
       } finally {
@@ -159,10 +156,7 @@ const keepsTheGrantedScopeWhenTheServer = () =>
     Effect.gen(function* () {
       const server = yield* awaited(startOAuthMcpServer());
       try {
-        const store = new McpOAuthCredentialStore(new InMemoryAuthStorageBackend()).forServer(
-          "test",
-          server.url,
-        );
+        const store = memoryServerStore(server.url);
         const opened: URL[] = [];
         const signInWith = (challenge: oauthTypes.OAuthChallenge) =>
           signInMcpServer({

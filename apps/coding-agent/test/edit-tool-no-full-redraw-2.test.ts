@@ -5,17 +5,14 @@ import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it } from "vite-plus/test";
 
 import editDiff from "../src/core/tools/edit-diff.ts";
-import edit from "../src/core/tools/edit.ts";
 import codingAgent from "../src/index.ts";
 import ansi from "../src/utils/ansi.ts";
 import editToolNoFullRedrawSupport from "./edit-tool-no-full-redraw-support.ts";
 import FakeTerminal from "./fake-terminal.ts";
 
-const { ToolExecutionComponent } = codingAgent;
-const { initTheme } = codingAgent;
+const { ToolExecutionComponent, createEditToolDefinition, initTheme } = codingAgent;
 
 const { computeEditsDiff } = editDiff;
-const { createEditToolDefinition } = edit;
 const { stripAnsi } = ansi;
 const { TuiMainScreen } = tuiModule;
 

@@ -66,6 +66,30 @@ const createSessionWithNonStrictTools = (input: { readonly activeTools: string[]
     return { agentDir, cwd, resourceLoader, settingsManager };
   });
 
+const expectToolsRegisteredWithoutStrictSampling = (
+  session: Awaited<ReturnType<typeof createAgentSession>>["session"],
+  activeTools: readonly string[],
+  cwd: string,
+) =>
+  Effect.gen(function* () {
+    const originalPrompt = session.tools.prompt.systemPrompt;
+    yield* awaited(session.extensions.binding.bindExtensions({}));
+    expect(session.tools.loadout.getActiveToolNames()).toEqual(activeTools);
+    expect(session.tools.prompt.systemPrompt).toBe(originalPrompt);
+    for (const name of strictToolNames) {
+      expect(session.tools.registry.getToolDefinition(name)?.constrainedSampling).toBe(false);
+    }
+    for (const tool of session.agent.state.tools) {
+      expect(tool.constrainedSampling).toBe(false);
+    }
+    if (activeTools.includes("read")) {
+      yield* writeTextFile(joinPath(cwd, "sample.txt"), "still works");
+      const read = session.agent.state.tools.find((tool) => tool.name === "read")!;
+      const result = yield* awaited(read.execute("read-test", { path: "sample.txt" }));
+      expect(result.content).toEqual([{ text: "still works", type: "text" as const }]);
+    }
+  });
+
 describe("strict built-in tools", () => {
   afterEach(() => vi.unstubAllEnvs());
 
@@ -122,24 +146,7 @@ describe("strict built-in tools", () => {
               }),
             );
             try {
-              const originalPrompt = session.tools.prompt.systemPrompt;
-              yield* awaited(session.extensions.binding.bindExtensions({}));
-              expect(session.tools.loadout.getActiveToolNames()).toEqual(activeTools);
-              expect(session.tools.prompt.systemPrompt).toBe(originalPrompt);
-              for (const name of strictToolNames) {
-                expect(session.tools.registry.getToolDefinition(name)?.constrainedSampling).toBe(
-                  false,
-                );
-              }
-              for (const tool of session.agent.state.tools) {
-                expect(tool.constrainedSampling).toBe(false);
-              }
-              if (activeTools.includes("read")) {
-                yield* writeTextFile(joinPath(cwd, "sample.txt"), "still works");
-                const read = session.agent.state.tools.find((tool) => tool.name === "read")!;
-                const result = yield* awaited(read.execute("read-test", { path: "sample.txt" }));
-                expect(result.content).toEqual([{ text: "still works", type: "text" as const }]);
-              }
+              yield* expectToolsRegisteredWithoutStrictSampling(session, activeTools, cwd);
             } finally {
               session.dispose();
             }

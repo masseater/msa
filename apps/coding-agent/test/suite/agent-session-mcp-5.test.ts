@@ -239,63 +239,32 @@ const reachesDeferredMcpToolsThroughCodemode = Effect.gen(function* () {
   expect(notifications).toEqual([]);
 });
 
-const listsAndReadsResourcesWithCodexS = () => Effect.runPromise(listsAndReadsResourcesWithCodex);
-
-const makesTheResourceToolsCallableFromCodemode = () =>
-  Effect.runPromise(makesTheResourceToolsCallableFrom);
-
-const appliesPerToolExposureOverrides2 = () => Effect.runPromise(appliesPerToolExposureOverrides);
-
-const describesTheServerWithItsConfiguredDescription = () =>
-  Effect.runPromise(describesTheServerWithItsConfigured);
-
-const listsServersByTheFirstLineOf = () => Effect.runPromise(listsServersByTheFirstLine);
-
-const doesNotActivateCodemodeWhenAutoenablecodemodeIs = () =>
-  Effect.runPromise(doesNotActivateCodemodeWhenAutoenablecodemode);
-
-const treatsCodemodeMcpToolsAsReachableThrough = () =>
-  Effect.runPromise(treatsCodemodeMcpToolsAsReachable);
-
-const reachesDeferredMcpToolsThroughCodemodeWhen = () =>
-  Effect.runPromise(reachesDeferredMcpToolsThroughCodemode);
-
 describe("AgentSession MCP integration", () => {
   afterEach(() => {
     while (harnesses.length > 0) harnesses.pop()?.cleanup();
   });
 
-  it("lists and reads resources with Codex's resource tools", listsAndReadsResourcesWithCodexS);
+  it("lists and reads resources with Codex's resource tools", () =>
+    Effect.runPromise(listsAndReadsResourcesWithCodex));
 
-  it(
-    "makes the resource tools callable from codemode for codemode servers",
-    makesTheResourceToolsCallableFromCodemode,
-  );
+  it("makes the resource tools callable from codemode for codemode servers", () =>
+    Effect.runPromise(makesTheResourceToolsCallableFrom));
 
-  it("applies per-tool exposure overrides", appliesPerToolExposureOverrides2);
+  it("applies per-tool exposure overrides", () =>
+    Effect.runPromise(appliesPerToolExposureOverrides));
 
-  it(
-    "describes the server with its configured description and returns its instructions to scripts",
-    describesTheServerWithItsConfiguredDescription,
-  );
+  it("describes the server with its configured description and returns its instructions to scripts", () =>
+    Effect.runPromise(describesTheServerWithItsConfigured));
 
-  it(
-    "lists servers by the first line of their instructions without a configured description",
-    listsServersByTheFirstLineOf,
-  );
+  it("lists servers by the first line of their instructions without a configured description", () =>
+    Effect.runPromise(listsServersByTheFirstLine));
 
-  it(
-    "does not activate codemode when autoEnableCodemode is false",
-    doesNotActivateCodemodeWhenAutoenablecodemodeIs,
-  );
+  it("does not activate codemode when autoEnableCodemode is false", () =>
+    Effect.runPromise(doesNotActivateCodemodeWhenAutoenablecodemode));
 
-  it(
-    "treats codemode MCP tools as reachable through an active tool_search",
-    treatsCodemodeMcpToolsAsReachableThrough,
-  );
+  it("treats codemode MCP tools as reachable through an active tool_search", () =>
+    Effect.runPromise(treatsCodemodeMcpToolsAsReachable));
 
-  it(
-    "reaches deferred MCP tools through codemode when tool_search is not available",
-    reachesDeferredMcpToolsThroughCodemodeWhen,
-  );
+  it("reaches deferred MCP tools through codemode when tool_search is not available", () =>
+    Effect.runPromise(reachesDeferredMcpToolsThroughCodemode));
 });

@@ -5,7 +5,6 @@ import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import src from "../src/index.ts";
 import type statusIndicatorTypes from "../src/modes/interactive/components/status-indicator.types.ts";
-import type TreeSelectorComponent from "../src/modes/interactive/components/tree-selector.ts";
 import type treeSelectorTypes from "../src/modes/interactive/components/tree-selector.types.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 import interactiveModeFake from "./interactive-mode-fake.ts";
@@ -233,7 +232,10 @@ describe("InteractiveMode tree navigation availability", () => {
     ));
 });
 
-function selectTreeEntry(selector: TreeSelectorComponent | undefined, targetId: string) {
+function selectTreeEntry(
+  selector: treeSelectorTypes.TreeSelectorComponent | undefined,
+  targetId: string,
+) {
   return runTest(
     Effect.gen(function* () {
       expect(selector).toBeDefined();

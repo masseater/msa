@@ -7,9 +7,7 @@ import { vi } from "vite-plus/test";
 
 import CacheWarmer from "../src/core/cache-warmer.ts";
 import type cacheWarmerTypes from "../src/core/cache-warmer.types.ts";
-import type sessionManagerTypes from "../src/core/session-manager.types.ts";
 import codingAgent from "../src/index.ts";
-import type codingAgentTypes from "../src/index.types.ts";
 
 const { SessionManager } = codingAgent;
 
@@ -55,7 +53,7 @@ function response(
   };
 }
 
-function branchWithPrompt(promptTokens: number): sessionManagerTypes.SessionEntry[] {
+function branchWithPrompt(promptTokens: number): cacheWarmerTypes.BranchEntry[] {
   return [
     {
       id: "a",
@@ -81,8 +79,8 @@ function fakeRuntime(
     decide?: (
       event: cacheWarmerTypes.CacheWarmingDecisionEvent,
     ) => cacheWarmerTypes.CacheWarmingAction | Promise<cacheWarmerTypes.CacheWarmingAction>;
-    mode?: codingAgentTypes.CacheWarmingMode;
-    branch?: sessionManagerTypes.SessionEntry[];
+    mode?: cacheWarmerTypes.CacheWarmingMode;
+    branch?: cacheWarmerTypes.BranchEntry[];
   } = {},
 ) {
   const calls: Array<{
@@ -90,7 +88,7 @@ function fakeRuntime(
     options: aiTypes.ModelsSimpleStreamOptions | undefined;
   }> = [];
   const events: cacheWarmerTypes.CacheWarmingDecisionEvent[] = [];
-  const warmedEntries: sessionManagerTypes.UsageEntry[] = [];
+  const warmedEntries: cacheWarmerTypes.WarmedEntry[] = [];
   const usageManager = SessionManager.inMemory();
   const appendUsage = vi.fn(usageManager.appendUsage.bind(usageManager));
   const state = {

@@ -1,7 +1,5 @@
 import agentModule from "@msa/agent-core";
-import type agentTypes from "@msa/agent-core/index.types";
 import compat from "@msa/ai/compat";
-import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
@@ -34,8 +32,8 @@ type AssistantStream = ReturnType<typeof createAssistantMessageEventStream>;
 
 const assistantMessage = (
   text: string,
-  overrides: Partial<compatTypes.AssistantMessage> = {},
-): compatTypes.AssistantMessage => ({
+  overrides: Partial<sessionKitTypes.AssistantMessage> = {},
+): sessionKitTypes.AssistantMessage => ({
   api: "anthropic-messages",
   content: [{ text, type: "text" }],
   model: "mock",
@@ -70,7 +68,7 @@ const textOf = (content: unknown): string =>
 const userTexts = (messages: readonly { role: string; content?: unknown }[]): string[] =>
   messages.filter((message) => message.role === "user").map((message) => textOf(message.content));
 
-const reply = (stream: AssistantStream, message: compatTypes.AssistantMessage): void => {
+const reply = (stream: AssistantStream, message: sessionKitTypes.AssistantMessage): void => {
   stream.push({ partial: { ...message, content: [] }, type: "start" });
   stream.push({
     message,
@@ -97,7 +95,7 @@ const replyWhenAborted = (stream: AssistantStream, signal: AbortSignal | undefin
 };
 
 const streamWith =
-  (respond: sessionKitTypes.Responder): agentTypes.StreamFn =>
+  (respond: sessionKitTypes.Responder): sessionKitTypes.StreamFn =>
   (_model, context, options) => {
     const stream = createAssistantMessageEventStream();
     queueMicrotask(() => respond({ context, signal: options?.signal, stream }));
@@ -125,7 +123,7 @@ const resourceLoaderFor = (
 const createAgentSession = Effect.fn("createAgentSession")(function* (
   options: sessionKitTypes.SessionOptions,
 ) {
-  const tools: agentTypes.AgentTool[] = options.tools ?? options.agentTools ?? [];
+  const tools: sessionKitTypes.AgentTool[] = options.tools ?? options.agentTools ?? [];
   const agent = new Agent({
     getApiKey: () => options.apiKey ?? "test-key",
     initialState: {

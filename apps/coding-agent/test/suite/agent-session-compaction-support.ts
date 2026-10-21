@@ -1,6 +1,7 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
+import { vi } from "vite-plus/test";
 
 import type harnessTypes from "./harness.types.ts";
 
@@ -90,7 +91,16 @@ function seedCompactableSession(harness: harnessTypes.Harness): void {
 
 const harnesses: harnessTypes.Harness[] = [];
 
+const afterEachHook = () => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  while (harnesses.length > 0) {
+    harnesses.pop()?.cleanup();
+  }
+};
+
 const agentSessionCompactionSupport = {
+  afterEachHook,
   createAssistant,
   createUsage,
   harnesses,

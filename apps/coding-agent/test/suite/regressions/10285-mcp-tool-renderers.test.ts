@@ -6,7 +6,6 @@ import { describe, expect, it } from "vite-plus/test";
 import type extensionsTypesTypes from "../../../src/core/extensions/types.types.ts";
 import extension from "../../../src/extensions/mcp/extension.ts";
 import codingAgent from "../../../src/index.ts";
-import type codingAgentTypes from "../../../src/index.types.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
@@ -50,6 +49,44 @@ const rendersCallsToMcpToolsThat = Effect.gen(function* () {
   }
 });
 
+const appendMcpToolTurn = (sessionManager: ReturnType<typeof SessionManager.inMemory>) => {
+  sessionManager.appendMessage({ content: "search", role: "user", timestamp: 1 });
+  sessionManager.appendMessage({
+    api: "anthropic-messages",
+    content: [
+      { arguments: { query: "msa" }, id: "call-1", name: "mcp__my_docs__search", type: "toolCall" },
+    ],
+    model: "test",
+    provider: "anthropic-api",
+    role: "assistant",
+    stopReason: "toolUse",
+    timestamp: 2,
+    usage: {
+      cacheRead: 0,
+      cacheWrite: 0,
+      cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
+      input: 0,
+      output: 0,
+      totalTokens: 0,
+    },
+  });
+};
+
+const exportedToolCallHtml = (harness: harnessTypes.Harness, dir: string) =>
+  Effect.gen(function* () {
+    const html = yield* fs.readFileString(
+      yield* Effect.promise(() =>
+        harness.session.context.exports.exportToHtml(joinPath(dir, "export.html")),
+      ),
+    );
+    const data =
+      /<script id="session-data" type="application\/json">([^<]*)<\/script>/u.exec(html)?.[1] ?? "";
+    const session = (yield* fromJsonText(Buffer.from(data, "base64").toString("utf8"))) as {
+      renderedTools?: Record<string, { callHtml?: string }>;
+    };
+    return session.renderedTools?.["call-1"]?.callHtml ?? "";
+  });
+
 const rendersThemInHtmlExportsToo = Effect.gen(function* () {
   initTheme("dark");
   const dir = yield* fs.makeTempDirectory({ prefix: "msa-10285-" });
@@ -57,61 +94,14 @@ const rendersThemInHtmlExportsToo = Effect.gen(function* () {
   const harness = yield* Effect.promise(() =>
     createHarness({ extensionFactories: [mcpExtension], sessionManager }),
   );
-  return yield* rendersThemInHtmlExportsTooStep1(dir, sessionManager, harness);
+  try {
+    appendMcpToolTurn(sessionManager);
+    expect(stripAnsi(yield* exportedToolCallHtml(harness, dir))).toContain("my_docs/search");
+  } finally {
+    harness.cleanup();
+    yield* fs.remove(dir, { force: true, recursive: true });
+  }
 });
-
-const rendersThemInHtmlExportsTooStep1 = (
-  dir: string,
-  sessionManager: codingAgentTypes.SessionManager,
-  harness: harnessTypes.Harness,
-) =>
-  Effect.gen(function* () {
-    try {
-      sessionManager.appendMessage({ content: "search", role: "user", timestamp: 1 });
-      sessionManager.appendMessage({
-        api: "anthropic-messages",
-        content: [
-          {
-            arguments: { query: "msa" },
-            id: "call-1",
-            name: "mcp__my_docs__search",
-            type: "toolCall",
-          },
-        ],
-        model: "test",
-        provider: "anthropic-api",
-        role: "assistant",
-        stopReason: "toolUse",
-        timestamp: 2,
-        usage: {
-          cacheRead: 0,
-          cacheWrite: 0,
-          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0, total: 0 },
-          input: 0,
-          output: 0,
-          totalTokens: 0,
-        },
-      });
-
-      const html = yield* fs.readFileString(
-        yield* Effect.promise(() =>
-          harness.session.context.exports.exportToHtml(joinPath(dir, "export.html")),
-        ),
-      );
-      const data =
-        /<script id="session-data" type="application\/json">([^<]*)<\/script>/u.exec(html)?.[1] ??
-        "";
-      const session = (yield* fromJsonText(Buffer.from(data, "base64").toString("utf8"))) as {
-        renderedTools?: Record<string, { callHtml?: string }>;
-      };
-      expect(stripAnsi(session.renderedTools?.["call-1"]?.callHtml ?? "")).toContain(
-        "my_docs/search",
-      );
-    } finally {
-      harness.cleanup();
-      yield* fs.remove(dir, { force: true, recursive: true });
-    }
-  });
 
 const rendersCallsToMcpToolsThatAre = () => Effect.runPromise(rendersCallsToMcpToolsThat);
 

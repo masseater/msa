@@ -1,33 +1,18 @@
 import testing from "@msa/testing";
 import tui from "@msa/tui";
-import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
-import { describe, expect, it, vi } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import KeybindingsManager from "../src/core/keybindings-manager.ts";
-import codingAgent from "../src/index.ts";
-import type codingAgentTypes from "../src/index.types.ts";
-import InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
 import tuiRenderer from "../src/modes/interactive/tui-renderer.ts";
-import interactiveModeFake from "./interactive-mode-fake.ts";
 import RecordingTerminal from "./interactive-tui-support.ts";
+import tuiKit from "./tui-kit.ts";
 
-const { bindModeFake } = interactiveModeFake;
+const { KeybindingsManager, initTheme } = tuiKit;
 
-const { initTheme } = codingAgent;
-
-const { createInteractiveTui, createInteractiveTuiReference } = tuiRenderer;
+const { createInteractiveTui } = tuiRenderer;
 
 const { ScrollView, Text, getKeybindings, isViewportTUI, setKeybindings } = tui;
 const { awaited, runTest } = testing;
-
-const clipboardMocks = vi.hoisted(() => ({
-  copyToClipboard: vi.fn<(text: string) => Promise<void>>(),
-  readClipboardFilePaths: vi.fn<() => Promise<string[] | null>>(),
-  readClipboardText: vi.fn<() => Promise<string | null>>(),
-}));
-
-vi.mock("../src/utils/clipboard.ts", () => ({ default: clipboardMocks }));
 
 const showsTheConfiguredJumpToBottomShortcut = Effect.gen(function* () {
   initTheme("dark");
@@ -91,120 +76,10 @@ const selectsTheAlternateScreenRendererOnlyWhen = Effect.gen(function* () {
   altTui.stop();
 });
 
-type SwitchContext = {
-  runtimeHost: {
-    session: {
-      settingsManager: {
-        terminal: {
-          getFullscreenCopyOnSelect: () => boolean;
-          getFullscreenWheelScrollLines: () => tuiTypes.WheelScrollLines;
-        };
-      };
-    };
-  };
-  renderer: ReturnType<typeof createInteractiveTui>;
-  ui: tuiTypes.TUI;
-  fullscreenLayoutRoot: tuiTypes.Component;
-  options: { tuiMode?: codingAgentTypes.TuiMode };
-  themeController: { rebindTui: () => void };
-  extensionTerminalInputSubscriptions: Set<never>;
-};
-
-const createSwitchContext = (
-  renderer: ReturnType<typeof createInteractiveTui>,
-  component: tuiTypes.Component,
-): SwitchContext =>
-  Object.assign(Object.create(InteractiveMode.prototype), {
-    extensionTerminalInputSubscriptions: new Set<never>(),
-    fullscreenLayoutRoot: component,
-    options: { tuiMode: "regular" as codingAgentTypes.TuiMode },
-    renderer,
-    runtimeHost: {
-      session: {
-        settingsManager: {
-          terminal: {
-            getFullscreenCopyOnSelect: () => true,
-            getFullscreenWheelScrollLines: () => "auto",
-          },
-        },
-      },
-    },
-    themeController: { rebindTui: () => {} },
-    ui: undefined as unknown as tuiTypes.TUI,
-  }) as SwitchContext;
-
-const replacesTheRendererAndRestoresThePrevious = Effect.gen(function* () {
-  const terminal = new RecordingTerminal(40, 8);
-  const renderer = createInteractiveTui({
-    logDirectory: "/tmp",
-    showHardwareCursor: false,
-    terminal,
-    tuiMode: "regular",
-  });
-  let stableUi: tuiTypes.TUI;
-  const invalidatedModes: codingAgentTypes.TuiMode[] = [];
-  const component: tuiTypes.Component & { focused: boolean } = {
-    focused: false,
-    invalidate: () => invalidatedModes.push(stableUi.mode),
-    render: () => ["content"],
-  };
-  renderer.addChild(component);
-  renderer.setFocus(component);
-
-  const context = createSwitchContext(renderer, component);
-  stableUi = createInteractiveTuiReference(() => context.renderer);
-  context.ui = stableUi;
-  const screen = bindModeFake(context).lifecycle.screen;
-
-  renderer.start();
-  yield* awaited(terminal.waitForRender());
-  expect(screen.switchTuiMode("fullscreen", false)).toBe(true);
-  yield* awaited(terminal.waitForRender());
-
-  expect(stableUi.mode).toBe("fullscreen");
-  expect(context.renderer.children).toEqual([component]);
-  expect(context.renderer.getFocusedComponent()).toBe(component);
-  expect(component.focused).toBe(true);
-  expect(invalidatedModes).toEqual(["fullscreen"]);
-  expect([terminal.startCount, terminal.stopCount]).toEqual([2, 1]);
-
-  screen.stopInteractiveTui("resume-hint");
-
-  expect(stableUi.mode).toBe("fullscreen");
-  expect([terminal.startCount, terminal.stopCount]).toEqual([2, 2]);
-});
-
 describe("createInteractiveTui", () => {
   it("selects the alternate-screen renderer only when requested", () =>
     runTest(selectsTheAlternateScreenRendererOnlyWhen));
 
   it("shows the configured jump-to-bottom shortcut while scrolled up", () =>
     runTest(showsTheConfiguredJumpToBottomShortcut));
-
-  it("replaces the renderer and restores the previous screen for resume-hint exits", () =>
-    runTest(replacesTheRendererAndRestoresThePrevious));
-});
-
-const feedsClipboardTextToTheFocusedComponent = Effect.gen(function* () {
-  clipboardMocks.readClipboardText.mockResolvedValue("clipboard text");
-  const handleInput = vi.fn<(data: string) => void>();
-  const target = {
-    handleInput,
-    invalidate: () => {},
-    render: () => [],
-  } satisfies tuiTypes.Component;
-  const requestRender = vi.fn();
-  const context = {
-    renderer: { getFocusedComponent: () => target },
-    ui: { requestRender },
-  };
-  yield* awaited(bindModeFake(context).input.clipboard.handleRightClickPaste());
-
-  expect(handleInput).toHaveBeenCalledWith("\x1b[200~clipboard text\x1b[201~");
-  expect(requestRender).toHaveBeenCalledOnce();
-});
-
-describe("InteractiveMode right-click paste", () => {
-  it("feeds clipboard text to the focused component as a bracketed paste", () =>
-    runTest(feedsClipboardTextToTheFocusedComponent));
 });

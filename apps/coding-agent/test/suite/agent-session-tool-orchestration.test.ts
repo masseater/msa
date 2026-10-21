@@ -1,5 +1,4 @@
 import ai from "@msa/ai";
-import type compatTypes from "@msa/ai/compat.types";
 import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { Type } from "typebox";
@@ -111,7 +110,7 @@ const supportsToolsThatCallOtherTools = Effect.gen(function* () {
 
   expect(requestTools[0]).toEqual(["run_tools"]);
   const result = harness.session.messages.find(
-    (message): message is compatTypes.ToolResultMessage => message.role === "toolResult",
+    (message): message is aiTypes.ToolResultMessage => message.role === "toolResult",
   );
   if (result === undefined) throw new Error("No tool result");
   expect(result.content).toEqual([

@@ -1,19 +1,16 @@
 import compat from "@msa/ai/compat";
-import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import extensionsTypes from "../src/core/extensions/types.ts";
 import sessionExport from "../src/core/session-export.ts";
 import src from "../src/index.ts";
 import type srcTypes from "../src/index.types.ts";
 import sessionShare from "../src/modes/interactive/session-share.ts";
 import utilities from "./utilities.ts";
 
-const { defineTool } = extensionsTypes;
-const { SessionManager, SettingsManager, createAgentSession } = src;
+const { SessionManager, SettingsManager, createAgentSession, defineTool } = src;
 const { serializeSessionBranch } = sessionExport;
 const { createShareTrailingEntries } = sessionShare;
 
@@ -63,7 +60,7 @@ const createShareSession = (tempDir: string, sessionManager: srcTypes.SessionMan
 
 const appendToolTurn = (sessionManager: srcTypes.SessionManager) => {
   const userId = sessionManager.appendMessage(userMsg("hello"));
-  const assistant: compatTypes.AssistantMessage = {
+  const assistant = {
     ...assistantMsg(""),
     content: [
       {
@@ -73,14 +70,14 @@ const appendToolTurn = (sessionManager: srcTypes.SessionManager) => {
         type: "toolCall" as const,
       },
     ],
-    stopReason: "toolUse",
+    stopReason: "toolUse" as const,
   };
   const assistantId = sessionManager.appendMessage(assistant);
-  const result: compatTypes.ToolResultMessage = {
+  const result = {
     content: [{ text: "done", type: "text" as const }],
     details: {},
     isError: false,
-    role: "toolResult",
+    role: "toolResult" as const,
     timestamp: currentTimeMillis(),
     toolCallId: "call-1",
     toolName: "share_tool",

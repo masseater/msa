@@ -241,21 +241,6 @@ const extensionSendusermessageCanOptIntoExtension = Effect.gen(function* () {
   expect(harness.getPendingResponseCount()).toBe(0);
 });
 
-const expandsSkillCommandsBeforeSendingThePrompt = () =>
-  Effect.runPromise(expandsSkillCommandsBeforeSendingThe);
-
-const expandsPromptTemplatesBeforeSendingThePrompt = () =>
-  Effect.runPromise(expandsPromptTemplatesBeforeSendingThe);
-
-const sendusermessageCanOptIntoPromptTemplateExpansion = () =>
-  Effect.runPromise(sendusermessageCanOptIntoPromptTemplate);
-
-const dispatchesExtensionCommandsWithoutConsumingAProvider = () =>
-  Effect.runPromise(dispatchesExtensionCommandsWithoutConsumingA);
-
-const extensionSendusermessageCanOptIntoExtensionCommand = () =>
-  Effect.runPromise(extensionSendusermessageCanOptIntoExtension);
-
 const afterEachHook2 = () =>
   runTest(
     Effect.gen(function* () {
@@ -275,28 +260,18 @@ const afterEachHook2 = () =>
 describe("AgentSession prompt characterization", () => {
   afterEach(afterEachHook2);
 
-  it(
-    "expands skill commands before sending the prompt, over a prompt template of the same name",
-    expandsSkillCommandsBeforeSendingThePrompt,
-  );
+  it("expands skill commands before sending the prompt, over a prompt template of the same name", () =>
+    Effect.runPromise(expandsSkillCommandsBeforeSendingThe));
 
-  it(
-    "expands prompt templates before sending the prompt",
-    expandsPromptTemplatesBeforeSendingThePrompt,
-  );
+  it("expands prompt templates before sending the prompt", () =>
+    Effect.runPromise(expandsPromptTemplatesBeforeSendingThe));
 
-  it(
-    "sendUserMessage can opt into prompt template expansion",
-    sendusermessageCanOptIntoPromptTemplateExpansion,
-  );
+  it("sendUserMessage can opt into prompt template expansion", () =>
+    Effect.runPromise(sendusermessageCanOptIntoPromptTemplate));
 
-  it(
-    "dispatches extension commands without consuming a provider response",
-    dispatchesExtensionCommandsWithoutConsumingAProvider,
-  );
+  it("dispatches extension commands without consuming a provider response", () =>
+    Effect.runPromise(dispatchesExtensionCommandsWithoutConsumingA));
 
-  it(
-    "extension sendUserMessage can opt into extension command dispatch",
-    extensionSendusermessageCanOptIntoExtensionCommand,
-  );
+  it("extension sendUserMessage can opt into extension command dispatch", () =>
+    Effect.runPromise(extensionSendusermessageCanOptIntoExtension));
 });

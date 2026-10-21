@@ -13,6 +13,12 @@ declare namespace sessionKitTypes {
 
   type Responder = (input: ResponderInput) => void;
 
+  type AgentTool = agentTypes.AgentTool;
+
+  type StreamFn = agentTypes.StreamFn;
+
+  type AssistantMessage = compatTypes.AssistantMessage;
+
   interface SessionOptions {
     readonly agentTools?: agentTypes.AgentTool[];
     readonly apiKey?: string | undefined;

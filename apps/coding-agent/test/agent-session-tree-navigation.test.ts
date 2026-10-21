@@ -155,6 +155,40 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
   },
 );
 
+const attachesSummaryToNestedUserMessageParent = Effect.gen(function* () {
+  const { session, sessionManager } = ctx2;
+
+  yield* awaited(session.run.prompting.prompt("Message one"));
+  yield* awaited(session.agent.waitForIdle());
+  yield* awaited(session.run.prompting.prompt("Message two"));
+  yield* awaited(session.agent.waitForIdle());
+  yield* awaited(session.run.prompting.prompt("Message three"));
+  yield* awaited(session.agent.waitForIdle());
+
+  const entries = sessionManager.getEntries();
+  const userEntries = entries.filter((e) => e.type === "message" && e.message.role === "user");
+  expect(userEntries.length).toBe(3);
+
+  const u2 = userEntries[1];
+  if (u2 === undefined) throw new Error("expected a second user entry");
+  const a1 = entries.find((e) => e.id === u2.parentId);
+
+  const result = yield* awaited(session.context.tree.navigateTree(u2.id, { summarize: true }));
+
+  expect(result.cancelled).toBe(false);
+  expect(result.editorText).toBe("Message two");
+  expect(result.summaryEntry).toBeDefined();
+
+  expect(result.summaryEntry?.parentId).toBe(a1?.id);
+
+  const children = sessionManager.getChildren(a1!.id);
+  expect(children.length).toBe(2);
+
+  const childTypes = children.map((c) => c.type).sort();
+  expect(childTypes).toContain("branch_summary");
+  expect(childTypes).toContain("message");
+});
+
 describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
   "AgentSession tree navigation e2e",
   () => {
@@ -166,46 +200,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
 
     it(
       "should attach summary to correct parent when navigating to nested user message",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            const { session, sessionManager } = ctx2;
-
-            yield* awaited(session.run.prompting.prompt("Message one"));
-            yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.run.prompting.prompt("Message two"));
-            yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.run.prompting.prompt("Message three"));
-            yield* awaited(session.agent.waitForIdle());
-
-            const entries = sessionManager.getEntries();
-            const userEntries = entries.filter(
-              (e) => e.type === "message" && e.message.role === "user",
-            );
-            expect(userEntries.length).toBe(3);
-
-            const u2 = userEntries[1];
-            if (u2 === undefined) throw new Error("expected a second user entry");
-            const a1 = entries.find((e) => e.id === u2.parentId);
-
-            const result = yield* awaited(
-              session.context.tree.navigateTree(u2.id, { summarize: true }),
-            );
-
-            expect(result.cancelled).toBe(false);
-            expect(result.editorText).toBe("Message two");
-            expect(result.summaryEntry).toBeDefined();
-
-            expect(result.summaryEntry?.parentId).toBe(a1?.id);
-
-            const children = sessionManager.getChildren(a1!.id);
-            expect(children.length).toBe(2);
-
-            const childTypes = children.map((c) => c.type).sort();
-            expect(childTypes).toContain("branch_summary");
-            expect(childTypes).toContain("message");
-          }),
-        ),
+      () => runTest(attachesSummaryToNestedUserMessageParent),
       120000,
     );
   },

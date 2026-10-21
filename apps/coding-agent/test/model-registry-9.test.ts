@@ -2,29 +2,20 @@ import compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import type modelRegistryTypes from "../src/core/model-registry.types.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
+import modelRegistryFixture from "./model-registry-fixture.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
-const { clearApiKeyCache } = providerAuth;
 
 const { getApiProvider } = compat;
 
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistryFixture;
 const { captureThrown, emptyContext, openAiModel } = modelRegistrySupport;
 
-const { awaited, currentTimeMillis, joinPath, makeTempDir, randomSuffixSync, removePath, runTest } =
-  testing;
+const { awaited, currentTimeMillis, runTest } = testing;
 
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
+const fixture = useModelRegistryFixture();
 
 function providerConfig(
   baseUrl: string,
@@ -54,7 +45,7 @@ function getModelsForProvider(registry: modelRegistryTypes.ModelRegistry, provid
 const failedRegisterproviderDoesNotRemoveExistingProvider = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       registry.registerProvider("demo-provider", {
         api: "openai-completions",
@@ -104,7 +95,7 @@ const unregisterproviderRemovesTheRuntimeOauthOverlayWithout = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       registry.registerProvider("anthropic-api", {
         oauth: {
@@ -135,7 +126,7 @@ const unregisterproviderRemovesTheRuntimeOauthOverlayWithout = () =>
 const streamsimpleOverlaysDoNotMutateTheGlobal = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       registry.registerProvider("stream-override-provider", {
         api: "openai-completions",
@@ -163,7 +154,7 @@ const streamsimpleOverlaysDoNotMutateTheGlobal = () =>
 const baseurlOnlyOverrideKeepsBuiltInProvider = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       registry.registerProvider("anthropic-api", { baseUrl: "https://proxy.test/anthropic" });
       yield* awaited(registry.refresh());
@@ -177,7 +168,7 @@ const baseurlOnlyOverrideKeepsBuiltInProvider = () =>
 const modelsOnlyOverrideReplacesBuiltInProvider = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       registry.registerProvider("anthropic-api", {
         ...providerConfig(
@@ -201,7 +192,7 @@ const modelsOnlyOverrideReplacesBuiltInProvider = () =>
 const modelsPlusBaseurlOverrideReplacesBuiltIn = () =>
   runTest(
     Effect.gen(function* () {
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       registry.registerProvider("anthropic-api", {
         ...providerConfig(
@@ -223,25 +214,7 @@ const modelsPlusBaseurlOverrideReplacesBuiltIn = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("dynamic provider lifecycle", () => {
     test(
       "failed registerProvider does not remove existing provider models",

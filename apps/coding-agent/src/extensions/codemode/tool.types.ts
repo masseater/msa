@@ -47,6 +47,10 @@ declare namespace toolTypes {
     cost?: number;
   }
 
+  type CodemodeToolResult = extensionsTypesTypes.AgentToolResult<CodemodeToolDetails | undefined>;
+
+  type CodemodeRenderContext = extensionsTypesTypes.ToolRenderContext;
+
   interface CodemodeToolDetails {
     calls: CodemodeNestedCall[];
 

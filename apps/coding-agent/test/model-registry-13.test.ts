@@ -2,46 +2,28 @@ import ai from "@msa/ai";
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
+import { describe, expect, test, vi } from "vite-plus/test";
 
-import AuthStorage from "../src/core/auth-storage.ts";
-import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import ModelConfig from "../src/core/model-config.ts";
-import providerAuth from "../src/core/provider-composer/provider-auth.ts";
 import type codingAgentTypes from "../src/index.types.ts";
+import modelRegistryFixture from "./model-registry-fixture.ts";
 import modelRegistrySupport from "./model-registry-support.ts";
-import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 
-const { clearApiKeyCache } = providerAuth;
 const { createProvider } = ai;
 
 const { makeGate } = modelRegistrySupport;
-const { createModelRegistry } = modelRuntimeTestUtils;
+const { useModelRegistryFixture } = modelRegistryFixture;
 
-const {
-  awaited,
-  joinPath,
-  makeTempDir,
-  randomSuffixSync,
-  readTextFile,
-  removePath,
-  runTest,
-  writeJsonFile,
-  writeTextFile,
-} = testing;
+const { awaited, joinPath, readTextFile, runTest, writeJsonFile, writeTextFile } = testing;
 
-let tempDir: string;
-
-let modelsJsonPath: string;
-
-let authStorage: authStorageTypes.AuthStorage;
+const fixture = useModelRegistryFixture();
 
 function toShPath(value: string): string {
   return value.replace(/\\/gu, "/").replace(/"/gu, '\\"');
 }
 
 const writeRawModelsJson = (providers: Record<string, unknown>) =>
-  writeJsonFile(modelsJsonPath, { providers });
+  writeJsonFile(fixture.modelsJsonPath, { providers });
 
 function providerWithApiKey(apiKey: string) {
   return {
@@ -81,7 +63,7 @@ const createLimitedKeyRegistry = (): Promise<codingAgentTypes.ModelRegistry> =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       yield* awaited(
-        authStorage.modify("filtered-provider", () =>
+        fixture.authStorage.modify("filtered-provider", () =>
           effectRunPromise(
             awaited({
               key: "limited-key",
@@ -90,7 +72,7 @@ const createLimitedKeyRegistry = (): Promise<codingAgentTypes.ModelRegistry> =>
           ),
         ),
       );
-      return yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      return yield* awaited(fixture.createRegistry());
     }),
   );
 
@@ -143,7 +125,7 @@ const filteredAvailableIds = (registry: codingAgentTypes.ModelRegistry): string[
 const providerAuthStatusReportsCommandApikeyValues = () =>
   runTest(
     Effect.gen(function* () {
-      const counterFile = joinPath(tempDir, "status-counter");
+      const counterFile = joinPath(fixture.tempDir, "status-counter");
       yield* writeTextFile(counterFile, "0");
       const counterPath = toShPath(counterFile);
       const command = `!sh -c 'echo 1 > "${counterPath}"; echo key-value'`;
@@ -151,7 +133,7 @@ const providerAuthStatusReportsCommandApikeyValues = () =>
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
 
       expect(registry.getProviderAuthStatus("custom-provider")).toEqual({
         configured: true,
@@ -164,7 +146,7 @@ const providerAuthStatusReportsCommandApikeyValues = () =>
 const getavailableDoesNotExecuteCommandBackedApikey = () =>
   runTest(
     Effect.gen(function* () {
-      const counterFile = joinPath(tempDir, "counter");
+      const counterFile = joinPath(fixture.tempDir, "counter");
       yield* writeTextFile(counterFile, "0");
 
       const counterPath = toShPath(counterFile);
@@ -173,7 +155,7 @@ const getavailableDoesNotExecuteCommandBackedApikey = () =>
         "custom-provider": providerWithApiKey(command),
       });
 
-      const registry = yield* awaited(createModelRegistry(authStorage, modelsJsonPath));
+      const registry = yield* awaited(fixture.createRegistry());
       const available = registry.getAvailable();
 
       expect(available.some((m) => m.provider === "custom-provider")).toBe(true);
@@ -198,7 +180,7 @@ const aBackgroundRefreshThatLandsDuringAn = () =>
     Effect.gen(function* () {
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-      const config = yield* awaited(ModelConfig.load(modelsJsonPath));
+      const config = yield* awaited(ModelConfig.load(fixture.modelsJsonPath));
       const background = makeGate();
       const releaseBackground = () => {
         background.open();
@@ -221,25 +203,7 @@ const aBackgroundRefreshThatLandsDuringAn = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(makeTempDir(`msa-test-model-registry-${randomSuffixSync()}-`)).then((dir) => {
-    tempDir = dir;
-    modelsJsonPath = joinPath(tempDir, "models.json");
-    authStorage = AuthStorage.inMemory();
-    return dir;
-  });
-
-const afterEachHook = () => {
-  clearApiKeyCache();
-  vi.restoreAllMocks();
-  return runTest(removePath(tempDir));
-};
-
 describe("ModelRegistry", () => {
-  beforeEach(beforeEachHook);
-
-  afterEach(afterEachHook);
-
   describe("API key resolution", () => {
     describe("request-time resolution", () => {
       test(

@@ -7,7 +7,6 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import codingAgent from "../../src/index.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
-import agentSessionCompactionSupport2 from "./agent-session-compaction-support2.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
@@ -15,9 +14,7 @@ const { estimateTokens } = codingAgent;
 
 const { fauxAssistantMessage } = ai;
 
-const { afterEachHook } = agentSessionCompactionSupport2;
-
-const { harnesses, seedCompactableSession } = agentSessionCompactionSupport;
+const { afterEachHook, harnesses, seedCompactableSession } = agentSessionCompactionSupport;
 
 const { createHarness, getUserTexts } = harnessModule;
 

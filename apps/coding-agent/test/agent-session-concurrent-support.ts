@@ -5,7 +5,6 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 
 import systemPrompt from "../src/core/system-prompt.ts";
-import type systemPromptTypes from "../src/core/system-prompt.types.ts";
 import type codingAgentTypes from "../src/index.types.ts";
 import type agentSessionConcurrentSupportTypes from "./agent-session-concurrent-support.types.ts";
 import sessionKit from "./session-kit.ts";
@@ -66,7 +65,7 @@ const installExtensionRunner = (
     emit: () => runTest(Effect.void),
     emitBeforeAgentStart: (
       _trigger: unknown,
-      systemPromptOptions: systemPromptTypes.BuildSystemPromptOptions,
+      systemPromptOptions: codingAgentTypes.BuildSystemPromptOptions,
     ) =>
       runTest(
         Effect.succeed({

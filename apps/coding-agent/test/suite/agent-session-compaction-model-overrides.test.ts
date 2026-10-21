@@ -135,12 +135,6 @@ const capturesModelIdentityBeforeAwaitingSummarization = Effect.gen(function* ()
   expect(requests).toEqual([{ id: "first", maxTokens: 1600 }]);
 });
 
-const usesTheNewlySelectedModelWithoutChanging = () =>
-  Effect.runPromise(usesTheNewlySelectedModelWithout);
-
-const capturesModelIdentityBeforeAwaitingSummarizationAuth = () =>
-  Effect.runPromise(capturesModelIdentityBeforeAwaitingSummarization);
-
 const harnessRecordingPreparations = (input: {
   readonly path: "manual" | "pre-prompt" | "post-run" | "overflow";
 }) =>
@@ -293,13 +287,9 @@ describe("AgentSession compaction model overrides", () => {
     while (harnesses.length !== 0) harnesses.pop()?.cleanup();
   });
 
-  it(
-    "uses the newly selected model without changing ordinary settings",
-    usesTheNewlySelectedModelWithoutChanging,
-  );
+  it("uses the newly selected model without changing ordinary settings", () =>
+    Effect.runPromise(usesTheNewlySelectedModelWithout));
 
-  it(
-    "captures model identity before awaiting summarization auth",
-    capturesModelIdentityBeforeAwaitingSummarizationAuth,
-  );
+  it("captures model identity before awaiting summarization auth", () =>
+    Effect.runPromise(capturesModelIdentityBeforeAwaitingSummarization));
 });

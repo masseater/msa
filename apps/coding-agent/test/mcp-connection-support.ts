@@ -1,14 +1,10 @@
 import mcp from "@msa/mcp";
-import type mcpTypes from "@msa/mcp/index.types";
 import testingModule from "@msa/mcp/testing";
-import type testingTypes from "@msa/mcp/testing.types";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
 import runtime from "../src/extensions/mcp/runtime.ts";
-import type runtimeTypes from "../src/extensions/mcp/runtime.types.ts";
-import type codingAgentTypes from "../src/index.types.ts";
 import type mcpConnectionSupportTypes from "./mcp-connection-support.types.ts";
 
 const { McpOAuthCredentialStore, McpServerConnection } = runtime;
@@ -17,15 +13,15 @@ const { createInMemoryTransportPair } = testingModule;
 
 const { runTest } = testing;
 
-const fakeServers: testingTypes.InMemoryTransport[] = [];
+const fakeServers: mcpConnectionSupportTypes.FakeServer[] = [];
 
-const STDIO_ENTRY: codingAgentTypes.McpServerEntry = {
+const STDIO_ENTRY: mcpConnectionSupportTypes.ServerEntry = {
   config: { command: "unused" },
   name: "fake",
   source: "test",
 };
 
-const HTTP_ENTRY: codingAgentTypes.McpServerEntry = {
+const HTTP_ENTRY: mcpConnectionSupportTypes.ServerEntry = {
   config: { headers: { Authorization: "x" }, url: "http://unused.invalid" },
   name: "fake",
   source: "test",
@@ -44,7 +40,7 @@ const respond = (
   options: mcpConnectionSupportTypes.TransportOptions,
   id: string | number,
   method: string,
-): mcpTypes.JsonRpcMessage => {
+): mcpConnectionSupportTypes.JsonRpcMessage => {
   switch (method) {
     case "initialize":
       return { id, jsonrpc: "2.0", result: initializeResult(options) };
@@ -72,7 +68,7 @@ const createTransport = (options: mcpConnectionSupportTypes.TransportOptions = {
   void pair.server.start();
   if (options.expireFirstCall === true) {
     const send = pair.client.send.bind(pair.client);
-    pair.client.send = (message: mcpTypes.JsonRpcMessage) =>
+    pair.client.send = (message: mcpConnectionSupportTypes.JsonRpcMessage) =>
       "method" in message && message.method === "tools/call"
         ? Promise.reject(new McpSessionExpiredError("gone"))
         : send(message);
@@ -87,9 +83,9 @@ const failingTransport = (error: Error) => () => {
 };
 
 const connect = (
-  entry: codingAgentTypes.McpServerEntry,
+  entry: mcpConnectionSupportTypes.ServerEntry,
   transports: (() => ReturnType<typeof createTransport>)[],
-  log?: runtimeTypes.McpServerLog,
+  log?: mcpConnectionSupportTypes.ServerLog,
 ) => {
   let opened = 0;
   const connection = new McpServerConnection({

@@ -1,48 +1,26 @@
-import { tmpdir } from "node:os";
-
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
+import { describe, expect, it } from "vite-plus/test";
 
-import DefaultPackageManager from "../src/core/default-package-manager.ts";
-import type packageManagerTypes from "../src/core/package-manager.types.ts";
 import commandRunner from "../src/core/package-manager/command-runner.ts";
-import SettingsManager from "../src/core/settings-manager.ts";
-import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 import gitUpdateSupport from "./git-update-support.ts";
+import packageManagerFixture from "./package-manager-fixture.ts";
 import parsedSource from "./parsed-source.ts";
-import testNetworkEnv from "./test-network-env.ts";
 
 const { asGit } = parsedSource;
 const { getFileContent, gitSource } = gitUpdateSupport;
 
-const { allowNetwork } = testNetworkEnv;
+const { awaited, joinPath, makeDirectory, removePath, runTest, toJsonText, writeTextFile } =
+  testing;
+const { usePackageManagerFixture } = packageManagerFixture;
 
-const {
-  awaited,
-  currentTimeMillis,
-  joinPath,
-  makeDirectory,
-  pathExists,
-  randomSuffixSync,
-  removePath,
-  runTest,
-  toJsonText,
-  writeTextFile,
-} = testing;
-let tempDir: string;
-
-let agentDir: string;
-
-let settingsManager: settingsManagerTypes.SettingsManager;
-
-let packageManager: packageManagerTypes.DefaultPackageManager;
+const fixture = usePackageManagerFixture();
 
 const writeStaleGitCache = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
-    const cachedDir = packageManager.git.paths.getGitInstallPath(
-      asGit(packageManager.sources.parseSource(gitSource)),
+    const cachedDir = fixture.packageManager.git.paths.getGitInstallPath(
+      asGit(fixture.packageManager.sources.parseSource(gitSource)),
       "temporary",
     );
     const extensionFile = joinPath(cachedDir, "msa-extensions", "session-breakdown.ts");
@@ -56,32 +34,6 @@ const writeStaleGitCache = () =>
     yield* writeTextFile(extensionFile, "// stale");
     return { cachedDir, effectRunPromise, extensionFile };
   });
-
-const beforeEachHook4 = () =>
-  runTest(
-    Effect.gen(function* () {
-      allowNetwork();
-      tempDir = joinPath(tmpdir(), `git-update-test-${currentTimeMillis()}-${randomSuffixSync()}`);
-      yield* makeDirectory(tempDir);
-      agentDir = joinPath(tempDir, "agent");
-      yield* makeDirectory(agentDir);
-      settingsManager = SettingsManager.inMemory();
-      packageManager = new DefaultPackageManager({
-        agentDir,
-        cwd: tempDir,
-        settingsManager,
-      });
-    }),
-  );
-
-const afterEachHook4 = () =>
-  runTest(
-    Effect.gen(function* () {
-      if (tempDir.length > 0 && (yield* pathExists(tempDir))) {
-        yield* removePath(tempDir);
-      }
-    }),
-  );
 
 const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
   runTest(
@@ -115,7 +67,7 @@ const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
         );
 
       yield* awaited(
-        packageManager.resolution.resolveExtensionSources([gitSource], { temporary: true }),
+        fixture.packageManager.resolution.resolveExtensionSources([gitSource], { temporary: true }),
       );
 
       expect(executedCommands).toContain(
@@ -128,10 +80,6 @@ const shouldRefreshCachedTemporaryGitSourcesWhen = () =>
   );
 
 describe("DefaultPackageManager git update", () => {
-  beforeEach(beforeEachHook4);
-
-  afterEach(afterEachHook4);
-
   describe("temporary git sources", () => {
     it(
       "should refresh cached temporary git sources when resolving",

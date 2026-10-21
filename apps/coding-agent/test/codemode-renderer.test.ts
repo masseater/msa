@@ -1,12 +1,10 @@
 import { stripVTControlCharacters } from "node:util";
 
-import type agentTypes from "@msa/agent-core/index.types";
 import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
 import { afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
-import type extensionsTypesTypes from "../src/core/extensions/types.types.ts";
 import renderer from "../src/extensions/codemode/renderer.ts";
 import type toolTypes from "../src/extensions/codemode/tool.types.ts";
 import ToolExecutionComponent from "../src/modes/interactive/components/tool-execution.ts";
@@ -18,7 +16,7 @@ const { initTheme, theme } = themeModule;
 const { runTest } = testing;
 
 function render(
-  result: agentTypes.AgentToolResult<toolTypes.CodemodeToolDetails | undefined>,
+  result: toolTypes.CodemodeToolResult,
   isError = false,
   expanded = true,
   width = 200,
@@ -38,7 +36,7 @@ function render(
     showImages: false,
     state: {},
     toolCallId: "call",
-  } satisfies extensionsTypesTypes.ToolRenderContext;
+  } satisfies toolTypes.CodemodeRenderContext;
   const component = codemodeRenderers.renderResult?.(
     result,
     { expanded, isPartial: false },

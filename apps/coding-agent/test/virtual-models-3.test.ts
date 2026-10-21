@@ -10,9 +10,7 @@ import codingAgent from "../src/index.ts";
 import utilities from "./utilities.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 
-const { createAgentSession } = codingAgent;
-
-const { SessionManager } = codingAgent;
+const { SessionManager, createAgentSession } = codingAgent;
 const { fauxAssistantMessage } = ai;
 
 const { assistantFrom, createRuntime } = virtualModelsSupport;
@@ -252,15 +250,13 @@ const recordsAnExplicitModelOverrideOnResume = () =>
     }),
   );
 
-const beforeEachHook = () =>
-  runTest(
-    Effect.gen(function* () {
-      tempDir = yield* makeTempDir("msa-virtual-models-");
+describe("createAgentSession with virtual models", () => {
+  beforeEach(() =>
+    runTest(makeTempDir("msa-virtual-models-")).then((dir) => {
+      tempDir = dir;
+      return dir;
     }),
   );
-
-describe("createAgentSession with virtual models", () => {
-  beforeEach(beforeEachHook);
 
   afterEach(() => runTest(removePath(tempDir)));
 
