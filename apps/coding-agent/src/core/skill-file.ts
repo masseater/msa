@@ -1,14 +1,13 @@
 import frontmatterModule from "../utils/frontmatter.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import type skillsTypes from "./skills.types.ts";
 import sourceInfoModule from "./source-info.ts";
 import type sourceInfoTypes from "./source-info.types.ts";
 
 const { basename, dirname } = platformModule;
 const { parseFrontmatter } = frontmatterModule;
-const { readFileSync } = nodeFs;
+const { readText } = platformModule.files;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const MAX_NAME_LENGTH = 64;
@@ -77,21 +76,30 @@ function createSkillSourceInfo(
   }
 }
 
-function loadSkillFromFile(
-  filePath: string,
-  source: string,
-): { skill: skillsTypes.Skill | null; diagnostics: diagnosticsTypes.ResourceDiagnostic[] } {
+type SkillFileResult = {
+  skill: skillsTypes.Skill | null;
+  diagnostics: diagnosticsTypes.ResourceDiagnostic[];
+};
+
+function loadSkillFromFile(filePath: string, source: string): Promise<SkillFileResult> {
+  return readText(filePath).then(
+    (rawContent) => skillFromContent(filePath, source, rawContent),
+    (error: unknown) => ({
+      diagnostics: [
+        {
+          message: error instanceof Error ? error.message : "failed to read skill file",
+          path: filePath,
+          type: "warning" as const,
+        },
+      ],
+      skill: null,
+    }),
+  );
+}
+
+function skillFromContent(filePath: string, source: string, rawContent: string): SkillFileResult {
   const diagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
   const isDeclaredSkill = basename(filePath) === "SKILL.md";
-
-  let rawContent: string;
-  try {
-    rawContent = readFileSync(filePath, "utf-8");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "failed to read skill file";
-    diagnostics.push({ message, path: filePath, type: "warning" });
-    return { diagnostics, skill: null };
-  }
 
   let frontmatter: skillsTypes.SkillFrontmatter;
   try {

@@ -55,7 +55,9 @@ const shouldSkipTheMainRepoSDuplicate = Effect.gen(function* () {
   yield* writeTextFile(joinPath(main, "AGENTS.md"), "main repo instructions");
   yield* writeTextFile(joinPath(worktree, "AGENTS.md"), "worktree instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktreeSrc });
+  const files = yield* Effect.promise(() =>
+    loadProjectContextFiles({ agentDir, cwd: worktreeSrc }),
+  );
 
   expect(files.map((f) => f.content)).toEqual(["worktree instructions"]);
 });
@@ -65,7 +67,9 @@ const shouldLoadTheWorktreeSContextOnce = Effect.gen(function* () {
   yield* writeTextFile(joinPath(main, "AGENTS.md"), "main repo instructions");
   yield* makeSymlink(joinPath(main, "AGENTS.md"), joinPath(worktree, "AGENTS.md"));
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktreeSrc });
+  const files = yield* Effect.promise(() =>
+    loadProjectContextFiles({ agentDir, cwd: worktreeSrc }),
+  );
 
   expect(files.map((f) => f.path)).toEqual([joinPath(worktree, "AGENTS.md")]);
 });
@@ -77,7 +81,9 @@ const shouldSkipTheMainRepoSDuplicate2 = Effect.gen(function* () {
   yield* makeSymlink(shared, joinPath(main, "AGENTS.md"));
   yield* makeSymlink(shared, joinPath(worktree, "AGENTS.md"));
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktreeSrc });
+  const files = yield* Effect.promise(() =>
+    loadProjectContextFiles({ agentDir, cwd: worktreeSrc }),
+  );
 
   expect(files.map((f) => f.path)).toEqual([joinPath(worktree, "AGENTS.md")]);
 });
@@ -86,7 +92,9 @@ const shouldStillInheritTheMainRepoS = Effect.gen(function* () {
   const { main, worktreeSrc } = yield* setupNestedWorktree;
   yield* writeTextFile(joinPath(main, "AGENTS.md"), "main repo instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktreeSrc });
+  const files = yield* Effect.promise(() =>
+    loadProjectContextFiles({ agentDir, cwd: worktreeSrc }),
+  );
 
   expect(files.map((f) => f.content)).toEqual(["main repo instructions"]);
 });
@@ -96,7 +104,9 @@ const shouldOnlySkipTheSameFilenameNot = Effect.gen(function* () {
   yield* writeTextFile(joinPath(main, "CLAUDE.md"), "main repo instructions");
   yield* writeTextFile(joinPath(worktree, "AGENTS.md"), "worktree instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktreeSrc });
+  const files = yield* Effect.promise(() =>
+    loadProjectContextFiles({ agentDir, cwd: worktreeSrc }),
+  );
 
   expect(files.map((f) => f.content)).toEqual(["main repo instructions", "worktree instructions"]);
 });
@@ -115,7 +125,7 @@ const shouldNotSkipTheContainerSContext = Effect.gen(function* () {
   yield* writeTextFile(joinPath(proj, "AGENTS.md"), "container instructions");
   yield* writeTextFile(joinPath(worktree, "AGENTS.md"), "worktree instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktree });
+  const files = yield* Effect.promise(() => loadProjectContextFiles({ agentDir, cwd: worktree }));
 
   expect(files.map((f) => f.content)).toEqual(["container instructions", "worktree instructions"]);
 });
@@ -126,7 +136,9 @@ const shouldKeepLoadingAncestorsAboveTheMain = Effect.gen(function* () {
   yield* writeTextFile(joinPath(main, "AGENTS.md"), "main repo instructions");
   yield* writeTextFile(joinPath(worktree, "AGENTS.md"), "worktree instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: worktreeSrc });
+  const files = yield* Effect.promise(() =>
+    loadProjectContextFiles({ agentDir, cwd: worktreeSrc }),
+  );
 
   expect(files.map((f) => f.content)).toEqual(["outer instructions", "worktree instructions"]);
 });
@@ -142,7 +154,7 @@ const shouldNotSkipAnythingForASibling = Effect.gen(function* () {
   yield* writeTextFile(joinPath(sib, "AGENTS.md"), "sibling worktree instructions");
   yield* linkWorktree(main, sib, "sib");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: sibSrc });
+  const files = yield* Effect.promise(() => loadProjectContextFiles({ agentDir, cwd: sibSrc }));
 
   expect(files.map((f) => f.content)).toEqual([
     "outer instructions",
@@ -162,7 +174,7 @@ const shouldNotSkipTheSuperprojectSContext = Effect.gen(function* () {
   yield* writeTextFile(joinPath(subGitDir, "HEAD"), "ref: refs/heads/main\n");
   yield* writeTextFile(joinPath(sub, ".git"), `gitdir: ${subGitDir}\n`);
 
-  const files = loadProjectContextFiles({ agentDir, cwd: subSrc });
+  const files = yield* Effect.promise(() => loadProjectContextFiles({ agentDir, cwd: subSrc }));
 
   expect(files.map((f) => f.content)).toEqual([
     "superproject instructions",
@@ -181,7 +193,7 @@ const shouldKeepClimbingPastAnOrdinaryRepo = Effect.gen(function* () {
   yield* writeTextFile(joinPath(repo, "AGENTS.md"), "repo instructions");
   yield* writeTextFile(joinPath(leaf, "AGENTS.md"), "leaf instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: leaf });
+  const files = yield* Effect.promise(() => loadProjectContextFiles({ agentDir, cwd: leaf }));
 
   expect(files.map((f) => f.content)).toEqual([
     "outer instructions",
@@ -198,7 +210,7 @@ const shouldClimbNormallyWhenTheGitdirTarget = Effect.gen(function* () {
   yield* writeTextFile(joinPath(repo, "AGENTS.md"), "repo instructions");
   yield* writeTextFile(joinPath(src, "AGENTS.md"), "src instructions");
 
-  const files = loadProjectContextFiles({ agentDir, cwd: src });
+  const files = yield* Effect.promise(() => loadProjectContextFiles({ agentDir, cwd: src }));
 
   expect(files.map((f) => f.content)).toEqual(["repo instructions", "src instructions"]);
 });

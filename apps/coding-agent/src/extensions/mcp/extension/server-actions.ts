@@ -25,19 +25,24 @@ export default class McpServerActions {
     server: extensionInternalTypes.McpServer,
     patch: configTypes.McpServerConfigPatch,
     inProject = false,
-  ): string | undefined => {
+  ): Promise<string | undefined> => {
     const override = inProject ? this.host.projectConfig : server.entry.override;
     const entry =
       override !== undefined && override !== "" ? { ...server.entry, override } : server.entry;
-    if (entry.scope !== "extension") {
-      try {
-        this.host.updateConfig(entry, patch);
-      } catch (error) {
-        return `Could not update ${entry.override ?? entry.source}: ${toErrorMessage(error)}`;
-      }
-    }
-    server.entry = { ...entry, config: { ...entry.config, ...patch } };
-    return undefined;
+    const saved =
+      entry.scope === "extension"
+        ? Promise.resolve()
+        : Promise.resolve()
+            .then(() => this.host.updateConfig(entry, patch))
+            .then(() => undefined);
+    return saved.then(
+      () => {
+        server.entry = { ...entry, config: { ...entry.config, ...patch } };
+        return undefined;
+      },
+      (error: unknown) =>
+        `Could not update ${entry.override ?? entry.source}: ${toErrorMessage(error)}`,
+    );
   };
 
   readonly signIn = (
@@ -92,9 +97,10 @@ export default class McpServerActions {
         const connection = server.connection;
         const url = connection?.auth.oauthUrl;
         if (connection === undefined || url === undefined || url === "") return false;
-        const removed = this.host.connections.resources
-          .getCredentials(yield* awaited(loadMcpRuntime()))
-          .remove(server.entry.name, url);
+        const credentials = this.host.connections.resources.getCredentials(
+          yield* awaited(loadMcpRuntime()),
+        );
+        const removed = yield* awaited(credentials.remove(server.entry.name, url));
         yield* awaited(connection.signOut());
         return removed;
       }, this),
@@ -130,7 +136,7 @@ export default class McpServerActions {
   ): Promise<string | undefined> =>
     Effect.runPromise(
       awaitingWith(function* () {
-        const failed = this.saveConfig(server, { enabled }, inProject);
+        const failed = yield* awaited(this.saveConfig(server, { enabled }, inProject));
         if (failed !== undefined && failed !== "") return failed;
         if (!enabled) {
           const connection = server.connection;
@@ -157,9 +163,12 @@ export default class McpServerActions {
   readonly setExposure = (
     server: extensionInternalTypes.McpServer,
     exposure: configTypes.McpExposure,
-  ): string | undefined => {
-    const failed = this.saveConfig(server, { exposure });
-    if (failed !== undefined && failed !== "") return failed;
+  ): Promise<string | undefined> =>
+    this.saveConfig(server, { exposure }).then((failed) =>
+      failed !== undefined && failed !== "" ? failed : this.applyExposure(server),
+    );
+
+  private readonly applyExposure = (server: extensionInternalTypes.McpServer): undefined => {
     if (server.connection?.state === "connected") this.host.tools.registerTools(server.connection);
     this.host.tools.resourceTools.syncResourceTools();
 

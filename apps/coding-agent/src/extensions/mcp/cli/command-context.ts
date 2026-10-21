@@ -23,12 +23,15 @@ function loadCommandContext(
 ): Promise<cliInternalTypes.CommandContext> {
   return Effect.runPromise(
     awaiting(function* () {
-      const projectTrusted = new ProjectTrustStore(options.agentDir).get(options.cwd) === true;
-      const loaded = loadMcpConfig({
-        agentDir: options.agentDir,
-        cwd: options.cwd,
-        projectTrusted,
-      });
+      const projectTrusted =
+        (yield* awaited(new ProjectTrustStore(options.agentDir).get(options.cwd))) === true;
+      const loaded = yield* awaited(
+        loadMcpConfig({
+          agentDir: options.agentDir,
+          cwd: options.cwd,
+          projectTrusted,
+        }),
+      );
       const untrustedNote =
         !projectTrusted && (yield* awaited(exists(projectConfig)))
           ? `${projectConfig} is ignored because the project is not trusted. Start ${APP_NAME} in the project to trust it.`

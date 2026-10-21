@@ -41,13 +41,13 @@ export default class McpOAuthCredentialStore {
     const { key, legacyKey } = storeKeys(name, serverUrl);
     return {
       load: () =>
-        this.backend.withLock((current) => {
+        this.backend.withLockAsync((current) => {
           const states = parseStates(current);
           if (states[key] !== undefined || states[legacyKey] === undefined)
-            return { result: states[key] };
+            return Promise.resolve({ result: states[key] });
           states[key] = states[legacyKey];
           delete states[legacyKey];
-          return { next: serializeStates(states), result: states[key] };
+          return Promise.resolve({ next: serializeStates(states), result: states[key] });
         }),
       save: (state) =>
         this.write((states) => {
@@ -57,28 +57,29 @@ export default class McpOAuthCredentialStore {
     };
   }
 
-  tokens(name: string, serverUrl: string): oauthTypes.McpOAuthState["tokens"] {
+  tokens(name: string, serverUrl: string): Promise<oauthTypes.McpOAuthState["tokens"]> {
     const { key, legacyKey } = storeKeys(name, serverUrl);
-    const states = this.backend.withLock((current) => ({ result: parseStates(current) }));
-    return (states[key] ?? states[legacyKey])?.tokens;
+    return this.backend
+      .withLockAsync((current) => Promise.resolve({ result: parseStates(current) }))
+      .then((states) => (states[key] ?? states[legacyKey])?.tokens);
   }
 
-  remove(name: string, serverUrl: string): boolean {
+  remove(name: string, serverUrl: string): Promise<boolean> {
     const { key, legacyKey } = storeKeys(name, serverUrl);
-    return this.backend.withLock((current) => {
+    return this.backend.withLockAsync((current) => {
       const states = parseStates(current);
       const stored = key in states ? key : legacyKey in states ? legacyKey : undefined;
-      if (stored === undefined || stored === "") return { result: false };
+      if (stored === undefined || stored === "") return Promise.resolve({ result: false });
       delete states[stored];
-      return { next: serializeStates(states), result: true };
+      return Promise.resolve({ next: serializeStates(states), result: true });
     });
   }
 
-  private write(update: (states: StoredStates) => void): void {
-    this.backend.withLock((current) => {
+  private write(update: (states: StoredStates) => void): Promise<void> {
+    return this.backend.withLockAsync((current) => {
       const states = parseStates(current);
       update(states);
-      return { next: serializeStates(states), result: undefined };
+      return Promise.resolve({ next: serializeStates(states), result: undefined });
     });
   }
 }

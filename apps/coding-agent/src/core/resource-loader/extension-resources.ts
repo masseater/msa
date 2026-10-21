@@ -10,7 +10,7 @@ import sourceInfoModule from "../source-info.ts";
 import ExtensionLoading from "./extension-loading.ts";
 
 const { BUILTIN_PATH_PREFIX } = sourceInfoModule;
-const { performed } = awaitingModule;
+const { awaited, performed } = awaitingModule;
 const { createExtensionRuntime } = loader;
 const { collectExtensionPackageWarnings, mergeExtensionWarnings } = defaultResourceLoaderHelpers;
 
@@ -59,21 +59,23 @@ export default class ExtensionResources {
   applyExtensionSourceInfo(
     extensions: extensionsTypesTypes.Extension[],
     metadataByPath: Map<string, packageManagerTypes.PathMetadata>,
-  ): void {
-    for (const extension of extensions) {
-      extension.sourceInfo =
-        this.owner.environment.paths.findSourceInfoForPath(
-          extension.path,
-          undefined,
-          metadataByPath,
-        ) ?? this.owner.environment.paths.getDefaultSourceInfoForPath(extension.path);
-      for (const command of extension.commands.values()) {
-        command.sourceInfo = extension.sourceInfo;
-      }
-      for (const tool of extension.tools.values()) {
-        tool.sourceInfo = extension.sourceInfo;
-      }
-    }
+  ): Promise<void> {
+    const { paths } = this.owner.environment;
+    return Promise.all(
+      extensions.map((extension) => {
+        const known = paths.findSourceInfoForPath(extension.path, undefined, metadataByPath);
+        return (
+          known === undefined
+            ? paths.getDefaultSourceInfoForPath(extension.path)
+            : Promise.resolve(known)
+        ).then((sourceInfo) => {
+          extension.sourceInfo = sourceInfo;
+          for (const command of extension.commands.values()) command.sourceInfo = sourceInfo;
+          for (const tool of extension.tools.values()) tool.sourceInfo = sourceInfo;
+          return undefined;
+        });
+      }),
+    ).then(() => undefined);
   }
 
   configure(options: resourceLoaderTypes.DefaultResourceLoaderOptions): void {
@@ -86,17 +88,23 @@ export default class ExtensionResources {
   *reload(plan: defaultResourceLoaderInternalTypes.ResourcePlan) {
     const { paths } = this.owner.environment;
     const { cli, configured } = plan.extensions;
-    const extensionPaths = (this.noExtensions ? cli : paths.mergePaths(cli, configured)).filter(
+    const extensionPaths = (
+      this.noExtensions ? cli : yield* awaited(paths.mergePaths(cli, configured))
+    ).filter(
       (path) =>
         !path.startsWith(BUILTIN_PATH_PREFIX) ||
         !this.disabledBuiltinExtensions.has(path.slice(BUILTIN_PATH_PREFIX.length)),
     );
-    const packageWarnings = collectExtensionPackageWarnings(extensionPaths, plan.metadataByPath);
+    const packageWarnings = yield* awaited(
+      collectExtensionPackageWarnings(extensionPaths, plan.metadataByPath),
+    );
     const extensionsResult = yield* performed(
       this.loading.loadFinalExtensionSet(extensionPaths, plan.preTrustExtensions),
     );
     mergeExtensionWarnings(extensionsResult, packageWarnings);
-    for (const resolved of paths.missingPaths(this.additionalExtensionPaths, true)) {
+    for (const resolved of yield* awaited(
+      paths.missingPaths(this.additionalExtensionPaths, true),
+    )) {
       extensionsResult.errors.push({
         error: `Extension path does not exist: ${resolved}`,
         path: resolved,
@@ -106,6 +114,8 @@ export default class ExtensionResources {
       this.extensionsOverride === undefined
         ? extensionsResult
         : this.extensionsOverride(extensionsResult);
-    this.applyExtensionSourceInfo(this.extensionsResult.extensions, plan.metadataByPath);
+    yield* awaited(
+      this.applyExtensionSourceInfo(this.extensionsResult.extensions, plan.metadataByPath),
+    );
   }
 }

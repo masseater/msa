@@ -13,7 +13,8 @@ import startupThemes from "./startup-themes.ts";
 const { awaited, awaiting } = awaitingModule;
 const { setTerminalColors, getTerminalTheme, markTerminalColorsPending } = terminalColors;
 const { requestTerminalColors } = themeController;
-const { setTheme, resolveThemeSetting, initTheme, setRegisteredThemes } = themeModule;
+const { setTheme, resolveThemeSetting, initTheme, refreshCustomThemes, setRegisteredThemes } =
+  themeModule;
 const { SYSTEM_THEME_NAME } = systemTheme;
 const { loadStartupThemes } = startupThemes;
 
@@ -21,6 +22,7 @@ function initStartupTheme(settingsManager: settingsManagerTypes.SettingsManager)
   return Effect.runPromise(
     awaiting(function* () {
       setRegisteredThemes(yield* awaited(loadStartupThemes(settingsManager)));
+      yield* awaited(refreshCustomThemes());
       markTerminalColorsPending();
       initTheme(
         resolveThemeSetting(settingsManager.display.getThemeSetting(), getTerminalTheme()) ??

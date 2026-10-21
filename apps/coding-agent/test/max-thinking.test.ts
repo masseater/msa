@@ -52,7 +52,7 @@ const fallsBackToThinkingxhighForLegacyThemes = () =>
       const themePath = joinPath(testDir, "legacy-theme.json");
       yield* writeJsonFile(themePath, darkTheme);
 
-      const legacyTheme = loadThemeFromPath(themePath);
+      const legacyTheme = yield* Effect.promise(() => loadThemeFromPath(themePath));
       expect(legacyTheme.getThinkingBorderColor("max")("border")).toBe(
         legacyTheme.getThinkingBorderColor("xhigh")("border"),
       );

@@ -61,7 +61,7 @@ export default class BuiltinCommandRouter {
       "/rewind": after(() => this.mode.selectors.tree.showTreeSelector()),
       "/tasks": after(() => this.mode.selectors.views.showTasksView()),
       "/threads": after(() => this.mode.selectors.views.showTasksView()),
-      "/trust": after(() => this.mode.selectors.trust.showTrustSelector()),
+      "/trust": after(() => void this.mode.selectors.trust.showTrustSelector()),
     };
   }
 

@@ -1,26 +1,30 @@
+import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import errors from "../utils/errors.ts";
 import paths from "../utils/paths.ts";
 import text from "../utils/text.ts";
+import awaitingModule from "./awaiting.ts";
 import platform from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import trustManager from "./trust-manager.ts";
 import type trustManagerTypes from "./trust-manager.types.ts";
 
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 const { resolvePath } = paths;
-const { dirname, join, nowMs } = platform;
+const { dirname, join } = platform;
+const { exists, makeDirectory, readText, writeFile } = platform.files;
 const { stripBom } = text;
 const { toErrorMessage } = errors;
 const { normalizeCwd } = trustManager;
+const { awaited, awaiting } = awaitingModule;
+
+const LOCK_RETRIES = { factor: 1, maxTimeout: 20, minTimeout: 20, retries: 9 };
 
 type TrustFile = Record<string, boolean | null | undefined>;
-function findNearestTrustEntry(
+function nearestTrustEntry(
   data: TrustFile,
-  cwd: string,
+  start: string,
 ): trustManagerTypes.ProjectTrustStoreEntry | null {
-  let currentDir = normalizeCwd(cwd);
+  let currentDir = start;
   while (true) {
     const value = data[currentDir];
     if (value === true || value === false) {
@@ -34,14 +38,10 @@ function findNearestTrustEntry(
     currentDir = parentDir;
   }
 }
-function readTrustFile(path: string): TrustFile {
-  if (!existsSync(path)) {
-    return {};
-  }
-
+function parseTrustFile(path: string, content: string): TrustFile {
   let parsed: unknown;
   try {
-    parsed = JSON.parse(stripBom(readFileSync(path, "utf-8")));
+    parsed = JSON.parse(stripBom(content));
   } catch (error) {
     const message = toErrorMessage(error);
     throw new Error(`Failed to read trust store ${path}: ${message}`, { cause: error });
@@ -62,7 +62,12 @@ function readTrustFile(path: string): TrustFile {
   }
   return data;
 }
-function writeTrustFile(path: string, data: TrustFile): void {
+function readTrustFile(path: string): Promise<TrustFile> {
+  return exists(path).then((found) =>
+    found ? readText(path).then((content) => parseTrustFile(path, content)) : {},
+  );
+}
+function writeTrustFile(path: string, data: TrustFile): Promise<void> {
   const sorted: TrustFile = {};
   for (const key of Object.keys(data).sort()) {
     const value = data[key];
@@ -70,45 +75,29 @@ function writeTrustFile(path: string, data: TrustFile): void {
       sorted[key] = value;
     }
   }
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(sorted, null, 2)}\n`, "utf-8");
+  return makeDirectory({ path: dirname(path) }).then(() =>
+    writeFile({ data: `${JSON.stringify(sorted, null, 2)}\n`, path }),
+  );
 }
-function acquireTrustLockSync(path: string): () => void {
+function withTrustFileLock<T>(path: string, fn: () => Promise<T>): Promise<T> {
   const trustDir = dirname(path);
-  mkdirSync(trustDir, { recursive: true });
-  const maxAttempts = 10;
-  const delayMs = 20;
-  let lastError: unknown;
-
-  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-    try {
-      return lockfile.lockSync(trustDir, { lockfilePath: `${path}.lock`, realpath: false });
-    } catch (error) {
-      const code =
-        typeof error === "object" && error !== null && "code" in error
-          ? String((error as { code?: unknown }).code)
-          : undefined;
-      if (code !== "ELOCKED" || attempt === maxAttempts) {
-        throw error;
+  return Effect.runPromise(
+    awaiting(function* () {
+      yield* awaited(makeDirectory({ path: trustDir }));
+      const release = yield* awaited(
+        lockfile.lock(trustDir, {
+          lockfilePath: `${path}.lock`,
+          realpath: false,
+          retries: LOCK_RETRIES,
+        }),
+      );
+      try {
+        return yield* awaited(fn());
+      } finally {
+        yield* awaited(release());
       }
-      lastError = error;
-      const start = nowMs();
-      while (nowMs() - start < delayMs) {}
-    }
-  }
-
-  if (lastError instanceof Error) {
-    throw lastError;
-  }
-  throw new Error("Failed to acquire trust store lock");
-}
-function withTrustFileLock<T>(path: string, fn: () => T): T {
-  const release = acquireTrustLockSync(path);
-  try {
-    return fn();
-  } finally {
-    release();
-  }
+    }),
+  );
 }
 export default class ProjectTrustStore {
   private trustPath: string;
@@ -117,33 +106,38 @@ export default class ProjectTrustStore {
     this.trustPath = join(resolvePath(agentDir), "trust.json");
   }
 
-  get(cwd: string): trustManagerTypes.ProjectTrustDecision {
-    return this.getEntry(cwd)?.decision ?? null;
+  get(cwd: string): Promise<trustManagerTypes.ProjectTrustDecision> {
+    return this.getEntry(cwd).then((entry) => entry?.decision ?? null);
   }
 
-  getEntry(cwd: string): trustManagerTypes.ProjectTrustStoreEntry | null {
-    return withTrustFileLock(this.trustPath, () => {
-      const data = readTrustFile(this.trustPath);
-      return findNearestTrustEntry(data, cwd);
-    });
+  getEntry(cwd: string): Promise<trustManagerTypes.ProjectTrustStoreEntry | null> {
+    return withTrustFileLock(this.trustPath, () =>
+      Promise.all([readTrustFile(this.trustPath), normalizeCwd(cwd)]).then(([data, start]) =>
+        nearestTrustEntry(data, start),
+      ),
+    );
   }
 
-  set(cwd: string, decision: trustManagerTypes.ProjectTrustDecision): void {
-    this.setMany([{ decision, path: cwd }]);
+  set(cwd: string, decision: trustManagerTypes.ProjectTrustDecision): Promise<void> {
+    return this.setMany([{ decision, path: cwd }]);
   }
 
-  setMany(decisions: trustManagerTypes.ProjectTrustUpdate[]): void {
-    withTrustFileLock(this.trustPath, () => {
-      const data = readTrustFile(this.trustPath);
-      for (const { path, decision } of decisions) {
-        const key = normalizeCwd(path);
-        if (decision === null) {
-          delete data[key];
-        } else {
-          data[key] = decision;
+  setMany(decisions: trustManagerTypes.ProjectTrustUpdate[]): Promise<void> {
+    return withTrustFileLock(this.trustPath, () =>
+      Promise.all([
+        readTrustFile(this.trustPath),
+        Promise.all(decisions.map(({ path }) => normalizeCwd(path))),
+      ]).then(([data, keys]) => {
+        for (const [index, { decision }] of decisions.entries()) {
+          const key = keys[index]!;
+          if (decision === null) {
+            delete data[key];
+          } else {
+            data[key] = decision;
+          }
         }
-      }
-      writeTrustFile(this.trustPath, data);
-    });
+        return writeTrustFile(this.trustPath, data);
+      }),
+    );
   }
 }

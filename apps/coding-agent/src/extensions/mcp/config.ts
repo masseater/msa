@@ -4,15 +4,13 @@ import configModule from "../../config.ts";
 import mcpServers from "../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../core/mcp-servers.types.ts";
 import platformModule from "../../core/platform/index.ts";
-import nodeFs from "../../core/platform/node/fs.ts";
 import errorsModule from "../../utils/errors.ts";
 import type configTypes from "./config.types.ts";
-
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 
 const { mcpNamespace, validateMcpServerConfig } = mcpServers;
 const { toErrorMessage } = errorsModule;
 const { dirname, join } = platformModule;
+const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { CONFIG_DIR_NAME } = configModule;
 
 const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"];
@@ -33,12 +31,34 @@ interface McpConfigState {
   errors: string[];
 }
 
-function readConfigFile(path: string, scope: "global" | "project", state: McpConfigState): void {
-  const { servers, errors } = state;
-  if (!existsSync(path)) return;
+function readConfigFile(
+  path: string,
+  scope: "global" | "project",
+  state: McpConfigState,
+): Promise<void> {
+  return exists(path).then((found) =>
+    found
+      ? readText(path).then(
+          (content) => applyConfigText({ content, path, scope, state }),
+          (error: unknown) => {
+            state.errors.push(`${path}: ${toErrorMessage(error)}`);
+          },
+        )
+      : undefined,
+  );
+}
+
+function applyConfigText(input: {
+  readonly content: string;
+  readonly path: string;
+  readonly scope: "global" | "project";
+  readonly state: McpConfigState;
+}): void {
+  const { content, path, scope, state } = input;
+  const { errors } = state;
   let parsed: unknown;
   try {
-    parsed = JSON.parse(readFileSync(path, "utf8"));
+    parsed = JSON.parse(content);
   } catch (error) {
     errors.push(`${path}: ${toErrorMessage(error)}`);
     return;
@@ -54,7 +74,18 @@ function readConfigFile(path: string, scope: "global" | "project", state: McpCon
     state.autoEnableCodemode = parsed["autoEnableCodemode"];
   else if (parsed["autoEnableCodemode"] !== undefined)
     errors.push(`${path}: autoEnableCodemode must be a boolean`);
-  for (const [name, value] of Object.entries(parsed["mcpServers"] ?? {})) {
+  applyServers({ path, scope, servers: parsed["mcpServers"] ?? {}, state });
+}
+
+function applyServers(input: {
+  readonly path: string;
+  readonly scope: "global" | "project";
+  readonly servers: object;
+  readonly state: McpConfigState;
+}): void {
+  const { path, scope, state } = input;
+  const { servers, errors } = state;
+  for (const [name, value] of Object.entries(input.servers)) {
     if (scope === "project" && isRecord(value) && isOverride(value)) {
       const base = servers.get(name);
       applyOverride(value, base, errors, path, name, servers);
@@ -107,14 +138,24 @@ function loadMcpConfig(options: {
   agentDir: string;
   cwd: string;
   projectTrusted: boolean;
-}): configTypes.LoadedMcpConfig {
+}): Promise<configTypes.LoadedMcpConfig> {
   const state: McpConfigState = { errors: [], servers: new Map() };
-  readConfigFile(join(options.agentDir, "mcp.json"), "global", state);
   const projectConfig = options.projectTrusted
     ? join(options.cwd, CONFIG_DIR_NAME, "mcp.json")
     : undefined;
-  if (projectConfig !== undefined && projectConfig !== "")
-    readConfigFile(projectConfig, "project", state);
+  return readConfigFile(join(options.agentDir, "mcp.json"), "global", state)
+    .then(() =>
+      projectConfig !== undefined && projectConfig !== ""
+        ? readConfigFile(projectConfig, "project", state)
+        : undefined,
+    )
+    .then(() => loadedConfig(state, projectConfig));
+}
+
+function loadedConfig(
+  state: McpConfigState,
+  projectConfig: string | undefined,
+): configTypes.LoadedMcpConfig {
   return {
     servers: [...state.servers.values()],
     ...(state.autoEnableCodemode === undefined
@@ -130,8 +171,8 @@ function updateMcpServerConfigImpl(
   name: string,
   patch: configTypes.McpServerConfigPatch,
   options: { override?: boolean } = {},
-): void {
-  editMcpServers(path, (servers, parsed) => {
+): Promise<void> {
+  return editMcpServers(path, (servers, parsed) => {
     let server = servers?.[name];
     if (server === undefined && options.override === true) {
       server = {};
@@ -157,57 +198,71 @@ const updateMcpServerConfig: {
     name: string,
     patch: configTypes.McpServerConfigPatch,
     options?: { override?: boolean },
-  ): void;
+  ): Promise<void>;
   (
     name: string,
     patch: configTypes.McpServerConfigPatch,
     options?: { override?: boolean },
-  ): (path: string) => void;
+  ): (path: string) => Promise<void>;
 } = dual((args: IArguments) => args.length >= 3, updateMcpServerConfigImpl);
 
 function addMcpServerConfigImpl(
   path: string,
   name: string,
   config: mcpServersTypes.McpServerConfig,
-): boolean {
+): Promise<boolean> {
   let replaced = false;
-  editMcpServers(path, (servers, parsed) => {
+  return editMcpServers(path, (servers, parsed) => {
     const target = servers ?? {};
     replaced = target[name] !== undefined;
     target[name] = config;
     parsed["mcpServers"] = target;
     return true;
-  });
-  return replaced;
+  }).then(() => replaced);
 }
 
 const addMcpServerConfig: {
-  (path: string, name: string, config: mcpServersTypes.McpServerConfig): boolean;
-  (name: string, config: mcpServersTypes.McpServerConfig): (path: string) => boolean;
+  (path: string, name: string, config: mcpServersTypes.McpServerConfig): Promise<boolean>;
+  (name: string, config: mcpServersTypes.McpServerConfig): (path: string) => Promise<boolean>;
 } = dual((args: IArguments) => args.length >= 3, addMcpServerConfigImpl);
 
-function removeMcpServerConfigImpl(path: string, name: string): boolean {
-  if (!existsSync(path)) return false;
+function removeMcpServerConfigImpl(path: string, name: string): Promise<boolean> {
   let removed = false;
-  editMcpServers(path, (servers) => {
-    if (servers === undefined || servers[name] === undefined) return false;
-    delete servers[name];
-    removed = true;
-    return true;
-  });
-  return removed;
+  return exists(path).then((found) =>
+    found
+      ? editMcpServers(path, (servers) => {
+          if (servers === undefined || servers[name] === undefined) return false;
+          delete servers[name];
+          removed = true;
+          return true;
+        }).then(() => removed)
+      : false,
+  );
 }
 
 const removeMcpServerConfig: {
-  (path: string, name: string): boolean;
-  (name: string): (path: string) => boolean;
+  (path: string, name: string): Promise<boolean>;
+  (name: string): (path: string) => Promise<boolean>;
 } = dual((args: IArguments) => args.length >= 2, removeMcpServerConfigImpl);
 
 function editMcpServers(
   path: string,
   edit: (servers: Record<string, unknown> | undefined, parsed: Record<string, unknown>) => boolean,
-): void {
-  const text = existsSync(path) ? readFileSync(path, "utf8") : undefined;
+): Promise<void> {
+  return exists(path)
+    .then((found) => (found ? readText(path) : undefined))
+    .then((content) => writeEdited({ content, edit, path }));
+}
+
+function writeEdited(input: {
+  readonly content: string | undefined;
+  readonly path: string;
+  readonly edit: (
+    servers: Record<string, unknown> | undefined,
+    parsed: Record<string, unknown>,
+  ) => boolean;
+}): Promise<void> {
+  const { content: text, edit, path } = input;
   const parsed: unknown = text === undefined ? {} : JSON.parse(text);
   if (
     !isRecord(parsed) ||
@@ -216,10 +271,11 @@ function editMcpServers(
     throw new Error(`${path}: expected an object with an "mcpServers" object`);
   }
   const servers = isRecord(parsed["mcpServers"]) ? parsed["mcpServers"] : undefined;
-  if (!edit(servers, parsed)) return;
+  if (!edit(servers, parsed)) return Promise.resolve();
   const indent = (text && /^([ \t]+)\S/mu.exec(text)?.[1]) || "  ";
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(parsed, null, indent)}\n`);
+  return makeDirectory({ path: dirname(path) }).then(() =>
+    writeFile({ data: `${JSON.stringify(parsed, null, indent)}\n`, path }),
+  );
 }
 
 const config = {

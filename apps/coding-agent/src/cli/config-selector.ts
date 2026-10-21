@@ -9,13 +9,14 @@ import interop from "../utils/interop.ts";
 import type configSelectorTypes from "./config-selector.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
-const { initTheme, stopThemeWatcher } = themeModule;
+const { initTheme, refreshCustomThemes, stopThemeWatcher } = themeModule;
 const { callbackPromise } = interop;
 const { ProcessTerminal, TuiMainScreen } = tui;
 
 function selectConfig(options: configSelectorTypes.ConfigSelectorOptions): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
+      yield* awaited(refreshCustomThemes());
       initTheme(options.settingsManager.display.getTheme(), true);
 
       return yield* awaited(
@@ -44,7 +45,7 @@ function selectConfig(options: configSelectorTypes.ConfigSelectorOptions): Promi
             () => {
               ui.stop();
               stopThemeWatcher();
-              process.exit(0);
+              void options.settingsManager.persistence.flush().then(() => process.exit(0));
             },
             () => ui.requestRender(),
             ui.terminal.rows,

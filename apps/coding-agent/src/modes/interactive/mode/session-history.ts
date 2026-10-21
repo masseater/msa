@@ -157,7 +157,7 @@ export default class SessionHistoryView {
       populateHistory: true,
       updateFooter: true,
     });
-    this.mode.display.notices.warnings.renderProjectTrustWarningIfNeeded();
+    void this.mode.display.notices.warnings.renderProjectTrustWarningIfNeeded();
 
     const allEntries = this.mode.sessionManager.getEntries();
     const compactionCount = allEntries.filter((e) => e.type === "compaction").length;

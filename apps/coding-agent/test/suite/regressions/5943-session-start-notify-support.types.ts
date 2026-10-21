@@ -97,7 +97,7 @@ declare namespace SessionStartNotifySupportTypes {
     setupAutocompleteProvider: () => void;
     setupExtensionShortcuts: (runner: unknown) => void;
     showLoadedResources: (options: unknown) => void;
-    maybeSaveImplicitProjectTrustAfterReload: () => boolean;
+    maybeSaveImplicitProjectTrustAfterReload: () => boolean | Promise<boolean>;
     showStatus: (message: string) => void;
     showWarning: (message: string) => void;
     showError: (message: string) => void;

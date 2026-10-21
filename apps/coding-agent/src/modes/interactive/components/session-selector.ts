@@ -113,6 +113,7 @@ export default class SessionSelectorComponent extends tui.Container implements t
       this.keybindings,
       currentSessionFilePath,
     );
+    this.sessionList.onPathsResolved = () => this.requestRender();
 
     const clearStatusMessage = this.wiring.wireSelection(onSelect, onCancel);
     this.wiring.wireListActions(clearStatusMessage, onExit, renameSession);

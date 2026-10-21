@@ -43,17 +43,15 @@ export default class ResourceDiscovery {
       enabledResources(resources).map((r) => r.path);
 
     const configuredExtensions = enabledPaths(resolvedPaths.extensions);
-    const configuredSkills = enabledResources(resolvedPaths.skills).map((resource) =>
-      this.owner.environment.paths.mapSkillPath(resource, metadataByPath),
+    const configuredSkills = yield* awaited(
+      this.mapSkillPaths(enabledResources(resolvedPaths.skills), metadataByPath),
     );
     const configuredPrompts = enabledPaths(resolvedPaths.prompts);
     const configuredThemes = enabledPaths(resolvedPaths.themes);
 
-    for (const r of [...cliExtensionPaths.extensions, ...cliExtensionPaths.skills]) {
-      if (!metadataByPath.has(r.path)) {
+    for (const r of [...cliExtensionPaths.extensions, ...cliExtensionPaths.skills])
+      if (!metadataByPath.has(r.path))
         metadataByPath.set(r.path, { origin: "top-level", scope: "temporary", source: "cli" });
-      }
-    }
 
     const plan: defaultResourceLoaderInternalTypes.ResourcePlan = {
       extensions: {
@@ -67,6 +65,17 @@ export default class ResourceDiscovery {
       themes: { cli: enabledPaths(cliExtensionPaths.themes), configured: configuredThemes },
     };
     return plan;
+  }
+
+  private mapSkillPaths(
+    resources: packageManagerTypes.ResolvedResource[],
+    metadataByPath: Map<string, packageManagerTypes.PathMetadata>,
+  ): Promise<string[]> {
+    return Promise.all(
+      resources.map((resource) =>
+        this.owner.environment.paths.mapSkillPath(resource, metadataByPath),
+      ),
+    );
   }
 
   private *resolveConfiguredPaths(

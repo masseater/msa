@@ -170,7 +170,7 @@ const usesSavedProjectTrustDuringUpdate = () =>
           packages: ["npm:fake-package"],
         }),
       );
-      new ProjectTrustStore(agentDir).set(projectDir, true);
+      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, true));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -196,7 +196,7 @@ const letsTrustJsonOverrideDefaultProjectTrust = () =>
         joinPath(projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      new ProjectTrustStore(agentDir).set(projectDir, false);
+      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, false));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {

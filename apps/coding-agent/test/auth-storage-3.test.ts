@@ -48,7 +48,7 @@ const fileMode = (path: string): Effect.Effect<number> =>
 const createsNewAuthFilesWithOwnerOnly = () =>
   runTest(
     Effect.gen(function* () {
-      AuthStorage.create(authJsonPath);
+      yield* awaited(AuthStorage.create(authJsonPath).list());
 
       expect(yield* fileMode(authJsonPath)).toBe(0o600);
     }),
@@ -164,35 +164,12 @@ const doesNotRetryEpermOnOtherPlatforms = () =>
     }),
   );
 
-const retriesTransientEpermOnWindowsSync = () =>
-  runTest(
-    Effect.gen(function* () {
-      setPlatform("win32");
-      yield* writeAuthJson({});
-      const backend = new FileAuthStorageBackend(authJsonPath);
-      const release = vi.fn();
-      const lockSpy = vi
-        .spyOn(lockfile, "lockSync")
-        .mockImplementationOnce(() => {
-          throw eperm();
-        })
-        .mockReturnValueOnce(release);
-      const update = vi.fn(() => ({ result: undefined }));
-
-      backend.withLock(update);
-
-      expect(lockSpy).toHaveBeenCalledTimes(2);
-      expect(update).toHaveBeenCalledTimes(1);
-      expect(release).toHaveBeenCalledTimes(1);
-    }),
-  );
-
 describe("Windows EPERM on lock acquisition", () => {
   afterEach(() => {
     setPlatform(originalPlatform);
   });
 
-  test("retries transient EPERM on Windows (async)", retriesTransientEpermOnWindowsAsync);
+  test("retries transient EPERM on Windows", retriesTransientEpermOnWindowsAsync);
 
   test(
     "surfaces persistent EPERM on Windows after a bounded number of retries (async)",
@@ -200,6 +177,4 @@ describe("Windows EPERM on lock acquisition", () => {
   );
 
   test("does not retry EPERM on other platforms (async)", doesNotRetryEpermOnOtherPlatforms);
-
-  test("retries transient EPERM on Windows (sync)", retriesTransientEpermOnWindowsSync);
 });

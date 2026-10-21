@@ -68,8 +68,9 @@ function loginOrLogout(
         return 1;
       }
       if (command === "logout") {
+        const removed = yield* awaited(credentials.remove(name, url));
         log(
-          credentials.remove(name, url)
+          removed
             ? `Signed out of MCP server "${name}".`
             : `No stored credentials for MCP server "${name}".`,
         );

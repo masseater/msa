@@ -1,13 +1,17 @@
 import config from "../../../config.ts";
+import directoryEntry from "../../../core/directory-entry.ts";
 import platformModule from "../../../core/platform/index.ts";
-import nodeFs from "../../../core/platform/node/fs.ts";
 import textModule from "../../../utils/text.ts";
+import darkTheme from "./dark.json" with { type: "json" };
+import lightTheme from "./light.json" with { type: "json" };
 import type themeSchemaTypes from "./theme-schema.types.ts";
 import themeState from "./theme-state.ts";
 import type themeTypes from "./theme.types.ts";
 
-const { getCustomThemesDir, getThemesDir } = config;
+const { getCustomThemesDir } = config;
 const { join } = platformModule;
+const { exists, readText } = platformModule.files;
+const { readEntries } = directoryEntry;
 const { stripBom } = textModule;
 const { registeredThemes } = themeState;
 
@@ -52,22 +56,60 @@ function resolveThemeColors<T extends Record<string, themeSchemaTypes.ThemeColor
   return resolved as Record<keyof T, string | number>;
 }
 
-let builtinThemes: Record<string, themeSchemaTypes.ValidatedThemeJson> | undefined;
+const builtinThemes: Readonly<Record<string, themeSchemaTypes.ValidatedThemeJson>> = {
+  dark: darkTheme as themeSchemaTypes.ValidatedThemeJson,
+  light: lightTheme as themeSchemaTypes.ValidatedThemeJson,
+};
 
-function readBuiltinTheme(themesDir: string, name: string): themeSchemaTypes.ValidatedThemeJson {
-  const content = nodeFs.readFileSync(join(themesDir, `${name}.json`), "utf-8");
-  return JSON.parse(stripBom(content)) as themeSchemaTypes.ValidatedThemeJson;
+function getBuiltinThemes(): Readonly<Record<string, themeSchemaTypes.ValidatedThemeJson>> {
+  return builtinThemes;
 }
 
-function getBuiltinThemes(): Record<string, themeSchemaTypes.ValidatedThemeJson> {
-  if (builtinThemes === undefined) {
-    const themesDir = getThemesDir();
-    builtinThemes = {
-      dark: readBuiltinTheme(themesDir, "dark"),
-      light: readBuiltinTheme(themesDir, "light"),
-    };
-  }
-  return builtinThemes;
+type CustomThemeFile = {
+  readonly path: string;
+  readonly json: themeSchemaTypes.ValidatedThemeJson;
+};
+
+let customThemeFiles: ReadonlyMap<string, CustomThemeFile> = new Map();
+
+function getCustomThemeFiles(): ReadonlyMap<string, CustomThemeFile> {
+  return customThemeFiles;
+}
+
+function readCustomThemes(dir: string): Promise<Map<string, CustomThemeFile>> {
+  return readEntries(dir)
+    .then((entries) =>
+      Promise.all(
+        entries
+          .filter((entry) => entry.name.endsWith(".json"))
+          .map((entry) => {
+            const name = entry.name.slice(0, -".json".length);
+            const path = join(dir, entry.name);
+            return readThemeFile(path, name).then(
+              (json) => [name, { json, path }] as const,
+              () => undefined,
+            );
+          }),
+      ),
+    )
+    .then(
+      (loaded) =>
+        new Map(loaded.filter((entry): entry is NonNullable<typeof entry> => entry !== undefined)),
+    );
+}
+
+function refreshCustomThemes(): Promise<void> {
+  const dir = getCustomThemesDir();
+  return exists(dir)
+    .then((found) => (found ? readCustomThemes(dir) : new Map<string, CustomThemeFile>()))
+    .then((loaded) => {
+      customThemeFiles = loaded;
+      return undefined;
+    });
+}
+
+function setCustomThemeFile(name: string, file: CustomThemeFile): void {
+  customThemeFiles = new Map([...customThemeFiles, [name, file]]);
 }
 
 function parseThemeJson(label: string, json: unknown): themeSchemaTypes.ValidatedThemeJson {
@@ -91,8 +133,11 @@ function parseThemeJsonContent(
   return parseThemeJson(label, json);
 }
 
-function readThemeFile(themePath: string, label = themePath): themeSchemaTypes.ValidatedThemeJson {
-  return parseThemeJsonContent(label, nodeFs.readFileSync(themePath, "utf-8"));
+function readThemeFile(
+  themePath: string,
+  label = themePath,
+): Promise<themeSchemaTypes.ValidatedThemeJson> {
+  return readText(themePath).then((content) => parseThemeJsonContent(label, content));
 }
 
 function loadThemeJson(name: string): themeSchemaTypes.ValidatedThemeJson {
@@ -101,25 +146,28 @@ function loadThemeJson(name: string): themeSchemaTypes.ValidatedThemeJson {
     return builtinTheme;
   }
   const registeredTheme = registeredThemes.get(name);
-  if (registeredTheme?.sourcePath !== undefined && registeredTheme?.sourcePath !== "") {
-    return readThemeFile(registeredTheme.sourcePath);
+  if (registeredTheme?.sourceJson !== undefined) {
+    return registeredTheme.sourceJson;
   }
   if (registeredTheme !== undefined) {
     throw new Error(`Theme "${name}" does not have a source path for export`);
   }
-  const themePath = join(getCustomThemesDir(), `${name}.json`);
-  if (!nodeFs.existsSync(themePath)) {
+  const customTheme = customThemeFiles.get(name);
+  if (customTheme === undefined) {
     throw new Error(`Theme not found: ${name}`);
   }
-  return readThemeFile(themePath, name);
+  return customTheme.json;
 }
 
 const themeJson = {
   getBuiltinThemes,
+  getCustomThemeFiles,
   loadThemeJson,
   readThemeFile,
+  refreshCustomThemes,
   resolveThemeColors,
   resolveVarRefs,
+  setCustomThemeFile,
   setThemeJsonValidator,
 };
 

@@ -74,6 +74,7 @@ export default class AgentSessionRuntime {
         );
         this.beforeSessionInvalidate?.();
         yield* awaited(this.session.dispose());
+        yield* awaited(this.session.settingsManager.persistence.flush());
         yield* awaited(this.telemetry?.dispose() ?? Promise.resolve());
       }, this),
     );

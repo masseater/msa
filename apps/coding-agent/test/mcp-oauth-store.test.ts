@@ -6,7 +6,7 @@ import type authStorageTypes from "../src/core/auth-storage.types.ts";
 import InMemoryAuthStorageBackend from "../src/core/in-memory-auth-storage-backend.ts";
 import McpOAuthCredentialStore from "../src/extensions/mcp/mcp-oauth-credential-store.ts";
 
-const { awaited, runTest } = testing;
+const { awaited, runTest, toJsonText } = testing;
 
 const SERVER_URL = "https://mcp.example.com/mcp";
 
@@ -14,9 +14,11 @@ function state(accessToken: string) {
   return { serverUrl: SERVER_URL, tokens: { access_token: accessToken, token_type: "Bearer" } };
 }
 
-function storedKeys(backend: authStorageTypes.InMemoryAuthStorageBackend): string[] {
-  return Object.keys(JSON.parse(backend.withLock((current) => ({ result: current ?? "{}" }))));
-}
+const storedKeys = (backend: authStorageTypes.InMemoryAuthStorageBackend) =>
+  Effect.map(
+    awaited(backend.withLockAsync((current) => Promise.resolve({ result: current ?? "{}" }))),
+    (text): string[] => Object.keys(JSON.parse(text)),
+  );
 
 const keepsSeparateCredentialsForServersSharingA = () =>
   runTest(
@@ -32,47 +34,50 @@ const keepsSeparateCredentialsForServersSharingA = () =>
         (yield* awaited(store.forServer("personal", SERVER_URL).load()))?.tokens?.access_token,
       ).toBe("personal-token");
 
-      expect(store.remove("work", SERVER_URL)).toBe(true);
+      expect(yield* awaited(store.remove("work", SERVER_URL))).toBe(true);
       expect(yield* awaited(store.forServer("work", SERVER_URL).load())).toBeUndefined();
-      expect(store.tokens("personal", SERVER_URL)?.access_token).toBe("personal-token");
+      expect((yield* awaited(store.tokens("personal", SERVER_URL)))?.access_token).toBe(
+        "personal-token",
+      );
     }),
   );
 
 const movesCredentialsStoredByServerUrlTo = () =>
   runTest(
     Effect.gen(function* () {
-      const backend = new InMemoryAuthStorageBackend();
-      backend.withLock(() => ({
-        next: JSON.stringify({ [SERVER_URL]: state("legacy-token") }),
-        result: undefined,
-      }));
+      const backend = new InMemoryAuthStorageBackend(
+        yield* toJsonText({ [SERVER_URL]: state("legacy-token") }),
+      );
       const store = new McpOAuthCredentialStore(backend);
 
-      expect(store.tokens("work", SERVER_URL)?.access_token).toBe("legacy-token");
-      expect(storedKeys(backend)).toEqual([SERVER_URL]);
+      expect((yield* awaited(store.tokens("work", SERVER_URL)))?.access_token).toBe("legacy-token");
+      expect(yield* storedKeys(backend)).toEqual([SERVER_URL]);
 
       expect(
         (yield* awaited(store.forServer("my_work", SERVER_URL).load()))?.tokens?.access_token,
       ).toBe("legacy-token");
 
-      expect(store.tokens("my-work", SERVER_URL)?.access_token).toBe("legacy-token");
+      expect((yield* awaited(store.tokens("my-work", SERVER_URL)))?.access_token).toBe(
+        "legacy-token",
+      );
       expect(yield* awaited(store.forServer("personal", SERVER_URL).load())).toBeUndefined();
-      expect(storedKeys(backend)).toEqual([`mcp__my_work|${SERVER_URL}`]);
+      expect(yield* storedKeys(backend)).toEqual([`mcp__my_work|${SERVER_URL}`]);
     }),
   );
 
-const signsOutOfCredentialsStoredByServer = () => {
-  const backend = new InMemoryAuthStorageBackend();
-  backend.withLock(() => ({
-    next: JSON.stringify({ [SERVER_URL]: state("legacy-token") }),
-    result: undefined,
-  }));
-  const store = new McpOAuthCredentialStore(backend);
+const signsOutOfCredentialsStoredByServer = () =>
+  runTest(
+    Effect.gen(function* () {
+      const backend = new InMemoryAuthStorageBackend(
+        yield* toJsonText({ [SERVER_URL]: state("legacy-token") }),
+      );
+      const store = new McpOAuthCredentialStore(backend);
 
-  expect(store.remove("work", SERVER_URL)).toBe(true);
-  expect(storedKeys(backend)).toEqual([]);
-  expect(store.remove("work", SERVER_URL)).toBe(false);
-};
+      expect(yield* awaited(store.remove("work", SERVER_URL))).toBe(true);
+      expect(yield* storedKeys(backend)).toEqual([]);
+      expect(yield* awaited(store.remove("work", SERVER_URL))).toBe(false);
+    }),
+  );
 
 describe("MCP OAuth credential store", () => {
   it(

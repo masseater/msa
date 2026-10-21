@@ -59,6 +59,7 @@ function runWithPackageManager(
         writeError(chalk.red(`Error: ${message}`));
         process.exitCode = 1;
       }
+      yield* awaited(settingsManager.persistence.flush());
     }),
   );
 }

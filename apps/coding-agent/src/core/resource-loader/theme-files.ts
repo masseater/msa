@@ -3,11 +3,11 @@ import type tuiTypes from "@msa/tui/index.types";
 import themeModule from "../../modes/interactive/theme/theme.ts";
 import type themeTypes from "../../modes/interactive/theme/theme.types.ts";
 import type diagnosticsTypes from "../diagnostics.ts";
+import directoryEntry from "../directory-entry.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 
-const { existsSync, statSync, readdirSync } = nodeFs;
-const { join } = platformModule;
+const { stat } = platformModule.files;
+const { readEntries, resolveEntry } = directoryEntry;
 const { loadThemeFromPath } = themeModule;
 
 const dedupeThemes = (
@@ -42,91 +42,88 @@ const dedupeThemes = (
   return { diagnostics, themes: Array.from(seen.values()) };
 };
 
-const loadThemes = (
-  resolvedPaths: string[],
-  colorMode: tuiTypes.TerminalColorMode,
-): {
+type ThemeLoad = {
   themes: themeTypes.Theme[];
   diagnostics: diagnosticsTypes.ResourceDiagnostic[];
-} => {
-  const themes: themeTypes.Theme[] = [];
-  const diagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
-  for (const resolved of resolvedPaths) {
-    if (!existsSync(resolved)) {
-      diagnostics.push({ message: "theme path does not exist", path: resolved, type: "warning" });
-      continue;
-    }
-
-    try {
-      const stats = statSync(resolved);
-      if (stats.isDirectory()) {
-        loadThemesFromDir(resolved, themes, diagnostics, colorMode);
-      } else if (stats.isFile() && resolved.endsWith(".json")) {
-        loadThemeFromFile(resolved, themes, diagnostics, colorMode);
-      } else {
-        diagnostics.push({
-          message: "theme path is not a json file",
-          path: resolved,
-          type: "warning",
-        });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "failed to read theme path";
-      diagnostics.push({ message, path: resolved, type: "warning" });
-    }
-  }
-
-  return { diagnostics, themes };
 };
 
-const loadThemesFromDir = (
-  dir: string,
-  themes: themeTypes.Theme[],
-  diagnostics: diagnosticsTypes.ResourceDiagnostic[],
-  colorMode: tuiTypes.TerminalColorMode,
-): void => {
-  if (!existsSync(dir)) {
-    return;
-  }
-
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      let isFile = entry.isFile();
-      if (entry.isSymbolicLink()) {
-        try {
-          isFile = statSync(join(dir, entry.name)).isFile();
-        } catch {
-          continue;
-        }
-      }
-      if (!isFile) {
-        continue;
-      }
-      if (!entry.name.endsWith(".json")) {
-        continue;
-      }
-      loadThemeFromFile(join(dir, entry.name), themes, diagnostics, colorMode);
-    }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "failed to read theme directory";
-    diagnostics.push({ message, path: dir, type: "warning" });
-  }
-};
+const warning = (path: string, error: unknown, fallback: string) => ({
+  message: error instanceof Error ? error.message : fallback,
+  path,
+  type: "warning" as const,
+});
 
 const loadThemeFromFile = (
   filePath: string,
-  themes: themeTypes.Theme[],
-  diagnostics: diagnosticsTypes.ResourceDiagnostic[],
   colorMode: tuiTypes.TerminalColorMode,
-): void => {
-  try {
-    themes.push(loadThemeFromPath(filePath, colorMode));
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "failed to load theme";
-    diagnostics.push({ message, path: filePath, type: "warning" });
-  }
-};
+): Promise<ThemeLoad> =>
+  loadThemeFromPath(filePath, colorMode).then(
+    (theme) => ({ diagnostics: [], themes: [theme] }),
+    (error: unknown) => ({
+      diagnostics: [warning(filePath, error, "failed to load theme")],
+      themes: [],
+    }),
+  );
+
+const merge = (loads: readonly ThemeLoad[]): ThemeLoad => ({
+  diagnostics: loads.flatMap((load) => load.diagnostics),
+  themes: loads.flatMap((load) => load.themes),
+});
+
+const loadThemesFromDir = (
+  dir: string,
+  colorMode: tuiTypes.TerminalColorMode,
+): Promise<ThemeLoad> =>
+  readEntries(dir)
+    .then((entries) =>
+      Promise.all(
+        entries
+          .filter((entry) => entry.name.endsWith(".json"))
+          .map((entry) => resolveEntry(dir, entry)),
+      ),
+    )
+    .then((resolved) =>
+      Promise.all(
+        resolved
+          .filter((entry) => entry?.isFile === true)
+          .map((entry) => loadThemeFromFile(entry!.fullPath, colorMode)),
+      ),
+    )
+    .then(merge, (error: unknown) => ({
+      diagnostics: [warning(dir, error, "failed to read theme directory")],
+      themes: [],
+    }));
+
+const loadThemePath = (
+  resolved: string,
+  colorMode: tuiTypes.TerminalColorMode,
+): Promise<ThemeLoad> =>
+  stat(resolved).then(
+    (info) => {
+      if (info.isDirectory) return loadThemesFromDir(resolved, colorMode);
+      if (info.isFile && resolved.endsWith(".json")) return loadThemeFromFile(resolved, colorMode);
+      return {
+        diagnostics: [
+          { message: "theme path is not a json file", path: resolved, type: "warning" as const },
+        ],
+        themes: [],
+      };
+    },
+    (error: unknown) => ({
+      diagnostics: [
+        platformModule.isMissingPath(error)
+          ? { message: "theme path does not exist", path: resolved, type: "warning" as const }
+          : warning(resolved, error, "failed to read theme path"),
+      ],
+      themes: [],
+    }),
+  );
+
+const loadThemes = (
+  resolvedPaths: string[],
+  colorMode: tuiTypes.TerminalColorMode,
+): Promise<ThemeLoad> =>
+  Promise.all(resolvedPaths.map((resolved) => loadThemePath(resolved, colorMode))).then(merge);
 
 const themeFiles = { dedupeThemes, loadThemes };
 

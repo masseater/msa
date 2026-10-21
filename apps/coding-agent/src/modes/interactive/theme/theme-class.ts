@@ -6,6 +6,7 @@ import chalk from "chalk";
 import type sourceInfoTypes from "../../../core/source-info.types.ts";
 import terminalColorsModule from "./terminal-colors.ts";
 import themeColorTokens from "./theme-color-tokens.ts";
+import type themeSchemaTypes from "./theme-schema.types.ts";
 import type themeTokensTypes from "./theme-tokens.types.ts";
 import type themeTypes from "./theme.types.ts";
 const {
@@ -50,6 +51,7 @@ function detectAppearance(
 export default class Theme {
   readonly name?: string | undefined;
   readonly sourcePath?: string | undefined;
+  readonly sourceJson?: themeSchemaTypes.ValidatedThemeJson | undefined;
   sourceInfo?: sourceInfoTypes.SourceInfo | undefined;
   private mode: tuiTypes.TerminalColorMode;
   private readonly fgAnsi = new Map<themeTokensTypes.ThemeColor, string>();
@@ -74,6 +76,7 @@ export default class Theme {
     options: {
       name?: string | undefined;
       sourcePath?: string | undefined;
+      sourceJson?: themeSchemaTypes.ValidatedThemeJson | undefined;
       sourceInfo?: sourceInfoTypes.SourceInfo | undefined;
       appearance?: themeTypes.ThemeAppearance | undefined;
       dim?: readonly themeTokensTypes.ThemeColor[] | undefined;
@@ -81,6 +84,7 @@ export default class Theme {
   ) {
     this.name = options.name;
     this.sourcePath = options.sourcePath;
+    this.sourceJson = options.sourceJson;
     this.sourceInfo = options.sourceInfo;
     this.mode = mode;
     this.dimTokens = new Set(options.dim);

@@ -1,30 +1,45 @@
 import frontmatterModule from "../utils/frontmatter.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
+import directoryEntry from "./directory-entry.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import type promptTemplatesTypes from "./prompt-templates.types.ts";
 import type sourceInfoTypes from "./source-info.types.ts";
 
-const { statSync, readdirSync, existsSync, readFileSync } = nodeFs;
-const { basename, join } = platformModule;
+const { basename } = platformModule;
+const { exists, readText } = platformModule.files;
+const { readEntries, resolveEntry } = directoryEntry;
 const { parseFrontmatter } = frontmatterModule;
+
+type TemplateFileResult = {
+  template: promptTemplatesTypes.PromptTemplate | null;
+  diagnostics: diagnosticsTypes.ResourceDiagnostic[];
+};
 
 function loadTemplateFromFile(
   filePath: string,
   sourceInfo: sourceInfoTypes.SourceInfo,
-): {
-  template: promptTemplatesTypes.PromptTemplate | null;
-  diagnostics: diagnosticsTypes.ResourceDiagnostic[];
-} {
+): Promise<TemplateFileResult> {
+  return readText(filePath).then(
+    (rawContent) => templateFromContent(filePath, sourceInfo, rawContent),
+    (error: unknown) => ({
+      diagnostics: [
+        {
+          message: error instanceof Error ? error.message : "failed to read prompt template file",
+          path: filePath,
+          type: "warning" as const,
+        },
+      ],
+      template: null,
+    }),
+  );
+}
+
+function templateFromContent(
+  filePath: string,
+  sourceInfo: sourceInfoTypes.SourceInfo,
+  rawContent: string,
+): TemplateFileResult {
   const diagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
-  let rawContent: string;
-  try {
-    rawContent = readFileSync(filePath, "utf-8");
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "failed to read prompt template file";
-    diagnostics.push({ message, path: filePath, type: "warning" });
-    return { diagnostics, template: null };
-  }
 
   let frontmatter: Record<string, unknown>;
   let body: string;
@@ -71,43 +86,32 @@ function describeTemplate(description: string, body: string) {
 function loadTemplatesFromDir(
   dir: string,
   getSourceInfo: (filePath: string) => sourceInfoTypes.SourceInfo,
-): promptTemplatesTypes.LoadPromptTemplatesResult {
-  const templates: promptTemplatesTypes.PromptTemplate[] = [];
-  const diagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
-
-  if (!existsSync(dir)) {
-    return { diagnostics, templates };
-  }
-
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      const fullPath = join(dir, entry.name);
-
-      let isFile = entry.isFile();
-      if (entry.isSymbolicLink()) {
-        try {
-          const stats = statSync(fullPath);
-          isFile = stats.isFile();
-        } catch {
-          continue;
-        }
+): Promise<promptTemplatesTypes.LoadPromptTemplatesResult> {
+  const result: promptTemplatesTypes.LoadPromptTemplatesResult = { diagnostics: [], templates: [] };
+  return exists(dir)
+    .then((found) => (found ? readEntries(dir) : []))
+    .then((entries) =>
+      Promise.all(
+        entries
+          .filter((entry) => entry.name.endsWith(".md"))
+          .map((entry) => resolveEntry(dir, entry)),
+      ),
+    )
+    .then((resolved) =>
+      Promise.all(
+        resolved
+          .filter((entry) => entry?.isFile === true)
+          .map((entry) => loadTemplateFromFile(entry!.fullPath, getSourceInfo(entry!.fullPath))),
+      ),
+    )
+    .then((loaded) => {
+      for (const file of loaded) {
+        if (file.template !== null) result.templates.push(file.template);
+        result.diagnostics.push(...file.diagnostics);
       }
-
-      if (isFile && entry.name.endsWith(".md")) {
-        const result = loadTemplateFromFile(fullPath, getSourceInfo(fullPath));
-        if (result.template !== null) {
-          templates.push(result.template);
-        }
-        diagnostics.push(...result.diagnostics);
-      }
-    }
-  } catch {
-    return { diagnostics, templates };
-  }
-
-  return { diagnostics, templates };
+      return result;
+    })
+    .catch(() => result);
 }
 
 const promptTemplateFiles = { loadTemplateFromFile, loadTemplatesFromDir };

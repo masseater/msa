@@ -1,14 +1,12 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import trustManager from "../../../core/trust-manager.ts";
 import type trustManagerTypes from "../../../core/trust-manager.types.ts";
 import themeModule from "../theme/theme.ts";
 import DynamicBorder from "./dynamic-border.ts";
 import keybindingHints from "./keybinding-hints.ts";
 import type trustSelectorTypes from "./trust-selector.types.ts";
 
-const { getProjectTrustOptions } = trustManager;
 const { theme } = themeModule;
 const { keyHint, rawKeyHint } = keybindingHints;
 
@@ -40,7 +38,7 @@ export default class TrustSelectorComponent extends tui.Container {
     super();
 
     this.savedDecision = options.savedDecision;
-    this.trustOptions = getProjectTrustOptions(options.cwd);
+    this.trustOptions = options.trustOptions;
     this.selectedIndex = Math.max(
       0,
       this.trustOptions.findIndex((option) => this.isSavedOption(option)),

@@ -33,7 +33,7 @@ type DiscoveryScope = {
 
 const collectors: Record<
   "extensions" | "prompts" | "skills" | "themes",
-  (dir: string) => string[]
+  (dir: string) => Promise<string[]>
 > = {
   extensions: (dir) => collectAutoExtensionEntries(dir),
   prompts: (dir) => collectAutoPromptEntries(dir),
@@ -70,57 +70,63 @@ export default class AutoDiscoveredResources {
     projectSettings: ReturnType<settingsManagerTypes.SettingsManager["getProjectSettings"]>,
     globalBaseDir: string,
     projectBaseDir: string,
-  ): void {
+  ): Promise<void> {
     const userAgentsSkillsDir = join(getHomeDir(), ".agents", "skills");
     const projectTrusted = this.manager.settingsManager.isProjectTrusted();
     const projectAgentsSkillDirs = projectTrusted
-      ? collectAncestorAgentsSkillDirs(this.manager.cwd).filter(
-          (dir) => resolve(dir) !== resolve(userAgentsSkillsDir),
+      ? collectAncestorAgentsSkillDirs(this.manager.cwd).then((dirs) =>
+          dirs.filter((dir) => resolve(dir) !== resolve(userAgentsSkillsDir)),
         )
-      : [];
-    this.addScope(
-      accumulator,
-      discoveryScope(projectSettings, projectBaseDir, "project", {
-        agentsSkillDirs: projectAgentsSkillDirs,
-        enabled: projectTrusted,
-      }),
-    );
-    this.addScope(
-      accumulator,
-      discoveryScope(globalSettings, globalBaseDir, "user", {
-        agentsSkillDirs: [userAgentsSkillsDir],
-        enabled: true,
-      }),
-    );
+      : Promise.resolve([]);
+    return projectAgentsSkillDirs
+      .then((agentsSkillDirs) =>
+        this.addScope(
+          accumulator,
+          discoveryScope(projectSettings, projectBaseDir, "project", {
+            agentsSkillDirs,
+            enabled: projectTrusted,
+          }),
+        ),
+      )
+      .then(() =>
+        this.addScope(
+          accumulator,
+          discoveryScope(globalSettings, globalBaseDir, "user", {
+            agentsSkillDirs: [userAgentsSkillsDir],
+            enabled: true,
+          }),
+        ),
+      );
   }
 
   private addScope(
     accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
     scope: DiscoveryScope,
-  ): void {
-    const add = (kind: keyof typeof collectors) =>
-      this.addResources(accumulator, kind, collectors[kind](join(scope.baseDir, kind)), scope, {
-        baseDir: scope.baseDir,
-        metadata: scope.metadata,
-      });
-    if (scope.enabled) {
-      add("extensions");
-      add("skills");
-    }
-    for (const agentsSkillsDir of scope.agentsSkillDirs) {
-      const baseDir = dirname(agentsSkillsDir);
-      this.addResources(
-        accumulator,
-        "skills",
-        collectAutoSkillEntries(agentsSkillsDir, "agents"),
-        scope,
-        { baseDir, metadata: { ...scope.metadata, baseDir } },
-      );
-    }
-    if (scope.enabled) {
-      add("prompts");
-      add("themes");
-    }
+  ): Promise<void> {
+    const location = { baseDir: scope.baseDir, metadata: scope.metadata };
+    const own = (kinds: readonly (keyof typeof collectors)[]) =>
+      scope.enabled
+        ? Promise.all(kinds.map((kind) => collectors[kind](join(scope.baseDir, kind)))).then(
+            (found) => kinds.map((kind, index) => ({ kind, location, paths: found[index]! })),
+          )
+        : Promise.resolve([]);
+    const agents = Promise.all(
+      scope.agentsSkillDirs.map((agentsSkillsDir) => {
+        const baseDir = dirname(agentsSkillsDir);
+        return collectAutoSkillEntries(agentsSkillsDir, "agents").then((paths) => ({
+          kind: "skills" as const,
+          location: { baseDir, metadata: { ...scope.metadata, baseDir } },
+          paths,
+        }));
+      }),
+    );
+    return Promise.all([own(["extensions", "skills"]), agents, own(["prompts", "themes"])]).then(
+      (groups) => {
+        for (const { kind, location: at, paths } of groups.flat())
+          this.addResources(accumulator, kind, paths, scope, at);
+        return undefined;
+      },
+    );
   }
 
   private addResources(

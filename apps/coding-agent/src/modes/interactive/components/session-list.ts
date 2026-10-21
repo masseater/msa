@@ -12,7 +12,7 @@ import type sessionSelectorSearchTypes from "./session-selector-search.types.ts"
 
 const { filterAndSortSessions, hasSessionName } = sessionSelectorSearch;
 const { Input } = tui;
-const { buildSessionTree, canonicalizePath, flattenSessionTree } = sessionListHelpers;
+const { buildSessionTree, canonicalPathMap, flattenSessionTree } = sessionListHelpers;
 
 export default class SessionList implements tuiTypes.Component, tuiTypes.Focusable {
   readonly rendering: SessionListRendering;
@@ -41,6 +41,16 @@ export default class SessionList implements tuiTypes.Component, tuiTypes.Focusab
   confirmingDeletePath: string | null = null;
 
   private currentSessionCanonicalPath?: string | undefined;
+
+  private readonly currentSessionFilePath: string | undefined;
+
+  private canonicalPaths: ReadonlyMap<string, string> = new Map();
+
+  private canonicalGeneration = 0;
+
+  onPathsResolved?: () => void;
+
+  pathsResolved: Promise<void> = Promise.resolve();
 
   onSelect?: (sessionPath: string) => void;
 
@@ -92,9 +102,32 @@ export default class SessionList implements tuiTypes.Component, tuiTypes.Focusab
     this.filterSessions(this.searchInput.getValue());
   }
 
+  private canonical(path: string): string {
+    return this.canonicalPaths.get(path) ?? path;
+  }
+
+  private resolveCanonicalPaths(): Promise<void> {
+    const generation = ++this.canonicalGeneration;
+    const paths = [
+      this.currentSessionFilePath,
+      ...this.allSessions.flatMap((session) => [session.path, session.parentSessionPath]),
+    ];
+    return canonicalPathMap(paths).then((canonicalPaths) => {
+      if (generation !== this.canonicalGeneration) return;
+      this.canonicalPaths = canonicalPaths;
+      const current = this.currentSessionFilePath;
+      this.currentSessionCanonicalPath =
+        current === undefined ? undefined : this.canonical(current);
+      this.filterSessions(this.searchInput.getValue());
+      this.onPathsResolved?.();
+      return undefined;
+    });
+  }
+
   setSessions(sessions: sessionManagerTypes.SessionInfo[], showCwd: boolean): void {
     const selectedPath = this.selectionTouched ? this.getSelectedSessionPath() : undefined;
     this.allSessions = sessions;
+    this.pathsResolved = this.resolveCanonicalPaths();
     this.showCwd = showCwd;
     this.filterSessions(this.searchInput.getValue());
     if (!this.selectionTouched) {
@@ -115,7 +148,7 @@ export default class SessionList implements tuiTypes.Component, tuiTypes.Focusab
         : this.allSessions.filter((session) => hasSessionName(session));
 
     if (this.sortMode === "threaded" && trimmed === "") {
-      const roots = buildSessionTree(nameFiltered);
+      const roots = buildSessionTree(nameFiltered, (path) => this.canonical(path));
       this.filteredSessions = flattenSessionTree(roots);
     } else {
       const filtered = filterAndSortSessions(nameFiltered, query, this.sortMode, "all");
@@ -135,7 +168,7 @@ export default class SessionList implements tuiTypes.Component, tuiTypes.Focusab
   isCurrentSessionPath(path: string): boolean {
     if (this.currentSessionCanonicalPath === undefined || this.currentSessionCanonicalPath === "")
       return false;
-    return (canonicalizePath(path) ?? path) === this.currentSessionCanonicalPath;
+    return this.canonical(path) === this.currentSessionCanonicalPath;
   }
 
   invalidate(): void {}
@@ -165,8 +198,10 @@ export default class SessionList implements tuiTypes.Component, tuiTypes.Focusab
     this.sortMode = sortMode;
     this.nameFilter = nameFilter;
     this.keybindings = keybindings;
-    this.currentSessionCanonicalPath = canonicalizePath(currentSessionFilePath);
+    this.currentSessionFilePath = currentSessionFilePath;
+    this.currentSessionCanonicalPath = currentSessionFilePath;
     this.filterSessions("");
+    this.pathsResolved = this.resolveCanonicalPaths();
 
     this.searchInput.onSubmit = () => {
       const selected = this.filteredSessions[this.selectedIndex];

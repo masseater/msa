@@ -106,7 +106,7 @@ const usesRememberedProjectTrustForList = () =>
         joinPath(projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      new ProjectTrustStore(agentDir).set(projectDir, true);
+      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, true));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {
@@ -131,7 +131,7 @@ const overridesRememberedTrustForListWithNo = () =>
         joinPath(projectDir, ".msa", "settings.json"),
         yield* toJsonText({ packages: ["npm:@project/pkg"] }),
       );
-      new ProjectTrustStore(agentDir).set(projectDir, true);
+      yield* awaited(new ProjectTrustStore(agentDir).set(projectDir, true));
       const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
 
       try {

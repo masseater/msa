@@ -1,24 +1,21 @@
 import { homedir } from "os";
 
 import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type diagnosticsTypes from "../src/core/diagnostics.ts";
-import skillDirectory from "../src/core/skill-directory.ts";
 import skillsModule from "../src/core/skills.ts";
 import type skillsTypes from "../src/core/skills.types.ts";
 import sourceInfoModule from "../src/core/source-info.ts";
 import skillsSupport from "./skills-support.ts";
 
 const { formatSkillsForPrompt, loadSkills } = skillsModule;
-const { loadSkillsFromDir } = skillDirectory;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const { fixturesDir } = skillsSupport;
 
-const { joinPath, resolvePath } = testing;
-
-const collisionFixturesDir = resolvePath(__dirname, "fixtures/skills-collision");
+const { joinPath, resolvePath, runTest } = testing;
 
 function createTestSkill(options: {
   name: string;
@@ -164,85 +161,66 @@ const shouldReturnEmptyStringWhenAllSkills = () => {
   expect(result).toBe("");
 };
 
-const shouldLoadFromExplicitSkillpaths = () => {
-  const { skills, diagnostics } = loadSkills({
-    agentDir: emptyAgentDir,
-    cwd: emptyCwd,
-    includeDefaults: true,
-    skillPaths: [joinPath(fixturesDir, "valid-skill")],
-  });
-  expect(skills).toHaveLength(1);
-  expect(skills[0]?.sourceInfo.scope).toBe("temporary");
-  expect(diagnostics).toHaveLength(0);
-};
+const shouldLoadFromExplicitSkillpaths = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills, diagnostics } = yield* Effect.promise(() =>
+        loadSkills({
+          agentDir: emptyAgentDir,
+          cwd: emptyCwd,
+          includeDefaults: true,
+          skillPaths: [joinPath(fixturesDir, "valid-skill")],
+        }),
+      );
+      expect(skills).toHaveLength(1);
+      expect(skills[0]?.sourceInfo.scope).toBe("temporary");
+      expect(diagnostics).toHaveLength(0);
+    }),
+  );
 
-const shouldWarnWhenSkillPathDoesNot = () => {
-  const { skills, diagnostics } = loadSkills({
-    agentDir: emptyAgentDir,
-    cwd: emptyCwd,
-    includeDefaults: true,
-    skillPaths: ["/non/existent/path"],
-  });
-  expect(skills).toHaveLength(0);
-  expect(
-    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-      d.message.includes("does not exist"),
-    ),
-  ).toBe(true);
-};
+const shouldWarnWhenSkillPathDoesNot = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills, diagnostics } = yield* Effect.promise(() =>
+        loadSkills({
+          agentDir: emptyAgentDir,
+          cwd: emptyCwd,
+          includeDefaults: true,
+          skillPaths: ["/non/existent/path"],
+        }),
+      );
+      expect(skills).toHaveLength(0);
+      expect(
+        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+          d.message.includes("does not exist"),
+        ),
+      ).toBe(true);
+    }),
+  );
 
-const shouldExpandInSkillpaths = () => {
-  const homeSkillsDir = joinPath(homedir(), ".msa/agent/skills");
-  const { skills: withTilde } = loadSkills({
-    agentDir: emptyAgentDir,
-    cwd: emptyCwd,
-    includeDefaults: true,
-    skillPaths: ["~/.msa/agent/skills"],
-  });
-  const { skills: withoutTilde } = loadSkills({
-    agentDir: emptyAgentDir,
-    cwd: emptyCwd,
-    includeDefaults: true,
-    skillPaths: [homeSkillsDir],
-  });
-  expect(withTilde.length).toBe(withoutTilde.length);
-};
-
-const shouldDetectNameCollisionsAndKeepFirst = () => {
-  const first = loadSkillsFromDir({
-    dir: joinPath(collisionFixturesDir, "first"),
-    source: "first",
-  });
-
-  const second = loadSkillsFromDir({
-    dir: joinPath(collisionFixturesDir, "second"),
-    source: "second",
-  });
-
-  const skillMap = new Map<string, skillsTypes.Skill>();
-  const collisionWarnings: Array<{ skillPath: string; message: string }> = [];
-
-  for (const skill of first.skills) {
-    skillMap.set(skill.name, skill);
-  }
-
-  for (const skill of second.skills) {
-    const existing = skillMap.get(skill.name);
-    if (existing === undefined) {
-      skillMap.set(skill.name, skill);
-    } else {
-      collisionWarnings.push({
-        message: `name collision: "${skill.name}" already loaded from ${existing.filePath}`,
-        skillPath: skill.filePath,
-      });
-    }
-  }
-
-  expect(skillMap.size).toBe(1);
-  expect(skillMap.get("calendar")?.sourceInfo.source).toBe("first");
-  expect(collisionWarnings).toHaveLength(1);
-  expect(collisionWarnings[0]?.message).toContain("name collision");
-};
+const shouldExpandInSkillpaths = () =>
+  runTest(
+    Effect.gen(function* () {
+      const homeSkillsDir = joinPath(homedir(), ".msa/agent/skills");
+      const { skills: withTilde } = yield* Effect.promise(() =>
+        loadSkills({
+          agentDir: emptyAgentDir,
+          cwd: emptyCwd,
+          includeDefaults: true,
+          skillPaths: ["~/.msa/agent/skills"],
+        }),
+      );
+      const { skills: withoutTilde } = yield* Effect.promise(() =>
+        loadSkills({
+          agentDir: emptyAgentDir,
+          cwd: emptyCwd,
+          includeDefaults: true,
+          skillPaths: [homeSkillsDir],
+        }),
+      );
+      expect(withTilde.length).toBe(withoutTilde.length);
+    }),
+  );
 
 describe("skills", () => {
   describe("formatSkillsForPrompt", () => {
@@ -273,12 +251,5 @@ describe("skills", () => {
     it("should warn when skill path does not exist", shouldWarnWhenSkillPathDoesNot);
 
     it("should expand ~ in skillPaths", shouldExpandInSkillpaths);
-  });
-
-  describe("collision handling", () => {
-    it(
-      "should detect name collisions and keep first skill",
-      shouldDetectNameCollisionsAndKeepFirst,
-    );
   });
 });

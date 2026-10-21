@@ -1,4 +1,5 @@
 import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type diagnosticsTypes from "../src/core/diagnostics.ts";
@@ -9,63 +10,88 @@ const { loadSkillsFromDir } = skillDirectory;
 
 const { fixturesDir } = skillsSupport;
 
-const { joinPath } = testing;
+const { joinPath, runTest } = testing;
 
-const shouldLoadAllSkillsFromFixtureDirectory = () => {
-  const { skills } = loadSkillsFromDir({
-    dir: fixturesDir,
-    source: "test",
-  });
+const shouldLoadAllSkillsFromFixtureDirectory = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills } = yield* Effect.promise(() =>
+        loadSkillsFromDir({
+          dir: fixturesDir,
+          source: "test",
+        }),
+      );
 
-  expect(skills.length).toBeGreaterThanOrEqual(6);
-};
+      expect(skills.length).toBeGreaterThanOrEqual(6);
+    }),
+  );
 
-const shouldReturnEmptyForNonExistentDirectory = () => {
-  const { skills, diagnostics } = loadSkillsFromDir({
-    dir: "/non/existent/path",
-    source: "test",
-  });
+const shouldReturnEmptyForNonExistentDirectory = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills, diagnostics } = yield* Effect.promise(() =>
+        loadSkillsFromDir({
+          dir: "/non/existent/path",
+          source: "test",
+        }),
+      );
 
-  expect(skills).toHaveLength(0);
-  expect(diagnostics).toHaveLength(0);
-};
+      expect(skills).toHaveLength(0);
+      expect(diagnostics).toHaveLength(0);
+    }),
+  );
 
-const shouldUseParentDirectoryNameWhenName = () => {
-  const { skills } = loadSkillsFromDir({
-    dir: joinPath(fixturesDir, "valid-skill"),
-    source: "test",
-  });
+const shouldUseParentDirectoryNameWhenName = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills } = yield* Effect.promise(() =>
+        loadSkillsFromDir({
+          dir: joinPath(fixturesDir, "valid-skill"),
+          source: "test",
+        }),
+      );
 
-  expect(skills).toHaveLength(1);
-  expect(skills[0]?.name).toBe("valid-skill");
-};
+      expect(skills).toHaveLength(1);
+      expect(skills[0]?.name).toBe("valid-skill");
+    }),
+  );
 
-const shouldParseDisableModelInvocationFrontmatterField = () => {
-  const { skills, diagnostics } = loadSkillsFromDir({
-    dir: joinPath(fixturesDir, "disable-model-invocation"),
-    source: "test",
-  });
+const shouldParseDisableModelInvocationFrontmatterField = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills, diagnostics } = yield* Effect.promise(() =>
+        loadSkillsFromDir({
+          dir: joinPath(fixturesDir, "disable-model-invocation"),
+          source: "test",
+        }),
+      );
 
-  expect(skills).toHaveLength(1);
-  expect(skills[0]?.name).toBe("disable-model-invocation");
-  expect(skills[0]?.disableModelInvocation).toBe(true);
+      expect(skills).toHaveLength(1);
+      expect(skills[0]?.name).toBe("disable-model-invocation");
+      expect(skills[0]?.disableModelInvocation).toBe(true);
 
-  expect(
-    diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
-      d.message.includes("unknown frontmatter field"),
-    ),
-  ).toBe(false);
-};
+      expect(
+        diagnostics.some((d: diagnosticsTypes.ResourceDiagnostic) =>
+          d.message.includes("unknown frontmatter field"),
+        ),
+      ).toBe(false);
+    }),
+  );
 
-const shouldDefaultDisablemodelinvocationToFalseWhenNot = () => {
-  const { skills } = loadSkillsFromDir({
-    dir: joinPath(fixturesDir, "valid-skill"),
-    source: "test",
-  });
+const shouldDefaultDisablemodelinvocationToFalseWhenNot = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { skills } = yield* Effect.promise(() =>
+        loadSkillsFromDir({
+          dir: joinPath(fixturesDir, "valid-skill"),
+          source: "test",
+        }),
+      );
 
-  expect(skills).toHaveLength(1);
-  expect(skills[0]?.disableModelInvocation).toBe(false);
-};
+      expect(skills).toHaveLength(1);
+      expect(skills[0]?.disableModelInvocation).toBe(false);
+    }),
+  );
 
 describe("skills", () => {
   describe("loadSkillsFromDir", () => {

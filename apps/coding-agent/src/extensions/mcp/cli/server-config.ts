@@ -2,18 +2,15 @@ import configModule from "../../../config.ts";
 import mcpServers from "../../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../../core/mcp-servers.types.ts";
 import platform from "../../../core/platform/index.ts";
-import ProjectTrustStore from "../../../core/project-trust-store.ts";
-import errorsModule from "../../../utils/errors.ts";
 import type cliInternalTypes from "../cli-internal.types.ts";
 import type cliTypes from "../cli.types.ts";
-import mcpConfig from "../config.ts";
 import cliOptions from "./cli-options.ts";
+import serverPersist from "./server-persist.ts";
 
 const { APP_NAME, CONFIG_DIR_NAME } = configModule;
 const { validateMcpServerConfig } = mcpServers;
 const { join } = platform;
-const { toErrorMessage } = errorsModule;
-const { addMcpServerConfig, loadMcpConfig, removeMcpServerConfig } = mcpConfig;
+const { removeConfiguredServer, saveAddedServer } = serverPersist;
 const { HELP_HINT, parseOptions, parsePairs } = cliOptions;
 
 type Line = (line: string) => void;
@@ -119,60 +116,38 @@ function buildServerConfig(
   return validated;
 }
 
-function saveServer(
-  name: string,
-  validated: mcpServersTypes.McpServerConfig,
-  path: string,
-  scope: string,
-  log: Line,
-  error: Line,
-): boolean {
-  let replaced: boolean;
-  try {
-    replaced = addMcpServerConfig(path, name, validated);
-  } catch (addError) {
-    error(`Could not update ${path}: ${toErrorMessage(addError)}`);
-    return false;
-  }
-  log(`${replaced ? "Replaced" : "Added"} ${scope} MCP server "${name}" in ${path}.`);
-  return true;
-}
-
 function add(
   args: string[],
   projectConfig: string,
   options: cliTypes.McpCommandOptions,
   log: Line,
   error: Line,
-): number {
+): Promise<number> {
   const parsed = parseOptions(args, ADD_OPTIONS, error, 2);
-  if (parsed === undefined) return 1;
+  if (parsed === undefined) return Promise.resolve(1);
   const [name, ...command] = parsed.positional;
   if (name === undefined || name === "" || !parsed.values.has("url") === (command.length === 0)) {
     error(
       `Usage: ${APP_NAME} mcp add <server> [options] (--url <url> | -- <command> [args...])\n${HELP_HINT}`,
     );
-    return 1;
+    return Promise.resolve(1);
   }
   const validated = buildServerConfig(name, command, parsed, error);
-  if (validated === undefined) return 1;
+  if (validated === undefined) return Promise.resolve(1);
   const project = parsed.values.has("local");
   const path = project ? projectConfig : join(options.agentDir, "mcp.json");
-  if (!saveServer(name, validated, path, project ? "project" : "global", log, error)) return 1;
-  if (project && new ProjectTrustStore(options.agentDir).get(options.cwd) !== true) {
+  return saveAddedServer({ error, log, name, options, path, project, validated }).then((saved) => {
+    if (!saved) return 1;
+    const mayNeedSignIn =
+      "url" in validated &&
+      !Object.keys(validated.headers ?? {}).some(
+        (header) => header.toLowerCase() === "authorization",
+      );
     log(
-      `The project is not trusted, so ${path} is ignored until you start ${APP_NAME} in the project and trust it.`,
+      `Check it with: ${APP_NAME} mcp list${mayNeedSignIn ? `. If it requires sign-in: ${APP_NAME} mcp login ${name}` : ""}`,
     );
-  }
-  const mayNeedSignIn =
-    "url" in validated &&
-    !Object.keys(validated.headers ?? {}).some(
-      (header) => header.toLowerCase() === "authorization",
-    );
-  log(
-    `Check it with: ${APP_NAME} mcp list${mayNeedSignIn ? `. If it requires sign-in: ${APP_NAME} mcp login ${name}` : ""}`,
-  );
-  return 0;
+    return 0;
+  });
 }
 
 function remove(
@@ -181,38 +156,18 @@ function remove(
   options: cliTypes.McpCommandOptions,
   log: Line,
   error: Line,
-): number {
+): Promise<number> {
   const parsed = parseOptions(args, { local: "flag" }, error);
-  if (parsed === undefined) return 1;
+  if (parsed === undefined) return Promise.resolve(1);
   const [name, ...extra] = parsed.positional;
   if (name === undefined || name === "" || extra.length > 0) {
     error(`Usage: ${APP_NAME} mcp remove <server> [-l]\n${HELP_HINT}`);
-    return 1;
+    return Promise.resolve(1);
   }
   const project = parsed.values.has("local");
-  const globalConfig = join(options.agentDir, "mcp.json");
-  const path = project ? projectConfig : globalConfig;
+  const path = project ? projectConfig : join(options.agentDir, "mcp.json");
   const scope = project ? "project" : "global";
-  let removed: boolean;
-  try {
-    removed = removeMcpServerConfig(path, name);
-  } catch (removeError) {
-    error(`Could not update ${path}: ${toErrorMessage(removeError)}`);
-    return 1;
-  }
-  if (removed) {
-    log(`Removed ${scope} MCP server "${name}" from ${path}.`);
-    return 0;
-  }
-  const other = loadMcpConfig({
-    agentDir: options.agentDir,
-    cwd: options.cwd,
-    projectTrusted: true,
-  }).servers.find((server) => server.name === name && server.scope !== scope);
-  error(
-    `No ${scope} MCP server named "${name}" in ${path}.${other === undefined ? "" : ` It is defined in ${other.source}${other.scope === "project" ? "; use --local" : "; omit --local"}.`}`,
-  );
-  return 1;
+  return removeConfiguredServer({ error, log, name, options, path, scope });
 }
 
 const serverConfig = { add, projectConfigPath, remove };

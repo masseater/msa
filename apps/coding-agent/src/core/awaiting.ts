@@ -32,6 +32,8 @@ const drive = <A>(start: () => Steps<A>): Effect.Effect<A> =>
 
 const awaiting = <A>(body: () => Steps<A>): Effect.Effect<A> => drive(body);
 
+const promised = <A>(body: () => Steps<A>): Promise<A> => Effect.runPromise(drive(body));
+
 const awaitingWith: {
   <This>(self: This): <A>(body: (this: This) => Steps<A>) => Effect.Effect<A>;
   <This, A>(body: (this: This) => Steps<A>, self: This): Effect.Effect<A>;
@@ -44,6 +46,7 @@ const awaitingModule = {
   awaiting,
   awaitingWith,
   performed,
+  promised,
 };
 
 export default awaitingModule;

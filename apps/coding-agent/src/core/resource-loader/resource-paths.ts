@@ -2,13 +2,12 @@ import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import sourceInfoModule from "../source-info.ts";
 import type sourceInfoTypes from "../source-info.types.ts";
 import type ResourceEnvironment from "./resource-environment.ts";
 
-const { existsSync, statSync } = nodeFs;
 const { join, resolve, sep } = platformModule;
+const { exists, stat } = platformModule.files;
 const { CONFIG_DIR_NAME } = config;
 const { createSourceInfo, getSyntheticPathSource, isSyntheticPath } = sourceInfoModule;
 const { canonicalizePath, isLocalPath, resolvePath } = pathsModule;
@@ -25,26 +24,21 @@ export default class ResourcePaths {
   mapSkillPath(
     resource: packageManagerTypes.ResolvedResource,
     metadataByPath: Map<string, packageManagerTypes.PathMetadata>,
-  ): string {
+  ): Promise<string> {
     if (resource.metadata.source !== "auto" && resource.metadata.origin !== "package") {
-      return resource.path;
-    }
-    try {
-      const stats = statSync(resource.path);
-      if (!stats.isDirectory()) {
-        return resource.path;
-      }
-    } catch {
-      return resource.path;
+      return Promise.resolve(resource.path);
     }
     const skillFile = join(resource.path, "SKILL.md");
-    if (existsSync(skillFile)) {
-      if (!metadataByPath.has(skillFile)) {
-        metadataByPath.set(skillFile, resource.metadata);
-      }
-      return skillFile;
-    }
-    return resource.path;
+    return stat(resource.path)
+      .then((info) => info.isDirectory && exists(skillFile))
+      .then(
+        (hasSkillFile) => {
+          if (!hasSkillFile) return resource.path;
+          if (!metadataByPath.has(skillFile)) metadataByPath.set(skillFile, resource.metadata);
+          return skillFile;
+        },
+        () => resource.path,
+      );
   }
 
   private resourceRoots(filePath: string) {
@@ -83,7 +77,7 @@ export default class ResourcePaths {
     }
 
     if (isSyntheticPath(resourcePath)) {
-      return this.getDefaultSourceInfoForPath(resourcePath);
+      return this.rootedSourceInfo(resourcePath);
     }
 
     const normalizedResourcePath = resolve(resourcePath);
@@ -119,7 +113,20 @@ export default class ResourcePaths {
     return undefined;
   }
 
-  getDefaultSourceInfoForPath(filePath: string): sourceInfoTypes.SourceInfo {
+  getDefaultSourceInfoForPath(filePath: string): Promise<sourceInfoTypes.SourceInfo> {
+    const known = this.rootedSourceInfo(filePath);
+    if (known !== undefined) return Promise.resolve(known);
+    const normalizedPath = resolve(filePath);
+    return stat(normalizedPath).then((info) => ({
+      baseDir: info.isDirectory ? normalizedPath : resolve(normalizedPath, ".."),
+      origin: "top-level" as const,
+      path: filePath,
+      scope: "temporary" as const,
+      source: "local",
+    }));
+  }
+
+  private rootedSourceInfo(filePath: string): sourceInfoTypes.SourceInfo | undefined {
     const syntheticSource = getSyntheticPathSource(filePath);
     if (syntheticSource !== undefined && syntheticSource !== "") {
       return {
@@ -156,40 +163,34 @@ export default class ResourcePaths {
       }
     }
 
-    return {
-      baseDir: statSync(normalizedPath).isDirectory()
-        ? normalizedPath
-        : resolve(normalizedPath, ".."),
-      origin: "top-level",
-      path: filePath,
-      scope: "temporary",
-      source: "local",
-    };
+    return undefined;
   }
 
-  mergePaths(primary: string[], additional: string[]): string[] {
-    const merged: string[] = [];
-    const seen = new Set<string>();
-
-    for (const p of [...primary, ...additional]) {
-      const resolved = this.resolveResourcePath(p);
-      const canonicalPath = canonicalizePath(resolved);
-      if (seen.has(canonicalPath)) continue;
-      seen.add(canonicalPath);
-      merged.push(resolved);
-    }
-
-    return merged;
+  mergePaths(primary: string[], additional: string[]): Promise<string[]> {
+    const resolvedPaths = [...primary, ...additional].map((p) => this.resolveResourcePath(p));
+    return Promise.all(resolvedPaths.map((resolved) => canonicalizePath(resolved))).then(
+      (canonicalPaths) => {
+        const seen = new Set<string>();
+        return resolvedPaths.filter((_resolved, index) => {
+          const canonicalPath = canonicalPaths[index]!;
+          if (seen.has(canonicalPath)) return false;
+          seen.add(canonicalPath);
+          return true;
+        });
+      },
+    );
   }
 
   resolveResourcePath(p: string): string {
     return isSyntheticPath(p) ? p : resolvePath(p, this.owner.cwd, { trim: true });
   }
 
-  missingPaths(paths: string[], localOnly: boolean): string[] {
-    return paths
+  missingPaths(paths: string[], localOnly: boolean): Promise<string[]> {
+    const candidates = paths
       .filter((p) => !localOnly || isLocalPath(p))
-      .map((p) => this.resolveResourcePath(p))
-      .filter((resolved) => !existsSync(resolved));
+      .map((p) => this.resolveResourcePath(p));
+    return Promise.all(candidates.map((resolved) => exists(resolved))).then((found) =>
+      candidates.filter((_resolved, index) => found[index] !== true),
+    );
   }
 }

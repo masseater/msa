@@ -8,7 +8,12 @@ import platform from "../src/core/platform/index.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 
 const { readEnv } = platform;
-const { getAvailableThemes, getAvailableThemesWithPaths, setRegisteredThemes } = themeModule;
+const {
+  getAvailableThemes,
+  getAvailableThemesWithPaths,
+  refreshCustomThemes,
+  setRegisteredThemes,
+} = themeModule;
 
 const { joinPath, makeDirectory, makeTempDir, readJsonFile, removePath, runTest, writeJsonFile } =
   testing;
@@ -34,6 +39,7 @@ const usesCustomThemeContentNamesInsteadOf = () =>
 
       const themePath = joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "foo.json");
       yield* writeJsonFile(themePath, customTheme);
+      yield* Effect.promise(() => refreshCustomThemes());
 
       expect(getAvailableThemes()).toContain("bar");
       expect(getAvailableThemes()).not.toContain("foo");

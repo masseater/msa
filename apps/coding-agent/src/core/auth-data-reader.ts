@@ -47,14 +47,17 @@ export default class AuthDataReader {
     return this.readState.data;
   }
 
-  isCurrent(): boolean {
-    if (this.authPath === undefined) return false;
-    const revision = getFileRevision(this.authPath);
-    return revision !== undefined && revision === this.readState.revision;
+  isCurrent(): Promise<boolean> {
+    if (this.authPath === undefined) return Promise.resolve(false);
+    return getFileRevision(this.authPath).then(
+      (revision) => revision !== undefined && revision === this.readState.revision,
+    );
   }
 
-  fileRevision(): string | undefined {
-    return this.authPath === undefined ? undefined : getFileRevision(this.authPath);
+  fileRevision(): Promise<string | undefined> {
+    return this.authPath === undefined
+      ? Promise.resolve(undefined)
+      : getFileRevision(this.authPath);
   }
 
   parse(content: string | undefined): AuthStorageData {
@@ -67,29 +70,21 @@ export default class AuthDataReader {
     this.readState.revision = revision;
   }
 
-  reload(): void {
-    let content: string | undefined;
-    let revision: string | undefined;
-    try {
-      this.storage.withLock((current) => {
-        content = current;
-        revision = this.fileRevision();
-        return { result: undefined };
-      });
-      this.update(this.parse(content), revision);
-    } catch {}
+  reload(): Promise<void> {
+    return this.reloadAsync().then(
+      () => undefined,
+      () => undefined,
+    );
   }
 
   private reloadAsync(options?: aiTypes.AuthOperationOptions): Promise<AuthStorageData> {
     return this.storage.withLockAsync(
       (content) =>
-        Effect.runPromise(
-          Effect.sync(() => {
-            const currentData = this.parse(content);
-            this.update(currentData, this.fileRevision());
-            return { result: currentData };
-          }),
-        ),
+        this.fileRevision().then((revision) => {
+          const currentData = this.parse(content);
+          this.update(currentData, revision);
+          return { result: currentData };
+        }),
       options,
     );
   }
@@ -120,7 +115,7 @@ export default class AuthDataReader {
           options?.signal === undefined ? reload.catch(() => this.readState.data) : reload,
         );
       }
-      if (this.isCurrent()) return this.readState.data;
+      if (yield* awaited(this.isCurrent())) return this.readState.data;
       const reload = this.sharedReload();
       reload.readers++;
       try {

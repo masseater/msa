@@ -58,30 +58,32 @@ const shouldLoadSkillsAndPromptsWithExtension = Effect.gen(function* () {
   const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* awaited(loader.reload());
 
-  loader.extendResources({
-    promptPaths: [
-      {
-        metadata: {
-          baseDir: extraPromptDir,
-          origin: "top-level",
-          scope: "temporary",
-          source: "extension:extra",
+  yield* awaited(
+    loader.extendResources({
+      promptPaths: [
+        {
+          metadata: {
+            baseDir: extraPromptDir,
+            origin: "top-level",
+            scope: "temporary",
+            source: "extension:extra",
+          },
+          path: promptPath,
         },
-        path: promptPath,
-      },
-    ],
-    skillPaths: [
-      {
-        metadata: {
-          baseDir: extraSkillDir,
-          origin: "top-level",
-          scope: "temporary",
-          source: "extension:extra",
+      ],
+      skillPaths: [
+        {
+          metadata: {
+            baseDir: extraSkillDir,
+            origin: "top-level",
+            scope: "temporary",
+            source: "extension:extra",
+          },
+          path: extraSkillDir,
         },
-        path: extraSkillDir,
-      },
-    ],
-  });
+      ],
+    }),
+  );
 
   const { skills } = loader.getSkills();
   const loadedSkill = skills.find((skill) => skill.name === "extra-skill");
@@ -112,19 +114,21 @@ Extra content`,
   const loader = new DefaultResourceLoader({ agentDir, cwd });
   yield* awaited(loader.reload());
 
-  loader.extendResources({
-    skillPaths: [
-      {
-        metadata: {
-          baseDir: extraSkillDir,
-          origin: "top-level",
-          scope: "temporary",
-          source: "extension:file-url",
+  yield* awaited(
+    loader.extendResources({
+      skillPaths: [
+        {
+          metadata: {
+            baseDir: extraSkillDir,
+            origin: "top-level",
+            scope: "temporary",
+            source: "extension:file-url",
+          },
+          path: pathToFileURL(extraSkillDir).href,
         },
-        path: pathToFileURL(extraSkillDir).href,
-      },
-    ],
-  });
+      ],
+    }),
+  );
 
   const { skills, diagnostics } = loader.getSkills();
   expect(diagnostics).toEqual([]);

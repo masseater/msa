@@ -32,8 +32,9 @@ function runMcpCommandImpl(args: string[], options: cliTypes.McpCommandOptions):
         return 0;
       }
       const projectConfig = projectConfigPath(options);
-      if (command === "add") return add(rest, projectConfig, options, log, error);
-      if (command === "remove") return remove(rest, projectConfig, options, log, error);
+      if (command === "add") return yield* awaited(add(rest, projectConfig, options, log, error));
+      if (command === "remove")
+        return yield* awaited(remove(rest, projectConfig, options, log, error));
       const context = yield* awaited(loadCommandContext(options, projectConfig, log, error));
       if (command === "list") return yield* awaited(listCommand(rest, context));
       if (command === "login" || command === "logout") {

@@ -4,11 +4,10 @@ import text from "../utils/text.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 import type packageManagerTypes from "./package-manager.types.ts";
 import platform from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import sourceInfoModule from "./source-info.ts";
 
 const { join, writeError } = platform;
-const { existsSync, readFileSync } = nodeFs;
+const { exists, readText } = platform.files;
 const { stripBom } = text;
 const { BUILTIN_PATH_PREFIX } = sourceInfoModule;
 
@@ -25,39 +24,48 @@ const HOST_PROVIDED_EXTENSION_PACKAGES = new Set([
   "typebox",
 ]);
 
+type PackageWarning = { path: string; warning: string };
+
+function hostDependencyWarning(packageJsonPath: string, content: string): PackageWarning[] {
+  const manifest = JSON.parse(stripBom(content)) as { dependencies?: unknown };
+  if (
+    typeof manifest.dependencies !== "object" ||
+    manifest.dependencies === null ||
+    Array.isArray(manifest.dependencies)
+  ) {
+    return [];
+  }
+  const hostDependencies = Object.keys(manifest.dependencies)
+    .filter((name) => HOST_PROVIDED_EXTENSION_PACKAGES.has(name))
+    .sort();
+  if (hostDependencies.length === 0) return [];
+  return [
+    {
+      path: packageJsonPath,
+      warning: `Host-provided extension packages must be declared in peerDependencies with a "*" range, not dependencies: ${hostDependencies.join(", ")}. Installed copies can bypass the extension loader and create duplicate runtime modules.`,
+    },
+  ];
+}
+
+function packageWarningsFor(packageRoot: string): Promise<PackageWarning[]> {
+  const packageJsonPath = join(packageRoot, "package.json");
+  return exists(packageJsonPath).then((found) =>
+    found
+      ? readText(packageJsonPath).then((content) => hostDependencyWarning(packageJsonPath, content))
+      : [],
+  );
+}
+
 function collectExtensionPackageWarnings(
   extensionPaths: string[],
   metadataByPath: Map<string, packageManagerTypes.PathMetadata>,
-): Array<{ path: string; warning: string }> {
-  const warnings: Array<{ path: string; warning: string }> = [];
+): Promise<PackageWarning[]> {
   const packageRoots = new Set(
     extensionPaths
       .map((extensionPath) => metadataByPath.get(extensionPath)?.packageRoot)
       .filter((packageRoot): packageRoot is string => packageRoot !== undefined),
   );
-  for (const packageRoot of packageRoots) {
-    const packageJsonPath = join(packageRoot, "package.json");
-    if (!existsSync(packageJsonPath)) continue;
-    const manifest = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8"))) as {
-      dependencies?: unknown;
-    };
-    if (
-      typeof manifest.dependencies !== "object" ||
-      manifest.dependencies === null ||
-      Array.isArray(manifest.dependencies)
-    ) {
-      continue;
-    }
-    const hostDependencies = Object.keys(manifest.dependencies)
-      .filter((name) => HOST_PROVIDED_EXTENSION_PACKAGES.has(name))
-      .sort();
-    if (hostDependencies.length === 0) continue;
-    warnings.push({
-      path: packageJsonPath,
-      warning: `Host-provided extension packages must be declared in peerDependencies with a "*" range, not dependencies: ${hostDependencies.join(", ")}. Installed copies can bypass the extension loader and create duplicate runtime modules.`,
-    });
-  }
-  return warnings;
+  return Promise.all([...packageRoots].map(packageWarningsFor)).then((groups) => groups.flat());
 }
 
 function mergeExtensionWarnings(
@@ -108,21 +116,23 @@ function omitReplacedExtensions(
   });
 }
 
-function resolvePromptInput(input: string | undefined, description: string): string | undefined {
+function resolvePromptInput(
+  input: string | undefined,
+  description: string,
+): Promise<string | undefined> {
   if (input === undefined || input === "") {
-    return undefined;
+    return Promise.resolve(undefined);
   }
-
-  if (existsSync(input)) {
-    try {
-      return stripBom(readFileSync(input, "utf-8"));
-    } catch (error) {
-      writeError(chalk.yellow(`Warning: Could not read ${description} file ${input}: ${error}`));
-      return input;
-    }
-  }
-
-  return input;
+  return exists(input).then((found) =>
+    found
+      ? readText(input).then(stripBom, (error: unknown) => {
+          writeError(
+            chalk.yellow(`Warning: Could not read ${description} file ${input}: ${String(error)}`),
+          );
+          return input;
+        })
+      : input,
+  );
 }
 
 const defaultResourceLoaderHelpers = {

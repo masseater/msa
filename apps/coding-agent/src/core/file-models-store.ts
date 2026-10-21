@@ -67,13 +67,11 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
   ): Promise<StoredModels> {
     return this.storage.withLockAsync(
       (content) =>
-        Effect.runPromise(
-          Effect.sync(() => {
-            const data = this.parse(content);
-            this.updateReadState(readState, data, getFileRevision(this.path));
-            return { result: data };
-          }),
-        ),
+        getFileRevision(this.path).then((revision) => {
+          const data = this.parse(content);
+          this.updateReadState(readState, data, revision);
+          return { result: data };
+        }),
       options,
     );
   }
@@ -84,7 +82,7 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
   ): Effect.Effect<StoredModels> {
     return awaitingWith(function* () {
       options?.signal?.throwIfAborted();
-      const revision = getFileRevision(this.path);
+      const revision = yield* awaited(getFileRevision(this.path));
       if (revision !== undefined && revision === readState.revision) return readState.data;
       if (readState.reload === undefined) {
         const controller = new AbortController();

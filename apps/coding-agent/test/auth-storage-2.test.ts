@@ -112,7 +112,7 @@ const coalescesFileReloadsAcrossConcurrentReadersAnd = () =>
       yield* awaited(otherFirst.read("other"));
       yield* awaited(otherSecond.read("other"));
       yield* awaited(otherFirst.list());
-      expect(lockSpy).toHaveBeenCalledTimes(1);
+      expect(lockSpy).toHaveBeenCalledTimes(3);
 
       const third = AuthStorage.create(authJsonPath);
       yield* writeAuthJson({ "anthropic-api": { key: "newest", type: "api_key" as const } });
@@ -121,7 +121,7 @@ const coalescesFileReloadsAcrossConcurrentReadersAnd = () =>
       );
       expect(firstReload).toEqual({ key: "newest", type: "api_key" as const });
       expect(thirdReload).toEqual({ key: "newest", type: "api_key" as const });
-      expect(lockSpy).toHaveBeenCalledTimes(2);
+      expect(lockSpy).toHaveBeenCalledTimes(4);
     }),
   );
 

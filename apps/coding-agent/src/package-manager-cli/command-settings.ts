@@ -26,7 +26,8 @@ function* loadProjectTrustExtensions(
   projectTrustWarnings: string[],
 ) {
   const extensionsResult =
-    options.projectTrustOverride === undefined && hasTrustRequiringProjectResources(options.cwd)
+    options.projectTrustOverride === undefined &&
+    (yield* awaited(hasTrustRequiringProjectResources(options.cwd)))
       ? yield* awaited(
           new DefaultResourceLoader({
             agentDir: options.agentDir,
@@ -55,7 +56,7 @@ function createCommandSettingsManager(
       const projectTrustWarnings: string[] = [];
       const trustStore = new ProjectTrustStore(options.agentDir);
       if (options.useSavedProjectTrustOnly === true) {
-        const savedProjectTrusted = trustStore.get(options.cwd) === true;
+        const savedProjectTrusted = (yield* awaited(trustStore.get(options.cwd))) === true;
         yield* awaited(
           settingsManager.persistence.setProjectTrusted(
             options.projectTrustOverride ?? savedProjectTrusted,

@@ -53,9 +53,8 @@ export default class RuntimeFactory {
     diagnostics: Diagnostic[],
   ): Promise<agentSessionServicesTypes.AgentSessionServices> {
     const { parsed, extensionFactories } = this.startup;
-    const { projectTrusted, resolveTrust } = this.trust.trustFor(args.cwd);
-    return SettingsManager.create(args.cwd, args.agentDir, { projectTrusted }).then(
-      (settingsManager) =>
+    return this.trust.trustFor(args.cwd).then(({ projectTrusted, resolveTrust }) =>
+      SettingsManager.create(args.cwd, args.agentDir, { projectTrusted }).then((settingsManager) =>
         createAgentSessionServices({
           agentDir: args.agentDir,
           cwd: args.cwd,
@@ -81,6 +80,7 @@ export default class RuntimeFactory {
             : undefined,
           settingsManager,
         }),
+      ),
     );
   }
 }

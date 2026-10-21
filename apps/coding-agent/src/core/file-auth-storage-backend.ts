@@ -7,10 +7,8 @@ import paths from "../utils/paths.ts";
 import type authStorageTypes from "./auth-storage.types.ts";
 import awaitingModule from "./awaiting.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
-
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 const { dirname, nowMs, randomUnit, sleepFor } = platformModule;
+const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { getAuthPath } = config;
 const { normalizePath } = paths;
 const { awaited, awaitingWith, performed } = awaitingModule;
@@ -21,7 +19,7 @@ function getRetryableLockErrorCode(error: unknown): "ELOCKED" | "EPERM" | undefi
   if (code === "EPERM" && process.platform === "win32") return code;
   return undefined;
 }
-const AUTH_FILE_WRITE_OPTIONS = { encoding: "utf-8", mode: 0o600 } as const;
+const AUTH_FILE_MODE = 0o600;
 export default class FileAuthStorageBackend implements authStorageTypes.AuthStorageBackend {
   private authPath: string;
 
@@ -29,51 +27,20 @@ export default class FileAuthStorageBackend implements authStorageTypes.AuthStor
     this.authPath = normalizePath(authPath);
   }
 
-  private ensureParentDir(): void {
-    const dir = dirname(this.authPath);
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { mode: 0o700, recursive: true });
-    }
+  private ensureFile(): Promise<void> {
+    return makeDirectory({ mode: 0o700, path: dirname(this.authPath) })
+      .then(() => exists(this.authPath))
+      .then((found) =>
+        found
+          ? undefined
+          : writeFile({ data: "{}", flag: "wx", mode: AUTH_FILE_MODE, path: this.authPath }).catch(
+              () => undefined,
+            ),
+      );
   }
 
-  private ensureFileExists(): void {
-    if (!existsSync(this.authPath)) {
-      writeFileSync(this.authPath, "{}", AUTH_FILE_WRITE_OPTIONS);
-    }
-  }
-
-  private acquireLockSyncWithRetry(path: string): () => void {
-    const maxAttempts = 10;
-    const delayMs = 20;
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return lockfile.lockSync(path, { realpath: false });
-      } catch (error) {
-        if (getRetryableLockErrorCode(error) === undefined || attempt === maxAttempts) throw error;
-        const start = nowMs();
-        while (nowMs() - start < delayMs) {}
-      }
-    }
-  }
-
-  withLock<T>(fn: (current: string | undefined) => authStorageTypes.LockResult<T>): T {
-    this.ensureParentDir();
-    this.ensureFileExists();
-
-    let release: (() => void) | undefined;
-    try {
-      release = this.acquireLockSyncWithRetry(this.authPath);
-      const current = existsSync(this.authPath) ? readFileSync(this.authPath, "utf-8") : undefined;
-      const { result, next } = fn(current);
-      if (next !== undefined) {
-        writeFileSync(this.authPath, next, AUTH_FILE_WRITE_OPTIONS);
-      }
-      return result;
-    } finally {
-      if (release !== undefined) {
-        release();
-      }
-    }
+  private readCurrent(): Promise<string | undefined> {
+    return exists(this.authPath).then((found) => (found ? readText(this.authPath) : undefined));
   }
 
   private acquireLockAsync(
@@ -126,8 +93,7 @@ export default class FileAuthStorageBackend implements authStorageTypes.AuthStor
     return Effect.runPromise(
       awaitingWith(function* () {
         options?.signal?.throwIfAborted();
-        this.ensureParentDir();
-        this.ensureFileExists();
+        yield* awaited(this.ensureFile());
 
         let release: (() => Promise<void>) | undefined;
         let lockCompromised = false;
@@ -148,14 +114,12 @@ export default class FileAuthStorageBackend implements authStorageTypes.AuthStor
 
           throwIfCompromised();
           options?.signal?.throwIfAborted();
-          const current = existsSync(this.authPath)
-            ? readFileSync(this.authPath, "utf-8")
-            : undefined;
+          const current = yield* awaited(this.readCurrent());
           const { result, next } = yield* awaited(fn(current));
           throwIfCompromised();
           options?.signal?.throwIfAborted();
           if (next !== undefined) {
-            writeFileSync(this.authPath, next, AUTH_FILE_WRITE_OPTIONS);
+            yield* awaited(writeFile({ data: next, mode: AUTH_FILE_MODE, path: this.authPath }));
           }
           throwIfCompromised();
           return result;

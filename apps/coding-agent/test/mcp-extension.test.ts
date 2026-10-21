@@ -30,7 +30,7 @@ const mergesGlobalAndTrustedProjectServersAnd = Effect.gen(function* () {
     { mcpServers: { shared: { command: "project-cmd", exposure: "direct" } } },
   );
 
-  const trusted = loadMcpConfig({ ...paths, projectTrusted: true });
+  const trusted = yield* Effect.promise(() => loadMcpConfig({ ...paths, projectTrusted: true }));
 
   expect(trusted.servers.map((server) => [server.name, server.scope, server.config])).toEqual([
     ["shared", "project", { command: "project-cmd", exposure: "direct" }],
@@ -47,7 +47,7 @@ const mergesGlobalAndTrustedProjectServersAnd = Effect.gen(function* () {
   expect(trusted.errors[2]).toContain('server "badUrl": url must be an http or https URL');
   expect(trusted.errors[3]).toContain('invalid server name "bad name"');
 
-  const untrusted = loadMcpConfig({ ...paths, projectTrusted: false });
+  const untrusted = yield* Effect.promise(() => loadMcpConfig({ ...paths, projectTrusted: false }));
   expect(untrusted.servers.find((server) => server.name === "shared")?.config).toEqual({
     command: "global-cmd",
   });
@@ -58,7 +58,9 @@ const rejectsServerNamesThatDifferOnlyIn = Effect.gen(function* () {
     { mcpServers: { "work-files": { command: "a" }, work_files: { command: "b" } } },
     {},
   );
-  const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: false });
+  const { servers, errors } = yield* Effect.promise(() =>
+    loadMcpConfig({ ...paths, projectTrusted: false }),
+  );
   expect(servers.map((server) => server.name)).toEqual(["work-files"]);
   expect(errors).toEqual([
     expect.stringContaining('server "work_files" conflicts with "work-files"'),
@@ -86,7 +88,9 @@ const letsProjectEntriesOverrideEnabledAndExposure = () =>
         },
       );
       const project = joinPath(paths.cwd, ".msa", "mcp.json");
-      const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: true });
+      const { servers, errors } = yield* Effect.promise(() =>
+        loadMcpConfig({ ...paths, projectTrusted: true }),
+      );
       expect(servers.map((server) => [server.name, server.override, server.config])).toEqual([
         ["tools", undefined, { command: "x", env: { TOKEN: "secret" } }],
       ]);
@@ -103,13 +107,15 @@ const letsProjectEntriesOverrideEnabledAndExposure = () =>
         project,
         yield* toJsonText({ mcpServers: { tools: { enabled: false } } }),
       );
-      const [tools] = loadMcpConfig({ ...paths, projectTrusted: true }).servers;
+      const [tools] = (yield* Effect.promise(() =>
+        loadMcpConfig({ ...paths, projectTrusted: true }),
+      )).servers;
       expect([tools?.override, tools?.config]).toEqual([
         project,
         { command: "x", enabled: false, env: { TOKEN: "secret" } },
       ]);
 
-      updateMcpServerConfig(project, "tools", { enabled: true });
+      yield* Effect.promise(() => updateMcpServerConfig(project, "tools", { enabled: true }));
       const updated = (yield* fromJsonText(yield* readTextFile(project))) as {
         mcpServers: { tools: unknown };
       };

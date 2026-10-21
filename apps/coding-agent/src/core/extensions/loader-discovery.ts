@@ -20,7 +20,7 @@ const manifestEntries = (dir: string) =>
   Effect.gen(function* () {
     const packageJsonPath = platform.join(dir, "package.json");
     if (!(yield* existsOrFalse(packageJsonPath))) return [];
-    const manifest = yield* Effect.sync(() => readMsaManifest(packageJsonPath));
+    const manifest = yield* Effect.promise(() => readMsaManifest(packageJsonPath));
     const entries: string[] = [];
     for (const extPath of manifest?.extensions ?? []) {
       const resolvedExtPath = platform.resolve(dir, extPath);

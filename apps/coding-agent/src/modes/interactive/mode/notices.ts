@@ -82,14 +82,14 @@ export default class ChatNotices {
     );
   }
 
-  renderProjectTrustWarningIfNeeded(): void {
-    if (
-      this.mode.settingsManager.isProjectTrusted() ||
-      !hasTrustRequiringProjectResources(this.mode.sessionManager.getCwd())
-    ) {
-      return;
-    }
+  renderProjectTrustWarningIfNeeded(): Promise<void> {
+    if (this.mode.settingsManager.isProjectTrusted()) return Promise.resolve();
+    return hasTrustRequiringProjectResources(this.mode.sessionManager.getCwd()).then(
+      (requiresTrust) => (requiresTrust ? this.renderProjectTrustWarning() : undefined),
+    );
+  }
 
+  private renderProjectTrustWarning(): void {
     if (this.mode.layout.chatContainer.children.length > 0) {
       this.mode.layout.chatContainer.addChild(new Spacer(1));
     }
@@ -104,5 +104,6 @@ export default class ChatNotices {
         0,
       ),
     );
+    this.mode.ui.requestRender();
   }
 }

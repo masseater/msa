@@ -10,7 +10,7 @@ import ResourceEnvironment from "./resource-loader/resource-environment.ts";
 import SkillResources from "./resource-loader/skill-resources.ts";
 import ThemeResources from "./resource-loader/theme-resources.ts";
 
-const { awaitingWith } = awaitingModule;
+const { awaited, awaitingWith } = awaitingModule;
 
 type Loader = resourceLoaderTypes.ResourceLoader;
 
@@ -68,10 +68,18 @@ export default class DefaultResourceLoader implements Loader {
     return this.context.appendSystemPromptSourcePaths.map((path) => ({ path }));
   }
 
-  extendResources(paths: resourceLoaderTypes.ResourceExtensionPaths): void {
-    this.skills.extend(this.extensions.normalizeExtensionPaths(paths.skillPaths ?? []));
-    this.prompts.extend(this.extensions.normalizeExtensionPaths(paths.promptPaths ?? []));
-    this.themes.extend(this.extensions.normalizeExtensionPaths(paths.themePaths ?? []));
+  extendResources(paths: resourceLoaderTypes.ResourceExtensionPaths): Promise<void> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        yield* this.skills.extend(this.extensions.normalizeExtensionPaths(paths.skillPaths ?? []));
+        yield* this.prompts.extend(
+          this.extensions.normalizeExtensionPaths(paths.promptPaths ?? []),
+        );
+        yield* awaited(
+          this.themes.extend(this.extensions.normalizeExtensionPaths(paths.themePaths ?? [])),
+        );
+      }, this),
+    );
   }
 
   reload(options?: resourceLoaderTypes.ResourceLoaderReloadOptions): Promise<void> {
@@ -79,10 +87,10 @@ export default class DefaultResourceLoader implements Loader {
       awaitingWith(function* () {
         const plan = yield* this.discovery.discover(options);
         yield* this.extensions.reload(plan);
-        this.skills.reload(plan);
-        this.prompts.reload(plan);
-        this.themes.reload(plan);
-        this.context.reload();
+        yield* this.skills.reload(plan);
+        yield* this.prompts.reload(plan);
+        yield* awaited(this.themes.reload(plan));
+        yield* awaited(this.context.reload());
         this.loaded = true;
       }, this),
     );

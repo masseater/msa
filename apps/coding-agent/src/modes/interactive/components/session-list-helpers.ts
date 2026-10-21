@@ -27,27 +27,46 @@ function formatSessionDate(date: Date): string {
   return `${Math.floor(diffDays / 365)}y`;
 }
 
-function canonicalizePath(path: string | undefined): string | undefined {
-  if (path === undefined || path === "") return path;
-  return _canonicalizePath(path);
+function canonicalPathMap(
+  candidates: readonly (string | undefined)[],
+): Promise<Map<string, string>> {
+  const known = [...new Set(candidates)].filter(
+    (path): path is string => path !== undefined && path !== "",
+  );
+  return Promise.all(
+    known.map((path) => _canonicalizePath(path).then((canonical) => [path, canonical] as const)),
+  ).then((entries) => new Map(entries));
 }
+
+const updateLatestActivity = (node: sessionListInternalTypes.SessionTreeNode): number => {
+  let latestActivity = node.session.modified.getTime();
+  for (const child of node.children) {
+    latestActivity = Math.max(latestActivity, updateLatestActivity(child));
+  }
+  node.latestActivity = latestActivity;
+  return latestActivity;
+};
 
 function buildSessionTree(
   sessions: sessionManagerTypes.SessionInfo[],
+  canonical: (path: string) => string = (path) => path,
 ): sessionListInternalTypes.SessionTreeNode[] {
   const byPath = new Map<string, sessionListInternalTypes.SessionTreeNode>();
 
   for (const session of sessions) {
-    const sessionPath = canonicalizePath(session.path) ?? session.path;
+    const sessionPath = canonical(session.path);
     byPath.set(sessionPath, { children: [], latestActivity: session.modified.getTime(), session });
   }
 
   const roots: sessionListInternalTypes.SessionTreeNode[] = [];
 
   for (const session of sessions) {
-    const sessionPath = canonicalizePath(session.path) ?? session.path;
+    const sessionPath = canonical(session.path);
     const node = byPath.get(sessionPath)!;
-    const parentPath = canonicalizePath(session.parentSessionPath);
+    const parentPath =
+      session.parentSessionPath === undefined || session.parentSessionPath === ""
+        ? session.parentSessionPath
+        : canonical(session.parentSessionPath);
 
     if (parentPath !== undefined && parentPath !== "" && byPath.has(parentPath)) {
       byPath.get(parentPath)!.children.push(node);
@@ -55,15 +74,6 @@ function buildSessionTree(
       roots.push(node);
     }
   }
-
-  const updateLatestActivity = (node: sessionListInternalTypes.SessionTreeNode): number => {
-    let latestActivity = node.session.modified.getTime();
-    for (const child of node.children) {
-      latestActivity = Math.max(latestActivity, updateLatestActivity(child));
-    }
-    node.latestActivity = latestActivity;
-    return latestActivity;
-  };
 
   for (const root of roots) {
     updateLatestActivity(root);
@@ -132,7 +142,7 @@ function appendSessionLine(
 const sessionListHelpers = {
   appendSessionLine,
   buildSessionTree,
-  canonicalizePath,
+  canonicalPathMap,
   flattenSessionTree,
   formatSessionDate,
 };

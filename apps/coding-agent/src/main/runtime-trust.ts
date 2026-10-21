@@ -27,18 +27,19 @@ export default class RuntimeTrust {
       parsed.help === true || parsed.listModels !== undefined ? "print" : startup.appMode;
   }
 
-  trustFor(runtimeCwd: string): { projectTrusted: boolean; resolveTrust: boolean } {
+  trustFor(runtimeCwd: string): Promise<{ projectTrusted: boolean; resolveTrust: boolean }> {
     const { parsed, trustStore } = this.startup;
     const cached = this.projectTrustByCwd.get(runtimeCwd);
-    const requiresTrust = hasTrustRequiringProjectResources(runtimeCwd);
-    const resolveTrust =
-      parsed.projectTrustOverride === undefined && cached === undefined && requiresTrust;
-    const projectTrusted = resolveTrust
-      ? false
-      : (cached ??
-        parsed.projectTrustOverride ??
-        (!requiresTrust || trustStore.get(runtimeCwd) === true));
-    return { projectTrusted, resolveTrust };
+    return hasTrustRequiringProjectResources(runtimeCwd).then((requiresTrust) => {
+      const resolveTrust =
+        parsed.projectTrustOverride === undefined && cached === undefined && requiresTrust;
+      const known = resolveTrust ? false : (cached ?? parsed.projectTrustOverride);
+      if (known !== undefined || !requiresTrust)
+        return { projectTrusted: known ?? true, resolveTrust };
+      return trustStore
+        .get(runtimeCwd)
+        .then((decision) => ({ projectTrusted: decision === true, resolveTrust }));
+    });
   }
 
   resolver(args: FactoryArgs, diagnostics: Diagnostic[]) {

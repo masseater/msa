@@ -15,7 +15,7 @@ const { listModels } = listModelsModule;
 const { awaited, awaiting } = awaitingModule;
 const { time } = timings;
 const { showDeprecationWarnings } = migrations;
-const { initTheme } = themeModule;
+const { initTheme, refreshCustomThemes } = themeModule;
 const { prepareInitialMessage, readPipedStdin } = cliInput;
 const { reportDiagnostics } = diagnosticsModule;
 
@@ -58,6 +58,7 @@ function prepareInput(startup: Startup, runtime: Runtime) {
       time("readPipedStdin");
       const input = yield* awaited(prepareInitialMessage(startup.parsed, stdinContent));
       time("prepareInitialMessage");
+      yield* awaited(refreshCustomThemes());
       initTheme(
         runtime.services.settingsManager.display.getTheme(),
         startup.appMode === "interactive",

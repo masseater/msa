@@ -43,6 +43,7 @@ const treatsTheCurrentSessionAsActiveAcross = () =>
         paths.parentAliasA,
       );
       yield* flushPromises;
+      yield* awaited(selector.getSessionList().pathsResolved);
 
       const list = selector.getSessionList();
       const confirmationChanges: Array<string | null> = [];

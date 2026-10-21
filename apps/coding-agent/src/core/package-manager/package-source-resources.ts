@@ -4,11 +4,11 @@ import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
-import nodeFs from "../platform/node/fs.ts";
+import platform from "../platform/index.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import packageEnv from "./package-env.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 const { isOfflineModeEnabled } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 
@@ -64,12 +64,14 @@ export default class PackageSourceResources {
           resolvedSource: deltaBase?.source ?? sourceStr,
         };
         if (source.parsed.type === "local") {
-          this.manager.resources.collection.resolveLocalExtensionSource(
-            source.parsed,
-            accumulator,
-            source.filter,
-            source.metadata,
-            this.manager.sources.getBaseDirForScope(source.resolvedScope),
+          yield* awaited(
+            this.manager.resources.collection.resolveLocalExtensionSource(
+              source.parsed,
+              accumulator,
+              source.filter,
+              source.metadata,
+              this.manager.sources.getBaseDirForScope(source.resolvedScope),
+            ),
           );
           continue;
         }
@@ -77,11 +79,13 @@ export default class PackageSourceResources {
         if (installedPath === undefined) continue;
         source.metadata.baseDir = installedPath;
         source.metadata.packageRoot = installedPath;
-        this.manager.resources.collection.collectPackageResources(
-          installedPath,
-          accumulator,
-          source.filter,
-          source.metadata,
+        yield* awaited(
+          this.manager.resources.collection.collectPackageResources(
+            installedPath,
+            accumulator,
+            source.filter,
+            source.metadata,
+          ),
         );
       }
     }, this);
@@ -100,7 +104,7 @@ export default class PackageSourceResources {
           const { installs, paths } = this.manager.npm;
           const installedPath = paths.getNpmInstallPath(parsed, resolvedScope);
           const current =
-            existsSync(installedPath) &&
+            (yield* awaited(exists(installedPath))) &&
             (yield* performed(
               installs.installedNpmMatchesConfiguredVersion(parsed, installedPath),
             ));
@@ -109,7 +113,7 @@ export default class PackageSourceResources {
           return paths.getNpmInstallPath(parsed, resolvedScope);
         }
         const installedPath = this.manager.git.paths.getGitInstallPath(parsed, resolvedScope);
-        if (!existsSync(installedPath)) {
+        if (!(yield* awaited(exists(installedPath)))) {
           return (yield* awaited(installMissing())) ? installedPath : undefined;
         }
         if (resolvedScope === "temporary" && !parsed.pinned && !isOfflineModeEnabled()) {

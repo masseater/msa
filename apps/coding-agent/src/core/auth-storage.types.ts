@@ -12,7 +12,6 @@ declare namespace authStorageTypes {
   };
 
   interface AuthStorageBackend {
-    withLock<T>(fn: (current: string | undefined) => LockResult<T>): T;
     withLockAsync<T>(
       fn: (current: string | undefined) => Promise<LockResult<T>>,
       options?: aiTypes.AuthOperationOptions,

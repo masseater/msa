@@ -24,7 +24,7 @@ function selectProjectTrustOption(
   ctx: extensionsTypesTypes.ProjectTrustContext,
 ): Effect.Effect<trustManagerTypes.ProjectTrustOption | undefined> {
   return awaiting(function* () {
-    const options = getProjectTrustOptions(cwd, { includeSessionOnly: true });
+    const options = yield* awaited(getProjectTrustOptions(cwd, { includeSessionOnly: true }));
     const selected = yield* awaited(
       ctx.ui.select(
         formatProjectTrustPrompt(cwd),
@@ -38,10 +38,8 @@ function selectProjectTrustOption(
 function saveProjectTrustPromptResult(
   trustStore: trustManagerTypes.ProjectTrustStore,
   result: trustManagerTypes.ProjectTrustOption,
-): void {
-  if (result.updates.length > 0) {
-    trustStore.setMany(result.updates);
-  }
+): Promise<void> {
+  return result.updates.length > 0 ? trustStore.setMany(result.updates) : Promise.resolve();
 }
 
 function* trustFromExtensions(options: projectTrustTypes.ResolveProjectTrustedOptions) {
@@ -60,15 +58,19 @@ function* trustFromExtensions(options: projectTrustTypes.ResolveProjectTrustedOp
   }
   if (result === undefined) return undefined;
   const trusted = result.trusted === "yes";
-  if (result.remember === true) options.trustStore.set(options.cwd, trusted);
+  if (result.remember === true) yield* awaited(options.trustStore.set(options.cwd, trusted));
   return trusted;
 }
 
 function storedOrDefaultTrust(
   options: projectTrustTypes.ResolveProjectTrustedOptions,
-): boolean | "ask" {
-  const decision = options.trustStore.get(options.cwd);
-  if (decision !== null) return decision;
+): Promise<boolean | "ask"> {
+  return options.trustStore
+    .get(options.cwd)
+    .then((decision) => (decision === null ? defaultTrust(options) : decision));
+}
+
+function defaultTrust(options: projectTrustTypes.ResolveProjectTrustedOptions): boolean | "ask" {
   switch (options.defaultProjectTrust ?? SETTINGS_DEFAULTS.defaultProjectTrust) {
     case "always":
       return true;
@@ -85,17 +87,17 @@ function resolveProjectTrusted(
   return Effect.runPromise(
     awaiting(function* () {
       if (options.trustOverride !== undefined) return options.trustOverride;
-      if (!hasTrustRequiringProjectResources(options.cwd)) return true;
+      if (!(yield* awaited(hasTrustRequiringProjectResources(options.cwd)))) return true;
       const fromExtensions = yield* trustFromExtensions(options);
       if (fromExtensions !== undefined) return fromExtensions;
-      const stored = storedOrDefaultTrust(options);
+      const stored = yield* awaited(storedOrDefaultTrust(options));
       if (stored !== "ask") return stored;
       if (!options.projectTrustContext.hasUI) return false;
       const selected = yield* performed(
         selectProjectTrustOption(options.cwd, options.projectTrustContext),
       );
       if (selected === undefined) return false;
-      saveProjectTrustPromptResult(options.trustStore, selected);
+      yield* awaited(saveProjectTrustPromptResult(options.trustStore, selected));
       return selected.trusted;
     }),
   );

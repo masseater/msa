@@ -19,8 +19,16 @@ const { createTestResourceLoader } = utilities;
 const { awaited, joinPath, makeTempDir, randomSuffix, removeDirs } = testing;
 
 const tempDirs: string[] = [];
+const settingsManagers: SettingsManager[] = [];
 
-const removeSessionDirs: Effect.Effect<void> = Effect.suspend(() => removeDirs(tempDirs.splice(0)));
+const removeSessionDirs: Effect.Effect<void> = Effect.suspend(() =>
+  Effect.andThen(
+    Effect.promise(() =>
+      Promise.all(settingsManagers.splice(0).map((manager) => manager.persistence.flush())),
+    ),
+    removeDirs(tempDirs.splice(0)),
+  ),
+);
 
 const sonnet = getModel("anthropic-api", "claude-sonnet-4-5")!;
 const opus = getModel("anthropic-api", "claude-opus-4-8")!;
@@ -31,6 +39,7 @@ const createSession = (options: { scoped: boolean; persistedScope?: string[] }) 
     tempDirs.push(tempDir);
 
     const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
+    settingsManagers.push(settingsManager);
     if (options.persistedScope !== undefined) {
       settingsManager.models.setEnabledModels(options.persistedScope);
     }

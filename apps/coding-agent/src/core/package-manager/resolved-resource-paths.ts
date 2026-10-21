@@ -6,36 +6,37 @@ import resourceFiles from "./resource-files.ts";
 const { canonicalizePath } = pathsModule;
 const { resourcePrecedenceRank } = resourceFiles;
 
+function mapToResolved(
+  entries: Map<string, { metadata: packageManagerTypes.PathMetadata; enabled: boolean }>,
+): Promise<packageManagerTypes.ResolvedResource[]> {
+  const resolved = Array.from(entries.entries()).map(([path, { metadata, enabled }]) => ({
+    enabled,
+    metadata,
+    path,
+  }));
+  resolved.sort((a, b) => resourcePrecedenceRank(a.metadata) - resourcePrecedenceRank(b.metadata));
+  return Promise.all(resolved.map((entry) => canonicalizePath(entry.path))).then(
+    (canonicalPaths) => {
+      const seen = new Set<string>();
+      return resolved.filter((_entry, index) => {
+        const canonicalPath = canonicalPaths[index]!;
+        if (seen.has(canonicalPath)) return false;
+        seen.add(canonicalPath);
+        return true;
+      });
+    },
+  );
+}
+
 function resolvedPathsOf(
   accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
-): packageManagerTypes.ResolvedPaths {
-  const mapToResolved = (
-    entries: Map<string, { metadata: packageManagerTypes.PathMetadata; enabled: boolean }>,
-  ): packageManagerTypes.ResolvedResource[] => {
-    const resolved = Array.from(entries.entries()).map(([path, { metadata, enabled }]) => ({
-      enabled,
-      metadata,
-      path,
-    }));
-    resolved.sort(
-      (a, b) => resourcePrecedenceRank(a.metadata) - resourcePrecedenceRank(b.metadata),
-    );
-
-    const seen = new Set<string>();
-    return resolved.filter((entry) => {
-      const canonicalPath = canonicalizePath(entry.path);
-      if (seen.has(canonicalPath)) return false;
-      seen.add(canonicalPath);
-      return true;
-    });
-  };
-
-  return {
-    extensions: mapToResolved(accumulator.extensions),
-    prompts: mapToResolved(accumulator.prompts),
-    skills: mapToResolved(accumulator.skills),
-    themes: mapToResolved(accumulator.themes),
-  };
+): Promise<packageManagerTypes.ResolvedPaths> {
+  return Promise.all([
+    mapToResolved(accumulator.extensions),
+    mapToResolved(accumulator.prompts),
+    mapToResolved(accumulator.skills),
+    mapToResolved(accumulator.themes),
+  ]).then(([extensions, prompts, skills, themes]) => ({ extensions, prompts, skills, themes }));
 }
 
 const resolvedResourcePaths = { resolvedPathsOf };

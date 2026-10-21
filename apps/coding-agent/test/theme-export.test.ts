@@ -9,7 +9,7 @@ import platform from "../src/core/platform/index.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
 
 const { readEnv } = platform;
-const { getThemeExportColors } = themeModule;
+const { getThemeExportColors, refreshCustomThemes } = themeModule;
 
 const { colorToHex, okhslColor } = tui;
 
@@ -55,6 +55,8 @@ const convertsOkhslExportColorsToHexBecause = () =>
         joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-okhsl.json"),
         yield* toJsonText(customTheme),
       );
+
+      yield* Effect.promise(() => refreshCustomThemes());
 
       expect(getThemeExportColors("custom-export-okhsl")).toEqual({
         cardBg: colorToHex(okhslColor(250, 0.2, 0.2)),
@@ -113,6 +115,8 @@ describe("getThemeExportColors", () => {
           yield* toJsonText(customTheme),
         );
 
+        yield* Effect.promise(() => refreshCustomThemes());
+
         expect(getThemeExportColors("custom-export-vars")).toEqual({
           cardBg: "#223344",
           infoBg: "#445566",
@@ -163,6 +167,8 @@ describe("getThemeExportColors", () => {
           joinPath(readEnv("MSA_CODING_AGENT_DIR")!, "themes", "custom-export-recursive.json"),
           yield* toJsonText(customTheme),
         );
+
+        yield* Effect.promise(() => refreshCustomThemes());
 
         expect(getThemeExportColors("custom-export-recursive")).toEqual({
           cardBg: "#005f87",

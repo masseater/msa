@@ -15,27 +15,23 @@ const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
 let tempRoot: string;
 
-const processShouldSurviveAnErrorEventSetup = () =>
-  Effect.gen(function* () {
-    const themeModulePath = joinPath(
-      __dirname,
-      "../../../src/modes/interactive/theme/theme.ts",
-    ).replace(/\\/gu, "/");
-    const agentDir = joinPath(tempRoot, "agent").replace(/\\/gu, "/");
-
-    const scriptPath = joinPath(tempRoot, "test-watcher-error.mts");
-    yield* fs.writeFileString(
-      scriptPath,
-      `
+const watcherScript = (themeModulePath: string, agentDir: string): string =>
+  `
 import themeModule from "${themeModulePath}";
-const { setTheme, stopThemeWatcher } = themeModule;
+const { refreshCustomThemes, setTheme, stopThemeWatcher } = themeModule;
 process.env.MSA_CODING_AGENT_DIR = "${agentDir}";
 
+await refreshCustomThemes();
 setTheme("custom-test", true);
 
 // Find the FSWatcher among active handles
-const handles = (process as any)._getActiveHandles();
-const fsWatcher = handles.find((h: any) => h.constructor?.name === "FSWatcher");
+const findWatcher = () =>
+	(process as any)._getActiveHandles().find((h: any) => h.constructor?.name === "FSWatcher");
+let fsWatcher = findWatcher();
+for (let attempt = 0; attempt < 100 && !fsWatcher; attempt++) {
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	fsWatcher = findWatcher();
+}
 
 if (!fsWatcher) {
 	process.stderr.write("no FSWatcher found among active handles\\n");
@@ -58,8 +54,18 @@ try {
 
 stopThemeWatcher();
 process.exit(0);
-`,
-    );
+`;
+
+const processShouldSurviveAnErrorEventSetup = () =>
+  Effect.gen(function* () {
+    const themeModulePath = joinPath(
+      __dirname,
+      "../../../src/modes/interactive/theme/theme.ts",
+    ).replace(/\\/gu, "/");
+    const agentDir = joinPath(tempRoot, "agent").replace(/\\/gu, "/");
+
+    const scriptPath = joinPath(tempRoot, "test-watcher-error.mts");
+    yield* fs.writeFileString(scriptPath, watcherScript(themeModulePath, agentDir));
     return { agentDir, scriptPath };
   });
 

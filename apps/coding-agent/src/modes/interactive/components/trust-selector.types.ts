@@ -7,6 +7,7 @@ declare namespace trustSelectorTypes {
   interface TrustSelectorOptions {
     cwd: string;
     savedDecision: trustManagerTypes.ProjectTrustStoreEntry | null;
+    trustOptions: trustManagerTypes.ProjectTrustOption[];
     projectTrusted: boolean;
     onSelect: (selection: TrustSelection) => void;
     onCancel: () => void;

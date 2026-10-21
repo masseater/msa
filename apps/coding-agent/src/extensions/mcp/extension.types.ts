@@ -7,7 +7,9 @@ declare namespace extensionTypes {
   type McpTransportFactory = runtimeTypes.McpTransportFactory;
 
   interface McpExtensionOptions {
-    loadConfig?: (ctx: extensionsTypesTypes.ExtensionContext) => configTypes.LoadedMcpConfig;
+    loadConfig?: (
+      ctx: extensionsTypesTypes.ExtensionContext,
+    ) => configTypes.LoadedMcpConfig | Promise<configTypes.LoadedMcpConfig>;
 
     createTransport?: runtimeTypes.McpTransportFactory;
 
@@ -20,7 +22,7 @@ declare namespace extensionTypes {
     updateConfig?: (
       entry: configTypes.McpServerEntry,
       patch: configTypes.McpServerConfigPatch,
-    ) => void;
+    ) => void | Promise<void>;
 
     startupWaitMs?: number;
   }

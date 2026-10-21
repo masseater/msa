@@ -35,13 +35,13 @@ const storesDecisionsAndInheritsFromParentDirectories = () =>
       const childDir = joinPath(parentDir, "project");
       yield* makeDirectory(childDir);
 
-      expect(store.get(childDir)).toBeNull();
-      store.set(parentDir, true);
-      expect(store.get(childDir)).toBe(true);
-      store.set(childDir, false);
-      expect(store.get(childDir)).toBe(false);
-      store.set(childDir, null);
-      expect(store.get(childDir)).toBe(true);
+      expect(yield* Effect.promise(() => store.get(childDir))).toBeNull();
+      yield* Effect.promise(() => store.set(parentDir, true));
+      expect(yield* Effect.promise(() => store.get(childDir))).toBe(true);
+      yield* Effect.promise(() => store.set(childDir, false));
+      expect(yield* Effect.promise(() => store.get(childDir))).toBe(false);
+      yield* Effect.promise(() => store.set(childDir, null));
+      expect(yield* Effect.promise(() => store.get(childDir))).toBe(true);
     }),
   );
 
@@ -53,20 +53,20 @@ const detectsTrustRequiringProjectResources = () =>
       try {
         yield* makeDirectory(joinPath(tempDir, ".msa", "agent"));
         yield* makeDirectory(joinPath(tempDir, ".agents", "skills"));
-        expect(hasTrustRequiringProjectResources(tempDir)).toBe(false);
-        expect(hasTrustRequiringProjectResources(cwd)).toBe(false);
+        expect(yield* Effect.promise(() => hasTrustRequiringProjectResources(tempDir))).toBe(false);
+        expect(yield* Effect.promise(() => hasTrustRequiringProjectResources(cwd))).toBe(false);
 
         yield* writeTextFile(joinPath(tempDir, ".msa", "settings.json"), "{}");
-        expect(hasTrustRequiringProjectResources(tempDir)).toBe(true);
+        expect(yield* Effect.promise(() => hasTrustRequiringProjectResources(tempDir))).toBe(true);
         yield* removePath(joinPath(tempDir, ".msa", "settings.json"));
 
         yield* makeDirectory(joinPath(cwd, ".msa"));
         yield* writeTextFile(joinPath(cwd, ".msa", "settings.json"), "{}");
-        expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+        expect(yield* Effect.promise(() => hasTrustRequiringProjectResources(cwd))).toBe(true);
 
         yield* removePath(joinPath(cwd, ".msa"));
         yield* makeDirectory(joinPath(cwd, ".agents", "skills"));
-        expect(hasTrustRequiringProjectResources(cwd)).toBe(true);
+        expect(yield* Effect.promise(() => hasTrustRequiringProjectResources(cwd))).toBe(true);
       } finally {
         if (originalHome === undefined) {
           vi.stubEnv("HOME", undefined);

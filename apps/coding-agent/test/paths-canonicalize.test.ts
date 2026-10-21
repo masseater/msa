@@ -25,7 +25,7 @@ const returnsTheRealPathForARegular = () =>
       const dir = yield* createTempDir;
       const file = joinPath(dir, "file.txt");
       yield* writeTextFile(file, "hello");
-      expect(canonicalizePath(file)).toBe(yield* realPath(file));
+      expect(yield* Effect.promise(() => canonicalizePath(file))).toBe(yield* realPath(file));
     }),
   );
 
@@ -37,7 +37,7 @@ const resolvesSymlinksToTheirTargets = () =>
       const link = joinPath(dir, "link.txt");
       yield* writeTextFile(target, "hello");
       yield* symlink(target, link);
-      expect(canonicalizePath(link)).toBe(yield* realPath(target));
+      expect(yield* Effect.promise(() => canonicalizePath(link))).toBe(yield* realPath(target));
     }),
   );
 
@@ -49,7 +49,9 @@ const resolvesDirectorySymlinks = () =>
       const linkDir = joinPath(dir, "link-dir");
       yield* makeDirectory(targetDir);
       yield* symlink(targetDir, linkDir);
-      expect(canonicalizePath(linkDir)).toBe(yield* realPath(targetDir));
+      expect(yield* Effect.promise(() => canonicalizePath(linkDir))).toBe(
+        yield* realPath(targetDir),
+      );
     }),
   );
 
@@ -58,7 +60,7 @@ const fallsBackToTheRawPathWhen = () =>
     Effect.gen(function* () {
       const dir = yield* createTempDir;
       const nonexistent = joinPath(dir, "no-such-file");
-      expect(canonicalizePath(nonexistent)).toBe(nonexistent);
+      expect(yield* Effect.promise(() => canonicalizePath(nonexistent))).toBe(nonexistent);
     }),
   );
 
@@ -71,7 +73,7 @@ const fallsBackToTheRawPathFor = () =>
 
       yield* symlink(target, link);
 
-      expect(canonicalizePath(link)).toBe(link);
+      expect(yield* Effect.promise(() => canonicalizePath(link))).toBe(link);
     }),
   );
 

@@ -1,41 +1,71 @@
 import ignore from "ignore";
 
-import type diagnosticsTypes from "./diagnostics.ts";
+import awaitingModule from "./awaiting.ts";
 import directoryEntry from "./directory-entry.ts";
 import ignoreRules from "./ignore-rules.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import skillFile from "./skill-file.ts";
 import type skillsInternalTypes from "./skills-internal.types.ts";
 import type skillsTypes from "./skills.types.ts";
 
 const { relative } = platformModule;
-const { readdirSync, existsSync } = nodeFs;
-const { resolveEntry } = directoryEntry;
+const { exists } = platformModule.files;
+const { readEntries, resolveEntry } = directoryEntry;
 const { loadSkillFromFile } = skillFile;
 const { toPosixPath, addIgnoreRules } = ignoreRules;
+const { awaited, promised } = awaitingModule;
+
+type Entry = Awaited<ReturnType<typeof readEntries>>[number];
 
 function loadSkillsFromDir(
   options: skillsTypes.LoadSkillsFromDirOptions,
-): skillsTypes.LoadSkillsResult {
+): Promise<skillsTypes.LoadSkillsResult> {
   const { dir, source } = options;
   return loadSkillsFromDirInternal(dir, source, true);
 }
 
-function rootSkillFile(
+function* rootSkillFile(
   dir: string,
-  entries: readonly Parameters<typeof resolveEntry>[1][],
+  entries: readonly Entry[],
   root: string,
   ig: skillsInternalTypes.IgnoreMatcher,
-): string | undefined {
+) {
   for (const entry of entries) {
     if (entry.name !== "SKILL.md") continue;
-    const resolved = resolveEntry(dir, entry);
+    const resolved = yield* awaited(resolveEntry(dir, entry));
     if (resolved?.isFile === true && !ig.ignores(toPosixPath(relative(root, resolved.fullPath)))) {
       return resolved.fullPath;
     }
   }
   return undefined;
+}
+
+function* collectEntries(input: {
+  readonly dir: string;
+  readonly entries: readonly Entry[];
+  readonly source: string;
+  readonly includeRootFiles: boolean;
+  readonly ig: skillsInternalTypes.IgnoreMatcher;
+  readonly root: string;
+  readonly result: skillsTypes.LoadSkillsResult;
+}) {
+  const { dir, entries, ig, includeRootFiles, result, root, source } = input;
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+    const resolved = yield* awaited(resolveEntry(dir, entry));
+    if (resolved === undefined) continue;
+    const relPath = toPosixPath(relative(root, resolved.fullPath));
+    if (ig.ignores(resolved.isDir ? `${relPath}/` : relPath)) continue;
+    if (resolved.isDir) {
+      const subResult = yield* awaited(
+        loadSkillsFromDirInternal(resolved.fullPath, source, false, ig, root),
+      );
+      result.skills.push(...subResult.skills);
+      result.diagnostics.push(...subResult.diagnostics);
+    } else if (resolved.isFile && includeRootFiles && entry.name.endsWith(".md")) {
+      yield* awaited(collectSkillFile(resolved.fullPath, source, result));
+    }
+  }
 }
 
 function loadSkillsFromDirInternal(
@@ -44,50 +74,36 @@ function loadSkillsFromDirInternal(
   includeRootFiles: boolean,
   ignoreMatcher?: skillsInternalTypes.IgnoreMatcher,
   rootDir?: string,
-): skillsTypes.LoadSkillsResult {
-  const skills: skillsTypes.Skill[] = [];
-  const diagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
-  if (!existsSync(dir)) return { diagnostics, skills };
-
-  const root = rootDir ?? dir;
-  const ig = ignoreMatcher ?? ignore();
-  addIgnoreRules(ig, dir, root);
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    const skillFilePath = rootSkillFile(dir, entries, root, ig);
-    if (skillFilePath !== undefined) {
-      collectSkillFile(skillFilePath, source, skills, diagnostics);
-      return { diagnostics, skills };
-    }
-    for (const entry of entries) {
-      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-      const resolved = resolveEntry(dir, entry);
-      if (resolved === undefined) continue;
-      const relPath = toPosixPath(relative(root, resolved.fullPath));
-      if (ig.ignores(resolved.isDir ? `${relPath}/` : relPath)) continue;
-      if (resolved.isDir) {
-        const subResult = loadSkillsFromDirInternal(resolved.fullPath, source, false, ig, root);
-        skills.push(...subResult.skills);
-        diagnostics.push(...subResult.diagnostics);
-      } else if (resolved.isFile && includeRootFiles && entry.name.endsWith(".md")) {
-        collectSkillFile(resolved.fullPath, source, skills, diagnostics);
+): Promise<skillsTypes.LoadSkillsResult> {
+  return promised(function* () {
+    const result: skillsTypes.LoadSkillsResult = { diagnostics: [], skills: [] };
+    if (!(yield* awaited(exists(dir)))) return result;
+    const root = rootDir ?? dir;
+    const ig = ignoreMatcher ?? ignore();
+    yield* awaited(addIgnoreRules(ig, dir, root));
+    try {
+      const entries = yield* awaited(readEntries(dir));
+      const skillFilePath = yield* rootSkillFile(dir, entries, root, ig);
+      if (skillFilePath !== undefined) {
+        yield* awaited(collectSkillFile(skillFilePath, source, result));
+        return result;
       }
-    }
-  } catch {}
-  return { diagnostics, skills };
+      yield* collectEntries({ dir, entries, ig, includeRootFiles, result, root, source });
+    } catch {}
+    return result;
+  });
 }
 
 function collectSkillFile(
   fullPath: string,
   source: string,
-  skills: skillsTypes.Skill[],
-  diagnostics: diagnosticsTypes.ResourceDiagnostic[],
-) {
-  const result = loadSkillFromFile(fullPath, source);
-  if (result.skill !== null) {
-    skills.push(result.skill);
-  }
-  diagnostics.push(...result.diagnostics);
+  result: skillsTypes.LoadSkillsResult,
+): Promise<void> {
+  return loadSkillFromFile(fullPath, source).then((loaded) => {
+    if (loaded.skill !== null) result.skills.push(loaded.skill);
+    result.diagnostics.push(...loaded.diagnostics);
+    return undefined;
+  });
 }
 
 const skillDirectory = { loadSkillsFromDir, loadSkillsFromDirInternal };

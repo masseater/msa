@@ -3,17 +3,16 @@ import chalk from "chalk";
 import argsModule from "../cli/args.ts";
 import type argsTypes from "../cli/args.types.ts";
 import platform from "../core/platform/index.ts";
-import ProjectTrustStore from "../core/project-trust-store.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
 import timings from "../core/timings.ts";
-import trustManager from "../core/trust-manager.ts";
 import sessionCwdCheck from "./session-cwd-check.ts";
 import sessionLocation from "./session-location.ts";
+import sessionTrustModule from "./session-trust.ts";
 
 const { normalizeSessionName } = argsModule;
 const { writeError } = platform;
 const { time } = timings;
-const { hasTrustRequiringProjectResources } = trustManager;
+const { sessionTrust } = sessionTrustModule;
 const { ensureSessionCwd } = sessionCwdCheck;
 const { openSessionManager } = sessionLocation;
 
@@ -42,12 +41,11 @@ function* prepareSession(
   }
   time("createSessionManager");
 
-  const trustStore = new ProjectTrustStore(agentDir);
-  const sessionCwd = sessionManager.getCwd();
-  const autoTrustOnReloadCwd =
-    parsed.projectTrustOverride === undefined && !hasTrustRequiringProjectResources(sessionCwd)
-      ? sessionCwd
-      : undefined;
+  const { autoTrustOnReloadCwd, trustStore } = yield* sessionTrust(
+    parsed,
+    agentDir,
+    sessionManager.getCwd(),
+  );
   return { autoTrustOnReloadCwd, sessionManager, trustStore };
 }
 

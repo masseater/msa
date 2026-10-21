@@ -11,12 +11,8 @@ export default class InMemoryAuthStorageBackend implements authStorageTypes.Auth
   private value: string | undefined;
   private asyncChain: Promise<unknown> = Promise.resolve();
 
-  withLock<T>(fn: (current: string | undefined) => authStorageTypes.LockResult<T>): T {
-    const { result, next } = fn(this.value);
-    if (next !== undefined) {
-      this.value = next;
-    }
-    return result;
+  constructor(initial?: string) {
+    this.value = initial;
   }
 
   withLockAsync<T>(

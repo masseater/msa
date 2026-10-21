@@ -3,25 +3,28 @@ import type aiTypes from "@msa/ai/index.types";
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
 import text from "../utils/text.ts";
-import nodeFs from "./platform/node/fs.ts";
+import platform from "./platform/index.ts";
 
-const { readFileSync } = nodeFs;
 const { getAuthPath } = config;
 const { normalizePath } = paths;
 const { stripBom } = text;
 type AuthStorageData = Record<string, aiTypes.Credential>;
-function readStoredCredential(
-  providerId: string,
-  authPath: string = getAuthPath(),
-): aiTypes.Credential | undefined {
+const credentialIn = (content: string, providerId: string): aiTypes.Credential | undefined => {
   try {
-    const data = JSON.parse(
-      stripBom(readFileSync(normalizePath(authPath), "utf-8")),
-    ) as AuthStorageData;
-    return data[providerId];
+    return (JSON.parse(stripBom(content)) as AuthStorageData)[providerId];
   } catch {
     return undefined;
   }
+};
+
+function readStoredCredential(
+  providerId: string,
+  authPath: string = getAuthPath(),
+): Promise<aiTypes.Credential | undefined> {
+  return platform.files.readText(normalizePath(authPath)).then(
+    (content) => credentialIn(content, providerId),
+    () => undefined,
+  );
 }
 
 const authStorageSupport = {

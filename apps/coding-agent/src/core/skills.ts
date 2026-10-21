@@ -1,20 +1,25 @@
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
+import awaitingModule from "./awaiting.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import skillDirectory from "./skill-directory.ts";
 import skillFile from "./skill-file.ts";
 import type skillsTypes from "./skills.types.ts";
 
-const { statSync, existsSync } = nodeFs;
+const { exists, stat } = platformModule.files;
+const { awaited, promised } = awaitingModule;
 const { canonicalizePath, isPathWithin, resolvePath } = paths;
 const { join, resolve } = platformModule;
 const { CONFIG_DIR_NAME, getAgentDir } = config;
 const { loadSkillFromFile } = skillFile;
 const { loadSkillsFromDirInternal } = skillDirectory;
 
-function loadSkills(options: skillsTypes.LoadSkillsOptions): skillsTypes.LoadSkillsResult {
+function loadSkills(options: skillsTypes.LoadSkillsOptions): Promise<skillsTypes.LoadSkillsResult> {
+  return promised(() => loadSkillsGen(options));
+}
+
+function* loadSkillsGen(options: skillsTypes.LoadSkillsOptions) {
   const { agentDir, skillPaths, includeDefaults } = options;
 
   const resolvedCwd = resolvePath(options.cwd);
@@ -25,16 +30,16 @@ function loadSkills(options: skillsTypes.LoadSkillsOptions): skillsTypes.LoadSki
   const allDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
   const collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
 
-  function addSkills(result: skillsTypes.LoadSkillsResult) {
+  function addSkills(result: skillsTypes.LoadSkillsResult): Promise<void> {
     allDiagnostics.push(...result.diagnostics);
-    mergeLoadedSkills(result, realPathSet, skillMap, collisionDiagnostics);
+    return mergeLoadedSkills(result, realPathSet, skillMap, collisionDiagnostics);
   }
 
   const userSkillsDir = join(resolvedAgentDir, "skills");
   const projectSkillsDir = resolve(resolvedCwd, CONFIG_DIR_NAME, "skills");
   if (includeDefaults) {
-    addSkills(loadSkillsFromDirInternal(userSkillsDir, "user", true));
-    addSkills(loadSkillsFromDirInternal(projectSkillsDir, "project", true));
+    yield* awaited(loadSkillsFromDirInternal(userSkillsDir, "user", true).then(addSkills));
+    yield* awaited(loadSkillsFromDirInternal(projectSkillsDir, "project", true).then(addSkills));
   }
 
   const getSource = (resolvedPath: string): "user" | "project" | "path" => {
@@ -45,7 +50,7 @@ function loadSkills(options: skillsTypes.LoadSkillsOptions): skillsTypes.LoadSki
     return "path";
   };
 
-  return loadExplicitSkillPaths(
+  return yield* loadExplicitSkillPaths(
     skillPaths,
     resolvedCwd,
     allDiagnostics,
@@ -61,46 +66,65 @@ function mergeLoadedSkills(
   realPathSet: Set<string>,
   skillMap: Map<string, skillsTypes.Skill>,
   collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[],
-) {
-  for (const skill of result.skills) {
-    const realPath = canonicalizePath(skill.filePath);
+): Promise<void> {
+  return Promise.all(result.skills.map((skill) => canonicalizePath(skill.filePath))).then(
+    (realPaths) => {
+      for (const [index, skill] of result.skills.entries())
+        mergeLoadedSkill({
+          collisionDiagnostics,
+          realPath: realPaths[index]!,
+          realPathSet,
+          skill,
+          skillMap,
+        });
+      return undefined;
+    },
+  );
+}
 
-    if (realPathSet.has(realPath)) {
-      continue;
-    }
+function mergeLoadedSkill(input: {
+  readonly skill: skillsTypes.Skill;
+  readonly realPath: string;
+  readonly realPathSet: Set<string>;
+  readonly skillMap: Map<string, skillsTypes.Skill>;
+  readonly collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[];
+}): void {
+  const { collisionDiagnostics, realPath, realPathSet, skill, skillMap } = input;
+  if (realPathSet.has(realPath)) {
+    return;
+  }
 
-    const existing = skillMap.get(skill.name);
-    if (existing === undefined) {
-      skillMap.set(skill.name, skill);
-      realPathSet.add(realPath);
-    } else {
-      collisionDiagnostics.push({
-        collision: {
-          loserPath: skill.filePath,
-          name: skill.name,
-          resourceType: "skill",
-          winnerPath: existing.filePath,
-        },
-        message: `name "${skill.name}" collision`,
-        path: skill.filePath,
-        type: "collision",
-      });
-    }
+  const existing = skillMap.get(skill.name);
+  if (existing === undefined) {
+    skillMap.set(skill.name, skill);
+    realPathSet.add(realPath);
+  } else {
+    collisionDiagnostics.push({
+      collision: {
+        loserPath: skill.filePath,
+        name: skill.name,
+        resourceType: "skill",
+        winnerPath: existing.filePath,
+      },
+      message: `name "${skill.name}" collision`,
+      path: skill.filePath,
+      type: "collision",
+    });
   }
 }
 
-function loadExplicitSkillPaths(
+function* loadExplicitSkillPaths(
   skillPaths: string[],
   resolvedCwd: string,
   allDiagnostics: diagnosticsTypes.ResourceDiagnostic[],
   getSource: (resolvedPath: string) => "user" | "project" | "path",
-  addSkills: (result: skillsTypes.LoadSkillsResult) => void,
+  addSkills: (result: skillsTypes.LoadSkillsResult) => Promise<void>,
   collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[],
   skillMap: Map<string, skillsTypes.Skill>,
-): skillsTypes.LoadSkillsResult {
+) {
   for (const rawPath of skillPaths) {
     const resolvedPath = resolvePath(rawPath, resolvedCwd, { trim: true });
-    if (!existsSync(resolvedPath)) {
+    if (!(yield* awaited(exists(resolvedPath)))) {
       allDiagnostics.push({
         message: "skill path does not exist",
         path: resolvedPath,
@@ -110,16 +134,16 @@ function loadExplicitSkillPaths(
     }
 
     try {
-      const stats = statSync(resolvedPath);
+      const stats = yield* awaited(stat(resolvedPath));
       const source = getSource(resolvedPath);
-      if (stats.isDirectory()) {
-        addSkills(loadSkillsFromDirInternal(resolvedPath, source, true));
-      } else if (stats.isFile() && resolvedPath.endsWith(".md")) {
-        const result = loadSkillFromFile(resolvedPath, source);
+      if (stats.isDirectory) {
+        yield* awaited(loadSkillsFromDirInternal(resolvedPath, source, true).then(addSkills));
+      } else if (stats.isFile && resolvedPath.endsWith(".md")) {
+        const result = yield* awaited(loadSkillFromFile(resolvedPath, source));
         if (result.skill === null) {
           allDiagnostics.push(...result.diagnostics);
         } else {
-          addSkills({ diagnostics: result.diagnostics, skills: [result.skill] });
+          yield* awaited(addSkills({ diagnostics: result.diagnostics, skills: [result.skill] }));
         }
       } else {
         allDiagnostics.push({

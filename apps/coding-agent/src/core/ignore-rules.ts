@@ -1,9 +1,8 @@
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import type skillsInternalTypes from "./skills-internal.types.ts";
 
-const { readFileSync, existsSync } = nodeFs;
 const { join, relative, sep } = platformModule;
+const { readText } = platformModule.files;
 
 const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
 
@@ -34,24 +33,30 @@ function prefixIgnorePattern(line: string, prefix: string): string | null {
   return negated ? `!${prefixed}` : prefixed;
 }
 
-function addIgnoreRules(ig: skillsInternalTypes.IgnoreMatcher, dir: string, rootDir: string): void {
+const ignorePatterns = (content: string, prefix: string): string[] =>
+  content
+    .split(/\r?\n/u)
+    .map((line) => prefixIgnorePattern(line, prefix))
+    .filter((line): line is string => Boolean(line));
+
+function addIgnoreRules(
+  ig: skillsInternalTypes.IgnoreMatcher,
+  dir: string,
+  rootDir: string,
+): Promise<void> {
   const relativeDir = relative(rootDir, dir);
   const prefix = relativeDir === "" ? "" : `${toPosixPath(relativeDir)}/`;
-
-  for (const filename of IGNORE_FILE_NAMES) {
-    const ignorePath = join(dir, filename);
-    if (!existsSync(ignorePath)) continue;
-    try {
-      const content = readFileSync(ignorePath, "utf-8");
-      const patterns = content
-        .split(/\r?\n/u)
-        .map((line) => prefixIgnorePattern(line, prefix))
-        .filter((line): line is string => Boolean(line));
-      if (patterns.length > 0) {
-        ig.add(patterns);
-      }
-    } catch {}
-  }
+  return Promise.all(
+    IGNORE_FILE_NAMES.map((filename) =>
+      readText(join(dir, filename)).then(
+        (content) => ignorePatterns(content, prefix),
+        () => [],
+      ),
+    ),
+  ).then((groups) => {
+    for (const patterns of groups) if (patterns.length > 0) ig.add(patterns);
+    return undefined;
+  });
 }
 
 const ignoreRules = { addIgnoreRules, toPosixPath };

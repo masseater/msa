@@ -29,6 +29,7 @@ function createTheme(
   return new Theme(fgColors, bgColors, colorMode, {
     appearance: themeJson.appearance,
     name: themeJson.name,
+    sourceJson: themeJson,
     sourcePath,
   });
 }
@@ -48,12 +49,12 @@ function createSystemTheme(mode?: tuiTypes.TerminalColorMode): Theme {
 }
 
 const loadThemeFromPath: {
-  (mode?: tuiTypes.TerminalColorMode): (themePath: string) => Theme;
-  (themePath: string, mode?: tuiTypes.TerminalColorMode): Theme;
+  (mode?: tuiTypes.TerminalColorMode): (themePath: string) => Promise<Theme>;
+  (themePath: string, mode?: tuiTypes.TerminalColorMode): Promise<Theme>;
 } = Fn.dual(
   (args) => typeof args[0] === "string" && args[0] !== "truecolor" && args[0] !== "256color",
-  (themePath: string, mode?: tuiTypes.TerminalColorMode): Theme =>
-    createTheme(readThemeFile(themePath), mode, themePath),
+  (themePath: string, mode?: tuiTypes.TerminalColorMode): Promise<Theme> =>
+    readThemeFile(themePath).then((json) => createTheme(json, mode, themePath)),
 );
 
 function loadTheme(name: string, mode?: tuiTypes.TerminalColorMode): Theme {

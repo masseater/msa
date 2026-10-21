@@ -74,7 +74,7 @@ export default class SessionExtensionResources {
         themePaths: this.buildExtensionResourcePaths(themePaths),
       };
 
-      this.session.resourceLoader.extendResources(extensionPaths);
+      yield* awaited(this.session.resourceLoader.extendResources(extensionPaths));
       this.session.tools.prompt.rebuildSystemPrompt(
         this.session.tools.loadout.getActiveToolNames(),
       );

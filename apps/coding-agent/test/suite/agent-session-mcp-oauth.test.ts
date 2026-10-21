@@ -3,6 +3,7 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import runnerEvents from "../../src/core/extensions/runner-events.ts";
+import type InMemoryAuthStorageBackend from "../../src/core/in-memory-auth-storage-backend.ts";
 import agentSessionMcpOauthHarness from "./agent-session-mcp-oauth-harness.ts";
 import agentSessionMcpOauthSupport from "./agent-session-mcp-oauth-support.ts";
 import harnessModule from "./harness.ts";
@@ -18,6 +19,14 @@ const { currentTimeMillis } = testing;
 
 const { runCleanups, setup } = agentSessionMcpOauthHarness;
 
+function setTokensExpireAt(backend: InMemoryAuthStorageBackend, at: number): Promise<void> {
+  return backend.withLockAsync((current) => {
+    const states = JSON.parse(current ?? "{}") as Record<string, { tokensExpireAt?: number }>;
+    for (const state of Object.values(states)) state.tokensExpireAt = at;
+    return Promise.resolve({ next: JSON.stringify(states), result: undefined });
+  });
+}
+
 const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
   const { harness, server, notifications, backend } = yield* Effect.promise(() => setup("follow"));
 
@@ -31,9 +40,11 @@ const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
   expect(server.log).toEqual(["401 none", "register", "token code"]);
-  expect(backend.withLock((current) => ({ result: current }))).toContain(
-    '"access_token": "access-1"',
-  );
+  expect(
+    yield* Effect.promise(() =>
+      backend.withLockAsync((current) => Promise.resolve({ result: current })),
+    ),
+  ).toContain('"access_token": "access-1"');
 
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe("token access-1");
 
@@ -41,11 +52,7 @@ const signsInThroughTheBrowserRefreshes = Effect.gen(function* () {
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe("token access-2");
   expect(server.log.slice(-3)).toEqual(["401 access-1", "token refresh", "call access-2"]);
 
-  backend.withLock((current) => {
-    const states = JSON.parse(current ?? "{}") as Record<string, { tokensExpireAt?: number }>;
-    for (const state of Object.values(states)) state.tokensExpireAt = currentTimeMillis() - 1_000;
-    return { next: JSON.stringify(states), result: undefined };
-  });
+  yield* Effect.promise(() => setTokensExpireAt(backend, currentTimeMillis() - 1_000));
   expect(getMessageText(yield* Effect.promise(() => callWhoami(harness)))).toBe("token access-3");
   expect(server.log.slice(-2)).toEqual(["token refresh", "call access-3"]);
 
@@ -105,11 +112,7 @@ const closesTheSessionWithoutRefreshingAn = Effect.gen(function* () {
   yield* Effect.promise(() => harness.session.run.prompting.prompt("/mcp login issues"));
   expect(notifications.at(-1)).toBe('Signed in to MCP server "issues" (1 tools).');
 
-  backend.withLock((current) => {
-    const states = JSON.parse(current ?? "{}") as Record<string, { tokensExpireAt?: number }>;
-    for (const state of Object.values(states)) state.tokensExpireAt = currentTimeMillis() + 10_000;
-    return { next: JSON.stringify(states), result: undefined };
-  });
+  yield* Effect.promise(() => setTokensExpireAt(backend, currentTimeMillis() + 10_000));
   server.stall.add("/token");
 
   expect(yield* Effect.promise(() => shutdown(harness))).toBeLessThan(2_000);

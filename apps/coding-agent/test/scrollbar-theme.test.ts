@@ -45,7 +45,8 @@ const usesExplicitlyConfiguredScrollbarColors = () =>
       themeJson.colors["scrollbarTrack"] = "#654321";
       themeJson.colors["scrollbarThumb"] = "#123456";
 
-      const loadedTheme = loadThemeFromPath(yield* writeTheme(themeJson), "truecolor");
+      const themePath = yield* writeTheme(themeJson);
+      const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
       expect(loadedTheme.getFgAnsi("scrollbarTrack")).toBe("\x1b[38;2;101;67;33m");
       expect(loadedTheme.getFgAnsi("scrollbarThumb")).toBe("\x1b[38;2;18;52;86m");
     }),
@@ -59,7 +60,8 @@ const fallsBackToExistingSelectionAndText = () =>
       delete themeJson.colors["searchMatchBg"];
       delete themeJson.colors["searchMatchText"];
 
-      const loadedTheme = loadThemeFromPath(yield* writeTheme(themeJson), "truecolor");
+      const themePath = yield* writeTheme(themeJson);
+      const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
       expect(loadedTheme.getBgAnsi("searchMatchBg")).toBe(loadedTheme.getBgAnsi("selectedBg"));
       expect(loadedTheme.getFgAnsi("searchMatchText")).toBe(loadedTheme.getFgAnsi("text"));
     }),
@@ -73,7 +75,8 @@ const usesExplicitlyConfiguredSearchHighlightColors = () =>
       themeJson.colors["searchMatchBg"] = "#112233";
       themeJson.colors["searchMatchText"] = "#223344";
 
-      const loadedTheme = loadThemeFromPath(yield* writeTheme(themeJson), "truecolor");
+      const themePath = yield* writeTheme(themeJson);
+      const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
       expect(loadedTheme.getBgAnsi("searchMatchBg")).toBe("\x1b[48;2;17;34;51m");
       expect(loadedTheme.getFgAnsi("searchMatchText")).toBe("\x1b[38;2;34;51;68m");
     }),
@@ -90,7 +93,8 @@ describe("fullscreen theme colors", () => {
         themeJson.name = `missing-${token}-theme`;
         delete themeJson.colors[token];
 
-        const loadedTheme = loadThemeFromPath(yield* writeTheme(themeJson), "truecolor");
+        const themePath = yield* writeTheme(themeJson);
+        const loadedTheme = yield* Effect.promise(() => loadThemeFromPath(themePath, "truecolor"));
         expect(loadedTheme.getFgAnsi(token)).toBe(loadedTheme.getFgAnsi(fallback));
       }),
     ),

@@ -33,7 +33,9 @@ const resolvesPerToolExposureFromExactNames = Effect.gen(function* () {
     },
     {},
   );
-  const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: false });
+  const { servers, errors } = yield* Effect.promise(() =>
+    loadMcpConfig({ ...paths, projectTrusted: false }),
+  );
   expect(errors).toEqual([
     expect.stringContaining('server "bad": toolExposure "a" must be one of'),
   ]);
@@ -67,7 +69,9 @@ const validatesProviderAuthAndAcceptsItOnly = Effect.gen(function* () {
       },
     },
   );
-  const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: true });
+  const { servers, errors } = yield* Effect.promise(() =>
+    loadMcpConfig({ ...paths, projectTrusted: true }),
+  );
 
   expect(
     servers.map((server) => [

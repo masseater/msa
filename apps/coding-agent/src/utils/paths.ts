@@ -1,7 +1,7 @@
 import { dual } from "effect/Function";
 
 import platformModule from "../core/platform/index.ts";
-import nodeFs from "../core/platform/node/fs.ts";
+import nodeFsPromises from "../core/platform/node/fs-promises.ts";
 import nodeOs from "../core/platform/node/os.ts";
 import nodeUrl from "../core/platform/node/url.ts";
 import childProcess from "./child-process.ts";
@@ -10,29 +10,17 @@ import type pathsTypes from "./paths.types.ts";
 const { homedir } = nodeOs;
 const { fileURLToPath } = nodeUrl;
 
-const { realpathSync, statSync } = nodeFs;
-
 const { isAbsolute, join, relative, resolve: nodeResolvePath, sep } = platformModule;
 const { spawnProcessSync } = childProcess;
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/gu;
 
-function canonicalizePath(path: string): string {
-  try {
-    return realpathSync(path);
-  } catch {
-    return path;
-  }
+function canonicalizePath(path: string): Promise<string> {
+  return platformModule.files.realPath(path).catch(() => path);
 }
 
-function getFileRevision(path: string): string | undefined {
-  try {
-    const stats = statSync(path, { bigint: true });
-    return `${stats.dev}:${stats.ino}:${stats.size}:${stats.mtimeNs}:${stats.ctimeNs}`;
-  } catch {
-    return undefined;
-  }
-}
+const getFileRevision = (path: string): Promise<string | undefined> =>
+  nodeFsPromises.fileRevision(path);
 
 function isLocalPath(value: string): boolean {
   const trimmed = value.trim();

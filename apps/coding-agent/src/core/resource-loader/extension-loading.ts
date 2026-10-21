@@ -55,7 +55,7 @@ export default class ExtensionLoading {
     const extensionPaths = (
       this.owner.extensions.noExtensions
         ? cliEnabled
-        : paths.mergePaths(cliEnabled, enabled(resolvedPaths.extensions))
+        : yield* awaited(paths.mergePaths(cliEnabled, enabled(resolvedPaths.extensions)))
     ).filter((path) => !path.startsWith(BUILTIN_PATH_PREFIX));
     const metadataByPath = new Map(
       [...resolvedPaths.extensions, ...cliExtensionPaths.extensions].map((resource) => [
@@ -69,7 +69,9 @@ export default class ExtensionLoading {
   private loadCurrentExtensionSet(): Effect.Effect<extensionsTypesTypes.LoadExtensionsResult> {
     return awaitingWith(function* () {
       const { extensionPaths, metadataByPath } = yield* this.currentExtensionPaths();
-      const packageWarnings = collectExtensionPackageWarnings(extensionPaths, metadataByPath);
+      const packageWarnings = yield* awaited(
+        collectExtensionPackageWarnings(extensionPaths, metadataByPath),
+      );
       const { cwd, eventBus } = this.owner.environment;
       const extensionsResult = yield* awaited(loadExtensionsCached(extensionPaths, cwd, eventBus));
       mergeExtensionWarnings(extensionsResult, packageWarnings);

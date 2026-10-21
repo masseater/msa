@@ -1,37 +1,20 @@
 import config from "../../../config.ts";
 import platformModule from "../../../core/platform/index.ts";
-import nodeFs from "../../../core/platform/node/fs.ts";
 import systemTheme from "./system-theme.ts";
 import type Theme from "./theme-class.ts";
 import themeJson from "./theme-json.ts";
-import themeLoader from "./theme-loader.ts";
 import themeState from "./theme-state.ts";
 import type themeTypes from "./theme.types.ts";
 
-const { getCustomThemesDir, getThemesDir } = config;
+const { getThemesDir } = config;
 const { join } = platformModule;
 const { SYSTEM_THEME_NAME } = systemTheme;
 const { registeredThemes } = themeState;
 
 function getCustomThemeInfos(): themeTypes.ThemeInfo[] {
-  const customThemesDir = getCustomThemesDir();
-  const result: themeTypes.ThemeInfo[] = [];
-  if (!nodeFs.existsSync(customThemesDir)) {
-    return result;
-  }
-  for (const file of nodeFs.readdirSync(customThemesDir)) {
-    if (!file.endsWith(".json")) {
-      continue;
-    }
-    const themePath = join(customThemesDir, file);
-    try {
-      const customTheme = themeLoader.loadThemeFromPath(themePath);
-      if (customTheme.name !== undefined && customTheme.name !== "") {
-        result.push({ name: customTheme.name, path: themePath });
-      }
-    } catch {}
-  }
-  return result;
+  return [...themeJson.getCustomThemeFiles().values()]
+    .filter(({ json }) => json.name !== undefined && json.name !== "")
+    .map(({ json, path }) => ({ name: json.name!, path }));
 }
 
 function compareThemeInfos(a: themeTypes.ThemeInfo, b: themeTypes.ThemeInfo): number {
@@ -84,6 +67,7 @@ function setRegisteredThemes(themes: Theme[]): void {
 const themeCatalog = {
   getAvailableThemes,
   getAvailableThemesWithPaths,
+  refreshCustomThemes: themeJson.refreshCustomThemes,
   setRegisteredThemes,
 };
 

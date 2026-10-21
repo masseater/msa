@@ -37,7 +37,7 @@ declare namespace resourceLoaderTypes {
     getSystemPromptSource(): { path: string } | undefined;
     getAppendSystemPrompt(): string[];
     getAppendSystemPromptSources(): Array<{ path: string }>;
-    extendResources(paths: ResourceExtensionPaths): void;
+    extendResources(paths: ResourceExtensionPaths): void | Promise<void>;
     reload(options?: ResourceLoaderReloadOptions): Promise<void>;
   }
 

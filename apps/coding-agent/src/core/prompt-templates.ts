@@ -1,8 +1,8 @@
 import config from "../config.ts";
 import paths from "../utils/paths.ts";
+import awaitingModule from "./awaiting.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import promptTemplateArgs from "./prompt-template-args.ts";
 import promptTemplateFiles from "./prompt-template-files.ts";
 import type promptTemplatesTypes from "./prompt-templates.types.ts";
@@ -12,14 +12,19 @@ import type sourceInfoTypes from "./source-info.types.ts";
 const { dirname, join, resolve } = platformModule;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 const { isPathWithin, resolvePath } = paths;
-const { statSync, existsSync } = nodeFs;
+const { exists, stat } = platformModule.files;
+const { awaited, promised } = awaitingModule;
 const { CONFIG_DIR_NAME } = config;
 const { substituteArgs, parseCommandArgs } = promptTemplateArgs;
 const { loadTemplateFromFile, loadTemplatesFromDir } = promptTemplateFiles;
 
 function loadPromptTemplates(
   options: promptTemplatesTypes.LoadPromptTemplatesOptions,
-): promptTemplatesTypes.LoadPromptTemplatesResult {
+): Promise<promptTemplatesTypes.LoadPromptTemplatesResult> {
+  return promised(() => loadPromptTemplatesGen(options));
+}
+
+function* loadPromptTemplatesGen(options: promptTemplatesTypes.LoadPromptTemplatesOptions) {
   const resolvedCwd = resolvePath(options.cwd);
   const resolvedAgentDir = resolvePath(options.agentDir);
   const { includeDefaults, promptPaths } = options;
@@ -33,7 +38,7 @@ function loadPromptTemplates(
   const globalPromptsDir = join(resolvedAgentDir, "prompts");
   const projectPromptsDir = resolve(resolvedCwd, CONFIG_DIR_NAME, "prompts");
 
-  const getSourceInfo = loadDefaultTemplates(
+  const getSourceInfo = yield* loadDefaultTemplates(
     globalPromptsDir,
     projectPromptsDir,
     includeDefaults,
@@ -42,16 +47,18 @@ function loadPromptTemplates(
 
   for (const rawPath of promptPaths) {
     const resolvedPath = resolvePath(rawPath, resolvedCwd, { trim: true });
-    if (!existsSync(resolvedPath)) {
+    if (!(yield* awaited(exists(resolvedPath)))) {
       continue;
     }
 
     try {
-      const stats = statSync(resolvedPath);
-      if (stats.isDirectory()) {
-        addResult(loadTemplatesFromDir(resolvedPath, getSourceInfo));
-      } else if (stats.isFile() && resolvedPath.endsWith(".md")) {
-        const result = loadTemplateFromFile(resolvedPath, getSourceInfo(resolvedPath));
+      const stats = yield* awaited(stat(resolvedPath));
+      if (stats.isDirectory) {
+        addResult(yield* awaited(loadTemplatesFromDir(resolvedPath, getSourceInfo)));
+      } else if (stats.isFile && resolvedPath.endsWith(".md")) {
+        const result = yield* awaited(
+          loadTemplateFromFile(resolvedPath, getSourceInfo(resolvedPath)),
+        );
         if (result.template !== null) {
           templates.push(result.template);
         }
@@ -67,7 +74,7 @@ function loadPromptTemplates(
   return { diagnostics, templates };
 }
 
-function loadDefaultTemplates(
+function* loadDefaultTemplates(
   globalPromptsDir: string,
   projectPromptsDir: string,
   includeDefaults: boolean,
@@ -89,14 +96,14 @@ function loadDefaultTemplates(
       });
     }
     return createSyntheticSourceInfo(resolvedPath, {
-      baseDir: statSync(resolvedPath).isDirectory() ? resolvedPath : dirname(resolvedPath),
+      baseDir: dirname(resolvedPath),
       source: "local",
     });
   };
 
   if (includeDefaults) {
-    addResult(loadTemplatesFromDir(globalPromptsDir, getSourceInfo));
-    addResult(loadTemplatesFromDir(projectPromptsDir, getSourceInfo));
+    addResult(yield* awaited(loadTemplatesFromDir(globalPromptsDir, getSourceInfo)));
+    addResult(yield* awaited(loadTemplatesFromDir(projectPromptsDir, getSourceInfo)));
   }
   return getSourceInfo;
 }

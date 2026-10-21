@@ -36,7 +36,7 @@ const loadTheme = Effect.fn("loadTheme")(function* (
   tempDirs.push(dir);
   const path = joinPath(dir, `${themeJson.name}.json`);
   yield* writeJsonFile(path, themeJson);
-  return loadThemeFromPath(path, "truecolor");
+  return yield* Effect.promise(() => loadThemeFromPath(path, "truecolor"));
 });
 
 afterEach(() =>

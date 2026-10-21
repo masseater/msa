@@ -23,8 +23,6 @@ export default class AuthStorage implements aiTypes.CredentialStore {
   private constructor(storage: authStorageTypes.AuthStorageBackend, authPath?: string) {
     this.storage = storage;
     this.reader = new AuthDataReader(storage, authPath);
-    if (this.reader.isCurrent()) return;
-    this.reload();
   }
 
   static create(authPath: string = getAuthPath()): AuthStorage {
@@ -37,13 +35,11 @@ export default class AuthStorage implements aiTypes.CredentialStore {
   }
 
   static inMemory(data: AuthStorageData = {}): AuthStorage {
-    const storage = new InMemoryAuthStorageBackend();
-    storage.withLock(() => ({ next: prettyJson(data), result: undefined }));
-    return AuthStorage.fromStorage(storage);
+    return AuthStorage.fromStorage(new InMemoryAuthStorageBackend(prettyJson(data)));
   }
 
-  reload(): void {
-    this.reader.reload();
+  reload(): Promise<void> {
+    return this.reader.reload();
   }
 
   read(
@@ -79,7 +75,7 @@ export default class AuthStorage implements aiTypes.CredentialStore {
                   const next = yield* awaited(fn(currentData[provider]));
                   if (next === undefined) {
                     latestData = currentData;
-                    revision = this.reader.fileRevision();
+                    revision = yield* awaited(this.reader.fileRevision());
                     return { result: currentData[provider] };
                   }
 

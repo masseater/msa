@@ -25,8 +25,16 @@ export default class McpSessionEvents {
     this.host = host;
   }
 
-  onSessionStart(ctx: extensionsTypesTypes.ExtensionContext): void {
-    const loaded = (this.host.options.loadConfig ?? defaultLoadConfig)(ctx);
+  onSessionStart(ctx: extensionsTypesTypes.ExtensionContext): Promise<void> {
+    return Promise.resolve((this.host.options.loadConfig ?? defaultLoadConfig)(ctx)).then(
+      (loaded) => this.startSession(loaded, ctx),
+    );
+  }
+
+  private startSession(
+    loaded: Awaited<ReturnType<typeof defaultLoadConfig>>,
+    ctx: extensionsTypesTypes.ExtensionContext,
+  ): void {
     this.host.configErrors = loaded.errors;
     this.host.projectConfig = loaded.projectConfig;
     this.host.autoEnableCodemode = loaded.autoEnableCodemode ?? true;
@@ -110,7 +118,7 @@ export default class McpSessionEvents {
   onTurnStart(ctx: extensionsTypesTypes.ExtensionContext): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        if (this.host.connections.tokensAtSignIn.size > 0)
+        if (this.host.connections.awaitingSignIn())
           yield* awaited(this.host.connections.reconnectSignedIn(ctx));
       }, this),
     );

@@ -36,12 +36,14 @@ argument-hint: "<PR-URL>"
 You are given one or more GitHub PR URLs: $@`,
   );
 
-  const { templates } = loadPromptTemplates({
-    agentDir: getAgentDir(),
-    cwd: process.cwd(),
-    includeDefaults: false,
-    promptPaths: [testDir2],
-  });
+  const { templates } = yield* Effect.promise(() =>
+    loadPromptTemplates({
+      agentDir: getAgentDir(),
+      cwd: process.cwd(),
+      includeDefaults: false,
+      promptPaths: [testDir2],
+    }),
+  );
 
   const pr = templates.find((t) => t.name === "pr");
   expect(pr).toBeDefined();
@@ -59,12 +61,14 @@ argument-hint: "[instructions]"
 Wrap it. Additional instructions: $ARGUMENTS`,
   );
 
-  const { templates } = loadPromptTemplates({
-    agentDir: getAgentDir(),
-    cwd: process.cwd(),
-    includeDefaults: false,
-    promptPaths: [testDir2],
-  });
+  const { templates } = yield* Effect.promise(() =>
+    loadPromptTemplates({
+      agentDir: getAgentDir(),
+      cwd: process.cwd(),
+      includeDefaults: false,
+      promptPaths: [testDir2],
+    }),
+  );
 
   const wr = templates.find((t) => t.name === "wr");
   expect(wr).toBeDefined();
@@ -83,12 +87,14 @@ description: Audit changelog entries before release
 Audit changelog entries for all commits since the last release.`,
   );
 
-  const { templates } = loadPromptTemplates({
-    agentDir: getAgentDir(),
-    cwd: process.cwd(),
-    includeDefaults: false,
-    promptPaths: [testDir2],
-  });
+  const { templates } = yield* Effect.promise(() =>
+    loadPromptTemplates({
+      agentDir: getAgentDir(),
+      cwd: process.cwd(),
+      includeDefaults: false,
+      promptPaths: [testDir2],
+    }),
+  );
 
   const cl = templates.find((t) => t.name === "cl");
   expect(cl).toBeDefined();
@@ -105,12 +111,14 @@ argument-hint: ""
 Do something`,
   );
 
-  const { templates } = loadPromptTemplates({
-    agentDir: getAgentDir(),
-    cwd: process.cwd(),
-    includeDefaults: false,
-    promptPaths: [testDir2],
-  });
+  const { templates } = yield* Effect.promise(() =>
+    loadPromptTemplates({
+      agentDir: getAgentDir(),
+      cwd: process.cwd(),
+      includeDefaults: false,
+      promptPaths: [testDir2],
+    }),
+  );
 
   const tmpl = templates.find((t) => t.name === "empty-hint");
   expect(tmpl).toBeDefined();
@@ -127,12 +135,14 @@ argument-hint: "<issue>"
 Analyze GitHub issue(s): $ARGUMENTS`,
   );
 
-  const { templates } = loadPromptTemplates({
-    agentDir: getAgentDir(),
-    cwd: process.cwd(),
-    includeDefaults: false,
-    promptPaths: [testDir2],
-  });
+  const { templates } = yield* Effect.promise(() =>
+    loadPromptTemplates({
+      agentDir: getAgentDir(),
+      cwd: process.cwd(),
+      includeDefaults: false,
+      promptPaths: [testDir2],
+    }),
+  );
 
   const is = templates.find((t) => t.name === "is");
   expect(is).toBeDefined();
@@ -167,12 +177,14 @@ const reportsInvalidYamlFrontmatterAndKeepsValid = Effect.gen(function* () {
     );
     yield* writeTextFile(joinPath(testDir, "valid.md"), "Valid prompt content.");
 
-    const { templates, diagnostics } = loadPromptTemplates({
-      agentDir: getAgentDir(),
-      cwd: process.cwd(),
-      includeDefaults: false,
-      promptPaths: [testDir],
-    });
+    const { templates, diagnostics } = yield* Effect.promise(() =>
+      loadPromptTemplates({
+        agentDir: getAgentDir(),
+        cwd: process.cwd(),
+        includeDefaults: false,
+        promptPaths: [testDir],
+      }),
+    );
 
     expect(templates.map((template) => template.name)).toEqual(["valid"]);
     expect(diagnostics).toEqual([

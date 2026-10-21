@@ -135,11 +135,13 @@ const shouldKeepPackageMetadataForSkillsPrompts = Effect.gen(function* () {
     scope: "temporary",
     source: "extension:discovery",
   } as const;
-  loader.extendResources({
-    promptPaths: [{ metadata: extensionMetadata, path: extensionPromptsDir }],
-    skillPaths: [{ metadata: extensionMetadata, path: extensionSkillDir }],
-    themePaths: [{ metadata: extensionMetadata, path: extensionThemesDir }],
-  });
+  yield* awaited(
+    loader.extendResources({
+      promptPaths: [{ metadata: extensionMetadata, path: extensionPromptsDir }],
+      skillPaths: [{ metadata: extensionMetadata, path: extensionSkillDir }],
+      themePaths: [{ metadata: extensionMetadata, path: extensionThemesDir }],
+    }),
+  );
 
   const packageSourceInfo = {
     origin: "package",

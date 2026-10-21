@@ -29,28 +29,57 @@ export default class McpConnections {
 
   readonly tokensAtSignIn = new Map<runtimeTypes.McpServerConnection, string>();
 
-  readonly storedTokens = (connection: runtimeTypes.McpServerConnection): string => {
+  readonly storedTokens = (connection: runtimeTypes.McpServerConnection): Promise<string> => {
     const url = connection.auth.oauthUrl;
     return url !== undefined && url !== "" && this.host.credentials !== undefined
-      ? JSON.stringify(this.host.credentials.tokens(connection.name, url) ?? null)
-      : "null";
+      ? this.host.credentials
+          .tokens(connection.name, url)
+          .then((tokens) => JSON.stringify(tokens ?? null))
+      : Promise.resolve("null");
   };
 
+  private readonly tokenSnapshots = new Map<runtimeTypes.McpServerConnection, Promise<string>>();
+
+  readonly awaitingSignIn = (): boolean => this.tokenSnapshots.size > 0;
+
   readonly onConnectionChange = (connection: runtimeTypes.McpServerConnection) => {
-    if (connection.state !== "needs-auth") this.tokensAtSignIn.delete(connection);
-    else if (!this.tokensAtSignIn.has(connection))
-      this.tokensAtSignIn.set(connection, this.storedTokens(connection));
+    if (connection.state !== "needs-auth") {
+      this.tokensAtSignIn.delete(connection);
+      this.tokenSnapshots.delete(connection);
+    } else if (!this.tokenSnapshots.has(connection)) {
+      const snapshot = this.storedTokens(connection);
+      this.tokenSnapshots.set(connection, snapshot);
+      void snapshot.then((tokens) => {
+        if (this.tokenSnapshots.get(connection) === snapshot)
+          this.tokensAtSignIn.set(connection, tokens);
+        return undefined;
+      });
+    }
     this.host.emitChange();
   };
 
   readonly reconnectSignedIn = (ctx: extensionsTypesTypes.ExtensionContext) =>
     Effect.runPromise(
       awaitingWith(function* () {
-        const signedIn = [...this.tokensAtSignIn].filter(
-          ([connection, tokens]) => this.storedTokens(connection) !== tokens,
+        yield* awaited(Promise.all(this.tokenSnapshots.values()));
+        const current = yield* awaited(
+          Promise.all(
+            [...this.tokensAtSignIn].map(([connection, tokens]) =>
+              this.storedTokens(connection).then((now) => ({
+                changed: now !== tokens,
+                connection,
+              })),
+            ),
+          ),
         );
+        const signedIn = current
+          .filter((entry) => entry.changed)
+          .map((entry) => [entry.connection] as const);
         if (signedIn.length === 0) return;
-        for (const [connection] of signedIn) this.tokensAtSignIn.delete(connection);
+        for (const [connection] of signedIn) {
+          this.tokensAtSignIn.delete(connection);
+          this.tokenSnapshots.delete(connection);
+        }
         yield* awaited(Promise.allSettled(signedIn.map(([connection]) => connection.reconnect())));
         this.host.tools.discovery.ensureDiscoveryActive(ctx);
       }, this),

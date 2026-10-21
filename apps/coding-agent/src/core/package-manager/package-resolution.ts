@@ -12,7 +12,7 @@ import sourceInfo from "../source-info.ts";
 
 const { join } = platform;
 const { CONFIG_DIR_NAME } = config;
-const { awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed } = awaitingModule;
 const { BUILTIN_PATH_PREFIX } = sourceInfo;
 
 export default class PackageResolution {
@@ -47,7 +47,7 @@ export default class PackageResolution {
         yield* performed(
           this.manager.resources.packages.resolvePackageSources(packageSources, accumulator),
         );
-        return this.manager.resources.collection.toResolvedPaths(accumulator);
+        return yield* awaited(this.manager.resources.collection.toResolvedPaths(accumulator));
       }, this),
     );
   }
@@ -76,12 +76,14 @@ export default class PackageResolution {
           projectSettings,
         );
 
-        this.manager.resources.autoDiscovery.addAutoDiscoveredResources(
-          accumulator,
-          globalSettings,
-          projectSettings,
-          globalBaseDir,
-          projectBaseDir,
+        yield* awaited(
+          this.manager.resources.autoDiscovery.addAutoDiscoveredResources(
+            accumulator,
+            globalSettings,
+            projectSettings,
+            globalBaseDir,
+            projectBaseDir,
+          ),
         );
 
         this.manager.resources.autoDiscovery.addBuiltinExtensions(accumulator, {
@@ -90,7 +92,7 @@ export default class PackageResolution {
           projectBaseDir,
           projectSettings,
         });
-        return this.manager.resources.collection.toResolvedPaths(accumulator);
+        return yield* awaited(this.manager.resources.collection.toResolvedPaths(accumulator));
       }, this),
     );
   }
@@ -117,10 +119,12 @@ export default class PackageResolution {
     const globalBaseDir = this.manager.agentDir;
     const projectBaseDir = join(this.manager.cwd, CONFIG_DIR_NAME);
 
-    this.manager.resources.collection.resolveTopLevelEntries(accumulator, [
-      { baseDir: projectBaseDir, scope: "project", settings: projectSettings },
-      { baseDir: globalBaseDir, scope: "user", settings: globalSettings },
-    ]);
+    yield* awaited(
+      this.manager.resources.collection.resolveTopLevelEntries(accumulator, [
+        { baseDir: projectBaseDir, scope: "project", settings: projectSettings },
+        { baseDir: globalBaseDir, scope: "user", settings: globalSettings },
+      ]),
+    );
     return { globalBaseDir, projectBaseDir };
   }
 }

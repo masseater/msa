@@ -34,7 +34,7 @@ const validatesExposureAndReadsAutoenablecodemodeWithProject = Effect.gen(functi
     { autoEnableCodemode: "yes", mcpServers: {} },
   );
 
-  const untrusted = loadMcpConfig({ ...paths, projectTrusted: false });
+  const untrusted = yield* Effect.promise(() => loadMcpConfig({ ...paths, projectTrusted: false }));
   expect(untrusted.autoEnableCodemode).toBe(false);
   expect(untrusted.servers.map((server) => [server.name, server.config.exposure])).toEqual([
     ["later", "deferred"],
@@ -49,7 +49,7 @@ const validatesExposureAndReadsAutoenablecodemodeWithProject = Effect.gen(functi
     expect.stringContaining('server "badDescription": description must be a string'),
   ]);
 
-  const trusted = loadMcpConfig({ ...paths, projectTrusted: true });
+  const trusted = yield* Effect.promise(() => loadMcpConfig({ ...paths, projectTrusted: true }));
   expect(trusted.autoEnableCodemode).toBe(false);
   expect(trusted.errors).toContainEqual(
     expect.stringContaining("autoEnableCodemode must be a boolean"),
@@ -146,7 +146,9 @@ const EXPECTED_OAUTH_ERRORS = [
 
 const validatesTheOauthCallbackUrlScopeAnd = Effect.gen(function* () {
   const paths = yield* setup({ mcpServers: OAUTH_SERVERS }, {});
-  const { servers, errors } = loadMcpConfig({ ...paths, projectTrusted: false });
+  const { servers, errors } = yield* Effect.promise(() =>
+    loadMcpConfig({ ...paths, projectTrusted: false }),
+  );
   expect(servers.map((server) => server.name)).toEqual([
     "ok",
     "ipv6",

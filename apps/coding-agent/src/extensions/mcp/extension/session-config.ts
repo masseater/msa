@@ -8,7 +8,7 @@ const { loadMcpConfig } = configModule;
 
 function defaultLoadConfig(
   ctx: extensionsTypesTypes.ExtensionContext,
-): configTypes.LoadedMcpConfig {
+): Promise<configTypes.LoadedMcpConfig> {
   return loadMcpConfig({
     agentDir: getAgentDir(),
     cwd: ctx.cwd,

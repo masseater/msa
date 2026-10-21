@@ -37,6 +37,9 @@ const appendText = (options: { path: string; data: string }): Promise<void> =>
 const chmod = (options: { path: string; mode: number }): Promise<void> =>
   run((fileSystem) => fileSystem.chmod(options.path, options.mode));
 
+const glob = (pattern: string, root: string): Promise<readonly string[]> =>
+  run((fileSystem) => fileSystem.glob(pattern, { root }));
+
 const makeTempDirectory = (prefix: string): Promise<string> =>
   run((fileSystem) => fileSystem.makeTempDirectory({ prefix }));
 
@@ -108,6 +111,7 @@ const platformFiles = {
   copyFile,
   exists,
   fileSize,
+  glob,
   makeDirectory,
   makeTempDirectory,
   readDirectory,

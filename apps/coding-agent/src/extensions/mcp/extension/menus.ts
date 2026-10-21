@@ -102,7 +102,9 @@ export default class McpMenus {
           })),
         );
         if (choice === undefined || choice === "" || choice === current) return undefined;
-        return this.host.actions.setExposure(server, choice as configTypes.McpExposure);
+        return yield* awaited(
+          this.host.actions.setExposure(server, choice as configTypes.McpExposure),
+        );
       }, this),
     );
 

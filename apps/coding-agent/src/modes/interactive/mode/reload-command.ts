@@ -23,33 +23,33 @@ export default class ReloadCommand {
 
   autoTrustOnReloadCwd!: string | undefined;
 
-  private maybeSaveImplicitProjectTrustAfterReload(): boolean {
+  private maybeSaveImplicitProjectTrustAfterReload(): Promise<boolean> {
     const cwd = this.mode.sessionManager.getCwd();
-    if (this.autoTrustOnReloadCwd !== cwd) {
-      return false;
+    if (this.autoTrustOnReloadCwd !== cwd || !this.mode.settingsManager.isProjectTrusted()) {
+      return Promise.resolve(false);
     }
-    if (!this.mode.settingsManager.isProjectTrusted() || !hasTrustRequiringProjectResources(cwd)) {
-      return false;
-    }
-
-    const trustStore = new ProjectTrustStore(this.mode.runtimeHost.services.agentDir);
-    try {
-      if (trustStore.get(cwd) !== null) {
-        this.autoTrustOnReloadCwd = undefined;
-        return false;
-      }
-      trustStore.set(cwd, true);
-      this.autoTrustOnReloadCwd = undefined;
-      return true;
-    } catch (error) {
-      this.mode.display.status.showWarning(
-        `Could not save project trust after reload: ${toErrorMessage(error)}`,
-      );
-      return false;
-    }
+    return hasTrustRequiringProjectResources(cwd).then((requiresTrust) =>
+      requiresTrust ? this.saveImplicitProjectTrust(cwd) : false,
+    );
   }
 
-  private applyReloadedResources(): void {
+  private saveImplicitProjectTrust(cwd: string): Promise<boolean> {
+    const trustStore = new ProjectTrustStore(this.mode.runtimeHost.services.agentDir);
+    return trustStore
+      .get(cwd)
+      .then((decision) => {
+        this.autoTrustOnReloadCwd = undefined;
+        return decision === null ? trustStore.set(cwd, true).then(() => true) : false;
+      })
+      .catch((error: unknown) => {
+        this.mode.display.status.showWarning(
+          `Could not save project trust after reload: ${toErrorMessage(error)}`,
+        );
+        return false;
+      });
+  }
+
+  private applyReloadedResources(): Promise<void> {
     this.mode.keybindings.reload();
     const activeHeader = this.mode.layout.customHeader ?? this.mode.layout.builtInHeader;
     if (isExpandable(activeHeader))
@@ -65,7 +65,12 @@ export default class ReloadCommand {
       force: false,
       showDiagnosticsWhenQuiet: true,
     });
-    const savedImplicitProjectTrust = this.maybeSaveImplicitProjectTrustAfterReload();
+    return Promise.resolve(this.maybeSaveImplicitProjectTrustAfterReload()).then(
+      (savedImplicitProjectTrust) => this.reportReload(savedImplicitProjectTrust),
+    );
+  }
+
+  private reportReload(savedImplicitProjectTrust: boolean): void {
     const modelsJsonError = this.mode.session.models.selection.modelRuntime.getError();
     if (modelsJsonError !== undefined && modelsJsonError !== "")
       this.mode.display.status.showError(`models.json error: ${modelsJsonError}`);
@@ -106,7 +111,7 @@ export default class ReloadCommand {
             }),
           );
           restoreChatBeforeSessionStart();
-          this.applyReloadedResources();
+          yield* awaited(this.applyReloadedResources());
           this.mode.editorSlot.show(this.mode.editor);
         } catch (error) {
           if (!reload.reloadBoxDismissed) this.mode.editorSlot.show(reload.previousEditor);

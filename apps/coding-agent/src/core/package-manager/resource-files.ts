@@ -1,14 +1,17 @@
 import ignore from "ignore";
 
+import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
+import directoryEntry from "../directory-entry.ts";
 import ignoreRules from "../ignore-rules.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 
-const { statSync, readdirSync, existsSync, globSync } = nodeFs;
-const { join, relative, resolve, sep } = platformModule;
+const { relative, resolve, sep } = platformModule;
+const { exists, glob } = platformModule.files;
 const { toPosixPath, addIgnoreRules } = ignoreRules;
+const { awaited, promised } = awaitingModule;
+const { readEntries, resolveEntry } = directoryEntry;
 
 const RESOURCE_TYPES: defaultPackageManagerInternalTypes.ResourceType[] = [
   "extensions",
@@ -24,15 +27,17 @@ const FILE_PATTERNS: Record<defaultPackageManagerInternalTypes.ResourceType, Reg
   themes: /\.json$/u,
 };
 
-function expandPackageGlob(pattern: string, root: string): string[] {
-  return globSync(pattern, { cwd: root })
-    .map((match) => resolve(root, match))
-    .filter((path) =>
-      relative(root, path)
-        .split(sep)
-        .every((segment) => segment === ".." || !segment.startsWith(".")),
-    )
-    .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
+function expandPackageGlob(pattern: string, root: string): Promise<string[]> {
+  return glob(pattern, root).then((matches) =>
+    matches
+      .map((match) => resolve(root, match))
+      .filter((path) =>
+        relative(root, path)
+          .split(sep)
+          .every((segment) => segment === ".." || !segment.startsWith(".")),
+      )
+      .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+  );
 }
 
 function collectFiles(
@@ -41,47 +46,37 @@ function collectFiles(
   skipNodeModules = true,
   ignoreMatcher?: defaultPackageManagerInternalTypes.IgnoreMatcher,
   rootDir?: string,
-): string[] {
-  const files: string[] = [];
-  if (!existsSync(dir)) return files;
+): Promise<string[]> {
+  return promised(function* () {
+    const files: string[] = [];
+    if (!(yield* awaited(exists(dir)))) return files;
 
-  const root = rootDir ?? dir;
-  const ig = ignoreMatcher ?? ignore();
-  addIgnoreRules(ig, dir, root);
+    const root = rootDir ?? dir;
+    const ig = ignoreMatcher ?? ignore();
+    yield* awaited(addIgnoreRules(ig, dir, root));
 
-  try {
-    const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.name.startsWith(".")) continue;
-      if (skipNodeModules && entry.name === "node_modules") continue;
+    try {
+      for (const entry of yield* awaited(readEntries(dir))) {
+        if (entry.name.startsWith(".")) continue;
+        if (skipNodeModules && entry.name === "node_modules") continue;
+        const resolved = yield* awaited(resolveEntry(dir, entry));
+        if (resolved === undefined) continue;
+        const { fullPath, isDir, isFile } = resolved;
+        const relPath = toPosixPath(relative(root, fullPath));
+        if (ig.ignores(isDir ? `${relPath}/` : relPath)) continue;
 
-      const fullPath = join(dir, entry.name);
-      let isDir = entry.isDirectory();
-      let isFile = entry.isFile();
-
-      if (entry.isSymbolicLink()) {
-        try {
-          const stats = statSync(fullPath);
-          isDir = stats.isDirectory();
-          isFile = stats.isFile();
-        } catch {
-          continue;
+        if (isDir) {
+          files.push(
+            ...(yield* awaited(collectFiles(fullPath, filePattern, skipNodeModules, ig, root))),
+          );
+        } else if (isFile && filePattern.test(entry.name)) {
+          files.push(fullPath);
         }
       }
+    } catch {}
 
-      const relPath = toPosixPath(relative(root, fullPath));
-      const ignorePath = isDir ? `${relPath}/` : relPath;
-      if (ig.ignores(ignorePath)) continue;
-
-      if (isDir) {
-        files.push(...collectFiles(fullPath, filePattern, skipNodeModules, ig, root));
-      } else if (isFile && filePattern.test(entry.name)) {
-        files.push(fullPath);
-      }
-    }
-  } catch {}
-
-  return files;
+    return files;
+  });
 }
 
 function resourcePrecedenceRank(m: packageManagerTypes.PathMetadata): number {

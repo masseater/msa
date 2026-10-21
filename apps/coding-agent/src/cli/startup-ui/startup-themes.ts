@@ -13,21 +13,26 @@ const { awaited, awaiting } = awaitingModule;
 const { getAgentDir } = config;
 const { loadThemeFromPath } = themeModule;
 
-function loadThemes(resources: packageManagerTypes.ResolvedResource[]): themeTypes.Theme[] {
-  const themes: themeTypes.Theme[] = [];
-  const seen = new Set<string>();
-  for (const resource of resources) {
-    if (!resource.enabled) continue;
-    try {
-      const loadedTheme = loadThemeFromPath(resource.path);
+function loadThemes(
+  resources: packageManagerTypes.ResolvedResource[],
+): Promise<themeTypes.Theme[]> {
+  return Promise.all(
+    resources
+      .filter((resource) => resource.enabled)
+      .map((resource) => loadThemeFromPath(resource.path).catch(() => undefined)),
+  ).then((loaded) => {
+    const themes: themeTypes.Theme[] = [];
+    const seen = new Set<string>();
+    for (const loadedTheme of loaded) {
+      if (loadedTheme === undefined) continue;
       if (loadedTheme.name !== undefined && loadedTheme.name !== "") {
         if (seen.has(loadedTheme.name)) continue;
         seen.add(loadedTheme.name);
       }
       themes.push(loadedTheme);
-    } catch {}
-  }
-  return themes;
+    }
+    return themes;
+  });
 }
 
 function loadStartupThemes(
@@ -46,7 +51,7 @@ function loadStartupThemes(
       const resolvedPaths = yield* awaited(
         packageManager.resolution.resolve(() => Effect.runPromise(Effect.succeed("skip"))),
       );
-      return loadThemes(resolvedPaths.themes);
+      return yield* awaited(loadThemes(resolvedPaths.themes));
     }),
   );
 }

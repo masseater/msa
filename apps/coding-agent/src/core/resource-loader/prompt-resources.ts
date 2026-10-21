@@ -1,3 +1,4 @@
+import awaitingModule from "../awaiting.ts";
 import type defaultResourceLoaderInternalTypes from "../default-resource-loader-internal.types.ts";
 import type DefaultResourceLoader from "../default-resource-loader.ts";
 import type diagnosticsTypes from "../diagnostics.ts";
@@ -9,6 +10,7 @@ import sourceInfoModule from "../source-info.ts";
 import type sourceInfoTypes from "../source-info.types.ts";
 
 const { loadPromptTemplates } = promptTemplates;
+const { awaited } = awaitingModule;
 
 const { createSourceInfo } = sourceInfoModule;
 
@@ -62,43 +64,61 @@ export default class PromptResources {
     return { diagnostics, prompts: Array.from(seen.values()) };
   }
 
-  updatePromptsFromPaths(
-    promptPaths: string[],
-    metadataByPath?: Map<string, packageManagerTypes.PathMetadata>,
-  ): void {
-    let promptsResult: {
-      prompts: promptTemplatesTypes.PromptTemplate[];
-      diagnostics: diagnosticsTypes.ResourceDiagnostic[];
-    };
-    if (this.noPromptTemplates && promptPaths.length === 0) {
-      promptsResult = { diagnostics: [], prompts: [] };
-    } else {
-      const loaded = loadPromptTemplates({
-        agentDir: this.owner.environment.agentDir,
-        cwd: this.owner.environment.cwd,
-        includeDefaults: false,
-        promptPaths,
-      });
+  private loadPrompts(promptPaths: string[]): Promise<{
+    prompts: promptTemplatesTypes.PromptTemplate[];
+    diagnostics: diagnosticsTypes.ResourceDiagnostic[];
+  }> {
+    if (this.noPromptTemplates && promptPaths.length === 0)
+      return Promise.resolve({ diagnostics: [], prompts: [] });
+    return loadPromptTemplates({
+      agentDir: this.owner.environment.agentDir,
+      cwd: this.owner.environment.cwd,
+      includeDefaults: false,
+      promptPaths,
+    }).then((loaded) => {
       const deduped = this.dedupePrompts(loaded.templates);
-      promptsResult = {
+      return {
         diagnostics: [...loaded.diagnostics, ...deduped.diagnostics],
         prompts: deduped.prompts,
       };
-    }
-    const resolvedPrompts =
-      this.promptsOverride === undefined ? promptsResult : this.promptsOverride(promptsResult);
-    this.prompts = resolvedPrompts.prompts.map((prompt) => ({
-      ...prompt,
-      sourceInfo:
-        this.owner.environment.paths.findSourceInfoForPath(
-          prompt.filePath,
-          this.extensionPromptSourceInfos,
-          metadataByPath,
-        ) ??
-        prompt.sourceInfo ??
-        this.owner.environment.paths.getDefaultSourceInfoForPath(prompt.filePath),
-    }));
-    this.promptDiagnostics = resolvedPrompts.diagnostics;
+    });
+  }
+
+  updatePromptsFromPaths(
+    promptPaths: string[],
+    metadataByPath?: Map<string, packageManagerTypes.PathMetadata>,
+  ): Promise<void> {
+    return this.loadPrompts(promptPaths)
+      .then((promptsResult) =>
+        this.promptsOverride === undefined ? promptsResult : this.promptsOverride(promptsResult),
+      )
+      .then((resolvedPrompts) =>
+        Promise.all(
+          resolvedPrompts.prompts.map((prompt) => this.withSourceInfo(prompt, metadataByPath)),
+        ).then((prompts) => {
+          this.prompts = prompts;
+          this.promptDiagnostics = resolvedPrompts.diagnostics;
+          return undefined;
+        }),
+      );
+  }
+
+  private withSourceInfo(
+    prompt: promptTemplatesTypes.PromptTemplate,
+    metadataByPath: Map<string, packageManagerTypes.PathMetadata> | undefined,
+  ): Promise<promptTemplatesTypes.PromptTemplate> {
+    const { paths } = this.owner.environment;
+    const sourceInfo =
+      paths.findSourceInfoForPath(
+        prompt.filePath,
+        this.extensionPromptSourceInfos,
+        metadataByPath,
+      ) ?? prompt.sourceInfo;
+    return (
+      sourceInfo === undefined
+        ? paths.getDefaultSourceInfoForPath(prompt.filePath)
+        : Promise.resolve(sourceInfo)
+    ).then((resolved) => ({ ...prompt, sourceInfo: resolved }));
   }
 
   configure(options: resourceLoaderTypes.DefaultResourceLoaderOptions): void {
@@ -107,15 +127,19 @@ export default class PromptResources {
     this.promptsOverride = options.promptsOverride;
   }
 
-  reload(plan: defaultResourceLoaderInternalTypes.ResourcePlan): void {
+  *reload(plan: defaultResourceLoaderInternalTypes.ResourcePlan) {
     const { paths } = this.owner.environment;
     const { cli, configured } = plan.prompts;
-    const promptPaths = this.noPromptTemplates
-      ? paths.mergePaths(cli, this.additionalPromptTemplatePaths)
-      : paths.mergePaths([...cli, ...configured], this.additionalPromptTemplatePaths);
+    const promptPaths = yield* awaited(
+      this.noPromptTemplates
+        ? paths.mergePaths(cli, this.additionalPromptTemplatePaths)
+        : paths.mergePaths([...cli, ...configured], this.additionalPromptTemplatePaths),
+    );
     this.lastPromptPaths = promptPaths;
-    this.updatePromptsFromPaths(promptPaths, plan.metadataByPath);
-    for (const resolved of paths.missingPaths(this.additionalPromptTemplatePaths, true)) {
+    yield* awaited(this.updatePromptsFromPaths(promptPaths, plan.metadataByPath));
+    for (const resolved of yield* awaited(
+      paths.missingPaths(this.additionalPromptTemplatePaths, true),
+    )) {
       if (this.promptDiagnostics.some((d) => d.path === resolved)) continue;
       this.promptDiagnostics.push({
         message: "Prompt template path does not exist",
@@ -125,18 +149,22 @@ export default class PromptResources {
     }
   }
 
-  extend(entries: Array<{ path: string; metadata: packageManagerTypes.PathMetadata }>): void {
+  *extend(entries: Array<{ path: string; metadata: packageManagerTypes.PathMetadata }>) {
     for (const entry of entries) {
       this.extensionPromptSourceInfos.set(entry.path, createSourceInfo(entry.path, entry.metadata));
     }
     if (entries.length === 0) return;
-    this.lastPromptPaths = this.owner.environment.paths.mergePaths(
-      this.lastPromptPaths,
-      entries.map((entry) => entry.path),
+    this.lastPromptPaths = yield* awaited(
+      this.owner.environment.paths.mergePaths(
+        this.lastPromptPaths,
+        entries.map((entry) => entry.path),
+      ),
     );
-    this.updatePromptsFromPaths(
-      this.lastPromptPaths,
-      this.owner.environment.paths.resourceMetadataByPath,
+    yield* awaited(
+      this.updatePromptsFromPaths(
+        this.lastPromptPaths,
+        this.owner.environment.paths.resourceMetadataByPath,
+      ),
     );
   }
 }

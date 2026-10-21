@@ -56,6 +56,7 @@ function* selectPackageResources(
       writeScope: local ? "project" : "global",
     }),
   );
+  yield* awaited(settingsManager.persistence.flush());
 }
 
 const configResources = { selectPackageResources };

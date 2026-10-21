@@ -58,6 +58,7 @@ const threadsSessionsWhenParentAndChildPaths = () =>
         { keybindings },
       );
       yield* flushPromises;
+      yield* awaited(selector.getSessionList().pathsResolved);
 
       const output = stripAnsi(selector.render(120).join("\n"));
       expect(output).toContain("Parent");
@@ -97,6 +98,7 @@ const sortsThreadedSessionsByLatestActivityIn = () =>
         { keybindings },
       );
       yield* flushPromises;
+      yield* awaited(selector.getSessionList().pathsResolved);
 
       const output = stripAnsi(selector.render(120).join("\n"));
       const parentTwoIndex = output.indexOf("Parent two");

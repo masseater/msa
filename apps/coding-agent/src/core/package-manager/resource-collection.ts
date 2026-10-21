@@ -1,9 +1,9 @@
+import awaitingModule from "../awaiting.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import manifestModule from "../manifest.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import resolvedResourcePaths from "./resolved-resource-paths.ts";
 import resourceEntries from "./resource-entries.ts";
 import resourceFiles from "./resource-files.ts";
@@ -11,7 +11,8 @@ import resourcePatterns from "./resource-patterns.ts";
 
 const { resolvedPathsOf } = resolvedResourcePaths;
 const { dirname, join } = platformModule;
-const { existsSync, statSync } = nodeFs;
+const { exists, stat } = platformModule.files;
+const { awaited, promised } = awaitingModule;
 const { applyPatterns, splitPatterns } = resourcePatterns;
 const { collectResourceFiles } = resourceEntries;
 const { RESOURCE_TYPES } = resourceFiles;
@@ -69,26 +70,25 @@ export default class ResourceCollection {
     target: Map<string, { metadata: packageManagerTypes.PathMetadata; enabled: boolean }>,
     metadata: packageManagerTypes.PathMetadata,
     baseDir: string,
-  ): void {
-    if (entries.length === 0) return;
+  ): Promise<void> {
+    if (entries.length === 0) return Promise.resolve();
 
     const { plain, patterns } = splitPatterns(entries);
     const resolvedPlain = plain.map((p) => this.manager.sources.resolvePathFromBase(p, baseDir));
-    const allFiles = this.manager.resources.manifest.collectFilesFromPaths(
-      resolvedPlain,
-      resourceType,
-    );
-
-    const enabledPaths = applyPatterns(allFiles, patterns, baseDir);
-
-    for (const f of allFiles) {
-      this.addResource(target, f, metadata, enabledPaths.has(f));
-    }
+    return this.manager.resources.manifest
+      .collectFilesFromPaths(resolvedPlain, resourceType)
+      .then((allFiles) => {
+        const enabledPaths = applyPatterns(allFiles, patterns, baseDir);
+        for (const f of allFiles) {
+          this.addResource(target, f, metadata, enabledPaths.has(f));
+        }
+        return undefined;
+      });
   }
 
   toResolvedPaths(
     accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
-  ): packageManagerTypes.ResolvedPaths {
+  ): Promise<packageManagerTypes.ResolvedPaths> {
     return resolvedPathsOf(accumulator);
   }
 
@@ -98,30 +98,28 @@ export default class ResourceCollection {
     filter: defaultPackageManagerInternalTypes.PackageFilter | undefined,
     metadata: packageManagerTypes.PathMetadata,
     baseDir: string,
-  ): void {
+  ): Promise<void> {
     const resolved = this.manager.sources.resolvePathFromBase(source.path, baseDir);
-    if (!existsSync(resolved)) {
-      return;
-    }
-
-    try {
-      const stats = statSync(resolved);
-      if (stats.isFile()) {
-        metadata.baseDir = dirname(resolved);
-        this.addResource(accumulator.extensions, resolved, metadata, true);
-        return;
-      }
-      if (stats.isDirectory()) {
-        metadata.baseDir = resolved;
-        metadata.packageRoot = resolved;
-        const resources = this.collectPackageResources(resolved, accumulator, filter, metadata);
-        if (!resources) {
-          this.addResource(accumulator.extensions, resolved, metadata, true);
+    const collection = this;
+    return promised(function* () {
+      if (!(yield* awaited(exists(resolved)))) return;
+      try {
+        const stats = yield* awaited(stat(resolved));
+        if (stats.isFile) {
+          metadata.baseDir = dirname(resolved);
+          collection.addResource(accumulator.extensions, resolved, metadata, true);
+          return;
         }
-      }
-    } catch {
-      return undefined;
-    }
+        if (stats.isDirectory) {
+          metadata.baseDir = resolved;
+          metadata.packageRoot = resolved;
+          const resources = yield* awaited(
+            collection.collectPackageResources(resolved, accumulator, filter, metadata),
+          );
+          if (!resources) collection.addResource(accumulator.extensions, resolved, metadata, true);
+        }
+      } catch {}
+    });
   }
 
   collectPackageResources(
@@ -129,25 +127,32 @@ export default class ResourceCollection {
     accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
     filter: defaultPackageManagerInternalTypes.PackageFilter | undefined,
     metadata: packageManagerTypes.PathMetadata,
-  ): boolean {
+  ): Promise<boolean> {
     if (filter !== undefined) {
-      this.collectFilteredResources(packageRoot, accumulator, filter, metadata);
-      return true;
+      return this.collectFilteredResources(packageRoot, accumulator, filter, metadata).then(
+        () => true,
+      );
     }
-    const manifest = readMsaManifest(join(packageRoot, "package.json"));
-    if (manifest !== null) {
+    const collection = this;
+    return promised(function* () {
+      const manifest = yield* awaited(readMsaManifest(join(packageRoot, "package.json")));
+      if (manifest === null)
+        return yield* awaited(
+          collection.collectConventionalResources(packageRoot, accumulator, metadata),
+        );
       for (const resourceType of RESOURCE_TYPES) {
-        this.manager.resources.manifest.addManifestEntries(
-          manifest[resourceType as keyof typeof manifest],
-          packageRoot,
-          resourceType,
-          this.getTargetMap(accumulator, resourceType),
-          metadata,
+        yield* awaited(
+          collection.manager.resources.manifest.addManifestEntries(
+            manifest[resourceType as keyof typeof manifest],
+            packageRoot,
+            resourceType,
+            collection.getTargetMap(accumulator, resourceType),
+            metadata,
+          ),
         );
       }
       return true;
-    }
-    return this.collectConventionalResources(packageRoot, accumulator, metadata);
+    });
   }
 
   private collectFilteredResources(
@@ -155,42 +160,59 @@ export default class ResourceCollection {
     accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
     filter: defaultPackageManagerInternalTypes.PackageFilter,
     metadata: packageManagerTypes.PathMetadata,
-  ): void {
+  ): Promise<void> {
     const { manifest } = this.manager.resources;
-    for (const resourceType of RESOURCE_TYPES) {
-      const patterns = filter[resourceType];
-      const target = this.getTargetMap(accumulator, resourceType);
-      if (filter.autoload === false) {
-        manifest.applyPackageDeltaFilter(
-          packageRoot,
-          patterns ?? [],
-          resourceType,
-          target,
-          metadata,
-        );
-      } else if (patterns === undefined) {
-        manifest.collectDefaultResources(packageRoot, resourceType, target, metadata);
-      } else {
-        manifest.applyPackageFilter(packageRoot, patterns, resourceType, target, metadata);
+    const collection = this;
+    return promised(function* () {
+      for (const resourceType of RESOURCE_TYPES) {
+        const patterns = filter[resourceType];
+        const target = collection.getTargetMap(accumulator, resourceType);
+        if (filter.autoload === false) {
+          yield* awaited(
+            manifest.applyPackageDeltaFilter(
+              packageRoot,
+              patterns ?? [],
+              resourceType,
+              target,
+              metadata,
+            ),
+          );
+        } else if (patterns === undefined) {
+          yield* awaited(
+            manifest.collectDefaultResources(packageRoot, resourceType, target, metadata),
+          );
+        } else {
+          yield* awaited(
+            manifest.applyPackageFilter(packageRoot, patterns, resourceType, target, metadata),
+          );
+        }
       }
-    }
+    });
   }
 
   private collectConventionalResources(
     packageRoot: string,
     accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
     metadata: packageManagerTypes.PathMetadata,
-  ): boolean {
-    let hasAnyDir = false;
-    for (const resourceType of RESOURCE_TYPES) {
-      const dir = join(packageRoot, resourceType);
-      if (!existsSync(dir)) continue;
-      for (const f of collectResourceFiles(dir, resourceType)) {
-        this.addResource(this.getTargetMap(accumulator, resourceType), f, metadata, true);
+  ): Promise<boolean> {
+    const collection = this;
+    return promised(function* () {
+      let hasAnyDir = false;
+      for (const resourceType of RESOURCE_TYPES) {
+        const dir = join(packageRoot, resourceType);
+        if (!(yield* awaited(exists(dir)))) continue;
+        for (const f of yield* awaited(collectResourceFiles(dir, resourceType))) {
+          collection.addResource(
+            collection.getTargetMap(accumulator, resourceType),
+            f,
+            metadata,
+            true,
+          );
+        }
+        hasAnyDir = true;
       }
-      hasAnyDir = true;
-    }
-    return hasAnyDir;
+      return hasAnyDir;
+    });
   }
 
   resolveTopLevelEntries(
@@ -200,19 +222,24 @@ export default class ResourceCollection {
       scope: "project" | "user";
       settings: Partial<Record<defaultPackageManagerInternalTypes.ResourceType, unknown>>;
     }>,
-  ): void {
-    for (const resourceType of RESOURCE_TYPES) {
-      const target = this.getTargetMap(accumulator, resourceType);
-      for (const { baseDir, scope, settings } of scopes) {
-        const entries = (settings[resourceType] ?? []) as string[];
-        this.resolveLocalEntries(
-          entries,
-          resourceType,
-          target,
-          { origin: "top-level", scope, source: "local" },
-          baseDir,
-        );
+  ): Promise<void> {
+    const collection = this;
+    return promised(function* () {
+      for (const resourceType of RESOURCE_TYPES) {
+        const target = collection.getTargetMap(accumulator, resourceType);
+        for (const { baseDir, scope, settings } of scopes) {
+          const entries = (settings[resourceType] ?? []) as string[];
+          yield* awaited(
+            collection.resolveLocalEntries(
+              entries,
+              resourceType,
+              target,
+              { origin: "top-level", scope, source: "local" },
+              baseDir,
+            ),
+          );
+        }
       }
-    }
+    });
   }
 }
