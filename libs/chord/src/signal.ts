@@ -4,9 +4,9 @@ import { dual } from "effect/Function";
 import type coreTypes from "./core.types.ts";
 import errorsModule from "./errors.ts";
 import type errorsTypes from "./errors.types.ts";
-import unrefSleepModule from "./unref-sleep.ts";
+import sleep from "./sleep.ts";
 
-const { unrefSleep } = unrefSleepModule;
+const { unrefSleep } = sleep;
 
 const { ChordError } = errorsModule;
 

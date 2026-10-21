@@ -1,3 +1,4 @@
+import sleep from "@msa/chord/sleep";
 import { type Cause, Deferred, Effect, Exit, Queue, Scope, Stream } from "effect";
 
 import type daemonProcessTypes from "./daemon-process.types.ts";
@@ -6,12 +7,11 @@ import remoteError from "./remote-error.ts";
 import type remoteErrorTypes from "./remote-error.types.ts";
 import Session from "./session.ts";
 import type sessionTypes from "./session.types.ts";
-import unrefSleepModule from "./unref-sleep.ts";
 
 const { RemoteError, lost } = remoteError;
 const { randomHex, spawnProcess } = platform;
 
-const { unrefSleep } = unrefSleepModule;
+const { unrefSleep } = sleep;
 
 const PING_INTERVAL_MS = 5000;
 

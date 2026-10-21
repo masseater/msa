@@ -10,9 +10,8 @@ import SelfImpl from "./self.ts";
 import serviceModule from "./service.ts";
 import type serviceTypes from "./service.types.ts";
 
-const { cell: cellModule, errors: errorsModule, unrefSleep: unrefSleepModule } = activationKit;
-
-const { unrefSleep } = unrefSleepModule;
+const { cell: cellModule, errors: errorsModule, sleep } = activationKit;
+const { unrefSleep } = sleep;
 
 const { ChordError, invalid, runAll } = errorsModule;
 const { validateImplementation } = serviceModule;

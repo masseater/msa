@@ -46,11 +46,12 @@
     "build:native:darwin": "native/darwin/build.sh",
     "build:native:linux": "native/linux/build.sh",
     "build:native:win32": "node native/win32/build.ts",
-    "test": "node --test --test-reporter=dot --test-reporter-destination=stdout test/*.test.ts"
+    "test": "node --test --conditions=source --test-reporter=dot --test-reporter-destination=stdout test/*.test.ts"
   },
   "dependencies": {
     "@ansi-tools/parser": "catalog:",
     "@effect/platform-node": "catalog:",
+    "@msa/chord": "workspace:*",
     "culori": "catalog:",
     "effect": "catalog:stack",
     "get-east-asian-width": "catalog:",

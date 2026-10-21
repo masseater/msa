@@ -1,3 +1,4 @@
+import sleep from "@msa/chord/sleep";
 import { Effect } from "effect";
 import { dual } from "effect/Function";
 
@@ -6,6 +7,7 @@ import McpHttpError from "./errors/http-error.ts";
 import type httpSupportTypes from "./http-support.types.ts";
 
 const { McpForeignError } = foreignModule;
+const { unrefSleep } = sleep;
 
 const ERROR_MESSAGE_BODY_CHARS = 500;
 
@@ -74,20 +76,8 @@ const abortedBy = (signal: AbortSignal): Effect.Effect<boolean> =>
     });
   });
 
-const elapsed = (ms: number): Effect.Effect<boolean> =>
-  Effect.callback<boolean>((resume) => {
-    const timer = AbortSignal.timeout(Math.max(0, Math.ceil(ms)));
-    const onTimeout = () => {
-      resume(Effect.succeed(true));
-    };
-    timer.addEventListener("abort", onTimeout, { once: true });
-    return Effect.sync(() => {
-      timer.removeEventListener("abort", onTimeout);
-    });
-  });
-
 const sleepFor = (ms: number, signal: AbortSignal): Effect.Effect<boolean> =>
-  Effect.race(elapsed(ms), abortedBy(signal));
+  Effect.race(Effect.as(unrefSleep(ms), true), abortedBy(signal));
 
 const sleepUnlessAborted: {
   (signal: AbortSignal): (ms: number) => Effect.Effect<boolean>;

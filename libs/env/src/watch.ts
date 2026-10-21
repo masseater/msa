@@ -1,4 +1,5 @@
 import type chordTypes from "@msa/chord/index.types";
+import sleep from "@msa/chord/sleep";
 import env from "@msa/durable/env";
 import type envTypes from "@msa/durable/env.types";
 import { Cause, Deferred, Effect, Exit } from "effect";
@@ -6,14 +7,13 @@ import { Cause, Deferred, Effect, Exit } from "effect";
 import connectionModule from "./connection.ts";
 import type connectionTypes from "./connection.types.ts";
 import errors from "./errors.ts";
-import unrefSleepModule from "./unref-sleep.ts";
 import type watchTypes from "./watch.types.ts";
 
 const { FileError } = env;
 
 const { isConnectionLost } = connectionModule;
 const { toFileError } = errors;
-const { unrefSleep } = unrefSleepModule;
+const { unrefSleep } = sleep;
 
 const RECONNECT_FIRST_MS = 1000;
 const RECONNECT_MAX_MS = 30_000;

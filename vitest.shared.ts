@@ -14,6 +14,7 @@ const workspaceSourcePaths = {
   chordDelta: fileURLToPath(new URL("./libs/chord/src/delta/index.ts", import.meta.url)),
   chordIndex: fileURLToPath(new URL("./libs/chord/src/index.ts", import.meta.url)),
   chordNode: fileURLToPath(new URL("./libs/chord/src/node.ts", import.meta.url)),
+  chordSleep: fileURLToPath(new URL("./libs/chord/src/sleep.ts", import.meta.url)),
   codemodeDeclarations: fileURLToPath(
     new URL("./libs/codemode/src/declarations.ts", import.meta.url),
   ),
@@ -44,6 +45,7 @@ const testBaseConfig = {
       },
       { find: /^@msa\/chord\/delta$/u, replacement: workspaceSourcePaths.chordDelta },
       { find: /^@msa\/chord\/node$/u, replacement: workspaceSourcePaths.chordNode },
+      { find: /^@msa\/chord\/sleep$/u, replacement: workspaceSourcePaths.chordSleep },
       {
         find: /^@msa\/telemetry$/u,
         replacement: workspaceSourcePaths.telemetryIndex,

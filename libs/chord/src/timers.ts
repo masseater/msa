@@ -1,8 +1,8 @@
 import { Effect, Fiber, FiberSet, Scope } from "effect";
 
-import unrefSleepModule from "./unref-sleep.ts";
+import sleep from "./sleep.ts";
 
-const { unrefSleep } = unrefSleepModule;
+const { unrefSleep } = sleep;
 
 export default class HostTimers {
   readonly #fibers: FiberSet.FiberSet<void>;

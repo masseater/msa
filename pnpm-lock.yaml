@@ -459,6 +459,9 @@ importers:
       '@msa/ai':
         specifier: workspace:*
         version: link:../../libs/ai
+      '@msa/chord':
+        specifier: workspace:*
+        version: link:../../libs/chord
       '@msa/codemode':
         specifier: workspace:*
         version: link:../../libs/codemode
@@ -812,6 +815,9 @@ importers:
 
   libs/mcp:
     dependencies:
+      '@msa/chord':
+        specifier: workspace:*
+        version: link:../chord
       cross-spawn:
         specifier: 'catalog:'
         version: 7.0.6
@@ -884,6 +890,9 @@ importers:
       '@effect/platform-node':
         specifier: 'catalog:'
         version: 4.0.2(effect@4.0.2)(redis@6.3.0)
+      '@msa/chord':
+        specifier: workspace:*
+        version: link:../chord
       culori:
         specifier: 'catalog:'
         version: 4.0.2

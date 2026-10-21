@@ -58,6 +58,11 @@
       "types": "./dist/json.types.d.ts",
       "import": "./dist/json.types.js"
     },
+    "./sleep": {
+      "source": "./src/sleep.ts",
+      "types": "./dist/sleep.d.ts",
+      "import": "./dist/sleep.js"
+    },
     "./state": {
       "source": "./src/state.ts",
       "types": "./dist/state.d.ts",

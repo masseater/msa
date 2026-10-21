@@ -6,9 +6,9 @@ import managerChild from "./manager-child.ts";
 import managerFork from "./manager-fork.ts";
 import managerLock from "./manager-lock.ts";
 import type managerTypesModule from "./manager-types.types.ts";
-import unrefSleepModule from "./unref-sleep.ts";
+import sleep from "./sleep.ts";
 
-const { unrefSleep } = unrefSleepModule;
+const { unrefSleep } = sleep;
 
 const { ChordError } = errorsModule;
 

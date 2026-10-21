@@ -21,6 +21,8 @@ const BUILD_COMMANDS = (bundle: boolean) => [
       "run",
       "build",
       "--workspace",
+      "libs/chord",
+      "--workspace",
       "libs/tui",
       "--workspace",
       "libs/telemetry",

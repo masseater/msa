@@ -1,11 +1,11 @@
 import cell from "./cell.ts";
 import errors from "./errors.ts";
-import unrefSleep from "./unref-sleep.ts";
+import sleep from "./sleep.ts";
 
 const activationKit = {
   cell,
   errors,
-  unrefSleep,
+  sleep,
 };
 
 export default activationKit;

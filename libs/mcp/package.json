@@ -62,6 +62,7 @@
     "test": "vitest --run"
   },
   "dependencies": {
+    "@msa/chord": "workspace:*",
     "cross-spawn": "catalog:",
     "effect": "catalog:stack",
     "srvx": "catalog:"
