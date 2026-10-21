@@ -8,10 +8,15 @@ let overrides: Readonly<Record<string, string>> = {};
 const liveProvider = (): ConfigProvider.ConfigProvider =>
   ConfigProvider.fromEnv({ preserveEmptyStrings: true });
 
+const liveValues = ConfigProvider.fromEnv({
+  env: process.env as Record<string, string>,
+  preserveEmptyStrings: true,
+});
+
 const readEnv = (name: string): string | undefined => {
   const override = overrides[name];
   if (override !== undefined) return override;
-  const node = Effect.runSync(liveProvider().load([name]));
+  const node = Effect.runSync(liveValues.load([name]));
   return node === undefined ? undefined : node.value;
 };
 

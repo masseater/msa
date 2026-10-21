@@ -8,12 +8,18 @@ import type nodeProcessTypes from "./node-process.types.ts";
 
 const { joinPaths } = nodePaths;
 
+const liveEnv = process.env as Record<string, string>;
+const liveValues = {
+  false: ConfigProvider.fromEnv({ env: liveEnv, preserveEmptyStrings: false }),
+  true: ConfigProvider.fromEnv({ env: liveEnv, preserveEmptyStrings: true }),
+};
+
 const environmentVariable: dualTypes.Dual2<string, boolean, string | undefined> = Function.dual(
   2,
   (name: string, preserveEmptyStrings: boolean): string | undefined =>
     Effect.runSync(
       Config.option(Config.String(name))
-        .parse(ConfigProvider.fromEnv({ preserveEmptyStrings }))
+        .parse(liveValues[`${preserveEmptyStrings}`])
         .pipe(Effect.map(Option.getOrUndefined)),
     ),
 );

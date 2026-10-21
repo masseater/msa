@@ -2,12 +2,17 @@ import { Config, ConfigProvider, Effect, Option } from "effect";
 
 const envOverrides = new Map<string, string | undefined>();
 
+const liveValues = ConfigProvider.fromEnv({
+  env: process.env as Record<string, string>,
+  preserveEmptyStrings: true,
+});
+
 const readEnv = (name: string): string | undefined =>
   envOverrides.has(name)
     ? envOverrides.get(name)
     : Effect.runSync(
         Config.option(Config.String(name))
-          .parse(ConfigProvider.fromEnv({ preserveEmptyStrings: true }))
+          .parse(liveValues)
           .pipe(Effect.map(Option.getOrUndefined)),
       );
 
