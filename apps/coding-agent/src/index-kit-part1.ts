@@ -4,7 +4,8 @@ import AgentSession from "./core/agent-session.ts";
 import compaction from "./core/compaction/index.ts";
 import CredentialSynchronizationError from "./core/credential-synchronization-error.ts";
 import DefaultPackageManager from "./core/default-package-manager.ts";
-import sessionManagerSupport from "./core/session-manager-support.ts";
+import sessionContext from "./core/session-manager/session-context.ts";
+import sessionFormat from "./core/session-manager/session-format.ts";
 import tools from "./core/tools/index.ts";
 import components from "./modes/interactive/components/index.ts";
 
@@ -17,7 +18,7 @@ const indexKitPart1 = {
   BorderedLoader: components.BorderedLoader,
   BranchSummaryMessageComponent: components.BranchSummaryMessageComponent,
   CONFIG_DIR_NAME: config.CONFIG_DIR_NAME,
-  CURRENT_SESSION_VERSION: sessionManagerSupport.CURRENT_SESSION_VERSION,
+  CURRENT_SESSION_VERSION: sessionFormat.CURRENT_SESSION_VERSION,
   CompactionSummaryMessageComponent: components.CompactionSummaryMessageComponent,
   CredentialSynchronizationError: CredentialSynchronizationError,
   CustomEditor: components.CustomEditor,
@@ -45,9 +46,9 @@ const indexKitPart1 = {
   UserMessageComponent: components.UserMessageComponent,
   UserMessageSelectorComponent: components.UserMessageSelectorComponent,
   VERSION: config.VERSION,
-  buildContextEntries: sessionManagerSupport.buildContextEntries,
-  buildSessionContext: sessionManagerSupport.buildSessionContext,
-  buildSessionProjection: sessionManagerSupport.buildSessionProjection,
+  buildContextEntries: sessionContext.buildContextEntries,
+  buildSessionContext: sessionContext.buildSessionContext,
+  buildSessionProjection: sessionContext.buildSessionProjection,
   calculateContextTokens: compaction.calculateContextTokens,
   collectEntriesForBranchSummary: compaction.collectEntriesForBranchSummary,
   compact: compaction.compact,
@@ -72,18 +73,18 @@ const indexKitPart1 = {
   getDocsPath: config.getDocsPath,
   getExamplesPath: config.getExamplesPath,
   getLastAssistantUsage: compaction.getLastAssistantUsage,
-  getLatestCompactionEntry: sessionManagerSupport.getLatestCompactionEntry,
+  getLatestCompactionEntry: sessionContext.getLatestCompactionEntry,
   getPackageDir: config.getPackageDir,
   getReadmePath: config.getReadmePath,
   keyHint: components.keyHint,
   keyText: components.keyText,
-  migrateSessionEntries: sessionManagerSupport.migrateSessionEntries,
-  parseSessionEntries: sessionManagerSupport.parseSessionEntries,
+  migrateSessionEntries: sessionFormat.migrateSessionEntries,
+  parseSessionEntries: sessionFormat.parseSessionEntries,
   prepareBranchEntries: compaction.prepareBranchEntries,
   rawKeyHint: components.rawKeyHint,
   renderDiff: components.renderDiff,
   serializeConversation: compaction.serializeConversation,
-  sessionEntryToContextMessages: sessionManagerSupport.sessionEntryToContextMessages,
+  sessionEntryToContextMessages: sessionContext.sessionEntryToContextMessages,
   shouldCompact: compaction.shouldCompact,
   truncateHead: tools.truncateHead,
   truncateLine: tools.truncateLine,

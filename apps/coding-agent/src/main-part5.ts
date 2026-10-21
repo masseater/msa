@@ -6,14 +6,14 @@ import { Effect } from "effect";
 import type argsTypes from "./cli/args.types.ts";
 import awaitingModule from "./core/awaiting.ts";
 import platformModule from "./core/platform.ts";
-import sessionManagerSupport from "./core/session-manager-support.ts";
+import sessionFormat from "./core/session-manager/session-format.ts";
 import errorsModule from "./utils/errors.ts";
 import interop from "./utils/interop.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { callbackPromise } = interop;
 const { writeError } = platformModule;
-const { assertValidSessionId } = sessionManagerSupport;
+const { assertValidSessionId } = sessionFormat;
 const { toErrorMessage } = errorsModule;
 
 function promptConfirm(message: string): Promise<boolean> {

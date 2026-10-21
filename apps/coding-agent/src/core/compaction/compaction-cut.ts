@@ -1,13 +1,13 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionContext from "../session-manager/session-context.ts";
 import type compactionCutTypes from "./compaction-cut.types.ts";
 import compactionTokens from "./compaction-tokens.ts";
 import type compactionTypesTypes from "./compaction-types.types.ts";
 
-const { sessionEntryToContextMessages } = sessionManagerSupport;
+const { sessionEntryToContextMessages } = sessionContext;
 const { estimateTokens } = compactionTokens;
 
 function isCutPointMessage(message: agentTypes.AgentMessage): boolean {

@@ -1,107 +1,11 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { isNullish } from "effect/Predicate";
 
-import messagesModule from "./messages.ts";
-import platformNode from "./platform-node.ts";
-import type sessionManagerTypes from "./session-manager.types.ts";
+import messagesModule from "../messages.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
 
-const { randomUuid } = platformNode;
-const { createBranchSummaryMessage, createCompactionSummaryMessage, createCustomMessage } =
+const { createCompactionSummaryMessage, createBranchSummaryMessage, createCustomMessage } =
   messagesModule;
-
-const CURRENT_SESSION_VERSION = 3;
-
-function assertValidSessionId(id: string): void {
-  if (!/^[A-Za-z0-9](?:[A-Za-z0-9._-]*[A-Za-z0-9])?$/u.test(id)) {
-    throw new Error(
-      "Session id must be non-empty, contain only alphanumeric characters, '-', '_', and '.', and start and end with an alphanumeric character",
-    );
-  }
-}
-
-function generateId(byId: { has(id: string): boolean }): string {
-  for (let i = 0; i < 100; i++) {
-    const id = randomUuid().slice(0, 8);
-    if (!byId.has(id)) return id;
-  }
-  return randomUuid();
-}
-
-function migrateV1ToV2(entries: sessionManagerTypes.FileEntry[]): void {
-  const ids = new Set<string>();
-  let prevId: string | null = null;
-
-  for (const entry of entries) {
-    if (entry.type === "session") {
-      entry.version = 2;
-      continue;
-    }
-
-    entry.id = generateId(ids);
-    entry.parentId = prevId;
-    prevId = entry.id;
-
-    if (entry.type === "compaction") {
-      const comp = entry as sessionManagerTypes.CompactionEntry & { firstKeptEntryIndex?: number };
-      if (typeof comp.firstKeptEntryIndex === "number") {
-        const targetEntry = entries[comp.firstKeptEntryIndex];
-        if (targetEntry !== undefined && targetEntry.type !== "session") {
-          comp.firstKeptEntryId = targetEntry.id;
-        }
-        delete comp.firstKeptEntryIndex;
-      }
-    }
-  }
-}
-
-function migrateV2ToV3(entries: sessionManagerTypes.FileEntry[]): void {
-  for (const entry of entries) {
-    if (entry.type === "session") {
-      entry.version = 3;
-      continue;
-    }
-
-    if (entry.type === "message") {
-      const msgEntry = entry as sessionManagerTypes.SessionMessageEntry;
-      if ((msgEntry.message as { role: string }).role === "hookMessage") {
-        (msgEntry.message as { role: string }).role = "custom";
-      }
-    }
-  }
-}
-
-function migrateToCurrentVersion(entries: sessionManagerTypes.FileEntry[]): boolean {
-  const header = entries.find((e) => e.type === "session") as
-    | sessionManagerTypes.SessionHeader
-    | undefined;
-  const version = header?.version ?? 1;
-
-  if (version >= CURRENT_SESSION_VERSION) return false;
-
-  if (version < 2) migrateV1ToV2(entries);
-  if (version < 3) migrateV2ToV3(entries);
-
-  return true;
-}
-
-function migrateSessionEntries(entries: sessionManagerTypes.FileEntry[]): void {
-  migrateToCurrentVersion(entries);
-}
-
-function parseSessionEntries(content: string): sessionManagerTypes.FileEntry[] {
-  const entries: sessionManagerTypes.FileEntry[] = [];
-  const lines = content.trim().split("\n");
-
-  for (const line of lines) {
-    if (line.trim() === "") continue;
-    try {
-      const entry = JSON.parse(line) as sessionManagerTypes.FileEntry;
-      entries.push(entry);
-    } catch {}
-  }
-
-  return entries;
-}
 
 function getLatestCompactionEntry(
   entries: sessionManagerTypes.SessionEntry[],
@@ -256,18 +160,77 @@ function buildContextEntries(
   return contextEntries;
 }
 
-const sessionManagerSupportPart1 = {
-  CURRENT_SESSION_VERSION,
-  assertValidSessionId,
+function projectContextEntry(
+  entry: sessionManagerTypes.SessionEntry,
+  edit: sessionManagerTypes.ContextEditEntry | undefined,
+): agentTypes.AgentMessage[] {
+  const messages = sessionEntryToContextMessages(entry);
+  if (edit === undefined) return messages;
+  const replacement = edit.replacement;
+  if (replacement === null) return [];
+
+  return messages.map((message) => {
+    if (
+      message.role !== "user" &&
+      message.role !== "assistant" &&
+      message.role !== "toolResult" &&
+      message.role !== "custom"
+    ) {
+      return message;
+    }
+    const content =
+      (message.role === "assistant" || message.role === "toolResult") &&
+      typeof replacement.content === "string"
+        ? [{ text: replacement.content, type: "text" as const }]
+        : replacement.content;
+    return Object.assign({}, message, { content }) as agentTypes.AgentMessage;
+  });
+}
+
+function buildSessionProjection(
+  entries: sessionManagerTypes.SessionEntry[],
+  leafId?: string | null,
+  byId?: Map<string, sessionManagerTypes.SessionEntry>,
+): sessionManagerTypes.SessionProjection {
+  const path = buildSessionPath(entries, leafId, byId);
+  const { thinkingLevel, model } = getSessionContextSettings(path);
+  const contextEntries = buildContextEntries(entries, leafId, byId);
+  const edits = new Map<string, sessionManagerTypes.ContextEditEntry>();
+  for (const entry of contextEntries) {
+    if (entry.type === "context_edit") edits.set(entry.targetId, entry);
+  }
+  const projectedEntries = contextEntries.map(
+    (sourceEntry, index): sessionManagerTypes.ProjectedSessionEntry => ({
+      messages:
+        sourceEntry.type === "compaction" && index > 0
+          ? []
+          : projectContextEntry(sourceEntry, edits.get(sourceEntry.id)),
+      sourceEntry,
+    }),
+  );
+  return {
+    entries: projectedEntries,
+    messages: projectedEntries.flatMap((entry) => entry.messages),
+    model,
+    thinkingLevel,
+  };
+}
+
+function buildSessionContext(
+  entries: sessionManagerTypes.SessionEntry[],
+  leafId?: string | null,
+  byId?: Map<string, sessionManagerTypes.SessionEntry>,
+): sessionManagerTypes.SessionContext {
+  const { messages, thinkingLevel, model } = buildSessionProjection(entries, leafId, byId);
+  return { messages, model, thinkingLevel };
+}
+
+const sessionContext = {
   buildContextEntries,
-  buildSessionPath,
-  generateId,
+  buildSessionContext,
+  buildSessionProjection,
   getLatestCompactionEntry,
-  getSessionContextSettings,
-  migrateSessionEntries,
-  migrateToCurrentVersion,
-  parseSessionEntries,
   sessionEntryToContextMessages,
 };
 
-export default sessionManagerSupportPart1;
+export default sessionContext;

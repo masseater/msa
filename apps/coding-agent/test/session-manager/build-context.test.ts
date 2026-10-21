@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import sessionManagerSupport from "../../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import sessionContext from "../../src/core/session-manager/session-context.ts";
 import buildContextCases from "./build-context-cases.ts";
 
-const { buildSessionContext } = sessionManagerSupport;
+const { buildSessionContext } = sessionContext;
 
 const {
   buildcontextentriesReturnsCompactionAwareEntriesIncluding,

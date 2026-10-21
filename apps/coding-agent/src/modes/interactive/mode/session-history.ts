@@ -3,8 +3,8 @@ import tuiModule from "@msa/tui";
 import type compactionTypes from "../../../core/compaction/index.types.ts";
 import messagesModule from "../../../core/messages.ts";
 import platformModule from "../../../core/platform.ts";
-import sessionManagerSupport from "../../../core/session-manager-support.ts";
 import type sessionManagerTypes from "../../../core/session-manager.types.ts";
+import sessionContext from "../../../core/session-manager/session-context.ts";
 import interactiveModeHelpers from "../interactive-mode-helpers.ts";
 import type interactiveModeInternalTypes from "../interactive-mode-internal.types.ts";
 import type InteractiveMode from "../interactive-mode.ts";
@@ -14,7 +14,7 @@ const { isCompactionCostNotice, isCustomSessionEntry, isUsageSessionEntry } =
   interactiveModeHelpers;
 const { nowIso } = platformModule;
 const { createCompactionSummaryMessage, createCustomMessage } = messagesModule;
-const { sessionEntryToContextMessages } = sessionManagerSupport;
+const { sessionEntryToContextMessages } = sessionContext;
 
 export default class SessionHistoryView {
   private readonly mode: InteractiveMode;

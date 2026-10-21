@@ -1,18 +1,92 @@
 import { StringDecoder } from "string_decoder";
 
-import paths from "../utils/paths.ts";
-import platformNode from "./platform-node.ts";
-import nodeFs from "./platform/node/fs.ts";
-import SessionHeaderScanLimitError from "./session-header-scan-limit-error.ts";
-import sessionManagerShared from "./session-manager-shared.ts";
-import sessionManagerSupportPart2 from "./session-manager-support-part2.ts";
-import type sessionManagerTypes from "./session-manager.types.ts";
+import config from "../../config.ts";
+import paths from "../../utils/paths.ts";
+import platformNode from "../platform-node.ts";
+import nodeFs from "../platform/node/fs.ts";
+import SessionHeaderScanLimitError from "../session-header-scan-limit-error.ts";
+import sessionManagerShared from "../session-manager-shared.ts";
+import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionFormat from "./session-format.ts";
 
-const { closeSync, openSync, readSync, readdirSync, statSync } = nodeFs;
+const {
+  statSync,
+  readdirSync,
+  appendFileSync,
+  closeSync,
+  readSync,
+  openSync,
+  mkdirSync,
+  existsSync,
+} = nodeFs;
 const { MAX_SESSION_HEADER_SCAN_BYTES } = sessionManagerShared;
 const { normalizePath, resolvePath } = paths;
 const { join } = platformNode;
-const { SESSION_HEADER_READ_BUFFER_SIZE, parseSessionHeaderCandidate } = sessionManagerSupportPart2;
+const { getAgentDir: getDefaultAgentDir } = config;
+const { parseSessionHeaderCandidate, parseSessionEntryLine } = sessionFormat;
+
+function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgentDir()): string {
+  const resolvedCwd = resolvePath(cwd);
+  const resolvedAgentDir = resolvePath(agentDir);
+  const safePath = `--${resolvedCwd.replace(/^[/\\]/u, "").replace(/[/\\:]/gu, "-")}--`;
+  return join(resolvedAgentDir, "sessions", safePath);
+}
+
+function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultAgentDir()): string {
+  const sessionDir = getDefaultSessionDirPath(cwd, agentDir);
+  if (!existsSync(sessionDir)) {
+    mkdirSync(sessionDir, { recursive: true });
+  }
+  return sessionDir;
+}
+
+const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
+
+const SESSION_HEADER_READ_BUFFER_SIZE = 4096;
+
+function loadEntriesFromFile(filePath: string): sessionManagerTypes.FileEntry[] {
+  const resolvedFilePath = normalizePath(filePath);
+  if (!existsSync(resolvedFilePath)) return [];
+
+  const entries: sessionManagerTypes.FileEntry[] = [];
+  let pending = "";
+  const fd = openSync(resolvedFilePath, "r");
+  try {
+    const decoder = new StringDecoder("utf8");
+    const buffer = Buffer.allocUnsafe(SESSION_READ_BUFFER_SIZE);
+
+    while (true) {
+      const bytesRead = readSync(fd, buffer, 0, buffer.length, null);
+      if (bytesRead === 0) break;
+
+      pending += decoder.write(buffer.subarray(0, bytesRead));
+      let lineStart = 0;
+      let newlineIndex = pending.indexOf("\n", lineStart);
+      while (newlineIndex !== -1) {
+        const entry = parseSessionEntryLine(pending.slice(lineStart, newlineIndex));
+        if (entry !== null) entries.push(entry);
+        lineStart = newlineIndex + 1;
+        newlineIndex = pending.indexOf("\n", lineStart);
+      }
+      pending = pending.slice(lineStart);
+    }
+
+    pending += decoder.end();
+    const finalEntry = parseSessionEntryLine(pending);
+    if (finalEntry !== null) entries.push(finalEntry);
+  } finally {
+    closeSync(fd);
+  }
+
+  const header = entries[0];
+  if (header === undefined) return entries;
+  if (header.type !== "session" || typeof (header as { id?: unknown }).id !== "string") {
+    return [];
+  }
+
+  if (pending !== "") appendFileSync(resolvedFilePath, "\n");
+  return entries;
+}
 
 function readSessionHeader(filePath: string): sessionManagerTypes.SessionHeader | null {
   const fd = openSync(filePath, "r");
@@ -99,12 +173,15 @@ function findMostRecentSession(sessionDir: string, cwd?: string): string | null 
   }
 }
 
-const sessionManagerSupportPart3 = {
+const sessionFiles = {
   findMostRecentSession,
+  getDefaultSessionDir,
+  getDefaultSessionDirPath,
   getSessionHeaderCwd,
+  loadEntriesFromFile,
   readSessionHeader,
   readSessionHeaderForDiscovery,
   sessionCwdMatches,
 };
 
-export default sessionManagerSupportPart3;
+export default sessionFiles;

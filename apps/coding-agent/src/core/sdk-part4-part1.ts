@@ -20,8 +20,8 @@ import sdkPart1 from "./sdk-part1.ts";
 import sdkPart2 from "./sdk-part2.ts";
 import sdkPart3 from "./sdk-part3.ts";
 import type sdkTypes from "./sdk.types.ts";
-import sessionManagerSupport from "./session-manager-support.ts";
 import SessionManager from "./session-manager.ts";
+import sessionFiles from "./session-manager/session-files.ts";
 import settingsManagerSupport from "./settings-manager-support.ts";
 import SettingsManager from "./settings-manager.ts";
 
@@ -29,7 +29,7 @@ const { awaited, awaiting } = awaitingModule;
 const { resolvePath } = paths;
 const { getDefaultAgentDir } = sdkPart1;
 const { join } = platformNode;
-const { getDefaultSessionDir } = sessionManagerSupport;
+const { getDefaultSessionDir } = sessionFiles;
 const { createAgentSessionPart2 } = sdkPart2;
 const { DEFAULT_THINKING_LEVEL } = defaults;
 const { clampThinkingLevel } = compat;

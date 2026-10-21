@@ -1,8 +1,8 @@
 import platform from "../platform.ts";
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionContext from "./session-context.ts";
 
-const { buildContextEntries, buildSessionProjection } = sessionManagerSupport;
+const { buildContextEntries, buildSessionProjection } = sessionContext;
 const { toEpochMs } = platform;
 
 export default class SessionTree {

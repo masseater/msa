@@ -3,11 +3,11 @@ import type aiTypes from "@msa/ai/index.types";
 
 import type messagesTypes from "../messages.types.ts";
 import platform from "../platform.ts";
-import sessionManagerSupport from "../session-manager-support.ts";
 import type SessionManager from "../session-manager.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionFormat from "./session-format.ts";
 
-const { generateId } = sessionManagerSupport;
+const { generateId } = sessionFormat;
 const { nowIso, toEpochMs } = platform;
 const { getCurrentSystemMessage } = ai;
 

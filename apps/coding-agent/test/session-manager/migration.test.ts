@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vite-plus/test";
 
-import sessionManagerSupport from "../../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import sessionFormat from "../../src/core/session-manager/session-format.ts";
 
-const { migrateSessionEntries } = sessionManagerSupport;
+const { migrateSessionEntries } = sessionFormat;
 
 const shouldAddIdParentidToV1 = () => {
   const entries: sessionManagerTypes.FileEntry[] = [

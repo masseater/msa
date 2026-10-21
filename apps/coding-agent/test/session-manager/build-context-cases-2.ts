@@ -1,10 +1,10 @@
 import { expect } from "vite-plus/test";
 
-import sessionManagerSupport from "../../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import sessionContext from "../../src/core/session-manager/session-context.ts";
 import buildContextCases1 from "./build-context-cases-1.ts";
 
-const { buildSessionContext } = sessionManagerSupport;
+const { buildSessionContext } = sessionContext;
 
 const { branchSummary, compaction, msg } = buildContextCases1;
 

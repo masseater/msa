@@ -3,10 +3,10 @@ import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
 import { beforeEach, describe, expect, it } from "vite-plus/test";
 
-import sessionManagerSupport from "../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import sessionContext from "../src/core/session-manager/session-context.ts";
 
-const { buildSessionContext } = sessionManagerSupport;
+const { buildSessionContext } = sessionContext;
 
 const { currentDate, currentTimeMillis } = testing;
 

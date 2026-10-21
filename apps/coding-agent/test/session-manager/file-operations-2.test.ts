@@ -2,11 +2,11 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
-import sessionManagerSupport from "../../src/core/session-manager-support.ts";
 import SessionManager from "../../src/core/session-manager.ts";
+import sessionFiles from "../../src/core/session-manager/session-files.ts";
 import fileOperationsSupport from "./file-operations-support.ts";
 
-const { findMostRecentSession } = sessionManagerSupport;
+const { findMostRecentSession } = sessionFiles;
 
 const { HEADER_SCAN_LIMIT_BYTES } = fileOperationsSupport;
 

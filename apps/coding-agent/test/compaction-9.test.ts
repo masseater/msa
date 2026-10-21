@@ -3,10 +3,12 @@ import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import compaction from "../src/core/compaction/index.ts";
-import sessionManagerSupport from "../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import sessionContext from "../src/core/session-manager/session-context.ts";
+import sessionFormat from "../src/core/session-manager/session-format.ts";
 
-const { buildSessionContext, migrateSessionEntries, parseSessionEntries } = sessionManagerSupport;
+const { buildSessionContext } = sessionContext;
+const { migrateSessionEntries, parseSessionEntries } = sessionFormat;
 const { DEFAULT_COMPACTION_SETTINGS, findCutPoint } = compaction;
 
 const { joinPath, readTextFile, runTest } = testing;

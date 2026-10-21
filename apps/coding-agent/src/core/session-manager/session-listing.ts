@@ -5,25 +5,25 @@ import paths from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
-import sessionManagerHelpers from "../session-manager-helpers.ts";
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
-import sessionDiscovery from "./session-discovery.ts";
+import sessionFiles from "./session-files.ts";
+import sessionInfoLoading from "./session-info-loading.ts";
+import sessionInfo from "./session-info.ts";
 
 const { getSessionsDir } = config;
-const { loadAllSessions } = sessionDiscovery;
+const { loadAllSessions, listSessionsFromDir } = sessionInfoLoading;
 const { resolvePath, normalizePath } = paths;
 const { awaiting, performed } = awaitingModule;
 const { join } = platformNode;
 const { existsSync, readdirSync } = nodeFs;
-const { listSessionsFromDir, sortSessionInfos } = sessionManagerHelpers;
+const { sortSessionInfos } = sessionInfo;
 const {
   getDefaultSessionDirPath,
   getDefaultSessionDir,
   getSessionHeaderCwd,
   readSessionHeaderForDiscovery,
   sessionCwdMatches,
-} = sessionManagerSupport;
+} = sessionFiles;
 
 function findById(cwd: string, id: string, sessionDir?: string): string | undefined {
   const dir =

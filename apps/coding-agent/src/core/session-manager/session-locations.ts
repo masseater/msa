@@ -3,24 +3,22 @@ import platformNode from "../platform-node.ts";
 import platform from "../platform.ts";
 import nodeFs from "../platform/node/fs.ts";
 import SessionHeaderScanLimitError from "../session-header-scan-limit-error.ts";
-import sessionManagerHelpers from "../session-manager-helpers.ts";
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionFiles from "./session-files.ts";
+import sessionFormat from "./session-format.ts";
 
 const { appendFileSync, writeFileSync, existsSync, mkdirSync } = nodeFs;
 const {
   getDefaultSessionDirPath,
-  CURRENT_SESSION_VERSION,
-  assertValidSessionId,
   loadEntriesFromFile,
   findMostRecentSession,
   getDefaultSessionDir,
   getSessionHeaderCwd,
   readSessionHeader,
-} = sessionManagerSupport;
+} = sessionFiles;
+const { CURRENT_SESSION_VERSION, assertValidSessionId, createSessionId } = sessionFormat;
 const { nowIso } = platform;
 const { join, resolve } = platformNode;
-const { createSessionId } = sessionManagerHelpers;
 const { resolvePath, normalizePath } = paths;
 
 type SessionLocation = {

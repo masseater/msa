@@ -6,15 +6,15 @@ import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
 import compactionModule from "../compaction/index.ts";
 import platform from "../platform.ts";
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionContext from "../session-manager/session-context.ts";
 import virtualModels from "../virtual-models.ts";
 
 const { toEpochMs } = platform;
 const { isVirtualModel } = virtualModels;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { estimateProjectedContextTokens, shouldCompact, prepareCompaction } = compactionModule;
-const { getLatestCompactionEntry } = sessionManagerSupport;
+const { getLatestCompactionEntry } = sessionContext;
 
 export default class SessionAutoCompaction {
   private readonly session: AgentSession;

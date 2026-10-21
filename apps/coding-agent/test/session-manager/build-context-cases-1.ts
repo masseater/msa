@@ -1,9 +1,9 @@
 import { expect } from "vite-plus/test";
 
-import sessionManagerSupport from "../../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import sessionContext from "../../src/core/session-manager/session-context.ts";
 
-const { buildContextEntries, buildSessionContext } = sessionManagerSupport;
+const { buildContextEntries, buildSessionContext } = sessionContext;
 
 const msg = (entry: {
   id: string;

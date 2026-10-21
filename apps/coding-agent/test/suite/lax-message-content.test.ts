@@ -5,12 +5,12 @@ import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
-import sessionManagerSupport from "../../src/core/session-manager-support.ts";
 import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
+import sessionContext from "../../src/core/session-manager/session-context.ts";
 import type srcTypes from "../../src/index.types.ts";
 import harnessModule from "./harness.ts";
 
-const { sessionEntryToContextMessages } = sessionManagerSupport;
+const { sessionEntryToContextMessages } = sessionContext;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 

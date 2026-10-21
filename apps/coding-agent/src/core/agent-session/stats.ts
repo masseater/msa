@@ -5,15 +5,15 @@ import type agentSessionTypes from "../agent-session.types.ts";
 import compactionModule from "../compaction/index.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import platform from "../platform.ts";
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionContext from "../session-manager/session-context.ts";
 import usageTotalsModule from "../usage-totals.ts";
 
 const { toEpochMs } = platform;
 const { addUsageToTotals, createUsageTotals } = usageTotalsModule;
 const { calculateContextTokens, estimateContextTokens, estimateProjectedContextTokens } =
   compactionModule;
-const { getLatestCompactionEntry } = sessionManagerSupport;
+const { getLatestCompactionEntry } = sessionContext;
 
 export default class SessionStats {
   private readonly session: AgentSession;

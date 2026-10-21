@@ -1,15 +1,15 @@
 import type agentTypes from "@msa/agent-core/index.types";
 import { Function as Fn } from "effect";
 
-import sessionManagerSupport from "../session-manager-support.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
+import sessionContext from "../session-manager/session-context.ts";
 import compactionCut from "./compaction-cut.ts";
 import compactionTokens from "./compaction-tokens.ts";
 import type compactionTypesTypes from "./compaction-types.types.ts";
 import utils from "./utils.ts";
 import type utilsTypes from "./utils.types.ts";
 
-const { buildSessionProjection } = sessionManagerSupport;
+const { buildSessionProjection } = sessionContext;
 const { createFileOps, extractFileOpsFromMessage } = utils;
 const { findProjectedCutPoint } = compactionCut;
 const { estimateProjectedContextTokens } = compactionTokens;

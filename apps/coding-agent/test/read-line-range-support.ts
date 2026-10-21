@@ -4,12 +4,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import exportHtml from "../src/core/export-html/index.ts";
-import sessionManagerSupport from "../src/core/session-manager-support.ts";
 import SessionManager from "../src/core/session-manager.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import sessionFormat from "../src/core/session-manager/session-format.ts";
 import type renderUtils from "../src/core/tools/render-utils.ts";
 
-const { CURRENT_SESSION_VERSION } = sessionManagerSupport;
+const { CURRENT_SESSION_VERSION } = sessionFormat;
 const { exportFromFile } = exportHtml;
 
 const { awaited, isoFromMillis, joinPath, readTextFile, toJsonText, writeTextFile } = testing;
