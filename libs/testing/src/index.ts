@@ -2,6 +2,7 @@ import effectSupport from "./effect-support.ts";
 import files from "./files.ts";
 import httpServer from "./http-server.ts";
 import json from "./json.ts";
+import nodeScript from "./node-script.ts";
 import paths from "./paths.ts";
 import runtime from "./runtime.ts";
 import temp from "./temp.ts";
@@ -59,6 +60,7 @@ const testing = {
   removePath: files.removePath,
   renamePath: files.renamePath,
   resolvePath: paths.resolvePath,
+  runNodeScript: nodeScript.runNodeScript,
   runTest: runtime.runTest,
   runTestSync: runtime.runTestSync,
   sleep: effectSupport.sleep,

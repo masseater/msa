@@ -4,13 +4,19 @@ import childProcess from "../utils/child-process.ts";
 import awaitingModule from "./awaiting.ts";
 import type execTypes from "./exec.types.ts";
 import platform from "./platform/index.ts";
+import type platformTypes from "./platform/index.types.ts";
 import nodeChildProcess from "./platform/node/child-process.ts";
 import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
 
 const { spawn } = nodeChildProcess;
 
 const { awaiting, performed } = awaitingModule;
-const { schedule } = platform;
+const { schedule, scheduleUnref } = platform;
+
+const KILL_GRACE_MS = 5000;
+
+const running = (proc: nodeChildProcessTypes.ChildProcess): boolean =>
+  proc.exitCode === null && proc.signalCode === null;
 const { waitForChildProcess } = childProcess;
 
 function stopOnAbortOrTimeout(
@@ -18,13 +24,14 @@ function stopOnAbortOrTimeout(
   options: execTypes.ExecOptions | undefined,
 ) {
   let killed = false;
+  let escalation: platformTypes.Scheduled | undefined;
   const kill = () => {
     if (killed) return;
     killed = true;
     proc.kill("SIGTERM");
-    schedule(() => {
-      if (!proc.killed) proc.kill("SIGKILL");
-    }, 5000);
+    escalation = scheduleUnref(() => {
+      if (running(proc)) proc.kill("SIGKILL");
+    }, KILL_GRACE_MS);
   };
   const signal = options?.signal;
   if (signal?.aborted === true) kill();
@@ -36,6 +43,7 @@ function stopOnAbortOrTimeout(
   return {
     dispose: () => {
       timeout?.cancel();
+      escalation?.cancel();
       signal?.removeEventListener("abort", kill);
     },
     killed: () => killed,
