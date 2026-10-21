@@ -134,8 +134,9 @@ const generatesAUuidv7IdWhenForking = () =>
 `,
       );
 
-      const forked = SessionManager.forkFrom(sourcePath, tempDir, tempDir);
-      const header = forked.getHeader();
+      const header = (yield* Effect.promise(() =>
+        SessionManager.forkFrom(sourcePath, tempDir, tempDir),
+      )).getHeader();
       expect(header).not.toBeNull();
       expect(header!.id).toMatch(UUID_V7_RE);
       expect(header!.parentSession).toBe(sourcePath);
@@ -158,9 +159,11 @@ const usesTheProvidedIdWhenForking = () =>
         })}\n`,
       );
 
-      const forked = SessionManager.forkFrom(sourcePath, tempDir, tempDir, {
-        id: "forked-session-id",
-      });
+      const forked = yield* Effect.promise(() =>
+        SessionManager.forkFrom(sourcePath, tempDir, tempDir, {
+          id: "forked-session-id",
+        }),
+      );
       const header = forked.getHeader();
       expect(header).not.toBeNull();
       expect(header!.id).toBe("forked-session-id");

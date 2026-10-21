@@ -119,7 +119,8 @@ const exportViewer = Effect.fn("exportViewer")(function* (sessionPath: string, t
   return loadHtmlViewer(html);
 });
 
-const openTree = (sessionPath: string) => SessionManager.open(sessionPath).getTree();
+const openTree = (sessionPath: string) =>
+  SessionManager.open(sessionPath).then((sessionManager) => sessionManager.getTree());
 
 const readLineRangeSupport = {
   RANGE_CASES,

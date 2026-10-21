@@ -17,14 +17,16 @@ const { stopThemeWatcher } = themeModule;
 const { toErrorMessage } = errorsModule;
 const { findLocalSessionByExactId, promptConfirm, resolveSessionPath } = sessionLookup;
 
-function openSessionOrExit(path: string, sessionDir?: string): sessionManagerTypes.SessionManager {
-  try {
-    return SessionManager.open(path, sessionDir);
-  } catch (error: unknown) {
-    const message = toErrorMessage(error);
-    writeError(chalk.red(`Error: ${message}`));
-    process.exit(1);
-  }
+function exitWithError(error: unknown): never {
+  writeError(chalk.red(`Error: ${toErrorMessage(error)}`));
+  process.exit(1);
+}
+
+function openSessionOrExit(
+  path: string,
+  sessionDir?: string,
+): Promise<sessionManagerTypes.SessionManager> {
+  return SessionManager.open(path, sessionDir).catch(exitWithError);
 }
 
 function forkSessionOrExit(
@@ -32,14 +34,10 @@ function forkSessionOrExit(
   cwd: string,
   sessionDir?: string,
   sessionId?: string,
-): sessionManagerTypes.SessionManager {
-  try {
-    return SessionManager.forkFrom(sourcePath, cwd, sessionDir, { id: sessionId });
-  } catch (error: unknown) {
-    const message = toErrorMessage(error);
-    writeError(chalk.red(`Error: ${message}`));
-    process.exit(1);
-  }
+): Promise<sessionManagerTypes.SessionManager> {
+  return SessionManager.forkFrom(sourcePath, cwd, sessionDir, { id: sessionId }).catch(
+    exitWithError,
+  );
 }
 
 function* forkFromArg(
@@ -49,7 +47,7 @@ function* forkFromArg(
   sessionDir: string | undefined,
 ) {
   if (sessionId !== undefined && sessionId !== "") {
-    const existingTarget = findLocalSessionByExactId(sessionId, cwd, sessionDir);
+    const existingTarget = yield* awaited(findLocalSessionByExactId(sessionId, cwd, sessionDir));
     if (existingTarget !== undefined) {
       writeError(chalk.red(`Session already exists with id '${sessionId}'`));
       process.exit(1);
@@ -62,7 +60,7 @@ function* forkFromArg(
     case "path":
     case "local":
     case "global":
-      return forkSessionOrExit(resolved.path, cwd, sessionDir, sessionId);
+      return yield* awaited(forkSessionOrExit(resolved.path, cwd, sessionDir, sessionId));
 
     case "not_found":
       writeError(chalk.red(`No session found matching '${resolved.arg}'`));
@@ -76,7 +74,7 @@ function* openFromArg(sessionArg: string, cwd: string, sessionDir: string | unde
   switch (resolved.type) {
     case "path":
     case "local":
-      return openSessionOrExit(resolved.path, sessionDir);
+      return yield* awaited(openSessionOrExit(resolved.path, sessionDir));
 
     case "global": {
       writeLog(chalk.yellow(`Session found in different project: ${resolved.cwd}`));
@@ -85,7 +83,7 @@ function* openFromArg(sessionArg: string, cwd: string, sessionDir: string | unde
         writeLog(chalk.dim("Aborted."));
         process.exit(0);
       }
-      return forkSessionOrExit(resolved.path, cwd, sessionDir);
+      return yield* awaited(forkSessionOrExit(resolved.path, cwd, sessionDir));
     }
 
     case "not_found":
@@ -111,7 +109,7 @@ function* pickSessionToResume(
       writeLog(chalk.dim("No session selected"));
       process.exit(0);
     }
-    return SessionManager.open(selectedPath, sessionDir);
+    return yield* awaited(SessionManager.open(selectedPath, sessionDir));
   } finally {
     stopThemeWatcher();
   }
@@ -121,9 +119,11 @@ function openOrCreateWithId(
   sessionId: string | undefined,
   cwd: string,
   sessionDir: string | undefined,
-): sessionManagerTypes.SessionManager {
-  if (sessionId !== undefined && sessionId !== "") {
-    const existingSession = findLocalSessionByExactId(sessionId, cwd, sessionDir);
+): Promise<sessionManagerTypes.SessionManager> {
+  if (sessionId === undefined || sessionId === "") {
+    return Promise.resolve(SessionManager.create(cwd, sessionDir, { id: sessionId }));
+  }
+  return findLocalSessionByExactId(sessionId, cwd, sessionDir).then((existingSession) => {
     if (existingSession !== undefined) {
       return SessionManager.open(existingSession.path, sessionDir);
     }
@@ -132,9 +132,8 @@ function openOrCreateWithId(
         `Warning: No project session found with id '${sessionId}'; creating a new session with that id.`,
       ),
     );
-  }
-
-  return SessionManager.create(cwd, sessionDir, { id: sessionId });
+    return SessionManager.create(cwd, sessionDir, { id: sessionId });
+  });
 }
 
 const sessionSources = { forkFromArg, openFromArg, openOrCreateWithId, pickSessionToResume };

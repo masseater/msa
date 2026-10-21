@@ -8,7 +8,7 @@ import type sessionManagerTypes from "../core/session-manager.types.ts";
 import type settingsManagerTypes from "../core/settings-manager.types.ts";
 import sessionSources from "./session-sources.ts";
 
-const { awaiting } = awaitingModule;
+const { awaited, awaiting } = awaitingModule;
 const { forkFromArg, openFromArg, openOrCreateWithId, pickSessionToResume } = sessionSources;
 
 function createSessionManagerImpl(
@@ -35,9 +35,9 @@ function createSessionManagerImpl(
         return yield* pickSessionToResume(cwd, sessionDir, settingsManager);
       }
       if (parsed.continue === true) {
-        return SessionManager.continueRecent(cwd, sessionDir);
+        return yield* awaited(SessionManager.continueRecent(cwd, sessionDir));
       }
-      return openOrCreateWithId(parsed.sessionId, cwd, sessionDir);
+      return yield* awaited(openOrCreateWithId(parsed.sessionId, cwd, sessionDir));
     }),
   );
 }

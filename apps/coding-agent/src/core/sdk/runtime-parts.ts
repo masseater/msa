@@ -12,7 +12,7 @@ const { getAgentDir } = config;
 const { awaited } = awaitingModule;
 const { resolvePath } = paths;
 const { join } = platform;
-const { getDefaultSessionDir } = sessionFiles;
+const { getDefaultSessionDirPath } = sessionFiles;
 
 function* createRuntimeParts(options: sdkInternalTypes.Options) {
   const cwd = resolvePath(options.cwd ?? options.sessionManager?.getCwd() ?? process.cwd());
@@ -30,7 +30,7 @@ function* createRuntimeParts(options: sdkInternalTypes.Options) {
     options.settingsManager ?? (yield* awaited(SettingsManager.create(cwd, agentDir)));
   modelRuntime.setModelPolicy(settingsManager.models.getModelPolicy());
   const sessionManager =
-    options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
+    options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDirPath(cwd, agentDir));
   const runtime: sdkInternalTypes.SdkRuntime = {
     agentDir,
     cwd,

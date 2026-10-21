@@ -13,6 +13,7 @@ const {
   makeTempDir,
   pathExists,
   readTextFile,
+  awaited,
   removePath,
   runTest,
   writeTextFile,
@@ -26,7 +27,7 @@ const truncatesAndRewritesEmptyFileWith = () =>
       const emptyFile = joinPath(tempDir5, "empty.jsonl");
       yield* writeTextFile(emptyFile, "");
 
-      const sm = SessionManager.open(emptyFile, tempDir5);
+      const sm = yield* Effect.promise(() => SessionManager.open(emptyFile, tempDir5));
 
       expect(sm.getSessionId()).toBeTruthy();
       expect(sm.getHeader()).toBeTruthy();
@@ -51,8 +52,10 @@ const throwsAndPreservesNonEmptyFile = () =>
         '{"type":"message","id":"abc","parentId":"orphaned","timestamp":"2025-01-01T00:00:00Z","message":{"role":"assistant","content":"test"}}\n';
       yield* writeTextFile(noHeaderFile, originalContent);
 
-      expect(() => SessionManager.open(noHeaderFile, tempDir5)).toThrow(
-        `Session file is not a valid msa session: ${noHeaderFile}`,
+      yield* awaited(
+        expect(SessionManager.open(noHeaderFile, tempDir5)).rejects.toThrow(
+          `Session file is not a valid msa session: ${noHeaderFile}`,
+        ),
       );
       expect(yield* readTextFile(noHeaderFile)).toBe(originalContent);
     }),
@@ -65,8 +68,10 @@ const throwsAndPreservesNonSessionJsonl = () =>
       const originalContent = '{"type":"event","data":"not a session"}\n';
       yield* writeTextFile(nonSessionFile, originalContent);
 
-      expect(() => SessionManager.open(nonSessionFile, tempDir5)).toThrow(
-        `Session file is not a valid msa session: ${nonSessionFile}`,
+      yield* awaited(
+        expect(SessionManager.open(nonSessionFile, tempDir5)).rejects.toThrow(
+          `Session file is not a valid msa session: ${nonSessionFile}`,
+        ),
       );
       expect(yield* readTextFile(nonSessionFile)).toBe(originalContent);
     }),
@@ -78,7 +83,7 @@ const preservesExplicitSessionFilePathWhen = () =>
       const explicitPath = joinPath(tempDir5, "my-session.jsonl");
       yield* writeTextFile(explicitPath, "");
 
-      const sm = SessionManager.open(explicitPath, tempDir5);
+      const sm = yield* Effect.promise(() => SessionManager.open(explicitPath, tempDir5));
 
       expect(sm.getSessionFile()).toBe(explicitPath);
     }),
@@ -90,10 +95,10 @@ const subsequentLoadsOfInitializedEmptyFile = () =>
       const emptyFile = joinPath(tempDir5, "empty.jsonl");
       yield* writeTextFile(emptyFile, "");
 
-      const sm1 = SessionManager.open(emptyFile, tempDir5);
+      const sm1 = yield* Effect.promise(() => SessionManager.open(emptyFile, tempDir5));
       const sessionId = sm1.getSessionId();
 
-      const sm2 = SessionManager.open(emptyFile, tempDir5);
+      const sm2 = yield* Effect.promise(() => SessionManager.open(emptyFile, tempDir5));
       expect(sm2.getSessionId()).toBe(sessionId);
       expect(sm2.getHeader()?.type).toBe("session");
     }),
@@ -149,7 +154,10 @@ const createsTheFileWhenTheFirst = () =>
         "model_change",
         "user",
       ]);
-      expect(SessionManager.open(file, tempDir6).buildSessionContext().messages).toHaveLength(1);
+      expect(
+        (yield* Effect.promise(() => SessionManager.open(file, tempDir6))).buildSessionContext()
+          .messages,
+      ).toHaveLength(1);
     }),
   );
 

@@ -21,10 +21,9 @@ void Effect.runPromise(
     yield* Console.log("New session file:", newSession.sessionFile);
     newSession.dispose();
 
+    const recent = yield* Effect.promise(() => SessionManager.continueRecent(process.cwd()));
     const { session: continued, modelFallbackMessage } = yield* Effect.promise(() =>
-      createAgentSession({
-        sessionManager: SessionManager.continueRecent(process.cwd()),
-      }),
+      createAgentSession({ sessionManager: recent }),
     );
     if (modelFallbackMessage !== undefined) yield* Console.log("Note:", modelFallbackMessage);
     yield* Console.log("Continued session:", continued.sessionFile);
@@ -38,10 +37,9 @@ void Effect.runPromise(
 
     const [latestSession] = sessions;
     if (latestSession !== undefined) {
+      const latest = yield* Effect.promise(() => SessionManager.open(latestSession.path));
       const { session: opened } = yield* Effect.promise(() =>
-        createAgentSession({
-          sessionManager: SessionManager.open(latestSession.path),
-        }),
+        createAgentSession({ sessionManager: latest }),
       );
       yield* Console.log(`\nOpened: ${opened.sessionId}`);
       opened.dispose();

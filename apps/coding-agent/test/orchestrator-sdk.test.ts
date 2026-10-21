@@ -134,9 +134,11 @@ const keepsWorkerTranscriptsOutOfTheSessions = () =>
       expect(sessionFile.slice(0, sessionDir.length + "/workers".length)).toBe(
         `${sessionDir}/workers`,
       );
-      expect(SessionManager.continueRecent(tempDir, sessionDir).getSessionFile()).toBe(
-        sessionManager.getSessionFile(),
-      );
+      expect(
+        (yield* Effect.promise(() =>
+          SessionManager.continueRecent(tempDir, sessionDir),
+        )).getSessionFile(),
+      ).toBe(sessionManager.getSessionFile());
       session.dispose();
     }),
   );

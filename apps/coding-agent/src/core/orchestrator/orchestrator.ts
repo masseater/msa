@@ -16,10 +16,13 @@ const { replan } = replanModule;
 
 export default class Orchestrator {
   private readonly state: OrchestratorState;
-  private readonly transcripts = new TranscriptCache();
+  private readonly transcripts: TranscriptCache;
 
   constructor(options: orchestratorTypes.OrchestratorOptions) {
     this.state = new OrchestratorState(options);
+    this.transcripts = new TranscriptCache(() => {
+      for (const listener of this.state.listeners) listener();
+    });
   }
 
   get database(): OrchestratorState["database"] {

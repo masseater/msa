@@ -4,11 +4,11 @@ import agentSessionRuntimeHelpers from "../agent-session-runtime-helpers.ts";
 import type AgentSessionRuntime from "../agent-session-runtime.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
-import nodeFs from "../platform/node/fs.ts";
+import platform from "../platform/index.ts";
 import SessionManager from "../session-manager.ts";
 
-const { awaitingWith, performed } = awaitingModule;
-const { existsSync } = nodeFs;
+const { awaited, awaitingWith, performed } = awaitingModule;
+const { exists } = platform.files;
 const { extractUserMessageText } = agentSessionRuntimeHelpers;
 
 type ForkOptions = {
@@ -38,7 +38,7 @@ export default class SessionForking {
         }
         const { targetLeafId, selectedText } = this.forkTarget(entryId, position);
         const previousSessionFile = this.runtime.session.sessionFile;
-        const { sessionManager, prepare } = this.forkedSessionManager(targetLeafId);
+        const { sessionManager, prepare } = yield* awaited(this.forkedSessionManager(targetLeafId));
         const persistedBranch =
           this.runtime.session.sessionManager.isPersisted() &&
           targetLeafId !== null &&
@@ -78,42 +78,54 @@ export default class SessionForking {
     };
   }
 
-  private forkedSessionManager(targetLeafId: string | null): {
+  private forkedSessionManager(targetLeafId: string | null): Promise<{
     sessionManager: SessionManager;
     prepare?: () => void;
-  } {
+  }> {
     const current = this.runtime.session.sessionManager;
     const hasTarget = targetLeafId !== null && targetLeafId !== "";
     if (!current.isPersisted()) {
       const parentSession = this.runtime.session.sessionFile;
-      return {
+      return Promise.resolve({
         prepare: () => {
           if (hasTarget) current.createBranchedSession(targetLeafId);
           else current.newSession({ parentSession });
         },
         sessionManager: current,
-      };
+      });
     }
+    return this.persistedForkedSessionManager(targetLeafId);
+  }
+
+  private persistedForkedSessionManager(
+    targetLeafId: string | null,
+  ): Promise<{ sessionManager: SessionManager }> {
+    const current = this.runtime.session.sessionManager;
     const currentSessionFile = this.runtime.session.sessionFile;
     if (currentSessionFile === undefined || currentSessionFile === "") {
       throw new Error("Persisted session is missing a session file");
     }
     const sessionDir = current.getSessionDir();
-    if (!hasTarget) {
+    if (targetLeafId === null || targetLeafId === "") {
       const sessionManager = SessionManager.create(this.runtime.cwd, sessionDir);
       sessionManager.newSession({ parentSession: currentSessionFile });
-      return { sessionManager };
+      return Promise.resolve({ sessionManager });
     }
-    if (!existsSync(currentSessionFile)) {
-      throw new Error(
-        "This session has not been saved yet. Send a message before cloning or forking it.",
-      );
-    }
-    const sessionManager = SessionManager.open(currentSessionFile, sessionDir);
-    const forkedSessionPath = sessionManager.createBranchedSession(targetLeafId);
-    if (forkedSessionPath === undefined || forkedSessionPath === "") {
-      throw new Error("Failed to create forked session");
-    }
-    return { sessionManager };
+    return exists(currentSessionFile)
+      .then((found) => {
+        if (!found) {
+          throw new Error(
+            "This session has not been saved yet. Send a message before cloning or forking it.",
+          );
+        }
+        return SessionManager.open(currentSessionFile, sessionDir);
+      })
+      .then((sessionManager) => {
+        const forkedSessionPath = sessionManager.createBranchedSession(targetLeafId);
+        if (forkedSessionPath === undefined || forkedSessionPath === "") {
+          throw new Error("Failed to create forked session");
+        }
+        return { sessionManager };
+      });
   }
 }

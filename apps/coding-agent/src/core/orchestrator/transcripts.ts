@@ -5,6 +5,11 @@ import type workerTypes from "./worker.ts";
 
 export default class TranscriptCache {
   private readonly cache = new Map<string, readonly agentTypes.AgentMessage[]>();
+  private readonly onLoaded: () => void;
+
+  constructor(onLoaded: () => void) {
+    this.onLoaded = onLoaded;
+  }
 
   messages(
     id: string,
@@ -17,15 +22,23 @@ export default class TranscriptCache {
       return streaming === undefined ? worker.messages : [...worker.messages, streaming];
     }
     if (sessionFile === null) return [];
-    let cached = this.cache.get(sessionFile);
-    if (cached === undefined) {
-      try {
-        cached = SessionManager.open(sessionFile).buildSessionContext().messages;
-      } catch {
-        cached = [];
-      }
-      this.cache.set(sessionFile, cached);
-    }
-    return cached;
+    const cached = this.cache.get(sessionFile);
+    if (cached !== undefined) return cached;
+    this.cache.set(sessionFile, []);
+    void this.load(sessionFile);
+    return [];
+  }
+
+  private load(sessionFile: string): Promise<void> {
+    return SessionManager.open(sessionFile)
+      .then(
+        (sessionManager) => sessionManager.buildSessionContext().messages,
+        () => [],
+      )
+      .then((messages) => {
+        this.cache.set(sessionFile, messages);
+        this.onLoaded();
+        return undefined;
+      });
   }
 }

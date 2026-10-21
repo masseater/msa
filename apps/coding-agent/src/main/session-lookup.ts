@@ -17,9 +17,10 @@ function findLocalSessionByExactId(
   sessionId: string,
   cwd: string,
   sessionDir?: string,
-): { type: "local"; path: string } | undefined {
-  const path = SessionManager.findById(cwd, sessionId, sessionDir);
-  return path !== undefined && path !== "" ? { path, type: "local" } : undefined;
+): Promise<{ type: "local"; path: string } | undefined> {
+  return SessionManager.findById(cwd, sessionId, sessionDir).then((path) =>
+    path !== undefined && path !== "" ? { path, type: "local" } : undefined,
+  );
 }
 
 function resolveSessionPath(
@@ -33,7 +34,9 @@ function resolveSessionPath(
         return { path: resolvePath(sessionArg, cwd), type: "path" };
       }
 
-      const exactLocalMatch = findLocalSessionByExactId(sessionArg, cwd, sessionDir);
+      const exactLocalMatch = yield* awaited(
+        findLocalSessionByExactId(sessionArg, cwd, sessionDir),
+      );
       if (exactLocalMatch !== undefined) {
         return exactLocalMatch;
       }

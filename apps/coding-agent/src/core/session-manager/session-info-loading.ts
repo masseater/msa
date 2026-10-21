@@ -3,7 +3,6 @@ import * as Effect from "effect/Effect";
 import awaitingModule from "../awaiting.ts";
 import platformModule from "../platform/index.ts";
 import nodeFsPromises from "../platform/node/fs-promises.ts";
-import nodeFs from "../platform/node/fs.ts";
 import type sessionManagerInternalTypes from "../session-manager-internal.types.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionInfo from "./session-info.ts";
@@ -11,7 +10,7 @@ import sessionInfo from "./session-info.ts";
 const { basename, join } = platformModule;
 const { stat, readdir } = nodeFsPromises;
 const { sortSessionInfos, buildSessionInfo } = sessionInfo;
-const { existsSync } = nodeFs;
+const { exists } = platformModule.files;
 const { performed, awaited, awaiting } = awaitingModule;
 
 const MAX_CONCURRENT_SESSION_INFO_LOADS = 10;
@@ -77,7 +76,7 @@ function listSessionsFromDir(
 ): Effect.Effect<sessionManagerTypes.SessionInfo[]> {
   return awaiting(function* () {
     signal?.throwIfAborted();
-    if (!existsSync(dir)) return [];
+    if (!(yield* awaited(exists(dir)))) return [];
 
     try {
       const dirEntries = yield* awaited(readdir(dir));

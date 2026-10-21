@@ -1,4 +1,4 @@
-import { Effect, FileSystem, Option } from "effect";
+import { Effect, FileSystem, Option, Stream } from "effect";
 
 import type platformTypes from "./index.types.ts";
 import platformRuntime from "./runtime.ts";
@@ -61,6 +61,36 @@ const readHead = (options: { path: string; length: number }): Promise<Uint8Array
     ),
   );
 
+type LineFold<S> = { pending: string; state: S };
+
+const splitChunk =
+  <S>(step: (state: S, line: string) => S) =>
+  (fold: LineFold<S>, chunk: string): LineFold<S> => {
+    const lines = `${fold.pending}${chunk}`.split("\n");
+    const pending = lines.pop() ?? "";
+    return { pending, state: lines.reduce(step, fold.state) };
+  };
+
+const foldLines = <S>(options: {
+  path: string;
+  chunkSize: number;
+  initial: S;
+  step: (state: S, line: string) => S;
+}): Promise<{ state: S; endsWithNewline: boolean }> =>
+  run((fileSystem) =>
+    Effect.map(
+      Stream.runFold(
+        Stream.decodeText(fileSystem.stream(options.path, { chunkSize: options.chunkSize })),
+        (): LineFold<S> => ({ pending: "", state: options.initial }),
+        splitChunk(options.step),
+      ),
+      ({ pending, state }) => ({
+        endsWithNewline: pending === "",
+        state: pending === "" ? state : options.step(state, pending),
+      }),
+    ),
+  );
+
 const writeFile = (options: {
   path: string;
   data: string | Uint8Array;
@@ -101,8 +131,14 @@ const remove = (options: {
 const rename = (options: { from: string; to: string }): Promise<void> =>
   run((fileSystem) => fileSystem.rename(options.from, options.to));
 
-const copyFile = (options: { from: string; to: string }): Promise<void> =>
-  run((fileSystem) => fileSystem.copyFile(options.from, options.to));
+const copyFile = (options: { from: string; to: string; exclusive?: boolean }): Promise<void> =>
+  run((fileSystem) =>
+    options.exclusive === true
+      ? Effect.flatMap(fileSystem.readFile(options.from), (data) =>
+          fileSystem.writeFile(options.to, data, { flag: "wx" }),
+        )
+      : fileSystem.copyFile(options.from, options.to),
+  );
 
 const platformFiles = {
   access,
@@ -111,6 +147,7 @@ const platformFiles = {
   copyFile,
   exists,
   fileSize,
+  foldLines,
   glob,
   makeDirectory,
   makeTempDirectory,

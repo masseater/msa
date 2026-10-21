@@ -13,7 +13,7 @@ const { createReadToolDefinition } = read;
 const { stripAnsi } = ansi;
 const { initTheme } = themeModule;
 
-const { makeTempDir, removePath, runTest } = testing;
+const { awaited, makeTempDir, removePath, runTest } = testing;
 
 const { READ_ARGS, openTree, writeReadSession } = readLineRangeSupport;
 
@@ -32,7 +32,7 @@ const showsStringRangesInTheTuiAndTree = Effect.gen(function* () {
   );
   expect(stripAnsi(tool.render(120).join("\n"))).toContain("read notes.txt:25-37");
   const tree = new TreeSelectorComponent(
-    openTree(sessionPath),
+    yield* awaited(openTree(sessionPath)),
     result.id,
     40,
     () => {},

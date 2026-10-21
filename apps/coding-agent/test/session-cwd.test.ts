@@ -57,8 +57,10 @@ const detectsMissingSessionCwdFromPersistedSessions = () =>
       cleanupPaths.push(fallbackCwd, sessionDir);
       yield* writeSessionFile(sessionFile, missingCwd);
 
-      const sessionManager = SessionManager.open(sessionFile);
-      const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
+      const sessionManager = yield* Effect.promise(() => SessionManager.open(sessionFile));
+      const issue = yield* Effect.promise(() =>
+        getMissingSessionCwdIssue(sessionManager, fallbackCwd),
+      );
       expect(issue).toEqual({
         fallbackCwd,
         sessionCwd: missingCwd,
@@ -77,9 +79,13 @@ const supportsOverridingTheEffectiveCwdWhenOpening = () =>
       cleanupPaths.push(fallbackCwd, sessionDir);
       yield* writeSessionFile(sessionFile, missingCwd);
 
-      const sessionManager = SessionManager.open(sessionFile, undefined, fallbackCwd);
+      const sessionManager = yield* Effect.promise(() =>
+        SessionManager.open(sessionFile, undefined, fallbackCwd),
+      );
       expect(sessionManager.getCwd()).toBe(fallbackCwd);
-      expect(getMissingSessionCwdIssue(sessionManager, fallbackCwd)).toBeUndefined();
+      expect(
+        yield* Effect.promise(() => getMissingSessionCwdIssue(sessionManager, fallbackCwd)),
+      ).toBeUndefined();
     }),
   );
 
@@ -95,7 +101,7 @@ const throwsAControlledErrorBeforeRuntimeCreation = () =>
       cleanupPaths.push(fallbackCwd, sessionDir);
       yield* writeSessionFile(sessionFile, missingCwd);
 
-      const sessionManager = SessionManager.open(sessionFile);
+      const sessionManager = yield* Effect.promise(() => SessionManager.open(sessionFile));
       let createRuntimeCalled = false;
       const createRuntime: agentSessionRuntimeTypes.CreateAgentSessionRuntimeFactory = () =>
         effectRunPromise(

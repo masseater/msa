@@ -21,7 +21,7 @@ function* ensureSessionCwd(
   sessionDir: string | undefined,
   settingsManager: settingsManagerTypes.SettingsManager,
 ) {
-  const issue = getMissingSessionCwdIssue(sessionManager, cwd);
+  const issue = yield* awaited(getMissingSessionCwdIssue(sessionManager, cwd));
   if (issue === undefined) return sessionManager;
   if (appMode !== "interactive") {
     writeError(chalk.red(new MissingSessionCwdError(issue).message));
@@ -36,7 +36,7 @@ function* ensureSessionCwd(
   if (selectedCwd === undefined || selectedCwd === "") {
     process.exit(0);
   }
-  return SessionManager.open(issue.sessionFile!, sessionDir, selectedCwd);
+  return yield* awaited(SessionManager.open(issue.sessionFile!, sessionDir, selectedCwd));
 }
 
 const sessionCwdCheck = { ensureSessionCwd };

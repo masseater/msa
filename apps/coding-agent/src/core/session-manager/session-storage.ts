@@ -1,15 +1,15 @@
 import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
 import platform from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
+import sessionLog from "../platform/node/session-log.ts";
+import type sessionManagerInternalTypes from "../session-manager-internal.types.ts";
 import type SessionManager from "../session-manager.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionFiles from "./session-files.ts";
 import sessionFormat from "./session-format.ts";
 
-const { appendFileSync, closeSync, existsSync, mkdirSync, openSync, statSync, writeFileSync } =
-  nodeFs;
-const { getDefaultSessionDirPath, loadEntriesFromFile } = sessionFiles;
+const { appendSessionLine, writeSessionLines } = sessionLog;
+const { getDefaultSessionDirPath } = sessionFiles;
 const { CURRENT_SESSION_VERSION, assertValidSessionId, migrateToCurrentVersion, createSessionId } =
   sessionFormat;
 const { join, nowIso } = platform;
@@ -33,16 +33,17 @@ export default class SessionStorage {
 
   flushed: boolean = false;
 
+  private writeEntries(path: string, flag: "w" | "wx"): void {
+    writeSessionLines({
+      flag,
+      lines: this.manager.tree.fileEntries.map((entry) => `${JSON.stringify(entry)}\n`),
+      path,
+    });
+  }
+
   rewriteFile(): void {
     if (!this.persist || this.sessionFile === undefined || this.sessionFile === "") return;
-    const fd = openSync(this.sessionFile, "w");
-    try {
-      for (const entry of this.manager.tree.fileEntries) {
-        writeFileSync(fd, `${JSON.stringify(entry)}\n`);
-      }
-    } finally {
-      closeSync(fd);
-    }
+    this.writeEntries(this.sessionFile, "w");
   }
 
   isPersisted(): boolean {
@@ -69,17 +70,14 @@ export default class SessionStorage {
     if (!this.persist || this.sessionFile === undefined || this.sessionFile === "") return;
 
     if (this.flushed) {
-      appendFileSync(this.sessionFile, `${JSON.stringify(entry)}\n`);
+      appendSessionLine(
+        this.sessionFile,
+        `${JSON.stringify(entry)}
+`,
+      );
     } else {
       if (!this.manager.tree.hasConversation()) return;
-      const fd = openSync(this.sessionFile, "wx");
-      try {
-        for (const e of this.manager.tree.fileEntries) {
-          writeFileSync(fd, `${JSON.stringify(e)}\n`);
-        }
-      } finally {
-        closeSync(fd);
-      }
+      this.writeEntries(this.sessionFile, "wx");
       this.flushed = true;
     }
   }
@@ -135,53 +133,42 @@ export default class SessionStorage {
     this.manager.tree.buildIndex();
   }
 
-  setSessionFileInternal(
-    sessionFile: string,
-    preloadedFileEntries?: sessionManagerTypes.FileEntry[],
-  ): void {
-    this.sessionFile = resolvePath(sessionFile);
-    if (existsSync(this.sessionFile)) {
-      const entries = preloadedFileEntries ?? loadEntriesFromFile(this.sessionFile);
-
-      if (entries.length === 0) {
-        const explicitPath = this.sessionFile;
-        if (statSync(explicitPath).size > 0) {
-          throw new Error(`Session file is not a valid ${APP_NAME} session: ${explicitPath}`);
-        }
-        this.newSession();
-        this.sessionFile = explicitPath;
-        this.rewriteFile();
-        this.flushed = true;
-        return;
-      }
-
-      this.loadEntries(entries);
-      this.flushed = true;
-    } else {
-      const explicitPath = this.sessionFile;
-      this.newSession();
-      this.sessionFile = explicitPath;
-    }
+  private startSessionAt(path: string): void {
+    this.newSession();
+    this.sessionFile = path;
   }
 
-  initialize(
-    sessionDir: string,
-    persist: boolean,
-    sessionFile: string | undefined,
-    preloadedFileEntries: sessionManagerTypes.FileEntry[] | undefined,
-    newSessionOptions: sessionManagerTypes.NewSessionOptions | undefined,
+  setSessionFileInternal(
+    sessionFile: string,
+    loaded: sessionManagerInternalTypes.LoadedSessionFile,
   ): void {
-    this.sessionDir = normalizePath(sessionDir);
-    this.persist = persist;
-    if (persist && this.sessionDir !== "" && !existsSync(this.sessionDir)) {
-      mkdirSync(this.sessionDir, { recursive: true });
+    const explicitPath = resolvePath(sessionFile);
+    this.sessionFile = explicitPath;
+    if (loaded === null) {
+      this.startSessionAt(explicitPath);
+      return;
     }
-    if (sessionFile !== undefined && sessionFile !== "") {
-      this.setSessionFileInternal(sessionFile, preloadedFileEntries);
-    } else if (preloadedFileEntries?.length !== undefined && preloadedFileEntries?.length !== 0) {
-      this.loadEntries(preloadedFileEntries, newSessionOptions);
+    if (loaded.entries.length === 0) {
+      if (loaded.size > 0) {
+        throw new Error(`Session file is not a valid ${APP_NAME} session: ${explicitPath}`);
+      }
+      this.startSessionAt(explicitPath);
+      this.rewriteFile();
     } else {
-      this.newSession(newSessionOptions);
+      this.loadEntries(loaded.entries);
+    }
+    this.flushed = true;
+  }
+
+  initialize(init: sessionManagerInternalTypes.SessionManagerInit): void {
+    this.sessionDir = normalizePath(init.sessionDir);
+    this.persist = init.persist;
+    if (init.file !== undefined) {
+      this.setSessionFileInternal(init.file.path, init.file.loaded);
+    } else if (init.entries !== undefined && init.entries.length > 0) {
+      this.loadEntries(init.entries, init.newSessionOptions);
+    } else {
+      this.newSession(init.newSessionOptions);
     }
   }
 }

@@ -12,7 +12,7 @@ import type sdkInternalTypes from "./sdk-internal.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { join } = platform;
-const { getDefaultSessionDir } = sessionFiles;
+const { getDefaultSessionDirPath } = sessionFiles;
 const { ORCHESTRATOR_TOOL_NAMES, isOrchestratorTool } = toolNames;
 
 type WorkerParent = Omit<sdkInternalTypes.SdkRuntime, "cwd"> & {
@@ -26,25 +26,29 @@ type Worker = Parameters<
   NonNullable<agentSessionTypes.AgentSessionConfig["createWorkerSession"]>
 >[0];
 
-const workerSessionManager = (parent: WorkerParent, worker: Worker): SessionManager =>
+const workerSessionManager = (parent: WorkerParent, worker: Worker): Promise<SessionManager> =>
   worker.sessionFile !== undefined && worker.sessionFile !== ""
     ? SessionManager.open(worker.sessionFile)
-    : SessionManager.create(
-        worker.cwd,
-        join(
-          parent.sessionManager.getSessionDir() ||
-            getDefaultSessionDir(worker.cwd, parent.agentDir),
-          "workers",
+    : Promise.resolve(
+        SessionManager.create(
+          worker.cwd,
+          join(
+            parent.sessionManager.getSessionDir() ||
+              getDefaultSessionDirPath(worker.cwd, parent.agentDir),
+            "workers",
+          ),
         ),
       );
 
-const workerOptions = (
-  parent: WorkerParent,
-  worker: Worker,
-  resourceLoader: DefaultResourceLoader,
-): sdkInternalTypes.Options => {
-  const { options, toolModifiers } = parent;
-  const workerTools = options.tools?.filter(
+const workerOptions = (options: {
+  parent: WorkerParent;
+  worker: Worker;
+  resourceLoader: DefaultResourceLoader;
+  sessionManager: SessionManager;
+}): sdkInternalTypes.Options => {
+  const { parent, worker, resourceLoader, sessionManager } = options;
+  const { options: parentOptions, toolModifiers } = parent;
+  const workerTools = parentOptions.tools?.filter(
     (entry) => !isOrchestratorTool(entry.replace(/^[+-]/u, "")),
   );
   return {
@@ -53,7 +57,7 @@ const workerOptions = (
     modelRuntime: parent.modelRuntime,
     resourceLoader,
     settingsManager: parent.settingsManager,
-    ...(options.customTools === undefined ? {} : { customTools: options.customTools }),
+    ...(parentOptions.customTools === undefined ? {} : { customTools: parentOptions.customTools }),
     isWorker: true,
     model: worker.model,
     telemetry: worker.telemetry,
@@ -61,9 +65,9 @@ const workerOptions = (
     ...(workerTools !== undefined && !(workerTools.length === 0 && toolModifiers !== undefined)
       ? { tools: workerTools }
       : {}),
-    excludeTools: [...(options.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
-    ...(options.noTools === undefined ? {} : { noTools: options.noTools }),
-    sessionManager: workerSessionManager(parent, worker),
+    excludeTools: [...(parentOptions.excludeTools ?? []), ...ORCHESTRATOR_TOOL_NAMES],
+    ...(parentOptions.noTools === undefined ? {} : { noTools: parentOptions.noTools }),
+    sessionManager,
   };
 };
 
@@ -74,8 +78,11 @@ function* createWorkerSession(parent: WorkerParent, worker: Worker) {
   for (const [name, value] of parent.session().extensions.binding.extensionRunner.getFlagValues()) {
     workerFlagValues.set(name, value);
   }
+  const sessionManager = yield* awaited(workerSessionManager(parent, worker));
   const { session: workerSession } = yield* awaited(
-    parent.createAgentSession(workerOptions(parent, worker, workerResourceLoader)),
+    parent.createAgentSession(
+      workerOptions({ parent, resourceLoader: workerResourceLoader, sessionManager, worker }),
+    ),
   );
   yield* awaited(workerSession.extensions.binding.bindExtensions({ mode: "print" }));
   return workerSession;

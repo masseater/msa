@@ -116,14 +116,12 @@ export default class SessionSelectors {
         {
           keybindings: this.mode.keybindings,
           renameSession: (sessionFilePath: string, nextName: string | undefined) =>
-            Effect.runPromise(
-              Effect.sync(() => {
-                const next = (nextName ?? "").trim();
-                if (next === "") return;
-                const mgr = SessionManager.open(sessionFilePath);
-                mgr.appendSessionInfo(next);
-              }),
-            ),
+            (nextName ?? "").trim() === ""
+              ? Promise.resolve()
+              : SessionManager.open(sessionFilePath).then((mgr) => {
+                  mgr.appendSessionInfo((nextName ?? "").trim());
+                  return undefined;
+                }),
           showRenameHint: true,
         },
 

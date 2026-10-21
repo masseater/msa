@@ -22,7 +22,7 @@ function createAgentSessionRuntime(
 ): Promise<AgentSessionRuntime> {
   return Effect.runPromise(
     awaiting(function* () {
-      assertSessionCwdExists(options.sessionManager, options.cwd);
+      yield* awaited(assertSessionCwdExists(options.sessionManager, options.cwd));
       const result = yield* awaited(createRuntime(options));
       return new AgentSessionRuntime(
         result.session,

@@ -1,26 +1,17 @@
 import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
-import StringDecoder from "../platform/node/string-decoder.ts";
 import SessionHeaderScanLimitError from "../session-header-scan-limit-error.ts";
+import type sessionManagerInternalTypes from "../session-manager-internal.types.ts";
 import sessionManagerShared from "../session-manager-shared.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionFormat from "./session-format.ts";
 
-const {
-  statSync,
-  readdirSync,
-  appendFileSync,
-  closeSync,
-  readSync,
-  openSync,
-  mkdirSync,
-  existsSync,
-} = nodeFs;
 const { MAX_SESSION_HEADER_SCAN_BYTES } = sessionManagerShared;
 const { normalizePath, resolvePath } = paths;
 const { join } = platformModule;
+const { appendText, exists, fileSize, foldLines, readDirectory, readHead, stat } =
+  platformModule.files;
 const { getAgentDir: getDefaultAgentDir } = config;
 const { parseSessionHeaderCandidate, parseSessionEntryLine } = sessionFormat;
 
@@ -31,110 +22,97 @@ function getDefaultSessionDirPath(cwd: string, agentDir: string = getDefaultAgen
   return join(resolvedAgentDir, "sessions", safePath);
 }
 
-function getDefaultSessionDir(cwd: string, agentDir: string = getDefaultAgentDir()): string {
-  const sessionDir = getDefaultSessionDirPath(cwd, agentDir);
-  if (!existsSync(sessionDir)) {
-    mkdirSync(sessionDir, { recursive: true });
-  }
-  return sessionDir;
-}
-
 const SESSION_READ_BUFFER_SIZE = 1024 * 1024;
 
-const SESSION_HEADER_READ_BUFFER_SIZE = 4096;
+const SESSION_HEADER_QUICK_SCAN_BYTES = 64 * 1024;
 
-function loadEntriesFromFile(filePath: string): sessionManagerTypes.FileEntry[] {
-  const resolvedFilePath = normalizePath(filePath);
-  if (!existsSync(resolvedFilePath)) return [];
-
-  const entries: sessionManagerTypes.FileEntry[] = [];
-  let pending = "";
-  const fd = openSync(resolvedFilePath, "r");
-  try {
-    const decoder = new StringDecoder("utf8");
-    const buffer = Buffer.allocUnsafe(SESSION_READ_BUFFER_SIZE);
-
-    while (true) {
-      const bytesRead = readSync(fd, buffer, 0, buffer.length, null);
-      if (bytesRead === 0) break;
-
-      pending += decoder.write(buffer.subarray(0, bytesRead));
-      let lineStart = 0;
-      let newlineIndex = pending.indexOf("\n", lineStart);
-      while (newlineIndex !== -1) {
-        const entry = parseSessionEntryLine(pending.slice(lineStart, newlineIndex));
-        if (entry !== null) entries.push(entry);
-        lineStart = newlineIndex + 1;
-        newlineIndex = pending.indexOf("\n", lineStart);
-      }
-      pending = pending.slice(lineStart);
-    }
-
-    pending += decoder.end();
-    const finalEntry = parseSessionEntryLine(pending);
-    if (finalEntry !== null) entries.push(finalEntry);
-  } finally {
-    closeSync(fd);
-  }
-
-  const header = entries[0];
-  if (header === undefined) return entries;
-  if (header.type !== "session" || typeof (header as { id?: unknown }).id !== "string") {
-    return [];
-  }
-
-  if (pending !== "") appendFileSync(resolvedFilePath, "\n");
+const collectEntry = (
+  entries: sessionManagerTypes.FileEntry[],
+  line: string,
+): sessionManagerTypes.FileEntry[] => {
+  const entry = parseSessionEntryLine(line);
+  if (entry !== null) entries.push(entry);
   return entries;
+};
+
+const hasValidHeader = (entries: sessionManagerTypes.FileEntry[]): boolean => {
+  const header = entries[0];
+  return header?.type === "session" && typeof (header as { id?: unknown }).id === "string";
+};
+
+function readEntries(resolvedFilePath: string): Promise<sessionManagerTypes.FileEntry[]> {
+  return foldLines<sessionManagerTypes.FileEntry[]>({
+    chunkSize: SESSION_READ_BUFFER_SIZE,
+    initial: [],
+    path: resolvedFilePath,
+    step: collectEntry,
+  }).then(({ state: entries, endsWithNewline }) => {
+    if (entries.length === 0) return entries;
+    if (!hasValidHeader(entries)) return [];
+    return endsWithNewline
+      ? entries
+      : appendText({ data: "\n", path: resolvedFilePath }).then(() => entries);
+  });
 }
 
-function readSessionHeader(filePath: string): sessionManagerTypes.SessionHeader | null {
-  const fd = openSync(filePath, "r");
-  try {
-    const decoder = new StringDecoder("utf8");
-    const buffer = Buffer.allocUnsafe(SESSION_HEADER_READ_BUFFER_SIZE);
-    const lineChunks: string[] = [];
-    let scannedBytes = 0;
+function loadEntriesFromFile(filePath: string): Promise<sessionManagerTypes.FileEntry[]> {
+  const resolvedFilePath = normalizePath(filePath);
+  return exists(resolvedFilePath).then((found) => (found ? readEntries(resolvedFilePath) : []));
+}
 
-    while (scannedBytes < MAX_SESSION_HEADER_SCAN_BYTES) {
-      const readLength = Math.min(buffer.length, MAX_SESSION_HEADER_SCAN_BYTES - scannedBytes);
-      const bytesRead = readSync(fd, buffer, 0, readLength, null);
-      if (bytesRead === 0) {
-        lineChunks.push(decoder.end());
-        return parseSessionHeaderCandidate(lineChunks.join("")) ?? null;
-      }
-      scannedBytes += bytesRead;
+function loadSessionFile(
+  filePath: string,
+  preloadedEntries?: sessionManagerTypes.FileEntry[],
+): Promise<sessionManagerInternalTypes.LoadedSessionFile> {
+  return exists(filePath).then((found) =>
+    found
+      ? Promise.all([preloadedEntries ?? readEntries(filePath), fileSize(filePath)]).then(
+          ([entries, size]) => ({ entries, size }),
+        )
+      : null,
+  );
+}
 
-      const chunk = decoder.write(buffer.subarray(0, bytesRead));
-      let lineStart = 0;
-      let newlineIndex = chunk.indexOf("\n", lineStart);
-      while (newlineIndex !== -1) {
-        lineChunks.push(chunk.slice(lineStart, newlineIndex));
-        const header = parseSessionHeaderCandidate(lineChunks.join(""));
-        if (header !== undefined) return header;
-        lineChunks.length = 0;
-        lineStart = newlineIndex + 1;
-        newlineIndex = chunk.indexOf("\n", lineStart);
-      }
-      lineChunks.push(chunk.slice(lineStart));
-    }
+const decodeText = (bytes: Uint8Array): string => new TextDecoder().decode(bytes);
 
-    const probe = Buffer.allocUnsafe(1);
-    if (readSync(fd, probe, 0, probe.length, null) === 0) {
-      lineChunks.push(decoder.end());
-      return parseSessionHeaderCandidate(lineChunks.join("")) ?? null;
-    }
+function headerFromLines(
+  text: string,
+  complete: boolean,
+): sessionManagerTypes.SessionHeader | null | undefined {
+  const lines = text.split("\n");
+  const last = lines.pop() ?? "";
+  for (const line of lines) {
+    const header = parseSessionHeaderCandidate(line);
+    if (header !== undefined) return header;
+  }
+  return complete ? (parseSessionHeaderCandidate(last) ?? null) : undefined;
+}
+
+function readHeaderWithinLimit(
+  filePath: string,
+): Promise<sessionManagerTypes.SessionHeader | null> {
+  return readHead({ length: MAX_SESSION_HEADER_SCAN_BYTES + 1, path: filePath }).then((head) => {
+    const complete = head.length <= MAX_SESSION_HEADER_SCAN_BYTES;
+    const header = headerFromLines(
+      decodeText(head.subarray(0, MAX_SESSION_HEADER_SCAN_BYTES)),
+      complete,
+    );
+    if (header !== undefined) return header;
     throw new SessionHeaderScanLimitError(filePath);
-  } finally {
-    closeSync(fd);
-  }
+  });
 }
 
-function readSessionHeaderForDiscovery(filePath: string): sessionManagerTypes.SessionHeader | null {
-  try {
-    return readSessionHeader(filePath);
-  } catch {
-    return null;
-  }
+function readSessionHeader(filePath: string): Promise<sessionManagerTypes.SessionHeader | null> {
+  return readHead({ length: SESSION_HEADER_QUICK_SCAN_BYTES, path: filePath }).then((head) => {
+    const header = headerFromLines(decodeText(head), head.length < SESSION_HEADER_QUICK_SCAN_BYTES);
+    return header === undefined ? readHeaderWithinLimit(filePath) : header;
+  });
+}
+
+function readSessionHeaderForDiscovery(
+  filePath: string,
+): Promise<sessionManagerTypes.SessionHeader | null> {
+  return readSessionHeader(filePath).catch(() => null);
 }
 
 function getSessionHeaderCwd(header: sessionManagerTypes.SessionHeader): string | undefined {
@@ -146,38 +124,46 @@ function sessionCwdMatches(cwd: string | undefined, resolvedCwd: string): boolea
   return cwd !== undefined && cwd !== "" && resolvePath(cwd) === resolvedCwd;
 }
 
-function findMostRecentSession(sessionDir: string, cwd?: string): string | null {
-  const resolvedSessionDir = normalizePath(sessionDir);
-  const resolvedCwd = cwd !== undefined && cwd !== "" ? resolvePath(cwd) : undefined;
-  try {
-    const files = readdirSync(resolvedSessionDir)
-      .filter((file) => file.endsWith(".jsonl"))
-      .map((file) => join(resolvedSessionDir, file))
-      .map((path) => ({ mtime: statSync(path).mtimeMs, path }))
-      .sort((a, b) => b.mtime - a.mtime);
+function sessionFilesByRecency(resolvedSessionDir: string): Promise<string[]> {
+  return readDirectory(resolvedSessionDir)
+    .then((files) =>
+      Promise.all(
+        files
+          .filter((file) => file.endsWith(".jsonl"))
+          .map((file) => join(resolvedSessionDir, file))
+          .map((path) => stat(path).then((info) => ({ mtime: info.mtimeMs, path }))),
+      ),
+    )
+    .then((files) => files.sort((a, b) => b.mtime - a.mtime).map(({ path }) => path));
+}
 
-    for (const { path } of files) {
-      const header = readSessionHeaderForDiscovery(path);
-      if (
-        header !== null &&
-        (resolvedCwd === undefined ||
-          resolvedCwd === "" ||
-          sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd))
-      )
-        return path;
-    }
-    return null;
-  } catch {
-    return null;
-  }
+function firstMatchingSession(
+  candidates: string[],
+  resolvedCwd: string | undefined,
+): Promise<string | null> {
+  const [path, ...rest] = candidates;
+  if (path === undefined) return Promise.resolve(null);
+  return readSessionHeaderForDiscovery(path).then((header) =>
+    header !== null &&
+    (resolvedCwd === undefined || sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd))
+      ? path
+      : firstMatchingSession(rest, resolvedCwd),
+  );
+}
+
+function findMostRecentSession(sessionDir: string, cwd?: string): Promise<string | null> {
+  const resolvedCwd = cwd !== undefined && cwd !== "" ? resolvePath(cwd) : undefined;
+  return sessionFilesByRecency(normalizePath(sessionDir))
+    .then((files) => firstMatchingSession(files, resolvedCwd))
+    .catch(() => null);
 }
 
 const sessionFiles = {
   findMostRecentSession,
-  getDefaultSessionDir,
   getDefaultSessionDirPath,
   getSessionHeaderCwd,
   loadEntriesFromFile,
+  loadSessionFile,
   readSessionHeader,
   readSessionHeaderForDiscovery,
   sessionCwdMatches,

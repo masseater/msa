@@ -4,7 +4,6 @@ import config from "../../config.ts";
 import paths from "../../utils/paths.ts";
 import awaitingModule from "../awaiting.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import sessionFiles from "./session-files.ts";
 import sessionInfoLoading from "./session-info-loading.ts";
@@ -13,37 +12,48 @@ import sessionInfo from "./session-info.ts";
 const { getSessionsDir } = config;
 const { loadAllSessions, listSessionsFromDir } = sessionInfoLoading;
 const { resolvePath, normalizePath } = paths;
-const { awaiting, performed } = awaitingModule;
+const { awaited, awaiting, performed } = awaitingModule;
 const { join } = platformModule;
-const { existsSync, readdirSync } = nodeFs;
+const { exists, readDirectory } = platformModule.files;
 const { sortSessionInfos } = sessionInfo;
 const {
   getDefaultSessionDirPath,
-  getDefaultSessionDir,
   getSessionHeaderCwd,
   readSessionHeaderForDiscovery,
   sessionCwdMatches,
 } = sessionFiles;
 
-function findById(cwd: string, id: string, sessionDir?: string): string | undefined {
+function findInFiles(options: {
+  dir: string;
+  files: readonly string[];
+  id: string;
+  resolvedCwd: string | undefined;
+}): Promise<string | undefined> {
+  const [file, ...rest] = options.files;
+  if (file === undefined) return Promise.resolve(undefined);
+  const searchRest = () => findInFiles({ ...options, files: rest });
+  if (!file.endsWith(".jsonl")) return searchRest();
+  const path = join(options.dir, file);
+  return readSessionHeaderForDiscovery(path).then((header) =>
+    header?.id === options.id &&
+    (options.resolvedCwd === undefined ||
+      sessionCwdMatches(getSessionHeaderCwd(header), options.resolvedCwd))
+      ? path
+      : searchRest(),
+  );
+}
+
+function findById(cwd: string, id: string, sessionDir?: string): Promise<string | undefined> {
   const dir =
     sessionDir !== undefined && sessionDir !== ""
       ? normalizePath(sessionDir)
-      : getDefaultSessionDir(cwd);
+      : getDefaultSessionDirPath(cwd);
   const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
-  const resolvedCwd = resolvePath(cwd);
-
-  try {
-    for (const file of readdirSync(dir)) {
-      if (!file.endsWith(".jsonl")) continue;
-      const path = join(dir, file);
-      const header = readSessionHeaderForDiscovery(path);
-      if (header?.id !== id) continue;
-      if (filterCwd && !sessionCwdMatches(getSessionHeaderCwd(header), resolvedCwd)) continue;
-      return path;
-    }
-  } catch {}
-  return undefined;
+  return readDirectory(dir)
+    .then((files) =>
+      findInFiles({ dir, files, id, resolvedCwd: filterCwd ? resolvePath(cwd) : undefined }),
+    )
+    .catch(() => undefined);
 }
 
 function list(
@@ -57,7 +67,7 @@ function list(
       const dir =
         sessionDir !== undefined && sessionDir !== ""
           ? normalizePath(sessionDir)
-          : getDefaultSessionDir(cwd);
+          : getDefaultSessionDirPath(cwd);
       const filterCwd = sessionDir !== undefined && dir !== getDefaultSessionDirPath(cwd);
       const resolvedCwd = resolvePath(cwd);
       const includeSession = (session: sessionManagerTypes.SessionInfo) =>
@@ -105,7 +115,7 @@ function listAll(
 
       const sessionsDir = getSessionsDir();
       try {
-        if (!existsSync(sessionsDir)) return [];
+        if (!(yield* awaited(exists(sessionsDir)))) return [];
         return yield* loadAllSessions(sessionsDir, progress, abortSignal);
       } catch {
         abortSignal?.throwIfAborted();

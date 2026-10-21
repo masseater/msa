@@ -146,7 +146,7 @@ const addsPresentationDataWithoutChangingConversationIds = Effect.gen(function* 
     const shareEntry = records.at(-1) as ShareEntry;
     expectShareEntry(shareEntry, turnIds[2], session.state.systemPrompt);
 
-    const imported = SessionManager.open(sharePath);
+    const imported = yield* Effect.promise(() => SessionManager.open(sharePath));
     expect(imported.getLeafId()).toBe(shareEntry.id);
     expect(imported.buildSessionContext().messages.map((message) => message.role)).toEqual([
       "user",

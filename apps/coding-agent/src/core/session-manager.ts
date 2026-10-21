@@ -1,7 +1,9 @@
 import paths from "../utils/paths.ts";
+import type sessionManagerInternalTypes from "./session-manager-internal.types.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 import SessionAppends from "./session-manager/session-appends.ts";
 import SessionBranching from "./session-manager/session-branching.ts";
+import sessionFiles from "./session-manager/session-files.ts";
 import sessionListing from "./session-manager/session-listing.ts";
 import sessionLocations from "./session-manager/session-locations.ts";
 import SessionStorage from "./session-manager/session-storage.ts";
@@ -25,27 +27,42 @@ export default class SessionManager {
     sessionDir?: string,
     options?: sessionManagerTypes.NewSessionOptions,
   ): SessionManager {
-    return new SessionManager(
+    return new SessionManager({
       cwd,
-      sessionLocations.sessionDirFor(cwd, sessionDir),
-      undefined,
-      true,
-      options,
-    );
+      newSessionOptions: options,
+      persist: true,
+      sessionDir: sessionLocations.sessionDirFor(cwd, sessionDir),
+    });
   }
 
-  static open(path: string, sessionDir?: string, cwdOverride?: string): SessionManager {
-    const { cwd, dir, file, preloadedFileEntries } = sessionLocations.locateExisting(
-      path,
-      sessionDir,
-      cwdOverride,
-    );
-    return new SessionManager(cwd, dir, file, true, undefined, preloadedFileEntries);
+  private static fromFile(location: {
+    cwd: string;
+    dir: string;
+    file: string | undefined;
+    preloadedFileEntries?: sessionManagerTypes.FileEntry[] | undefined;
+  }): Promise<SessionManager> {
+    const { cwd, dir, file } = location;
+    if (file === undefined) {
+      return Promise.resolve(new SessionManager({ cwd, persist: true, sessionDir: dir }));
+    }
+    return sessionFiles
+      .loadSessionFile(file, location.preloadedFileEntries)
+      .then(
+        (loaded) =>
+          new SessionManager({ cwd, file: { loaded, path: file }, persist: true, sessionDir: dir }),
+      );
   }
 
-  static continueRecent(cwd: string, sessionDir?: string): SessionManager {
-    const { dir, file } = sessionLocations.locateRecent(cwd, sessionDir);
-    return new SessionManager(cwd, dir, file, true);
+  static open(path: string, sessionDir?: string, cwdOverride?: string): Promise<SessionManager> {
+    return sessionLocations
+      .locateExisting(path, sessionDir, cwdOverride)
+      .then((location) => SessionManager.fromFile(location));
+  }
+
+  static continueRecent(cwd: string, sessionDir?: string): Promise<SessionManager> {
+    return sessionLocations
+      .locateRecent(cwd, sessionDir)
+      .then((location) => SessionManager.fromFile(location));
   }
 
   static readonly findById = sessionListing.findById;
@@ -59,7 +76,13 @@ export default class SessionManager {
     options?: sessionManagerTypes.NewSessionOptions,
     entries?: sessionManagerTypes.FileEntry[],
   ): SessionManager {
-    return new SessionManager(cwd, "", undefined, false, options, entries);
+    return new SessionManager({
+      cwd,
+      entries,
+      newSessionOptions: options,
+      persist: false,
+      sessionDir: "",
+    });
   }
 
   static forkFrom(
@@ -67,14 +90,10 @@ export default class SessionManager {
     targetCwd: string,
     sessionDir?: string,
     options?: sessionManagerTypes.NewSessionOptions,
-  ): SessionManager {
-    const { cwd, dir, file } = sessionLocations.writeFork(
-      sourcePath,
-      targetCwd,
-      sessionDir,
-      options,
-    );
-    return new SessionManager(cwd, dir, file, true);
+  ): Promise<SessionManager> {
+    return sessionLocations
+      .writeFork(sourcePath, targetCwd, sessionDir, options)
+      .then((location) => SessionManager.fromFile(location));
   }
 
   getLeafId(...args: Parameters<SessionTree["getLeafId"]>): ReturnType<SessionTree["getLeafId"]> {
@@ -265,25 +284,12 @@ export default class SessionManager {
     return this.branching.createBranchedSession(...args);
   }
 
-  protected constructor(
-    cwd: string,
-    sessionDir: string,
-    sessionFile: string | undefined,
-    persist: boolean,
-    newSessionOptions?: sessionManagerTypes.NewSessionOptions,
-    preloadedFileEntries?: sessionManagerTypes.FileEntry[],
-  ) {
+  protected constructor(init: sessionManagerInternalTypes.SessionManagerInit) {
     this.tree = new SessionTree();
     this.storage = new SessionStorage(this);
     this.appends = new SessionAppends(this);
     this.branching = new SessionBranching(this);
-    this.cwd = resolvePath(cwd);
-    this.storage.initialize(
-      sessionDir,
-      persist,
-      sessionFile,
-      preloadedFileEntries,
-      newSessionOptions,
-    );
+    this.cwd = resolvePath(init.cwd);
+    this.storage.initialize(init);
   }
 }

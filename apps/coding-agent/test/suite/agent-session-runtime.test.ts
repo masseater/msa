@@ -119,7 +119,9 @@ const settlesTheActiveResponseBeforeSessionStep1 = (
     yield* Effect.promise(() => promptPromise);
     expect(switchResult.cancelled).toBe(false);
     expect(runtime.session.sessionFile).toBe(firstSessionFile);
-    const outgoingEntries = SessionManager.open(outgoingSession.sessionFile!)
+    const outgoingEntries = (yield* Effect.promise(() =>
+      SessionManager.open(outgoingSession.sessionFile!),
+    ))
       .getEntries()
       .filter((entry) => entry.type === "message");
     expect(outgoingEntries.map((entry) => entry.message.role)).toEqual([

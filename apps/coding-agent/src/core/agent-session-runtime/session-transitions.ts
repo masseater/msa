@@ -5,31 +5,45 @@ import type AgentSessionRuntime from "../agent-session-runtime.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import platformModule from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import sessionCwd from "../session-cwd.ts";
 import SessionImportFileNotFoundError from "../session-import-file-not-found-error.ts";
 import SessionManager from "../session-manager.ts";
 
-const { awaitingWith, performed } = awaitingModule;
+const { awaited, awaitingWith, performed } = awaitingModule;
 const { assertSessionCwdExists } = sessionCwd;
-const { existsSync, constants, copyFileSync, mkdirSync } = nodeFs;
+const { copyFile, exists, makeDirectory } = platformModule.files;
 const { resolvePath } = paths;
 const { basename, join, parse, resolve } = platformModule;
+
+const freeDestination = (options: {
+  sessionDir: string;
+  name: string;
+  ext: string;
+  candidate: string;
+  suffix: number;
+}): Promise<string> =>
+  exists(options.candidate).then((taken) =>
+    taken
+      ? freeDestination({
+          ...options,
+          candidate: join(options.sessionDir, `${options.name}-${options.suffix}${options.ext}`),
+          suffix: options.suffix + 1,
+        })
+      : options.candidate,
+  );
 
 const importDestination = (
   resolvedPath: string,
   sessionDir: string,
-): { destinationPath: string; sourceAlreadyStored: boolean } => {
-  let destinationPath = join(sessionDir, basename(resolvedPath));
-  const sourceAlreadyStored = resolve(destinationPath) === resolvedPath;
-  if (!sourceAlreadyStored) {
-    const { name, ext } = parse(destinationPath);
-    let suffix = 1;
-    while (existsSync(destinationPath)) {
-      destinationPath = join(sessionDir, `${name}-${suffix++}${ext}`);
-    }
+): Promise<{ destinationPath: string; sourceAlreadyStored: boolean }> => {
+  const destinationPath = join(sessionDir, basename(resolvedPath));
+  if (resolve(destinationPath) === resolvedPath) {
+    return Promise.resolve({ destinationPath, sourceAlreadyStored: true });
   }
-  return { destinationPath, sourceAlreadyStored };
+  const { name, ext } = parse(destinationPath);
+  return freeDestination({ candidate: destinationPath, ext, name, sessionDir, suffix: 1 }).then(
+    (freePath) => ({ destinationPath: freePath, sourceAlreadyStored: false }),
+  );
 };
 
 export default class SessionTransitions {
@@ -56,8 +70,10 @@ export default class SessionTransitions {
         if (beforeResult.cancelled) return beforeResult;
 
         const previousSessionFile = this.runtime.session.sessionFile;
-        const sessionManager = SessionManager.open(sessionPath, undefined, options?.cwdOverride);
-        assertSessionCwdExists(sessionManager, this.runtime.cwd);
+        const sessionManager = yield* awaited(
+          SessionManager.open(sessionPath, undefined, options?.cwdOverride),
+        );
+        yield* awaited(assertSessionCwdExists(sessionManager, this.runtime.cwd));
         yield* performed(
           replacement.replace("resume", sessionManager, previousSessionFile, {
             cwd: sessionManager.getCwd(),
@@ -103,16 +119,13 @@ export default class SessionTransitions {
     return Effect.runPromise(
       awaitingWith(function* () {
         const resolvedPath = resolvePath(inputPath);
-        if (!existsSync(resolvedPath)) {
+        if (!(yield* awaited(exists(resolvedPath)))) {
           throw new SessionImportFileNotFoundError(resolvedPath);
         }
         const sessionDir = this.runtime.session.sessionManager.getSessionDir();
-        if (!existsSync(sessionDir)) {
-          mkdirSync(sessionDir, { recursive: true });
-        }
-        const { destinationPath, sourceAlreadyStored } = importDestination(
-          resolvedPath,
-          sessionDir,
+        yield* awaited(makeDirectory({ path: sessionDir }));
+        const { destinationPath, sourceAlreadyStored } = yield* awaited(
+          importDestination(resolvedPath, sessionDir),
         );
         const { replacement } = this.runtime;
         const beforeResult = yield* performed(
@@ -122,10 +135,12 @@ export default class SessionTransitions {
 
         const previousSessionFile = this.runtime.session.sessionFile;
         if (!sourceAlreadyStored) {
-          copyFileSync(resolvedPath, destinationPath, constants.COPYFILE_EXCL);
+          yield* awaited(copyFile({ exclusive: true, from: resolvedPath, to: destinationPath }));
         }
-        const sessionManager = SessionManager.open(destinationPath, sessionDir, cwdOverride);
-        assertSessionCwdExists(sessionManager, this.runtime.cwd);
+        const sessionManager = yield* awaited(
+          SessionManager.open(destinationPath, sessionDir, cwdOverride),
+        );
+        yield* awaited(assertSessionCwdExists(sessionManager, this.runtime.cwd));
         yield* performed(
           replacement.replace("resume", sessionManager, previousSessionFile, {
             cwd: sessionManager.getCwd(),

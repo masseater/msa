@@ -65,7 +65,7 @@ const exportFile = Effect.fn("exportFromFile")(function* (
   const resolvedInputPath = resolvePath(inputPath);
   const exists = yield* FileSystem.FileSystem.use((fs) => fs.exists(resolvedInputPath));
   if (!exists) return yield* new ToolFailure({ message: `File not found: ${resolvedInputPath}` });
-  const sm = yield* Effect.sync(() => SessionManager.open(resolvedInputPath));
+  const sm = yield* Effect.promise(() => SessionManager.open(resolvedInputPath));
   const sessionData: exportTypesTypes.SessionData = {
     entries: sm.getEntries(),
     header: sm.getHeader(),

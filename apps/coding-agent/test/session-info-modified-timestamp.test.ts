@@ -30,7 +30,7 @@ const createSessionFile = Effect.fn("createSessionFile")(function* (path: string
   };
   yield* writeTextFile(path, `${yield* toJsonText(header)}\n`);
 
-  const mgr = SessionManager.open(path);
+  const mgr = yield* Effect.promise(() => SessionManager.open(path));
   mgr.appendMessage({
     api: "openai-completions" as const,
     content: [{ text: "hi", type: "text" as const }],
@@ -60,7 +60,7 @@ const usesLastUserAssistantMessageTimestampInstead = () =>
 
       yield* Effect.sleep(10);
 
-      const mgr = SessionManager.open(filePath);
+      const mgr = yield* Effect.promise(() => SessionManager.open(filePath));
       const msgTime = currentTimeMillis();
       mgr.appendMessage({
         api: "openai-completions" as const,

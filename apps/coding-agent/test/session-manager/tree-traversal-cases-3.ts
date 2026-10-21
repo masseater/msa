@@ -40,7 +40,7 @@ const preservesToolAndSummaryUsageAcross = () =>
 
         const file = session.getSessionFile();
         expect(file).toBeDefined();
-        const reopened = SessionManager.open(file!, tempDir);
+        const reopened = yield* Effect.promise(() => SessionManager.open(file!, tempDir));
         expect(reopened.getEntries()).toEqual(
           expect.arrayContaining([
             expect.objectContaining({ type: "compaction", usage }),

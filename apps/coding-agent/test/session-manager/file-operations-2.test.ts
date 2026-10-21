@@ -32,7 +32,7 @@ const returnsSingleValidSessionFile = () =>
         file,
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n',
       );
-      expect(findMostRecentSession(tempDir3)).toBe(file);
+      expect(yield* Effect.promise(() => findMostRecentSession(tempDir3))).toBe(file);
     }),
   );
 
@@ -51,7 +51,7 @@ const returnsMostRecentlyModifiedSession = Effect.gen(function* () {
     '{"type":"session","id":"new","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n',
   );
 
-  expect(findMostRecentSession(tempDir3)).toBe(file2);
+  expect(yield* Effect.promise(() => findMostRecentSession(tempDir3))).toBe(file2);
 });
 
 const skipsInvalidFilesAndReturnsValid = Effect.gen(function* () {
@@ -65,7 +65,7 @@ const skipsInvalidFilesAndReturnsValid = Effect.gen(function* () {
     '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n',
   );
 
-  expect(findMostRecentSession(tempDir3)).toBe(valid);
+  expect(yield* Effect.promise(() => findMostRecentSession(tempDir3))).toBe(valid);
 });
 
 const skipsOversizedCorruptFilesAndReturns = () =>
@@ -79,7 +79,7 @@ const skipsOversizedCorruptFilesAndReturns = () =>
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n',
       );
 
-      expect(findMostRecentSession(tempDir3)).toBe(valid);
+      expect(yield* Effect.promise(() => findMostRecentSession(tempDir3))).toBe(valid);
     }),
   );
 
@@ -99,24 +99,22 @@ const filtersMostRecentSessionByCwd = Effect.gen(function* () {
     `${yield* toJsonText({ cwd: projectB, id: "b", timestamp: "2025-01-01T00:00:00Z", type: "session" })}\n`,
   );
 
-  expect(findMostRecentSession(tempDir3, projectA)).toBe(fileA);
-  expect(findMostRecentSession(tempDir3, projectB)).toBe(fileB);
+  expect(yield* Effect.promise(() => findMostRecentSession(tempDir3, projectA))).toBe(fileA);
+  expect(yield* Effect.promise(() => findMostRecentSession(tempDir3, projectB))).toBe(fileB);
 });
 
-const returnsNullForEmptyDirectory = () => {
-  expect(findMostRecentSession(tempDir3)).toBeNull();
-};
+const returnsNullForEmptyDirectory = () =>
+  expect(findMostRecentSession(tempDir3)).resolves.toBeNull();
 
-const returnsNullForNonExistentDirectory = () => {
-  expect(findMostRecentSession(joinPath(tempDir3, "nonexistent"))).toBeNull();
-};
+const returnsNullForNonExistentDirectory = () =>
+  expect(findMostRecentSession(joinPath(tempDir3, "nonexistent"))).resolves.toBeNull();
 
 const ignoresNonJsonlFiles = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(joinPath(tempDir3, "file.txt"), "hello");
       yield* writeTextFile(joinPath(tempDir3, "file.json"), "{}");
-      expect(findMostRecentSession(tempDir3)).toBeNull();
+      expect(yield* Effect.promise(() => findMostRecentSession(tempDir3))).toBeNull();
     }),
   );
 
@@ -124,7 +122,7 @@ const ignoresJsonlFilesWithoutValidSessionHeader = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(joinPath(tempDir3, "invalid.jsonl"), '{"type":"message"}\n');
-      expect(findMostRecentSession(tempDir3)).toBeNull();
+      expect(yield* Effect.promise(() => findMostRecentSession(tempDir3))).toBeNull();
     }),
   );
 
@@ -208,7 +206,7 @@ const scopesCurrentFolderApisByCwd = Effect.gen(function* () {
   const all = yield* Effect.promise(() => SessionManager.listAll(tempDir4));
   expect(new Set(all.map((session) => session.path))).toEqual(new Set([sessionA, sessionB]));
 
-  const continuedA = SessionManager.continueRecent(projectA, tempDir4);
+  const continuedA = yield* Effect.promise(() => SessionManager.continueRecent(projectA, tempDir4));
   expect(continuedA.getSessionFile()).toBe(sessionA);
 });
 

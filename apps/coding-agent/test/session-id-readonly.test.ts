@@ -221,10 +221,12 @@ const filtersExactIdsByCwdInA = () =>
       const foreign = SessionManager.create(projectB, sessionDir, { id: "foreign-id" });
       persistSession(foreign, "foreign session");
 
-      expect(SessionManager.findById(projectA, "foreign-id", sessionDir)).toBeUndefined();
-      expect(SessionManager.findById(projectB, "foreign-id", sessionDir)).toBe(
-        foreign.getSessionFile(),
-      );
+      expect(
+        yield* Effect.promise(() => SessionManager.findById(projectA, "foreign-id", sessionDir)),
+      ).toBeUndefined();
+      expect(
+        yield* Effect.promise(() => SessionManager.findById(projectB, "foreign-id", sessionDir)),
+      ).toBe(foreign.getSessionFile());
     }),
   );
 

@@ -50,7 +50,7 @@ const loadsValidSessionFile = () =>
         '{"type":"session","id":"abc","timestamp":"2025-01-01T00:00:00Z","cwd":"/tmp"}\n' +
           '{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}\n',
       );
-      const entries = loadEntriesFromFile(file);
+      const entries = yield* Effect.promise(() => loadEntriesFromFile(file));
       expect(entries).toHaveLength(2);
       expect(entries[0]?.type).toBe("session");
       expect(entries[1]?.type).toBe("message");
@@ -67,7 +67,7 @@ const skipsMalformedLinesButKeepsValid = () =>
           "not valid json\n" +
           '{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}\n',
       );
-      const entries = loadEntriesFromFile(file);
+      const entries = yield* Effect.promise(() => loadEntriesFromFile(file));
       expect(entries).toHaveLength(2);
     }),
   );
@@ -81,7 +81,7 @@ const addsANewlineAfterAnUnterminated = () =>
         '{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}';
       yield* writeTextFile(file, content);
 
-      expect(loadEntriesFromFile(file)).toHaveLength(2);
+      expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toHaveLength(2);
       expect(yield* readTextFile(file)).toBe(`${content}\n`);
     }),
   );
@@ -95,7 +95,7 @@ const addsANewlineAfterAnUnterminated2 = () =>
         '{"type":"message"';
       yield* writeTextFile(file, content);
 
-      expect(loadEntriesFromFile(file)).toHaveLength(1);
+      expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toHaveLength(1);
       expect(yield* readTextFile(file)).toBe(`${content}\n`);
     }),
   );
@@ -107,7 +107,7 @@ const doesNotModifyAnUnterminatedNon = () =>
       const content = '{"type":"message","id":"1"}';
       yield* writeTextFile(file, content);
 
-      expect(loadEntriesFromFile(file)).toEqual([]);
+      expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
       expect(yield* readTextFile(file)).toBe(content);
     }),
   );
@@ -130,7 +130,8 @@ const opensCompatibleSessionsBeyondTheDiscovery = () =>
         const file = joinPath(tempDir, `${name}.jsonl`);
         yield* Effect.promise(() => writeSessionHeader(file, storedCwd, id, prefix));
         for (const cwdOverride of [undefined, overrideCwd]) {
-          const sessionManager = SessionManager.open(file, tempDir, cwdOverride);
+          const opening = SessionManager.open(file, tempDir, cwdOverride);
+          const sessionManager = yield* Effect.promise(() => opening);
           expect(sessionManager.getSessionId()).toBe(id);
           expect(sessionManager.getCwd()).toBe(cwdOverride ?? storedCwd);
         }
@@ -170,7 +171,7 @@ const opensSessionFilesLargerThanNode = () =>
         '{"type":"message","id":"1","parentId":null,"timestamp":"2025-01-01T00:00:01Z","message":{"role":"user","content":"hi","timestamp":1}}\n',
       );
 
-      const sessionManager = SessionManager.open(file, tempDir);
+      const sessionManager = yield* Effect.promise(() => SessionManager.open(file, tempDir));
       expect(sessionManager.getSessionId()).toBe("abc");
       expect(sessionManager.getEntries()).toHaveLength(1);
       expect(sessionManager.buildSessionContext().messages).toEqual([
@@ -179,17 +180,15 @@ const opensSessionFilesLargerThanNode = () =>
     }),
   );
 
-const returnsEmptyArrayForNonExistentFile = () => {
-  const entries = loadEntriesFromFile(joinPath(tempDir, "nonexistent.jsonl"));
-  expect(entries).toEqual([]);
-};
+const returnsEmptyArrayForNonExistentFile = () =>
+  expect(loadEntriesFromFile(joinPath(tempDir, "nonexistent.jsonl"))).resolves.toEqual([]);
 
 const returnsEmptyArrayForEmptyFile = () =>
   runTest(
     Effect.gen(function* () {
       const file = joinPath(tempDir, "empty.jsonl");
       yield* writeTextFile(file, "");
-      expect(loadEntriesFromFile(file)).toEqual([]);
+      expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
     }),
   );
 
@@ -198,7 +197,7 @@ const returnsEmptyArrayForFileWithoutValid = () =>
     Effect.gen(function* () {
       const file = joinPath(tempDir, "no-header.jsonl");
       yield* writeTextFile(file, '{"type":"message","id":"1"}\n');
-      expect(loadEntriesFromFile(file)).toEqual([]);
+      expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
     }),
   );
 
@@ -207,7 +206,7 @@ const returnsEmptyArrayForMalformedJson = () =>
     Effect.gen(function* () {
       const file = joinPath(tempDir, "malformed.jsonl");
       yield* writeTextFile(file, "not json\n");
-      expect(loadEntriesFromFile(file)).toEqual([]);
+      expect(yield* Effect.promise(() => loadEntriesFromFile(file))).toEqual([]);
     }),
   );
 
@@ -248,7 +247,7 @@ describe("loadEntriesFromFile", () => {
         const storedCwd = joinPath(tempDir, "stored-project");
         yield* Effect.promise(() => writeSessionHeader(file, storedCwd, sessionId, prefix));
 
-        const sessionManager = SessionManager.open(file, tempDir);
+        const sessionManager = yield* Effect.promise(() => SessionManager.open(file, tempDir));
         expect(sessionManager.getSessionId()).toBe(sessionId);
         expect(sessionManager.getCwd()).toBe(storedCwd);
       }),

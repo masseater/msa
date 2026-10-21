@@ -1,8 +1,8 @@
 import MissingSessionCwdError from "./missing-session-cwd-error.ts";
-import nodeFs from "./platform/node/fs.ts";
+import platform from "./platform/index.ts";
 import type sessionCwdTypes from "./session-cwd.types.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 
 interface SessionCwdSource {
   getCwd(): string;
@@ -11,31 +11,29 @@ interface SessionCwdSource {
 function getMissingSessionCwdIssue(
   sessionManager: SessionCwdSource,
   fallbackCwd: string,
-): sessionCwdTypes.SessionCwdIssue | undefined {
+): Promise<sessionCwdTypes.SessionCwdIssue | undefined> {
   const sessionFile = sessionManager.getSessionFile();
-  if (sessionFile === undefined || sessionFile === "") {
-    return undefined;
-  }
-
   const sessionCwd = sessionManager.getCwd();
-  if (sessionCwd === "" || existsSync(sessionCwd)) {
-    return undefined;
+  if (sessionFile === undefined || sessionFile === "" || sessionCwd === "") {
+    return Promise.resolve(undefined);
   }
-
-  return {
-    fallbackCwd,
-    sessionCwd,
-    sessionFile,
-  };
+  return exists(sessionCwd).then((found) =>
+    found ? undefined : { fallbackCwd, sessionCwd, sessionFile },
+  );
 }
 function formatMissingSessionCwdPrompt(issue: sessionCwdTypes.SessionCwdIssue): string {
   return `cwd from session file does not exist\n${issue.sessionCwd}\n\ncontinue in current cwd\n${issue.fallbackCwd}`;
 }
-function assertSessionCwdExists(sessionManager: SessionCwdSource, fallbackCwd: string): void {
-  const issue = getMissingSessionCwdIssue(sessionManager, fallbackCwd);
-  if (issue !== undefined) {
-    throw new MissingSessionCwdError(issue);
-  }
+function assertSessionCwdExists(
+  sessionManager: SessionCwdSource,
+  fallbackCwd: string,
+): Promise<void> {
+  return getMissingSessionCwdIssue(sessionManager, fallbackCwd).then((issue) => {
+    if (issue !== undefined) {
+      throw new MissingSessionCwdError(issue);
+    }
+    return undefined;
+  });
 }
 
 const sessionCwd = {
