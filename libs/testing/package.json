@@ -40,7 +40,8 @@
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
-    "effect": "catalog:stack"
+    "effect": "catalog:stack",
+    "srvx": "catalog:"
   },
   "devDependencies": {
     "shx": "catalog:",

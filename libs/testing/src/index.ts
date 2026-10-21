@@ -63,6 +63,7 @@ const testing = {
   runNodeScript: nodeScript.runNodeScript,
   runTest: runtime.runTest,
   runTestSync: runtime.runTestSync,
+  serveLoopback: httpServer.serveLoopback,
   sleep: effectSupport.sleep,
   tempPath: temp.tempPath,
   tempRoot: temp.tempRoot,

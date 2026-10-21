@@ -40,7 +40,6 @@
           "@effect/platform-node/NodeCrypto#layer",
           "@effect/platform-node/NodeFileSystem#layer",
           "@effect/platform-node/NodeHttpClient#layerUndici",
-          "@effect/platform-node/NodeHttpServer#layerTest",
           "@effect/platform-node/NodePath#layer",
           "@effect/platform-node/NodePath#layerPosix",
           "@effect/platform-node/NodePath#layerWin32",

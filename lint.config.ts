@@ -7,6 +7,8 @@ const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
 const ENV_ONLY_VIA_PROCESS_ENV =
   "環境変数は core/platform の readEnv・writeEnv・envSnapshot だけで扱う";
+const LOOPBACK_TEST_SERVER =
+  "テスト用の HTTP サーバーは @msa/testing の listen・serveLoopback で 127.0.0.1 に立てる";
 
 const requiredStack: Readonly<Record<string, readonly string[]>> = {
   [EFFECT_ONLY_UTILS]: [
@@ -62,6 +64,23 @@ const envImportPaths: readonly Readonly<{
 }>[] = [
   { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "node:process" },
   { importNames: ["env"], message: ENV_ONLY_VIA_PROCESS_ENV, name: "process" },
+];
+
+const loopbackTestServerMembers: readonly Readonly<{
+  module: string;
+  path: readonly string[];
+  message: string;
+}>[] = [
+  {
+    message: LOOPBACK_TEST_SERVER,
+    module: "@effect/platform-node",
+    path: ["NodeHttpServer", "layerTest"],
+  },
+  {
+    message: LOOPBACK_TEST_SERVER,
+    module: "@effect/platform-node/NodeHttpServer",
+    path: ["layerTest"],
+  },
 ];
 
 const restrictedImports = {
@@ -233,6 +252,7 @@ const lintConfig = {
   fsSyncFunctions,
   generated,
   lintPlugins,
+  loopbackTestServerMembers,
   platformOnlyImports,
   requiredStack,
   restrictedImports,

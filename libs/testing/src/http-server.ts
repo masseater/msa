@@ -1,7 +1,5 @@
-import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import { Cause, Context, Deferred, Effect, Exit, Layer, Schema, Scope } from "effect";
-import { HttpEffect, HttpServer } from "effect/http";
-import * as NetAddress from "effect/net/NetAddress";
+import { Cause, Deferred, Effect, Exit, Schema, Scope } from "effect";
+import { type Server, serve } from "srvx";
 
 import type httpServerTypes from "./http-server.types.ts";
 
@@ -54,41 +52,52 @@ const tracked = (response: Response): Response => {
 const unavailable = (closing: Deferred.Deferred<void>) =>
   Deferred.await(closing).pipe(Effect.as(new Response(null, { status: 503 })));
 
-const respondWith = (
-  handler: httpServerTypes.HttpHandler,
-  origin: { value: string },
-  server: Running,
-) =>
-  HttpEffect.fromWebHandler((request) =>
+const respondWith =
+  (handler: httpServerTypes.HttpHandler, origin: { value: string }, server: Running) =>
+  (request: Request): Promise<Response> =>
     Effect.runPromise(
       handler(request, origin.value).pipe(
         Effect.catchCause(failWith),
         Effect.raceFirst(unavailable(server.closing)),
         Effect.map(tracked),
       ),
-    ),
-  );
-
-const serveIn = (server: Running, handler: httpServerTypes.HttpHandler) =>
-  Effect.gen(function* () {
-    const origin = { value: "" };
-    const serving = HttpServer.serve(respondWith(handler, origin, server)).pipe(
-      Layer.provideMerge(NodeHttpServer.layerTest),
     );
-    const services = yield* Layer.buildWithScope(serving, server.scope).pipe(Effect.orDie);
-    const { address } = Context.get(services, HttpServer.HttpServer);
-    if (NetAddress.isUnixPathAddress(address))
-      return yield* Effect.die(new Error("HTTP test server did not bind to TCP"));
-    origin.value = `http://127.0.0.1:${address.port}`;
-    return origin.value;
+
+const startLoopback = (fetch: (request: Request) => Promise<Response>): Effect.Effect<Server> =>
+  Effect.promise(() => {
+    const server = serve({
+      fetch,
+      gracefulShutdown: false,
+      hostname: "127.0.0.1",
+      manual: true,
+      port: 0,
+      silent: true,
+    });
+    return Promise.resolve(server.serve()).then(() => server);
   });
+
+const originOf = (server: Server): Effect.Effect<string> =>
+  server.url === undefined
+    ? Effect.die(new Error("HTTP test server did not bind to TCP"))
+    : Effect.succeed(`http://127.0.0.1:${new URL(server.url).port}`);
+
+const serveLoopback = (
+  fetch: (request: Request) => Promise<Response>,
+): Effect.Effect<string, never, Scope.Scope> =>
+  Effect.acquireRelease(startLoopback(fetch), (server) =>
+    Effect.promise(() => server.close(true)),
+  ).pipe(Effect.flatMap(originOf));
 
 const listen = Effect.fn("listen")(function* (
   handler: httpServerTypes.HttpHandler,
 ): Effect.fn.Return<string> {
   const server: Running = { closing: Deferred.makeUnsafe<void>(), scope: yield* Scope.make() };
   running.push(server);
-  return yield* serveIn(server, handler);
+  const origin = { value: "" };
+  origin.value = yield* serveLoopback(respondWith(handler, origin, server)).pipe(
+    Scope.provide(server.scope),
+  );
+  return origin.value;
 });
 
 const closeServers: Effect.Effect<void> = Effect.suspend(() => {
@@ -110,6 +119,7 @@ const httpServer = {
   openStream,
   readBody,
   readMessage,
+  serveLoopback,
 };
 
 export default httpServer;
