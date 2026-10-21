@@ -4,20 +4,15 @@ import { Effect } from "effect";
 import awaitingModule from "../../../core/awaiting.ts";
 import modelPolicyDenial from "../../../core/model-policy-denial.ts";
 import modelPolicy from "../../../core/model-policy.ts";
-import modelResolver from "../../../core/model-resolver.ts";
-import platformModule from "../../../core/platform.ts";
 import errorsModule from "../../../utils/errors.ts";
 import ModelSelectorComponent from "../components/model-selector.ts";
 import type InteractiveMode from "../interactive-mode.ts";
-import modelCatalogRefresh from "../model-catalog-refresh.ts";
+import modelReferenceLookup from "./model-reference-lookup.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
-const { schedule } = platformModule;
-const { findExactModelReferenceMatch } = modelResolver;
 const { findModelPolicyDenial, formatModelPolicyDenialError } = modelPolicyDenial;
 const { saveModelPolicy } = modelPolicy;
-const { refreshModelCatalogs } = modelCatalogRefresh;
 
 export default class ModelSelector {
   private readonly mode: InteractiveMode;
@@ -136,52 +131,6 @@ export default class ModelSelector {
   }
 
   findExactModelMatch(searchTerm: string): Promise<compatTypes.Model<any> | undefined> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        const cachedModels =
-          this.mode.session.models.selection.scopedModels.length > 0
-            ? this.mode.session.models.selection.scopedModels.map((scoped) => scoped.model)
-            : [...this.mode.session.models.selection.modelRuntime.getAvailableSnapshot()];
-        const cachedMatch = findExactModelReferenceMatch(searchTerm, cachedModels);
-        if (cachedMatch !== undefined || this.mode.session.models.selection.scopedModels.length > 0)
-          return cachedMatch;
-
-        this.mode.display.status.showStatus("Refreshing model catalogs…");
-        const controller = new AbortController();
-        let timedOut = false;
-        const timeout = schedule(() => {
-          timedOut = true;
-          controller.abort();
-        }, 15_000);
-        try {
-          const result = yield* awaited(
-            refreshModelCatalogs(
-              this.mode.session.models.selection.modelRuntime,
-              controller.signal,
-            ),
-          );
-          if (result.aborted && timedOut) {
-            this.mode.display.status.showWarning(
-              "Model refresh timed out; searching cached models.",
-            );
-          } else if (result.errors.size > 0) {
-            this.mode.display.status.showWarning(
-              `Could not refresh ${[...result.errors.keys()].join(", ")}; searching cached models.`,
-            );
-          }
-        } catch (error) {
-          this.mode.display.status.showWarning(
-            timedOut
-              ? "Model refresh timed out; searching cached models."
-              : `Could not refresh model catalogs: ${toErrorMessage(error)}`,
-          );
-        } finally {
-          timeout.cancel();
-        }
-        return findExactModelReferenceMatch(searchTerm, [
-          ...this.mode.session.models.selection.modelRuntime.getAvailableSnapshot(),
-        ]);
-      }, this),
-    );
+    return modelReferenceLookup.findExactModelMatch(this.mode, searchTerm);
   }
 }
