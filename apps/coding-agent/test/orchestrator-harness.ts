@@ -48,7 +48,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     }),
     handoffDirectory: options.handoffDirectory ?? joinPath(tmpdir(), "msa-orchestrator-handoffs"),
     pollIntervalMs: options.pollIntervalMs ?? null,
-    project: "project",
+    project: options.project ?? "project",
     report: (text, details) => reports.push({ details, text }),
     resolveModel: (reference) => {
       const found = MODELS.find(
@@ -60,6 +60,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     runCondition: options.runCondition ?? (() => Promise.resolve(true)),
     telemetry,
     version: "0.0.0-test",
+    watchdog: options.watchdog ?? null,
   });
   return { orchestrator, reports, telemetry, workers };
 }

@@ -1,19 +1,13 @@
+import elapsed from "../../utils/elapsed.ts";
 import type serviceTypes from "./service.types.ts";
 import snapshotModule from "./snapshot.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 import type watchTypes from "./watch.types.ts";
 
 const { isBehind, isConflicting } = snapshotModule;
+const { formatElapsed } = elapsed;
 
 const CI_STALL_MS = 10 * 60_000;
-
-function formatElapsed(ms: number): string {
-  const totalSeconds = Math.max(0, Math.round(ms / 1000));
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  const totalMinutes = Math.floor(totalSeconds / 60);
-  if (totalMinutes < 60) return `${totalMinutes}m`;
-  return `${Math.floor(totalMinutes / 60)}h ${totalMinutes % 60}m`;
-}
 
 function reviewLabel(reviewDecision: string): string | undefined {
   switch (reviewDecision) {

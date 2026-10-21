@@ -11,6 +11,11 @@ declare namespace runtimeTypes {
 
   type WorkerSession = workerTypes.WorkerSession;
 
+  interface ThreadActivity {
+    messages: number;
+    at: number;
+  }
+
   interface Runtime {
     database: DatabaseSync;
     options: workerTypes.OrchestratorOptions;
@@ -18,6 +23,7 @@ declare namespace runtimeTypes {
     workers: Map<string, workerTypes.WorkerSession>;
     runs: Map<string, number>;
     runStartedAt: Map<string, number>;
+    activity: Map<string, ThreadActivity>;
     wrapUps: Map<string, wrapUpTypes.WrapUp>;
     replanning: boolean;
     maxConcurrentThreads: number;

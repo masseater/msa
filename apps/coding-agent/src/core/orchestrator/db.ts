@@ -86,7 +86,8 @@ CREATE TABLE IF NOT EXISTS note_reads (
 );
 CREATE TABLE IF NOT EXISTS orchestrator_state (
   project TEXT PRIMARY KEY,
-  max_concurrent_threads INTEGER
+  max_concurrent_threads INTEGER,
+  owner_pid INTEGER
 );
 CREATE TABLE IF NOT EXISTS replans (
   id TEXT PRIMARY KEY,
@@ -143,6 +144,11 @@ function migrateTasks(database: DatabaseSync): void {
       if (names.has(column)) database.exec(`ALTER TABLE tasks DROP COLUMN ${column}`);
     }
   });
+}
+
+function addOwnerPid(database: DatabaseSync): void {
+  if (columnNames(database, "orchestrator_state").includes("owner_pid")) return;
+  database.exec("ALTER TABLE orchestrator_state ADD COLUMN owner_pid INTEGER");
 }
 
 const THREAD_ID_TABLES = ["assignments", "reports", "note_reads"] as const;
@@ -204,6 +210,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec(SCHEMA);
   dropReplanUndoColumns(database);
   migrateTasks(database);
+  addOwnerPid(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;
 }

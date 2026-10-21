@@ -3,6 +3,7 @@ import noteStoreModule from "./note-store.ts";
 import stateStoreModule from "./state-store.ts";
 import taskStoreModule from "./task-store.ts";
 import threadStoreModule from "./thread-store.ts";
+import watchdogStore from "./watchdog-store.ts";
 
 const { db } = dbModule;
 const { taskStore } = taskStoreModule;
@@ -17,6 +18,7 @@ const store = {
   ...noteStore,
   ...stateStore,
   ...recovery,
+  ...watchdogStore,
 };
 
 const storeModule = {

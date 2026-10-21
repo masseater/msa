@@ -47,6 +47,11 @@ declare namespace workerTypes {
     started: readonly string[];
   }
 
+  interface WatchdogOptions {
+    intervalMs: number;
+    idleMs: number;
+  }
+
   interface OrchestratorOptions {
     project: string;
     cwd: string;
@@ -61,6 +66,7 @@ declare namespace workerTypes {
     report: (text: string, details: OrchestratorReport) => void;
     runCondition: (command: string, cwd: string) => Promise<boolean>;
     pollIntervalMs?: number | null;
+    watchdog?: WatchdogOptions | null;
 
     telemetry: telemetryTypes.TelemetryContext;
   }

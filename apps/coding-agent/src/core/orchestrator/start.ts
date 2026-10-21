@@ -188,6 +188,19 @@ function openWorker(
   });
 }
 
+function noteActivity(
+  runtime: runtimeTypes.Runtime,
+  threadId: string,
+  worker: runtimeTypes.WorkerSession,
+): void {
+  const previous = runtime.activity.get(threadId);
+  if (previous === undefined || previous.messages === worker.messages.length) return;
+  runtime.activity.set(threadId, {
+    at: Effect.runSync(nowMillis),
+    messages: worker.messages.length,
+  });
+}
+
 function launch(
   runtime: runtimeTypes.Runtime,
   threadId: string,
@@ -198,7 +211,11 @@ function launch(
   const run = runtime.nextRun();
   store.updateThread(runtime.database, threadId, { sessionFile: worker.sessionFile ?? null }, now);
   runtime.workers.set(threadId, worker);
-  worker.subscribe(() => runtime.publish());
+  runtime.activity.set(threadId, { at: now, messages: worker.messages.length });
+  worker.subscribe(() => {
+    noteActivity(runtime, threadId, worker);
+    runtime.publish();
+  });
   runtime.runs.set(threadId, run);
   runtime.runStartedAt.set(threadId, performance.now());
   void worker.run.prompting.prompt(prompt).then(

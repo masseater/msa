@@ -1,8 +1,8 @@
-import { Effect, Fiber } from "effect";
+import { Effect, type Fiber } from "effect";
 
+import backgroundModule from "./background.ts";
 import runtime from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
-import schedule from "./schedule.ts";
 import settleModule from "./settle.ts";
 import snapshotModule from "./snapshot.ts";
 import storeModule from "./store.ts";
@@ -13,7 +13,7 @@ import type wrapUpTypes from "./wrap-up.types.ts";
 const { snapshots } = snapshotModule;
 const { nowMillis } = runtime;
 const { store } = storeModule;
-const { scheduling } = schedule;
+const { background } = backgroundModule;
 const { settling } = settleModule;
 
 type Snapshot = ReturnType<typeof snapshots.buildSnapshot>;
@@ -33,6 +33,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly workers = new Map<string, workerTypes.WorkerSession>();
   readonly runs = new Map<string, number>();
   readonly runStartedAt = new Map<string, number>();
+  readonly activity = new Map<string, runtimeTypes.ThreadActivity>();
   readonly wrapUps = new Map<string, wrapUpTypes.WrapUp>();
   readonly listeners = new Set<() => void>();
   replanning = false;
@@ -40,7 +41,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   maxConcurrentThreads: number;
   private queue: Promise<void> = Promise.resolve();
   private runCount = 0;
-  private poller: Fiber.Fiber<never, never> | undefined;
+  private fibers: Fiber.Fiber<never, never>[] = [];
 
   constructor(options: workerTypes.OrchestratorOptions) {
     this.telemetry = new OrchestratorTelemetry(options.telemetry);
@@ -57,9 +58,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
       store.storedMaxConcurrent(this.database, options.project) ??
       options.defaults().maxConcurrentThreads;
     this.publish();
-    if (options.pollIntervalMs !== null) {
-      this.poller = scheduling.startPolling(this, options.pollIntervalMs ?? 5000);
-    }
+    this.fibers = background.start(this);
   }
 
   nextRun(): number {
@@ -100,13 +99,13 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   }
 
   dispose(): Promise<void> {
-    const poller = this.poller;
-    this.poller = undefined;
+    const fibers = this.fibers;
+    this.fibers = [];
     this.telemetry.close();
     const self = this;
     return Effect.runPromise(
       Effect.gen(function* () {
-        if (poller !== undefined) yield* Fiber.interrupt(poller);
+        yield* background.stop(fibers);
         self.runs.clear();
         for (const worker of self.workers.values()) {
           yield* Effect.tryPromise({
