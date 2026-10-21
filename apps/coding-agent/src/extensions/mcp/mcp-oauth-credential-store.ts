@@ -1,24 +1,17 @@
 import type oauthTypes from "@msa/mcp/oauth.types";
-import * as Effect from "effect/Effect";
-import lockfile from "proper-lockfile";
 
 import config from "../../config.ts";
 import type authStorageTypes from "../../core/auth-storage.types.ts";
-import awaitingModule from "../../core/awaiting.ts";
 import FileAuthStorageBackend from "../../core/file-auth-storage-backend.ts";
 import mcpServers from "../../core/mcp-servers.ts";
 import platformNode from "../../core/platform-node.ts";
-import nodeFs from "../../utils/node-fs.ts";
+import mcpRefreshLock from "./mcp-refresh-lock.ts";
 import type oauthTypesNs from "./oauth.types.ts";
 
 const { mcpNamespace } = mcpServers;
-const { join, sha256Hex } = platformNode;
+const { join } = platformNode;
 const { getAgentDir } = config;
-const { awaited, awaitingWith } = awaitingModule;
-const { makeDirectory } = nodeFs;
-const REFRESH_LOCK_STALE_MS = 20_000;
-const REFRESH_LOCK_WAIT_MS = 25_000;
-const REFRESH_LOCK_RETRY_MS = 100;
+const { withRefreshLock } = mcpRefreshLock;
 type StoredStates = Record<string, oauthTypes.McpOAuthState>;
 function parseStates(content: string | undefined): StoredStates {
   if (content === undefined || content.trim() === "") return {};
@@ -60,37 +53,8 @@ export default class McpOAuthCredentialStore {
         this.write((states) => {
           states[key] = state;
         }),
-      withRefreshLock: (fn) => this.withRefreshLock(key, fn),
+      withRefreshLock: (fn) => withRefreshLock(this.lockDir, key, fn),
     };
-  }
-
-  private withRefreshLock<T>(key: string, fn: () => Promise<T>): Promise<T> {
-    return Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.lockDir === undefined || this.lockDir === "") return yield* awaited(fn());
-        const lockDir = this.lockDir;
-        yield* awaited(makeDirectory({ mode: 0o700, path: lockDir }));
-        const hash = sha256Hex(key).slice(0, 16);
-        const release = yield* awaited(
-          lockfile.lock(join(this.lockDir, `mcp-auth-refresh-${hash}`), {
-            onCompromised: () => {},
-            realpath: false,
-            retries: {
-              factor: 1,
-              maxTimeout: REFRESH_LOCK_RETRY_MS,
-              minTimeout: REFRESH_LOCK_RETRY_MS,
-              retries: REFRESH_LOCK_WAIT_MS / REFRESH_LOCK_RETRY_MS,
-            },
-            stale: REFRESH_LOCK_STALE_MS,
-          }),
-        );
-        try {
-          return yield* awaited(fn());
-        } finally {
-          yield* awaited(release().catch(() => undefined));
-        }
-      }, this),
-    );
   }
 
   tokens(name: string, serverUrl: string): oauthTypes.McpOAuthState["tokens"] {
