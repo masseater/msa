@@ -1,9 +1,45 @@
-import taskStorePart2 from "./task-store-part2.ts";
+import taskDependencies from "./task-dependencies.ts";
+import taskRounds from "./task-rounds.ts";
+import taskRows from "./task-rows.ts";
 
-const { taskStore } = taskStorePart2;
+const { workTasksOfRound, reviewTaskOfRound, listRoundIds, insertRound } = taskRounds;
+const { updateTask, setTaskStatus, listTasks, insertTask, getTask, deleteTask } = taskRows;
+const {
+  unfinishedDependencies,
+  tasksWithCondition,
+  replaceDependencies,
+  removeDependency,
+  readyTasks,
+  listDependencyPairs,
+  dependentsOf,
+  dependenciesOf,
+  clearDependencies,
+  addDependency,
+} = taskDependencies;
 
-const taskStoreModule = {
-  taskStore,
+const taskStore = {
+  addDependency,
+  clearDependencies,
+  deleteTask,
+  dependenciesOf,
+  dependentsOf,
+  getTask,
+  insertRound,
+  insertTask,
+  listDependencyPairs,
+  listRoundIds,
+  listTasks,
+  readyTasks,
+  removeDependency,
+  replaceDependencies,
+  reviewTaskOfRound,
+  setTaskStatus,
+  tasksWithCondition,
+  unfinishedDependencies,
+  updateTask,
+  workTasksOfRound,
 };
+
+const taskStoreModule = { taskStore };
 
 export default taskStoreModule;
