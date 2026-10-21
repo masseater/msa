@@ -3,10 +3,10 @@ import oauth from "@msa/mcp/oauth";
 import type oauthTypes from "@msa/mcp/oauth.types";
 import * as Effect from "effect/Effect";
 
-import awaitingModule from "../../core/awaiting.ts";
-import type oauthInternalTypes from "./oauth-internal.types.ts";
-import type oauthTypesNs from "./oauth.types.ts";
-import McpSignInCancelledError from "./sign-in-cancelled.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import type oauthInternalTypes from "../oauth-internal.types.ts";
+import type oauthTypesNs from "../oauth.types.ts";
+import McpSignInCancelledError from "../sign-in-cancelled.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { oauthErrorHtml, oauthSuccessHtml } = oauthPage;
@@ -95,9 +95,9 @@ function listenForCallback(
   );
 }
 
-const oauthPart3 = {
+const oauthCallback = {
   listenForCallback,
   waitForAuthorizationResponse,
 };
 
-export default oauthPart3;
+export default oauthCallback;

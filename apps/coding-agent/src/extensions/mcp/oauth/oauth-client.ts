@@ -2,10 +2,10 @@ import type mcpTypes from "@msa/mcp/index.types";
 import oauth from "@msa/mcp/oauth";
 import type oauthTypes from "@msa/mcp/oauth.types";
 
-import config from "../../config.ts";
-import platformNode from "../../core/platform-node.ts";
-import type oauthInternalTypes from "./oauth-internal.types.ts";
-import type oauthTypesNs from "./oauth.types.ts";
+import config from "../../../config.ts";
+import platformNode from "../../../core/platform-node.ts";
+import type oauthInternalTypes from "../oauth-internal.types.ts";
+import type oauthTypesNs from "../oauth.types.ts";
 
 const { sha256Hex } = platformNode;
 const { McpOAuthProvider } = oauth;
@@ -123,7 +123,7 @@ function createProvider(
   });
 }
 
-const oauthPart1 = {
+const oauthClient = {
   CALLBACK_PATH,
   FALLBACK_REDIRECT_URL,
   REFRESH_SKEW_MS,
@@ -135,4 +135,4 @@ const oauthPart1 = {
   timedFetch,
 };
 
-export default oauthPart1;
+export default oauthClient;

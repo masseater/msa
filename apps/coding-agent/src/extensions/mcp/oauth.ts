@@ -1,8 +1,19 @@
-import oauthPart2 from "./oauth-part2.ts";
-import oauthPart4 from "./oauth-part4.ts";
+import type oauthTypes from "@msa/mcp/oauth.types";
 
-const { createMcpAuthProvider } = oauthPart2;
-const { signInMcpServer } = oauthPart4;
+import type oauthTypesNs from "./oauth.types.ts";
+import McpTokenRefresh from "./oauth/auth-provider.ts";
+import signIn from "./oauth/sign-in.ts";
+
+const { signInMcpServer } = signIn;
+
+function createMcpAuthProvider(options: {
+  serverUrl: string;
+  store: oauthTypesNs.McpOAuthServerStore;
+  settings: () => oauthTypesNs.McpOAuthSettings;
+  onChallenge: (challenge: oauthTypes.OAuthChallenge) => void;
+}): oauthTypesNs.McpAuthProvider {
+  return new McpTokenRefresh(options);
+}
 
 const oauthModule = {
   createMcpAuthProvider,
