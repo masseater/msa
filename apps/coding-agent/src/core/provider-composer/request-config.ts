@@ -84,8 +84,25 @@ function configuredRequestAuthStatus(
   };
 }
 
+function mergeHeaders(
+  base: aiTypes.ProviderHeaders | undefined,
+  override: aiTypes.ProviderHeaders | undefined,
+): aiTypes.ProviderHeaders | undefined {
+  if (base === undefined && override === undefined) return undefined;
+  const merged = { ...base };
+  for (const [name, value] of Object.entries(override ?? {})) {
+    const lowerName = name.toLowerCase();
+    for (const existingName of Object.keys(merged)) {
+      if (existingName.toLowerCase() === lowerName) delete merged[existingName];
+    }
+    merged[name] = value;
+  }
+  return merged;
+}
+
 const requestConfig = {
   configuredRequestAuthStatus,
+  mergeHeaders,
   resolveCompatibilityRequestConfig,
   resolveConfiguredModelHeaders,
 };

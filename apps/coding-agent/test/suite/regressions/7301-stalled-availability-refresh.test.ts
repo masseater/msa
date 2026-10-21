@@ -154,7 +154,7 @@ const doesNotLetAStaleProvider = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   harness = yield* Effect.promise(() => createHarness());
   const runtime = harness.session.models.selection.modelRuntime;
-  const models = Reflect.get(runtime, "models") as aiTypes.Models;
+  const models = Reflect.get(Reflect.get(runtime, "runtime") as object, "models") as aiTypes.Models;
   const originalGetAvailable = models.getAvailable.bind(models);
   const started = createDeferred();
   const gate = createDeferred();
