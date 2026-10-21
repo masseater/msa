@@ -177,7 +177,7 @@ function toMsaModel(
   };
 }
 
-const providerPart1 = {
+const llamaModels = {
   DEFAULT_LLAMA_SERVER_URL,
   LLAMA_PROVIDER_ID,
   credentialServerUrl,
@@ -190,4 +190,4 @@ const providerPart1 = {
   toMsaModel,
 };
 
-export default providerPart1;
+export default llamaModels;
