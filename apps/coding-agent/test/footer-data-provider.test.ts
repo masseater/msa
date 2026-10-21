@@ -47,8 +47,16 @@ vi.mock("child_process", (importOriginal) =>
   importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, ...childProcessMocks })),
 );
 
-const { joinPath, makeDirectory, makeTempDir, pathExists, removePath, runTest, writeTextFile } =
-  testing;
+const {
+  awaited,
+  joinPath,
+  makeDirectory,
+  makeTempDir,
+  pathExists,
+  removePath,
+  runTest,
+  writeTextFile,
+} = testing;
 
 const createPlainReftableRepo = Effect.fn("createPlainReftableRepo")(function* (tempDir: string) {
   const repoDir = joinPath(tempDir, "repo");
@@ -68,6 +76,8 @@ const usesHeadDirectlyInARegularRepo = Effect.gen(function* () {
   process.chdir(nestedDir);
 
   const provider = new FooterDataProvider(nestedDir);
+
+  yield* awaited(provider.ready);
   try {
     expect(provider.getGitBranch()).toBe("main");
     expect(childProcessMocks.spawnSync).not.toHaveBeenCalled();
@@ -81,16 +91,18 @@ const resolvesTheBranchViaGitWhenHead = Effect.gen(function* () {
   process.chdir(repoDir);
 
   const provider = new FooterDataProvider(repoDir);
+
+  yield* awaited(provider.ready);
   try {
     expect(provider.getGitBranch()).toBe("main");
-    expect(childProcessMocks.spawnSync).toHaveBeenCalledWith(
+    expect(childProcessMocks.execFile).toHaveBeenCalledWith(
       "git",
       ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
       expect.objectContaining({
         cwd: expect.stringMatching(/repo$/u),
         encoding: "utf8",
-        stdio: ["ignore", "pipe", "ignore"],
       }),
+      expect.any(Function),
     );
   } finally {
     provider.dispose();
@@ -102,6 +114,8 @@ const resolvesTheBranchViaGitInA = Effect.gen(function* () {
   process.chdir(worktreeDir);
 
   const provider = new FooterDataProvider(worktreeDir);
+
+  yield* awaited(provider.ready);
   try {
     expect(provider.getGitBranch()).toBe("main");
   } finally {
@@ -115,6 +129,8 @@ const treatsAnUnresolvedInvalidReftableHeadAs = Effect.gen(function* () {
   gitState.branch = "";
 
   const provider = new FooterDataProvider(repoDir);
+
+  yield* awaited(provider.ready);
   try {
     expect(provider.getGitBranch()).toBe("detached");
   } finally {

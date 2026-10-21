@@ -4,22 +4,8 @@ import platformModule from "./platform/index.ts";
 import nodeChildProcess from "./platform/node/child-process.ts";
 import type nodeChildProcessTypes from "./platform/node/child-process.types.ts";
 
-const { execFile, spawnSync } = nodeChildProcess;
+const { execFile } = nodeChildProcess;
 const { readEnv } = platformModule;
-
-function resolveBranchWithGitSync(repoDir: string): string | null {
-  const result = spawnSync(
-    "git",
-    ["--no-optional-locks", "symbolic-ref", "--quiet", "--short", "HEAD"],
-    {
-      cwd: repoDir,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "ignore"],
-    },
-  );
-  const branch = result.status === 0 ? result.stdout.trim() : "";
-  return branch || null;
-}
 
 function resolveBranchWithGitAsync(repoDir: string): Promise<string | null> {
   return Effect.runPromise(
@@ -63,7 +49,6 @@ const footerDataProviderHelpers = {
   isWindowsMountedRepoPath,
   isWslEnvironment,
   resolveBranchWithGitAsync,
-  resolveBranchWithGitSync,
   shouldPollGitHead,
 };
 

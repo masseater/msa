@@ -7,9 +7,8 @@ import text from "../utils/text.ts";
 import keyIdSchema from "./key-id-schema.ts";
 import keybindings from "./keybindings.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 
-const { existsSync, readFileSync } = nodeFs;
+const { readText } = platformModule.files;
 const { KeybindingValueSchema } = keyIdSchema;
 const { stripBom } = text;
 const { getAgentDir } = configModule;
@@ -25,15 +24,29 @@ function toKeybindingsConfig(value: Record<string, unknown>): tuiTypes.Keybindin
   }
   return config;
 }
-function loadRawConfig(path: string): Record<string, unknown> | undefined {
-  if (!existsSync(path)) return undefined;
-  try {
-    const parsed = JSON.parse(stripBom(readFileSync(path, "utf-8"))) as unknown;
-    if (typeof parsed !== "object" || parsed === null) return undefined;
-    return parsed as Record<string, unknown>;
-  } catch {
-    return undefined;
-  }
+function parseRawConfig(content: string): Record<string, unknown> | undefined {
+  const parsed = JSON.parse(stripBom(content)) as unknown;
+  return typeof parsed === "object" && parsed !== null
+    ? (parsed as Record<string, unknown>)
+    : undefined;
+}
+
+const loadedConfigs = new Map<string, tuiTypes.KeybindingsConfig>();
+
+function readKeybindingsFile(path: string): Promise<tuiTypes.KeybindingsConfig> {
+  return readText(path)
+    .then(parseRawConfig)
+    .then(
+      (rawConfig) =>
+        rawConfig === undefined
+          ? {}
+          : toKeybindingsConfig(migrateKeybindingsConfig(rawConfig).config),
+      () => ({}),
+    )
+    .then((config) => {
+      loadedConfigs.set(path, config);
+      return config;
+    });
 }
 export default class KeybindingsManager extends tui.KeybindingsManager {
   private configPath: string | undefined;
@@ -43,24 +56,22 @@ export default class KeybindingsManager extends tui.KeybindingsManager {
     this.configPath = configPath;
   }
 
-  static create(agentDir: string = getAgentDir()): KeybindingsManager {
-    const configPath = join(agentDir, "keybindings.json");
-    const userBindings = KeybindingsManager.loadFromFile(configPath);
-    return new KeybindingsManager(userBindings, configPath);
+  static refresh(agentDir: string = getAgentDir()): Promise<void> {
+    return readKeybindingsFile(join(agentDir, "keybindings.json")).then(() => undefined);
   }
 
-  reload(): void {
-    if (this.configPath === undefined || this.configPath === "") return;
-    this.setUserBindings(KeybindingsManager.loadFromFile(this.configPath));
+  static create(agentDir: string = getAgentDir()): KeybindingsManager {
+    const configPath = join(agentDir, "keybindings.json");
+    return new KeybindingsManager(loadedConfigs.get(configPath) ?? {}, configPath);
+  }
+
+  reload(): Promise<void> {
+    const { configPath } = this;
+    if (configPath === undefined || configPath === "") return Promise.resolve();
+    return readKeybindingsFile(configPath).then((config) => this.setUserBindings(config));
   }
 
   getEffectiveConfig(): tuiTypes.KeybindingsConfig {
     return this.getResolvedBindings();
-  }
-
-  private static loadFromFile(path: string): tuiTypes.KeybindingsConfig {
-    const rawConfig = loadRawConfig(path);
-    if (rawConfig === undefined) return {};
-    return toKeybindingsConfig(migrateKeybindingsConfig(rawConfig).config);
   }
 }

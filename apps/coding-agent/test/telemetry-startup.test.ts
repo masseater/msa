@@ -39,36 +39,45 @@ const podmanOnPath = Effect.fn("podmanOnPath")(function* () {
   return bin;
 });
 
-const prefersMsaOtlpEndpointThenTelemetryOtlpendpoint = (bin: string) => {
-  expect(
-    resolveDestination({
-      envEndpoint: "http://env:4318",
-      path: bin,
-      settingsEndpoint: "http://settings:4318",
-      version: "0.0.0",
+const prefersMsaOtlpEndpointThenTelemetryOtlpendpoint = (bin: string) =>
+  runTest(
+    Effect.gen(function* () {
+      expect(
+        yield* awaited(
+          resolveDestination({
+            envEndpoint: "http://env:4318",
+            path: bin,
+            settingsEndpoint: "http://settings:4318",
+            version: "0.0.0",
+          }),
+        ),
+      ).toEqual({ endpoint: "http://env:4318", kind: "endpoint", source: "MSA_OTLP_ENDPOINT" });
+      expect(
+        yield* awaited(
+          resolveDestination({
+            envEndpoint: " ",
+            path: bin,
+            settingsEndpoint: "http://settings:4318",
+            version: "0.0.0",
+          }),
+        ),
+      ).toEqual({
+        endpoint: "http://settings:4318",
+        kind: "endpoint",
+        source: "telemetry.otlpEndpoint",
+      });
+      expect(
+        yield* awaited(
+          resolveDestination({
+            envEndpoint: undefined,
+            path: bin,
+            settingsEndpoint: undefined,
+            version: "0.0.0",
+          }),
+        ),
+      ).toEqual({ kind: "lgtm", podman: joinPath(bin, "podman") });
     }),
-  ).toEqual({ endpoint: "http://env:4318", kind: "endpoint", source: "MSA_OTLP_ENDPOINT" });
-  expect(
-    resolveDestination({
-      envEndpoint: " ",
-      path: bin,
-      settingsEndpoint: "http://settings:4318",
-      version: "0.0.0",
-    }),
-  ).toEqual({
-    endpoint: "http://settings:4318",
-    kind: "endpoint",
-    source: "telemetry.otlpEndpoint",
-  });
-  expect(
-    resolveDestination({
-      envEndpoint: undefined,
-      path: bin,
-      settingsEndpoint: undefined,
-      version: "0.0.0",
-    }),
-  ).toEqual({ kind: "lgtm", podman: joinPath(bin, "podman") });
-};
+  );
 
 const recordsNothingAndSaysWhyWhenNo = () =>
   runTest(

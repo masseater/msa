@@ -29,21 +29,31 @@ const { NOOP_TELEMETRY_CONTEXT } = telemetryModule;
 
 function resolveDestination(
   inputs: telemetryTypesNs.TelemetryInputs,
-): telemetryTypesNs.TelemetryDestination {
+): Promise<telemetryTypesNs.TelemetryDestination> {
   const envEndpoint = inputs.envEndpoint?.trim();
   if (envEndpoint !== undefined && envEndpoint !== "")
-    return { endpoint: envEndpoint, kind: "endpoint", source: "MSA_OTLP_ENDPOINT" };
+    return Promise.resolve({
+      endpoint: envEndpoint,
+      kind: "endpoint",
+      source: "MSA_OTLP_ENDPOINT",
+    });
   const settingsEndpoint = inputs.settingsEndpoint?.trim();
   if (settingsEndpoint !== undefined && settingsEndpoint !== "") {
-    return { endpoint: settingsEndpoint, kind: "endpoint", source: "telemetry.otlpEndpoint" };
+    return Promise.resolve({
+      endpoint: settingsEndpoint,
+      kind: "endpoint",
+      source: "telemetry.otlpEndpoint",
+    });
   }
-  const podman = findPodman(inputs.path);
-  if (podman !== undefined) return { kind: "lgtm", podman };
-  return {
-    kind: "off",
-    reason:
-      "podman not found; install podman or set MSA_OTLP_ENDPOINT to send traces, metrics, and logs",
-  };
+  return findPodman(inputs.path).then((podman): telemetryTypesNs.TelemetryDestination =>
+    podman === undefined
+      ? {
+          kind: "off",
+          reason:
+            "podman not found; install podman or set MSA_OTLP_ENDPOINT to send traces, metrics, and logs",
+        }
+      : { kind: "lgtm", podman },
+  );
 }
 function describeTelemetry(status: telemetryTypesNs.TelemetryStatus): string {
   const { destination, state } = status;
@@ -107,7 +117,7 @@ const layer = (inputs: telemetryTypesNs.TelemetryInputs): Layer.Layer<Telemetry>
   Layer.effect(
     Telemetry,
     Effect.gen(function* () {
-      const destination = resolveDestination(inputs);
+      const destination = yield* Effect.promise(() => resolveDestination(inputs));
       const scope = yield* Scope.Scope;
       if (destination.kind === "off") {
         return {

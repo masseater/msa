@@ -178,8 +178,10 @@ export default class SessionQueue {
       );
       if (processedInput === undefined) return "handled";
 
-      let expandedText = this.session.commands.slash.expandSkillCommand(processedInput.text);
-      expandedText = expandPromptTemplate(expandedText, [...this.session.promptTemplates]);
+      const expandedText = expandPromptTemplate(
+        yield* performed(this.session.commands.slash.expandSkillCommand(processedInput.text)),
+        [...this.session.promptTemplates],
+      );
 
       if (behavior === "steer") {
         yield* performed(this.queueSteer(expandedText, processedInput.images));

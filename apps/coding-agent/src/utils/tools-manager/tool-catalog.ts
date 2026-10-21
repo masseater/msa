@@ -1,14 +1,13 @@
 import configModule from "../../config.ts";
 import platformModule from "../../core/platform/index.ts";
 import nodeChildProcess from "../../core/platform/node/child-process.ts";
-import nodeFs from "../../core/platform/node/fs.ts";
 import nodeOs from "../../core/platform/node/os.ts";
 import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 
 const { platform } = nodeOs;
 
 const { join, readEnv } = platformModule;
-const { existsSync } = nodeFs;
+const { exists } = platformModule.files;
 const { spawnSync } = nodeChildProcess;
 const { getBinDir } = configModule;
 
@@ -71,23 +70,16 @@ function commandExists(cmd: string): boolean {
   }
 }
 
-function getToolPath(tool: "fd" | "rg"): string | null {
-  const config = TOOLS[tool];
-  if (config === undefined) return null;
-
-  const localPath = join(TOOLS_DIR, config.binaryName + (platform() === "win32" ? ".exe" : ""));
-  if (existsSync(localPath)) {
-    return localPath;
-  }
-
+function systemToolPath(config: toolsManagerInternalTypes.ToolConfig): string | null {
   const systemBinaryNames = config.systemBinaryNames ?? [config.binaryName];
-  for (const systemBinaryName of systemBinaryNames) {
-    if (commandExists(systemBinaryName)) {
-      return systemBinaryName;
-    }
-  }
+  return systemBinaryNames.find((systemBinaryName) => commandExists(systemBinaryName)) ?? null;
+}
 
-  return null;
+function getToolPath(tool: "fd" | "rg"): Promise<string | null> {
+  const config = TOOLS[tool];
+  if (config === undefined) return Promise.resolve(null);
+  const localPath = join(TOOLS_DIR, config.binaryName + (platform() === "win32" ? ".exe" : ""));
+  return exists(localPath).then((found) => (found ? localPath : systemToolPath(config)));
 }
 
 function isOfflineModeEnabled(): boolean {

@@ -50,7 +50,10 @@ export default class ReloadCommand {
   }
 
   private applyReloadedResources(): Promise<void> {
-    this.mode.keybindings.reload();
+    return this.mode.keybindings.reload().then(() => this.applyReloadedSettings());
+  }
+
+  private applyReloadedSettings(): Promise<void> {
     const activeHeader = this.mode.layout.customHeader ?? this.mode.layout.builtInHeader;
     if (isExpandable(activeHeader))
       activeHeader.setExpanded(this.mode.display.resources.toolOutputExpanded);

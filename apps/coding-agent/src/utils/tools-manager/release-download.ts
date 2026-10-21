@@ -1,6 +1,5 @@
 import awaitingModule from "../../core/awaiting.ts";
 import platformModule from "../../core/platform/index.ts";
-import nodeFs from "../../core/platform/node/fs.ts";
 import nodeOs from "../../core/platform/node/os.ts";
 import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 import downloadFileModule from "./download-file.ts";
@@ -10,7 +9,7 @@ import toolCatalog from "./tool-catalog.ts";
 const { arch } = nodeOs;
 
 const { join, nowMs, randomUnit } = platformModule;
-const { mkdirSync } = nodeFs;
+const { makeDirectory } = platformModule.files;
 const { awaited } = awaitingModule;
 const { TOOLS_DIR } = toolCatalog;
 const { getLatestVersion } = latestVersion;
@@ -33,7 +32,7 @@ function* downloadReleaseArchive(
     throw new Error(`Unsupported platform: ${plat}/${architecture}`);
   }
 
-  mkdirSync(TOOLS_DIR, { recursive: true });
+  yield* awaited(makeDirectory({ path: TOOLS_DIR }));
 
   const downloadUrl = `https://github.com/${config.repo}/releases/download/${config.tagPrefix}${version}/${assetName}`;
   const archivePath = join(TOOLS_DIR, assetName);

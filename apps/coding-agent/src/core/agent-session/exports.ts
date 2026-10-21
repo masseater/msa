@@ -23,7 +23,7 @@ export default class SessionExports {
     this.session = session;
   }
 
-  exportToJsonl(outputPath?: string): string {
+  exportToJsonl(outputPath?: string): Promise<string> {
     return exportSessionToJsonl(this.session.sessionManager, outputPath);
   }
 

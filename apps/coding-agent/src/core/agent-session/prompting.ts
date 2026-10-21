@@ -122,11 +122,14 @@ export default class SessionPrompting {
     );
   }
 
-  private expandPromptText(text: string, options?: agentSessionTypes.PromptOptions): string {
-    if (!(options?.expandPromptTemplates ?? true)) return text;
-    return expandPromptTemplate(this.session.commands.slash.expandSkillCommand(text), [
-      ...this.session.promptTemplates,
-    ]);
+  private expandPromptText(
+    text: string,
+    options?: agentSessionTypes.PromptOptions,
+  ): Effect.Effect<string> {
+    if (!(options?.expandPromptTemplates ?? true)) return Effect.succeed(text);
+    return Effect.map(this.session.commands.slash.expandSkillCommand(text), (expanded) =>
+      expandPromptTemplate(expanded, [...this.session.promptTemplates]),
+    );
   }
 
   prompt(text: string, options?: agentSessionTypes.PromptOptions): Promise<void> {
@@ -156,7 +159,7 @@ export default class SessionPrompting {
           return;
         }
         const { text: currentText, images: currentImages } = processedInput;
-        const expandedText = this.expandPromptText(currentText, options);
+        const expandedText = yield* performed(this.expandPromptText(currentText, options));
         if (this.session.isStreaming) {
           yield* performed(
             this.session.run.queue.queueWhileStreaming(expandedText, currentImages, options),

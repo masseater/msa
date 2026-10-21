@@ -67,7 +67,8 @@ const loadsOldKeyNamesInMemoryBefore = () =>
         interrupt: "ctrl+x",
         selectConfirm: "enter",
       });
-      const keybindings = yield* Effect.sync(() => KeybindingsManager.create(agentDir));
+      yield* Effect.promise(() => KeybindingsManager.refresh(agentDir));
+      const keybindings = KeybindingsManager.create(agentDir);
       expect(keybindings.getUserBindings()).toEqual({
         "app.interrupt": "ctrl+x",
         "tui.select.confirm": "enter",

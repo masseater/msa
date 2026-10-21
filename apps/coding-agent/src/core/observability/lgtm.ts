@@ -2,11 +2,10 @@ import { Effect } from "effect";
 
 import exec from "../exec.ts";
 import platform from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
 import type lgtmTypes from "./lgtm.types.ts";
 import PodmanError from "./podman-error.ts";
 
-const { existsSync } = nodeFs;
+const { exists } = platform.files;
 const { delimiter, join } = platform;
 const { execCommand } = exec;
 
@@ -19,16 +18,19 @@ function lgtmAction(state: lgtmTypes.ContainerState): lgtmTypes.LgtmAction {
   if (state === "running") return "reuse";
   return state === "stopped" ? "start" : "run";
 }
-function findPodman(path: string | undefined): string | undefined {
-  const names = process.platform === "win32" ? ["podman.exe"] : ["podman"];
-  for (const directory of (path ?? "").split(delimiter)) {
-    if (directory === "") continue;
-    for (const name of names) {
-      const candidate = join(directory, name);
-      if (existsSync(candidate)) return candidate;
-    }
-  }
-  return undefined;
+function firstExisting(candidates: readonly string[]): Promise<string | undefined> {
+  const [candidate, ...rest] = candidates;
+  if (candidate === undefined) return Promise.resolve(undefined);
+  return exists(candidate).then((found) => (found ? candidate : firstExisting(rest)));
+}
+function findPodman(path: string | undefined): Promise<string | undefined> {
+  const name = process.platform === "win32" ? "podman.exe" : "podman";
+  return firstExisting(
+    (path ?? "")
+      .split(delimiter)
+      .filter((directory) => directory !== "")
+      .map((directory) => join(directory, name)),
+  );
 }
 function podman(binary: string, args: readonly string[]): Effect.Effect<string, PodmanError> {
   return Effect.tryPromise({

@@ -21,11 +21,12 @@ export default class FooterDataProvider {
 
   disposed = false;
 
+  ready: Promise<void> = Promise.resolve();
+
+  private discoveryGeneration = 0;
+
   getGitBranch(): string | null {
-    if (this.cachedBranch === undefined) {
-      this.cachedBranch = this.gitWatch.resolveGitBranchSync();
-    }
-    return this.cachedBranch;
+    return this.cachedBranch ?? null;
   }
 
   getExtensionStatuses(): ReadonlyMap<string, string> {
@@ -83,15 +84,32 @@ export default class FooterDataProvider {
     }
     this.gitWatch.clearGitWatchers();
     this.cachedBranch = undefined;
-    this.gitPaths = findGitPaths(cwd);
-    this.gitWatch.setupGitWatcher();
+    this.gitPaths = undefined;
     this.notifyBranchChange();
+    this.ready = this.discover(cwd);
+  }
+
+  private discover(cwd: string): Promise<void> {
+    const generation = ++this.discoveryGeneration;
+    const current = () => generation === this.discoveryGeneration && !this.disposed;
+    return findGitPaths(cwd).then((gitPaths) => {
+      if (!current()) return undefined;
+      this.gitPaths = gitPaths;
+      return this.gitWatch
+        .setupGitWatcher()
+        .then(() => this.gitWatch.resolveBranch())
+        .then((branch) => {
+          if (!current()) return undefined;
+          this.cachedBranch = branch;
+          this.notifyBranchChange();
+          return undefined;
+        });
+    });
   }
 
   constructor(cwd: string) {
     this.gitWatch = new GitBranchWatcher(this);
     this.cwd = cwd;
-    this.gitPaths = findGitPaths(cwd);
-    this.gitWatch.setupGitWatcher();
+    this.ready = this.discover(cwd);
   }
 }

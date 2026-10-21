@@ -119,7 +119,7 @@ const addsPresentationDataWithoutChangingConversationIds = Effect.gen(function* 
     const originalEntryIds = sessionManager.getBranch().map((entry) => entry.id);
 
     const normalPath = joinPath(tempDir, "normal.jsonl");
-    session.context.exports.exportToJsonl(normalPath);
+    yield* Effect.promise(() => session.context.exports.exportToJsonl(normalPath));
     const normalRecords = yield* readJsonl(normalPath);
     expect(
       normalRecords.some(

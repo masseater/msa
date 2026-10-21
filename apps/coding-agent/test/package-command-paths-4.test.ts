@@ -114,7 +114,7 @@ const selfUpdatesThroughTheGlobalNpmPrefixSetup = () =>
       fakeNpmPath,
       `const fs=require("node:fs"),path=require("node:path"),args=process.argv.slice(2),prefix=args[args.indexOf("--prefix")+1];
 if(args.includes("root")) console.log(path.join(prefix,"lib","node_modules"));
-else fs.writeFileSync(${yield* toJsonText(recordPath)},JSON.stringify(args));
+else fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(args));
 `,
     );
     return {
@@ -199,7 +199,7 @@ const installsTheLatestReleaseOfTheCurrent = Effect.gen(function* () {
     fakeNpmPath,
     `const fs=require("node:fs"),path=require("node:path"),args=process.argv.slice(2),prefix=args[args.indexOf("--prefix")+1];
 if(args.includes("root")) console.log(path.join(prefix,"lib","node_modules"));
-else fs.writeFileSync(${yield* toJsonText(recordPath)},JSON.stringify(args));
+else fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(args));
 `,
   );
   yield* writeTextFile(

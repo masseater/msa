@@ -32,9 +32,8 @@ function createInheritedStdioCommand(pidFile: string): string {
     "const fs=require('fs');" +
     "const {spawn}=require('child_process');" +
     "const child=spawn(process.execPath,['-e','setTimeout(()=>{},60000)'],{stdio:'inherit',detached:true});" +
-    "fs.writeFileSync(process.argv[1], String(child.pid));" +
     "child.unref();" +
-    "console.log('child-exiting');" +
+    "fs.promises.writeFile(process.argv[1], String(child.pid)).then(()=>console.log('child-exiting'));" +
     '" ' +
     pidFileArg
   );

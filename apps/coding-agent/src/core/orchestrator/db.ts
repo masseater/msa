@@ -1,9 +1,7 @@
-import platform from "../platform/index.ts";
-import nodeFs from "../platform/node/fs.ts";
-import DatabaseSync from "../platform/node/sqlite.ts";
+import sqliteFile from "../platform/node/sqlite-file.ts";
+import type DatabaseSync from "../platform/node/sqlite.ts";
 
-const { mkdirSync } = nodeFs;
-const { dirname } = platform;
+const { openSqliteFile } = sqliteFile;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -197,8 +195,7 @@ function rejectNewerSchema(database: DatabaseSync, path: string): void {
 }
 
 function openDatabase(path: string): DatabaseSync {
-  mkdirSync(dirname(path), { recursive: true });
-  const database = new DatabaseSync(path, { timeout: 5_000 });
+  const database = openSqliteFile(path, { timeout: 5_000 });
   rejectNewerSchema(database, path);
   database.exec("PRAGMA journal_mode = WAL");
   database.exec("PRAGMA synchronous = NORMAL");

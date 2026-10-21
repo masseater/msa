@@ -98,7 +98,7 @@ export default class SessionCommands {
       try {
         const filePath =
           outputPath?.endsWith(".jsonl") === true
-            ? this.mode.session.context.exports.exportToJsonl(outputPath)
+            ? yield* awaited(this.mode.session.context.exports.exportToJsonl(outputPath))
             : yield* awaited(
                 this.mode.session.context.exports.exportToHtml(outputPath, {
                   themeName: theme.name,

@@ -132,6 +132,7 @@ const acceptsSchemaInKeybindingsJsonWithoutTreating = Effect.gen(function* () {
     }),
   );
 
+  yield* Effect.promise(() => KeybindingsManager.refresh(directory));
   const manager = KeybindingsManager.create(directory);
   expect(manager.getUserBindings()).toEqual({ "app.session.new": "ctrl+n" });
   expect(manager.getEffectiveConfig()["app.session.new"]).toBe("ctrl+n");

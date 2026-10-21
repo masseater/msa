@@ -60,7 +60,7 @@ function loadContextFileFromDir(dir: string): Promise<ContextFile | null> {
 
 function findShadowedContextFile(cwd: string): Promise<string | undefined> {
   return promised(function* () {
-    const gitPaths = findGitPaths(cwd);
+    const gitPaths = yield* awaited(findGitPaths(cwd));
     if (gitPaths === null) return undefined;
     const commonGitDir = yield* awaited(canonicalizePath(gitPaths.commonGitDir));
     const worktreeRoot = yield* awaited(canonicalizePath(gitPaths.repoDir));

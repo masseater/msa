@@ -2,7 +2,7 @@ import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
-import nodeFs from "../core/platform/node/fs.ts";
+import platformModule from "../core/platform/index.ts";
 import nodeOs from "../core/platform/node/os.ts";
 import type toolsManagerTypes from "./tools-manager.types.ts";
 import archiveExtract from "./tools-manager/archive-extract.ts";
@@ -13,7 +13,7 @@ import toolCatalog from "./tools-manager/tool-catalog.ts";
 const { platform } = nodeOs;
 
 const { awaited, awaiting } = awaitingModule;
-const { rmSync, mkdirSync } = nodeFs;
+const { makeDirectory, remove } = platformModule.files;
 const { TERMUX_PACKAGES, isOfflineModeEnabled, getToolPath, TOOLS } = toolCatalog;
 const { extractBinary } = archiveExtract;
 const { downloadReleaseArchive } = releaseDownload;
@@ -28,13 +28,23 @@ function downloadTool(tool: "fd" | "rg"): Promise<string> {
       const plat = platform();
       const { extractDir, assetName, archivePath, binaryExt, binaryPath } =
         yield* downloadReleaseArchive(tool, plat, config);
-      mkdirSync(extractDir, { recursive: true });
+      yield* awaited(makeDirectory({ path: extractDir }));
 
       try {
-        extractBinary({ archivePath, assetName, binaryExt, binaryPath, config, extractDir, plat });
+        yield* awaited(
+          extractBinary({
+            archivePath,
+            assetName,
+            binaryExt,
+            binaryPath,
+            config,
+            extractDir,
+            plat,
+          }),
+        );
       } finally {
-        rmSync(archivePath, { force: true });
-        rmSync(extractDir, { force: true, recursive: true });
+        yield* awaited(remove({ force: true, path: archivePath }));
+        yield* awaited(remove({ force: true, path: extractDir, recursive: true }));
       }
 
       return binaryPath;
@@ -60,7 +70,7 @@ function ensureToolImpl(
 ): Promise<string | undefined> {
   return Effect.runPromise(
     awaiting(function* () {
-      const existingPath = getToolPath(tool);
+      const existingPath = yield* awaited(getToolPath(tool));
       if (existingPath !== null && existingPath !== "") {
         return existingPath;
       }

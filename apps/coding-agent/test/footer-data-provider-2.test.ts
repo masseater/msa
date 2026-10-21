@@ -86,16 +86,21 @@ const doesNotNotifyListenersWhenReftableUpdates = () =>
       process.chdir(worktreeDir);
 
       const provider = new FooterDataProvider(worktreeDir);
+
+      yield* awaited(provider.ready);
       try {
         expect(provider.getGitBranch()).toBe("main");
         childProcessMocks.spawnSync.mockClear();
+        childProcessMocks.execFile.mockClear();
         const onBranchChange = vi.fn();
         provider.onBranchChange(onBranchChange);
 
         emitReftableChange(provider);
         yield* awaited(vi.advanceTimersByTimeAsync(501));
 
-        expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1);
+        yield* awaited(
+          vi.waitFor(() => expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1)),
+        );
         expect(childProcessMocks.spawnSync).not.toHaveBeenCalled();
         expect(provider.getGitBranch()).toBe("main");
         expect(onBranchChange).not.toHaveBeenCalled();
@@ -114,6 +119,8 @@ const debouncesRapidReftableUpdatesIntoASingle = () =>
       process.chdir(worktreeDir);
 
       const provider = new FooterDataProvider(worktreeDir);
+
+      yield* awaited(provider.ready);
       try {
         expect(provider.getGitBranch()).toBe("main");
         childProcessMocks.execFile.mockClear();
@@ -124,7 +131,9 @@ const debouncesRapidReftableUpdatesIntoASingle = () =>
         yield* awaited(vi.advanceTimersByTimeAsync(499));
         expect(childProcessMocks.execFile).not.toHaveBeenCalled();
         yield* awaited(vi.advanceTimersByTimeAsync(2));
-        expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1);
+        yield* awaited(
+          vi.waitFor(() => expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1)),
+        );
         yield* awaited(vi.advanceTimersByTimeAsync(650));
         expect(childProcessMocks.execFile).toHaveBeenCalledTimes(1);
       } finally {
@@ -141,8 +150,11 @@ const updatesTheCachedBranchWhenTheReftable = () =>
       process.chdir(worktreeDir);
 
       const provider = new FooterDataProvider(worktreeDir);
+
+      yield* awaited(provider.ready);
       try {
         expect(provider.getGitBranch()).toBe("main");
+        childProcessMocks.execFile.mockClear();
         gitState.branch = "foo";
         const onBranchChange = vi.fn();
         provider.onBranchChange(onBranchChange);

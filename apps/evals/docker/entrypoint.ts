@@ -120,11 +120,11 @@ const assertRootOnly = (path: string) =>
   });
 
 const probeScript = (path: string, method: string, uid: number, gid: number): string =>
-  `process.setgroups([]);process.setgid(${gid});process.setuid(${uid});require("node:fs").${method}(${JSON.stringify(path)})`;
+  `process.setgroups([]);process.setgid(${gid});process.setuid(${uid});require("node:fs").promises.${method}(${JSON.stringify(path)})`;
 
 const assertSandboxCannotRead = (path: string, uid: number, gid: number) =>
   Effect.gen(function* () {
-    const method = (yield* files.kind(path)) === "directory" ? "readdirSync" : "readFileSync";
+    const method = (yield* files.kind(path)) === "directory" ? "readdir" : "readFile";
     const status = yield* exitCodeOf(
       process.execPath,
       ["--eval", probeScript(path, method, uid, gid)],

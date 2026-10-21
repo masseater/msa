@@ -11,10 +11,10 @@ import type nodeFsTypes from "../platform/node/fs.types.ts";
 
 const { dirname, join, schedule } = platformModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { existsSync, readFileSync, unwatchFile, watchFile } = nodeFs;
+const { unwatchFile, watchFile } = nodeFs;
+const { exists, readText } = platformModule.files;
 const { FS_WATCH_RETRY_DELAY_MS, closeWatcher, watchWithErrorHandler } = fsWatch;
-const { resolveBranchWithGitAsync, resolveBranchWithGitSync, shouldPollGitHead } =
-  footerDataProviderHelpers;
+const { resolveBranchWithGitAsync, shouldPollGitHead } = footerDataProviderHelpers;
 
 const WATCH_DEBOUNCE_MS = 500;
 
@@ -87,27 +87,15 @@ export default class GitBranchWatcher {
     }, this);
   }
 
-  resolveGitBranchSync(): string | null {
-    try {
-      if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) return null;
-      const content = readFileSync(this.provider.gitPaths.headPath, "utf8").trim();
-      if (content.startsWith("ref: refs/heads/")) {
-        const branch = content.slice(16);
-        return branch === ".invalid"
-          ? (resolveBranchWithGitSync(this.provider.gitPaths.repoDir) ?? "detached")
-          : branch;
-      }
-      return "detached";
-    } catch {
-      return null;
-    }
+  resolveBranch(): Promise<string | null> {
+    return Effect.runPromise(this.resolveGitBranchAsync());
   }
 
   private resolveGitBranchAsync(): Effect.Effect<string | null> {
     return awaitingWith(function* () {
       try {
         if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) return null;
-        const content = readFileSync(this.provider.gitPaths.headPath, "utf8").trim();
+        const content = (yield* awaited(readText(this.provider.gitPaths.headPath))).trim();
         if (content.startsWith("ref: refs/heads/")) {
           const branch = content.slice(16);
           return branch === ".invalid"
@@ -155,7 +143,7 @@ export default class GitBranchWatcher {
 
     this.gitWatcherRetryTimer = schedule(() => {
       this.gitWatcherRetryTimer = null;
-      this.setupGitWatcher();
+      void this.setupGitWatcher();
     }, FS_WATCH_RETRY_DELAY_MS);
   }
 
@@ -164,9 +152,11 @@ export default class GitBranchWatcher {
     this.scheduleGitWatcherRetry();
   }
 
-  setupGitWatcher(): void {
+  setupGitWatcher(): Promise<void> {
     this.clearGitWatchers();
-    if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) return;
+    if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) {
+      return Promise.resolve();
+    }
 
     const pollGitHead = shouldPollGitHead(this.provider.gitPaths.repoDir);
 
@@ -193,25 +183,23 @@ export default class GitBranchWatcher {
       watchFile(this.headWatchFilePath, { interval: 1000 }, this.headWatchFileListener);
     }
     if (this.headWatcher === null && !pollGitHead) {
-      return;
+      return Promise.resolve();
     }
+    return this.setupReftableWatchers(join(this.provider.gitPaths.commonGitDir, "reftable"));
+  }
 
-    const reftableDir = join(this.provider.gitPaths.commonGitDir, "reftable");
-    if (existsSync(reftableDir)) {
-      this.watchReftableDir(reftableDir);
-      if (this.reftableWatcher === null) {
-        return;
-      }
-
-      const tablesListPath = join(reftableDir, "tables.list");
-      if (existsSync(tablesListPath)) {
+  private setupReftableWatchers(reftableDir: string): Promise<void> {
+    const tablesListPath = join(reftableDir, "tables.list");
+    return Promise.all([exists(reftableDir), exists(tablesListPath)]).then(
+      ([hasReftable, hasTablesList]) => {
+        if (!hasReftable || this.provider.disposed) return undefined;
+        this.watchReftableDir(reftableDir);
+        if (this.reftableWatcher === null || !hasTablesList) return undefined;
         this.watchTablesList(tablesListPath);
-        if (this.reftableTablesListWatcher === null) {
-          return;
-        }
-        this.pollTablesList(tablesListPath);
-      }
-    }
+        if (this.reftableTablesListWatcher !== null) this.pollTablesList(tablesListPath);
+        return undefined;
+      },
+    );
   }
 
   private watchReftableDir(reftableDir: string) {

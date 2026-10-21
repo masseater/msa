@@ -20,6 +20,7 @@ function createStartupTui(
     awaiting(function* () {
       setCapabilityOverrides(settingsManager.terminal.getTerminalCapabilityOverrides());
       yield* awaited(initStartupTheme(settingsManager));
+      yield* awaited(KeybindingsManager.refresh());
       setKeybindings(KeybindingsManager.create());
       const ui: tuiTypes.TUI = new TuiMainScreen(
         new ProcessTerminal(),

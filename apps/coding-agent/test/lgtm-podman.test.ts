@@ -11,11 +11,11 @@ const { readEnv } = platform;
 
 const { provideNode, randomSuffix, runTest } = testing;
 
-const podman = findPodman(readEnv("PATH"));
+const podmanPath = Effect.promise(() => findPodman(readEnv("PATH")));
 
 const pods: string[] = [];
 
-const runPodman = (args: string[]) =>
+const runPodmanAt = (podman: string | undefined, args: string[]) =>
   podman === undefined
     ? Effect.succeed(-1)
     : provideNode(
@@ -34,7 +34,11 @@ const runPodman = (args: string[]) =>
         Effect.orElseSucceed(() => -1),
       );
 
-const state = (name: string) => containerState(podman ?? "", name);
+const runPodman = (args: string[]) =>
+  Effect.flatMap(podmanPath, (podman) => runPodmanAt(podman, args));
+
+const state = (name: string) =>
+  Effect.flatMap(podmanPath, (podman) => containerState(podman ?? "", name));
 
 const newPod = Effect.map(randomSuffix, (suffix) => `msa-test-${suffix.slice(0, 8)}`);
 

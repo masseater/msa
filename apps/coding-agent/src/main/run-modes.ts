@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import awaitingModule from "../core/awaiting.ts";
+import KeybindingsManager from "../core/keybindings-manager.ts";
 import outputGuard from "../core/output-guard.ts";
 import timings from "../core/timings.ts";
 import modes from "../modes/index.ts";
@@ -31,6 +32,7 @@ function runInteractive(startup: Startup, runtime: Runtime, input: Input, checks
   return Effect.runPromise(
     awaiting(function* () {
       const { parsed } = startup;
+      yield* awaited(KeybindingsManager.refresh());
       const interactiveMode = new InteractiveMode(runtime, {
         autoTrustOnReloadCwd: startup.autoTrustOnReloadCwd,
         initialImages: input.initialImages,

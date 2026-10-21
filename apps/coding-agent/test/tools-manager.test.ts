@@ -9,8 +9,10 @@ const { ensureTool, getLatestVersion } = toolsManager;
 
 const { awaited, failure, runTest } = testing;
 
-vi.mock("fs", (importOriginal) =>
-  importOriginal().then((actual) => ({ ...(actual as object), existsSync: vi.fn(() => false) })),
+vi.mock("../src/core/platform/files.ts", (importOriginal) =>
+  importOriginal<{ default: Record<string, unknown> }>().then((actual) => ({
+    default: { ...actual.default, exists: vi.fn(() => Promise.resolve(false)) },
+  })),
 );
 
 vi.mock("child_process", (importOriginal) =>

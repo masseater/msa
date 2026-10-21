@@ -116,7 +116,7 @@ const doesNotPromptOrAskExtensionsFor = () =>
       const recordPath = joinPath(tempDir, "project-update.json");
       yield* writeTextFile(
         fakeNpmPath,
-        `const fs=require("node:fs");fs.writeFileSync(${yield* toJsonText(recordPath)},JSON.stringify(process.argv.slice(2)));`,
+        `const fs=require("node:fs");fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(process.argv.slice(2)));`,
       );
       yield* writeTextFile(
         joinPath(projectDir, ".msa", "settings.json"),
@@ -161,7 +161,7 @@ const usesSavedProjectTrustDuringUpdate = () =>
       const recordPath = joinPath(tempDir, "trusted-project-update.json");
       yield* writeTextFile(
         fakeNpmPath,
-        `const fs=require("node:fs");fs.writeFileSync(${yield* toJsonText(recordPath)},JSON.stringify(process.argv.slice(2)));`,
+        `const fs=require("node:fs");fs.promises.writeFile(${yield* toJsonText(recordPath)},JSON.stringify(process.argv.slice(2)));`,
       );
       yield* writeTextFile(
         joinPath(projectDir, ".msa", "settings.json"),

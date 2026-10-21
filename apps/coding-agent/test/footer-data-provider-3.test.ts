@@ -66,6 +66,8 @@ const retriesGitWatchers5SecondsAfterAn = () =>
       process.chdir(repoDir);
 
       const provider = new FooterDataProvider(repoDir);
+
+      yield* awaited(provider.ready);
       try {
         const providerWithInternals = provider.gitWatch as unknown as {
           headWatcher: WatcherHandle | null;

@@ -1,10 +1,9 @@
 import paths from "../utils/paths.ts";
 import platform from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import type sessionManagerTypes from "./session-manager.types.ts";
 import sessionFormat from "./session-manager/session-format.ts";
 
-const { existsSync, mkdirSync, writeFileSync } = nodeFs;
+const { makeDirectory, writeFile } = platform.files;
 
 const { CURRENT_SESSION_VERSION } = sessionFormat;
 const { dirname, nowIso } = platform;
@@ -37,15 +36,14 @@ function serializeSessionBranch(
 function exportSessionToJsonl(
   sessionManager: sessionManagerTypes.SessionManager,
   outputPath?: string,
-): string {
+): Promise<string> {
   const filePath = resolvePath(
     outputPath ?? `session-${nowIso().replace(/[:.]/gu, "-")}.jsonl`,
     process.cwd(),
   );
-  const dir = dirname(filePath);
-  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
-  writeFileSync(filePath, serializeSessionBranch(sessionManager));
-  return filePath;
+  return makeDirectory({ path: dirname(filePath) })
+    .then(() => writeFile({ data: serializeSessionBranch(sessionManager), path: filePath }))
+    .then(() => filePath);
 }
 
 const sessionExport = {

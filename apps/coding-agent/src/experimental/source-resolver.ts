@@ -1,12 +1,12 @@
 import platformModule from "../core/platform/index.ts";
-import nodeFs from "../core/platform/node/fs.ts";
+import moduleHookFiles from "../core/platform/node/module-hook-files.ts";
 import nodeModule from "../core/platform/node/module.ts";
 import nodeUrl from "../core/platform/node/url.ts";
 
 const { registerHooks } = nodeModule;
 const { fileURLToPath, pathToFileURL } = nodeUrl;
 
-const { existsSync, readFileSync, statSync } = nodeFs;
+const { firstRegularFileForModuleHook, readTextForModuleHook } = moduleHookFiles;
 
 const { extname, resolve, sep } = platformModule;
 
@@ -25,7 +25,7 @@ interface SourceAlias {
 
 const repositoryRoot = fileURLToPath(new URL("../../../..", import.meta.url));
 const tsconfigPath = resolve(repositoryRoot, "tsconfig.json");
-const tsconfig = JSON.parse(readFileSync(tsconfigPath, "utf8")) as TsConfig;
+const tsconfig = JSON.parse(readTextForModuleHook(tsconfigPath)) as TsConfig;
 const paths = tsconfig.compilerOptions?.paths;
 if (paths === undefined)
   throw new Error(`Source runtime requires compilerOptions.paths in ${tsconfigPath}`);
@@ -93,8 +93,5 @@ function resolveSourcePath(replacement: string): string | undefined {
         ? [basePath]
         : [basePath, `${basePath}.ts`, resolve(basePath, "index.ts")]
       : [basePath, `${basePath.slice(0, -extension.length)}${sourceExtension}`];
-  for (const candidate of candidates) {
-    if (existsSync(candidate) && statSync(candidate).isFile()) return candidate;
-  }
-  return undefined;
+  return firstRegularFileForModuleHook(candidates);
 }
