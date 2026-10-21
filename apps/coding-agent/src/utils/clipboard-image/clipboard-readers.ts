@@ -1,93 +1,30 @@
 import { tmpdir } from "os";
 
+import tui from "@msa/tui";
 import * as Effect from "effect/Effect";
 
-import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
-import clipboardCommand from "./clipboard-command.ts";
-import type clipboardImageTypes from "./clipboard-image.types.ts";
-import nodeFs from "./node-fs.ts";
-import photonModule from "./photon.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import platformNode from "../../core/platform-node.ts";
+import clipboardCommand from "../clipboard-command.ts";
+import type clipboardImageTypes from "../clipboard-image.types.ts";
+import mime from "../mime.ts";
+import nodeFs from "../node-fs.ts";
+import imageMime from "./image-mime.ts";
 
-const { awaited, awaiting } = awaitingModule;
-const { loadPhoton } = photonModule;
+const { detectSupportedImageMimeType } = mime;
+const { getNativeClipboard } = tui;
+const { remove, readFile } = nodeFs;
+const { randomUuid, join } = platformNode;
 const { runClipboardCommand } = clipboardCommand;
-const { join, randomUuid } = platformNode;
-const { readFile, remove } = nodeFs;
-
-const SUPPORTED_IMAGE_MIME_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+const { awaited, awaiting } = awaitingModule;
+const { baseMimeType, selectPreferredImageMimeType } = imageMime;
 
 const DEFAULT_LIST_TIMEOUT_MS = 1000;
 
 const DEFAULT_POWERSHELL_TIMEOUT_MS = 5000;
 
-const IMAGE_COMMAND_TIMEOUT_MS = 20_000;
-
 function isWaylandSession(env: NodeJS.ProcessEnv = process.env): boolean {
   return Boolean(env["WAYLAND_DISPLAY"]) || env["XDG_SESSION_TYPE"] === "wayland";
-}
-
-function baseMimeType(mimeType: string): string {
-  return mimeType.split(";")[0]?.trim().toLowerCase() ?? mimeType.toLowerCase();
-}
-
-function extensionForImageMimeType(mimeType: string): string | null {
-  switch (baseMimeType(mimeType)) {
-    case "image/png":
-      return "png";
-    case "image/jpeg":
-      return "jpg";
-    case "image/webp":
-      return "webp";
-    case "image/gif":
-      return "gif";
-    default:
-      return null;
-  }
-}
-
-function selectPreferredImageMimeType(mimeTypes: string[]): string | null {
-  const normalized = mimeTypes
-    .map((t) => t.trim())
-    .filter(Boolean)
-    .map((t) => ({ base: baseMimeType(t), raw: t }));
-
-  for (const preferred of SUPPORTED_IMAGE_MIME_TYPES) {
-    const match = normalized.find((t) => t.base === preferred);
-    if (match !== undefined) {
-      return match.raw;
-    }
-  }
-
-  const anyImage = normalized.find((t) => t.base.startsWith("image/"));
-  return anyImage?.raw ?? null;
-}
-
-function isSupportedImageMimeType(mimeType: string): boolean {
-  const base = baseMimeType(mimeType);
-  return SUPPORTED_IMAGE_MIME_TYPES.some((t) => t === base);
-}
-
-function convertToPng(bytes: Uint8Array): Promise<Uint8Array | null> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      const photon = yield* awaited(loadPhoton());
-      if (photon === null) {
-        return null;
-      }
-
-      try {
-        const image = photon.PhotonImage.new_from_byteslice(bytes);
-        try {
-          return image.get_bytes();
-        } finally {
-          image.free();
-        }
-      } catch {
-        return null;
-      }
-    }),
-  );
 }
 
 function readClipboardImageViaWlPaste(): Promise<
@@ -145,7 +82,7 @@ function readClipboardImageViaPowerShell(): Promise<clipboardImageTypes.Clipboar
         }
 
         const psQuotedWinPath = winPath.replaceAll("'", "''");
-        const result = yield* readClipboardImageViaPowerShellPart1(psQuotedWinPath);
+        const result = yield* saveClipboardImageWithPowerShell(psQuotedWinPath);
         if (result === undefined) {
           return null;
         }
@@ -172,7 +109,7 @@ function readClipboardImageViaPowerShell(): Promise<clipboardImageTypes.Clipboar
   );
 }
 
-function* readClipboardImageViaPowerShellPart1(psQuotedWinPath: string) {
+function* saveClipboardImageWithPowerShell(psQuotedWinPath: string) {
   const psScript = [
     "Add-Type -AssemblyName System.Windows.Forms",
     "Add-Type -AssemblyName System.Drawing",
@@ -220,15 +157,25 @@ function readClipboardImageViaXclip(): Promise<
   );
 }
 
-const clipboardImagePart1 = {
-  IMAGE_COMMAND_TIMEOUT_MS,
-  convertToPng,
-  extensionForImageMimeType,
-  isSupportedImageMimeType,
+function readClipboardImageViaNativeClipboard(): Promise<
+  clipboardImageTypes.ClipboardImage | null | undefined
+> {
+  return Effect.runPromise(
+    awaiting(function* () {
+      const bytes = yield* awaited(getNativeClipboard()?.getImage());
+      if (bytes === undefined) return undefined;
+      if (bytes?.length === undefined || bytes?.length === 0) return null;
+      return { bytes, mimeType: detectSupportedImageMimeType(bytes) ?? "application/octet-stream" };
+    }),
+  );
+}
+
+const clipboardReaders = {
   isWaylandSession,
+  readClipboardImageViaNativeClipboard,
   readClipboardImageViaPowerShell,
   readClipboardImageViaWlPaste,
   readClipboardImageViaXclip,
 };
 
-export default clipboardImagePart1;
+export default clipboardReaders;
