@@ -4,12 +4,14 @@ import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import type diagnosticsTypes from "../src/core/diagnostics.ts";
+import skillDirectory from "../src/core/skill-directory.ts";
 import skillsModule from "../src/core/skills.ts";
 import type skillsTypes from "../src/core/skills.types.ts";
 import sourceInfoModule from "../src/core/source-info.ts";
 import skillsSupport from "./skills-support.ts";
 
-const { formatSkillsForPrompt, loadSkills, loadSkillsFromDir } = skillsModule;
+const { formatSkillsForPrompt, loadSkills } = skillsModule;
+const { loadSkillsFromDir } = skillDirectory;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const { fixturesDir } = skillsSupport;

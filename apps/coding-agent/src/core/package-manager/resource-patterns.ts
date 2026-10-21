@@ -1,12 +1,12 @@
 import { minimatch } from "minimatch";
 
 import pathsModule from "../../utils/paths.ts";
+import ignoreRules from "../ignore-rules.ts";
 import platformNode from "../platform-node.ts";
-import resourceFiles from "./resource-files.ts";
 
 const { normalizePath } = pathsModule;
 const { dirname, basename, relative } = platformNode;
-const { toPosixPath } = resourceFiles;
+const { toPosixPath } = ignoreRules;
 
 function isPattern(s: string): boolean {
   return (

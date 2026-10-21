@@ -1,4 +1,5 @@
-import skills from "./core/skills.ts";
+import skillDirectory from "./core/skill-directory.ts";
+import skillsModule from "./core/skills.ts";
 import sourceInfo from "./core/source-info.ts";
 import editDiff from "./core/tools/edit-diff.ts";
 import renderUtils from "./core/tools/render-utils.ts";
@@ -18,7 +19,7 @@ const indexKitPart4 = {
   detectSupportedImageMimeTypeFromFile: mime.detectSupportedImageMimeTypeFromFile,
   formatDimensionNote: imageResize.formatDimensionNote,
   formatReadLineRange: renderUtils.formatReadLineRange,
-  formatSkillsForPrompt: skills.formatSkillsForPrompt,
+  formatSkillsForPrompt: skillsModule.formatSkillsForPrompt,
   generateDiffString: editDiff.generateDiffString,
   generateUnifiedPatch: editDiff.generateUnifiedPatch,
   getLanguageFromPath: themeModule.getLanguageFromPath,
@@ -27,8 +28,8 @@ const indexKitPart4 = {
   getSettingsListTheme: themeModule.getSettingsListTheme,
   highlightCode: themeModule.highlightCode,
   initTheme: themeModule.initTheme,
-  loadSkills: skills.loadSkills,
-  loadSkillsFromDir: skills.loadSkillsFromDir,
+  loadSkills: skillsModule.loadSkills,
+  loadSkillsFromDir: skillDirectory.loadSkillsFromDir,
   resizeImage: imageResize.resizeImage,
 };
 

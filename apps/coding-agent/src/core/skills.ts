@@ -1,13 +1,196 @@
-import skillsPart2 from "./skills-part2.ts";
-import skillsPart3 from "./skills-part3.ts";
+import config from "../config.ts";
+import paths from "../utils/paths.ts";
+import type diagnosticsTypes from "./diagnostics.ts";
+import platformNode from "./platform-node.ts";
+import nodeFs from "./platform/node/fs.ts";
+import skillDirectory from "./skill-directory.ts";
+import skillFile from "./skill-file.ts";
+import type skillsTypes from "./skills.types.ts";
 
-const { formatSkillsForPrompt, loadSkillsFromDir } = skillsPart2;
-const { loadSkills } = skillsPart3;
+const { statSync, existsSync } = nodeFs;
+const { canonicalizePath, resolvePath } = paths;
+const { sep, resolve, join } = platformNode;
+const { CONFIG_DIR_NAME, getAgentDir } = config;
+const { loadSkillFromFile } = skillFile;
+const { loadSkillsFromDirInternal } = skillDirectory;
 
-const skills = {
-  formatSkillsForPrompt,
-  loadSkills,
-  loadSkillsFromDir,
+const isUnderPath = (target: string, root: string): boolean => {
+  const normalizedRoot = resolve(root);
+  if (target === normalizedRoot) return true;
+  const prefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
+  return target.startsWith(prefix);
 };
 
-export default skills;
+function loadSkills(options: skillsTypes.LoadSkillsOptions): skillsTypes.LoadSkillsResult {
+  const { agentDir, skillPaths, includeDefaults } = options;
+
+  const resolvedCwd = resolvePath(options.cwd);
+  const resolvedAgentDir = resolvePath(agentDir ?? getAgentDir());
+
+  const skillMap = new Map<string, skillsTypes.Skill>();
+  const realPathSet = new Set<string>();
+  const allDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
+  const collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
+
+  function addSkills(result: skillsTypes.LoadSkillsResult) {
+    allDiagnostics.push(...result.diagnostics);
+    mergeLoadedSkills(result, realPathSet, skillMap, collisionDiagnostics);
+  }
+
+  const userSkillsDir = join(resolvedAgentDir, "skills");
+  const projectSkillsDir = resolve(resolvedCwd, CONFIG_DIR_NAME, "skills");
+  if (includeDefaults) {
+    addSkills(loadSkillsFromDirInternal(userSkillsDir, "user", true));
+    addSkills(loadSkillsFromDirInternal(projectSkillsDir, "project", true));
+  }
+
+  const getSource = (resolvedPath: string): "user" | "project" | "path" => {
+    if (!includeDefaults) {
+      if (isUnderPath(resolvedPath, userSkillsDir)) return "user";
+      if (isUnderPath(resolvedPath, projectSkillsDir)) return "project";
+    }
+    return "path";
+  };
+
+  return loadExplicitSkillPaths(
+    skillPaths,
+    resolvedCwd,
+    allDiagnostics,
+    getSource,
+    addSkills,
+    collisionDiagnostics,
+    skillMap,
+  );
+}
+
+function mergeLoadedSkills(
+  result: skillsTypes.LoadSkillsResult,
+  realPathSet: Set<string>,
+  skillMap: Map<string, skillsTypes.Skill>,
+  collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[],
+) {
+  for (const skill of result.skills) {
+    const realPath = canonicalizePath(skill.filePath);
+
+    if (realPathSet.has(realPath)) {
+      continue;
+    }
+
+    const existing = skillMap.get(skill.name);
+    if (existing === undefined) {
+      skillMap.set(skill.name, skill);
+      realPathSet.add(realPath);
+    } else {
+      collisionDiagnostics.push({
+        collision: {
+          loserPath: skill.filePath,
+          name: skill.name,
+          resourceType: "skill",
+          winnerPath: existing.filePath,
+        },
+        message: `name "${skill.name}" collision`,
+        path: skill.filePath,
+        type: "collision",
+      });
+    }
+  }
+}
+
+function loadExplicitSkillPaths(
+  skillPaths: string[],
+  resolvedCwd: string,
+  allDiagnostics: diagnosticsTypes.ResourceDiagnostic[],
+  getSource: (resolvedPath: string) => "user" | "project" | "path",
+  addSkills: (result: skillsTypes.LoadSkillsResult) => void,
+  collisionDiagnostics: diagnosticsTypes.ResourceDiagnostic[],
+  skillMap: Map<string, skillsTypes.Skill>,
+): skillsTypes.LoadSkillsResult {
+  for (const rawPath of skillPaths) {
+    const resolvedPath = resolvePath(rawPath, resolvedCwd, { trim: true });
+    if (!existsSync(resolvedPath)) {
+      allDiagnostics.push({
+        message: "skill path does not exist",
+        path: resolvedPath,
+        type: "warning",
+      });
+      continue;
+    }
+
+    try {
+      const stats = statSync(resolvedPath);
+      const source = getSource(resolvedPath);
+      if (stats.isDirectory()) {
+        addSkills(loadSkillsFromDirInternal(resolvedPath, source, true));
+      } else if (stats.isFile() && resolvedPath.endsWith(".md")) {
+        const result = loadSkillFromFile(resolvedPath, source);
+        if (result.skill === null) {
+          allDiagnostics.push(...result.diagnostics);
+        } else {
+          addSkills({ diagnostics: result.diagnostics, skills: [result.skill] });
+        }
+      } else {
+        allDiagnostics.push({
+          message: "skill path is not a markdown file",
+          path: resolvedPath,
+          type: "warning",
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "failed to read skill path";
+      allDiagnostics.push({ message, path: resolvedPath, type: "warning" });
+    }
+  }
+
+  return {
+    diagnostics: [...allDiagnostics, ...collisionDiagnostics],
+    skills: Array.from(skillMap.values()),
+  };
+}
+
+function formatSkillsForPrompt(
+  skills: skillsTypes.Skill[],
+  fileReadTool: "read" | "bash" | "indirect" = "read",
+): string {
+  const visibleSkills = skills.filter((s) => !s.disableModelInvocation);
+
+  if (visibleSkills.length === 0) {
+    return "";
+  }
+
+  const lines = [
+    "\n\nThe following skills provide specialized instructions for specific tasks.",
+    fileReadTool === "read"
+      ? "Use the read tool to load a skill's file when the task matches its description."
+      : fileReadTool === "bash"
+        ? "Use bash to load a skill's file when the task matches its description."
+        : "Load a skill's file when the task matches its description.",
+    "When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
+    "",
+    "<available_skills>",
+  ];
+
+  for (const skill of visibleSkills) {
+    lines.push("  <skill>");
+    lines.push(`    <name>${escapeXml(skill.name)}</name>`);
+    lines.push(`    <description>${escapeXml(skill.description)}</description>`);
+    lines.push(`    <location>${escapeXml(skill.filePath)}</location>`);
+    lines.push("  </skill>");
+  }
+
+  lines.push("</available_skills>");
+
+  return lines.join("\n");
+}
+
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&apos;");
+}
+
+const skillsModule = { formatSkillsForPrompt, loadSkills };
+
+export default skillsModule;

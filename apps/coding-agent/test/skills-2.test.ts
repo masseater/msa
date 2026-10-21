@@ -2,10 +2,10 @@ import testing from "@msa/testing";
 import { describe, expect, it } from "vite-plus/test";
 
 import type diagnosticsTypes from "../src/core/diagnostics.ts";
-import skillsModule from "../src/core/skills.ts";
+import skillDirectory from "../src/core/skill-directory.ts";
 import skillsSupport from "./skills-support.ts";
 
-const { loadSkillsFromDir } = skillsModule;
+const { loadSkillsFromDir } = skillDirectory;
 
 const { fixturesDir } = skillsSupport;
 

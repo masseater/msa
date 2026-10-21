@@ -1,12 +1,14 @@
 import ignore from "ignore";
 
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
+import ignoreRules from "../ignore-rules.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
 
-const { statSync, readdirSync, globSync, readFileSync, existsSync } = nodeFs;
-const { resolve, join, relative, sep } = platformNode;
+const { statSync, readdirSync, existsSync, globSync } = nodeFs;
+const { join, sep, relative, resolve } = platformNode;
+const { toPosixPath, addIgnoreRules } = ignoreRules;
 
 const RESOURCE_TYPES: defaultPackageManagerInternalTypes.ResourceType[] = [
   "extensions",
@@ -21,59 +23,6 @@ const FILE_PATTERNS: Record<defaultPackageManagerInternalTypes.ResourceType, Reg
   skills: /\.md$/u,
   themes: /\.json$/u,
 };
-
-const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
-
-function toPosixPath(p: string): string {
-  return p.split(sep).join("/");
-}
-
-function prefixIgnorePattern(line: string, prefix: string): string | null {
-  const trimmed = line.trim();
-  if (trimmed === "") return null;
-  if (trimmed.startsWith("#") && !trimmed.startsWith("\\#")) return null;
-
-  let pattern = line;
-  let negated = false;
-
-  if (pattern.startsWith("!")) {
-    negated = true;
-    pattern = pattern.slice(1);
-  } else if (pattern.startsWith("\\!")) {
-    pattern = pattern.slice(1);
-  }
-
-  if (pattern.startsWith("/")) {
-    pattern = pattern.slice(1);
-  }
-
-  const prefixed = prefix === "" ? pattern : `${prefix}${pattern}`;
-  return negated ? `!${prefixed}` : prefixed;
-}
-
-function addIgnoreRules(
-  ig: defaultPackageManagerInternalTypes.IgnoreMatcher,
-  dir: string,
-  rootDir: string,
-): void {
-  const relativeDir = relative(rootDir, dir);
-  const prefix = relativeDir === "" ? "" : `${toPosixPath(relativeDir)}/`;
-
-  for (const filename of IGNORE_FILE_NAMES) {
-    const ignorePath = join(dir, filename);
-    if (!existsSync(ignorePath)) continue;
-    try {
-      const content = readFileSync(ignorePath, "utf-8");
-      const patterns = content
-        .split(/\r?\n/u)
-        .map((line) => prefixIgnorePattern(line, prefix))
-        .filter((line): line is string => Boolean(line));
-      if (patterns.length > 0) {
-        ig.add(patterns);
-      }
-    } catch {}
-  }
-}
 
 function expandPackageGlob(pattern: string, root: string): string[] {
   return globSync(pattern, { cwd: root })
@@ -145,11 +94,9 @@ function resourcePrecedenceRank(m: packageManagerTypes.PathMetadata): number {
 const resourceFiles = {
   FILE_PATTERNS,
   RESOURCE_TYPES,
-  addIgnoreRules,
   collectFiles,
   expandPackageGlob,
   resourcePrecedenceRank,
-  toPosixPath,
 };
 
 export default resourceFiles;

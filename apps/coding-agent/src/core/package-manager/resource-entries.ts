@@ -1,6 +1,8 @@
 import ignore from "ignore";
 
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
+import directoryEntry from "../directory-entry.ts";
+import ignoreRules from "../ignore-rules.ts";
 import manifestModule from "../manifest.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
@@ -9,25 +11,10 @@ import resourceFiles from "./resource-files.ts";
 const { readMsaManifest } = manifestModule;
 const { dirname, resolve, relative, join } = platformNode;
 const { readdirSync, existsSync, statSync } = nodeFs;
-const { FILE_PATTERNS, collectFiles, toPosixPath, addIgnoreRules } = resourceFiles;
+const { FILE_PATTERNS, collectFiles } = resourceFiles;
+const { toPosixPath, addIgnoreRules } = ignoreRules;
 
-type ResolvedEntry = { fullPath: string; isDir: boolean; isFile: boolean };
-
-function resolveEntry(
-  dir: string,
-  entry: { name: string; isDirectory(): boolean; isFile(): boolean; isSymbolicLink(): boolean },
-): ResolvedEntry | undefined {
-  const fullPath = join(dir, entry.name);
-  if (!entry.isSymbolicLink()) {
-    return { fullPath, isDir: entry.isDirectory(), isFile: entry.isFile() };
-  }
-  try {
-    const stats = statSync(fullPath);
-    return { fullPath, isDir: stats.isDirectory(), isFile: stats.isFile() };
-  } catch {
-    return undefined;
-  }
-}
+const { resolveEntry } = directoryEntry;
 
 function collectSkillEntries(
   dir: string,

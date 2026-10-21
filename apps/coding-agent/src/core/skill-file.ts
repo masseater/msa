@@ -2,68 +2,18 @@ import frontmatterModule from "../utils/frontmatter.ts";
 import type diagnosticsTypes from "./diagnostics.ts";
 import platformNode from "./platform-node.ts";
 import nodeFs from "./platform/node/fs.ts";
-import type skillsInternalTypes from "./skills-internal.types.ts";
 import type skillsTypes from "./skills.types.ts";
 import sourceInfoModule from "./source-info.ts";
 import type sourceInfoTypes from "./source-info.types.ts";
 
-const { basename, dirname, join, relative, sep } = platformNode;
-const { existsSync, readFileSync } = nodeFs;
-const { createSyntheticSourceInfo } = sourceInfoModule;
+const { dirname, basename } = platformNode;
 const { parseFrontmatter } = frontmatterModule;
+const { readFileSync } = nodeFs;
+const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const MAX_NAME_LENGTH = 64;
 
 const MAX_DESCRIPTION_LENGTH = 1024;
-
-const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
-
-function toPosixPath(p: string): string {
-  return p.split(sep).join("/");
-}
-
-function prefixIgnorePattern(line: string, prefix: string): string | null {
-  const trimmed = line.trim();
-  if (trimmed === "") return null;
-  if (trimmed.startsWith("#") && !trimmed.startsWith("\\#")) return null;
-
-  let pattern = line;
-  let negated = false;
-
-  if (pattern.startsWith("!")) {
-    negated = true;
-    pattern = pattern.slice(1);
-  } else if (pattern.startsWith("\\!")) {
-    pattern = pattern.slice(1);
-  }
-
-  if (pattern.startsWith("/")) {
-    pattern = pattern.slice(1);
-  }
-
-  const prefixed = prefix === "" ? pattern : `${prefix}${pattern}`;
-  return negated ? `!${prefixed}` : prefixed;
-}
-
-function addIgnoreRules(ig: skillsInternalTypes.IgnoreMatcher, dir: string, rootDir: string): void {
-  const relativeDir = relative(rootDir, dir);
-  const prefix = relativeDir === "" ? "" : `${toPosixPath(relativeDir)}/`;
-
-  for (const filename of IGNORE_FILE_NAMES) {
-    const ignorePath = join(dir, filename);
-    if (!existsSync(ignorePath)) continue;
-    try {
-      const content = readFileSync(ignorePath, "utf-8");
-      const patterns = content
-        .split(/\r?\n/u)
-        .map((line) => prefixIgnorePattern(line, prefix))
-        .filter((line): line is string => Boolean(line));
-      if (patterns.length > 0) {
-        ig.add(patterns);
-      }
-    } catch {}
-  }
-}
 
 function validateName(name: string): string[] {
   const errors: string[] = [];
@@ -147,7 +97,7 @@ function loadSkillFromFile(
   try {
     ({ frontmatter } = parseFrontmatter<skillsTypes.SkillFrontmatter>(rawContent));
   } catch (error) {
-    return loadSkillFromFilePart2(isDeclaredSkill, error, diagnostics, filePath);
+    return skillParseFailure(isDeclaredSkill, error, diagnostics, filePath);
   }
 
   const description = frontmatter.description;
@@ -156,12 +106,7 @@ function loadSkillFromFile(
     return { diagnostics, skill: null };
   }
 
-  const { skillDir, name } = loadSkillFromFilePart1(
-    filePath,
-    description,
-    diagnostics,
-    frontmatter,
-  );
+  const { skillDir, name } = validateSkillIdentity(filePath, description, diagnostics, frontmatter);
 
   if (!hasDescription) {
     return { diagnostics, skill: null };
@@ -180,15 +125,7 @@ function loadSkillFromFile(
   };
 }
 
-const skillsPart1 = {
-  addIgnoreRules,
-  loadSkillFromFile,
-  toPosixPath,
-};
-
-export default skillsPart1;
-
-function loadSkillFromFilePart2(
+function skillParseFailure(
   isDeclaredSkill: boolean,
   error: unknown,
   diagnostics: diagnosticsTypes.ResourceDiagnostic[],
@@ -201,7 +138,7 @@ function loadSkillFromFilePart2(
   return { diagnostics, skill: null };
 }
 
-function loadSkillFromFilePart1(
+function validateSkillIdentity(
   filePath: string,
   description: string | undefined,
   diagnostics: diagnosticsTypes.ResourceDiagnostic[],
@@ -224,3 +161,7 @@ function loadSkillFromFilePart1(
   }
   return { name, skillDir };
 }
+
+const skillFile = { loadSkillFromFile };
+
+export default skillFile;
