@@ -5,13 +5,11 @@ import config from "../config.ts";
 import errors from "../utils/errors.ts";
 import paths from "../utils/paths.ts";
 import text from "../utils/text.ts";
-import platformNode from "./platform-node.ts";
 import nodeFs from "./platform/node/fs.ts";
 import resolveConfigValueModule from "./resolve-config-value.ts";
 
 const { readFileSync } = nodeFs;
-const { join } = platformNode;
-const { getAgentDir } = config;
+const { getAuthPath } = config;
 const { normalizePath } = paths;
 const { stripBom } = text;
 const { toErrorMessage } = errors;
@@ -21,7 +19,7 @@ export default class ReadOnlyAuthStorage implements aiTypes.CredentialStore {
   private readonly authPath: string;
   private data: AuthStorageData | undefined;
 
-  constructor(authPath: string = join(getAgentDir(), "auth.json")) {
+  constructor(authPath: string = getAuthPath()) {
     this.authPath = normalizePath(authPath);
   }
 

@@ -11,8 +11,8 @@ import platformModule from "./platform.ts";
 import nodeFs from "./platform/node/fs.ts";
 
 const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
-const { dirname, join } = platformNode;
-const { getAgentDir } = config;
+const { dirname } = platformNode;
+const { getAuthPath } = config;
 const { normalizePath } = paths;
 const { nowMs, randomUnit, sleepFor } = platformModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
@@ -27,7 +27,7 @@ const AUTH_FILE_WRITE_OPTIONS = { encoding: "utf-8", mode: 0o600 } as const;
 export default class FileAuthStorageBackend implements authStorageTypes.AuthStorageBackend {
   private authPath: string;
 
-  constructor(authPath: string = join(getAgentDir(), "auth.json")) {
+  constructor(authPath: string = getAuthPath()) {
     this.authPath = normalizePath(authPath);
   }
 
