@@ -5,39 +5,60 @@ import scopeLookup from "./scope-lookup.ts";
 
 type Node = flowTypes.Node;
 
-const rootIdentifier = (node: Node): Node => {
-  if (node.type === "MemberExpression") return rootIdentifier(node.object);
-  if (node.type === "CallExpression") return rootIdentifier(node.callee);
-  if (node.type === "TSInstantiationExpression") return rootIdentifier(node.expression);
-  return node;
-};
+type Visited = Set<Node>;
+
+type DefinitionCheck = (context: Context, def: Definition, visited: Visited) => boolean;
 
 const isRelative = (specifier: string): boolean => specifier.startsWith(".");
-
-type DefinitionCheck = (context: Context, def: Definition, depth: number) => boolean;
-
-const MAX_DEPTH = 8;
 
 const fromImport: DefinitionCheck = (_context, def) =>
   isRelative((def.parent as ESTree.ImportDeclaration).source.value);
 
-const fromVariable: DefinitionCheck = (context, def, depth) => {
+const fromVariable: DefinitionCheck = (context, def, visited) => {
   const init = def.node.type === "VariableDeclarator" ? def.node.init : null;
-  if (init === null) return false;
-  return init.type === "ClassExpression" || declaredInPackage(context, init, depth + 1);
+  return init !== null && declaredIn(context, init, visited);
 };
 
 const DEFINITIONS: Readonly<Partial<Record<Definition["type"], DefinitionCheck>>> = {
   ClassName: () => true,
+  FunctionName: () => true,
   ImportBinding: fromImport,
   Variable: fromVariable,
 };
 
-function declaredInPackage(context: Context, node: Node, depth = 0): boolean {
-  const variable = scopeLookup.variableOf(context, rootIdentifier(node));
-  if (variable === undefined || depth > MAX_DEPTH) return false;
-  return variable.defs.some((def) => DEFINITIONS[def.type]?.(context, def, depth) === true);
+const fromIdentifier = (context: Context, node: Node, visited: Visited): boolean =>
+  scopeLookup
+    .variableOf(context, node)
+    ?.defs.some((def) => DEFINITIONS[def.type]?.(context, def, visited) === true) === true;
+
+const fromCall = (context: Context, node: ESTree.CallExpression, visited: Visited): boolean =>
+  [node.callee, ...node.arguments].some((part) =>
+    declaredIn(context, part.type === "SpreadElement" ? part.argument : part, visited),
+  );
+
+function declaredIn(context: Context, node: Node, visited: Visited): boolean {
+  if (visited.has(node)) return false;
+  visited.add(node);
+  switch (node.type) {
+    case "ArrowFunctionExpression":
+    case "ClassExpression":
+    case "FunctionExpression":
+      return true;
+    case "CallExpression":
+      return fromCall(context, node, visited);
+    case "Identifier":
+      return fromIdentifier(context, node, visited);
+    case "MemberExpression":
+      return declaredIn(context, node.object, visited);
+    case "TSInstantiationExpression":
+      return declaredIn(context, node.expression, visited);
+    default:
+      return false;
+  }
 }
+
+const declaredInPackage = (context: Context, node: Node): boolean =>
+  declaredIn(context, node, new Set());
 
 const classOrigin = { declaredInPackage };
 

@@ -14,6 +14,14 @@ const HEADER = [
   "const { StatusIndicator } = statusIndicators;",
   "class Base {}",
   "const LocalExpression = class {};",
+  "const withFoo = <T,>(base: T): T => base;",
+  'import { Mixin } from "effect";',
+  "const Local0 = Base;",
+  ...Array.from({ length: 12 }, (_, index) => `const Local${index + 1} = Local${index};`),
+  "const Native0 = Error;",
+  ...Array.from({ length: 12 }, (_, index) => `const Native${index + 1} = Native${index};`),
+  "const Loop1 = Loop2;",
+  "const Loop2 = Loop1;",
 ];
 
 const cases: readonly (readonly [statement: string, expected: string | undefined])[] = [
@@ -23,6 +31,12 @@ const cases: readonly (readonly [statement: string, expected: string | undefined
   ["export class D extends statusIndicators.StatusIndicator {}", LOCAL_EXTENDS],
   ["export class E extends LocalExpression {}", LOCAL_EXTENDS],
   ["export const F = class extends Base {};", LOCAL_EXTENDS],
+  ["export class J extends withFoo(Base) {}", LOCAL_EXTENDS],
+  ["export class K extends withFoo(Error) {}", LOCAL_EXTENDS],
+  ["export class L extends Mixin(Base) {}", LOCAL_EXTENDS],
+  ["export class M extends Local12 {}", LOCAL_EXTENDS],
+  ["export class N extends Native12 {}", undefined],
+  ["export class O extends Loop1 {}", undefined],
   ["export class G extends tui.Container {}", undefined],
   ['export class H extends Data.TaggedError("H")<{}> {}', undefined],
   ["export class I extends Error {}", undefined],
