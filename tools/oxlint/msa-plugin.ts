@@ -1,61 +1,66 @@
 import type { Context, ESTree } from "vite-plus/lint/plugins";
 import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 
+import type flowTypes from "./flow.types.ts";
+import LookupFlow from "./lookup-flow.ts";
+import RequireFlow from "./require-flow.ts";
+import StaticString from "./static-string.ts";
+
 const LOOKUP = "getBuiltinModule";
 const LOOKUP_MESSAGE =
   "process.getBuiltinModule で組み込みを探さない。静的 import で読み、platform 層を通して使う";
+const LOOKUP_UNKNOWN_MESSAGE =
+  "process や globalThis をこの形で使うと getBuiltinModule に届くかを判定できない。静的なキーで読む";
 const REQUIRE_MESSAGE =
   "require や動的 import で組み込みを読まない。Effect の API か platform 層を通して使う";
+const REQUIRE_UNKNOWN_MESSAGE =
+  "require・createRequire・import() をこの形で使うと読み込む先を判定できない。文字列リテラルで直接呼ぶ";
+const SYNC_FS_MESSAGE =
+  "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
 
-const literalString = (node: Extract<ESTree.Node, { type: "Literal" }>): string | undefined =>
-  typeof node.value === "string" ? node.value : undefined;
+type Node = flowTypes.Node;
 
-const templateString = (node: ESTree.TemplateLiteral): string | undefined =>
-  node.expressions.length === 0 ? (node.quasis[0]?.value.cooked ?? undefined) : undefined;
-
-const staticString = (node: ESTree.Node | null | undefined): string | undefined => {
-  switch (node?.type) {
-    case "Literal":
-      return literalString(node);
-    case "TemplateLiteral":
-      return templateString(node);
-    default:
-      return undefined;
-  }
+const stringOptions = (context: Context, name: string): ReadonlySet<string> => {
+  const [options] = context.options as readonly (Record<string, readonly string[]> | undefined)[];
+  return new Set(options?.[name] ?? []);
 };
 
-const isRequireMember = (callee: ESTree.Node): boolean =>
-  callee.type === "MemberExpression" &&
-  !callee.computed &&
-  callee.property.type === "Identifier" &&
-  callee.property.name === "require";
-
-const moduleBase = (specifier: string): string =>
-  specifier.replace(/^node:/u, "").split("/")[0] ?? specifier;
-
-const optionModules = (context: Context): ReadonlySet<string> => {
-  const [options] = context.options as readonly ({ modules?: readonly string[] } | undefined)[];
-  return new Set(options?.modules ?? []);
+const createReporter = (context: Context, message: string) => {
+  const reported = new Set<number>();
+  return (node: Node): void => {
+    if (reported.has(node.start)) return;
+    reported.add(node.start);
+    context.report({ message, node });
+  };
 };
 
-const isCreateRequireCall = (node: ESTree.Node | null | undefined): boolean =>
-  node?.type === "CallExpression" &&
-  node.callee.type === "Identifier" &&
-  node.callee.name === "createRequire";
+const listSchema = (name: string) => [
+  {
+    additionalProperties: false,
+    properties: { [name]: { items: { type: "string" }, type: "array" } },
+    type: "object",
+  },
+];
 
 const noBuiltinModuleLookup = defineRule({
   create(context) {
-    const report = (node: ESTree.Node): void => context.report({ message: LOOKUP_MESSAGE, node });
+    const report = createReporter(context, LOOKUP_MESSAGE);
+    const lookup = new LookupFlow({
+      context,
+      unknown: createReporter(context, LOOKUP_UNKNOWN_MESSAGE),
+    });
+    const reportLookup = (node: Node): void => {
+      if (lookup.isLookup(node)) report(node);
+    };
     return {
+      BinaryExpression: reportLookup,
       Identifier(node) {
         if (node.name === LOOKUP) report(node);
       },
-      Literal(node) {
-        if (node.value === LOOKUP) report(node);
-      },
-      TemplateLiteral(node) {
-        if (staticString(node) === LOOKUP) report(node);
-      },
+      ImportDeclaration: (node) => lookup.fromImport(node),
+      Literal: reportLookup,
+      Program: () => lookup.fromGlobals(),
+      TemplateLiteral: reportLookup,
     };
   },
   meta: { type: "problem" },
@@ -63,43 +68,49 @@ const noBuiltinModuleLookup = defineRule({
 
 const noBuiltinRequire = defineRule({
   create(context) {
-    const modules = optionModules(context);
-    const requireNames = new Set(["require"]);
-    const restricted = (node: ESTree.Node | null | undefined): boolean => {
-      const specifier = staticString(node);
-      return specifier !== undefined && modules.has(moduleBase(specifier));
-    };
-    const isRequireName = (callee: ESTree.Node): boolean =>
-      callee.type === "Identifier" && requireNames.has(callee.name);
-    const isRequire = (callee: ESTree.Node): boolean =>
-      isRequireName(callee) || isCreateRequireCall(callee) || isRequireMember(callee);
-    const report = (node: ESTree.Node): void => context.report({ message: REQUIRE_MESSAGE, node });
-    return {
-      CallExpression(node) {
-        if (isRequire(node.callee) && restricted(node.arguments[0])) report(node);
+    const flow = new RequireFlow({
+      context,
+      report: {
+        restricted: createReporter(context, REQUIRE_MESSAGE),
+        unknown: createReporter(context, REQUIRE_UNKNOWN_MESSAGE),
       },
-      ImportExpression(node) {
-        if (restricted(node.source)) report(node);
+    });
+    return {
+      CallExpression: (node) => flow.fromMemberCall(node),
+      ImportDeclaration: (node) => flow.fromImport(node),
+      ImportExpression: (node) => flow.fromDynamicImport(node),
+      MemberExpression: (node) => flow.fromFactoryName(node),
+      Program: () => flow.fromGlobals(),
+      Property(node) {
+        if (node.parent.type === "ObjectPattern")
+          flow.fromFactoryName(node as ESTree.BindingProperty);
       },
       TSExternalModuleReference(node) {
-        if (restricted(node.expression)) report(node);
-      },
-      VariableDeclarator(node) {
-        if (node.id.type === "Identifier" && isCreateRequireCall(node.init))
-          requireNames.add(node.id.name);
+        flow.checkSpecifier(node.expression, node);
       },
     };
   },
-  meta: {
-    schema: [
-      {
-        additionalProperties: false,
-        properties: { modules: { items: { type: "string" }, type: "array" } },
-        type: "object",
-      },
-    ],
-    type: "problem",
+  meta: { schema: listSchema("modules"), type: "problem" },
+});
+
+const noSyncFs = defineRule({
+  create(context) {
+    const names = stringOptions(context, "names");
+    const strings = new StaticString(context);
+    const report = createReporter(context, SYNC_FS_MESSAGE);
+    const nameOf = (node: Node): string | undefined =>
+      node.type === "Identifier" ? node.name : strings.fold(node);
+    const reportName = (node: Node): void => {
+      if (names.has(nameOf(node) ?? "")) report(node);
+    };
+    return {
+      BinaryExpression: reportName,
+      Identifier: reportName,
+      Literal: reportName,
+      TemplateLiteral: reportName,
+    };
   },
+  meta: { schema: listSchema("names"), type: "problem" },
 });
 
 const msaPlugin = definePlugin({
@@ -107,6 +118,7 @@ const msaPlugin = definePlugin({
   rules: {
     "no-builtin-module-lookup": noBuiltinModuleLookup,
     "no-builtin-require": noBuiltinRequire,
+    "no-sync-fs": noSyncFs,
   },
 });
 

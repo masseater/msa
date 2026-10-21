@@ -7,6 +7,7 @@ import vitestShared from "./vitest.shared.ts";
 const {
   builtinModuleBases,
   effectReplaceableBuiltins,
+  fsSyncFunctions,
   generated,
   lintPlugins,
   platformOnlyImports,
@@ -70,11 +71,16 @@ export default defineConfig({
           "effecttsgo/node-builtin-import": "off",
           "eslint/no-restricted-imports": ["error", restrictedImports],
           "msa/no-builtin-require": "off",
+          "msa/no-sync-fs": "off",
         },
       },
       {
-        files: ["tools/oxlint/msa-plugin.ts"],
+        files: ["tools/oxlint/**"],
         rules: { "msa/no-builtin-module-lookup": "off" },
+      },
+      {
+        files: ["lint.config.ts"],
+        rules: { "msa/no-sync-fs": "off" },
       },
       {
         files: ["scripts/**"],
@@ -105,6 +111,7 @@ export default defineConfig({
       "import/prefer-default-export": "error",
       "msa/no-builtin-module-lookup": "error",
       "msa/no-builtin-require": ["error", { modules: effectReplaceableBuiltins }],
+      "msa/no-sync-fs": ["error", { names: fsSyncFunctions }],
       "no-comments/disallowComments": ["error", { allow: ["oxlint-disable", "eslint-disable"] }],
       "node/no-top-level-await": "error",
       "promise/always-return": "error",

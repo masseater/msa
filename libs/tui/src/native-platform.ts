@@ -32,6 +32,7 @@ function loadNativePlatformHelper(platform: string, suffix = ""): NativePlatform
 
   for (const modulePath of getNativeModuleCandidates(nativePath)) {
     try {
+      // oxlint-disable-next-line msa/no-builtin-require
       const helper = cjsRequire(modulePath) as Partial<NativePlatformHelper> | null;
       if (typeof helper?.getText === "function" && typeof helper.getImage === "function") {
         helpers.set(nativePath, helper as NativePlatformHelper);

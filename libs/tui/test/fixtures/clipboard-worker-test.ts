@@ -19,6 +19,7 @@ interface WorkerTestHelper {
 
 const require = createRequire(import.meta.url);
 const selfPath = fileURLToPath(import.meta.url);
+// oxlint-disable-next-line msa/no-builtin-require
 const loadHelper = (addon: string): WorkerTestHelper => require(addon);
 
 const waitFor = (

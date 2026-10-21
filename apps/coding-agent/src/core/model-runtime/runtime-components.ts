@@ -18,7 +18,11 @@ type RuntimeHost = Omit<ConstructorParameters<typeof ModelRequests>[0], "models"
 
 const createRuntimeComponents = (parts: RuntimeParts, host: RuntimeHost) => {
   const { credentials } = parts;
-  const models = createModels({ credentials, modelsStore: parts.modelsStore });
+  const models = createModels({
+    authContext: parts.authContext,
+    credentials,
+    modelsStore: parts.modelsStore,
+  });
   const virtualModels = new VirtualModelRegistry();
   const catalog = new ProviderCatalog(models, parts.catalogProviders, parts.config, virtualModels);
   const availability = new ModelAvailability(models, credentials);

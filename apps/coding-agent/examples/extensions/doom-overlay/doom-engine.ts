@@ -23,6 +23,7 @@ const loadDoomFactory = (buildDir: string, doomJsPath: string, doomJsCode: strin
     "require",
     doomJsCode,
   );
+  // oxlint-disable-next-line msa/no-builtin-require
   moduleFunc(moduleExports, moduleExports.exports, buildDir, doomJsPath, createRequire(doomJsPath));
   return moduleExports.exports as DoomFactory;
 };

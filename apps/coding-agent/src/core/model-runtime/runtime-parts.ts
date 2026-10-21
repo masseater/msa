@@ -1,3 +1,5 @@
+import ai from "@msa/ai";
+
 import configModule from "../../config.ts";
 import DefaultAuthStorage from "../auth-storage.ts";
 import FileModelsStore from "../file-models-store.ts";
@@ -9,7 +11,13 @@ import RuntimeCredentials from "../runtime-credentials.ts";
 import catalogProviders from "./catalog-providers.ts";
 
 const { dirname, join, readEnv } = platform;
-const { getModelsPath } = configModule;
+const { expandTildePath, getModelsPath } = configModule;
+const { defaultProviderAuthContext } = ai;
+
+const fileSystemAuthContext = (): ReturnType<typeof defaultProviderAuthContext> => ({
+  ...defaultProviderAuthContext(),
+  fileExists: (path) => platform.files.exists(expandTildePath(path)).catch(() => false),
+});
 const { builtinCatalogProviders } = catalogProviders;
 
 const modelsStoreFor = (
@@ -25,6 +33,7 @@ const loadRuntimeParts = (options: modelRuntimeTypes.CreateModelRuntimeOptions) 
   const modelsPath =
     options.modelsPath === null ? undefined : (options.modelsPath ?? getModelsPath());
   return ModelConfig.load(modelsPath).then((config) => ({
+    authContext: fileSystemAuthContext(),
     catalogProviders: builtinCatalogProviders(options.catalogBaseUrl),
     config,
     credentials: new RuntimeCredentials(

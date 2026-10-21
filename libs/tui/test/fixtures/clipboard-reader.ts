@@ -15,6 +15,7 @@ const require = createRequire(import.meta.url);
 const toJson = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
 
 const read = Effect.gen(function* () {
+  // oxlint-disable-next-line msa/no-builtin-require
   const helper: ClipboardReader = require(process.argv[2] ?? "");
   const pending = helper[process.argv[3] ?? ""]?.();
   assert.ok(pending instanceof Promise, "Native reads must return promises");

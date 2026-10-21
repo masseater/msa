@@ -82,10 +82,6 @@
       "types": "./dist/oauth.types.d.ts",
       "import": "./dist/oauth.types.js"
     },
-    "./bun-oauth": {
-      "types": "./dist/bun-oauth.d.ts",
-      "import": "./dist/bun-oauth.js"
-    },
     "./*.types": {
       "types": "./dist/*.types.d.ts",
       "import": "./dist/*.types.js"

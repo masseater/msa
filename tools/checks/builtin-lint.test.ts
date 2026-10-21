@@ -6,10 +6,11 @@ import lintConfig from "../../lint.config.ts";
 import captureProcessModule from "../capture-process.ts";
 
 const { captureProcess, processRunnerLayer } = captureProcessModule;
-const { builtinModuleBases, effectReplaceableBuiltins } = lintConfig;
+const { builtinModuleBases, effectReplaceableBuiltins, fsSyncFunctions } = lintConfig;
 
 const LOOKUP = "msa(no-builtin-module-lookup)";
 const REQUIRE = "msa(no-builtin-require)";
+const SYNC_FS = "msa(no-sync-fs)";
 const NODE_BUILTIN_IMPORT = "effecttsgo(node-builtin-import)";
 
 const LintReport = Schema.fromJsonString(
@@ -24,30 +25,74 @@ const LintReport = Schema.fromJsonString(
   }),
 );
 
-const cases: readonly (readonly [expression: string, expected: string | undefined])[] = [
-  ['Reflect.get(process, "getBuiltinModule")', LOOKUP],
-  ['process.getBuiltinModule?.("node:fs")', LOOKUP],
-  ['process["getBuiltinModule"]', LOOKUP],
-  ["process[`getBuiltinModule`]", LOOKUP],
-  ["(({ getBuiltinModule }: NodeJS.Process) => getBuiltinModule)(process)", LOOKUP],
-  ["(globalThis as { process?: { getBuiltinModule?(id: string): unknown } }).process", LOOKUP],
-  ['load("fs")', REQUIRE],
-  ['createRequire(import.meta.url)("node:child_process")', REQUIRE],
-  ['require("node:path/posix")', REQUIRE],
-  ['module.require("crypto")', REQUIRE],
-  ['import("node:fs/promises")', REQUIRE],
-  ['load("node:os")', undefined],
+const cases: readonly (readonly [statement: string, expected: string | undefined])[] = [
+  ['void Reflect.get(process, "getBuiltinModule");', LOOKUP],
+  ['void process.getBuiltinModule?.("node:fs");', LOOKUP],
+  ['void process["getBuiltinModule"];', LOOKUP],
+  ["void process[`getBuiltinModule`];", LOOKUP],
+  ['void process["get" + "BuiltinModule"];', LOOKUP],
+  ['{ const p = process; void p["get" + "Builtin" + "Module"]; }', LOOKUP],
+  ['{ const head = "get"; void process[`${head}BuiltinModule`]; }', LOOKUP],
+  ["void process[dynamicKey];", LOOKUP],
+  ["{ const p = process; void p[dynamicKey]; }", LOOKUP],
+  ["void Reflect.get(process, dynamicKey);", LOOKUP],
+  ['void globalThis["pro" + "cess"][dynamicKey];', LOOKUP],
+  ["void globalThis[dynamicKey];", LOOKUP],
+  ["{ const { ...rest } = process; void rest[dynamicKey]; }", LOOKUP],
+  ["void Object.values(process);", LOOKUP],
+  ["void (({ getBuiltinModule }: NodeJS.Process) => getBuiltinModule)(process);", LOOKUP],
+  [
+    "void (globalThis as { process?: { getBuiltinModule?(id: string): unknown } }).process;",
+    LOOKUP,
+  ],
+  ['void Object.getOwnPropertyDescriptor(process, "platform");', undefined],
+  ['void globalThis[Symbol.for("msa")];', undefined],
+  ["void globalThis[`msa_${dynamicKey}`];", undefined],
+  ['void load("fs");', REQUIRE],
+  ['void createRequire(import.meta.url)("node:child_process");', REQUIRE],
+  ['void nodeModule.createRequire(import.meta.url)("node:fs");', REQUIRE],
+  ['void moduleNamespace.createRequire(import.meta.url)("crypto");', REQUIRE],
+  ['void aliasedFactory(import.meta.url)("node:path");', REQUIRE],
+  ['{ const loader = createRequire(import.meta.url); void loader("http"); }', REQUIRE],
+  ['{ let loader; loader = createRequire(import.meta.url); void loader("https"); }', REQUIRE],
+  [
+    '{ const factory = nodeModule.createRequire; void factory(import.meta.url)("stream"); }',
+    REQUIRE,
+  ],
+  [
+    '{ const { createRequire: factory } = nodeModule; void factory(import.meta.url)("timers"); }',
+    REQUIRE,
+  ],
+  ['void nodeModule["create" + "Require"](import.meta.url)("console");', REQUIRE],
+  ['void Module.prototype.require("node:fs");', REQUIRE],
+  ["void load(dynamicKey);", REQUIRE],
+  ['void load.call(undefined, "fs");', REQUIRE],
+  ["void [createRequire];", REQUIRE],
+  ['void require("node:path/posix");', REQUIRE],
+  ['void module.require("crypto");', REQUIRE],
+  ['void import("node:fs/promises");', REQUIRE],
+  ["void import(dynamicKey);", REQUIRE],
+  ['void load("node:os");', undefined],
+  ['void load.resolve("node:fs");', undefined],
+  ['void existsSync("/");', SYNC_FS],
+  ['void fs.readFileSync("/");', SYNC_FS],
+  ['void fs["readFile" + "Sync"];', SYNC_FS],
+  ["{ const { writeFileSync: write } = fs; void write; }", SYNC_FS],
+  ['void fs.promises.readFile("/");', undefined],
 ];
 
 const HEADER = [
-  'import { createRequire } from "node:module";',
+  'import nodeModule, { Module, createRequire, createRequire as aliasedFactory } from "node:module";',
+  'import * as moduleNamespace from "node:module";',
+  'import fs, { existsSync } from "node:fs";',
   "const load = createRequire(import.meta.url);",
+  "const dynamicKey = String(Date.now());",
 ];
 
 const bypassProbe = [
   ...HEADER,
-  ...cases.map(([expression], index) => `const c${index} = ${expression};`),
-  `export default [${cases.map((_, index) => `c${index}`).join(", ")}];`,
+  ...cases.map(([statement]) => statement),
+  "export default undefined;",
 ].join("\n");
 
 const importedBases = builtinModuleBases.filter((base) => !base.startsWith("_"));
@@ -104,13 +149,22 @@ const codesOnLine = (
     )
     .map((diagnostic) => diagnostic.code);
 
+const SYNC_NAMES_SCRIPT =
+  'console.log(Object.keys(require("fs")).filter((key) => key.endsWith("Sync")).join(" "))';
+
+const runtimeSyncNames = captureProcess({
+  args: ["-e", SYNC_NAMES_SCRIPT],
+  command: process.execPath,
+  cwd: repoRoot,
+}).pipe(Effect.map(({ stdout }) => stdout.trim().split(" ")));
+
 const checkProbes = Effect.gen(function* () {
   const report = yield* diagnostics;
-  for (const [index, [expression, expected]] of cases.entries()) {
+  for (const [index, [statement, expected]] of cases.entries()) {
     const codes = codesOnLine(report, BYPASS_PROBE, HEADER.length + index + 1);
-    expect({ codes: [...new Set(codes)], expression }).toEqual({
+    expect({ codes: [...new Set(codes)], statement }).toEqual({
       codes: expected === undefined ? [] : [expected],
-      expression,
+      statement,
     });
   }
   const flaggedBases = report
@@ -118,6 +172,10 @@ const checkProbes = Effect.gen(function* () {
     .filter((diagnostic) => diagnostic.code === NODE_BUILTIN_IMPORT)
     .map((diagnostic) => importedBases[(diagnostic.labels[0]?.span.line ?? 0) - 1]);
   expect([...new Set(flaggedBases)].toSorted()).toEqual([...effectReplaceableBuiltins].toSorted());
+  const missingSyncNames = (yield* runtimeSyncNames).filter(
+    (name) => !fsSyncFunctions.includes(name),
+  );
+  expect(missingSyncNames).toEqual([]);
 });
 
 const runtime = ManagedRuntime.make(Layer.merge(processRunnerLayer, NodeServices.layer));

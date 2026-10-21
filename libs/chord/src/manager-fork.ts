@@ -70,7 +70,7 @@ const tapOutput = (handle: Handle, onOutput: OutputTap) =>
         Stream.runForEach(handle[stream], (chunk) =>
           Effect.sync(() => {
             onOutput(stream, chunk);
-            process[stream].write(chunk);
+            (stream === "stdout" ? process.stdout : process.stderr).write(chunk);
           }),
         ),
       ),

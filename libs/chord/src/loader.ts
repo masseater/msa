@@ -39,6 +39,7 @@ const loadFacet = (url: URL, version: string): Effect.Effect<hostTypesModule.Fac
     const name = url.href;
     url.searchParams.set(PARAM, version);
     const loaded = yield* Effect.promise(
+      // oxlint-disable-next-line msa/no-builtin-require
       () => import(url.href) as Promise<{ default?: hostTypesModule.FacetDefinition }>,
     );
     const definition = loaded.default;
