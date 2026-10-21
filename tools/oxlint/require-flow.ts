@@ -98,9 +98,12 @@ class RequireFlow {
     if (node.source === null) return;
     if (this.#specifier(node.source, node) !== "module") return;
     if (node.type === "ExportAllDeclaration") this.#report.unknown(node);
-    else
-      for (const specifier of node.specifiers)
-        if (MODULE_MEMBERS.has(exportedLocalName(specifier) ?? "")) this.#report.unknown(specifier);
+    else this.#reportModuleMembers(node.specifiers);
+  }
+
+  #reportModuleMembers(specifiers: ESTree.ExportNamedDeclaration["specifiers"]): void {
+    for (const specifier of specifiers)
+      if (MODULE_MEMBERS.has(exportedLocalName(specifier) ?? "")) this.#report.unknown(specifier);
   }
 
   fromGlobals(): void {
