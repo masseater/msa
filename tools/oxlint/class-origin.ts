@@ -36,25 +36,27 @@ const fromCall = (context: Context, node: ESTree.CallExpression, visited: Visite
     declaredIn(context, part.type === "SpreadElement" ? part.argument : part, visited),
   );
 
+type NodeCheck = (context: Context, node: Node, visited: Visited) => boolean;
+
+const local: NodeCheck = () => true;
+
+const NODES: Readonly<Partial<Record<Node["type"], NodeCheck>>> = {
+  ArrowFunctionExpression: local,
+  CallExpression: (context, node, visited) =>
+    fromCall(context, node as ESTree.CallExpression, visited),
+  ClassExpression: local,
+  FunctionExpression: local,
+  Identifier: fromIdentifier,
+  MemberExpression: (context, node, visited) =>
+    declaredIn(context, (node as ESTree.MemberExpression).object, visited),
+  TSInstantiationExpression: (context, node, visited) =>
+    declaredIn(context, (node as ESTree.TSInstantiationExpression).expression, visited),
+};
+
 function declaredIn(context: Context, node: Node, visited: Visited): boolean {
   if (visited.has(node)) return false;
   visited.add(node);
-  switch (node.type) {
-    case "ArrowFunctionExpression":
-    case "ClassExpression":
-    case "FunctionExpression":
-      return true;
-    case "CallExpression":
-      return fromCall(context, node, visited);
-    case "Identifier":
-      return fromIdentifier(context, node, visited);
-    case "MemberExpression":
-      return declaredIn(context, node.object, visited);
-    case "TSInstantiationExpression":
-      return declaredIn(context, node.expression, visited);
-    default:
-      return false;
-  }
+  return NODES[node.type]?.(context, node, visited) === true;
 }
 
 const declaredInPackage = (context: Context, node: Node): boolean =>
