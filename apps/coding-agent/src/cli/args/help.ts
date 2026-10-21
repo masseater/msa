@@ -1,23 +1,15 @@
 import chalk from "chalk";
 
-import config from "../config.ts";
-import type extensionsTypesTypes from "../core/extensions/types.types.ts";
-import platform from "../core/platform.ts";
-import argsPart2 from "./args-part2.ts";
+import config from "../../config.ts";
+import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
+import platform from "../../core/platform.ts";
 
 const { writeLog } = platform;
 const { APP_NAME, CONFIG_DIR_NAME, ENV_AGENT_DIR, ENV_SESSION_DIR } = config;
-const { printHelpPart1 } = argsPart2;
 
-function printHelp(extensionFlags?: extensionsTypesTypes.ExtensionFlag[]): void {
-  const extensionFlagsText = printHelpPart1(extensionFlags);
-  writeLog(`${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools
+const USAGE_HELP = `  ${APP_NAME} [options] [--] [@files...] [messages...]`;
 
-${chalk.bold("Usage:")}
-  ${APP_NAME} [options] [--] [@files...] [messages...]
-
-${chalk.bold("Commands:")}
-  ${APP_NAME} install <source> [-l]     Install extension source and add to settings
+const COMMANDS_HELP = `  ${APP_NAME} install <source> [-l]     Install extension source and add to settings
   ${APP_NAME} remove <source> [-l]      Remove extension source from settings
   ${APP_NAME} uninstall <source> [-l]   Alias for remove
   ${APP_NAME} update [source|self|msa]   Update msa, extensions, or model catalogs
@@ -25,10 +17,9 @@ ${chalk.bold("Commands:")}
   ${APP_NAME} config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
   ${APP_NAME} mcp <command>             Check MCP servers, sign in to or out of OAuth servers
-  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list/config/auth/mcp
+  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list/config/auth/mcp`;
 
-${chalk.bold("Options:")}
-  --provider <name>              Provider to search for --model (requires --model)
+const OPTIONS_HELP = `  --provider <name>              Provider to search for --model (requires --model)
   --model <pattern>              Model pattern or ID (supports "provider/id" and optional ":<thinking>")
   --api-key <key>                API key (defaults to env vars)
   --system-prompt <text>         System prompt (default: coding assistant prompt)
@@ -75,10 +66,9 @@ ${chalk.bold("Options:")}
   --help, -h                     Show this help
   --version, -v                  Show version number
 
-Extensions can register additional flags (e.g., --plan from plan-mode extension).${extensionFlagsText}
+Extensions can register additional flags (e.g., --plan from plan-mode extension).`;
 
-${chalk.bold("Examples:")}
-  # Print a provider API key for an external client
+const EXAMPLES_HELP = `  # Print a provider API key for an external client
   ${APP_NAME} auth print-api-key --provider openai
 
   # Print an OAuth bearer token for an external client (refreshes if expired)
@@ -143,10 +133,9 @@ ${chalk.bold("Examples:")}
 
   # Export a session file to HTML
   ${APP_NAME} --export ~/${CONFIG_DIR_NAME}/agent/sessions/--path--/session.jsonl
-  ${APP_NAME} --export session.jsonl output.html
+  ${APP_NAME} --export session.jsonl output.html`;
 
-${chalk.bold("Environment Variables:")}
-  ANTHROPIC_AUTH_TOKEN             - Anthropic bearer auth token
+const ENVIRONMENT_HELP = `  ANTHROPIC_AUTH_TOKEN             - Anthropic bearer auth token
   ANTHROPIC_API_KEY                - Anthropic Claude API key
   ANTHROPIC_OAUTH_TOKEN            - Anthropic OAuth token (alternative to API key)
   OPENAI_API_KEY                   - OpenAI GPT API key
@@ -157,10 +146,9 @@ ${chalk.bold("Environment Variables:")}
   MSA_PACKAGE_DIR                   - Override package directory (for Nix/Guix store paths)
   MSA_OFFLINE                       - Disable startup network operations when set to 1/true/yes
   MSA_TELEMETRY                     - Override provider attribution headers when set to 1/true/yes or 0/false/no
-  MSA_SHARE_VIEWER_URL              - Base URL for /share command (default: https://pi.dev/session/)
+  MSA_SHARE_VIEWER_URL              - Base URL for /share command (default: https://pi.dev/session/)`;
 
-${chalk.bold("Built-in Tool Names:")}
-  read       - Read file contents
+const TOOL_NAMES_HELP = `  read       - Read file contents
   bash       - Execute bash commands
   powershell - Execute PowerShell commands on Windows
   edit       - Edit files with find/replace
@@ -168,11 +156,28 @@ ${chalk.bold("Built-in Tool Names:")}
   grep       - Search file contents (read-only, off by default)
   find       - Find files by glob pattern (read-only, off by default)
   ls         - List directory contents (read-only, off by default)
-`);
+`;
+
+function extensionFlagsHelp(
+  extensionFlags: extensionsTypesTypes.ExtensionFlag[] | undefined,
+): string {
+  return extensionFlags !== undefined && extensionFlags.length > 0
+    ? `\n${chalk.bold("Extension CLI Flags:")}\n${extensionFlags
+        .map((flag) => {
+          const value = flag.type === "string" ? " <value>" : "";
+          const description = flag.description ?? `Registered by ${flag.extensionPath}`;
+          return `  --${flag.name}${value}`.padEnd(30) + description;
+        })
+        .join("\n")}\n`
+    : "";
 }
 
-const argsPart3 = {
-  printHelp,
-};
+function printHelp(extensionFlags?: extensionsTypesTypes.ExtensionFlag[]): void {
+  writeLog(
+    `${chalk.bold(APP_NAME)} - AI coding assistant with read, bash, edit, write tools\n\n${chalk.bold("Usage:")}\n${USAGE_HELP}\n\n${chalk.bold("Commands:")}\n${COMMANDS_HELP}\n\n${chalk.bold("Options:")}\n${OPTIONS_HELP}${extensionFlagsHelp(extensionFlags)}\n\n${chalk.bold("Examples:")}\n${EXAMPLES_HELP}\n\n${chalk.bold("Environment Variables:")}\n${ENVIRONMENT_HELP}\n\n${chalk.bold("Built-in Tool Names:")}\n${TOOL_NAMES_HELP}`,
+  );
+}
 
-export default argsPart3;
+const help = { printHelp };
+
+export default help;
