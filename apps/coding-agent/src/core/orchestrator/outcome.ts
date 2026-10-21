@@ -2,12 +2,14 @@ import type compatTypes from "@msa/ai/compat.types";
 import textModule from "@msa/ai/utils/text";
 
 import type outcomeTypes from "./outcome.types.ts";
+import runTimeNotice from "./run-time-notice.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import type workerTypes from "./worker.ts";
 
 const { store } = storeModule;
+const { runTimeSuffix } = runTimeNotice;
 
 const { contentText } = textModule;
 
@@ -83,7 +85,7 @@ function reportText(
       ? outcome.content
       : `${outcome.content.slice(0, REPORT_LIMIT)}\n[truncated]`;
   return [
-    `${titles.join(", ")} ${outcome.status}.`,
+    `${titles.join(", ")} ${outcome.status}.${runTimeSuffix(runtime, assignments, outcome)}`,
     started.length > 0 ? `Started: ${started.join(", ")}.` : undefined,
     content === "" ? undefined : `<report>\n${content}\n</report>`,
   ]
