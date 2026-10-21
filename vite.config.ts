@@ -21,9 +21,17 @@ type Rules = Readonly<Record<string, "error">>;
 const asErrors = (names: readonly string[]): Rules =>
   Object.fromEntries(names.map((name) => [name, "error"] as const));
 
-const effectRuleNames = Object.values(effectPresets).flatMap((preset) =>
-  Object.keys(preset.rules ?? {}),
-);
+const unadoptedEffectRules = new Set([
+  "effecttsgo/effect-sleep-zero-to-yield-now",
+  "effecttsgo/flat-map-to-tap",
+  "effecttsgo/prefer-effect-array",
+  "effecttsgo/prefer-effect-record",
+  "effecttsgo/prefer-schema-tagged-error",
+]);
+
+const effectRuleNames = Object.values(effectPresets)
+  .flatMap((preset) => Object.keys(preset.rules ?? {}))
+  .filter((name) => !unadoptedEffectRules.has(name));
 
 const effectRules = asErrors(effectRuleNames);
 
