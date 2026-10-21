@@ -4,7 +4,8 @@ import { defineConfig } from "vite-plus";
 import lintConfig from "./lint.config.ts";
 import vitestShared from "./vitest.shared.ts";
 
-const { generated, lintPlugins, restrictedImports, strictCategoryRules } = lintConfig;
+const { generated, lintPlugins, platformOnlyImports, restrictedImports, strictCategoryRules } =
+  lintConfig;
 const { onGitHubActions } = vitestShared;
 
 type Rules = Readonly<Record<string, "error">>;
@@ -49,8 +50,15 @@ export default defineConfig({
         },
       },
       {
+        files: ["apps/coding-agent/src/**"],
+        rules: { "eslint/no-restricted-imports": ["error", platformOnlyImports] },
+      },
+      {
         files: ["libs/durable/src/env/node/**", "apps/coding-agent/src/core/platform/node/**"],
-        rules: { "effecttsgo/node-builtin-import": "off" },
+        rules: {
+          "effecttsgo/node-builtin-import": "off",
+          "eslint/no-restricted-imports": ["error", restrictedImports],
+        },
       },
       {
         files: ["scripts/**"],

@@ -1,10 +1,12 @@
+import { builtinModules } from "node:module";
+
 import type { OxlintConfig } from "vite-plus/lint";
 
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
 const ENV_ONLY_VIA_PROCESS_ENV =
-  "環境変数は core/process-env.ts の readEnv・writeEnv・envSnapshot だけで扱う";
+  "環境変数は core/platform の readEnv・writeEnv・envSnapshot だけで扱う";
 
 const requiredStack: Readonly<Record<string, readonly string[]>> = {
   [EFFECT_ONLY_UTILS]: [
@@ -65,6 +67,19 @@ const envImportPaths: readonly Readonly<{
 const restrictedImports = {
   paths: [...requiredStackPaths, ...envImportPaths],
   patterns: [...requiredStackPatterns],
+};
+
+const NODE_BUILTINS_VIA_PLATFORM = "node の組み込みは core/platform/node/ を通して使う";
+
+const platformOnlyImports = {
+  paths: [
+    ...restrictedImports.paths,
+    ...builtinModules.map((name) => ({ message: NODE_BUILTINS_VIA_PLATFORM, name })),
+  ],
+  patterns: [
+    ...restrictedImports.patterns,
+    { group: ["node:*", "node:*/**"], message: NODE_BUILTINS_VIA_PLATFORM },
+  ],
 };
 
 const generated = [
@@ -151,6 +166,7 @@ const strictCategoryRules = [
 const lintConfig = {
   generated,
   lintPlugins,
+  platformOnlyImports,
   requiredStack,
   restrictedImports,
   strictCategories,
