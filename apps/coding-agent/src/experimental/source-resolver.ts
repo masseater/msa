@@ -1,14 +1,14 @@
-import platformModule from "../core/platform/index.ts";
 import moduleHookFiles from "../core/platform/node/module-hook-files.ts";
 import nodeModuleHooks from "../core/platform/node/module-hooks.ts";
 import nodeUrl from "../core/platform/node/url.ts";
+import platformPath from "../core/platform/path.ts";
 
 const { registerHooks } = nodeModuleHooks;
 const { fileURLToPath, pathToFileURL } = nodeUrl;
 
 const { firstRegularFileForModuleHook, readTextForModuleHook } = moduleHookFiles;
 
-const { extname, resolve, sep } = platformModule;
+const { extname, resolve, sep } = platformPath;
 
 interface TsConfig {
   readonly compilerOptions?: {

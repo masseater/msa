@@ -137,7 +137,7 @@ const scopeBaseline = (entry: {
   };
 };
 
-const usage = (): string => `Usage: node apps/coding-agent/test/mcp-conformance/run.ts [options]
+const usage = (): string => `Usage: vp run test:mcp-conformance [options]
 
 Options:
   --mode <version>     Only run this protocol version (repeatable): ${MODES.join(", ")}

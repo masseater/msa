@@ -3,10 +3,10 @@
 Runs the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance) against msa's MCP client and compares the result with a committed baseline.
 
 ```bash
-npm run test:mcp-conformance
+vp run test:mcp-conformance
 ```
 
-CI runs it in the `mcp-conformance` job of `.github/workflows/ci.yml`. Requires network access the first time, to fetch the pinned suite (`@modelcontextprotocol/conformance@0.2.0-alpha.11`) with `npx`. Install scripts are disabled. Needs a POSIX shell.
+`vp run verify` runs it as the `mcp-conformance` task. It runs from source through `apps/coding-agent/src/experimental/source-resolver.ts`, so it needs no build. Requires network access the first time, to fetch the pinned suite (`@modelcontextprotocol/conformance@0.2.0-alpha.11`) with `npx`. Install scripts are disabled. Needs a POSIX shell.
 
 ## How it works
 
@@ -27,8 +27,8 @@ Checks that started passing are reported; update the baseline to lock them in.
 ## Options
 
 ```bash
-node apps/coding-agent/test/mcp-conformance/run.ts --mode 2025-11-25 --scenario auth/scope-step-up --verbose
-node apps/coding-agent/test/mcp-conformance/run.ts --update-baseline
+vp run test:mcp-conformance --mode 2025-11-25 --scenario auth/scope-step-up --verbose
+vp run test:mcp-conformance --update-baseline
 ```
 
 - `--mode`, `--scenario`: run a subset (repeatable).
