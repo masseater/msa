@@ -1,13 +1,14 @@
 import * as Effect from "effect/Effect";
 
-import fsWatch from "../utils/fs-watch.ts";
-import awaitingModule from "./awaiting.ts";
-import footerDataProviderHelpers from "./footer-data-provider-helpers.ts";
-import FooterDataProviderLayer0 from "./footer-data-provider-layer-0.ts";
-import FooterDataProvider from "./footer-data-provider.ts";
-import platformNode from "./platform-node.ts";
-import platformModule from "./platform.ts";
-import nodeFs from "./platform/node/fs.ts";
+import fsWatch from "../../utils/fs-watch.ts";
+import awaitingModule from "../awaiting.ts";
+import footerDataProviderHelpers from "../footer-data-provider-helpers.ts";
+import type FooterDataProvider from "../footer-data-provider.ts";
+import platformNode from "../platform-node.ts";
+import platformModule from "../platform.ts";
+import type platformTypes from "../platform.types.ts";
+import nodeFs from "../platform/node/fs.ts";
+import type nodeFsTypes from "../platform/node/fs.types.ts";
 
 const { schedule } = platformModule;
 const { awaited, awaitingWith, performed } = awaitingModule;
@@ -17,59 +18,39 @@ const { dirname, join } = platformNode;
 const { resolveBranchWithGitAsync, resolveBranchWithGitSync, shouldPollGitHead } =
   footerDataProviderHelpers;
 
-export default abstract class FooterDataProviderLayer1 extends FooterDataProviderLayer0 {
-  getGitBranch(): string | null {
-    if (this.cachedBranch === undefined) {
-      this.cachedBranch = this.resolveGitBranchSync();
-    }
-    return this.cachedBranch;
+const WATCH_DEBOUNCE_MS = 500;
+
+export default class GitBranchWatcher {
+  private readonly provider: FooterDataProvider;
+
+  constructor(provider: FooterDataProvider) {
+    this.provider = provider;
   }
 
-  getExtensionStatuses(): ReadonlyMap<string, string> {
-    return this.extensionStatuses;
-  }
+  private headWatcher: nodeFsTypes.FSWatcher | null = null;
 
-  onBranchChange(callback: () => void): () => void {
-    this.branchChangeCallbacks.add(callback);
-    return () => this.branchChangeCallbacks.delete(callback);
-  }
+  private headWatchFilePath: string | null = null;
 
-  setExtensionStatus(key: string, text: string | undefined): void {
-    if (text === undefined) {
-      this.extensionStatuses.delete(key);
-    } else {
-      this.extensionStatuses.set(key, text);
-    }
-  }
+  private headWatchFileListener:
+    | ((current: nodeFsTypes.Stats, previous: nodeFsTypes.Stats) => void)
+    | null = null;
 
-  clearExtensionStatuses(): void {
-    this.extensionStatuses.clear();
-  }
+  private reftableWatcher: nodeFsTypes.FSWatcher | null = null;
 
-  getAvailableProviderCount(): number {
-    return this.availableProviderCount;
-  }
+  private reftableTablesListWatcher: nodeFsTypes.FSWatcher | null = null;
 
-  setAvailableProviderCount(count: number): void {
-    this.availableProviderCount = count;
-  }
+  private reftableTablesListPath: string | null = null;
 
-  dispose(): void {
-    this.disposed = true;
-    if (this.refreshTimer !== null) {
-      this.refreshTimer.cancel();
-      this.refreshTimer = null;
-    }
-    this.clearGitWatchers();
-    this.branchChangeCallbacks.clear();
-  }
+  refreshTimer: platformTypes.Scheduled | null = null;
 
-  protected notifyBranchChange(): void {
-    for (const cb of this.branchChangeCallbacks) cb();
-  }
+  private gitWatcherRetryTimer: platformTypes.Scheduled | null = null;
 
-  protected scheduleRefresh(): void {
-    if (this.disposed || this.refreshTimer !== null) return;
+  private refreshInFlight = false;
+
+  private refreshPending = false;
+
+  private scheduleRefresh(): void {
+    if (this.provider.disposed || this.refreshTimer !== null) return;
     if (this.refreshInFlight) {
       this.refreshPending = true;
       return;
@@ -77,12 +58,12 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     this.refreshTimer = schedule(() => {
       this.refreshTimer = null;
       void Effect.runPromise(this.refreshGitBranchAsync());
-    }, FooterDataProvider.WATCH_DEBOUNCE_MS);
+    }, WATCH_DEBOUNCE_MS);
   }
 
-  protected refreshGitBranchAsync(): Effect.Effect<void> {
+  private refreshGitBranchAsync(): Effect.Effect<void> {
     return awaitingWith(function* () {
-      if (this.disposed) return;
+      if (this.provider.disposed) return;
       if (this.refreshInFlight) {
         this.refreshPending = true;
         return;
@@ -91,16 +72,16 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
       this.refreshInFlight = true;
       try {
         const nextBranch = yield* performed(this.resolveGitBranchAsync());
-        if (this.disposed) return;
-        if (this.cachedBranch !== undefined && this.cachedBranch !== nextBranch) {
-          this.cachedBranch = nextBranch;
-          this.notifyBranchChange();
+        if (this.provider.disposed) return;
+        if (this.provider.cachedBranch !== undefined && this.provider.cachedBranch !== nextBranch) {
+          this.provider.cachedBranch = nextBranch;
+          this.provider.notifyBranchChange();
           return;
         }
-        this.cachedBranch = nextBranch;
+        this.provider.cachedBranch = nextBranch;
       } finally {
         this.refreshInFlight = false;
-        if (this.refreshPending && !this.disposed) {
+        if (this.refreshPending && !this.provider.disposed) {
           this.refreshPending = false;
           this.scheduleRefresh();
         }
@@ -108,14 +89,14 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     }, this);
   }
 
-  protected resolveGitBranchSync(): string | null {
+  resolveGitBranchSync(): string | null {
     try {
-      if (this.gitPaths === undefined || this.gitPaths === null) return null;
-      const content = readFileSync(this.gitPaths.headPath, "utf8").trim();
+      if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) return null;
+      const content = readFileSync(this.provider.gitPaths.headPath, "utf8").trim();
       if (content.startsWith("ref: refs/heads/")) {
         const branch = content.slice(16);
         return branch === ".invalid"
-          ? (resolveBranchWithGitSync(this.gitPaths.repoDir) ?? "detached")
+          ? (resolveBranchWithGitSync(this.provider.gitPaths.repoDir) ?? "detached")
           : branch;
       }
       return "detached";
@@ -124,15 +105,16 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     }
   }
 
-  protected resolveGitBranchAsync(): Effect.Effect<string | null> {
+  private resolveGitBranchAsync(): Effect.Effect<string | null> {
     return awaitingWith(function* () {
       try {
-        if (this.gitPaths === undefined || this.gitPaths === null) return null;
-        const content = readFileSync(this.gitPaths.headPath, "utf8").trim();
+        if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) return null;
+        const content = readFileSync(this.provider.gitPaths.headPath, "utf8").trim();
         if (content.startsWith("ref: refs/heads/")) {
           const branch = content.slice(16);
           return branch === ".invalid"
-            ? ((yield* awaited(resolveBranchWithGitAsync(this.gitPaths.repoDir))) ?? "detached")
+            ? ((yield* awaited(resolveBranchWithGitAsync(this.provider.gitPaths.repoDir))) ??
+                "detached")
             : branch;
         }
         return "detached";
@@ -142,7 +124,7 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     }, this);
   }
 
-  protected clearGitWatchers(): void {
+  clearGitWatchers(): void {
     closeWatcher(this.headWatcher);
     this.headWatcher = null;
     if (
@@ -168,8 +150,8 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     }
   }
 
-  protected scheduleGitWatcherRetry(): void {
-    if (this.disposed || this.gitWatcherRetryTimer !== null) {
+  private scheduleGitWatcherRetry(): void {
+    if (this.provider.disposed || this.gitWatcherRetryTimer !== null) {
       return;
     }
 
@@ -179,19 +161,19 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     }, FS_WATCH_RETRY_DELAY_MS);
   }
 
-  protected handleGitWatcherError(): void {
+  private handleGitWatcherError(): void {
     this.clearGitWatchers();
     this.scheduleGitWatcherRetry();
   }
 
-  protected setupGitWatcher(): void {
+  setupGitWatcher(): void {
     this.clearGitWatchers();
-    if (this.gitPaths === undefined || this.gitPaths === null) return;
+    if (this.provider.gitPaths === undefined || this.provider.gitPaths === null) return;
 
-    const pollGitHead = shouldPollGitHead(this.gitPaths.repoDir);
+    const pollGitHead = shouldPollGitHead(this.provider.gitPaths.repoDir);
 
     this.headWatcher = watchWithErrorHandler(
-      dirname(this.gitPaths.headPath),
+      dirname(this.provider.gitPaths.headPath),
       (_eventType, filename) => {
         if (filename === null || filename === "" || filename === "HEAD") {
           this.scheduleRefresh();
@@ -200,7 +182,7 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
       () => this.handleGitWatcherError(),
     );
     if (pollGitHead) {
-      this.headWatchFilePath = this.gitPaths.headPath;
+      this.headWatchFilePath = this.provider.gitPaths.headPath;
       this.headWatchFileListener = (current, previous) => {
         if (
           current.mtimeMs !== previous.mtimeMs ||
@@ -216,25 +198,25 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
       return;
     }
 
-    const reftableDir = join(this.gitPaths.commonGitDir, "reftable");
+    const reftableDir = join(this.provider.gitPaths.commonGitDir, "reftable");
     if (existsSync(reftableDir)) {
-      this.setupGitWatcherPart3(reftableDir);
+      this.watchReftableDir(reftableDir);
       if (this.reftableWatcher === null) {
         return;
       }
 
       const tablesListPath = join(reftableDir, "tables.list");
       if (existsSync(tablesListPath)) {
-        this.setupGitWatcherPart2(tablesListPath);
+        this.watchTablesList(tablesListPath);
         if (this.reftableTablesListWatcher === null) {
           return;
         }
-        this.setupGitWatcherPart1(tablesListPath);
+        this.pollTablesList(tablesListPath);
       }
     }
   }
 
-  protected setupGitWatcherPart3(reftableDir: string) {
+  private watchReftableDir(reftableDir: string) {
     this.reftableWatcher = watchWithErrorHandler(
       reftableDir,
       () => {
@@ -244,7 +226,7 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     );
   }
 
-  protected setupGitWatcherPart2(tablesListPath: string) {
+  private watchTablesList(tablesListPath: string) {
     this.reftableTablesListPath = tablesListPath;
     this.reftableTablesListWatcher = watchWithErrorHandler(
       tablesListPath,
@@ -255,7 +237,7 @@ export default abstract class FooterDataProviderLayer1 extends FooterDataProvide
     );
   }
 
-  protected setupGitWatcherPart1(tablesListPath: string) {
+  private pollTablesList(tablesListPath: string) {
     watchFile(tablesListPath, { interval: 250 }, (current, previous) => {
       if (
         current.mtimeMs !== previous.mtimeMs ||

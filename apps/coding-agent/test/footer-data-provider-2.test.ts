@@ -65,7 +65,9 @@ const {
 } = testing;
 
 function emitReftableChange(provider: footerDataProviderTypes.FooterDataProvider): void {
-  const { reftableWatcher } = provider as unknown as { reftableWatcher: WatcherHandle | null };
+  const { reftableWatcher } = provider.gitWatch as unknown as {
+    reftableWatcher: WatcherHandle | null;
+  };
   expect(reftableWatcher).not.toBeNull();
   reftableWatcher?.emit("change", "change", "tables.list");
 }
