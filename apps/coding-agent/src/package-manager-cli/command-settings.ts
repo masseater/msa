@@ -47,15 +47,19 @@ function createCommandSettingsManager(
 ): Promise<packageManagerCliInternalTypes.CommandSettingsResult> {
   return Effect.runPromise(
     awaiting(function* () {
-      const settingsManager = SettingsManager.create(options.cwd, options.agentDir, {
-        projectTrusted: false,
-      });
+      const settingsManager = yield* awaited(
+        SettingsManager.create(options.cwd, options.agentDir, {
+          projectTrusted: false,
+        }),
+      );
       const projectTrustWarnings: string[] = [];
       const trustStore = new ProjectTrustStore(options.agentDir);
       if (options.useSavedProjectTrustOnly === true) {
         const savedProjectTrusted = trustStore.get(options.cwd) === true;
-        settingsManager.persistence.setProjectTrusted(
-          options.projectTrustOverride ?? savedProjectTrusted,
+        yield* awaited(
+          settingsManager.persistence.setProjectTrusted(
+            options.projectTrustOverride ?? savedProjectTrusted,
+          ),
         );
         return { projectTrustWarnings, settingsManager };
       }
@@ -83,7 +87,7 @@ function createCommandSettingsManager(
           trustStore,
         }),
       );
-      settingsManager.persistence.setProjectTrusted(projectTrusted);
+      yield* awaited(settingsManager.persistence.setProjectTrusted(projectTrusted));
       return { projectTrustWarnings, settingsManager };
     }),
   );

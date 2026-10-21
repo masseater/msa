@@ -21,7 +21,7 @@ const shouldLoadShellcommandprefixFromSettings = () =>
           shellCommandPrefix: "shopt -s expand_aliases",
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.resources.getShellCommandPrefix()).toBe("shopt -s expand_aliases");
       }),
@@ -34,7 +34,7 @@ const shouldReturnUndefinedWhenShellcommandprefixIsNot = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.resources.getShellCommandPrefix()).toBeUndefined();
       }),
@@ -49,7 +49,7 @@ const shouldPreserveShellcommandprefixWhenSavingUnrelatedSettings = () =>
           shellCommandPrefix: "shopt -s expand_aliases",
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
         manager.display.setTheme("light");
         yield* awaited(manager.persistence.flush());
 
@@ -66,11 +66,11 @@ const loadsGlobalDefaultsAndLetsProjectSettings = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { defaultTools: ["read", "bash"] });
 
-        expect(openManager().resources.getDefaultTools()).toEqual(["read", "bash"]);
+        expect((yield* openManager()).resources.getDefaultTools()).toEqual(["read", "bash"]);
 
         yield* writeJsonFile(projectSettingsPath, { defaultTools: ["grep"] });
 
-        expect(openManager().resources.getDefaultTools()).toEqual(["grep"]);
+        expect((yield* openManager()).resources.getDefaultTools()).toEqual(["grep"]);
       }),
     ),
   );
@@ -114,7 +114,7 @@ const layersProjectModifiersOnTopOfThe = () =>
           defaultTools: ["-codemode", "+tool_search"],
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.resources.getDefaultTools()).toEqual(["read", "bash", "tool_search"]);
 
         manager.applyOverrides({ defaultTools: ["+codemode"] });
@@ -134,7 +134,7 @@ const appliesProjectModifiersToTheBuiltIn = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(projectSettingsPath, { defaultTools: ["+codemode"] });
 
-        expect(openManager().resources.getDefaultTools()).toEqual([
+        expect((yield* openManager()).resources.getDefaultTools()).toEqual([
           "read",
           "bash",
           "edit",

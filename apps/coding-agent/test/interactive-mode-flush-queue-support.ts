@@ -82,7 +82,7 @@ const createSession = Effect.fn("createSession")(function* (
     modelRuntime,
     resourceLoader: createTestResourceLoader(),
     sessionManager: SessionManager.inMemory(),
-    settingsManager: SettingsManager.create(tempDir, tempDir),
+    settingsManager: yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir)),
   });
 });
 

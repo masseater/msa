@@ -38,7 +38,7 @@ const loadsFrontmatterAndSettingsWithA = Effect.gen(function* () {
     `\uFEFF${yield* toJsonText({ defaultProvider: "project-provider" })}`,
   );
 
-  const settings = SettingsManager.create(projectDir, agentDir);
+  const settings = yield* Effect.promise(() => SettingsManager.create(projectDir, agentDir));
   expect(settings.models.getDefaultModel()).toBe("global-model");
   expect(settings.models.getDefaultProvider()).toBe("project-provider");
 

@@ -48,7 +48,7 @@ const createRuntimeHost = (
     const agent = createScriptedAgent(options);
 
     const sessionManager = SessionManager.inMemory();
-    const settingsManager = SettingsManager.create(tempDir, tempDir);
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
     const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
     const modelRegistry = yield* awaited(createInMemoryModelRegistry(authStorage));
     if (options.withAuth) {

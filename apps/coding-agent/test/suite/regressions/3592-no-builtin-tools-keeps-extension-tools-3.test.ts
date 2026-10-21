@@ -13,7 +13,9 @@ const { getModel } = compat;
 const { cleanupDirs, dirs, prepareDirs } = regression3592Support;
 
 const propagatesNotoolsThroughServiceBasedSession = Effect.gen(function* () {
-  const settingsManager = SettingsManager.create(dirs.tempDir, dirs.agentDir);
+  const settingsManager = yield* Effect.promise(() =>
+    SettingsManager.create(dirs.tempDir, dirs.agentDir),
+  );
   const sessionManager = SessionManager.inMemory(dirs.tempDir);
   const services = yield* Effect.promise(() =>
     createAgentSessionServices({

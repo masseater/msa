@@ -25,7 +25,7 @@ interface SettingsFile {
 interface SettingsPaths {
   readonly settingsPath: string;
   readonly projectSettingsPath: string;
-  readonly openManager: () => settingsManagerTypes.SettingsManager;
+  readonly openManager: () => Effect.Effect<settingsManagerTypes.SettingsManager>;
 }
 
 const tempDirs: string[] = [];
@@ -43,7 +43,7 @@ const withSettings = <A, E>(
     yield* makeDirectory(agentDir);
     yield* makeDirectory(joinPath(projectDir, ".msa"));
     return yield* use({
-      openManager: () => SettingsManager.create(projectDir, agentDir),
+      openManager: () => Effect.promise(() => SettingsManager.create(projectDir, agentDir)),
       projectSettingsPath: joinPath(projectDir, ".msa", "settings.json"),
       settingsPath: joinPath(agentDir, "settings.json"),
     });
@@ -61,7 +61,7 @@ const shouldPreserveFileChangesToPackagesArray = () =>
           theme: "dark",
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.resources.getPackages()).toEqual(["npm:msa-mcp-adapter"]);
 
@@ -91,7 +91,7 @@ const shouldPreserveFileChangesToExtensionsArray = () =>
           theme: "dark",
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const currentSettings = yield* readSettings(settingsPath);
         currentSettings.extensions = ["/new/extension.ts"];
@@ -116,7 +116,7 @@ const shouldPreserveExternalProjectSettingsChangesWhen = () =>
           prompts: ["./old-prompt.md"],
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const currentProjectSettings = yield* readSettings(projectSettingsPath);
         currentProjectSettings.prompts = ["./new-prompt.md"];
@@ -140,7 +140,7 @@ const shouldLetInMemoryProjectChangesOverride = () =>
           extensions: ["./initial-extension.ts"],
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const currentProjectSettings = yield* readSettings(projectSettingsPath);
         currentProjectSettings.extensions = ["./external-extension.ts"];

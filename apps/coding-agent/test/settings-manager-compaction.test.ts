@@ -78,7 +78,7 @@ const mergesProjectModelOverridesPerFieldBefore = () =>
           },
         }),
       );
-      const manager = SettingsManager.fromStorage(storage);
+      const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
       expect(manager.context.getCompactionSettings(model)).toEqual({
         enabled: true,
         keepRecentTokens: 2000,
@@ -91,7 +91,7 @@ const mergesProjectModelOverridesPerFieldBefore = () =>
       });
       yield* awaited(manager.persistence.reload());
       expect(manager.context.getCompactionKeepRecentTokens(model)).toBe(2000);
-      manager.persistence.setProjectTrusted(false);
+      yield* Effect.promise(() => manager.persistence.setProjectTrusted(false));
       expect(manager.context.getCompactionKeepRecentTokens(model)).toBe(30000);
     }),
   );
@@ -107,7 +107,7 @@ const keepsEnabledGlobalAndPreservesOverridesWhen = () =>
           },
         }),
       );
-      const manager = SettingsManager.fromStorage(storage);
+      const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
       expect(manager.context.getCompactionSettings(model).enabled).toBe(true);
       manager.context.setCompactionEnabled(false);
       yield* awaited(manager.persistence.flush());
@@ -188,22 +188,25 @@ describe("compaction model overrides", () => {
   describe.each(["reserveTokens", "keepRecentTokens"] as const)("model override %s", (field) => {
     it.each([null, -1, 1.5, "400000", true, {}, [], Number.MAX_SAFE_INTEGER + 1])(
       "reports invalid token values: %j",
-      (value) => {
-        const storage = new InMemorySettingsStorage();
-        storage.withLock("global", () =>
-          JSON.stringify({
-            compaction: { modelOverrides: { [modelKey]: { [field]: value } } },
+      (value) =>
+        runTest(
+          Effect.gen(function* () {
+            const storage = new InMemorySettingsStorage();
+            storage.withLock("global", () =>
+              JSON.stringify({
+                compaction: { modelOverrides: { [modelKey]: { [field]: value } } },
+              }),
+            );
+            const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
+            expect(() => manager.context.getCompactionSettings(model)).toThrow(
+              `Invalid compaction.modelOverrides["${modelKey}"].${field} setting: ${String(value)}. Expected a non-negative safe integer.`,
+            );
+            expect(manager.context.getCompactionSettings()).toEqual(defaults);
+            expect(
+              manager.context.getCompactionSettings({ id: model.id, provider: "other" }),
+            ).toEqual(defaults);
           }),
-        );
-        const manager = SettingsManager.fromStorage(storage);
-        expect(() => manager.context.getCompactionSettings(model)).toThrow(
-          `Invalid compaction.modelOverrides["${modelKey}"].${field} setting: ${String(value)}. Expected a non-negative safe integer.`,
-        );
-        expect(manager.context.getCompactionSettings()).toEqual(defaults);
-        expect(manager.context.getCompactionSettings({ id: model.id, provider: "other" })).toEqual(
-          defaults,
-        );
-      },
+        ),
     );
 
     it.each([Number.NaN, Infinity, -Infinity])("reports non-finite runtime values: %s", (value) => {
@@ -224,21 +227,24 @@ describe("compaction model overrides", () => {
     (field) => {
       it.each([null, -1, 1.5, "400000", true, {}, [], Number.MAX_SAFE_INTEGER + 1])(
         "reports invalid values even when a valid model override exists: %j",
-        (value) => {
-          const storage = new InMemorySettingsStorage();
-          storage.withLock("global", () =>
-            JSON.stringify({
-              compaction: {
-                [field]: value,
-                modelOverrides: { [modelKey]: { [field]: 4096 } },
-              },
+        (value) =>
+          runTest(
+            Effect.gen(function* () {
+              const storage = new InMemorySettingsStorage();
+              storage.withLock("global", () =>
+                JSON.stringify({
+                  compaction: {
+                    [field]: value,
+                    modelOverrides: { [modelKey]: { [field]: 4096 } },
+                  },
+                }),
+              );
+              const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
+              const error = `Invalid compaction.${field} setting: ${String(value)}. Expected a non-negative safe integer.`;
+              expect(() => manager.context.getCompactionSettings()).toThrow(error);
+              expect(() => manager.context.getCompactionSettings(model)).toThrow(error);
             }),
-          );
-          const manager = SettingsManager.fromStorage(storage);
-          const error = `Invalid compaction.${field} setting: ${String(value)}. Expected a non-negative safe integer.`;
-          expect(() => manager.context.getCompactionSettings()).toThrow(error);
-          expect(() => manager.context.getCompactionSettings(model)).toThrow(error);
-        },
+          ),
       );
 
       it.each([Number.NaN, Infinity, -Infinity])(
@@ -256,15 +262,20 @@ describe("compaction model overrides", () => {
 });
 
 describe("compaction model overrides", () => {
-  it.each([null, false, 42, "invalid", []])("reports malformed model entries: %j", (entry) => {
-    const storage = new InMemorySettingsStorage();
-    storage.withLock("global", () =>
-      JSON.stringify({ compaction: { modelOverrides: { [modelKey]: entry } } }),
-    );
-    expect(() => SettingsManager.fromStorage(storage).context.getCompactionSettings(model)).toThrow(
-      `Invalid compaction.modelOverrides["${modelKey}"] setting: ${String(entry)}. Expected an object.`,
-    );
-  });
+  it.each([null, false, 42, "invalid", []])("reports malformed model entries: %j", (entry) =>
+    runTest(
+      Effect.gen(function* () {
+        const storage = new InMemorySettingsStorage();
+        storage.withLock("global", () =>
+          JSON.stringify({ compaction: { modelOverrides: { [modelKey]: entry } } }),
+        );
+        const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
+        expect(() => manager.context.getCompactionSettings(model)).toThrow(
+          `Invalid compaction.modelOverrides["${modelKey}"] setting: ${String(entry)}. Expected an object.`,
+        );
+      }),
+    ),
+  );
 
   it(
     "accepts zero in ordinary settings and model overrides",

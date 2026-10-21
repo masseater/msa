@@ -21,7 +21,7 @@ const shouldSkipProjectSettingsWhenProjectIs = () =>
         yield* writeJsonFile(settingsPath, { theme: "global" });
         yield* writeJsonFile(projectSettingsPath, { theme: "project" });
 
-        const manager = openManager({ projectTrusted: false });
+        const manager = yield* openManager({ projectTrusted: false });
 
         expect(manager.isProjectTrusted()).toBe(false);
         expect(manager.display.getTheme()).toBe("global");
@@ -36,9 +36,9 @@ const shouldReloadProjectSettingsAfterTrustChanges = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "global" });
         yield* writeJsonFile(projectSettingsPath, { theme: "project" });
-        const manager = openManager({ projectTrusted: false });
+        const manager = yield* openManager({ projectTrusted: false });
 
-        manager.persistence.setProjectTrusted(true);
+        yield* Effect.promise(() => manager.persistence.setProjectTrusted(true));
 
         expect(manager.isProjectTrusted()).toBe(true);
         expect(manager.display.getTheme()).toBe("project");
@@ -51,7 +51,7 @@ const shouldFailProjectSettingsWritesWhenProject = () =>
     withSettings(({ projectSettingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(projectSettingsPath, { packages: ["npm:existing"] });
-        const manager = openManager({ projectTrusted: false });
+        const manager = yield* openManager({ projectTrusted: false });
 
         expect(() => manager.resources.setProjectPackages(["npm:new"])).toThrow(
           "Project is not trusted; refusing to write project settings",
@@ -73,7 +73,7 @@ const shouldReadDefaultProjectTrustFromGlobal = () =>
         yield* writeJsonFile(settingsPath, { defaultProjectTrust: "always" });
         yield* writeJsonFile(projectSettingsPath, { defaultProjectTrust: "never" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.session.getDefaultProjectTrust()).toBe("always");
       }),
@@ -86,7 +86,7 @@ const shouldDefaultInvalidProjectTrustSettingsTo = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { defaultProjectTrust: "sometimes" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.session.getDefaultProjectTrust()).toBe("ask");
       }),
@@ -101,7 +101,7 @@ const shouldNotCreateMsaFolderWhenOnly = () =>
 
         yield* removePath(joinPath(projectDir, ".msa"));
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(yield* pathExists(joinPath(projectDir, ".msa"))).toBe(false);
 
@@ -118,7 +118,7 @@ const shouldCreateMsaFolderWhenWritingProject = () =>
 
         yield* removePath(joinPath(projectDir, ".msa"));
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(yield* pathExists(joinPath(projectDir, ".msa"))).toBe(false);
 
@@ -166,8 +166,8 @@ const defaultsAndOverridesAgentRetryDelayCap = () => {
 const shouldDefaultTo5Minutes = () =>
   runTest(
     withSettings(({ openManager }) =>
-      Effect.sync(() => {
-        const manager = openManager();
+      Effect.gen(function* () {
+        const manager = yield* openManager();
         expect(manager.session.getHttpIdleTimeoutMs()).toBe(DEFAULT_HTTP_IDLE_TIMEOUT_MS);
       }),
     ),
@@ -180,7 +180,7 @@ const shouldUseMergedGlobalAndProjectSettings = () =>
         yield* writeJsonFile(settingsPath, { httpIdleTimeoutMs: 300000 });
         yield* writeJsonFile(projectSettingsPath, { httpIdleTimeoutMs: 0 });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.session.getHttpIdleTimeoutMs()).toBe(0);
       }),
@@ -192,7 +192,7 @@ const shouldRejectInvalidTimeoutValues = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { httpIdleTimeoutMs: -1 });
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(() => manager.session.getHttpIdleTimeoutMs()).toThrow(
           "Invalid httpIdleTimeoutMs setting",

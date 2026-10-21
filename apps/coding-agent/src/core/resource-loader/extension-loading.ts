@@ -33,7 +33,7 @@ export default class ExtensionLoading {
   loadProjectTrustExtensions(): Promise<extensionsTypesTypes.LoadExtensionsResult> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        this.owner.environment.settingsManager.persistence.setProjectTrusted(false);
+        yield* awaited(this.owner.environment.settingsManager.persistence.setProjectTrusted(false));
         yield* awaited(this.owner.environment.settingsManager.persistence.reload());
         return yield* performed(this.loadCurrentExtensionSet());
       }, this),

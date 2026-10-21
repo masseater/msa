@@ -32,24 +32,34 @@ export default class SettingsManager {
   static fromStorage(
     storage: settingsManagerInternalTypes.Storage,
     options: settingsManagerInternalTypes.CreateOptions = {},
-  ): SettingsManager {
-    return new SettingsManager(settingsLoading.loadState(storage, options));
+  ): Promise<SettingsManager> {
+    return settingsLoading.loadState(storage, options).then((state) => new SettingsManager(state));
   }
 
   static inMemory(
     settings: Partial<settingsManagerInternalTypes.Settings> = {},
     options: settingsManagerInternalTypes.CreateOptions = {},
   ): SettingsManager {
-    return SettingsManager.fromStorage(settingsLoading.inMemoryStorage(settings), options);
+    return new SettingsManager(settingsLoading.inMemoryState(settings, options));
   }
 
   static create(
     cwd: string,
     agentDir?: string,
     options: settingsManagerInternalTypes.CreateOptions = {},
-  ): SettingsManager {
+  ): Promise<SettingsManager> {
     const { storage, paths } = settingsLoading.fileStorage(cwd, agentDir);
-    return new SettingsManager(settingsLoading.loadState(storage, options, paths));
+    return settingsLoading
+      .loadState(storage, options, paths)
+      .then((state) => new SettingsManager(state));
+  }
+
+  static unloaded(
+    cwd: string,
+    agentDir?: string,
+    options: settingsManagerInternalTypes.CreateOptions = {},
+  ): SettingsManager {
+    return new SettingsManager(settingsLoading.unloadedFileState(cwd, agentDir, options));
   }
 
   constructor(state: settingsManagerInternalTypes.SettingsState) {

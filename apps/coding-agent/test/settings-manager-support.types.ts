@@ -1,3 +1,5 @@
+import type { Effect } from "effect";
+
 import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 
 declare namespace settingsManagerSupportTypes {
@@ -8,7 +10,7 @@ declare namespace settingsManagerSupportTypes {
     readonly projectSettingsPath: string;
     readonly openManager: (options?: {
       projectTrusted?: boolean;
-    }) => settingsManagerTypes.SettingsManager;
+    }) => Effect.Effect<settingsManagerTypes.SettingsManager>;
   }
 }
 

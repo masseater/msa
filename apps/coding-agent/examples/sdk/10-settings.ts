@@ -5,22 +5,17 @@ const { SessionManager, SettingsManager, createAgentSession } = codingAgent;
 
 const cwd = process.cwd();
 
-const settingsManagerFromDisk = SettingsManager.create(cwd);
-Effect.runSync(
-  Console.log(
-    "Current settings:",
-    JSON.stringify(settingsManagerFromDisk.getGlobalSettings(), null, 2),
-  ),
-);
-
-const settingsManager = SettingsManager.create(cwd);
-settingsManager.applyOverrides({
-  compaction: { enabled: false },
-  retry: { baseDelayMs: 1000, enabled: true, maxRetries: 5 },
-});
-
 void Effect.runPromise(
   Effect.gen(function* () {
+    const settingsManagerFromDisk = yield* Effect.promise(() => SettingsManager.create(cwd));
+    yield* Console.log("Current settings:", settingsManagerFromDisk.getGlobalSettings());
+
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(cwd));
+    settingsManager.applyOverrides({
+      compaction: { enabled: false },
+      retry: { baseDelayMs: 1000, enabled: true, maxRetries: 5 },
+    });
+
     const { session: customSettingsSession } = yield* Effect.promise(() =>
       createAgentSession({
         sessionManager: SessionManager.inMemory(),

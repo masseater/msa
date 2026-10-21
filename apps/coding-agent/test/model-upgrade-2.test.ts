@@ -21,7 +21,7 @@ const writesTheRewrittenReferencesIntoTheAgent = () =>
     Effect.gen(function* () {
       const storage = new InMemorySettingsStorage();
       storage.withLock("global", () => JSON.stringify(settingsNamingTheOldModel()));
-      const manager = SettingsManager.fromStorage(storage);
+      const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
       const { candidates } = upgradePair();
 
       const written = manager.models.rewriteModelReferences((layer) =>
@@ -44,10 +44,10 @@ describe("settings", () => {
 
 function createTool() {
   return runTest(
-    Effect.sync(() => {
+    Effect.gen(function* () {
       const storage = new InMemorySettingsStorage();
       storage.withLock("global", () => JSON.stringify(settingsNamingTheOldModel()));
-      const settingsManager = SettingsManager.fromStorage(storage);
+      const settingsManager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
       const { candidates } = upgradePair();
       const tool = wrapToolDefinition(
         createModelUpgradeToolDefinition({

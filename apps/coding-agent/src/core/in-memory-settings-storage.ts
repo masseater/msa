@@ -4,10 +4,15 @@ export default class InMemorySettingsStorage implements settingsManagerTypes.Set
   private global: string | undefined;
   private project: string | undefined;
 
+  constructor(initial: { readonly global?: string; readonly project?: string } = {}) {
+    this.global = initial.global;
+    this.project = initial.project;
+  }
+
   withLock(
     scope: settingsManagerTypes.SettingsScope,
     fn: (current: string | undefined) => string | undefined,
-  ): void {
+  ): Promise<void> {
     const current = scope === "global" ? this.global : this.project;
     const next = fn(current);
     if (next !== undefined) {
@@ -17,5 +22,6 @@ export default class InMemorySettingsStorage implements settingsManagerTypes.Set
         this.project = next;
       }
     }
+    return Promise.resolve();
   }
 }

@@ -19,7 +19,7 @@ const shouldPreserveEnabledmodelsWhenChangingThinkingLevel = () =>
           theme: "dark",
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const currentSettings = yield* readSettings(settingsPath);
         currentSettings.enabledModels = ["claude-opus-4-5", "gpt-5.2-codex"];
@@ -43,7 +43,7 @@ const shouldPreserveCustomSettingsWhenChangingTheme = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { defaultModel: "claude-sonnet" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const currentSettings = yield* readSettings(settingsPath);
         currentSettings.shellPath = "/bin/zsh";
@@ -67,7 +67,7 @@ const shouldLetInMemoryChangesOverrideFile = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const currentSettings = yield* readSettings(settingsPath);
         currentSettings.defaultThinkingLevel = "low";
@@ -88,14 +88,14 @@ const createsOneGlobalDeviceIdAndReuses = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
         yield* writeJsonFile(projectSettingsPath, { deviceId: "project-device" });
-        const first = openManager();
+        const first = yield* openManager();
 
         const deviceId = first.telemetry.getOrCreateDeviceId();
         yield* awaited(first.persistence.flush());
 
         expect(deviceId).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u);
         expect(first.telemetry.getOrCreateDeviceId()).toBe(deviceId);
-        expect(openManager().telemetry.getOrCreateDeviceId()).toBe(deviceId);
+        expect((yield* openManager()).telemetry.getOrCreateDeviceId()).toBe(deviceId);
         expect(yield* readSettings(settingsPath)).toEqual({ deviceId, theme: "dark" });
       }),
     ),
@@ -109,7 +109,7 @@ const shouldKeepLocalOnlyExtensionsInExtensions = () =>
           extensions: ["/local/ext.ts", "./relative/ext.ts"],
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.resources.getPackages()).toEqual([]);
         expect(manager.resources.getExtensionPaths()).toEqual([
@@ -135,7 +135,7 @@ const shouldHandlePackagesWithFilteringObjects = () =>
           ],
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         const packages = manager.resources.getPackages();
         expect(packages).toHaveLength(2);
@@ -158,7 +158,7 @@ const shouldReloadGlobalSettingsFromDisk = () =>
           theme: "dark",
         });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         yield* writeJsonFile(settingsPath, {
           defaultModel: "claude-sonnet",
@@ -181,7 +181,7 @@ const shouldKeepPreviousSettingsAndReportThe = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         yield* writeTextFile(settingsPath, "{ invalid json");
         yield* awaited(manager.persistence.reload());
@@ -198,7 +198,7 @@ const storesSlashSeparatedAutomaticThemeSettingsSeparately = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "light/dark" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.display.getTheme()).toBeUndefined();
         expect(manager.display.getThemeSetting()).toBe("light/dark");
@@ -219,7 +219,7 @@ const shouldCollectAndClearLoadErrorsVia = () =>
         yield* writeTextFile(settingsPath, "{ invalid global json");
         yield* writeTextFile(projectSettingsPath, "{ invalid project json");
 
-        const manager = openManager();
+        const manager = yield* openManager();
         const errors = manager.drainErrors();
 
         expect(errors).toHaveLength(2);

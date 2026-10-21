@@ -74,12 +74,15 @@ function createDoneStream() {
   return stream;
 }
 
-const settingsFor = (options: sdkOpenrouterAttributionSupportTypes.CaptureOptions) => {
-  const settingsManager = SettingsManager.create(dirs.cwd, dirs.agentDir);
-  if (options.telemetryEnabled === false)
-    settingsManager.telemetry.setEnableInstallTelemetry(false);
-  return settingsManager;
-};
+const settingsFor = (options: sdkOpenrouterAttributionSupportTypes.CaptureOptions) =>
+  Effect.gen(function* () {
+    const settingsManager = yield* Effect.promise(() =>
+      SettingsManager.create(dirs.cwd, dirs.agentDir),
+    );
+    if (options.telemetryEnabled === false)
+      settingsManager.telemetry.setEnableInstallTelemetry(false);
+    return settingsManager;
+  });
 
 const sessionManagerFor = (options: sdkOpenrouterAttributionSupportTypes.CaptureOptions) => {
   const sessionManager = SessionManager.inMemory(dirs.cwd);
@@ -124,7 +127,7 @@ const captureHeaders = (
           model,
           modelRuntime: getModelRuntime(modelRegistry),
           sessionManager: sessionManagerFor(options),
-          settingsManager: settingsFor(options),
+          settingsManager: yield* settingsFor(options),
         }),
       );
       const request = Effect.flatMap(

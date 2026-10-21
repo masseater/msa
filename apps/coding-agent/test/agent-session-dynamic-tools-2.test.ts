@@ -34,7 +34,7 @@ const keepsCustomToolsActiveButOmitsThemSetup = () =>
   Effect.gen(function* () {
     const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, agentDir));
     const sessionManager = SessionManager.inMemory();
 
     const resourceLoader = new DefaultResourceLoader({

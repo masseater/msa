@@ -17,7 +17,7 @@ const shouldReturnUndefinedWhenNotSet = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.session.getSessionDir()).toBeUndefined();
       }),
     ),
@@ -28,7 +28,7 @@ const shouldReturnGlobalSessiondir = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { sessionDir: "/tmp/sessions" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.session.getSessionDir()).toBe("/tmp/sessions");
       }),
     ),
@@ -40,7 +40,7 @@ const shouldReturnProjectSessiondirOverridingGlobal = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { sessionDir: "/global/sessions" });
         yield* writeJsonFile(projectSettingsPath, { sessionDir: "./sessions" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.session.getSessionDir()).toBe("./sessions");
       }),
     ),
@@ -51,7 +51,7 @@ const shouldExpandInSessiondir = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { sessionDir: "~/sessions" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.session.getSessionDir()).toBe(joinPath(homedir(), "sessions"));
       }),
     ),
@@ -62,7 +62,7 @@ const shouldReturnUndefinedWhenNotSet2 = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { theme: "dark" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.resources.getShellPath()).toBeUndefined();
       }),
     ),
@@ -73,7 +73,7 @@ const shouldReturnAnAbsoluteShellpathUnchanged = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { shellPath: "/bin/zsh" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.resources.getShellPath()).toBe("/bin/zsh");
       }),
     ),
@@ -86,7 +86,7 @@ const shouldExpandInShellpath = () =>
         yield* writeJsonFile(settingsPath, {
           shellPath: "~/.local/bin/agent-shell-sandbox",
         });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.resources.getShellPath()).toBe(
           joinPath(homedir(), ".local/bin/agent-shell-sandbox"),
         );
@@ -99,7 +99,7 @@ const shouldExpandABareInShellpath = () =>
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { shellPath: "~" });
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.resources.getShellPath()).toBe(homedir());
       }),
     ),

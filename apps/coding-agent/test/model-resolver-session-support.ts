@@ -30,7 +30,7 @@ const createSession = (options: { scoped: boolean; persistedScope?: string[] }) 
     const tempDir = yield* makeTempDir(`msa-default-scope-${yield* randomSuffix}-`);
     tempDirs.push(tempDir);
 
-    const settingsManager = SettingsManager.create(tempDir, tempDir);
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
     if (options.persistedScope !== undefined) {
       settingsManager.models.setEnabledModels(options.persistedScope);
     }

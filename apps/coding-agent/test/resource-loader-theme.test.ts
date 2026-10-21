@@ -53,7 +53,7 @@ const returnsToAutomaticDetectionAfterAnExplicit = Effect.gen(function* () {
 
   const settingsPath = joinPath(agentDir, "settings.json");
   yield* writeTextFile(settingsPath, yield* toJsonText({ terminal: { trueColor: false } }));
-  const settingsManager = SettingsManager.create(cwd, agentDir);
+  const settingsManager = yield* Effect.promise(() => SettingsManager.create(cwd, agentDir));
   const loader = new DefaultResourceLoader({
     additionalThemePaths: [themePath],
     agentDir,

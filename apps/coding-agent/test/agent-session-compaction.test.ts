@@ -45,7 +45,7 @@ function createSession(inMemory = false) {
       });
 
       sessionManager = inMemory ? SessionManager.inMemory() : SessionManager.create(tempDir);
-      const settingsManager = SettingsManager.create(tempDir, tempDir);
+      const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
 
       settingsManager.applyOverrides({ compaction: { keepRecentTokens: 1 } });
       const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));

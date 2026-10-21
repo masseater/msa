@@ -40,10 +40,12 @@ const assignState = (
 
 const cyclesProjectPackageOverridesInConfigLocal = () =>
   runTest(
-    Effect.sync(() => {
+    Effect.gen(function* () {
       const storage = new InMemorySettingsStorage();
       storage.withLock("global", () => toJsonTextSync({ packages: ["npm:msa-tools"] }));
-      const settingsManager = SettingsManager.fromStorage(storage, { projectTrusted: true });
+      const settingsManager = yield* Effect.promise(() =>
+        SettingsManager.fromStorage(storage, { projectTrusted: true }),
+      );
       const resolvedPaths = paths.extension(joinPath(tempDir, "pkg"), "npm:msa-tools", "user", [
         "bar.ts",
       ]);
@@ -78,9 +80,11 @@ const togglesBuiltInExtensionsInConfigGlobal = () =>
   runTest(
     Effect.gen(function* () {
       vi.stubEnv("HOME", tempDir);
-      const settingsManager = SettingsManager.fromStorage(new InMemorySettingsStorage(), {
-        projectTrusted: true,
-      });
+      const settingsManager = yield* Effect.promise(() =>
+        SettingsManager.fromStorage(new InMemorySettingsStorage(), {
+          projectTrusted: true,
+        }),
+      );
       const resolvedPaths = yield* awaited(
         new DefaultPackageManager({
           agentDir,
@@ -118,7 +122,9 @@ const cyclesProjectBuiltInExtensionOverridesIn = () =>
       vi.stubEnv("HOME", tempDir);
       const storage = new InMemorySettingsStorage();
       storage.withLock("global", () => toJsonTextSync({ extensions: ["-builtin:mcp"] }));
-      const settingsManager = SettingsManager.fromStorage(storage, { projectTrusted: true });
+      const settingsManager = yield* Effect.promise(() =>
+        SettingsManager.fromStorage(storage, { projectTrusted: true }),
+      );
       const resolvedPaths = yield* awaited(
         new DefaultPackageManager({
           agentDir,

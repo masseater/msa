@@ -18,8 +18,10 @@ const includesTheSettingsFilePathForFile = () =>
       yield* makeDirectory(agentDir);
       yield* writeTextFile(settingsPath, "{");
 
-      yield* Effect.sync(() => {
-        const diagnostics = collectSettingsDiagnostics(SettingsManager.create(tempDir, agentDir));
+      yield* Effect.gen(function* () {
+        const diagnostics = collectSettingsDiagnostics(
+          yield* Effect.promise(() => SettingsManager.create(tempDir, agentDir)),
+        );
 
         expect(diagnostics).toHaveLength(1);
         expect(diagnostics[0]?.type).toBe("warning");
@@ -28,19 +30,25 @@ const includesTheSettingsFilePathForFile = () =>
     }),
   );
 
-const fallsBackToTheSettingsScopeFor = () => {
-  const storage: settingsManagerTypes.SettingsStorage = {
-    withLock(scope, fn) {
-      if (scope === "global") throw new Error("backend failed");
-      fn(undefined);
-    },
-  };
-  const diagnostics = collectSettingsDiagnostics(SettingsManager.fromStorage(storage));
+const fallsBackToTheSettingsScopeFor = () =>
+  runTest(
+    Effect.gen(function* () {
+      const storage: settingsManagerTypes.SettingsStorage = {
+        withLock(scope, fn) {
+          if (scope === "global") return Promise.reject(new Error("backend failed"));
+          fn(undefined);
+          return Promise.resolve();
+        },
+      };
+      const diagnostics = collectSettingsDiagnostics(
+        yield* Effect.promise(() => SettingsManager.fromStorage(storage)),
+      );
 
-  expect(diagnostics).toEqual([
-    { message: "Invalid global settings: backend failed", type: "warning" },
-  ]);
-};
+      expect(diagnostics).toEqual([
+        { message: "Invalid global settings: backend failed", type: "warning" },
+      ]);
+    }),
+  );
 
 const deduplicatesDiagnosticsByTypeAndMessage = () => {
   const warning = {

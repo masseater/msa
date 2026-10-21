@@ -137,7 +137,9 @@ const createAgentSession = Effect.fn("createAgentSession")(function* (
     options.persistSession === true
       ? SessionManager.create(options.cwd)
       : SessionManager.inMemory();
-  const settingsManager = SettingsManager.create(options.cwd, options.cwd);
+  const settingsManager = yield* Effect.promise(() =>
+    SettingsManager.create(options.cwd, options.cwd),
+  );
   const { modelRuntime } = yield* createKeyedModelRuntime(
     options.cwd,
     options.useTestKey === false ? undefined : "anthropic-api",

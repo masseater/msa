@@ -82,7 +82,9 @@ export default class ResourceDiscovery {
           extensionsResult: preTrustExtensions,
         }),
       );
-      this.owner.environment.settingsManager.persistence.setProjectTrusted(projectTrusted);
+      yield* awaited(
+        this.owner.environment.settingsManager.persistence.setProjectTrusted(projectTrusted),
+      );
     }
 
     yield* awaited(this.owner.environment.settingsManager.persistence.reload());

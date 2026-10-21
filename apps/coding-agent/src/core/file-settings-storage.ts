@@ -1,15 +1,22 @@
+import * as Effect from "effect/Effect";
 import lockfile from "proper-lockfile";
 
 import config from "../config.ts";
 import pathsModule from "../utils/paths.ts";
+import awaitingModule from "./awaiting.ts";
 import platformModule from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
 import type settingsManagerTypes from "./settings-manager.types.ts";
 
-const { existsSync, mkdirSync, readFileSync, writeFileSync } = nodeFs;
 const { resolvePath } = pathsModule;
-const { dirname, join, nowMs } = platformModule;
+const { dirname, join } = platformModule;
+const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { CONFIG_DIR_NAME } = config;
+const { awaited, awaitingWith } = awaitingModule;
+
+const LOCK_RETRIES = { factor: 1, maxTimeout: 20, minTimeout: 20, retries: 9 };
+
+const lockSettingsFile = (path: string): Promise<() => Promise<void>> =>
+  lockfile.lock(path, { realpath: false, retries: LOCK_RETRIES });
 
 export default class FileSettingsStorage implements settingsManagerTypes.SettingsStorage {
   private globalSettingsPath: string;
@@ -22,59 +29,27 @@ export default class FileSettingsStorage implements settingsManagerTypes.Setting
     this.projectSettingsPath = join(resolvedCwd, CONFIG_DIR_NAME, "settings.json");
   }
 
-  private acquireLockSyncWithRetry(path: string): () => void {
-    const maxAttempts = 10;
-    const delayMs = 20;
-    let lastError: unknown;
-
-    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
-      try {
-        return lockfile.lockSync(path, { realpath: false });
-      } catch (error) {
-        const code =
-          typeof error === "object" && error !== null && "code" in error
-            ? String((error as { code?: unknown }).code)
-            : undefined;
-        if (code !== "ELOCKED" || attempt === maxAttempts) {
-          throw error;
-        }
-        lastError = error;
-        const start = nowMs();
-        while (nowMs() - start < delayMs) {}
-      }
-    }
-
-    throw (lastError as Error) ?? new Error("Failed to acquire settings lock");
-  }
-
   withLock(
     scope: settingsManagerTypes.SettingsScope,
     fn: (current: string | undefined) => string | undefined,
-  ): void {
+  ): Promise<void> {
     const path = scope === "global" ? this.globalSettingsPath : this.projectSettingsPath;
-    const dir = dirname(path);
-
-    let release: (() => void) | undefined;
-    try {
-      const fileExists = existsSync(path);
-      if (fileExists) {
-        release = this.acquireLockSyncWithRetry(path);
-      }
-      const current = fileExists ? readFileSync(path, "utf-8") : undefined;
-      const next = fn(current);
-      if (next !== undefined) {
-        if (!existsSync(dir)) {
-          mkdirSync(dir, { recursive: true });
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const fileExists = yield* awaited(exists(path));
+        let release: (() => Promise<void>) | undefined;
+        try {
+          if (fileExists) release = yield* awaited(lockSettingsFile(path));
+          const current = fileExists ? yield* awaited(readText(path)) : undefined;
+          const next = fn(current);
+          if (next === undefined) return;
+          yield* awaited(makeDirectory({ path: dirname(path) }));
+          release ??= yield* awaited(lockSettingsFile(path));
+          yield* awaited(writeFile({ data: next, path }));
+        } finally {
+          if (release !== undefined) yield* awaited(release());
         }
-        if (release === undefined) {
-          release = this.acquireLockSyncWithRetry(path);
-        }
-        writeFileSync(path, next, "utf-8");
-      }
-    } finally {
-      if (release !== undefined) {
-        release();
-      }
-    }
+      }, this),
+    );
   }
 }

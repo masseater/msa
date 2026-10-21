@@ -34,8 +34,8 @@ let tempDir: string;
 let agentDir: string;
 
 const exposesSessionStateBeforeCustomBashSpawnStep1 = () =>
-  Effect.sync(() => {
-    const settingsManager = SettingsManager.create(tempDir, agentDir);
+  Effect.gen(function* () {
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, agentDir));
     const sessionManager = SessionManager.create(tempDir, joinPath(agentDir, "sessions"), {
       id: "bash-env-test",
     });

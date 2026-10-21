@@ -26,7 +26,8 @@ function* createRuntimeParts(options: sdkInternalTypes.Options) {
         modelsPath: customAgentDir ? join(agentDir, "models.json") : undefined,
       }),
     ));
-  const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+  const settingsManager =
+    options.settingsManager ?? (yield* awaited(SettingsManager.create(cwd, agentDir)));
   modelRuntime.setModelPolicy(settingsManager.models.getModelPolicy());
   const sessionManager =
     options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));

@@ -29,7 +29,7 @@ void Effect.runPromise(
   Effect.gen(function* () {
     yield* Effect.promise(() => resourceLoader.reload());
 
-    const settingsManager = SettingsManager.create(cwd);
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(cwd));
 
     settingsManager.applyOverrides({ defaultTools: ["+codemode", "+tool_search"] });
 

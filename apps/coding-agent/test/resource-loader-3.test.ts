@@ -70,7 +70,9 @@ Project skill content`,
   };
   themeData.name = "project-theme";
   yield* writeTextFile(joinPath(themesDir, "project.json"), yield* toJsonText(themeData));
-  const settingsManager = SettingsManager.create(cwd, agentDir, { projectTrusted: false });
+  const settingsManager = yield* Effect.promise(() =>
+    SettingsManager.create(cwd, agentDir, { projectTrusted: false }),
+  );
 
   const loader = new DefaultResourceLoader({ agentDir, cwd, settingsManager });
   yield* awaited(loader.reload());

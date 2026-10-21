@@ -54,30 +54,33 @@ export default class RuntimeFactory {
   ): Promise<agentSessionServicesTypes.AgentSessionServices> {
     const { parsed, extensionFactories } = this.startup;
     const { projectTrusted, resolveTrust } = this.trust.trustFor(args.cwd);
-    return createAgentSessionServices({
-      agentDir: args.agentDir,
-      cwd: args.cwd,
-      extensionFlagValues: parsed.unknownFlags,
-      modelRuntimeSignal: AbortSignal.timeout(15_000),
-      resourceLoaderOptions: {
-        additionalExtensionPaths: this.paths.extensions,
-        additionalPromptTemplatePaths: this.paths.promptTemplates,
-        additionalSkillPaths: this.paths.skills,
-        additionalThemePaths: this.paths.themes,
-        appendSystemPrompt: parsed.appendSystemPrompt,
-        disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
-        extensionFactories,
-        noContextFiles: parsed.noContextFiles,
-        noExtensions: parsed.noExtensions,
-        noPromptTemplates: parsed.noPromptTemplates,
-        noSkills: parsed.noSkills,
-        noThemes: parsed.noThemes,
-        systemPrompt: parsed.systemPrompt,
-      },
-      resourceLoaderReloadOptions: resolveTrust
-        ? this.trust.resolver(args, diagnostics)
-        : undefined,
-      settingsManager: SettingsManager.create(args.cwd, args.agentDir, { projectTrusted }),
-    });
+    return SettingsManager.create(args.cwd, args.agentDir, { projectTrusted }).then(
+      (settingsManager) =>
+        createAgentSessionServices({
+          agentDir: args.agentDir,
+          cwd: args.cwd,
+          extensionFlagValues: parsed.unknownFlags,
+          modelRuntimeSignal: AbortSignal.timeout(15_000),
+          resourceLoaderOptions: {
+            additionalExtensionPaths: this.paths.extensions,
+            additionalPromptTemplatePaths: this.paths.promptTemplates,
+            additionalSkillPaths: this.paths.skills,
+            additionalThemePaths: this.paths.themes,
+            appendSystemPrompt: parsed.appendSystemPrompt,
+            disabledBuiltinExtensions: parsed.noMcp === true ? ["mcp"] : undefined,
+            extensionFactories,
+            noContextFiles: parsed.noContextFiles,
+            noExtensions: parsed.noExtensions,
+            noPromptTemplates: parsed.noPromptTemplates,
+            noSkills: parsed.noSkills,
+            noThemes: parsed.noThemes,
+            systemPrompt: parsed.systemPrompt,
+          },
+          resourceLoaderReloadOptions: resolveTrust
+            ? this.trust.resolver(args, diagnostics)
+            : undefined,
+          settingsManager,
+        }),
+    );
   }
 }

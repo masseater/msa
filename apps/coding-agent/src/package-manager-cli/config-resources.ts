@@ -22,9 +22,11 @@ function* selectPackageResources(
   const builtinExtensions = (runtimeOptions.extensionFactories ?? [])
     .filter(isBuiltinExtension)
     .map((input) => input.name);
-  const globalSettingsManager = SettingsManager.create(cwd, agentDir, {
-    projectTrusted: false,
-  });
+  const globalSettingsManager = yield* awaited(
+    SettingsManager.create(cwd, agentDir, {
+      projectTrusted: false,
+    }),
+  );
   const globalResolvedPaths = yield* awaited(
     new DefaultPackageManager({
       agentDir,

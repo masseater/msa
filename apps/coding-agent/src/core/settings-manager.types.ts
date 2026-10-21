@@ -11,7 +11,10 @@ declare namespace settingsManagerTypes {
   }
 
   interface SettingsStorage {
-    withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void;
+    withLock(
+      scope: SettingsScope,
+      fn: (current: string | undefined) => string | undefined,
+    ): Promise<void>;
   }
 
   interface SettingsError {

@@ -35,7 +35,7 @@ export default class ResourceEnvironment {
     this.cwd = resolvePath(options.cwd);
     this.agentDir = resolvePath(options.agentDir);
     this.settingsManager =
-      options.settingsManager ?? SettingsManager.create(this.cwd, this.agentDir);
+      options.settingsManager ?? SettingsManager.unloaded(this.cwd, this.agentDir);
     this.eventBus = options.eventBus ?? createEventBus();
     const factories = options.extensionFactories ?? [];
     this.extensionFactories = factories.filter((input) => !isBuiltinExtension(input));

@@ -83,21 +83,7 @@ function migrateLegacyFields(settings: Record<string, unknown>) {
   }
 }
 
-function loadFromStorage(
-  storage: settingsManagerTypes.SettingsStorage,
-  scope: settingsManagerTypes.SettingsScope,
-  projectTrusted = true,
-): settingsSchemaTypes.Settings {
-  if (scope === "project" && !projectTrusted) {
-    return {};
-  }
-
-  let content: string | undefined;
-  storage.withLock(scope, (current) => {
-    content = current;
-    return undefined;
-  });
-
+function parseStoredSettings(content: string | undefined): settingsSchemaTypes.Settings {
   if (content === undefined || content === "") {
     return {};
   }
@@ -105,29 +91,59 @@ function loadFromStorage(
   return migrateSettings(settings);
 }
 
+function loadFromStorage(
+  storage: settingsManagerTypes.SettingsStorage,
+  scope: settingsManagerTypes.SettingsScope,
+  projectTrusted = true,
+): Promise<settingsSchemaTypes.Settings> {
+  if (scope === "project" && !projectTrusted) {
+    return Promise.resolve({});
+  }
+
+  let content: string | undefined;
+  return storage
+    .withLock(scope, (current) => {
+      content = current;
+      return undefined;
+    })
+    .then(() => parseStoredSettings(content));
+}
+
 function tryLoadFromStorage(
   storage: settingsManagerTypes.SettingsStorage,
   scope: settingsManagerTypes.SettingsScope,
   projectTrusted = true,
-): { settings: settingsSchemaTypes.Settings; error: Error | null } {
-  try {
-    return {
-      error: null,
-      settings: loadFromStorage(storage, scope, projectTrusted),
-    };
-  } catch (error) {
-    return { error: error as Error, settings: {} };
-  }
+): Promise<{ settings: settingsSchemaTypes.Settings; error: Error | null }> {
+  return loadFromStorage(storage, scope, projectTrusted).then(
+    (settings) => ({ error: null, settings }),
+    (error: unknown) => ({ error: error as Error, settings: {} }),
+  );
 }
 
 function loadState(
   storage: settingsManagerTypes.SettingsStorage,
   options: settingsManagerTypes.SettingsManagerCreateOptions,
   settingsPaths: settingsManagerInternalTypes.SettingsPaths = {},
-): settingsManagerInternalTypes.SettingsState {
+): Promise<settingsManagerInternalTypes.SettingsState> {
   const projectTrusted = options.projectTrusted ?? true;
-  const globalLoad = tryLoadFromStorage(storage, "global");
-  const projectLoad = tryLoadFromStorage(storage, "project", projectTrusted);
+  return Promise.all([
+    tryLoadFromStorage(storage, "global"),
+    tryLoadFromStorage(storage, "project", projectTrusted),
+  ]).then(([globalLoad, projectLoad]) =>
+    stateFrom({ globalLoad, projectLoad, projectTrusted, settingsPaths, storage }),
+  );
+}
+
+type LoadResult = { settings: settingsSchemaTypes.Settings; error: Error | null };
+
+function stateFrom(parts: {
+  readonly storage: settingsManagerTypes.SettingsStorage;
+  readonly globalLoad: LoadResult;
+  readonly projectLoad: LoadResult;
+  readonly projectTrusted: boolean;
+  readonly settingsPaths: settingsManagerInternalTypes.SettingsPaths;
+}): settingsManagerInternalTypes.SettingsState {
+  const { globalLoad, projectLoad, projectTrusted, settingsPaths, storage } = parts;
   const errors: settingsManagerTypes.SettingsError[] = [];
   if (globalLoad.error !== null) {
     errors.push(toSettingsError("global", globalLoad.error, settingsPaths.global));
@@ -166,13 +182,34 @@ function fileStorage(
   };
 }
 
-function inMemoryStorage(
+function inMemoryState(
   settings: Partial<settingsSchemaTypes.Settings>,
-): settingsManagerTypes.SettingsStorage {
-  const storage = new InMemorySettingsStorage();
+  options: settingsManagerTypes.SettingsManagerCreateOptions,
+): settingsManagerInternalTypes.SettingsState {
   const initialSettings = migrateSettings(structuredClone(settings) as Record<string, unknown>);
-  storage.withLock("global", () => JSON.stringify(initialSettings, null, 2));
-  return storage;
+  const content = JSON.stringify(initialSettings, null, 2);
+  return stateFrom({
+    globalLoad: { error: null, settings: parseStoredSettings(content) },
+    projectLoad: { error: null, settings: {} },
+    projectTrusted: options.projectTrusted ?? true,
+    settingsPaths: {},
+    storage: new InMemorySettingsStorage({ global: content }),
+  });
+}
+
+function unloadedFileState(
+  cwd: string,
+  agentDir: string | undefined,
+  options: settingsManagerTypes.SettingsManagerCreateOptions,
+): settingsManagerInternalTypes.SettingsState {
+  const { storage, paths } = fileStorage(cwd, agentDir);
+  return stateFrom({
+    globalLoad: { error: null, settings: {} },
+    projectLoad: { error: null, settings: {} },
+    projectTrusted: options.projectTrusted ?? true,
+    settingsPaths: paths,
+    storage,
+  });
 }
 
 const mergeSettings = (
@@ -182,13 +219,14 @@ const mergeSettings = (
 
 const settingsLoading = {
   fileStorage,
-  inMemoryStorage,
+  inMemoryState,
   loadFromStorage,
   loadState,
   mergeSettings,
   migrateLegacyFields,
   migrateSettings,
   tryLoadFromStorage,
+  unloadedFileState,
 };
 
 export default settingsLoading;

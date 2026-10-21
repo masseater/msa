@@ -21,16 +21,16 @@ const defaultsToStreamingAndIgnoresProjectSettings = () =>
   runTest(
     withSettings(({ settingsPath, projectSettingsPath, openManager }) =>
       Effect.gen(function* () {
-        expect(openManager().session.getCacheWarmingMode()).toBe("streaming");
+        expect((yield* openManager()).session.getCacheWarmingMode()).toBe("streaming");
 
         yield* writeJsonFile(projectSettingsPath, { cacheWarming: "idle" });
-        expect(openManager().session.getCacheWarmingMode()).toBe("streaming");
+        expect((yield* openManager()).session.getCacheWarmingMode()).toBe("streaming");
 
         yield* writeJsonFile(settingsPath, { cacheWarming: "idle" });
-        expect(openManager().session.getCacheWarmingMode()).toBe("idle");
+        expect((yield* openManager()).session.getCacheWarmingMode()).toBe("idle");
 
         yield* writeJsonFile(settingsPath, { cacheWarming: "bogus" });
-        expect(openManager().session.getCacheWarmingMode()).toBe("streaming");
+        expect((yield* openManager()).session.getCacheWarmingMode()).toBe("streaming");
       }),
     ),
   );
@@ -39,11 +39,11 @@ const persistsTheModeGlobally = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
-        const manager = openManager();
+        const manager = yield* openManager();
         manager.session.setCacheWarmingMode("off");
         yield* awaited(manager.persistence.flush());
 
-        expect(openManager().session.getCacheWarmingMode()).toBe("off");
+        expect((yield* openManager()).session.getCacheWarmingMode()).toBe("off");
         expect(yield* readSettings(settingsPath)).toEqual({ cacheWarming: "off" });
       }),
     ),
@@ -76,7 +76,7 @@ const defaultsToFullscreenAndPersistsRegularMode = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.terminal.getTuiMode()).toBe("fullscreen");
 
@@ -96,7 +96,7 @@ const fallsBackToFullscreenForUnsupportedValues = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { tuiMode: "other" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.terminal.getTuiMode()).toBe("fullscreen");
       }),
@@ -109,7 +109,7 @@ const doesNotRecognizeTheOldUimodeSetting = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { uiMode: "regular" });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.terminal.getTuiMode()).toBe("fullscreen");
       }),
@@ -120,7 +120,7 @@ const validatesAndPersistsFullscreenSettings = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.terminal.getFullscreenExitOutput()).toBe("transcript");
         expect(manager.terminal.getFullscreenScrollbar()).toBe("auto");
         expect(manager.terminal.getFullscreenCopyOnSelect()).toBe(true);
@@ -138,7 +138,7 @@ const validatesAndPersistsFullscreenSettings = () =>
           fullscreenExitOutput: "nothing",
           fullscreenScrollbar: "sometimes",
         });
-        const reloadedManager = openManager();
+        const reloadedManager = yield* openManager();
         expect(reloadedManager.terminal.getFullscreenExitOutput()).toBe("transcript");
         expect(reloadedManager.terminal.getFullscreenScrollbar()).toBe("auto");
         expect(reloadedManager.terminal.getFullscreenCopyOnSelect()).toBe(true);
@@ -150,7 +150,7 @@ const persistsFullscreenWheelScrollLines = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
-        const manager = openManager();
+        const manager = yield* openManager();
         expect(manager.terminal.getFullscreenWheelScrollLines()).toBe("auto");
 
         manager.terminal.setFullscreenWheelScrollLines(3);
@@ -165,7 +165,7 @@ const persistsFullscreenWheelScrollLines = () =>
           [null, "auto"],
         ] as const) {
           yield* writeJsonFile(settingsPath, { fullscreenWheelScrollLines: value });
-          expect(openManager().terminal.getFullscreenWheelScrollLines()).toBe(expected);
+          expect((yield* openManager()).terminal.getFullscreenWheelScrollLines()).toBe(expected);
         }
       }),
     ),
@@ -175,7 +175,7 @@ const shouldDefaultTo1AndPersistBinary = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.terminal.getOutputPad()).toBe(1);
 
@@ -195,7 +195,7 @@ const shouldTreatUnsupportedOutputpadValuesAsDefault = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { outputPad: 2 });
 
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.terminal.getOutputPad()).toBe(1);
       }),
@@ -206,7 +206,7 @@ const defaultsToStreamingAndPersistsRenderingModes = () =>
   runTest(
     withSettings(({ settingsPath, openManager }) =>
       Effect.gen(function* () {
-        const manager = openManager();
+        const manager = yield* openManager();
 
         expect(manager.display.getMermaidRenderingMode()).toBe("streaming");
 
@@ -226,7 +226,7 @@ const fallsBackToStreamingForUnsupportedValues = () =>
       Effect.gen(function* () {
         yield* writeJsonFile(settingsPath, { markdown: { mermaid: "sometimes" } });
 
-        expect(openManager().display.getMermaidRenderingMode()).toBe("streaming");
+        expect((yield* openManager()).display.getMermaidRenderingMode()).toBe("streaming");
       }),
     ),
   );

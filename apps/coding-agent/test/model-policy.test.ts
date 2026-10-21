@@ -19,7 +19,7 @@ const {
   removeModelPolicyPattern,
   withModelPolicy,
 } = modelPolicyModule;
-const { removePath, runTest } = testing;
+const { removePath, runTest, toJsonText } = testing;
 
 const { model, policy } = modelPolicySupport;
 
@@ -196,29 +196,36 @@ describe("withModelPolicy", () => {
   it("hides the models the policy denies", hidesTheModelsThePolicyDenies);
 });
 
-const combinesTheAgentDirectoryAndProjectLayers = () => {
-  const storage = new InMemorySettingsStorage();
-  storage.withLock("global", () => JSON.stringify({ modelPolicy: { deny: ["openai/*"] } }));
-  storage.withLock("project", () =>
-    JSON.stringify({ modelPolicy: { allow: ["openai/gpt-5.5"], deny: ["openrouter/*"] } }),
+const combinesTheAgentDirectoryAndProjectLayers = () =>
+  runTest(
+    Effect.gen(function* () {
+      const storage = new InMemorySettingsStorage({
+        global: yield* toJsonText({ modelPolicy: { deny: ["openai/*"] } }),
+        project: yield* toJsonText({
+          modelPolicy: { allow: ["openai/gpt-5.5"], deny: ["openrouter/*"] },
+        }),
+      });
+      const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
+      expect(manager.models.getModelPolicy()).toEqual({
+        allow: ["openai/gpt-5.5"],
+        deny: ["openai/*", "openrouter/*"],
+      });
+    }),
   );
-  const manager = SettingsManager.fromStorage(storage);
-  expect(manager.models.getModelPolicy()).toEqual({
-    allow: ["openai/gpt-5.5"],
-    deny: ["openai/*", "openrouter/*"],
-  });
-};
 
-const writesThePolicyToTheAgentDirectory = () => {
-  const storage = new InMemorySettingsStorage();
-  const manager = SettingsManager.fromStorage(storage);
-  manager.models.setModelPolicy(policy(["anthropic-api/*"], ["openrouter/*"]));
-  expect(manager.getGlobalSettings().modelPolicy).toEqual({
-    allow: ["anthropic-api/*"],
-    deny: ["openrouter/*"],
-  });
-  expect(manager.getProjectSettings().modelPolicy).toBeUndefined();
-};
+const writesThePolicyToTheAgentDirectory = () =>
+  runTest(
+    Effect.gen(function* () {
+      const storage = new InMemorySettingsStorage();
+      const manager = yield* Effect.promise(() => SettingsManager.fromStorage(storage));
+      manager.models.setModelPolicy(policy(["anthropic-api/*"], ["openrouter/*"]));
+      expect(manager.getGlobalSettings().modelPolicy).toEqual({
+        allow: ["anthropic-api/*"],
+        deny: ["openrouter/*"],
+      });
+      expect(manager.getProjectSettings().modelPolicy).toBeUndefined();
+    }),
+  );
 
 const dropsAnEmptyPolicyInsteadOfWriting = () => {
   const manager = SettingsManager.inMemory({

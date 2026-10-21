@@ -23,7 +23,8 @@ const withSettings = <A, E>(
     yield* makeDirectory(joinPath(projectDir, ".msa"));
     return yield* use({
       agentDir,
-      openManager: (options) => SettingsManager.create(projectDir, agentDir, options),
+      openManager: (options) =>
+        Effect.promise(() => SettingsManager.create(projectDir, agentDir, options)),
       projectDir,
       projectSettingsPath: joinPath(projectDir, ".msa", "settings.json"),
       settingsPath: joinPath(agentDir, "settings.json"),

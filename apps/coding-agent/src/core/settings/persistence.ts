@@ -1,16 +1,16 @@
 import * as Effect from "effect/Effect";
 
-import text from "../../utils/text.ts";
 import awaitingModule from "../awaiting.ts";
 import settingsManagerHelpers from "../settings-manager-helpers.ts";
 import type settingsManagerInternalTypes from "../settings-manager-internal.types.ts";
 import type SettingsManager from "../settings-manager.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
+import modifiedMerge from "./modified-merge.ts";
 import settingsLoading from "./settings-loading.ts";
 
 const { deepMergeSettings, toSettingsError } = settingsManagerHelpers;
-const { stripBom } = text;
+const { mergeModifiedSettings } = modifiedMerge;
 const { awaited, awaitingWith } = awaitingModule;
 
 export default class SettingsPersistence {
@@ -90,13 +90,15 @@ export default class SettingsPersistence {
     this.save();
   }
 
-  private enqueueWrite(scope: settingsManagerTypes.SettingsScope, task: () => void): void {
+  private enqueueWrite(scope: settingsManagerTypes.SettingsScope, task: () => Promise<void>): void {
     this.writeQueue = this.writeQueue
       .then(() => {
         if (scope === "project") {
           this.assertProjectTrustedForWrite();
         }
-        task();
+        return task();
+      })
+      .then(() => {
         this.clearModifiedScope(scope);
         return undefined;
       })
@@ -110,33 +112,15 @@ export default class SettingsPersistence {
     snapshotSettings: settingsSchemaTypes.Settings,
     modifiedFields: Set<keyof settingsSchemaTypes.Settings>,
     modifiedNestedFields: Map<keyof settingsSchemaTypes.Settings, Set<string>>,
-  ): void {
-    this.manager.storage.withLock(scope, (current) => {
-      const currentFileSettings =
-        current !== undefined && current !== ""
-          ? settingsLoading.migrateSettings(
-              JSON.parse(stripBom(current)) as Record<string, unknown>,
-            )
-          : {};
-      const mergedSettings: settingsSchemaTypes.Settings = { ...currentFileSettings };
-      for (const field of modifiedFields) {
-        const value = snapshotSettings[field];
-        if (modifiedNestedFields.has(field) && typeof value === "object" && value !== null) {
-          const nestedModified = modifiedNestedFields.get(field)!;
-          const baseNested = (currentFileSettings[field] as Record<string, unknown>) ?? {};
-          const inMemoryNested = value as Record<string, unknown>;
-          const mergedNested = { ...baseNested };
-          for (const nestedKey of nestedModified) {
-            mergedNested[nestedKey] = inMemoryNested[nestedKey];
-          }
-          (mergedSettings as Record<string, unknown>)[field] = mergedNested;
-        } else {
-          (mergedSettings as Record<string, unknown>)[field] = value;
-        }
-      }
-
-      return JSON.stringify(mergedSettings, null, 2);
-    });
+  ): Promise<void> {
+    return this.manager.storage.withLock(scope, (current) =>
+      mergeModifiedSettings({
+        current,
+        fields: modifiedFields,
+        nestedFields: modifiedNestedFields,
+        snapshot: snapshotSettings,
+      }),
+    );
   }
 
   save(): void {
@@ -153,19 +137,19 @@ export default class SettingsPersistence {
     const modifiedFields = new Set(this.modifiedFields);
     const modifiedNestedFields = this.cloneModifiedNestedFields(this.modifiedNestedFields);
 
-    this.enqueueWrite("global", () => {
+    this.enqueueWrite("global", () =>
       this.persistScopedSettings(
         "global",
         snapshotGlobalSettings,
         modifiedFields,
         modifiedNestedFields,
-      );
-    });
+      ),
+    );
   }
 
-  setProjectTrusted(trusted: boolean): void {
+  setProjectTrusted(trusted: boolean): Promise<void> {
     if (this.manager.projectTrusted === trusted) {
-      return;
+      return Promise.resolve();
     }
 
     this.manager.projectTrusted = trusted;
@@ -179,14 +163,17 @@ export default class SettingsPersistence {
         this.manager.globalSettings,
         this.manager.projectSettings,
       );
-      return;
+      return Promise.resolve();
     }
 
-    const projectLoad = settingsLoading.tryLoadFromStorage(
-      this.manager.storage,
-      "project",
-      trusted,
-    );
+    return settingsLoading
+      .tryLoadFromStorage(this.manager.storage, "project", trusted)
+      .then((projectLoad) => this.applyTrustedProjectLoad(projectLoad));
+  }
+
+  private applyTrustedProjectLoad(
+    projectLoad: Awaited<ReturnType<typeof settingsLoading.tryLoadFromStorage>>,
+  ): void {
     this.manager.projectSettings = projectLoad.settings;
     this.manager.projectSettingsLoadError = projectLoad.error;
     if (projectLoad.error !== null) {
@@ -202,7 +189,9 @@ export default class SettingsPersistence {
     return Effect.runPromise(
       awaitingWith(function* () {
         yield* awaited(this.writeQueue);
-        const globalLoad = settingsLoading.tryLoadFromStorage(this.manager.storage, "global");
+        const globalLoad = yield* awaited(
+          settingsLoading.tryLoadFromStorage(this.manager.storage, "global"),
+        );
         if (globalLoad.error === null) {
           this.manager.globalSettings = globalLoad.settings;
           this.manager.globalSettingsLoadError = null;
@@ -216,10 +205,12 @@ export default class SettingsPersistence {
         this.modifiedProjectFields.clear();
         this.modifiedProjectNestedFields.clear();
 
-        const projectLoad = settingsLoading.tryLoadFromStorage(
-          this.manager.storage,
-          "project",
-          this.manager.projectTrusted,
+        const projectLoad = yield* awaited(
+          settingsLoading.tryLoadFromStorage(
+            this.manager.storage,
+            "project",
+            this.manager.projectTrusted,
+          ),
         );
         if (projectLoad.error === null) {
           this.manager.projectSettings = projectLoad.settings;
@@ -264,14 +255,14 @@ export default class SettingsPersistence {
     const snapshotProjectSettings = structuredClone(this.manager.projectSettings);
     const modifiedFields = new Set(this.modifiedProjectFields);
     const modifiedNestedFields = this.cloneModifiedNestedFields(this.modifiedProjectNestedFields);
-    this.enqueueWrite("project", () => {
+    this.enqueueWrite("project", () =>
       this.persistScopedSettings(
         "project",
         snapshotProjectSettings,
         modifiedFields,
         modifiedNestedFields,
-      );
-    });
+      ),
+    );
   }
 
   updateProjectSettings(

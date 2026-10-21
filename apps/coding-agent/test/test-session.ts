@@ -17,13 +17,14 @@ const { createTestResourceLoader } = utilities;
 
 const { createAgent } = testSessionAgent;
 
-const createSettings = (tempDir: string, options: utilitiesTypes.TestSessionOptions) => {
-  const settingsManager = SettingsManager.create(tempDir, tempDir);
-  if (options.settingsOverrides !== undefined) {
-    settingsManager.applyOverrides(options.settingsOverrides);
-  }
-  return settingsManager;
-};
+const createSettings = (tempDir: string, options: utilitiesTypes.TestSessionOptions) =>
+  Effect.gen(function* () {
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
+    if (options.settingsOverrides !== undefined) {
+      settingsManager.applyOverrides(options.settingsOverrides);
+    }
+    return settingsManager;
+  });
 
 const createTestSession = (
   options: utilitiesTypes.TestSessionOptions = {},
@@ -42,7 +43,7 @@ const createTestSession = (
         modelRuntime: getModelRuntime(modelRegistry),
         resourceLoader: createTestResourceLoader(),
         sessionManager,
-        settingsManager: createSettings(tempDir, options),
+        settingsManager: yield* createSettings(tempDir, options),
       });
       session.subscribe(() => {});
       const cleanup = () => {

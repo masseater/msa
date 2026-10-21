@@ -30,7 +30,9 @@ const cleanupDirs = () => runTest(dirs.tempDir === "" ? Effect.void : removePath
 function createSession(options?: { noTools?: "all" | "builtin"; tools?: string[] }) {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const settingsManager = SettingsManager.create(dirs.tempDir, dirs.agentDir);
+      const settingsManager = yield* Effect.promise(() =>
+        SettingsManager.create(dirs.tempDir, dirs.agentDir),
+      );
       const sessionManager = SessionManager.inMemory(dirs.tempDir);
       const resourceLoader = new DefaultResourceLoader({
         agentDir: dirs.agentDir,

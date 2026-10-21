@@ -29,7 +29,8 @@ function* loadAgentSessionServices(
         signal: options.modelRuntimeSignal,
       }),
     ));
-  const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+  const settingsManager =
+    options.settingsManager ?? (yield* awaited(SettingsManager.create(cwd, agentDir)));
   modelRuntime.setModelPolicy(settingsManager.models.getModelPolicy());
   const resourceLoader = new DefaultResourceLoader({
     ...(options.resourceLoaderOptions ?? {}),

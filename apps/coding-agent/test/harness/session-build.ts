@@ -67,7 +67,7 @@ const buildHarness = Effect.fn("buildHarness")(function* (
     tools: options.tools ?? [],
   });
   const sessionManager = SessionManager.inMemory();
-  const settingsManager = createSettingsManager(tempDir, options);
+  const settingsManager = yield* createSettingsManager(tempDir, options);
   const session = new AgentSession({
     agent,
     cwd: tempDir,
@@ -86,11 +86,12 @@ const buildHarness = Effect.fn("buildHarness")(function* (
   return harnessOf({ agent, events, faux, session, sessionManager, settingsManager, tempDir });
 });
 
-function createSettingsManager(tempDir: string, options: sessionTypesModule.HarnessOptions) {
-  const settingsManager = SettingsManager.create(tempDir, tempDir);
-  if (options.settings !== undefined) settingsManager.applyOverrides(options.settings);
-  return settingsManager;
-}
+const createSettingsManager = (tempDir: string, options: sessionTypesModule.HarnessOptions) =>
+  Effect.gen(function* () {
+    const settingsManager = yield* Effect.promise(() => SettingsManager.create(tempDir, tempDir));
+    if (options.settings !== undefined) settingsManager.applyOverrides(options.settings);
+    return settingsManager;
+  });
 
 const sessionBuild = {
   buildHarness,

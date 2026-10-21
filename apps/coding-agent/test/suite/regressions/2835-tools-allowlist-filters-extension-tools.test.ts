@@ -26,7 +26,9 @@ let agentDir: string;
 function createSession(allowedToolNames?: string[]) {
   return Effect.runPromise(
     Effect.gen(function* () {
-      const settingsManager = SettingsManager.create(tempDir, agentDir);
+      const settingsManager = yield* Effect.promise(() =>
+        SettingsManager.create(tempDir, agentDir),
+      );
       const sessionManager = SessionManager.inMemory(tempDir);
       const resourceLoader = new DefaultResourceLoader({
         agentDir,

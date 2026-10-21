@@ -17,9 +17,11 @@ function prepareHost(cwd: string, agentDir: string): Promise<void> {
       if (process.platform === "win32") {
         yield* awaited(cleanupWindowsSelfUpdateQuarantine(getPackageDir()));
       }
-      const bootstrapSettingsManager = SettingsManager.create(cwd, agentDir, {
-        projectTrusted: false,
-      });
+      const bootstrapSettingsManager = yield* awaited(
+        SettingsManager.create(cwd, agentDir, {
+          projectTrusted: false,
+        }),
+      );
       applyHttpProxySettings(bootstrapSettingsManager.getGlobalSettings().httpProxy);
       configureHttpDispatcher();
     }),

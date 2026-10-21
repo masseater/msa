@@ -118,7 +118,7 @@ await session.run.prompting.prompt("Hello");
 | `customTools`     | `[]`                                                 | Additional tool definitions                                                |
 | `resourceLoader`  | DefaultResourceLoader                                | Resource loader for extensions, skills, prompts, themes, and context files |
 | `sessionManager`  | `SessionManager.create(cwd)`                         | Persistence                                                                |
-| `settingsManager` | `SettingsManager.create(cwd, agentDir)`              | Settings overrides                                                         |
+| `settingsManager` | `await SettingsManager.create(cwd, agentDir)`        | Settings overrides                                                         |
 
 ## Events
 

@@ -80,7 +80,9 @@ const inactiveTool: sdkTypes.InlineExtension = (msa) => {
 };
 
 const createFileSession = (options: defaultToolsSettingSupportTypes.ToolOptions = {}) =>
-  sessionWith(SettingsManager.create(dirs.tempDir, dirs.agentDir), options, [inactiveTool]);
+  SettingsManager.create(dirs.tempDir, dirs.agentDir).then((settingsManager) =>
+    sessionWith(settingsManager, options, [inactiveTool]),
+  );
 
 const resumeSession = (
   sessionManager: sessionManagerTypes.SessionManager,

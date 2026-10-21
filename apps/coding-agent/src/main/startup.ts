@@ -27,7 +27,7 @@ function prepareStartup(args: string[], boot: Boot) {
       const { appMode, parsed } = yield* parseCliArgs(args);
       const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
       time("runMigrations");
-      const startupSettingsManager = SettingsManager.create(cwd, agentDir);
+      const startupSettingsManager = yield* awaited(SettingsManager.create(cwd, agentDir));
       const startupSettingsDiagnostics = collectSettingsDiagnostics(startupSettingsManager);
       yield* awaited(setUpInteractiveStart(appMode, parsed, startupSettingsManager));
       const telemetry = yield* awaited(startTelemetryFor(parsed, startupSettingsManager));
