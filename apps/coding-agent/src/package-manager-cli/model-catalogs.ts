@@ -1,17 +1,18 @@
 import chalk from "chalk";
 import * as Effect from "effect/Effect";
 
-import config from "./config.ts";
-import type configTypes from "./config.types.ts";
-import awaitingModule from "./core/awaiting.ts";
-import ModelRuntime from "./core/model-runtime.ts";
-import platformNode from "./core/platform-node.ts";
-import platformModule from "./core/platform.ts";
+import awaitingModule from "../core/awaiting.ts";
+import ModelRuntime from "../core/model-runtime.ts";
+import platformNode from "../core/platform-node.ts";
+import platformModule from "../core/platform.ts";
 
-const { awaited, awaiting } = awaitingModule;
 const { join } = platformNode;
-const { writeError, writeLog } = platformModule;
-const { APP_NAME, PACKAGE_NAME, getSelfUpdateUnavailableInstruction } = config;
+const { writeLog, writeError } = platformModule;
+const { awaited, awaiting } = awaitingModule;
+
+import srcConfig from "../config.ts";
+
+const { getAgentDir } = srcConfig;
 
 function refreshModelCatalogs(agentDir: string): Promise<void> {
   return Effect.runPromise(
@@ -47,23 +48,14 @@ function refreshModelCatalogs(agentDir: string): Promise<void> {
   );
 }
 
-function printSelfUpdateUnavailable(
-  npmCommand?: string[],
-  updatePackageTarget: configTypes.SelfUpdatePackageTarget = PACKAGE_NAME,
-): void {
-  writeError(`error: ${APP_NAME} cannot self-update this installation.`);
-  writeError(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageTarget));
-
-  const entrypoint = process.argv[1];
-  if (entrypoint !== undefined && entrypoint !== "") {
-    writeError("");
-    writeError(`Location of ${APP_NAME} executable: ${entrypoint}`);
-  }
+function refreshModels(): Promise<void> {
+  return refreshModelCatalogs(getAgentDir()).catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "Unknown model catalog refresh error";
+    writeError(chalk.red(`Error: ${message}`));
+    process.exitCode = 1;
+  });
 }
 
-const packageManagerCliPart4 = {
-  printSelfUpdateUnavailable,
-  refreshModelCatalogs,
-};
+const modelCatalogs = { refreshModels };
 
-export default packageManagerCliPart4;
+export default modelCatalogs;

@@ -1,8 +1,8 @@
-import packageManagerCliPart12 from "./package-manager-cli-part12.ts";
-import packageManagerCliPart14 from "./package-manager-cli-part14.ts";
+import configCommand from "./package-manager-cli/config-command.ts";
+import packageCommand from "./package-manager-cli/package-command.ts";
 
-const { handleConfigCommand } = packageManagerCliPart12;
-const { handlePackageCommand } = packageManagerCliPart14;
+const { handleConfigCommand } = configCommand;
+const { handlePackageCommand } = packageCommand;
 
 const packageManagerCli = {
   handleConfigCommand,

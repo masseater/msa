@@ -1,17 +1,17 @@
-import configSelector from "./cli/config-selector.ts";
-import awaitingModule from "./core/awaiting.ts";
-import DefaultPackageManager from "./core/default-package-manager.ts";
-import resourceLoader from "./core/resource-loader.ts";
-import SettingsManager from "./core/settings-manager.ts";
-import packageManagerCliPart1 from "./package-manager-cli-part1.ts";
-import type packageManagerCliTypes from "./package-manager-cli.types.ts";
+import configSelector from "../cli/config-selector.ts";
+import awaitingModule from "../core/awaiting.ts";
+import DefaultPackageManager from "../core/default-package-manager.ts";
+import resourceLoader from "../core/resource-loader.ts";
+import SettingsManager from "../core/settings-manager.ts";
+import type packageManagerCliTypes from "../package-manager-cli.types.ts";
+import trustedSettings from "./trusted-settings.ts";
 
-const { isBuiltinExtension } = resourceLoader;
 const { awaited } = awaitingModule;
 const { selectConfig } = configSelector;
-const { reportSettingsErrors } = packageManagerCliPart1;
+const { isBuiltinExtension } = resourceLoader;
+const { reportSettingsErrors } = trustedSettings;
 
-function* handleConfigCommandImplPart1(
+function* selectPackageResources(
   settingsManager: SettingsManager,
   runtimeOptions: packageManagerCliTypes.PackageCommandRuntimeOptions,
   cwd: string,
@@ -56,8 +56,6 @@ function* handleConfigCommandImplPart1(
   );
 }
 
-const packageManagerCliPart10 = {
-  handleConfigCommandImplPart1,
-};
+const configResources = { selectPackageResources };
 
-export default packageManagerCliPart10;
+export default configResources;

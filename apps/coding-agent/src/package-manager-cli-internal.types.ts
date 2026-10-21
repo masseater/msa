@@ -1,3 +1,4 @@
+import type extensionsTypesTypes from "./core/extensions/types.types.ts";
 import type settingsManagerTypes from "./core/settings-manager.types.ts";
 import type packageManagerCliTypes from "./package-manager-cli.types.ts";
 
@@ -27,6 +28,14 @@ declare namespace packageManagerCliInternalTypes {
     installSpec: string;
     version: string;
     shouldRun: boolean;
+  }
+
+  interface CommandSettingsOptions {
+    cwd: string;
+    agentDir: string;
+    projectTrustOverride?: boolean | undefined;
+    useSavedProjectTrustOnly?: boolean | undefined;
+    extensionFactories?: extensionsTypesTypes.InlineExtension[] | undefined;
   }
 
   interface CommandSettingsResult {
