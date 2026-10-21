@@ -1,34 +1,19 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Console, Data, DateTime, Effect, Schema } from "effect";
+import { Data, Effect } from "effect";
 
+import caseDiscovery from "./case-discovery.ts";
 import cliOptions from "./cli-options.ts";
-import type cliOptionsTypes from "./cli-options.types.ts";
-import dockerModule from "./docker.ts";
-import type dockerTypes from "./docker.types.ts";
+import evalRunner from "./eval-runner.ts";
 import plan from "./plan.ts";
-import type planTypes from "./plan.types.ts";
 import platform from "./platform.ts";
-import reportFormat from "./report-format.ts";
-import reportRead from "./report-read.ts";
 import reportSummary from "./report-summary.ts";
-import type reportTypesTypes from "./report-types.types.ts";
+import runArtifacts from "./run-artifacts.ts";
 
-const { files, pathOperations, randomUuid, sha256Hex } = platform;
-const { DOCUMENTATION_VARIANTS, createTaskPlan, parseDiscoveredCases } = plan;
-const { buildImages, discoverCases, requireEvalAuthFile, runTask } = dockerModule;
-const { erroredObservation, readTaskObservation } = reportRead;
-const { parseEvalCli } = cliOptions;
-const { summarizeEvalObservations } = reportSummary;
-const { formatEvalComparisonReport } = reportFormat;
+const { files, pathOperations } = platform;
 
 class BlockedPairsError extends Data.TaggedError("BlockedPairsError") {}
 
 const packageRoot = pathOperations.resolve(import.meta.dirname, "..");
-
-const artifactRunId = Effect.gen(function* () {
-  const now = yield* DateTime.now;
-  return `${DateTime.formatIso(now).replaceAll(":", "-")}_${yield* randomUuid}`;
-});
 
 function containerPath(path: string): string {
   const absolute = pathOperations.resolve(packageRoot, path);
@@ -38,21 +23,6 @@ function containerPath(path: string): string {
   }
   return packageRelative.replaceAll("\\", "/");
 }
-
-function normalizeDiscoveredFile(path: string): string {
-  const prefix = "/repo/apps/evals/";
-  if (!path.startsWith(prefix)) {
-    throw new Error(`Discovered eval path is outside the container package: ${path}`);
-  }
-  return path.slice(prefix.length);
-}
-
-const caseIdentities = (cases: readonly planTypes.DiscoveredEvalCase[]): string =>
-  JSON.stringify(
-    cases
-      .map(({ fullName, file }) => JSON.stringify([fullName, normalizeDiscoveredFile(file)]))
-      .sort(),
-  );
 
 const selectFiles = (requestedFiles: readonly string[]): Effect.Effect<string[]> =>
   Effect.gen(function* () {
@@ -74,136 +44,8 @@ const selectFiles = (requestedFiles: readonly string[]): Effect.Effect<string[]>
     return selected;
   });
 
-const decodeJson = (text: string): Effect.Effect<unknown> =>
-  Schema.decodeEffect(Schema.fromJsonString(Schema.Unknown))(text).pipe(Effect.orDie);
-
-const discoverVariant = (
-  docker: dockerTypes.DockerContext,
-  variant: (typeof DOCUMENTATION_VARIANTS)[number],
-  evalFiles: readonly string[],
-  vitestArgs: readonly string[],
-): Effect.Effect<planTypes.DiscoveredEvalCase[]> =>
-  Effect.gen(function* () {
-    const path = yield* discoverCases({ context: docker, files: evalFiles, variant, vitestArgs });
-    return parseDiscoveredCases(yield* decodeJson(yield* files.readFileString(path)));
-  });
-
-const encodeCompact = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown));
-
-const encodePretty = Schema.encodeEffect(Schema.fromJsonString(Schema.Unknown, { space: 2 }));
-
-const writeJson = (path: string, value: unknown): Effect.Effect<void> =>
-  Effect.flatMap(Effect.orDie(encodePretty(value)), (text) =>
-    files.writeFileString(path, `${text}\n`),
-  );
-
-const writeProtocol = (
-  artifactDirectory: string,
-  protocol: Record<string, unknown>,
-  tasks: readonly planTypes.EvalTask[],
-): Effect.Effect<string> =>
-  Effect.gen(function* () {
-    const protocolDigest = yield* Effect.flatMap(Effect.orDie(encodeCompact(protocol)), sha256Hex);
-    yield* writeJson(pathOperations.resolve(artifactDirectory, "protocol.json"), {
-      ...protocol,
-      protocolDigest,
-    });
-    yield* writeJson(pathOperations.resolve(artifactDirectory, "expected-runs.json"), tasks);
-    return protocolDigest;
-  });
-
-const runAllTasks = (
-  docker: dockerTypes.DockerContext,
-  tasks: readonly planTypes.EvalTask[],
-): Effect.Effect<reportTypesTypes.EvalObservation[]> =>
-  Effect.gen(function* () {
-    const observations: reportTypesTypes.EvalObservation[] = [];
-    for (const [index, task] of tasks.entries()) {
-      yield* Console.log(
-        `\n[${index + 1}/${tasks.length}] ${task.evalSet} > ${task.caseId} | ${task.variant} | ${task.model} | run ${task.runNumber}`,
-      );
-      const reportPath = yield* runTask({ context: docker, task });
-      observations.push(
-        reportPath === undefined
-          ? erroredObservation(task)
-          : yield* readTaskObservation({
-              artifactDirectory: docker.artifactDirectory,
-              reportPath,
-              task,
-            }),
-      );
-      yield* files.writeFileString(
-        pathOperations.resolve(docker.artifactDirectory, "observations.jsonl"),
-        `${observations.map((item) => JSON.stringify(item)).join("\n")}\n`,
-      );
-    }
-    return observations;
-  });
-
-const prepareDocker = (
-  cli: cliOptionsTypes.EvalCliOptions & { provider: string; model: string },
-  artifactDirectory: string,
-): Effect.Effect<dockerTypes.DockerContext> =>
-  Effect.gen(function* () {
-    const authPath = yield* requireEvalAuthFile(cli.provider);
-    yield* files.makeDirectory(artifactDirectory, 0o700);
-    const images = yield* buildImages;
-    if (images.with_docs.id === images.without_docs.id) {
-      return yield* Effect.die(new Error("Documentation variants resolved to the same image."));
-    }
-    return {
-      artifactDirectory,
-      authPath,
-      images,
-      model: cli.model,
-      provider: cli.provider,
-      runsPerVariant: cli.runsPerVariant,
-    };
-  });
-
-const discoverCommonCases = (
-  docker: dockerTypes.DockerContext,
-  evalFiles: readonly string[],
-  vitestArgs: readonly string[],
-): Effect.Effect<planTypes.DiscoveredEvalCase[]> =>
-  Effect.gen(function* () {
-    const [firstVariant, secondVariant] = DOCUMENTATION_VARIANTS;
-    const first = yield* discoverVariant(docker, firstVariant, evalFiles, vitestArgs);
-    const second = yield* discoverVariant(docker, secondVariant, evalFiles, vitestArgs);
-    if (caseIdentities(first) !== caseIdentities(second)) {
-      return yield* Effect.die(
-        new Error("Documentation variants discovered different eval cases."),
-      );
-    }
-    const cases = first.map(({ fullName, evalSet, caseId, file }) => ({
-      caseId,
-      evalSet,
-      file: normalizeDiscoveredFile(file),
-      fullName,
-    }));
-    if (cases.length === 0) {
-      return yield* Effect.die(new Error("No documentation eval cases matched the selection."));
-    }
-    return cases;
-  });
-
-const writeReport = (
-  artifactDirectory: string,
-  report: ReturnType<typeof summarizeEvalObservations>,
-): Effect.Effect<void> =>
-  Effect.gen(function* () {
-    const reportText = formatEvalComparisonReport(report);
-    yield* writeJson(pathOperations.resolve(artifactDirectory, "report.json"), report);
-    yield* files.writeFileString(
-      pathOperations.resolve(artifactDirectory, "report.txt"),
-      `${reportText}\n`,
-    );
-    yield* Console.log(`\n${reportText}`);
-    yield* Console.log(`\nArtifacts: ${artifactDirectory}`);
-  });
-
 const main = Effect.gen(function* () {
-  const cli = parseEvalCli(process.argv.slice(2));
+  const cli = cliOptions.parseEvalCli(process.argv.slice(2));
   const { provider, model } = cli;
   if (provider === undefined || model === undefined) {
     return yield* Effect.die(
@@ -212,11 +54,15 @@ const main = Effect.gen(function* () {
   }
   const modelIdentity = `${provider}/${model}`;
   const evalFiles = yield* selectFiles(cli.requestedFiles);
-  const artifactDirectory = pathOperations.resolve(packageRoot, ".eval", yield* artifactRunId);
-  const docker = yield* prepareDocker({ ...cli, model, provider }, artifactDirectory);
-  const cases = yield* discoverCommonCases(docker, evalFiles, cli.discoveryArgs);
-  const tasks = createTaskPlan(cases, modelIdentity, cli.runsPerVariant);
-  const protocolDigest = yield* writeProtocol(
+  const artifactDirectory = pathOperations.resolve(
+    packageRoot,
+    ".eval",
+    yield* runArtifacts.artifactRunId,
+  );
+  const docker = yield* evalRunner.prepareDocker({ ...cli, model, provider }, artifactDirectory);
+  const cases = yield* caseDiscovery.discoverCommonCases(docker, evalFiles, cli.discoveryArgs);
+  const tasks = plan.createTaskPlan(cases, modelIdentity, cli.runsPerVariant);
+  const protocolDigest = yield* runArtifacts.writeProtocol(
     artifactDirectory,
     {
       cases: cases.map(({ evalSet, caseId, file }) => ({ caseId, evalSet, file })),
@@ -229,9 +75,9 @@ const main = Effect.gen(function* () {
     },
     tasks,
   );
-  const observations = yield* runAllTasks(docker, tasks);
-  const report = summarizeEvalObservations(protocolDigest, tasks, observations);
-  yield* writeReport(artifactDirectory, report);
+  const observations = yield* evalRunner.runAllTasks(docker, tasks);
+  const report = reportSummary.summarizeEvalObservations(protocolDigest, tasks, observations);
+  yield* runArtifacts.writeReport(artifactDirectory, report);
   if (report.blockedPairs.length > 0) return yield* new BlockedPairsError();
 });
 
