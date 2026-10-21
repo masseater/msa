@@ -96,7 +96,7 @@ jobs:
             The working tree is checked out on branch ${{ steps.target.outputs.branch }}.
 
             1. Read the failure with `gh run view --job ${{ steps.target.outputs.failed_job }} --log-failed`.
-            2. Fix the root cause in the code, following AGENTS.md. Do not weaken lint rules, add disable directives, or skip checks to make verify pass.
+            2. Fix the root cause in the code, following AGENTS.md. Do not change lint or commitlint rules in either direction, add disable directives, or skip checks to make verify pass.
             3. Run `vp run verify` and repeat until it passes.
             4. Commit the fix with a Conventional Commits message whose body explains the cause. Do not push.
           claude_args: >-
