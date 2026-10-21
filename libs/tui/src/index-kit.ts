@@ -1,19 +1,19 @@
-import indexKitPart1 from "./index-kit-part1.ts";
-import indexKitPart2 from "./index-kit-part2.ts";
-import indexKitPart3 from "./index-kit-part3.ts";
-import indexKitPart4 from "./index-kit-part4.ts";
-import indexKitPart5 from "./index-kit-part5.ts";
+import inputKit from "./index-kit/input.ts";
+import layoutKit from "./index-kit/layout.ts";
+import renderingKit from "./index-kit/rendering.ts";
+import terminalKit from "./index-kit/terminal.ts";
+import widgetsKit from "./index-kit/widgets.ts";
 
-const indexKit: typeof indexKitPart1 &
-  typeof indexKitPart2 &
-  typeof indexKitPart3 &
-  typeof indexKitPart4 &
-  typeof indexKitPart5 = {
-  ...indexKitPart1,
-  ...indexKitPart2,
-  ...indexKitPart3,
-  ...indexKitPart4,
-  ...indexKitPart5,
+const indexKit: typeof layoutKit &
+  typeof widgetsKit &
+  typeof inputKit &
+  typeof terminalKit &
+  typeof renderingKit = {
+  ...layoutKit,
+  ...widgetsKit,
+  ...inputKit,
+  ...terminalKit,
+  ...renderingKit,
 };
 
 export default indexKit;

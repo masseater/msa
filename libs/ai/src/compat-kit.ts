@@ -1,13 +1,16 @@
-import compatKitPart1 from "./compat-kit-part1.ts";
-import compatKitPart2 from "./compat-kit-part2.ts";
-import compatKitPart3 from "./compat-kit-part3.ts";
-import compatKitPart4 from "./compat-kit-part4.ts";
+import apiProvidersKit from "./compat-kit/api-providers.ts";
+import authModelsKit from "./compat-kit/auth-models.ts";
+import imagesKit from "./compat-kit/images.ts";
+import streamsFauxKit from "./compat-kit/streams-faux.ts";
 
-const compatKit = {
-  ...compatKitPart1,
-  ...compatKitPart2,
-  ...compatKitPart3,
-  ...compatKitPart4,
+const compatKit: typeof apiProvidersKit &
+  typeof authModelsKit &
+  typeof imagesKit &
+  typeof streamsFauxKit = {
+  ...apiProvidersKit,
+  ...authModelsKit,
+  ...imagesKit,
+  ...streamsFauxKit,
 };
 
 export default compatKit;

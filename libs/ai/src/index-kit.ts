@@ -1,9 +1,9 @@
-import indexKitPart1 from "./index-kit-part1.ts";
-import indexKitPart2 from "./index-kit-part2.ts";
+import authModelsKit from "./index-kit/auth-models.ts";
+import streamsFauxKit from "./index-kit/streams-faux.ts";
 
-const indexKit = {
-  ...indexKitPart1,
-  ...indexKitPart2,
+const indexKit: typeof authModelsKit & typeof streamsFauxKit = {
+  ...authModelsKit,
+  ...streamsFauxKit,
 };
 
 export default indexKit;
