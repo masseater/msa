@@ -1,12 +1,14 @@
-import * as Clock from "effect/Clock";
-import * as Console from "effect/Console";
-import * as DateTime from "effect/DateTime";
-import * as Deferred from "effect/Deferred";
-import * as Effect from "effect/Effect";
-import * as Exit from "effect/Exit";
-import { dual } from "effect/Function";
-import * as Option from "effect/Option";
-import * as Random from "effect/Random";
+import {
+  Clock,
+  Console,
+  DateTime,
+  Deferred,
+  Effect,
+  Exit,
+  Function as Fn,
+  Option,
+  Random,
+} from "effect";
 
 import type platformTypes from "./platform.types.ts";
 import processEnv from "./process-env.ts";
@@ -40,7 +42,7 @@ const randomUnit = (): number => Effect.runSync(Random.next);
 const schedule: {
   (delayMs: number): (run: () => void) => platformTypes.Scheduled;
   (run: () => void, delayMs: number): platformTypes.Scheduled;
-} = dual(2, (run: () => void, delayMs: number): platformTypes.Scheduled => {
+} = Fn.dual(2, (run: () => void, delayMs: number): platformTypes.Scheduled => {
   const fiber = Effect.runFork(Effect.delay(Effect.sync(run), delayMs));
   return {
     cancel: () => {
@@ -68,7 +70,7 @@ const abortError = (signal: AbortSignal): Error =>
 const sleepFor: {
   (signal: AbortSignal | undefined): (ms: number) => Effect.Effect<void>;
   (ms: number, signal: AbortSignal | undefined): Effect.Effect<void>;
-} = dual(2, (ms: number, signal: AbortSignal | undefined): Effect.Effect<void> =>
+} = Fn.dual(2, (ms: number, signal: AbortSignal | undefined): Effect.Effect<void> =>
   Effect.callback<void>((resume) => {
     if (signal?.aborted === true) {
       resume(Effect.die(abortError(signal)));

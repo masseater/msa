@@ -1,21 +1,20 @@
-import pathsModule from "../../utils/paths.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import manifestModule from "../manifest.ts";
-import type manifestTypes from "../manifest.types.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
+import resolvedResourcePaths from "./resolved-resource-paths.ts";
 import resourceEntries from "./resource-entries.ts";
 import resourceFiles from "./resource-files.ts";
 import resourcePatterns from "./resource-patterns.ts";
 
-const { canonicalizePath } = pathsModule;
+const { resolvedPathsOf } = resolvedResourcePaths;
 const { dirname, join } = platformNode;
 const { existsSync, statSync } = nodeFs;
 const { applyPatterns, splitPatterns } = resourcePatterns;
 const { collectResourceFiles } = resourceEntries;
-const { resourcePrecedenceRank, RESOURCE_TYPES } = resourceFiles;
+const { RESOURCE_TYPES } = resourceFiles;
 const { readMsaManifest } = manifestModule;
 
 export default class ResourceCollection {
@@ -90,33 +89,7 @@ export default class ResourceCollection {
   toResolvedPaths(
     accumulator: defaultPackageManagerInternalTypes.ResourceAccumulator,
   ): packageManagerTypes.ResolvedPaths {
-    const mapToResolved = (
-      entries: Map<string, { metadata: packageManagerTypes.PathMetadata; enabled: boolean }>,
-    ): packageManagerTypes.ResolvedResource[] => {
-      const resolved = Array.from(entries.entries()).map(([path, { metadata, enabled }]) => ({
-        enabled,
-        metadata,
-        path,
-      }));
-      resolved.sort(
-        (a, b) => resourcePrecedenceRank(a.metadata) - resourcePrecedenceRank(b.metadata),
-      );
-
-      const seen = new Set<string>();
-      return resolved.filter((entry) => {
-        const canonicalPath = canonicalizePath(entry.path);
-        if (seen.has(canonicalPath)) return false;
-        seen.add(canonicalPath);
-        return true;
-      });
-    };
-
-    return {
-      extensions: mapToResolved(accumulator.extensions),
-      prompts: mapToResolved(accumulator.prompts),
-      skills: mapToResolved(accumulator.skills),
-      themes: mapToResolved(accumulator.themes),
-    };
+    return resolvedPathsOf(accumulator);
   }
 
   resolveLocalExtensionSource(
@@ -165,7 +138,7 @@ export default class ResourceCollection {
     if (manifest !== null) {
       for (const resourceType of RESOURCE_TYPES) {
         this.manager.resources.manifest.addManifestEntries(
-          manifest[resourceType as keyof manifestTypes.MsaManifest],
+          manifest[resourceType as keyof typeof manifest],
           packageRoot,
           resourceType,
           this.getTargetMap(accumulator, resourceType),

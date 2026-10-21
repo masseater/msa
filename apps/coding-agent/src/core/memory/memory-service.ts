@@ -2,8 +2,7 @@ import * as NodeServices from "@effect/platform-node/NodeServices";
 import { Effect, Fiber, FileSystem, ManagedRuntime } from "effect";
 
 import platform from "../platform/index.ts";
-import EmbeddingClient from "./embeddings.ts";
-import type embeddingsTypes from "./embeddings.types.ts";
+import MemoryEmbedder from "./memory-embedder.ts";
 import memoryFormat from "./memory-format.ts";
 import memoryProject from "./memory-project.ts";
 import MemoryStore from "./memory-store.ts";
@@ -16,18 +15,15 @@ const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 const { projectNameOf } = memoryProject;
 const { formatMemoryStats, formatMemoryStatus, isMemoryKind } = memoryFormat;
 const { MEMORY_KINDS } = storeTypesModule;
-const { ToolFailure, currentTimeMillis, fromPromise, pathOperations, unwrapForeign } = platform;
+const { ToolFailure, fromPromise, pathOperations, unwrapForeign } = platform;
 
-const EMBEDDING_FAILURE_COOLDOWN_MS = 60_000;
 const REEMBED_BATCH_LIMIT = 25;
 const EXPLICIT_SEARCH_MIN_SCORE = 0.1;
 export default class MemoryService {
   readonly settings: memoryTypesTypes.ResolvedMemorySettings;
   private projectName: string;
   private store: storeTypes.MemoryStore | undefined;
-  private embedding: embeddingsTypes.EmbeddingClient | undefined;
-  private embeddingFailedAt: number | undefined;
-  private lastEmbeddingError: string | undefined;
+  private readonly embedder: MemoryEmbedder;
   private readonly ready: Promise<void>;
   private readonly preparing: Fiber.Fiber<void>;
   private closed = false;
@@ -36,15 +32,7 @@ export default class MemoryService {
   constructor(options: memoryTypesTypes.MemoryServiceOptions) {
     this.settings = options.settings;
     this.projectName = options.project ?? (pathOperations.basename(options.cwd) || options.cwd);
-    if (this.settings.embedding.enabled) {
-      const apiKey = this.settings.embedding.apiKey;
-      this.embedding = new EmbeddingClient({
-        baseUrl: this.settings.embedding.baseUrl,
-        model: this.settings.embedding.model,
-        ...(apiKey !== undefined && apiKey !== "" ? { apiKey } : {}),
-        timeoutMs: this.settings.embedding.timeoutMs,
-      });
-    }
+    this.embedder = new MemoryEmbedder(this.settings.embedding);
     this.preparing = nodeRuntime.runFork(this.prepare(options));
     this.ready = nodeRuntime.runPromise(Effect.asVoid(Fiber.await(this.preparing)));
   }
@@ -64,10 +52,9 @@ export default class MemoryService {
   warm(): void {
     if (!this.recallEnabled || this.storeIsEmpty()) return;
     this.warming = nodeRuntime.runFork(
-      this.embedQuery("warmup").pipe(
-        Effect.andThen(this.reembedStaleEffect(REEMBED_BATCH_LIMIT)),
-        Effect.ignore,
-      ),
+      this.embedder
+        .embedQuery("warmup")
+        .pipe(Effect.andThen(this.reembedStaleEffect(REEMBED_BATCH_LIMIT)), Effect.ignore),
     );
   }
 
@@ -102,7 +89,7 @@ export default class MemoryService {
   describeStatus(): string {
     if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
     return formatMemoryStatus({
-      lastEmbeddingError: this.lastEmbeddingError,
+      lastEmbeddingError: this.embedder.lastError,
       project: this.project,
       settings: this.settings,
       stats: this.ensureStore().stats(),
@@ -151,48 +138,12 @@ export default class MemoryService {
     return this.store;
   }
 
-  private embed(text: string, signal?: AbortSignal) {
-    return Effect.gen({ self: this }, function* () {
-      const client = this.embedding;
-      if (client === undefined) return undefined;
-      const failedAt = this.embeddingFailedAt;
-      if (
-        failedAt !== undefined &&
-        currentTimeMillis() - failedAt < EMBEDDING_FAILURE_COOLDOWN_MS
-      ) {
-        return undefined;
-      }
-      return yield* fromPromise(() => client.embed(text, signal)).pipe(
-        Effect.map((vector) => {
-          this.embeddingFailedAt = undefined;
-          this.lastEmbeddingError = undefined;
-          return vector;
-        }),
-        Effect.catchTag("ForeignError", (failure) =>
-          Effect.sync(() => {
-            this.embeddingFailedAt = currentTimeMillis();
-            this.lastEmbeddingError = failure.message;
-            return undefined;
-          }),
-        ),
-      );
-    });
-  }
-
-  private embedDocument(text: string, signal?: AbortSignal) {
-    return this.embed(`${this.settings.embedding.documentPrefix}${text}`, signal);
-  }
-
-  private embedQuery(text: string, signal?: AbortSignal) {
-    return this.embed(`${this.settings.embedding.queryPrefix}${text}`, signal);
-  }
-
   private reembedStaleEffect(limit: number) {
     return Effect.gen({ self: this }, function* () {
-      if (!this.settings.enabled || this.embedding === undefined) return 0;
+      if (!this.settings.enabled || !this.embedder.available) return 0;
       let reembedded = 0;
       for (const record of this.ensureStore().listStale(this.settings.embedding.model, limit)) {
-        const vector = yield* this.embedDocument(record.content);
+        const vector = yield* this.embedder.embedDocument(record.content);
         if (vector === undefined) break;
         this.ensureStore().setEmbedding(record.id, vector, this.settings.embedding.model);
         reembedded++;
@@ -204,7 +155,7 @@ export default class MemoryService {
   private recallEffect(query: string, signal: AbortSignal | undefined) {
     return Effect.gen({ self: this }, function* () {
       if (!this.recallEnabled || query.trim() === "" || this.storeIsEmpty()) return [];
-      const embedding = yield* this.embedQuery(query, signal);
+      const embedding = yield* this.embedder.embedQuery(query, signal);
       const scores = this.ensureStore().search({
         text: query,
         ...(embedding === undefined ? {} : { embedding }),
@@ -235,7 +186,7 @@ export default class MemoryService {
         });
       }
       yield* fromPromise(() => this.ready);
-      const embedding = yield* this.embedDocument(content);
+      const embedding = yield* this.embedder.embedDocument(content);
       const result = this.ensureStore().save({
         content,
         kind,
@@ -245,7 +196,7 @@ export default class MemoryService {
           ? {}
           : { embedding, embeddingModel: this.settings.embedding.model }),
       });
-      const failure = this.lastEmbeddingError;
+      const failure = this.embedder.lastError;
       return {
         ...result,
         embedded: embedding !== undefined,
@@ -260,7 +211,7 @@ export default class MemoryService {
     return Effect.gen({ self: this }, function* () {
       yield* fromPromise(() => this.ready);
       if (this.ensureStore().isEmpty()) return [];
-      const embedding = yield* this.embedQuery(query);
+      const embedding = yield* this.embedder.embedQuery(query);
       return this.ensureStore().search({
         text: query,
         ...(embedding === undefined ? {} : { embedding }),

@@ -185,6 +185,20 @@ export default class GoalLoop {
         const toolUsed = goal.toolUsed;
         goal.toolUsed = false;
         const turn = goal.turns + 1;
+        const outcome = yield* awaited(this.judge(goal, signal, turn));
+        if (typeof outcome === "boolean") return outcome;
+        return this.applyVerdict(goal, outcome, turn, toolUsed);
+      }, this),
+    );
+  }
+
+  private judge(
+    goal: ActiveGoal,
+    signal: AbortSignal,
+    turn: number,
+  ): Promise<goalTypes.GoalEvaluation | boolean> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
         const prompt = buildGoalEvaluationPrompt({
           condition: goal.condition,
           elapsedMs: nowMs() - goal.startedAt,
@@ -205,46 +219,52 @@ export default class GoalLoop {
             this.host.changed();
             return false;
           }
-          const reason = toErrorMessage(error);
-          return this.pause(goal, `Goal evaluation failed: ${reason}`);
+          return this.pause(goal, `Goal evaluation failed: ${toErrorMessage(error)}`);
         }
         goal.evaluating = false;
         if (signal.aborted || this.active !== goal) {
           this.host.changed();
           return false;
         }
-        goal.turns = turn;
-        goal.lastEvaluation = evaluation;
-
-        if (evaluation.verdict !== "not_met") {
-          this.end({
-            condition: goal.condition,
-            elapsedMs: nowMs() - goal.startedAt,
-            event: evaluation.verdict,
-            reason: evaluation.reason,
-            tokens: Math.max(0, this.host.totalTokens() - goal.tokenBaseline),
-            turns: goal.turns,
-          });
-          return false;
-        }
-
-        this.host.record({
-          condition: goal.condition,
-          event: "evaluated",
-          reason: evaluation.reason,
-          turn,
-        });
-        goal.idleTurns = toolUsed ? 0 : goal.idleTurns + 1;
-        if (goal.idleTurns >= GOAL_NO_PROGRESS_TURN_LIMIT) {
-          goal.idleTurns = 0;
-          return this.pause(goal, `No tool calls in ${GOAL_NO_PROGRESS_TURN_LIMIT} turns in a row`);
-        }
-        this.host.changed();
-        this.host.queueContinue(
-          `The goal is not met yet: ${evaluation.reason}\n\nKeep working until this condition holds:\n${goal.condition}`,
-        );
-        return true;
+        return evaluation;
       }, this),
     );
+  }
+
+  private applyVerdict(
+    goal: ActiveGoal,
+    evaluation: goalTypes.GoalEvaluation,
+    turn: number,
+    toolUsed: boolean,
+  ): boolean {
+    goal.turns = turn;
+    goal.lastEvaluation = evaluation;
+    if (evaluation.verdict !== "not_met") {
+      this.end({
+        condition: goal.condition,
+        elapsedMs: nowMs() - goal.startedAt,
+        event: evaluation.verdict,
+        reason: evaluation.reason,
+        tokens: Math.max(0, this.host.totalTokens() - goal.tokenBaseline),
+        turns: goal.turns,
+      });
+      return false;
+    }
+    this.host.record({
+      condition: goal.condition,
+      event: "evaluated",
+      reason: evaluation.reason,
+      turn,
+    });
+    goal.idleTurns = toolUsed ? 0 : goal.idleTurns + 1;
+    if (goal.idleTurns >= GOAL_NO_PROGRESS_TURN_LIMIT) {
+      goal.idleTurns = 0;
+      return this.pause(goal, `No tool calls in ${GOAL_NO_PROGRESS_TURN_LIMIT} turns in a row`);
+    }
+    this.host.changed();
+    this.host.queueContinue(
+      `The goal is not met yet: ${evaluation.reason}\n\nKeep working until this condition holds:\n${goal.condition}`,
+    );
+    return true;
   }
 }
