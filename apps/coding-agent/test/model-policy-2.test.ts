@@ -2,14 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import cliModelFlag from "../src/core/cli-model.ts";
+import modelPolicyDenial from "../src/core/model-policy-denial.ts";
 import coreModelPolicy from "../src/core/model-policy.ts";
-import modelResolver from "../src/core/model-resolver.ts";
 import SettingsManager from "../src/core/settings-manager.ts";
 import modelPolicyModule from "../src/core/tools/model-policy.ts";
 import toolDefinitionWrapper from "../src/core/tools/tool-definition-wrapper.ts";
 import modelPolicySupport from "./model-policy-support.ts";
 
-const { findModelPolicyDenial, resolveCliModel } = modelResolver;
+const { findModelPolicyDenial } = modelPolicyDenial;
+const { resolveCliModel } = cliModelFlag;
 const { wrapToolDefinition } = toolDefinitionWrapper;
 const { createModelPolicyToolDefinition } = modelPolicyModule;
 const { saveModelPolicy } = coreModelPolicy;

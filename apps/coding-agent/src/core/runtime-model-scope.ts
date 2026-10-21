@@ -3,14 +3,14 @@ import chalk from "chalk";
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "./awaiting.ts";
-import modelResolverPart2 from "./model-resolver-part2.ts";
 import type modelResolverTypes from "./model-resolver.types.ts";
 import type modelRuntimeTypes from "./model-runtime.types.ts";
+import modelScope from "./model-scope.ts";
 import platform from "./platform.ts";
 
-const { awaited, awaiting } = awaitingModule;
 const { writeWarn } = platform;
-const { resolveModelScopeFromModels } = modelResolverPart2;
+const { awaited, awaiting } = awaitingModule;
+const { resolveModelScopeFromModels } = modelScope;
 
 function resolveModelScopeWithDiagnostics(
   patterns: string[],
@@ -45,9 +45,6 @@ function resolveModelScope(
   );
 }
 
-const modelResolverPart3 = {
-  resolveModelScope,
-  resolveModelScopeWithDiagnostics,
-};
+const runtimeModelScope = { resolveModelScope, resolveModelScopeWithDiagnostics };
 
-export default modelResolverPart3;
+export default runtimeModelScope;

@@ -3,8 +3,8 @@ import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
+import cliModelFlag from "../core/cli-model.ts";
 import InMemoryCodingAgentModelsStore from "../core/in-memory-coding-agent-models-store.ts";
-import modelResolver from "../core/model-resolver.ts";
 import ModelRuntime from "../core/model-runtime.ts";
 import type modelRuntimeTypes from "../core/model-runtime.types.ts";
 import type argsTypes from "./args.types.ts";
@@ -14,7 +14,7 @@ import authCommand from "./auth-command.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { getAuthCredential, validateAuthCommandArgs } = authCommand;
-const { resolveCliModel } = modelResolver;
+const { resolveCliModel } = cliModelFlag;
 
 function checkProviderAuthImpl(
   args: argsTypes.Args,

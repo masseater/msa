@@ -2,10 +2,10 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type compatTypes from "@msa/ai/compat.types";
 import type aiTypes from "@msa/ai/index.types";
 
-import modelResolver from "../../../core/model-resolver.ts";
+import modelScope from "../../../core/model-scope.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 
-const { resolveModelScopeFromModels } = modelResolver;
+const { resolveModelScopeFromModels } = modelScope;
 
 export default class ScopedModelState {
   private readonly mode: InteractiveMode;

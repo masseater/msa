@@ -5,11 +5,12 @@ import { describe, expect, test, vi } from "vite-plus/test";
 
 import modelResolver from "../src/core/model-resolver.ts";
 import type modelResolverTypes from "../src/core/model-resolver.types.ts";
+import runtimeModelScope from "../src/core/runtime-model-scope.ts";
 import modelResolverCases from "./model-resolver-cases.ts";
 import modelResolverSupport from "./model-resolver-support.ts";
 
-const { resolveModelReference, resolveModelScope, resolveModelScopeWithDiagnostics } =
-  modelResolver;
+const { resolveModelReference } = modelResolver;
+const { resolveModelScope, resolveModelScopeWithDiagnostics } = runtimeModelScope;
 
 const { referenceCases } = modelResolverCases;
 const { allModels, mockModels, modelRef, referenceCatalog } = modelResolverSupport;

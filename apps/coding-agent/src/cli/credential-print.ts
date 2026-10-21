@@ -3,6 +3,7 @@ import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
+import cliModelFlag from "../core/cli-model.ts";
 import modelResolver from "../core/model-resolver.ts";
 import type ModelRuntime from "../core/model-runtime.ts";
 import type modelRuntimeTypes from "../core/model-runtime.types.ts";
@@ -13,7 +14,8 @@ import type authCommandTypes from "./auth-command.types.ts";
 
 const { getAuthCredential, validateAuthCommandArgs } = authCommand;
 const { awaited, awaiting } = awaitingModule;
-const { resolveCliModel, resolveModelReference } = modelResolver;
+const { resolveCliModel } = cliModelFlag;
+const { resolveModelReference } = modelResolver;
 
 const DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS = 30 * 60_000;
 

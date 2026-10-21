@@ -1,6 +1,6 @@
 import type argsTypes from "./cli/args.types.ts";
 import type agentSessionServicesTypes from "./core/agent-session-services.types.ts";
-import modelResolver from "./core/model-resolver.ts";
+import cliModelFlag from "./core/cli-model.ts";
 import type modelResolverTypes from "./core/model-resolver.types.ts";
 import type modelRuntimeTypes from "./core/model-runtime.types.ts";
 import type sdkTypes from "./core/sdk.types.ts";
@@ -8,7 +8,7 @@ import type settingsManagerTypes from "./core/settings-manager.types.ts";
 import mainPart8 from "./main-part8.ts";
 import mainPart9 from "./main-part9.ts";
 
-const { resolveCliModel } = modelResolver;
+const { resolveCliModel } = cliModelFlag;
 const { buildSessionOptionsPart2 } = mainPart8;
 const { buildSessionOptionsPart3 } = mainPart9;
 

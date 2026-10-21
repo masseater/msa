@@ -1,7 +1,7 @@
 import authGuidance from "./auth-guidance.ts";
 import awaitingModule from "./awaiting.ts";
 import DefaultResourceLoader from "./default-resource-loader.ts";
-import modelResolver from "./model-resolver.ts";
+import initialModel from "./initial-model.ts";
 import ModelRuntime from "./model-runtime.ts";
 import type resourceLoaderTypes from "./resource-loader.types.ts";
 import type sdkTypes from "./sdk.types.ts";
@@ -13,7 +13,7 @@ import virtualModels from "./virtual-models.ts";
 const { awaited } = awaitingModule;
 const { time } = timings;
 const { getBranchSelection } = virtualModels;
-const { findInitialModel } = modelResolver;
+const { findInitialModel } = initialModel;
 const { formatNoModelsAvailableMessage } = authGuidance;
 
 function* createAgentSessionPart2(

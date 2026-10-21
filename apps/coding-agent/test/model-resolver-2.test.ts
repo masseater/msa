@@ -1,12 +1,12 @@
 import type aiTypes from "@msa/ai/index.types";
 import { describe, expect, test } from "vite-plus/test";
 
+import cliModelFlag from "../src/core/cli-model.ts";
 import modelPolicy from "../src/core/model-policy.ts";
-import modelResolver from "../src/core/model-resolver.ts";
 import modelResolverSupport from "./model-resolver-support.ts";
 
 const { EMPTY_MODEL_POLICY } = modelPolicy;
-const { resolveCliModel } = modelResolver;
+const { resolveCliModel } = cliModelFlag;
 
 const { allModels, mockModels } = modelResolverSupport;
 

@@ -2,6 +2,7 @@ import type compatTypes from "@msa/ai/compat.types";
 import { Effect } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
+import modelPolicyDenial from "../../../core/model-policy-denial.ts";
 import modelPolicy from "../../../core/model-policy.ts";
 import modelResolver from "../../../core/model-resolver.ts";
 import platformModule from "../../../core/platform.ts";
@@ -13,8 +14,8 @@ import modelCatalogRefresh from "../model-catalog-refresh.ts";
 const { awaited, awaitingWith } = awaitingModule;
 const { toErrorMessage } = errorsModule;
 const { schedule } = platformModule;
-const { findExactModelReferenceMatch, findModelPolicyDenial, formatModelPolicyDenialError } =
-  modelResolver;
+const { findExactModelReferenceMatch } = modelResolver;
+const { findModelPolicyDenial, formatModelPolicyDenialError } = modelPolicyDenial;
 const { saveModelPolicy } = modelPolicy;
 const { refreshModelCatalogs } = modelCatalogRefresh;
 
