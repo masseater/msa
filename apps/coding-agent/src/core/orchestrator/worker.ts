@@ -12,6 +12,7 @@ declare namespace workerTypes {
       lifecycle: { abort(): Promise<unknown> };
       retry: { isRetrying: boolean };
     };
+    integrations: { prWatch: { close(): Promise<void> } };
     models: {
       selection: { setModel(model: compatTypes.Model<any>): Promise<unknown> };
       thinking: { setThinkingLevel(level: agentTypes.ThinkingLevel): void };

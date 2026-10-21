@@ -10,7 +10,7 @@ import start from "./start.ts";
 import storeModule from "./store.ts";
 import wrapUp from "./wrap-up.ts";
 
-const { nowMillis } = runtimeModule;
+const { nowMillis, releaseThread } = runtimeModule;
 const { store } = storeModule;
 const { outcomes } = outcomeModule;
 const { wrapping } = wrapUp;
@@ -34,6 +34,7 @@ function settleEffect(
     const assignments = store.assignmentsOfThread(runtime.database, threadId);
     runtime.runs.delete(threadId);
     runtime.runStartedAt.delete(threadId);
+    releaseThread(runtime, threadId);
     const outcome = outcomes.outcomeOf(worker, error);
     if (outcome.status !== "completed") {
       wrapping.fail(runtime, threadId, `wrap-up failed: ${outcome.content}`);

@@ -10,7 +10,7 @@ import watchdogInspect from "./watchdog-inspect.ts";
 import type watchdogTypes from "./watchdog.types.ts";
 import type workerTypes from "./worker.ts";
 
-const { nowMillis } = runtimeModule;
+const { nowMillis, releaseThread } = runtimeModule;
 const { orchestratorError } = errors;
 const { store } = storeModule;
 const { scheduling } = schedule;
@@ -25,6 +25,7 @@ function release(runtime: runtimeTypes.Runtime, threadId: string): void {
   runtime.runStartedAt.delete(threadId);
   runtime.activity.delete(threadId);
   runtime.wrapUps.delete(threadId);
+  releaseThread(runtime, threadId);
   void worker?.run.lifecycle.abort().catch(() => undefined);
 }
 

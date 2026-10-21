@@ -68,6 +68,17 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
 
   dispose = () => {};
 
+  prWatchClosed = 0;
+
+  readonly integrations = {
+    prWatch: {
+      close: () => {
+        this.prWatchClosed++;
+        return Promise.resolve();
+      },
+    },
+  };
+
   readonly run = {
     lifecycle: { abort: () => this.abort() },
     prompting: { prompt: (text: string) => this.prompt(text) },

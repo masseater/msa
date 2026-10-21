@@ -7,7 +7,7 @@ import storeModule from "./store.ts";
 import type workerTypes from "./worker.ts";
 import type wrapUpTypes from "./wrap-up.types.ts";
 
-const { nowMillis } = runtimeModule;
+const { nowMillis, releaseThread } = runtimeModule;
 const { store } = storeModule;
 const { outcomes } = outcomeModule;
 
@@ -64,6 +64,7 @@ function stopped(runtime: runtimeTypes.Runtime, threadId: string, memo: string, 
   }
   runtime.runs.delete(threadId);
   runtime.runStartedAt.delete(threadId);
+  releaseThread(runtime, threadId);
   runtime.publish();
 }
 
