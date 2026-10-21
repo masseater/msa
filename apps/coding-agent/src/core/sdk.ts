@@ -1,7 +1,7 @@
 import agentModule from "@msa/agent-core";
 import compat from "@msa/ai/compat";
 
-import sdkPart4 from "./sdk-part4.ts";
+import createAgentSessionModule from "./sdk/create-agent-session.ts";
 import toolsModule from "./tools/index.ts";
 
 const {
@@ -19,7 +19,7 @@ const {
 } = toolsModule;
 const { setDefaultStreamFn } = agentModule;
 const { streamSimple } = compat;
-const { createAgentSession } = sdkPart4;
+const { createAgentSession } = createAgentSessionModule;
 
 setDefaultStreamFn(streamSimple);
 
