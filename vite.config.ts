@@ -61,14 +61,6 @@ export default defineConfig({
         rules: { "import/max-dependencies": ["error", { max: 15 }] },
       },
       {
-        files: ["apps/**"],
-        rules: {
-          "eslint/max-lines": ["error", { max: 1350 }],
-          "eslint/max-lines-per-function": ["error", { max: 1250 }],
-          "import/max-dependencies": ["error", { max: 45 }],
-        },
-      },
-      {
         files: ["**/*.types.ts"],
         rules: { "eslint/max-lines": ["error", { max: 400 }] },
       },
