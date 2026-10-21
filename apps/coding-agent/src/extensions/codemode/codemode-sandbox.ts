@@ -12,7 +12,6 @@ import type toolTypes from "./tool.types.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { getCodemodeWorkerSpecifier, getQuickJSWasmPath } = config;
-const { CodemodeSandbox } = codemode;
 const { createDiscoveryGlobals } = discoveryGlobals;
 const { createModelGlobals } = modelGlobals;
 const { ERROR_PREVIEW_CHARS, previewArgs, textOf, toScriptValue, truncateText } = scriptText;
@@ -99,10 +98,10 @@ function createSandbox(
   callable: readonly agentTypes.AgentTool<any>[],
   samples: ReadonlyMap<string, string>,
   timeoutMs: number,
-): InstanceType<typeof CodemodeSandbox> {
+): codemodeTypes.CodemodeSandbox {
   const workerUrl = getCodemodeWorkerSpecifier();
   const { ctx, options } = run;
-  return new CodemodeSandbox({
+  return new codemode.CodemodeSandbox({
     globals: [
       ...createDiscoveryGlobals(callable, samples, options),
       ...(options.models === true && ctx !== undefined
