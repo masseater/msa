@@ -1,8 +1,8 @@
-import mainPart8 from "./main-part8.ts";
-import mainPart17 from "./main-part17.ts";
+import runMain from "./main/run-main.ts";
+import sessionSetup from "./main/session-setup.ts";
 
-const { createSessionManager } = mainPart8;
-const { main } = mainPart17;
+const { createSessionManager } = sessionSetup;
+const { main } = runMain;
 
 const mainModule = {
   createSessionManager,

@@ -1,92 +1,90 @@
 import tui from "@msa/tui";
 import chalk from "chalk";
 import { Effect } from "effect";
+import { dual } from "effect/Function";
 
-import argsModule from "./cli/args.ts";
-import listModelsModule from "./cli/list-models.ts";
-import projectTrustModule from "./cli/project-trust.ts";
-import startupUi from "./cli/startup-ui.ts";
-import config from "./config.ts";
-import agentSessionRuntimeSupport from "./core/agent-session-runtime-support.ts";
-import type agentSessionRuntimeTypes from "./core/agent-session-runtime.types.ts";
-import agentSessionServices from "./core/agent-session-services.ts";
-import type agentSessionServicesTypes from "./core/agent-session-services.types.ts";
-import authGuidance from "./core/auth-guidance.ts";
-import awaitingModule from "./core/awaiting.ts";
-import httpDispatcher from "./core/http-dispatcher.ts";
-import telemetrySupport from "./core/observability/telemetry-support.ts";
-import outputGuard from "./core/output-guard.ts";
-import platformModule from "./core/platform.ts";
-import processEnv from "./core/process-env.ts";
-import projectTrust from "./core/project-trust.ts";
-import type projectTrustTypes from "./core/project-trust.types.ts";
-import runtimeModelScope from "./core/runtime-model-scope.ts";
-import settingsDiagnostics from "./core/settings-diagnostics.ts";
-import SettingsManager from "./core/settings-manager.ts";
-import timings from "./core/timings.ts";
-import trustManager from "./core/trust-manager.ts";
-import extensionsModule from "./extensions/index.ts";
-import cliLazy from "./extensions/mcp/cli.lazy.ts";
-import mainPart1 from "./main-part1.ts";
-import mainPart3 from "./main-part3.ts";
-import mainPart4 from "./main-part4.ts";
-import mainPart10 from "./main-part10.ts";
-import mainPart11 from "./main-part11.ts";
-import mainPart12 from "./main-part12.ts";
-import mainPart14 from "./main-part14.ts";
-import mainPart15 from "./main-part15.ts";
-import type mainTypes from "./main.types.ts";
-import migrations from "./migrations.ts";
-import modes from "./modes/index.ts";
-import themeSchema from "./modes/interactive/theme/theme-schema.ts";
-import themeModule from "./modes/interactive/theme/theme.ts";
-import packageManagerCli from "./package-manager-cli.ts";
-import interop from "./utils/interop.ts";
-import windowsSelfUpdate from "./utils/windows-self-update.ts";
+import argsModule from "../cli/args.ts";
+import listModelsModule from "../cli/list-models.ts";
+import projectTrustModule from "../cli/project-trust.ts";
+import startupUi from "../cli/startup-ui.ts";
+import config from "../config.ts";
+import agentSessionRuntimeSupport from "../core/agent-session-runtime-support.ts";
+import type agentSessionRuntimeTypes from "../core/agent-session-runtime.types.ts";
+import agentSessionServices from "../core/agent-session-services.ts";
+import type agentSessionServicesTypes from "../core/agent-session-services.types.ts";
+import authGuidance from "../core/auth-guidance.ts";
+import awaitingModule from "../core/awaiting.ts";
+import httpDispatcher from "../core/http-dispatcher.ts";
+import telemetrySupport from "../core/observability/telemetry-support.ts";
+import outputGuard from "../core/output-guard.ts";
+import platformModule from "../core/platform.ts";
+import processEnv from "../core/process-env.ts";
+import projectTrust from "../core/project-trust.ts";
+import type projectTrustTypes from "../core/project-trust.types.ts";
+import runtimeModelScope from "../core/runtime-model-scope.ts";
+import settingsDiagnostics from "../core/settings-diagnostics.ts";
+import SettingsManager from "../core/settings-manager.ts";
+import timings from "../core/timings.ts";
+import trustManager from "../core/trust-manager.ts";
+import extensionsModule from "../extensions/index.ts";
+import cliLazy from "../extensions/mcp/cli.lazy.ts";
+import type mainTypes from "../main.types.ts";
+import migrations from "../migrations.ts";
+import modes from "../modes/index.ts";
+import themeSchema from "../modes/interactive/theme/theme-schema.ts";
+import themeModule from "../modes/interactive/theme/theme.ts";
+import packageManagerCli from "../package-manager-cli.ts";
+import interop from "../utils/interop.ts";
+import windowsSelfUpdate from "../utils/windows-self-update.ts";
+import cliInput from "./cli-input.ts";
+import runAuthCommandModule from "./run-auth-command.ts";
+import runtimeSession from "./runtime-session.ts";
+import sessionOptionsModule from "./session-options.ts";
+import sessionSetup from "./session-setup.ts";
 
-const { awaited, awaiting, performed } = awaitingModule;
-const { printTimings, resetTimings, time } = timings;
-const { initTheme, setThemeJsonValidator, stopThemeWatcher } = themeModule;
-const { validateThemeJson } = themeSchema;
+const { restoreStdout } = outputGuard;
+const { runPrintMode, InteractiveMode, runRpcMode } = modes;
+const { callbackPromise } = interop;
+const { stopThemeWatcher, initTheme, setThemeJsonValidator } = themeModule;
+const { performed, awaited, awaiting } = awaitingModule;
+const { printTimings, time, resetTimings } = timings;
+const { formatNoModelsAvailableMessage } = authGuidance;
+const { writeError } = platformModule;
+const { describeTelemetry, startTelemetry } = telemetrySupport;
+const { deduplicateDiagnostics, collectSettingsDiagnostics } = settingsDiagnostics;
+const { showDeprecationWarnings, runMigrations } = migrations;
+const { listModels } = listModelsModule;
+const { printHelp } = argsModule;
+const { primeTerminalCapabilities, setCapabilityOverrides } = tui;
+const { createAgentSessionRuntime } = agentSessionRuntimeSupport;
+const { resolveModelScope } = runtimeModelScope;
+const { createProjectTrustContext } = projectTrustModule;
+const { resolveProjectTrusted } = projectTrust;
+const { createAgentSessionServices } = agentSessionServices;
+const { hasTrustRequiringProjectResources } = trustManager;
+const { ENV_SESSION_DIR, VERSION, getAgentDir, getPackageDir } = config;
+const { showFirstTimeSetup, shouldRunFirstTimeSetup } = startupUi;
+const { loadMcpCommand } = cliLazy;
+const { handleConfigCommand, handlePackageCommand } = packageManagerCli;
+const { configureHttpDispatcher, applyHttpProxySettings } = httpDispatcher;
+const { cleanupWindowsSelfUpdateQuarantine } = windowsSelfUpdate;
+const { writeEnv, readEnv } = processEnv;
 const { builtInExtensions } = extensionsModule;
+const { validateThemeJson } = themeSchema;
 const {
+  toPrintOutputMode,
   EXTENSION_LOAD_FAILURE_HINT,
-  isTruthyEnvFlag,
+  prepareInitialMessage,
   readPipedStdin,
   reportDiagnostics,
-  toPrintOutputMode,
-} = mainPart1;
-const { readEnv, writeEnv } = processEnv;
-const { runAuthCommand } = mainPart3;
-const { cleanupWindowsSelfUpdateQuarantine } = windowsSelfUpdate;
-const { ENV_SESSION_DIR, VERSION, getAgentDir, getPackageDir } = config;
-const { applyHttpProxySettings, configureHttpDispatcher } = httpDispatcher;
-const { handleConfigCommand, handlePackageCommand } = packageManagerCli;
-const { loadMcpCommand } = cliLazy;
-const { mainImplPart2 } = mainPart12;
-const { runMigrations, showDeprecationWarnings } = migrations;
-const { collectSettingsDiagnostics, deduplicateDiagnostics } = settingsDiagnostics;
-const { shouldRunFirstTimeSetup, showFirstTimeSetup } = startupUi;
-const { describeTelemetry, startTelemetry } = telemetrySupport;
-const { mainImplPart1 } = mainPart14;
-const { resolveCliPaths } = mainPart11;
-const { hasTrustRequiringProjectResources } = trustManager;
-const { createAgentSessionServices } = agentSessionServices;
-const { resolveProjectTrusted } = projectTrust;
-const { createProjectTrustContext } = projectTrustModule;
-const { resolveModelScope } = runtimeModelScope;
-const { buildSessionOptions } = mainPart10;
-const { createRuntimePart1 } = mainPart15;
-const { createAgentSessionRuntime } = agentSessionRuntimeSupport;
-const { primeTerminalCapabilities, setCapabilityOverrides } = tui;
-const { printHelp } = argsModule;
-const { listModels } = listModelsModule;
-const { prepareInitialMessage } = mainPart4;
-const { writeError } = platformModule;
-const { formatNoModelsAvailableMessage } = authGuidance;
-const { InteractiveMode, runPrintMode, runRpcMode } = modes;
-const { callbackPromise } = interop;
-const { restoreStdout } = outputGuard;
+  resolveCliPaths,
+  parseCliArgs,
+  isTruthyEnvFlag,
+} = cliInput;
+const { createSessionFromServices } = runtimeSession;
+const { buildSessionOptions } = sessionOptionsModule;
+const { prepareSession } = sessionSetup;
+const { runAuthCommand } = runAuthCommandModule;
 
 function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<undefined> {
   return Effect.runPromise(
@@ -135,7 +133,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
         return;
       }
 
-      let { appMode, parsed } = yield* mainImplPart2(args);
+      let { appMode, parsed } = yield* parseCliArgs(args);
 
       const { migratedAuthProviders: migratedProviders, deprecationWarnings } = runMigrations(cwd);
       time("runMigrations");
@@ -171,7 +169,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
       time("startTelemetry");
 
       const envSessionDir = readEnv(ENV_SESSION_DIR);
-      let { trustStore, sessionManager, autoTrustOnReloadCwd } = yield* mainImplPart1(
+      let { trustStore, sessionManager, autoTrustOnReloadCwd } = yield* prepareSession(
         parsed,
         envSessionDir,
         startupSettingsManager,
@@ -303,7 +301,7 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
               modelRuntime,
               settingsManager,
             );
-            return yield* createRuntimePart1(
+            return yield* createSessionFromServices(
               diagnostics,
               sessionOptionDiagnostics,
               parsed,
@@ -470,8 +468,11 @@ function mainImpl(args: string[], options?: mainTypes.MainOptions): Promise<unde
   );
 }
 
-const mainPart16Part1 = {
-  mainImpl,
-};
+const main: {
+  (args: string[], options?: mainTypes.MainOptions): Promise<undefined>;
+  (options?: mainTypes.MainOptions): (args: string[]) => Promise<undefined>;
+} = dual((args: IArguments) => args.length >= 1, mainImpl);
 
-export default mainPart16Part1;
+const runMain = { main };
+
+export default runMain;

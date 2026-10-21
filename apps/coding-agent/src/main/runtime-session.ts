@@ -1,17 +1,36 @@
-import type argsTypes from "./cli/args.types.ts";
-import agentSessionServices from "./core/agent-session-services.ts";
-import type agentSessionServicesTypes from "./core/agent-session-services.types.ts";
-import awaitingModule from "./core/awaiting.ts";
-import type typesSessionEventsTypes from "./core/extensions/types-session-events.ts";
-import ModelRuntime from "./core/model-runtime.ts";
-import type telemetryTypesNs from "./core/observability/telemetry.types.ts";
-import type sdkTypes from "./core/sdk.types.ts";
-import SessionManager from "./core/session-manager.ts";
+import type argsTypes from "../cli/args.types.ts";
+import agentSessionServices from "../core/agent-session-services.ts";
+import type agentSessionServicesTypes from "../core/agent-session-services.types.ts";
+import awaitingModule from "../core/awaiting.ts";
+import type typesSessionEventsTypes from "../core/extensions/types-session-events.ts";
+import ModelRuntime from "../core/model-runtime.ts";
+import type telemetryTypesNs from "../core/observability/telemetry.types.ts";
+import type sdkTypes from "../core/sdk.types.ts";
+import SessionManager from "../core/session-manager.ts";
 
-const { awaited } = awaitingModule;
 const { createAgentSessionFromServices } = agentSessionServices;
+const { awaited } = awaitingModule;
 
-function* createRuntimePart1(
+function* applyCliApiKey(
+  parsed: argsTypes.Args,
+  sessionOptions: sdkTypes.CreateAgentSessionOptions,
+  diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[],
+  modelRuntime: ModelRuntime,
+) {
+  if (parsed.apiKey !== undefined && parsed.apiKey !== "") {
+    if (sessionOptions.model === undefined) {
+      diagnostics.push({
+        message:
+          "--api-key requires a model to be specified via --model, --provider/--model, or --models",
+        type: "error",
+      });
+    } else {
+      yield* awaited(modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey));
+    }
+  }
+}
+
+function* createSessionFromServices(
   diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[],
   sessionOptionDiagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[],
   parsed: argsTypes.Args,
@@ -25,7 +44,7 @@ function* createRuntimePart1(
 ) {
   diagnostics.push(...sessionOptionDiagnostics);
 
-  yield* createRuntimePart1Part1(parsed, sessionOptions, diagnostics, modelRuntime);
+  yield* applyCliApiKey(parsed, sessionOptions, diagnostics, modelRuntime);
 
   const created = yield* awaited(
     createAgentSessionFromServices({
@@ -54,27 +73,6 @@ function* createRuntimePart1(
   };
 }
 
-const mainPart15 = {
-  createRuntimePart1,
-};
+const runtimeSession = { createSessionFromServices };
 
-export default mainPart15;
-
-function* createRuntimePart1Part1(
-  parsed: argsTypes.Args,
-  sessionOptions: sdkTypes.CreateAgentSessionOptions,
-  diagnostics: agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[],
-  modelRuntime: ModelRuntime,
-) {
-  if (parsed.apiKey !== undefined && parsed.apiKey !== "") {
-    if (sessionOptions.model === undefined) {
-      diagnostics.push({
-        message:
-          "--api-key requires a model to be specified via --model, --provider/--model, or --models",
-        type: "error",
-      });
-    } else {
-      yield* awaited(modelRuntime.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey));
-    }
-  }
-}
+export default runtimeSession;
