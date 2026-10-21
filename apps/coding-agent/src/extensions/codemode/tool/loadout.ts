@@ -1,14 +1,16 @@
 import type agentTypes from "@msa/agent-core/index.types";
 
-import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
-import settingsDefaults from "../../core/settings-defaults.ts";
-import toolPart1 from "./tool-part1.ts";
-import toolPart2 from "./tool-part2.ts";
-import type toolTypes from "./tool.types.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import settingsDefaults from "../../../core/settings-defaults.ts";
+import type toolTypes from "../tool.types.ts";
+import toolDeclarations from "./declarations.ts";
+import toolDescription from "./description.ts";
+import toolSchema from "./schema.ts";
 
 const { SETTINGS_DEFAULTS } = settingsDefaults;
-const { CODEMODE_TOOL_NAME, DEFAULT_CODEMODE_INLINE_BUDGET, getCodemodeCallableTools } = toolPart1;
-const { createCodemodeDescription, describeScriptCall } = toolPart2;
+const { DEFAULT_CODEMODE_INLINE_BUDGET, createCodemodeDescription } = toolDescription;
+const { CODEMODE_TOOL_NAME } = toolSchema;
+const { describeScriptCall, getCodemodeCallableTools } = toolDeclarations;
 
 function prepareCodemodeLoadout(
   loadout: extensionsTypesTypes.ToolLoadout,
@@ -64,9 +66,6 @@ function getScriptReach(code: unknown): "all" | readonly string[] {
   return DISCOVERY_GLOBALS.test(code) ? "all" : (code.match(/\w+/gu) ?? []);
 }
 
-const toolPart3 = {
-  getScriptReach,
-  prepareCodemodeLoadout,
-};
+const toolLoadout = { getScriptReach, prepareCodemodeLoadout };
 
-export default toolPart3;
+export default toolLoadout;

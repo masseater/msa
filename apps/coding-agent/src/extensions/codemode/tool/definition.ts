@@ -1,22 +1,22 @@
 import source from "@msa/codemode/source";
 import * as Effect from "effect/Effect";
 
-import awaitingModule from "../../core/awaiting.ts";
-import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
-import executeLazy from "./execute.lazy.ts";
-import renderer from "./renderer.ts";
-import toolPart1 from "./tool-part1.ts";
-import toolPart2 from "./tool-part2.ts";
-import toolPart3 from "./tool-part3.ts";
-import type toolTypes from "./tool.types.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import executeLazy from "../execute.lazy.ts";
+import renderer from "../renderer.ts";
+import type toolTypes from "../tool.types.ts";
+import toolDescription from "./description.ts";
+import toolLoadout from "./loadout.ts";
+import toolSchema from "./schema.ts";
 
-const { CODEMODE_SOURCE_GRAMMAR } = source;
-const { awaited, awaiting } = awaitingModule;
-const { loadCodemodeExecutor } = executeLazy;
 const { codemodeRenderers } = renderer;
-const { CODEMODE_TOOL_NAME, codemodeSchema, codemodeToolSystemPromptContribution } = toolPart1;
-const { createCodemodeDescription } = toolPart2;
-const { getScriptReach, prepareCodemodeLoadout } = toolPart3;
+const { loadCodemodeExecutor } = executeLazy;
+const { awaited, awaiting } = awaitingModule;
+const { CODEMODE_SOURCE_GRAMMAR } = source;
+const { getScriptReach, prepareCodemodeLoadout } = toolLoadout;
+const { codemodeToolSystemPromptContribution, CODEMODE_TOOL_NAME, codemodeSchema } = toolSchema;
+const { createCodemodeDescription } = toolDescription;
 
 function createCodemodeToolDefinition(
   options: toolTypes.CodemodeToolOptions = {},
@@ -54,8 +54,6 @@ function createCodemodeToolDefinition(
   };
 }
 
-const toolPart4 = {
-  createCodemodeToolDefinition,
-};
+const toolDefinition = { createCodemodeToolDefinition };
 
-export default toolPart4;
+export default toolDefinition;
