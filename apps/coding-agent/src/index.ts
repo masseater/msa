@@ -1,19 +1,31 @@
-import indexKitPart1 from "./index-kit-part1.ts";
-import indexKitPart2 from "./index-kit-part2.ts";
-import indexKitPart3 from "./index-kit-part3.ts";
-import indexKitPart4 from "./index-kit-part4.ts";
-import indexKitPart5 from "./index-kit-part5.ts";
+import cliKit from "./index-kit/cli.ts";
+import extensionsKit from "./index-kit/extensions.ts";
+import modelsKit from "./index-kit/models.ts";
+import resourcesKit from "./index-kit/resources.ts";
+import sessionKit from "./index-kit/session.ts";
+import settingsKit from "./index-kit/settings.ts";
+import toolsKit from "./index-kit/tools.ts";
+import uiKit from "./index-kit/ui.ts";
+import utilsKit from "./index-kit/utils.ts";
 
-const src: typeof indexKitPart1 &
-  typeof indexKitPart2 &
-  typeof indexKitPart3 &
-  typeof indexKitPart4 &
-  typeof indexKitPart5 = {
-  ...indexKitPart1,
-  ...indexKitPart2,
-  ...indexKitPart3,
-  ...indexKitPart4,
-  ...indexKitPart5,
+const src: typeof sessionKit &
+  typeof modelsKit &
+  typeof settingsKit &
+  typeof resourcesKit &
+  typeof toolsKit &
+  typeof extensionsKit &
+  typeof uiKit &
+  typeof cliKit &
+  typeof utilsKit = {
+  ...sessionKit,
+  ...modelsKit,
+  ...settingsKit,
+  ...resourcesKit,
+  ...toolsKit,
+  ...extensionsKit,
+  ...uiKit,
+  ...cliKit,
+  ...utilsKit,
 };
 
 export default src;
