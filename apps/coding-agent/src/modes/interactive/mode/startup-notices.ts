@@ -24,14 +24,15 @@ export default class StartupNotices {
 
   private startupNoticesShown = false;
 
-  getChangelogForDisplay(): string | undefined {
+  getChangelogForDisplay(): Promise<string | undefined> {
     if (this.mode.session.state.messages.length > 0) {
-      return undefined;
+      return Promise.resolve(undefined);
     }
+    return parseChangelog(getChangelogPath()).then((entries) => this.changelogSince(entries));
+  }
 
+  private changelogSince(entries: Awaited<ReturnType<typeof parseChangelog>>): string | undefined {
     const lastVersion = this.mode.settingsManager.display.getLastChangelogVersion();
-    const changelogPath = getChangelogPath();
-    const entries = parseChangelog(changelogPath);
 
     if (lastVersion === undefined || lastVersion === "") {
       this.mode.settingsManager.display.setLastChangelogVersion(VERSION);

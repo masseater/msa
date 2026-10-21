@@ -45,7 +45,9 @@ const reportsARemovedInstallInsteadOfReading = () =>
       yield* makeDirectory(installDir);
       yield* writeJsonFile(joinPath(tempDir, "package.json"), { version: "0.0.1" });
       yield* removePath(installDir);
-      expect(detectInstallChange(joinPath(installDir, "package.json"))).toEqual({
+      expect(
+        yield* Effect.promise(() => detectInstallChange(joinPath(installDir, "package.json"))),
+      ).toEqual({
         kind: "removed",
       });
     }),

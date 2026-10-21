@@ -105,9 +105,8 @@ export default class ModeRunLoop {
         this.warnAboutTmuxKeyboard();
         this.showStartupDiagnostics();
         const { initialImages, initialMessage, initialMessages } = this.mode.options;
-        yield* performed(
-          this.runInputLoop(takeUnnotifiedCrash(), initialMessage, initialImages, initialMessages),
-        );
+        const crash = yield* awaited(takeUnnotifiedCrash());
+        yield* performed(this.runInputLoop(crash, initialMessage, initialImages, initialMessages));
       }, this),
     );
   }

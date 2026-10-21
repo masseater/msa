@@ -118,10 +118,8 @@ const selfUpdatesRenamedPnpmGlobalInstallsBy = () =>
   runTest(
     Effect.gen(function* () {
       yield* createPnpmGlobalInstall();
-      const command = getSelfUpdateCommand(
-        "@mariozechner/pi-coding-agent",
-        undefined,
-        "@new-scope/msa",
+      const command = yield* Effect.promise(() =>
+        getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/msa"),
       );
       expect(detectInstallMethod()).toBe("pnpm");
       expect(command).toEqual({
@@ -193,7 +191,7 @@ const selfUpdatesPnpmV11GlobalInstallsResolved = () =>
       process.argv[1] = joinPath(globalPackageDir, "dist", "cli.js");
       setExecPath(joinPath(storePackageDir, "dist", "cli.js"));
 
-      const command = getSelfUpdateCommand(packageName);
+      const command = yield* Effect.promise(() => getSelfUpdateCommand(packageName));
 
       expect(detectInstallMethod()).toBe("pnpm");
       expect(command).toEqual({
@@ -208,10 +206,8 @@ const selfUpdatesRenamedYarnGlobalInstallsBy = () =>
   runTest(
     Effect.gen(function* () {
       yield* createYarnGlobalInstall();
-      const command = getSelfUpdateCommand(
-        "@mariozechner/pi-coding-agent",
-        undefined,
-        "@new-scope/msa",
+      const command = yield* Effect.promise(() =>
+        getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/msa"),
       );
       expect(detectInstallMethod()).toBe("yarn");
       expect(command).toEqual({

@@ -31,10 +31,20 @@ function buildBundle(
   session: agentSessionTypes.AgentSession,
   options: bugReportInternalTypes.BugReportOptions,
   summary: string | undefined,
-): bugReportTypesModule.BugReportBundle {
+): Promise<bugReportTypesModule.BugReportBundle> {
+  return readCrashLog().then((crashes) => bundleWith({ crashes, options, session, summary }));
+}
+
+function bundleWith(parts: {
+  readonly session: agentSessionTypes.AgentSession;
+  readonly options: bugReportInternalTypes.BugReportOptions;
+  readonly summary: string | undefined;
+  readonly crashes: Awaited<ReturnType<typeof readCrashLog>>;
+}): bugReportTypesModule.BugReportBundle {
+  const { crashes, options, session, summary } = parts;
   const extensions = session.resourceLoader.getExtensions();
   return {
-    diagnostics: collectBugReportDiagnostics(session.sessionManager, readCrashLog()),
+    diagnostics: collectBugReportDiagnostics(session.sessionManager, crashes),
     metadata: collectBugReportMetadata({
       cwd: session.sessionManager.getCwd(),
       extensionErrors: extensions.errors,
@@ -63,7 +73,7 @@ function recordInSession(
   session: agentSessionTypes.AgentSession,
   bundle: bugReportTypesModule.BugReportBundle,
   delivery: Pick<bugReportTypesModule.BugReportSessionEntryData, "delivery" | "path">,
-): void {
+): Promise<void> {
   session.sessionManager.appendCustomEntry(BUG_REPORT_CUSTOM_ENTRY_TYPE, {
     createdAt: bundle.metadata.createdAt,
     hint: bundle.metadata.hint,
@@ -72,7 +82,7 @@ function recordInSession(
     summaryIncluded: bundle.metadata.session.summaryIncluded,
     ...delivery,
   } satisfies bugReportTypesModule.BugReportSessionEntryData);
-  if (bundle.diagnostics.crashes.length > 0) clearCrashLog();
+  return bundle.diagnostics.crashes.length > 0 ? clearCrashLog() : Promise.resolve();
 }
 
 function exportZip(
@@ -87,7 +97,9 @@ function exportZip(
       context.showError(`Failed to write bug report: ${errorMessage(error)}`);
       return;
     }
-    recordInSession(context.session, bundle, { delivery: "zip", path: archivePath });
+    yield* awaited(
+      recordInSession(context.session, bundle, { delivery: "zip", path: archivePath }),
+    );
     context.showStatus(`Bug report exported to: ${archivePath}\nReport ID: ${bundle.metadata.id}`);
   });
 }

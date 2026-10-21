@@ -27,16 +27,24 @@ export default class ChatNotices {
 
   private installChangeWarningShown = false;
 
-  maybeShowInstallChangeWarning(): boolean {
-    if (this.installChangeWarningShown) return true;
-    const change = detectInstallChange();
-    if (change === undefined) return false;
+  maybeShowInstallChangeWarning(): Promise<boolean> {
+    if (this.installChangeWarningShown) return Promise.resolve(true);
+    return Promise.all([detectInstallChange(), formatResumeCommand(this.mode.sessionManager)]).then(
+      ([change, resumeCommand]) => this.showInstallChangeWarning(change, resumeCommand),
+    );
+  }
+
+  private showInstallChangeWarning(
+    change: Awaited<ReturnType<typeof detectInstallChange>>,
+    resumeCommand: string | undefined,
+  ): boolean {
+    if (change === undefined || this.installChangeWarningShown)
+      return this.installChangeWarningShown;
     this.installChangeWarningShown = true;
     const cause =
       change.kind === "updated"
         ? `${APP_NAME} was updated to ${change.version} while this session was running (${VERSION})`
         : `The ${APP_NAME} installation this session runs from was removed or replaced`;
-    const resumeCommand = formatResumeCommand(this.mode.sessionManager);
     const restart =
       resumeCommand !== undefined && resumeCommand !== ""
         ? `Restart with \`${resumeCommand}\` to continue this session.`
@@ -64,11 +72,14 @@ export default class ChatNotices {
     this.mode.ui.requestRender();
   }
 
-  maybeSuggestBugReport(message: compatTypes.AssistantMessage): void {
-    if (message.stopReason !== "error" || isRetryableAssistantError(message)) return;
-    if (/\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b/iu.test(message.errorMessage ?? "")) return;
-    if (this.maybeShowInstallChangeWarning()) return;
-    this.suggestBugReport();
+  maybeSuggestBugReport(message: compatTypes.AssistantMessage): Promise<void> {
+    if (message.stopReason !== "error" || isRetryableAssistantError(message))
+      return Promise.resolve();
+    if (/\b(?:abort(?:ed)?|cancel(?:l?ed)?)\b/iu.test(message.errorMessage ?? ""))
+      return Promise.resolve();
+    return Promise.resolve(this.maybeShowInstallChangeWarning()).then((shown) =>
+      shown ? undefined : this.suggestBugReport(),
+    );
   }
 
   renderProjectTrustWarningIfNeeded(): void {

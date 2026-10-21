@@ -2,10 +2,7 @@ import { dual } from "effect/Function";
 
 import config from "../config.ts";
 import platform from "../core/platform/index.ts";
-import nodeFs from "../core/platform/node/fs.ts";
 import type changelogTypes from "./changelog.types.ts";
-
-const { existsSync, readFileSync } = nodeFs;
 
 const { posix, writeError } = platform;
 
@@ -118,13 +115,16 @@ const normalizeChangelogLinks: {
   (version: string | changelogTypes.ChangelogEntry): (markdown: string) => string;
 } = dual((args: IArguments) => args.length >= 2, normalizeChangelogLinksImpl);
 
-function parseChangelog(changelogPath: string): changelogTypes.ChangelogEntry[] {
-  if (!existsSync(changelogPath)) {
+function parseChangelog(changelogPath: string): Promise<changelogTypes.ChangelogEntry[]> {
+  return platform.files.readText(changelogPath).then(parseChangelogText, (error: unknown) => {
+    if (!platform.isMissingPath(error))
+      writeError(`Warning: Could not parse changelog: ${String(error)}`);
     return [];
-  }
+  });
+}
 
+function parseChangelogText(content: string): changelogTypes.ChangelogEntry[] {
   try {
-    const content = readFileSync(changelogPath, "utf-8");
     const lines = content.split("\n");
     const entries: changelogTypes.ChangelogEntry[] = [];
 

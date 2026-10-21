@@ -43,10 +43,11 @@ export default class InfoCommands {
     }, this);
   }
 
-  handleChangelogCommand(): void {
-    const changelogPath = getChangelogPath();
-    const allEntries = parseChangelog(changelogPath);
+  handleChangelogCommand(): Promise<void> {
+    return parseChangelog(getChangelogPath()).then((allEntries) => this.showChangelog(allEntries));
+  }
 
+  private showChangelog(allEntries: Awaited<ReturnType<typeof parseChangelog>>): void {
     const changelogMarkdown =
       allEntries.length > 0
         ? allEntries

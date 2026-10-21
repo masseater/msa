@@ -24,7 +24,8 @@ function setUpInteractiveStart(
   return Effect.runPromise(
     awaiting(function* () {
       if (appMode !== "interactive") return;
-      if (parsed.help !== true && parsed.listModels === undefined && shouldRunFirstTimeSetup()) {
+      const wantsSetup = parsed.help !== true && parsed.listModels === undefined;
+      if (wantsSetup && (yield* awaited(shouldRunFirstTimeSetup()))) {
         yield* awaited(showFirstTimeSetup(settingsManager));
         time("firstTimeSetup");
       }

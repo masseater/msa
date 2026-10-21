@@ -31,7 +31,7 @@ export default class ToolExecutionsView {
   onToolExecutionEnd(
     event: Extract<agentSessionTypes.AgentSessionEvent, { type: "tool_execution_end" }>,
   ): void {
-    if (event.isError) this.mode.display.notices.warnings.maybeShowInstallChangeWarning();
+    if (event.isError) void this.mode.display.notices.warnings.maybeShowInstallChangeWarning();
     const component = this.pendingTools.get(event.toolCallId);
     if (component === undefined) return;
     component.updateResult({

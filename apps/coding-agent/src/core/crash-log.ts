@@ -2,10 +2,11 @@ import config from "../config.ts";
 import type crashLogTypes from "./crash-log.types.ts";
 import type extensionsTypesTypes from "./extensions/types.types.ts";
 import platform from "./platform/index.ts";
-import nodeFs from "./platform/node/fs.ts";
+import crashFiles from "./platform/node/crash-files.ts";
 import sourceInfoModule from "./source-info.ts";
 
-const { mkdirSync, readFileSync, rmSync, writeFileSync } = nodeFs;
+const { readCrashFileBeforeExit, writeCrashFileBeforeExit } = crashFiles;
+const { makeDirectory, readText, remove, writeFile } = platform.files;
 
 const { VERSION, getAgentDir } = config;
 const { dirname, join, nowIso, nowMs } = platform;
@@ -18,26 +19,33 @@ function crashLogPath(agentDir = getAgentDir()): string {
   return join(agentDir, "crashes.json");
 }
 
-function readCrashLog(path = crashLogPath()): crashLogTypes.CrashRecord[] {
+const isCrashRecord = (record: unknown): record is crashLogTypes.CrashRecord =>
+  typeof record === "object" &&
+  record !== null &&
+  typeof (record as crashLogTypes.CrashRecord).timestamp === "string" &&
+  typeof (record as crashLogTypes.CrashRecord).message === "string";
+
+function parseCrashLog(text: string | undefined): crashLogTypes.CrashRecord[] {
+  if (text === undefined) return [];
   try {
-    const records: unknown = JSON.parse(readFileSync(path, "utf8"));
-    return Array.isArray(records)
-      ? records.filter(
-          (record): record is crashLogTypes.CrashRecord =>
-            typeof record === "object" &&
-            record !== null &&
-            typeof (record as crashLogTypes.CrashRecord).timestamp === "string" &&
-            typeof (record as crashLogTypes.CrashRecord).message === "string",
-        )
-      : [];
+    const records: unknown = JSON.parse(text);
+    return Array.isArray(records) ? records.filter(isCrashRecord) : [];
   } catch {
     return [];
   }
 }
 
-function writeCrashLog(records: readonly crashLogTypes.CrashRecord[], path: string): void {
-  mkdirSync(dirname(path), { recursive: true });
-  writeFileSync(path, `${JSON.stringify(records, null, 2)}\n`);
+const serializeCrashLog = (records: readonly crashLogTypes.CrashRecord[]): string =>
+  `${JSON.stringify(records, null, 2)}\n`;
+
+function readCrashLog(path = crashLogPath()): Promise<crashLogTypes.CrashRecord[]> {
+  return readText(path).then(parseCrashLog, () => []);
+}
+
+function writeCrashLog(records: readonly crashLogTypes.CrashRecord[], path: string): Promise<void> {
+  return makeDirectory({ path: dirname(path) }).then(() =>
+    writeFile({ data: serializeCrashLog(records), path }),
+  );
 }
 
 type ExtensionStackMetadata = Pick<
@@ -190,37 +198,40 @@ function recordCrash(
       timestamp: nowIso(),
       version: VERSION,
     };
-    writeCrashLog([...readCrashLog(path), record].slice(-MAX_CRASH_RECORDS), path);
+    const records = parseCrashLog(readCrashFileBeforeExit(path));
+    writeCrashFileBeforeExit(
+      path,
+      serializeCrashLog([...records, record].slice(-MAX_CRASH_RECORDS)),
+    );
     return record;
   } catch {
     return undefined;
   }
 }
 
+const markNotified = (records: readonly crashLogTypes.CrashRecord[]): crashLogTypes.CrashRecord[] =>
+  records.map((record) =>
+    record.notified === true ? record : Object.assign({}, record, { notified: true }),
+  );
+
 function takeUnnotifiedCrash(
   path = crashLogPath(),
   now = nowMs(),
-): crashLogTypes.CrashRecord | undefined {
-  const records = readCrashLog(path);
-  const crash = [...records]
-    .reverse()
-    .find((record) => record.notified !== true && now - Date.parse(record.timestamp) <= MAX_AGE);
-  if (crash === undefined) return undefined;
-  try {
-    writeCrashLog(
-      records.map((record) =>
-        record.notified === true ? record : Object.assign({}, record, { notified: true }),
-      ),
-      path,
+): Promise<crashLogTypes.CrashRecord | undefined> {
+  return readCrashLog(path).then((records) => {
+    const crash = [...records]
+      .reverse()
+      .find((record) => record.notified !== true && now - Date.parse(record.timestamp) <= MAX_AGE);
+    if (crash === undefined) return undefined;
+    return writeCrashLog(markNotified(records), path).then(
+      () => crash,
+      () => crash,
     );
-  } catch {}
-  return crash;
+  });
 }
 
-function clearCrashLog(path = crashLogPath()): void {
-  try {
-    rmSync(path, { force: true });
-  } catch {}
+function clearCrashLog(path = crashLogPath()): Promise<void> {
+  return remove({ force: true, path }).catch(() => undefined);
 }
 
 const crashLog = {

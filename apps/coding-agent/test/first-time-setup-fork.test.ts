@@ -29,9 +29,12 @@ let tempDir: string;
 
 let settingsPath: string;
 
-const returnsFalseForAForkedPackage = () => {
-  expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-};
+const returnsFalseForAForkedPackage = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(yield* Effect.promise(() => shouldRunFirstTimeSetup(settingsPath))).toBe(false);
+    }),
+  );
 
 const beforeEachHook = () =>
   runTest(

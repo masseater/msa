@@ -2,7 +2,6 @@ import tuiModule from "@msa/tui";
 
 import config from "../../../config.ts";
 import platformModule from "../../../core/platform/index.ts";
-import nodeFs from "../../../core/platform/node/fs.ts";
 import ThemedText from "../components/themed-text.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
@@ -12,6 +11,7 @@ const { getDebugLogPath } = config;
 const { Spacer, visibleWidth } = tuiModule;
 const { nowIso } = platformModule;
 const { dirname } = platformModule;
+const { makeDirectory, writeFile } = platformModule.files;
 
 export default class DebugCommand {
   private readonly mode: InteractiveMode;
@@ -20,7 +20,7 @@ export default class DebugCommand {
     this.mode = mode;
   }
 
-  handleDebugCommand(): void {
+  handleDebugCommand(): Promise<void> {
     const width = this.mode.ui.terminal.columns;
     const height = this.mode.ui.terminal.rows;
     const allLines = this.mode.ui.render(width);
@@ -43,9 +43,12 @@ export default class DebugCommand {
       "",
     ].join("\n");
 
-    nodeFs.mkdirSync(dirname(debugLogPath), { recursive: true });
-    nodeFs.writeFileSync(debugLogPath, debugData);
+    return makeDirectory({ path: dirname(debugLogPath) })
+      .then(() => writeFile({ data: debugData, path: debugLogPath }))
+      .then(() => this.showDebugLogWritten(debugLogPath));
+  }
 
+  private showDebugLogWritten(debugLogPath: string): void {
     this.mode.layout.chatContainer.addChild(new Spacer(1));
     this.mode.layout.chatContainer.addChild(
       new ThemedText(

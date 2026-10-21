@@ -98,8 +98,20 @@ function createSandbox(
   callable: readonly agentTypes.AgentTool<any>[],
   samples: ReadonlyMap<string, string>,
   timeoutMs: number,
-): codemodeTypes.CodemodeSandbox {
-  const workerUrl = getCodemodeWorkerSpecifier();
+): Promise<codemodeTypes.CodemodeSandbox> {
+  return getCodemodeWorkerSpecifier().then((workerUrl) =>
+    sandboxFor({ callable, run, samples, timeoutMs, workerUrl }),
+  );
+}
+
+function sandboxFor(parts: {
+  readonly run: SandboxRun;
+  readonly callable: readonly agentTypes.AgentTool<any>[];
+  readonly samples: ReadonlyMap<string, string>;
+  readonly timeoutMs: number;
+  readonly workerUrl: string | URL | undefined;
+}): codemodeTypes.CodemodeSandbox {
+  const { callable, run, samples, timeoutMs, workerUrl } = parts;
   const { ctx, options } = run;
   return new codemode.CodemodeSandbox({
     globals: [

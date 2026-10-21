@@ -218,7 +218,7 @@ export default class KeyHandlers {
       Effect.runPromise(this.cycleModel("backward")),
     );
 
-    this.mode.ui.onDebug = () => this.mode.commands.debug.handleDebugCommand();
+    this.mode.ui.onDebug = () => void this.mode.commands.debug.handleDebugCommand();
     this.mode.defaultEditor.onAction("app.model.select", () =>
       this.mode.models.selector.showModelSelector(),
     );

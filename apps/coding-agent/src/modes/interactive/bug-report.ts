@@ -53,7 +53,7 @@ const reportBug: {
 
         let bundle: bugReportTypesModule.BugReportBundle;
         try {
-          bundle = buildBundle(context.session, options, summary);
+          bundle = yield* awaited(buildBundle(context.session, options, summary));
         } catch (error: unknown) {
           context.showError(`Failed to build bug report: ${errorMessage(error)}`);
           return;

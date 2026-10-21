@@ -74,7 +74,8 @@ export default class ClipboardInput {
       const filePaths = yield* awaited(readClipboardFilePaths());
       if (filePaths !== null) return this.insertClipboardFilePaths(filePaths);
       const image = yield* awaited(readClipboardImage());
-      if (image !== null) return this.mode.input.clipboardImages.insertClipboardImage(image);
+      if (image !== null)
+        return yield* awaited(this.mode.input.clipboardImages.insertClipboardImage(image));
       const text = yield* awaited(readClipboardText());
       if (text === null || text === "") return undefined;
       this.mode.editor.insertTextAtCursor?.(text);

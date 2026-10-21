@@ -50,13 +50,13 @@ export default class BuiltinCommandRouter {
     const after = (run: () => void) => ({ args: false, clearFirst: false, run: syncCommand(run) });
     return {
       "/config": after(() => this.mode.selectors.settings.showSettingsSelector()),
-      "/debug": after(() => this.mode.commands.debug.handleDebugCommand()),
+      "/debug": after(() => void this.mode.commands.debug.handleDebugCommand()),
       "/fork": after(() => this.mode.selectors.fork.showUserMessageSelector()),
       "/help": after(() => this.mode.commands.info.handleHelpCommand()),
       "/keybindings": after(() => this.mode.commands.info.handleHotkeysCommand()),
       "/logout": after(() => void this.mode.models.login.loginFlow.logouts.logout()),
       "/memory": after(() => this.mode.selectors.views.showMemoryView()),
-      "/release-notes": after(() => this.mode.commands.info.handleChangelogCommand()),
+      "/release-notes": after(() => void this.mode.commands.info.handleChangelogCommand()),
       "/resume": after(() => this.mode.selectors.sessions.showSessionSelector()),
       "/rewind": after(() => this.mode.selectors.tree.showTreeSelector()),
       "/tasks": after(() => this.mode.selectors.views.showTasksView()),

@@ -98,7 +98,7 @@ const selfUpdateTreatsEmptyNpmcommandAsUnset = () =>
   runTest(
     Effect.gen(function* () {
       const { prefix } = yield* createNpmPrefixInstall();
-      const command = getSelfUpdateCommand("@msa/coding-agent", []);
+      const command = yield* Effect.promise(() => getSelfUpdateCommand("@msa/coding-agent", []));
       expect(command?.args).toEqual([
         "--prefix",
         prefix,
@@ -115,29 +115,32 @@ const quotesNpmSelfUpdateDisplayPaths = () =>
   runTest(
     Effect.gen(function* () {
       const { prefix } = yield* createNpmPrefixInstall("msa prefix ");
-      const command = getSelfUpdateCommand("@msa/coding-agent");
+      const command = yield* Effect.promise(() => getSelfUpdateCommand("@msa/coding-agent"));
       expect(command?.display).toBe(
         `npm --prefix "${prefix}" install -g --ignore-scripts --min-release-age=0 @msa/coding-agent`,
       );
     }),
   );
 
-const doesNotInferWindowsNpmCustomPrefixes = () => {
-  const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@msa\\coding-agent";
-  vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
-  setExecPath(`${packageDir}\\dist\\cli.js`);
+const doesNotInferWindowsNpmCustomPrefixes = () =>
+  runTest(
+    Effect.gen(function* () {
+      const packageDir = "C:\\Users\\Admin\\npm prefix\\node_modules\\@msa\\coding-agent";
+      vi.stubEnv("MSA_PACKAGE_DIR", packageDir);
+      setExecPath(`${packageDir}\\dist\\cli.js`);
 
-  expect(detectInstallMethod()).toBe("npm");
-  expect(getUpdateInstruction("@msa/coding-agent")).toBe(
-    "Run: npm install -g --ignore-scripts --min-release-age=0 @msa/coding-agent",
+      expect(detectInstallMethod()).toBe("npm");
+      expect(yield* Effect.promise(() => getUpdateInstruction("@msa/coding-agent"))).toBe(
+        "Run: npm install -g --ignore-scripts --min-release-age=0 @msa/coding-agent",
+      );
+    }),
   );
-};
 
 const selfUpdatesBunGlobalInstallsFromBun = () =>
   runTest(
     Effect.gen(function* () {
       yield* createBunGlobalInstall();
-      const command = getSelfUpdateCommand("@msa/coding-agent");
+      const command = yield* Effect.promise(() => getSelfUpdateCommand("@msa/coding-agent"));
       expect(detectInstallMethod()).toBe("bun");
       expect(command).toEqual({
         args: ["install", "-g", "--ignore-scripts", "--minimum-release-age=0", "@msa/coding-agent"],

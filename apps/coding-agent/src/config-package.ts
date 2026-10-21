@@ -2,9 +2,9 @@ import { dual } from "effect/Function";
 
 import type configPackageTypes from "./config-package.types.ts";
 import platform from "./core/platform/index.ts";
-import nodeFs from "./core/platform/node/fs.ts";
 import nodeModule from "./core/platform/node/module.ts";
 import nodeOs from "./core/platform/node/os.ts";
+import packageFiles from "./core/platform/node/package-files.ts";
 import nodeUrl from "./core/platform/node/url.ts";
 import paths from "./utils/paths.ts";
 import text from "./utils/text.ts";
@@ -13,9 +13,10 @@ const { createRequire } = nodeModule;
 const { homedir } = nodeOs;
 const { fileURLToPath } = nodeUrl;
 
-const { existsSync, readFileSync } = nodeFs;
+const { locatePackageDir, readStartupPackageJson, sourceLayoutOf } = packageFiles;
 
-const { basename, dirname, join, readEnv, resolve } = platform;
+const { dirname, join, readEnv, resolve } = platform;
+const { readFile, readText } = platform.files;
 const { normalizePath } = paths;
 const { stripBom } = text;
 
@@ -32,20 +33,14 @@ const isBunRuntime = process.versions["bun"] !== undefined && process.versions["
 declare const MSA_BUNDLED_NODE: boolean;
 const isBundledNode = typeof MSA_BUNDLED_NODE !== "undefined" && MSA_BUNDLED_NODE;
 
-function findNodePackageDir(startDir: string): string {
-  let dir = startDir;
-  while (dir !== dirname(dir)) {
-    if (existsSync(join(dir, "package.json"))) {
-      const parent = dirname(dir);
+let nodePackageDir: string | undefined;
 
-      if (basename(dir) === "dist" && existsSync(join(parent, "package.json"))) {
-        return parent;
-      }
-      return dir;
-    }
-    dir = dirname(dir);
-  }
-  return startDir;
+const sourceLayouts = new Map<string, "dist" | "src">();
+
+function sourceLayout(packageDir: string): "dist" | "src" {
+  const known = sourceLayouts.get(packageDir) ?? sourceLayoutOf(packageDir);
+  sourceLayouts.set(packageDir, known);
+  return known;
 }
 
 function getPackageDir(): string {
@@ -57,7 +52,8 @@ function getPackageDir(): string {
   if (isBunBinary) {
     return dirname(process.execPath);
   }
-  return findNodePackageDir(moduleDirname);
+  nodePackageDir ??= locatePackageDir(moduleDirname);
+  return nodePackageDir;
 }
 
 function getThemesDir(): string {
@@ -66,8 +62,7 @@ function getThemesDir(): string {
   }
 
   const packageDir = getPackageDir();
-  const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
-  return join(packageDir, srcOrDist, "modes", "interactive", "theme");
+  return join(packageDir, sourceLayout(packageDir), "modes", "interactive", "theme");
 }
 
 function getExportTemplateDir(): string {
@@ -75,8 +70,7 @@ function getExportTemplateDir(): string {
     return join(getPackageDir(), "export-html");
   }
   const packageDir = getPackageDir();
-  const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
-  return join(packageDir, srcOrDist, "core", "export-html");
+  return join(packageDir, sourceLayout(packageDir), "core", "export-html");
 }
 
 function getPackageJsonPath(): string {
@@ -129,34 +123,33 @@ const resolveCodemodeWorkerSpecifier: {
   ): (runtime: "bun-binary" | "bundled-node" | "unbundled") => string | URL | undefined;
 } = dual((args: IArguments) => args.length >= 2, resolveCodemodeWorkerSpecifierImpl);
 
-let codemodeWorkerDataUrl: URL | undefined;
+let codemodeWorkerDataUrl: Promise<URL> | undefined;
 
-function getCodemodeWorkerSpecifier(): string | URL | undefined {
+function getCodemodeWorkerSpecifier(): Promise<string | URL | undefined> {
   const runtime = isBunBinary ? "bun-binary" : isBundledNode ? "bundled-node" : "unbundled";
   const specifier = resolveCodemodeWorkerSpecifier(runtime, import.meta.url);
-  if (runtime !== "bundled-node" || !(specifier instanceof URL)) return specifier;
+  if (runtime !== "bundled-node" || !(specifier instanceof URL)) return Promise.resolve(specifier);
 
-  codemodeWorkerDataUrl ??= new URL(
-    `data:text/javascript;base64,${readFileSync(specifier).toString("base64")}`,
+  codemodeWorkerDataUrl ??= readFile(fileURLToPath(specifier)).then(
+    (bytes) => new URL(`data:text/javascript;base64,${Buffer.from(bytes).toString("base64")}`),
   );
   return codemodeWorkerDataUrl;
 }
 
-function detectInstallChange(
-  packageJsonPath = startupPackageJsonPath,
-): configPackageTypes.InstallChange | undefined {
-  if (isBunBinary || packageJsonPath === undefined || packageJsonPath === "") return undefined;
-  let installed: PackageJson;
-  try {
-    installed = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8"))) as PackageJson;
-  } catch (error) {
-    return (error as NodeJS.ErrnoException).code === "ENOENT" ? { kind: "removed" } : undefined;
-  }
-  return installed.version !== undefined &&
-    installed.version !== "" &&
-    installed.version !== VERSION
+const installChangeOf = (installed: PackageJson): configPackageTypes.InstallChange | undefined =>
+  installed.version !== undefined && installed.version !== "" && installed.version !== VERSION
     ? { kind: "updated", version: installed.version }
     : undefined;
+
+function detectInstallChange(
+  packageJsonPath = startupPackageJsonPath,
+): Promise<configPackageTypes.InstallChange | undefined> {
+  if (isBunBinary || packageJsonPath === undefined || packageJsonPath === "")
+    return Promise.resolve(undefined);
+  return readText(packageJsonPath).then(
+    (manifest) => installChangeOf(JSON.parse(stripBom(manifest)) as PackageJson),
+    (error: unknown) => (platform.isMissingPath(error) ? { kind: "removed" as const } : undefined),
+  );
 }
 
 interface PackageJson {
@@ -171,13 +164,13 @@ interface PackageJson {
 let pkg: PackageJson = {};
 
 let startupPackageJsonPath: string | undefined;
-try {
+{
   const packageJsonPath = getPackageJsonPath();
-  pkg = JSON.parse(stripBom(readFileSync(packageJsonPath, "utf-8"))) as PackageJson;
-  startupPackageJsonPath = packageJsonPath;
-} catch (e: unknown) {
-  const err = e as NodeJS.ErrnoException;
-  if (err.code !== "ENOENT") throw e;
+  const packageJsonText = readStartupPackageJson(packageJsonPath);
+  if (packageJsonText !== undefined) {
+    pkg = JSON.parse(stripBom(packageJsonText)) as PackageJson;
+    startupPackageJsonPath = packageJsonPath;
+  }
 }
 
 const msaConfigName: string | undefined = pkg.msaConfig?.name;
@@ -257,7 +250,7 @@ const configPackage = {
   VERSION,
   detectInstallChange,
   expandTildePath,
-  findNodePackageDir,
+  findNodePackageDir: locatePackageDir,
   getAgentDir,
   getAuthPath,
   getBinDir,

@@ -28,12 +28,9 @@ const { awaited, awaiting } = awaitingModule;
 
 const { getSelfUpdatePlan } = selfUpdatePlanModule;
 
-function printSelfUpdateUnavailable(
-  npmCommand?: string[],
-  updatePackageTarget: configTypes.SelfUpdatePackageTarget = PACKAGE_NAME,
-): void {
+function printSelfUpdateUnavailable(instruction: string): void {
   writeError(`error: ${APP_NAME} cannot self-update this installation.`);
-  writeError(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, updatePackageTarget));
+  writeError(instruction);
 
   const entrypoint = process.argv[1];
   if (entrypoint !== undefined && entrypoint !== "") {
@@ -98,6 +95,18 @@ function runSelfUpdate(command: configTypes.SelfUpdateCommand): Promise<void> {
   );
 }
 
+function* resolveSelfUpdateCommand(
+  npmCommand: string[] | undefined,
+  target: configTypes.SelfUpdatePackageTarget,
+): Generator<Effect.Effect<unknown>, configTypes.SelfUpdateCommand | undefined, unknown> {
+  const command = yield* awaited(getSelfUpdateCommand(PACKAGE_NAME, npmCommand, target));
+  if (command === undefined)
+    printSelfUpdateUnavailable(
+      yield* awaited(getSelfUpdateUnavailableInstruction(PACKAGE_NAME, npmCommand, target)),
+    );
+  return command;
+}
+
 function* performSelfUpdate(
   force: boolean,
   npmCommand: string[] | undefined,
@@ -120,9 +129,8 @@ function* performSelfUpdate(
     installSpec: selfUpdatePlan.installSpec,
     packageName: PACKAGE_NAME,
   };
-  const selfUpdateCommand = getSelfUpdateCommand(PACKAGE_NAME, npmCommand, selfUpdateTarget);
+  const selfUpdateCommand = yield* resolveSelfUpdateCommand(npmCommand, selfUpdateTarget);
   if (selfUpdateCommand === undefined) {
-    printSelfUpdateUnavailable(npmCommand, selfUpdateTarget);
     process.exitCode = 1;
     return;
   }

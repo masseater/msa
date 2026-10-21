@@ -60,9 +60,6 @@ export default class ModeStartup {
   } {
     this.mode.lifecycle.shutdown.registerSignalHandlers();
 
-    this.mode.display.notices.startup.changelogMarkdown =
-      this.mode.display.notices.startup.getChangelogForDisplay();
-
     const startupVisibility = this.mode.display.resources.getStartupVisibility();
     if (this.mode.session.models.selection.scopedModels.length > 0 && startupVisibility.details) {
       const modelList = this.mode.session.models.selection.scopedModels
@@ -106,7 +103,11 @@ export default class ModeStartup {
       awaitingWith(function* () {
         if (this.isInitialized) return;
 
+        const changelogMarkdown = yield* awaited(
+          this.mode.display.notices.startup.getChangelogForDisplay(),
+        );
         const startupVisibility = this.prepareStartupLayout();
+        this.mode.display.notices.startup.changelogMarkdown = changelogMarkdown;
         yield* performed(this.startTui());
 
         if (startupVisibility.header) {

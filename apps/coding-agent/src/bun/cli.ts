@@ -2,8 +2,8 @@ import restoreSandboxEnvModule from "./restore-sandbox-env.ts";
 
 const { restoreSandboxEnv } = restoreSandboxEnvModule;
 
-restoreSandboxEnv();
-void import("./runtime-setup.ts")
+void restoreSandboxEnv()
+  .then(() => import("./runtime-setup.ts"))
   .then(({ default: runtimeSetup }) => {
     runtimeSetup.setupBunRuntime();
     return import("../cli/setup.ts");

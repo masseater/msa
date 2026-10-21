@@ -20,27 +20,36 @@ let tempDir: string;
 
 let settingsPath: string;
 
-const returnsTrueWhenExperimentalDefaultAgentDir = () => {
-  expect(shouldRunFirstTimeSetup(settingsPath)).toBe(true);
-};
+const setupWanted = () => Effect.promise(() => shouldRunFirstTimeSetup(settingsPath));
 
-const returnsFalseWhenExperimentalFeaturesAreDisabled = () => {
-  deleteEnv("MSA_EXPERIMENTAL");
+const returnsTrueWhenExperimentalDefaultAgentDir = () =>
+  runTest(
+    Effect.gen(function* () {
+      expect(yield* setupWanted()).toBe(true);
+    }),
+  );
 
-  expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-};
+const returnsFalseWhenExperimentalFeaturesAreDisabled = () =>
+  runTest(
+    Effect.gen(function* () {
+      deleteEnv("MSA_EXPERIMENTAL");
+      expect(yield* setupWanted()).toBe(false);
+    }),
+  );
 
-const returnsFalseWhenACustomAgentDir = () => {
-  writeEnv(ENV_AGENT_DIR, tempDir);
-
-  expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
-};
+const returnsFalseWhenACustomAgentDir = () =>
+  runTest(
+    Effect.gen(function* () {
+      writeEnv(ENV_AGENT_DIR, tempDir);
+      expect(yield* setupWanted()).toBe(false);
+    }),
+  );
 
 const returnsFalseWhenSettingsJsonAlreadyExists = () =>
   runTest(
     Effect.gen(function* () {
       yield* writeTextFile(settingsPath, "{}");
-      expect(shouldRunFirstTimeSetup(settingsPath)).toBe(false);
+      expect(yield* setupWanted()).toBe(false);
     }),
   );
 

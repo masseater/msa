@@ -82,7 +82,7 @@ export default class ModeShutdown {
         this.stop();
         yield* awaited(this.mode.runtimeHost.dispose());
 
-        const resumeCommand = formatResumeCommand(this.mode.sessionManager);
+        const resumeCommand = yield* awaited(formatResumeCommand(this.mode.sessionManager));
         if (resumeCommand !== undefined && resumeCommand !== "") {
           process.stdout.write(`${chalk.dim("To resume this session:")} ${resumeCommand}\n`);
         }

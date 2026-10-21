@@ -1,3 +1,5 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import restoreSandboxEnvModule from "../src/bun/restore-sandbox-env.ts";
@@ -5,11 +7,14 @@ import platform from "../src/core/platform/index.ts";
 
 const { envNames, envSnapshot, readEnv } = platform;
 const { restoreSandboxEnv } = restoreSandboxEnvModule;
+const { runTest } = testing;
 
-const readFileSync = vi.hoisted(() => vi.fn());
+const readText = vi.hoisted(() => vi.fn<(path: string) => Promise<string>>());
 
-vi.mock("node:fs", (importOriginal) =>
-  importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, readFileSync })),
+vi.mock("../src/core/platform/files.ts", (importOriginal) =>
+  importOriginal<{ default: Record<string, unknown> }>().then((actual) => ({
+    default: { ...actual.default, readText },
+  })),
 );
 
 const stubVersions = (versions: Record<string, string>): (() => void) => {
@@ -30,46 +35,49 @@ const emptyEnv = (): void => {
   vi.stubEnv("BAZ", undefined);
 };
 
-const doesNothingWhenNotRunningUnderBun = () => {
-  const restoreVersions = stubVersions({ node: "20.0.0" });
-  const envBefore = { ...envSnapshot() };
+const restore = Effect.promise(() => restoreSandboxEnv());
 
-  restoreSandboxEnv();
+const doesNothingWhenNotRunningUnderBun = () =>
+  runTest(
+    Effect.gen(function* () {
+      const restoreVersions = stubVersions({ node: "20.0.0" });
+      const envBefore = { ...envSnapshot() };
+      yield* restore;
+      expect(envSnapshot()).toEqual(envBefore);
+      expect(readText).not.toHaveBeenCalled();
+      restoreVersions();
+    }),
+  );
 
-  expect(envSnapshot()).toEqual(envBefore);
+const doesNothingWhenProcessEnvAlreadyHas = () =>
+  runTest(
+    Effect.gen(function* () {
+      const restoreVersions = stubVersions({ bun: "1.2.0", node: "20.0.0" });
+      vi.stubEnv("RESTORE_SANDBOX_ENV_TEST", "1");
+      const envBefore = { ...envSnapshot() };
+      yield* restore;
+      expect(envSnapshot()).toEqual(envBefore);
+      expect(readText).not.toHaveBeenCalled();
+      vi.unstubAllEnvs();
+      restoreVersions();
+    }),
+  );
 
-  restoreVersions();
-};
-
-const doesNothingWhenProcessEnvAlreadyHas = () => {
-  const restoreVersions = stubVersions({ bun: "1.2.0", node: "20.0.0" });
-  vi.stubEnv("RESTORE_SANDBOX_ENV_TEST", "1");
-  const envBefore = { ...envSnapshot() };
-
-  restoreSandboxEnv();
-
-  expect(envSnapshot()).toEqual(envBefore);
-  vi.unstubAllEnvs();
-
-  restoreVersions();
-};
-
-const restoresEnvironmentFromProcSelfEnvironWhen = () => {
-  const restoreVersions = stubVersions({ bun: "1.2.0", node: "20.0.0" });
-  emptyEnv();
-
-  readFileSync.mockReturnValue("FOO=bar\0BAZ=qux\0");
-
-  restoreSandboxEnv();
-
-  expect(readFileSync).toHaveBeenCalledWith("/proc/self/environ", "utf-8");
-  expect(readEnv("FOO")).toBe("bar");
-  expect(readEnv("BAZ")).toBe("qux");
-
-  vi.unstubAllEnvs();
-  restoreVersions();
-  readFileSync.mockReset();
-};
+const restoresEnvironmentFromProcSelfEnvironWhen = () =>
+  runTest(
+    Effect.gen(function* () {
+      const restoreVersions = stubVersions({ bun: "1.2.0", node: "20.0.0" });
+      emptyEnv();
+      readText.mockResolvedValue("FOO=bar\0BAZ=qux\0");
+      yield* restore;
+      expect(readText).toHaveBeenCalledWith("/proc/self/environ");
+      expect(readEnv("FOO")).toBe("bar");
+      expect(readEnv("BAZ")).toBe("qux");
+      vi.unstubAllEnvs();
+      restoreVersions();
+      readText.mockReset();
+    }),
+  );
 
 describe("restoreSandboxEnv", () => {
   it("does nothing when not running under bun", doesNothingWhenNotRunningUnderBun);

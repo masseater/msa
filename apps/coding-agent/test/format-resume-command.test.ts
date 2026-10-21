@@ -63,7 +63,9 @@ const returnsASessionResumeCommandForDefault = () =>
       setStdoutIsTTY(true);
       const sessionFile = yield* createTempFile;
       const sessionManager = createSessionManager({ sessionFile, sessionId: "test-session" });
-      expect(formatResumeCommand(sessionManager)).toBe(`${APP_NAME} --session test-session`);
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBe(
+        `${APP_NAME} --session test-session`,
+      );
     }),
   );
 
@@ -78,7 +80,7 @@ const includesUnquotedSafeSessionDirsForNon = () =>
         sessionId: "test-session",
         usesDefaultSessionDir: false,
       });
-      expect(formatResumeCommand(sessionManager)).toBe(
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBe(
         `${APP_NAME} --session-dir /tmp/custom-msa-sessions --session test-session`,
       );
     }),
@@ -95,7 +97,7 @@ const quotesSessionDirsContainingSpaces = () =>
         sessionId: "test-session",
         usesDefaultSessionDir: false,
       });
-      expect(formatResumeCommand(sessionManager)).toBe(
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBe(
         `${APP_NAME} --session-dir '/tmp/custom msa sessions' --session test-session`,
       );
     }),
@@ -112,7 +114,7 @@ const quotesSessionDirsContainingSingleQuotes = () =>
         sessionId: "test-session",
         usesDefaultSessionDir: false,
       });
-      expect(formatResumeCommand(sessionManager)).toBe(
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBe(
         `${APP_NAME} --session-dir '/tmp/custom msa'\\''s sessions' --session test-session`,
       );
     }),
@@ -124,7 +126,7 @@ const returnsUndefinedWhenStdoutIsNotA = () =>
       setStdoutIsTTY(false);
       const sessionFile = yield* createTempFile;
       const sessionManager = createSessionManager({ sessionFile });
-      expect(formatResumeCommand(sessionManager)).toBeUndefined();
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBeUndefined();
     }),
   );
 
@@ -134,23 +136,29 @@ const returnsUndefinedForInMemorySessions = () =>
       setStdoutIsTTY(true);
       const sessionFile = yield* createTempFile;
       const sessionManager = createSessionManager({ persisted: false, sessionFile });
-      expect(formatResumeCommand(sessionManager)).toBeUndefined();
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBeUndefined();
     }),
   );
 
-const returnsUndefinedWhenTheSessionFileIs = () => {
-  setStdoutIsTTY(true);
-  const sessionManager = createSessionManager({ sessionFile: "/tmp/msa-missing-session.jsonl" });
+const returnsUndefinedWhenTheSessionFileIs = () =>
+  runTest(
+    Effect.gen(function* () {
+      setStdoutIsTTY(true);
+      const sessionManager = createSessionManager({
+        sessionFile: "/tmp/msa-missing-session.jsonl",
+      });
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBeUndefined();
+    }),
+  );
 
-  expect(formatResumeCommand(sessionManager)).toBeUndefined();
-};
-
-const returnsUndefinedWhenTheSessionFileIs2 = () => {
-  setStdoutIsTTY(true);
-  const sessionManager = createSessionManager({});
-
-  expect(formatResumeCommand(sessionManager)).toBeUndefined();
-};
+const returnsUndefinedWhenTheSessionFileIs2 = () =>
+  runTest(
+    Effect.gen(function* () {
+      setStdoutIsTTY(true);
+      const sessionManager = createSessionManager({});
+      expect(yield* Effect.promise(() => formatResumeCommand(sessionManager))).toBeUndefined();
+    }),
+  );
 
 describe("formatResumeCommand", () => {
   it(

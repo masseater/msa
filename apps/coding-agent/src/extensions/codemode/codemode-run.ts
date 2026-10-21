@@ -68,7 +68,7 @@ function toolSamples(
 }
 
 function persistStoreWrites(
-  result: Awaited<ReturnType<ReturnType<typeof createSandbox>["execute"]>>,
+  result: Awaited<ReturnType<Awaited<ReturnType<typeof createSandbox>>["execute"]>>,
   options: toolTypes.CodemodeToolOptions,
 ): void {
   if (!result.ok) return;
@@ -87,7 +87,9 @@ const runCodemode = (call: CodemodeCall): Promise<toolTypes.CodemodeRunResult> =
       run.publish();
       const callable = call.ctx === undefined ? [] : getCodemodeCallableTools(call.ctx.tools);
       const timeoutMs = sourceOptions.timeoutMs ?? Number.POSITIVE_INFINITY;
-      const sandbox = createSandbox(run, callable, toolSamples(callable, call.options), timeoutMs);
+      const sandbox = yield* awaited(
+        createSandbox(run, callable, toolSamples(callable, call.options), timeoutMs),
+      );
       let result: Awaited<ReturnType<typeof sandbox.execute>>;
       try {
         const store =

@@ -113,7 +113,7 @@ export default class StreamingView {
       for (const [, component] of this.mode.view.toolExecutions.pendingTools.entries())
         component.updateResult({ content: [{ text, type: "text" }], isError: true });
       this.mode.view.toolExecutions.pendingTools.clear();
-      this.mode.display.notices.warnings.maybeSuggestBugReport(message);
+      void this.mode.display.notices.warnings.maybeSuggestBugReport(message);
     } else {
       for (const [, component] of this.mode.view.toolExecutions.pendingTools.entries())
         component.setArgsComplete();

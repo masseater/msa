@@ -98,10 +98,8 @@ const selfUpdatesRenamedBunGlobalInstallsBy = () =>
   runTest(
     Effect.gen(function* () {
       yield* createBunGlobalInstall();
-      const command = getSelfUpdateCommand(
-        "@mariozechner/pi-coding-agent",
-        undefined,
-        "@new-scope/msa",
+      const command = yield* Effect.promise(() =>
+        getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/msa"),
       );
       expect(detectInstallMethod()).toBe("bun");
       expect(command).toEqual({
@@ -136,10 +134,12 @@ const doesNotSelfUpdateWhenNpmInstall = () =>
     Effect.gen(function* () {
       const { packageDir } = yield* createNpmPrefixInstall();
       yield* changeMode(packageDir, 0o500);
-      expect(getSelfUpdateCommand("@msa/coding-agent")).toBeUndefined();
-      expect(getSelfUpdateUnavailableInstruction("@msa/coding-agent")).toContain(
-        "the install path is not writable",
-      );
+      expect(
+        yield* Effect.promise(() => getSelfUpdateCommand("@msa/coding-agent")),
+      ).toBeUndefined();
+      expect(
+        yield* Effect.promise(() => getSelfUpdateUnavailableInstruction("@msa/coding-agent")),
+      ).toContain("the install path is not writable");
     }),
   );
 

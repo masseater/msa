@@ -1,5 +1,5 @@
 import config from "../../config.ts";
-import nodeFs from "../../core/platform/node/fs.ts";
+import platform from "../../core/platform/index.ts";
 import type sessionManagerTypes from "../../core/session-manager.types.ts";
 const { APP_NAME } = config;
 
@@ -31,14 +31,16 @@ function quoteIfNeeded(value: string): string {
 }
 function formatResumeCommand(
   sessionManager: sessionManagerTypes.SessionManager,
-): string | undefined {
-  if (!process.stdout.isTTY) return undefined;
-  if (!sessionManager.isPersisted()) return undefined;
-
+): Promise<string | undefined> {
+  if (!process.stdout.isTTY || !sessionManager.isPersisted()) return Promise.resolve(undefined);
   const sessionFile = sessionManager.getSessionFile();
-  if (sessionFile === undefined || sessionFile === "" || !nodeFs.existsSync(sessionFile))
-    return undefined;
+  if (sessionFile === undefined || sessionFile === "") return Promise.resolve(undefined);
+  return platform.files
+    .exists(sessionFile)
+    .then((found) => (found ? resumeCommandFor(sessionManager) : undefined));
+}
 
+function resumeCommandFor(sessionManager: sessionManagerTypes.SessionManager): string {
   const args = [APP_NAME];
   if (!sessionManager.usesDefaultSessionDir()) {
     args.push("--session-dir", quoteIfNeeded(sessionManager.getSessionDir()));

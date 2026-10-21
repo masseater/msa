@@ -58,32 +58,40 @@ const createNpmPrefixInstall = Effect.fn("createNpmPrefixInstall")(function* (
   return { packageDir, prefix };
 });
 
-const detectsPnpmFromWindowsPnpmInstallPaths = () => {
-  setExecPath(
-    "C:\\Users\\Admin\\Documents\\pnpm-repository\\global\\5\\.pnpm\\@msa+coding-agent@0.67.68\\node_modules\\@msa\\coding-agent\\dist\\cli.js",
+const detectsPnpmFromWindowsPnpmInstallPaths = () =>
+  runTest(
+    Effect.gen(function* () {
+      setExecPath(
+        "C:\\Users\\Admin\\Documents\\pnpm-repository\\global\\5\\.pnpm\\@msa+coding-agent@0.67.68\\node_modules\\@msa\\coding-agent\\dist\\cli.js",
+      );
+
+      expect(detectInstallMethod()).toBe("pnpm");
+      expect(yield* Effect.promise(() => getUpdateInstruction("@msa/coding-agent"))).toBe(
+        "Run: pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @msa/coding-agent",
+      );
+    }),
   );
 
-  expect(detectInstallMethod()).toBe("pnpm");
-  expect(getUpdateInstruction("@msa/coding-agent")).toBe(
-    "Run: pnpm install -g --ignore-scripts --config.minimumReleaseAge=0 @msa/coding-agent",
-  );
-};
+const doesNotSelfUpdateUnknownWrapperInstalls = () =>
+  runTest(
+    Effect.gen(function* () {
+      setExecPath("/usr/local/bin/node");
 
-const doesNotSelfUpdateUnknownWrapperInstalls = () => {
-  setExecPath("/usr/local/bin/node");
-
-  expect(detectInstallMethod()).toBe("unknown");
-  expect(getSelfUpdateCommand("@msa/coding-agent")).toBeUndefined();
-  expect(getUpdateInstruction("@msa/coding-agent")).toBe(
-    "Update @msa/coding-agent using the package manager, wrapper, or source checkout that provides this installation.",
+      expect(detectInstallMethod()).toBe("unknown");
+      expect(
+        yield* Effect.promise(() => getSelfUpdateCommand("@msa/coding-agent")),
+      ).toBeUndefined();
+      expect(yield* Effect.promise(() => getUpdateInstruction("@msa/coding-agent"))).toBe(
+        "Update @msa/coding-agent using the package manager, wrapper, or source checkout that provides this installation.",
+      );
+    }),
   );
-};
 
 const selfUpdatesNpmInstallsFromCustomPrefixes = () =>
   runTest(
     Effect.gen(function* () {
       const { prefix } = yield* createNpmPrefixInstall();
-      const command = getSelfUpdateCommand("@msa/coding-agent");
+      const command = yield* Effect.promise(() => getSelfUpdateCommand("@msa/coding-agent"));
       expect(detectInstallMethod()).toBe("npm");
       expect(command).toEqual({
         args: [
@@ -105,10 +113,12 @@ const selfUpdatesExactNpmVersionsWithoutUninstalling = () =>
   runTest(
     Effect.gen(function* () {
       const { prefix } = yield* createNpmPrefixInstall();
-      const command = getSelfUpdateCommand("@msa/coding-agent", undefined, {
-        installSpec: "@msa/coding-agent@1.2.3",
-        packageName: "@msa/coding-agent",
-      });
+      const command = yield* Effect.promise(() =>
+        getSelfUpdateCommand("@msa/coding-agent", undefined, {
+          installSpec: "@msa/coding-agent@1.2.3",
+          packageName: "@msa/coding-agent",
+        }),
+      );
       expect(command).toEqual({
         args: [
           "--prefix",
@@ -129,10 +139,8 @@ const selfUpdatesRenamedPackagesFromTheCurrent = () =>
   runTest(
     Effect.gen(function* () {
       const { prefix } = yield* createNpmPrefixInstall();
-      const command = getSelfUpdateCommand(
-        "@mariozechner/pi-coding-agent",
-        undefined,
-        "@new-scope/msa",
+      const command = yield* Effect.promise(() =>
+        getSelfUpdateCommand("@mariozechner/pi-coding-agent", undefined, "@new-scope/msa"),
       );
       expect(command).toEqual({
         args: [
@@ -174,7 +182,9 @@ const selfUpdateRespectsConfiguredNpmcommand = () =>
   runTest(
     Effect.gen(function* () {
       const { prefix } = yield* createNpmPrefixInstall();
-      const command = getSelfUpdateCommand("@msa/coding-agent", ["npm", "--prefix", prefix]);
+      const command = yield* Effect.promise(() =>
+        getSelfUpdateCommand("@msa/coding-agent", ["npm", "--prefix", prefix]),
+      );
       expect(command).toEqual({
         args: [
           "--prefix",

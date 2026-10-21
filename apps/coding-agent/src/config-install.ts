@@ -4,12 +4,11 @@ import configInstallCommand from "./config-install-command.ts";
 import type configInstallCommandTypes from "./config-install-command.types.ts";
 import configPackage from "./config-package.ts";
 import platformModule from "./core/platform/index.ts";
-import nodeFs from "./core/platform/node/fs.ts";
 import nodeOs from "./core/platform/node/os.ts";
 
 const { homedir } = nodeOs;
 
-const { accessSync, constants, existsSync, realpathSync } = nodeFs;
+const { access, exists, realPath } = platformModule.files;
 
 const {
   detectInstallMethod,
@@ -71,85 +70,90 @@ function getGlobalPackageRoots(
   }
 }
 
+const comparablePath = (path: string): string =>
+  process.platform === "win32" ? path.toLowerCase() : path;
+
 function normalizeExistingPathForComparison(
   path: string,
   resolveSymlinks: boolean,
-): string | undefined {
+): Promise<string | undefined> {
   const resolvedPath = resolve(path);
-  if (!existsSync(resolvedPath)) {
-    return undefined;
-  }
-  let normalizedPath = resolvedPath;
-  if (resolveSymlinks) {
-    try {
-      normalizedPath = realpathSync(resolvedPath);
-    } catch {
-      return undefined;
-    }
-  }
-  if (process.platform === "win32") {
-    normalizedPath = normalizedPath.toLowerCase();
-  }
-  return normalizedPath;
+  return exists(resolvedPath).then((found) => {
+    if (!found) return undefined;
+    if (!resolveSymlinks) return comparablePath(resolvedPath);
+    return realPath(resolvedPath).then(comparablePath, () => undefined);
+  });
 }
 
-function getPathComparisonCandidates(path: string): string[] {
-  return Array.from(
-    new Set(
-      [
-        normalizeExistingPathForComparison(path, false),
-        normalizeExistingPathForComparison(path, true),
-      ].filter((candidate): candidate is string => candidate !== undefined && candidate !== ""),
+function getPathComparisonCandidates(path: string): Promise<string[]> {
+  return Promise.all([
+    normalizeExistingPathForComparison(path, false),
+    normalizeExistingPathForComparison(path, true),
+  ]).then((candidates) =>
+    Array.from(
+      new Set(
+        candidates.filter(
+          (candidate): candidate is string => candidate !== undefined && candidate !== "",
+        ),
+      ),
     ),
   );
 }
 
-function getEntrypointPackageDir(): string | undefined {
-  const entrypoint = process.argv[1];
-  if (entrypoint === undefined || entrypoint === "") return undefined;
-  let dir = dirname(entrypoint);
-  while (dir !== dirname(dir)) {
-    if (existsSync(join(dir, "package.json"))) {
-      return dir;
-    }
-    dir = dirname(dir);
-  }
-  return undefined;
+function findPackageDirFrom(dir: string): Promise<string | undefined> {
+  if (dir === dirname(dir)) return Promise.resolve(undefined);
+  return exists(join(dir, "package.json")).then((found) =>
+    found ? dir : findPackageDirFrom(dirname(dir)),
+  );
 }
 
-function isSelfUpdatePathWritable(): boolean {
-  const packageDir = getPackageDir();
-  try {
-    accessSync(packageDir, constants.W_OK);
-    accessSync(dirname(packageDir), constants.W_OK);
-    return true;
-  } catch {
-    return false;
-  }
+function getEntrypointPackageDir(): Promise<string | undefined> {
+  const entrypoint = process.argv[1];
+  if (entrypoint === undefined || entrypoint === "") return Promise.resolve(undefined);
+  return findPackageDirFrom(dirname(entrypoint));
 }
+
+function isSelfUpdatePathWritable(): Promise<boolean> {
+  const packageDir = getPackageDir();
+  return Promise.all([
+    access(packageDir, { writable: true }),
+    access(dirname(packageDir), { writable: true }),
+  ]).then(
+    () => true,
+    () => false,
+  );
+}
+
+const isUnderRoot = (normalizedRoot: string, packageDirCandidates: readonly string[]): boolean => {
+  const rootPrefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
+  return packageDirCandidates.some((packageDir) => packageDir.startsWith(rootPrefix));
+};
 
 function isManagedByGlobalPackageManager(
   method: configInstallCommandTypes.InstallMethod,
   packageName: string,
   npmCommand?: string[],
-): boolean {
-  const packageDirs = [getPackageDir(), getEntrypointPackageDir()].filter(
-    (dir): dir is string => dir !== undefined && dir !== "",
-  );
-  const packageDirCandidates = packageDirs.flatMap((dir) => getPathComparisonCandidates(dir));
-  return getGlobalPackageRoots(method, packageName, npmCommand).some((root) =>
-    getPathComparisonCandidates(root).some((normalizedRoot) => {
-      const rootPrefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
-      return packageDirCandidates.some((packageDir) => packageDir.startsWith(rootPrefix));
-    }),
-  );
+): Promise<boolean> {
+  return getEntrypointPackageDir().then((entrypointDir) => {
+    const packageDirs = [getPackageDir(), entrypointDir].filter(
+      (dir): dir is string => dir !== undefined && dir !== "",
+    );
+    const roots = getGlobalPackageRoots(method, packageName, npmCommand);
+    return Promise.all([
+      Promise.all(packageDirs.map(getPathComparisonCandidates)),
+      Promise.all(roots.map(getPathComparisonCandidates)),
+    ]).then(([packageCandidates, rootCandidates]) => {
+      const packageDirCandidates = packageCandidates.flat();
+      return rootCandidates.flat().some((root) => isUnderRoot(root, packageDirCandidates));
+    });
+  });
 }
 
 function getSelfUpdateCommandImpl(
   packageName: string,
   npmCommand?: string[],
   updatePackageTarget: configInstallCommandTypes.SelfUpdatePackageTarget = packageName,
-): configInstallCommandTypes.SelfUpdateCommand | undefined {
+): Promise<configInstallCommandTypes.SelfUpdateCommand | undefined> {
   const method = detectInstallMethod();
   const command = getSelfUpdateCommandForMethod(
     method,
@@ -157,14 +161,11 @@ function getSelfUpdateCommandImpl(
     updatePackageTarget,
     npmCommand,
   );
-  if (
-    command === undefined ||
-    !isManagedByGlobalPackageManager(method, packageName, npmCommand) ||
-    !isSelfUpdatePathWritable()
-  ) {
-    return undefined;
-  }
-  return command;
+  if (command === undefined) return Promise.resolve(undefined);
+  return Promise.all([
+    isManagedByGlobalPackageManager(method, packageName, npmCommand),
+    isSelfUpdatePathWritable(),
+  ]).then(([managed, writable]) => (managed && writable ? command : undefined));
 }
 
 const getSelfUpdateCommand: {
@@ -172,34 +173,37 @@ const getSelfUpdateCommand: {
     packageName: string,
     npmCommand?: string[],
     updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
-  ): configInstallCommandTypes.SelfUpdateCommand | undefined;
+  ): Promise<configInstallCommandTypes.SelfUpdateCommand | undefined>;
   (
     npmCommand?: string[],
     updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
-  ): (packageName: string) => configInstallCommandTypes.SelfUpdateCommand | undefined;
+  ): (packageName: string) => Promise<configInstallCommandTypes.SelfUpdateCommand | undefined>;
 } = dual((args: IArguments) => args.length >= 1, getSelfUpdateCommandImpl);
 
 function getSelfUpdateUnavailableInstructionImpl(
   packageName: string,
   npmCommand?: string[],
   updatePackageTarget: configInstallCommandTypes.SelfUpdatePackageTarget = packageName,
-): string {
+): Promise<string> {
   const method = detectInstallMethod();
   const target = normalizeSelfUpdatePackageTarget(updatePackageTarget);
   if (method === "bun-binary") {
-    return `Download from: ${RELEASES_URL}/latest`;
+    return Promise.resolve(`Download from: ${RELEASES_URL}/latest`);
   }
   const command = getSelfUpdateCommandForMethod(method, packageName, target, npmCommand);
-  if (command !== undefined) {
-    if (
-      isManagedByGlobalPackageManager(method, packageName, npmCommand) &&
-      !isSelfUpdatePathWritable()
-    ) {
-      return `This installation is managed by a global ${method} install, but the install path is not writable. Update it yourself with: ${command.display}`;
-    }
-    return `This installation is not managed by a global ${method} install. Update it with the package manager, wrapper, or source checkout that provides it.`;
+  if (command === undefined) {
+    return Promise.resolve(
+      `Update ${target.installSpec} using the package manager, wrapper, or source checkout that provides this installation.`,
+    );
   }
-  return `Update ${target.installSpec} using the package manager, wrapper, or source checkout that provides this installation.`;
+  return Promise.all([
+    isManagedByGlobalPackageManager(method, packageName, npmCommand),
+    isSelfUpdatePathWritable(),
+  ]).then(([managed, writable]) =>
+    managed && !writable
+      ? `This installation is managed by a global ${method} install, but the install path is not writable. Update it yourself with: ${command.display}`
+      : `This installation is not managed by a global ${method} install. Update it with the package manager, wrapper, or source checkout that provides it.`,
+  );
 }
 
 const getSelfUpdateUnavailableInstruction: {
@@ -207,18 +211,18 @@ const getSelfUpdateUnavailableInstruction: {
     packageName: string,
     npmCommand?: string[],
     updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
-  ): string;
+  ): Promise<string>;
   (
     npmCommand?: string[],
     updatePackageTarget?: configInstallCommandTypes.SelfUpdatePackageTarget,
-  ): (packageName: string) => string;
+  ): (packageName: string) => Promise<string>;
 } = dual((args: IArguments) => args.length >= 1, getSelfUpdateUnavailableInstructionImpl);
 
-function getUpdateInstruction(packageName: string): string {
+function getUpdateInstruction(packageName: string): Promise<string> {
   const method = detectInstallMethod();
   const command = getSelfUpdateCommandForMethod(method, packageName);
   if (command !== undefined) {
-    return `Run: ${command.display}`;
+    return Promise.resolve(`Run: ${command.display}`);
   }
   return getSelfUpdateUnavailableInstruction(packageName);
 }

@@ -4,6 +4,13 @@ import type toolFailureTypes from "./tool-failure.types.ts";
 declare namespace platformTypes {
   type EnvValues = Readonly<Record<string, string | undefined>>;
 
+  interface FileInfo {
+    readonly isDirectory: boolean;
+    readonly isFile: boolean;
+    readonly mtimeMs: number;
+    readonly size: number;
+  }
+
   interface Latch {
     readonly promise: Promise<void>;
     readonly open: () => void;
