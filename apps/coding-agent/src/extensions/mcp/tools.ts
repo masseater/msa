@@ -1,19 +1,18 @@
 import mcpServers from "../../core/mcp-servers.ts";
-import toolsPart1 from "./tools-part1.ts";
-import toolsPart2 from "./tools-part2.ts";
-import toolsPart4 from "./tools-part4.ts";
-import toolsPart6 from "./tools-part6.ts";
-import toolsPart7 from "./tools-part7.ts";
-import toolsPart9 from "./tools-part9.ts";
+import outputLimit from "./tools/output-limit.ts";
+import resultContent from "./tools/result-content.ts";
+import resultSchema from "./tools/result-schema.ts";
+import toolDefinition from "./tools/tool-definition.ts";
+import toolRenderers from "./tools/tool-renderers.ts";
+import toolShape from "./tools/tool-shape.ts";
 
 const { READ_MCP_RESOURCE_TOOL } = mcpServers;
-const { MCP_OUTPUT_MAX_BYTES, createMcpResultSchema, createMcpToolName, toToolExposure } =
-  toolsPart1;
-const { convertMcpResult } = toolsPart6;
-const { createMcpToolDefinition } = toolsPart9;
-const { createMcpToolRenderers } = toolsPart7;
-const { limitMcpContent } = toolsPart2;
-const { toModelContent } = toolsPart4;
+const { MCP_OUTPUT_MAX_BYTES, limitMcpContent } = outputLimit;
+const { createMcpResultSchema } = resultSchema;
+const { createMcpToolName, toToolExposure } = toolShape;
+const { convertMcpResult, toModelContent } = resultContent;
+const { createMcpToolDefinition } = toolDefinition;
+const { createMcpToolRenderers } = toolRenderers;
 
 const tools = {
   MCP_OUTPUT_MAX_BYTES,

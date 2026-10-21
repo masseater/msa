@@ -2,16 +2,29 @@ import type aiTypes from "@msa/ai/index.types";
 import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
-import awaitingModule from "../../core/awaiting.ts";
-import truncate from "../../core/tools/truncate.ts";
-import errors from "../../utils/errors.ts";
-import toolsPart1 from "./tools-part1.ts";
-import type toolsTypes from "./tools.types.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import truncate from "../../../core/tools/truncate.ts";
+import errors from "../../../utils/errors.ts";
+import outputFiles from "../../../utils/output-files.ts";
+import type toolsTypes from "../tools.types.ts";
 
+const { toErrorMessage } = errors;
 const { awaited, awaiting } = awaitingModule;
 const { truncateMiddle } = truncate;
-const { toErrorMessage } = errors;
-const { MCP_OUTPUT_MAX_BYTES, saveToTempFile, textOf } = toolsPart1;
+const { writeOutputFile } = outputFiles;
+
+const MCP_OUTPUT_MAX_BYTES = 20 * 1024;
+
+function saveToTempFile(data: string | Uint8Array, extension: string): Promise<string> {
+  return writeOutputFile("msa-mcp", extension, data);
+}
+
+function textOf(content: readonly (aiTypes.TextContent | aiTypes.ImageContent)[]): string {
+  return content
+    .filter((block): block is aiTypes.TextContent => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
+}
 
 function limitMcpContentImpl(
   content: (aiTypes.TextContent | aiTypes.ImageContent)[],
@@ -53,26 +66,6 @@ const limitMcpContent: {
   }>;
 } = dual((args: IArguments) => args.length >= 1, limitMcpContentImpl);
 
-function extensionOf(uri: string): string {
-  const path = URL.canParse(uri) ? new URL(uri).pathname : uri;
-  return /\.[A-Za-z0-9]{1,8}$/u.exec(path)?.[0] ?? ".bin";
-}
+const outputLimit = { MCP_OUTPUT_MAX_BYTES, limitMcpContent, saveToTempFile, textOf };
 
-function isTextMimeType(mimeType: string | undefined): boolean {
-  if (mimeType === undefined || mimeType === "") return false;
-  const type = (mimeType.split(";", 1)[0] ?? "").trim().toLowerCase();
-  return (
-    type.startsWith("text/") ||
-    type === "application/json" ||
-    type.endsWith("+json") ||
-    type.endsWith("+xml")
-  );
-}
-
-const toolsPart2 = {
-  extensionOf,
-  isTextMimeType,
-  limitMcpContent,
-};
-
-export default toolsPart2;
+export default outputLimit;

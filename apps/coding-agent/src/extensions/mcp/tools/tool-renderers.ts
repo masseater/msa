@@ -1,14 +1,14 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
-import renderUtils from "../../core/tools/render-utils.ts";
-import visualTruncate from "../../modes/interactive/components/visual-truncate.ts";
-import type toolsTypes from "./tools.types.ts";
+import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import renderUtils from "../../../core/tools/render-utils.ts";
+import visualTruncate from "../../../modes/interactive/components/visual-truncate.ts";
+import type toolsTypes from "../tools.types.ts";
 
-const { Container, Spacer, Text } = tui;
-const { formatToolCallWithArgs, getTextOutput, replaceTabs } = renderUtils;
 const { collapsedOutput } = visualTruncate;
+const { Spacer, Container, Text } = tui;
+const { replaceTabs, getTextOutput, formatToolCallWithArgs } = renderUtils;
 
 function createMcpToolRenderers(label: string): extensionsTypesTypes.ToolRenderers {
   return {
@@ -43,8 +43,6 @@ function createMcpToolRenderers(label: string): extensionsTypesTypes.ToolRendere
   };
 }
 
-const toolsPart7 = {
-  createMcpToolRenderers,
-};
+const toolRenderers = { createMcpToolRenderers };
 
-export default toolsPart7;
+export default toolRenderers;
