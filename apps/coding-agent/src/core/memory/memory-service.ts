@@ -73,7 +73,7 @@ export default class MemoryService {
   }
 
   list(limit = 20): Promise<storeTypes.MemoryRecord[]> {
-    return this.ready.then(() => this.ensureStore().list({ limit, project: this.project }));
+    return nodeRuntime.runPromise(unwrapForeign(this.listEffect(limit)));
   }
 
   stats(): storeTypes.MemoryStoreStats {
@@ -85,17 +85,7 @@ export default class MemoryService {
   }
 
   describeStatus(): Promise<string> {
-    if (!this.settings.enabled) {
-      return Promise.resolve("Memory is disabled (settings: memory.enabled).");
-    }
-    return this.ready.then(() =>
-      formatMemoryStatus({
-        lastEmbeddingError: this.embedder.lastError,
-        project: this.project,
-        settings: this.settings,
-        stats: this.ensureStore().stats(),
-      }),
-    );
+    return nodeRuntime.runPromise(unwrapForeign(this.describeStatusEffect()));
   }
 
   describeStats(): string {
@@ -207,6 +197,26 @@ export default class MemoryService {
           ? { embeddingError: failure }
           : {}),
       };
+    });
+  }
+
+  private listEffect(limit: number) {
+    return Effect.gen({ self: this }, function* () {
+      yield* fromPromise(() => this.ready);
+      return this.ensureStore().list({ limit, project: this.project });
+    });
+  }
+
+  private describeStatusEffect() {
+    return Effect.gen({ self: this }, function* () {
+      if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
+      yield* fromPromise(() => this.ready);
+      return formatMemoryStatus({
+        lastEmbeddingError: this.embedder.lastError,
+        project: this.project,
+        settings: this.settings,
+        stats: this.ensureStore().stats(),
+      });
     });
   }
 
