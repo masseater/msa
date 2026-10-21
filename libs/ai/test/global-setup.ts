@@ -3,6 +3,9 @@ import type { TestProject } from "vite-plus/test/node";
 
 import localLlmSupport from "./local-llm-support.ts";
 import resolveApiKey from "./oauth.ts";
+import storedProviders from "./stored-providers.ts";
+
+const { STORED_PROVIDERS } = storedProviders;
 
 declare module "vitest" {
   interface ProvidedContext {
@@ -14,8 +17,6 @@ declare module "vitest" {
     readonly storedApiKeys: Readonly<Record<string, string>>;
   }
 }
-
-const STORED_PROVIDERS = ["anthropic", "openai-codex"];
 
 const resolveAll = Effect.forEach(
   STORED_PROVIDERS,
