@@ -1,3 +1,5 @@
+import { createHook } from "node:async_hooks";
+
 import { Effect, Fiber } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -28,6 +30,33 @@ const aPendingWaitLeavesTheProcessFree = Effect.gen(function* () {
   expect(pending).toBe(before);
 });
 
+const timersArmedWhile = <A>(effect: Effect.Effect<A>): Effect.Effect<number> =>
+  Effect.gen(function* () {
+    const armed = { count: 0 };
+    const hook = createHook({
+      init: (_id, type) => {
+        if (type === "Timeout") armed.count += 1;
+      },
+    });
+    yield* Effect.acquireUseRelease(
+      Effect.sync(() => hook.enable()),
+      () => effect,
+      () => Effect.sync(() => hook.disable()),
+    );
+    return armed.count;
+  });
+
+const anEndlessWaitArmsNoTimer = Effect.gen(function* () {
+  const armed = yield* timersArmedWhile(
+    Effect.gen(function* () {
+      const waiting = yield* Effect.forkDetach(unrefSleep(Number.POSITIVE_INFINITY));
+      yield* settle;
+      yield* Fiber.interrupt(waiting);
+    }),
+  );
+  expect(armed).toBe(0);
+});
+
 const waitsBeyondTheTimerLimit = Effect.gen(function* () {
   expect(yield* stillWaitingAfter(MAX_TIMER_MS + 1000, 50)).toBe(true);
   expect(yield* stillWaitingAfter(Number.POSITIVE_INFINITY, 50)).toBe(true);
@@ -46,6 +75,8 @@ describe("unrefSleep", () => {
 
   it("keeps waiting past the 2^31 - 1 ms timer limit instead of firing early", () =>
     Effect.runPromise(waitsBeyondTheTimerLimit));
+
+  it("arms no timer for an endless wait", () => Effect.runPromise(anEndlessWaitArmsNoTimer));
 
   it("ends short, negative, and NaN waits", () => Effect.runPromise(shortWaitsEnd));
 });
