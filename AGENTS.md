@@ -88,7 +88,7 @@ release. Add a tool name to select part of the graph. For example, run
 ## node の組み込み
 
 - Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。
-- import 文だけでなく、`require`・`createRequire(...)(...)`・動的 `import()`・`process.getBuiltinModule` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。`node:module` から来た `createRequire` と `process`・`globalThis` は変数・別名・分割代入・再代入を追い、読み込む先やキーを決められない書き方（文字列でない引数、計算したキー、値を外へ渡すなど）も弾く。
+- import 文だけでなく、`require`・`createRequire(...)(...)`・`Module._load`・動的 `import()`・`export ... from` による再 export・`process.getBuiltinModule` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。`node:module` から来た `createRequire`・`Module` と CJS の `module`（`module.constructor`）、`process`・`globalThis` は変数・別名・分割代入・再代入を追い、読み込む先やキーを決められない書き方（文字列でない引数、計算したキー、値を外へ渡すなど）も弾く。
 - 同期の fs（`existsSync`・`readFileSync` などの `*Sync`）は `msa/no-sync-fs` で禁じている。Effect の `FileSystem` か platform の非同期 API を使う。起動前など同期でしか書けない処理は、`core/platform/node/` の名前付き関数に閉じる。
 - 規則は `tools/oxlint/` にあり、すり抜けの書き方と一覧が effecttsgo・node の fs とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。読み込む先が実行時に決まる箇所（ネイティブアドオン、ユーザーのモジュール）だけ `oxlint-disable-next-line` で外す。
 
