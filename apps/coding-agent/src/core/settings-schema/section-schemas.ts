@@ -1,6 +1,6 @@
 import { type TSchemaOptions, Type } from "typebox";
 
-import settingsDefaults from "./settings-defaults.ts";
+import settingsDefaults from "../settings-defaults.ts";
 
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 
@@ -261,7 +261,7 @@ const CodemodeSettingsSchema = Type.Object({
   ),
 });
 
-const settingsSchemaPart1 = {
+const sectionSchemas = {
   BranchSummarySettingsSchema,
   CodemodeModeSchema,
   CodemodeSettingsSchema,
@@ -278,4 +278,4 @@ const settingsSchemaPart1 = {
   timeoutSetting,
 };
 
-export default settingsSchemaPart1;
+export default sectionSchemas;

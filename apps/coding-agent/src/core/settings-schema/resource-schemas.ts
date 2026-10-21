@@ -1,6 +1,6 @@
 import { Type } from "typebox";
 
-import settingsDefaults from "./settings-defaults.ts";
+import settingsDefaults from "../settings-defaults.ts";
 
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 
@@ -80,11 +80,11 @@ const SkillsInputSchema = Type.Union(
   { description: "Local skill file paths or directories." },
 );
 
-const settingsSchemaPart2 = {
+const resourceSchemas = {
   ModelPolicySettingsSchema,
   PackageSourceSchema,
   PrWatchSettingsSchema,
   SkillsInputSchema,
 };
 
-export default settingsSchemaPart2;
+export default resourceSchemas;
