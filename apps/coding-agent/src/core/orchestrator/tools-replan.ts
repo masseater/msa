@@ -43,6 +43,12 @@ const replanTaskSchema = Type.Object({
       description: "Short name other entries of this replan use in dependsOn.",
     }),
   ),
+  mergeInto: Type.Optional(
+    Type.String({
+      description:
+        "Existing work task whose branch this task's branch merges into. Default: the merge target of the first task it replaces.",
+    }),
+  ),
   model: Type.Optional(modelSchema),
   round: Type.Optional(
     Type.String({ description: "Round id. Default: the round of the task it replaces, or main." }),

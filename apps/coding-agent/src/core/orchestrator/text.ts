@@ -70,11 +70,28 @@ function requireChecks(
   });
 }
 
+function requireMergeTarget(
+  mergeInto: string | undefined,
+  project: string,
+  find: (id: string) => orchestratorTypesTypes.Task | undefined,
+): string | null {
+  if (mergeInto === undefined) return null;
+  const target = find(mergeInto);
+  if (target === undefined || target.project !== project) {
+    throw new Error(`Unknown merge target: ${mergeInto}`);
+  }
+  if (target.kind !== "work") {
+    throw new Error(`${mergeInto} is a review task; merge into a work task.`);
+  }
+  return target.id;
+}
+
 const text = {
   firstLine,
   outputPattern,
   phrase,
   requireChecks,
+  requireMergeTarget,
   requireStates,
   searchQuery,
   segmentWords,

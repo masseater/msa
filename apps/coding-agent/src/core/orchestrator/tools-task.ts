@@ -42,6 +42,12 @@ const createSchema = Type.Object({
   goalState: Type.String({
     description: "What should be true when the task is done, in terms that can be checked.",
   }),
+  mergeInto: Type.Optional(
+    Type.String({
+      description:
+        "Work task whose branch this task's branch merges into; that task merges the branches and opens the one pull request, so give it dependsOn on this task. Default: this task opens its own pull request into the default branch.",
+    }),
+  ),
   model: Type.Optional(modelSchema),
   round: Type.Optional(
     Type.String({

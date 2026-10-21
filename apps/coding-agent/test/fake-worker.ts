@@ -8,6 +8,7 @@ const { fauxAssistantMessage } = ai;
 
 export default class FakeWorker implements orchestratorTypes.WorkerSession {
   compaction = { manual: { isCompacting: false } };
+  cwd: string;
   isStreaming = false;
   messages: agentTypes.AgentMessage[] = [];
   sessionFile: string;
@@ -23,6 +24,7 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   }> = [];
 
   constructor(options: orchestratorTypes.CreateWorkerOptions, index: number) {
+    this.cwd = options.cwd;
     this.model = options.model;
     this.thinkingLevel = options.thinkingLevel;
     this.telemetry = options.telemetry;

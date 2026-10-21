@@ -12,7 +12,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { requireChecks, requireStates } = text;
+const { requireChecks, requireMergeTarget, requireStates } = text;
 const { newId } = idsModule;
 const { rounds } = roundsModule;
 const { scheduling } = schedule;
@@ -69,6 +69,9 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     requireDependenciesWhenBusy(runtime, input);
     const round = resolveRound(runtime, input);
+    const mergeInto = requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
+      store.getTask(runtime.database, id),
+    );
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
       checks,
@@ -79,6 +82,7 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
       goalState: states.goalState,
       id,
       kind: "work",
+      mergeInto,
       model: input.model ?? null,
       project,
       round,

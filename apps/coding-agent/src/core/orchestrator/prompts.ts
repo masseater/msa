@@ -59,6 +59,41 @@ function checksBlock(checks: readonly orchestratorTypesTypes.TaskCheck[]): strin
   ].join("\n");
 }
 
+function workspaceBlock(
+  role: orchestratorTypesTypes.ThreadRole,
+  workspace: orchestratorTypesTypes.Workspace,
+): string {
+  if (workspace.branch === null) return "";
+  const where = `The harness created this task's git worktree at ${workspace.cwd}, on branch ${workspace.branch}.`;
+  if (role === "reviewer") {
+    return [
+      "<workspace>",
+      `${where} The work to review is the diff of ${workspace.branch} against ${workspace.targetBranch}.`,
+      "</workspace>",
+    ].join("\n");
+  }
+  const target =
+    workspace.target === null
+      ? `When the work is done, push ${workspace.branch} and open a pull request into ${workspace.targetBranch}.`
+      : `This work merges into task ${workspace.target.id} "${workspace.target.title}" on branch ${workspace.targetBranch}, which opens the pull request. Commit and push ${workspace.branch}; do not open a pull request.`;
+  const sources =
+    workspace.sources.length === 0
+      ? []
+      : [
+          `These tasks merge into this one. Merge their branches into ${workspace.branch} before you open the pull request:`,
+          ...workspace.sources.map(
+            (source) => `- ${source.branch} (task ${source.task.id} "${source.task.title}")`,
+          ),
+        ];
+  return [
+    "<workspace>",
+    `${where} Work and commit here; do not create another worktree or switch this one to another branch.`,
+    target,
+    ...sources,
+    "</workspace>",
+  ].join("\n");
+}
+
 function workerPrompt(
   task: orchestratorTypesTypes.TaskView,
   dependencies: readonly orchestratorTypesTypes.TaskView[],
@@ -227,6 +262,7 @@ const prompts = {
   taskHeading,
   taskReviewerPrompt,
   workerPrompt,
+  workspaceBlock,
 };
 
 const promptsModule = {

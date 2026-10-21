@@ -1,0 +1,215 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
+import { expect, it } from "vite-plus/test";
+
+import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
+import orchestratorHarness from "./orchestrator-harness.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
+
+const { joinPath, makeTempDir, removePath } = testing;
+const { create } = orchestratorSupport;
+const { harness } = orchestratorHarness;
+const { setup, taskStatus, waitFor } = harness;
+const { runCommand } = orchestratorCallbacks;
+
+const GIT = "git -c user.name=t -c user.email=t@example.invalid";
+
+function sh(command: string, cwd: string): Effect.Effect<string> {
+  return Effect.flatMap(
+    Effect.promise((signal) => runCommand(command, cwd, 30_000, signal)),
+    (result) =>
+      result.exitCode === 0
+        ? Effect.succeed(result.output.trim())
+        : Effect.die(new Error(`${command} in ${cwd}: ${result.output}`)),
+  );
+}
+
+function commitOnBranch(repository: string, branch: string, message: string) {
+  return sh(
+    `git branch ${branch} && ${GIT} commit-tree -m ${message} -p ${branch} ${branch}^{tree} | xargs git update-ref refs/heads/${branch}`,
+    repository,
+  );
+}
+
+function withRepository<A, E>(body: (repository: string) => Effect.Effect<A, E>) {
+  return Effect.acquireUseRelease(
+    makeTempDir("msa-worktree-"),
+    (parent) =>
+      Effect.gen(function* () {
+        const repository = joinPath(parent, "repo");
+        yield* sh(
+          `mkdir -p repo/app && echo app > repo/app/README && git -C repo init -q -b main`,
+          parent,
+        );
+        yield* sh(`git add . && ${GIT} commit -q -m init`, repository);
+        return yield* body(repository);
+      }),
+    (parent) => removePath(parent),
+  );
+}
+
+function shortId(taskId: string): string {
+  return taskId.replace(/^t-/u, "");
+}
+
+const startsTheWorkerInAWorktreeAndChecksThere = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const { orchestrator, workers } = setup({
+          cwd: joinPath(repository, "app"),
+          runCommand,
+        });
+        const task = yield* create(orchestrator, {
+          checks: [{ command: "cat done.txt", output: "^done$" }],
+          currentState: "done.txt is missing",
+          goalState: "done.txt says done",
+          title: "write done",
+        });
+        const branch = `task/${shortId(task.id)}`;
+        const worker = workers[0]!;
+
+        expect(yield* sh("git rev-parse --abbrev-ref HEAD", worker.cwd)).toBe(branch);
+        expect(yield* sh("git rev-parse --show-prefix", worker.cwd)).toBe("app/");
+        expect(yield* sh("basename $(git rev-parse --show-toplevel)", worker.cwd)).toBe(
+          `repo-${shortId(task.id)}`,
+        );
+        expect(yield* sh("git rev-parse --abbrev-ref HEAD", repository)).toBe("main");
+        expect(orchestrator.snapshot.threads[0]).toMatchObject({
+          branch,
+          cwd: worker.cwd,
+          targetBranch: "main",
+        });
+        expect(worker.prompts[0]).toContain(
+          `on branch ${branch}. Work and commit here; do not create another worktree`,
+        );
+        expect(worker.prompts[0]).toContain(`push ${branch} and open a pull request into main.`);
+
+        yield* sh("echo done > done.txt", worker.cwd);
+        worker.complete("wrote done.txt");
+        yield* waitFor(() => workers.length === 2);
+        expect(worker.prompts).toHaveLength(1);
+        const reviewer = workers[1]!;
+        expect(reviewer.cwd).toBe(worker.cwd);
+        expect(reviewer.prompts[0]).toContain(`the diff of ${branch} against main.`);
+
+        reviewer.complete("acceptable");
+        yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
+        expect(yield* sh("git rev-parse --abbrev-ref HEAD", worker.cwd)).toBe(branch);
+        expect(yield* sh("cat done.txt", worker.cwd)).toBe("done");
+      }),
+    ),
+  );
+
+it(
+  "starts the worker in a worktree and branch it creates, runs the goal's checks there, and keeps the worktree after the task ends",
+  startsTheWorkerInAWorktreeAndChecksThere,
+);
+
+const branchesFromTheMergeTarget = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const { orchestrator, workers } = setup({ cwd: repository, runCommand });
+        const gate = yield* create(orchestrator, {
+          currentState: "a",
+          goalState: "b",
+          title: "gate",
+        });
+        const target = yield* create(orchestrator, {
+          currentState: "the parts are on their own branches",
+          dependsOn: [gate.id],
+          goalState: "one pull request carries every part",
+          title: "integrate",
+        });
+        const targetBranch = `task/${shortId(target.id)}`;
+        yield* commitOnBranch(repository, targetBranch, "target");
+        const part = yield* create(orchestrator, {
+          currentState: "c",
+          goalState: "d",
+          mergeInto: target.id,
+          title: "part",
+        });
+        const partBranch = `task/${shortId(part.id)}`;
+        const partWorker = workers[1]!;
+
+        expect(yield* sh("git log -1 --format=%s", partWorker.cwd)).toBe("target");
+        expect(partWorker.prompts[0]).toContain(
+          `This work merges into task ${target.id} "integrate" on branch ${targetBranch}, which opens the pull request. Commit and push ${partBranch}; do not open a pull request.`,
+        );
+
+        workers[0]!.complete("gate done");
+        yield* waitFor(() => workers.length === 3);
+        workers[2]!.complete("acceptable");
+        yield* waitFor(() => workers.length === 4);
+        const targetWorker = workers[3]!;
+        expect(yield* sh("git rev-parse --abbrev-ref HEAD", targetWorker.cwd)).toBe(targetBranch);
+        expect(yield* sh("git log -1 --format=%s", targetWorker.cwd)).toBe("target");
+        expect(targetWorker.prompts[0]).toContain(
+          `Merge their branches into ${targetBranch} before you open the pull request:\n- ${partBranch} (task ${part.id} "part")`,
+        );
+        expect(targetWorker.prompts[0]).toContain(
+          `push ${targetBranch} and open a pull request into main.`,
+        );
+      }),
+    ),
+  );
+
+it(
+  "branches a task that merges into another from that task's branch, and lists it to the target",
+  branchesFromTheMergeTarget,
+);
+
+const leavesAPlainDirectoryAsItIs = () =>
+  Effect.runPromise(
+    Effect.acquireUseRelease(
+      makeTempDir("msa-no-repo-"),
+      (directory) =>
+        Effect.gen(function* () {
+          const { orchestrator, workers } = setup({ cwd: directory, runCommand });
+          yield* create(orchestrator, { currentState: "a", goalState: "b", title: "plain" });
+          expect(workers[0]?.cwd).toBe(directory);
+          expect(workers[0]?.prompts[0]).not.toContain("<workspace>");
+          expect(orchestrator.snapshot.threads[0]).toMatchObject({
+            branch: null,
+            targetBranch: null,
+          });
+        }),
+      (directory) => removePath(directory),
+    ),
+  );
+
+it(
+  "starts the worker in the task's directory when it is not a git repository",
+  leavesAPlainDirectoryAsItIs,
+);
+
+const rejectsAReviewTaskAsMergeTarget = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator } = setup();
+      const work = yield* create(orchestrator, { currentState: "a", goalState: "b", title: "w" });
+      const review = orchestrator.snapshot.tasks.find((task) => task.kind === "review")!;
+      const rejected = yield* Effect.promise(() =>
+        orchestrator
+          .createTask({ currentState: "c", goalState: "d", mergeInto: review.id, title: "x" })
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+      );
+      expect(String(rejected)).toContain("is a review task");
+      const unknown = yield* Effect.promise(() =>
+        orchestrator
+          .createTask({ currentState: "c", goalState: "d", mergeInto: "t-missing", title: "x" })
+          .then(
+            () => undefined,
+            (error: unknown) => error,
+          ),
+      );
+      expect(String(unknown)).toContain("Unknown merge target: t-missing");
+      expect(work.mergeInto).toBeNull();
+    }),
+  );
+
+it("rejects a merge target that is not a work task", rejectsAReviewTaskAsMergeTarget);
