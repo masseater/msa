@@ -1,5 +1,6 @@
 import type AgentSession from "../agent-session.ts";
 import type agentSessionTypes from "../agent-session.types.ts";
+import SessionDecision from "./decision.ts";
 import SessionGoalEvaluation from "./goal-evaluation.ts";
 import SessionGoal from "./goal.ts";
 import SessionMemory from "./memory.ts";
@@ -8,6 +9,7 @@ import SessionPrWatch from "./pr-watch.ts";
 import SessionTelemetryRecorder from "./telemetry.ts";
 
 export default class SessionIntegrations {
+  readonly decision: SessionDecision;
   readonly goalEvaluation: SessionGoalEvaluation;
   readonly goal: SessionGoal;
   readonly memory: SessionMemory;
@@ -16,6 +18,7 @@ export default class SessionIntegrations {
   readonly telemetry: SessionTelemetryRecorder;
 
   constructor(session: AgentSession) {
+    this.decision = new SessionDecision(session);
     this.goalEvaluation = new SessionGoalEvaluation(session);
     this.goal = new SessionGoal(session);
     this.memory = new SessionMemory(session);
@@ -25,6 +28,7 @@ export default class SessionIntegrations {
   }
 
   start(config: agentSessionTypes.AgentSessionConfig): void {
+    this.decision.start();
     this.goal.start();
     const telemetryContext = this.telemetry.start(config.telemetry);
     this.prWatch.start(telemetryContext);
@@ -32,6 +36,7 @@ export default class SessionIntegrations {
   }
 
   close(): Promise<void> {
+    this.decision.close();
     return Promise.all([
       this.orchestration.close(),
       this.prWatch.close(),

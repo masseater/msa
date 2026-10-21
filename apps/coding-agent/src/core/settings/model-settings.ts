@@ -31,6 +31,14 @@ export default class ModelSettings {
     return this.manager.settings.goal?.evaluatorModel;
   }
 
+  getDecisionModel(): string | undefined {
+    return this.manager.settings.decision?.model;
+  }
+
+  getDecisionThreshold(key: string): number | undefined {
+    return this.manager.settings.decision?.thresholds?.[key];
+  }
+
   getOrchestratorWorkerModel(): string | undefined {
     return this.manager.settings.orchestrator?.workerModel;
   }

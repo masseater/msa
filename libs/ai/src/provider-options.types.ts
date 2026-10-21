@@ -16,7 +16,11 @@ declare namespace providerOptionsTypes {
   type Api = typesModule.KnownApi | (string & {});
   type KnownImageApi = "openrouter-images";
   type ImageApi = typesModule.KnownImageApi | (string & {});
-  type KnownClassifierApi = "typesafe-system-one" | "llama-cpp-classify" | "openai-decisions";
+  type KnownClassifierApi =
+    | "typesafe-system-one"
+    | "llama-cpp-classify"
+    | "node-llama-cpp-classify"
+    | "openai-decisions";
   type ClassifierApi = typesModule.KnownClassifierApi | (string & {});
   type KnownProvider =
     | "anthropic-api"

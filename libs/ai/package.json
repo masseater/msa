@@ -102,6 +102,7 @@
     "@google/genai": "catalog:",
     "@msa/telemetry": "workspace:*",
     "effect": "catalog:stack",
+    "node-llama-cpp": "catalog:",
     "openai": "catalog:",
     "partial-json": "catalog:",
     "srvx": "catalog:",
@@ -109,6 +110,7 @@
   },
   "devDependencies": {
     "@effect/vitest": "catalog:stack",
+    "@msa/testing": "workspace:*",
     "@types/node": "catalog:",
     "canvas": "catalog:",
     "vitest": "catalog:"

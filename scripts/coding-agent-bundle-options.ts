@@ -6,6 +6,7 @@ const { EsbuildFilter } = esbuildFilter;
 
 const ALLOWED_EXTERNAL_PACKAGES = new Set([
   "@silvia-odwyer/photon-node",
+  "node-llama-cpp",
   "jiti",
   "bufferutil",
   "utf-8-validate",
@@ -47,7 +48,7 @@ const unbannedBuildOptions = (repoRoot: string): BuildOptions => ({
   absWorkingDir: repoRoot,
   bundle: true,
   define: { MSA_BUNDLED_NODE: "true" },
-  external: ["@silvia-odwyer/photon-node"],
+  external: ["@silvia-odwyer/photon-node", "node-llama-cpp"],
   format: "esm",
   legalComments: "none",
   logLevel: "warning",
