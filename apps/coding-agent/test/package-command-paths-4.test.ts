@@ -29,6 +29,8 @@ const {
   writeTextFile,
 } = testing;
 
+const twoNodeChildrenTimeout = 60_000;
+
 let state: packageCommandPathsSupportTypes.PackageTestState;
 
 let tempDir = "";
@@ -250,9 +252,15 @@ describe("package commands", () => {
   it("retries a transient self-update version check", () =>
     runTest(retriesATransientSelfUpdateVersionCheck));
 
-  it("self-updates through the global npm prefix, not the project one", () =>
-    runTest(selfUpdatesThroughTheGlobalNpmPrefix));
+  it(
+    "self-updates through the global npm prefix, not the project one",
+    () => runTest(selfUpdatesThroughTheGlobalNpmPrefix),
+    twoNodeChildrenTimeout,
+  );
 
-  it("installs the latest release of the current package", () =>
-    runTest(installsTheLatestReleaseOfTheCurrent));
+  it(
+    "installs the latest release of the current package",
+    () => runTest(installsTheLatestReleaseOfTheCurrent),
+    twoNodeChildrenTimeout,
+  );
 });
