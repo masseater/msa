@@ -26,7 +26,15 @@ type BuildBoundaryContext = (
   | extensionsTypesTypes.BoundaryContextPreview
   | Promise<extensionsTypesTypes.BoundaryContextPreview>;
 
-export default class LifecycleEmitter extends HandlerInvoker {
+export default class LifecycleEmitter {
+  private readonly host: ConstructorParameters<typeof HandlerInvoker>[0];
+  private readonly handlers: HandlerInvoker;
+
+  constructor(host: ConstructorParameters<typeof HandlerInvoker>[0]) {
+    this.host = host;
+    this.handlers = new HandlerInvoker(host);
+  }
+
   emitBoundary(baseEvent: runnerTypesTypes.BoundaryBaseEvent, buildContext: BuildBoundaryContext) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
@@ -34,11 +42,17 @@ export default class LifecycleEmitter extends HandlerInvoker {
       let shouldContinue = false;
       let context = yield* fromPromise(() => buildContext(entries));
       let valid = true;
-      for (const { ext, handler } of this.slots(baseEvent.type)) {
+      for (const { ext, handler } of this.handlers.slots(baseEvent.type)) {
         const event = { ...baseEvent, context, continue: shouldContinue, entries } as
           | extensionsTypesTypes.TurnEndEvent
           | extensionsTypesTypes.AgentBeforeSettleEvent;
-        const outcome = yield* this.invoke({ ctx, event, eventType: baseEvent.type, ext, handler });
+        const outcome = yield* this.handlers.invoke({
+          ctx,
+          event,
+          eventType: baseEvent.type,
+          ext,
+          handler,
+        });
         if (outcome.ok) {
           const handlerResult = outcome.value as extensionsTypesTypes.BoundaryResult | undefined;
           if (handlerResult?.entries !== undefined) entries = handlerResult.entries;
@@ -51,7 +65,7 @@ export default class LifecycleEmitter extends HandlerInvoker {
           valid = true;
         } else {
           valid = false;
-          this.reportError(
+          this.handlers.reportError(
             ext.path,
             baseEvent.type,
             rebuilt.failure.cause,
@@ -70,8 +84,14 @@ export default class LifecycleEmitter extends HandlerInvoker {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       let result: runnerTypesTypes.SessionBeforeEventResult | undefined;
-      for (const { ext, handler } of this.slots(event.type)) {
-        const outcome = yield* this.invoke({ ctx, event, eventType: event.type, ext, handler });
+      for (const { ext, handler } of this.handlers.slots(event.type)) {
+        const outcome = yield* this.handlers.invoke({
+          ctx,
+          event,
+          eventType: event.type,
+          ext,
+          handler,
+        });
         if (outcome.ok && isSessionBeforeEvent(event) && outcome.value !== undefined) {
           result = outcome.value as runnerTypesTypes.SessionBeforeEventResult;
           if (result.cancel === true) return result as runnerTypesTypes.RunnerEmitResult<TEvent>;
@@ -85,8 +105,14 @@ export default class LifecycleEmitter extends HandlerInvoker {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       let action: cacheWarmerTypes.CacheWarmingAction = event.action;
-      for (const { ext, handler } of this.slots(event.type)) {
-        const outcome = yield* this.invoke({ ctx, event, eventType: event.type, ext, handler });
+      for (const { ext, handler } of this.handlers.slots(event.type)) {
+        const outcome = yield* this.handlers.invoke({
+          ctx,
+          event,
+          eventType: event.type,
+          ext,
+          handler,
+        });
         const result = outcome.ok
           ? (outcome.value as extensionsTypesTypes.CacheWarmingDecisionEventResult | undefined)
           : undefined;
@@ -101,12 +127,12 @@ export default class LifecycleEmitter extends HandlerInvoker {
       const ctx = this.host.createContext();
       let currentMessage = event.message;
       let modified = false;
-      for (const { ext, handler } of this.slots("message_end")) {
+      for (const { ext, handler } of this.handlers.slots("message_end")) {
         const currentEvent: extensionsTypesTypes.MessageEndEvent = {
           ...event,
           message: currentMessage,
         };
-        const outcome = yield* this.invoke({
+        const outcome = yield* this.handlers.invoke({
           ctx,
           event: currentEvent,
           eventType: "message_end",
@@ -137,7 +163,7 @@ export default class LifecycleEmitter extends HandlerInvoker {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       let result: extensionsTypesTypes.ToolCallEventResult | undefined;
-      for (const { handler } of this.slots("tool_call")) {
+      for (const { handler } of this.handlers.slots("tool_call")) {
         const handlerResult = yield* fromPromise(() => handler(event, ctx));
         if (typeof handlerResult === "object" && handlerResult !== null) {
           result = handlerResult as extensionsTypesTypes.ToolCallEventResult;
@@ -151,10 +177,10 @@ export default class LifecycleEmitter extends HandlerInvoker {
   emitUserBash(event: extensionsTypesTypes.UserBashEvent) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      for (const { ext, handler } of this.slots("user_bash")) {
+      for (const { ext, handler } of this.handlers.slots("user_bash")) {
         const outcome = yield* fromPromise(() => handler(event, ctx)).pipe(Effect.result);
         if (Result.isFailure(outcome)) {
-          this.reportError(ext.path, "user_bash", outcome.failure.cause);
+          this.handlers.reportError(ext.path, "user_bash", outcome.failure.cause);
           return yield* outcome.failure;
         }
         const handlerResult = outcome.success;
@@ -163,7 +189,7 @@ export default class LifecycleEmitter extends HandlerInvoker {
           const invalid = new Error(
             "Invalid user_bash handler result: return undefined for local execution or exactly one valid { operations } or { result } object",
           );
-          this.reportError(ext.path, "user_bash", invalid);
+          this.handlers.reportError(ext.path, "user_bash", invalid);
           return yield* Effect.die(invalid);
         }
         const valid: extensionsTypesTypes.UserBashEventResult = handlerResult;
@@ -178,8 +204,8 @@ export default class LifecycleEmitter extends HandlerInvoker {
       const ctx = this.host.createContext();
       const currentEvent: extensionsTypesTypes.ToolResultEvent = { ...event };
       let modified = false;
-      for (const { ext, handler } of this.slots("tool_result")) {
-        const outcome = yield* this.invoke({
+      for (const { ext, handler } of this.handlers.slots("tool_result")) {
+        const outcome = yield* this.handlers.invoke({
           ctx,
           event: currentEvent,
           eventType: "tool_result",

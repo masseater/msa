@@ -15,19 +15,33 @@ const { buildSystemPrompt, normalizeBuildSystemPromptOptions } = systemPromptMod
 const REMOVED_SYSTEM_MESSAGE =
   "Handler removed the leading system message; the request has no prompt or initial tool declarations. Keep it at index 0 or replace a dropped prefix with getCurrentSystemMessage().";
 
-export default class ContextEmitter extends HandlerInvoker {
+export default class ContextEmitter {
+  private readonly host: ConstructorParameters<typeof HandlerInvoker>[0];
+  private readonly handlers: HandlerInvoker;
+
+  constructor(host: ConstructorParameters<typeof HandlerInvoker>[0]) {
+    this.host = host;
+    this.handlers = new HandlerInvoker(host);
+  }
+
   emitContext(messages: agentTypes.AgentMessage[]) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       let currentMessages = structuredClone(messages);
-      for (const { ext, handler } of this.slots("context")) {
+      for (const { ext, handler } of this.handlers.slots("context")) {
         const visibleMessages = currentMessages.filter((message) => message.role !== "system");
         const visibleSnapshot = visibleMessages.slice();
         const event: extensionsTypesTypes.ContextEvent = {
           messages: visibleMessages,
           type: "context",
         };
-        const outcome = yield* this.invoke({ ctx, event, eventType: "context", ext, handler });
+        const outcome = yield* this.handlers.invoke({
+          ctx,
+          event,
+          eventType: "context",
+          ext,
+          handler,
+        });
         if (!outcome.ok) continue;
         const returned =
           (outcome.value as extensionsTypesTypes.ContextEventResult | undefined)?.messages ??
@@ -45,13 +59,13 @@ export default class ContextEmitter extends HandlerInvoker {
   ) {
     return Effect.gen({ self: this }, function* () {
       let currentMessages = messages;
-      for (const { ext, handler } of this.slots("context_with_system")) {
+      for (const { ext, handler } of this.handlers.slots("context_with_system")) {
         const hadLeadingSystemMessage = currentMessages[0]?.role === "system";
         const event: extensionsTypesTypes.ContextWithSystemEvent = {
           messages: currentMessages,
           type: "context_with_system",
         };
-        const outcome = yield* this.invoke({
+        const outcome = yield* this.handlers.invoke({
           ctx,
           event,
           eventType: "context_with_system",
@@ -78,12 +92,12 @@ export default class ContextEmitter extends HandlerInvoker {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
       let currentPayload = payload;
-      for (const { ext, handler } of this.slots("before_provider_request")) {
+      for (const { ext, handler } of this.handlers.slots("before_provider_request")) {
         const event: extensionsTypesTypes.BeforeProviderRequestEvent = {
           payload: currentPayload,
           type: "before_provider_request",
         };
-        const outcome = yield* this.invoke({
+        const outcome = yield* this.handlers.invoke({
           ctx,
           event,
           eventType: "before_provider_request",
@@ -99,12 +113,18 @@ export default class ContextEmitter extends HandlerInvoker {
   emitBeforeProviderHeaders(headers: aiTypes.ProviderHeaders) {
     return Effect.gen({ self: this }, function* () {
       const ctx = this.host.createContext();
-      for (const { ext, handler } of this.slots("before_provider_headers")) {
+      for (const { ext, handler } of this.handlers.slots("before_provider_headers")) {
         const event: extensionsTypesTypes.BeforeProviderHeadersEvent = {
           headers,
           type: "before_provider_headers",
         };
-        yield* this.invoke({ ctx, event, eventType: "before_provider_headers", ext, handler });
+        yield* this.handlers.invoke({
+          ctx,
+          event,
+          eventType: "before_provider_headers",
+          ext,
+          handler,
+        });
       }
       return headers;
     });
@@ -127,7 +147,7 @@ export default class ContextEmitter extends HandlerInvoker {
       };
       const messages: NonNullable<extensionsTypesTypes.BeforeAgentStartEventResult["message"]>[] =
         [];
-      for (const { ext, handler } of this.slots("before_agent_start")) {
+      for (const { ext, handler } of this.handlers.slots("before_agent_start")) {
         const event: extensionsTypesTypes.BeforeAgentStartEvent = {
           ...trigger,
           get systemPrompt() {
@@ -136,7 +156,7 @@ export default class ContextEmitter extends HandlerInvoker {
           systemPromptOptions: currentOptions,
           type: "before_agent_start",
         };
-        const outcome = yield* this.invoke({
+        const outcome = yield* this.handlers.invoke({
           ctx,
           event,
           eventType: "before_agent_start",
@@ -171,13 +191,13 @@ export default class ContextEmitter extends HandlerInvoker {
         skillPaths: [],
         themePaths: [],
       };
-      for (const { ext, handler } of this.slots("resources_discover")) {
+      for (const { ext, handler } of this.handlers.slots("resources_discover")) {
         const event: extensionsTypesTypes.ResourcesDiscoverEvent = {
           cwd,
           reason,
           type: "resources_discover",
         };
-        const outcome = yield* this.invoke({
+        const outcome = yield* this.handlers.invoke({
           ctx,
           event,
           eventType: "resources_discover",
@@ -206,7 +226,7 @@ export default class ContextEmitter extends HandlerInvoker {
       const ctx = this.host.createContext();
       let currentText = text;
       let currentImages = images;
-      for (const { ext, handler } of this.slots("input")) {
+      for (const { ext, handler } of this.handlers.slots("input")) {
         const event: extensionsTypesTypes.InputEvent = {
           images: currentImages,
           source,
@@ -214,7 +234,13 @@ export default class ContextEmitter extends HandlerInvoker {
           text: currentText,
           type: "input",
         };
-        const outcome = yield* this.invoke({ ctx, event, eventType: "input", ext, handler });
+        const outcome = yield* this.handlers.invoke({
+          ctx,
+          event,
+          eventType: "input",
+          ext,
+          handler,
+        });
         if (!outcome.ok) continue;
         const result = outcome.value as extensionsTypesTypes.InputEventResult | undefined;
         if (result?.action === "handled") return result;

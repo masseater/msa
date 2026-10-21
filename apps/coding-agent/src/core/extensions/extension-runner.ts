@@ -1,28 +1,33 @@
 import type modelRegistryTypes from "../model-registry.types.ts";
 import type sessionManagerTypes from "../session-manager.types.ts";
 import runnerBindings from "./runner-bindings.ts";
-import ContextFactory from "./runner-context.ts";
-import RunnerEmitApi from "./runner-emit-api.ts";
+import runnerParts from "./runner-parts.ts";
+import type runnerPartsTypes from "./runner-parts.types.ts";
 import ProviderBinder from "./runner-providers.ts";
 import type runnerTypesTypes from "./runner-types.ts";
-import UIPromptTracker from "./runner-ui-prompts.ts";
 import runnerUi from "./runner-ui.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
+type Parts = runnerPartsTypes.RunnerParts;
+type Queries = Parts["queries"];
+type Events = Parts["events"];
+
 const { noOpUIContext } = runnerUi;
-const { applyContextActions, createBindings, idleCommandBindings } = runnerBindings;
+const { applyContextActions, applyRuntimeActions, commandBindings, createBindings } =
+  runnerBindings;
+const { createRunnerParts } = runnerParts;
 
 const STALE_MESSAGE =
   "This extension ctx is stale after session replacement or reload. Do not use a captured msa or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
-export default class ExtensionRunner extends RunnerEmitApi {
+export default class ExtensionRunner {
+  private readonly runtime: extensionsTypesTypes.ExtensionRuntime;
+  private readonly cwd: string;
+  private readonly modelRegistry: modelRegistryTypes.ModelRegistry;
+  private readonly bindings: ReturnType<typeof createBindings>;
+  private readonly parts: Parts;
   private uiContext: extensionsTypesTypes.ExtensionUIContext = noOpUIContext;
   private mode: extensionsTypesTypes.ExtensionMode = "print";
-  private readonly errorListeners = new Set<runnerTypesTypes.ExtensionErrorListener>();
-  private readonly reportedMcpServers = new Set<string>();
   private staleMessage: string | undefined;
-  private readonly bindings: ReturnType<typeof createBindings>;
-  private readonly contextFactory: ContextFactory;
-  private readonly prompts: UIPromptTracker;
 
   constructor(
     extensions: extensionsTypesTypes.Extension[],
@@ -31,23 +36,36 @@ export default class ExtensionRunner extends RunnerEmitApi {
     sessionManager: sessionManagerTypes.SessionManager,
     modelRegistry: modelRegistryTypes.ModelRegistry,
   ) {
-    super(extensions, runtime, cwd, sessionManager, modelRegistry);
+    this.runtime = runtime;
+    this.cwd = cwd;
+    this.modelRegistry = modelRegistry;
     this.bindings = createBindings(cwd);
-    this.contextFactory = new ContextFactory({
-      assertActive: () => this.assertActive(),
-      bindings: this.bindings,
-      cwd,
-      hasUI: () => this.hasUI(),
-      mode: () => this.mode,
-      modelRegistry,
-      runtime,
-      sessionManager,
-      ui: () => this.uiContext,
-    });
-    this.prompts = new UIPromptTracker((event) => {
-      queueMicrotask(() => {
-        void this.emit(event);
-      });
+    const assertActive = () => this.assertActive();
+    const hasUI = () => this.hasUI();
+    this.parts = createRunnerParts({
+      context: {
+        assertActive,
+        bindings: this.bindings,
+        cwd,
+        hasUI,
+        mode: () => this.mode,
+        modelRegistry,
+        runtime,
+        sessionManager,
+        ui: () => this.uiContext,
+      },
+      events: {
+        assertActive,
+        createContext: () => this.createContext(),
+        emitError: (error) => this.emitError(error),
+        extensions,
+      },
+      onPromptEvent: (event) => {
+        queueMicrotask(() => {
+          void this.emit(event);
+        });
+      },
+      queries: { extensions, hasUI, modelRegistry, runtime },
     });
   }
 
@@ -57,21 +75,7 @@ export default class ExtensionRunner extends RunnerEmitApi {
     providerActions?: ConstructorParameters<typeof ProviderBinder>[2],
   ): void {
     const { runtime } = this;
-    runtime.sendMessage = actions.sendMessage;
-    runtime.sendUserMessage = actions.sendUserMessage;
-    runtime.appendEntry = actions.appendEntry;
-    runtime.setSessionName = actions.setSessionName;
-    runtime.getSessionName = actions.getSessionName;
-    runtime.setLabel = actions.setLabel;
-    runtime.getActiveTools = actions.getActiveTools;
-    runtime.getAllTools = actions.getAllTools;
-    runtime.getSettings = actions.getSettings;
-    runtime.setActiveTools = actions.setActiveTools;
-    runtime.refreshTools = actions.refreshTools;
-    runtime.getCommands = actions.getCommands;
-    runtime.setModel = actions.setModel;
-    runtime.getThinkingLevel = actions.getThinkingLevel;
-    runtime.setThinkingLevel = actions.setThinkingLevel;
+    applyRuntimeActions(runtime, actions);
     runtime.createContext = () => this.createContext();
     applyContextActions({ actions: contextActions, bindings: this.bindings, cwd: this.cwd });
     runtime.mcpServers.setChangeListener(() => {
@@ -84,25 +88,14 @@ export default class ExtensionRunner extends RunnerEmitApi {
   }
 
   bindCommandContext(actions?: extensionsTypesTypes.ExtensionCommandContextActions): void {
-    const next =
-      actions === undefined
-        ? idleCommandBindings()
-        : {
-            forkHandler: actions.fork,
-            navigateTreeHandler: actions.navigateTree,
-            newSessionHandler: actions.newSession,
-            reloadHandler: actions.reload,
-            switchSessionHandler: actions.switchSession,
-            waitForIdleFn: actions.waitForIdle,
-          };
-    Object.assign(this.bindings, next);
+    Object.assign(this.bindings, commandBindings(actions));
   }
 
   setUIContext(
     uiContext?: extensionsTypesTypes.ExtensionUIContext,
     mode: extensionsTypesTypes.ExtensionMode = "print",
   ): void {
-    this.uiContext = uiContext === undefined ? noOpUIContext : this.prompts.wrap(uiContext);
+    this.uiContext = uiContext === undefined ? noOpUIContext : this.parts.prompts.wrap(uiContext);
     this.mode = mode;
   }
 
@@ -122,27 +115,16 @@ export default class ExtensionRunner extends RunnerEmitApi {
   }
 
   onError(listener: runnerTypesTypes.ExtensionErrorListener): () => void {
-    this.errorListeners.add(listener);
-    return () => this.errorListeners.delete(listener);
+    return this.parts.errors.onError(listener);
   }
 
   emitError(error: extensionsTypesTypes.ExtensionError): void {
-    for (const listener of this.errorListeners) {
-      listener(error);
-    }
+    this.parts.errors.emit(error);
   }
 
   reportUnhandledMcpServers(): void {
-    if (this.hasHandlers("mcp_servers_change")) return;
-    for (const server of this.runtime.mcpServers.list()) {
-      if (this.reportedMcpServers.has(server.name)) continue;
-      this.reportedMcpServers.add(server.name);
-      this.emitError({
-        error: `MCP server "${server.name}" is registered, but no loaded extension connects MCP servers; another extension may have replaced the built-in MCP support`,
-        event: "register_mcp_server",
-        extensionPath: server.extensionPath,
-      });
-    }
+    if (!this.hasHandlers("mcp_servers_change"))
+      this.parts.errors.reportUnhandledMcpServers(this.runtime.mcpServers.list());
   }
 
   shutdown(): void {
@@ -155,23 +137,150 @@ export default class ExtensionRunner extends RunnerEmitApi {
   }
 
   createContext(): extensionsTypesTypes.ExtensionContext {
-    return this.contextFactory.createContext();
+    return this.parts.contextFactory.createContext();
   }
 
   createToolContext(
     toolCallId: string,
     signal: AbortSignal | undefined,
   ): extensionsTypesTypes.ExtensionToolContext {
-    return this.contextFactory.createToolContext(toolCallId, signal);
+    return this.parts.contextFactory.createToolContext(toolCallId, signal);
   }
 
   createCommandContext(): extensionsTypesTypes.ExtensionCommandContext {
-    return this.contextFactory.createCommandContext();
+    return this.parts.contextFactory.createCommandContext();
   }
 
-  protected assertActive(): void {
+  private assertActive(): void {
     if (this.staleMessage !== undefined && this.staleMessage !== "") {
       throw new Error(this.staleMessage);
     }
+  }
+
+  getExtensionPaths() {
+    return this.parts.queries.getExtensionPaths();
+  }
+
+  getAllRegisteredTools() {
+    return this.parts.queries.getAllRegisteredTools();
+  }
+
+  getToolDefinition(toolName: string) {
+    return this.parts.queries.getToolDefinition(toolName);
+  }
+
+  getFlags() {
+    return this.parts.queries.getFlags();
+  }
+
+  setFlagValue(name: string, value: boolean | string): void {
+    this.parts.queries.setFlagValue(name, value);
+  }
+
+  getFlagValues() {
+    return this.parts.queries.getFlagValues();
+  }
+
+  getShortcuts(...args: Parameters<Queries["getShortcuts"]>) {
+    return this.parts.queries.getShortcuts(...args);
+  }
+
+  getShortcutDiagnostics() {
+    return this.parts.queries.getShortcutDiagnostics();
+  }
+
+  hasHandlers(eventType: string): boolean {
+    return this.parts.queries.hasHandlers(eventType);
+  }
+
+  getMessageRenderer(customType: string) {
+    return this.parts.queries.getMessageRenderer(customType);
+  }
+
+  getExternalServices() {
+    return this.parts.queries.getExternalServices();
+  }
+
+  getMarkdownTransformers() {
+    return this.parts.queries.getMarkdownTransformers();
+  }
+
+  resolveToolRenderers(
+    toolName: string,
+    base: () => extensionsTypesTypes.ToolRenderers | undefined,
+  ): extensionsTypesTypes.ToolRenderers | undefined {
+    return this.parts.queries.resolveToolRenderers(toolName, base);
+  }
+
+  getEntryRenderer(customType: string) {
+    return this.parts.queries.getEntryRenderer(customType);
+  }
+
+  getModelRegistry(): modelRegistryTypes.ModelRegistry {
+    return this.modelRegistry;
+  }
+
+  getRegisteredCommands() {
+    return this.parts.queries.getRegisteredCommands();
+  }
+
+  getCommandDiagnostics() {
+    return this.parts.queries.getCommandDiagnostics();
+  }
+
+  getCommand(name: string) {
+    return this.parts.queries.getCommand(name);
+  }
+
+  emitBoundary(...args: Parameters<Events["emitBoundary"]>) {
+    return this.parts.events.emitBoundary(...args);
+  }
+
+  emit<TEvent extends runnerTypesTypes.RunnerEmitEvent>(event: TEvent) {
+    return this.parts.events.emit(event);
+  }
+
+  emitCacheWarmingDecision(event: extensionsTypesTypes.CacheWarmingDecisionEvent) {
+    return this.parts.events.emitCacheWarmingDecision(event);
+  }
+
+  emitMessageEnd(event: extensionsTypesTypes.MessageEndEvent) {
+    return this.parts.events.emitMessageEnd(event);
+  }
+
+  emitToolResult(event: extensionsTypesTypes.ToolResultEvent) {
+    return this.parts.events.emitToolResult(event);
+  }
+
+  emitToolCall(event: extensionsTypesTypes.ToolCallEvent) {
+    return this.parts.events.emitToolCall(event);
+  }
+
+  emitUserBash(event: extensionsTypesTypes.UserBashEvent) {
+    return this.parts.events.emitUserBash(event);
+  }
+
+  emitContext(...args: Parameters<Events["emitContext"]>) {
+    return this.parts.events.emitContext(...args);
+  }
+
+  emitBeforeProviderRequest(payload: unknown) {
+    return this.parts.events.emitBeforeProviderRequest(payload);
+  }
+
+  emitBeforeProviderHeaders(...args: Parameters<Events["emitBeforeProviderHeaders"]>) {
+    return this.parts.events.emitBeforeProviderHeaders(...args);
+  }
+
+  emitBeforeAgentStart(...args: Parameters<Events["emitBeforeAgentStart"]>) {
+    return this.parts.events.emitBeforeAgentStart(...args);
+  }
+
+  emitResourcesDiscover(...args: Parameters<Events["emitResourcesDiscover"]>) {
+    return this.parts.events.emitResourcesDiscover(...args);
+  }
+
+  emitInput(...args: Parameters<Events["emitInput"]>) {
+    return this.parts.events.emitInput(...args);
   }
 }

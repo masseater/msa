@@ -5,36 +5,26 @@ import type diagnosticsTypes from "../diagnostics.ts";
 import type externalServicesTypes from "../external-services.types.ts";
 import type keybindingsTypes from "../keybindings.types.ts";
 import type modelRegistryTypes from "../model-registry.types.ts";
-import type sessionManagerTypes from "../session-manager.types.ts";
 import runnerKeybindings from "./runner-keybindings.ts";
+import type runnerQueriesTypes from "./runner-queries.types.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
 const { buildBuiltinKeybindings } = runnerKeybindings;
 
-export default abstract class RunnerQueries {
-  protected extensions: extensionsTypesTypes.Extension[];
-  protected runtime: extensionsTypesTypes.ExtensionRuntime;
-  protected cwd: string;
-  protected sessionManager: sessionManagerTypes.SessionManager;
-  protected modelRegistry: modelRegistryTypes.ModelRegistry;
+export default class RunnerQueries {
+  private readonly extensions: extensionsTypesTypes.Extension[];
+  private readonly runtime: extensionsTypesTypes.ExtensionRuntime;
+  private readonly modelRegistry: modelRegistryTypes.ModelRegistry;
+  private readonly hasUI: () => boolean;
   private shortcutDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
   private commandDiagnostics: diagnosticsTypes.ResourceDiagnostic[] = [];
 
-  constructor(
-    extensions: extensionsTypesTypes.Extension[],
-    runtime: extensionsTypesTypes.ExtensionRuntime,
-    cwd: string,
-    sessionManager: sessionManagerTypes.SessionManager,
-    modelRegistry: modelRegistryTypes.ModelRegistry,
-  ) {
-    this.extensions = extensions;
-    this.runtime = runtime;
-    this.cwd = cwd;
-    this.sessionManager = sessionManager;
-    this.modelRegistry = modelRegistry;
+  constructor(source: runnerQueriesTypes.QuerySource) {
+    this.extensions = source.extensions;
+    this.runtime = source.runtime;
+    this.modelRegistry = source.modelRegistry;
+    this.hasUI = source.hasUI;
   }
-
-  abstract hasUI(): boolean;
 
   getExtensionPaths(): string[] {
     return this.extensions.map((e) => e.path);

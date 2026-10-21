@@ -11,21 +11,19 @@ const { toErrorMessage } = errors;
 const { fromPromise } = platform;
 
 export default class HandlerInvoker {
-  protected readonly host: runnerInvokerTypes.EmitHost;
+  private readonly host: runnerInvokerTypes.EmitHost;
 
   constructor(host: runnerInvokerTypes.EmitHost) {
     this.host = host;
   }
 
-  protected slots(
-    eventType: extensionsTypesTypes.ExtensionEvent["type"],
-  ): runnerInvokerTypes.HandlerSlot[] {
+  slots(eventType: extensionsTypesTypes.ExtensionEvent["type"]): runnerInvokerTypes.HandlerSlot[] {
     return snapshotEventHandlers(this.host.extensions, eventType).flatMap(({ ext, handlers }) =>
       handlers.map((handler) => ({ ext, handler })),
     );
   }
 
-  protected reportError(
+  reportError(
     extensionPath: string,
     event: string,
     error: unknown,
@@ -39,7 +37,7 @@ export default class HandlerInvoker {
     });
   }
 
-  protected invoke({ ext, eventType, handler, event, ctx }: runnerInvokerTypes.HandlerRun) {
+  invoke({ ext, eventType, handler, event, ctx }: runnerInvokerTypes.HandlerRun) {
     return fromPromise(() => handler(event, ctx)).pipe(
       Effect.map((value): runnerInvokerTypes.HandlerOutcome => ({ ok: true, value })),
       Effect.catchTag("ForeignError", (failure) =>
