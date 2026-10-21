@@ -65,7 +65,7 @@ export default class McpServerActions {
                 serverUrl: url,
                 settings: connection.auth.oauthSettings(),
                 signal,
-                store: this.host.connections
+                store: this.host.connections.resources
                   .getCredentials(runtime)
                   .forServer(server.entry.name, url),
               }),
@@ -92,7 +92,7 @@ export default class McpServerActions {
         const connection = server.connection;
         const url = connection?.auth.oauthUrl;
         if (connection === undefined || url === undefined || url === "") return false;
-        const removed = this.host.connections
+        const removed = this.host.connections.resources
           .getCredentials(yield* awaited(loadMcpRuntime()))
           .remove(server.entry.name, url);
         yield* awaited(connection.signOut());
@@ -161,7 +161,7 @@ export default class McpServerActions {
     const failed = this.saveConfig(server, { exposure });
     if (failed !== undefined && failed !== "") return failed;
     if (server.connection?.state === "connected") this.host.tools.registerTools(server.connection);
-    this.host.tools.syncResourceTools();
+    this.host.tools.resourceTools.syncResourceTools();
 
     const indirect = new Set(
       this.host.msa
@@ -218,7 +218,7 @@ export default class McpServerActions {
       if (signal.aborted || server.attempt !== attempt || !this.host.servers.includes(server))
         return;
       server.message = message;
-      this.host.tools.ensureDiscoveryActive(ctx);
+      this.host.tools.discovery.ensureDiscoveryActive(ctx);
       this.host.emitChange();
     };
     void this.host.track(ready.then(finish, (error: unknown) => finish(toErrorMessage(error))));

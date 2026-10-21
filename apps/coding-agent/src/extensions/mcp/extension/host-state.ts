@@ -5,12 +5,11 @@ import openBrowserModule from "../../../utils/open-browser.ts";
 import configModule from "../config.ts";
 import type configTypes from "../config.types.ts";
 import type extensionInternalTypes from "../extension-internal.types.ts";
-import extensionPart1 from "../extension-part1.ts";
 import type extensionTypes from "../extension.types.ts";
 import type oauthTypesNs from "../oauth.types.ts";
 import type runtimeTypes from "../runtime.types.ts";
 
-const { DEFAULT_STARTUP_WAIT_MS } = extensionPart1;
+const DEFAULT_STARTUP_WAIT_MS = 10_000;
 const { openBrowser } = openBrowserModule;
 const { updateMcpServerConfig } = configModule;
 const { mcpNamespace } = mcpServers;

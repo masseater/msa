@@ -1,32 +1,30 @@
 import * as Effect from "effect/Effect";
-import * as Option from "effect/Option";
 
-import srcConfig from "../../../config.ts";
 import awaitingModule from "../../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
-import platformNode from "../../../core/platform-node.ts";
-import interop from "../../../utils/interop.ts";
 import type extensionInternalTypes from "../extension-internal.types.ts";
-import extensionPart1 from "../extension-part1.ts";
-import type oauthTypesNs from "../oauth.types.ts";
 import runtimeLazy from "../runtime.lazy.ts";
-import type McpRuntime from "../runtime.ts";
 import type runtimeTypes from "../runtime.types.ts";
 import type McpExtensionHost from "./host.ts";
+import McpRuntimeResources from "./runtime-resources.ts";
+import serverState from "./server-state.ts";
+import McpServerWaits from "./server-waits.ts";
 
-const { describeState, hasDirectTools, isEnabled } = extensionPart1;
-const { awaited, awaitingWith, performed } = awaitingModule;
+const { describeState, isEnabled } = serverState;
+const { awaited, awaitingWith } = awaitingModule;
 const { loadMcpRuntime } = runtimeLazy;
-const { callbackPromise } = interop;
-
-const { join } = platformNode;
-const { getAgentDir } = srcConfig;
 
 export default class McpConnections {
   private readonly host: McpExtensionHost;
 
+  readonly resources: McpRuntimeResources;
+
+  readonly waits: McpServerWaits;
+
   constructor(host: McpExtensionHost) {
     this.host = host;
+    this.resources = new McpRuntimeResources(host);
+    this.waits = new McpServerWaits(host);
   }
 
   readonly tokensAtSignIn = new Map<runtimeTypes.McpServerConnection, string>();
@@ -54,7 +52,7 @@ export default class McpConnections {
         if (signedIn.length === 0) return;
         for (const [connection] of signedIn) this.tokensAtSignIn.delete(connection);
         yield* awaited(Promise.allSettled(signedIn.map(([connection]) => connection.reconnect())));
-        this.host.tools.ensureDiscoveryActive(ctx);
+        this.host.tools.discovery.ensureDiscoveryActive(ctx);
       }, this),
     );
 
@@ -68,10 +66,10 @@ export default class McpConnections {
         if (!isCurrent()) return undefined;
         const connection = new runtime.McpServerConnection({
           createTransport: this.host.options.createTransport ?? runtime.createDefaultTransport,
-          credentials: this.getCredentials(runtime),
+          credentials: this.resources.getCredentials(runtime),
           cwd: this.host.sessionCwd,
           entry: server.entry,
-          log: this.getServerLog(runtime),
+          log: this.resources.getServerLog(runtime),
           onChange: (serverConnection) => {
             if (isCurrent()) this.onConnectionChange(serverConnection);
             else this.tokensAtSignIn.delete(serverConnection);
@@ -118,44 +116,6 @@ export default class McpConnections {
     return ready;
   };
 
-  readonly waitForServers = (
-    waiting: readonly extensionInternalTypes.McpServer[],
-    signal: AbortSignal | undefined,
-  ) =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        const readyOf = () =>
-          waiting.flatMap((server) =>
-            isEnabled(server) && this.host.servers.includes(server) && server.ready !== undefined
-              ? [{ ready: server.ready, server }]
-              : [],
-          );
-        const unchanged = (ready: ReturnType<typeof readyOf>) =>
-          ready.every(
-            (attempt) =>
-              !isEnabled(attempt.server) ||
-              !this.host.servers.includes(attempt.server) ||
-              attempt.ready === attempt.server.ready,
-          );
-        for (;;) {
-          const ready = readyOf();
-          if (ready.length === 0 || signal?.aborted === true) return;
-          let onAbort: (() => void) | undefined;
-          yield* awaited(
-            Promise.race([
-              Promise.all(ready.map((attempt) => attempt.ready)),
-              callbackPromise<void>((done) => {
-                onAbort = () => done();
-                signal?.addEventListener("abort", onAbort, { once: true });
-              }),
-            ]),
-          );
-          if (onAbort !== undefined) signal?.removeEventListener("abort", onAbort);
-          if ((signal?.aborted ?? false) || unchanged(ready)) return;
-        }
-      }, this),
-    );
-
   readonly reportProblems = (
     ctx: extensionsTypesTypes.ExtensionContext,
     only?: readonly extensionInternalTypes.McpServer[],
@@ -172,44 +132,5 @@ export default class McpConnections {
       `MCP servers need attention:\n${lines.map((line) => `  ${line}`).join("\n")}\nRun /mcp to fix.`,
       "warning",
     );
-  };
-
-  readonly waitForDirectServers = (ctx: extensionsTypesTypes.ExtensionContext) =>
-    Effect.runPromise(
-      awaitingWith(function* () {
-        if (this.host.waitedForStartup) return;
-        this.host.waitedForStartup = true;
-        const ready = this.host.servers.flatMap((server) =>
-          isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
-            ? [server.ready]
-            : [],
-        );
-        if (ready.length === 0) return;
-        const finished = Option.isSome(
-          yield* performed(
-            Effect.promise(() => Promise.all(ready)).pipe(
-              Effect.timeoutOption(this.host.startupWaitMs),
-            ),
-          ),
-        );
-        if (!finished) {
-          ctx.ui.notify(
-            "MCP servers are still connecting; their tools become available once connected.",
-            "info",
-          );
-        }
-      }, this),
-    );
-
-  readonly getCredentials = (runtime: typeof McpRuntime): oauthTypesNs.McpOAuthCredentialStore => {
-    const credentials = (this.host.credentials ??= new runtime.McpOAuthCredentialStore());
-    return credentials;
-  };
-
-  readonly getServerLog = (runtime: typeof McpRuntime): runtimeTypes.McpServerLog => {
-    const log = (this.host.serverLog ??= new runtime.McpServerLog(
-      this.host.options.logPath ?? join(getAgentDir(), "mcp.log"),
-    ));
-    return log;
   };
 }

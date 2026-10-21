@@ -1,21 +1,19 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
-import type typesSessionEventsTypes from "../../../core/extensions/types-session-events.ts";
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
 import errorsModule from "../../../utils/errors.ts";
-import extensionPart1 from "../extension-part1.ts";
 import runtimeLazy from "../runtime.lazy.ts";
 import type McpExtensionHost from "./host.ts";
+import serverState from "./server-state.ts";
+import serversSection from "./servers-section.ts";
+import sessionConfig from "./session-config.ts";
+import toolCallReach from "./tool-call-reach.ts";
 
-const {
-  MCP_SERVERS_SECTION,
-  RESOURCE_TOOL_NAMES,
-  defaultLoadConfig,
-  isEnabled,
-  reachesServer,
-  renderServersSection,
-} = extensionPart1;
+const { MCP_SERVERS_SECTION, renderServersSection } = serversSection;
+const { defaultLoadConfig } = sessionConfig;
+const { RESOURCE_TOOL_NAMES, reachesServer } = toolCallReach;
+const { isEnabled } = serverState;
 const { awaited, awaitingWith } = awaitingModule;
 const { loadMcpRuntime } = runtimeLazy;
 const { toErrorMessage } = errorsModule;
@@ -44,7 +42,7 @@ export default class McpSessionEvents {
     this.host.servers = [...loaded.servers.map((entry) => ({ entry })), ...registered.servers];
     this.host.emitChange();
 
-    this.host.tools.ensureDiscoveryActive(ctx);
+    this.host.tools.discovery.ensureDiscoveryActive(ctx);
     const enabled = this.host.servers.filter(isEnabled);
     if (enabled.length === 0) {
       this.host.connections.reportProblems(ctx);
@@ -67,12 +65,12 @@ export default class McpSessionEvents {
   }
 
   onBeforeAgentStart(
-    event: typesSessionEventsTypes.BeforeAgentStartEvent,
+    event: extensionsTypesTypes.BeforeAgentStartEvent,
     ctx: extensionsTypesTypes.ExtensionContext,
   ): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        yield* awaited(this.host.connections.waitForDirectServers(ctx));
+        yield* awaited(this.host.connections.waits.waitForDirectServers(ctx));
         const { sections } = event.systemPromptOptions;
         const section = renderServersSection(this.host.servers);
         if (section !== undefined && section !== "") sections[MCP_SERVERS_SECTION] = section;
@@ -104,7 +102,7 @@ export default class McpSessionEvents {
               ? readyServers
               : readyServers.filter((server) => server.entry.name === owner)
             : readyServers.filter((server) => reachesServer(reach, server.entry.name));
-        yield* awaited(this.host.connections.waitForServers(waiting, ctx.signal));
+        yield* awaited(this.host.connections.waits.waitForServers(waiting, ctx.signal));
       }, this),
     );
   }
@@ -139,7 +137,7 @@ export default class McpSessionEvents {
         );
         this.host.servers.push(...added);
         this.host.emitChange();
-        this.host.tools.ensureDiscoveryActive(ctx);
+        this.host.tools.discovery.ensureDiscoveryActive(ctx);
         yield* awaited(Promise.all(removed.map((server) => server.connection?.close())));
         const connecting = added.filter(isEnabled);
         if (signal.aborted || connecting.length === 0) return;
