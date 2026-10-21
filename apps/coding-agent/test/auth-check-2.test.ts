@@ -3,12 +3,14 @@ import { Effect } from "effect";
 import { afterEach, beforeEach, describe, expect, test } from "vite-plus/test";
 
 import argsModule from "../src/cli/args.ts";
+import authCheckRuntime from "../src/cli/auth-check-runtime.ts";
 import authCheck from "../src/cli/auth-check.ts";
 import authCommand from "../src/cli/auth-command.ts";
 import AuthStorage from "../src/core/auth-storage.ts";
 import ReadOnlyAuthStorage from "../src/core/read-only-auth-storage.ts";
 import authCheckSupport from "./auth-check-support.ts";
-const { checkProviderAuth, createAuthCheckModelRuntime } = authCheck;
+const { checkProviderAuth } = authCheck;
+const { createAuthCheckModelRuntime } = authCheckRuntime;
 const { parseArgs } = argsModule;
 const { parseAuthCommand } = authCommand;
 

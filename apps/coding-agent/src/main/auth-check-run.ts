@@ -1,4 +1,5 @@
 import type argsTypes from "../cli/args.types.ts";
+import authCheckRuntime from "../cli/auth-check-runtime.ts";
 import authCheck from "../cli/auth-check.ts";
 import type authCheckTypes from "../cli/auth-check.types.ts";
 import authCommand from "../cli/auth-command.ts";
@@ -7,7 +8,8 @@ import AuthStorage from "../core/auth-storage.ts";
 import awaitingModule from "../core/awaiting.ts";
 import ReadOnlyAuthStorage from "../core/read-only-auth-storage.ts";
 
-const { getProviderCredential, checkProviderAuth, createAuthCheckModelRuntime } = authCheck;
+const { getProviderCredential, checkProviderAuth } = authCheck;
+const { createAuthCheckModelRuntime } = authCheckRuntime;
 const { validateAuthCommandArgs } = authCommand;
 const { awaited } = awaitingModule;
 

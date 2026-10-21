@@ -4,8 +4,6 @@ import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
 import cliModelFlag from "../core/cli-model.ts";
-import InMemoryCodingAgentModelsStore from "../core/in-memory-coding-agent-models-store.ts";
-import ModelRuntime from "../core/model-runtime.ts";
 import type modelRuntimeTypes from "../core/model-runtime.types.ts";
 import type argsTypes from "./args.types.ts";
 import type authCheckTypes from "./auth-check.types.ts";
@@ -99,26 +97,8 @@ const getProviderCredential: {
   ): (providerId: string) => Promise<string | undefined>;
 } = dual((args: IArguments) => args.length >= 4, getProviderCredentialImpl);
 
-function createAuthCheckModelRuntime(
-  credentials: aiTypes.CredentialStore,
-): Promise<modelRuntimeTypes.ModelRuntime> {
-  return Effect.runPromise(
-    awaiting(function* () {
-      return yield* awaited(
-        ModelRuntime.create({
-          allowModelNetwork: false,
-          credentials,
-          modelsStore: new InMemoryCodingAgentModelsStore(),
-          refreshOnCreate: false,
-        }),
-      );
-    }),
-  );
-}
-
 const authCheck = {
   checkProviderAuth,
-  createAuthCheckModelRuntime,
   getProviderCredential,
 };
 

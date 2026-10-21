@@ -3,19 +3,16 @@ import * as Effect from "effect/Effect";
 import { dual } from "effect/Function";
 
 import awaitingModule from "../core/awaiting.ts";
-import cliModelFlag from "../core/cli-model.ts";
-import modelResolver from "../core/model-resolver.ts";
-import type ModelRuntime from "../core/model-runtime.ts";
 import type modelRuntimeTypes from "../core/model-runtime.types.ts";
 import type argsTypes from "./args.types.ts";
 import AuthCommandError from "./auth-command-error.ts";
 import authCommand from "./auth-command.ts";
 import type authCommandTypes from "./auth-command.types.ts";
+import credentialCandidatesModule from "./credential-candidates.ts";
 
 const { getAuthCredential, validateAuthCommandArgs } = authCommand;
 const { awaited, awaiting } = awaitingModule;
-const { resolveCliModel } = cliModelFlag;
-const { resolveModelReference } = modelResolver;
+const { credentialCandidates } = credentialCandidatesModule;
 
 const DEFAULT_BEARER_TOKEN_MIN_EXPIRY_MS = 30 * 60_000;
 
@@ -31,63 +28,23 @@ function resolveCredentialForPrintImpl(
   return Effect.runPromise(
     awaiting(function* () {
       const { provider: cliProvider, model: cliModel } = validateAuthCommandArgs(args, kind);
+      const listed = yield* awaited(
+        modelRuntime.listCredentials(signal === undefined ? {} : { signal }),
+      );
       const credentialTypes = new Map<string, aiTypes.CredentialInfo["type"]>(
-        (yield* awaited(modelRuntime.listCredentials(signal === undefined ? {} : { signal }))).map(
-          (credential) => [credential.providerId, credential.type],
-        ),
+        listed.map((credential) => [credential.providerId, credential.type]),
       );
-      const providers: Array<{ id: string; model?: aiTypes.Model<aiTypes.Api> }> = [];
-      if (cliProvider !== undefined && cliProvider !== "") {
-        const provider = modelRuntime.getProvider(cliProvider);
-        if (provider === undefined) {
-          throw new AuthCommandError(
-            `Unknown provider "${cliProvider}". Use --list-models to see available providers.`,
-          );
-        }
-        if (cliModel !== undefined && cliModel !== "") {
-          const resolved = resolveCliModel({ cliModel, cliProvider: provider.id, modelRuntime });
-          if (
-            (resolved.error !== undefined && resolved.error !== "") ||
-            resolved.model === undefined
-          ) {
-            throw new AuthCommandError(
-              resolved.error ?? "Unable to resolve the requested provider/model",
-            );
-          }
-          providers.push({ id: provider.id, model: resolved.model });
-        } else {
-          providers.push({ id: provider.id });
-        }
-      } else {
-        const models = modelRuntime.getModels();
-        for (const provider of modelRuntime.getProviders()) {
-          if (!credentialTypes.has(provider.id)) continue;
-          const resolved = resolveModelReference(
-            { fuzzy: true, provider: provider.id, text: cliModel!, thinkingSuffix: "strict" },
-            models,
-            () => true,
-          );
-          if (resolved.status === "resolved")
-            providers.push({ id: provider.id, model: resolved.model });
-        }
-        if (providers.length === 0) {
-          throw new AuthCommandError(
-            `Model "${cliModel}" not found. Use --list-models to see available models.`,
-          );
-        }
-      }
-
-      const credentials: Array<{ providerId: string; value: string }> = [];
-      yield* collectCredentials(
-        providers,
+      const providers = credentialCandidates({
+        cliModel,
+        cliProvider,
         credentialTypes,
-        kind,
-        minExpiryMs,
-        signal,
         modelRuntime,
-        credentials,
-      );
-
+      });
+      const credentials = yield* collectCredentials(providers, credentialTypes, kind, {
+        minExpiryMs,
+        modelRuntime,
+        signal,
+      });
       const [onlyCredential] = credentials;
       if (credentials.length === 1 && onlyCredential !== undefined) return onlyCredential.value;
       assertCredentialFound(credentials, providers, credentialTypes, cliProvider, kind);
@@ -124,11 +81,17 @@ function* collectCredentials(
   providers: { id: string; model?: aiTypes.Model<aiTypes.Api> }[],
   credentialTypes: Map<string, "api_key" | "oauth">,
   kind: string,
-  minExpiryMs: number | undefined,
-  signal: AbortSignal | undefined,
-  modelRuntime: ModelRuntime,
-  credentials: { providerId: string; value: string }[],
+  {
+    minExpiryMs,
+    modelRuntime,
+    signal,
+  }: {
+    minExpiryMs: number | undefined;
+    modelRuntime: modelRuntimeTypes.ModelRuntime;
+    signal: AbortSignal | undefined;
+  },
 ) {
+  const credentials: { providerId: string; value: string }[] = [];
   for (const provider of providers) {
     const type = credentialTypes.get(provider.id);
     if (kind === "api_key" && type === "oauth") continue;
@@ -146,6 +109,7 @@ function* collectCredentials(
     const value = getAuthCredential(auth);
     if (value !== undefined && value !== "") credentials.push({ providerId: provider.id, value });
   }
+  return credentials;
 }
 
 function assertCredentialFound(

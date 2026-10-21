@@ -94,6 +94,18 @@ function getInferredNpmInstall(): { root: string; prefix: string } | undefined {
   return undefined;
 }
 
+function replacingSelfUpdateCommand(
+  target: { packageName: string },
+  installedPackageName: string,
+  installStep: ReturnType<typeof makeSelfUpdateCommandStep>,
+  uninstallStep: ReturnType<typeof makeSelfUpdateCommandStep>,
+): configInstallCommandTypes.SelfUpdateCommand {
+  return makeSelfUpdateCommand(
+    installStep,
+    target.packageName === installedPackageName ? undefined : uninstallStep,
+  );
+}
+
 function getSelfUpdateCommandForMethod(
   method: configInstallCommandTypes.InstallMethod,
   installedPackageName: string,
@@ -107,19 +119,21 @@ function getSelfUpdateCommandForMethod(
     case "pnpm":
       return pnpmSelfUpdateCommand(target, installedPackageName);
     case "yarn":
-      return makeSelfUpdateCommand(
+      return replacingSelfUpdateCommand(
+        target,
+        installedPackageName,
         makeSelfUpdateCommandStep("yarn", [
           "global",
           "add",
           "--ignore-scripts",
           target.installSpec,
         ]),
-        target.packageName === installedPackageName
-          ? undefined
-          : makeSelfUpdateCommandStep("yarn", ["global", "remove", installedPackageName]),
+        makeSelfUpdateCommandStep("yarn", ["global", "remove", installedPackageName]),
       );
     case "bun":
-      return makeSelfUpdateCommand(
+      return replacingSelfUpdateCommand(
+        target,
+        installedPackageName,
         makeSelfUpdateCommandStep("bun", [
           "install",
           "-g",
@@ -127,24 +141,29 @@ function getSelfUpdateCommandForMethod(
           "--minimum-release-age=0",
           target.installSpec,
         ]),
-        target.packageName === installedPackageName
-          ? undefined
-          : makeSelfUpdateCommandStep("bun", ["uninstall", "-g", installedPackageName]),
+        makeSelfUpdateCommandStep("bun", ["uninstall", "-g", installedPackageName]),
       );
-    case "npm": {
-      const [command = "npm", ...npmArgs] = npmCommand ?? [];
-      const { installStep, uninstallStep } = npmSelfUpdateSteps(
-        npmCommand,
-        npmArgs,
-        command,
-        target,
-        installedPackageName,
-      );
-      return makeSelfUpdateCommand(installStep, uninstallStep);
-    }
+    case "npm":
+      return npmSelfUpdateCommand(npmCommand, target, installedPackageName);
     case "unknown":
       return undefined;
   }
+}
+
+function npmSelfUpdateCommand(
+  npmCommand: string[] | undefined,
+  target: { packageName: string; installSpec: string },
+  installedPackageName: string,
+): configInstallCommandTypes.SelfUpdateCommand {
+  const [command = "npm", ...npmArgs] = npmCommand ?? [];
+  const { installStep, uninstallStep } = npmSelfUpdateSteps(
+    npmCommand,
+    npmArgs,
+    command,
+    target,
+    installedPackageName,
+  );
+  return makeSelfUpdateCommand(installStep, uninstallStep);
 }
 
 function npmSelfUpdateSteps(
