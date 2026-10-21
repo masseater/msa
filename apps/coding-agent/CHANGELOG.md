@@ -9,6 +9,7 @@
 ### Fixed
 
 - A task no longer stays `running` after its thread dies. The orchestrator checks its threads every minute and stops the ones with no tool call or message for 30 minutes, the ones whose last turn ended in an error or abort without finishing, the ones with no live run, and the ones whose orchestrator process is gone, including threads left by an earlier session. Their tasks become `stopped` or `failed`, and the session gets a report with the elapsed time. A report for a failed thread now says how long it ran ([docs](docs/cli.md#tools))
+- A thread that completes, fails, or is stopped stops every pull request it registered with `pr_watch`, so a CI or review change no longer wakes a finished thread to push or merge
 
 ## [0.0.5] - 2026-10-20
 

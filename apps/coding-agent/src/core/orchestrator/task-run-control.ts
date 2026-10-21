@@ -7,7 +7,7 @@ import schedule from "./schedule.ts";
 import startModule from "./start.ts";
 import storeModule from "./store.ts";
 
-const { nowMillis } = runtimeModule;
+const { nowMillis, releaseThread } = runtimeModule;
 const { store } = storeModule;
 const { scheduling } = schedule;
 const { starting } = startModule;
@@ -22,6 +22,7 @@ function stop(runtime: runtimeTypes.Runtime, taskId: string) {
     const thread = actionHelpers.runningThreadOf(runtime, taskId);
     if (thread !== undefined) {
       runtime.runs.delete(thread.id);
+      releaseThread(runtime, thread.id);
       void runtime.workers
         .get(thread.id)
         ?.run.lifecycle.abort()
