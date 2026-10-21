@@ -7,6 +7,7 @@ const { db } = dbModule;
 
 function toTask(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.Task {
   return {
+    checks: JSON.parse(row.checks) as orchestratorTypesTypes.TaskCheck[],
     condition: row.condition,
     createdAt: row.created_at,
     currentState: row.current_state,
@@ -27,9 +28,9 @@ function toTask(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.Tas
 function insertTask(database: DatabaseSync, task: orchestratorTypesTypes.Task): void {
   database
     .prepare(
-      `INSERT INTO tasks (id, project, round, kind, title, current_state, goal_state, status, cwd,
-         condition, model, thinking_level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO tasks (id, project, round, kind, title, current_state, goal_state, checks, status,
+         cwd, condition, model, thinking_level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       task.id,
@@ -39,6 +40,7 @@ function insertTask(database: DatabaseSync, task: orchestratorTypesTypes.Task): 
       task.title,
       task.currentState,
       task.goalState,
+      JSON.stringify(task.checks),
       task.status,
       task.cwd,
       task.condition,
@@ -64,6 +66,7 @@ function listTasks(database: DatabaseSync, project: string): orchestratorTypesTy
 }
 
 const PATCH_COLUMNS: Readonly<Record<string, string>> = {
+  checks: "checks",
   condition: "condition",
   currentState: "current_state",
   goalState: "goal_state",
@@ -79,17 +82,24 @@ function updateTask(
   patch: Partial<
     Pick<
       orchestratorTypesTypes.Task,
-      "title" | "currentState" | "goalState" | "status" | "condition" | "model" | "thinkingLevel"
+      | "title"
+      | "currentState"
+      | "goalState"
+      | "checks"
+      | "status"
+      | "condition"
+      | "model"
+      | "thinkingLevel"
     >
   >,
   now: number,
 ): void {
   const entries = db
     .definedEntries(patch)
-    .map(([key, value]) => [PATCH_COLUMNS[key] ?? key, value]) as [
-    string,
-    string | number | null,
-  ][];
+    .map(([key, value]) => [
+      PATCH_COLUMNS[key] ?? key,
+      key === "checks" ? JSON.stringify(value) : value,
+    ]) as [string, string | number | null][];
   if (entries.length === 0) return;
   const assignments = entries.map(([column]) => `${column} = ?`).join(", ");
   database

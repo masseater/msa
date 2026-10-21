@@ -16,6 +16,7 @@ function ensureReview(
   const existing = store.reviewTaskOfRound(database, project, round);
   if (existing !== undefined) return existing;
   const review: orchestratorTypesTypes.Task = {
+    checks: [],
     condition: null,
     createdAt: now,
     currentState: `Every task of round ${round} has finished.`,

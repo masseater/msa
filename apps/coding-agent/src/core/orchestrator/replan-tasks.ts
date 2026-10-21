@@ -6,6 +6,7 @@ import type replanTypes from "./replan.types.ts";
 import roundsModule from "./rounds.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import text from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { fail, unique } = replanSupport;
@@ -13,6 +14,7 @@ const { rounds } = roundsModule;
 const { newId } = ids;
 const { store } = storeModule;
 const { writeReport } = replanHandoffs;
+const { requireChecks } = text;
 
 function detachReview(runtime: runtimeTypes.Runtime, task: orchestratorTypesTypes.Task): void {
   const review = store.reviewTaskOfRound(runtime.database, runtime.options.project, task.round);
@@ -56,6 +58,15 @@ function inherited(
     .join("\n\n");
 }
 
+function inheritedChecks(
+  sources: readonly orchestratorTypesTypes.Task[],
+): orchestratorTypesTypes.TaskCheck[] {
+  const byKey = new Map(
+    sources.flatMap((source) => source.checks).map((check) => [JSON.stringify(check), check]),
+  );
+  return [...byKey.values()];
+}
+
 function roundFor(
   input: orchestratorTypesTypes.ReplanTaskInput,
   sources: readonly orchestratorTypesTypes.Task[],
@@ -72,6 +83,10 @@ function newTask(
   now: number,
 ): orchestratorTypesTypes.Task {
   return {
+    checks:
+      input.checks === undefined
+        ? inheritedChecks(sources)
+        : requireChecks(`Task ${input.title}`, input.checks),
     condition: null,
     createdAt: now,
     currentState: input.currentState ?? inherited(sources, (source) => source.currentState),

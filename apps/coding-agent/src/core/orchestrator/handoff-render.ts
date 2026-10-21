@@ -89,6 +89,7 @@ function taskBlock(task: orchestratorTypesTypes.TaskSnapshot): string {
     quote(task.currentState, "  "),
     "- goalState:",
     quote(task.goalState, "  "),
+    ...(task.checks.length === 0 ? [] : [`- checks: \`${JSON.stringify(task.checks)}\``]),
     ...lastReport(task),
   ].join("\n");
 }

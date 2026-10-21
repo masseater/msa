@@ -12,7 +12,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { requireStates } = text;
+const { requireChecks, requireStates } = text;
 const { newId } = idsModule;
 const { rounds } = roundsModule;
 const { scheduling } = schedule;
@@ -43,10 +43,12 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     const database = runtime.database;
     const project = runtime.options.project;
     const states = requireStates(`Task ${input.title}`, input.currentState, input.goalState);
+    const checks = requireChecks(`Task ${input.title}`, input.checks);
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     const round = resolveRound(runtime, input);
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
+      checks,
       condition: input.condition ?? null,
       createdAt: now,
       currentState: states.currentState,

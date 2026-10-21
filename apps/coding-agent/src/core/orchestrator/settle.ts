@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import goalChecksModule from "./goal-checks.ts";
 import outcomeModule from "./outcome.ts";
 import promptsModule from "./prompts.ts";
 import runtimeModule from "./runtime.ts";
@@ -16,6 +17,7 @@ const { wrapping } = wrapUp;
 const { starting } = start;
 const { scheduling } = schedule;
 const { prompts } = promptsModule;
+const { goalChecks } = goalChecksModule;
 
 function settleEffect(
   runtime: runtimeTypes.Runtime,
@@ -86,7 +88,7 @@ function afterTurn(
   );
   const pending = [...new Map(notes.map((note) => [note.id, note])).values()];
   if (pending.length === 0) {
-    void settle(runtime, threadId, run, worker, undefined);
+    goalChecks.verify(runtime, threadId, run, worker);
     return;
   }
   const now = Effect.runSync(nowMillis);

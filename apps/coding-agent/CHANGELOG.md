@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- A task can carry checks: commands with the exit code, and optionally the output, they must give. `create_task`, `replan`, and `set_task_state` take them. When the worker ends its turn, the harness runs them in the task's working directory before the reviewer starts and sends failing results back to the worker; after three such rounds the task fails. `orchestrator.db` moves to schema 2, so an older msa stops with "Update msa" instead of running tasks without their checks ([docs](docs/cli.md#tools))
+
 ### Fixed
 
 - A task no longer stays `running` after its thread dies. The orchestrator checks its threads every minute and stops the ones with no tool call or message for 30 minutes, the ones whose last turn ended in an error or abort without finishing, the ones with no live run, and the ones whose orchestrator process is gone, including threads left by an earlier session. Their tasks become `stopped` or `failed`, and the session gets a report with the elapsed time. A report for a failed thread now says how long it ran ([docs](docs/cli.md#tools))

@@ -30,6 +30,8 @@ declare namespace orchestratorTypes {
 
   type TaskView = orchestratorTypesTypes.TaskView;
 
+  type CommandResult = workerTypes.CommandResult;
+
   type CreateWorkerOptions = workerTypes.CreateWorkerOptions;
 
   type OrchestratorDefaults = workerTypes.OrchestratorDefaults;

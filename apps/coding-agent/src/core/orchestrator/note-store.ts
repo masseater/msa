@@ -91,6 +91,16 @@ function noteRead(database: DatabaseSync, noteId: string, threadId: string): boo
   return row !== undefined;
 }
 
+function notesReadBy(database: DatabaseSync, threadId: string): orchestratorTypesTypes.Note[] {
+  const rows = database
+    .prepare(
+      `SELECT n.* FROM notes n JOIN note_reads r ON r.note_id = n.id
+       WHERE r.thread_id = ? ORDER BY n.created_at, n.id`,
+    )
+    .all(threadId) as unknown as NoteRow[];
+  return rows.map((row) => toNote(database, row));
+}
+
 function deleteNote(database: DatabaseSync, noteId: string): void {
   database.prepare("DELETE FROM note_reads WHERE note_id = ?").run(noteId);
   database.prepare("DELETE FROM note_targets WHERE note_id = ?").run(noteId);
@@ -103,6 +113,7 @@ const noteStore = {
   listNotes,
   markNoteRead,
   noteRead,
+  notesReadBy,
   unreadNotes,
 };
 

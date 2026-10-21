@@ -11,6 +11,18 @@ declare namespace orchestratorTypesTypes {
 
   type NoteAudience = "all" | "round" | "tasks";
 
+  interface TaskCheck {
+    command: string;
+    exitCode: number;
+    output: string | null;
+  }
+
+  interface TaskCheckInput {
+    command: string;
+    exitCode?: number;
+    output?: string;
+  }
+
   interface Task {
     id: string;
     project: string;
@@ -19,6 +31,7 @@ declare namespace orchestratorTypesTypes {
     title: string;
     currentState: string;
     goalState: string;
+    checks: readonly TaskCheck[];
     status: TaskStatus;
     cwd: string;
     condition: string | null;
@@ -116,6 +129,7 @@ declare namespace orchestratorTypesTypes {
     title: string;
     currentState: string;
     goalState: string;
+    checks?: readonly TaskCheckInput[];
     dependsOn?: readonly string[];
     round?: string;
     condition?: string;
@@ -134,6 +148,7 @@ declare namespace orchestratorTypesTypes {
     taskId: string;
     currentState?: string;
     goalState?: string;
+    checks?: readonly TaskCheckInput[];
   }
 
   interface SendNoteInput {
@@ -155,6 +170,7 @@ declare namespace orchestratorTypesTypes {
     title: string;
     currentState?: string;
     goalState?: string;
+    checks?: readonly TaskCheckInput[];
     dependsOn?: readonly string[];
     round?: string;
     model?: string;

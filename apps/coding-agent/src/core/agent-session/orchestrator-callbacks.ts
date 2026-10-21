@@ -10,10 +10,33 @@ const { execFile } = nodeChildProcess;
 const { resolveModelReference } = modelResolver;
 const { formatNoModelSelectedMessage } = authGuidance;
 
-function runCondition(command: string, cwd: string): Promise<boolean> {
-  const { promise, resolve } = Promise.withResolvers<boolean>();
-  execFile("/bin/sh", ["-c", command], { cwd, timeout: 60_000 }, (error) =>
-    resolve(error === null),
+function exitCodeOf(error: { code?: unknown; killed?: boolean } | null): number | null {
+  if (error === null) return 0;
+  if (error.killed === true) return null;
+  return typeof error.code === "number" ? error.code : null;
+}
+
+function runCommand(
+  command: string,
+  cwd: string,
+  timeoutMs: number,
+  signal: AbortSignal,
+): Promise<orchestratorTypes.CommandResult> {
+  const { promise, resolve } = Promise.withResolvers<orchestratorTypes.CommandResult>();
+  execFile(
+    "/bin/sh",
+    ["-c", command],
+    { cwd, maxBuffer: 16 * 1024 * 1024, signal, timeout: timeoutMs },
+    (error, stdout, stderr) => {
+      const timedOut =
+        error?.killed === true && !signal.aborted ? `\n[killed after ${timeoutMs} ms]` : "";
+      const spawnError =
+        error !== null && typeof error.code === "string" ? `\n${error.message}` : "";
+      resolve({
+        exitCode: exitCodeOf(error),
+        output: `${stdout}${stderr}${timedOut}${spawnError}`,
+      });
+    },
   );
   return promise;
 }
@@ -53,6 +76,6 @@ function defaults(session: AgentSession): orchestratorTypes.OrchestratorDefaults
   };
 }
 
-const orchestratorCallbacks = { defaults, resolveModel, runCondition };
+const orchestratorCallbacks = { defaults, resolveModel, runCommand };
 
 export default orchestratorCallbacks;

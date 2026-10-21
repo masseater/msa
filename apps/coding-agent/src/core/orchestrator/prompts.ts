@@ -40,6 +40,25 @@ function stateBlock(tag: string, value: string): string {
   return `<${tag}>\n${value}\n</${tag}>`;
 }
 
+function checkExpectation(check: orchestratorTypesTypes.TaskCheck): string {
+  const exit = `exit ${check.exitCode}`;
+  return check.output === null ? exit : `${exit}, output matching /${check.output}/m`;
+}
+
+function checkLines(checks: readonly orchestratorTypesTypes.TaskCheck[]): string[] {
+  return checks.map((check) => `- \`${check.command}\` → ${checkExpectation(check)}`);
+}
+
+function checksBlock(checks: readonly orchestratorTypesTypes.TaskCheck[]): string {
+  if (checks.length === 0) return "";
+  return [
+    "<goal-checks>",
+    "When you end your turn, the harness runs these commands in the working directory. The task is done only when every one gives the expected result; otherwise the results come back to you.",
+    ...checkLines(checks),
+    "</goal-checks>",
+  ].join("\n");
+}
+
 function workerPrompt(
   task: orchestratorTypesTypes.TaskView,
   dependencies: readonly orchestratorTypesTypes.TaskView[],
@@ -48,6 +67,7 @@ function workerPrompt(
   return [
     stateBlock("current-state", task.currentState),
     stateBlock("goal-state", task.goalState),
+    checksBlock(task.checks),
     dependencyBlock(dependencies),
     notesBlock(notes),
   ]
@@ -140,6 +160,7 @@ function formatTaskDetail(
     threads.length > 0 ? `Threads: ${threads.join(", ")}` : "Threads: -",
     stateBlock("current-state", task.currentState),
     stateBlock("goal-state", task.goalState),
+    ...(task.checks.length === 0 ? [] : [`Checks:\n${checkLines(task.checks).join("\n")}`]),
     ...reports,
   ].join("\n\n");
 }
@@ -193,6 +214,8 @@ function formatReplan(result: orchestratorTypesTypes.ReplanResult): string {
 }
 
 const prompts = {
+  checkExpectation,
+  checksBlock,
   dependencyBlock,
   formatReplan,
   formatTaskDetail,

@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   title TEXT NOT NULL,
   current_state TEXT NOT NULL,
   goal_state TEXT NOT NULL,
+  checks TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL,
   cwd TEXT NOT NULL,
   condition TEXT,
@@ -151,6 +152,11 @@ function addOwnerPid(database: DatabaseSync): void {
   database.exec("ALTER TABLE orchestrator_state ADD COLUMN owner_pid INTEGER");
 }
 
+function addTaskChecks(database: DatabaseSync): void {
+  if (columnNames(database, "tasks").includes("checks")) return;
+  database.exec("ALTER TABLE tasks ADD COLUMN checks TEXT NOT NULL DEFAULT '[]'");
+}
+
 const THREAD_ID_TABLES = ["assignments", "reports", "note_reads"] as const;
 const THREAD_COLUMNS =
   "id, project, model, thinking_level, cwd, status, session_file, created_at, updated_at";
@@ -187,7 +193,7 @@ function renameSessionsToThreads(database: DatabaseSync): void {
   });
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 function rejectNewerSchema(database: DatabaseSync, path: string): void {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
@@ -211,6 +217,7 @@ function openDatabase(path: string): DatabaseSync {
   dropReplanUndoColumns(database);
   migrateTasks(database);
   addOwnerPid(database);
+  addTaskChecks(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;
 }

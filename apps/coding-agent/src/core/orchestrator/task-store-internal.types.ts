@@ -7,6 +7,7 @@ declare namespace taskStoreInternalTypes {
     title: string;
     current_state: string;
     goal_state: string;
+    checks: string;
     status: string;
     cwd: string;
     condition: string | null;
