@@ -4,7 +4,6 @@ import Theme from "../modes/interactive/theme/theme-class.ts";
 import themeModule from "../modes/interactive/theme/theme.ts";
 
 const uiKit: {
-  readonly ArminComponent: typeof components.ArminComponent;
   readonly AssistantMessageComponent: typeof components.AssistantMessageComponent;
   readonly BashExecutionComponent: typeof components.BashExecutionComponent;
   readonly BorderedLoader: typeof components.BorderedLoader;
@@ -47,7 +46,6 @@ const uiKit: {
   readonly runRpcMode: typeof modes.runRpcMode;
   readonly truncateToVisualLines: typeof components.truncateToVisualLines;
 } = {
-  ArminComponent: components.ArminComponent,
   AssistantMessageComponent: components.AssistantMessageComponent,
   BashExecutionComponent: components.BashExecutionComponent,
   BorderedLoader: components.BorderedLoader,

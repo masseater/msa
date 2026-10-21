@@ -49,10 +49,8 @@ export default class BuiltinCommandRouter {
   private builtinViewCommands(): Record<string, interactiveModeInternalTypes.BuiltinCommand> {
     const after = (run: () => void) => ({ args: false, clearFirst: false, run: syncCommand(run) });
     return {
-      "/arminsayshi": after(() => this.mode.commands.easterEggs.handleArminSaysHi()),
       "/config": after(() => this.mode.selectors.settings.showSettingsSelector()),
       "/debug": after(() => this.mode.commands.debug.handleDebugCommand()),
-      "/dementedelves": after(() => this.mode.commands.easterEggs.handleDementedDelves()),
       "/fork": after(() => this.mode.selectors.fork.showUserMessageSelector()),
       "/help": after(() => this.mode.commands.info.handleHelpCommand()),
       "/keybindings": after(() => this.mode.commands.info.handleHotkeysCommand()),

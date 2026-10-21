@@ -338,7 +338,6 @@ declare namespace srcTypes {
   type RpcExtensionUIResponse = codingAgentUiKitTypes.RpcExtensionUIResponse;
   type RpcResponse = codingAgentUiKitTypes.RpcResponse;
   type RpcSessionState = codingAgentUiKitTypes.RpcSessionState;
-  type ArminComponent = codingAgentUiKitTypes.ArminComponent;
   type AssistantMessageComponent = codingAgentUiKitTypes.AssistantMessageComponent;
   type BashExecutionComponent = codingAgentUiKitTypes.BashExecutionComponent;
   type BorderedLoader = codingAgentUiKitTypes.BorderedLoader;

@@ -98,19 +98,6 @@ function getChangelogPath(): string {
   return resolve(join(getPackageDir(), "CHANGELOG.md"));
 }
 
-function getInteractiveAssetsDir(): string {
-  if (isBunBinary) {
-    return join(getPackageDir(), "assets");
-  }
-  const packageDir = getPackageDir();
-  const srcOrDist = existsSync(join(packageDir, "src")) ? "src" : "dist";
-  return join(packageDir, srcOrDist, "modes", "interactive", "assets");
-}
-
-function getBundledInteractiveAssetPath(name: string): string {
-  return join(getInteractiveAssetsDir(), name);
-}
-
 let quickJSWasmPath: string | undefined;
 
 function setEmbeddedQuickJSWasmPath(path: string): void {
@@ -273,7 +260,6 @@ const configPackage = {
   getAgentDir,
   getAuthPath,
   getBinDir,
-  getBundledInteractiveAssetPath,
   getChangelogPath,
   getCodemodeWorkerSpecifier,
   getCustomThemesDir,
@@ -281,7 +267,6 @@ const configPackage = {
   getDocsPath,
   getExamplesPath,
   getExportTemplateDir,
-  getInteractiveAssetsDir,
   getModelsPath,
   getPackageDir,
   getPackageJsonPath,

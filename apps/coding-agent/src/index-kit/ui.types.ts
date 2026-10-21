@@ -18,7 +18,6 @@ declare namespace codingAgentUiKitTypes {
   type RpcExtensionUIResponse = modesTypes.RpcExtensionUIResponse;
   type RpcResponse = modesTypes.RpcResponse;
   type RpcSessionState = modesTypes.RpcSessionState;
-  type ArminComponent = componentsTypes.ArminComponent;
   type AssistantMessageComponent = componentsTypes.AssistantMessageComponent;
   type BashExecutionComponent = componentsTypes.BashExecutionComponent;
   type BorderedLoader = componentsTypes.BorderedLoader;

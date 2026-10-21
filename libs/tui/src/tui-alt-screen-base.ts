@@ -95,10 +95,6 @@ export default abstract class AltScreenTuiBase
     return this.getPrimaryScrollView().isFollowingEnd;
   }
 
-  getScreenLines(): string[] {
-    return [...this.frame.previousScreen];
-  }
-
   setLayoutRoot(component: tuiComponentTypes.Component | undefined): void {
     if (this.layoutRoot === component) return;
     this.layoutRoot = component;

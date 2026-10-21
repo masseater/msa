@@ -4,7 +4,6 @@ import type componentsMessagesKitTypes from "./index-kit/messages.types.ts";
 import type componentsSelectorsKitTypes from "./index-kit/selectors.types.ts";
 
 declare namespace componentsTypes {
-  type ArminComponent = componentsChromeKitTypes.ArminComponent;
   type AssistantMessageComponent = componentsMessagesKitTypes.AssistantMessageComponent;
   type BashExecutionComponent = componentsMessagesKitTypes.BashExecutionComponent;
   type BorderedLoader = componentsChromeKitTypes.BorderedLoader;
