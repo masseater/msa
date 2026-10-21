@@ -167,6 +167,7 @@ export default defineConfig({
       "mcp-conformance": {
         cache: false,
         command: "node apps/coding-agent/test/mcp-conformance/run.ts",
+        dependsOn: ["build"],
       },
       "render-homebrew-formula": {
         cache: false,
