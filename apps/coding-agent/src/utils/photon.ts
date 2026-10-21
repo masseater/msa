@@ -39,62 +39,46 @@ function getFallbackWasmPaths(): string[] {
   ];
 }
 
-function patchPhotonWasmRead(): () => void {
-  const originalReadFileSync: ReadFileSync = fs.readFileSync.bind(fs);
-  const fallbackPaths = getFallbackWasmPaths();
-  const mutableFs = fs as { readFileSync: ReadFileSync };
-
-  const patchedReadFileSync: ReadFileSync = ((...args: Parameters<ReadFileSync>) => {
-    const [file, options] = args;
-    const resolvedPath = pathOrNull(file);
-
-    if (resolvedPath?.endsWith(WASM_FILENAME) === true) {
-      try {
-        return originalReadFileSync(...args);
-      } catch (error) {
-        const err = error as NodeJS.ErrnoException;
-        if (err?.code !== undefined && err?.code !== "" && err.code !== "ENOENT") {
-          throw error;
-        }
-
-        for (const fallbackPath of fallbackPaths) {
-          if (!fs.existsSync(fallbackPath)) {
-            continue;
-          }
-          if (options === undefined) {
-            return originalReadFileSync(fallbackPath);
-          }
-          return originalReadFileSync(fallbackPath, options);
-        }
-
-        throw error;
-      }
-    }
-
-    return originalReadFileSync(...args);
-  }) as ReadFileSync;
-
+function setReadFileSync(readFileSync: ReadFileSync): void {
   try {
-    mutableFs.readFileSync = patchedReadFileSync;
+    (fs as { readFileSync: ReadFileSync }).readFileSync = readFileSync;
   } catch {
     Object.defineProperty(fs, "readFileSync", {
       configurable: true,
-      value: patchedReadFileSync,
+      value: readFileSync,
       writable: true,
     });
   }
+}
 
-  return () => {
-    try {
-      mutableFs.readFileSync = originalReadFileSync;
-    } catch {
-      Object.defineProperty(fs, "readFileSync", {
-        configurable: true,
-        value: originalReadFileSync,
-        writable: true,
-      });
+function readFallbackWasm(
+  readFileSync: ReadFileSync,
+  fallbackPaths: readonly string[],
+  options: Parameters<ReadFileSync>[1],
+  error: unknown,
+): ReturnType<ReadFileSync> {
+  const code = (error as NodeJS.ErrnoException)?.code;
+  if (code !== undefined && code !== "" && code !== "ENOENT") throw error;
+  const fallbackPath = fallbackPaths.find((path) => fs.existsSync(path));
+  if (fallbackPath === undefined) throw error;
+  return options === undefined ? readFileSync(fallbackPath) : readFileSync(fallbackPath, options);
+}
+
+function patchPhotonWasmRead(): () => void {
+  const originalReadFileSync: ReadFileSync = fs.readFileSync.bind(fs);
+  const fallbackPaths = getFallbackWasmPaths();
+  const patchedReadFileSync: ReadFileSync = ((...args: Parameters<ReadFileSync>) => {
+    if (pathOrNull(args[0])?.endsWith(WASM_FILENAME) !== true) {
+      return originalReadFileSync(...args);
     }
-  };
+    try {
+      return originalReadFileSync(...args);
+    } catch (error) {
+      return readFallbackWasm(originalReadFileSync, fallbackPaths, args[1], error);
+    }
+  }) as ReadFileSync;
+  setReadFileSync(patchedReadFileSync);
+  return () => setReadFileSync(originalReadFileSync);
 }
 
 function loadPhoton(): Promise<typeof import("@silvia-odwyer/photon-node") | null> {

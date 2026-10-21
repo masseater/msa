@@ -31,6 +31,41 @@ function createResizeWorker(workerSpecifier: string | URL): Worker {
   return new Worker(workerSpecifier);
 }
 
+interface WorkerRequest {
+  inputBytes: ReturnType<typeof toTransferableBytes>;
+  mimeType: string;
+  options: imageResizeCoreTypes.ImageResizeOptions | undefined;
+}
+
+function awaitWorkerResult(
+  worker: Worker,
+  request: WorkerRequest,
+): Promise<imageResizeCoreTypes.ResizedImage | null> {
+  return callbackPromise<imageResizeCoreTypes.ResizedImage | null>((resolve, reject) => {
+    let settled = false;
+    const settle = (result: imageResizeCoreTypes.ResizedImage | null): void => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const fail = (error: Error): void => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+    worker.on("message", (message: unknown) => {
+      if (!isResizeImageWorkerResponse(message)) return;
+      if ("error" in message) fail(new Error(message.error));
+      else settle(message.result);
+    });
+    worker.once("error", fail);
+    worker.once("exit", (code) => {
+      if (!settled) fail(new Error(`Image resize worker exited with code ${code}`));
+    });
+    worker.postMessage(request, [request.inputBytes.buffer]);
+  });
+}
+
 function resizeImageInWorker(
   workerSpecifier: string | URL,
   inputBytes: Uint8Array,
@@ -41,40 +76,11 @@ function resizeImageInWorker(
     awaiting(function* () {
       const worker = createResizeWorker(workerSpecifier);
       try {
-        const inputBytesForWorker = toTransferableBytes(inputBytes);
         return yield* awaited(
-          callbackPromise<imageResizeCoreTypes.ResizedImage | null>((resolve, reject) => {
-            let settled = false;
-            const settle = (result: imageResizeCoreTypes.ResizedImage | null): void => {
-              if (settled) return;
-              settled = true;
-              resolve(result);
-            };
-            const fail = (error: Error): void => {
-              if (settled) return;
-              settled = true;
-              reject(error);
-            };
-
-            worker.on("message", (message: unknown) => {
-              if (!isResizeImageWorkerResponse(message)) return;
-              if ("error" in message) fail(new Error(message.error));
-              else settle(message.result);
-            });
-            worker.once("error", fail);
-            worker.once("exit", (code) => {
-              if (!settled) {
-                fail(new Error(`Image resize worker exited with code ${code}`));
-              }
-            });
-            worker.postMessage(
-              {
-                inputBytes: inputBytesForWorker,
-                mimeType,
-                options,
-              },
-              [inputBytesForWorker.buffer],
-            );
+          awaitWorkerResult(worker, {
+            inputBytes: toTransferableBytes(inputBytes),
+            mimeType,
+            options,
           }),
         );
       } finally {

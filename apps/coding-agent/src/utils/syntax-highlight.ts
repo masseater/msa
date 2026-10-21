@@ -105,6 +105,39 @@ function isSpanOpenTagStart(html: string, index: number): boolean {
   );
 }
 
+type HtmlToken =
+  | { kind: "open"; scope: string | undefined; end: number }
+  | { kind: "close"; end: number }
+  | { kind: "text"; text: string; end: number };
+
+function readHtmlToken(html: string, index: number): HtmlToken {
+  if (isSpanOpenTagStart(html, index)) {
+    const tagEndIndex = html.indexOf(">", index + 5);
+    if (tagEndIndex !== -1) {
+      const scope = getScopeFromSpanTag(html.slice(index, tagEndIndex + 1));
+      return { end: tagEndIndex + 1, kind: "open", scope };
+    }
+  }
+  if (html.startsWith(SPAN_CLOSE, index)) {
+    return { end: index + SPAN_CLOSE.length, kind: "close" };
+  }
+  if (html[index] === "&") {
+    const decoded = decodeHtmlEntityAt(html, index);
+    if (decoded !== undefined) {
+      return { end: index + decoded.length, kind: "text", text: decoded.text };
+    }
+  }
+  return { end: index + 1, kind: "text", text: html[index] ?? "" };
+}
+
+function formatText(text: string, formatter: syntaxHighlightTypes.HighlightFormatter | undefined) {
+  if (formatter === undefined) return text;
+  return text
+    .split("\n")
+    .map((line) => (line === "" ? line : formatter(line)))
+    .join("\n");
+}
+
 function renderHighlightedHtmlImpl(
   html: string,
   theme: syntaxHighlightTypes.HighlightTheme = {},
@@ -112,58 +145,22 @@ function renderHighlightedHtmlImpl(
   let output = "";
   let textBuffer = "";
   const scopes: Array<string | undefined> = [];
-
   const flushText = () => {
-    if (textBuffer === "") {
-      return;
-    }
-    const formatter = getActiveFormatter(scopes, theme);
-    output +=
-      formatter === undefined
-        ? textBuffer
-        : textBuffer
-            .split("\n")
-            .map((line) => (line === "" ? line : formatter(line)))
-            .join("\n");
+    output += textBuffer === "" ? "" : formatText(textBuffer, getActiveFormatter(scopes, theme));
     textBuffer = "";
   };
-
   let index = 0;
   while (index < html.length) {
-    if (isSpanOpenTagStart(html, index)) {
-      const tagEndIndex = html.indexOf(">", index + 5);
-      if (tagEndIndex !== -1) {
-        flushText();
-        const tag = html.slice(index, tagEndIndex + 1);
-        const scope = getScopeFromSpanTag(tag);
-        scopes.push(scope);
-        index = tagEndIndex + 1;
-        continue;
-      }
-    }
-
-    if (html.startsWith(SPAN_CLOSE, index)) {
+    const token = readHtmlToken(html, index);
+    if (token.kind === "text") {
+      textBuffer += token.text;
+    } else {
       flushText();
-      if (scopes.length > 0) {
-        scopes.pop();
-      }
-      index += SPAN_CLOSE.length;
-      continue;
+      if (token.kind === "open") scopes.push(token.scope);
+      else scopes.pop();
     }
-
-    if (html[index] === "&") {
-      const decoded = decodeHtmlEntityAt(html, index);
-      if (decoded !== undefined) {
-        textBuffer += decoded.text;
-        index += decoded.length;
-        continue;
-      }
-    }
-
-    textBuffer += html[index];
-    index++;
+    index = token.end;
   }
-
   flushText();
   return output;
 }
