@@ -5,10 +5,9 @@ import type agentSessionTypes from "../../core/agent-session.types.ts";
 import type askTypes from "../../core/ask.types.ts";
 import type bashExecutorTypes from "../../core/bash-executor.types.ts";
 import type compactionTypes from "../../core/compaction/index.types.ts";
-import type contextBreakdownTypes from "../../core/context-breakdown.types.ts";
-import type extensionsTypesTypes from "../../core/extensions/types.types.ts";
 import type sessionManagerTypes from "../../core/session-manager.types.ts";
-import type sourceInfoTypes from "../../core/source-info.types.ts";
+import type rpcExtensionUiTypes from "./rpc-extension-ui.types.ts";
+import type rpcSessionStateTypes from "./rpc-session-state.types.ts";
 
 declare namespace rpcTypesTypes {
   type RpcCommand =
@@ -69,31 +68,9 @@ declare namespace rpcTypesTypes {
     | { id?: string | undefined; type: "get_messages" }
     | { id?: string | undefined; type: "get_commands" };
 
-  interface RpcSlashCommand {
-    name: string;
-    description?: string | undefined;
-    source: "extension" | "prompt" | "skill";
-    sourceInfo: sourceInfoTypes.SourceInfo;
-  }
+  type RpcSlashCommand = rpcSessionStateTypes.RpcSlashCommand;
 
-  interface RpcSessionState {
-    model?: aiTypes.Model<any> | undefined;
-    thinkingLevel: agentTypes.ThinkingLevel;
-    isStreaming: boolean;
-    isCompacting: boolean;
-    steeringMode: "all" | "one-at-a-time";
-    followUpMode: "all" | "one-at-a-time";
-    sessionFile?: string | undefined;
-    sessionId: string;
-    sessionName?: string | undefined;
-    autoCompactionEnabled: boolean;
-    messageCount: number;
-    pendingMessageCount: number;
-
-    contextUsage?:
-      | (extensionsTypesTypes.ContextUsage & { breakdown: contextBreakdownTypes.ContextBreakdown })
-      | undefined;
-  }
+  type RpcSessionState = rpcSessionStateTypes.RpcSessionState;
 
   type RpcResponse =
     | {
@@ -279,67 +256,9 @@ declare namespace rpcTypesTypes {
       }
     | { id?: string | undefined; type: "response"; command: string; success: false; error: string };
 
-  type RpcExtensionUIRequest =
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "select";
-        title: string;
-        options: string[];
-        timeout?: number | undefined;
-      }
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "confirm";
-        title: string;
-        message: string;
-        timeout?: number | undefined;
-      }
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "input";
-        title: string;
-        placeholder?: string | undefined;
-        timeout?: number | undefined;
-      }
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "editor";
-        title: string;
-        prefill?: string | undefined;
-      }
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "notify";
-        message: string;
-        notifyType?: "info" | "warning" | "error" | undefined;
-      }
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "setStatus";
-        statusKey: string;
-        statusText: string | undefined;
-      }
-    | {
-        type: "extension_ui_request";
-        id: string;
-        method: "setWidget";
-        widgetKey: string;
-        widgetLines: string[] | undefined;
-        widgetPlacement?: "aboveEditor" | "belowEditor" | undefined;
-      }
-    | { type: "extension_ui_request"; id: string; method: "setTitle"; title: string }
-    | { type: "extension_ui_request"; id: string; method: "set_editor_text"; text: string };
+  type RpcExtensionUIRequest = rpcExtensionUiTypes.RpcExtensionUIRequest;
 
-  type RpcExtensionUIResponse =
-    | { type: "extension_ui_response"; id: string; value: string }
-    | { type: "extension_ui_response"; id: string; confirmed: boolean }
-    | { type: "extension_ui_response"; id: string; cancelled: true };
+  type RpcExtensionUIResponse = rpcExtensionUiTypes.RpcExtensionUIResponse;
 
   type RpcCommandType = RpcCommand["type"];
 }
