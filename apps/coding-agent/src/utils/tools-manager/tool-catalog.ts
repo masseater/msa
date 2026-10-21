@@ -1,29 +1,19 @@
 import { platform } from "os";
 
-import configModule from "../config.ts";
-import platformNode from "../core/platform-node.ts";
-import platformModule from "../core/platform.ts";
-import nodeChildProcess from "../core/platform/node/child-process.ts";
-import nodeFs from "../core/platform/node/fs.ts";
-import type toolsManagerInternalTypes from "./tools-manager-internal.types.ts";
+import configModule from "../../config.ts";
+import platformNode from "../../core/platform-node.ts";
+import platformModule from "../../core/platform.ts";
+import nodeChildProcess from "../../core/platform/node/child-process.ts";
+import nodeFs from "../../core/platform/node/fs.ts";
+import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 
-const { getBinDir } = configModule;
 const { readEnv } = platformModule;
-const { spawnSync } = nodeChildProcess;
-const { join } = platformNode;
 const { existsSync } = nodeFs;
+const { join } = platformNode;
+const { spawnSync } = nodeChildProcess;
+const { getBinDir } = configModule;
 
 const TOOLS_DIR = getBinDir();
-
-const NETWORK_TIMEOUT_MS = 10_000;
-
-const DOWNLOAD_TIMEOUT_MS = 120_000;
-
-function isOfflineModeEnabled(): boolean {
-  const value = readEnv("MSA_OFFLINE");
-  if (value === undefined || value === "") return false;
-  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
-}
 
 const TOOLS: Record<string, toolsManagerInternalTypes.ToolConfig> = {
   fd: {
@@ -67,6 +57,11 @@ const TOOLS: Record<string, toolsManagerInternalTypes.ToolConfig> = {
   },
 };
 
+const TERMUX_PACKAGES: Record<string, string> = {
+  fd: "fd",
+  rg: "ripgrep",
+};
+
 function commandExists(cmd: string): boolean {
   try {
     const result = spawnSync(cmd, ["--version"], { stdio: "pipe" });
@@ -96,13 +91,12 @@ function getToolPath(tool: "fd" | "rg"): string | null {
   return null;
 }
 
-const toolsManagerPart1 = {
-  DOWNLOAD_TIMEOUT_MS,
-  NETWORK_TIMEOUT_MS,
-  TOOLS,
-  TOOLS_DIR,
-  getToolPath,
-  isOfflineModeEnabled,
-};
+function isOfflineModeEnabled(): boolean {
+  const value = readEnv("MSA_OFFLINE");
+  if (value === undefined || value === "") return false;
+  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
+}
 
-export default toolsManagerPart1;
+const toolCatalog = { TERMUX_PACKAGES, TOOLS, TOOLS_DIR, getToolPath, isOfflineModeEnabled };
+
+export default toolCatalog;

@@ -1,15 +1,38 @@
 import { platform } from "os";
 
-import platformNode from "../core/platform-node.ts";
-import platformModule from "../core/platform.ts";
-import nodeChildProcess from "../core/platform/node/child-process.ts";
-import type nodeChildProcessTypes from "../core/platform/node/child-process.types.ts";
-import nodeFs from "../core/platform/node/fs.ts";
+import platformNode from "../../core/platform-node.ts";
+import platformModule from "../../core/platform.ts";
+import nodeChildProcess from "../../core/platform/node/child-process.ts";
+import type nodeChildProcessTypes from "../../core/platform/node/child-process.types.ts";
+import nodeFs from "../../core/platform/node/fs.ts";
+import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
 
-const { spawnSync } = nodeChildProcess;
+const { chmodSync, renameSync, existsSync, readdirSync } = nodeFs;
 const { readEnv } = platformModule;
+const { spawnSync } = nodeChildProcess;
 const { join } = platformNode;
-const { existsSync } = nodeFs;
+
+function findBinaryRecursively(rootDir: string, binaryFileName: string): string | null {
+  const stack: string[] = [rootDir];
+
+  while (stack.length > 0) {
+    const currentDir = stack.pop();
+    if (currentDir === undefined || currentDir === "") continue;
+
+    const entries = readdirSync(currentDir, { withFileTypes: true });
+    for (const entry of entries) {
+      const fullPath = join(currentDir, entry.name);
+      if (entry.isFile() && entry.name === binaryFileName) {
+        return fullPath;
+      }
+      if (entry.isDirectory()) {
+        stack.push(fullPath);
+      }
+    }
+  }
+
+  return null;
+}
 
 function formatSpawnFailure(result: nodeChildProcessTypes.SpawnSyncReturns<Buffer>): string {
   if (result.error?.message !== undefined && result.error?.message !== "") {
@@ -93,9 +116,47 @@ function extractZipArchive(archivePath: string, extractDir: string, assetName: s
   throw new Error(`Failed to extract ${assetName}: ${failures.join("; ")}`);
 }
 
-const toolsManagerPart3 = {
-  extractTarGzArchive,
-  extractZipArchive,
-};
+function extractBinary(archive: {
+  archivePath: string;
+  assetName: string;
+  binaryExt: string;
+  binaryPath: string;
+  config: toolsManagerInternalTypes.ToolConfig;
+  extractDir: string;
+  plat: string;
+}): void {
+  const { archivePath, assetName, binaryExt, binaryPath, config, extractDir, plat } = archive;
+  if (assetName.endsWith(".tar.gz")) {
+    extractTarGzArchive(archivePath, extractDir, assetName);
+  } else if (assetName.endsWith(".zip")) {
+    extractZipArchive(archivePath, extractDir, assetName);
+  } else {
+    throw new Error(`Unsupported archive format: ${assetName}`);
+  }
 
-export default toolsManagerPart3;
+  const binaryFileName = config.binaryName + binaryExt;
+  const extractedDir = join(extractDir, assetName.replace(/\.(tar\.gz|zip)$/u, ""));
+  const extractedBinaryCandidates = [
+    join(extractedDir, binaryFileName),
+    join(extractDir, binaryFileName),
+  ];
+  let extractedBinary = extractedBinaryCandidates.find((candidate) => existsSync(candidate));
+
+  if (extractedBinary === undefined || extractedBinary === "") {
+    extractedBinary = findBinaryRecursively(extractDir, binaryFileName) ?? undefined;
+  }
+
+  if (extractedBinary !== undefined && extractedBinary !== "") {
+    renameSync(extractedBinary, binaryPath);
+  } else {
+    throw new Error(`Binary not found in archive: expected ${binaryFileName} under ${extractDir}`);
+  }
+
+  if (plat !== "win32") {
+    chmodSync(binaryPath, 0o755);
+  }
+}
+
+const archiveExtract = { extractBinary };
+
+export default archiveExtract;

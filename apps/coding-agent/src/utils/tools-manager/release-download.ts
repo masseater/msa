@@ -1,21 +1,23 @@
 import { arch } from "os";
 
-import awaitingModule from "../core/awaiting.ts";
-import platformNode from "../core/platform-node.ts";
-import platformModule from "../core/platform.ts";
-import nodeFs from "../core/platform/node/fs.ts";
-import type toolsManagerInternalTypes from "./tools-manager-internal.types.ts";
-import toolsManagerPart1 from "./tools-manager-part1.ts";
-import toolsManagerPart2 from "./tools-manager-part2.ts";
+import awaitingModule from "../../core/awaiting.ts";
+import platformNode from "../../core/platform-node.ts";
+import platformModule from "../../core/platform.ts";
+import nodeFs from "../../core/platform/node/fs.ts";
+import type toolsManagerInternalTypes from "../tools-manager-internal.types.ts";
+import downloadFileModule from "./download-file.ts";
+import latestVersion from "./latest-version.ts";
+import toolCatalog from "./tool-catalog.ts";
 
-const { awaited } = awaitingModule;
-const { mkdirSync } = nodeFs;
+const { randomUnit, nowMs } = platformModule;
 const { join } = platformNode;
-const { nowMs, randomUnit } = platformModule;
-const { downloadFile, getLatestVersion } = toolsManagerPart2;
-const { TOOLS_DIR } = toolsManagerPart1;
+const { mkdirSync } = nodeFs;
+const { awaited } = awaitingModule;
+const { TOOLS_DIR } = toolCatalog;
+const { getLatestVersion } = latestVersion;
+const { downloadFile } = downloadFileModule;
 
-function* downloadToolPart1(
+function* downloadReleaseArchive(
   tool: string,
   plat: string,
   config: toolsManagerInternalTypes.ToolConfig,
@@ -48,8 +50,6 @@ function* downloadToolPart1(
   return { archivePath, assetName, binaryExt, binaryPath, extractDir };
 }
 
-const toolsManagerPart4 = {
-  downloadToolPart1,
-};
+const releaseDownload = { downloadReleaseArchive };
 
-export default toolsManagerPart4;
+export default releaseDownload;
