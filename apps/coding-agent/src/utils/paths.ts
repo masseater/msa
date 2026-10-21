@@ -171,6 +171,13 @@ function markPathIgnoredByCloudSync(path: string): void {
   }
 }
 
+function isPathWithin(target: string, root: string): boolean {
+  const normalizedRoot = nodeResolvePath(root);
+  if (target === normalizedRoot) return true;
+  const prefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
+  return target.startsWith(prefix);
+}
+
 const paths = {
   abbreviateHomePath,
   canonicalizePath,
@@ -178,6 +185,7 @@ const paths = {
   getCwdRelativePath,
   getFileRevision,
   isLocalPath,
+  isPathWithin,
   markPathIgnoredByCloudSync,
   normalizePath,
   normalizeWindowsShellPath,

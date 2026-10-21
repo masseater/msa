@@ -1,8 +1,10 @@
 import { describe, expect, test } from "vite-plus/test";
 
+import promptTemplateArgs from "../src/core/prompt-template-args.ts";
 import promptTemplates from "../src/core/prompt-templates.ts";
 
-const { expandPromptTemplate, parseCommandArgs, substituteArgs } = promptTemplates;
+const { expandPromptTemplate } = promptTemplates;
+const { parseCommandArgs, substituteArgs } = promptTemplateArgs;
 
 const shouldParseSimpleSpaceSeparatedArguments = () => {
   expect(parseCommandArgs("a b c")).toEqual(["a", "b", "c"]);

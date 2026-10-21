@@ -8,12 +8,12 @@ import type agentSessionTypes from "../agent-session.types.ts";
 import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import platform from "../platform.ts";
-import promptTemplatesModule from "../prompt-templates.ts";
+import promptTemplates from "../prompt-templates.ts";
 
 const { nowMs } = platform;
 const { contentText } = ai;
 const { awaitingWith, performed } = awaitingModule;
-const { expandPromptTemplate } = promptTemplatesModule;
+const { expandPromptTemplate } = promptTemplates;
 
 export default class SessionQueue {
   private readonly session: AgentSession;

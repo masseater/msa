@@ -8,12 +8,12 @@ import awaitingModule from "../awaiting.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
 import type messagesTypes from "../messages.types.ts";
 import platform from "../platform.ts";
-import promptTemplatesModule from "../prompt-templates.ts";
+import promptTemplates from "../prompt-templates.ts";
 
 const { nowMs } = platform;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { formatNoModelSelectedMessage } = authGuidance;
-const { expandPromptTemplate } = promptTemplatesModule;
+const { expandPromptTemplate } = promptTemplates;
 
 export default class SessionPrompting {
   private readonly session: AgentSession;

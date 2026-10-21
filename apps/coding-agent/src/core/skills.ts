@@ -8,18 +8,11 @@ import skillFile from "./skill-file.ts";
 import type skillsTypes from "./skills.types.ts";
 
 const { statSync, existsSync } = nodeFs;
-const { canonicalizePath, resolvePath } = paths;
-const { sep, resolve, join } = platformNode;
+const { canonicalizePath, isPathWithin, resolvePath } = paths;
+const { resolve, join } = platformNode;
 const { CONFIG_DIR_NAME, getAgentDir } = config;
 const { loadSkillFromFile } = skillFile;
 const { loadSkillsFromDirInternal } = skillDirectory;
-
-const isUnderPath = (target: string, root: string): boolean => {
-  const normalizedRoot = resolve(root);
-  if (target === normalizedRoot) return true;
-  const prefix = normalizedRoot.endsWith(sep) ? normalizedRoot : `${normalizedRoot}${sep}`;
-  return target.startsWith(prefix);
-};
 
 function loadSkills(options: skillsTypes.LoadSkillsOptions): skillsTypes.LoadSkillsResult {
   const { agentDir, skillPaths, includeDefaults } = options;
@@ -46,8 +39,8 @@ function loadSkills(options: skillsTypes.LoadSkillsOptions): skillsTypes.LoadSki
 
   const getSource = (resolvedPath: string): "user" | "project" | "path" => {
     if (!includeDefaults) {
-      if (isUnderPath(resolvedPath, userSkillsDir)) return "user";
-      if (isUnderPath(resolvedPath, projectSkillsDir)) return "project";
+      if (isPathWithin(resolvedPath, userSkillsDir)) return "user";
+      if (isPathWithin(resolvedPath, projectSkillsDir)) return "project";
     }
     return "path";
   };
