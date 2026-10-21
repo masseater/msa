@@ -76,6 +76,7 @@ const ai = {
   hasToolRedefinitions: transcript.hasToolRedefinitions,
   isContextOverflow: overflow.isContextOverflow,
   isModelType: modelOperations.isModelType,
+  isProviderUnusableError: retry.isProviderUnusableError,
   isRecoverableLength: overflow.isRecoverableLength,
   isRetryableAssistantError: retry.isRetryableAssistantError,
   lazyApi: lazy.lazyApi,

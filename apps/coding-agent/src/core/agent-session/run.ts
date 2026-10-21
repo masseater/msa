@@ -1,6 +1,7 @@
 import type AgentSession from "../agent-session.ts";
 import SessionBoundary from "./boundary.ts";
 import SessionPrompting from "./prompting.ts";
+import SessionProviderFallback from "./provider-fallback.ts";
 import SessionQueue from "./queue.ts";
 import SessionRequestProjection from "./request-projection.ts";
 import SessionRetry from "./retry.ts";
@@ -14,6 +15,7 @@ export default class SessionRun {
   readonly triggers: SessionTurnTriggers;
   readonly boundary: SessionBoundary;
   readonly retry: SessionRetry;
+  readonly fallback: SessionProviderFallback;
   readonly projection: SessionRequestProjection;
 
   constructor(session: AgentSession) {
@@ -23,6 +25,7 @@ export default class SessionRun {
     this.triggers = new SessionTurnTriggers(session);
     this.boundary = new SessionBoundary(session);
     this.retry = new SessionRetry(session);
+    this.fallback = new SessionProviderFallback(session);
     this.projection = new SessionRequestProjection(session);
   }
 }

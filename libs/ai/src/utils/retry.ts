@@ -22,6 +22,19 @@ const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([
   "subscription_sharing_usage_limit_exceeded",
 ]);
 
+const PROVIDER_ACCOUNT_ERROR_PATTERN = buildProviderErrorPattern([
+  "^\\s*40[13]\\b",
+  "\\b402\\b",
+  "payment.?required",
+  "requires more credits",
+  "credit balance",
+  "insufficient.?(?:credits|balance|funds)",
+  "invalid.?(?:credential|api.?key|x-api-key)",
+  "unauthorized",
+  "authentication.?error",
+  "permission.?denied",
+]);
+
 const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
   "overloaded",
   "server_busy",
@@ -223,20 +236,31 @@ const retryAssistantCall: {
     ),
 );
 
+const errorText = (message: typesModule.AssistantMessage): string | undefined =>
+  message.stopReason !== "error" ||
+  message.errorMessage === undefined ||
+  message.errorMessage === ""
+    ? undefined
+    : message.errorMessage;
+
+const isProviderUnusableError = (message: typesModule.AssistantMessage): boolean => {
+  const text = errorText(message);
+  return (
+    text !== undefined &&
+    (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(text) ||
+      PROVIDER_ACCOUNT_ERROR_PATTERN.test(text))
+  );
+};
+
 const isRetryableAssistantError = (message: typesModule.AssistantMessage): boolean => {
-  if (
-    message.stopReason !== "error" ||
-    message.errorMessage === undefined ||
-    message.errorMessage === ""
-  )
-    return false;
-  const errorMessage = message.errorMessage;
-  if (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(errorMessage)) return false;
-  return RETRYABLE_PROVIDER_ERROR_PATTERN.test(errorMessage);
+  const text = errorText(message);
+  if (text === undefined || isProviderUnusableError(message)) return false;
+  return RETRYABLE_PROVIDER_ERROR_PATTERN.test(text);
 };
 
 const retry = {
   DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
+  isProviderUnusableError,
   isRetryableAssistantError,
   retryAssistantCall,
   retryDelayMs,

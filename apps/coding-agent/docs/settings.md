@@ -196,6 +196,8 @@ See [Themes](themes.md) and [Terminal Setup](terminal-setup.md) for format and p
 
 Keep `retry.provider.maxRetries` at `0` unless provider-level retries are required. Provider retries can delay msa from handling quota and usage-limit errors itself.
 
+A failure that waiting cannot fix (401, 402, 403, an invalid key, an empty credit balance, a spent quota) is never retried. msa switches to the first model in `enabledModels` that has credentials and belongs to a provider that has not failed yet, and resends the request. When no such model is left, msa stops, records the time and the error in the transcript, rings the terminal bell with an OSC 9 and OSC 777 notification, and marks the terminal title as stopped. Reports and prompts that arrive while stopped stay in the conversation; switching the model with `/model` or `Ctrl+P` resumes the run and handles them.
+
 ## Shell
 
 | Setting              | Type       | Default          | Description                                                         |

@@ -97,6 +97,7 @@ const tui = {
   encodeITerm2: terminalImage.encodeITerm2,
   encodeKitty: terminalImageKitty.encodeKitty,
   foregroundAnsi: colorAnsiModule.foregroundAnsi,
+  formatAttentionAlert: programStatus.formatAttentionAlert,
   formatProgramStatus: programStatus.formatProgramStatus,
   fuzzyFilter: fuzzy.fuzzyFilter,
   fuzzyMatch: fuzzy.fuzzyMatch,

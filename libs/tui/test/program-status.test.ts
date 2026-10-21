@@ -4,7 +4,7 @@ import { describe, it } from "node:test";
 import ansiSequences from "../src/ansi-sequences.ts";
 import programStatus from "../src/program-status.ts";
 
-const { formatProgramStatus, isProgramStatusReply } = programStatus;
+const { formatAttentionAlert, formatProgramStatus, isProgramStatusReply } = programStatus;
 const { parseEscapeSequence } = ansiSequences;
 
 function decodeMessage(sequence: string): string | undefined {
@@ -64,5 +64,20 @@ describe("isProgramStatusReply", () => {
     assert.equal(isProgramStatusReply("\x1b]7501;?version=2\x1b\\"), true);
     assert.equal(isProgramStatusReply("\x1b]7501;state=idle\x1b\\"), false);
     assert.equal(isProgramStatusReply("\x1b]11;rgb:0000/0000/0000\x07"), false);
+  });
+});
+
+describe("formatAttentionAlert", () => {
+  it("rings the bell and raises an OSC 9 and OSC 777 notification", () => {
+    assert.equal(
+      formatAttentionAlert("msa", "Model calls stopped"),
+      "\x1b]9;msa: Model calls stopped\x07\x1b]777;notify;msa;Model calls stopped\x07\x07",
+    );
+  });
+
+  it("keeps the text inside one OSC field", () => {
+    const sequence = formatAttentionAlert("msa", "402: a;b\x07\x1b]0;x");
+    assert.equal(sequence.split("\x07").length, 4);
+    assert.ok(sequence.includes("notify;msa;402: a,b ]0,x\x07"));
   });
 });

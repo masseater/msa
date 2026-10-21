@@ -38,8 +38,20 @@ function formatProgramStatus(status: programStatusTypes.ProgramStatus): string {
   return `\x1b]7501;${pairs.join(":")}\x1b\\`;
 }
 
+const MAX_ALERT_BYTES = 256;
+
+function formatAttentionAlert(app: string, message: string): string {
+  const text = truncateUtf8(
+    replaceControlRuns(message, " ").replaceAll(";", ",").trim(),
+    MAX_ALERT_BYTES,
+  );
+  const name = APP_PATTERN.test(app) ? app : "app";
+  return `\x1b]9;${name}: ${text}\x07\x1b]777;notify;${name};${text}\x07\x07`;
+}
+
 const programStatus = {
   PROGRAM_STATUS_QUERY,
+  formatAttentionAlert,
   formatProgramStatus,
   isProgramStatusReply,
 };
