@@ -6,33 +6,42 @@ import platform from "../src/platform.ts";
 const { readEnv, runCommand } = platform;
 
 const probeName = "MSA_EVAL_RUN_COMMAND_PROBE";
+const childProcessTimeout = 30_000;
 
 describe("runCommand", () => {
-  it("passes an explicit environment to the child process", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        const result = yield* runCommand(
-          process.execPath,
-          [
-            "--eval",
-            `process.stdout.write([process.env.${probeName} ?? "", process.env.PATH ? "inherited" : "isolated"].join("|"))`,
-          ],
-          { cwd: process.cwd(), env: { [probeName]: "child-only" }, output: "capture" },
-        );
-        expect(result.status).toBe(0);
-        expect(result.stdout).toBe("child-only|inherited");
-      }),
-    ));
+  it(
+    "passes an explicit environment to the child process",
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          const result = yield* runCommand(
+            process.execPath,
+            [
+              "--eval",
+              `process.stdout.write([process.env.${probeName} ?? "", process.env.PATH ? "inherited" : "isolated"].join("|"))`,
+            ],
+            { cwd: process.cwd(), env: { [probeName]: "child-only" }, output: "capture" },
+          );
+          expect(result.status).toBe(0);
+          expect(result.stdout).toBe("child-only|inherited");
+        }),
+      ),
+    childProcessTimeout,
+  );
 
-  it("leaves the parent environment unchanged", () =>
-    Effect.runPromise(
-      Effect.gen(function* () {
-        yield* runCommand(process.execPath, ["--eval", ""], {
-          cwd: process.cwd(),
-          env: { [probeName]: "child-only" },
-          output: "ignore",
-        });
-        expect(readEnv(probeName)).toBeUndefined();
-      }),
-    ));
+  it(
+    "leaves the parent environment unchanged",
+    () =>
+      Effect.runPromise(
+        Effect.gen(function* () {
+          yield* runCommand(process.execPath, ["--eval", ""], {
+            cwd: process.cwd(),
+            env: { [probeName]: "child-only" },
+            output: "ignore",
+          });
+          expect(readEnv(probeName)).toBeUndefined();
+        }),
+      ),
+    childProcessTimeout,
+  );
 });

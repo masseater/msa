@@ -27,6 +27,9 @@ const exitsWhileWaiting = Effect.gen(function* () {
 });
 
 describe("RemoteWatcher", () => {
-  it("lets the process exit while it waits to reconnect", () =>
-    Effect.runPromise(exitsWhileWaiting));
+  it(
+    "lets the process exit while it waits to reconnect",
+    () => Effect.runPromise(exitsWhileWaiting),
+    30_000,
+  );
 });

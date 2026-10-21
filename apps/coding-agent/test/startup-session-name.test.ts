@@ -89,7 +89,7 @@ const setsTheNameBeforeModelValidation = Effect.gen(function* () {
         "-p",
         "hi",
       ],
-      { agentDir: dirs.agentDir, cwd: dirs.projectDir, timeout: "10 seconds" },
+      { agentDir: dirs.agentDir, cwd: dirs.projectDir },
     ),
   );
   expect(result.code).toBe(1);

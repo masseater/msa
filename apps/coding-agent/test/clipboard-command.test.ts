@@ -8,18 +8,21 @@ const { runClipboardCommand } = clipboardCommand;
 
 const { awaited, runTest } = testing;
 
+const nodeStart = { timeoutMs: 20_000 };
+
 const preservesBinaryOutputAndDistinguishesEmptySuccess = () =>
   runTest(
     Effect.gen(function* () {
       expect(
         yield* awaited(
-          runClipboardCommand(process.execPath, [
-            "-e",
-            "process.stdout.write(Buffer.from([0, 255, 10]))",
-          ]),
+          runClipboardCommand(
+            process.execPath,
+            ["-e", "process.stdout.write(Buffer.from([0, 255, 10]))"],
+            nodeStart,
+          ),
         ),
       ).toEqual(Buffer.from([0, 255, 10]));
-      expect(yield* awaited(runClipboardCommand(process.execPath, ["-e", ""]))).toEqual(
+      expect(yield* awaited(runClipboardCommand(process.execPath, ["-e", ""], nodeStart))).toEqual(
         Buffer.alloc(0),
       );
       expect(
@@ -38,7 +41,10 @@ const sendsUnicodeInputToClipboardWriters = () =>
         "let text = ''; process.stdin.setEncoding('utf8'); process.stdin.on('data', c => text += c); process.stdin.on('end', () => process.exit(text === 'café 日本語' ? 0 : 1));";
       expect(
         yield* awaited(
-          runClipboardCommand(process.execPath, ["-e", script], { input: "café 日本語" }),
+          runClipboardCommand(process.execPath, ["-e", script], {
+            ...nodeStart,
+            input: "café 日本語",
+          }),
         ),
       ).toEqual(Buffer.alloc(0));
     }),
@@ -83,6 +89,7 @@ const rejectsOutputAboveTheBufferLimit = () =>
             process.execPath,
             ["-e", "process.stdout.write(Buffer.alloc(1024))"],
             {
+              ...nodeStart,
               maxBufferBytes: 16,
             },
           ),

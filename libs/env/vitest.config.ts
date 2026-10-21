@@ -1,9 +1,5 @@
 import { defineConfig } from "vite-plus";
 
-import vitestShared from "../../vitest.shared.ts";
-
-const { testTimeout } = vitestShared;
-
 export default defineConfig({
   resolve: {
     conditions: ["source"],
@@ -12,6 +8,5 @@ export default defineConfig({
   test: {
     environment: "node",
     globalSetup: ["./test/global-setup.ts"],
-    testTimeout,
   },
 });

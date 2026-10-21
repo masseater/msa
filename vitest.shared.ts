@@ -32,8 +32,6 @@ const workspaceSourcePaths = {
   tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
 } as const;
 
-const testTimeout = 30_000;
-
 const onGitHubActions = Effect.runSync(Config.withDefault(Config.Boolean("GITHUB_ACTIONS"), false));
 
 const testBaseConfig = {
@@ -87,13 +85,11 @@ const testBaseConfig = {
       { find: /^@msa\/testing$/u, replacement: workspaceSourcePaths.testingIndex },
     ],
   },
-  test: { testTimeout },
 };
 
 const vitestShared = {
   onGitHubActions,
   testBaseConfig,
-  testTimeout,
   workspaceSourcePaths,
 };
 

@@ -1,0 +1,2 @@
+#!/bin/sh
+echo '{"base_url": "https://treg.to", "logged_in": false}'

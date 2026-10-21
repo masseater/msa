@@ -10,6 +10,7 @@ const { McpClient, StdioTransport } = mcp;
 
 const fixture = fileURLToPath(new URL("./fixtures/stdio-server.mjs", import.meta.url));
 const stubborn = fileURLToPath(new URL("./fixtures/stubborn-server.mjs", import.meta.url));
+const childProcessTimeout = 30_000;
 
 function isAlive(pid: number): boolean {
   try {
@@ -76,12 +77,15 @@ const killsStubbornServer = Effect.gen(function* () {
 });
 
 describe("StdioTransport", () => {
-  it("connects to a newline-delimited MCP server and captures stderr", () =>
-    Effect.runPromise(connectsAndCapturesStderr));
+  it(
+    "connects to a newline-delimited MCP server and captures stderr",
+    () => Effect.runPromise(connectsAndCapturesStderr),
+    childProcessTimeout,
+  );
 
   it.skipIf(process.platform === "win32")(
     "kills a server that ignores shutdown, including its children",
     () => Effect.runPromise(killsStubbornServer),
-    10_000,
+    childProcessTimeout,
   );
 });

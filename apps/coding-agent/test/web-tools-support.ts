@@ -4,15 +4,14 @@ import { vi } from "vite-plus/test";
 
 import type tregTypes from "../src/core/treg.types.ts";
 
-const { awaited, changeMode, joinPath, runTest, writeTextFile } = testing;
+const { awaited, joinPath, makeSymlink, removePath, resolvePath, runTest } = testing;
+
+const tregFixtures = resolvePath(import.meta.dirname, "fixtures/treg");
 
 const fakeTreg = Effect.fn("fakeTreg")(function* (bin: string, loggedIn: boolean) {
   const path = joinPath(bin, "treg");
-  yield* writeTextFile(
-    path,
-    `#!/bin/sh\necho '{"base_url": "https://treg.to", "logged_in": ${loggedIn}}'\n`,
-  );
-  yield* changeMode(path, 0o755);
+  yield* removePath(path);
+  yield* makeSymlink(joinPath(tregFixtures, loggedIn ? "signed-in" : "signed-out"), path);
   return path;
 });
 
