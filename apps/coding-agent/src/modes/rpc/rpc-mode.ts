@@ -1,9 +1,16 @@
-import rpcModePart3 from "./rpc-mode-part3.ts";
+import { Effect } from "effect";
 
-const { runRpcMode } = rpcModePart3;
+import type agentSessionRuntimeTypes from "../../core/agent-session-runtime.types.ts";
+import outputGuard from "../../core/output-guard.ts";
+import RpcServer from "./rpc-mode/rpc-server.ts";
 
-const rpcMode = {
-  runRpcMode,
-};
+const { takeOverStdout } = outputGuard;
+
+function runRpcMode(runtimeHost: agentSessionRuntimeTypes.AgentSessionRuntime): Promise<never> {
+  takeOverStdout();
+  return Effect.runPromise(new RpcServer(runtimeHost).run());
+}
+
+const rpcMode = { runRpcMode };
 
 export default rpcMode;
