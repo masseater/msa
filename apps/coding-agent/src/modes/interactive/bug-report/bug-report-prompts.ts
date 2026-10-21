@@ -1,12 +1,16 @@
 import { Effect } from "effect";
 
-import awaitingModule from "../../core/awaiting.ts";
-import type bugReportInternalTypes from "./bug-report-internal.types.ts";
-import ExtensionEditorComponent from "./components/extension-editor.ts";
-import type extensionEditorTypes from "./components/extension-editor.types.ts";
-import ExtensionSelectorComponent from "./components/extension-selector.ts";
-import type extensionSelectorTypes from "./components/extension-selector.types.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import type bugReportInternalTypes from "../bug-report-internal.types.ts";
+import BorderedLoader from "../components/bordered-loader.ts";
+import type borderedLoaderTypes from "../components/bordered-loader.types.ts";
+import ExtensionEditorComponent from "../components/extension-editor.ts";
+import type extensionEditorTypes from "../components/extension-editor.types.ts";
+import ExtensionSelectorComponent from "../components/extension-selector.ts";
+import type extensionSelectorTypes from "../components/extension-selector.types.ts";
+import themeModule from "../theme/theme.ts";
 
+const { theme } = themeModule;
 const { awaited, awaiting } = awaitingModule;
 
 const DISCLAIMER =
@@ -131,10 +135,15 @@ function restoreEditor(
   context.editorSlot.restoreEditor();
 }
 
-const bugReportPart1 = {
-  promptForOptions,
-  restoreEditor,
-  showOverlay,
-};
+function showLoader(
+  context: bugReportInternalTypes.BugReportContext,
+  message: string,
+): borderedLoaderTypes.BorderedLoader {
+  const loader = new BorderedLoader(context.ui, theme, message);
+  showOverlay(context, loader);
+  return loader;
+}
 
-export default bugReportPart1;
+const bugReportPrompts = { promptForOptions, restoreEditor, showLoader };
+
+export default bugReportPrompts;

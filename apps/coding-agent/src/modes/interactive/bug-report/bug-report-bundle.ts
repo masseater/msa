@@ -1,16 +1,31 @@
-import type agentSessionTypes from "../../core/agent-session.types.ts";
-import bugReportModule from "../../core/bug-report.ts";
-import type bugReportTypesModule from "../../core/bug-report.types.ts";
-import crashLog from "../../core/crash-log.ts";
-import sessionExport from "../../core/session-export.ts";
-import type bugReportInternalTypes from "./bug-report-internal.types.ts";
-import sessionShare from "./session-share.ts";
+import { Effect } from "effect";
 
-const { BUG_REPORT_CUSTOM_ENTRY_TYPE, collectBugReportDiagnostics, collectBugReportMetadata } =
-  bugReportModule;
+import type agentSessionTypes from "../../../core/agent-session.types.ts";
+import awaitingModule from "../../../core/awaiting.ts";
+import bugReportModule from "../../../core/bug-report.ts";
+import type bugReportTypesModule from "../../../core/bug-report.types.ts";
+import crashLog from "../../../core/crash-log.ts";
+import sessionExport from "../../../core/session-export.ts";
+import pathModule from "../../path.ts";
+import type bugReportInternalTypes from "../bug-report-internal.types.ts";
+import sessionShare from "../session-share.ts";
+
+const {
+  writeBugReportArchive,
+  bugReportArchiveFileName,
+  BUG_REPORT_CUSTOM_ENTRY_TYPE,
+  collectBugReportMetadata,
+  collectBugReportDiagnostics,
+} = bugReportModule;
+const { awaited, awaiting } = awaitingModule;
+const { join } = pathModule;
 const { clearCrashLog, readCrashLog } = crashLog;
-const { serializeSessionBranch } = sessionExport;
 const { createShareTrailingEntries } = sessionShare;
+const { serializeSessionBranch } = sessionExport;
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error";
+}
 
 function buildBundle(
   session: agentSessionTypes.AgentSession,
@@ -60,9 +75,23 @@ function recordInSession(
   if (bundle.diagnostics.crashes.length > 0) clearCrashLog();
 }
 
-const bugReportPart3 = {
-  buildBundle,
-  recordInSession,
-};
+function exportZip(
+  context: bugReportInternalTypes.BugReportContext,
+  bundle: bugReportTypesModule.BugReportBundle,
+): Effect.Effect<void> {
+  return awaiting(function* () {
+    const archivePath = join(process.cwd(), bugReportArchiveFileName(bundle.metadata.id));
+    try {
+      yield* awaited(writeBugReportArchive(bundle, archivePath));
+    } catch (error: unknown) {
+      context.showError(`Failed to write bug report: ${errorMessage(error)}`);
+      return;
+    }
+    recordInSession(context.session, bundle, { delivery: "zip", path: archivePath });
+    context.showStatus(`Bug report exported to: ${archivePath}\nReport ID: ${bundle.metadata.id}`);
+  });
+}
 
-export default bugReportPart3;
+const bugReportBundle = { buildBundle, errorMessage, exportZip };
+
+export default bugReportBundle;
