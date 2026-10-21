@@ -1,9 +1,9 @@
 import platformModule from "../core/platform/index.ts";
 import moduleHookFiles from "../core/platform/node/module-hook-files.ts";
-import nodeModule from "../core/platform/node/module.ts";
+import nodeModuleHooks from "../core/platform/node/module-hooks.ts";
 import nodeUrl from "../core/platform/node/url.ts";
 
-const { registerHooks } = nodeModule;
+const { registerHooks } = nodeModuleHooks;
 const { fileURLToPath, pathToFileURL } = nodeUrl;
 
 const { firstRegularFileForModuleHook, readTextForModuleHook } = moduleHookFiles;
