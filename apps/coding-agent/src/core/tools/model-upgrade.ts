@@ -54,6 +54,81 @@ function formatChanges(
   );
 }
 
+type UpgradePlan = ReturnType<typeof planModelUpgrades>;
+
+const textResult = (lines: readonly string[], details: Record<string, unknown>) => ({
+  content: [{ text: lines.join("\n"), type: "text" as const }],
+  details,
+});
+
+function reportLines(plan: UpgradePlan): string[] {
+  const named = candidatesNamedByChanges(plan.candidates, plan.changes);
+  const shown = named.length > 0 ? named : plan.candidates.slice(0, 20);
+  const rest = plan.candidates.length - shown.length;
+  return [
+    "Upgrades",
+    ...shown.map((candidate) => `  ${formatModelUpgrade(candidate)}`),
+    ...(rest > 0 ? [`  ${rest} more catalog upgrades affect no setting`] : []),
+    "Settings",
+    ...(plan.changes.length === 0
+      ? ["  No setting names an upgraded model."]
+      : formatChanges(plan.changes)),
+    "Not rewritten",
+    ...plan.unreachable.map((line) => `  ${line}`),
+  ];
+}
+
+function listResult(lines: string[], plan: UpgradePlan, applicable: number) {
+  lines.push(
+    applicable === 0
+      ? "Nothing to apply; every upgrade needs a decision."
+      : 'Dry run. Use action "apply" to write these settings.',
+  );
+  return textResult(lines, {
+    action: "list",
+    applicable,
+    changes: plan.changes.length,
+    upgrades: plan.candidates.length,
+  });
+}
+
+const runModelUpgrade = (
+  target: modelUpgradeTypes.ModelUpgradeToolTarget,
+  params: modelUpgradeTypes.ModelUpgradeToolInput,
+) =>
+  awaiting(function* () {
+    const { upgrades, candidates } = selectUpgrades(target, params);
+    if (upgrades.length === 0) {
+      return textResult(["No model upgrades found."], {
+        action: params.action,
+        changes: 0,
+        upgrades: 0,
+      });
+    }
+    const plan = planModelUpgrades({
+      candidates,
+      layers: {
+        global: target.settingsManager.getGlobalSettings(),
+        project: target.settingsManager.getProjectSettings(),
+      },
+      selected: upgrades,
+    });
+    const applicable = plan.candidates.filter((candidate) => candidate.confident);
+    const lines = reportLines(plan);
+    if (params.action !== "apply") return listResult(lines, plan, applicable.length);
+    if (applicable.length === 0) {
+      return textResult(lines, { action: "apply", changes: 0, upgrades: plan.candidates.length });
+    }
+    const replacements = createUpgradeReplacements(applicable);
+    const count = yield* applyUpgrades(target, replacements, lines);
+    return textResult(lines, {
+      action: "apply",
+      applied: [...replacements.keys()],
+      changes: count,
+      upgrades: plan.candidates.length,
+    });
+  });
+
 function createModelUpgradeToolDefinition(
   target: modelUpgradeTypes.ModelUpgradeToolTarget,
 ): extensionsTypesTypes.ToolDefinition<typeof modelUpgradeSchema, Record<string, unknown>> {
@@ -63,79 +138,7 @@ function createModelUpgradeToolDefinition(
   > = {
     description:
       "Find catalog models that a newer model of the same family and variant replaces, and apply them to settings. A higher version or a later dated variant is confident; a different variant is only a candidate. `list` reports the settings that would change without writing; `apply` rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, orchestrator, and compaction references in agent-directory and project settings. Session transcripts keep their recorded model id.",
-    execute(_toolCallId, params) {
-      return Effect.runPromise(
-        awaiting(function* () {
-          const { upgrades, candidates } = selectUpgrades(target, params);
-          if (upgrades.length === 0) {
-            return {
-              content: [{ text: "No model upgrades found.", type: "text" }],
-              details: { action: params.action, changes: 0, upgrades: 0 },
-            };
-          }
-
-          const plan = planModelUpgrades({
-            candidates,
-            layers: {
-              global: target.settingsManager.getGlobalSettings(),
-              project: target.settingsManager.getProjectSettings(),
-            },
-            selected: upgrades,
-          });
-          const applicable = plan.candidates.filter((candidate) => candidate.confident);
-          const named = candidatesNamedByChanges(plan.candidates, plan.changes);
-          const shown = named.length > 0 ? named : plan.candidates.slice(0, 20);
-          const rest = plan.candidates.length - shown.length;
-          const lines = [
-            "Upgrades",
-            ...shown.map((candidate) => `  ${formatModelUpgrade(candidate)}`),
-            ...(rest > 0 ? [`  ${rest} more catalog upgrades affect no setting`] : []),
-            "Settings",
-            ...(plan.changes.length === 0
-              ? ["  No setting names an upgraded model."]
-              : formatChanges(plan.changes)),
-            "Not rewritten",
-            ...plan.unreachable.map((line) => `  ${line}`),
-          ];
-
-          if (params.action !== "apply") {
-            lines.push(
-              applicable.length === 0
-                ? "Nothing to apply; every upgrade needs a decision."
-                : 'Dry run. Use action "apply" to write these settings.',
-            );
-            return {
-              content: [{ text: lines.join("\n"), type: "text" }],
-              details: {
-                action: "list",
-                applicable: applicable.length,
-                changes: plan.changes.length,
-                upgrades: plan.candidates.length,
-              },
-            };
-          }
-
-          if (applicable.length === 0) {
-            return {
-              content: [{ text: lines.join("\n"), type: "text" }],
-              details: { action: "apply", changes: 0, upgrades: plan.candidates.length },
-            };
-          }
-
-          const replacements = createUpgradeReplacements(applicable);
-          const count = yield* applyUpgrades(target, replacements, lines);
-          return {
-            content: [{ text: lines.join("\n"), type: "text" }],
-            details: {
-              action: "apply",
-              applied: [...replacements.keys()],
-              changes: count,
-              upgrades: plan.candidates.length,
-            },
-          };
-        }),
-      );
-    },
+    execute: (_toolCallId, params) => Effect.runPromise(runModelUpgrade(target, params)),
     label: "model upgrade",
     name: "model_upgrade",
     parameters: modelUpgradeSchema,

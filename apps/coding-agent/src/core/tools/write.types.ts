@@ -1,5 +1,6 @@
 import type { Static } from "typebox";
 
+import type extensionsTypesTypes from "../extensions/types.types.ts";
 import type write from "./write.ts";
 
 declare namespace writeTypes {
@@ -13,6 +14,8 @@ declare namespace writeTypes {
   interface WriteToolOptions {
     operations?: WriteOperations;
   }
+
+  type WriteToolContext = extensionsTypesTypes.ExtensionContext;
 }
 
 export type { writeTypes as default };

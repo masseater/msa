@@ -1,22 +1,16 @@
-import * as NodeServices from "@effect/platform-node/NodeServices";
 import type agentTypes from "@msa/agent-core/index.types";
-import { Effect, FileSystem, ManagedRuntime } from "effect";
 import { Type } from "typebox";
 
 import type extensionsTypesTypes from "../extensions/types.types.ts";
 import platform from "../platform/index.ts";
-import fileMutationQueue from "./file-mutation-queue.ts";
-import pathUtils from "./path-utils.ts";
 import writeModule from "./renderers/write.ts";
 import toolDefinitionWrapper from "./tool-definition-wrapper.ts";
 import type toolDefinitionWrapperTypes from "./tool-definition-wrapper.types.ts";
+import writeFileModule from "./write-file.ts";
 import type writeTypes from "./write.types.ts";
 
-const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
-
-const { ToolFailure, fromMaybePromise, nonEmptyOr, pathOperations, rethrowCause } = platform;
-const { resolveToCwd } = pathUtils;
-const { withFileMutationQueue } = fileMutationQueue;
+const { nonEmptyOr } = platform;
+const { defaultWriteOperations, writeFile } = writeFileModule;
 const { writeRenderers } = writeModule;
 const { cwdFactory, wrapToolDefinition } = toolDefinitionWrapper;
 
@@ -25,52 +19,17 @@ const writeSchema = Type.Object({
   path: Type.String({ description: "Path to the file to write (relative or absolute)" }),
 });
 
+type WriteToolDefinition = extensionsTypesTypes.ToolDefinition<typeof writeSchema, undefined>;
+
 const writeToolSystemPromptContribution = {
   guidelines: ["Use write only for new files or complete rewrites."],
   snippet: "Create or overwrite files",
 } as const;
 
-const defaultWriteOperations: writeTypes.WriteOperations = {
-  mkdir: (dir) =>
-    nodeRuntime.runPromise(
-      rethrowCause(FileSystem.FileSystem.use((fs) => fs.makeDirectory(dir, { recursive: true }))),
-    ),
-  writeFile: (path, content) =>
-    nodeRuntime.runPromise(
-      rethrowCause(FileSystem.FileSystem.use((fs) => fs.writeFileString(path, content))),
-    ),
-};
-
-const writeUnderQueue = (
-  ops: writeTypes.WriteOperations,
-  dir: string,
-  absolutePath: string,
-  content: string,
-  path: string,
-  signal: AbortSignal | undefined,
-) => {
-  const throwIfAborted = Effect.suspend(() =>
-    signal?.aborted === true
-      ? Effect.fail(new ToolFailure({ message: "Operation aborted" }))
-      : Effect.void,
-  );
-  return Effect.gen(function* () {
-    yield* throwIfAborted;
-    yield* fromMaybePromise(() => ops.mkdir(dir));
-    yield* throwIfAborted;
-    yield* fromMaybePromise(() => ops.writeFile(absolutePath, content));
-    yield* throwIfAborted;
-    return {
-      content: [{ text: `Successfully wrote to ${path}`, type: "text" as const }],
-      details: undefined,
-    };
-  });
-};
-
 const createWriteToolDefinitionImpl = (
   cwd: string,
   options?: writeTypes.WriteToolOptions,
-): extensionsTypesTypes.ToolDefinition<typeof writeSchema, undefined> => {
+): WriteToolDefinition => {
   const ops = options?.operations ?? defaultWriteOperations;
   return {
     constrainedSampling: { strict: "prefer", type: "json_schema" },
@@ -81,14 +40,8 @@ const createWriteToolDefinitionImpl = (
       { path, content }: { path: string; content: string },
       signal?: AbortSignal,
       _onUpdate?,
-      ctx?: extensionsTypesTypes.ExtensionContext,
-    ) => {
-      const absolutePath = resolveToCwd(path, nonEmptyOr(ctx?.cwd, cwd));
-      const dir = pathOperations.dirname(absolutePath);
-      return withFileMutationQueue(absolutePath, () =>
-        nodeRuntime.runPromise(writeUnderQueue(ops, dir, absolutePath, content, path, signal)),
-      );
-    },
+      ctx?: writeTypes.WriteToolContext,
+    ) => writeFile({ content, cwd: nonEmptyOr(ctx?.cwd, cwd), ops, path, signal }),
     label: "write",
     name: "write",
     parameters: writeSchema,
@@ -100,7 +53,7 @@ const createWriteToolDefinitionImpl = (
 
 const createWriteToolDefinition: toolDefinitionWrapperTypes.CwdFactory<
   writeTypes.WriteToolOptions,
-  extensionsTypesTypes.ToolDefinition<typeof writeSchema, undefined>
+  WriteToolDefinition
 > = cwdFactory(createWriteToolDefinitionImpl);
 
 const createWriteTool: toolDefinitionWrapperTypes.CwdFactory<

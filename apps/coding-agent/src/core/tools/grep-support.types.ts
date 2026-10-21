@@ -1,3 +1,6 @@
+import type { Static } from "typebox";
+
+import type grepSupport from "./grep-support.ts";
 import type RgMatchCollectorClass from "./rg-match-collector.ts";
 import type truncateTypes from "./truncate.types.ts";
 
@@ -23,6 +26,8 @@ declare namespace grepSupportTypes {
     effectiveLimit: number;
     isDirectory: boolean;
   }
+
+  type GrepCallInput = Omit<Static<typeof grepSupport.grepSchema>, "path"> & { path?: string };
 
   interface RgMatch {
     filePath: string;

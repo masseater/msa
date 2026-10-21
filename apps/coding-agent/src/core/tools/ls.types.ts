@@ -1,5 +1,6 @@
 import type { Static } from "typebox";
 
+import type extensionsTypesTypes from "../extensions/types.types.ts";
 import type ls from "./ls.ts";
 import type truncateTypes from "./truncate.types.ts";
 
@@ -22,6 +23,8 @@ declare namespace lsTypes {
   interface LsToolOptions {
     operations?: LsOperations;
   }
+
+  type LsToolContext = extensionsTypesTypes.ExtensionContext;
 }
 
 export type { lsTypes as default };

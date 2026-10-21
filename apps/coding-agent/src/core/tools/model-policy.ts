@@ -76,6 +76,35 @@ function formatHidden(
   return lines;
 }
 
+const runModelPolicy = (
+  target: modelPolicyTypes.ModelPolicyToolTarget,
+  params: modelPolicyTypes.ModelPolicyToolInput,
+) =>
+  awaiting(function* () {
+    const catalog = target.modelRuntime.getCatalogModels();
+    const before = target.modelRuntime.getModelPolicy();
+
+    if (params.action === "list") {
+      const { lines, hidden } = listPolicy(target, before, catalog);
+      return yield* awaited({
+        content: [{ text: lines.join("\n"), type: "text" as const }],
+        details: {
+          action: "list",
+          allow: [...before.allow],
+          deny: [...before.deny],
+          hidden: hidden.length,
+        },
+      });
+    }
+
+    const pattern = params.pattern?.trim();
+    if (pattern === undefined || pattern === "")
+      throw new Error(`action ${params.action} requires pattern`);
+
+    const { lines, saved, hidden } = changePolicy(params, before, pattern, target, catalog);
+    return yield* awaited(policyChangeResult(lines, params, saved, hidden, pattern));
+  });
+
 function createModelPolicyToolDefinition(
   target: modelPolicyTypes.ModelPolicyToolTarget,
 ): extensionsTypesTypes.ToolDefinition<typeof modelPolicySchema, Record<string, unknown>> {
@@ -85,34 +114,7 @@ function createModelPolicyToolDefinition(
   > = {
     description:
       "Read and change which models this session may use. `list` shows the allow and deny patterns and the models they hide; `deny` and `allow` add a pattern in the --models forms (provider/model, provider/*, *); `remove` drops one. Deny wins over allow, and a change applies to the next listing, selection, and session. The model the running session uses cannot be denied.",
-    execute(_toolCallId, params) {
-      return Effect.runPromise(
-        awaiting(function* () {
-          const catalog = target.modelRuntime.getCatalogModels();
-          const before = target.modelRuntime.getModelPolicy();
-
-          if (params.action === "list") {
-            const { lines, hidden } = listPolicy(target, before, catalog);
-            return yield* awaited({
-              content: [{ text: lines.join("\n"), type: "text" }],
-              details: {
-                action: "list",
-                allow: [...before.allow],
-                deny: [...before.deny],
-                hidden: hidden.length,
-              },
-            });
-          }
-
-          const pattern = params.pattern?.trim();
-          if (pattern === undefined || pattern === "")
-            throw new Error(`action ${params.action} requires pattern`);
-
-          const { lines, saved, hidden } = changePolicy(params, before, pattern, target, catalog);
-          return yield* awaited(policyChangeResult(lines, params, saved, hidden, pattern));
-        }),
-      );
-    },
+    execute: (_toolCallId, params) => Effect.runPromise(runModelPolicy(target, params)),
     label: "model policy",
     name: "model_policy",
     parameters: modelPolicySchema,

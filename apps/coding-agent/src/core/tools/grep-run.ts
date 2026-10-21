@@ -7,12 +7,14 @@ import platform from "../platform/index.ts";
 import GrepFormatter from "./grep-format.ts";
 import grepSupport from "./grep-support.ts";
 import type grepSupportTypes from "./grep-support.types.ts";
+import pathUtils from "./path-utils.ts";
 import RgMatchCollector from "./rg-match-collector.ts";
 
 const nodeRuntime = ManagedRuntime.make(NodeServices.layer);
 
-const { formatGrepOutput, rgArguments } = grepSupport;
-const { ToolFailure, fromPromise, rethrowCause } = platform;
+const { DEFAULT_GREP_LIMIT, formatGrepOutput, rgArguments } = grepSupport;
+const { ToolFailure, abortedBy, fromPromise, nonEmptyOr, rethrowCause, unwrapForeign } = platform;
+const { resolveToCwd } = pathUtils;
 const { ensureTool } = toolsManager;
 const { streamCommand } = command;
 const defaultGrepOperations: grepSupportTypes.GrepOperations = {
@@ -94,9 +96,31 @@ const runGrep = Effect.fn("grep")(function* (
   });
 });
 
+interface GrepCall {
+  cwd: string;
+  input: grepSupportTypes.GrepCallInput;
+  ops: grepSupportTypes.GrepOperations;
+  signal: AbortSignal | undefined;
+}
+
+const executeGrep = ({ cwd, input, ops, signal }: GrepCall) =>
+  Effect.runPromise(
+    unwrapForeign(
+      runGrep(ops, {
+        contextValue: input.context !== undefined && input.context > 0 ? input.context : 0,
+        effectiveLimit: Math.max(1, input.limit ?? DEFAULT_GREP_LIMIT),
+        glob: input.glob,
+        ignoreCase: input.ignoreCase,
+        literal: input.literal,
+        pattern: input.pattern,
+        searchPath: resolveToCwd(nonEmptyOr(input.path, "."), cwd),
+      }).pipe(abortedBy(signal)),
+    ),
+  );
+
 const grepRun = {
   defaultGrepOperations,
-  runGrep,
+  executeGrep,
 };
 
 export default grepRun;
