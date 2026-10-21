@@ -11,12 +11,13 @@ function webSocketsAccepted<Request, P = unknown>(
   host: hostTypesModule.Host<P>,
   options: websocketTypes.WebSocketAcceptOptions<Request, P>,
 ): void {
+  const { compression, ...accept } = options;
   server.on("connection", (socket, request) => {
-    const link = webSocketLink(socket, { acceptPacked: false, compress: true });
-    Promise.resolve(options.principal(request)).then(
+    const link = webSocketLink(socket, { acceptPacked: false, compress: true, compression });
+    Promise.resolve(accept.principal(request)).then(
       (principal) => {
         if (principal === undefined) link.close("unauthorized");
-        else host.accept(link, { ...options, kind: "client", principal });
+        else host.accept(link, { ...accept, kind: "client", principal });
         return undefined;
       },
       () => link.close("authentication failed"),

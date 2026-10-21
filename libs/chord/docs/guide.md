@@ -812,6 +812,7 @@ const sessions = self.get(Sessions, {}); // `hostNamed("server")`: worker → se
   ```
 
 - **Browsers** don't take part in commits. They learn about new code through shape and `reset` messages, and an incompatible contract makes their calls fail with `upgrade_required`.
+- **Compression:** payloads over `PACK_THRESHOLD` are deflated only on links given a `compression` (`ipcLink`, `memoryLinkPair`, `webSocketLink`, `acceptWebSockets`, `forkDriver`). On Node pass `zlibCompression` from `@msa/chord/node`. Both ends of an IPC or memory link need it; a WebSocket client without it inflates what the server sends through `DecompressionStream`.
 
 ## Durable
 

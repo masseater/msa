@@ -1,3 +1,4 @@
+import type compressionTypes from "./compression.types.ts";
 import type linkTypes from "./link.types.ts";
 
 declare namespace managerTypesModule {
@@ -39,7 +40,7 @@ declare namespace managerTypesModule {
     spawn(): Promise<Instance>;
   }
 
-  interface ForkDriverOptions {
+  interface ForkDriverOptions extends compressionTypes.CompressionOptions {
     readonly entry: string;
     readonly args?: readonly string[];
     readonly env?: Readonly<Record<string, string>>;

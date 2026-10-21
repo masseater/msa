@@ -1,22 +1,16 @@
-import type * as Zlib from "node:zlib";
-
 import { dual } from "effect/Function";
 
+import type compressionTypes from "./compression.types.ts";
 import Packed from "./packed.ts";
 import type wireTypes from "./wire.types.ts";
 
+type Compression = compressionTypes.Compression;
+
 const PACK_THRESHOLD = 64 * 1024;
-
-const zlib: typeof Zlib | undefined = (
-  globalThis as { process?: { getBuiltinModule?(id: "node:zlib"): typeof Zlib } }
-).process?.getBuiltinModule?.("node:zlib");
-
-const zlibAvailable = zlib !== undefined;
 
 function unpack(value: unknown): unknown {
   if (!(value instanceof Packed)) return value;
-  if (zlib === undefined) throw new TypeError("packed payload without zlib");
-  return JSON.parse(zlib.inflateRawSync(value.bytes).toString("utf8"));
+  return JSON.parse(value.compression.inflateRaw(value.bytes));
 }
 
 type PayloadField = "args" | "value";
@@ -35,21 +29,25 @@ function envelopeOf(frame: wireTypes.Frame, field: PayloadField): Record<string,
   return envelope;
 }
 
-function packedBytes(value: unknown, compress: boolean, json?: string): Uint8Array | undefined {
+function packedBytes(
+  value: unknown,
+  compression: Compression | undefined,
+  json?: string,
+): Uint8Array | undefined {
   if (value instanceof Packed) return value.bytes;
-  if (!compress || zlib === undefined || json === undefined || json.length <= PACK_THRESHOLD)
+  if (compression === undefined || json === undefined || json.length <= PACK_THRESHOLD)
     return undefined;
-  return zlib.deflateRawSync(json, { level: 1 });
+  return compression.deflateRaw(json);
 }
 
-function packObjectImpl(frame: wireTypes.Frame, compress: boolean): unknown {
+function packObjectImpl(frame: wireTypes.Frame, compression: Compression | undefined): unknown {
   const field = payloadField(frame);
   if (field === undefined) return frame;
   const value = (frame as Record<string, unknown>)[field];
   const bytes = packedBytes(
     value,
-    compress,
-    compress && zlib !== undefined ? JSON.stringify(value) : undefined,
+    compression,
+    compression === undefined ? undefined : JSON.stringify(value),
   );
   if (bytes === undefined) return frame;
   return {
@@ -58,23 +56,27 @@ function packObjectImpl(frame: wireTypes.Frame, compress: boolean): unknown {
   };
 }
 
-function unpackObject(message: unknown): unknown {
+function unpackObjectImpl(message: unknown, compression: Compression | undefined): unknown {
   if (message === null || typeof message !== "object" || !("z" in message)) return message;
   const { z, ...rest } = message as { z: unknown } & Record<string, unknown>;
   if (!Array.isArray(z) || !PAYLOAD_FIELDS.has(z[0]) || typeof z[1] !== "string")
     throw new TypeError("bad packed payload");
-  return { ...rest, [z[0]]: new Packed(Buffer.from(z[1], "base64")) };
+  if (compression === undefined) throw new TypeError("packed payload without compression");
+  return { ...rest, [z[0]]: new Packed(Buffer.from(z[1], "base64"), compression) };
 }
 
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 
-function packMessageImpl(frame: wireTypes.Frame, compress: boolean): string | Uint8Array {
+function packMessageImpl(
+  frame: wireTypes.Frame,
+  compression: Compression | undefined,
+): string | Uint8Array {
   const field = payloadField(frame);
   if (field === undefined) return JSON.stringify(frame);
   const value = (frame as Record<string, unknown>)[field];
   const json = value instanceof Packed ? undefined : JSON.stringify(value);
-  const bytes = packedBytes(value, compress, json);
+  const bytes = packedBytes(value, compression, json);
   const envelope = envelopeOf(frame, field);
   if (bytes === undefined) {
     const head = JSON.stringify(envelope);
@@ -89,13 +91,18 @@ function packMessageImpl(frame: wireTypes.Frame, compress: boolean): string | Ui
 }
 
 const packObject: {
-  (compress: boolean): (frame: wireTypes.Frame) => unknown;
-  (frame: wireTypes.Frame, compress: boolean): unknown;
+  (compression: Compression | undefined): (frame: wireTypes.Frame) => unknown;
+  (frame: wireTypes.Frame, compression: Compression | undefined): unknown;
 } = dual(2, packObjectImpl);
 
+const unpackObject: {
+  (compression: Compression | undefined): (message: unknown) => unknown;
+  (message: unknown, compression: Compression | undefined): unknown;
+} = dual(2, unpackObjectImpl);
+
 const packMessage: {
-  (compress: boolean): (frame: wireTypes.Frame) => string | Uint8Array;
-  (frame: wireTypes.Frame, compress: boolean): string | Uint8Array;
+  (compression: Compression | undefined): (frame: wireTypes.Frame) => string | Uint8Array;
+  (frame: wireTypes.Frame, compression: Compression | undefined): string | Uint8Array;
 } = dual(2, packMessageImpl);
 
 function splitMessage(data: Uint8Array): {
@@ -112,12 +119,16 @@ function splitMessage(data: Uint8Array): {
   return { bytes: data.slice(4 + length), envelope: rest, field: field as PayloadField };
 }
 
-function inflateMessage(data: Uint8Array): string {
-  if (zlib === undefined) throw new TypeError("inflateMessage needs zlib");
+function inflateMessageImpl(data: Uint8Array, compression: Compression): string {
   const { envelope, field, bytes } = splitMessage(data);
   const head = JSON.stringify(envelope);
-  return `${head.slice(0, -1)},${JSON.stringify(field)}:${zlib.inflateRawSync(bytes).toString("utf8")}}`;
+  return `${head.slice(0, -1)},${JSON.stringify(field)}:${compression.inflateRaw(bytes)}}`;
 }
+
+const inflateMessage: {
+  (compression: Compression): (data: Uint8Array) => string;
+  (data: Uint8Array, compression: Compression): string;
+} = dual(2, inflateMessageImpl);
 
 function inflate(bytes: Uint8Array): Promise<unknown> {
   const stream = new Blob([bytes as Uint8Array<ArrayBuffer>])
@@ -126,12 +137,17 @@ function inflate(bytes: Uint8Array): Promise<unknown> {
   return new Response(stream).text().then((text) => JSON.parse(text) as unknown);
 }
 
-function parseFrame(data: string): wireTypes.Frame {
-  const frame = unpackObject(JSON.parse(data)) as wireTypes.Frame;
+function parseFrameImpl(data: string, compression: Compression | undefined): wireTypes.Frame {
+  const frame = unpackObject(JSON.parse(data), compression) as wireTypes.Frame;
   if (frame === null || typeof frame !== "object" || typeof frame.t !== "string")
     throw new TypeError("not a frame");
   return frame;
 }
+
+const parseFrame: {
+  (compression: Compression | undefined): (data: string) => wireTypes.Frame;
+  (data: string, compression: Compression | undefined): wireTypes.Frame;
+} = dual(2, parseFrameImpl);
 
 const linkPack = {
   PACK_THRESHOLD,
@@ -144,7 +160,6 @@ const linkPack = {
   splitMessage,
   unpack,
   unpackObject,
-  zlibAvailable,
 };
 
 export default linkPack;

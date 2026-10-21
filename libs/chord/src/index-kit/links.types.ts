@@ -1,3 +1,4 @@
+import type compressionTypes from "../compression.types.ts";
 import type connectionTypesModule from "../connection-types.types.ts";
 import type linkBaseTypes from "../link-base.types.ts";
 import type linkIpcTypes from "../link-ipc.types.ts";
@@ -9,6 +10,10 @@ declare namespace chordLinksKitTypes {
   type AcceptOptions<P = unknown> = connectionTypesModule.AcceptOptions<P>;
 
   type LinkOptions = connectionTypesModule.LinkOptions;
+
+  type Compression = compressionTypes.Compression;
+
+  type CompressionOptions = compressionTypes.CompressionOptions;
 
   type IpcChannel = linkIpcTypes.IpcChannel;
 

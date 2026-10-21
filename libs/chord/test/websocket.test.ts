@@ -7,6 +7,7 @@ import { WebSocketServer } from "ws";
 
 import chord from "../src/index.ts";
 import type chordTypes from "../src/index.types.ts";
+import chordNode from "../src/node.ts";
 import timing from "./fixtures/timing.ts";
 
 const {
@@ -21,6 +22,7 @@ const {
 } = chord;
 
 const { latch } = timing;
+const { zlibCompression } = chordNode;
 
 const Board = remote("t.board", {
   host: hostNamed("server"),
@@ -46,7 +48,7 @@ const withSocketServer = <A>(
     yield* Effect.callback<void>((resume) => {
       wss.once("listening", () => resume(Effect.void));
     });
-    acceptWebSockets(wss as never, server, { principal });
+    acceptWebSockets(wss as never, server, { compression: zlibCompression, principal });
     return yield* use((wss.address() as { port: number }).port).pipe(
       Effect.ensuring(
         Effect.callback<void>((resume) => {
@@ -164,7 +166,7 @@ const deliversPackedPayloads = (url: string, notes: string[]) =>
     assert.deepEqual(board.notes.value, notes);
     assert(binary.length >= 2, "the result and the snapshot came as binary messages");
     const frames = binary.map(
-      (message) => JSON.parse(inflateMessage(message)) as Record<string, unknown>,
+      (message) => JSON.parse(inflateMessage(message, zlibCompression)) as Record<string, unknown>,
     );
     assert(matchesNotes(frames, "result", notes));
     assert(matchesNotes(frames, "state", notes));

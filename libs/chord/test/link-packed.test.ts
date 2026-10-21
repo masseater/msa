@@ -7,11 +7,14 @@ import { describe, it } from "vite-plus/test";
 import chord from "../src/index.ts";
 import type chordTypes from "../src/index.types.ts";
 import linkModule2 from "../src/link.ts";
+import chordNode from "../src/node.ts";
 import linkModule from "./fixtures/link.ts";
 import timing from "./fixtures/timing.ts";
 
 const { createHost, ipcLink, memoryLinkPair } = chord;
 const { Packed, unpack } = linkModule2;
+const { zlibCompression } = chordNode;
+const zlibLinks = { compression: zlibCompression };
 
 const { Big, large } = linkModule;
 const { tick } = timing;
@@ -25,7 +28,7 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
     resolve: (name) =>
       Effect.runPromiseWith(services)(
         Effect.sync(() => {
-          const [down, up] = memoryLinkPair();
+          const [down, up] = memoryLinkPair(zlibLinks);
           const worker = createHost({
             name,
             onError: () => {},
@@ -40,7 +43,7 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
         }),
       ),
   });
-  const [down, up] = memoryLinkPair();
+  const [down, up] = memoryLinkPair(zlibLinks);
   server.accept(down, { principal: { owner: true } });
   const browser = createHost({
     kind: "client",
@@ -57,7 +60,7 @@ const largeArgsResultsAndSnapshotsCross = Effect.gen(function* () {
 });
 
 const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
-  const [a, b] = memoryLinkPair();
+  const [a, b] = memoryLinkPair(zlibLinks);
   const frames: chordTypes.Frame[] = [];
   b.receive((frame) => frames.push(frame));
   a.send({ id: 1, t: "result", value: large("v") });
@@ -72,7 +75,7 @@ const onlyPayloadsAboveTheThresholdAre = Effect.gen(function* () {
   assert(snap?.t === "state" && snap.value instanceof Packed);
   assert.deepEqual(unpack(snap.value), large("s"));
 
-  const [c, d] = memoryLinkPair();
+  const [c, d] = memoryLinkPair(zlibLinks);
   const forwarded: chordTypes.Frame[] = [];
   d.receive((frame) => forwarded.push(frame));
   c.send({ ...packed, id: 9 });

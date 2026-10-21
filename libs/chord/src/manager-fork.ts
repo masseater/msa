@@ -118,7 +118,7 @@ function instanceOf(
     killTree: () => {
       Effect.runFork(Effect.ignore(handle.kill({ killSignal: "SIGKILL" })));
     },
-    link: ipcLink(channel),
+    link: ipcLink(channel, { compression: options.compression }),
     onControl: (listener) => listeners.add(listener),
     pid: handle.pid,
     send,

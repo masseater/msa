@@ -91,6 +91,10 @@ declare namespace chordTypes {
 
   type IpcChannel = chordLinksKitTypes.IpcChannel;
 
+  type Compression = chordLinksKitTypes.Compression;
+
+  type CompressionOptions = chordLinksKitTypes.CompressionOptions;
+
   type Link = chordLinksKitTypes.Link;
 
   type WebSocketLike = chordLinksKitTypes.WebSocketLike;

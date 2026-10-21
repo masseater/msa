@@ -1,3 +1,4 @@
+import type compressionTypes from "./compression.types.ts";
 import type linkWebsocket from "./link-websocket.ts";
 
 declare namespace linkWebsocketTypes {
@@ -9,7 +10,7 @@ declare namespace linkWebsocketTypes {
     addEventListener(type: "open" | "close" | "error", listener: () => void): void;
   }
 
-  interface WebSocketLinkOptions {
+  interface WebSocketLinkOptions extends compressionTypes.CompressionOptions {
     readonly compress?: boolean;
     readonly acceptPacked?: boolean;
   }
