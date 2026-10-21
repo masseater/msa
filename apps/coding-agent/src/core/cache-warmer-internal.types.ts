@@ -1,3 +1,5 @@
+import type aiTypes from "@msa/ai/index.types";
+
 import type cacheWarmerTypes from "./cache-warmer.types.ts";
 import type platformTypes from "./platform.types.ts";
 
@@ -14,6 +16,8 @@ declare namespace cacheWarmerInternalTypes {
     extensionOverride: boolean;
     timer?: platformTypes.Scheduled | undefined;
   }
+
+  type WarmupMessage = aiTypes.AssistantMessage;
 }
 
 export type { cacheWarmerInternalTypes as default };
