@@ -4,8 +4,8 @@ import awaitingModule from "../core/awaiting.ts";
 import KeybindingsManager from "../core/keybindings-manager.ts";
 import outputGuard from "../core/output-guard.ts";
 import timings from "../core/timings.ts";
-import modes from "../modes/index.ts";
 import themeModule from "../modes/interactive/theme/theme.ts";
+import modeRunners from "../modes/mode-runners.ts";
 import interop from "../utils/interop.ts";
 import appModeModule from "./app-mode.ts";
 import type mainInternalTypes from "./main-internal.types.ts";
@@ -13,7 +13,7 @@ import type mainInternalTypes from "./main-internal.types.ts";
 const { awaited, awaiting, performed } = awaitingModule;
 const { restoreStdout } = outputGuard;
 const { printTimings, time } = timings;
-const { runPrintMode, InteractiveMode, runRpcMode } = modes;
+const { loadInteractiveMode, runPrintMode, runRpcMode } = modeRunners;
 const { stopThemeWatcher } = themeModule;
 const { callbackPromise } = interop;
 const { toPrintOutputMode } = appModeModule;
@@ -32,7 +32,9 @@ function runInteractive(startup: Startup, runtime: Runtime, input: Input, checks
   return Effect.runPromise(
     awaiting(function* () {
       const { parsed } = startup;
-      yield* awaited(KeybindingsManager.refresh());
+      const [InteractiveMode] = yield* awaited(
+        Promise.all([loadInteractiveMode(), KeybindingsManager.refresh()]),
+      );
       const interactiveMode = new InteractiveMode(runtime, {
         autoTrustOnReloadCwd: startup.autoTrustOnReloadCwd,
         initialImages: input.initialImages,

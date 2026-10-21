@@ -4,7 +4,7 @@ import {
   convertOklabToLrgb,
   convertOklabToOkhsl,
   convertRgbToOklab,
-} from "culori";
+} from "culori/fn";
 import { dual } from "effect/Function";
 
 import type terminalColorsTypes from "./terminal-colors.types.ts";

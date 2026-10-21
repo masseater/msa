@@ -113,8 +113,9 @@ function* textUnits(text: string): Generator<utilsTypes.TextUnit> {
       i += ansi.length;
       continue;
     }
-    let end = i;
-    while (end < text.length && extractAnsiCode(text, end) === null) end++;
+    let end = text.indexOf("\x1b", i);
+    while (end !== -1 && ansiCodeLength(text, end) === 0) end = text.indexOf("\x1b", end + 1);
+    if (end === -1) end = text.length;
     for (const { segment } of graphemeSegmenter.segment(text.slice(i, end))) {
       yield { ansi: false, text: segment, width: graphemeWidth(segment) };
     }
