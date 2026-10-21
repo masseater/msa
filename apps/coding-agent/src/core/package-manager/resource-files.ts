@@ -1,63 +1,14 @@
-import { homedir } from "node:os";
-
 import ignore from "ignore";
-import { valid, validRange } from "semver";
 
-import type defaultPackageManagerInternalTypes from "./default-package-manager-internal.types.ts";
-import type packageManagerTypes from "./package-manager.types.ts";
-import platformNode from "./platform-node.ts";
-import nodeFs from "./platform/node/fs.ts";
-import processEnv from "./process-env.ts";
+import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
+import type packageManagerTypes from "../package-manager.types.ts";
+import platformNode from "../platform-node.ts";
+import nodeFs from "../platform/node/fs.ts";
+import resourceEntries from "./resource-entries.ts";
 
-const { envNames, envSnapshot, readEnv } = processEnv;
-const { existsSync, globSync, readFileSync, readdirSync, statSync } = nodeFs;
-const { join, relative, resolve, sep } = platformNode;
-
-function getEnv(): NodeJS.ProcessEnv {
-  if (process.platform !== "linux" || envNames().length > 0) {
-    return envSnapshot();
-  }
-  try {
-    const data = readFileSync("/proc/self/environ", "utf-8");
-    const env: NodeJS.ProcessEnv = {};
-    for (const entry of data.split("\0")) {
-      const idx = entry.indexOf("=");
-      if (idx > 0) {
-        env[entry.slice(0, idx)] = entry.slice(idx + 1);
-      }
-    }
-    return env;
-  } catch {
-    return envSnapshot();
-  }
-}
-
-const NETWORK_TIMEOUT_MS = 10000;
-
-const UPDATE_CHECK_CONCURRENCY = 4;
-
-const GIT_UPDATE_CONCURRENCY = 4;
-
-function isOfflineModeEnabled(): boolean {
-  const value = readEnv("MSA_OFFLINE");
-  if (value === undefined || value === "") return false;
-  return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
-}
-
-function isExactNpmVersion(version: string | undefined): boolean {
-  return valid(version ?? "") !== null;
-}
-
-function getNpmVersionRange(version: string | undefined): string | undefined {
-  return version !== undefined && version !== "" ? (validRange(version) ?? undefined) : undefined;
-}
-
-function resourcePrecedenceRank(m: packageManagerTypes.PathMetadata): number {
-  if (m.source === "builtin") return 5;
-  if (m.origin === "package") return 4;
-  const scopeBase = m.scope === "project" ? 0 : 2;
-  return scopeBase + (m.source === "local" ? 0 : 1);
-}
+const { statSync, readdirSync, globSync, readFileSync, existsSync } = nodeFs;
+const { resolve, join, relative, sep } = platformNode;
+const { collectAutoExtensionEntries, collectSkillEntries } = resourceEntries;
 
 const RESOURCE_TYPES: defaultPackageManagerInternalTypes.ResourceType[] = [
   "extensions",
@@ -77,10 +28,6 @@ const IGNORE_FILE_NAMES = [".gitignore", ".ignore", ".fdignore"];
 
 function toPosixPath(p: string): string {
   return p.split(sep).join("/");
-}
-
-function getHomeDir(): string {
-  return readEnv("HOME") || homedir();
 }
 
 function prefixIgnorePattern(line: string, prefix: string): string | null {
@@ -130,24 +77,6 @@ function addIgnoreRules(
   }
 }
 
-function isPattern(s: string): boolean {
-  return (
-    s.startsWith("!") ||
-    s.startsWith("+") ||
-    s.startsWith("-") ||
-    s.includes("*") ||
-    s.includes("?")
-  );
-}
-
-function isOverridePattern(s: string): boolean {
-  return s.startsWith("!") || s.startsWith("+") || s.startsWith("-");
-}
-
-function hasGlobPattern(s: string): boolean {
-  return s.includes("*") || s.includes("?");
-}
-
 function expandPackageGlob(pattern: string, root: string): string[] {
   return globSync(pattern, { cwd: root })
     .map((match) => resolve(root, match))
@@ -157,19 +86,6 @@ function expandPackageGlob(pattern: string, root: string): string[] {
         .every((segment) => segment === ".." || !segment.startsWith(".")),
     )
     .sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-}
-
-function splitPatterns(entries: string[]): { plain: string[]; patterns: string[] } {
-  const plain: string[] = [];
-  const patterns: string[] = [];
-  for (const entry of entries) {
-    if (isPattern(entry)) {
-      patterns.push(entry);
-    } else {
-      plain.push(entry);
-    }
-  }
-  return { patterns, plain };
 }
 
 function collectFiles(
@@ -221,28 +137,33 @@ function collectFiles(
   return files;
 }
 
-const defaultPackageManagerHelpersPart1 = {
-  FILE_PATTERNS,
-  GIT_UPDATE_CONCURRENCY,
-  IGNORE_FILE_NAMES,
-  NETWORK_TIMEOUT_MS,
+function collectResourceFiles(
+  dir: string,
+  resourceType: defaultPackageManagerInternalTypes.ResourceType,
+): string[] {
+  if (resourceType === "skills") {
+    return collectSkillEntries(dir, "msa");
+  }
+  if (resourceType === "extensions") {
+    return collectAutoExtensionEntries(dir);
+  }
+  return collectFiles(dir, FILE_PATTERNS[resourceType]);
+}
+
+function resourcePrecedenceRank(m: packageManagerTypes.PathMetadata): number {
+  if (m.source === "builtin") return 5;
+  if (m.origin === "package") return 4;
+  const scopeBase = m.scope === "project" ? 0 : 2;
+  return scopeBase + (m.source === "local" ? 0 : 1);
+}
+
+const resourceFiles = {
   RESOURCE_TYPES,
-  UPDATE_CHECK_CONCURRENCY,
   addIgnoreRules,
-  collectFiles,
+  collectResourceFiles,
   expandPackageGlob,
-  getEnv,
-  getHomeDir,
-  getNpmVersionRange,
-  hasGlobPattern,
-  isExactNpmVersion,
-  isOfflineModeEnabled,
-  isOverridePattern,
-  isPattern,
-  prefixIgnorePattern,
   resourcePrecedenceRank,
-  splitPatterns,
   toPosixPath,
 };
 
-export default defaultPackageManagerHelpersPart1;
+export default resourceFiles;

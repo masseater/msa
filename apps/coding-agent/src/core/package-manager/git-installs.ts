@@ -2,17 +2,17 @@ import * as Effect from "effect/Effect";
 
 import type gitTypes from "../../utils/git.types.ts";
 import awaitingModule from "../awaiting.ts";
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
 import commandRunner from "./command-runner.ts";
 import gitRemote from "./git-remote.ts";
+import packageEnv from "./package-env.ts";
 
 const { dirname, join } = platformNode;
 const { existsSync, mkdirSync, rmSync, writeFileSync } = nodeFs;
-const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = defaultPackageManagerHelpers;
+const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 
 export default class GitInstalls {

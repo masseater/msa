@@ -1,19 +1,19 @@
 import config from "../../config.ts";
 import git from "../../utils/git.ts";
 import pathsModule from "../../utils/paths.ts";
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import packageManager from "../package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
+import packageEnv from "./package-env.ts";
 
 const { resolvePath, isLocalPath } = pathsModule;
 const { join, resolve, sep, sha256Hex, relative } = platformNode;
 const { CONFIG_DIR_NAME } = config;
 const { getExtensionTempFolder } = packageManager;
-const { getHomeDir, getNpmVersionRange, isExactNpmVersion } = defaultPackageManagerHelpers;
+const { getHomeDir, getNpmVersionRange, isExactNpmVersion } = packageEnv;
 const { parseGitUrl } = git;
 
 export default class PackageSources {

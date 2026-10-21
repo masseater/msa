@@ -1,10 +1,10 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import commandRunner from "./command-runner.ts";
+import packageEnv from "./package-env.ts";
 
-const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = defaultPackageManagerHelpers;
+const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = packageEnv;
 const { awaited, awaiting, performed } = awaitingModule;
 
 function gitHasAvailableUpdate(installedPath: string): Promise<boolean> {

@@ -1,7 +1,6 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
@@ -9,9 +8,10 @@ import nodeFs from "../platform/node/fs.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import concurrency from "./concurrency.ts";
 import gitRemote from "./git-remote.ts";
+import packageEnv from "./package-env.ts";
 
 const { existsSync } = nodeFs;
-const { isOfflineModeEnabled, UPDATE_CHECK_CONCURRENCY } = defaultPackageManagerHelpers;
+const { isOfflineModeEnabled, UPDATE_CHECK_CONCURRENCY } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { runWithConcurrency } = concurrency;
 

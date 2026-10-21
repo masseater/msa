@@ -1,81 +1,42 @@
-import ignore from "ignore";
 import { minimatch } from "minimatch";
 
-import pathsModule from "../utils/paths.ts";
-import defaultPackageManagerHelpersPart1 from "./default-package-manager-helpers-part1.ts";
-import defaultPackageManagerHelpersPart2 from "./default-package-manager-helpers-part2.ts";
-import type defaultPackageManagerInternalTypes from "./default-package-manager-internal.types.ts";
-import platformNode from "./platform-node.ts";
-import nodeFs from "./platform/node/fs.ts";
+import pathsModule from "../../utils/paths.ts";
+import platformNode from "../platform-node.ts";
+import resourceFiles from "./resource-files.ts";
 
-const { existsSync, readdirSync, statSync } = nodeFs;
-const { basename, dirname, join, relative } = platformNode;
 const { normalizePath } = pathsModule;
-const { collectSkillEntries, resolveExtensionEntries } = defaultPackageManagerHelpersPart2;
-const { FILE_PATTERNS, addIgnoreRules, collectFiles, toPosixPath } =
-  defaultPackageManagerHelpersPart1;
+const { dirname, basename, relative } = platformNode;
+const { toPosixPath } = resourceFiles;
 
-function collectAutoExtensionEntries(dir: string): string[] {
-  const entries: string[] = [];
-  if (!existsSync(dir)) return entries;
-
-  const rootEntries = resolveExtensionEntries(dir);
-  if (rootEntries !== null) {
-    return rootEntries;
-  }
-
-  const ig = ignore();
-  addIgnoreRules(ig, dir, dir);
-
-  try {
-    const dirEntries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of dirEntries) {
-      if (entry.name.startsWith(".")) continue;
-      if (entry.name === "node_modules") continue;
-
-      const fullPath = join(dir, entry.name);
-      let isDir = entry.isDirectory();
-      let isFile = entry.isFile();
-
-      if (entry.isSymbolicLink()) {
-        try {
-          const stats = statSync(fullPath);
-          isDir = stats.isDirectory();
-          isFile = stats.isFile();
-        } catch {
-          continue;
-        }
-      }
-
-      const relPath = toPosixPath(relative(dir, fullPath));
-      const ignorePath = isDir ? `${relPath}/` : relPath;
-      if (ig.ignores(ignorePath)) continue;
-
-      if (isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))) {
-        entries.push(fullPath);
-      } else if (isDir) {
-        const resolvedEntries = resolveExtensionEntries(fullPath);
-        if (resolvedEntries !== null) {
-          entries.push(...resolvedEntries);
-        }
-      }
-    }
-  } catch {}
-
-  return entries;
+function isPattern(s: string): boolean {
+  return (
+    s.startsWith("!") ||
+    s.startsWith("+") ||
+    s.startsWith("-") ||
+    s.includes("*") ||
+    s.includes("?")
+  );
 }
 
-function collectResourceFiles(
-  dir: string,
-  resourceType: defaultPackageManagerInternalTypes.ResourceType,
-): string[] {
-  if (resourceType === "skills") {
-    return collectSkillEntries(dir, "msa");
+function isOverridePattern(s: string): boolean {
+  return s.startsWith("!") || s.startsWith("+") || s.startsWith("-");
+}
+
+function hasGlobPattern(s: string): boolean {
+  return s.includes("*") || s.includes("?");
+}
+
+function splitPatterns(entries: string[]): { plain: string[]; patterns: string[] } {
+  const plain: string[] = [];
+  const patterns: string[] = [];
+  for (const entry of entries) {
+    if (isPattern(entry)) {
+      patterns.push(entry);
+    } else {
+      plain.push(entry);
+    }
   }
-  if (resourceType === "extensions") {
-    return collectAutoExtensionEntries(dir);
-  }
-  return collectFiles(dir, FILE_PATTERNS[resourceType]);
+  return { patterns, plain };
 }
 
 function matchesAnyPattern(filePath: string, patterns: string[], baseDir: string): boolean {
@@ -232,16 +193,14 @@ function applyAutoloadDisabledPatterns(
   return result;
 }
 
-const defaultPackageManagerHelpersPart3 = {
+const resourcePatterns = {
   applyAutoloadDisabledPatterns,
   applyPatterns,
-  collectAutoExtensionEntries,
-  collectResourceFiles,
   getOverridePatterns,
+  hasGlobPattern,
   isEnabledByOverrides,
-  matchesAnyExactPattern,
-  matchesAnyPattern,
-  normalizeExactPattern,
+  isOverridePattern,
+  splitPatterns,
 };
 
-export default defaultPackageManagerHelpersPart3;
+export default resourcePatterns;

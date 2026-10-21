@@ -1,15 +1,33 @@
 import ignore from "ignore";
 
-import defaultPackageManagerHelpersPart1 from "./default-package-manager-helpers-part1.ts";
-import type defaultPackageManagerInternalTypes from "./default-package-manager-internal.types.ts";
-import manifestModule from "./manifest.ts";
-import platformNode from "./platform-node.ts";
-import nodeFs from "./platform/node/fs.ts";
+import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
+import manifestModule from "../manifest.ts";
+import platformNode from "../platform-node.ts";
+import nodeFs from "../platform/node/fs.ts";
+import resourceFiles from "./resource-files.ts";
 
-const { existsSync, readdirSync, statSync } = nodeFs;
-const { dirname, join, relative, resolve } = platformNode;
 const { readMsaManifest } = manifestModule;
-const { addIgnoreRules, toPosixPath } = defaultPackageManagerHelpersPart1;
+const { dirname, resolve, relative, join } = platformNode;
+const { statSync, readdirSync, existsSync } = nodeFs;
+const { toPosixPath, addIgnoreRules } = resourceFiles;
+
+type ResolvedEntry = { fullPath: string; isDir: boolean; isFile: boolean };
+
+function resolveEntry(
+  dir: string,
+  entry: { name: string; isDirectory(): boolean; isFile(): boolean; isSymbolicLink(): boolean },
+): ResolvedEntry | undefined {
+  const fullPath = join(dir, entry.name);
+  if (!entry.isSymbolicLink()) {
+    return { fullPath, isDir: entry.isDirectory(), isFile: entry.isFile() };
+  }
+  try {
+    const stats = statSync(fullPath);
+    return { fullPath, isDir: stats.isDirectory(), isFile: stats.isFile() };
+  } catch {
+    return undefined;
+  }
+}
 
 function collectSkillEntries(
   dir: string,
@@ -26,47 +44,21 @@ function collectSkillEntries(
 
   try {
     const dirEntries = readdirSync(dir, { withFileTypes: true });
-
     for (const entry of dirEntries) {
-      if (entry.name !== "SKILL.md") {
-        continue;
-      }
-
-      const fullPath = join(dir, entry.name);
-      let isFile = entry.isFile();
-      if (entry.isSymbolicLink()) {
-        try {
-          isFile = statSync(fullPath).isFile();
-        } catch {
-          continue;
-        }
-      }
-
-      const relPath = toPosixPath(relative(root, fullPath));
-      if (isFile && !ig.ignores(relPath)) {
-        entries.push(fullPath);
+      if (entry.name !== "SKILL.md") continue;
+      const resolved = resolveEntry(dir, entry);
+      if (resolved === undefined) continue;
+      if (resolved.isFile && !ig.ignores(toPosixPath(relative(root, resolved.fullPath)))) {
+        entries.push(resolved.fullPath);
         return entries;
       }
     }
 
     for (const entry of dirEntries) {
-      if (entry.name.startsWith(".")) continue;
-      if (entry.name === "node_modules") continue;
-
-      const fullPath = join(dir, entry.name);
-      let isDir = entry.isDirectory();
-      let isFile = entry.isFile();
-
-      if (entry.isSymbolicLink()) {
-        try {
-          const stats = statSync(fullPath);
-          isDir = stats.isDirectory();
-          isFile = stats.isFile();
-        } catch {
-          continue;
-        }
-      }
-
+      if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
+      const resolved = resolveEntry(dir, entry);
+      if (resolved === undefined) continue;
+      const { fullPath, isDir, isFile } = resolved;
       const relPath = toPosixPath(relative(root, fullPath));
       const shouldIncludeMarkdownFile =
         isFile &&
@@ -75,13 +67,9 @@ function collectSkillEntries(
         ((mode === "msa" && dir === root) || (mode === "agents" && dir !== root));
       if (shouldIncludeMarkdownFile) {
         entries.push(fullPath);
-        continue;
+      } else if (isDir && !ig.ignores(`${relPath}/`)) {
+        entries.push(...collectSkillEntries(fullPath, mode, ig, root));
       }
-
-      if (!isDir) continue;
-      if (ig.ignores(`${relPath}/`)) continue;
-
-      entries.push(...collectSkillEntries(fullPath, mode, ig, root));
     }
   } catch {}
 
@@ -230,14 +218,63 @@ function resolveExtensionEntries(dir: string): string[] | null {
   return null;
 }
 
-const defaultPackageManagerHelpersPart2 = {
+function collectAutoExtensionEntries(dir: string): string[] {
+  const entries: string[] = [];
+  if (!existsSync(dir)) return entries;
+
+  const rootEntries = resolveExtensionEntries(dir);
+  if (rootEntries !== null) {
+    return rootEntries;
+  }
+
+  const ig = ignore();
+  addIgnoreRules(ig, dir, dir);
+
+  try {
+    const dirEntries = readdirSync(dir, { withFileTypes: true });
+    for (const entry of dirEntries) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.name === "node_modules") continue;
+
+      const fullPath = join(dir, entry.name);
+      let isDir = entry.isDirectory();
+      let isFile = entry.isFile();
+
+      if (entry.isSymbolicLink()) {
+        try {
+          const stats = statSync(fullPath);
+          isDir = stats.isDirectory();
+          isFile = stats.isFile();
+        } catch {
+          continue;
+        }
+      }
+
+      const relPath = toPosixPath(relative(dir, fullPath));
+      const ignorePath = isDir ? `${relPath}/` : relPath;
+      if (ig.ignores(ignorePath)) continue;
+
+      if (isFile && (entry.name.endsWith(".ts") || entry.name.endsWith(".js"))) {
+        entries.push(fullPath);
+      } else if (isDir) {
+        const resolvedEntries = resolveExtensionEntries(fullPath);
+        if (resolvedEntries !== null) {
+          entries.push(...resolvedEntries);
+        }
+      }
+    }
+  } catch {}
+
+  return entries;
+}
+
+const resourceEntries = {
   collectAncestorAgentsSkillDirs,
+  collectAutoExtensionEntries,
   collectAutoPromptEntries,
   collectAutoSkillEntries,
   collectAutoThemeEntries,
   collectSkillEntries,
-  findGitRepoRoot,
-  resolveExtensionEntries,
 };
 
-export default defaultPackageManagerHelpersPart2;
+export default resourceEntries;

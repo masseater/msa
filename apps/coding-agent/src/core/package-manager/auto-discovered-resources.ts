@@ -1,4 +1,3 @@
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
@@ -6,17 +5,21 @@ import platformNode from "../platform-node.ts";
 import type settingsManagerTypes from "../settings-manager.types.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 import sourceInfo from "../source-info.ts";
+import packageEnv from "./package-env.ts";
+import resourceEntries from "./resource-entries.ts";
+import resourcePatterns from "./resource-patterns.ts";
 
 const { dirname, join, resolve } = platformNode;
+const { getHomeDir } = packageEnv;
 const {
-  getHomeDir,
   collectAncestorAgentsSkillDirs,
   collectAutoExtensionEntries,
   collectAutoPromptEntries,
   collectAutoSkillEntries,
   collectAutoThemeEntries,
-  isEnabledByOverrides,
-} = defaultPackageManagerHelpers;
+} = resourceEntries;
+const { isEnabledByOverrides, applyAutoloadDisabledPatterns, getOverridePatterns } =
+  resourcePatterns;
 
 type ResourceKind = defaultPackageManagerInternalTypes.ResourceType;
 
@@ -51,8 +54,6 @@ function discoveryScope(
     overrides: (kind) => (settings[kind as keyof settingsSchemaTypes.Settings] ?? []) as string[],
   };
 }
-
-const { applyAutoloadDisabledPatterns, getOverridePatterns } = defaultPackageManagerHelpers;
 
 const { BUILTIN_PATH_PREFIX } = sourceInfo;
 

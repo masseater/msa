@@ -2,14 +2,14 @@ import * as Effect from "effect/Effect";
 import { gt, maxSatisfying, rcompare } from "semver";
 
 import awaitingModule from "../awaiting.ts";
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import nodeFs from "../platform/node/fs.ts";
 import commandRunner from "./command-runner.ts";
+import packageEnv from "./package-env.ts";
 
 const { existsSync } = nodeFs;
-const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = defaultPackageManagerHelpers;
+const { NETWORK_TIMEOUT_MS, isOfflineModeEnabled } = packageEnv;
 const { awaited, awaitingWith } = awaitingModule;
 
 export default class NpmUpdateCheck {

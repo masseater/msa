@@ -1,4 +1,3 @@
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import manifestModule from "../manifest.ts";
@@ -6,17 +5,14 @@ import type manifestTypes from "../manifest.types.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
+import resourceFiles from "./resource-files.ts";
+import resourcePatterns from "./resource-patterns.ts";
 
 const { join, resolve } = platformNode;
 const { existsSync, statSync } = nodeFs;
-const {
-  applyPatterns,
-  collectResourceFiles,
-  expandPackageGlob,
-  hasGlobPattern,
-  isOverridePattern,
-  applyAutoloadDisabledPatterns,
-} = defaultPackageManagerHelpers;
+const { applyPatterns, hasGlobPattern, isOverridePattern, applyAutoloadDisabledPatterns } =
+  resourcePatterns;
+const { collectResourceFiles, expandPackageGlob } = resourceFiles;
 const { readMsaManifest } = manifestModule;
 
 export default class ManifestResources {

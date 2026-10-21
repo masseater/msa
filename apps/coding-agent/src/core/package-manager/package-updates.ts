@@ -1,13 +1,12 @@
 import * as Effect from "effect/Effect";
 
 import awaitingModule from "../awaiting.ts";
-import defaultPackageManagerHelpers from "../default-package-manager-helpers.ts";
 import type defaultPackageManagerInternalTypes from "../default-package-manager-internal.types.ts";
 import type DefaultPackageManager from "../default-package-manager.ts";
 import concurrency from "./concurrency.ts";
+import packageEnv from "./package-env.ts";
 
-const { isOfflineModeEnabled, UPDATE_CHECK_CONCURRENCY, GIT_UPDATE_CONCURRENCY } =
-  defaultPackageManagerHelpers;
+const { isOfflineModeEnabled, UPDATE_CHECK_CONCURRENCY, GIT_UPDATE_CONCURRENCY } = packageEnv;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { runWithConcurrency } = concurrency;
 
