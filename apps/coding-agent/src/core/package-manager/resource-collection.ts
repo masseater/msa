@@ -6,6 +6,7 @@ import type manifestTypes from "../manifest.types.ts";
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
+import resourceEntries from "./resource-entries.ts";
 import resourceFiles from "./resource-files.ts";
 import resourcePatterns from "./resource-patterns.ts";
 
@@ -13,7 +14,8 @@ const { canonicalizePath } = pathsModule;
 const { dirname, join } = platformNode;
 const { existsSync, statSync } = nodeFs;
 const { applyPatterns, splitPatterns } = resourcePatterns;
-const { collectResourceFiles, resourcePrecedenceRank, RESOURCE_TYPES } = resourceFiles;
+const { collectResourceFiles } = resourceEntries;
+const { resourcePrecedenceRank, RESOURCE_TYPES } = resourceFiles;
 const { readMsaManifest } = manifestModule;
 
 export default class ResourceCollection {

@@ -8,8 +8,8 @@ import resourceFiles from "./resource-files.ts";
 
 const { readMsaManifest } = manifestModule;
 const { dirname, resolve, relative, join } = platformNode;
-const { statSync, readdirSync, existsSync } = nodeFs;
-const { toPosixPath, addIgnoreRules } = resourceFiles;
+const { readdirSync, existsSync, statSync } = nodeFs;
+const { FILE_PATTERNS, collectFiles, toPosixPath, addIgnoreRules } = resourceFiles;
 
 type ResolvedEntry = { fullPath: string; isDir: boolean; isFile: boolean };
 
@@ -268,13 +268,26 @@ function collectAutoExtensionEntries(dir: string): string[] {
   return entries;
 }
 
+function collectResourceFiles(
+  dir: string,
+  resourceType: defaultPackageManagerInternalTypes.ResourceType,
+): string[] {
+  if (resourceType === "skills") {
+    return collectSkillEntries(dir, "msa");
+  }
+  if (resourceType === "extensions") {
+    return collectAutoExtensionEntries(dir);
+  }
+  return collectFiles(dir, FILE_PATTERNS[resourceType]);
+}
+
 const resourceEntries = {
   collectAncestorAgentsSkillDirs,
   collectAutoExtensionEntries,
   collectAutoPromptEntries,
   collectAutoSkillEntries,
   collectAutoThemeEntries,
-  collectSkillEntries,
+  collectResourceFiles,
 };
 
 export default resourceEntries;

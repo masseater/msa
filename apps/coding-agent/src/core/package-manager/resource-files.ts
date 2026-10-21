@@ -4,11 +4,9 @@ import type defaultPackageManagerInternalTypes from "../default-package-manager-
 import type packageManagerTypes from "../package-manager.types.ts";
 import platformNode from "../platform-node.ts";
 import nodeFs from "../platform/node/fs.ts";
-import resourceEntries from "./resource-entries.ts";
 
 const { statSync, readdirSync, globSync, readFileSync, existsSync } = nodeFs;
 const { resolve, join, relative, sep } = platformNode;
-const { collectAutoExtensionEntries, collectSkillEntries } = resourceEntries;
 
 const RESOURCE_TYPES: defaultPackageManagerInternalTypes.ResourceType[] = [
   "extensions",
@@ -137,19 +135,6 @@ function collectFiles(
   return files;
 }
 
-function collectResourceFiles(
-  dir: string,
-  resourceType: defaultPackageManagerInternalTypes.ResourceType,
-): string[] {
-  if (resourceType === "skills") {
-    return collectSkillEntries(dir, "msa");
-  }
-  if (resourceType === "extensions") {
-    return collectAutoExtensionEntries(dir);
-  }
-  return collectFiles(dir, FILE_PATTERNS[resourceType]);
-}
-
 function resourcePrecedenceRank(m: packageManagerTypes.PathMetadata): number {
   if (m.source === "builtin") return 5;
   if (m.origin === "package") return 4;
@@ -158,9 +143,10 @@ function resourcePrecedenceRank(m: packageManagerTypes.PathMetadata): number {
 }
 
 const resourceFiles = {
+  FILE_PATTERNS,
   RESOURCE_TYPES,
   addIgnoreRules,
-  collectResourceFiles,
+  collectFiles,
   expandPackageGlob,
   resourcePrecedenceRank,
   toPosixPath,
