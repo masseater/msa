@@ -6,6 +6,10 @@
 
 - A task can carry checks: commands with the exit code, and optionally the output, they must give. `create_task`, `replan`, and `set_task_state` take them. When the worker ends its turn, the harness runs them in the task's working directory before the reviewer starts and sends failing results back to the worker; after three such rounds the task fails. `orchestrator.db` moves to schema 2, so an older msa stops with "Update msa" instead of running tasks without their checks ([docs](docs/cli.md#tools))
 
+### Changed
+
+- `create_task` rejects a task without dependencies once 3 or more work tasks of the project are waiting or running; the error lists them and says to name a dependency or insert the task with `replan`. With 2 or fewer, `dependsOn` can still be empty. The orchestrator's tool guidelines now ask for strict dependencies: work on the same area, branch, or precondition is chained, parallel only when neither task depends on the other's result, and a red main gets one fixing task that the other work tasks wait for ([docs](docs/cli.md#tools))
+
 ### Fixed
 
 - A task no longer stays `running` after its thread dies. The orchestrator checks its threads every minute and stops the ones with no tool call or message for 30 minutes (60 minutes while one tool call is running), the ones whose last turn ended in an error or abort without finishing, and the ones with no live run; a thread that is compacting is not checked. Their tasks become `stopped` or `failed`, and the session gets a report with the elapsed time. Tasks of another session whose orchestrator process is gone go back to `waiting`, as do a session's own running tasks when it closes or reopens; the reopened session gets a report with how long each had gone without an update. A report for a failed thread now says how long it ran ([docs](docs/cli.md#tools))

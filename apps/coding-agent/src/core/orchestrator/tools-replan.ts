@@ -105,6 +105,7 @@ function replanTools(
       promptGuidelines: [
         "Use replan when the plan itself is wrong, not to nudge one task: send_message and send_note steer work that stays as it is.",
         "Every running task must be kept, replaced by a task with from, or dropped. The call is rejected otherwise.",
+        "Use replan to insert a task that must run before existing ones: add it and rewire the tasks it precedes to depend on it. Keep the dependencies strict; prefer chaining work on the same area, branch, or precondition over running it in parallel.",
         "A task you replace keeps its round, dependencies, states, and checks unless you say otherwise. Pass checks to replace them; [] removes them.",
         "Write each new task as a currentState and a goalState, never as a procedure. Use the handoff memo to say what is true now.",
       ],
