@@ -18,6 +18,28 @@ const { rounds } = roundsModule;
 const { scheduling } = schedule;
 const { actionHelpers } = actionHelpersModule;
 
+const UNFINISHED_TASKS_REQUIRING_DEPENDENCIES = 3;
+
+function requireDependenciesWhenBusy(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.CreateTaskInput,
+): void {
+  if ((input.dependsOn ?? []).length > 0) return;
+  const unfinished = store
+    .listTasks(runtime.database, runtime.options.project)
+    .filter(
+      (task) => task.kind === "work" && (task.status === "waiting" || task.status === "running"),
+    );
+  if (unfinished.length < UNFINISHED_TASKS_REQUIRING_DEPENDENCIES) return;
+  throw new Error(
+    `Task ${input.title} has no dependsOn while ${unfinished.length} tasks are unfinished (${unfinished
+      .map((task) => task.id)
+      .join(
+        ", ",
+      )}). With ${UNFINISHED_TASKS_REQUIRING_DEPENDENCIES} or more unfinished tasks, a new task must name what it waits for in dependsOn. If it must run before existing tasks, insert it into the DAG with replan instead.`,
+  );
+}
+
 function resolveRound(
   runtime: runtimeTypes.Runtime,
   input: orchestratorTypesTypes.CreateTaskInput,
@@ -45,6 +67,7 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     const states = requireStates(`Task ${input.title}`, input.currentState, input.goalState);
     const checks = requireChecks(`Task ${input.title}`, input.checks);
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
+    requireDependenciesWhenBusy(runtime, input);
     const round = resolveRound(runtime, input);
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
