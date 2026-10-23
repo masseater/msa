@@ -76,10 +76,33 @@ function roundFor(
   return "main";
 }
 
+function mergeTargetOf(
+  runtime: runtimeTypes.Runtime,
+  input: orchestratorTypesTypes.ReplanTaskInput,
+  sources: readonly orchestratorTypesTypes.Task[],
+  replaced: ReadonlySet<string>,
+): string | null {
+  const find = (id: string) => store.getTask(runtime.database, id);
+  const project = runtime.options.project;
+  if (input.mergeInto !== undefined) return requireMergeTarget(input.mergeInto, project, find);
+  const own = new Set(sources.map((source) => source.id));
+  const source = sources.find((task) => task.mergeInto !== null && !own.has(task.mergeInto));
+  const target = source?.mergeInto ?? null;
+  if (source === undefined || target === null || replaced.has(target)) return target;
+  try {
+    return requireMergeTarget(target, project, find);
+  } catch (error) {
+    throw fail(
+      `Task ${input.title} would inherit mergeInto ${target} from ${source.id}, but ${error instanceof Error ? error.message : String(error)} Pass mergeInto to choose another target.`,
+    );
+  }
+}
+
 function newTask(
   runtime: runtimeTypes.Runtime,
   input: orchestratorTypesTypes.ReplanTaskInput,
   sources: readonly orchestratorTypesTypes.Task[],
+  replaced: ReadonlySet<string>,
   now: number,
 ): orchestratorTypesTypes.Task {
   return {
@@ -94,12 +117,7 @@ function newTask(
     goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
     id: newId("t"),
     kind: "work",
-    mergeInto:
-      input.mergeInto === undefined
-        ? (sources[0]?.mergeInto ?? null)
-        : requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
-            store.getTask(runtime.database, id),
-          ),
+    mergeInto: mergeTargetOf(runtime, input, sources, replaced),
     model: input.model ?? null,
     project: runtime.options.project,
     round: roundFor(input, sources),
@@ -118,13 +136,14 @@ function createTasks(
   const database = runtime.database;
   const project = runtime.options.project;
   const closed = new Set(prepared.sources);
+  const replaced = new Set(prepared.entries.flatMap((entry) => entry.from));
   const created: orchestratorTypesTypes.ReplanCreated[] = [];
   const inheritors = new Map<string, string[]>();
   const byKey = new Map<string, string>();
   const pending: { taskId: string; refs: readonly string[]; explicit: boolean }[] = [];
   for (const entry of prepared.entries) {
     const sources = entry.from.flatMap((id) => prepared.views.get(id) ?? []);
-    const task = newTask(runtime, entry.input, sources, now);
+    const task = newTask(runtime, entry.input, sources, replaced, now);
     store.insertTask(database, task);
     const review = rounds.ensureReview(runtime, task.round, now);
     rounds.attachReview(runtime, review, task.id, now);

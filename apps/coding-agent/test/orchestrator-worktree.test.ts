@@ -10,7 +10,7 @@ const { joinPath, makeTempDir, removePath } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
-const { commitOnBranch, gatedTarget, read, runCommand, sh, shortId, withRepository } =
+const { GIT, commitOnBranch, gatedTarget, read, runCommand, sh, shortId, withRepository } =
   worktreeSupport;
 
 const startsTheWorkerInAWorktreeAndChecksThere = () =>
@@ -174,3 +174,47 @@ const rejectsAReviewTaskAsMergeTarget = () =>
   );
 
 it("rejects a merge target that is not a work task", rejectsAReviewTaskAsMergeTarget);
+
+const branchesFromTheLatestOrigin = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const parent = joinPath(repository, "..");
+        yield* sh(
+          "git clone -q --bare repo origin.git && git clone -q origin.git upstream",
+          parent,
+        );
+        yield* sh(
+          "git remote add origin ../origin.git && git fetch -q origin && git remote set-head origin main",
+          repository,
+        );
+        const advanceOrigin = (message: string) =>
+          sh(
+            `${GIT} commit -q --allow-empty -m ${message} && git push -q origin main`,
+            joinPath(parent, "upstream"),
+          );
+        const { orchestrator, workers } = setup({ cwd: repository, runCommand });
+
+        yield* advanceOrigin("upstream-1");
+        const { target } = yield* gatedTarget(orchestrator);
+        expect(yield* sh("git log -1 --format=%s", workers[0]!.cwd)).toBe("upstream-1");
+
+        yield* advanceOrigin("upstream-2");
+        yield* create(orchestrator, {
+          currentState: "c",
+          goalState: "d",
+          mergeInto: target.id,
+          title: "part",
+        });
+        expect(yield* sh(`git log -1 --format=%s task/${shortId(target.id)}`, repository)).toBe(
+          "upstream-2",
+        );
+        expect(yield* sh("git log -1 --format=%s", workers[1]!.cwd)).toBe("upstream-2");
+      }),
+    ),
+  );
+
+it(
+  "fetches origin before it cuts a task's branch or its merge target's branch, so neither starts from a stale main",
+  branchesFromTheLatestOrigin,
+);
