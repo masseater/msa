@@ -164,6 +164,11 @@ export default defineConfig({
         cache: false,
         command: "node tools/local-install.ts",
       },
+      "lockfile-policy": {
+        cache: false,
+        command:
+          "git ls-files -- ':(glob)**/package-lock.json' ':(glob)**/npm-shrinkwrap.json' ':(glob)**/yarn.lock' ':(glob)**/bun.lock' ':(glob)**/bun.lockb' ':(glob)**/deno.lock' | awk '{ print \"pnpm-lock.yaml 以外の lock がコミットされている: \" $0; found = 1 } END { exit found }'",
+      },
       "mcp-conformance": {
         cache: false,
         command: "vp run test:mcp-conformance",
@@ -188,6 +193,7 @@ export default defineConfig({
           "syncpack",
           "actions-lint",
           "code-rules",
+          "lockfile-policy",
           "mcp-conformance",
           "fallow-all",
           "audit",
