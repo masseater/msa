@@ -1,0 +1,13 @@
+diff --git a/dist/sandbox/sandbox-config.d.ts b/dist/sandbox/sandbox-config.d.ts
+index 5b60451e407b1500936fc72f61c6d83b1e934a77..bdad76a17eb35098e6bc603a14ebf0ed06b332a2 100644
+--- a/dist/sandbox/sandbox-config.d.ts
++++ b/dist/sandbox/sandbox-config.d.ts
+@@ -2,7 +2,7 @@
+  * Configuration for Sandbox Runtime
+  * This is the main configuration interface that consumers pass to SandboxManager.initialize()
+  */
+-import { z } from 'zod';
++import type { z } from 'zod/v3';
+ /**
+  * Network configuration schema for validation
+  */

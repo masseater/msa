@@ -84,6 +84,7 @@ overrides:
   protobufjs: 7.6.6
   oxlint: 1.87.0
   oxlint-tsgolint: 7.0.2003
+  "@anthropic-ai/sandbox-runtime>zod": 4.6.7
 
 allowBuilds:
   "@ast-grep/cli": true
@@ -100,3 +101,6 @@ minimumReleaseAge: 2880
 audit:
   ignore:
     - GHSA-86w9-cpqp-85rv
+
+patchedDependencies:
+  "@anthropic-ai/sandbox-runtime@0.0.26": patches/@anthropic-ai__sandbox-runtime@0.0.26.patch
