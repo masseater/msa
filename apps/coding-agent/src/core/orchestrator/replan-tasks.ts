@@ -85,7 +85,8 @@ function mergeTargetOf(
   const find = (id: string) => store.getTask(runtime.database, id);
   const project = runtime.options.project;
   if (input.mergeInto !== undefined) return requireMergeTarget(input.mergeInto, project, find);
-  const source = sources[0];
+  const own = new Set(sources.map((source) => source.id));
+  const source = sources.find((task) => task.mergeInto !== null && !own.has(task.mergeInto));
   const target = source?.mergeInto ?? null;
   if (source === undefined || target === null || replaced.has(target)) return target;
   try {
