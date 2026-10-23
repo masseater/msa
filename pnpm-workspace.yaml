@@ -98,6 +98,9 @@ allowBuilds:
 
 minimumReleaseAge: 2880
 
+minimumReleaseAgeExclude:
+  - body-parser@2.4.0
+
 audit:
   ignore:
     - GHSA-86w9-cpqp-85rv
