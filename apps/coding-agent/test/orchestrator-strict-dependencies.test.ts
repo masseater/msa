@@ -76,6 +76,22 @@ it("accepts a task that names a dependency while three tasks are unfinished", ()
     }),
   ));
 
+it("accepts a task that merges into a waiting task while three tasks are unfinished, since the target waits for it", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator } = setup({ maxConcurrent: 1 });
+      yield* create(orchestrator, work("a"));
+      yield* create(orchestrator, work("b"));
+      const c = yield* create(orchestrator, work("c"));
+      const part = yield* create(orchestrator, { ...work("part of c"), mergeInto: c.id });
+      expect(part.dependsOn).toEqual([]);
+      const target = (yield* Effect.promise(() => orchestrator.list())).find(
+        (task) => task.id === c.id,
+      );
+      expect(target?.dependsOn).toEqual([part.id]);
+    }),
+  ));
+
 it("counts only unfinished tasks, so a finished one frees a slot", () =>
   Effect.runPromise(
     Effect.gen(function* () {

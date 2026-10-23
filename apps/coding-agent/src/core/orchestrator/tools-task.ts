@@ -36,7 +36,7 @@ const createSchema = Type.Object({
   dependsOn: Type.Optional(
     Type.Array(taskIdSchema, {
       description:
-        "Tasks that must complete before this one starts; their reports join the prompt. Pass [] only when the work needs none. Once 3 or more work tasks of the project are waiting or running, a task without dependencies is rejected: name what it waits for, or insert it with replan when it must run first.",
+        "Tasks that must complete before this one starts; their reports join the prompt. Pass [] only when the work needs none. Once 3 or more work tasks of the project are waiting or running, a task with neither dependencies nor mergeInto is rejected: name what it waits for, or insert it with replan when it must run first.",
     }),
   ),
   goalState: Type.String({

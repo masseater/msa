@@ -24,7 +24,7 @@ function requireDependenciesWhenBusy(
   runtime: runtimeTypes.Runtime,
   input: orchestratorTypesTypes.CreateTaskInput,
 ): void {
-  if ((input.dependsOn ?? []).length > 0) return;
+  if ((input.dependsOn ?? []).length > 0 || input.mergeInto !== undefined) return;
   const unfinished = store
     .listTasks(runtime.database, runtime.options.project)
     .filter(
@@ -36,7 +36,7 @@ function requireDependenciesWhenBusy(
       .map((task) => task.id)
       .join(
         ", ",
-      )}). With ${UNFINISHED_TASKS_REQUIRING_DEPENDENCIES} or more unfinished tasks, a new task must name what it waits for in dependsOn. If it must run before existing tasks, insert it into the DAG with replan instead.`,
+      )}). With ${UNFINISHED_TASKS_REQUIRING_DEPENDENCIES} or more unfinished tasks, a new task must name what it waits for in dependsOn, or the task it merges into in mergeInto. If it must run before existing tasks, insert it into the DAG with replan instead.`,
   );
 }
 
