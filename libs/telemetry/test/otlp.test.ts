@@ -1,7 +1,5 @@
-import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import { Context, Effect, Exit, Layer, ManagedRuntime, Scope } from "effect";
-import { HttpEffect, HttpServer } from "effect/http";
-import * as NetAddress from "effect/net/NetAddress";
+import msaTesting from "@msa/testing";
+import { Effect, Exit, ManagedRuntime, Scope } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import otlp from "../src/otlp.ts";
@@ -23,16 +21,14 @@ interface Collector {
 
 type Listener = (path: string, payload: otlpRecordsTypes.Payload) => void;
 
-const respond = (listener: Listener) =>
-  HttpEffect.fromWebHandler((request) =>
-    Effect.runPromise(
-      Effect.map(
-        Effect.promise(() => request.text()),
-        (body) => {
-          listener(new URL(request.url).pathname, JSON.parse(body) as otlpRecordsTypes.Payload);
-          return new Response("{}", { headers: { "content-type": "application/json" } });
-        },
-      ),
+const respond = (listener: Listener) => (request: Request) =>
+  Effect.runPromise(
+    Effect.map(
+      Effect.promise(() => request.text()),
+      (body) => {
+        listener(new URL(request.url).pathname, JSON.parse(body) as otlpRecordsTypes.Payload);
+        return new Response("{}", { headers: { "content-type": "application/json" } });
+      },
     ),
   );
 
@@ -40,21 +36,15 @@ const startCollector = (onPayload: Listener = () => {}): Effect.Effect<Collector
   Effect.gen(function* () {
     const received: otlpRecordsTypes.Received = { logs: [], metrics: new Map(), spans: [] };
     const scope = yield* Scope.make();
-    const serving = HttpServer.serve(
-      respond((path, payload) => {
-        onPayload(path, payload);
-        receive(received, path, payload);
-      }),
-    ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
-    const services = yield* Effect.orDie(Layer.buildWithScope(serving, scope));
-    const { address } = Context.get(services, HttpServer.HttpServer);
-    if (NetAddress.isUnixPathAddress(address))
-      return yield* Effect.die("collector bound to a path");
-    return {
-      close: Scope.close(scope, Exit.void),
-      endpoint: `http://127.0.0.1:${address.port}`,
-      received,
-    };
+    const endpoint = yield* msaTesting
+      .serveLoopback(
+        respond((path, payload) => {
+          onPayload(path, payload);
+          receive(received, path, payload);
+        }),
+      )
+      .pipe(Scope.provide(scope));
+    return { close: Scope.close(scope, Exit.void), endpoint, received };
   });
 
 const makeFixture = Effect.gen(function* () {

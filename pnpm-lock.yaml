@@ -614,6 +614,9 @@ importers:
       '@msa/coding-agent':
         specifier: workspace:*
         version: link:../coding-agent
+      '@msa/testing':
+        specifier: workspace:*
+        version: link:../../libs/testing
       '@msa/tui':
         specifier: workspace:*
         version: link:../../libs/tui
@@ -865,6 +868,9 @@ importers:
       '@effect/vitest':
         specifier: catalog:stack
         version: 4.0.2(effect@4.0.2)(vitest@5.0.5)
+      '@msa/testing':
+        specifier: workspace:*
+        version: link:../testing
       '@types/node':
         specifier: 'catalog:'
         version: 22.19.19
@@ -880,6 +886,9 @@ importers:
       effect:
         specifier: 4.0.2
         version: 4.0.2
+      srvx:
+        specifier: 'catalog:'
+        version: 1.0.5
     devDependencies:
       shx:
         specifier: 'catalog:'

@@ -48,6 +48,40 @@ vi.mock("child_process", (importOriginal) =>
   importOriginal<Record<string, unknown>>().then((actual) => ({ ...actual, ...childProcessMocks })),
 );
 
+const watchMode = vi.hoisted(() => ({ onlyEmitted: false }));
+
+type Listener = (...args: unknown[]) => void;
+
+const emittedOnly = (listener: Listener) => {
+  let open = true;
+  return {
+    close: () => {
+      open = false;
+    },
+    emit: (event: string, ...args: unknown[]) => {
+      if (!open || event !== "change") return false;
+      listener(...args);
+      return true;
+    },
+    listenerCount: () => (open ? 1 : 0),
+  };
+};
+
+vi.mock("../src/utils/fs-watch.ts", (importOriginal) =>
+  importOriginal<{ default: Record<string, unknown> }>().then(({ default: actual }) => {
+    const realWatch = actual["watchWithErrorHandler"] as Listener;
+    return {
+      default: {
+        ...actual,
+        watchWithErrorHandler: (...args: unknown[]) =>
+          watchMode.onlyEmitted && args.length >= 3
+            ? emittedOnly(args[1] as Listener)
+            : realWatch(...args),
+      },
+    };
+  }),
+);
+
 interface WatcherHandle {
   emit(event: string, ...args: unknown[]): boolean;
   listenerCount(event: string): number;
@@ -82,6 +116,7 @@ const doesNotNotifyListenersWhenReftableUpdates = () =>
   runTest(
     Effect.gen(function* () {
       vi.useFakeTimers();
+      watchMode.onlyEmitted = true;
       const { worktreeDir } = yield* createReftableWorktree(tempDir2);
       process.chdir(worktreeDir);
 
@@ -115,6 +150,7 @@ const debouncesRapidReftableUpdatesIntoASingle = () =>
   runTest(
     Effect.gen(function* () {
       vi.useFakeTimers();
+      watchMode.onlyEmitted = true;
       const { worktreeDir } = yield* createReftableWorktree(tempDir2);
       process.chdir(worktreeDir);
 
@@ -184,6 +220,7 @@ const beforeEachHook2 = () =>
       originalCwd = process.cwd();
       tempDir2 = yield* makeTempDir("footer-data-provider-");
       gitState.branch = "main";
+      watchMode.onlyEmitted = false;
       childProcessMocks.spawnSync.mockClear();
       childProcessMocks.execFile.mockClear();
     }),

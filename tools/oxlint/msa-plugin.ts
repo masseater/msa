@@ -5,6 +5,7 @@ import classOrigin from "./class-origin.ts";
 import type flowTypes from "./flow.types.ts";
 import LookupFlow from "./lookup-flow.ts";
 import RequireFlow from "./require-flow.ts";
+import restrictedMember from "./restricted-member.ts";
 import StaticString from "./static-string.ts";
 
 const LOOKUP = "getBuiltinModule";
@@ -129,12 +130,48 @@ const noLocalClassExtends = defineRule({
   meta: { type: "problem" },
 });
 
+const noRestrictedMember = defineRule({
+  create(context) {
+    const members = restrictedMember.restrictedMembersOf(context);
+    return {
+      ImportDeclaration(node) {
+        for (const member of members) restrictedMember.checkImport(context, node, member);
+      },
+    };
+  },
+  meta: {
+    schema: [
+      {
+        additionalProperties: false,
+        properties: {
+          members: {
+            items: {
+              additionalProperties: false,
+              properties: {
+                message: { type: "string" },
+                module: { type: "string" },
+                path: { items: { type: "string" }, minItems: 1, type: "array" },
+              },
+              required: ["message", "module", "path"],
+              type: "object",
+            },
+            type: "array",
+          },
+        },
+        type: "object",
+      },
+    ],
+    type: "problem",
+  },
+});
+
 const msaPlugin = definePlugin({
   meta: { name: "msa" },
   rules: {
     "no-builtin-module-lookup": noBuiltinModuleLookup,
     "no-builtin-require": noBuiltinRequire,
     "no-local-class-extends": noLocalClassExtends,
+    "no-restricted-member": noRestrictedMember,
     "no-sync-fs": noSyncFs,
   },
 });

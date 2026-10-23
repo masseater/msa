@@ -58,6 +58,7 @@
   "devDependencies": {
     "@effect/platform-node": "catalog:",
     "@effect/vitest": "catalog:stack",
+    "@msa/testing": "workspace:*",
     "@types/node": "catalog:",
     "vitest": "catalog:"
   },

@@ -18,6 +18,7 @@
     "@effect/vitest": "catalog:stack",
     "@msa/ai": "workspace:*",
     "@msa/coding-agent": "workspace:*",
+    "@msa/testing": "workspace:*",
     "@msa/tui": "workspace:*",
     "@types/node": "catalog:",
     "@vitest-evals/core": "catalog:",

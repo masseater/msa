@@ -1,16 +1,13 @@
-import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import mcp from "@msa/mcp";
 import testing from "@msa/testing";
-import { Context, Crypto, Deferred, Effect, Exit, Layer, ManagedRuntime, Scope } from "effect";
-import { HttpEffect, HttpServer } from "effect/http";
-import * as NetAddress from "effect/net/NetAddress";
+import { Crypto, Deferred, Effect, Exit, ManagedRuntime, Scope } from "effect";
 
 import type mcpOauthServerTypes from "./mcp-oauth-server.types.ts";
 
 const { LATEST_PROTOCOL_VERSION } = mcp;
 
-const { fromJsonText } = testing;
+const { fromJsonText, serveLoopback } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 
@@ -227,13 +224,9 @@ const initialState = (
 
 const serve = Effect.fn("serve")(function* (state: mcpOauthServerTypes.ServerState) {
   const scope = yield* Scope.make();
-  const serving = HttpServer.serve(
-    HttpEffect.fromWebHandler((request) => runtime.runPromise(handle(state, request))),
-  ).pipe(Layer.provideMerge(NodeHttpServer.layerTest));
-  const services = yield* Layer.buildWithScope(serving, scope);
-  const { address } = Context.get(services, HttpServer.HttpServer);
-  if (!NetAddress.isInetAddress(address)) throw new Error("test server did not bind to TCP");
-  state.origin = `http://127.0.0.1:${address.port}`;
+  state.origin = yield* serveLoopback((request) => runtime.runPromise(handle(state, request))).pipe(
+    Scope.provide(scope),
+  );
   return scope;
 });
 

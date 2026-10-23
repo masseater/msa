@@ -1,7 +1,5 @@
-import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer";
-import { Context, Effect, Exit, Layer, Option, Schema, Scope } from "effect";
-import { HttpEffect, HttpServer } from "effect/http";
-import * as NetAddress from "effect/net/NetAddress";
+import testing from "@msa/testing";
+import { Effect, Exit, Option, Schema, Scope } from "effect";
 
 import type acmeServerTypes from "./acme-server.types.ts";
 
@@ -159,8 +157,8 @@ const handle =
         : openAiResponse(request, payload.value, prompt, probe);
     });
 
-const webHandler = (mode: ServerMode, probe: Probe) =>
-  HttpEffect.fromWebHandler((request) => Effect.runPromise(handle(mode, probe)(request)));
+const webHandler = (mode: ServerMode, probe: Probe) => (request: Request) =>
+  Effect.runPromise(handle(mode, probe)(request));
 
 function createAcmeServer(mode: ServerMode): acmeServerTypes.AcmeServer {
   const probe: Probe = { validRequestReceived: false };
@@ -169,16 +167,10 @@ function createAcmeServer(mode: ServerMode): acmeServerTypes.AcmeServer {
 
   const start = Effect.gen(function* () {
     const serverScope = yield* Scope.make();
-    const serving = HttpServer.serve(webHandler(mode, probe)).pipe(
-      Layer.provideMerge(NodeHttpServer.layerTest),
-    );
-    const services = yield* Layer.buildWithScope(serving, serverScope).pipe(Effect.orDie);
-    const { address } = Context.get(services, HttpServer.HttpServer);
-    if (NetAddress.isUnixPathAddress(address)) {
-      return yield* Effect.die(new Error("Acme fixture server did not bind a TCP port."));
-    }
+    serverOrigin = yield* testing
+      .serveLoopback(webHandler(mode, probe))
+      .pipe(Scope.provide(serverScope));
     scope = serverScope;
-    serverOrigin = `http://127.0.0.1:${address.port}`;
   });
 
   const stop = Effect.suspend(() => {

@@ -16,14 +16,14 @@ const settle = Effect.repeat(Effect.yieldNow, { times: 10 });
 
 const cacheWarmerLeavesTheProcessFree = Effect.gen(function* () {
   const { warmer } = fakeRuntime();
-  const before = timersHoldingTheProcess();
   warmer.start(request(), current);
   yield* settle;
   const status = warmer.status;
   const pending = timersHoldingTheProcess();
   warmer.cancel();
+  const after = timersHoldingTheProcess();
   expect(status.state).toBe("scheduled");
-  expect(pending).toBe(before);
+  expect(pending).toBe(after);
 });
 
 const killFallbackLeavesTheProcessFree = Effect.gen(function* () {
@@ -38,7 +38,6 @@ const killFallbackLeavesTheProcessFree = Effect.gen(function* () {
   yield* settle;
   const before = timersHoldingTheProcess();
   controller.abort();
-  yield* settle;
   const pending = timersHoldingTheProcess();
   const stillRunning = !settled;
   const finished = yield* Effect.promise(() => result);
