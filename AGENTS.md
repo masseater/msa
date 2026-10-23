@@ -47,6 +47,7 @@ release. Add a tool name to select part of the graph. For example, run
   - Claude Code のインスタンス名、サブスクリプションのアカウント名などのアカウント名
   - 個人のメールアドレス
   - ローカルの絶対パス、ホームディレクトリ（`~/` など）の下のパス
+  - このリポジトリ以外のリポジトリの名前・パス・中身
 - 書きかけたら、書く前に一般的な言い方（「別のインスタンス」「個人のアカウント」「ローカルの設定ディレクトリ」など）に置き換える。公開した履歴は消せないため、投稿の前に確かめる。
 
 ## 作業の完了
@@ -89,7 +90,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## node の組み込み
 
-- Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。
+- Effect に代わりのある組み込み（`lint.config.ts` の `effectReplaceableBuiltins`）は、`apps/coding-agent/src/core/platform/node/` と `libs/durable/src/env/node/` でだけ読む。`vite.config.ts` で `effecttsgo/node-builtin-import` を外す override もこの 2 つだけに置き、ほかの場所を足さない。`apps/coding-agent/src` では、ほかの組み込みも `core/platform/node/` を通す。
 - import 文だけでなく、`require`・`createRequire(...)(...)`・`Module._load`・動的 `import()`・`export ... from` による再 export・`process.getBuiltinModule`・`process.binding` も lint（`msa/no-builtin-require`・`msa/no-builtin-module-lookup`）で禁じている。`node:module` から来た `createRequire`・`Module` と CJS の `module`（`module.constructor`）、`process`・`globalThis` は変数・別名・分割代入・再代入を追い、読み込む先やキーを決められない書き方（文字列でない引数、計算したキー、値を外へ渡すなど）も弾く。
 - 同期の fs（`existsSync`・`readFileSync` などの `*Sync`）は `msa/no-sync-fs` で禁じている。Effect の `FileSystem` か platform の非同期 API を使う。起動前など同期でしか書けない処理は、`core/platform/node/` の名前付き関数に閉じる。
 - 規則は `tools/oxlint/` にあり、すり抜けの書き方と一覧が effecttsgo・node の fs とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。lint の抑止コメントは書けない（`no-comments` で弾く）。読み込む先が実行時に決まるファイルは、`import()` に `pathToFileURL(...)` の URL を直接渡すか、ネイティブアドオンなら `process.dlopen` で読む（`libs/tui/src/native-addon.ts`）。どちらも組み込みには届かない。
@@ -127,8 +128,12 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## PR とマージ
 
-- PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
-- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってから自分でマージする。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
+- orchestrator の reviewer による判定のほかに、PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
+- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージし、orchestrator の work task の PR は reviewer の合格後に orchestrator が squash merge する。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
+- orchestrator の worker は次のとおりにする。
+  - PR を自分でマージしない。`gh pr merge` も auto-merge も使わない。
+  - 完了は、PR を出し、CI が全 green になったのを `pr_watch` で確かめ、PR 番号と head SHA を報告したところまで。
+  - main の `verify` が赤いときは自分で直さず、直す担当のタスクが main に入るのを待ち、rebase してから進める。
 
 ## 公開先
 
