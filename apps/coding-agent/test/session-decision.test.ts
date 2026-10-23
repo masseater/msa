@@ -3,11 +3,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
+import decideModule from "../src/core/decision/decide.ts";
 import localModelEvents from "../src/core/decision/local-model-events.ts";
 import harnessModule from "./suite/harness.ts";
 
 const { awaited, runTest } = testing;
 const { LIQUID_D1 } = localModule;
+const { decide } = decideModule;
 const { emitLocalModelEvent } = localModelEvents;
 const { createHarness } = harnessModule;
 
@@ -45,7 +47,7 @@ const recordsAnUndecidedDecision = () =>
         createHarness({ settings: { decision: { model: "local/none" } } }),
       );
       try {
-        const decision = yield* harness.session.integrations.decision.decideInternal.decide({
+        const decision = yield* decide({
           name: "triage",
           questions: {
             urgent: {
@@ -56,7 +58,7 @@ const recordsAnUndecidedDecision = () =>
             },
           },
           state: { ticket: "The build fails." },
-        });
+        }).pipe((effect) => harness.session.integrations.decision.provide(effect));
 
         const reason = 'decision.model "local/none" is not an available classifier';
         expect(decision).toEqual({ reason, status: "undecided" });

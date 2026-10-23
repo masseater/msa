@@ -152,6 +152,9 @@ const makeDecide = (host: decideTypes.DecisionHost) =>
     });
   });
 
-const decideModule = { DECISION_TIMEOUT, makeDecide };
+const decide = (request: decideTypes.DecideRequest) =>
+  Decide.use((service) => service.decide(request));
+
+const decideModule = { DECISION_TIMEOUT, decide, makeDecide };
 
 export default decideModule;

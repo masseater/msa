@@ -3,6 +3,7 @@ import localModule from "@msa/ai/providers/local";
 import { Effect } from "effect";
 
 import type AgentSession from "../agent-session.ts";
+import Decide from "../decision/decide-service.ts";
 import decideModule from "../decision/decide.ts";
 import type decideTypes from "../decision/decide.types.ts";
 import localModelEvents from "../decision/local-model-events.ts";
@@ -35,7 +36,7 @@ function progressLogger(
 }
 
 export default class SessionDecision {
-  decideInternal!: decideTypes.DecideShape;
+  private service: decideTypes.DecideShape | undefined;
 
   private readonly session: AgentSession;
 
@@ -49,7 +50,7 @@ export default class SessionDecision {
     const { session } = this;
     const settings = session.settingsManager.models;
     const runtime = () => session.models.selection.modelRuntimeInternal;
-    this.decideInternal = Effect.runSync(
+    this.service = Effect.runSync(
       makeDecide({
         classify: (model, context, signal) => runtime().classify(model, context, { signal }),
         model: () => {
@@ -91,6 +92,12 @@ export default class SessionDecision {
         session.sessionManager.appendCustomEntry(DECISION_MODEL_ENTRY, event);
       }),
     );
+  }
+
+  provide<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, Exclude<R, Decide>> {
+    const { service } = this;
+    if (service === undefined) return Effect.die(new Error("session decision has not started"));
+    return Effect.provideService(effect, Decide, service);
   }
 
   close(): void {

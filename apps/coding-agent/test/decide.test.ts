@@ -5,12 +5,13 @@ import { Clock, Duration, Effect, Fiber } from "effect";
 import { TestClock } from "effect/testing";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import Decide from "../src/core/decision/decide-service.ts";
 import decideModule from "../src/core/decision/decide.ts";
 import type decideTypes from "../src/core/decision/decide.types.ts";
 
 const { closeServers, joinPath, listen, makeTempDir, removeDirs, runTest } = testing;
 const { LIQUID_D1, localProvider } = localModule;
-const { DECISION_TIMEOUT, makeDecide } = decideModule;
+const { DECISION_TIMEOUT, decide: decideWith, makeDecide } = decideModule;
 
 const FIXTURE = joinPath(
   import.meta.dirname,
@@ -69,7 +70,7 @@ interface Recorded {
   usage: aiTypes.ClassifierResult[];
 }
 
-const localHost = Effect.fn("localHost")(function* (
+const localDecide = Effect.fn("localDecide")(function* (
   model: aiTypes.ClassifierModel<"node-llama-cpp-classify">,
   options: {
     endpoints?: { huggingFace: string };
@@ -95,13 +96,50 @@ const localHost = Effect.fn("localHost")(function* (
     recordUsage: (result) => recorded.usage.push(result),
     threshold: (key) => options.thresholds?.[key],
   };
-  return { host, recorded };
+  const service = yield* makeDecide(host);
+  const decide = (decideRequest: decideTypes.DecideRequest) =>
+    decideWith(decideRequest).pipe(Effect.provideService(Decide, service));
+  return { decide, recorded };
 });
+
+const blocking = (threshold: number): decideTypes.DecideRequest => ({
+  name: "triage",
+  questions: {
+    blocking: {
+      criteria: { false: "others can keep working", true: "stops everyone" },
+      instructions: "Does it block the team?",
+      threshold,
+      type: "bool",
+    },
+  },
+  state: { ticket: "The build fails." },
+});
+
+const holdsFromTheThresholdUp = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE));
+
+      const open = yield* decide(blocking(0));
+      if (open.status !== "decided") throw new Error(open.reason);
+      const answer = open.answers["blocking"];
+      if (answer?.type !== "bool") throw new Error("expected a bool answer");
+      const { probability } = answer;
+      expect(probability).toBeGreaterThan(0);
+      expect(probability).toBeLessThan(1);
+      const at = yield* decide(blocking(probability));
+      const above = yield* decide(blocking(probability + 1e-9));
+
+      expect(answer.holds).toBe(true);
+      expect(at).toEqual({ ...open, answers: { blocking: { ...answer, holds: true } } });
+      expect(above).toEqual({ ...open, answers: { blocking: { ...answer, holds: false } } });
+      expect(recorded.classifications).toBe(1);
+    }),
+  );
 const appliesEachQuestionsThreshold = () =>
   runTest(
     Effect.gen(function* () {
-      const { host, recorded } = yield* localHost(classifierAt(FIXTURE));
-      const { decide } = yield* makeDecide(host);
+      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE));
 
       const open = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
       const strict = yield* decide(request("The build fails.", { route: 1, severity: 1 }));
@@ -130,10 +168,9 @@ const appliesEachQuestionsThreshold = () =>
 const letsSettingsOverrideTheThreshold = () =>
   runTest(
     Effect.gen(function* () {
-      const { host } = yield* localHost(classifierAt(FIXTURE), {
+      const { decide } = yield* localDecide(classifierAt(FIXTURE), {
         thresholds: { "triage.route": 1 },
       });
-      const { decide } = yield* makeDecide(host);
 
       const decision = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
 
@@ -150,8 +187,7 @@ const letsSettingsOverrideTheThreshold = () =>
 const answersTheSameInputFromItsCache = () =>
   runTest(
     Effect.gen(function* () {
-      const { host, recorded } = yield* localHost(classifierAt(FIXTURE));
-      const { decide } = yield* makeDecide(host);
+      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE));
 
       const first = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
       const again = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
@@ -167,8 +203,9 @@ const isUndecidedWithoutADecisionModel = () =>
   runTest(
     Effect.gen(function* () {
       const reason = 'decision.model "local/none" is not an available classifier';
-      const { host, recorded } = yield* localHost(classifierAt(FIXTURE), { unavailable: reason });
-      const { decide } = yield* makeDecide(host);
+      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE), {
+        unavailable: reason,
+      });
 
       const decision = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
 
@@ -184,10 +221,9 @@ const retriesAFailedDownloadOnTheNextCall = () =>
       const origin = yield* listen(() =>
         Effect.succeed(new Response("not found", { status: 404 })),
       );
-      const { host, recorded } = yield* localHost(classifierAt("hf:example/missing/m.gguf"), {
+      const { decide, recorded } = yield* localDecide(classifierAt("hf:example/missing/m.gguf"), {
         endpoints: { huggingFace: `${origin}/` },
       });
-      const { decide } = yield* makeDecide(host);
 
       const first = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
       const second = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
@@ -204,10 +240,9 @@ const isUndecidedWhenTheModelIsLate = () =>
     Effect.scoped(
       Effect.gen(function* () {
         const origin = yield* listen(() => Effect.never);
-        const { host, recorded } = yield* localHost(classifierAt("hf:example/slow/m.gguf"), {
+        const { decide, recorded } = yield* localDecide(classifierAt("hf:example/slow/m.gguf"), {
           endpoints: { huggingFace: `${origin}/` },
         });
-        const { decide } = yield* makeDecide(host);
         const clock = yield* TestClock.make();
 
         const fiber = yield* decide(request("The build fails.", { route: 0, severity: 0 })).pipe(
@@ -228,6 +263,11 @@ const isUndecidedWhenTheModelIsLate = () =>
   );
 
 describe("decide", () => {
+  it(
+    "holds a bool answer when its probability reaches the threshold and not above it",
+    holdsFromTheThresholdUp,
+  );
+
   it(
     "turns the model's probabilities into answers through each question's threshold",
     appliesEachQuestionsThreshold,
