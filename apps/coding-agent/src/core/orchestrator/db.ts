@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS tasks (
   checks TEXT NOT NULL DEFAULT '[]',
   status TEXT NOT NULL,
   cwd TEXT NOT NULL,
+  merge_into TEXT,
   condition TEXT,
   model TEXT,
   thinking_level TEXT,
@@ -41,6 +42,8 @@ CREATE TABLE IF NOT EXISTS threads (
   model TEXT NOT NULL,
   thinking_level TEXT NOT NULL,
   cwd TEXT NOT NULL,
+  branch TEXT,
+  target_branch TEXT,
   status TEXT NOT NULL,
   session_file TEXT,
   created_at INTEGER NOT NULL,
@@ -165,6 +168,16 @@ function addTaskChecks(database: DatabaseSync): void {
   database.exec("ALTER TABLE tasks ADD COLUMN checks TEXT NOT NULL DEFAULT '[]'");
 }
 
+function addWorkspaceColumns(database: DatabaseSync): void {
+  const tasks = columnNames(database, "tasks");
+  if (!tasks.includes("merge_into")) database.exec("ALTER TABLE tasks ADD COLUMN merge_into TEXT");
+  const threads = columnNames(database, "threads");
+  if (!threads.includes("branch")) database.exec("ALTER TABLE threads ADD COLUMN branch TEXT");
+  if (!threads.includes("target_branch")) {
+    database.exec("ALTER TABLE threads ADD COLUMN target_branch TEXT");
+  }
+}
+
 function addMissingRounds(database: DatabaseSync): void {
   database.exec(
     `INSERT OR IGNORE INTO rounds (id, project, title, created_at)
@@ -208,7 +221,7 @@ function renameSessionsToThreads(database: DatabaseSync): void {
   });
 }
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 
 function rejectNewerSchema(database: DatabaseSync, path: string): void {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
@@ -233,6 +246,7 @@ function openDatabase(path: string): DatabaseSync {
   migrateTasks(database);
   addOwnerPid(database);
   addTaskChecks(database);
+  addWorkspaceColumns(database);
   addMissingRounds(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;

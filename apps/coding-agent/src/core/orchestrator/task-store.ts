@@ -1,4 +1,5 @@
 import taskDependencies from "./task-dependencies.ts";
+import taskMerges from "./task-merges.ts";
 import taskRounds from "./task-rounds.ts";
 import taskRows from "./task-rows.ts";
 
@@ -18,6 +19,7 @@ const {
 } = taskDependencies;
 
 const taskStore = {
+  ...taskMerges,
   addDependency,
   clearDependencies,
   deleteTask,

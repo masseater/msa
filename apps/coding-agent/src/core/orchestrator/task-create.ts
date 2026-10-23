@@ -12,7 +12,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { requireChecks, requireStates } = text;
+const { requireChecks, requireMergeTarget, requireStates } = text;
 const { newId } = idsModule;
 const { rounds } = roundsModule;
 const { scheduling } = schedule;
@@ -24,7 +24,7 @@ function requireDependenciesWhenBusy(
   runtime: runtimeTypes.Runtime,
   input: orchestratorTypesTypes.CreateTaskInput,
 ): void {
-  if ((input.dependsOn ?? []).length > 0) return;
+  if ((input.dependsOn ?? []).length > 0 || input.mergeInto !== undefined) return;
   const unfinished = store
     .listTasks(runtime.database, runtime.options.project)
     .filter(
@@ -36,7 +36,7 @@ function requireDependenciesWhenBusy(
       .map((task) => task.id)
       .join(
         ", ",
-      )}). With ${UNFINISHED_TASKS_REQUIRING_DEPENDENCIES} or more unfinished tasks, a new task must name what it waits for in dependsOn. If it must run before existing tasks, insert it into the DAG with replan instead.`,
+      )}). With ${UNFINISHED_TASKS_REQUIRING_DEPENDENCIES} or more unfinished tasks, a new task must name what it waits for in dependsOn, or the task it merges into in mergeInto. If it must run before existing tasks, insert it into the DAG with replan instead.`,
   );
 }
 
@@ -69,6 +69,9 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
     if (input.model !== undefined) runtime.options.resolveModel(input.model);
     requireDependenciesWhenBusy(runtime, input);
     const round = resolveRound(runtime, input);
+    const mergeInto = requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
+      store.getTask(runtime.database, id),
+    );
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
       checks,
@@ -79,6 +82,7 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
       goalState: states.goalState,
       id,
       kind: "work",
+      mergeInto,
       model: input.model ?? null,
       project,
       round,
@@ -94,6 +98,7 @@ function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes
         for (const dependency of input.dependsOn ?? []) {
           store.addDependency(database, project, id, dependency);
         }
+        if (mergeInto !== null) store.linkMergeSources(database, project, mergeInto);
         rounds.attachReview(runtime, review, id, now);
       });
     });

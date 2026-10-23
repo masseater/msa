@@ -31,6 +31,7 @@ function task(
     handoff: null,
     id,
     kind: "work",
+    mergeInto: null,
     model: "fast/flash",
     project: "p",
     replan: null,
@@ -50,6 +51,7 @@ function thread(
   patch: Partial<orchestratorTypesTypes.ThreadView> = {},
 ): orchestratorTypesTypes.ThreadView {
   return {
+    branch: null,
     createdAt: 0,
     cwd: "/repo",
     id,
@@ -57,6 +59,7 @@ function thread(
     project: "p",
     sessionFile: null,
     status: "running",
+    targetBranch: null,
     tasks: [],
     thinkingLevel: "low",
     updatedAt: 0,

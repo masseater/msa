@@ -145,3 +145,24 @@ const refusesADatabaseWrittenByANewer = Effect.gen(function* () {
 
 it("refuses a database written by a newer msa and leaves it untouched", () =>
   runTest(refusesADatabaseWrittenByANewer));
+
+const marksTheDatabaseSoThatAnMsaWithoutWorktreesRefusesIt = Effect.gen(function* () {
+  const directory = yield* makeTempDir("msa-orchestrator-schema-");
+  directories.push(directory);
+  const path = joinPath(directory, "orchestrator.db");
+  store.openDatabase(path).close();
+
+  const opened = new DatabaseSync(path);
+  const { user_version: version } = opened.prepare("PRAGMA user_version").get() as {
+    user_version: number;
+  };
+  const columns = opened.prepare("PRAGMA table_info(tasks)").all() as { name: string }[];
+  opened.close();
+
+  const lastSchemaWithoutWorktrees = 2;
+  expect(columns.map((column) => column.name)).toContain("merge_into");
+  expect(version).toBeGreaterThan(lastSchemaWithoutWorktrees);
+});
+
+it("marks a database with merge targets so that an msa that runs every task in the main checkout refuses it", () =>
+  runTest(marksTheDatabaseSoThatAnMsaWithoutWorktreesRefusesIt));

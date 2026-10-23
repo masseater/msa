@@ -10,6 +10,7 @@ declare namespace taskStoreInternalTypes {
     checks: string;
     status: string;
     cwd: string;
+    merge_into: string | null;
     condition: string | null;
     model: string | null;
     thinking_level: string | null;

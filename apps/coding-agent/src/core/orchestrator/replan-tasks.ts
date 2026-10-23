@@ -14,7 +14,7 @@ const { rounds } = roundsModule;
 const { newId } = ids;
 const { store } = storeModule;
 const { writeReport } = replanHandoffs;
-const { requireChecks } = text;
+const { requireChecks, requireMergeTarget } = text;
 
 function detachReview(runtime: runtimeTypes.Runtime, task: orchestratorTypesTypes.Task): void {
   const review = store.reviewTaskOfRound(runtime.database, runtime.options.project, task.round);
@@ -94,6 +94,12 @@ function newTask(
     goalState: input.goalState ?? inherited(sources, (source) => source.goalState),
     id: newId("t"),
     kind: "work",
+    mergeInto:
+      input.mergeInto === undefined
+        ? (sources[0]?.mergeInto ?? null)
+        : requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
+            store.getTask(runtime.database, id),
+          ),
     model: input.model ?? null,
     project: runtime.options.project,
     round: roundFor(input, sources),

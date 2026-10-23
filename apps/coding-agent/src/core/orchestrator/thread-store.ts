@@ -12,6 +12,8 @@ interface ThreadRow {
   model: string;
   thinking_level: string;
   cwd: string;
+  branch: string | null;
+  target_branch: string | null;
   status: string;
   session_file: string | null;
   created_at: number;
@@ -37,6 +39,7 @@ interface ReportRow {
 
 function toThread(row: ThreadRow): orchestratorTypesTypes.Thread {
   return {
+    branch: row.branch,
     createdAt: row.created_at,
     cwd: row.cwd,
     id: row.id,
@@ -44,6 +47,7 @@ function toThread(row: ThreadRow): orchestratorTypesTypes.Thread {
     project: row.project,
     sessionFile: row.session_file,
     status: row.status as orchestratorTypesTypes.ThreadStatus,
+    targetBranch: row.target_branch,
     thinkingLevel: row.thinking_level as orchestratorTypesTypes.Thread["thinkingLevel"],
     updatedAt: row.updated_at,
   };
@@ -73,8 +77,8 @@ function toReport(row: ReportRow): orchestratorTypesTypes.Report {
 function insertThread(database: DatabaseSync, thread: orchestratorTypesTypes.Thread): void {
   database
     .prepare(
-      `INSERT INTO threads (id, project, model, thinking_level, cwd, status, session_file,
-         created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO threads (id, project, model, thinking_level, cwd, branch, target_branch, status,
+         session_file, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       thread.id,
@@ -82,6 +86,8 @@ function insertThread(database: DatabaseSync, thread: orchestratorTypesTypes.Thr
       thread.model,
       thread.thinkingLevel,
       thread.cwd,
+      thread.branch,
+      thread.targetBranch,
       thread.status,
       thread.sessionFile,
       thread.createdAt,
@@ -97,9 +103,12 @@ function getThread(database: DatabaseSync, id: string): orchestratorTypesTypes.T
 }
 
 const THREAD_COLUMNS: Readonly<Record<string, string>> = {
+  branch: "branch",
+  cwd: "cwd",
   model: "model",
   sessionFile: "session_file",
   status: "status",
+  targetBranch: "target_branch",
   thinkingLevel: "thinking_level",
 };
 
@@ -107,7 +116,10 @@ function updateThread(
   database: DatabaseSync,
   id: string,
   patch: Partial<
-    Pick<orchestratorTypesTypes.Thread, "model" | "thinkingLevel" | "status" | "sessionFile">
+    Pick<
+      orchestratorTypesTypes.Thread,
+      "model" | "thinkingLevel" | "status" | "sessionFile" | "cwd" | "branch" | "targetBranch"
+    >
   >,
   now: number,
 ): void {

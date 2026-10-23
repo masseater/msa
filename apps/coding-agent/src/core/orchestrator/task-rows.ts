@@ -15,6 +15,7 @@ function toTask(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.Tas
     goalState: row.goal_state,
     id: row.id,
     kind: row.kind as orchestratorTypesTypes.TaskKind,
+    mergeInto: row.merge_into,
     model: row.model,
     project: row.project,
     round: row.round,
@@ -29,8 +30,8 @@ function insertTask(database: DatabaseSync, task: orchestratorTypesTypes.Task): 
   database
     .prepare(
       `INSERT INTO tasks (id, project, round, kind, title, current_state, goal_state, checks, status,
-         cwd, condition, model, thinking_level, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         cwd, merge_into, condition, model, thinking_level, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
     .run(
       task.id,
@@ -43,6 +44,7 @@ function insertTask(database: DatabaseSync, task: orchestratorTypesTypes.Task): 
       JSON.stringify(task.checks),
       task.status,
       task.cwd,
+      task.mergeInto,
       task.condition,
       task.model,
       task.thinkingLevel,
@@ -70,6 +72,7 @@ const PATCH_COLUMNS: Readonly<Record<string, string>> = {
   condition: "condition",
   currentState: "current_state",
   goalState: "goal_state",
+  mergeInto: "merge_into",
   model: "model",
   status: "status",
   thinkingLevel: "thinking_level",
@@ -88,6 +91,7 @@ function updateTask(
       | "checks"
       | "status"
       | "condition"
+      | "mergeInto"
       | "model"
       | "thinkingLevel"
     >

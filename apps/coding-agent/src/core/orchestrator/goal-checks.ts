@@ -100,11 +100,13 @@ function markActive(thread: ThreadRun): Effect.Effect<void> {
 
 function runAll(
   runtime: runtimeTypes.Runtime,
+  threadId: string,
   tasks: readonly orchestratorTypesTypes.Task[],
 ): Effect.Effect<CheckResult[]> {
+  const cwd = store.getThread(runtime.database, threadId)?.cwd;
   return Effect.forEach(
-    tasks.flatMap((task) => task.checks.map((check) => ({ check, cwd: task.cwd }))),
-    ({ check, cwd }) => runCheck(runtime, check, cwd),
+    tasks.flatMap((task) => task.checks.map((check) => ({ check, cwd: cwd ?? task.cwd }))),
+    (planned) => runCheck(runtime, planned.check, planned.cwd),
   );
 }
 
@@ -190,7 +192,7 @@ function verify(
     return;
   }
   const readBefore = readIds(thread);
-  void Effect.runPromise(whileCurrent(thread, runAll(runtime, tasks))).then(
+  void Effect.runPromise(whileCurrent(thread, runAll(runtime, threadId, tasks))).then(
     (results) => decide(thread, results, readBefore),
     (error: unknown) => settle(thread, error),
   );

@@ -13,7 +13,7 @@ const checksSchema = Type.Array(
   Type.Object({
     command: Type.String({
       description:
-        "Shell command run with /bin/sh in the task's working directory, such as `vp lint`, `vp test apps/x`, or `rg -c 'layer-[0-9]' src`.",
+        "Shell command run with /bin/sh in the worker's working directory (the task's worktree in a git repository), such as `vp lint`, `vp test apps/x`, or `rg -c 'layer-[0-9]' src`.",
     }),
     exitCode: Type.Optional(
       Type.Integer({
@@ -32,7 +32,7 @@ const checksSchema = Type.Array(
   }),
   {
     description:
-      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the task's working directory before the reviewer starts; if one gives another result, the worker gets the results back and keeps working, and after 3 such rounds the task fails. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only.",
+      "Completion checks of the goal state. When the worker ends its turn, the harness runs each command in the worker's working directory before the reviewer starts; if one gives another result, the worker gets the results back and keeps working, and after 3 such rounds the task fails. Write one check per measurable part of the goal, and add checks that count the shortcuts that would satisfy the others in form only.",
   },
 );
 

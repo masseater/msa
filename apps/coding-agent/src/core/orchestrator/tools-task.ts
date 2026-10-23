@@ -36,12 +36,18 @@ const createSchema = Type.Object({
   dependsOn: Type.Optional(
     Type.Array(taskIdSchema, {
       description:
-        "Tasks that must complete before this one starts; their reports join the prompt. Pass [] only when the work needs none. Once 3 or more work tasks of the project are waiting or running, a task without dependencies is rejected: name what it waits for, or insert it with replan when it must run first.",
+        "Tasks that must complete before this one starts; their reports join the prompt. Pass [] only when the work needs none. Once 3 or more work tasks of the project are waiting or running, a task with neither dependencies nor mergeInto is rejected: name what it waits for, or insert it with replan when it must run first.",
     }),
   ),
   goalState: Type.String({
     description: "What should be true when the task is done, in terms that can be checked.",
   }),
+  mergeInto: Type.Optional(
+    Type.String({
+      description:
+        "Work task that has not started and whose branch this task's branch merges into; that task merges the branches and opens the one pull request, and the harness makes it depend on this task. Default: this task opens its own pull request into the default branch.",
+    }),
+  ),
   model: Type.Optional(modelSchema),
   round: Type.Optional(
     Type.String({

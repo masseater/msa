@@ -8,6 +8,7 @@ import type runtimeTypes from "./runtime.types.ts";
 import snapshot from "./snapshot.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
+import worktreeModule from "./worktree.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
@@ -15,6 +16,7 @@ const { snapshots } = snapshot;
 const { prompts } = promptsModule;
 const { newId } = ids;
 const { orchestratorError } = errors;
+const { worktrees } = worktreeModule;
 
 interface ThreadPlan {
   threadId: string;
@@ -134,6 +136,7 @@ function insertRunningThread(
 ): void {
   const database = runtime.database;
   store.insertThread(database, {
+    branch: null,
     createdAt: now,
     cwd: task.cwd,
     id: plan.threadId,
@@ -141,6 +144,7 @@ function insertRunningThread(
     project: runtime.options.project,
     sessionFile: null,
     status: "running",
+    targetBranch: null,
     thinkingLevel: plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel,
     updatedAt: now,
   });
@@ -154,16 +158,51 @@ function insertRunningThread(
   markRead(runtime, plan.notes, plan.threadId, now);
 }
 
+interface OpenedWorker {
+  worker: runtimeTypes.WorkerSession;
+  workspace: orchestratorTypesTypes.Workspace;
+}
+
+function openWorkspace(
+  runtime: runtimeTypes.Runtime,
+  plan: ThreadPlan,
+  task: orchestratorTypesTypes.Task,
+  role: orchestratorTypesTypes.ThreadRole,
+  now: number,
+): Effect.Effect<orchestratorTypesTypes.Workspace | undefined> {
+  return Effect.gen(function* () {
+    const prepared = yield* Effect.result(worktrees.prepare(runtime, task));
+    if (Result.isFailure(prepared)) {
+      yield* Effect.sync(() =>
+        failThread(runtime, plan, task, role, now, prepared.failure.message),
+      );
+      return undefined;
+    }
+    const workspace = prepared.success;
+    yield* Effect.sync(() =>
+      store.updateThread(
+        runtime.database,
+        plan.threadId,
+        { branch: workspace.branch, cwd: workspace.cwd, targetBranch: workspace.targetBranch },
+        now,
+      ),
+    );
+    return workspace;
+  });
+}
+
 function openWorker(
   runtime: runtimeTypes.Runtime,
   plan: ThreadPlan,
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
   now: number,
-): Effect.Effect<runtimeTypes.WorkerSession | undefined, runtimeTypes.OrchestratorError> {
+): Effect.Effect<OpenedWorker | undefined, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const thinkingLevel = plan.thinkingLevel ?? runtime.options.defaults().workerThinkingLevel;
     yield* Effect.sync(() => insertRunningThread(runtime, plan, task, role, now));
+    const workspace = yield* openWorkspace(runtime, plan, task, role, now);
+    if (workspace === undefined) return undefined;
     const telemetry = runtime.telemetry.threadStarted(
       { model: plan.model, role, thinkingLevel, threadId: plan.threadId },
       task,
@@ -173,7 +212,7 @@ function openWorker(
         catch: orchestratorError,
         try: () =>
           runtime.options.createWorker({
-            cwd: task.cwd,
+            cwd: workspace.cwd,
             model: runtime.options.resolveModel(plan.model),
             telemetry,
             thinkingLevel,
@@ -184,7 +223,7 @@ function openWorker(
       yield* Effect.sync(() => failThread(runtime, plan, task, role, now, created.failure.message));
       return undefined;
     }
-    return created.success;
+    return { worker: created.success, workspace };
   });
 }
 
@@ -234,9 +273,12 @@ function startTasks(
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const plan = planThread(runtime, task, role, workerReport, extra);
-    const worker = yield* openWorker(runtime, plan, task, role, now);
-    if (worker === undefined) return;
-    yield* Effect.sync(() => launch(runtime, plan.threadId, worker, plan.prompt, now));
+    const opened = yield* openWorker(runtime, plan, task, role, now);
+    if (opened === undefined) return;
+    const prompt = [plan.prompt, prompts.workspaceBlock(role, opened.workspace)]
+      .filter(Boolean)
+      .join("\n\n");
+    yield* Effect.sync(() => launch(runtime, plan.threadId, opened.worker, prompt, now));
   });
 }
 

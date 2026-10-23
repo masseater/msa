@@ -34,6 +34,7 @@ declare namespace orchestratorTypesTypes {
     checks: readonly TaskCheck[];
     status: TaskStatus;
     cwd: string;
+    mergeInto: string | null;
     condition: string | null;
     model: string | null;
     thinkingLevel: agentTypes.ThinkingLevel | null;
@@ -47,10 +48,25 @@ declare namespace orchestratorTypesTypes {
     model: string;
     thinkingLevel: agentTypes.ThinkingLevel;
     cwd: string;
+    branch: string | null;
+    targetBranch: string | null;
     status: ThreadStatus;
     sessionFile: string | null;
     createdAt: number;
     updatedAt: number;
+  }
+
+  interface WorkspaceSource {
+    task: Task;
+    branch: string;
+  }
+
+  interface Workspace {
+    cwd: string;
+    branch: string | null;
+    targetBranch: string | null;
+    target: Task | null;
+    sources: readonly WorkspaceSource[];
   }
 
   interface Assignment {
@@ -136,6 +152,7 @@ declare namespace orchestratorTypesTypes {
     model?: string;
     thinkingLevel?: agentTypes.ThinkingLevel;
     cwd?: string;
+    mergeInto?: string;
   }
 
   interface SetTaskDependsInput {
@@ -176,6 +193,7 @@ declare namespace orchestratorTypesTypes {
     model?: string;
     thinkingLevel?: agentTypes.ThinkingLevel;
     cwd?: string;
+    mergeInto?: string;
   }
 
   interface ReplanDropInput {

@@ -25,6 +25,7 @@ function ensureReview(
     goalState: `Round ${round} is reviewed as a whole and the remaining work is laid out.`,
     id: newId("rev"),
     kind: "review",
+    mergeInto: null,
     model: null,
     project,
     round,

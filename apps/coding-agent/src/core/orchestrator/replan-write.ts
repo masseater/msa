@@ -12,6 +12,26 @@ const { store } = storeModule;
 const { writeHandoffs } = replanHandoffs;
 const { keep, rewire, createTasks, closeDropped } = replanTasks;
 
+function relinkMerges(
+  runtime: runtimeTypes.Runtime,
+  prepared: replanTypes.Prepared,
+  inheritors: ReadonlyMap<string, readonly string[]>,
+  now: number,
+): void {
+  const database = runtime.database;
+  const project = runtime.options.project;
+  const replaced = new Map<string, string>();
+  for (const [source, tasks] of inheritors) {
+    if (tasks[0] !== undefined) replaced.set(source, tasks[0]);
+  }
+  store.unlinkMergeSources(database, [
+    ...prepared.sources,
+    ...prepared.drop.map((item) => item.taskId),
+  ]);
+  store.retargetMerges(database, project, replaced, now);
+  store.linkAllMergeSources(database, project);
+}
+
 function write(
   runtime: runtimeTypes.Runtime,
   prepared: replanTypes.Prepared,
@@ -26,6 +46,7 @@ function write(
     const creation = createTasks(runtime, prepared, now);
     const rewired = rewire(runtime, prepared, creation.byKey);
     keep(runtime, prepared, now);
+    relinkMerges(runtime, prepared, creation.inheritors, now);
     if (prepared.input.maxConcurrentThreads !== undefined) {
       store.storeMaxConcurrent(database, project, prepared.input.maxConcurrentThreads);
       runtime.maxConcurrentThreads = prepared.input.maxConcurrentThreads;
