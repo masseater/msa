@@ -57,9 +57,19 @@ const decodeHtmlEntityAt: {
   (index: number): (html: string) => htmlTypes.DecodedHtmlEntity | undefined;
 } = dual((args: IArguments) => args.length >= 2, decodeHtmlEntityAtImpl);
 
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/gu, "&amp;")
+    .replace(/</gu, "&lt;")
+    .replace(/>/gu, "&gt;")
+    .replace(/"/gu, "&quot;")
+    .replace(/'/gu, "&apos;");
+}
+
 const html = {
   decodeHtmlEntity,
   decodeHtmlEntityAt,
+  escapeXml,
 };
 
 export default html;

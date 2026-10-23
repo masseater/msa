@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import html from "../../utils/html.ts";
 import outcomeModule from "./outcome.ts";
 import promptsModule from "./prompts.ts";
 import runtimeModule from "./runtime.ts";
@@ -14,6 +15,7 @@ const { outcomes } = outcomeModule;
 const { prompts } = promptsModule;
 const { nowMillis } = runtimeModule;
 const { outputPattern } = text;
+const { escapeXml } = html;
 
 const CHECK_TIMEOUT_MS = 10 * 60_000;
 const RUN_POLL_MS = 100;
@@ -45,8 +47,8 @@ function resultsText(results: readonly CheckResult[]): string {
     .map((result) => {
       const got = result.exitCode === null ? "no exit code" : `exit ${result.exitCode}`;
       return [
-        `<check command="${result.check.command}" expected="${prompts.checkExpectation(result.check)}" got="${got}" passed="${result.passed}">`,
-        clip(result.output.trim()),
+        `<check command="${escapeXml(result.check.command)}" expected="${escapeXml(prompts.checkExpectation(result.check))}" got="${got}" passed="${result.passed}">`,
+        escapeXml(clip(result.output.trim())),
         "</check>",
       ].join("\n");
     })
@@ -158,6 +160,7 @@ function decide(
     return;
   }
   if (results.every((result) => result.passed)) {
+    rejections.delete(worker);
     const arrived = store
       .notesReadBy(runtime.database, threadId)
       .filter((note) => !readBefore.has(note.id));

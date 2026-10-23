@@ -4,25 +4,18 @@ import { expect, it, vi } from "vite-plus/test";
 
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import errors from "../src/core/orchestrator/errors.ts";
+import goalChecksSupport from "./orchestrator-goal-checks-support.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
-const { joinPath, makeTempDir, removePath, writeTextFile } = testing;
+const { joinPath, writeTextFile } = testing;
+const { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepo } = goalChecksSupport;
 const { orchestratorError } = errors;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { advance, fakeClock } = watchdogSupport;
-
-const LINT_CHECK = { command: "cat lint.txt", output: "^0 errors$" };
-const SHORTCUT_CHECK = { command: "grep -c 'layer-[0-9]' src.txt", exitCode: 1 };
-
-function withRepo<A, E>(body: (directory: string) => Effect.Effect<A, E>): Effect.Effect<A, E> {
-  return Effect.acquireUseRelease(makeTempDir("msa-goal-checks-"), body, (directory) =>
-    removePath(directory),
-  );
-}
 
 const returnsAFailingReportToTheWorker = () =>
   Effect.runPromise(
@@ -57,7 +50,7 @@ const returnsAFailingReportToTheWorker = () =>
         workers[0]?.complete("lint is clean now");
         yield* waitFor(() => workers[0]?.prompts.length === 3);
         expect(workers[0]?.prompts[2]).toContain(
-          `<check command="grep -c 'layer-[0-9]' src.txt" expected="exit 1" got="exit 0" passed="false">\n1`,
+          `<check command="grep -c &apos;layer-[0-9]&apos; src.txt" expected="exit 1" got="exit 0" passed="false">\n1`,
         );
         expect(workers).toHaveLength(1);
 
@@ -110,18 +103,6 @@ it(
   "fails the task without a review when the checks still fail after three rounds",
   failsTheTaskWhenTheChecksKeepFailing,
 );
-
-function heldCommand() {
-  const calls: { command: string; signal: AbortSignal; release: () => void }[] = [];
-  const runCommand = (command: string, _cwd: string, _timeoutMs: number, signal: AbortSignal) => {
-    const { promise, resolve } = Promise.withResolvers<{ exitCode: number; output: string }>();
-    const release = () => resolve({ exitCode: 0, output: "0 errors\n" });
-    signal.addEventListener("abort", () => resolve({ exitCode: 1, output: "aborted" }));
-    calls.push({ command, release, signal });
-    return promise;
-  };
-  return { calls, runCommand };
-}
 
 const deliversANoteSentWhileTheChecksRun = () =>
   Effect.runPromise(
