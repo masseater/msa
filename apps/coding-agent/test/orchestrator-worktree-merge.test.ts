@@ -199,3 +199,44 @@ it(
   "reruns a stopped task in the worktree it already has, with its uncommitted work",
   rerunsInTheSameWorktree,
 );
+
+const refusesToInheritAStartedTarget = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, workers } = setup();
+      const { target } = yield* gatedTarget(orchestrator);
+      const part = yield* create(orchestrator, {
+        currentState: "c",
+        goalState: "d",
+        mergeInto: target.id,
+        title: "part",
+      });
+      yield* Effect.promise(() => orchestrator.stop(part.id));
+      yield* Effect.promise(() =>
+        orchestrator.setDepends({ remove: [part.id], taskIds: [target.id] }),
+      );
+      workers[0]!.complete("gate done");
+      yield* waitFor(() => workers.length === 3);
+      workers[2]!.complete("acceptable");
+      yield* waitFor(() => taskStatus(orchestrator, target.id) === "running");
+      const before = orchestrator.snapshot.tasks.length;
+
+      const refused = yield* rejection(() =>
+        orchestrator.replan({
+          reason: "the part needs another try",
+          stop: false,
+          tasks: [{ from: [part.id], title: "part again" }],
+        }),
+      );
+
+      expect(refused).toContain(`would inherit mergeInto ${target.id} from ${part.id}`);
+      expect(refused).toContain(`${target.id} is running`);
+      expect(orchestrator.snapshot.tasks).toHaveLength(before);
+      expect(taskStatus(orchestrator, part.id)).toBe("stopped");
+    }),
+  );
+
+it(
+  "refuses a replan whose new task would inherit a merge target that has already started",
+  refusesToInheritAStartedTarget,
+);

@@ -88,6 +88,16 @@ function branchExists(repository: Repository, branch: string): Effect.Effect<boo
   );
 }
 
+function fetchBase(
+  repository: Repository,
+  base: string,
+): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+  if (!base.startsWith("origin/")) return Effect.void;
+  return Effect.asVoid(
+    required(repository.root, ["fetch", "--quiet", "origin", upstreamName(base)]),
+  );
+}
+
 function ensureBranch(
   repository: Repository,
   branch: string,
@@ -95,6 +105,7 @@ function ensureBranch(
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     if (yield* branchExists(repository, branch)) return;
+    yield* fetchBase(repository, base);
     const created = yield* git(repository.root, ["branch", "--no-track", branch, base]);
     if (created.ok || (yield* branchExists(repository, branch))) return;
     return yield* orchestratorError(new Error(`git branch ${branch} ${base}: ${created.output}`));
