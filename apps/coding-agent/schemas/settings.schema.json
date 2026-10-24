@@ -479,6 +479,10 @@
       },
       "description": "Per-model default thinking level overrides keyed by \"provider/modelId\"."
     },
+    "notifyCommand": {
+      "type": "string",
+      "description": "Shell command run when msa stops and needs you, with the message in MSA_NOTIFY_MESSAGE. Global setting only."
+    },
     "npmCommand": {
       "type": "array",
       "items": {

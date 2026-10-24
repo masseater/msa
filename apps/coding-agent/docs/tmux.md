@@ -53,3 +53,13 @@ set -g extended-keys on
 msa supports the xterm `modifyOtherKeys` format used by these versions. Restart tmux and repeat the verification steps.
 
 For older versions, upgrade tmux or use msa outside tmux rather than relying on modified Enter shortcuts.
+
+## Forward notifications
+
+tmux forwards the bell msa rings when it stops, but drops the OSC 9 and OSC 777 notifications unless passthrough is on. Add this line to `~/.tmux.conf`:
+
+```tmux
+set -g allow-passthrough on
+```
+
+msa wraps the notifications for passthrough when `TMUX` is set. See [Notifications](terminal-setup.md#notifications) for what each terminal shows.

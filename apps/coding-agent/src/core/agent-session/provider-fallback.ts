@@ -2,16 +2,29 @@ import compat from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
 import * as Effect from "effect/Effect";
 
+import errors from "../../utils/errors.ts";
 import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
+import command from "../platform/command.ts";
 import platform from "../platform/index.ts";
 
-const { isContextOverflow, isProviderUnusableError } = compat;
-const { awaitingWith, performed } = awaitingModule;
+const { isContextOverflow, providerUnusableReason } = compat;
+const { awaited, awaitingWith, performed } = awaitingModule;
+const { runCommand } = command;
 const { formatLocalDateTime, nowMs } = platform;
+const { toErrorMessage } = errors;
 
 const PROVIDER_STALLED_MESSAGE_TYPE = "msa.provider.stalled";
 const PROVIDER_RESUMED_MESSAGE_TYPE = "msa.provider.resumed";
+const NOTIFY_FAILED_MESSAGE_TYPE = "msa.notify.failed";
+const NOTIFY_COMMAND_TIMEOUT_MS = 30_000;
+
+type Stalled = {
+  at: number;
+  model: string;
+  errorMessage: string;
+  reason: compatTypes.ProviderUnusableReason;
+};
 
 const reference = (provider: string, model: string): string => `${provider}/${model}`;
 
@@ -20,7 +33,7 @@ export default class SessionProviderFallback {
 
   private readonly failedProviders = new Set<string>();
 
-  private stalledInternal: { at: number; model: string; errorMessage: string } | undefined;
+  private stalledInternal: Stalled | undefined;
 
   private unrecoveredSince: number | undefined;
 
@@ -28,7 +41,7 @@ export default class SessionProviderFallback {
     this.session = session;
   }
 
-  get stalled(): { at: number; model: string; errorMessage: string } | undefined {
+  get stalled(): Stalled | undefined {
     return this.stalledInternal;
   }
 
@@ -38,16 +51,23 @@ export default class SessionProviderFallback {
       this.recordSuccess(message);
       return Effect.succeed(false);
     }
-    return this.isUnusable(message) ? this.recover(message) : Effect.succeed(false);
+    const reason = this.unusableReason(message);
+    return reason === undefined ? Effect.succeed(false) : this.recover(message, reason);
   }
 
-  private isUnusable(message: compatTypes.AssistantMessage): boolean {
-    if (!isProviderUnusableError(message)) return false;
+  private unusableReason(
+    message: compatTypes.AssistantMessage,
+  ): compatTypes.ProviderUnusableReason | undefined {
+    const reason = providerUnusableReason(message);
+    if (reason === undefined) return undefined;
     const model = this.session.models.selection.modelForMessage(message) ?? this.session.model;
-    return !isContextOverflow(message, model?.contextWindow ?? 0);
+    return isContextOverflow(message, model?.contextWindow ?? 0) ? undefined : reason;
   }
 
-  private recover(message: compatTypes.AssistantMessage): Effect.Effect<boolean> {
+  private recover(
+    message: compatTypes.AssistantMessage,
+    reason: compatTypes.ProviderUnusableReason,
+  ): Effect.Effect<boolean> {
     return awaitingWith(function* () {
       this.failedProviders.add(message.provider);
       const errorMessage = message.errorMessage ?? "Unknown error";
@@ -55,7 +75,7 @@ export default class SessionProviderFallback {
         this.session.models.selection.fallbackModel(this.failedProviders),
       );
       if (next === undefined) {
-        this.stall(message, errorMessage);
+        this.stall(message, errorMessage, reason);
         return false;
       }
       this.session.run.retry.omitRecoveryAttempt(message);
@@ -98,12 +118,17 @@ export default class SessionProviderFallback {
     );
   }
 
-  private stall(message: compatTypes.AssistantMessage, errorMessage: string): void {
+  private stall(
+    message: compatTypes.AssistantMessage,
+    errorMessage: string,
+    reason: compatTypes.ProviderUnusableReason,
+  ): void {
     if (this.stalledInternal !== undefined) return;
     const stalled = {
       at: nowMs(),
       errorMessage,
       model: reference(message.provider, message.model),
+      reason,
     };
     this.stalledInternal = stalled;
     this.unrecoveredSince ??= stalled.at;
@@ -116,5 +141,43 @@ export default class SessionProviderFallback {
       },
       { triggerTurn: false },
     );
+    void Effect.runPromise(this.runNotifyCommand(`${stalled.model} stopped: ${errorMessage}`));
+  }
+
+  private runNotifyCommand(text: string): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const notifyCommand = this.session.settingsManager.terminal.getNotifyCommand();
+      if (notifyCommand === undefined) return;
+      const shell =
+        process.platform === "win32"
+          ? { args: ["/d", "/s", "/c", notifyCommand], file: "cmd.exe" }
+          : { args: ["-c", notifyCommand], file: "/bin/sh" };
+      let failure: string | undefined;
+      try {
+        const output = yield* awaited(
+          runCommand({
+            ...shell,
+            env: { MSA_NOTIFY_MESSAGE: text },
+            signal: AbortSignal.timeout(NOTIFY_COMMAND_TIMEOUT_MS),
+          }),
+        );
+        const stderr = output.stderr.trim();
+        if (output.exitCode !== 0)
+          failure = `exited with ${output.exitCode}${stderr === "" ? "" : `: ${stderr}`}`;
+      } catch (error) {
+        failure = toErrorMessage(error);
+      }
+      if (failure === undefined) return;
+      yield* awaited(
+        this.session.run.prompting.sendCustomMessage(
+          {
+            content: `notifyCommand failed: ${failure}`,
+            customType: NOTIFY_FAILED_MESSAGE_TYPE,
+            display: true,
+          },
+          { triggerTurn: false },
+        ),
+      );
+    }, this);
   }
 }

@@ -13,6 +13,7 @@ const collect = (request: commandTypes.CommandRequest) =>
         ChildProcess.make(request.file, [...request.args], {
           stdin: "ignore",
           ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+          ...(request.env === undefined ? {} : { env: request.env, extendEnv: true }),
         }),
       );
       const [lines, stderr, exitCode] = yield* Effect.all(
@@ -49,6 +50,7 @@ const streamLines = (request: commandTypes.StreamRequest) =>
         ChildProcess.make(request.file, [...request.args], {
           stdin: "ignore",
           ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
+          ...(request.env === undefined ? {} : { env: request.env, extendEnv: true }),
         }),
       );
       const stderrFiber = yield* Stream.mkString(Stream.decodeText(handle.stderr)).pipe(

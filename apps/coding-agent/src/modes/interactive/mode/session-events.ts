@@ -16,7 +16,7 @@ const { formatAttentionAlert } = tuiModule;
 const firstLine = (text: string): string => text.split(/\r?\n/u, 1)[0]?.trim() ?? "";
 const { every } = interval;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { basename } = platformModule;
+const { basename, readEnv } = platformModule;
 
 export default class SessionEventRouter {
   private readonly mode: InteractiveMode;
@@ -59,8 +59,9 @@ export default class SessionEventRouter {
         return true;
       case "provider_stalled": {
         const message = `${event.model} stopped: ${firstLine(event.errorMessage)}`;
-        this.mode.ui.terminal.write(formatAttentionAlert(APP_NAME, message));
-        this.mode.layout.programStatus.setBlocked("provider", { kind: "auth", message });
+        const tmux = (readEnv("TMUX") ?? "") !== "";
+        this.mode.ui.terminal.write(formatAttentionAlert(APP_NAME, message, { tmux }));
+        this.mode.layout.programStatus.setBlocked("provider", { kind: event.reason, message });
         this.updateTerminalTitle();
         return true;
       }

@@ -3,6 +3,7 @@ declare namespace commandTypes {
     readonly file: string;
     readonly args: ReadonlyArray<string>;
     readonly cwd?: string;
+    readonly env?: Readonly<Record<string, string>>;
     readonly signal?: AbortSignal;
   }
 

@@ -51,7 +51,13 @@ declare namespace agentSessionEventTypes {
         finalError?: string | undefined;
       }
     | { type: "model_fallback"; from: string; to: string; errorMessage: string }
-    | { type: "provider_stalled"; at: number; model: string; errorMessage: string }
+    | {
+        type: "provider_stalled";
+        at: number;
+        model: string;
+        errorMessage: string;
+        reason: "auth" | "quota";
+      }
     | { type: "provider_recovered"; since: number; model: string }
     | {
         type: "summarization_retry_scheduled";

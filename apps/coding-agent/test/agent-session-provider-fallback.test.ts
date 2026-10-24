@@ -6,7 +6,16 @@ import type codingAgentTypes from "../src/index.types.ts";
 import agentSessionProviderFallbackSupport from "./agent-session-provider-fallback-support.ts";
 import sessionKit from "./session-kit.ts";
 
-const { awaited, pollUntil, runTest, toJsonText } = testing;
+const {
+  awaited,
+  joinPath,
+  pathExists,
+  pollUntil,
+  readTextFile,
+  runTest,
+  toJsonText,
+  writeTextFile,
+} = testing;
 const { disposeWorkspace, prepareWorkspace } = sessionKit;
 const { CREDITS_ERROR, providerStream, startFallbackSession } = agentSessionProviderFallbackSupport;
 
@@ -71,6 +80,7 @@ const stopsOnceAndRecordsTheStop = () =>
       expect(created.run.fallback.stalled).toMatchObject({
         errorMessage: CREDITS_ERROR,
         model: `openrouter/${openrouter.id}`,
+        reason: "quota",
       });
       const transcript = yield* toJsonText(created.agent.state.messages);
       expect(transcript).toMatch(
@@ -197,6 +207,57 @@ const notifiesASecondStopAfterTheModelIsSwitched = () =>
     }),
   );
 
+const withNotifyCommand = (notifyCommand: string) =>
+  Effect.gen(function* () {
+    yield* writeTextFile(
+      joinPath(tempDir, "settings.json"),
+      yield* toJsonText({ memory: { enabled: false }, notifyCommand }),
+    );
+  });
+
+const runsTheNotifyCommandWithTheMessage = () =>
+  runTest(
+    Effect.gen(function* () {
+      const notified = joinPath(tempDir, "notified.txt");
+      yield* withNotifyCommand(`printf '%s' "$MSA_NOTIFY_MESSAGE" > '${notified}'`);
+      const stream = providerStream(new Set(["openrouter"]));
+      const { openrouter, session: created } = yield* start(stream, (models) => [
+        models.openrouter,
+      ]);
+
+      yield* awaited(created.run.prompting.prompt("Go"));
+      yield* pollUntil(pathExists(notified), 400, 25);
+
+      expect(yield* readTextFile(notified)).toBe(
+        `openrouter/${openrouter.id} stopped: ${CREDITS_ERROR}`,
+      );
+    }),
+  );
+
+const recordsAFailedNotifyCommand = () =>
+  runTest(
+    Effect.gen(function* () {
+      yield* withNotifyCommand("echo unreachable >&2; exit 3");
+      const stream = providerStream(new Set(["openrouter"]));
+      const { session: created } = yield* start(stream, (models) => [models.openrouter]);
+
+      yield* awaited(created.run.prompting.prompt("Go"));
+      yield* pollUntil(
+        Effect.suspend(() =>
+          Effect.map(toJsonText(created.agent.state.messages), (text) =>
+            text.includes("notifyCommand failed"),
+          ),
+        ),
+        400,
+        25,
+      );
+
+      expect(yield* toJsonText(created.agent.state.messages)).toContain(
+        "notifyCommand failed: exited with 3: unreachable",
+      );
+    }),
+  );
+
 describe("provider fallback", () => {
   beforeEach(() =>
     runTest(
@@ -227,4 +288,6 @@ describe("provider fallback", () => {
   it("resumes when the model is cycled with Ctrl+P", () => resumesWhenTheModelIsCycled());
   it("notifies and records a second stop after the model is switched", () =>
     notifiesASecondStopAfterTheModelIsSwitched());
+  it("runs notifyCommand with the stop message", () => runsTheNotifyCommandWithTheMessage());
+  it("records a notifyCommand that fails", () => recordsAFailedNotifyCommand());
 });

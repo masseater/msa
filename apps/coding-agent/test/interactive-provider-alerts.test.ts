@@ -1,7 +1,7 @@
 import testing from "@msa/testing";
 import type tuiTypes from "@msa/tui/index.types";
 import { Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import type InteractiveMode from "../src/modes/interactive/interactive-mode.ts";
@@ -48,50 +48,102 @@ const setup = () => {
   return { fallback, send, terminal, warnings };
 };
 
+const raisesAlertsWhileStopped = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { fallback, send, terminal } = setup();
+      fallback.stalled = { at: 1 };
+      yield* send({
+        at: 1,
+        errorMessage: '402: {"message":"This request requires more credits"}\nmore',
+        model: "openrouter/m",
+        reason: "quota",
+        type: "provider_stalled",
+      });
+
+      const alert = terminal.writes.join("");
+      expect(alert).toContain(
+        '\x1b]777;notify;msa;openrouter/m stopped: 402: {"message":"This request requires more credits"}\x07',
+      );
+      expect(alert.endsWith("\x07\x07")).toBe(true);
+      expect(terminal.titles.at(-1)).toContain("(stopped)");
+      expect(terminal.statuses.at(-1)).toMatchObject({ kind: "quota", state: "blocked" });
+
+      fallback.stalled = undefined;
+      yield* send({ model: "anthropic-api/m", since: 1, type: "provider_recovered" });
+
+      expect(terminal.titles.at(-1)).not.toContain("(stopped)");
+      expect(terminal.statuses.at(-1)?.state).not.toBe("blocked");
+    }),
+  );
+
+const blocksAuthFailuresAsAuth = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { send, terminal } = setup();
+      yield* send({
+        at: 1,
+        errorMessage: "401: Invalid API key",
+        model: "openrouter/m",
+        reason: "auth",
+        type: "provider_stalled",
+      });
+
+      expect(terminal.statuses.at(-1)).toMatchObject({ kind: "auth", state: "blocked" });
+    }),
+  );
+
+const passesNotificationsThroughTmux = () =>
+  runTest(
+    Effect.gen(function* () {
+      vi.stubEnv("TMUX", "/tmp/tmux-1/default,1,0");
+      const { send, terminal } = setup();
+      yield* send({
+        at: 1,
+        errorMessage: "402: no credits",
+        model: "openrouter/m",
+        reason: "quota",
+        type: "provider_stalled",
+      });
+
+      const alert = terminal.writes.join("");
+      expect(alert).toContain(
+        "\x1bPtmux;\x1b\x1b]777;notify;msa;openrouter/m stopped: 402: no credits\x07\x1b\\",
+      );
+      expect(alert.endsWith("\x1b\\\x07")).toBe(true);
+    }),
+  );
+
+const tellsWhichModelTookOver = () =>
+  runTest(
+    Effect.gen(function* () {
+      const { send, terminal, warnings } = setup();
+      yield* send({
+        errorMessage: "402: no credits",
+        from: "openrouter/m",
+        to: "anthropic-api/m",
+        type: "model_fallback",
+      });
+
+      expect(warnings).toEqual([
+        "openrouter/m failed (402: no credits). Switched to anthropic-api/m.",
+      ]);
+      expect(terminal.writes).toEqual([]);
+    }),
+  );
+
 describe("provider alerts", () => {
+  beforeEach(() => {
+    vi.stubEnv("TMUX", "");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("raises a terminal notification, blocks the program status, and marks the title while stopped", () =>
-    runTest(
-      Effect.gen(function* () {
-        const { fallback, send, terminal } = setup();
-        fallback.stalled = { at: 1 };
-        yield* send({
-          at: 1,
-          errorMessage: '402: {"message":"This request requires more credits"}\nmore',
-          model: "openrouter/m",
-          type: "provider_stalled",
-        });
-
-        const alert = terminal.writes.join("");
-        expect(alert).toContain(
-          '\x1b]777;notify;msa;openrouter/m stopped: 402: {"message":"This request requires more credits"}\x07',
-        );
-        expect(alert.endsWith("\x07\x07")).toBe(true);
-        expect(terminal.titles.at(-1)).toContain("(stopped)");
-        expect(terminal.statuses.at(-1)).toMatchObject({ kind: "auth", state: "blocked" });
-
-        fallback.stalled = undefined;
-        yield* send({ model: "anthropic-api/m", since: 1, type: "provider_recovered" });
-
-        expect(terminal.titles.at(-1)).not.toContain("(stopped)");
-        expect(terminal.statuses.at(-1)?.state).not.toBe("blocked");
-      }),
-    ));
-
-  it("tells the user which model took over", () =>
-    runTest(
-      Effect.gen(function* () {
-        const { send, terminal, warnings } = setup();
-        yield* send({
-          errorMessage: "402: no credits",
-          from: "openrouter/m",
-          to: "anthropic-api/m",
-          type: "model_fallback",
-        });
-
-        expect(warnings).toEqual([
-          "openrouter/m failed (402: no credits). Switched to anthropic-api/m.",
-        ]);
-        expect(terminal.writes).toEqual([]);
-      }),
-    ));
+    raisesAlertsWhileStopped());
+  it("blocks an authentication failure as auth", () => blocksAuthFailuresAsAuth());
+  it("passes the notifications through tmux", () => passesNotificationsThroughTmux());
+  it("tells the user which model took over", () => tellsWhichModelTookOver());
 });

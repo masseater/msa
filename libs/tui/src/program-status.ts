@@ -9,6 +9,17 @@ function isProgramStatusReply(sequence: string): boolean {
   return matchStringSequence({ body: PROGRAM_STATUS_BODY, data: sequence, kind: "osc" }) !== null;
 }
 
+const BASE_KINDS: ReadonlySet<string> = new Set(["permission", "question", "auth"]);
+
+function programStatusReplyKinds(sequence: string): ReadonlySet<string> {
+  const reply = matchStringSequence({ body: PROGRAM_STATUS_BODY, data: sequence, kind: "osc" });
+  const kinds = reply?.groups[0]
+    ?.split(":")
+    .find((pair) => pair.startsWith("kinds="))
+    ?.slice("kinds=".length);
+  return kinds === undefined ? BASE_KINDS : new Set(kinds.split(","));
+}
+
 const APP_PATTERN = /^[A-Za-z0-9_.+-]{1,32}$/u;
 const PROGRAM_STATUS_BODY = /^7501;\?.*$/su;
 const MAX_MESSAGE_BYTES = 2048;
@@ -26,10 +37,14 @@ function truncateUtf8(text: string, maxBytes: number): string {
   return text.slice(0, end);
 }
 
-function formatProgramStatus(status: programStatusTypes.ProgramStatus): string {
+function formatProgramStatus(
+  status: programStatusTypes.ProgramStatus,
+  kinds: ReadonlySet<string> = BASE_KINDS,
+): string {
   const pairs = [`state=${status.state}`];
   if (status.app !== undefined && APP_PATTERN.test(status.app)) pairs.push(`app=${status.app}`);
-  if (status.state === "blocked" && status.kind !== undefined) pairs.push(`kind=${status.kind}`);
+  if (status.state === "blocked" && status.kind !== undefined && kinds.has(status.kind))
+    pairs.push(`kind=${status.kind}`);
   const message = truncateUtf8(
     replaceControlRuns(status.message ?? "", " ").trim(),
     MAX_MESSAGE_BYTES,
@@ -40,13 +55,22 @@ function formatProgramStatus(status: programStatusTypes.ProgramStatus): string {
 
 const MAX_ALERT_BYTES = 256;
 
-function formatAttentionAlert(app: string, message: string): string {
+const tmuxPassthrough = (sequence: string): string =>
+  `\x1bPtmux;${sequence.replaceAll("\x1b", "\x1b\x1b")}\x1b\\`;
+
+function formatAttentionAlert(
+  app: string,
+  message: string,
+  options: { readonly tmux?: boolean } = {},
+): string {
   const text = truncateUtf8(
     replaceControlRuns(message, " ").replaceAll(";", ",").trim(),
     MAX_ALERT_BYTES,
   );
   const name = APP_PATTERN.test(app) ? app : "app";
-  return `\x1b]9;${name}: ${text}\x07\x1b]777;notify;${name};${text}\x07\x07`;
+  const notifications = [`\x1b]9;${name}: ${text}\x07`, `\x1b]777;notify;${name};${text}\x07`];
+  const wrap = options.tmux === true ? tmuxPassthrough : (sequence: string) => sequence;
+  return `${notifications.map(wrap).join("")}\x07`;
 }
 
 const programStatus = {
@@ -54,6 +78,7 @@ const programStatus = {
   formatAttentionAlert,
   formatProgramStatus,
   isProgramStatusReply,
+  programStatusReplyKinds,
 };
 
 export default programStatus;
