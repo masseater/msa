@@ -32,6 +32,10 @@ declare namespace decideTypes {
       }
     | { readonly status: "undecided"; readonly reason: string };
 
+  type DecisionModelPreparation =
+    | { readonly status: "ready"; readonly model: string; readonly fetched: boolean }
+    | { readonly status: "failed"; readonly model: string; readonly reason: string };
+
   interface DecideShape {
     readonly decide: (request: DecideRequest) => Effect.Effect<Decision>;
   }

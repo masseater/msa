@@ -136,6 +136,8 @@ const attachClassifiers = <TApi extends typesModuleModule2.Api>({
       return Promise.reject(error);
     }
   };
+  provider.prepareClassifier = (model) =>
+    classifiers[model.api]?.prepare?.(model) ?? Promise.resolve({ fetched: false });
 };
 
 const modelsCatalogQuery = {

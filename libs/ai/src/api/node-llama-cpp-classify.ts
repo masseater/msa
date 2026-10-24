@@ -24,8 +24,6 @@ interface LoadedModel {
 
 type Config = nodeLlamaCppClassifyTypes.LocalClassifierConfig;
 
-type OnModelEvent = (event: typesModule.ClassifierModelEvent) => void;
-
 type Bindings = typeof import("node-llama-cpp");
 
 const errorMessage = (error: unknown): string =>
@@ -43,7 +41,6 @@ const resolveFile = (
   config: Config,
   uri: string,
   downloading: Deferred.Deferred<void>,
-  onEvent: OnModelEvent,
 ) =>
   Effect.gen(function* () {
     const { resolveModelFile } = bindings;
@@ -57,19 +54,7 @@ const resolveFile = (
     ).pipe(Effect.option);
     if (Option.isSome(existing)) return existing.value;
     yield* Deferred.succeed(downloading, undefined);
-    onEvent({ type: "download-started", uri });
-    return yield* Effect.tryPromise(() =>
-      resolveModelFile(uri, {
-        ...options,
-        onProgress: ({ downloadedSize, totalSize }) =>
-          onEvent({
-            downloadedBytes: downloadedSize,
-            totalBytes: totalSize,
-            type: "download-progress",
-            uri,
-          }),
-      }),
-    );
+    return yield* Effect.tryPromise(() => resolveModelFile(uri, options));
   });
 
 const loadModel = Effect.fn("loadModel")(function* (
@@ -77,10 +62,9 @@ const loadModel = Effect.fn("loadModel")(function* (
   uri: string,
   contextSize: number,
   downloading: Deferred.Deferred<void>,
-  onEvent: OnModelEvent,
 ) {
   const bindings = yield* Effect.tryPromise(() => import("node-llama-cpp"));
-  const path = yield* resolveFile(bindings, config, uri, downloading, onEvent);
+  const path = yield* resolveFile(bindings, config, uri, downloading);
   const llama = yield* Effect.tryPromise(() =>
     bindings.getLlama({
       build: "never",
@@ -99,11 +83,10 @@ const loadModel = Effect.fn("loadModel")(function* (
     model,
     sequence: context.getSequence(),
   };
-  onEvent({ path, type: "ready", uri });
   return loaded;
 });
 
-function startLoad(config: Config, uri: string, contextSize: number, onEvent: OnModelEvent): Load {
+function startLoad(config: Config, uri: string, contextSize: number): Load {
   const key = `${config.directory}\u0000${uri}`;
   const cached = loads.get(key);
   if (cached !== undefined) return cached;
@@ -113,13 +96,12 @@ function startLoad(config: Config, uri: string, contextSize: number, onEvent: On
   };
   loads.set(key, load);
   Effect.runFork(
-    loadModel(config, uri, contextSize, load.downloading, onEvent).pipe(
+    loadModel(config, uri, contextSize, load.downloading).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
-          Effect.sync(() => {
-            loads.delete(key);
-            onEvent({ message: errorMessage(error.cause), type: "failed", uri });
-          }).pipe(Effect.andThen(Deferred.fail(load.loaded, errorMessage(error.cause)))),
+          Effect.sync(() => loads.delete(key)).pipe(
+            Effect.andThen(Deferred.fail(load.loaded, errorMessage(error.cause))),
+          ),
         onSuccess: (model) => Deferred.succeed(load.loaded, model),
       }),
     ),
@@ -139,6 +121,21 @@ const awaitLoad = Effect.fn("awaitLoad")(function* (load: Load, uri: string) {
       Effect.andThen(Effect.die(new Error(`${LABEL} is still fetching ${uri}`))),
     ),
   );
+});
+
+const prepareModel = Effect.fn("prepareModel")(function* (
+  config: Config,
+  model: typesModule.ClassifierModel<typesModule.ClassifierApi>,
+) {
+  const load = startLoad(config, model.baseUrl, model.contextWindow);
+  yield* Deferred.await(load.loaded).pipe(
+    Effect.mapError((message) => new Error(message)),
+    Effect.orDie,
+  );
+  const preparation: typesModule.ClassifierPreparation = {
+    fetched: yield* Deferred.isDone(load.downloading),
+  };
+  return preparation;
 });
 
 function labelToken(loaded: LoadedModel, label: string): Token | undefined {
@@ -240,7 +237,7 @@ const classifyAll = Effect.fn("classifyAll")(function* (
     );
   for (const id of Object.keys(context.questions)) renderQuestion(context, id);
   const loaded = yield* awaitLoad(
-    startLoad(config, model.baseUrl, model.contextWindow, options?.onModelEvent ?? (() => {})),
+    startLoad(config, model.baseUrl, model.contextWindow),
     model.baseUrl,
   );
   const answers: Array<[string, typesModule.ClassifierAnswer]> = [];
@@ -259,7 +256,7 @@ const untilAborted = (signal: AbortSignal | undefined) =>
         return Effect.sync(() => signal.removeEventListener("abort", abort));
       });
 
-function nodeLlamaCppClassifier(config: Config): typesModule.ProviderClassifier {
+function nodeLlamaCppClassifier(config: Config): Required<typesModule.ProviderClassifier> {
   return {
     classify: (model, context, options) =>
       Effect.runPromise(
@@ -287,6 +284,7 @@ function nodeLlamaCppClassifier(config: Config): typesModule.ProviderClassifier 
           );
         }),
       ),
+    prepare: (model) => Effect.runPromise(prepareModel(config, model)),
   };
 }
 

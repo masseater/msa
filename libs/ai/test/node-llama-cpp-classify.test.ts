@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import localModule from "../src/providers/local.ts";
 import type typesModule from "../src/types.types.ts";
 
-const { closeServers, joinPath, listen, makeTempDir, pollUntil, removeDirs, runTest } = testing;
+const { closeServers, joinPath, listen, makeTempDir, removeDirs, runTest } = testing;
 const { LIQUID_D1, localProvider } = localModule;
 
 const FIXTURE = joinPath(import.meta.dirname, "fixtures", "stories260K.gguf");
@@ -53,19 +53,14 @@ const tempDirectory = Effect.gen(function* () {
 const answersFromNextTokenProbabilities = () =>
   runTest(
     Effect.gen(function* () {
-      const events: typesModule.ClassifierModelEvent[] = [];
-      const siblingEvents: typesModule.ClassifierModelEvent[] = [];
       const directory = yield* tempDirectory;
       const provider = localProvider({ directory }, [modelAt(FIXTURE)]);
       const sibling = localProvider({ directory }, [modelAt(FIXTURE)]);
       const model = modelAt(FIXTURE);
 
-      const first = yield* Effect.promise(() =>
-        provider.classify!(model, context, { onModelEvent: (event) => events.push(event) }),
-      );
-      const second = yield* Effect.promise(() =>
-        sibling.classify!(model, context, { onModelEvent: (event) => siblingEvents.push(event) }),
-      );
+      const first = yield* Effect.promise(() => provider.classify!(model, context));
+      const second = yield* Effect.promise(() => sibling.classify!(model, context));
+      const preparation = yield* Effect.promise(() => sibling.prepareClassifier!(model));
 
       expect(first.errorMessage).toBeUndefined();
       expect(first.stopReason).toBe("stop");
@@ -80,8 +75,7 @@ const answersFromNextTokenProbabilities = () =>
       expect(severity.score).toBeGreaterThanOrEqual(0);
       expect(severity.score).toBeLessThanOrEqual(2);
       expect(second.answers).toEqual(first.answers);
-      expect(events).toEqual([{ path: FIXTURE, type: "ready", uri: FIXTURE }]);
-      expect(siblingEvents).toEqual([]);
+      expect(preparation).toEqual({ fetched: false });
     }),
   );
 
@@ -95,43 +89,30 @@ const retriesAFailedDownload = () =>
           return new Response("not found", { status: 404 });
         }),
       );
-      const events: typesModule.ClassifierModelEvent[] = [];
-      const onModelEvent = (event: typesModule.ClassifierModelEvent) => events.push(event);
       const provider = localProvider(
         { directory: yield* tempDirectory, endpoints: { huggingFace: `${origin}/` } },
         [modelAt("hf:example/missing/missing.gguf")],
       );
       const model = modelAt("hf:example/missing/missing.gguf");
-
-      const failures = Effect.sync(() => events.filter((event) => event.type === "failed").length);
-
-      const first = yield* Effect.promise(() =>
-        provider.classify!(model, context, { onModelEvent }),
+      const failure = Effect.tryPromise(() => provider.prepareClassifier!(model)).pipe(
+        Effect.flip,
+        Effect.map((error) => String(error.cause)),
       );
-      yield* pollUntil(
-        Effect.map(failures, (count) => count === 1),
-        100,
-        "20 millis",
-      );
+
+      const first = yield* Effect.promise(() => provider.classify!(model, context));
+      const firstFailure = yield* failure;
       const requestsAfterFirst = requested.length;
-      const second = yield* Effect.promise(() =>
-        provider.classify!(model, context, { onModelEvent }),
-      );
-      yield* pollUntil(
-        Effect.map(failures, (count) => count === 2),
-        100,
-        "20 millis",
-      );
+      const second = yield* Effect.promise(() => provider.classify!(model, context));
+      const secondFailure = yield* failure;
 
       expect(first.stopReason).toBe("error");
       expect(first.answers).toEqual({});
       expect(first.errorMessage).toContain("still fetching hf:example/missing/missing.gguf");
       expect(second.stopReason).toBe("error");
+      expect(firstFailure).not.toBe("");
+      expect(secondFailure).not.toBe("");
       expect(requestsAfterFirst).toBeGreaterThan(0);
       expect(requested.length).toBeGreaterThan(requestsAfterFirst);
-      expect(
-        events.map((event) => event.type).filter((type) => type !== "download-progress"),
-      ).toEqual(["download-started", "failed", "download-started", "failed"]);
     }),
   );
 
@@ -142,7 +123,7 @@ describe("node-llama-cpp classifier", () => {
   );
 
   it(
-    "answers at once while the model downloads, and downloads again after a failure",
+    "answers at once while the model downloads, and prepares it again after a failure",
     retriesAFailedDownload,
   );
 });

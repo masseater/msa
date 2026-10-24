@@ -36,7 +36,6 @@ export default class SessionIntegrations {
   }
 
   close(): Promise<void> {
-    this.decision.close();
     return Promise.all([
       this.orchestration.close(),
       this.prWatch.close(),

@@ -6,6 +6,7 @@ import platform from "../core/platform/index.ts";
 import settingsDiagnostics from "../core/settings-diagnostics.ts";
 import timings from "../core/timings.ts";
 import cliInput from "./cli-input.ts";
+import decisionModelStartup from "./decision-model-startup.ts";
 import diagnosticsModule from "./diagnostics.ts";
 import type mainInternalTypes from "./main-internal.types.ts";
 
@@ -16,6 +17,7 @@ const { deduplicateDiagnostics } = settingsDiagnostics;
 const { time } = timings;
 const { isTruthyEnvFlag } = cliInput;
 const { EXTENSION_LOAD_FAILURE_HINT, reportDiagnostics } = diagnosticsModule;
+const { startDecisionModel } = decisionModelStartup;
 
 type Startup = mainInternalTypes.Startup;
 type Runtime = mainInternalTypes.Runtime;
@@ -57,7 +59,11 @@ function checkStartup(startup: Startup, runtime: Runtime) {
     writeError(chalk.red("Error: MSA_STARTUP_BENCHMARK only supports interactive mode"));
     process.exit(1);
   }
-  return { startupBenchmark, startupDiagnostics: diagnostics };
+  return {
+    decisionModel: startDecisionModel(startup, runtime),
+    startupBenchmark,
+    startupDiagnostics: diagnostics,
+  };
 }
 
 const startupChecks = { checkStartup };

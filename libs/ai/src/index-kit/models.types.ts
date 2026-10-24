@@ -43,7 +43,7 @@ declare namespace aiModelsKitTypes {
   type ClassifierFunction<TOptions extends aiTypes.ClassifierOptions = aiTypes.ClassifierOptions> =
     providerApiTypesModule.ClassifierFunction<TOptions>;
   type ClassifierOptions = providerApiTypesModule.ClassifierOptions;
-  type ClassifierModelEvent = providerApiTypesModule.ClassifierModelEvent;
+  type ClassifierPreparation = providerApiTypesModule.ClassifierPreparation;
   type ImagesFunction<TOptions extends aiTypes.ImagesOptions = aiTypes.ImagesOptions> =
     providerApiTypesModule.ImagesFunction<TOptions>;
   type ImagesOptions = providerApiTypesModule.ImagesOptions;

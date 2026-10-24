@@ -4,14 +4,15 @@ import type nodeLlamaCppClassifyTypes from "./node-llama-cpp-classify.types.ts";
 const nodeLlamaCppClassifyApi = (
   config: nodeLlamaCppClassifyTypes.LocalClassifierConfig,
 ): typesModule.ProviderClassifier => {
-  let classifier: Promise<typesModule.ProviderClassifier> | undefined;
+  let classifier: Promise<Required<typesModule.ProviderClassifier>> | undefined;
+  const load = () =>
+    (classifier ??= import("./node-llama-cpp-classify.ts").then((module) =>
+      module.default.nodeLlamaCppClassifier(config),
+    ));
   return {
-    classify: (model, context, options) => {
-      classifier ??= import("./node-llama-cpp-classify.ts").then((module) =>
-        module.default.nodeLlamaCppClassifier(config),
-      );
-      return classifier.then((loaded) => loaded.classify(model, context, options));
-    },
+    classify: (model, context, options) =>
+      load().then((loaded) => loaded.classify(model, context, options)),
+    prepare: (model) => load().then((loaded) => loaded.prepare(model)),
   };
 };
 

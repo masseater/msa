@@ -28,6 +28,24 @@ export default class BackgroundChecks {
     }
     this.checkForNewVersion();
     this.checkForUpdates();
+    this.reportDecisionModel();
+  }
+
+  private reportDecisionModel(): void {
+    const { decisionModelPreparation } = this.mode.options;
+    if (decisionModelPreparation === undefined) return;
+    Effect.runFork(
+      awaitingWith(function* () {
+        const preparation = yield* awaited(decisionModelPreparation);
+        const { status } = this.mode.display;
+        if (preparation.status === "failed")
+          status.showWarning(
+            `Could not load decision model ${preparation.model}: ${preparation.reason}`,
+          );
+        else if (preparation.fetched)
+          status.showStatus(`Downloaded decision model ${preparation.model}`);
+      }, this),
+    );
   }
 
   private refreshCatalogs(): void {

@@ -37,6 +37,7 @@ function runInteractive(startup: Startup, runtime: Runtime, input: Input, checks
       );
       const interactiveMode = new InteractiveMode(runtime, {
         autoTrustOnReloadCwd: startup.autoTrustOnReloadCwd,
+        decisionModelPreparation: checks.decisionModel,
         initialImages: input.initialImages,
         initialMessage: input.initialMessage,
         initialMessages: parsed.messages,
