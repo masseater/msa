@@ -212,6 +212,12 @@ function current(
   return findByBranch(runtime, owner.cwd, owner.branch);
 }
 
+function heldByAnother(runtime: runtimeTypes.Runtime, taskId: string, branch: string): boolean {
+  return store
+    .listPullRequests(runtime.database, runtime.options.project)
+    .some((pull) => pull.branch === branch && pull.taskId !== taskId);
+}
+
 function save(
   runtime: runtimeTypes.Runtime,
   taskId: string,
@@ -231,10 +237,7 @@ function refresh(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<v
     if (task === undefined) return;
     const owner = yield* ownerOf(runtime, task);
     if (owner === undefined) return;
-    const holder = store
-      .listPullRequests(runtime.database, runtime.options.project)
-      .find((pull) => pull.branch === owner.branch && pull.taskId !== task.id);
-    if (holder !== undefined) return;
+    if (heldByAnother(runtime, task.id, owner.branch)) return;
     const found = yield* Effect.result(current(runtime, owner));
     if (Result.isFailure(found) || found.success === undefined) return;
     const recorded = store.pullRequestOf(runtime.database, task.id);

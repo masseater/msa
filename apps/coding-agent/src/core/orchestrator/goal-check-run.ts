@@ -49,6 +49,7 @@ function verifyAll(
   runtime: runtimeTypes.Runtime,
   threadId: string,
   tasks: readonly orchestratorTypesTypes.Task[],
+  live: () => boolean,
 ): Effect.Effect<Verification> {
   return Effect.gen(function* () {
     const checks = yield* runAll(
@@ -56,7 +57,9 @@ function verifyAll(
       threadId,
       tasks.filter((task) => task.checks.length > 0),
     );
-    const gates = yield* Effect.forEach(tasks, (task) => pullRequestGate.check(runtime, task));
+    const gates = yield* Effect.forEach(tasks, (task) =>
+      pullRequestGate.check(runtime, task, live),
+    );
     return { checks, pullRequests: gates.flatMap((gate) => gate ?? []) };
   });
 }

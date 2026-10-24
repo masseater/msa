@@ -50,6 +50,9 @@ export default class FakeGitHub {
 
   unavailable: orchestratorTypes.GhResult | undefined;
   calls = 0;
+  answered = 0;
+  private held: Promise<void> | undefined;
+  private releaseHeld: (() => void) | undefined;
 
   constructor(origin: string) {
     this.origin = origin;
@@ -80,12 +83,32 @@ export default class FakeGitHub {
     );
   }
 
-  runGh = (args: readonly string[], _cwd: string): Promise<orchestratorTypes.GhResult> =>
-    Effect.runPromise(this.handle(args));
+  hold(): void {
+    const { promise, resolve } = Promise.withResolvers<void>();
+    this.held = promise;
+    this.releaseHeld = resolve;
+  }
+
+  release(): void {
+    this.held = undefined;
+    this.releaseHeld?.();
+  }
+
+  runGh = (args: readonly string[], _cwd: string): Promise<orchestratorTypes.GhResult> => {
+    this.calls += 1;
+    const held = this.held;
+    return Effect.runPromise(
+      Effect.gen({ self: this }, function* () {
+        if (held !== undefined) yield* Effect.promise(() => held);
+        const result = yield* this.handle(args);
+        this.answered += 1;
+        return result;
+      }),
+    );
+  };
 
   private handle(args: readonly string[]): Effect.Effect<orchestratorTypes.GhResult> {
     return Effect.gen({ self: this }, function* () {
-      this.calls += 1;
       if (this.unavailable !== undefined) return this.unavailable;
       const [group, command, target] = args;
       if (group !== "pr") return refused(`fake gh does not know ${args.join(" ")}`);

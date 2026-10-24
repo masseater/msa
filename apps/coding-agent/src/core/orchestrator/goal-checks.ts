@@ -36,7 +36,7 @@ function check(round: Round, waitingSince: number | undefined): void {
   const pollMs = runtime.options.ciPollMs ?? CI_POLL_MS;
   const checked = Effect.gen(function* () {
     if (waitingSince !== undefined) yield* Effect.sleep(pollMs);
-    const results = yield* verifyAll(runtime, threadId, tasks);
+    const results = yield* verifyAll(runtime, threadId, tasks, () => threadRuns.current(thread));
     return { at: yield* nowMillis, results };
   });
   void Effect.runPromise(threadRuns.whileCurrent(thread, checked)).then(

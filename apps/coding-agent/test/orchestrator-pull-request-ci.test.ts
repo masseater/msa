@@ -198,3 +198,34 @@ it(
   "does not merge a pull request whose body changed after the review, and merges it with the body the next review read",
   sendsBackWhenTheBodyChangedAfterReview,
 );
+
+const recordsNothingFromACheckThatOutlivedItsRun = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { orchestrator, workers, branch, taskId } = yield* openedTask(remote);
+        github.ci.set(yield* github.head(branch), "pending");
+        const polled = github.calls + 2;
+        workers[0]!.complete("waiting for CI");
+        yield* waitFor(() => github.calls >= polled);
+
+        github.hold();
+        const inFlight = github.calls + 1;
+        yield* waitFor(() => github.calls >= inFlight);
+        github.ci.set(yield* github.head(branch), "failure");
+        yield* Effect.promise(() => orchestrator.stop(taskId));
+        github.release();
+        yield* waitFor(() => github.answered === github.calls);
+        yield* Effect.sleep(20);
+
+        const tasks = yield* Effect.promise(() => orchestrator.list());
+        expect(tasks.find((task) => task.id === taskId)?.pullRequest?.ci).toBe("pending");
+      }),
+    ),
+  );
+
+it(
+  "records nothing from a pull request check that was still in flight when its task stopped",
+  recordsNothingFromACheckThatOutlivedItsRun,
+);

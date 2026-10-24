@@ -18,6 +18,7 @@ type GateResult = goalCheckTextTypes.GateResult;
 function check(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
+  live: () => boolean,
 ): Effect.Effect<GateResult | undefined> {
   return Effect.gen(function* () {
     const owner = yield* pullRequests.ownerOf(runtime, task);
@@ -46,6 +47,7 @@ function check(
     }
     const now = yield* nowMillis;
     const local = yield* worktrees.headOf(owner.cwd);
+    if (!live()) return undefined;
     const unverified = pullRequests.save(runtime, task.id, pull, null, now);
     const problems = problemsOf(unverified, local);
     if (problems.length === 0) {
