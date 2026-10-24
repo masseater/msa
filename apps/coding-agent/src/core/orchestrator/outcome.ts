@@ -50,9 +50,14 @@ function worse(left: ReportStatus, right: ReportStatus): ReportStatus {
   return SEVERITY.indexOf(left) <= SEVERITY.indexOf(right) ? left : right;
 }
 
+interface SendBack {
+  task: orchestratorTypesTypes.Task;
+  prompt: string;
+}
+
 interface Applied {
   review: orchestratorTypesTypes.Task[];
-  sendBack: orchestratorTypesTypes.Task[];
+  sendBack: SendBack[];
   lines: string[];
   status: ReportStatus;
 }
@@ -89,7 +94,8 @@ function applyOutcome(
     }
     if (judged !== undefined && result !== undefined && result.status !== "completed") {
       applied.status = worse(applied.status, result.status);
-      if (result.status === "sent-back") applied.sendBack.push(judged);
+      if (result.status === "sent-back")
+        applied.sendBack.push({ prompt: result.prompt ?? "", task: judged });
       else store.setTaskStatus(database, assignment.taskId, result.status, now);
       continue;
     }

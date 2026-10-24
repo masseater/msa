@@ -8,6 +8,7 @@ import Orchestrator from "../orchestrator/orchestrator.ts";
 import type orchestratorTypes from "../orchestrator/orchestrator.types.ts";
 import platform from "../platform/index.ts";
 import orchestratorCallbacks from "./orchestrator-callbacks.ts";
+import orchestratorGh from "./orchestrator-gh.ts";
 
 const { schedule } = platform;
 const { ORCHESTRATOR_REPORT_MESSAGE_TYPE } = orchestratorSupport;
@@ -69,6 +70,7 @@ export default class SessionOrchestration {
         ),
       resolveModel: (reference) => orchestratorCallbacks.resolveModel(session, reference),
       runCommand: orchestratorCallbacks.runCommand,
+      runGh: orchestratorGh.runGh,
       telemetry,
       version: VERSION,
     });

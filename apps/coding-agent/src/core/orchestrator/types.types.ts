@@ -99,11 +99,42 @@ declare namespace orchestratorTypesTypes {
     createdAt: number;
   }
 
+  type PullRequestCi = "passing" | "pending" | "failing";
+
+  interface PullRequest {
+    taskId: string;
+    number: number;
+    url: string;
+    branch: string;
+    base: string;
+    state: string;
+    headSha: string;
+    ci: PullRequestCi;
+    mergeable: string;
+    mergeState: string;
+    verifiedSha: string | null;
+    checkedAt: number;
+  }
+
+  interface PullRequestHandover {
+    number: number;
+    from: string;
+    to: string;
+  }
+
+  interface OrphanedPullRequest {
+    number: number;
+    url: string;
+    taskId: string;
+    branch: string;
+  }
+
   interface TaskView extends Task {
     dependsOn: readonly string[];
     dependents: readonly string[];
     assignments: readonly Assignment[];
     reports: readonly Report[];
+    pullRequest: PullRequest | null;
   }
 
   interface ThreadView extends Thread {
@@ -247,6 +278,8 @@ declare namespace orchestratorTypesTypes {
   interface ReplanResult {
     replanId: string | null;
     aborted: string | null;
+    handedOver: readonly PullRequestHandover[];
+    orphaned: readonly OrphanedPullRequest[];
     stopped: readonly ReplanStopped[];
     created: readonly ReplanCreated[];
     dropped: readonly ReplanDropped[];

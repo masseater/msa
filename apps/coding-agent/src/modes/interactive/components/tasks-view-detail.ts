@@ -12,7 +12,7 @@ import visualTruncate from "./visual-truncate.ts";
 
 const { viewHelpers } = tasksViewHelpers;
 const { formatToolDuration } = renderUtils;
-const { firstLine } = textModule;
+const { firstLine, pullRequestText } = textModule;
 const { theme } = themeModule;
 const { truncateToVisualLines } = visualTruncate;
 const { keyHint } = keybindingHints;
@@ -124,6 +124,11 @@ function detailWriters(
   if (task.replan !== null) {
     section("Replan");
     indented(`${task.replan.role} · ${task.replan.reason}`);
+  }
+  if (task.pullRequest !== null) {
+    section("Pull request");
+    indented(pullRequestText(task.pullRequest));
+    indented(task.pullRequest.url);
   }
   const byId = new Map(orchestrator.snapshot.tasks.map((entry) => [entry.id, entry]));
   const related = (ids: readonly string[]) => {

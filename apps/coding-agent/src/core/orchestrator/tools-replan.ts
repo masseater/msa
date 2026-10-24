@@ -3,11 +3,10 @@ import { Type } from "typebox";
 
 import type extensionsTypesTypes from "../extensions/types.types.ts";
 import type orchestratorTypes from "./orchestrator.types.ts";
-import promptsModule from "./prompts.ts";
+import replanFormat from "./replan-format.ts";
 import toolSupport from "./tool-support.ts";
 
 const { checksSchema, modelSchema, taskIdSchema, tool } = toolSupport;
-const { prompts } = promptsModule;
 
 const { ModelThinkingLevelSchema } = modelSchemaModule;
 
@@ -116,7 +115,7 @@ function replanTools(
         "Write each new task as a currentState and a goalState, never as a procedure. Use the handoff memo to say what is true now.",
       ],
       promptSnippet: "Stop the work, rewrite the task DAG, and resume it",
-      run: (params) => orchestrator.replan(params).then(prompts.formatReplan),
+      run: (params) => orchestrator.replan(params).then(replanFormat.formatReplan),
     }),
   };
 }

@@ -32,6 +32,8 @@ declare namespace orchestratorTypes {
 
   type CommandResult = workerTypes.CommandResult;
 
+  type GhResult = workerTypes.GhResult;
+
   type CreateWorkerOptions = workerTypes.CreateWorkerOptions;
 
   type OrchestratorDefaults = workerTypes.OrchestratorDefaults;

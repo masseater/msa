@@ -2,19 +2,44 @@ import { Effect } from "effect";
 
 import type decideTypes from "../decision/decide.types.ts";
 import outcomeModule from "./outcome.ts";
+import pullRequestMergeModule from "./pull-request-merge.ts";
 import reviewVerdictModule from "./review-verdict.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import threadRun from "./thread-run.ts";
 import type threadRunTypes from "./thread-run.types.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
 const { store } = storeModule;
 const { outcomes } = outcomeModule;
 const { threadRuns } = threadRun;
 const { reviewVerdicts } = reviewVerdictModule;
+const { pullRequestMerge } = pullRequestMergeModule;
+
+function mergeAndSettle(
+  thread: threadRunTypes.ThreadRun,
+  task: orchestratorTypesTypes.Task,
+  verdict: runtimeTypes.ReviewVerdict,
+): void {
+  const merging = Effect.map(pullRequestMerge.afterReview(thread.runtime, task), (merge) => ({
+    merge,
+  }));
+  void Effect.runPromise(threadRuns.whileCurrent(thread, merging)).then(
+    (merged) =>
+      merged === undefined || !threadRuns.current(thread)
+        ? undefined
+        : threadRuns.settle(
+            thread,
+            undefined,
+            merged.merge === undefined ? verdict : { ...verdict, merge: merged.merge },
+          ),
+    (error: unknown) => threadRuns.settle(thread, error),
+  );
+}
 
 function conclude(
   thread: threadRunTypes.ThreadRun,
+  task: orchestratorTypesTypes.Task,
   decided: decideTypes.Decision | undefined,
   readBefore: ReadonlySet<string>,
 ): void {
@@ -24,8 +49,10 @@ function conclude(
     runtime.afterTurn(threadId, run, worker);
     return;
   }
-  if (!threadRuns.continueWithNotes(thread, readBefore))
-    threadRuns.settle(thread, undefined, reviewVerdicts.verdictOf(decided));
+  if (threadRuns.continueWithNotes(thread, readBefore)) return;
+  const verdict = reviewVerdicts.verdictOf(decided);
+  if (verdict.result === "pass") mergeAndSettle(thread, task, verdict);
+  else threadRuns.settle(thread, undefined, verdict);
 }
 
 function judge(
@@ -51,7 +78,7 @@ function judge(
       })),
   );
   void Effect.runPromise(threadRuns.whileCurrent(thread, decision)).then(
-    (decided) => conclude(thread, decided, readBefore),
+    (decided) => conclude(thread, task, decided, readBefore),
     (error: unknown) => threadRuns.settle(thread, error),
   );
   return true;

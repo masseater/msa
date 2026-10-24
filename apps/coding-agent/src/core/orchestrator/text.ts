@@ -91,10 +91,15 @@ function requireMergeTarget(
   return target.id;
 }
 
+function pullRequestText(pull: orchestratorTypesTypes.PullRequest): string {
+  return `PR #${pull.number} ${pull.state.toLowerCase()}, head ${pull.headSha.slice(0, 12)}, CI ${pull.ci}, mergeable ${pull.mergeable.toLowerCase()} (${pull.mergeState.toLowerCase()})`;
+}
+
 const text = {
   firstLine,
   outputPattern,
   phrase,
+  pullRequestText,
   requireChecks,
   requireMergeTarget,
   requireStates,

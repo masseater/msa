@@ -1,7 +1,9 @@
 import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import pullRequestSchema from "./pull-request-schema.ts";
 
 const { openSqliteFile } = sqliteFile;
+const { PULL_REQUEST_SCHEMA } = pullRequestSchema;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -227,7 +229,7 @@ function renameSessionsToThreads(database: DatabaseSync): void {
   });
 }
 
-const SCHEMA_VERSION = 4;
+const SCHEMA_VERSION = 5;
 
 function rejectNewerSchema(database: DatabaseSync, path: string): void {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
@@ -248,6 +250,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec("PRAGMA foreign_keys = OFF");
   renameSessionsToThreads(database);
   database.exec(SCHEMA);
+  database.exec(PULL_REQUEST_SCHEMA);
   dropReplanUndoColumns(database);
   migrateTasks(database);
   addOwnerPid(database);

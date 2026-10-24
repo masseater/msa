@@ -1,5 +1,6 @@
 import dbModule from "./db.ts";
 import noteStoreModule from "./note-store.ts";
+import pullRequestStore from "./pull-request-store.ts";
 import reportStoreModule from "./report-store.ts";
 import stateStoreModule from "./state-store.ts";
 import taskStoreModule from "./task-store.ts";
@@ -21,6 +22,7 @@ const store = {
   ...noteStore,
   ...stateStore,
   ...watchdogStore,
+  ...pullRequestStore,
 };
 
 const storeModule = {

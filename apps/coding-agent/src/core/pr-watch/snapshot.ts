@@ -123,6 +123,8 @@ function isConflicting(snapshot: snapshotTypes.PrSnapshot): boolean {
 }
 
 const snapshot = {
+  RollupEntry,
+  countChecks,
   describeChecks,
   isBehind,
   isConflicting,

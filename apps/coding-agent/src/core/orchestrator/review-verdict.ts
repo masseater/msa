@@ -18,6 +18,15 @@ interface ReviewResult {
   status: ReviewStatus | "sent-back";
   result: orchestratorTypesTypes.ReviewVerdictResult;
   line: string;
+  prompt?: string;
+}
+
+function passed(head: string, merge: runtimeTypes.MergeOutcome | undefined): ReviewResult {
+  if (merge === undefined) return { line: head, result: "pass", status: "completed" };
+  const line = `${head} ${merge.line}`;
+  if (merge.kind === "merged") return { line, result: "pass", status: "completed" };
+  if (merge.kind === "stopped") return { line, result: "pass", status: "stopped" };
+  return { line, prompt: merge.prompt, result: "pass", status: "sent-back" };
 }
 
 function judgedTask(
@@ -83,7 +92,7 @@ function apply(
 ): ReviewResult {
   const judged = verdict ?? { reason: "the review was not judged", result: "undecided" };
   const head = `Review verdict: ${judged.result} (${judged.reason}).`;
-  if (judged.result === "pass") return { line: head, result: "pass", status: "completed" };
+  if (judged.result === "pass") return passed(head, judged.merge);
   if (judged.result === "undecided") {
     return {
       line: `${head} The task is stopped, not completed: read the report and decide whether to rerun it with the findings.`,

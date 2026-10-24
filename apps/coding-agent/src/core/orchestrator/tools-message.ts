@@ -146,7 +146,12 @@ function messageToolsB(
       parameters: taskIdObject,
       promptSnippet: "Stop a task",
       run: ({ taskId }) =>
-        orchestrator.stop(taskId).then((task) => `${task.id} is ${task.status}.`),
+        orchestrator.stop(taskId).then((task) => {
+          const pull = task.pullRequest;
+          if (pull?.taskId !== task.id || pull.state !== "OPEN")
+            return `${task.id} is ${task.status}.`;
+          return `${task.id} is ${task.status}. It still carries open pull request #${pull.number} (${pull.url}, ${pull.branch}): rerun the task, hand the pull request to a new task with replan from ${task.id}, or close it.`;
+        }),
     }),
   };
 }

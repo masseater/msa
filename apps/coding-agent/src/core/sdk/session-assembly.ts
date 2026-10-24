@@ -46,6 +46,7 @@ function assembleSession(parts: SessionParts): AgentSession {
     excludedToolNames: tools.excludedToolNames,
     extensionRunnerRef,
     initialActiveToolNames: tools.initialActiveToolNames,
+    isWorker: options.isWorker === true,
     modelRuntime,
     resourceLoader,
     scopedModels: options.scopedModels,

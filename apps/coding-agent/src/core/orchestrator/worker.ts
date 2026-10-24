@@ -48,6 +48,12 @@ declare namespace workerTypes {
     output: string;
   }
 
+  interface GhResult {
+    code: number;
+    stdout: string;
+    stderr: string;
+  }
+
   type ReportStatus = "completed" | "sent-back" | "waiting" | "stopped" | "failed";
 
   interface OrchestratorReport {
@@ -76,6 +82,7 @@ declare namespace workerTypes {
       signal: AbortSignal,
     ) => Promise<CommandResult>;
     decide: (request: decideTypes.DecideRequest) => Promise<decideTypes.Decision>;
+    runGh: (args: readonly string[], cwd: string) => Promise<GhResult>;
     pollIntervalMs?: number | null;
 
     telemetry: telemetryTypes.TelemetryContext;

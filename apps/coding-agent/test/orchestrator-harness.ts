@@ -60,6 +60,9 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
       return found;
     },
     runCommand: options.runCommand ?? (() => Promise.resolve({ exitCode: 0, output: "" })),
+    runGh:
+      options.runGh ??
+      (() => Promise.resolve({ code: 1, stderr: "this test has no GitHub", stdout: "" })),
     telemetry,
     version: "0.0.0-test",
   });

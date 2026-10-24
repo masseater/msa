@@ -44,7 +44,6 @@ const startsTheWorkerInAWorktreeAndChecksThere = () =>
         expect(worker.prompts[0]).toContain(
           `on branch ${branch}. Work and commit here; do not create another worktree`,
         );
-        expect(worker.prompts[0]).toContain(`push ${branch} and open a pull request into main.`);
 
         yield* sh("echo done > done.txt", worker.cwd);
         worker.complete("wrote done.txt");
@@ -108,9 +107,6 @@ const branchesFromTheMergeTarget = () =>
         expect(yield* sh("git log -1 --format=%s", targetWorker.cwd)).toBe("target");
         expect(targetWorker.prompts[0]).toContain(
           `Merge their branches into ${targetBranch} before you open the pull request:\n- ${partBranch} (task ${part.id} "part")`,
-        );
-        expect(targetWorker.prompts[0]).toContain(
-          `push ${targetBranch} and open a pull request into main.`,
         );
       }),
     ),

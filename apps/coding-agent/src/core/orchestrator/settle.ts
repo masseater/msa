@@ -24,11 +24,11 @@ function startFollowUps(
     for (const task of applied.review) {
       yield* starting.startTasks(runtime, task, "reviewer", report);
     }
-    for (const task of applied.sendBack) {
-      yield* starting.startTasks(runtime, task, "worker");
+    for (const item of applied.sendBack) {
+      yield* starting.startTasks(runtime, item.task, "worker", "", item.prompt);
     }
     const scheduled = yield* scheduling.scheduleEffect(runtime);
-    return [...applied.sendBack.map((task) => task.id), ...scheduled];
+    return [...applied.sendBack.map((item) => item.task.id), ...scheduled];
   });
 }
 
