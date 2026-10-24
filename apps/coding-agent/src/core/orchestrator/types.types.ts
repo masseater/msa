@@ -9,6 +9,8 @@ declare namespace orchestratorTypesTypes {
 
   type ThreadStatus = "running" | "completed" | "failed" | "stopped";
 
+  type ReviewVerdictResult = "pass" | "fail" | "undecided";
+
   type NoteAudience = "all" | "round" | "tasks";
 
   interface TaskCheck {
@@ -83,6 +85,7 @@ declare namespace orchestratorTypesTypes {
     role: ThreadRole;
     status: ThreadStatus;
     content: string;
+    verdict: ReviewVerdictResult | null;
     createdAt: number;
   }
 

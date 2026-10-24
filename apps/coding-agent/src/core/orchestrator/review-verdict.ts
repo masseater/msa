@@ -16,6 +16,7 @@ type ReviewStatus = Extract<orchestratorTypesTypes.TaskStatus, "completed" | "fa
 
 interface ReviewResult {
   status: ReviewStatus | "sent-back";
+  result: orchestratorTypesTypes.ReviewVerdictResult;
   line: string;
 }
 
@@ -65,6 +66,16 @@ function verdictOf(decision: decideTypes.Decision): Verdict {
   };
 }
 
+function failsInARow(runtime: runtimeTypes.Runtime, taskId: string): number {
+  const verdicts = store
+    .reportsOfTask(runtime.database, taskId)
+    .flatMap((report) =>
+      report.role === "reviewer" && report.verdict !== null ? [report.verdict] : [],
+    );
+  const last = verdicts.findLastIndex((verdict) => verdict !== "fail");
+  return verdicts.length - 1 - last;
+}
+
 function apply(
   runtime: runtimeTypes.Runtime,
   taskId: string,
@@ -72,43 +83,30 @@ function apply(
 ): ReviewResult {
   const judged = verdict ?? { reason: "the review was not judged", result: "undecided" };
   const head = `Review verdict: ${judged.result} (${judged.reason}).`;
-  if (judged.result === "pass") {
-    runtime.reviewRejections.delete(taskId);
-    return { line: head, status: "completed" };
-  }
+  if (judged.result === "pass") return { line: head, result: "pass", status: "completed" };
   if (judged.result === "undecided") {
     return {
       line: `${head} The task is stopped, not completed: read the report and decide whether to rerun it with the findings.`,
+      result: "undecided",
       status: "stopped",
     };
   }
-  const count = (runtime.reviewRejections.get(taskId) ?? 0) + 1;
-  if (count > MAX_REJECTIONS) {
-    runtime.reviewRejections.delete(taskId);
+  const round = (failsInARow(runtime, taskId) % (MAX_REJECTIONS + 1)) + 1;
+  if (round > MAX_REJECTIONS) {
     return {
       line: `${head} The review still finds problems within the goal after ${MAX_REJECTIONS} rounds of fixes, so the task failed.`,
+      result: "fail",
       status: "failed",
     };
   }
-  runtime.reviewRejections.set(taskId, count);
   return {
-    line: `${head} Sent back to the worker to fix (round ${count} of ${MAX_REJECTIONS}).`,
+    line: `${head} Sent back to the worker to fix (round ${round} of ${MAX_REJECTIONS}).`,
+    result: "fail",
     status: "sent-back",
   };
 }
 
-function rejectionPrompt(report: string): string {
-  return [
-    "<review-failed>",
-    "A reviewer checked your work and found problems within the task's goal, so the task is not complete. Fix every finding within the goal in the same branch and pull request, whatever its severity; a new review follows when you end your turn.",
-    "<review-report>",
-    report,
-    "</review-report>",
-    "</review-failed>",
-  ].join("\n");
-}
-
-const reviewVerdicts = { apply, judgedTask, rejectionPrompt, verdictOf, verdictRequest };
+const reviewVerdicts = { apply, judgedTask, verdictOf, verdictRequest };
 
 const reviewVerdict = { reviewVerdicts };
 

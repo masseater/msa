@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 
 import outcomeModule from "./outcome.ts";
-import reviewVerdictModule from "./review-verdict.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
@@ -15,7 +14,6 @@ const { outcomes } = outcomeModule;
 const { wrapping } = wrapUp;
 const { starting } = start;
 const { scheduling } = schedule;
-const { reviewVerdicts } = reviewVerdictModule;
 
 function startFollowUps(
   runtime: runtimeTypes.Runtime,
@@ -27,13 +25,7 @@ function startFollowUps(
       yield* starting.startTasks(runtime, task, "reviewer", report);
     }
     for (const task of applied.sendBack) {
-      yield* starting.startTasks(
-        runtime,
-        task,
-        "worker",
-        "",
-        reviewVerdicts.rejectionPrompt(report),
-      );
+      yield* starting.startTasks(runtime, task, "worker");
     }
     const scheduled = yield* scheduling.scheduleEffect(runtime);
     return [...applied.sendBack.map((task) => task.id), ...scheduled];

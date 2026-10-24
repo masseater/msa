@@ -66,6 +66,7 @@ function applyOutcome(
       status: outcome.status,
       taskId: assignment.taskId,
       threadId: assignment.threadId,
+      verdict: result?.result ?? null,
     });
     if (outcome.status !== "completed") {
       store.setTaskStatus(database, assignment.taskId, "failed", now);

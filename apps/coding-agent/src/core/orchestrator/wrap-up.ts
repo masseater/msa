@@ -59,6 +59,7 @@ function stopped(runtime: runtimeTypes.Runtime, threadId: string, memo: string, 
       status: "stopped",
       taskId: assignment.taskId,
       threadId,
+      verdict: null,
     });
     store.setTaskStatus(database, assignment.taskId, "stopped", now);
   }

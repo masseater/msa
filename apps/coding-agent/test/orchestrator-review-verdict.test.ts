@@ -1,4 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
@@ -6,6 +7,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import reviewVerdictSupport from "./review-verdict-support.ts";
 
+const { makeTempDir, removePath } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
@@ -22,9 +24,9 @@ function findingsFail(seen: aiTypes.JsonObject[] = []) {
   });
 }
 
-const startCacheTask = (decide: ReturnType<typeof classifierDecide>) =>
+const startCacheTask = (decide: ReturnType<typeof classifierDecide>, databasePath?: string) =>
   Effect.gen(function* () {
-    const setUp = setup({ decide });
+    const setUp = setup(databasePath === undefined ? { decide } : { databasePath, decide });
     const task = yield* create(setUp.orchestrator, {
       currentState: "repeated reads go to the network",
       goalState: GOAL,
@@ -129,4 +131,39 @@ it(
     classifierDecide(() => ({ fail: 0.4, pass: 0.6 })),
     "no answer reached the threshold",
   ),
+);
+
+const keepsTheFindingsAndTheRoundsAcrossARestart = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const directory = yield* makeTempDir("msa-review-verdict-");
+      const databasePath = `${directory}/orchestrator.db`;
+      const decide = findingsFail();
+      const first = yield* startCacheTask(decide, databasePath);
+      first.workers[1]?.complete(FINDING);
+      yield* waitFor(() => first.workers.length === 3);
+      yield* Effect.promise(() => first.orchestrator.dispose());
+
+      const { orchestrator, workers } = setup({ databasePath, decide, pollIntervalMs: 10 });
+      yield* waitFor(() => workers.length === 1);
+      expect(workers[0]?.prompts[0]).toContain(FINDING);
+      for (let round = 2; round <= 3; round++) {
+        workers.at(-1)?.complete(`fixed, try ${round}`);
+        yield* waitFor(() => workers.length === 2 * round - 2);
+        workers.at(-1)?.complete(FINDING);
+        yield* waitFor(() => workers.length === 2 * round - 1);
+      }
+      workers.at(-1)?.complete("fixed, try 4");
+      yield* waitFor(() => workers.length === 6);
+      workers.at(-1)?.complete(FINDING);
+      yield* waitFor(() => taskStatus(orchestrator, first.task.id) === "failed");
+      expect(workers).toHaveLength(6);
+      yield* Effect.promise(() => orchestrator.dispose());
+      yield* removePath(directory);
+    }),
+  );
+
+it(
+  "keeps a failed review's findings and its rounds of fixes when the orchestrator reopens",
+  keepsTheFindingsAndTheRoundsAcrossARestart,
 );

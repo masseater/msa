@@ -54,6 +54,7 @@ function resolveFinding(
       status: finding.threadStatus,
       taskId: assignment.taskId,
       threadId: thread.id,
+      verdict: null,
     });
     store.setTaskStatus(database, assignment.taskId, finding.taskStatus, now);
   }

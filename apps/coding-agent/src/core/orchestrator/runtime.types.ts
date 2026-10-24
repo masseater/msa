@@ -3,6 +3,7 @@ import type { Effect } from "effect";
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import type errorsTypes from "./errors.types.ts";
 import type telemetryTypesNs from "./telemetry.types.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 import type workerTypes from "./worker.ts";
 import type wrapUpTypes from "./wrap-up.types.ts";
 
@@ -19,7 +20,7 @@ declare namespace runtimeTypes {
   }
 
   interface ReviewVerdict {
-    result: "pass" | "fail" | "undecided";
+    result: orchestratorTypesTypes.ReviewVerdictResult;
     reason: string;
   }
 
@@ -32,7 +33,6 @@ declare namespace runtimeTypes {
     runStartedAt: Map<string, number>;
     activity: Map<string, ThreadActivity>;
     wrapUps: Map<string, wrapUpTypes.WrapUp>;
-    reviewRejections: Map<string, number>;
     replanning: boolean;
     maxConcurrentThreads: number;
     nextRun(): number;

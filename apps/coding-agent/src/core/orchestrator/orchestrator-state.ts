@@ -36,7 +36,6 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly runStartedAt = new Map<string, number>();
   readonly activity = new Map<string, runtimeTypes.ThreadActivity>();
   readonly wrapUps = new Map<string, wrapUpTypes.WrapUp>();
-  readonly reviewRejections = new Map<string, number>();
   readonly listeners = new Set<() => void>();
   replanning = false;
   snapshot: Snapshot = EMPTY;

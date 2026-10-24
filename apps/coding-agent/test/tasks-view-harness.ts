@@ -91,6 +91,7 @@ const TASKS = [
         status: "completed",
         taskId: "c",
         threadId: "th-worker",
+        verdict: null,
       },
     ],
     status: "completed",

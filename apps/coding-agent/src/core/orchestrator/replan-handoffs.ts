@@ -59,6 +59,7 @@ function writeReport(
     status: "stopped",
     taskId,
     threadId,
+    verdict: null,
   });
 }
 
