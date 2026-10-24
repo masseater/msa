@@ -2,6 +2,7 @@ import type compatTypes from "@msa/ai/compat.types";
 import textModule from "@msa/ai/utils/text";
 
 import type outcomeTypes from "./outcome.types.ts";
+import reviewVerdictModule from "./review-verdict.ts";
 import runTimeNotice from "./run-time-notice.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
@@ -10,6 +11,7 @@ import type workerTypes from "./worker.ts";
 
 const { store } = storeModule;
 const { runTimeSuffix } = runTimeNotice;
+const { reviewVerdicts } = reviewVerdictModule;
 
 const { contentText } = textModule;
 
@@ -34,17 +36,30 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   };
 }
 
+interface Applied {
+  review: orchestratorTypesTypes.Task[];
+  sendBack: orchestratorTypesTypes.Task[];
+  lines: string[];
+  held: boolean;
+}
+
 function applyOutcome(
   runtime: runtimeTypes.Runtime,
   assignments: readonly orchestratorTypesTypes.Assignment[],
   outcome: outcomeTypes.Outcome,
   now: number,
-): orchestratorTypesTypes.Task[] {
+  verdict?: runtimeTypes.ReviewVerdict,
+): Applied {
   const database = runtime.database;
-  const review: orchestratorTypesTypes.Task[] = [];
+  const applied: Applied = { held: false, lines: [], review: [], sendBack: [] };
   for (const assignment of assignments) {
+    const judged =
+      outcome.status === "completed" ? reviewVerdicts.judgedTask(runtime, assignment) : undefined;
+    const result =
+      judged === undefined ? undefined : reviewVerdicts.apply(runtime, judged.id, verdict);
+    if (result !== undefined) applied.lines.push(result.line);
     store.insertReport(database, {
-      content: outcome.content,
+      content: result === undefined ? outcome.content : `${result.line}\n\n${outcome.content}`,
       createdAt: now,
       id: `rep-${assignment.threadId}-${assignment.role}`,
       role: assignment.role,
@@ -56,6 +71,12 @@ function applyOutcome(
       store.setTaskStatus(database, assignment.taskId, "failed", now);
       continue;
     }
+    if (judged !== undefined && result !== undefined && result.status !== "completed") {
+      applied.held = true;
+      if (result.status === "sent-back") applied.sendBack.push(judged);
+      else store.setTaskStatus(database, assignment.taskId, result.status, now);
+      continue;
+    }
     if (store.unfinishedDependencies(database, assignment.taskId).length > 0) {
       store.setTaskStatus(database, assignment.taskId, "waiting", now);
       continue;
@@ -65,9 +86,9 @@ function applyOutcome(
       continue;
     }
     const task = store.getTask(database, assignment.taskId);
-    if (task !== undefined) review.push(task);
+    if (task !== undefined) applied.review.push(task);
   }
-  return review;
+  return applied;
 }
 
 function reportText(

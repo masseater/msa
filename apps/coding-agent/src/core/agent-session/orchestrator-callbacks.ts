@@ -1,7 +1,10 @@
 import type compatTypes from "@msa/ai/compat.types";
+import { Effect } from "effect";
 
 import type AgentSession from "../agent-session.ts";
 import authGuidance from "../auth-guidance.ts";
+import decideModule from "../decision/decide.ts";
+import type decideTypes from "../decision/decide.types.ts";
 import modelResolver from "../model-resolver.ts";
 import type orchestratorTypes from "../orchestrator/orchestrator.types.ts";
 import nodeChildProcess from "../platform/node/child-process.ts";
@@ -76,6 +79,13 @@ function defaults(session: AgentSession): orchestratorTypes.OrchestratorDefaults
   };
 }
 
-const orchestratorCallbacks = { defaults, resolveModel, runCommand };
+function decide(
+  session: AgentSession,
+  request: decideTypes.DecideRequest,
+): Promise<decideTypes.Decision> {
+  return Effect.runPromise(session.integrations.decision.provide(decideModule.decide(request)));
+}
+
+const orchestratorCallbacks = { decide, defaults, resolveModel, runCommand };
 
 export default orchestratorCallbacks;

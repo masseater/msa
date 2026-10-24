@@ -58,6 +58,7 @@ export default class SessionOrchestration {
       createWorker,
       cwd: session.cwd,
       databasePath: session.settingsManager.session.getOrchestratorDatabasePath(session.agentDir),
+      decide: (request) => orchestratorCallbacks.decide(session, request),
       defaults: () => orchestratorCallbacks.defaults(session),
       handoffDirectory: session.settingsManager.session.getHandoffDirectory(session.agentDir),
       project: session.sessionManager.getSessionId(),

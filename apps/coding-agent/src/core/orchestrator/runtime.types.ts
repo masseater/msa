@@ -11,20 +11,28 @@ declare namespace runtimeTypes {
 
   type WorkerSession = workerTypes.WorkerSession;
 
+  type OrchestratorOptions = workerTypes.OrchestratorOptions;
+
   interface ThreadActivity {
     messages: number;
     at: number;
   }
 
+  interface ReviewVerdict {
+    result: "pass" | "fail" | "undecided";
+    reason: string;
+  }
+
   interface Runtime {
     database: DatabaseSync;
-    options: workerTypes.OrchestratorOptions;
+    options: OrchestratorOptions;
     telemetry: telemetryTypesNs.OrchestratorTelemetry;
     workers: Map<string, workerTypes.WorkerSession>;
     runs: Map<string, number>;
     runStartedAt: Map<string, number>;
     activity: Map<string, ThreadActivity>;
     wrapUps: Map<string, wrapUpTypes.WrapUp>;
+    reviewRejections: Map<string, number>;
     replanning: boolean;
     maxConcurrentThreads: number;
     nextRun(): number;
@@ -35,6 +43,7 @@ declare namespace runtimeTypes {
       run: number,
       worker: workerTypes.WorkerSession,
       error: unknown,
+      verdict?: ReviewVerdict,
     ): Promise<void>;
     afterTurn(threadId: string, run: number, worker: workerTypes.WorkerSession): void;
   }
