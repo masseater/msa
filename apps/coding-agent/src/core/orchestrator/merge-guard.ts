@@ -12,7 +12,7 @@ const GRAPHQL_MERGE = /\b(?:mergePullRequest|enablePullRequestAutoMerge|enqueueP
 const MCP_MERGE = /(?:^|_)(?:merge_pull_request|enable_(?:pull_request_)?auto_merge)$/u;
 
 const REASON =
-  "Workers and reviewers do not merge pull requests or turn on auto-merge: the harness squash-merges a task's pull request at the head the review passed. Leave the pull request pushed, current with its base, and green on CI, then end your turn.";
+  "Workers and reviewers do not merge pull requests or turn on auto-merge: the harness squash-merges a task's pull request at the head the review passed. Leave the pull request pushed and current with its base, then end your turn; the harness waits for CI.";
 
 function baseName(word: string): string {
   return word.slice(Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1);

@@ -89,7 +89,7 @@ function workspaceBlock(
   }
   const target =
     workspace.target === null
-      ? `When the work is done, push ${workspace.branch}, open a pull request into ${workspace.targetBranch}, and end your turn once CI passes on its head. The harness finds the pull request from ${workspace.branch}, sends the work back while the pull request is missing, unpushed, behind, conflicting, or not green, and squash-merges it after the review passes; do not merge it or turn on auto-merge.`
+      ? `When the work is done, push ${workspace.branch}, open a pull request into ${workspace.targetBranch} whose title and body describe the final diff, and end your turn; do not wait for CI or watch the pull request. The harness finds the pull request from ${workspace.branch} and waits for CI on its head. It sends the work back when the pull request is missing, unpushed, behind, conflicting, or failing CI, and squash-merges it after the review passes; do not merge it or turn on auto-merge.`
       : `This work merges into task ${workspace.target.id} "${workspace.target.title}" on branch ${workspace.targetBranch}, which opens the pull request. Commit and push ${workspace.branch}; do not open a pull request.`;
   const sources =
     workspace.sources.length === 0
