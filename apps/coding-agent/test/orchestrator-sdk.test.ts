@@ -105,11 +105,12 @@ const keepsWorkerTranscriptsOutOfTheSessions = () =>
           title: "t",
         }),
       );
-      yield* waitFor(
-        () =>
-          orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status === "completed",
-      );
+      yield* waitFor(() => {
+        const status = orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status;
+        return status !== "waiting" && status !== "running";
+      });
       const worker = yield* Effect.promise(() => orchestrator.read(task.id));
+      expect(worker.status).toBe("stopped");
       const assignment = worker.assignments.find((item) => item.role === "worker");
       const sessionFile = orchestrator.snapshot.threads.find(
         (candidate) => candidate.id === assignment?.threadId,

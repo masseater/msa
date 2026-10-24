@@ -104,6 +104,19 @@ function workspaceBlock(
   ].join("\n");
 }
 
+function reviewFindingsBlock(task: orchestratorTypesTypes.TaskView): string {
+  const judged = task.reports.findLast(
+    (report) => report.role === "reviewer" && report.verdict !== null,
+  );
+  if (judged?.verdict !== "fail") return "";
+  return [
+    "<review-failed>",
+    "A reviewer checked this task's work and found problems within its goal, so the task is not complete. Fix every finding within the goal in the same branch and pull request, whatever its severity; a new review follows when you end your turn.",
+    `<review-report>\n${truncateReport(judged.content)}\n</review-report>`,
+    "</review-failed>",
+  ].join("\n");
+}
+
 function workerPrompt(
   task: orchestratorTypesTypes.TaskView,
   dependencies: readonly orchestratorTypesTypes.TaskView[],
@@ -113,6 +126,7 @@ function workerPrompt(
     stateBlock("current-state", task.currentState),
     stateBlock("goal-state", task.goalState),
     checksBlock(task.checks),
+    reviewFindingsBlock(task),
     dependencyBlock(dependencies),
     notesBlock(notes),
   ]

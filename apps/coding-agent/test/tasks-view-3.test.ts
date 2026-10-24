@@ -2,11 +2,16 @@ import tui from "@msa/tui";
 import { beforeAll, describe, expect, it } from "vite-plus/test";
 
 import KeybindingsManager from "../src/core/keybindings-manager.ts";
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import tasksViewHelpers from "../src/modes/interactive/components/tasks-view-helpers.ts";
 import themeModule from "../src/modes/interactive/theme/theme.ts";
+import ansi from "../src/utils/ansi.ts";
 import tasksViewHarness from "./tasks-view-harness.ts";
 import tasksViewSupport from "./tasks-view-support.ts";
 
-const { initTheme } = themeModule;
+const { initTheme, theme } = themeModule;
+const { createTaskReportRenderer } = tasksViewHelpers;
+const { stripAnsi } = ansi;
 const { setKeybindings } = tui;
 
 const { DOWN, ENTER, PAGE_DOWN, PAGE_UP } = tasksViewSupport;
@@ -153,4 +158,35 @@ describe("TasksView ids", () => {
   it("shows an id that already fits the row whole", showsAnIdThatAlreadyFitsThe);
 
   it("leaves the id column out before a task has an id", leavesTheIdColumnOutBeforeA);
+});
+
+const reportRow = (status: orchestratorTypes.ReportStatus) => {
+  const component = createTaskReportRenderer(undefined)(
+    {
+      content: "",
+      customType: "orchestrator-report",
+      details: { role: "worker", started: [], status, taskId: "task a" },
+      display: true,
+      role: "custom",
+      timestamp: 0,
+    },
+    { expanded: false, outputPad: 0 },
+    theme,
+  );
+  return stripAnsi(component?.render(120)[0] ?? "").trim();
+};
+
+const marksEachReportStatusWithThe = () => {
+  expect(reportRow("completed").split(" ")[0]).toBe("✓");
+  expect(reportRow("failed").split(" ")[0]).toBe("✗");
+  expect(reportRow("sent-back").split(" ")[0]).toBe("●");
+  expect(reportRow("stopped").split(" ")[0]).toBe("■");
+  expect(reportRow("waiting").split(" ")[0]).toBe("○");
+};
+
+describe("task report glyphs", () => {
+  it(
+    "marks each report status with the glyph of the task state it leaves",
+    marksEachReportStatusWithThe,
+  );
 });

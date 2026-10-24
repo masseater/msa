@@ -65,6 +65,7 @@ CREATE TABLE IF NOT EXISTS reports (
   role TEXT NOT NULL,
   status TEXT NOT NULL,
   content TEXT NOT NULL,
+  verdict TEXT,
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS reports_task ON reports(task_id);
@@ -178,6 +179,11 @@ function addWorkspaceColumns(database: DatabaseSync): void {
   }
 }
 
+function addReportVerdict(database: DatabaseSync): void {
+  if (columnNames(database, "reports").includes("verdict")) return;
+  database.exec("ALTER TABLE reports ADD COLUMN verdict TEXT");
+}
+
 function addMissingRounds(database: DatabaseSync): void {
   database.exec(
     `INSERT OR IGNORE INTO rounds (id, project, title, created_at)
@@ -221,7 +227,7 @@ function renameSessionsToThreads(database: DatabaseSync): void {
   });
 }
 
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 
 function rejectNewerSchema(database: DatabaseSync, path: string): void {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
@@ -247,6 +253,7 @@ function openDatabase(path: string): DatabaseSync {
   addOwnerPid(database);
   addTaskChecks(database);
   addWorkspaceColumns(database);
+  addReportVerdict(database);
   addMissingRounds(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;

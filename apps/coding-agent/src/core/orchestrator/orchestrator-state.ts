@@ -1,5 +1,6 @@
 import { Effect, type Fiber } from "effect";
 
+import afterTurnModule from "./after-turn.ts";
 import backgroundModule from "./background.ts";
 import runtime from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -7,7 +8,6 @@ import settleModule from "./settle.ts";
 import snapshotModule from "./snapshot.ts";
 import storeModule from "./store.ts";
 import OrchestratorTelemetry from "./telemetry.ts";
-import type workerTypes from "./worker.ts";
 import type wrapUpTypes from "./wrap-up.types.ts";
 
 const { snapshots } = snapshotModule;
@@ -15,6 +15,7 @@ const { nowMillis } = runtime;
 const { store } = storeModule;
 const { background } = backgroundModule;
 const { settling } = settleModule;
+const { afterTurns } = afterTurnModule;
 
 type Snapshot = ReturnType<typeof snapshots.buildSnapshot>;
 
@@ -28,9 +29,9 @@ const EMPTY: Snapshot = {
 
 export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly database: ReturnType<typeof store.openDatabase>;
-  readonly options: workerTypes.OrchestratorOptions;
+  readonly options: runtimeTypes.OrchestratorOptions;
   readonly telemetry: OrchestratorTelemetry;
-  readonly workers = new Map<string, workerTypes.WorkerSession>();
+  readonly workers = new Map<string, runtimeTypes.WorkerSession>();
   readonly runs = new Map<string, number>();
   readonly runStartedAt = new Map<string, number>();
   readonly activity = new Map<string, runtimeTypes.ThreadActivity>();
@@ -43,7 +44,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   private runCount = 0;
   private fibers: Fiber.Fiber<never, never>[] = [];
 
-  constructor(options: workerTypes.OrchestratorOptions) {
+  constructor(options: runtimeTypes.OrchestratorOptions) {
     this.telemetry = new OrchestratorTelemetry(options.telemetry);
     this.options = {
       ...options,
@@ -87,14 +88,15 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   settle(
     threadId: string,
     run: number,
-    worker: workerTypes.WorkerSession,
+    worker: runtimeTypes.WorkerSession,
     error: unknown,
+    verdict?: runtimeTypes.ReviewVerdict,
   ): Promise<void> {
-    return settling.settle(this, threadId, run, worker, error);
+    return settling.settle(this, threadId, run, worker, error, verdict);
   }
 
-  afterTurn(threadId: string, run: number, worker: workerTypes.WorkerSession): void {
-    settling.afterTurn(this, threadId, run, worker);
+  afterTurn(threadId: string, run: number, worker: runtimeTypes.WorkerSession): void {
+    afterTurns.afterTurn(this, threadId, run, worker);
   }
 
   dispose(): Promise<void> {

@@ -47,7 +47,8 @@ const stopsAThreadThatMakesNoToolCallFor30Minutes = () =>
 
       expect(taskStatus(orchestrator, task.id)).toBe("stopped");
       expect(threadStatus(orchestrator, task.id)).toBe("stopped");
-      expect(reports.at(-1)?.details).toMatchObject({ status: "failed", taskId: task.id });
+      expect(reports.at(-1)?.details).toMatchObject({ status: "stopped", taskId: task.id });
+      expect(reports.at(-1)?.text).toMatch(/^cache reads \(t-[^)]+\) stopped\.\n/u);
       expect(reports.at(-1)?.text).toMatch(/no tool call or message for 30m \(running 30m\)/u);
       yield* Effect.promise(() => orchestrator.dispose());
     }),
@@ -90,6 +91,8 @@ const failsAThreadWhoseTurnAbortedWithoutSettling = () =>
 
       expect(taskStatus(orchestrator, task.id)).toBe("failed");
       expect(threadStatus(orchestrator, task.id)).toBe("failed");
+      expect(reports.at(-1)?.details.status).toBe("failed");
+      expect(reports.at(-1)?.text).toMatch(/^cache reads \(t-[^)]+\) failed\.\n/u);
       expect(reports.at(-1)?.text).toMatch(
         /the last turn ended with aborted: The operation was aborted\. 1m ago/u,
       );
@@ -156,6 +159,8 @@ const stopsATaskLeftRunningAfterItsThreadEnded = () =>
       yield* advance(MINUTE);
 
       expect(taskStatus(orchestrator, task.id)).toBe("stopped");
+      expect(reports.at(-1)?.details.status).toBe("stopped");
+      expect(reports.at(-1)?.text).toMatch(/^cache reads \(t-[^)]+\) stopped\.\n/u);
       expect(reports.at(-1)?.text).toMatch(/running with no running thread for 2h 1m/u);
       yield* Effect.promise(() => orchestrator.dispose());
     }),

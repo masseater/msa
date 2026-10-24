@@ -53,6 +53,7 @@ const paneTasks = (): orchestratorTypesTypes.TaskSnapshot[] => {
           status: "running",
           taskId: FIRST,
           threadId: "s1",
+          verdict: null,
         },
       ],
       status: "running",

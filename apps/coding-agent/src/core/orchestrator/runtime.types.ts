@@ -3,6 +3,7 @@ import type { Effect } from "effect";
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import type errorsTypes from "./errors.types.ts";
 import type telemetryTypesNs from "./telemetry.types.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 import type workerTypes from "./worker.ts";
 import type wrapUpTypes from "./wrap-up.types.ts";
 
@@ -11,14 +12,21 @@ declare namespace runtimeTypes {
 
   type WorkerSession = workerTypes.WorkerSession;
 
+  type OrchestratorOptions = workerTypes.OrchestratorOptions;
+
   interface ThreadActivity {
     messages: number;
     at: number;
   }
 
+  interface ReviewVerdict {
+    result: orchestratorTypesTypes.ReviewVerdictResult;
+    reason: string;
+  }
+
   interface Runtime {
     database: DatabaseSync;
-    options: workerTypes.OrchestratorOptions;
+    options: OrchestratorOptions;
     telemetry: telemetryTypesNs.OrchestratorTelemetry;
     workers: Map<string, workerTypes.WorkerSession>;
     runs: Map<string, number>;
@@ -35,6 +43,7 @@ declare namespace runtimeTypes {
       run: number,
       worker: workerTypes.WorkerSession,
       error: unknown,
+      verdict?: ReviewVerdict,
     ): Promise<void>;
     afterTurn(threadId: string, run: number, worker: workerTypes.WorkerSession): void;
   }

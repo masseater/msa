@@ -28,24 +28,38 @@ const STATUS_LABEL: Record<orchestratorTypesTypes.TaskStatus, string> = {
   waiting: "Waiting",
 };
 
+interface Glyph {
+  color: Parameters<typeof theme.fg>[0];
+  symbol: string;
+}
+
+const TASK_GLYPH: Record<orchestratorTypesTypes.TaskStatus, Glyph> = {
+  completed: { color: "success", symbol: "✓" },
+  failed: { color: "error", symbol: "✗" },
+  running: { color: "accent", symbol: "●" },
+  stopped: { color: "dim", symbol: "■" },
+  waiting: { color: "muted", symbol: "○" },
+};
+
+const REPORT_GLYPH: Record<orchestratorTypes.ReportStatus, Glyph> = {
+  completed: TASK_GLYPH.completed,
+  failed: TASK_GLYPH.failed,
+  "sent-back": TASK_GLYPH.running,
+  stopped: TASK_GLYPH.stopped,
+  waiting: TASK_GLYPH.waiting,
+};
+
+function paint({ color, symbol }: Glyph): string {
+  return theme.fg(color, symbol);
+}
+
 function glyph(task: orchestratorTypesTypes.TaskSnapshot): string {
   if (task.kind === "review") {
     const color =
       task.status === "failed" ? "error" : task.status === "running" ? "accent" : "muted";
     return theme.fg(color, "◆");
   }
-  switch (task.status) {
-    case "failed":
-      return theme.fg("error", "✗");
-    case "running":
-      return theme.fg("accent", "●");
-    case "waiting":
-      return theme.fg("muted", "○");
-    case "completed":
-      return theme.fg("success", "✓");
-    case "stopped":
-      return theme.fg("dim", "■");
-  }
+  return paint(TASK_GLYPH[task.status]);
 }
 
 function finished(task: orchestratorTypesTypes.TaskSnapshot): boolean {
@@ -142,7 +156,7 @@ function createTaskReportRenderer(
         ? theme.fg("muted", ` · started ${details.started.join(", ")}`)
         : "";
     const lines = [
-      `${glyph({ kind: "work", status: details.status } as orchestratorTypesTypes.TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
+      `${paint(REPORT_GLYPH[details.status])} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
     ];
     const content = typeof message.content === "string" ? message.content : "";
     const report = /<report>\n([\s\S]*)\n<\/report>/u.exec(content)?.[1];

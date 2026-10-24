@@ -9,6 +9,7 @@ import Orchestrator from "../src/core/orchestrator/orchestrator.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import FakeWorker from "./fake-worker.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
+import reviewVerdictSupport from "./review-verdict-support.ts";
 const { InMemoryTelemetryContext } = telemetryModule;
 const { joinPath } = testing;
 
@@ -39,6 +40,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     },
     cwd: options.cwd ?? "/repo",
     databasePath: options.databasePath ?? ":memory:",
+    decide: options.decide ?? reviewVerdictSupport.passingDecide,
     defaults: () => ({
       maxConcurrentThreads: options.maxConcurrent ?? 4,
       reviewModel: "sub/fable",

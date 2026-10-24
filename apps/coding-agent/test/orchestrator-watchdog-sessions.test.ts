@@ -123,6 +123,8 @@ const closingASessionPutsItsTasksBackToWaiting = () =>
     expect(reopened.reports.at(-1)?.text).toMatch(
       /cache reads \(.+\): running when the session closed, 5m after its last update/u,
     );
+    expect(reopened.reports.at(-1)?.text).toMatch(/^A task was left running .+ waiting again/u);
+    expect(reopened.reports.at(-1)?.details.status).toBe("waiting");
     expect(taskStatus(reopened.orchestrator, task.id)).toBe("running");
     yield* Effect.promise(() => reopened.orchestrator.dispose());
     yield* Effect.promise(() => current.orchestrator.dispose());

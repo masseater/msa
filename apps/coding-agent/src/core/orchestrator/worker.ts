@@ -2,6 +2,7 @@ import type agentTypes from "@msa/agent-core/index.types";
 import type compatTypes from "@msa/ai/compat.types";
 import type telemetryTypes from "@msa/telemetry/index.types";
 
+import type decideTypes from "../decision/decide.types.ts";
 import type sessionTelemetryTypes from "../observability/session-telemetry.types.ts";
 
 declare namespace workerTypes {
@@ -47,10 +48,12 @@ declare namespace workerTypes {
     output: string;
   }
 
+  type ReportStatus = "completed" | "sent-back" | "waiting" | "stopped" | "failed";
+
   interface OrchestratorReport {
     taskId: string;
     role: "worker" | "reviewer";
-    status: "completed" | "failed";
+    status: ReportStatus;
     started: readonly string[];
   }
 
@@ -72,6 +75,7 @@ declare namespace workerTypes {
       timeoutMs: number,
       signal: AbortSignal,
     ) => Promise<CommandResult>;
+    decide: (request: decideTypes.DecideRequest) => Promise<decideTypes.Decision>;
     pollIntervalMs?: number | null;
 
     telemetry: telemetryTypes.TelemetryContext;
