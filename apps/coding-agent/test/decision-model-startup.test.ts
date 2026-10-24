@@ -1,108 +1,42 @@
-import nodeLlamaCppClassifyLazy from "@msa/ai/api/node-llama-cpp-classify.lazy";
 import testing from "@msa/testing";
-import { Deferred, Effect } from "effect";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import decideModule from "../src/core/decision/decide.ts";
-import type srcTypes from "../src/index.types.ts";
 import decisionModelStartup from "../src/main/decision-model-startup.ts";
+import startupChecks from "../src/main/startup-checks.ts";
 import decideSupport from "./decide-support.ts";
-import harnessModule from "./suite/harness.ts";
+import decisionModelStartupSupport from "./decision-model-startup-support.ts";
 
-const { awaited, listen, pollUntil, readBytesFile, runTest } = testing;
+const { awaited, pollUntil, runTest } = testing;
 const { decide } = decideModule;
-const { nodeLlamaCppClassifyApi } = nodeLlamaCppClassifyLazy;
-const { createHarness } = harnessModule;
 const { startDecisionModel } = decisionModelStartup;
-const { FIXTURE, blocking, cleanUp, tempDirectory } = decideSupport;
+const { checkStartup } = startupChecks;
+const { blocking, cleanUp } = decideSupport;
+const { gatedServer, sessionAt, startedRpc } = decisionModelStartupSupport;
 
 afterEach(() => runTest(cleanUp));
-
-const fixtureProvider =
-  (directory: string, origin: string): srcTypes.ExtensionFactory =>
-  (msa) => {
-    msa.registerProvider("fixture", {
-      apiKey: "local",
-      classifiers: {
-        "node-llama-cpp-classify": nodeLlamaCppClassifyApi({
-          directory,
-          endpoints: { huggingFace: `${origin}/` },
-        }),
-      },
-      models: [
-        {
-          api: "node-llama-cpp-classify",
-          baseUrl: "hf:example/fixture/stories260K.gguf",
-          contextWindow: 4096,
-          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
-          id: "stories",
-          input: ["text"],
-          name: "Stories",
-          type: "classifier",
-        },
-      ],
-    });
-  };
-
-const gatedServer = Effect.gen(function* () {
-  const bytes = yield* readBytesFile(FIXTURE);
-  const gate = yield* Deferred.make<void>();
-  const state = { requests: 0, serving: false };
-  const model = new Response(bytes, {
-    headers: {
-      "content-length": String(bytes.byteLength),
-      "content-type": "application/octet-stream",
-    },
-  });
-  const origin = yield* listen(() =>
-    Effect.sync(() => {
-      state.requests += 1;
-    }).pipe(
-      Effect.andThen(Deferred.await(gate)),
-      Effect.map(() =>
-        state.serving ? model.clone() : new Response("not found", { status: 404 }),
-      ),
-    ),
-  );
-  return { open: Deferred.succeed(gate, undefined), origin, state };
-});
-
-const sessionAt = Effect.fn("sessionAt")(function* (origin: string) {
-  const harness = yield* awaited(
-    createHarness({
-      extensionFactories: [fixtureProvider(yield* tempDirectory, origin)],
-      settings: { decision: { model: "fixture/stories" } },
-    }),
-  );
-  const services = {
-    modelRuntime: harness.session.models.selection.modelRuntimeInternal,
-    settingsManager: harness.settingsManager,
-  };
-  const decideNow = decide(blocking(0.5)).pipe((effect) =>
-    harness.session.integrations.decision.provide(effect),
-  );
-  return { decideNow, harness, services };
-});
 
 const startsAtStartupAndRetriesAfterAFailure = () =>
   runTest(
     Effect.gen(function* () {
       const server = yield* gatedServer;
-      const { decideNow, harness, services } = yield* sessionAt(server.origin);
+      const { runtime, startup } = yield* startedRpc(server.origin);
       try {
-        const preparation = startDecisionModel(
-          { appMode: "interactive", offlineMode: false },
-          { services },
+        const decideNow = decide(blocking(0.5)).pipe((effect) =>
+          runtime.session.integrations.decision.provide(effect),
         );
+        const requestsBeforeChecks = server.state.requests;
+        const { decisionModel } = checkStartup(startup, runtime);
         yield* pollUntil(
-          Effect.sync(() => server.state.requests > 0),
+          Effect.sync(() => server.state.requests > requestsBeforeChecks),
           200,
           "20 millis",
         );
         const beforeFetch = yield* decideNow;
         yield* server.open;
-        expect(preparation).toBeDefined();
-        const failed = yield* Effect.promise(() => preparation!);
+        expect(decisionModel).toBeDefined();
+        const failed = yield* awaited(decisionModel!);
         server.state.serving = true;
         const afterFailure = yield* decideNow;
         yield* pollUntil(
@@ -111,11 +45,12 @@ const startsAtStartupAndRetriesAfterAFailure = () =>
           "20 millis",
         );
 
+        expect(requestsBeforeChecks).toBe(0);
         expect(beforeFetch.status).toBe("undecided");
         expect(failed).toMatchObject({ model: "fixture/stories", status: "failed" });
         expect(afterFailure.status).toBe("undecided");
       } finally {
-        harness.cleanup();
+        yield* awaited(runtime.dispose());
       }
     }),
   );

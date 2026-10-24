@@ -7,14 +7,15 @@ import decideSupport from "./decide-support.ts";
 
 const { listen, runTest } = testing;
 const { LIQUID_D1 } = localModule;
-const { FIXTURE, blocking, classifierAt, cleanUp, localDecide, request } = decideSupport;
+const { FIXTURE, blocking, classifierAt, cleanUp, loadedDecide, localDecide, request } =
+  decideSupport;
 
 afterEach(() => runTest(cleanUp));
 
 const holdsFromTheThresholdUp = () =>
   runTest(
     Effect.gen(function* () {
-      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE));
+      const { decide, recorded } = yield* loadedDecide(classifierAt(FIXTURE));
 
       const open = yield* decide(blocking(0));
       if (open.status !== "decided") throw new Error(open.reason);
@@ -35,7 +36,7 @@ const holdsFromTheThresholdUp = () =>
 const appliesEachQuestionsThreshold = () =>
   runTest(
     Effect.gen(function* () {
-      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE));
+      const { decide, recorded } = yield* loadedDecide(classifierAt(FIXTURE));
 
       const open = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
       const strict = yield* decide(request("The build fails.", { route: 1, severity: 1 }));
@@ -64,7 +65,7 @@ const appliesEachQuestionsThreshold = () =>
 const letsSettingsOverrideTheThreshold = () =>
   runTest(
     Effect.gen(function* () {
-      const { decide } = yield* localDecide(classifierAt(FIXTURE), {
+      const { decide } = yield* loadedDecide(classifierAt(FIXTURE), {
         thresholds: { "triage.route": 1 },
       });
 
@@ -83,7 +84,7 @@ const letsSettingsOverrideTheThreshold = () =>
 const answersTheSameInputFromItsCache = () =>
   runTest(
     Effect.gen(function* () {
-      const { decide, recorded } = yield* localDecide(classifierAt(FIXTURE));
+      const { decide, recorded } = yield* loadedDecide(classifierAt(FIXTURE));
 
       const first = yield* decide(request("The build fails.", { route: 0, severity: 0 }));
       const again = yield* decide(request("The build fails.", { route: 0, severity: 0 }));

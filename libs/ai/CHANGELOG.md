@@ -4,7 +4,7 @@
 
 ### Added
 
-- The `local` provider runs GGUF classifier models in process through `node-llama-cpp` (`node-llama-cpp-classify`), with Liquid D1 3B as `local/liquid-d1-3b`. A model is fetched on first use and shared by the whole process; while it downloads, `classify` returns an error at once, and a failed fetch is retried on the next call. `ProviderClassifier.prepare` and `Provider.prepareClassifier` fetch and load a classifier model ahead of the first call and report whether it was downloaded
+- The `local` provider runs GGUF classifier models in process through `node-llama-cpp` (`node-llama-cpp-classify`), with Liquid D1 3B as `local/liquid-d1-3b`. A model is fetched on first use and shared by the whole process; until it is downloaded and loaded into memory, `classify` returns an error at once, and a failed fetch is retried on the next call. `ProviderClassifier.prepare` and `Provider.prepareClassifier` fetch and load a classifier model ahead of the first call and report whether it was downloaded
 
 ## [0.0.1] - 2026-10-16
 

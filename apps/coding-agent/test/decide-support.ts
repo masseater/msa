@@ -98,7 +98,16 @@ const localDecide = Effect.fn("localDecide")(function* (
   const service = yield* makeDecide(host);
   const decide = (decideRequest: decideTypes.DecideRequest) =>
     decideWith(decideRequest).pipe(Effect.provideService(Decide, service));
-  return { decide, recorded };
+  return { decide, provider, recorded };
+});
+
+const loadedDecide = Effect.fn("loadedDecide")(function* (
+  model: aiTypes.ClassifierModel<"node-llama-cpp-classify">,
+  options: { thresholds?: Record<string, number> } = {},
+) {
+  const local = yield* localDecide(model, options);
+  yield* Effect.promise(() => local.provider.prepareClassifier!(model));
+  return local;
 });
 
 const blocking = (threshold: number): decideTypes.DecideRequest => ({
@@ -119,6 +128,7 @@ const decideSupport = {
   blocking,
   classifierAt,
   cleanUp,
+  loadedDecide,
   localDecide,
   request,
   tempDirectory,

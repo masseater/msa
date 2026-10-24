@@ -109,17 +109,12 @@ function startLoad(config: Config, uri: string, contextSize: number): Load {
   return load;
 }
 
-const awaitLoad = Effect.fn("awaitLoad")(function* (load: Load, uri: string) {
-  const loaded = Deferred.await(load.loaded).pipe(
+const loadedNow = Effect.fn("loadedNow")(function* (load: Load, uri: string) {
+  if (!(yield* Deferred.isDone(load.loaded)))
+    return yield* Effect.die(new Error(`${LABEL} has not loaded ${uri} yet`));
+  return yield* Deferred.await(load.loaded).pipe(
     Effect.mapError((message) => new Error(message)),
     Effect.orDie,
-  );
-  if (yield* Deferred.isDone(load.loaded)) return yield* loaded;
-  return yield* Effect.raceFirst(
-    loaded,
-    Deferred.await(load.downloading).pipe(
-      Effect.andThen(Effect.die(new Error(`${LABEL} is still fetching ${uri}`))),
-    ),
   );
 });
 
@@ -236,7 +231,7 @@ const classifyAll = Effect.fn("classifyAll")(function* (
       new Error(`Temperature must be a positive number, got ${temperature}`),
     );
   for (const id of Object.keys(context.questions)) renderQuestion(context, id);
-  const loaded = yield* awaitLoad(
+  const loaded = yield* loadedNow(
     startLoad(config, model.baseUrl, model.contextWindow),
     model.baseUrl,
   );

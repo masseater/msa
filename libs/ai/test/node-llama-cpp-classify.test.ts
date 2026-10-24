@@ -58,9 +58,9 @@ const answersFromNextTokenProbabilities = () =>
       const sibling = localProvider({ directory }, [modelAt(FIXTURE)]);
       const model = modelAt(FIXTURE);
 
+      const preparation = yield* Effect.promise(() => provider.prepareClassifier!(model));
       const first = yield* Effect.promise(() => provider.classify!(model, context));
       const second = yield* Effect.promise(() => sibling.classify!(model, context));
-      const preparation = yield* Effect.promise(() => sibling.prepareClassifier!(model));
 
       expect(first.errorMessage).toBeUndefined();
       expect(first.stopReason).toBe("stop");
@@ -76,6 +76,22 @@ const answersFromNextTokenProbabilities = () =>
       expect(severity.score).toBeLessThanOrEqual(2);
       expect(second.answers).toEqual(first.answers);
       expect(preparation).toEqual({ fetched: false });
+    }),
+  );
+
+const answersAtOnceWhileTheModelLoads = () =>
+  runTest(
+    Effect.gen(function* () {
+      const provider = localProvider({ directory: yield* tempDirectory }, [modelAt(FIXTURE)]);
+      const model = modelAt(FIXTURE);
+
+      const loading = yield* Effect.promise(() => provider.classify!(model, context));
+      yield* Effect.promise(() => provider.prepareClassifier!(model));
+      const loaded = yield* Effect.promise(() => provider.classify!(model, context));
+
+      expect(loading.stopReason).toBe("error");
+      expect(loading.errorMessage).toContain(`has not loaded ${FIXTURE} yet`);
+      expect(loaded.stopReason).toBe("stop");
     }),
   );
 
@@ -107,7 +123,7 @@ const retriesAFailedDownload = () =>
 
       expect(first.stopReason).toBe("error");
       expect(first.answers).toEqual({});
-      expect(first.errorMessage).toContain("still fetching hf:example/missing/missing.gguf");
+      expect(first.errorMessage).toContain("has not loaded hf:example/missing/missing.gguf yet");
       expect(second.stopReason).toBe("error");
       expect(firstFailure).not.toBe("");
       expect(secondFailure).not.toBe("");
@@ -120,6 +136,11 @@ describe("node-llama-cpp classifier", () => {
   it(
     "answers from the next-token probabilities of a GGUF model loaded once per process",
     answersFromNextTokenProbabilities,
+  );
+
+  it(
+    "answers at once while a model already on disk is loaded into memory",
+    answersAtOnceWhileTheModelLoads,
   );
 
   it(
