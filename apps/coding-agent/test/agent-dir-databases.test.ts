@@ -45,7 +45,7 @@ const tempDirectory = (name: string) =>
     return directory;
   });
 
-it("keeps the orchestrator and memory databases in the agent dir the session was given", () =>
+it("keeps the orchestrator and memory databases and the handoffs in the agent dir the session was given", () =>
   runTest(
     Effect.gen(function* () {
       const ambient = yield* tempDirectory("ambient");
@@ -71,10 +71,17 @@ it("keeps the orchestrator and memory databases in the agent dir the session was
           settingsManager: SettingsManager.inMemory(),
         }),
       );
+      const orchestrator = session.integrations.orchestration.orchestrator;
+      if (orchestrator === undefined) throw new Error("orchestrator missing");
+      const handoff = yield* awaited(
+        orchestrator.handoff({ donts: "none", goals: "none", premise: "none" }),
+      );
       yield* awaited(session.dispose());
 
       expect(yield* pathExists(joinPath(given, "orchestrator.db"))).toBe(true);
       expect(yield* pathExists(joinPath(given, "memory.db"))).toBe(true);
+      expect(handoff.path.startsWith(`${joinPath(given, "handoffs")}/`)).toBe(true);
+      expect(yield* pathExists(handoff.path)).toBe(true);
       expect(yield* readDirectory(ambient)).toEqual([]);
     }),
   ));
