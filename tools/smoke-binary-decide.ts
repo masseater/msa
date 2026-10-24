@@ -10,7 +10,7 @@ const { runMainWith } = runMain;
 const PROBE_RESULT_FILE = "decide-probe.json";
 const PROBE_PROMPT = "decide-probe: create the probe task";
 const PROBE_SETTINGS = { decision: { model: "local/decide-probe" } };
-const DECIDED = /^Review verdict: (pass|fail) \(local\/decide-probe: /u;
+const DECIDED = /^Review verdict: fail \(local\/decide-probe: /u;
 
 class DecideSmokeError extends Data.TaggedError("DecideSmokeError")<{
   readonly message: string;
@@ -53,7 +53,7 @@ const decideSmoke = (binary: string) =>
     const { verdict } = yield* Schema.decodeEffect(ProbeResult)(raw);
     if (!DECIDED.test(verdict))
       return yield* new DecideSmokeError({
-        message: `${binary} did not decide the review with the decision model: ${verdict}\n${stderr}`,
+        message: `${binary} did not fail the review with the fixture decision model: ${verdict}\n${stderr}`,
       });
     return verdict;
   }).pipe(Effect.scoped, Effect.orDie);
