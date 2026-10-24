@@ -46,14 +46,22 @@ function readCredentialHelper(agentDir: string): Promise<CredentialHelperConfig 
 
 function memoryOnlyNotice(parts: {
   readonly reason: string;
-  readonly deleted: string | undefined;
+  readonly deleted: { readonly path: string; readonly servers: readonly string[] } | undefined;
   readonly configPath: string;
 }): string {
+  const { deleted } = parts;
   return [
     `MCP sign-ins are not saved, because ${parts.reason}; they last until ${APP_NAME} exits.`,
-    ...(parts.deleted === undefined
+    ...(deleted === undefined
       ? []
-      : [`${parts.deleted} was deleted so that its tokens are not left in a plain file.`]),
+      : [
+          `${deleted.path} was deleted so that its tokens are not left in a plain file.`,
+          ...(deleted.servers.length === 0
+            ? []
+            : [
+                `The sign-ins it held (${deleted.servers.join(", ")}) last only until ${APP_NAME} exits; sign in to them again after that.`,
+              ]),
+        ]),
     `To save sign-ins, set credentialHelper to a docker-credential helper in ${parts.configPath}, for example "credentialHelper": { "command": "docker-credential-pass" }.`,
   ].join("\n");
 }

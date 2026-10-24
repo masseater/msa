@@ -11,7 +11,7 @@ sepiace is a built-in MCP server named `sepiace` (`https://hi.sepiace.io/api/v1/
 ## What the model sees
 
 - The `memory` tool takes one `request`, such as "Remember that the user prefers pnpm over npm.", "What did the user decide about the release schedule?", or "Forget the user's old home address." It is active by default next to `read`, `bash`, `edit`, and `write`.
-- Every user prompt first asks sepiace a question: what it remembers that is relevant to the prompt in the current repository. The prompt goes in as a quotation inside that question, which tells sepiace not to remember or forget anything, so a prompt such as "forget my old address" only recalls. What comes back is added to that run as a `<memory>` block, stored with the session and hidden from the transcript view. Recall waits up to 5 seconds; when sepiace is not signed in, unreachable, or recalls nothing, the prompt runs without the block.
+- Every user prompt first asks sepiace a question: what it remembers that is relevant to the prompt in the current repository. The prompt goes in only as a quotation inside that question, which asks sepiace not to remember or forget anything. sepiace's public docs give no read-only way to ask, and its [skill](https://github.com/osaxyz/sepiace/blob/main/skills/memory/SKILL.md) says the server "combines them when a request asks for more than one", so whether a prompt such as "forget my old address" only recalls is up to sepiace. What comes back is added to that run as a `<memory>` block, stored with the session and hidden from the transcript view. Recall waits up to 5 seconds; when sepiace is not signed in, unreachable, or recalls nothing, the prompt runs without the block.
 
 ## Scope
 

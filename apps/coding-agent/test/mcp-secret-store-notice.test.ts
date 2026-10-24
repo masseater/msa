@@ -83,6 +83,7 @@ const warnsWhenSignInsStopBeingSaved = () =>
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).toContain(`${legacy} was deleted`);
       expect(warnings[0]).toContain("they last until");
+      expect(warnings[0]).toContain("The sign-ins it held (docs) last only until");
       expect(warnings[0]).toContain(
         `credentialHelper to a docker-credential helper in ${joinPath(agentDir, "mcp.json")}`,
       );
@@ -106,6 +107,7 @@ const warnsWhenALaterWriteFallsBack = () =>
       yield* awaited(store.forServer("docs", SERVER_URL).save(state("token-at-login")));
       expect(warnings).toHaveLength(1);
       expect(warnings[0]).not.toContain("was deleted");
+      expect(warnings[0]).not.toContain("sign-ins it held");
       expect(warnings[0]).not.toContain("token-at-login");
     }),
   );

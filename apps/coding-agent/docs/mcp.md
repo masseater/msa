@@ -200,7 +200,7 @@ msa writes no token to a file. It keeps every MCP sign-in in one credential stor
 
 1. The `credentialHelper` in `~/.msa/agent/mcp.json`, a program that speaks the [Docker credential helper protocol](https://github.com/docker/docker-credential-helpers): msa runs it with `get` or `store` and passes the server URL `https://msa.invalid/mcp-oauth` or a JSON object with `ServerURL`, `Username`, and `Secret` on standard input, never in arguments. When it is set and fails, sign-in fails.
 2. The login keychain on macOS (`security`) or the Secret Service keyring on Linux (`secret-tool`), one item per agent directory.
-3. Memory: sign-ins last until msa exits. This happens over SSH on macOS, where the login keychain refuses access. msa warns in the session as soon as it falls back to memory, whether at startup, when a token is refreshed, or when signing in, and `msa mcp list` and `/memory` say that sign-ins are not saved.
+3. Memory: sign-ins last until msa exits. This happens over SSH on macOS, where the login keychain refuses access. msa warns as soon as it falls back to memory, whether at startup, when a token is refreshed, or when signing in: in the session, or on standard error in `msa -p` and JSON mode. When it moved sign-ins out of an old `mcp-auth.json`, the warning names those servers. `msa mcp list` and `/memory` say that sign-ins are not saved.
 
 ```json
 {

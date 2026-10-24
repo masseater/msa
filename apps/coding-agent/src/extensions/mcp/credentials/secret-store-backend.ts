@@ -36,6 +36,17 @@ const parseStates = (text: string | undefined): Record<string, unknown> => {
     : {};
 };
 
+const MCP_NAMESPACE_PREFIX = "mcp__";
+
+const serverOf = (key: string): string => {
+  const separator = key.indexOf("|");
+  if (separator === -1) return key;
+  const namespace = key.slice(0, separator);
+  return namespace.startsWith(MCP_NAMESPACE_PREFIX)
+    ? namespace.slice(MCP_NAMESPACE_PREFIX.length)
+    : namespace;
+};
+
 const reasonOf = (error: unknown) =>
   (error instanceof Error ? error.message : String(error)).trim().replace(/[.\s]+$/u, "");
 
@@ -56,6 +67,7 @@ export default class SecretStoreAuthBackend implements authStorageTypes.AuthStor
   private active: SecretStore = memoryStore(undefined);
   private fromHelper = false;
   private legacyDeleted = false;
+  private legacyServers: readonly string[] = [];
   private noticeDelivered = false;
   private settled = false;
   private readonly listeners = new Set<(notice: string) => void>();
@@ -78,7 +90,9 @@ export default class SecretStoreAuthBackend implements authStorageTypes.AuthStor
       ? undefined
       : memoryOnlyNotice({
           configPath: this.configPath,
-          deleted: this.legacyDeleted ? this.legacyPath : undefined,
+          deleted: this.legacyDeleted
+            ? { path: this.legacyPath, servers: this.legacyServers }
+            : undefined,
           reason: this.fallbackReason,
         });
   }
@@ -167,7 +181,9 @@ export default class SecretStoreAuthBackend implements authStorageTypes.AuthStor
           }
         }
         if (legacy !== undefined) {
-          const merged = { ...parseStates(legacy), ...parseStates(current) };
+          const legacyStates = parseStates(legacy);
+          this.legacyServers = [...new Set(Object.keys(legacyStates).map(serverOf))];
+          const merged = { ...legacyStates, ...parseStates(current) };
           yield* awaited(this.write(this.active, `${JSON.stringify(merged, null, 2)}\n`));
           yield* awaited(remove({ force: true, path: this.legacyPath }));
           this.legacyDeleted = !this.active.persistent;
