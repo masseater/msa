@@ -1,5 +1,6 @@
 import { Deferred, Effect, Exit } from "effect";
 
+import type resolveTypes from "./auth/resolve.types.ts";
 import type typesModule from "./auth/types.ts";
 import modelsAuth from "./models-auth.ts";
 import modelsKit from "./models-kit.ts";
@@ -49,7 +50,7 @@ interface AuthorizedRequest<TModel extends typesModuleModule2.AnyModel, TOptions
     typesModuleModule2.ProviderRequestOptions<TModel>;
 }
 
-type AuthOverrides = Parameters<typeof getAuth>[0]["overrides"];
+type AuthOverrides = resolveTypes.AuthResolutionOverrides | undefined;
 
 interface AuthorizeRequest<TModel extends typesModuleModule2.AnyModel, TOptions> {
   readonly model: TModel;
