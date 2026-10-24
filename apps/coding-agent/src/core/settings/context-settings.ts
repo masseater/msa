@@ -1,6 +1,5 @@
 import type aiTypes from "@msa/ai/index.types";
 
-import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import type memoryTypes from "../memory/memory.types.ts";
 import platform from "../platform/index.ts";
@@ -12,8 +11,7 @@ import type settingsSchemaTypes from "../settings-schema.types.ts";
 const { DEFAULT_COMPACTION_TOKEN_SETTINGS, isMergeableObject } = settingsManagerHelpers;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 const { resolvePath } = pathsModule;
-const { dirname, join, readEnv } = platform;
-const { getAgentDir } = config;
+const { join, readEnv } = platform;
 
 export default class ContextSettings {
   private readonly manager: SettingsManager;
@@ -101,7 +99,7 @@ export default class ContextSettings {
     };
   }
 
-  getMemorySettings(): memoryTypes.ResolvedMemorySettings {
+  getMemorySettings(agentDir: string): memoryTypes.ResolvedMemorySettings {
     const memory = this.manager.settings.memory;
     const defaults = SETTINGS_DEFAULTS.memory;
     const apiKeyEnv = memory?.embedding?.apiKeyEnv?.trim();
@@ -111,10 +109,6 @@ export default class ContextSettings {
     const timeoutMs = memory?.embedding?.timeoutMs;
     const limit = memory?.recall?.limit;
     const minScore = memory?.recall?.minScore;
-    const agentDir =
-      this.manager.settingsPaths.global !== undefined && this.manager.settingsPaths.global !== ""
-        ? dirname(this.manager.settingsPaths.global)
-        : getAgentDir();
     return {
       database:
         database !== undefined && database !== ""

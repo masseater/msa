@@ -153,6 +153,7 @@ const createAgentSession = Effect.fn("createAgentSession")(function* (
     ...(options.tools === undefined
       ? {}
       : { baseToolsOverride: Object.fromEntries(options.tools.map((tool) => [tool.name, tool])) }),
+    agentDir: options.cwd,
     cwd: options.cwd,
     modelRuntime,
     resourceLoader: resourceLoaderFor(options, extensionsResult),

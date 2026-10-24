@@ -53,6 +53,7 @@ function createSession(inMemory = false) {
 
       session = new AgentSession({
         agent,
+        agentDir: tempDir,
         cwd: tempDir,
         modelRuntime: getModelRuntime(modelRegistry),
         resourceLoader: createTestResourceLoader(),

@@ -60,6 +60,7 @@ const createSession = (options: { scoped: boolean; persistedScope?: string[] }) 
     });
     const session = new AgentSession({
       agent,
+      agentDir: tempDir,
       cwd: tempDir,
       modelRuntime,
       resourceLoader: createTestResourceLoader(),

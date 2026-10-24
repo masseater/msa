@@ -20,6 +20,7 @@ export default class AgentSession {
   readonly settingsManager: Config["settingsManager"];
   readonly resourceLoader: Config["resourceLoader"];
   readonly cwd: string;
+  readonly agentDir: string;
   readonly tools: SessionTools;
   readonly models: SessionModels;
   readonly run: SessionRun;
@@ -39,6 +40,7 @@ export default class AgentSession {
     this.settingsManager = config.settingsManager;
     this.resourceLoader = config.resourceLoader;
     this.cwd = config.cwd;
+    this.agentDir = config.agentDir;
     this.tools = new SessionTools(this);
     this.models = new SessionModels(this);
     this.run = new SessionRun(this);

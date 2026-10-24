@@ -78,6 +78,7 @@ const createSession = Effect.fn("createSession")(function* (
   const { modelRuntime } = yield* createKeyedModelRuntime(tempDir);
   return new AgentSession({
     agent,
+    agentDir: tempDir,
     cwd: tempDir,
     modelRuntime,
     resourceLoader: createTestResourceLoader(),

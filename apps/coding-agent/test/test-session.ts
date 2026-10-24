@@ -39,6 +39,7 @@ const createTestSession = (
       );
       const session = new AgentSession({
         agent: createAgent(options),
+        agentDir: tempDir,
         cwd: tempDir,
         modelRuntime: getModelRuntime(modelRegistry),
         resourceLoader: createTestResourceLoader(),

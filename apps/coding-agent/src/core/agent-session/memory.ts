@@ -16,7 +16,9 @@ export default class SessionMemory {
   }
 
   resetMemory(): void {
-    const memorySettings = this.session.settingsManager.context.getMemorySettings();
+    const memorySettings = this.session.settingsManager.context.getMemorySettings(
+      this.session.agentDir,
+    );
     void this.memoryInternal?.close();
     this.memoryInternal = memorySettings.enabled
       ? new MemoryService({ cwd: this.session.cwd, settings: memorySettings })
