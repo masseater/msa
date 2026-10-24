@@ -2,7 +2,7 @@ import { expect, it } from "vite-plus/test";
 
 import lintProbe from "./lint-probe.ts";
 
-const { lintProbes, msaCodesOnLine, probePath } = lintProbe;
+const { codesOnLine, lintProbes, probePath } = lintProbe;
 
 const LOCAL_EXTENDS = "msa(no-local-class-extends)";
 
@@ -28,6 +28,7 @@ const HEADER = [
   'import deletedPkg from "@msa/tui";',
   'import aliasedPkg from "@msa/tui";',
   'import nestedPkg from "@msa/tui";',
+  'import nodeEvents from "node:events";',
   "const { StatusIndicator } = statusIndicators;",
   "class Base {}",
   "const LocalExpression = class {};",
@@ -209,6 +210,8 @@ const cases: Cases = [
   ['export class G1 extends tui["Box"] {}', undefined],
   ["export class G2 extends (tui.Container as typeof tui.Container) {}", undefined],
   ["export class S4 extends ChordBase {}", undefined],
+  ["export class K1 extends nodeEvents.EventEmitter {}", LOCAL_EXTENDS],
+  ["export class K2 extends Intl.Collator {}", LOCAL_EXTENDS],
   ['export class H extends Data.TaggedError("H")<{}> {}', undefined],
   ['export class H2 extends Context.Service<H2, {}>()("H2") {}', undefined],
   ["export class H3 extends Mixin(() => Error) {}", undefined],
@@ -281,7 +284,7 @@ it("flags coding-agent classes whose superclass is not syntactically a class fro
     expect(
       probes.flatMap(({ cases: probeCases, header, path }) =>
         probeCases.map(([statement], index) => ({
-          codes: msaCodesOnLine(report, path, header.length + index + 1),
+          codes: codesOnLine(report, path, header.length + index + 1, LOCAL_EXTENDS),
           statement,
         })),
       ),

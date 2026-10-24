@@ -6,6 +6,7 @@ import type flowTypes from "./flow.types.ts";
 import LookupFlow from "./lookup-flow.ts";
 import RequireFlow from "./require-flow.ts";
 import restrictedMember from "./restricted-member.ts";
+import sharedWrite from "./shared-write.ts";
 import StaticString from "./static-string.ts";
 
 const LOOKUP = "getBuiltinModule";
@@ -21,6 +22,12 @@ const LOCAL_EXTENDS_MESSAGE =
   "同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む";
 const PROTOTYPE_MESSAGE =
   "setPrototypeOf や __proto__ で prototype を書き換えない。継承は class 宣言の extends だけで決める";
+const SHARED_WRITE_MESSAGE =
+  "グローバルオブジェクトや package から import した値を書き換えない。差し替える値は引数か Layer で渡す";
+const GLOBAL_ESCAPE_MESSAGE =
+  "globalThis などのグローバルオブジェクトを値として渡さない。要るメンバーをその場で読む";
+const WRITE_API_ESCAPE_MESSAGE =
+  "Object.assign・Object.defineProperty・Reflect.set などを値として渡さない。書き換える先が判定できるよう、その場で呼ぶ";
 const PROTOTYPE_NAMES: ReadonlySet<string> = new Set(["__proto__", "setPrototypeOf"]);
 const SYNC_FS_MESSAGE =
   "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
@@ -171,6 +178,14 @@ const noLocalClassExtends = defineRule({
       if (PROTOTYPE_NAMES.has(name ?? "")) reportPrototype(node);
     };
     const checkString = (node: Node): void => checkName(node, strings.fold(node));
+    const shared = sharedWrite.createSharedWrite(
+      { context, selfSpecifiers },
+      {
+        apiEscape: createReporter(context, WRITE_API_ESCAPE_MESSAGE),
+        globalEscape: createReporter(context, GLOBAL_ESCAPE_MESSAGE),
+        write: createReporter(context, SHARED_WRITE_MESSAGE),
+      },
+    );
     const check = (node: ESTree.Class): void => {
       if (
         node.superClass !== null &&
@@ -179,10 +194,14 @@ const noLocalClassExtends = defineRule({
         context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
     };
     return {
+      ...shared,
       BinaryExpression: checkString,
       ClassDeclaration: check,
       ClassExpression: check,
-      Identifier: (node) => checkName(node, node.name),
+      Identifier(node) {
+        checkName(node, node.name);
+        shared.Identifier(node);
+      },
       Literal: checkString,
       TemplateLiteral: checkString,
     };

@@ -48,7 +48,7 @@ const matchesSpecifier = (specifier: string, pattern: string): boolean => {
 };
 
 const isPackageSpecifier = (walk: Walk, specifier: string): boolean =>
-  !/^[./#]/u.test(specifier) &&
+  !/^(?:[./#]|node:)/u.test(specifier) &&
   !walk.selfSpecifiers.some((pattern) => matchesSpecifier(specifier, pattern));
 
 const importSource = (def: Definition): string | undefined =>
@@ -81,6 +81,7 @@ const packageImportRoot = (walk: Walk, node: Node): Root | undefined => {
   if (variable === undefined || !isPackageImport(walk, variable.defs)) return undefined;
   return {
     base: variable.defs[0] === undefined ? undefined : importBase(variable.defs[0]),
+    kind: "import",
     path: [],
     references: variable.references.map((reference) => reference.identifier),
   };
@@ -101,6 +102,7 @@ const builtinGlobalRoot = (walk: Walk, node: ESTree.IdentifierName): Root | unde
   isTrustedGlobal(walk, node) && !reachesGlobalObject(walk)
     ? {
         base: undefined,
+        kind: "builtin",
         path: [],
         references: scopeLookup.globalReferences(walk.context, node.name),
       }
@@ -114,9 +116,14 @@ const staticKey = (node: ESTree.MemberExpression): string | undefined => {
     : undefined;
 };
 
+const importRootOf = (walk: Walk, node: Node): Root | undefined => {
+  const root = rootOf(walk, node);
+  return root?.kind === "import" ? root : undefined;
+};
+
 const memberRoot = (walk: Walk, node: ESTree.MemberExpression): Root | undefined => {
   const key = staticKey(node);
-  const root = key === undefined ? undefined : rootOf(walk, node.object);
+  const root = key === undefined ? undefined : importRootOf(walk, node.object);
   return root === undefined || key === undefined
     ? undefined
     : { ...root, path: [...root.path, key] };
@@ -156,6 +163,7 @@ const classRoot = {
   TRANSPARENT,
   isFactoryCallee,
   isFactoryKey,
+  isPackageImport,
   parentOf,
   rootOf,
   staticKey,
