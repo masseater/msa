@@ -1,7 +1,9 @@
+import html from "../../utils/html.ts";
 import textModule from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { pullRequestText } = textModule;
+const { escapeXml } = html;
 
 const REPORT_LIMIT = 6000;
 
@@ -137,6 +139,18 @@ function workerPrompt(
     .join("\n\n");
 }
 
+function pullRequestBlock(task: orchestratorTypesTypes.TaskView): string {
+  const pull = task.pullRequest;
+  if (pull?.verified === null || pull?.verified === undefined) return "";
+  return [
+    `<pull-request number="${pull.number}" head="${pull.verified.sha}" url="${escapeXml(pull.url)}">`,
+    `<title>${escapeXml(pull.verified.title)}</title>`,
+    `<body>\n${escapeXml(pull.verified.body)}\n</body>`,
+    "</pull-request>",
+    `The harness squash-merges this pull request at this head after you pass it, with this title and body as the commit message. Check that the body describes the final diff of ${pull.branch} against ${pull.base}: what it changes, why, and how it was verified, with nothing from earlier attempts that the diff no longer does. A body that does not match the diff is a finding within the goal.`,
+  ].join("\n");
+}
+
 function taskReviewerPrompt(
   task: orchestratorTypesTypes.TaskView,
   workerReport: string,
@@ -148,7 +162,10 @@ function taskReviewerPrompt(
     stateBlock("goal-state", task.goalState),
     "</task>",
     `<worker-report>\n${truncateReport(workerReport)}\n</worker-report>`,
-  ].join("\n");
+    pullRequestBlock(task),
+  ]
+    .filter(Boolean)
+    .join("\n");
   return [
     "You are reviewing work another thread just did. You did not write it.",
     "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",

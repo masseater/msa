@@ -85,6 +85,10 @@ declare namespace workerTypes {
     runGh: (args: readonly string[], cwd: string) => Promise<GhResult>;
     pollIntervalMs?: number | null;
 
+    ciPollMs?: number;
+
+    ciWaitMs?: number | undefined;
+
     telemetry: telemetryTypes.TelemetryContext;
   }
 }

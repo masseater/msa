@@ -5,6 +5,8 @@ declare namespace orchestratorHarnessTypes {
   interface HarnessOptions {
     maxConcurrent?: number;
     pollIntervalMs?: number | null;
+    ciPollMs?: number;
+    ciWaitMs?: number;
     project?: string;
     runCommand?: orchestratorTypes.OrchestratorOptions["runCommand"];
     runGh?: orchestratorTypes.OrchestratorOptions["runGh"];

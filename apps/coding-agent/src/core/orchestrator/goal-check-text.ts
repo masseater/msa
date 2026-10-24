@@ -34,7 +34,7 @@ function gateText(gates: readonly GateResult[]): string {
     .map((gate) =>
       [
         `<pull-request task="${escapeXml(gate.task.id)}"${gate.number === null ? "" : ` number="${gate.number}"`}>`,
-        ...gate.problems.map((problem) => `- ${escapeXml(problem)}`),
+        ...gate.problems.map((problem) => `- ${escapeXml(problem.text)}`),
         "</pull-request>",
       ].join("\n"),
     )
@@ -59,10 +59,26 @@ function rejectionPrompt(verification: Verification): string {
 function passed(verification: Verification): boolean {
   return (
     verification.checks.every((result) => result.passed) &&
-    verification.pullRequests.every((gate) => gate.problems.length === 0)
+    verification.pullRequests.every(
+      (gate) => gate.problems.length === 0 && gate.unavailable === undefined,
+    )
   );
 }
 
-const goalCheckText = { failureText, passed, rejectionPrompt };
+function unavailableText(verification: Verification): string | undefined {
+  const reasons = verification.pullRequests.flatMap((gate) => gate.unavailable ?? []);
+  return reasons.length === 0 ? undefined : reasons.join("\n");
+}
+
+function waitingForCi(verification: Verification): boolean {
+  const problems = verification.pullRequests.flatMap((gate) => gate.problems);
+  return (
+    verification.checks.every((result) => result.passed) &&
+    problems.length > 0 &&
+    problems.every((problem) => problem.kind === "pending")
+  );
+}
+
+const goalCheckText = { failureText, passed, rejectionPrompt, unavailableText, waitingForCi };
 
 export default goalCheckText;

@@ -14,23 +14,9 @@ const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { GIT, read, runCommand, sh, shortId } = worktreeSupport;
-const { advanceMain, commitAndPush, withRemote } = pullRequestSupport;
+const { advanceMain, commitAndPush, exists, rebaseAndPush, withRemote } = pullRequestSupport;
 
 type Workers = ReturnType<typeof setup>["workers"];
-
-function exists(command: string, cwd: string) {
-  return Effect.map(
-    Effect.promise((signal) => runCommand(command, cwd, 30_000, signal)),
-    (result) => result.exitCode === 0,
-  );
-}
-
-function rebaseAndPush(cwd: string, branch: string) {
-  return sh(
-    `git fetch -q origin main && ${GIT} rebase -q origin/main && git push -q -f origin ${branch}`,
-    cwd,
-  );
-}
 
 function started(orchestrator: orchestratorTypes.Orchestrator, title: string) {
   return Effect.gen(function* () {
@@ -64,8 +50,10 @@ function holdsTheWorkerUntilCiIsGreen(run: Merging) {
     const number = yield* github.open(branch);
     const head = yield* github.head(branch);
     github.ci.set(head, "pending");
+    const polled = github.calls + 3;
     worker.complete("opened the pull request");
-    yield* waitFor(() => worker.prompts.length === 3);
+    yield* waitFor(() => github.calls >= polled);
+    expect(worker.prompts).toHaveLength(2);
     expect(workers).toHaveLength(1);
     expect((yield* read(orchestrator, taskId)).pullRequest).toMatchObject({
       branch,
@@ -73,7 +61,7 @@ function holdsTheWorkerUntilCiIsGreen(run: Merging) {
       headSha: head,
       number,
       state: "OPEN",
-      verifiedSha: null,
+      verified: null,
     });
     return { head, number };
   });
@@ -83,20 +71,27 @@ function mergesAfterTheReview(run: Merging, opened: { head: string; number: numb
   const { orchestrator, workers, github, taskId } = run;
   return Effect.gen(function* () {
     github.ci.set(opened.head, "success");
-    workers[0]!.complete("CI is green");
     yield* waitFor(() => workers.length === 2);
+    expect(workers[0]!.prompts).toHaveLength(2);
     expect((yield* read(orchestrator, taskId)).pullRequest).toMatchObject({
       ci: "passing",
       mergeState: "CLEAN",
       mergeable: "MERGEABLE",
-      verifiedSha: opened.head,
+      verified: { sha: opened.head },
     });
     expect(github.merged).toEqual([]);
     expect(taskStatus(orchestrator, taskId)).toBe("running");
 
     workers[1]!.complete("acceptable");
     yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
-    expect(github.merged).toEqual([{ number: opened.number, sha: opened.head }]);
+    expect(github.merged).toEqual([
+      {
+        body: `Adds ${run.branch}.`,
+        number: opened.number,
+        sha: opened.head,
+        subject: `Add ${run.branch} (#${opened.number})`,
+      },
+    ]);
     expect((yield* read(orchestrator, taskId)).pullRequest?.state).toBe("MERGED");
   });
 }
@@ -129,7 +124,7 @@ const mergesTheReviewedHeadOnceCiIsGreen = () =>
   );
 
 it(
-  "keeps the task with its worker until its own pull request is green, then squash-merges the reviewed head and removes the worktree and both branches",
+  "waits for CI on the task's own pull request without waking the worker, then squash-merges the reviewed head with the reviewed title and body and removes the worktree and both branches",
   mergesTheReviewedHeadOnceCiIsGreen,
 );
 
@@ -178,7 +173,7 @@ const sendsBackAFailingUnpushedOrConflictingPullRequest = () =>
         github.conflicting.delete(number);
         workers[0]!.complete("resolved the conflict");
         yield* waitFor(() => workers.length === 2);
-        expect((yield* read(orchestrator, task.id)).pullRequest?.verifiedSha).toBe(
+        expect((yield* read(orchestrator, task.id)).pullRequest?.verified?.sha).toBe(
           yield* github.head(branch),
         );
       }),
@@ -215,7 +210,7 @@ const sendsBackAPullRequestBehindItsBase = () =>
         github.ci.set(rebased, "success");
         worker.complete("rebased");
         yield* waitFor(() => workers.length === 2);
-        expect((yield* read(orchestrator, task.id)).pullRequest?.verifiedSha).toBe(rebased);
+        expect((yield* read(orchestrator, task.id)).pullRequest?.verified?.sha).toBe(rebased);
       }),
     ),
   );
@@ -284,7 +279,7 @@ const sendsBackWhenThePullRequestCannotMergeAfterReview = () =>
         yield* waitFor(() => workers.length === 6);
         workers[5]!.complete("acceptable");
         yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
-        expect(github.merged).toEqual([{ number, sha: late }]);
+        expect(github.merged).toMatchObject([{ number, sha: late }]);
       }),
     ),
   );

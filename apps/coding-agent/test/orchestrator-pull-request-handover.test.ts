@@ -33,8 +33,10 @@ function openedAndWaitingForCi(
     const branch = `task/${shortId(task.id)}`;
     yield* commitAndPush(workers[0]!.cwd, `${title}.txt`, branch);
     const number = yield* github.open(branch);
+    github.ci.set(yield* github.head(branch), "pending");
+    const polled = github.calls + 3;
     workers[0]!.complete("waiting for CI");
-    yield* waitFor(() => workers[0]!.prompts.length === 2);
+    yield* waitFor(() => github.calls >= polled);
     return { branch, number, task };
   });
 }
@@ -84,7 +86,7 @@ const handsThePullRequestToTheTaskThatReplacesIt = () =>
 
         const head = yield* mergesInTheHeir(workers, github, worktree, first.branch);
         yield* waitFor(() => taskStatus(orchestrator, second) === "completed");
-        expect(github.merged).toEqual([{ number: first.number, sha: head }]);
+        expect(github.merged).toMatchObject([{ number: first.number, sha: head }]);
       }),
     ),
   );
@@ -200,7 +202,7 @@ const showsTheTargetPullRequestOnAMergedTask = () =>
 
         workers[5]!.complete("acceptable");
         yield* waitFor(() => taskStatus(orchestrator, target.id) === "completed");
-        expect(github.merged).toEqual([{ number, sha: head }]);
+        expect(github.merged).toMatchObject([{ number, sha: head }]);
         expect(yield* sh(`git branch --list ${partBranch} ${targetBranch}`, repository)).toBe("");
         expect(yield* sh(`git worktree list --porcelain | grep -c '^worktree'`, repository)).toBe(
           "1",

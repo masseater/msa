@@ -166,3 +166,26 @@ const marksTheDatabaseSoThatAnMsaWithoutWorktreesRefusesIt = Effect.gen(function
 
 it("marks a database with merge targets so that an msa that runs every task in the main checkout refuses it", () =>
   runTest(marksTheDatabaseSoThatAnMsaWithoutWorktreesRefusesIt));
+
+const keepsTheSchemaThatTheReleasedMsaOpens = Effect.gen(function* () {
+  const directory = yield* makeTempDir("msa-orchestrator-schema-");
+  directories.push(directory);
+  const path = joinPath(directory, "orchestrator.db");
+  store.openDatabase(path).close();
+
+  const opened = new DatabaseSync(path);
+  const { user_version: version } = opened.prepare("PRAGMA user_version").get() as {
+    user_version: number;
+  };
+  const tables = opened
+    .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'task_pull_requests'")
+    .all();
+  opened.close();
+
+  const releasedSchema = 4;
+  expect(tables).toHaveLength(1);
+  expect(version).toBe(releasedSchema);
+});
+
+it("adds the pull request table without raising the schema, so an msa that knows schema 4 still opens the database", () =>
+  runTest(keepsTheSchemaThatTheReleasedMsaOpens));

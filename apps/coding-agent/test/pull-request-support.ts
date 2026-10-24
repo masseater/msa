@@ -5,7 +5,7 @@ import FakeGitHub from "./fake-github.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, makeTempDir, removePath } = testing;
-const { GIT, sh } = worktreeSupport;
+const { GIT, runCommand, sh } = worktreeSupport;
 
 interface Remote {
   repository: string;
@@ -40,6 +40,20 @@ function commitAndPush(cwd: string, file: string, branch: string) {
   );
 }
 
+function exists(command: string, cwd: string) {
+  return Effect.map(
+    Effect.promise((signal) => runCommand(command, cwd, 30_000, signal)),
+    (result) => result.exitCode === 0,
+  );
+}
+
+function rebaseAndPush(cwd: string, branch: string) {
+  return sh(
+    `git fetch -q origin main && ${GIT} rebase -q origin/main && git push -q -f origin ${branch}`,
+    cwd,
+  );
+}
+
 function advanceMain(origin: string, parent: string, file: string) {
   return sh(
     `git clone -q ${origin} side-${file} && cd side-${file} && echo ${file} > ${file} && git add ${file} && ${GIT} commit -q -m ${file} && git push -q origin main && cd .. && rm -rf side-${file}`,
@@ -47,6 +61,6 @@ function advanceMain(origin: string, parent: string, file: string) {
   );
 }
 
-const pullRequestSupport = { advanceMain, commitAndPush, withRemote };
+const pullRequestSupport = { advanceMain, commitAndPush, exists, rebaseAndPush, withRemote };
 
 export default pullRequestSupport;

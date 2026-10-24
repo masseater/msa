@@ -15,6 +15,15 @@ interface FakePull {
   base: string;
   state: "OPEN" | "MERGED" | "CLOSED";
   head: string;
+  title: string;
+  body: string;
+}
+
+interface Merged {
+  number: number;
+  sha: string;
+  subject: string;
+  body: string;
 }
 
 function git(origin: string, args: string): Effect.Effect<{ ok: boolean; output: string }> {
@@ -36,19 +45,30 @@ export default class FakeGitHub {
   readonly pulls: FakePull[] = [];
   readonly ci = new Map<string, Ci>();
   readonly conflicting = new Set<number>();
-  readonly merged: { number: number; sha: string }[] = [];
+  readonly merged: Merged[] = [];
   readonly origin: string;
+
+  unavailable: orchestratorTypes.GhResult | undefined;
+  calls = 0;
 
   constructor(origin: string) {
     this.origin = origin;
   }
 
-  open(branch: string, base = "main"): Effect.Effect<number> {
+  open(branch: string, base = "main", body = `Adds ${branch}.`): Effect.Effect<number> {
     return Effect.gen({ self: this }, function* () {
       const head = yield* git(this.origin, `rev-parse refs/heads/${branch}`);
       if (!head.ok) throw new Error(`${branch} is not pushed to the fake origin`);
       const number = this.pulls.length + 1;
-      this.pulls.push({ base, branch, head: head.output, number, state: "OPEN" });
+      this.pulls.push({
+        base,
+        body,
+        branch,
+        head: head.output,
+        number,
+        state: "OPEN",
+        title: `Add ${branch}`,
+      });
       return number;
     });
   }
@@ -65,6 +85,8 @@ export default class FakeGitHub {
 
   private handle(args: readonly string[]): Effect.Effect<orchestratorTypes.GhResult> {
     return Effect.gen({ self: this }, function* () {
+      this.calls += 1;
+      if (this.unavailable !== undefined) return this.unavailable;
       const [group, command, target] = args;
       if (group !== "pr") return refused(`fake gh does not know ${args.join(" ")}`);
       if (command === "list") {
@@ -78,8 +100,7 @@ export default class FakeGitHub {
       const pull = this.pulls.find((candidate) => String(candidate.number) === target);
       if (pull === undefined) return refused(`no pull requests found for ${target}`);
       if (command === "view") return ok(yield* Effect.orDie(encodeJson(yield* this.view(pull))));
-      if (command === "merge")
-        return yield* this.merge(pull, args[args.indexOf("--match-head-commit") + 1] ?? "");
+      if (command === "merge") return yield* this.merge(pull, args);
       return refused(`fake gh does not know pr ${command}`);
     });
   }
@@ -107,6 +128,7 @@ export default class FakeGitHub {
       const behind = pull.state === "OPEN" && (yield* this.behind(pull));
       return {
         baseRefName: pull.base,
+        body: pull.body,
         headRefName: pull.branch,
         headRefOid: pull.head,
         mergeStateStatus: conflicting ? "DIRTY" : behind ? "BEHIND" : "CLEAN",
@@ -124,12 +146,18 @@ export default class FakeGitHub {
                   status: ci === "pending" ? "IN_PROGRESS" : "COMPLETED",
                 },
               ],
+        title: pull.title,
         url: `https://github.invalid/pull/${pull.number}`,
       };
     });
   }
 
-  private merge(pull: FakePull, sha: string): Effect.Effect<orchestratorTypes.GhResult> {
+  private merge(
+    pull: FakePull,
+    args: readonly string[],
+  ): Effect.Effect<orchestratorTypes.GhResult> {
+    const flag = (name: string) => args[args.indexOf(name) + 1] ?? "";
+    const sha = flag("--match-head-commit");
     return Effect.gen({ self: this }, function* () {
       yield* this.refresh(pull);
       if (pull.state !== "OPEN") return refused(`pull request #${pull.number} is not open`);
@@ -137,7 +165,8 @@ export default class FakeGitHub {
         return refused("Head branch was modified. Review and try the merge again.");
       if (yield* this.behind(pull))
         return refused("the head branch is not up to date with the base branch");
-      if (this.ci.get(pull.head) !== "success")
+      const ci = this.ci.get(pull.head);
+      if (ci !== undefined && ci !== "success")
         return refused("required status checks have not passed");
       const commit = yield* git(
         this.origin,
@@ -145,7 +174,12 @@ export default class FakeGitHub {
       );
       yield* git(this.origin, `update-ref refs/heads/${pull.base} ${commit.output}`);
       pull.state = "MERGED";
-      this.merged.push({ number: pull.number, sha });
+      this.merged.push({
+        body: flag("--body"),
+        number: pull.number,
+        sha,
+        subject: flag("--subject"),
+      });
       return ok("");
     });
   }

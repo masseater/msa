@@ -99,7 +99,13 @@ declare namespace orchestratorTypesTypes {
     createdAt: number;
   }
 
-  type PullRequestCi = "passing" | "pending" | "failing";
+  type PullRequestCi = "passing" | "pending" | "failing" | "none";
+
+  interface VerifiedPullRequest {
+    sha: string;
+    title: string;
+    body: string;
+  }
 
   interface PullRequest {
     taskId: string;
@@ -112,7 +118,7 @@ declare namespace orchestratorTypesTypes {
     ci: PullRequestCi;
     mergeable: string;
     mergeState: string;
-    verifiedSha: string | null;
+    verified: VerifiedPullRequest | null;
     checkedAt: number;
   }
 

@@ -229,7 +229,7 @@ function renameSessionsToThreads(database: DatabaseSync): void {
   });
 }
 
-const SCHEMA_VERSION = 5;
+const SCHEMA_VERSION = 4;
 
 function rejectNewerSchema(database: DatabaseSync, path: string): void {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as {

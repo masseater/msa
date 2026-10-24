@@ -15,6 +15,8 @@ interface PullRequestRow {
   mergeable: string;
   merge_state: string;
   verified_sha: string | null;
+  verified_title: string | null;
+  verified_body: string | null;
   checked_at: number;
 }
 
@@ -31,7 +33,10 @@ function toPullRequest(row: PullRequestRow): PullRequest {
     state: row.state,
     taskId: row.task_id,
     url: row.url,
-    verifiedSha: row.verified_sha,
+    verified:
+      row.verified_sha === null
+        ? null
+        : { body: row.verified_body ?? "", sha: row.verified_sha, title: row.verified_title ?? "" },
   };
 }
 
@@ -55,12 +60,13 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
   database
     .prepare(
       `INSERT INTO task_pull_requests (task_id, number, url, branch, base, state, head_sha, ci,
-         mergeable, merge_state, verified_sha, checked_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         mergeable, merge_state, verified_sha, verified_title, verified_body, checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (task_id) DO UPDATE SET number = excluded.number, url = excluded.url,
          branch = excluded.branch, base = excluded.base, state = excluded.state,
          head_sha = excluded.head_sha, ci = excluded.ci, mergeable = excluded.mergeable,
          merge_state = excluded.merge_state, verified_sha = excluded.verified_sha,
+         verified_title = excluded.verified_title, verified_body = excluded.verified_body,
          checked_at = excluded.checked_at`,
     )
     .run(
@@ -74,7 +80,9 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
       pullRequest.ci,
       pullRequest.mergeable,
       pullRequest.mergeState,
-      pullRequest.verifiedSha,
+      pullRequest.verified?.sha ?? null,
+      pullRequest.verified?.title ?? null,
+      pullRequest.verified?.body ?? null,
       pullRequest.checkedAt,
     );
 }

@@ -8,10 +8,17 @@ declare namespace goalCheckTextTypes {
     passed: boolean;
   }
 
+  interface Problem {
+    kind: "fix" | "pending";
+    text: string;
+  }
+
   interface GateResult {
     task: orchestratorTypesTypes.Task;
     number: number | null;
-    problems: readonly string[];
+    problems: readonly Problem[];
+
+    unavailable?: string;
   }
 
   interface Verification {

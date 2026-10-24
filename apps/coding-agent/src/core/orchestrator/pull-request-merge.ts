@@ -1,5 +1,6 @@
 import { Effect, Result } from "effect";
 
+import pullRequestProblems from "./pull-request-problems.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -8,11 +9,14 @@ import type orchestratorTypesTypes from "./types.types.ts";
 import worktreeModule from "./worktree.ts";
 
 const { pullRequests } = pullRequestsModule;
+const { problemsOf, short } = pullRequestProblems;
 const { worktrees } = worktreeModule;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
+type PullRequest = orchestratorTypesTypes.PullRequest;
+type Verified = orchestratorTypesTypes.VerifiedPullRequest;
 
 function sendBack(problems: readonly string[], number: number | null): MergeOutcome {
   const name = number === null ? "the pull request" : `PR #${number}`;
@@ -31,7 +35,7 @@ function sendBack(problems: readonly string[], number: number | null): MergeOutc
 function finish(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
-  record: orchestratorTypesTypes.PullRequest,
+  record: PullRequest,
   merged: string,
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
@@ -43,8 +47,8 @@ function finish(
 
 interface Ready {
   owner: { branch: string; base: string; cwd: string };
-  record: orchestratorTypesTypes.PullRequest;
-  verified: string;
+  record: PullRequest;
+  verified: Verified;
 }
 
 function squash(
@@ -64,7 +68,7 @@ function squash(
         runtime,
         task,
         merged,
-        `Squash-merged PR #${merged.number} at head ${pullRequests.short(verified)}.`,
+        `Squash-merged PR #${merged.number} at head ${short(verified.sha)}.`,
       );
     }
     const why = Result.isFailure(merging)
@@ -79,19 +83,24 @@ function squash(
   });
 }
 
-function blocked(
-  record: orchestratorTypesTypes.PullRequest,
-  verified: string | null,
-): MergeOutcome | undefined {
-  const problems = pullRequests.problemsOf(record, undefined);
-  if (problems.length > 0) return sendBack(problems, record.number);
-  if (verified !== null && verified === record.headSha) return undefined;
-  return sendBack(
-    [
-      `The head of #${record.number} is ${pullRequests.short(record.headSha)}, not the commit the goal check passed and the reviewer read${verified === null ? "" : ` (${pullRequests.short(verified)})`}. End your turn again so the new head is checked and reviewed.`,
-    ],
-    record.number,
-  );
+function changedSinceReview(number: number, now: Verified, verified: Verified | null): string[] {
+  const name = `#${number}`;
+  if (verified === null) {
+    return [
+      `The goal check never passed on ${name}, so the reviewer did not read it. End your turn again so it is checked and reviewed.`,
+    ];
+  }
+  const changed = [
+    ...(verified.sha === now.sha
+      ? []
+      : [`its head moved from ${short(verified.sha)} to ${short(now.sha)}`]),
+    ...(verified.title === now.title ? [] : ["its title changed"]),
+    ...(verified.body === now.body ? [] : ["its body changed"]),
+  ];
+  if (changed.length === 0) return [];
+  return [
+    `${name} changed after the review (${changed.join(", ")}), so the reviewed pull request is not the one that would merge. Make the title and body describe the final diff, then end your turn so it is checked and reviewed again.`,
+  ];
 }
 
 function afterReview(
@@ -118,13 +127,16 @@ function afterReview(
         null,
       );
     }
-    const verified = recorded?.number === pull.number ? recorded.verifiedSha : null;
+    const verified = recorded?.number === pull.number ? recorded.verified : null;
     const record = pullRequests.save(runtime, task.id, pull, verified, yield* nowMillis);
     if (record.state === "MERGED") {
       return yield* finish(runtime, task, record, `PR #${record.number} was already merged.`);
     }
-    const stop = blocked(record, verified);
-    if (stop !== undefined || verified === null) return stop;
+    const problems = [
+      ...problemsOf(record, undefined).map((problem) => problem.text),
+      ...changedSinceReview(record.number, pullRequests.verifiedOf(pull), verified),
+    ];
+    if (problems.length > 0 || verified === null) return sendBack(problems, record.number);
     return yield* squash(runtime, task, { owner, record, verified });
   });
 }

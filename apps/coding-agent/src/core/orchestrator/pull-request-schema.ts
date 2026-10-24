@@ -11,6 +11,8 @@ CREATE TABLE IF NOT EXISTS task_pull_requests (
   mergeable TEXT NOT NULL,
   merge_state TEXT NOT NULL,
   verified_sha TEXT,
+  verified_title TEXT,
+  verified_body TEXT,
   checked_at INTEGER NOT NULL
 );
 `;

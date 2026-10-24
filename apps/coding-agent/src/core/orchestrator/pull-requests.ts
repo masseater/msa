@@ -16,11 +16,12 @@ const { worktrees } = worktreeModule;
 const { RollupEntry, countChecks } = prWatchSnapshot;
 
 const FIELDS =
-  "number,url,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup";
+  "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup";
 const LIST_LIMIT = 20;
 
 const GhPull = Schema.Struct({
   baseRefName: Schema.String,
+  body: Schema.optionalKey(Schema.String),
   headRefName: Schema.String,
   headRefOid: Schema.String,
   mergeStateStatus: Schema.optionalKey(Schema.String),
@@ -28,6 +29,7 @@ const GhPull = Schema.Struct({
   number: Schema.Finite,
   state: Schema.String,
   statusCheckRollup: RollupEntry.pipe(Schema.Array, Schema.NullOr, Schema.optionalKey),
+  title: Schema.optionalKey(Schema.String),
   url: Schema.String,
 });
 
@@ -38,6 +40,7 @@ const PullListJson = GhPull.pipe(Schema.Array, Schema.fromJsonString);
 
 type Task = orchestratorTypesTypes.Task;
 type PullRequest = orchestratorTypesTypes.PullRequest;
+type Verified = orchestratorTypesTypes.VerifiedPullRequest;
 
 interface Owner {
   branch: string;
@@ -82,15 +85,20 @@ function decoded<A>(
 
 function ciOf(pull: PullView): orchestratorTypesTypes.PullRequestCi {
   const checks = countChecks(pull.statusCheckRollup ?? []);
+  if (checks.total === 0) return "none";
   if (checks.failed > 0) return "failing";
-  if (checks.pending > 0 || checks.total === 0) return "pending";
+  if (checks.pending > 0) return "pending";
   return "passing";
+}
+
+function verifiedOf(pull: PullView): Verified {
+  return { body: pull.body ?? "", sha: pull.headRefOid, title: pull.title ?? "" };
 }
 
 function recordOf(
   taskId: string,
   pull: PullView,
-  verifiedSha: string | null,
+  verified: Verified | null,
   now: number,
 ): PullRequest {
   return {
@@ -105,7 +113,7 @@ function recordOf(
     state: pull.state.toUpperCase(),
     taskId,
     url: pull.url,
-    verifiedSha,
+    verified,
   };
 }
 
@@ -152,10 +160,26 @@ function merge(
   runtime: runtimeTypes.Runtime,
   cwd: string,
   number: number,
-  sha: string,
+  verified: Verified,
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+  const subject = verified.title === "" ? `#${number}` : `${verified.title} (#${number})`;
   return Effect.asVoid(
-    gh(runtime, ["pr", "merge", String(number), "--squash", "--match-head-commit", sha], cwd),
+    gh(
+      runtime,
+      [
+        "pr",
+        "merge",
+        String(number),
+        "--squash",
+        "--match-head-commit",
+        verified.sha,
+        "--subject",
+        subject,
+        "--body",
+        verified.body,
+      ],
+      cwd,
+    ),
   );
 }
 
@@ -192,10 +216,10 @@ function save(
   runtime: runtimeTypes.Runtime,
   taskId: string,
   pull: PullView,
-  verifiedSha: string | null,
+  verified: Verified | null,
   now: number,
 ): PullRequest {
-  const record = recordOf(taskId, pull, verifiedSha, now);
+  const record = recordOf(taskId, pull, verified, now);
   store.savePullRequest(runtime.database, record);
   runtime.publish();
   return record;
@@ -214,56 +238,18 @@ function refresh(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<v
     const found = yield* Effect.result(current(runtime, owner));
     if (Result.isFailure(found) || found.success === undefined) return;
     const recorded = store.pullRequestOf(runtime.database, task.id);
-    const verified = recorded?.number === found.success.number ? recorded.verifiedSha : null;
+    const verified = recorded?.number === found.success.number ? recorded.verified : null;
     save(runtime, task.id, found.success, verified, yield* nowMillis);
   });
-}
-
-function short(sha: string): string {
-  return sha.slice(0, 12);
-}
-
-function problemsOf(record: PullRequest, localHead: string | undefined): string[] {
-  const name = `#${record.number}`;
-  if (record.state === "MERGED") return [];
-  if (record.state !== "OPEN") {
-    return [
-      `Pull request ${name} is ${record.state.toLowerCase()}. Reopen it, or open a new pull request from ${record.branch} into ${record.base}.`,
-    ];
-  }
-  const problems: string[] = [];
-  if (localHead !== undefined && localHead !== record.headSha) {
-    problems.push(
-      `The head of ${name} is ${short(record.headSha)}, but ${record.branch} in the worktree is at ${short(localHead)}. Push the branch so the pull request carries the work.`,
-    );
-  }
-  if (record.mergeable === "CONFLICTING" || record.mergeState === "DIRTY") {
-    problems.push(
-      `${name} conflicts with ${record.base}. Rebase ${record.branch} onto the latest ${record.base}, resolve the conflicts, and push.`,
-    );
-  } else if (record.mergeState === "BEHIND") {
-    problems.push(
-      `${name} is behind ${record.base}. Rebase ${record.branch} onto the latest ${record.base} and push.`,
-    );
-  }
-  if (record.ci === "failing") {
-    problems.push(`CI fails on the head ${short(record.headSha)} of ${name}. Fix it and push.`);
-  } else if (record.ci === "pending") {
-    problems.push(
-      `CI has not finished on the head ${short(record.headSha)} of ${name}. Wait until every check passes (pr_watch reports it) before ending your turn.`,
-    );
-  }
-  return problems;
 }
 
 const pullRequests = {
   current,
   merge,
   ownerOf,
-  problemsOf,
   refresh,
   save,
-  short,
+  verifiedOf,
   view,
 };
 
