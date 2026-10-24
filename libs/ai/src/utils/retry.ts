@@ -1,105 +1,11 @@
 import { Effect, Function } from "effect";
 
 import type typesModule from "../types.types.ts";
+import providerFailureModule from "./provider-failure.ts";
 import type retryTypes from "./retry.types.ts";
 
-function buildProviderErrorPattern(patterns: readonly string[]): RegExp {
-  return new RegExp(patterns.join("|"), "iu");
-}
-
-const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([
-  "GoUsageLimitError",
-  "FreeUsageLimitError",
-
-  "Monthly usage limit reached",
-  "available balance",
-
-  "insufficient_quota",
-  "out of budget",
-  "quota exceeded",
-  "billing",
-
-  "subscription_sharing_usage_limit_exceeded",
-]);
-
-const PROVIDER_ACCOUNT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403]);
-
-const RETRYABLE_PROVIDER_STATUSES: ReadonlySet<number> = new Set([
-  429, 500, 502, 503, 504, 520, 524,
-]);
-
-const HTTP_STATUS_IN_TEXT =
-  /(?:^\s*|\b(?:HTTP(?:\/\d(?:\.\d)?)?|status(?:\s+code)?|error(?:\s+code)?|failed|returned|answered)\s*[:=]?\s*\(?|"(?:code|status)"\s*:\s*)([1-5]\d{2})(?!\d)/iu;
-
-const textStatus = (text: string): number | undefined => {
-  const status = HTTP_STATUS_IN_TEXT.exec(text)?.[1];
-  return status === undefined ? undefined : Number(status);
-};
-
-const PROVIDER_ACCOUNT_ERROR_PATTERN = buildProviderErrorPattern([
-  "payment.?required",
-  "requires more credits",
-  "credit balance",
-  "insufficient.?(?:credits|balance|funds)",
-  "invalid.?(?:credential|api.?key|x-api-key)",
-  "unauthorized",
-  "authentication.?error",
-  "permission.?denied",
-]);
-
-const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
-  "overloaded",
-  "server_busy",
-  "servers are currently busy",
-  "currently experiencing high demand",
-  "model is at capacity",
-  "rate.?limit",
-  "too many requests",
-  "service.?(?:is.?)?(?:temporarily.?)?unavailable",
-  "server.?error",
-  "internal.?error",
-
-  "provider.?returned.?(?:an.?)?error",
-  "exceeded request buffer limit while retrying upstream",
-  "unable to forward upstream",
-
-  "network.?error",
-  "connection.?error",
-  "connection.?refused",
-  "connection.?lost",
-  "other side closed",
-  "fetch failed",
-  "getaddrinfo",
-  "ENOTFOUND",
-  "EAI_AGAIN",
-  "upstream.?connect",
-  "reset before headers",
-  "socket hang up",
-  "socket connection was closed",
-  "timed? out",
-  "timeout",
-  "terminated",
-
-  "websocket.?closed",
-  "websocket.?error",
-
-  "ended without",
-  "stream ended before message_stop",
-  "stream ended before a terminal response event",
-  "http2 request did not get a response",
-  "pending stream has been canceled",
-
-  "retry delay",
-
-  "you can retry your request",
-  "try your request again",
-  "please retry your request",
-
-  "ResourceExhausted",
-
-  "subscription_sharing_usage_unavailable",
-  "subscription_sharing_user_unavailable",
-]);
+const { isProviderUnusableError, isRetryableAssistantError, providerUnusableReason } =
+  providerFailureModule;
 
 const DEFAULT_MAX_AGENT_RETRY_DELAY_MS = 60_000;
 
@@ -241,41 +147,11 @@ const retryAssistantCall: {
     ),
 );
 
-interface ProviderFailure {
-  readonly text: string;
-  readonly status: number | undefined;
-}
-
-const providerFailure = (message: typesModule.AssistantMessage): ProviderFailure | undefined => {
-  if (message.stopReason !== "error") return undefined;
-  const text = message.errorMessage ?? "";
-  const status = message.errorStatus ?? textStatus(text);
-  return text === "" && status === undefined ? undefined : { status, text };
-};
-
-const isUnusable = ({ status, text }: ProviderFailure): boolean =>
-  PROVIDER_ACCOUNT_STATUSES.has(status ?? 0) ||
-  NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(text) ||
-  PROVIDER_ACCOUNT_ERROR_PATTERN.test(text);
-
-const isProviderUnusableError = (message: typesModule.AssistantMessage): boolean => {
-  const failure = providerFailure(message);
-  return failure !== undefined && isUnusable(failure);
-};
-
-const isRetryableAssistantError = (message: typesModule.AssistantMessage): boolean => {
-  const failure = providerFailure(message);
-  if (failure === undefined || isUnusable(failure)) return false;
-  return (
-    RETRYABLE_PROVIDER_STATUSES.has(failure.status ?? 0) ||
-    RETRYABLE_PROVIDER_ERROR_PATTERN.test(failure.text)
-  );
-};
-
 const retry = {
   DEFAULT_MAX_AGENT_RETRY_DELAY_MS,
   isProviderUnusableError,
   isRetryableAssistantError,
+  providerUnusableReason,
   retryAssistantCall,
   retryDelayMs,
 };

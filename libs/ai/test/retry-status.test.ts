@@ -2,9 +2,10 @@ import { describe, expect, it } from "vite-plus/test";
 
 import faux from "../src/providers/faux.ts";
 import errorBody from "../src/utils/error-body.ts";
-import retry from "../src/utils/retry.ts";
+import providerFailure from "../src/utils/provider-failure.ts";
 
-const { isProviderUnusableError, isRetryableAssistantError } = retry;
+const { isProviderUnusableError, isRetryableAssistantError, providerUnusableReason } =
+  providerFailure;
 const { formatProviderError, normalizeProviderError } = errorBody;
 const { fauxAssistantMessage } = faux;
 
@@ -132,5 +133,38 @@ describe("a number in the error text that is not its status", () => {
     "max_tokens: 502",
   ])("does not retry %s", (errorMessage) => {
     expect(isRetryableAssistantError(failed(errorMessage))).toBe(false);
+  });
+
+  it.each([
+    "error: 402 tokens requested exceeds limit",
+    "failed: 403 files could not be read",
+    "Error: 500 tokens is over max_tokens",
+    "500 is not a valid value for max_tokens",
+    "model returned 500 tokens",
+  ])("reads no status from %s, where a word follows the number", (errorMessage) => {
+    expect(providerUnusableReason(failed(errorMessage))).toBeUndefined();
+    expect(isRetryableAssistantError(failed(errorMessage))).toBe(false);
+  });
+});
+
+describe("why a provider is unusable", () => {
+  it.each([
+    [402, "quota"],
+    [401, "auth"],
+    [403, "auth"],
+  ] as const)("names %i on the message as %s", (status, reason) => {
+    expect(providerUnusableReason(failed("no access", status))).toBe(reason);
+  });
+
+  it.each([
+    ['402: {"message":"This request requires more credits","code":402}', "quota"],
+    ["Your credit balance is too low to access the API.", "quota"],
+    ["insufficient_quota", "quota"],
+    ["Monthly usage limit reached", "quota"],
+    ["Request failed with status code 401", "auth"],
+    ["Invalid API key provided", "auth"],
+    ["Proxy error: 403 ", "auth"],
+  ] as const)("names %s as %s", (errorMessage, reason) => {
+    expect(providerUnusableReason(failed(errorMessage))).toBe(reason);
   });
 });

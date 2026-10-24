@@ -138,6 +138,7 @@ const compat = {
   parseStreamingJson: jsonParse.parseStreamingJson,
   parseToolCallArguments: jsonParse.parseToolCallArguments,
   promptUser: helpers.promptUser,
+  providerUnusableReason: retry.providerUnusableReason,
   registerApiProvider: apiProviderRegistryModule.registerApiProvider,
   registerBuiltInApiProviders: builtinApiProviders.registerBuiltInApiProviders,
   registerBuiltInImagesApiProviders: registerBuiltins.registerBuiltInImagesApiProviders,

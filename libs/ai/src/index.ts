@@ -88,6 +88,7 @@ const ai = {
   parseStreamingJson: jsonParse.parseStreamingJson,
   parseToolCallArguments: jsonParse.parseToolCallArguments,
   promptUser: helpers.promptUser,
+  providerUnusableReason: retry.providerUnusableReason,
   registerSessionResourceCleanup: sessionResources.registerSessionResourceCleanup,
   renderSystemMessageUpdate: textModule.renderSystemMessageUpdate,
   repairJson: jsonParse.repairJson,

@@ -3,11 +3,11 @@ import { describe, expect, it } from "vite-plus/test";
 
 import anthropicMessages from "../src/api/anthropic-messages.ts";
 import type typesModule from "../src/types.types.ts";
-import retry from "../src/utils/retry.ts";
+import providerFailure from "../src/utils/provider-failure.ts";
 import transcript from "../src/utils/transcript.ts";
 import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
 
-const { isProviderUnusableError } = retry;
+const { isProviderUnusableError } = providerFailure;
 const { resetCodexStateAfterEach, runCodex, stubCodexFetch } = openaiCodexStreamSupport;
 
 const { stream: streamAnthropic } = anthropicMessages;
