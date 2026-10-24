@@ -23,11 +23,7 @@ const LOCAL_EXTENDS_MESSAGE =
 const PROTOTYPE_MESSAGE =
   "setPrototypeOf や __proto__ で prototype を書き換えない。継承は class 宣言の extends だけで決める";
 const SHARED_WRITE_MESSAGE =
-  "グローバルオブジェクトや package から import した値を書き換えない。差し替える値は引数か Layer で渡す";
-const GLOBAL_ESCAPE_MESSAGE =
-  "globalThis などのグローバルオブジェクトや Function・eval を値として渡さない。要るメンバーをその場で読み、その場で呼ぶ";
-const WRITE_API_ESCAPE_MESSAGE =
-  "Object.assign・Object.defineProperty・Reflect.set などを値として渡さない。書き換える先が判定できるよう、その場で呼ぶ";
+  "package から import した値を書き換えない。差し替える値は引数か Layer で渡す";
 const PROTOTYPE_NAMES: ReadonlySet<string> = new Set(["__proto__", "setPrototypeOf"]);
 const SYNC_FS_MESSAGE =
   "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
@@ -132,20 +128,22 @@ const noSyncFs = defineRule({
 type WorkspacePackage = { readonly dir: string; readonly specifiers: readonly string[] };
 
 type ClassExtendsOptions = {
-  readonly builtins?: readonly string[];
-  readonly packages?: readonly WorkspacePackage[];
+  readonly builtins: readonly string[];
+  readonly packages: readonly WorkspacePackage[];
 };
 
 const classExtendsOptions = (context: Context): ClassExtendsOptions => {
-  const [options] = context.options as readonly (ClassExtendsOptions | undefined)[];
-  return options ?? {};
+  const [options] = context.options as unknown as readonly (ClassExtendsOptions | undefined)[];
+  if (options === undefined)
+    throw new TypeError("msa/no-local-class-extends には builtins と packages を渡す");
+  return options;
 };
 
-const packagesOption = (context: Context): readonly WorkspacePackage[] =>
-  classExtendsOptions(context).packages ?? [];
-
-const selfSpecifiersOf = (context: Context): readonly string[] =>
-  packagesOption(context)
+const selfSpecifiersOf = (
+  context: Context,
+  packages: readonly WorkspacePackage[],
+): readonly string[] =>
+  packages
     .filter(({ dir }) => context.filename.startsWith(`${dir}/`))
     .reduce<WorkspacePackage | undefined>(
       (owner, candidate) =>
@@ -153,34 +151,41 @@ const selfSpecifiersOf = (context: Context): readonly string[] =>
       undefined,
     )?.specifiers ?? [];
 
-const packagesSchema = [
-  {
-    additionalProperties: false,
-    properties: {
-      builtins: { items: { type: "string" }, type: "array" },
-      packages: {
-        items: {
-          additionalProperties: false,
-          properties: {
-            dir: { type: "string" },
-            specifiers: { items: { type: "string" }, type: "array" },
+const packagesSchema = {
+  items: [
+    {
+      additionalProperties: false,
+      properties: {
+        builtins: { items: { type: "string" }, type: "array" },
+        packages: {
+          items: {
+            additionalProperties: false,
+            properties: {
+              dir: { type: "string" },
+              specifiers: { items: { type: "string" }, type: "array" },
+            },
+            required: ["dir", "specifiers"],
+            type: "object",
           },
-          required: ["dir", "specifiers"],
-          type: "object",
+          type: "array",
         },
-        type: "array",
       },
+      required: ["builtins", "packages"],
+      type: "object",
     },
-    type: "object",
-  },
-];
+  ],
+  maxItems: 1,
+  minItems: 1,
+  type: "array",
+} as const;
 
 const noLocalClassExtends = defineRule({
   create(context) {
+    const { builtins, packages } = classExtendsOptions(context);
     const walk = {
-      builtins: new Set(classExtendsOptions(context).builtins ?? []),
+      builtins: new Set(builtins),
       context,
-      selfSpecifiers: selfSpecifiersOf(context),
+      selfSpecifiers: selfSpecifiersOf(context, packages),
     };
     const strings = new StaticString(context);
     const reportPrototype = createReporter(context, PROTOTYPE_MESSAGE);
@@ -188,11 +193,10 @@ const noLocalClassExtends = defineRule({
       if (PROTOTYPE_NAMES.has(name ?? "")) reportPrototype(node);
     };
     const checkString = (node: Node): void => checkName(node, strings.fold(node));
-    const shared = sharedWrite.createSharedWrite(walk, {
-      apiEscape: createReporter(context, WRITE_API_ESCAPE_MESSAGE),
-      globalEscape: createReporter(context, GLOBAL_ESCAPE_MESSAGE),
-      write: createReporter(context, SHARED_WRITE_MESSAGE),
-    });
+    const shared = sharedWrite.createSharedWrite(
+      walk,
+      createReporter(context, SHARED_WRITE_MESSAGE),
+    );
     const check = (node: ESTree.Class): void => {
       if (node.superClass !== null && classOrigin.declaredInPackage(walk, node.superClass))
         context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
@@ -202,10 +206,7 @@ const noLocalClassExtends = defineRule({
       BinaryExpression: checkString,
       ClassDeclaration: check,
       ClassExpression: check,
-      Identifier(node) {
-        checkName(node, node.name);
-        shared.Identifier(node);
-      },
+      Identifier: (node) => checkName(node, node.name),
       Literal: checkString,
       TemplateLiteral: checkString,
     };

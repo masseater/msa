@@ -11,7 +11,6 @@ declare namespace classRootTypes {
 
   type Root = {
     readonly base: string | undefined;
-    readonly kind: "builtin" | "import";
     readonly path: readonly string[];
     readonly references: readonly flowTypes.Node[];
   };

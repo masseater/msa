@@ -20,18 +20,6 @@ const TRANSPARENT: ReadonlySet<Node["type"]> = new Set([
   "TSTypeAssertion",
 ]);
 
-const GLOBAL_REACHERS: readonly string[] = [
-  "Function",
-  "eval",
-  "frames",
-  "global",
-  "globalThis",
-  "parent",
-  "self",
-  "top",
-  "window",
-];
-
 const unwrap = (node: Node): Node =>
   TRANSPARENT.has(node.type) ? unwrap((node as { readonly expression: Node }).expression) : node;
 
@@ -82,32 +70,10 @@ const packageImportRoot = (walk: Walk, node: Node): Root | undefined => {
   if (variable === undefined || !isPackageImport(walk, variable.defs)) return undefined;
   return {
     base: variable.defs[0] === undefined ? undefined : importBase(variable.defs[0]),
-    kind: "import",
     path: [],
     references: variable.references.map((reference) => reference.identifier),
   };
 };
-
-const reachesGlobalObject = (walk: Walk): boolean =>
-  GLOBAL_REACHERS.some((name) => scopeLookup.globalReferences(walk.context, name).length > 0);
-
-const isBuiltin = (walk: Walk, name: string): boolean =>
-  walk.context.sourceCode.scopeManager.globalScope?.set.get(name)?.defs.length === 0;
-
-const isTrustedGlobal = (walk: Walk, node: ESTree.IdentifierName): boolean =>
-  walk.context.sourceCode.isGlobalReference(node) &&
-  !GLOBAL_REACHERS.includes(node.name) &&
-  isBuiltin(walk, node.name);
-
-const builtinGlobalRoot = (walk: Walk, node: ESTree.IdentifierName): Root | undefined =>
-  isTrustedGlobal(walk, node) && !reachesGlobalObject(walk)
-    ? {
-        base: undefined,
-        kind: "builtin",
-        path: [],
-        references: scopeLookup.globalReferences(walk.context, node.name),
-      }
-    : undefined;
 
 const staticKey = (node: ESTree.MemberExpression): string | undefined => {
   if (!node.computed) return scopeLookup.staticMemberName(node);
@@ -117,14 +83,9 @@ const staticKey = (node: ESTree.MemberExpression): string | undefined => {
     : undefined;
 };
 
-const importRootOf = (walk: Walk, node: Node): Root | undefined => {
-  const root = rootOf(walk, node);
-  return root?.kind === "import" ? root : undefined;
-};
-
 const memberRoot = (walk: Walk, node: ESTree.MemberExpression): Root | undefined => {
   const key = staticKey(node);
-  const root = key === undefined ? undefined : importRootOf(walk, node.object);
+  const root = key === undefined ? undefined : rootOf(walk, node.object);
   return root === undefined || key === undefined
     ? undefined
     : { ...root, path: [...root.path, key] };
@@ -132,8 +93,7 @@ const memberRoot = (walk: Walk, node: ESTree.MemberExpression): Root | undefined
 
 const ROOTS: Readonly<Partial<Record<Node["type"], (walk: Walk, node: Node) => Root | undefined>>> =
   {
-    Identifier: (walk, node) =>
-      packageImportRoot(walk, node) ?? builtinGlobalRoot(walk, node as ESTree.IdentifierName),
+    Identifier: packageImportRoot,
     MemberExpression: (walk, node) => memberRoot(walk, node as ESTree.MemberExpression),
   };
 

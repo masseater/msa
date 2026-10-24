@@ -111,8 +111,8 @@ const cases: Cases = [
   ["export class Z4 extends Mixin(() => hidden) {}", LOCAL_EXTENDS],
   ["export class Z5 extends Mixin(() => (flag ? Error : TypeError)) {}", LOCAL_EXTENDS],
   ["export class Z6 extends Mixin((B = Base) => B) {}", LOCAL_EXTENDS],
-  ["export class Z7 extends Mixin(async () => Error) {}", LOCAL_EXTENDS],
-  ["export class Z8 extends Mixin(() => { if (flag) return Error; }) {}", undefined],
+  ["export class Z7 extends Mixin(async () => tui.Container) {}", LOCAL_EXTENDS],
+  ["export class Z8 extends Mixin(() => { if (flag) return tui.Container; }) {}", undefined],
   ["export class Z9 extends Mixin(innerOnly) {}", LOCAL_EXTENDS],
   ["export class Y1 extends Mixin(arrowHelper, arrowHelper()) {}", LOCAL_EXTENDS],
   ["export class Y2 extends Mixin(arrowAlias, Mixin(arrowHelper())) {}", LOCAL_EXTENDS],
@@ -181,21 +181,29 @@ const cases: Cases = [
   ['export class N5 extends tui.get("Base") {}', LOCAL_EXTENDS, ['tui.set("Base", Base);']],
   ["export class N6 extends tui.Container {}", LOCAL_EXTENDS, ['tui.register("Container", Base);']],
   ["export class N7 extends tui.Container {}", LOCAL_EXTENDS, ["declared(tui.Container, Base);"]],
-  ["export class N8 extends Error {}", LOCAL_EXTENDS, ["declared(Error, Base);"]],
-  ["export class N9 extends Error {}", LOCAL_EXTENDS, ["const Alias = Error;"]],
+  ["export class N8 extends tui.Container {}", LOCAL_EXTENDS, ["declared(tui, Base);"]],
+  ["export class N9 extends tui.Container {}", LOCAL_EXTENDS, ["const Alias = tui.Container;"]],
   [
     "export class N10 extends tui.Container {}",
     LOCAL_EXTENDS,
     ["Object.setPrototypeOf(tui.Container, Base);"],
   ],
-  ["export class N11 extends Error {}", LOCAL_EXTENDS, ["Object.setPrototypeOf(Error, Base);"]],
-  ["export class N12 extends Error {}", LOCAL_EXTENDS, ["Reflect.setPrototypeOf(Error, Base);"]],
   [
-    "export class N13 extends Error {}",
+    "export class N11 extends tui.Container {}",
+    LOCAL_EXTENDS,
+    ["Object.setPrototypeOf(tui, Base);"],
+  ],
+  [
+    "export class N12 extends tui.Container {}",
+    LOCAL_EXTENDS,
+    ["Reflect.setPrototypeOf(tui.Container, Base);"],
+  ],
+  [
+    "export class N13 extends tui.Container {}",
     LOCAL_EXTENDS,
     [
       "const descriptor = Object.getOwnPropertyDescriptor(Object.prototype, key);",
-      "descriptor?.set?.call(Error, Base);",
+      "descriptor?.set?.call(tui.Container, Base);",
     ],
   ],
   ["Object.setPrototypeOf(Error, Base);", LOCAL_EXTENDS],
@@ -204,73 +212,42 @@ const cases: Cases = [
   ['(Error as unknown as Record<string, unknown>)["__proto__"] = Base;', LOCAL_EXTENDS],
   ['(Error as unknown as Record<string, unknown>)["__pro" + "to__"] = Base;', LOCAL_EXTENDS],
   ["const { setPrototypeOf: reparent } = Object;", LOCAL_EXTENDS],
-  ["export class I extends Error {}", undefined],
-  ["export class I1 extends Error {}", undefined, ["declared(new Error(Error.name));"]],
+  [
+    "export class I1 extends tui.Container {}",
+    undefined,
+    ["declared(new tui.Container(tui.Container.name));"],
+  ],
   ["export class G extends tui.Container {}", undefined],
   ['export class G1 extends tui["Box"] {}', undefined],
   ["export class G2 extends (tui.Container as typeof tui.Container) {}", undefined],
   ["export class S4 extends ChordBase {}", undefined],
   ["export class K1 extends nodeEvents.EventEmitter {}", LOCAL_EXTENDS],
   ["export class K2 extends Intl.Collator {}", LOCAL_EXTENDS],
+  ["export class I extends Error {}", LOCAL_EXTENDS],
+  ["export class I2 extends Map {}", LOCAL_EXTENDS],
+  ["export class I3 extends EventTarget {}", LOCAL_EXTENDS],
+  ["export class I5 extends globalThis.Error {}", LOCAL_EXTENDS],
+  ['export class I6 extends globalThis["Error"] {}', LOCAL_EXTENDS],
+  ["export class I7 extends self.Error {}", LOCAL_EXTENDS],
+  ["export class I8 extends globalThis.Leak {}", LOCAL_EXTENDS],
+  ['export class I9 extends Function("return class {}")() {}', LOCAL_EXTENDS],
+  ['export class I10 extends eval("Base") {}', LOCAL_EXTENDS],
+  ["export class I11 extends Mixin(() => Error) {}", LOCAL_EXTENDS],
+  ["export class I12 extends Mixin(() => { return Map; }) {}", LOCAL_EXTENDS],
+  ["export class I13 extends Mixin(Error) {}", LOCAL_EXTENDS],
   ['export class H extends Data.TaggedError("H")<{}> {}', undefined],
   ['export class H2 extends Context.Service<H2, {}>()("H2") {}', undefined],
-  ["export class H3 extends Mixin(() => Error) {}", undefined],
+  ["export class H3 extends Mixin(() => tui.Container) {}", undefined],
   ["export class H4 extends Mixin(() => { return tui.Container; }) {}", undefined],
-  ['export class H5 extends Mixin(Error, 1, `tag`, () => Data.TaggedError("X")) {}', undefined],
+  ['export class H5 extends Mixin(tui.Box, 1, `tag`, () => Data.TaggedError("X")) {}', undefined],
   ['export class H6 extends DataNs.TaggedError("H6") {}', undefined],
 ];
 
-const globalsCases: Cases = [
-  ["export class L1 extends globalThis.Leak {}", LOCAL_EXTENDS],
-  ["export class L2 extends Leak {}", LOCAL_EXTENDS],
-  ["export class L3 extends globalThis.Error {}", LOCAL_EXTENDS],
-  ["export class L4 extends Error {}", LOCAL_EXTENDS],
-  ["export class L5 extends globalAlias.Error {}", LOCAL_EXTENDS],
-  ['export class L6 extends Function("return this")().Error {}', LOCAL_EXTENDS],
-  ['export class L7 extends Function("return class {}")() {}', LOCAL_EXTENDS],
-  ['export class L8 extends eval("Base") {}', LOCAL_EXTENDS],
-  ["export class L9 extends window.Error {}", LOCAL_EXTENDS],
-  ["export class L10 extends self.Error {}", LOCAL_EXTENDS],
-  ["export class L11 extends globalThis.globalThis.Error {}", LOCAL_EXTENDS],
-  ["export class L12 extends globalThis.Missing {}", LOCAL_EXTENDS],
-  ['export class L13 extends globalThis["Error"] {}', LOCAL_EXTENDS],
-  ["export class L14 extends self.Leak {}", LOCAL_EXTENDS],
-  ["export class L15 extends globalThis.SyntaxError {}", LOCAL_EXTENDS],
-];
-
-const reachedGlobalCases: Cases = [["export class M1 extends Error {}", LOCAL_EXTENDS]];
-
-const builtinCases: Cases = [
-  ["export class B1 extends SyntaxError {}", LOCAL_EXTENDS],
-  ["export class B2 extends Error {}", undefined],
-];
-
-const probes = [
-  ...cases.map(([statement, expected, setup = []], index) => ({
-    cases: [[statement, expected]] as Cases,
-    header: [...HEADER, ...setup],
-    kind: `class-extends-${index}`,
-  })),
-  {
-    cases: globalsCases,
-    header: [
-      "class Base {}",
-      "Object.assign(globalThis, { Leak: Base });",
-      "const globalAlias = globalThis;",
-    ],
-    kind: "class-extends-globals",
-  },
-  {
-    cases: reachedGlobalCases,
-    header: ["class Base {}", 'Function("return this")().Error = Base;'],
-    kind: "class-extends-function",
-  },
-  {
-    cases: builtinCases,
-    header: ["class Base {}", "SyntaxError = Base as never;"],
-    kind: "class-extends-builtin",
-  },
-].map((probe) => Object.assign(probe, { path: probePath("apps/coding-agent/src", probe.kind) }));
+const probes = cases.map(([statement, expected, setup = []], index) => ({
+  cases: [[statement, expected]] as Cases,
+  header: [...HEADER, ...setup],
+  path: probePath("apps/coding-agent/src", `class-extends-${index}`),
+}));
 
 const sourceOf = (header: readonly string[], probeCases: Cases): string =>
   [...header, ...probeCases.map(([statement]) => statement)].join("\n");
