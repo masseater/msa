@@ -10,6 +10,8 @@ const { awaited, dirnameOf, joinPath, makeTempDir, readDirectory, readTextFile, 
 
 const sourceDir = dirnameOf(fileURLToPath(import.meta.url));
 
+const RPC_MODEL = { id: "claude-sonnet-4-5", provider: "anthropic-api" } as const;
+
 const readSessionEntries = (sessionDir: string): Effect.Effect<any[]> =>
   Effect.gen(function* () {
     const sessionsPath = joinPath(sessionDir, "sessions");
@@ -38,8 +40,8 @@ const withClient = <A, E>(
       cliPath: joinPath(sourceDir, "..", "dist", "cli.js"),
       cwd: joinPath(sourceDir, ".."),
       env: { MSA_CODING_AGENT_DIR: sessionDir },
-      model: "claude-sonnet-4-5",
-      provider: "anthropic-api",
+      model: RPC_MODEL.id,
+      provider: RPC_MODEL.provider,
     });
     try {
       yield* awaited(client.start());
@@ -51,6 +53,7 @@ const withClient = <A, E>(
   });
 
 const rpcSupport = {
+  RPC_MODEL,
   readSessionEntries,
   withClient,
 };

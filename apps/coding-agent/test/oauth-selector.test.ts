@@ -21,7 +21,7 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
         apiKey: { login: () => runTest(awaited({})), name: "Anthropic API key" },
         oauth: { login: () => runTest(awaited({})), name: "Anthropic (Claude Pro/Max)" },
       },
-      id: "anthropic",
+      id: "anthropic-api",
       name: "Anthropic",
     },
     {
@@ -48,7 +48,7 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
   expect(apiKeyOptions).toMatchObject([
     {
       authType: "api_key",
-      id: "anthropic",
+      id: "anthropic-api",
       method: { name: "Anthropic API key" },
       name: "Anthropic",
     },
@@ -60,7 +60,7 @@ const projectsProviderOwnedAuthOptionsWithoutProvider = () => {
     },
   ]);
   expect(loginFlow.providers.getProviderOptions("oauth")).toMatchObject([
-    { authType: "oauth", id: "anthropic", name: "Anthropic" },
+    { authType: "oauth", id: "anthropic-api", name: "Anthropic" },
   ]);
 };
 
@@ -83,7 +83,7 @@ const showsOauthAuthDistinctlyInTheApi = () => {
     [
       {
         authType: "api_key",
-        id: "anthropic",
+        id: "anthropic-api",
         name: "Anthropic",
         status: { source: "OAuth", type: "oauth" },
       },

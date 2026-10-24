@@ -21,10 +21,10 @@ describe("resolveModelSelection", () => {
   it("prefers an explicit harness model", () => {
     expect(
       resolveModelSelection(
-        { id: "claude-opus-4-6", provider: "anthropic" },
+        { id: "claude-opus-4-6", provider: "anthropic-api" },
         { MSA_MODEL: "gpt-5.6-sol", MSA_PROVIDER: "openai-codex" },
       ),
-    ).toEqual({ id: "claude-opus-4-6", provider: "anthropic" });
+    ).toEqual({ id: "claude-opus-4-6", provider: "anthropic-api" });
   });
 
   it("uses trimmed environment defaults", () => {
