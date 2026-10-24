@@ -7,32 +7,7 @@ import pullRequestSupport from "./pull-request-support.ts";
 
 const { dirnameOf } = testing;
 const { taskStatus, waitFor } = orchestratorHarness.harness;
-const { advanceMain, exists, openedTask, withRemote } = pullRequestSupport;
-
-type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
-
-function reviewed(remote: Remote, options: Parameters<typeof openedTask>[1] = {}) {
-  return Effect.gen(function* () {
-    const run = yield* openedTask(remote, options);
-    const head = yield* remote.github.head(run.branch);
-    remote.github.ci.set(head, "success");
-    const worktree = run.workers[0]!.cwd;
-    run.workers[0]!.complete("CI is green");
-    yield* waitFor(() => run.workers.length === 2);
-    return { ...run, head, worktree };
-  });
-}
-
-function cleanedUp(remote: Remote, worktree: string, branch: string) {
-  return Effect.gen(function* () {
-    const { repository } = remote;
-    return {
-      local: yield* exists(`git rev-parse --verify --quiet refs/heads/${branch}`, repository),
-      remote: yield* exists(`git ls-remote --exit-code --heads origin ${branch}`, repository),
-      worktree: yield* exists(`test -d ${worktree}`, repository),
-    };
-  });
-}
+const { advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
 
 const completesWhenAFailedMergeLanded = () =>
   Effect.runPromise(

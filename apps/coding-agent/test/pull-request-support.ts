@@ -10,7 +10,7 @@ import worktreeSupport from "./worktree-support.ts";
 const { joinPath, makeTempDir, removePath } = testing;
 const { GIT, runCommand, sh, shortId } = worktreeSupport;
 const { create } = orchestratorSupport;
-const { setup } = orchestratorHarness.harness;
+const { setup, waitFor } = orchestratorHarness.harness;
 
 interface Remote {
   repository: string;
@@ -82,12 +82,37 @@ function openedTask(remote: Remote, options: orchestratorHarnessTypes.HarnessOpt
   });
 }
 
+function reviewed(remote: Remote, options: orchestratorHarnessTypes.HarnessOptions = {}) {
+  return Effect.gen(function* () {
+    const run = yield* openedTask(remote, options);
+    const head = yield* remote.github.head(run.branch);
+    remote.github.ci.set(head, "success");
+    const worktree = run.workers[0]!.cwd;
+    run.workers[0]!.complete("CI is green");
+    yield* waitFor(() => run.workers.length === 2);
+    return { ...run, head, worktree };
+  });
+}
+
+function cleanedUp(remote: Remote, worktree: string, branch: string) {
+  return Effect.gen(function* () {
+    const { repository } = remote;
+    return {
+      local: yield* exists(`git rev-parse --verify --quiet refs/heads/${branch}`, repository),
+      remote: yield* exists(`git ls-remote --exit-code --heads origin ${branch}`, repository),
+      worktree: yield* exists(`test -d ${worktree}`, repository),
+    };
+  });
+}
+
 const pullRequestSupport = {
   advanceMain,
+  cleanedUp,
   commitAndPush,
   exists,
   openedTask,
   rebaseAndPush,
+  reviewed,
   withRemote,
 };
 

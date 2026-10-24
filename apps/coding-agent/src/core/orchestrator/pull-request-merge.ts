@@ -42,6 +42,29 @@ interface Ready {
   verified: Verified;
 }
 
+type Attempt<A> = Result.Result<A, runtimeTypes.OrchestratorError>;
+
+function unmerged(
+  number: number,
+  verified: Verified,
+  merging: Attempt<void>,
+  after: Attempt<{ state: string }>,
+): MergeOutcome {
+  if (Result.isSuccess(merging) && Result.isFailure(after)) {
+    return {
+      kind: "stopped",
+      line: `gh pr merge reported that PR #${number} was squash-merged at head ${short(verified.sha)}, but the harness could not read it back to confirm, so the task is stopped, not completed: ${after.failure.message} Rerun the task once gh can read the pull request; it completes if #${number} reads back as merged at that head.`,
+    };
+  }
+  const why = Result.isFailure(merging)
+    ? merging.failure.message
+    : `#${number} is still ${Result.isSuccess(after) ? after.success.state.toLowerCase() : "unread"}`;
+  return {
+    kind: "stopped",
+    line: `The review passed, but the harness could not merge PR #${number}, so the task is stopped, not completed: ${why}`,
+  };
+}
+
 function squash(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
@@ -56,10 +79,9 @@ function squash(
         Effect.result(pullRequests.view(runtime, owner.cwd, record.number)),
       ]),
     );
-    const landed = Result.isSuccess(after)
-      ? after.success.state.toUpperCase() === "MERGED"
-      : Result.isSuccess(merging);
-    if (!landed) store.markHarnessMerge(runtime.database, task.id, null);
+    if (Result.isFailure(merging) && Result.isFailure(after)) {
+      store.markHarnessMerge(runtime.database, task.id, null);
+    }
     if (Result.isSuccess(after)) {
       const now = yield* nowMillis;
       const saved = pullRequests.save(runtime, task.id, after.success, verified, now);
@@ -81,15 +103,7 @@ function squash(
         );
       }
     }
-    const why = Result.isFailure(merging)
-      ? merging.failure.message
-      : Result.isFailure(after)
-        ? after.failure.message
-        : `#${record.number} is still ${after.success.state.toLowerCase()}`;
-    return {
-      kind: "stopped",
-      line: `The review passed, but the harness could not merge PR #${record.number}, so the task is stopped, not completed: ${why}`,
-    };
+    return unmerged(record.number, verified, merging, after);
   });
 }
 

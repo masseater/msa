@@ -71,7 +71,7 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
          verified_title = excluded.verified_title, verified_body = excluded.verified_body,
          checked_at = excluded.checked_at,
          harness_merge_sha = CASE WHEN task_pull_requests.number = excluded.number
-           THEN task_pull_requests.harness_merge_sha END`,
+           AND excluded.state = 'MERGED' THEN task_pull_requests.harness_merge_sha END`,
     )
     .run(
       pullRequest.taskId,
