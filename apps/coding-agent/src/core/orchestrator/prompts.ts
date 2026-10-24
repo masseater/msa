@@ -5,6 +5,13 @@ const REPORT_LIMIT = 6000;
 const STYLE_CRITERIA =
   "Judge the work against every rule in the <development_style> section of your system prompt as well as against the goal. Work that breaks one of those rules is not acceptable; name the rule and where it is broken.";
 
+function verdictCriteria(goal: string): string[] {
+  return [
+    `The work is not acceptable while any finding within ${goal} remains, whatever its severity. Do not pass the work with such a finding by calling it minor, saying it need not block the merge, or leaving it for a separate issue: it is fixed in the same pull request and reviewed again.`,
+    `Report under separate headings: the findings within ${goal}, the problems outside it that could become separate issues, and what you checked. Problems outside ${goal} do not make the work unacceptable. Say clearly whether the work is acceptable.`,
+  ];
+}
+
 function truncateReport(text: string): string {
   return text.length <= REPORT_LIMIT ? text : `${text.slice(0, REPORT_LIMIT)}\n[truncated]`;
 }
@@ -129,8 +136,7 @@ function taskReviewerPrompt(
     "You are reviewing work another thread just did. You did not write it.",
     "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
     STYLE_CRITERIA,
-    "The work is not acceptable while any finding within the task's goal remains, whatever its severity. Do not pass the work with a finding within the goal by calling it minor, saying it need not block the merge, or leaving it for a separate issue: it is fixed in the same pull request and reviewed again.",
-    "Report under separate headings: the findings within the task's goal, the problems outside the goal that could become separate issues, and what you checked. Problems outside the goal do not make the work unacceptable. Say clearly whether the work is acceptable.",
+    ...verdictCriteria("the task's goal"),
     "",
     work,
     notesBlock(notes),
@@ -156,7 +162,8 @@ function roundReviewPrompt(
     `You are the closing reviewer of round "${round}" of an orchestrated project. Every task of the round has finished, and nothing of the round runs while you work.`,
     "Step back and review the work as a whole, not task by task: check the results against each other and against the original intent, read the code they changed, and find gaps, conflicts, duplicated work, and wrong assumptions.",
     STYLE_CRITERIA,
-    "Then redesign: say what should change in the overall approach and lay out the remaining work as tasks with their dependencies, so the orchestrator can start the next round. If nothing is left, say so.",
+    ...verdictCriteria("the goals of the round's tasks"),
+    "Then redesign: say what should change in the overall approach and lay out the remaining work as tasks with their dependencies, so the orchestrator can start the next round. A finding within a task's goal becomes work on that task's pull request, not a new issue. If nothing is left, say so.",
     "",
     "<round-tasks>",
     reports,
