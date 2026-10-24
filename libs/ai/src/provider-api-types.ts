@@ -11,6 +11,10 @@ declare namespace providerApiTypesModule {
     temperature?: number;
   }
 
+  interface ClassifierPreparation {
+    readonly fetched: boolean;
+  }
+
   interface ImagesOptions extends typesModule.ProviderRequestOptions<
     modelTypesModule.ImageModel<typesModule.ImageApi>
   > {
@@ -61,6 +65,9 @@ declare namespace providerApiTypesModule {
       context: mediaTypesModule.ClassifierContext,
       options?: ClassifierOptions,
     ): Promise<mediaTypesModule.ClassifierResult>;
+    prepare?(
+      model: modelTypesModule.ClassifierModel<typesModule.ClassifierApi>,
+    ): Promise<ClassifierPreparation>;
   }
 
   type StreamFunction<

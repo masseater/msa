@@ -103,7 +103,7 @@ function isRecord(value: unknown): value is SettingsRecord {
 }
 
 function rewriteSections(record: SettingsRecord, rewrite: Rewrite, changes: Change[]): void {
-  const { compaction, goal, modelPolicy, orchestrator } = record;
+  const { compaction, decision, goal, modelPolicy, orchestrator } = record;
   if (isRecord(compaction)) {
     rewriteRecordKeys(
       compaction,
@@ -119,6 +119,9 @@ function rewriteSections(record: SettingsRecord, rewrite: Rewrite, changes: Chan
   }
   if (isRecord(goal)) {
     rewriteString(goal, "evaluatorModel", rewrite, changes, "goal.evaluatorModel");
+  }
+  if (isRecord(decision)) {
+    rewriteString(decision, "model", rewrite, changes, "decision.model");
   }
   if (isRecord(orchestrator)) {
     rewriteString(orchestrator, "workerModel", rewrite, changes, "orchestrator.workerModel");

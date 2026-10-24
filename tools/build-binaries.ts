@@ -155,6 +155,7 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
         "--compile",
         "--no-compile-autoload-bunfig",
         "--no-compile-autoload-dotenv",
+        "--external=node-llama-cpp",
         `--target=${platform.bunTarget}`,
         "./dist/bun/cli.js",
         "./src/utils/image-resize-worker.ts",

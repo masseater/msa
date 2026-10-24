@@ -179,8 +179,27 @@ const leavesSettingsThatNameOtherModelsAlone = () => {
   });
 };
 
+const rewritesTheDecisionModel = () => {
+  const settings = {
+    decision: { model: "anthropic-api/claude-sonnet-4-5", thresholds: { "task.open": 0.7 } },
+  } as settingsSchemaTypes.Settings;
+
+  const changes = rewriteModelReferencesInSettings(
+    settings,
+    createUpgradeReplacements(upgradePair().candidates),
+  );
+
+  expect(settings.decision).toEqual({
+    model: "anthropic-api/claude-sonnet-5-5",
+    thresholds: { "task.open": 0.7 },
+  });
+  expect(changes.map((change) => change.setting)).toEqual(["decision.model"]);
+};
+
 describe("rewriteModelReferencesInSettings", () => {
   it("replaces every reference that names the old model", replacesEveryReferenceThatNamesTheOld);
+
+  it("rewrites the decision model", rewritesTheDecisionModel);
 
   it("leaves settings that name other models alone", leavesSettingsThatNameOtherModelsAlone);
 });

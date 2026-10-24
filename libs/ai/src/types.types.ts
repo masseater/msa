@@ -110,6 +110,7 @@ declare namespace typesModule {
   type ClassifierFunction<TOptions extends ClassifierOptions = ClassifierOptions> =
     providerApiTypesModule.ClassifierFunction<TOptions>;
   type ClassifierOptions = providerApiTypesModule.ClassifierOptions;
+  type ClassifierPreparation = providerApiTypesModule.ClassifierPreparation;
   type ImagesFunction<TOptions extends ImagesOptions = ImagesOptions> =
     providerApiTypesModule.ImagesFunction<TOptions>;
   type ImagesOptions = providerApiTypesModule.ImagesOptions;

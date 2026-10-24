@@ -86,6 +86,10 @@ declare namespace providerTypesModule {
       context: typesModuleModule.ClassifierContext,
       options?: typesModuleModule.ClassifierOptions,
     ): Promise<typesModuleModule.ClassifierResult>;
+
+    prepareClassifier?(
+      model: typesModuleModule.ClassifierModel<typesModuleModule.ClassifierApi>,
+    ): Promise<typesModuleModule.ClassifierPreparation>;
   }
 }
 

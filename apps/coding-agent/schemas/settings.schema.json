@@ -122,6 +122,26 @@
         }
       }
     },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "model": {
+          "type": "string",
+          "description": "Classifier model that tools ask for decisions, as \"provider/id\". Default: local/liquid-d1-3b, run in process and downloaded on first use."
+        },
+        "thresholds": {
+          "type": "object",
+          "patternProperties": {
+            "^.*$": {
+              "type": "number",
+              "maximum": 1,
+              "minimum": 0
+            }
+          },
+          "description": "Probability a decision must reach, keyed by \"<decision>.<question>\". Unset keys use the tool's own threshold."
+        }
+      }
+    },
     "defaultModel": {
       "type": "string"
     },

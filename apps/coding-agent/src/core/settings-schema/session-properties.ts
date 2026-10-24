@@ -19,6 +19,22 @@ const sessionProperties = {
   branchSummary: Type.Optional(BranchSummarySettingsSchema),
   codemode: Type.Optional(CodemodeSettingsSchema),
   compaction: Type.Optional(CompactionSettingsSchema),
+  decision: Type.Optional(
+    Type.Object({
+      model: Type.Optional(
+        Type.String({
+          description:
+            'Classifier model that tools ask for decisions, as "provider/id". Default: local/liquid-d1-3b, run in process and downloaded on first use.',
+        }),
+      ),
+      thresholds: Type.Optional(
+        Type.Record(Type.String(), Type.Number({ maximum: 1, minimum: 0 }), {
+          description:
+            'Probability a decision must reach, keyed by "<decision>.<question>". Unset keys use the tool\'s own threshold.',
+        }),
+      ),
+    }),
+  ),
   defaultProjectTrust: Type.Optional(
     Type.Union([Type.Literal("ask"), Type.Literal("always"), Type.Literal("never")], {
       default: SETTINGS_DEFAULTS.defaultProjectTrust,

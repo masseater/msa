@@ -157,6 +157,7 @@ declare namespace aiTypes {
   type ClassifierFunction<TOptions extends ClassifierOptions = ClassifierOptions> =
     aiModelsKitTypes.ClassifierFunction<TOptions>;
   type ClassifierOptions = aiModelsKitTypes.ClassifierOptions;
+  type ClassifierPreparation = aiModelsKitTypes.ClassifierPreparation;
   type ImagesFunction<TOptions extends ImagesOptions = ImagesOptions> =
     aiModelsKitTypes.ImagesFunction<TOptions>;
   type ImagesOptions = aiModelsKitTypes.ImagesOptions;

@@ -70,6 +70,13 @@ const attachClassifiers = (composed: ComposedProvider, provider: aiTypes.Provide
       ),
     );
   };
+  const prepareClassifier = composed.base?.prepareClassifier;
+  provider.prepareClassifier = (model) => {
+    const implementation = extensionClassifiers?.[model.api];
+    if (implementation !== undefined)
+      return implementation.prepare?.(model) ?? Promise.resolve({ fetched: false });
+    return prepareClassifier?.(model) ?? Promise.resolve({ fetched: false });
+  };
 };
 
 const streamThrough = (

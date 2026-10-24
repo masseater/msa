@@ -41,7 +41,7 @@ const modelUpgradeReadSchema = Type.Object({
 const modelUpgradeToolSystemPromptContribution = {
   guidelines: [
     "Use model_upgrade with `list` before naming a model in a recommendation: a newer version of the same family may already exist",
-    'Apply with `action: "apply"` only after reading the changes `list` reports; it rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, orchestrator, and compaction references in settings',
+    'Apply with `action: "apply"` only after reading the changes `list` reports; it rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, decision, orchestrator, and compaction references in settings',
   ],
   snippet: "Find and apply catalog models a newer model replaces",
 } as const;
@@ -137,7 +137,7 @@ function createModelUpgradeToolDefinition(
     Record<string, unknown>
   > = {
     description:
-      "Find catalog models that a newer model of the same family and variant replaces, and apply them to settings. A higher version or a later dated variant is confident; a different variant is only a candidate. `list` reports the settings that would change without writing; `apply` rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, orchestrator, and compaction references in agent-directory and project settings. Session transcripts keep their recorded model id.",
+      "Find catalog models that a newer model of the same family and variant replaces, and apply them to settings. A higher version or a later dated variant is confident; a different variant is only a candidate. `list` reports the settings that would change without writing; `apply` rewrites defaultModel, enabledModels, modelThinkingLevels, modelPolicy, goal, decision, orchestrator, and compaction references in agent-directory and project settings. Session transcripts keep their recorded model id.",
     execute: (_toolCallId, params) => Effect.runPromise(runModelUpgrade(target, params)),
     label: "model upgrade",
     name: "model_upgrade",
