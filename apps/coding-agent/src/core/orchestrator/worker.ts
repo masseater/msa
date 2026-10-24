@@ -91,6 +91,8 @@ declare namespace workerTypes {
 
     ciAppearMs?: number | undefined;
 
+    runPollMs?: number | undefined;
+
     telemetry: telemetryTypes.TelemetryContext;
   }
 }

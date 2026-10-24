@@ -11,9 +11,9 @@ const { advanceMain, exists, openedTask, withRemote } = pullRequestSupport;
 
 type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
 
-function reviewed(remote: Remote) {
+function reviewed(remote: Remote, options: Parameters<typeof openedTask>[1] = {}) {
   return Effect.gen(function* () {
-    const run = yield* openedTask(remote);
+    const run = yield* openedTask(remote, options);
     const head = yield* remote.github.head(run.branch);
     remote.github.ci.set(head, "success");
     const worktree = run.workers[0]!.cwd;
@@ -136,4 +136,40 @@ const completesWhenTheRunEndsMidMerge = () =>
 it(
   "completes the task and cleans up when its run is stopped while gh pr merge is in flight and the merge lands",
   completesWhenTheRunEndsMidMerge,
+);
+
+const completesWhenTheRunEndsRightAfterTheMerge = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { orchestrator, workers, branch, number, taskId, worktree } = yield* reviewed(
+          remote,
+          { runPollMs: 60_000 },
+        );
+        let stopping: Promise<unknown> | undefined;
+        const unsubscribe = orchestrator.onChange(() => {
+          const task = orchestrator.snapshot.tasks.find((candidate) => candidate.id === taskId);
+          if (stopping === undefined && task?.pullRequest?.state === "MERGED") {
+            stopping = orchestrator.stop(taskId);
+          }
+        });
+        workers[1]!.complete("acceptable");
+        yield* waitFor(() => stopping !== undefined);
+        yield* Effect.promise(() => stopping!);
+        unsubscribe();
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+        expect(github.merged).toMatchObject([{ number }]);
+        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
+          local: false,
+          remote: false,
+          worktree: false,
+        });
+      }),
+    ),
+  );
+
+it(
+  "completes the task and cleans up when its run is stopped right after GitHub reports the merge, before the harness settles it",
+  completesWhenTheRunEndsRightAfterTheMerge,
 );

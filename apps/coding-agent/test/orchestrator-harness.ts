@@ -66,6 +66,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     runGh:
       options.runGh ??
       (() => Promise.resolve({ code: 1, stderr: "this test has no GitHub", stdout: "" })),
+    runPollMs: options.runPollMs,
     telemetry,
     version: "0.0.0-test",
   });

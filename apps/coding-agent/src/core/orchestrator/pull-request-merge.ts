@@ -1,22 +1,20 @@
 import { Effect, Result } from "effect";
 
+import pullRequestFinish from "./pull-request-finish.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
-import schedule from "./schedule.ts";
 import storeModule from "./store.ts";
 import threadRun from "./thread-run.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
-import worktreeModule from "./worktree.ts";
 
 const { pullRequests } = pullRequestsModule;
 const { problemsOf, short } = pullRequestProblems;
-const { worktrees } = worktreeModule;
+const { finish } = pullRequestFinish;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
-const { scheduling } = schedule;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -34,19 +32,6 @@ function sendBack(problems: readonly string[], number: number | null): MergeOutc
       "</merge-blocked>",
     ].join("\n"),
   };
-}
-
-function finish(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.Task,
-  record: PullRequest,
-  merged: string,
-): Effect.Effect<MergeOutcome> {
-  return Effect.gen(function* () {
-    const removed = yield* worktrees.cleanUp(runtime, task, record.branch);
-    const cleaned = removed.length === 0 ? "" : ` Removed ${removed.join(", ")}.`;
-    return { kind: "merged", line: `${merged}${cleaned}` };
-  });
 }
 
 interface Ready {
@@ -150,7 +135,7 @@ interface Read {
   verified: Verified | null;
 }
 
-function read(
+function readPull(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   owner: Ready["owner"],
@@ -189,7 +174,7 @@ function afterReview(
     const { pollMs, waitMs } = pullRequests.ciTiming(runtime);
     const since = yield* nowMillis;
     for (;;) {
-      const got = yield* read(runtime, task, owner);
+      const got = yield* readPull(runtime, task, owner);
       if ("kind" in got) return got;
       const { pull, record, verified } = got;
       if (record.state === "MERGED") {
@@ -221,66 +206,7 @@ function afterReview(
   });
 }
 
-interface Ended {
-  status: "completed" | "stopped";
-  line: string;
-}
-
-function settleInterrupted(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.Task,
-): Effect.Effect<Ended | undefined> {
-  return Effect.gen(function* () {
-    const recorded = store.pullRequestOf(runtime.database, task.id);
-    const owner = yield* pullRequests.ownerOf(runtime, task);
-    const status = store.getTask(runtime.database, task.id)?.status;
-    if (recorded === undefined || owner === undefined) return undefined;
-    if (status !== "running" && status !== "stopped") return undefined;
-    const found = yield* Effect.result(pullRequests.current(runtime, owner));
-    const pull = Result.isSuccess(found) ? found.success : undefined;
-    const now = yield* nowMillis;
-    if (pull?.number === recorded.number && pull.state.toUpperCase() === "MERGED") {
-      const record = pullRequests.save(runtime, task.id, pull, recorded.verified, now);
-      const done = yield* finish(
-        runtime,
-        task,
-        record,
-        `PR #${record.number} was merged while the run was ending, so ${task.id} is completed, not ${status}.`,
-      );
-      store.setTaskStatus(runtime.database, task.id, "completed", now);
-      return { line: done.line, status: "completed" };
-    }
-    if (status !== "running") return undefined;
-    store.setTaskStatus(runtime.database, task.id, "stopped", now);
-    const why = Result.isFailure(found)
-      ? found.failure.message
-      : `#${recorded.number} is ${pull?.state.toLowerCase() ?? "gone"}`;
-    return {
-      line: `The run of ${task.id} ended while the harness was merging PR #${recorded.number}, so the task is stopped, not completed: ${why}`,
-      status: "stopped",
-    };
-  });
-}
-
-function afterInterrupt(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.Task,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
-  return Effect.gen(function* () {
-    const ended = yield* settleInterrupted(runtime, task);
-    if (ended === undefined) return;
-    const started = yield* scheduling.scheduleEffect(runtime);
-    runtime.publish();
-    runtime.options.report(`${task.title} (${task.id}) ${ended.status}.\n\n${ended.line}`, {
-      role: "reviewer",
-      started,
-      status: ended.status,
-      taskId: task.id,
-    });
-  });
-}
-
-const pullRequestMerge = { afterInterrupt, afterReview };
+const pullRequestMerge = { afterInterrupt: pullRequestFinish.afterInterrupt, afterReview };
 
 const pullRequestMergeModule = { pullRequestMerge };
 
