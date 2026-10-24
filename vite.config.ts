@@ -1,10 +1,10 @@
-import { presets as effectPresets } from "@effect/tsgo/oxlint-presets";
 import { defineConfig } from "vite-plus";
 
 import lintConfig from "./lint.config.ts";
 import vitestShared from "./vitest.shared.ts";
 
 const {
+  adoptedEffectRules,
   builtinModuleBases,
   effectReplaceableBuiltins,
   fsSyncFunctions,
@@ -23,12 +23,6 @@ type Rules = Readonly<Record<string, "error">>;
 
 const asErrors = (names: readonly string[]): Rules =>
   Object.fromEntries(names.map((name) => [name, "error"] as const));
-
-const effectRuleNames = Object.values(effectPresets).flatMap((preset) =>
-  Object.keys(preset.rules ?? {}),
-);
-
-const effectRules = asErrors(effectRuleNames);
 
 export default defineConfig({
   fmt: {
@@ -126,7 +120,7 @@ export default defineConfig({
       "promise/always-return": "error",
       "vite-plus/prefer-vite-plus-imports": "error",
       ...asErrors(strictCategoryRules),
-      ...effectRules,
+      ...asErrors(adoptedEffectRules),
     },
   },
   run: {

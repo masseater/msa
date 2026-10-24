@@ -2,6 +2,7 @@ import { builtinModules } from "node:module";
 
 import type { OxlintConfig } from "vite-plus/lint";
 
+import effectRules from "./effect-rules.config.ts";
 import lintedPackages from "./tools/oxlint/workspace-packages.json" with { type: "json" };
 
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
@@ -259,8 +260,12 @@ const workspacePackages = lintedPackages.map(({ dir, specifiers }) => ({
   specifiers,
 }));
 
+const { adoptedEffectRules, declinedEffectRules } = effectRules;
+
 const lintConfig = {
+  adoptedEffectRules,
   builtinModuleBases,
+  declinedEffectRules,
   effectReplaceableBuiltins,
   fsSyncFunctions,
   generated,

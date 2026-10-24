@@ -107,6 +107,11 @@ release. Add a tool name to select part of the graph. For example, run
 - 同期の fs（`existsSync`・`readFileSync` などの `*Sync`）は `msa/no-sync-fs` で禁じている。Effect の `FileSystem` か platform の非同期 API を使う。起動前など同期でしか書けない処理は、`core/platform/node/` の名前付き関数に閉じる。
 - 規則は `tools/oxlint/` にあり、すり抜けの書き方と一覧が effecttsgo・node の fs とずれていないかを `tools/checks/builtin-lint.test.ts` が確かめる。lint の抑止コメントは書けない（`no-comments` で弾く）。読み込む先が実行時に決まるファイルは、`import()` に `pathToFileURL(...)` の URL を直接渡すか、ネイティブアドオンなら `process.dlopen` で読む（`libs/tui/src/native-addon.ts`）。どちらも組み込みには届かない。
 
+## effect-tsgo の規則
+
+- effect-tsgo の規則は、`effect-rules.config.ts` の `adoptedEffectRules`（error で掛ける）か `declinedEffectRules`（掛けない）のどちらかに名前で置く。preset に載っているだけの規則は掛からない。
+- `@effect/tsgo` を上げて preset に新しい規則が増えると、`tools/checks/effect-rules.test.ts` が落ちる。採るなら違反を直して `adoptedEffectRules` に足し、採らないなら `declinedEffectRules` に足して理由（上流の既定・自動修正の有無・違反の件数）をコミットログに書く。今効いている規則を `declinedEffectRules` に移さない。
+
 ## テスト
 
 - テストは `Effect.gen` と `@msa/testing` で書く。`it` には `runTest(effect)` を渡し、`async` 関数と `await` は使わない。
