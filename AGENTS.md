@@ -45,15 +45,18 @@ release. Add a tool name to select part of the graph. For example, run
 
 - このリポジトリは公開されている。issue・PR 本文・コミットメッセージ・コード・docs・コメントに、次のものを書かない。
   - Claude Code のインスタンス名、サブスクリプションのアカウント名などのアカウント名
+  - 組織名
   - 個人のメールアドレス
+  - キーやトークンの値と、秘密情報の置き場所でのキーの名前
+  - セッションログや会話の本文の引用
   - ローカルの絶対パス、ホームディレクトリ（`~/` など）の下のパス
   - このリポジトリ以外のリポジトリの名前・パス・中身
 - 書きかけたら、書く前に一般的な言い方（「別のインスタンス」「個人のアカウント」「ローカルの設定ディレクトリ」など）に置き換える。公開した履歴は消せないため、投稿の前に確かめる。
 
 ## 作業の完了
 
-- 作業の完了は `vp run verify` が通ることである。
-- ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
+- 作業の完了は、PR が main にマージされた時点である。CI が green でも、マージされていなければ完了ではない。
+- マージの条件と orchestrator の worker の役目は「PR とマージ」の節に書く。
 
 ## このリポジトリの目的
 
@@ -72,6 +75,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## コマンド
 
+- ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
 - squash merge の本文は手で書き直さず、PR の検査を通ったコミットメッセージを使う。
@@ -134,11 +138,13 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## PR とマージ
 
-- orchestrator の reviewer による判定のほかに、PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
+- PR を判定するのは orchestrator の reviewer だけにする。ほかに PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
+- reviewer の指摘のうちタスクのゴールに入るものは、深刻度に関係なく同じ PR で直し、再レビューで合格してからマージする。マージしてから別 issue に分けない。別 issue にしてよいのは、タスクのゴールの外の問題だけ。
 - マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージし、orchestrator の work task の PR は reviewer の合格後に orchestrator が squash merge する。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
 - orchestrator の worker は次のとおりにする。
   - PR を自分でマージしない。`gh pr merge` も auto-merge も使わない。
-  - 完了は、PR を出し、CI が全 green になったのを `pr_watch` で確かめ、PR 番号と head SHA を報告したところまで。
+  - 役目は、PR を出し、CI が全 green になったのを `pr_watch` で確かめ、PR 番号と head SHA を報告するところまで。マージは orchestrator が行う。
+  - reviewer から差し戻された指摘は、同じ枝に足して同じ PR で直す。
   - main の `verify` が赤いときは自分で直さず、直す担当のタスクが main に入るのを待ち、rebase してから進める。
 
 ## 公開先

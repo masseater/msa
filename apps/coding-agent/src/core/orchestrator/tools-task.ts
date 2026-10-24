@@ -69,6 +69,7 @@ const CREATE_TASK_GUIDELINES = [
   "When main's verify is red, create exactly one task that fixes main and make every other work task wait for it with dependsOn. Tell workers not to put main fixes such as dependency updates into their own pull requests.",
   "When a new task must run before tasks already in the DAG, insert it with replan instead of create_task, so the tasks it precedes wait for it.",
   "The scheduler owns assignment and start; do not start threads yourself.",
+  "When a task's reviewer reports findings within the task's goal, send them back to the worker with rerun_task so they are fixed in the same pull request, and merge only after a new review passes. This holds for every finding within the goal, including ones the reviewer calls minor or says need not block the merge. Never merge first and move such findings into a separate issue; only problems outside the task's goal become separate issues or tasks.",
   "When a closing review reports, act on it: create the next round's tasks, or tell the user the work is done.",
 ];
 

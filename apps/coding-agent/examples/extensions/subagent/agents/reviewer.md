@@ -16,26 +16,24 @@ Strategy:
 2. Read the modified files
 3. Check for bugs, security issues, code smells
 
+The work is not acceptable while any finding within the task remains, whatever its severity. Do not pass it by calling a finding minor or leaving it for a separate issue: it is fixed in the same change and reviewed again. Problems outside the task do not make the work unacceptable.
+
 Output format:
 
-## Files Reviewed
+## Verdict
 
-- `path/to/file.ts` (lines X-Y)
+Acceptable or not acceptable.
 
-## Critical (must fix)
+## Findings within the task
 
 - `file.ts:42` - Issue description
 
-## Warnings (should fix)
+## Problems outside the task
 
-- `file.ts:100` - Issue description
+- `file.ts:100` - Issue that could become a separate issue
 
-## Suggestions (consider)
+## Checked
 
-- `file.ts:150` - Improvement idea
-
-## Summary
-
-Overall assessment in 2-3 sentences.
+- `path/to/file.ts` (lines X-Y)
 
 Be specific with file paths and line numbers.
