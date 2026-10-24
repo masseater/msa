@@ -100,7 +100,7 @@ describe("lazy provider module loading", () => {
       `const { default: compat } = await import("${compatEntryUrl}");
 			const model = compat.getModels("anthropic-api").find((candidate) => candidate.api === "anthropic-messages");
 			const context = { messages: [{ role: "user", content: "hi" }] };
-			await compat.streamSimple(model, context).result();`,
+			await compat.streamSimple(model, context, { apiKey: "test-key" }).result();`,
       ["@anthropic-ai/sdk"],
     ),
   );

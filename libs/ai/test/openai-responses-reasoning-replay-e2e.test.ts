@@ -4,8 +4,11 @@ import { describe, expect, it } from "vite-plus/test";
 import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
 import openaiResponsesReasoningReplayE2eSupport from "./openai-responses-reasoning-replay-e2e-support.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { complete, getEnvApiKey } = compat;
 
@@ -15,7 +18,6 @@ const { answerAfterToolResult, askToDouble, doubleNumberTool, textOf } =
   openaiResponsesReasoningReplayE2eSupport;
 
 const openaiKey = getEnvApiKey("openai");
-const anthropicKey = getEnvApiKey("anthropic-api");
 
 const reasoningResponsesModels = modelsWhere(
   "openai",
@@ -86,7 +88,6 @@ const handsOffFromAnthropic = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const history = yield* askToDouble(budgetThinkingAnthropic, {
-        apiKey: anthropicKey,
         thinkingBudgetTokens: 5000,
         thinkingEnabled: true,
       });
@@ -99,7 +100,7 @@ const handsOffFromAnthropic = () =>
     }),
   );
 
-describe.skipIf(!hasEnv("OPENAI_API_KEY") || !hasEnv("ANTHROPIC_API_KEY"))(
+describe.skipIf(!hasEnv("OPENAI_API_KEY") || !hasLiveAuth("anthropic-api"))(
   "OpenAI Responses reasoning replay e2e",
   () => {
     it(

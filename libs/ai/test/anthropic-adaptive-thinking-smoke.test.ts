@@ -4,8 +4,10 @@ import { describe, expect, it } from "vite-plus/test";
 import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import clock from "../src/utils/clock.ts";
-import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { currentTimeMillis } = clock;
 const { streamSimple } = compat;
@@ -22,8 +24,6 @@ const adaptiveModel = () =>
       compatValue(candidate, "supportsMidConvoEffort") !== true &&
       candidate.thinkingLevelMap?.off === undefined,
   );
-
-const { envValue } = env;
 
 interface AnthropicThinkingPayload {
   thinking?: { type: string };
@@ -44,9 +44,7 @@ function makeContext(): typesModule.Context {
   };
 }
 
-describe.skipIf(
-  envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-)("Anthropic adaptive thinking smoke", () => {
+describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic adaptive thinking smoke", () => {
   it(
     "streams an adaptive thinking model with reasoning enabled",
     { retry: 2, timeout: 30000 },

@@ -76,7 +76,7 @@ const main = Effect.gen(function* () {
   yield* awaited(
     root.configure(
       {
-        model: { modelId: "claude-sonnet-4-5", provider: "anthropic" },
+        model: { modelId: "claude-sonnet-4-5", provider: "anthropic-api" },
         thinkingLevel: "high",
         tools: [write, read],
       },

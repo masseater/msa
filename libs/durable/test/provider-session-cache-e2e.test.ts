@@ -10,7 +10,10 @@ import { describe, expect, inject, it } from "vite-plus/test";
 import providerSessionCacheE2eKit from "./provider-session-cache-e2e-kit.ts";
 import type providerSessionCacheE2eTestTypes from "./provider-session-cache-e2e.test.types.ts";
 
-const { openaiCodexResponses, support } = providerSessionCacheE2eKit;
+const { modelChoice, openaiCodexResponses, support } = providerSessionCacheE2eKit;
+const { chooseModel } = modelChoice;
+
+const CODEX_MODEL = { modelId: chooseModel("openai-codex", "Codex").id, provider: "openai-codex" };
 
 const { normalizeContext, uuidv7 } = ai;
 const { builtinModels } = all;
@@ -136,7 +139,7 @@ describe("Durable provider session cache e2e", () => {
           yield* Effect.gen(function* () {
             const root = yield* awaited(
               harness.root(context, {
-                agent: { model: { modelId: "gpt-5.5", provider: "openai-codex" } },
+                agent: { model: CODEX_MODEL },
               }),
             );
             harness.resume();

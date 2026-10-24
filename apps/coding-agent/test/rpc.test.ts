@@ -1,20 +1,22 @@
 import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
 
-import platform from "../src/core/platform/index.ts";
 import rpcSupport from "./rpc-support.ts";
 
-const { readEnv } = platform;
-
-const { readSessionEntries, withClient } = rpcSupport;
+const { hasRpcCredentials, readSessionEntries, RPC_MODEL, withClient } = rpcSupport;
 
 const { awaited, currentTimeMillis, joinPath, pathExists, runTest } = testing;
 
-describe.skipIf(
-  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
-)("RPC mode", () => {
+const { getModels } = compat;
+
+test("starts the RPC client on a model the catalog has", () => {
+  expect(getModels(RPC_MODEL.provider).map((model) => model.id)).toContain(RPC_MODEL.id);
+});
+
+describe.skipIf(!hasRpcCredentials)("RPC mode", () => {
   test(
     "should get state",
     () =>
@@ -24,8 +26,8 @@ describe.skipIf(
             const state = yield* awaited(client.getState());
 
             expect(state.model).toBeDefined();
-            expect(state.model?.provider).toBe("anthropic");
-            expect(state.model?.id).toBe("claude-sonnet-4-5");
+            expect(state.model?.provider).toBe(RPC_MODEL.provider);
+            expect(state.model?.id).toBe(RPC_MODEL.id);
             expect(state.isStreaming).toBe(false);
             expect(state.messageCount).toBe(0);
           }),
@@ -35,9 +37,7 @@ describe.skipIf(
   );
 });
 
-describe.skipIf(
-  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
-)("RPC mode", () => {
+describe.skipIf(!hasRpcCredentials)("RPC mode", () => {
   test(
     "should save messages to session file",
     () =>
@@ -72,9 +72,7 @@ describe.skipIf(
   );
 });
 
-describe.skipIf(
-  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
-)("RPC mode", () => {
+describe.skipIf(!hasRpcCredentials)("RPC mode", () => {
   test(
     "should handle manual compaction",
     () =>
@@ -103,9 +101,7 @@ describe.skipIf(
   );
 });
 
-describe.skipIf(
-  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
-)("RPC mode", () => {
+describe.skipIf(!hasRpcCredentials)("RPC mode", () => {
   test(
     "should execute bash command",
     () =>
@@ -123,9 +119,7 @@ describe.skipIf(
   );
 });
 
-describe.skipIf(
-  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
-)("RPC mode", () => {
+describe.skipIf(!hasRpcCredentials)("RPC mode", () => {
   test(
     "should add bash output to context",
     () =>
@@ -154,9 +148,7 @@ describe.skipIf(
   );
 });
 
-describe.skipIf(
-  readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
-)("RPC mode", () => {
+describe.skipIf(!hasRpcCredentials)("RPC mode", () => {
   test(
     "should include bash output in LLM context",
     () =>

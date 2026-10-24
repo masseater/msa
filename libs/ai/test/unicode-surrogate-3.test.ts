@@ -1,19 +1,18 @@
 import { describe, it } from "vite-plus/test";
 
-import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
 import unicodeSurrogateSupport from "./unicode-surrogate-support.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { chooseModel, usesApi } = modelChoice;
 
 const { testEmojiInToolResults, testRealWorldLinkedInData, testUnpairedHighSurrogate } =
   unicodeSurrogateSupport;
-const { envValue } = env;
 
 describe("AI Providers Unicode Surrogate Pair Tests", () => {
-  describe.skipIf(
-    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-  )("Anthropic Provider Unicode Handling", () => {
+  describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic Provider Unicode Handling", () => {
     const llm = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
     it("should handle emoji in tool results", { retry: 3, timeout: 30000 }, () =>

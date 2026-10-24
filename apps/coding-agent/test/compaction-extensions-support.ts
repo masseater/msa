@@ -1,16 +1,15 @@
 import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
+import { inject } from "vite-plus/test";
 
 import type agentSessionTypes from "../src/core/agent-session.types.ts";
 import type extensionsTypes from "../src/core/extensions/index.types.ts";
-import platform from "../src/core/platform/index.ts";
 import sourceInfoModule from "../src/core/source-info.ts";
 import src from "../src/index.ts";
 import type compactionExtensionsSupportTypes from "./compaction-extensions-support.types.ts";
 import sessionKit from "./session-kit.ts";
 
-const { readEnv } = platform;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 const { createCodingTools } = src;
 
@@ -19,9 +18,7 @@ const { streamSimple } = compat;
 const { createAgentSession } = sessionKit;
 const { makeTempDir, removePath, runTest } = testing;
 
-const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY");
-
-const hasApiKey = API_KEY !== undefined && API_KEY.length > 0;
+const hasLiveAuth = inject("liveAuthAvailable");
 
 const capturedEvents: extensionsTypes.SessionEvent[] = [];
 
@@ -82,7 +79,6 @@ const createSession = Effect.fn("createSession")(function* (
 ) {
   const { session, settingsManager } = yield* createAgentSession({
     agentTools: createCodingTools(process.cwd()),
-    apiKey: API_KEY,
     cwd: tempDir,
     extensions,
     persistSession: true,
@@ -112,13 +108,12 @@ const cleanUp = (): Promise<void> =>
   );
 
 const compactionExtensionsSupport = {
-  API_KEY,
   capturedEvents,
   cleanUp,
   createExtension,
   createSession,
   extensionFrom,
-  hasApiKey,
+  hasLiveAuth,
   prepare,
 };
 

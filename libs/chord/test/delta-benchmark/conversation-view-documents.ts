@@ -22,7 +22,7 @@ const configDocument = (): conversationViewTypes.ConfigDoc => {
     name: `tool_${index}`,
   }));
   return {
-    model: { modelId: "claude-sonnet-provisional", provider: "anthropic" },
+    model: { modelId: "claude-sonnet-provisional", provider: "anthropic-api" },
     revision: 0,
     schema: "pico5.doc.config.provisional.v0",
     sections,

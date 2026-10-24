@@ -3,8 +3,11 @@ import { describe, inject, it } from "vite-plus/test";
 
 import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
 import streamScenarios from "./stream-scenarios.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { hasEnv, hasValue } = env;
 const { chooseModel, usesApi } = modelChoice;
@@ -63,7 +66,7 @@ const targets: Target[] = [
     thinking: { reasoningEffort: "high" },
   },
   {
-    available: hasEnv("ANTHROPIC_API_KEY"),
+    available: hasLiveAuth("anthropic-api"),
     basic: { thinkingEnabled: true },
     label: "Anthropic",
     model: chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages")),

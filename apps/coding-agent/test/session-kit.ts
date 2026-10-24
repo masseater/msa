@@ -125,7 +125,8 @@ const createAgentSession = Effect.fn("createAgentSession")(function* (
 ) {
   const tools: sessionKitTypes.AgentTool[] = options.tools ?? options.agentTools ?? [];
   const agent = new Agent({
-    getApiKey: () => options.apiKey ?? "test-key",
+    getApiKey: () =>
+      options.useTestKey === false ? options.apiKey : (options.apiKey ?? "test-key"),
     initialState: {
       model: getModel("anthropic-api", "claude-sonnet-4-5")!,
       systemPrompt: options.systemPrompt ?? "Test",

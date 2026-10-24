@@ -199,7 +199,7 @@ const doesNotDuplicateEntriesWhenForking = () =>
 
       try {
         const session = SessionManager.create(tempDir, tempDir);
-        const modelChangeId = session.appendModelChange("anthropic", "claude-sonnet-4-5");
+        const modelChangeId = session.appendModelChange("anthropic-api", "claude-sonnet-4-5");
         session.appendMessage(userMsg("first question"));
         session.appendMessage(assistantMsg("first answer"));
 

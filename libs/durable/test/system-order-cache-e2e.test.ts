@@ -20,9 +20,9 @@ const { MemoryStorage } = memory;
 
 const { awaited, context } = support;
 
-const anthropicToken = inject("storedApiKeys")["anthropic"];
+const anthropicToken = inject("storedApiKeys")["anthropic-api"];
 
-const MODEL = { modelId: "claude-sonnet-5-5", provider: "anthropic" } as const;
+const MODEL = { modelId: "claude-sonnet-5-5", provider: "anthropic-api" } as const;
 
 function instructions(nonce: string): string {
   const lines = [

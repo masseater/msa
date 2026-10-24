@@ -97,8 +97,8 @@ const matchesLoginCommandArgumentsByProviderIdStep = () => {
     loginFlow: {
       providers: {
         getProviderOptions: () => [
-          { authType: "oauth", id: "anthropic", name: "Anthropic", subscription: true },
-          { authType: "api_key", id: "anthropic", name: "Anthropic", subscription: true },
+          { authType: "oauth", id: "anthropic-api", name: "Anthropic", subscription: true },
+          { authType: "api_key", id: "anthropic-api", name: "Anthropic", subscription: true },
           { authType: "api_key", id: "openai", name: "OpenAI" },
           { authType: "oauth", id: "openrouter", name: "OpenRouter", subscription: false },
         ],
@@ -133,8 +133,8 @@ const matchesLoginCommandArgumentsByProviderId = Effect.gen(function* () {
   expect(suggestions?.items).toEqual([
     {
       description: "Anthropic · subscription/API key",
-      label: "anthropic",
-      value: "anthropic",
+      label: "anthropic-api",
+      value: "anthropic-api",
     },
   ]);
 

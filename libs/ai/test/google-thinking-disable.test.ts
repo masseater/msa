@@ -5,7 +5,10 @@ import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import clock from "../src/utils/clock.ts";
 import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { currentTimeMillis } = clock;
 const { streamSimple } = compat;
@@ -114,9 +117,7 @@ const expectThinkingDisabledE2E = Effect.fn("expectThinkingDisabledE2E")(functio
   }
 });
 
-describe.skipIf(
-  envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-)("Anthropic thinking disable E2E", () => {
+describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic thinking disable E2E", () => {
   it("disables thinking for budget-based reasoning models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
       expectThinkingDisabledE2E(

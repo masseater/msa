@@ -6,7 +6,7 @@ import type extensionsTypes from "../src/core/extensions/index.types.ts";
 import compactionExtensionsSupport from "./compaction-extensions-support.ts";
 
 const { awaited, runTest } = testing;
-const { capturedEvents, cleanUp, createSession, extensionFrom, hasApiKey, prepare } =
+const { capturedEvents, cleanUp, createSession, extensionFrom, hasLiveAuth, prepare } =
   compactionExtensionsSupport;
 
 const throwingExtension = () =>
@@ -51,7 +51,7 @@ const continuesWithDefaultCompactionOnError = () =>
     }),
   );
 
-describe.skipIf(!hasApiKey)("Compaction extensions", () => {
+describe.skipIf(!hasLiveAuth)("Compaction extensions", () => {
   beforeEach(prepare);
 
   afterEach(cleanUp);
