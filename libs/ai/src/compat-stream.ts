@@ -1,19 +1,20 @@
-import { Function } from "effect";
+import { Effect, Function } from "effect";
 
+import lazy from "./api/lazy.ts";
+import type resolveTypes from "./auth/resolve.types.ts";
+import type authTypes from "./auth/types.ts";
 import compatKit from "./compat-kit.ts";
+import modelsAuthApply from "./models-auth-apply.ts";
+import type modelsTypes from "./models.types.ts";
 import type typesModule from "./types.types.ts";
 import transcriptModule from "./utils/transcript.ts";
 
-const {
-  all,
-  apiProviderRegistry: apiProviderRegistryModule,
-  builtinApiProviders,
-  envApiKeys,
-} = compatKit;
+const { all, apiProviderRegistry: apiProviderRegistryModule, builtinApiProviders } = compatKit;
 const { builtinModels, getBuiltinModel, getBuiltinModels, getBuiltinProviders } = all;
 const { isBuiltinApiProvider } = builtinApiProviders;
-const { getEnvApiKey } = envApiKeys;
+const { lazyStream } = lazy;
 const { getApiProvider } = apiProviderRegistryModule;
+const { authorize } = modelsAuthApply;
 const { normalizeContext } = transcriptModule;
 
 const getModel = getBuiltinModel;
@@ -24,20 +25,32 @@ const getProviders = getBuiltinProviders;
 
 const compatModels = builtinModels();
 
-const AMBIENT_AUTH_MARKER = "<authenticated>";
+const resolveAuth = (
+  providerOrModel: string | typesModule.AnyModel,
+  overrides?: resolveTypes.AuthResolutionOverrides,
+): Promise<authTypes.AuthResult | undefined> =>
+  typeof providerOrModel === "string"
+    ? compatModels.getAuth(providerOrModel, overrides)
+    : compatModels.getAuth(providerOrModel, overrides);
 
-function hasExplicitApiKey(apiKey: string | undefined): apiKey is string {
-  return typeof apiKey === "string" && apiKey.trim().length > 0;
-}
-
-function withEnvApiKey<TOptions extends typesModule.StreamOptions>(
-  model: typesModule.Model<typesModule.Api>,
+function streamWithAuth<TApi extends typesModule.Api, TOptions extends typesModule.StreamOptions>(
+  model: typesModule.Model<TApi>,
   options: TOptions | undefined,
-): TOptions | undefined {
-  if (hasExplicitApiKey(options?.apiKey)) return options;
-  const apiKey = getEnvApiKey(model.provider, options?.env);
-  if (apiKey === undefined || apiKey === "" || apiKey === AMBIENT_AUTH_MARKER) return options;
-  return { ...options, apiKey } as TOptions;
+  start: (
+    model: typesModule.Model<TApi>,
+    options: TOptions | undefined,
+  ) => typesModule.AssistantMessageEventStream,
+): typesModule.AssistantMessageEventStream {
+  if (compatModels.getProvider(model.provider) === undefined) return start(model, options);
+  return lazyStream(model, () =>
+    Effect.runPromise(
+      authorize({
+        model,
+        options,
+        resolve: (overrides) => Effect.promise(() => resolveAuth(model, overrides)),
+      }),
+    ).then(({ requestModel, requestOptions }) => start(requestModel, requestOptions as TOptions)),
+  );
 }
 
 function getBuiltinProviderForModel(model: typesModule.Model<typesModule.Api>) {
@@ -73,20 +86,17 @@ const stream: {
     context: typesModule.Context,
     options?: typesModule.ProviderStreamOptions,
   ): typesModule.AssistantMessageEventStream {
-    const transcript = normalizeContext(context);
-    const builtinProvider = getBuiltinProviderForModel(model);
-    if (builtinProvider !== undefined) {
-      return builtinProvider.stream(
+    if (getBuiltinProviderForModel(model) !== undefined) {
+      return compatModels.stream(
         model,
-        transcript,
-        withEnvApiKey(model, options) as typesModule.ApiStreamOptions<TApi>,
+        context,
+        options as modelsTypes.ModelsApiStreamOptions<TApi>,
       );
     }
     const provider = resolveApiProvider(model.api);
-    return provider.stream(
-      model,
-      transcript,
-      withEnvApiKey(model, options) as typesModule.StreamOptions,
+    const transcript = normalizeContext(context);
+    return streamWithAuth(model, options, (target, resolved) =>
+      provider.stream(target, transcript, resolved as typesModule.StreamOptions),
     );
   },
 );
@@ -133,13 +143,14 @@ const streamSimple: {
     context: typesModule.Context,
     options?: typesModule.SimpleStreamOptions,
   ): typesModule.AssistantMessageEventStream {
-    const transcript = normalizeContext(context);
-    const builtinProvider = getBuiltinProviderForModel(model);
-    if (builtinProvider !== undefined) {
-      return builtinProvider.streamSimple(model, transcript, withEnvApiKey(model, options));
+    if (getBuiltinProviderForModel(model) !== undefined) {
+      return compatModels.streamSimple(model, context, options);
     }
     const provider = resolveApiProvider(model.api);
-    return provider.streamSimple(model, transcript, withEnvApiKey(model, options));
+    const transcript = normalizeContext(context);
+    return streamWithAuth(model, options, (target, resolved) =>
+      provider.streamSimple(target, transcript, resolved),
+    );
   },
 );
 
@@ -169,7 +180,6 @@ const completeSimple: {
 );
 
 const compatStream = {
-  AMBIENT_AUTH_MARKER,
   compatModels,
   complete,
   completeSimple,
@@ -177,11 +187,10 @@ const compatStream = {
   getModel,
   getModels,
   getProviders,
-  hasExplicitApiKey,
   resolveApiProvider,
+  resolveAuth,
   stream,
   streamSimple,
-  withEnvApiKey,
 };
 
 export default compatStream;
