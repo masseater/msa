@@ -28,15 +28,19 @@ const work = (title: string, dependsOn?: string[]): CreateInput => ({
   ...(dependsOn === undefined ? {} : { dependsOn }),
 });
 
-it("accepts a task without dependencies while two tasks are unfinished", () =>
+it("accepts a task without dependencies while two work tasks and the round's closing review are unfinished", () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator } = setup({ maxConcurrent: 1 });
       yield* create(orchestrator, work("a"));
       yield* create(orchestrator, work("b"));
+      const review = (yield* Effect.promise(() => orchestrator.list())).filter(
+        (task) => task.kind === "review" && task.status === "waiting",
+      );
+      expect(review).toHaveLength(1);
+
       const third = yield* create(orchestrator, work("c", []));
       expect(third.dependsOn).toEqual([]);
-      expect((yield* Effect.promise(() => orchestrator.list())).length).toBeGreaterThanOrEqual(3);
     }),
   ));
 
@@ -103,6 +107,41 @@ it("counts only unfinished tasks, so a finished one frees a slot", () =>
       yield* waitFor(() => workers.length === 2);
       workers[1]?.complete("a reviewed");
       yield* waitFor(() => taskStatus(orchestrator, a.id) === "completed");
+
+      const d = yield* create(orchestrator, work("d"));
+      expect(d.dependsOn).toEqual([]);
+    }),
+  ));
+
+it("does not count a stopped task, and counts it again once it is rerun", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator } = setup({ maxConcurrent: 1 });
+      yield* create(orchestrator, work("a"));
+      yield* create(orchestrator, work("b"));
+      const c = yield* create(orchestrator, work("c"));
+      yield* Effect.promise(() => orchestrator.stop(c.id));
+      expect(taskStatus(orchestrator, c.id)).toBe("stopped");
+
+      const d = yield* create(orchestrator, work("d", []));
+      expect(d.dependsOn).toEqual([]);
+      yield* Effect.promise(() => orchestrator.stop(d.id));
+
+      yield* Effect.promise(() => orchestrator.rerun(c.id));
+      expect(taskStatus(orchestrator, c.id)).toBe("running");
+      expect(yield* attempt(orchestrator, work("e"))).toContain(c.id);
+    }),
+  ));
+
+it("does not count a failed task", () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, workers } = setup({ maxConcurrent: 1 });
+      const a = yield* create(orchestrator, work("a"));
+      yield* create(orchestrator, work("b"));
+      yield* create(orchestrator, work("c"));
+      workers[0]?.fail(new Error("worker crashed"));
+      yield* waitFor(() => taskStatus(orchestrator, a.id) === "failed");
 
       const d = yield* create(orchestrator, work("d"));
       expect(d.dependsOn).toEqual([]);
