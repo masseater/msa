@@ -104,6 +104,46 @@ const sendsMaxTokens = (provider: "opencode" | "opencode-go") =>
     }),
   );
 
+const localModel = (
+  provider: string,
+  baseUrl = "http://localhost:11434/v1",
+): typesModule.Model<"openai-completions"> => ({
+  api: "openai-completions",
+  baseUrl,
+  contextWindow: 128000,
+  cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+  id: "gpt-oss:20b",
+  input: ["text"],
+  maxTokens: 16000,
+  name: "gpt-oss:20b",
+  provider,
+  reasoning: true,
+});
+
+const sendsMaxTokensToOllama = (provider: string) =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { payload } = yield* promptModel(localModel(provider), "Hi", {
+        options: { maxTokens: 123 },
+      });
+      expect(payload["max_tokens"]).toBe(123);
+      expect(payload["max_completion_tokens"]).toBeUndefined();
+    }),
+  );
+
+const sendsMaxCompletionTokensToOtherLocalServers = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { payload } = yield* promptModel(
+        localModel("lm-studio", "http://localhost:1234/v1"),
+        "Hi",
+        { options: { maxTokens: 123 } },
+      );
+      expect(payload["max_completion_tokens"]).toBe(123);
+      expect(payload["max_tokens"]).toBeUndefined();
+    }),
+  );
+
 const omitsUnsupportedReasoningEffort = () =>
   Effect.runPromise(
     Effect.forEach(
@@ -134,6 +174,14 @@ describe("openai-completions tool_choice", () => {
   it.for(["opencode", "opencode-go"] as const)(
     "sends max_tokens for %s completions models",
     sendsMaxTokens,
+  );
+  it.for(["ollama", "local"])(
+    "sends max_tokens to Ollama for a %s provider",
+    sendsMaxTokensToOllama,
+  );
+  it(
+    "sends max_completion_tokens to a local server that is not Ollama",
+    sendsMaxCompletionTokensToOtherLocalServers,
   );
   it(
     "omits reasoning effort for OpenCode models without reasoning effort support",

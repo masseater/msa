@@ -29,7 +29,9 @@ function detectCompat(
   const isNonStandard =
     baseUrl.includes("chutes.ai") || provider === "opencode" || baseUrl.includes("opencode.ai");
 
-  const useMaxTokens = baseUrl.includes("chutes.ai");
+  const isOllama = provider === "ollama" || baseUrl.includes(":11434");
+
+  const useMaxTokens = baseUrl.includes("chutes.ai") || isOllama;
 
   const isOpenRouterDeveloperRoleModel =
     isOpenRouter && (model.id.startsWith("anthropic/") || model.id.startsWith("openai/"));
