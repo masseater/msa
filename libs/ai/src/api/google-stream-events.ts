@@ -17,7 +17,7 @@ const { isThinkingPart, retainThoughtSignature } = googleMessages;
 const { encodeJsonSync } = jsonCodec;
 const { mapStopReason } = googleShared;
 const { calculateCost } = modelsModule;
-const { formatProviderError, normalizeProviderError } = errorBody;
+const { formatProviderError, normalizeProviderError, recordErrorStatus } = errorBody;
 
 let toolCallCounter = 0;
 
@@ -214,7 +214,9 @@ function failGoogleStream<T extends googleThinkingTypes.GoogleApiType>({
     if ("index" in block) delete (block as { index?: number }).index;
   }
   output.stopReason = signal?.aborted === true ? "aborted" : "error";
-  output.errorMessage = formatProviderError(normalizeProviderError(error));
+  const failure = normalizeProviderError(error);
+  output.errorMessage = formatProviderError(failure);
+  recordErrorStatus(output, failure);
   events.push({ error: output, reason: output.stopReason, type: "error" });
   events.end();
 }

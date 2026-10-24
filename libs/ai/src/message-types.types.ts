@@ -101,6 +101,7 @@ declare namespace messageTypesModule {
     stopReason: StopReason;
     deferred?: DeferredHandle;
     errorMessage?: string;
+    errorStatus?: number;
     rawStopReason?: string | undefined;
     endTurn?: boolean;
     timestamp: number;

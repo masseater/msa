@@ -54,6 +54,14 @@ function isPlainNonEmptyObject(value: unknown): boolean {
   return Object.keys(value).length > 0;
 }
 
+function recordErrorStatus(
+  output: { errorStatus?: number },
+  norm: errorBodyTypes.NormalizedProviderError,
+): void {
+  if (norm.status === undefined) delete output.errorStatus;
+  else output.errorStatus = norm.status;
+}
+
 const formatProviderError: {
   (prefix?: string): (norm: errorBodyTypes.NormalizedProviderError) => string;
   (norm: errorBodyTypes.NormalizedProviderError, prefix?: string): string;
@@ -92,6 +100,7 @@ const errorBody = {
   MAX_PROVIDER_ERROR_BODY_CHARS,
   formatProviderError,
   normalizeProviderError,
+  recordErrorStatus,
   safeJsonStringify,
   truncateErrorText,
 };

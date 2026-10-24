@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import proxy from "../src/proxy.ts";
 import type proxyTypes from "../src/proxy.types.ts";
 
-const { normalizeContext } = ai;
+const { isProviderUnusableError, isRetryableAssistantError, normalizeContext } = ai;
 
 const { streamProxy } = proxy;
 
@@ -116,23 +116,49 @@ const failsWith = (response: Response) =>
     const { events, result } = yield* streamFromProxy;
     expect(events.map((event) => event.type)).toEqual(["error"]);
     expect(result.stopReason).toBe("error");
-    return result.errorMessage;
+    return result;
   });
 
 const reportsHttpErrors = Effect.gen(function* () {
   expect(
     yield* failsWith(new Response("oops", { status: 500, statusText: "Internal Server Error" })),
-  ).toBe("Proxy error: 500 Internal Server Error");
+  ).toMatchObject({ errorMessage: "Proxy error: 500 Internal Server Error", errorStatus: 500 });
   expect(
     yield* failsWith(
       new Response('{"error":"bad key"}', { status: 401, statusText: "Unauthorized" }),
     ),
-  ).toBe("Proxy error: bad key");
+  ).toMatchObject({ errorMessage: "Proxy error: bad key", errorStatus: 401 });
+});
+
+const classifiesByStatus = Effect.gen(function* () {
+  const gateway = yield* failsWith(new Response("", { status: 524 }));
+  expect(isRetryableAssistantError(gateway)).toBe(true);
+  expect(isProviderUnusableError(gateway)).toBe(false);
+
+  const forbidden = yield* failsWith(new Response('{"error":"no access"}', { status: 403 }));
+  expect(forbidden.errorMessage).toBe("Proxy error: no access");
+  expect(isProviderUnusableError(forbidden)).toBe(true);
+  expect(isRetryableAssistantError(forbidden)).toBe(false);
+
+  const busy = yield* failsWith(new Response('{"error":"slow down"}', { status: 429 }));
+  expect(isRetryableAssistantError(busy)).toBe(true);
+});
+
+const forwardsErrorStatus = Effect.gen(function* () {
+  respondWith(
+    `${sse({ type: "start" })}\n\n${sse({ errorMessage: "upstream says no", errorStatus: 402, reason: "error", type: "error", usage })}\n\n`,
+  );
+  const { result } = yield* streamFromProxy;
+  expect(result).toMatchObject({ errorMessage: "upstream says no", errorStatus: 402 });
+  expect(isProviderUnusableError(result)).toBe(true);
 });
 
 describe("streamProxy", () => {
   it("reports the status line or the error field of a failed response", () =>
     Effect.runPromise(reportsHttpErrors));
+  it("lets retry read the HTTP status of a failed response even when the text drops it", () =>
+    Effect.runPromise(classifiesByStatus));
+  it("forwards the HTTP status of an error event", () => Effect.runPromise(forwardsErrorStatus));
   it("preserves tool-call metadata received only on toolcall_end", () =>
     Effect.runPromise(keepsToolCallMetadata));
   it("processes terminal metadata when the event is not newline-terminated", () =>

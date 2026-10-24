@@ -17,7 +17,7 @@ declare namespace openaiResponsesRunTypes {
     readonly output: typesModule.AssistantMessage;
     readonly streamName: string;
     readonly prepare: () => ResponsesRequest;
-    readonly formatError: (error: unknown) => string;
+    readonly recordError: (output: typesModule.AssistantMessage, error: unknown) => void;
   }
 }
 

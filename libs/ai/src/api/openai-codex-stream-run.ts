@@ -3,7 +3,7 @@ import openaiCodexError from "./openai-codex-error.ts";
 import type openaiCodexStreamRunTypes from "./openai-codex-stream-run.types.ts";
 
 const { requestAbortedError } = openaiCodexError;
-const { formatProviderError, normalizeProviderError } = errorBody;
+const { formatProviderError, normalizeProviderError, recordErrorStatus } = errorBody;
 
 function finishCodexOutput({
   options,
@@ -26,7 +26,9 @@ function failCodexOutput({ output, events, options }: openaiCodexStreamRunTypes.
       delete (block as { customInput?: unknown }).customInput;
     }
     output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-    output.errorMessage = formatProviderError(normalizeProviderError(error));
+    const failure = normalizeProviderError(error);
+    output.errorMessage = formatProviderError(failure);
+    recordErrorStatus(output, failure);
     events.push({ error: output, reason: output.stopReason, type: "error" });
     events.end();
   };

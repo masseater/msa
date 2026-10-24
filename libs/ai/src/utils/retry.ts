@@ -28,19 +28,12 @@ const RETRYABLE_PROVIDER_STATUSES: ReadonlySet<number> = new Set([
   429, 500, 502, 503, 504, 520, 524,
 ]);
 
-const HTTP_STATUS_PATTERNS: readonly RegExp[] = [
-  /^\s*(\d{3})(?=[\s:]|$)/u,
-  /^[^\n(]*\((\d{3})\):/u,
-  /\bstatus(?:\s+code)?\s*[:=]?\s*(\d{3})\b/iu,
-  /"(?:code|status)"\s*:\s*(\d{3})\b/u,
-];
+const HTTP_STATUS_IN_TEXT =
+  /(?:^\s*|\b(?:HTTP(?:\/\d(?:\.\d)?)?|status(?:\s+code)?|error(?:\s+code)?|failed|returned|answered)\s*[:=]?\s*\(?|"(?:code|status)"\s*:\s*)([1-5]\d{2})(?!\d)/iu;
 
-const httpStatus = (text: string): number | undefined => {
-  for (const pattern of HTTP_STATUS_PATTERNS) {
-    const status = pattern.exec(text)?.[1];
-    if (status !== undefined) return Number(status);
-  }
-  return undefined;
+const textStatus = (text: string): number | undefined => {
+  const status = HTTP_STATUS_IN_TEXT.exec(text)?.[1];
+  return status === undefined ? undefined : Number(status);
 };
 
 const PROVIDER_ACCOUNT_ERROR_PATTERN = buildProviderErrorPattern([
@@ -248,29 +241,34 @@ const retryAssistantCall: {
     ),
 );
 
-const errorText = (message: typesModule.AssistantMessage): string | undefined =>
-  message.stopReason !== "error" ||
-  message.errorMessage === undefined ||
-  message.errorMessage === ""
-    ? undefined
-    : message.errorMessage;
+interface ProviderFailure {
+  readonly text: string;
+  readonly status: number | undefined;
+}
+
+const providerFailure = (message: typesModule.AssistantMessage): ProviderFailure | undefined => {
+  if (message.stopReason !== "error") return undefined;
+  const text = message.errorMessage ?? "";
+  const status = message.errorStatus ?? textStatus(text);
+  return text === "" && status === undefined ? undefined : { status, text };
+};
+
+const isUnusable = ({ status, text }: ProviderFailure): boolean =>
+  PROVIDER_ACCOUNT_STATUSES.has(status ?? 0) ||
+  NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(text) ||
+  PROVIDER_ACCOUNT_ERROR_PATTERN.test(text);
 
 const isProviderUnusableError = (message: typesModule.AssistantMessage): boolean => {
-  const text = errorText(message);
-  return (
-    text !== undefined &&
-    (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(text) ||
-      PROVIDER_ACCOUNT_STATUSES.has(httpStatus(text) ?? 0) ||
-      PROVIDER_ACCOUNT_ERROR_PATTERN.test(text))
-  );
+  const failure = providerFailure(message);
+  return failure !== undefined && isUnusable(failure);
 };
 
 const isRetryableAssistantError = (message: typesModule.AssistantMessage): boolean => {
-  const text = errorText(message);
-  if (text === undefined || isProviderUnusableError(message)) return false;
+  const failure = providerFailure(message);
+  if (failure === undefined || isUnusable(failure)) return false;
   return (
-    RETRYABLE_PROVIDER_STATUSES.has(httpStatus(text) ?? 0) ||
-    RETRYABLE_PROVIDER_ERROR_PATTERN.test(text)
+    RETRYABLE_PROVIDER_STATUSES.has(failure.status ?? 0) ||
+    RETRYABLE_PROVIDER_ERROR_PATTERN.test(failure.text)
   );
 };
 
