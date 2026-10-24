@@ -31,14 +31,17 @@
     "@types/node": "catalog:",
     "d3-array": "catalog:",
     "effect": "catalog:stack",
+    "es-module-lexer": "catalog:",
     "esbuild": "catalog:",
     "eslint-plugin-no-comments": "catalog:",
     "fallow": "catalog:stack",
     "shx": "catalog:",
     "skills": "catalog:",
     "syncpack": "catalog:",
+    "tree-sitter-bash": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:stack",
+    "web-tree-sitter": "catalog:",
     "yaml": "catalog:"
   },
   "overrides": {
