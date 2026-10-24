@@ -20,7 +20,7 @@ function savedDescription(entry: Server["entry"]): string {
       ? "saved to the project mcp.json"
       : entry.scope === undefined
         ? "saved to mcp.json"
-        : `saved to the ${entry.scope} mcp.json`;
+        : `saved to the ${entry.scope === "builtin" ? "global" : entry.scope} mcp.json`;
 }
 
 function connectionItems(server: Server): tuiTypes.SelectItem[] {
@@ -62,7 +62,7 @@ function menuItems(server: Server, hasProjectConfig: boolean): tuiTypes.SelectIt
   const { entry } = server;
   const saved = savedDescription(entry);
   const inProject =
-    entry.scope === "global" &&
+    (entry.scope === "global" || entry.scope === "builtin") &&
     (entry.override === undefined || entry.override === "") &&
     hasProjectConfig;
   const inProjectSaved = "saved to the project mcp.json";
@@ -82,7 +82,9 @@ function menuItems(server: Server, hasProjectConfig: boolean): tuiTypes.SelectIt
   }
   return [
     ...connectionItems(server),
-    { description: exposureOf(entry), label: "Exposure", value: "exposure" },
+    ...(entry.scope === "builtin"
+      ? []
+      : [{ description: exposureOf(entry), label: "Exposure", value: "exposure" }]),
     { description: saved, label: "Disable", value: "disable" },
     ...(inProject
       ? [

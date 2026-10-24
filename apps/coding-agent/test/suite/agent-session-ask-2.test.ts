@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import agentSessionAskSupport from "./agent-session-ask-support.ts";
 import harnessModule from "./harness.ts";
 
-const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt } = ai;
+const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { awaited, gate, runTest, toJsonText } = testing;
 
@@ -36,25 +36,22 @@ const refusesAWriteActionOnATool = () =>
     Effect.gen(function* () {
       const { harness } = yield* setup();
       const requests = record(harness, [
-        fauxAssistantMessage([fauxToolCall("memory", { action: "save", content: "x" })], {
-          stopReason: "toolUse",
-        }),
-        fauxAssistantMessage([fauxToolCall("memory", { action: "list" })], {
+        fauxAssistantMessage(
+          [fauxToolCall("pr_watch", { action: "watch", number: 1, repository: "o/r" })],
+          { stopReason: "toolUse" },
+        ),
+        fauxAssistantMessage([fauxToolCall("pr_watch", { action: "list" })], {
           stopReason: "toolUse",
         }),
         fauxAssistantMessage("listed"),
       ]);
 
-      yield* awaited(harness.session.run.prompting.prompt("/ask remember x"));
+      yield* awaited(harness.session.run.prompting.prompt("/ask watch pull request 1"));
 
       const results = harness.session.messages.filter((message) => message.role === "toolResult");
       expect(results.map((result) => result.isError)).toEqual([true, false]);
-      expect(yield* toJsonText(results[1]?.content)).toContain("No memories");
+      expect(yield* toJsonText(results[1]?.content)).toContain("No pull requests watched");
       expect(requests).toHaveLength(3);
-      for (const request of requests) {
-        expect(getCurrentSystemPrompt(request.messages)).not.toContain("save durable facts");
-        expect(getCurrentSystemPrompt(request.messages)).toContain("- memory: Search and list");
-      }
     }),
   );
 

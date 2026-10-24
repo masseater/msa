@@ -127,7 +127,7 @@ const createHarness = (options: typesModule.HarnessOptions = {}): Promise<typesM
       );
       const extensionRunnerRef: { current?: codingAgentTypes.ExtensionRunner } = {};
       const sessionManager = createSessionManager(options.sessionManager);
-      const settingsManager = createSettingsManager({ settings: options.settings, tempDir });
+      const settingsManager = createSettingsManager(options.settings);
       const session = new AgentSession({
         agent: createFauxAgent({ extensionRunnerRef, fauxProvider, model, withConfiguredAuth }),
         agentDir: tempDir,

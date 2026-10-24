@@ -5,21 +5,17 @@ import mcpServers from "../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../core/mcp-servers.types.ts";
 import platformModule from "../../core/platform/index.ts";
 import errorsModule from "../../utils/errors.ts";
+import configOverrides from "./config-overrides.ts";
 import type configTypes from "./config.types.ts";
+import credentialHelperConfig from "./credentials/credential-helper-config.ts";
 
 const { mcpNamespace, validateMcpServerConfig } = mcpServers;
+const { credentialHelperError } = credentialHelperConfig;
+const { applyOverride, applyToBuiltin, isOverride } = configOverrides;
 const { toErrorMessage } = errorsModule;
 const { dirname, join } = platformModule;
 const { exists, makeDirectory, readText, writeFile } = platformModule.files;
 const { CONFIG_DIR_NAME } = configModule;
-
-const OVERRIDE_KEYS = ["enabled", "exposure", "toolExposure"];
-
-function isOverride(value: Record<string, unknown>): boolean {
-  return (
-    value["command"] === undefined && value["url"] === undefined && value["type"] === undefined
-  );
-}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -74,6 +70,8 @@ function applyConfigText(input: {
     state.autoEnableCodemode = parsed["autoEnableCodemode"];
   else if (parsed["autoEnableCodemode"] !== undefined)
     errors.push(`${path}: autoEnableCodemode must be a boolean`);
+  const helperError = credentialHelperError(parsed["credentialHelper"], scope);
+  if (helperError !== undefined) errors.push(`${path}: ${helperError}`);
   applyServers({ path, scope, servers: parsed["mcpServers"] ?? {}, state });
 }
 
@@ -86,8 +84,13 @@ function applyServers(input: {
   const { path, scope, state } = input;
   const { servers, errors } = state;
   for (const [name, value] of Object.entries(input.servers)) {
+    const base = servers.get(name);
+    if (base?.scope === "builtin") {
+      const error = applyToBuiltin({ base, name, path, scope, servers, value });
+      if (error !== undefined) errors.push(error);
+      continue;
+    }
     if (scope === "project" && isRecord(value) && isOverride(value)) {
-      const base = servers.get(name);
       applyOverride(value, base, errors, path, name, servers);
       continue;
     }
@@ -112,34 +115,16 @@ function applyServers(input: {
   }
 }
 
-function applyOverride(
-  value: Record<string, unknown>,
-  base: configTypes.McpServerEntry | undefined,
-  errors: string[],
-  path: string,
-  name: string,
-  servers: Map<string, configTypes.McpServerEntry>,
-) {
-  const extra = Object.keys(value).filter((key) => !OVERRIDE_KEYS.includes(key));
-  if (base === undefined) {
-    errors.push(
-      `${path}: server "${name}" needs "command" or "url", or a global server to override`,
-    );
-  } else if (extra.length > 0) {
-    errors.push(`${path}: server "${name}": an override can only set ${OVERRIDE_KEYS.join(", ")}`);
-  } else {
-    const config = validateMcpServerConfig(name, { ...base.config, ...value });
-    if (typeof config === "string") errors.push(`${path}: ${config}`);
-    else servers.set(name, { ...base, config, override: path });
-  }
-}
-
 function loadMcpConfig(options: {
   agentDir: string;
   cwd: string;
   projectTrusted: boolean;
+  builtins?: readonly configTypes.McpServerEntry[];
 }): Promise<configTypes.LoadedMcpConfig> {
-  const state: McpConfigState = { errors: [], servers: new Map() };
+  const state: McpConfigState = {
+    errors: [],
+    servers: new Map((options.builtins ?? []).map((entry) => [entry.name, entry])),
+  };
   const projectConfig = options.projectTrusted
     ? join(options.cwd, CONFIG_DIR_NAME, "mcp.json")
     : undefined;

@@ -1,237 +1,165 @@
-import { Effect, Fiber, FileSystem } from "effect";
+import type agentTypes from "@msa/agent-core/index.types";
+import * as Effect from "effect/Effect";
 
+import awaitingModule from "../awaiting.ts";
 import platform from "../platform/index.ts";
-import nodeRuntime from "../platform/runtime.ts";
-import MemoryEmbedder from "./memory-embedder.ts";
-import memoryFormat from "./memory-format.ts";
+import legacyMigration from "./legacy-migration.ts";
 import memoryProject from "./memory-project.ts";
-import MemoryStore from "./memory-store.ts";
-import type memoryTypesTypes from "./memory-types.ts";
-import storeTypesModule from "./store-types.ts";
-import type storeTypes from "./store.types.ts";
+import memoryRequests from "./memory-requests.ts";
+import memoryModule from "./memory.ts";
+import type memoryTypes from "./memory.types.ts";
+import secretCheckLazy from "./secret-check.lazy.ts";
 
-const { projectNameOf } = memoryProject;
-const { formatMemoryStats, formatMemoryStatus, isMemoryKind } = memoryFormat;
-const { MEMORY_KINDS } = storeTypesModule;
-const { ToolFailure, fromPromise, unwrapForeign } = platform;
+const { awaited, awaitingWith } = awaitingModule;
+const { randomHex } = platform;
+const { exists } = platform.files;
+const { migrateLegacyMemories } = legacyMigration;
+const { resolveProjectName } = memoryProject;
+const { MAX_REQUEST_CHARS, recallRequest } = memoryRequests;
+const { SEPIACE_REQUESTS_URL, SEPIACE_SERVER_NAME } = memoryModule;
+const { findSecrets } = secretCheckLazy;
 
-const REEMBED_BATCH_LIMIT = 25;
-const EXPLICIT_SEARCH_MIN_SCORE = 0.1;
+const REQUEST_TIMEOUT_MS = 60_000;
+const RECALL_TIMEOUT_MS = 5_000;
+
+const describeConnection = (connection: memoryTypes.MemoryConnection) =>
+  connection.state === "ready"
+    ? "connected"
+    : connection.state === "missing"
+      ? `not connected; ${connection.detail}`
+      : `the last request failed: ${connection.detail}`;
+
+const bounded = (signal: AbortSignal | undefined, ms: number) =>
+  signal === undefined
+    ? AbortSignal.timeout(ms)
+    : AbortSignal.any([signal, AbortSignal.timeout(ms)]);
+
+const textOf = (result: agentTypes.AgentToolResult<unknown>) =>
+  result.content
+    .flatMap((block) => (block.type === "text" ? [block.text] : []))
+    .join("\n")
+    .trim();
+
 export default class MemoryService {
-  readonly settings: memoryTypesTypes.ResolvedMemorySettings;
-  private projectName: string;
-  private store: storeTypes.MemoryStore | undefined;
-  private readonly embedder: MemoryEmbedder;
-  private readonly ready: Promise<void>;
-  private readonly preparing: Fiber.Fiber<void>;
-  private closed = false;
-  private warming: Fiber.Fiber<void> | undefined;
+  private readonly options: memoryTypes.MemoryServiceOptions;
 
-  constructor(options: memoryTypesTypes.MemoryServiceOptions) {
-    this.settings = options.settings;
-    this.projectName = options.project ?? (platform.basename(options.cwd) || options.cwd);
-    this.embedder = new MemoryEmbedder(this.settings.embedding);
-    this.preparing = nodeRuntime.runFork(this.prepare(options));
-    this.ready = nodeRuntime.runPromise(Effect.asVoid(Fiber.await(this.preparing)));
+  private project: Promise<string> | undefined;
+
+  private migration: Promise<memoryTypes.MigrationResult | undefined> | undefined;
+
+  private migrationFailed = false;
+
+  private lastFailure: string | undefined;
+
+  constructor(options: memoryTypes.MemoryServiceOptions) {
+    this.options = options;
   }
 
-  get project(): string {
-    return this.projectName;
+  get settings(): memoryTypes.ResolvedMemorySettings {
+    return this.options.settings();
   }
 
-  get enabled(): boolean {
-    return this.settings.enabled;
+  get connected(): boolean {
+    return this.options.tool() !== undefined;
   }
 
-  get recallEnabled(): boolean {
-    return this.settings.enabled && this.settings.recall.enabled;
+  get connection(): memoryTypes.MemoryConnection {
+    if (!this.connected)
+      return {
+        detail: `sign in with /mcp login ${SEPIACE_SERVER_NAME}, or check /mcp`,
+        state: "missing",
+      };
+    return this.lastFailure === undefined
+      ? { state: "ready" }
+      : { detail: this.lastFailure, state: "failing" };
   }
 
-  warm(): void {
-    if (!this.recallEnabled || this.storeIsEmpty()) return;
-    this.warming = nodeRuntime.runFork(
-      this.embedder
-        .embedQuery("warmup")
-        .pipe(Effect.andThen(this.reembedStaleEffect(REEMBED_BATCH_LIMIT)), Effect.ignore),
+  send(request: string, signal?: AbortSignal, timeoutMs = REQUEST_TIMEOUT_MS): Promise<string> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        if (!this.settings.enabled) throw new Error("Memory is off (settings: memory.enabled).");
+        const text = request.trim();
+        if (text === "") throw new Error("The memory request is empty.");
+        if (text.length > MAX_REQUEST_CHARS)
+          throw new Error(`The memory request is longer than ${MAX_REQUEST_CHARS} characters.`);
+        const secrets = yield* awaited(findSecrets(text));
+        if (secrets.length > 0)
+          throw new Error(
+            `The memory request was not sent because it looks like it holds a secret (${secrets.join(", ")}). Leave secrets out of memories.`,
+          );
+        const tool = this.options.tool();
+        if (tool === undefined)
+          throw new Error(
+            `sepiace is not connected. Sign in with /mcp login ${SEPIACE_SERVER_NAME}, or check /mcp.`,
+          );
+        const outcome = yield* awaited(
+          tool
+            .execute(`memory-${randomHex(8)}`, { request: text }, bounded(signal, timeoutMs))
+            .then(
+              (result) => {
+                const reply = textOf(result);
+                return result.isError === true
+                  ? { failure: reply === "" ? "sepiace reported an error." : reply }
+                  : { reply };
+              },
+              (error: unknown) => ({
+                failure: error instanceof Error ? error.message : String(error),
+              }),
+            ),
+        );
+        this.lastFailure = "failure" in outcome ? outcome.failure : undefined;
+        if ("failure" in outcome) throw new Error(outcome.failure);
+        return outcome.reply;
+      }, this),
     );
   }
 
-  reembedStale(limit = REEMBED_BATCH_LIMIT): Promise<number> {
-    return nodeRuntime.runPromise(unwrapForeign(this.reembedStaleEffect(limit)));
+  recall(prompt: string, signal?: AbortSignal): Promise<string | undefined> {
+    return Effect.runPromise(
+      awaitingWith(function* () {
+        const text = prompt.trim();
+        if (!this.settings.recall || text === "" || !this.connected) return undefined;
+        if ((yield* awaited(findSecrets(text))).length > 0) return undefined;
+        this.project ??= resolveProjectName(this.options.cwd);
+        const request = recallRequest(text, yield* awaited(this.project));
+        const reply = yield* awaited(this.send(request, signal, RECALL_TIMEOUT_MS).catch(() => ""));
+        return reply === "" ? undefined : reply;
+      }, this),
+    );
   }
 
-  recall(query: string, signal?: AbortSignal): Promise<storeTypes.MemoryRecord[]> {
-    return nodeRuntime.runPromise(this.recallEffect(query, signal));
+  legacyPending(): Promise<boolean> {
+    return exists(this.options.legacyDatabase);
   }
 
-  save(request: memoryTypesTypes.MemorySaveRequest): Promise<memoryTypesTypes.MemorySaveOutcome> {
-    return nodeRuntime.runPromise(unwrapForeign(this.saveEffect(request)));
-  }
-
-  search(query: string, limit = 5): Promise<storeTypes.MemoryScore[]> {
-    return nodeRuntime.runPromise(unwrapForeign(this.searchEffect(query, limit)));
-  }
-
-  list(limit = 20): Promise<storeTypes.MemoryRecord[]> {
-    return nodeRuntime.runPromise(unwrapForeign(this.listEffect(limit)));
-  }
-
-  stats(): storeTypes.MemoryStoreStats {
-    return this.ensureStore().stats();
-  }
-
-  forget(id: string): boolean {
-    return this.ensureStore().forget(id);
-  }
-
-  describeStatus(): Promise<string> {
-    return nodeRuntime.runPromise(unwrapForeign(this.describeStatusEffect()));
-  }
-
-  describeStats(): string {
-    if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
-    return formatMemoryStats({ settings: this.settings, stats: this.ensureStore().stats() });
-  }
-
-  close(): Promise<void> {
-    this.closed = true;
-    const warming = this.warming;
-    this.warming = undefined;
-    this.store?.close();
-    this.store = undefined;
-    const background = warming === undefined ? [this.preparing] : [this.preparing, warming];
-    return nodeRuntime.runPromise(Fiber.interruptAll(background));
-  }
-
-  private prepare(options: memoryTypesTypes.MemoryServiceOptions) {
-    return Effect.gen({ self: this }, function* () {
-      if (options.project === undefined) {
-        const name = yield* projectNameOf(options.cwd);
-        if (name !== undefined) this.projectName = name;
-      }
-      if (this.settings.database !== ":memory:") {
-        const directory = platform.dirname(this.settings.database);
-        yield* FileSystem.FileSystem.use((fs) => fs.makeDirectory(directory, { recursive: true }));
-      }
-    }).pipe(Effect.ignore);
-  }
-
-  private storeIsEmpty(): boolean {
-    try {
-      return this.ensureStore().isEmpty();
-    } catch {
-      return true;
-    }
-  }
-
-  private ensureStore(): storeTypes.MemoryStore {
-    if (this.closed) throw new Error("Memory service is closed");
-    this.store ??= new MemoryStore(this.settings.database);
-    return this.store;
-  }
-
-  private reembedStaleEffect(limit: number) {
-    return Effect.gen({ self: this }, function* () {
-      if (!this.settings.enabled || !this.embedder.available) return 0;
-      let reembedded = 0;
-      for (const record of this.ensureStore().listStale(this.settings.embedding.model, limit)) {
-        const vector = yield* this.embedder.embedDocument(record.content);
-        if (vector === undefined) break;
-        this.ensureStore().setEmbedding(record.id, vector, this.settings.embedding.model);
-        reembedded++;
-      }
-      return reembedded;
-    });
-  }
-
-  private recallEffect(query: string, signal: AbortSignal | undefined) {
-    return Effect.gen({ self: this }, function* () {
-      if (!this.recallEnabled || query.trim() === "" || this.storeIsEmpty()) return [];
-      yield* fromPromise(() => this.ready);
-      const embedding = yield* this.embedder.embedQuery(query, signal);
-      const scores = this.ensureStore().search({
-        text: query,
-        ...(embedding === undefined ? {} : { embedding }),
-        limit: this.settings.recall.limit,
-        minScore: this.settings.recall.minScore,
-        project: this.project,
+  migrate(): Promise<memoryTypes.MigrationResult | undefined> {
+    if (this.migration !== undefined) return this.migration;
+    if (this.migrationFailed || !this.settings.enabled || !this.connected)
+      return Promise.resolve(undefined);
+    const run = migrateLegacyMemories(
+      this.options.agentDir,
+      this.options.legacyDatabase,
+      (request) => this.send(request),
+    )
+      .catch((error: unknown) => {
+        this.migrationFailed = true;
+        throw error;
+      })
+      .finally(() => {
+        this.migration = undefined;
       });
-      const records = scores.map((scored) => scored.record);
-      if (records.length > 0) this.ensureStore().markUsed(records.map((record) => record.id));
-      return records;
-    }).pipe(Effect.catchCause(() => Effect.succeed<storeTypes.MemoryRecord[]>([])));
+    this.migration = run;
+    return run;
   }
 
-  private saveEffect(request: memoryTypesTypes.MemorySaveRequest) {
-    return Effect.gen({ self: this }, function* () {
-      const content = request.content.trim();
-      if (content === "") return yield* new ToolFailure({ message: "Memory content is empty" });
-      const kind = request.kind ?? "fact";
-      if (!isMemoryKind(kind)) {
-        return yield* new ToolFailure({
-          message: `Unknown memory kind "${kind}"; use one of ${MEMORY_KINDS.join(", ")}`,
-        });
-      }
-      const scope = request.scope ?? "project";
-      if (scope !== "project" && scope !== "global") {
-        return yield* new ToolFailure({
-          message: `Unknown memory scope "${scope}"; use project or global`,
-        });
-      }
-      yield* fromPromise(() => this.ready);
-      const embedding = yield* this.embedder.embedDocument(content);
-      const result = this.ensureStore().save({
-        content,
-        kind,
-        project: this.project,
-        scope,
-        ...(embedding === undefined
-          ? {}
-          : { embedding, embeddingModel: this.settings.embedding.model }),
-      });
-      const failure = this.embedder.lastError;
-      return {
-        ...result,
-        embedded: embedding !== undefined,
-        ...(embedding === undefined && failure !== undefined && failure !== ""
-          ? { embeddingError: failure }
-          : {}),
-      };
-    });
-  }
-
-  private listEffect(limit: number) {
-    return Effect.gen({ self: this }, function* () {
-      yield* fromPromise(() => this.ready);
-      return this.ensureStore().list({ limit, project: this.project });
-    });
-  }
-
-  private describeStatusEffect() {
-    return Effect.gen({ self: this }, function* () {
-      if (!this.settings.enabled) return "Memory is disabled (settings: memory.enabled).";
-      yield* fromPromise(() => this.ready);
-      return formatMemoryStatus({
-        lastEmbeddingError: this.embedder.lastError,
-        project: this.project,
-        settings: this.settings,
-        stats: this.ensureStore().stats(),
-      });
-    });
-  }
-
-  private searchEffect(query: string, limit: number) {
-    return Effect.gen({ self: this }, function* () {
-      yield* fromPromise(() => this.ready);
-      if (this.ensureStore().isEmpty()) return [];
-      const embedding = yield* this.embedder.embedQuery(query);
-      return this.ensureStore().search({
-        text: query,
-        ...(embedding === undefined ? {} : { embedding }),
-        limit,
-        minScore: EXPLICIT_SEARCH_MIN_SCORE,
-        project: this.project,
-      });
-    });
+  status(legacyPending: boolean): string {
+    const { settings } = this;
+    if (!settings.enabled) return "Memory is off (settings: memory.enabled).";
+    return [
+      `Memory: sepiace (${describeConnection(this.connection)})`,
+      `Recall on every prompt: ${settings.recall ? "on" : "off"}`,
+      ...(legacyPending ? ["memory.db: waiting to be moved to sepiace"] : []),
+      `Requests and the memories they changed: ${SEPIACE_REQUESTS_URL}`,
+    ].join("\n");
   }
 }

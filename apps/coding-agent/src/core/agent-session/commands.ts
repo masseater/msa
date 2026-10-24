@@ -6,12 +6,12 @@ import type agentSessionTypes from "../agent-session.types.ts";
 import ask from "../ask.ts";
 import awaitingModule from "../awaiting.ts";
 import goalModule from "../goal.ts";
-import memoryFormat from "../memory/memory-format.ts";
+import memoryCommandModule from "../memory/memory-command.ts";
 const { parseGoalCommand } = goalModule;
 const { parseAskCommand } = ask;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { toErrorMessage } = errors;
-const { parseMemoryCommand } = memoryFormat;
+const { parseMemoryCommand } = memoryCommandModule;
 
 export default class SessionCommands {
   private readonly session: AgentSession;

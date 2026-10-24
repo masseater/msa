@@ -11,11 +11,13 @@ declare namespace mcpOauthServerTypes {
     issParameter?: boolean;
     cimd?: boolean;
     redirectPath?: string;
+    memory?: (request: string) => string | { error: string };
   }
 
   interface ServerState {
     readonly options: ServerOptions;
     readonly log: string[];
+    readonly memoryRequests: string[];
     readonly registrations: Record<string, unknown>[];
     readonly authorizations: URLSearchParams[];
     readonly tokenRequests: URLSearchParams[];

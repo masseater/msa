@@ -66,6 +66,8 @@
     "@msa/mcp": "workspace:*",
     "@msa/telemetry": "workspace:*",
     "@msa/tui": "workspace:*",
+    "@secretlint/core": "catalog:",
+    "@secretlint/secretlint-rule-preset-recommend": "catalog:",
     "@silvia-odwyer/photon-node": "catalog:",
     "brace-expansion": "catalog:",
     "chalk": "catalog:",

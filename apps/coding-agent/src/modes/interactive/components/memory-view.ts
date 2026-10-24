@@ -1,50 +1,43 @@
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
 
-import type storeTypes from "../../../core/memory/store.types.ts";
+import memoryModule from "../../../core/memory/memory.ts";
 import errors from "../../../utils/errors.ts";
-import memoryViewHelpers from "./memory-view-helpers.ts";
+import themeModule from "../theme/theme.ts";
+import keybindingHints from "./keybinding-hints.ts";
 import type memoryViewTypes from "./memory-view.types.ts";
-import MemoryViewInput from "./memory-view/memory-view-input.ts";
-import MemoryViewRendering from "./memory-view/memory-view-rendering.ts";
 import scrollWindow from "./scroll-window.ts";
 
-const { Input } = tui;
+const { Input, getKeybindings, matchesKey, truncateToWidth, wrapTextWithAnsi } = tui;
+const { SEPIACE_REQUESTS_URL } = memoryModule;
 const { toErrorMessage } = errors;
-const { LIST_LIMIT } = memoryViewHelpers;
+const { theme } = themeModule;
+const { rawKeyHint } = keybindingHints;
 const { fitView } = scrollWindow;
 
 export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusable {
-  readonly rendering: MemoryViewRendering;
-  readonly input: MemoryViewInput;
-
   readonly wantsViewportKeys = true;
 
-  options!: memoryViewTypes.MemoryViewOptions;
+  private readonly options: memoryViewTypes.MemoryViewOptions;
 
-  records!: storeTypes.MemoryRecord[];
+  readonly requestInput = new Input({
+    placeholder: "Ask sepiace to remember, recall, or forget",
+    prompt: "› ",
+  });
 
-  selectedId!: string | undefined;
-
-  openId!: string | undefined;
-
-  query!: string | undefined;
+  typing = false;
 
   busy = false;
 
-  inputMode!: "search" | "add" | undefined;
+  legacyPending = false;
 
-  readonly searchInput = new Input({ placeholder: "Search memories", prompt: "› " });
+  reply: { text: string; failed: boolean } | undefined;
 
-  readonly addInput = new Input({ placeholder: "Memory to remember", prompt: "› " });
+  private scroll = 0;
 
-  scroll = 0;
+  private room = 0;
 
-  private generation = 0;
-
-  room = 0;
-
-  focusedState = false;
+  private focusedState = false;
 
   get focused(): boolean {
     return this.focusedState;
@@ -52,75 +45,131 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
 
   set focused(value: boolean) {
     this.focusedState = value;
-    this.searchInput.focused = value && this.inputMode === "search";
-    this.addInput.focused = value && this.inputMode === "add";
+    this.requestInput.focused = value && this.typing;
+  }
+
+  constructor(options: memoryViewTypes.MemoryViewOptions) {
+    this.options = options;
+    this.requestInput.onSubmit = (value) => this.submit(value);
+    this.requestInput.onEscape = () => this.stopTyping();
+    void options.service.legacyPending().then((pending) => {
+      this.legacyPending = pending;
+      options.requestRender();
+      return undefined;
+    });
   }
 
   invalidate(): void {}
 
-  rows(): storeTypes.MemoryRecord[] {
+  handleInput(data: string): void {
+    if (this.typing) {
+      this.requestInput.handleInput(data);
+    } else if (getKeybindings().matches(data, "tui.select.cancel")) {
+      this.options.onClose();
+    } else if (this.scrollStep(data) !== undefined) {
+      this.scroll = Math.max(0, this.scroll + (this.scrollStep(data) ?? 0));
+    } else if (getKeybindings().matches(data, "tui.select.confirm") && !this.busy) {
+      this.typing = true;
+      this.requestInput.focused = this.focusedState;
+    } else if (matchesKey(data, "r")) {
+      this.options.setRecall(!this.options.service.settings.recall);
+    }
+    this.options.requestRender();
+  }
+
+  private scrollStep(data: string): number | undefined {
+    const kb = getKeybindings();
+    const page = Math.max(1, this.room - 1);
+    if (kb.matches(data, "tui.select.up")) return -1;
+    if (kb.matches(data, "tui.select.down")) return 1;
+    if (kb.matches(data, "tui.select.pageUp")) return -page;
+    if (kb.matches(data, "tui.select.pageDown")) return page;
+    return undefined;
+  }
+
+  private stopTyping(): void {
+    this.typing = false;
+    this.requestInput.focused = false;
+    this.options.requestRender();
+  }
+
+  private submit(value: string): void {
+    const request = value.trim();
+    this.stopTyping();
+    if (request === "") return;
+    this.requestInput.setValue("");
+    this.busy = true;
+    void this.options.service
+      .send(request)
+      .then(
+        (text) => ({ failed: false, text: text === "" ? "sepiace returned nothing." : text }),
+        (error: unknown) => ({ failed: true, text: toErrorMessage(error) }),
+      )
+      .then((reply) => {
+        this.busy = false;
+        this.reply = reply;
+        this.scroll = 0;
+        return this.options.requestRender();
+      });
+  }
+
+  private statusLines(): string[] {
+    const { service } = this.options;
+    const state = service.connection;
+    const connection =
+      state.state === "ready"
+        ? theme.fg("success", "connected")
+        : theme.fg(
+            state.state === "missing" ? "warning" : "error",
+            `${state.state === "missing" ? "not connected" : "last request failed"} · ${state.detail}`,
+          );
     return [
-      ...this.records.filter((record) => record.scope === "project"),
-      ...this.records.filter((record) => record.scope === "global"),
+      ` sepiace  ${connection}`,
+      ` recall   ${service.settings.recall ? "on every prompt" : theme.fg("dim", "off")}`,
+      ...(this.legacyPending ? [` memory.db ${theme.fg("warning", "waiting to move")}`] : []),
+      ` ${theme.fg("dim", SEPIACE_REQUESTS_URL)}`,
     ];
   }
 
-  selected(rows: readonly storeTypes.MemoryRecord[]): storeTypes.MemoryRecord | undefined {
-    return rows.find((record) => record.id === this.selectedId) ?? rows[0];
-  }
-
-  showRecords(records: storeTypes.MemoryRecord[]): void {
-    this.generation += 1;
-    this.records = records;
-  }
-
-  reload(): void {
-    this.generation += 1;
-    const generation = this.generation;
-    this.options.service.list(LIST_LIMIT).then(
-      (records) => {
-        if (generation !== this.generation) return undefined;
-        this.records = records;
-        this.options.requestRender();
-        return undefined;
-      },
-      (error: unknown) => {
-        this.options.onError(toErrorMessage(error));
-      },
-    );
-  }
-
-  handleInput(data: string): void {
-    this.input.handle(data);
+  private replyLines(width: number): string[] {
+    if (this.busy) return ["", theme.fg("dim", " Sending…")];
+    if (this.reply === undefined) return [];
+    const color = this.reply.failed ? "error" : "text";
+    return [
+      "",
+      ...wrapTextWithAnsi(this.reply.text, Math.max(10, width - 2)).map(
+        (line) => ` ${theme.fg(color, line)}`,
+      ),
+    ];
   }
 
   render(width: number): string[] {
-    const rows = this.rows();
-    const open =
-      this.openId !== undefined && this.openId !== ""
-        ? rows.find((record) => record.id === this.openId)
-        : undefined;
-    const frame =
-      open === undefined
-        ? this.rendering.renderList(rows, width)
-        : this.rendering.renderDetail(open, width);
+    const footer = this.typing
+      ? [
+          "",
+          ...this.requestInput.render(width),
+          ` ${rawKeyHint("enter", "send")}  ${rawKeyHint("esc", "cancel")}`,
+        ]
+      : [
+          "",
+          ` ${rawKeyHint("enter", "request")}  ${rawKeyHint("↑↓", "scroll")}  ${rawKeyHint("r", "recall on/off")}  ${rawKeyHint("esc", "close")}`,
+        ];
+    const frame = {
+      body: [
+        ...this.statusLines().map((line) => truncateToWidth(line, width)),
+        ...this.replyLines(width),
+      ],
+      footer,
+      header: [
+        "",
+        truncateToWidth(` ${theme.bold("Memory")}`, width),
+        theme.fg("borderMuted", "─".repeat(width)),
+      ],
+    };
     const max = Math.max(8, this.options.maxHeight());
-    const room = Math.max(0, max - frame.header.length - frame.footer.length);
-    this.room = Math.min(room, frame.body.length);
+    this.room = Math.max(0, max - frame.header.length - frame.footer.length);
     const fitted = fitView(frame, width, max, this.scroll);
     this.scroll = fitted.offset;
     return fitted.lines;
-  }
-
-  constructor(options: memoryViewTypes.MemoryViewOptions) {
-    this.rendering = new MemoryViewRendering(this);
-    this.input = new MemoryViewInput(this);
-    this.options = options;
-    this.records = [];
-    this.reload();
-    for (const input of [this.searchInput, this.addInput]) {
-      input.onSubmit = (value) => this.input.submit(value);
-      input.onEscape = () => this.input.stopInput();
-    }
   }
 }

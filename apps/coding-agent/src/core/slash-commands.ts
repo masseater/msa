@@ -76,8 +76,8 @@ const BUILTIN_SLASH_COMMANDS: ReadonlyArray<slashCommandsTypes.BuiltinSlashComma
   },
   { description: "Save project trust decision for future sessions", name: "trust" },
   {
-    argumentHint: "[list|search <query>|forget <id>|stats]",
-    description: "Open the memory view, or manage long-term memory with an argument",
+    argumentHint: "[request]",
+    description: "Open the sepiace memory view, or send sepiace a request such as forget X",
     name: "memory",
   },
   { aliases: ["threads"], description: "Show the task DAG the orchestrator runs", name: "tasks" },

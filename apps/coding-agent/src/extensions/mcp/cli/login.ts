@@ -118,6 +118,8 @@ function login(
         return 1;
       }
       log(`Signed in to MCP server "${name}" (${connection.tools.length} tools).`);
+      const note = yield* awaited(credentials.persistenceNote());
+      if (note !== undefined) log(note);
       return 0;
     }),
   );

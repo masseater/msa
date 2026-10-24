@@ -376,55 +376,10 @@
     "memory": {
       "type": "object",
       "properties": {
-        "database": {
-          "type": "string",
-          "description": "SQLite file holding memories. Default: <agent dir>/memory.db."
-        },
-        "embedding": {
-          "type": "object",
-          "properties": {
-            "apiKeyEnv": {
-              "type": "string",
-              "description": "Environment variable holding the API key, for endpoints that need one."
-            },
-            "baseUrl": {
-              "type": "string",
-              "default": "http://127.0.0.1:11434/v1",
-              "description": "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended."
-            },
-            "documentPrefix": {
-              "type": "string",
-              "default": "title: none | text: ",
-              "description": "Prepended to memory text before embedding."
-            },
-            "enabled": {
-              "type": "boolean",
-              "default": true,
-              "description": "Compute embeddings so memories are searchable by meaning, not only keywords."
-            },
-            "model": {
-              "type": "string",
-              "default": "embeddinggemma-2",
-              "description": "Embedding model name at that endpoint."
-            },
-            "queryPrefix": {
-              "type": "string",
-              "default": "task: search result | query: ",
-              "description": "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none."
-            },
-            "timeoutMs": {
-              "type": "integer",
-              "maximum": 9007199254740991,
-              "minimum": 0,
-              "default": 5000,
-              "description": "Embedding request timeout in milliseconds."
-            }
-          }
-        },
         "enabled": {
           "type": "boolean",
           "default": true,
-          "description": "Long-term memory: the memory tool, recall, and the /memory command."
+          "description": "Long-term memory in sepiace: the built-in sepiace MCP server, the memory tool, recall, and the /memory command."
         },
         "recall": {
           "type": "object",
@@ -432,19 +387,7 @@
             "enabled": {
               "type": "boolean",
               "default": true,
-              "description": "Recall memories relevant to each user prompt and add them to the run."
-            },
-            "limit": {
-              "type": "integer",
-              "maximum": 9007199254740991,
-              "minimum": 0,
-              "default": 5,
-              "description": "Maximum memories added to a run."
-            },
-            "minScore": {
-              "type": "number",
-              "default": 0.72,
-              "description": "Minimum relevance (0-1) for a memory to be recalled: its embedding similarity, or the share of query words it holds. Embedding models differ in their score range, so tune this with the model."
+              "description": "Ask sepiace for memories relevant to each user prompt and add them to the run."
             }
           }
         }

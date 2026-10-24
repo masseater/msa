@@ -117,9 +117,15 @@ export default class McpCommand {
           return;
         }
         this.host.tools.discovery.ensureDiscoveryActive(ctx);
+        const note = yield* awaited(
+          this.host.state.credentials?.persistenceNote() ?? Promise.resolve(undefined),
+        );
         ctx.ui.notify(
-          `Signed in to MCP server "${name}" (${server.connection?.tools.length ?? 0} tools).`,
-          "info",
+          [
+            `Signed in to MCP server "${name}" (${server.connection?.tools.length ?? 0} tools).`,
+            ...(note === undefined ? [] : [note]),
+          ].join("\n"),
+          note === undefined ? "info" : "warning",
         );
       }, this),
     );

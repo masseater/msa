@@ -40,19 +40,9 @@ const SETTINGS_DEFAULTS = {
     mermaid: "streaming",
   },
   memory: {
-    embedding: {
-      baseUrl: "http://127.0.0.1:11434/v1",
-      documentPrefix: "title: none | text: ",
-      enabled: true,
-      model: "embeddinggemma-2",
-      queryPrefix: "task: search result | query: ",
-      timeoutMs: 5000,
-    },
     enabled: true,
     recall: {
       enabled: true,
-      limit: 5,
-      minScore: 0.72,
     },
   },
   orchestrator: {

@@ -1,14 +1,14 @@
 import * as Effect from "effect/Effect";
 
+import errorsModule from "../../utils/errors.ts";
 import type AgentSession from "../agent-session.ts";
 import type agentSessionTypes from "../agent-session.types.ts";
 import awaitingModule from "../awaiting.ts";
 import type goalTypes from "../goal.types.ts";
-import memoryFormat from "../memory/memory-format.ts";
 import type memoryTypes from "../memory/memory.types.ts";
 
 const { awaited, awaitingWith } = awaitingModule;
-const { formatMemoryList, formatSearchResults } = memoryFormat;
+const { toErrorMessage } = errorsModule;
 
 export default class SessionBuiltinCommands {
   private readonly session: AgentSession;
@@ -25,27 +25,16 @@ export default class SessionBuiltinCommands {
       const memory = this.session.integrations.memory.memoryInternal;
       let text: string;
       if (memory === undefined) {
-        text = "Memory is disabled (settings: memory.enabled).";
+        text = "Memory is off (settings: memory.enabled).";
+      } else if (command.kind === "status") {
+        text = memory.status(yield* awaited(memory.legacyPending()));
       } else {
-        switch (command.kind) {
-          case "status":
-            text = yield* awaited(memory.describeStatus());
-            break;
-          case "stats":
-            text = memory.describeStats();
-            break;
-          case "list":
-            text = formatMemoryList(yield* awaited(memory.list(20)));
-            break;
-          case "search":
-            text = formatSearchResults(yield* awaited(memory.search(command.query, 10)));
-            break;
-          case "forget":
-            text = memory.forget(command.id)
-              ? `Forgot memory ${command.id}.`
-              : `No memory with id ${command.id}.`;
-            break;
-        }
+        text = yield* awaited(
+          memory.send(command.request).then(
+            (reply) => (reply === "" ? "sepiace returned nothing." : reply),
+            (error: unknown) => toErrorMessage(error),
+          ),
+        );
       }
       this.session.emit({ text, type: "memory_status" });
       options?.preflightResult?.("handled");

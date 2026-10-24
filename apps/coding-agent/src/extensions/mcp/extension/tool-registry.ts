@@ -59,7 +59,8 @@ export default class McpToolRegistry {
         const client = resolved.connection;
         if (client === undefined) throw new Error(`MCP server "${server}" is still starting.`);
         if (
-          getMcpToolExposure(resolved.entry.config, tool) === "hidden" ||
+          (getMcpToolExposure(resolved.entry.config, tool) === "hidden" &&
+            resolved.entry.scope !== "builtin") ||
           (client.state === "connected" && !client.tools.some((offered) => offered.name === tool))
         ) {
           throw new Error(`MCP tool "${server}/${tool}" is no longer available.`);

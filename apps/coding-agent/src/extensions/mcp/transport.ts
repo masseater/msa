@@ -63,6 +63,7 @@ const createDefaultTransport: {
 
 const transport = {
   createDefaultTransport,
+  expandHome,
 };
 
 export default transport;

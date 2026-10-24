@@ -131,83 +131,21 @@ const ImageSettingsSchema = Type.Object({
   ),
 });
 
-const MemoryEmbeddingSettingsSchema = Type.Object({
-  apiKeyEnv: Type.Optional(
-    Type.String({
-      description: "Environment variable holding the API key, for endpoints that need one.",
-    }),
-  ),
-  baseUrl: Type.Optional(
-    Type.String({
-      default: SETTINGS_DEFAULTS.memory.embedding.baseUrl,
-      description:
-        "OpenAI-compatible base URL such as http://127.0.0.1:11434/v1 (Ollama) or https://api.openai.com/v1. /embeddings is appended.",
-    }),
-  ),
-  documentPrefix: Type.Optional(
-    Type.String({
-      default: SETTINGS_DEFAULTS.memory.embedding.documentPrefix,
-      description: "Prepended to memory text before embedding.",
-    }),
-  ),
-  enabled: Type.Optional(
-    Type.Boolean({
-      default: SETTINGS_DEFAULTS.memory.embedding.enabled,
-      description: "Compute embeddings so memories are searchable by meaning, not only keywords.",
-    }),
-  ),
-  model: Type.Optional(
-    Type.String({
-      default: SETTINGS_DEFAULTS.memory.embedding.model,
-      description: "Embedding model name at that endpoint.",
-    }),
-  ),
-  queryPrefix: Type.Optional(
-    Type.String({
-      default: SETTINGS_DEFAULTS.memory.embedding.queryPrefix,
-      description:
-        "Prepended to search queries, for models trained with task prefixes (EmbeddingGemma). Clear it for models that use none.",
-    }),
-  ),
-  timeoutMs: Type.Optional(
-    nonNegativeSafeInteger({
-      default: SETTINGS_DEFAULTS.memory.embedding.timeoutMs,
-      description: "Embedding request timeout in milliseconds.",
-    }),
-  ),
-});
-
 const MemoryRecallSettingsSchema = Type.Object({
   enabled: Type.Optional(
     Type.Boolean({
       default: SETTINGS_DEFAULTS.memory.recall.enabled,
-      description: "Recall memories relevant to each user prompt and add them to the run.",
-    }),
-  ),
-  limit: Type.Optional(
-    nonNegativeSafeInteger({
-      default: SETTINGS_DEFAULTS.memory.recall.limit,
-      description: "Maximum memories added to a run.",
-    }),
-  ),
-  minScore: Type.Optional(
-    Type.Number({
-      default: SETTINGS_DEFAULTS.memory.recall.minScore,
-      description:
-        "Minimum relevance (0-1) for a memory to be recalled: its embedding similarity, or the share of query words it holds. Embedding models differ in their score range, so tune this with the model.",
+      description: "Ask sepiace for memories relevant to each user prompt and add them to the run.",
     }),
   ),
 });
 
 const MemorySettingsSchema = Type.Object({
-  database: Type.Optional(
-    Type.String({ description: "SQLite file holding memories. Default: <agent dir>/memory.db." }),
-  ),
-  embedding: Type.Optional(MemoryEmbeddingSettingsSchema),
   enabled: Type.Optional(
     Type.Boolean({
       default: SETTINGS_DEFAULTS.memory.enabled,
-      description: "Long-term memory: the memory tool, recall, and the /memory command.",
+      description:
+        "Long-term memory in sepiace: the built-in sepiace MCP server, the memory tool, recall, and the /memory command.",
     }),
   ),
   recall: Type.Optional(MemoryRecallSettingsSchema),

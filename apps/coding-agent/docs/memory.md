@@ -1,61 +1,48 @@
 # Long-Term Memory
 
-msa keeps long-term memories across sessions in a local SQLite database, and the `memory` tool lets the model save, search, list, and forget them.
+msa keeps long-term memory in [sepiace](https://sepiace.io), a remote MCP server. The model passes sepiace one natural-language request, and sepiace decides whether to remember, recall, or forget. Memories are cut from the words in the request and come back as text only, with no IDs, dates, or scores.
 
-Memory is separate from context files and compaction: those keep one conversation coherent, while memory survives sessions and working folders.
+Memory is separate from context files and compaction: those keep one conversation coherent, while memory survives sessions, working folders, and other agents that use the same sepiace account.
+
+## Sign in
+
+sepiace is a built-in MCP server named `sepiace` (`https://hi.sepiace.io/api/v1/mcp`). Sign in once with `/mcp login sepiace` in a session or `msa mcp login sepiace` from a shell; until then the `memory` tool reports that sign-in is needed and prompts run without recall. Sign-ins are kept as described in [Store sign-ins](mcp.md#store-sign-ins).
 
 ## What the model sees
 
-- Every user prompt first searches memory and adds a `<memory>` block with the best matches to that run. The block is stored with the session (hidden from the transcript view), so later turns keep the recalled context without searching again.
-- The `memory` tool is active by default next to `read`, `bash`, `edit`, and `write`.
-- When memories were used, their use count rises, and memories used more often win ties later.
+- The `memory` tool takes one `request`, such as "Remember that the user prefers pnpm over npm.", "What did the user decide about the release schedule?", or "Forget the user's old home address." It is active by default next to `read`, `bash`, `edit`, and `write`.
+- Every user prompt first asks sepiace what it remembers about the prompt in the current repository. What comes back is added to that run as a `<memory>` block, stored with the session and hidden from the transcript view. Recall waits up to 5 seconds; when sepiace is not signed in, unreachable, or recalls nothing, the prompt runs without the block.
 
-## Scopes
+## Scope
 
-Each memory is either `project` or `global`.
+sepiace keeps memories per account, not per project. Recall names the current repository (the git repository of the working folder, or the folder name outside one), and the model names the repository in a fact that only applies there.
 
-- `project` memories belong to the git repository of the working folder, or to the folder name outside a repository, and are only recalled there.
-- `global` memories are recalled everywhere. Use them for user preferences.
+## Secrets
 
-## Embeddings
+msa checks each request with the recommended rules of [secretlint](https://github.com/secretlint/secretlint), which find API keys, access tokens, private keys, and URLs with passwords. A request that matches is not sent: the `memory` tool and `/memory` fail with the names of the rules, and recall skips that prompt.
 
-Search runs two retrievers and merges their rankings with [Reciprocal Rank Fusion](https://doi.org/10.1145/1571941.1572114) (k = 60): embedding similarity, and SQLite [FTS5](https://www.sqlite.org/fts5.html) full-text search ranked by bm25. Text is split into words with `Intl.Segmenter` before indexing, so Japanese matches by word. The embedding retriever keeps memories whose similarity reaches `memory.recall.minScore`, and the full-text retriever keeps memories holding at least that share of the query's words. Embeddings come from an OpenAI-compatible `/embeddings` endpoint; the default is a local [Ollama](https://ollama.com) endpoint running [EmbeddingGemma 2](https://huggingface.co/google/embeddinggemma-2).
+## Offline
 
-```sh
-ollama pull embeddinggemma-2
-```
-
-EmbeddingGemma is trained with task prefixes: queries are embedded as `task: search result | query: …` and memories as `title: none | text: …`. msa sends those prefixes by default (`memory.embedding.queryPrefix` and `memory.embedding.documentPrefix`); clear both when you switch to a model that does not use prefixes, such as `bge-m3` (also available in Ollama).
-
-Any endpoint with the OpenAI embeddings shape works, including LM Studio, llama.cpp, and hosted APIs. Without a reachable endpoint, memories are still saved and searched by keyword, and msa retries embedding after a short cooldown.
-
-Similarity ranges differ between models, and Google publishes no recommended threshold for EmbeddingGemma, so `memory.recall.minScore` is measured for the default model: EmbeddingGemma 2 puts relevant memories around 0.75 or higher, while `bge-m3` tops out lower and wants roughly 0.5.
-
-Changing the embedding model changes the vector width. When a session starts, msa re-embeds up to 25 memories that carry no vector or one from another model in the background; until a memory is re-embedded it keeps working through keyword search.
+Nothing is queued for later. A `memory` tool call or `/memory` request that cannot reach sepiace fails with the error, and recall gives up so the prompt still runs.
 
 ## Manage memories
 
-Type `/memory` in the interactive TUI to open the memory view: every memory grouped by scope, one memory in detail, and keys to browse, search, add, and forget without leaving the screen.
+Type `/memory` in the interactive TUI to open the memory view: the sepiace connection, whether recall runs, and whether `memory.db` is waiting to move, with keys to send sepiace a request and read its reply.
 
-| Key     | Action                                                   |
-| ------- | -------------------------------------------------------- |
-| `↑` `↓` | Select a memory                                          |
-| `enter` | Open the selected memory with its full text and metadata |
-| `/`     | Search memories by meaning and keywords                  |
-| `a`     | Add a memory by hand (kind `fact`, scope `project`)      |
-| `d`     | Forget the selected memory, after a confirmation         |
-| `esc`   | Back from a memory or a search, or close the view        |
+| Key     | Action                                                            |
+| ------- | ----------------------------------------------------------------- |
+| `enter` | Type a request, such as "forget my old home address", and send it |
+| `↑` `↓` | Scroll a reply longer than the view                               |
+| `r`     | Turn recall on every prompt on or off (`memory.recall.enabled`)   |
+| `esc`   | Cancel the request being typed, or close the view                 |
 
-The same store works from the command line:
+`/memory <request>` sends a request without the view and prints the reply; outside the TUI, `/memory` prints the same status as the view.
 
-| Command                  | Description                              |
-| ------------------------ | ---------------------------------------- |
-| `/memory list`           | List the newest memories of this project |
-| `/memory search <query>` | Search memories by meaning and keywords  |
-| `/memory forget <id>`    | Delete one memory                        |
-| `/memory stats`          | Show counts by kind and project          |
+Because sepiace returns no IDs, msa cannot list memories or delete one by ID. The sepiace console at [hi.sepiace.io/requests](https://hi.sepiace.io/requests) lists every request with the memories it changed.
 
-The model manages the same store through the `memory` tool, with `save`, `search`, `list`, and `forget` actions.
+## Move memories from memory.db
+
+msa 0.0.5 and earlier kept memories in `<agent dir>/memory.db`, or in the file `memory.database` named. When a session finds that file and sepiace is signed in, msa sends its memories to sepiace once, several per request and each request under 4,000 characters, naming the project for memories that belonged to one and splitting a longer memory at sentence ends. It then renames the file to `memory.db.migrated` and stops reading it. Memories that look like secrets are not sent; a notice lists them. If a request fails, the next session sends the memories that were not sent yet.
 
 ## Settings
 
@@ -63,44 +50,14 @@ The model manages the same store through the `memory` tool, with `save`, `search
 {
   "memory": {
     "enabled": true,
-    "database": "~/.msa/agent/memory.db",
-    "embedding": {
-      "enabled": true,
-      "baseUrl": "http://127.0.0.1:11434/v1",
-      "model": "embeddinggemma-2",
-      "queryPrefix": "task: search result | query: ",
-      "documentPrefix": "title: none | text: ",
-      "apiKeyEnv": "OPENAI_API_KEY",
-      "timeoutMs": 5000
-    },
-    "recall": {
-      "enabled": true,
-      "limit": 5,
-      "minScore": 0.72
-    }
+    "recall": { "enabled": true }
   }
 }
 ```
 
-| Setting                           | Type    | Default                          | Description                                                                    |
-| --------------------------------- | ------- | -------------------------------- | ------------------------------------------------------------------------------ |
-| `memory.enabled`                  | boolean | `true`                           | Register the `memory` tool, recall, and `/memory`.                             |
-| `memory.database`                 | string  | `<agent dir>/memory.db`          | SQLite file holding memories. Relative paths resolve from the agent directory. |
-| `memory.embedding.enabled`        | boolean | `true`                           | Compute embeddings for meaning-based search.                                   |
-| `memory.embedding.baseUrl`        | string  | `http://127.0.0.1:11434/v1`      | OpenAI-compatible base URL; `/embeddings` is appended.                         |
-| `memory.embedding.model`          | string  | `embeddinggemma-2`               | Embedding model at that endpoint.                                              |
-| `memory.embedding.queryPrefix`    | string  | EmbeddingGemma's task prefix     | Prepended to search queries; clear it for models without task prefixes.        |
-| `memory.embedding.documentPrefix` | string  | EmbeddingGemma's document prefix | Prepended to memory text before embedding.                                     |
-| `memory.embedding.apiKeyEnv`      | string  | None                             | Environment variable holding the API key, for endpoints that need one.         |
-| `memory.embedding.timeoutMs`      | number  | `5000`                           | Embedding request timeout.                                                     |
-| `memory.recall.enabled`           | boolean | `true`                           | Search memory on every user prompt and add matches to the run.                 |
-| `memory.recall.limit`             | number  | `5`                              | Maximum memories added to a run.                                               |
-| `memory.recall.minScore`          | number  | `0.72`                           | Minimum relevance for a memory to be recalled; tune it with the model.         |
+| Setting                 | Type    | Default | Description                                                                          |
+| ----------------------- | ------- | ------- | ------------------------------------------------------------------------------------ |
+| `memory.enabled`        | boolean | `true`  | Turn on the built-in `sepiace` MCP server, the `memory` tool, recall, and `/memory`. |
+| `memory.recall.enabled` | boolean | `true`  | Ask sepiace about every user prompt and add what it recalls to the run.              |
 
-With `memory.enabled: false` the tool is not registered, no recall runs, and `/memory` reports that memory is off.
-
-## Storage
-
-Memories live in one SQLite file (`memory.db`). Each row holds the text, kind (`fact`, `preference`, `decision`, `note`), scope, project, timestamps, use count, and its embedding; an FTS5 table next to it holds the full-text index, built for existing memories the first time a new msa opens the file. Saving the same text twice in the same scope refreshes the existing memory instead of adding a duplicate.
-
-Delete the file to start over. To move memories between machines, copy the file.
+With `memory.enabled: false` the `sepiace` server is turned off, the `memory` tool and `/memory` are not offered, and no recall runs. An entry named `sepiace` in `mcp.json` changes the built-in server: `{ "enabled": false }` turns it off, and a `url` in the user-level file points it elsewhere. msa reaches sepiace through the built-in MCP support: with `--no-mcp`, or an extension that replaces that support, the `memory` tool reports that sepiace is not connected and no recall runs.

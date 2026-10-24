@@ -36,10 +36,6 @@ export default class SessionIntegrations {
   }
 
   close(): Promise<void> {
-    return Promise.all([
-      this.orchestration.close(),
-      this.prWatch.close(),
-      this.memory.close(),
-    ]).then(() => undefined);
+    return Promise.all([this.orchestration.close(), this.prWatch.close()]).then(() => undefined);
   }
 }

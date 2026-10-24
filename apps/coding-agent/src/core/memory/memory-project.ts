@@ -28,7 +28,6 @@ const resolveProjectName = (dir: string): Promise<string> =>
   );
 
 const memoryProject = {
-  projectNameOf,
   resolveProjectName,
 };
 

@@ -58,10 +58,36 @@ const mcpResult = (
         serverInfo: { name: "issues", version: "1.0.0" },
       };
     case "tools/list":
-      return { tools: [{ inputSchema: { properties: {}, type: "object" }, name: "whoami" }] };
-    case "tools/call":
+      return {
+        tools: [
+          { inputSchema: { properties: {}, type: "object" }, name: "whoami" },
+          ...(state.options.memory === undefined
+            ? []
+            : [
+                {
+                  inputSchema: {
+                    properties: { request: { type: "string" } },
+                    required: ["request"],
+                    type: "object",
+                  },
+                  name: "memory",
+                },
+              ]),
+        ],
+      };
+    case "tools/call": {
+      const params = message.params as { name?: string; arguments?: { request?: string } };
+      if (params.name === "memory" && state.options.memory !== undefined) {
+        const request = params.arguments?.request ?? "";
+        state.memoryRequests.push(request);
+        const reply = state.options.memory(request);
+        return typeof reply === "string"
+          ? { content: [{ text: reply, type: "text" }] }
+          : { content: [{ text: reply.error, type: "text" }], isError: true };
+      }
       state.log.push(`call ${token}`);
       return { content: [{ text: `token ${token}`, type: "text" }] };
+    }
     default:
       return {};
   }
@@ -212,6 +238,7 @@ const initialState = (
   deletes: [],
   issued: 0,
   log: [],
+  memoryRequests: [],
   options,
   origin: "",
   refreshTokens: new Set(),
@@ -247,6 +274,7 @@ const startOAuthMcpServer = (options: mcpOauthServerTypes.ServerOptions = {}) =>
         deletes: state.deletes,
         expireAccessTokens: () => state.validTokens.clear(),
         log: state.log,
+        memoryRequests: state.memoryRequests,
         registrations: state.registrations,
         stall: state.stall,
         stalled: state.stalled,
