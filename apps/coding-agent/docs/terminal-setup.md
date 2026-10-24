@@ -222,12 +222,25 @@ Only force a capability supported by the complete terminal path. Unsupported esc
 
 msa reports its state with the [Program Status Protocol (OSC 7501)](https://www.superlogical.com/rex/docs/build/program-status), so terminals and agent dashboards can show whether it is working, waiting for you, done, or failed:
 
-| State     | When                                                                                       |
-| --------- | ------------------------------------------------------------------------------------------ |
-| `working` | An agent run or compaction is in progress. The message is the session name.                |
-| `blocked` | An extension dialog or login waits for you. The message is the dialog title.               |
-| `done`    | A run finished. The message is the session name.                                           |
-| `error`   | A run ended with an error that is not retried. The message is the first line of the error. |
-| `idle`    | msa started, or you cancelled the run.                                                     |
+| State     | When                                                                                                              |
+| --------- | ----------------------------------------------------------------------------------------------------------------- |
+| `working` | An agent run or compaction is in progress. The message is the session name.                                       |
+| `blocked` | An extension dialog or login waits for you, or model calls stopped. The message is the dialog title or the error. |
+| `done`    | A run finished. The message is the session name.                                                                  |
+| `error`   | A run ended with an error that is not retried. The message is the first line of the error.                        |
+| `idle`    | msa started, or you cancelled the run.                                                                            |
+
+A stop because a provider rejected the credential reports kind `auth`. A stop because the balance or quota ran out reports kind `quota` when the terminal lists it in its reply, and no kind otherwise.
 
 Reports never contain prompts or model output. msa sends them only after the terminal answers the protocol's support query; tmux and screen do not forward them. Set `MSA_PROGRAM_STATUS=1` to send reports without asking, or `MSA_PROGRAM_STATUS=0` to turn them off.
+
+## Notifications
+
+When model calls stop and no model in `enabledModels` can take over, msa rings the bell and sends an OSC 9 and an OSC 777 notification. What reaches you depends on every terminal on the path:
+
+| Path             | Bell                                                                                 | OSC 9 and OSC 777                                                                                                      |
+| ---------------- | ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------- |
+| tmux             | Forwarded                                                                            | Forwarded only with `set -g allow-passthrough on`; see [tmux](tmux.md#forward-notifications)                           |
+| Windows Terminal | Plays a sound and marks the tab. Add `"taskbar"` to `bellStyle` to flash the taskbar | OSC 9 text is ignored. OSC 777 shows a toast from Preview 1.26 with `"compatibility.allowOSC777": true` in the profile |
+
+For a screen the terminal cannot reach, such as the machine an SSH session comes from, set [`notifyCommand`](settings.md#interaction).

@@ -134,6 +134,8 @@ const handlers: Handlers = {
   error: (event, partial) => {
     if (event.errorMessage === undefined) delete partial.errorMessage;
     else partial.errorMessage = event.errorMessage;
+    if (event.errorStatus === undefined) delete partial.errorStatus;
+    else partial.errorStatus = event.errorStatus;
     finish(partial, event);
     return { error: partial, reason: event.reason, type: "error" };
   },

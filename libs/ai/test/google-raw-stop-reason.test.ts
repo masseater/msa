@@ -22,6 +22,7 @@ const { googleGenAiMock } = googleGenAiMockModule;
 
 beforeEach(() => {
   googleGenAiMock.streamChunks = undefined;
+  googleGenAiMock.streamError = undefined;
 });
 
 const MSA_USER_AGENT = `pi (${platform()}; ${arch()})`;
@@ -119,6 +120,23 @@ describe("Google raw stop reasons", () => {
       }),
     ),
   );
+});
+
+describe("Google request failures", () => {
+  it("record the HTTP status of the failed request", () =>
+    Effect.runPromise(
+      Effect.gen(function* () {
+        googleGenAiMock.streamError = Object.assign(new Error("quota gone"), { status: 429 });
+        const message = yield* Effect.promise(() =>
+          streamGoogleGenerativeAi(googleGenerativeModel(), context, {
+            apiKey: "test-api-key",
+            maxRetries: 0,
+          }).result(),
+        );
+        expect(message.stopReason).toBe("error");
+        expect(message.errorStatus).toBe(429);
+      }),
+    ));
 });
 
 describe("Google provider stream events", () => {

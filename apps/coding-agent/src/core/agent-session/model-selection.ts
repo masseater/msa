@@ -134,6 +134,53 @@ export default class SessionModelSelection {
     }, this);
   }
 
+  private switchModel(
+    next: { model: compatTypes.Model<any>; thinkingLevel?: agentTypes.ThinkingLevel | undefined },
+    options: agentSessionTypes.ModelMutationOptions,
+    source: "set" | "cycle",
+  ): Effect.Effect<void> {
+    return awaitingWith(function* () {
+      const previousModel = this.session.model;
+      const thinkingLevel = this.session.models.thinking.getThinkingLevelForModelSwitch(
+        next.model,
+        next.thinkingLevel,
+      );
+      this.session.agent.state.model = next.model;
+      this.session.sessionManager.appendModelChange(next.model.provider, next.model.id);
+      if (options.persist === true) {
+        this.session.settingsManager.models.setDefaultModelAndProvider(
+          next.model.provider,
+          next.model.id,
+        );
+        this.addPersistedDefaultToNonEmptyScope(next.model);
+      }
+
+      this.session.models.thinking.setThinkingLevel(thinkingLevel);
+
+      yield* performed(this.emitModelSelect(next.model, previousModel, source));
+    }, this);
+  }
+
+  fallbackModel(
+    failedProviders: ReadonlySet<string>,
+  ): Effect.Effect<compatTypes.Model<any> | undefined> {
+    return awaitingWith(function* () {
+      const available = new Set(
+        (yield* awaited(this.modelRuntimeInternal.getAvailable())).map(
+          (model) => `${model.provider}\0${model.id}`,
+        ),
+      );
+      const next = this.scopedModelsInternal.find(
+        (scoped) =>
+          !failedProviders.has(scoped.model.provider) &&
+          available.has(`${scoped.model.provider}\0${scoped.model.id}`),
+      );
+      if (next === undefined) return undefined;
+      yield* performed(this.switchModel(next, {}, "set"));
+      return next.model;
+    }, this);
+  }
+
   setModel(
     model: compatTypes.Model<any>,
     options: agentSessionTypes.ModelMutationOptions = {},
@@ -143,19 +190,8 @@ export default class SessionModelSelection {
         if ((yield* awaited(this.modelRuntimeInternal.checkAuth(model.provider))) === undefined) {
           throw new Error(`No API key for ${model.provider}/${model.id}`);
         }
-
-        const previousModel = this.session.model;
-        const thinkingLevel = this.session.models.thinking.getThinkingLevelForModelSwitch(model);
-        this.session.agent.state.model = model;
-        this.session.sessionManager.appendModelChange(model.provider, model.id);
-        if (options.persist === true) {
-          this.session.settingsManager.models.setDefaultModelAndProvider(model.provider, model.id);
-          this.addPersistedDefaultToNonEmptyScope(model);
-        }
-
-        this.session.models.thinking.setThinkingLevel(thinkingLevel);
-
-        yield* performed(this.emitModelSelect(model, previousModel, "set"));
+        yield* performed(this.switchModel({ model }, options, "set"));
+        this.session.run.fallback.resumeAfterModelChange();
       }, this),
     );
   }
@@ -166,10 +202,12 @@ export default class SessionModelSelection {
   ): Promise<agentSessionTypes.ModelCycleResult | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        if (this.scopedModelsInternal.length > 0) {
-          return yield* performed(this.cycleScopedModel(direction, options));
-        }
-        return yield* performed(this.cycleAvailableModel(direction, options));
+        const result =
+          this.scopedModelsInternal.length > 0
+            ? yield* performed(this.cycleScopedModel(direction, options))
+            : yield* performed(this.cycleAvailableModel(direction, options));
+        if (result !== undefined) this.session.run.fallback.resumeAfterModelChange();
+        return result;
       }, this),
     );
   }
@@ -198,25 +236,7 @@ export default class SessionModelSelection {
         direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
       const next = scopedModels[nextIndex];
       if (next === undefined) return undefined;
-      const thinkingLevel = this.session.models.thinking.getThinkingLevelForModelSwitch(
-        next.model,
-        next.thinkingLevel,
-      );
-
-      this.session.agent.state.model = next.model;
-      this.session.sessionManager.appendModelChange(next.model.provider, next.model.id);
-      if (options.persist === true) {
-        this.session.settingsManager.models.setDefaultModelAndProvider(
-          next.model.provider,
-          next.model.id,
-        );
-        this.addPersistedDefaultToNonEmptyScope(next.model);
-      }
-
-      this.session.models.thinking.setThinkingLevel(thinkingLevel);
-
-      yield* performed(this.emitModelSelect(next.model, currentModel, "cycle"));
-
+      yield* performed(this.switchModel(next, options, "cycle"));
       return { isScoped: true, model: next.model, thinkingLevel: this.session.thinkingLevel };
     }, this);
   }
@@ -238,22 +258,7 @@ export default class SessionModelSelection {
         direction === "forward" ? (currentIndex + 1) % len : (currentIndex - 1 + len) % len;
       const nextModel = availableModels[nextIndex];
       if (nextModel === undefined) return undefined;
-
-      const thinkingLevel = this.session.models.thinking.getThinkingLevelForModelSwitch(nextModel);
-      this.session.agent.state.model = nextModel;
-      this.session.sessionManager.appendModelChange(nextModel.provider, nextModel.id);
-      if (options.persist === true) {
-        this.session.settingsManager.models.setDefaultModelAndProvider(
-          nextModel.provider,
-          nextModel.id,
-        );
-        this.addPersistedDefaultToNonEmptyScope(nextModel);
-      }
-
-      this.session.models.thinking.setThinkingLevel(thinkingLevel);
-
-      yield* performed(this.emitModelSelect(nextModel, currentModel, "cycle"));
-
+      yield* performed(this.switchModel({ model: nextModel }, options, "cycle"));
       return { isScoped: false, model: nextModel, thinkingLevel: this.session.thinkingLevel };
     }, this);
   }

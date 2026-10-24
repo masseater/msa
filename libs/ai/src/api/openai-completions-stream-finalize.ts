@@ -5,7 +5,7 @@ import openaiCompletionsStreamState from "./openai-completions-stream-state.ts";
 import type openaiCompletionsStreamTypesModule from "./openai-completions-stream-types.types.ts";
 
 const { finishAllBlocks } = openaiCompletionsStreamState;
-const { formatProviderError, normalizeProviderError } = errorBody;
+const { formatProviderError, normalizeProviderError, recordErrorStatus } = errorBody;
 
 function finalizeCompletionsStream(
   state: openaiCompletionsStreamTypesModule.CompletionsStreamState,
@@ -49,7 +49,9 @@ function failCompletionsStream(input: FailStreamInput): void {
     delete (block as { streamIndex?: number }).streamIndex;
   }
   output.stopReason = signal?.aborted === true ? "aborted" : "error";
-  output.errorMessage = formatProviderError(normalizeProviderError(error));
+  const failure = normalizeProviderError(error);
+  output.errorMessage = formatProviderError(failure);
+  recordErrorStatus(output, failure);
   const rawMetadata = (error as any)?.error?.metadata?.raw;
   if (Boolean(rawMetadata) && !output.errorMessage.includes(String(rawMetadata))) {
     output.errorMessage += `\n${rawMetadata}`;

@@ -199,6 +199,7 @@ declare namespace aiTypes {
   type EventChannelOptions<T, R> = aiStreamsKitTypes.EventChannelOptions<T, R>;
   type EventChannel<T, R> = aiStreamsKitTypes.EventChannel<T, R>;
   type RetryPolicy = aiStreamsKitTypes.RetryPolicy;
+  type ProviderUnusableReason = aiStreamsKitTypes.ProviderUnusableReason;
   type RetryCallbacks = aiStreamsKitTypes.RetryCallbacks;
   type TranscriptMessages = aiStreamsKitTypes.TranscriptMessages;
   type ToolStateChanges = aiStreamsKitTypes.ToolStateChanges;

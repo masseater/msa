@@ -22,6 +22,7 @@ declare namespace proxyEventsTypes {
         type: "error";
         reason: Extract<aiTypes.StopReason, "aborted" | "error">;
         errorMessage?: string | undefined;
+        errorStatus?: number | undefined;
         usage: aiTypes.AssistantMessage["usage"];
         providerThinkingLevel?: string;
       };

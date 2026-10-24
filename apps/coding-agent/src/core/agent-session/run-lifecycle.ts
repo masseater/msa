@@ -278,6 +278,9 @@ export default class SessionRunLifecycle {
         this.session.run.retry.retryAttemptInternal = 0;
       }
 
+      if (yield* performed(this.session.run.fallback.afterResponse(message)))
+        return !this.agentRunAbortRequested;
+
       if (
         yield* awaited(this.session.compaction.auto.checkCompaction(message, true, toolResults))
       ) {

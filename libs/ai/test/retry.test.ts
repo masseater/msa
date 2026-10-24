@@ -2,10 +2,12 @@ import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
 import faux from "../src/providers/faux.ts";
+import providerFailure from "../src/utils/provider-failure.ts";
 import retry from "../src/utils/retry.ts";
 import type retryTypes from "../src/utils/retry.types.ts";
 
-const { isRetryableAssistantError, retryAssistantCall, retryDelayMs } = retry;
+const { isRetryableAssistantError } = providerFailure;
+const { retryAssistantCall, retryDelayMs } = retry;
 const { fauxAssistantMessage } = faux;
 
 const openAIExplicitRetryMessage =

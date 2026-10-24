@@ -202,6 +202,7 @@ declare namespace compatTypes {
   type EventChannelOptions<T, R> = aiTypes.EventChannelOptions<T, R>;
   type EventChannel<T, R> = aiTypes.EventChannel<T, R>;
   type RetryPolicy = aiTypes.RetryPolicy;
+  type ProviderUnusableReason = aiTypes.ProviderUnusableReason;
   type RetryCallbacks = aiTypes.RetryCallbacks;
   type TranscriptMessages = aiTypes.TranscriptMessages;
   type ToolStateChanges = aiTypes.ToolStateChanges;

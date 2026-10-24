@@ -51,7 +51,7 @@ const responsesModel: typesModule.Model<"openai-responses"> = {
 
 function drainResult(stream: {
   [Symbol.asyncIterator](): AsyncIterator<unknown>;
-  result(): Promise<{ errorMessage?: string; stopReason?: string }>;
+  result(): Promise<{ errorMessage?: string; errorStatus?: number; stopReason?: string }>;
 }) {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -72,7 +72,7 @@ describe("provider error body passthrough (per-tier regression)", () => {
           drainResult(streamOpenAICompletions(completionsModel, context, { apiKey: "test" })),
         );
 
-        expect(output.stopReason).toBe("error");
+        expect(output).toMatchObject({ errorStatus: 403, stopReason: "error" });
         expect(output.errorMessage).toContain("403");
         expect(output.errorMessage).toContain("blocked by gateway WAF");
         expect(output.errorMessage).not.toBe("403 status code (no body)");
@@ -105,7 +105,7 @@ describe("provider error body passthrough (per-tier regression)", () => {
           drainResult(streamOpenAIResponses(responsesModel, context, { apiKey: "test" })),
         );
 
-        expect(output.stopReason).toBe("error");
+        expect(output).toMatchObject({ errorStatus: 403, stopReason: "error" });
         expect(output.errorMessage).toContain("OpenAI API error (403)");
         expect(output.errorMessage).toContain("blocked by gateway WAF");
       }),

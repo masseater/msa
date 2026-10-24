@@ -131,3 +131,38 @@ describe("ProcessTerminal dimensions", () => {
     }
   });
 });
+
+describe("ProcessTerminal program status kinds", () => {
+  const blocked = {
+    app: "msa",
+    kind: "quota",
+    message: "out of credits",
+    state: "blocked",
+  } as const;
+
+  it("drops a kind the terminal did not list in its reply", () => {
+    withOverride(undefined, () => {
+      const harness = setupNegotiation();
+      try {
+        harness.send("\x1b]7501;?\x1b\\");
+        harness.terminal.setProgramStatus(blocked);
+        assert.ok(harness.writes.at(-1)!.startsWith("\x1b]7501;state=blocked:app=msa:msg="));
+      } finally {
+        harness.cleanup();
+      }
+    });
+  });
+
+  it("keeps a kind the terminal listed in its reply", () => {
+    withOverride(undefined, () => {
+      const harness = setupNegotiation();
+      try {
+        harness.send("\x1b]7501;?:kinds=permission,question,auth,quota\x1b\\");
+        harness.terminal.setProgramStatus(blocked);
+        assert.match(harness.writes.at(-1)!, /:kind=quota:/u);
+      } finally {
+        harness.cleanup();
+      }
+    });
+  });
+});

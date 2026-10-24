@@ -5,7 +5,8 @@ import programStatusModule from "./program-status.ts";
 import type programStatusTypes from "./program-status.types.ts";
 
 const { readEnv } = env;
-const { PROGRAM_STATUS_QUERY, formatProgramStatus, isProgramStatusReply } = programStatusModule;
+const { PROGRAM_STATUS_QUERY, formatProgramStatus, isProgramStatusReply, programStatusReplyKinds } =
+  programStatusModule;
 const { runEvery } = delay;
 
 const TERMINAL_PROGRESS_KEEPALIVE_MS = 1000;
@@ -17,6 +18,7 @@ export default class TerminalStatusReporter {
   private programStatus: programStatusTypes.ProgramStatus | undefined;
   private programStatusSupported = false;
   private programStatusQueryPending = false;
+  private programStatusKinds: ReadonlySet<string> | undefined;
 
   beginQuery(): string {
     const programStatusOverride = readEnv("MSA_PROGRAM_STATUS");
@@ -30,6 +32,7 @@ export default class TerminalStatusReporter {
     if (this.programStatusQueryPending) {
       this.programStatusQueryPending = false;
       this.programStatusSupported = true;
+      this.programStatusKinds = programStatusReplyKinds(sequence);
       this.writeProgramStatus();
     }
     return true;
@@ -52,12 +55,13 @@ export default class TerminalStatusReporter {
 
   setProgramStatus(status: programStatusTypes.ProgramStatus): void {
     this.programStatus = status.state === "clear" ? undefined : status;
-    if (this.programStatusSupported) process.stdout.write(formatProgramStatus(status));
+    if (this.programStatusSupported)
+      process.stdout.write(formatProgramStatus(status, this.programStatusKinds));
   }
 
   writeProgramStatus(): void {
     if (this.programStatusSupported && this.programStatus !== undefined) {
-      process.stdout.write(formatProgramStatus(this.programStatus));
+      process.stdout.write(formatProgramStatus(this.programStatus, this.programStatusKinds));
     }
   }
 

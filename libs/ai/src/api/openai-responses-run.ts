@@ -32,7 +32,7 @@ function finish(
 }
 
 function fail(
-  { output, options, formatError }: openaiResponsesRunTypes.ResponsesRunSpec<typesModule.Api>,
+  { output, options, recordError }: openaiResponsesRunTypes.ResponsesRunSpec<typesModule.Api>,
   events: eventStreamTypes.AssistantMessageEventStream,
   error: unknown,
 ): void {
@@ -42,7 +42,7 @@ function fail(
     delete (block as { customInput?: unknown }).customInput;
   }
   output.stopReason = options?.signal?.aborted === true ? "aborted" : "error";
-  output.errorMessage = formatError(error);
+  recordError(output, error);
   events.push({ error: output, reason: output.stopReason, type: "error" });
   events.end();
 }

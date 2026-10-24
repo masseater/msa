@@ -20,6 +20,11 @@ export default class TerminalSettings {
     return typeof command === "string" && command.trim() !== "" ? command : undefined;
   }
 
+  getNotifyCommand(): string | undefined {
+    const command = this.manager.globalSettings.notifyCommand;
+    return typeof command === "string" && command.trim() !== "" ? command : undefined;
+  }
+
   getExternalEditorCommand(): string {
     const configuredEditor = this.manager.settings.externalEditor;
     if (typeof configuredEditor === "string" && configuredEditor.trim() !== "") {

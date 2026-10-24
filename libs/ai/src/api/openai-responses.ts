@@ -11,7 +11,7 @@ import openaiResponsesRun from "./openai-responses-run.ts";
 
 const { clock, errorBody } = openaiResponsesKit;
 
-const { formatProviderError, normalizeProviderError } = errorBody;
+const { formatProviderError, normalizeProviderError, recordErrorStatus } = errorBody;
 const { currentTimeMillis } = clock;
 const { modelCall } = modelCallModule;
 const { resolveTranscript } = transcript;
@@ -28,15 +28,19 @@ type Stream<O extends typesModule.StreamOptions> = typesModule.StreamFunction<
   O
 >;
 
-function formatOpenAIError(model: ResponsesModel): (error: unknown) => string {
-  return (error) => {
+function recordOpenAIError(
+  model: ResponsesModel,
+): (output: typesModule.AssistantMessage, error: unknown) => void {
+  return (output, error) => {
+    const failure = normalizeProviderError(error);
     const message = formatProviderError(
-      normalizeProviderError(error),
+      failure,
       `${model.provider === "openai" ? "OpenAI" : model.provider} API error`,
     );
-    return message.includes("subscription_sharing_usage_limit_exceeded")
+    output.errorMessage = message.includes("subscription_sharing_usage_limit_exceeded")
       ? `${message}\nCheck your ChatGPT usage: ${CHATGPT_USAGE_URL}`
       : message;
+    recordErrorStatus(output, failure);
   };
 }
 
@@ -80,7 +84,6 @@ const stream = modelCall<
     const normalized = resolveTranscript(context, getCompat(model).supportsMidConvoSystemMessages);
     const configurationUpdateEffort = getConfigurationUpdateEffort(model)(options);
     return runResponsesStream({
-      formatError: formatOpenAIError(model),
       model,
       options,
       output: pendingOutput(model, configurationUpdateEffort),
@@ -91,6 +94,7 @@ const stream = modelCall<
           model,
           options,
         }),
+      recordError: recordOpenAIError(model),
       streamName: "OpenAI Responses",
     });
   },

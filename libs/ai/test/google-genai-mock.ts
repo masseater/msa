@@ -5,6 +5,7 @@ const googleGenAiMock = {
   finishReason: "MALFORMED_FUNCTION_CALL",
   includeFunctionCall: false,
   streamChunks: undefined as Array<Record<string, unknown>> | undefined,
+  streamError: undefined as Error | undefined,
 };
 
 const functionCallContent = {
@@ -29,7 +30,11 @@ class GoogleGenAI {
 
   models = {
     generateContentStream: () =>
-      Stream.toAsyncIterable(Stream.fromIterable(googleGenAiMock.streamChunks ?? [defaultChunk()])),
+      googleGenAiMock.streamError === undefined
+        ? Stream.toAsyncIterable(
+            Stream.fromIterable(googleGenAiMock.streamChunks ?? [defaultChunk()]),
+          )
+        : Promise.reject(googleGenAiMock.streamError),
   };
 }
 

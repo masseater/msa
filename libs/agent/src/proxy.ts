@@ -31,7 +31,10 @@ function buildProxyRequestOptions(
   };
 }
 
-class ProxyError extends Data.TaggedError("ProxyError")<{ readonly message: string }> {}
+class ProxyError extends Data.TaggedError("ProxyError")<{
+  readonly message: string;
+  readonly status?: number;
+}> {}
 
 const globalFetch = (): typeof globalThis.fetch => globalThis.fetch;
 
@@ -101,6 +104,7 @@ const openProxy = ({ model, context, options }: ProxyRequest, received: Received
     const text = yield* Effect.orElseSucceed(response.text, () => "");
     return yield* new ProxyError({
       message: errorFromBody(`Proxy error: ${response.status} ${received.statusText}`, text),
+      status: response.status,
     });
   });
 
@@ -167,9 +171,16 @@ const abortedBy = (signal: AbortSignal) =>
     });
   });
 
-const fail = (read: ProxyRead, message: string, aborted: boolean): void => {
+const fail = (
+  read: ProxyRead,
+  message: string,
+  status: number | undefined,
+  aborted: boolean,
+): void => {
   read.partial.stopReason = aborted ? "aborted" : "error";
   read.partial.errorMessage = message;
+  if (status === undefined) delete read.partial.errorStatus;
+  else read.partial.errorStatus = status;
   read.stream.push({ error: read.partial, reason: aborted ? "aborted" : "error", type: "error" });
 };
 
@@ -182,11 +193,21 @@ const streamProxyEffect = (request: ProxyRequest, read: ProxyRead): Effect.Effec
     );
     if (Exit.isSuccess(exit)) {
       if (!exit.value) {
-        fail(read, "Connection closed by proxy server before the response completed", false);
+        fail(
+          read,
+          "Connection closed by proxy server before the response completed",
+          undefined,
+          false,
+        );
       }
     } else {
       const error = Cause.squash(exit.cause);
-      fail(read, error instanceof Error ? error.message : String(error), signal?.aborted === true);
+      fail(
+        read,
+        error instanceof Error ? error.message : String(error),
+        error instanceof ProxyError ? error.status : undefined,
+        signal?.aborted === true,
+      );
     }
     read.stream.end();
   });

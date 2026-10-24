@@ -52,7 +52,7 @@ const attemptCodexSse = Effect.fn("attemptCodexSse")(function* (
     return undefined;
   }
   const info = describeCodexErrorBody(response)(errorText);
-  throw new Error(info.friendlyMessage || info.message);
+  throw Object.assign(new Error(info.friendlyMessage || info.message), { status: response.status });
 });
 
 function retryCodexSseAttempt(

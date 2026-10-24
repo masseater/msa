@@ -1,11 +1,14 @@
 import type { BetaRawMessageStreamEvent as RawMessageStreamEvent } from "@anthropic-ai/sdk/resources/beta/messages/messages.js";
 import { Effect, Stream } from "effect";
 
+import type typesModule from "../types.types.ts";
+import errorBody from "../utils/error-body.ts";
 import errors from "../utils/errors.ts";
 import jsonParse from "../utils/json-parse.ts";
 
 const { parseJsonWithRepair } = jsonParse;
 const { toErrorMessage } = errors;
+const { normalizeProviderError, recordErrorStatus } = errorBody;
 
 interface ServerSentEvent {
   event: string | null;
@@ -213,13 +216,14 @@ function iterateAnthropicEvents(
   });
 }
 
-function describeThrown(error: unknown): string {
-  return error instanceof Error ? error.message : JSON.stringify(error);
+function recordThrown(output: typesModule.AssistantMessage, error: unknown): void {
+  output.errorMessage = error instanceof Error ? error.message : JSON.stringify(error);
+  recordErrorStatus(output, normalizeProviderError(error));
 }
 
 const anthropicSse = {
-  describeThrown,
   iterateAnthropicEvents,
+  recordThrown,
 };
 
 export default anthropicSse;

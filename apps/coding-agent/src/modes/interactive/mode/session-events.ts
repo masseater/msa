@@ -1,3 +1,4 @@
+import tuiModule from "@msa/tui";
 import { Effect } from "effect";
 
 import config from "../../../config.ts";
@@ -9,10 +10,13 @@ import interval from "../../interval.ts";
 import type InteractiveMode from "../interactive-mode.ts";
 import themeModule from "../theme/theme.ts";
 const { theme } = themeModule;
-const { APP_TITLE } = config;
+const { APP_NAME, APP_TITLE } = config;
+const { formatAttentionAlert } = tuiModule;
+
+const firstLine = (text: string): string => text.split(/\r?\n/u, 1)[0]?.trim() ?? "";
 const { every } = interval;
 const { awaited, awaitingWith, performed } = awaitingModule;
-const { basename } = platformModule;
+const { basename, readEnv } = platformModule;
 
 export default class SessionEventRouter {
   private readonly mode: InteractiveMode;
@@ -37,10 +41,36 @@ export default class SessionEventRouter {
   updateTerminalTitle(): void {
     const cwdBasename = basename(this.mode.sessionManager.getCwd());
     const sessionName = this.mode.sessionManager.getSessionName();
+    const app =
+      this.mode.session.run.fallback.stalled === undefined ? APP_TITLE : `${APP_TITLE} (stopped)`;
     if (sessionName !== undefined && sessionName !== "") {
-      this.mode.ui.terminal.setTitle(`${APP_TITLE} - ${sessionName} - ${cwdBasename}`);
+      this.mode.ui.terminal.setTitle(`${app} - ${sessionName} - ${cwdBasename}`);
     } else {
-      this.mode.ui.terminal.setTitle(`${APP_TITLE} - ${cwdBasename}`);
+      this.mode.ui.terminal.setTitle(`${app} - ${cwdBasename}`);
+    }
+  }
+
+  private handleProviderEvent(event: agentSessionTypes.AgentSessionEvent): boolean {
+    switch (event.type) {
+      case "model_fallback":
+        this.mode.display.status.showWarning(
+          `${event.from} failed (${firstLine(event.errorMessage)}). Switched to ${event.to}.`,
+        );
+        return true;
+      case "provider_stalled": {
+        const message = `${event.model} stopped: ${firstLine(event.errorMessage)}`;
+        const tmux = (readEnv("TMUX") ?? "") !== "";
+        this.mode.ui.terminal.write(formatAttentionAlert(APP_NAME, message, { tmux }));
+        this.mode.layout.programStatus.setBlocked("provider", { kind: event.reason, message });
+        this.updateTerminalTitle();
+        return true;
+      }
+      case "provider_recovered":
+        this.mode.layout.programStatus.setBlocked("provider", undefined);
+        this.updateTerminalTitle();
+        return true;
+      default:
+        return false;
     }
   }
 
@@ -137,6 +167,7 @@ export default class SessionEventRouter {
           yield* awaited(this.mode.lifecycle.startup.init());
         this.mode.footer.invalidate();
         this.mode.layout.programStatus.handleEvent(event);
+        if (this.handleProviderEvent(event)) return;
         if (this.mode.view.streaming.handleStreamEvent(event)) return;
         yield* performed(this.handleSessionEvent(event));
       }, this),

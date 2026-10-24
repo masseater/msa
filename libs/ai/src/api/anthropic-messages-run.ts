@@ -14,7 +14,7 @@ const { assertRequestAuth, createClient, getAnthropicFederation } = anthropicMes
 const { resolveCacheRetention } = anthropicMessagesCompat;
 const { currentTimeMillis } = clock;
 const { appendAssistantMessageDiagnostic } = diagnosticsModule;
-const { describeThrown } = anthropicSse;
+const { recordThrown } = anthropicSse;
 
 interface ResolveClientInput {
   readonly model: typesModule.Model<"anthropic-messages">;
@@ -120,7 +120,7 @@ function failStream(input: FailStreamInput): void {
     delete (block as { partialJson?: string }).partialJson;
   }
   output.stopReason = signal?.aborted === true ? "aborted" : "error";
-  output.errorMessage = describeThrown(error);
+  recordThrown(output, error);
   events.push({ error: output, reason: output.stopReason, type: "error" });
   events.end();
 }

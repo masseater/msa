@@ -72,6 +72,12 @@ const displayProperties = {
   images: Type.Optional(ImageSettingsSchema),
   lastChangelogVersion: Type.Optional(Type.String()),
   markdown: Type.Optional(MarkdownSettingsSchema),
+  notifyCommand: Type.Optional(
+    Type.String({
+      description:
+        "Shell command run when msa stops and needs you, with the message in MSA_NOTIFY_MESSAGE. Global setting only.",
+    }),
+  ),
   outputPad: Type.Optional(
     Type.Union([Type.Literal(0), Type.Literal(1)], {
       default: SETTINGS_DEFAULTS.outputPad,
