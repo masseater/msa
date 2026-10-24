@@ -16,11 +16,13 @@ const { ENV_AGENT_DIR } = config;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const {
   awaited,
+  isAbsolutePath,
   joinPath,
   makeDirectory,
   makeTempDir,
   pathExists,
   readDirectory,
+  relativePath,
   removePath,
   runTest,
 } = testing;
@@ -80,7 +82,12 @@ it("keeps the orchestrator and memory databases and the handoffs in the agent di
 
       expect(yield* pathExists(joinPath(given, "orchestrator.db"))).toBe(true);
       expect(yield* pathExists(joinPath(given, "memory.db"))).toBe(true);
-      expect(handoff.path.startsWith(`${joinPath(given, "handoffs")}/`)).toBe(true);
+      const handoffs = joinPath(given, "handoffs");
+      const insideHandoffs = relativePath(handoffs, handoff.path);
+      expect(insideHandoffs).not.toBe("");
+      expect(insideHandoffs.startsWith("..")).toBe(false);
+      expect(isAbsolutePath(insideHandoffs)).toBe(false);
+      expect(joinPath(handoffs, insideHandoffs)).toBe(handoff.path);
       expect(yield* pathExists(handoff.path)).toBe(true);
       expect(yield* readDirectory(ambient)).toEqual([]);
     }),
