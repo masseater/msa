@@ -14,6 +14,13 @@ const { getSystemMessageText } = ai;
 const { DEVELOPMENT_STYLE } = developmentStyle;
 const { localTimeZone } = platform;
 
+const FILE_OPERATION_RULES = {
+  bash: "Use bash for file operations like ls, rg, find",
+  bashAndPowerShell:
+    "Use bash or PowerShell for file operations like listing, searching, and finding files",
+  powershell: "Use PowerShell for file operations like listing, searching, and finding files",
+} as const;
+
 function timeZoneSection(): string {
   const { name, offset } = localTimeZone();
   return [
@@ -85,15 +92,11 @@ function buildRules(
   const hasLs = selectedTools.includes("ls");
 
   if ((hasBash || hasPowerShell) && !hasGrep && !hasFind && !hasLs) {
-    if (hasBash && hasPowerShell) {
-      addRule(
-        "Use bash or PowerShell for file operations like listing, searching, and finding files",
-      );
-    } else if (hasPowerShell) {
-      addRule("Use PowerShell for file operations like listing, searching, and finding files");
-    } else {
-      addRule("Use bash for file operations like ls, rg, find");
-    }
+    addRule(
+      FILE_OPERATION_RULES[
+        hasBash && hasPowerShell ? "bashAndPowerShell" : hasPowerShell ? "powershell" : "bash"
+      ],
+    );
   }
 
   for (const name of selectedTools) {
@@ -281,6 +284,7 @@ function diffSystemPromptSections(
 }
 
 const systemPrompt = {
+  FILE_OPERATION_RULES,
   ORCHESTRATOR_PREAMBLE,
   buildSystemPrompt,
   buildSystemPromptSections,

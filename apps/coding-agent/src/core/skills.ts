@@ -166,6 +166,14 @@ function* loadExplicitSkillPaths(
   };
 }
 
+const SKILLS_INTRO = "The following skills provide specialized instructions for specific tasks.";
+
+const SKILL_READER_HINTS = {
+  bash: "Use bash to load a skill's file when the task matches its description.",
+  indirect: "Load a skill's file when the task matches its description.",
+  read: "Use the read tool to load a skill's file when the task matches its description.",
+} as const;
+
 function formatSkillsForPrompt(
   skills: skillsTypes.Skill[],
   fileReadTool: "read" | "bash" | "indirect" = "read",
@@ -177,12 +185,8 @@ function formatSkillsForPrompt(
   }
 
   const lines = [
-    "\n\nThe following skills provide specialized instructions for specific tasks.",
-    fileReadTool === "read"
-      ? "Use the read tool to load a skill's file when the task matches its description."
-      : fileReadTool === "bash"
-        ? "Use bash to load a skill's file when the task matches its description."
-        : "Load a skill's file when the task matches its description.",
+    `\n\n${SKILLS_INTRO}`,
+    SKILL_READER_HINTS[fileReadTool],
     "When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.",
     "",
     "<available_skills>",
@@ -201,6 +205,6 @@ function formatSkillsForPrompt(
   return lines.join("\n");
 }
 
-const skillsModule = { formatSkillsForPrompt, loadSkills };
+const skillsModule = { SKILLS_INTRO, SKILL_READER_HINTS, formatSkillsForPrompt, loadSkills };
 
 export default skillsModule;

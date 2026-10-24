@@ -7,8 +7,14 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 
 import sdk from "../src/core/sdk.ts";
 import SessionManager from "../src/core/session-manager.ts";
+import bashTypes from "../src/core/tools/bash-types.ts";
 
 const { createAgentSession } = sdk;
+const {
+  bashToolSystemPromptContribution: {
+    guidelines: [bashGuideline],
+  },
+} = bashTypes;
 const { getModel } = compat;
 
 const {
@@ -132,9 +138,7 @@ const exposesCurrentSessionStateToTheBuilt = () =>
         }),
       );
       expect(session.sessionFile).toBeTruthy();
-      expect(session.tools.prompt.systemPrompt).toContain(
-        "You can inspect MSA_* environment variables for current model and session details.",
-      );
+      expect(session.tools.prompt.systemPrompt).toContain(bashGuideline);
 
       const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash");
       expect(bashTool).toBeTruthy();

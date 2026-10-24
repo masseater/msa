@@ -53,7 +53,7 @@ const canSelectPowershellInsteadOfBash = Effect.gen(function* () {
     "edit",
     "write",
   ]);
-  expect(session.tools.prompt.systemPrompt).toContain("- powershell: Execute PowerShell commands");
+  expect(session.tools.prompt.systemPrompt).toContain("\n- powershell: ");
   expect(session.tools.prompt.systemPrompt).not.toContain("- bash:");
   session.dispose();
 });

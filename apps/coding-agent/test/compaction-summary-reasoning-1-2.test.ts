@@ -4,11 +4,13 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
+import compactionPrompts from "../src/core/compaction/compaction-prompts.ts";
 import compaction from "../src/core/compaction/index.ts";
 import type compactionTypes from "../src/core/compaction/index.types.ts";
 import compactionSummaryReasoning1Support from "./compaction-summary-reasoning-1-support.ts";
 
 const { compact, generateSummary, generateSummaryWithUsage } = compaction;
+const { TURN_PREFIX_SUMMARIZATION_PROMPT } = compactionPrompts;
 
 const { createModel } = compactionSummaryReasoning1Support;
 
@@ -89,9 +91,8 @@ const preservesThePreviousSummaryWithoutAnEmpty = () =>
       const prompt = yield* toJsonText(requestContext.messages);
 
       expect(prompt).toContain("# Conversation\\n[User]: Summarize this.");
-      expect(prompt).toContain(
-        "# Instructions\\nThe messages above are earlier context from an ongoing conversation.",
-      );
+      const instructions = yield* toJsonText(`# Instructions\n${TURN_PREFIX_SUMMARIZATION_PROMPT}`);
+      expect(prompt).toContain(instructions.slice(1, -1));
     }),
   );
 

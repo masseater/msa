@@ -5,9 +5,9 @@ const DEVELOPMENT_STYLE = [
   "Carry verification and cleanup through to the end without asking: remove the test data, temporary tokens, temporary files, and worktrees you created.",
   "Answer questions about recent or changing facts by searching and reading the original source, not from memory. Before you build something new, look for a library, tool, or existing code in the repository that already does it.",
   "Write a rule that must keep holding into the repository, in AGENTS.md or a skill, not into memory.",
-  "On a branch or pull request, rebase onto the latest main when you start, before you push, and when CI fails or the pull request is conflicting or behind. Never open a pull request with conflicts.",
+  "On a branch, rebase onto the latest state of the branch it merges into (usually main) when you start, before you push, and when CI fails or the branch is conflicting or behind. Never push or open a pull request with unresolved conflicts.",
   "End with a report of the resulting state and how to use it, in a few lines, plus where and how you verified it. Leave out history, intermediate changes, and lists of what you did.",
-  "Leave open only what needs the user's decision, such as a security policy, billing, or a choice of specification, and mention decisions only when there is one.",
+  "Leave open only what needs the user's decision, such as a security policy, billing, or a choice of specification. When nothing needs the user's decision, do not say so; name a decision only when there is one.",
   "State causes, frequencies, and costs as measured numbers with where they came from.",
   "Keep names and technical terms from code and logs as they are; do not translate them.",
 ]
