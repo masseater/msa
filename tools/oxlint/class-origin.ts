@@ -217,11 +217,7 @@ function isExternal(walk: Walk, node: Node): boolean {
     : isExternalReference(walk, value);
 }
 
-const declaredInPackage = (
-  context: Context,
-  node: Node,
-  selfSpecifiers: readonly string[],
-): boolean => !isExternal({ context, selfSpecifiers }, node);
+const declaredInPackage = (walk: Walk, node: Node): boolean => !isExternal(walk, node);
 
 const classOrigin = { declaredInPackage };
 

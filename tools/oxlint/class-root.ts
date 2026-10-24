@@ -49,6 +49,7 @@ const matchesSpecifier = (specifier: string, pattern: string): boolean => {
 
 const isPackageSpecifier = (walk: Walk, specifier: string): boolean =>
   !/^(?:[./#]|node:)/u.test(specifier) &&
+  !walk.builtins.has(specifier.split("/")[0] ?? specifier) &&
   !walk.selfSpecifiers.some((pattern) => matchesSpecifier(specifier, pattern));
 
 const importSource = (def: Definition): string | undefined =>

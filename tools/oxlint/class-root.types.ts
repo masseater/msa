@@ -3,7 +3,11 @@ import type { Context } from "vite-plus/lint/plugins";
 import type flowTypes from "./flow.types.ts";
 
 declare namespace classRootTypes {
-  type Walk = { readonly context: Context; readonly selfSpecifiers: readonly string[] };
+  type Walk = {
+    readonly builtins: ReadonlySet<string>;
+    readonly context: Context;
+    readonly selfSpecifiers: readonly string[];
+  };
 
   type Root = {
     readonly base: string | undefined;

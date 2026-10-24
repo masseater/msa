@@ -22,8 +22,10 @@ const { isPackageImport, parentOf } = classRoot;
 
 const {
   hasKeyIn,
+  inTypePosition,
   isAliasInit,
   isCalleeOf,
+  isCodeRunner,
   isGlobalNamed,
   isGlobalObject,
   memberKey,
@@ -220,9 +222,12 @@ const createSharedWrite = (walk: Walk, report: Reporters) => {
     if (isApi(walk, node.callee, new Set()) && isSharedTarget(node.arguments[0]))
       report.write(node);
   };
+  const escapesGlobalObject = (node: Node): boolean =>
+    isGlobalObject(walk, node) && !staysGlobal(walk, node);
+  const escapesCodeRunner = (node: Node): boolean =>
+    isCodeRunner(walk, node) && !isCalleeOf(node) && !inTypePosition(node);
   const checkGlobalEscape = (node: Node): void => {
-    if (!isGlobalObject(walk, node) || staysGlobal(walk, node)) return;
-    report.globalEscape(node);
+    if (escapesGlobalObject(node) || escapesCodeRunner(node)) report.globalEscape(node);
   };
   const checkApiEscape = (node: ESTree.MemberExpression): void => {
     if (isApiMember(walk, node, new Set()) && !isCalleeOf(node) && !isAliasInit(node))

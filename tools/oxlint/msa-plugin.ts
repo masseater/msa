@@ -25,7 +25,7 @@ const PROTOTYPE_MESSAGE =
 const SHARED_WRITE_MESSAGE =
   "グローバルオブジェクトや package から import した値を書き換えない。差し替える値は引数か Layer で渡す";
 const GLOBAL_ESCAPE_MESSAGE =
-  "globalThis などのグローバルオブジェクトを値として渡さない。要るメンバーをその場で読む";
+  "globalThis などのグローバルオブジェクトや Function・eval を値として渡さない。要るメンバーをその場で読み、その場で呼ぶ";
 const WRITE_API_ESCAPE_MESSAGE =
   "Object.assign・Object.defineProperty・Reflect.set などを値として渡さない。書き換える先が判定できるよう、その場で呼ぶ";
 const PROTOTYPE_NAMES: ReadonlySet<string> = new Set(["__proto__", "setPrototypeOf"]);
@@ -131,13 +131,18 @@ const noSyncFs = defineRule({
 
 type WorkspacePackage = { readonly dir: string; readonly specifiers: readonly string[] };
 
-const packagesOption = (context: Context): readonly WorkspacePackage[] => {
-  const [options] = context.options as readonly (
-    | { packages?: readonly WorkspacePackage[] }
-    | undefined
-  )[];
-  return options?.packages ?? [];
+type ClassExtendsOptions = {
+  readonly builtins?: readonly string[];
+  readonly packages?: readonly WorkspacePackage[];
 };
+
+const classExtendsOptions = (context: Context): ClassExtendsOptions => {
+  const [options] = context.options as readonly (ClassExtendsOptions | undefined)[];
+  return options ?? {};
+};
+
+const packagesOption = (context: Context): readonly WorkspacePackage[] =>
+  classExtendsOptions(context).packages ?? [];
 
 const selfSpecifiersOf = (context: Context): readonly string[] =>
   packagesOption(context)
@@ -152,6 +157,7 @@ const packagesSchema = [
   {
     additionalProperties: false,
     properties: {
+      builtins: { items: { type: "string" }, type: "array" },
       packages: {
         items: {
           additionalProperties: false,
@@ -171,26 +177,24 @@ const packagesSchema = [
 
 const noLocalClassExtends = defineRule({
   create(context) {
-    const selfSpecifiers = selfSpecifiersOf(context);
+    const walk = {
+      builtins: new Set(classExtendsOptions(context).builtins ?? []),
+      context,
+      selfSpecifiers: selfSpecifiersOf(context),
+    };
     const strings = new StaticString(context);
     const reportPrototype = createReporter(context, PROTOTYPE_MESSAGE);
     const checkName = (node: Node, name: string | undefined): void => {
       if (PROTOTYPE_NAMES.has(name ?? "")) reportPrototype(node);
     };
     const checkString = (node: Node): void => checkName(node, strings.fold(node));
-    const shared = sharedWrite.createSharedWrite(
-      { context, selfSpecifiers },
-      {
-        apiEscape: createReporter(context, WRITE_API_ESCAPE_MESSAGE),
-        globalEscape: createReporter(context, GLOBAL_ESCAPE_MESSAGE),
-        write: createReporter(context, SHARED_WRITE_MESSAGE),
-      },
-    );
+    const shared = sharedWrite.createSharedWrite(walk, {
+      apiEscape: createReporter(context, WRITE_API_ESCAPE_MESSAGE),
+      globalEscape: createReporter(context, GLOBAL_ESCAPE_MESSAGE),
+      write: createReporter(context, SHARED_WRITE_MESSAGE),
+    });
     const check = (node: ESTree.Class): void => {
-      if (
-        node.superClass !== null &&
-        classOrigin.declaredInPackage(context, node.superClass, selfSpecifiers)
-      )
+      if (node.superClass !== null && classOrigin.declaredInPackage(walk, node.superClass))
         context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
     };
     return {

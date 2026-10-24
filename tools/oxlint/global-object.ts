@@ -48,9 +48,15 @@ const isNamedGlobal = (walk: Walk, value: Node, names: ReadonlySet<string>): boo
     hasKeyIn(names, value) &&
     isGlobalObject(walk, value.object));
 
+const CONSTRUCTOR_KEYS: ReadonlySet<string> = new Set(["constructor"]);
+
+const isCodeRunner = (walk: Walk, node: Node): boolean =>
+  isNamedGlobal(walk, strip(node), CODE_RUNNERS);
+
 function runsCode(walk: Walk, callee: Node): boolean {
   const value = strip(callee);
-  return isCall(value) ? runsCode(walk, value.callee) : isNamedGlobal(walk, value, CODE_RUNNERS);
+  if (isCall(value)) return runsCode(walk, value.callee);
+  return hasKeyIn(CONSTRUCTOR_KEYS, value) || isCodeRunner(walk, value);
 }
 
 function isGlobalObject(walk: Walk, node: Node): boolean {
@@ -90,6 +96,11 @@ const GLOBAL_STAYS: Readonly<
 const isTypeOnly = (parent: Node): boolean =>
   parent.type.startsWith("TS") && parent.type !== "TSExportAssignment";
 
+const inTypePosition = (node: Node): boolean => {
+  const parent = parentOf(climbOut(node));
+  return parent !== null && isTypeOnly(parent);
+};
+
 const staysGlobal = (walk: Walk, node: Node): boolean => {
   const outer = climbOut(node);
   const parent = parentOf(outer);
@@ -101,8 +112,10 @@ const staysGlobal = (walk: Walk, node: Node): boolean => {
 
 const globalObject = {
   hasKeyIn,
+  inTypePosition,
   isAliasInit,
   isCalleeOf,
+  isCodeRunner,
   isGlobalNamed,
   isGlobalObject,
   memberKey,
