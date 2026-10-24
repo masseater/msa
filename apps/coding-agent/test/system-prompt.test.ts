@@ -15,24 +15,7 @@ const showsNoneForEmptyToolsList = () => {
   expect(prompt).toContain("<tools>\n(none)\n");
 };
 
-const showsFilePathsGuidelineEvenWithNo = () => {
-  const prompt = buildSystemPrompt({
-    contextFiles: [],
-    cwd: process.cwd(),
-    selectedTools: [],
-    skills: [],
-  });
-
-  expect(prompt).toContain("Show file paths clearly");
-};
-
-const keepsTheDefaultAndCustomPromptPrefixes = () => {
-  const defaultPrompt = buildSystemPrompt({
-    contextFiles: [],
-    cwd: "/tmp",
-    selectedTools: [],
-    skills: [],
-  });
+const keepsTheCustomPromptPrefix = () => {
   const customPrompt = buildSystemPrompt({
     contextFiles: [],
     customPrompt: "You are Exact.",
@@ -41,10 +24,7 @@ const keepsTheDefaultAndCustomPromptPrefixes = () => {
     skills: [],
   });
 
-  expect(defaultPrompt.startsWith("You are an expert coding assistant operating inside msa")).toBe(
-    true,
-  );
-  expect(customPrompt.startsWith("You are Exact.\n\n<cwd>")).toBe(true);
+  expect(customPrompt.startsWith("You are Exact.\n\n<")).toBe(true);
 };
 
 const preservesAnExactForcedPromptWithoutSections = () => {
@@ -87,21 +67,6 @@ const includesAllDefaultToolsWhenSnippetsAre = () => {
   expect(prompt).toContain("- write:");
 };
 
-const instructsModelsToResolveMsaDocsAnd = () => {
-  const prompt = buildSystemPrompt({
-    contextFiles: [],
-    cwd: process.cwd(),
-    skills: [],
-  });
-
-  expect(prompt).toContain(
-    "- When reading msa docs or examples, resolve docs/... under Additional docs and examples/... under Examples, not the current working directory",
-  );
-  expect(prompt).toContain(
-    "environment variables (docs/environment-variables.md), MCP servers (docs/mcp.md)",
-  );
-};
-
 const includesCustomToolsInAvailableToolsSection = () => {
   const prompt = buildSystemPrompt({
     contextFiles: [],
@@ -130,15 +95,10 @@ const omitsCustomToolsFromAvailableToolsSection = () => {
 describe("buildSystemPrompt", () => {
   describe("empty tools", () => {
     test("shows (none) for empty tools list", showsNoneForEmptyToolsList);
-
-    test("shows file paths guideline even with no tools", showsFilePathsGuidelineEvenWithNo);
   });
 
   describe("prompt structure", () => {
-    test(
-      "keeps the default and custom prompt prefixes exact",
-      keepsTheDefaultAndCustomPromptPrefixes,
-    );
+    test("keeps the custom prompt prefix exact", keepsTheCustomPromptPrefix);
 
     test(
       "preserves an exact forced prompt without sections",
@@ -172,11 +132,6 @@ describe("buildSystemPrompt", () => {
 
       expect(prompt).toContain(expected);
     });
-
-    test(
-      "instructs models to resolve msa docs and examples under absolute base paths",
-      instructsModelsToResolveMsaDocsAnd,
-    );
   });
 
   describe("custom tool snippets", () => {

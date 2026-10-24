@@ -65,7 +65,7 @@ const runOversizedToolTurn = Effect.fn("runOversizedToolTurn")(function* (modelO
   const harness = yield* Effect.promise(() =>
     createHarness({
       extensionFactories: [summarizingExtension(order, observedSettings)],
-      models: [{ contextWindow: 3000, id: "faux-1", maxTokens: 100 }],
+      models: [{ contextWindow: 3600, id: "faux-1", maxTokens: 100 }],
       settings: { compaction: compactionSettings(modelOverride) },
       tools: [largeTool],
     }),

@@ -16,7 +16,7 @@ Steering messages enter after the current assistant turn. Follow-up messages ent
 
 The active branch supplies conversation history. msa converts its session entries into model-compatible user, assistant, and tool-result messages.
 
-msa builds the system prompt from its base instructions and discovered context files. The request also carries tool definitions and skill descriptions.
+msa builds the system prompt from its base instructions, its development style, and discovered context files. The development style is the `development_style` section: how msa fixes problems, where reasons go, how branches stay on main, and how it reports. It is in every session, the orchestrator's workers and reviewers included, and reviewers judge work against it. The request also carries tool definitions and skill descriptions.
 
 A turn started with [`/ask`](slash-commands.md#ask-a-question) changes both for that turn: the request carries only the read-only tools, and the system prompt has an extra `ask` section that says to answer without starting work.
 

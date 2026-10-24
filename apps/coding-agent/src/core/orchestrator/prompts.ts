@@ -2,6 +2,9 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const REPORT_LIMIT = 6000;
 
+const STYLE_CRITERIA =
+  "Judge the work against every rule in the <development_style> section of your system prompt as well as against the goal. Work that breaks one of those rules is not acceptable; name the rule and where it is broken.";
+
 function truncateReport(text: string): string {
   return text.length <= REPORT_LIMIT ? text : `${text.slice(0, REPORT_LIMIT)}\n[truncated]`;
 }
@@ -125,6 +128,7 @@ function taskReviewerPrompt(
   return [
     "You are reviewing work another thread just did. You did not write it.",
     "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
+    STYLE_CRITERIA,
     "Report what is wrong, what is missing, and what you checked. Say clearly whether the work is acceptable.",
     "",
     work,
@@ -150,6 +154,7 @@ function roundReviewPrompt(
   return [
     `You are the closing reviewer of round "${round}" of an orchestrated project. Every task of the round has finished, and nothing of the round runs while you work.`,
     "Step back and review the work as a whole, not task by task: check the results against each other and against the original intent, read the code they changed, and find gaps, conflicts, duplicated work, and wrong assumptions.",
+    STYLE_CRITERIA,
     "Then redesign: say what should change in the overall approach and lay out the remaining work as tasks with their dependencies, so the orchestrator can start the next round. If nothing is left, say so.",
     "",
     "<round-tasks>",

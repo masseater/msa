@@ -10,6 +10,7 @@
 
 ### Changed
 
+- Every session's system prompt has a `development_style` section with msa's own way of working: choose the fix that removes the cause instead of asking the user to pick, fix every place with the same problem and add a guard against it coming back, keep reasons in commit messages, finish verification and cleanup without asking, search for recent facts and existing solutions, write lasting rules into the repository, rebase onto main before pushing, report the resulting state in a few lines with measured numbers, and keep names untranslated. `--system-prompt` and `SYSTEM.md` keep it, and the orchestrator's reviewers judge work against it ([docs](docs/how-msa-works.md#context))
 - `create_task` rejects a task without dependencies once 3 or more work tasks of the project are waiting or running; the error lists them and says to name a dependency or insert the task with `replan`. With 2 or fewer, `dependsOn` can still be empty. The orchestrator's tool guidelines now ask for strict dependencies: work on the same area, branch, or precondition is chained, parallel only when neither task depends on the other's result, and a red main gets one fixing task that the other work tasks wait for ([docs](docs/cli.md#tools))
 
 ### Fixed

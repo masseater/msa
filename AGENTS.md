@@ -64,6 +64,12 @@ release. Add a tool name to select part of the graph. For example, run
 - **場合に応じて切り替える機能は要らない**。モードやフラグで「どちらでも選べる」形にせず、本人の思想に沿う 1 つに決める。
 - 具体的な手法（開発の進め方、ハーネスが自動化する範囲、人に残す判断、品質の基準、道具の作り方）は、決まったものからこのファイルの該当する節に書く。書くのは目的とやり方だけで、理由と経緯はコミットログに書く。
 
+## 組み込みの指示
+
+- msa の開発スタイル（直し方・理由の置き場所・検証と後片付け・main の取り込み・報告の書き方など）は、組み込みの指示が持つ。ユーザー環境の AGENTS.md に頼らない。全セッションに効くものは `apps/coding-agent/src/core/development-style.ts`（system prompt の `development_style` 節）に、役ごとのものは `apps/coding-agent/src/core/orchestrator/prompts.ts` の worker・reviewer の prompt や orchestrator のツールの `promptGuidelines` に、1 か所だけ書く。reviewer はその決まりを判定の基準に使う。
+- 環境・個人・アカウントに依る決まり（シェル、リポジトリの置き場所、秘密情報の管理、使うサービスやアカウント）は組み込みの指示に入れない。
+- prompt・指針・ツール説明の文言をテストで固定しない。テストで固定するのはハーネスの挙動（判定・状態遷移・ツールが断ることなど）だけにする。
+
 ## コマンド
 
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。

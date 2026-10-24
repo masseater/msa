@@ -218,7 +218,7 @@ msa --append-system-prompt ./instructions.md
 See [Configuration](configuration.md) for saved configuration, [Security](security.md#understand-project-trust) for project trust, and [Environment Variables](environment-variables.md) for process controls.
 
 - `--system-prompt <text|path>`<br>
-  Replaces the default system prompt with text or the contents of an existing file.
+  Replaces the default system prompt with text or the contents of an existing file; the `development_style` section stays.
 - `--append-system-prompt <text|path>`<br>
   Appends text or an existing file to the system prompt and is repeatable.
 - `--tui-mode <mode>`<br>

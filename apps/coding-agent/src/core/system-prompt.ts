@@ -1,6 +1,7 @@
 import ai from "@msa/ai";
 
 import config from "../config.ts";
+import developmentStyle from "./development-style.ts";
 import platform from "./platform/index.ts";
 import skillsModule from "./skills.ts";
 import type skillsTypes from "./skills.types.ts";
@@ -10,6 +11,7 @@ const { getDocsPath, getExamplesPath, getReadmePath } = config;
 const { formatSkillsForPrompt } = skillsModule;
 
 const { getSystemMessageText } = ai;
+const { DEVELOPMENT_STYLE } = developmentStyle;
 const { localTimeZone } = platform;
 
 function timeZoneSection(): string {
@@ -209,6 +211,7 @@ function fillPromptSections(
       toolGuidelines,
     });
   }
+  promptSections["development_style"] = DEVELOPMENT_STYLE;
 
   if (appendSystemPrompt !== "") promptSections["addendum"] = appendSystemPrompt;
   fillContextSections(
