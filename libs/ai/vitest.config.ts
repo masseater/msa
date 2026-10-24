@@ -11,7 +11,9 @@ const telemetrySrcIndex = fileURLToPath(new URL("../telemetry/src/index.ts", imp
 export default defineConfig({
   resolve: {
     alias: [{ find: /^@msa\/telemetry$/u, replacement: telemetrySrcIndex }],
+    conditions: ["source"],
   },
+  ssr: { resolve: { conditions: ["source"] } },
   test: {
     environment: "node",
     globalSetup: ["./test/global-setup.ts"],
