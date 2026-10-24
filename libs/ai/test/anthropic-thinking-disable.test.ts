@@ -4,13 +4,14 @@ import { describe, expect, it } from "vite-plus/test";
 import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import clock from "../src/utils/clock.ts";
-import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { currentTimeMillis } = clock;
 const { streamSimple } = compat;
 
-const { envValue } = env;
 const { chooseModel, compatValue, modelsWhere, usesApi } = modelChoice;
 
 interface AnthropicThinkingPayload {
@@ -196,9 +197,7 @@ describe("Anthropic thinking disable payload", () => {
   )("maps xhigh reasoning to effort=xhigh for $id", usesAdaptiveEffort("xhigh"));
 });
 
-describe.skipIf(
-  envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-)("Anthropic thinking disable E2E", () => {
+describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic thinking disable E2E", () => {
   it("disables thinking for Claude reasoning models", { retry: 2, timeout: 30000 }, () =>
     Effect.runPromise(
       Effect.gen(function* () {

@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import compactionExtensionsSupport from "./compaction-extensions-support.ts";
 
 const { awaited, runTest } = testing;
-const { capturedEvents, cleanUp, createExtension, createSession, hasApiKey, prepare } =
+const { capturedEvents, cleanUp, createExtension, createSession, hasLiveAuth, prepare } =
   compactionExtensionsSupport;
 
 const shouldAllowExtensionsToProvideCustomCompaction = () =>
@@ -49,7 +49,7 @@ const shouldAllowExtensionsToProvideCustomCompaction = () =>
     }),
   );
 
-describe.skipIf(!hasApiKey)("Compaction extensions", () => {
+describe.skipIf(!hasLiveAuth)("Compaction extensions", () => {
   beforeEach(prepare);
 
   afterEach(cleanUp);
@@ -85,7 +85,7 @@ const shouldIncludeEntriesInCompactEventAfter = () =>
     }),
   );
 
-describe.skipIf(!hasApiKey)("Compaction extensions", () => {
+describe.skipIf(!hasLiveAuth)("Compaction extensions", () => {
   beforeEach(prepare);
 
   afterEach(cleanUp);

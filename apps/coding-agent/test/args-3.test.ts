@@ -131,7 +131,7 @@ const capturesUnknownLongFlagsWithEqualsSyntax = () => {
 const parsesMultipleFlagsTogether = () => {
   const result = parseArgs([
     "--provider",
-    "anthropic",
+    "anthropic-api",
     "--model",
     "claude-sonnet",
     "--print",
@@ -140,7 +140,7 @@ const parsesMultipleFlagsTogether = () => {
     "@prompt.md",
     "Do the task",
   ]);
-  expect(result.provider).toBe("anthropic");
+  expect(result.provider).toBe("anthropic-api");
   expect(result.model).toBe("claude-sonnet");
   expect(result.print).toBe(true);
   expect(result.thinking).toBe("high");

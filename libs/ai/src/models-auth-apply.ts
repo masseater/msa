@@ -1,5 +1,6 @@
 import { Deferred, Effect, Exit } from "effect";
 
+import type resolveTypes from "./auth/resolve.types.ts";
 import type typesModule from "./auth/types.ts";
 import modelsAuth from "./models-auth.ts";
 import modelsKit from "./models-kit.ts";
@@ -49,27 +50,28 @@ interface AuthorizedRequest<TModel extends typesModuleModule2.AnyModel, TOptions
     typesModuleModule2.ProviderRequestOptions<TModel>;
 }
 
-interface ApplyAuthRequest<TModel extends typesModuleModule2.AnyModel, TOptions> {
-  readonly state: modelsStateTypes.ModelsState;
+type AuthOverrides = resolveTypes.AuthResolutionOverrides | undefined;
+
+interface AuthorizeRequest<TModel extends typesModuleModule2.AnyModel, TOptions> {
   readonly model: TModel;
   readonly options: TOptions | undefined;
+  readonly resolve: (overrides: AuthOverrides) => Effect.Effect<typesModule.AuthResult | undefined>;
 }
 
-const applyAuth = <
+const authorize = <
   TModel extends typesModuleModule2.AnyModel,
   TOptions extends typesModuleModule2.ProviderRequestOptions<TModel> &
     typesModuleModule.ModelsRequestTransforms,
 >({
-  state,
   model,
   options,
-}: ApplyAuthRequest<TModel, TOptions>): Effect.Effect<AuthorizedRequest<TModel, TOptions>> =>
+  resolve,
+}: AuthorizeRequest<TModel, TOptions>): Effect.Effect<AuthorizedRequest<TModel, TOptions>> =>
   Effect.gen(function* () {
-    requireProvider({ model, state });
-    const resolution = yield* getAuth({
-      overrides: { apiKey: options?.apiKey, env: options?.env, signal: options?.signal },
-      providerOrModel: model,
-      state,
+    const resolution = yield* resolve({
+      apiKey: options?.apiKey,
+      env: options?.env,
+      signal: options?.signal,
     });
     if (resolution === undefined) {
       return yield* Effect.die(
@@ -101,6 +103,30 @@ const applyAuth = <
       typesModuleModule2.ProviderRequestOptions<TModel>;
 
     return { requestModel, requestOptions };
+  });
+
+interface ApplyAuthRequest<TModel extends typesModuleModule2.AnyModel, TOptions> {
+  readonly state: modelsStateTypes.ModelsState;
+  readonly model: TModel;
+  readonly options: TOptions | undefined;
+}
+
+const applyAuth = <
+  TModel extends typesModuleModule2.AnyModel,
+  TOptions extends typesModuleModule2.ProviderRequestOptions<TModel> &
+    typesModuleModule.ModelsRequestTransforms,
+>({
+  state,
+  model,
+  options,
+}: ApplyAuthRequest<TModel, TOptions>): Effect.Effect<AuthorizedRequest<TModel, TOptions>> =>
+  Effect.gen(function* () {
+    requireProvider({ model, state });
+    return yield* authorize({
+      model,
+      options,
+      resolve: (overrides) => getAuth({ overrides, providerOrModel: model, state }),
+    });
   });
 
 const storeCredential = (
@@ -208,6 +234,7 @@ const logout = ({ state, providerId, options }: LogoutRequest): Effect.Effect<vo
 const modelsAuthApply = {
   applyAuth,
   assertChatModel,
+  authorize,
   login,
   logout,
   requireChatProvider,

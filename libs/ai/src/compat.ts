@@ -10,8 +10,16 @@ import typeboxHelpers from "./utils/typebox-helpers.ts";
 import uuid from "./utils/uuid.ts";
 import validation from "./utils/validation.ts";
 
-const { complete, completeSimple, getModel, getModels, getProviders, stream, streamSimple } =
-  compatStream;
+const {
+  complete,
+  completeSimple,
+  getModel,
+  getModels,
+  getProviders,
+  resolveAuth,
+  stream,
+  streamSimple,
+} = compatStream;
 
 const {
   anthropicMessagesLazy,
@@ -148,6 +156,7 @@ const compat = {
   renderSystemMessageUpdate: textModule.renderSystemMessageUpdate,
   repairJson: jsonParse.repairJson,
   resetApiProviders: builtinApiProviders.resetApiProviders,
+  resolveAuth,
   resolveTranscript: transcriptModule.resolveTranscript,
   resolveTranscriptTools: transcriptModule.resolveTranscriptTools,
   retryAssistantCall: retry.retryAssistantCall,

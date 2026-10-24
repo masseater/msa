@@ -4,7 +4,10 @@ import { describe, expect, inject, it } from "vite-plus/test";
 import compatModule from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { complete } = compatModule;
 
@@ -72,9 +75,7 @@ describe("responseId E2E Tests", () => {
     },
   );
 
-  describe.skipIf(
-    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-  )("Anthropic Provider", () => {
+  describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic Provider", () => {
     const llm = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
     it("should expose responseId", { retry: 3, timeout: 30000 }, () =>

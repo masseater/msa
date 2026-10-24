@@ -6,14 +6,15 @@ import compatModule from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import cacheRetentionSupport from "./cache-retention-support.ts";
 import type cacheRetentionSupportTypes from "./cache-retention-support.types.ts";
-import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { stream } = compatModule;
 const { stream: streamAnthropic } = anthropicMessages;
 
 const { capturePayload, context, isolateCacheRetentionEnv } = cacheRetentionSupport;
-const { hasEnv } = env;
 const { chooseModel } = modelChoice;
 
 type AnthropicCachePayload = cacheRetentionSupportTypes.AnthropicCachePayload;
@@ -98,11 +99,11 @@ describe("Cache Retention (MSA_CACHE_RETENTION)", () => {
   isolateCacheRetentionEnv();
 
   describe("Anthropic Provider", () => {
-    it.skipIf(!hasEnv("ANTHROPIC_API_KEY"))(
+    it.skipIf(!hasLiveAuth("anthropic-api"))(
       "should use default cache TTL (no ttl field) when MSA_CACHE_RETENTION is not set",
       () => Effect.runPromise(usesDefaultTtl),
     );
-    it.skipIf(!hasEnv("ANTHROPIC_API_KEY"))(
+    it.skipIf(!hasLiveAuth("anthropic-api"))(
       "should use 1h cache TTL when MSA_CACHE_RETENTION=long",
       () => Effect.runPromise(usesLongTtlFromEnv),
     );

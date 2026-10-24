@@ -22,7 +22,7 @@ const msg = (entry: {
       api: "anthropic-messages",
       content: [{ text, type: "text" }],
       model: "claude-test",
-      provider: "anthropic",
+      provider: "anthropic-api",
       role,
       stopReason: "stop",
       timestamp: 1,
@@ -136,7 +136,7 @@ const tracksModelFromAssistantMessage = () => {
     msg({ id: "2", parentId: "1", role: "assistant", text: "hi" }),
   ];
   const ctx = buildSessionContext(entries);
-  expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic" });
+  expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic-api" });
 };
 const tracksModelFromModelChangeEntry = () => {
   const entries: sessionManagerTypes.SessionEntry[] = [
@@ -146,7 +146,7 @@ const tracksModelFromModelChangeEntry = () => {
   ];
   const ctx = buildSessionContext(entries);
 
-  expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic" });
+  expect(ctx.model).toEqual({ modelId: "claude-test", provider: "anthropic-api" });
 };
 const includesSummaryBeforeKeptMessages = () => {
   const entries: sessionManagerTypes.SessionEntry[] = [

@@ -9,7 +9,7 @@ import openaiCodexStreamSupport from "./openai-codex-stream-support.ts";
 
 const { streamSimple: streamSimpleOpenAICodexResponses } = openaiCodexResponses;
 
-const { chooseModel, modelsWhere } = modelChoice;
+const { modelsWhere } = modelChoice;
 const {
   decodeCodexRequestBody,
   helloEvents,
@@ -66,13 +66,20 @@ const defaultTierSse = sseText(
 
 const STANDARD_PRIORITY_MULTIPLIER = 2;
 
-const pricedModel = chooseModel(
-  "openai-codex",
+const firstCodex = (
+  wanted: string,
+  accepts: (model: typesModule.Model<"openai-codex-responses">) => boolean,
+) => {
+  const [model] = codexCatalog(accepts);
+  if (model === undefined) throw new Error(`The openai-codex catalog has no ${wanted} model`);
+  return model;
+};
+
+const pricedModel = firstCodex(
   "standard-priced Codex",
   (model) => model.cost.serviceTiers?.priority === STANDARD_PRIORITY_MULTIPLIER,
 );
-const surchargedModel = chooseModel(
-  "openai-codex",
+const surchargedModel = firstCodex(
   "priority-surcharged Codex",
   (model) => (model.cost.serviceTiers?.priority ?? 0) > STANDARD_PRIORITY_MULTIPLIER,
 );
