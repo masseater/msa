@@ -34,10 +34,12 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
     "./index.types": {
+      "source": "./src/index.types.ts",
       "types": "./dist/index.types.d.ts",
       "import": "./dist/index.types.js"
     },
@@ -47,42 +49,52 @@
       "import": "./dist/models/types.js"
     },
     "./models": {
+      "source": "./src/models.ts",
       "types": "./dist/models.d.ts",
       "import": "./dist/models.js"
     },
     "./models.types": {
+      "source": "./src/models.types.ts",
       "types": "./dist/models.types.d.ts",
       "import": "./dist/models.types.js"
     },
     "./compat": {
+      "source": "./src/compat.ts",
       "types": "./dist/compat.d.ts",
       "import": "./dist/compat.js"
     },
     "./compat.types": {
+      "source": "./src/compat.types.ts",
       "types": "./dist/compat.types.d.ts",
       "import": "./dist/compat.types.js"
     },
     "./providers/*": {
+      "source": "./src/providers/*.ts",
       "types": "./dist/providers/*.d.ts",
       "import": "./dist/providers/*.js"
     },
     "./api/*": {
+      "source": "./src/api/*.ts",
       "types": "./dist/api/*.d.ts",
       "import": "./dist/api/*.js"
     },
     "./utils/*": {
+      "source": "./src/utils/*.ts",
       "types": "./dist/utils/*.d.ts",
       "import": "./dist/utils/*.js"
     },
     "./oauth": {
+      "source": "./src/oauth.ts",
       "types": "./dist/oauth.d.ts",
       "import": "./dist/oauth.js"
     },
     "./oauth.types": {
+      "source": "./src/oauth.types.ts",
       "types": "./dist/oauth.types.d.ts",
       "import": "./dist/oauth.types.js"
     },
     "./*.types": {
+      "source": "./src/*.types.ts",
       "types": "./dist/*.types.d.ts",
       "import": "./dist/*.types.js"
     }
