@@ -18,7 +18,7 @@ declare namespace goalCheckTextTypes {
     number: number | null;
     problems: readonly Problem[];
 
-    unavailable?: string;
+    stop?: string;
   }
 
   interface Verification {

@@ -59,14 +59,12 @@ function rejectionPrompt(verification: Verification): string {
 function passed(verification: Verification): boolean {
   return (
     verification.checks.every((result) => result.passed) &&
-    verification.pullRequests.every(
-      (gate) => gate.problems.length === 0 && gate.unavailable === undefined,
-    )
+    verification.pullRequests.every((gate) => gate.problems.length === 0 && gate.stop === undefined)
   );
 }
 
-function unavailableText(verification: Verification): string | undefined {
-  const reasons = verification.pullRequests.flatMap((gate) => gate.unavailable ?? []);
+function stopText(verification: Verification): string | undefined {
+  const reasons = verification.pullRequests.flatMap((gate) => gate.stop ?? []);
   return reasons.length === 0 ? undefined : reasons.join("\n");
 }
 
@@ -79,6 +77,6 @@ function waitingForCi(verification: Verification): boolean {
   );
 }
 
-const goalCheckText = { failureText, passed, rejectionPrompt, unavailableText, waitingForCi };
+const goalCheckText = { failureText, passed, rejectionPrompt, stopText, waitingForCi };
 
 export default goalCheckText;

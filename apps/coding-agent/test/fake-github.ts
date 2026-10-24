@@ -15,6 +15,7 @@ interface FakePull {
   base: string;
   state: "OPEN" | "MERGED" | "CLOSED";
   head: string;
+  mergedBy?: { login: string; commit: string };
   title: string;
   body: string;
 }
@@ -129,6 +130,17 @@ export default class FakeGitHub {
       }
       const pull = this.pulls.find((candidate) => String(candidate.number) === target);
       if (pull === undefined) return refused(`no pull requests found for ${target}`);
+      if (command === "view" && args.join(" ").includes("mergedBy")) {
+        const by = pull.mergedBy;
+        return ok(
+          yield* Effect.orDie(
+            encodeJson({
+              mergeCommit: by === undefined ? null : { oid: by.commit },
+              mergedBy: by === undefined ? null : { login: by.login },
+            }),
+          ),
+        );
+      }
       if (command === "view") return ok(yield* Effect.orDie(encodeJson(yield* this.view(pull))));
       if (command === "merge") return yield* this.merge(pull, args);
       return refused(`fake gh does not know pr ${command}`);
@@ -184,6 +196,28 @@ export default class FakeGitHub {
     });
   }
 
+  mergeOutside(number: number, login: string): Effect.Effect<string> {
+    return Effect.gen({ self: this }, function* () {
+      const pull = this.pulls.find((candidate) => candidate.number === number);
+      if (pull === undefined) throw new Error(`no pull request #${number}`);
+      yield* this.refresh(pull);
+      return yield* this.land(pull, login);
+    });
+  }
+
+  private land(pull: FakePull, login: string): Effect.Effect<string> {
+    return Effect.gen({ self: this }, function* () {
+      const commit = yield* git(
+        this.origin,
+        `-c user.name=t -c user.email=t@example.invalid commit-tree -m "pull #${pull.number}" -p refs/heads/${pull.base} ${pull.head}^{tree}`,
+      );
+      yield* git(this.origin, `update-ref refs/heads/${pull.base} ${commit.output}`);
+      pull.state = "MERGED";
+      pull.mergedBy = { commit: commit.output, login };
+      return commit.output;
+    });
+  }
+
   private merge(
     pull: FakePull,
     args: readonly string[],
@@ -202,12 +236,7 @@ export default class FakeGitHub {
       const ci = this.ci.get(pull.head);
       if (ci !== undefined && ci !== "success")
         return refused("required status checks have not passed");
-      const commit = yield* git(
-        this.origin,
-        `-c user.name=t -c user.email=t@example.invalid commit-tree -m "pull #${pull.number}" -p refs/heads/${pull.base} ${pull.head}^{tree}`,
-      );
-      yield* git(this.origin, `update-ref refs/heads/${pull.base} ${commit.output}`);
-      pull.state = "MERGED";
+      yield* this.land(pull, "harness");
       this.merged.push({
         body: flag("--body"),
         number: pull.number,

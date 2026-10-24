@@ -119,6 +119,7 @@ declare namespace orchestratorTypesTypes {
     mergeable: string;
     mergeState: string;
     verified: VerifiedPullRequest | null;
+    harnessMerge: string | null;
     checkedAt: number;
   }
 

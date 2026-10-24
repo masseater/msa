@@ -186,6 +186,11 @@ function addReportVerdict(database: DatabaseSync): void {
   database.exec("ALTER TABLE reports ADD COLUMN verdict TEXT");
 }
 
+function addHarnessMerge(database: DatabaseSync): void {
+  if (columnNames(database, "task_pull_requests").includes("harness_merge_sha")) return;
+  database.exec("ALTER TABLE task_pull_requests ADD COLUMN harness_merge_sha TEXT");
+}
+
 function addMissingRounds(database: DatabaseSync): void {
   database.exec(
     `INSERT OR IGNORE INTO rounds (id, project, title, created_at)
@@ -257,6 +262,7 @@ function openDatabase(path: string): DatabaseSync {
   addTaskChecks(database);
   addWorkspaceColumns(database);
   addReportVerdict(database);
+  addHarnessMerge(database);
   addMissingRounds(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;

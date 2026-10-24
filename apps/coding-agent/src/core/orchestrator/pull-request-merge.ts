@@ -1,6 +1,7 @@
 import { Effect, Result } from "effect";
 
 import pullRequestFinish from "./pull-request-finish.ts";
+import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
@@ -12,6 +13,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { pullRequests } = pullRequestsModule;
 const { problemsOf, short } = pullRequestProblems;
 const { finish } = pullRequestFinish;
+const { mergedOutside, outsideMergeLine } = pullRequestOutside;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
@@ -47,6 +49,7 @@ function squash(
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
     const { owner, record, verified } = ready;
+    store.markHarnessMerge(runtime.database, task.id, verified.sha);
     const [merging, after] = yield* Effect.uninterruptible(
       Effect.all([
         Effect.result(pullRequests.merge(runtime, owner.cwd, record.number, verified)),
@@ -177,6 +180,9 @@ function afterReview(
       const got = yield* readPull(runtime, task, owner);
       if ("kind" in got) return got;
       const { pull, record, verified } = got;
+      if (mergedOutside(record)) {
+        return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, owner.cwd, record) };
+      }
       if (record.state === "MERGED") {
         return yield* finish(runtime, task, record, `PR #${record.number} was already merged.`);
       }

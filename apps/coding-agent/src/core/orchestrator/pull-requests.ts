@@ -111,6 +111,7 @@ function recordOf(
     branch: pull.headRefName,
     checkedAt: now,
     ci: ciOf(pull),
+    harnessMerge: null,
     headSha: pull.headRefOid,
     mergeState: (pull.mergeStateStatus ?? "UNKNOWN").toUpperCase(),
     mergeable: (pull.mergeable ?? "UNKNOWN").toUpperCase(),
@@ -230,10 +231,9 @@ function save(
   verified: Verified | null,
   now: number,
 ): PullRequest {
-  const record = recordOf(taskId, pull, verified, now);
-  store.savePullRequest(runtime.database, record);
+  store.savePullRequest(runtime.database, recordOf(taskId, pull, verified, now));
   runtime.publish();
-  return record;
+  return store.pullRequestOf(runtime.database, taskId) ?? recordOf(taskId, pull, verified, now);
 }
 
 function ciTiming(runtime: runtimeTypes.Runtime): { pollMs: number; waitMs: number } {

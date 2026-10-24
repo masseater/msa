@@ -17,6 +17,7 @@ interface PullRequestRow {
   verified_sha: string | null;
   verified_title: string | null;
   verified_body: string | null;
+  harness_merge_sha: string | null;
   checked_at: number;
 }
 
@@ -26,6 +27,7 @@ function toPullRequest(row: PullRequestRow): PullRequest {
     branch: row.branch,
     checkedAt: row.checked_at,
     ci: row.ci as orchestratorTypesTypes.PullRequestCi,
+    harnessMerge: row.harness_merge_sha,
     headSha: row.head_sha,
     mergeState: row.merge_state,
     mergeable: row.mergeable,
@@ -67,7 +69,9 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
          head_sha = excluded.head_sha, ci = excluded.ci, mergeable = excluded.mergeable,
          merge_state = excluded.merge_state, verified_sha = excluded.verified_sha,
          verified_title = excluded.verified_title, verified_body = excluded.verified_body,
-         checked_at = excluded.checked_at`,
+         checked_at = excluded.checked_at,
+         harness_merge_sha = CASE WHEN task_pull_requests.number = excluded.number
+           THEN task_pull_requests.harness_merge_sha END`,
     )
     .run(
       pullRequest.taskId,
@@ -87,11 +91,23 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
     );
 }
 
+function markHarnessMerge(database: DatabaseSync, taskId: string, sha: string): void {
+  database
+    .prepare("UPDATE task_pull_requests SET harness_merge_sha = ? WHERE task_id = ?")
+    .run(sha, taskId);
+}
+
 function movePullRequest(database: DatabaseSync, from: string, to: string): void {
   database.prepare("DELETE FROM task_pull_requests WHERE task_id = ?").run(to);
   database.prepare("UPDATE task_pull_requests SET task_id = ? WHERE task_id = ?").run(to, from);
 }
 
-const pullRequestStore = { listPullRequests, movePullRequest, pullRequestOf, savePullRequest };
+const pullRequestStore = {
+  listPullRequests,
+  markHarnessMerge,
+  movePullRequest,
+  pullRequestOf,
+  savePullRequest,
+};
 
 export default pullRequestStore;

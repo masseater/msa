@@ -11,7 +11,7 @@ import threadRun from "./thread-run.ts";
 import type threadRunTypes from "./thread-run.types.ts";
 
 const { outcomes } = outcomeModule;
-const { failureText, passed, rejectionPrompt, unavailableText, waitingForCi } = goalCheckText;
+const { failureText, passed, rejectionPrompt, stopText, waitingForCi } = goalCheckText;
 const { threadRuns } = threadRun;
 const { MAX_REJECTIONS } = threadRuns;
 const { ciTiming, verifyAll, workerTasks } = goalCheckRun;
@@ -74,9 +74,9 @@ function decide(
     if (!threadRuns.continueWithNotes(thread, readBefore)) threadRuns.settle(thread, undefined);
     return;
   }
-  const unavailable = unavailableText(results);
-  if (unavailable !== undefined) {
-    threadRuns.settle(thread, new TaskStopped({ message: unavailable }));
+  const stop = stopText(results);
+  if (stop !== undefined) {
+    threadRuns.settle(thread, new TaskStopped({ message: stop }));
     return;
   }
   if (waitingForCi(results)) {

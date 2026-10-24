@@ -1,5 +1,6 @@
 import { Effect, Result } from "effect";
 
+import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -13,6 +14,7 @@ const { worktrees } = worktreeModule;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { scheduling } = schedule;
+const { mergedOutside, outsideMergeLine } = pullRequestOutside;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -66,6 +68,12 @@ function settleInterrupted(
     if (status !== "running" && status !== "stopped") return undefined;
     const read = yield* readBack(runtime, task, recorded);
     const now = yield* nowMillis;
+    if ("record" in read && mergedOutside(read.record)) {
+      if (status !== "running") return undefined;
+      store.setTaskStatus(runtime.database, task.id, "stopped", now);
+      const line = yield* outsideMergeLine(runtime, task, task.cwd, read.record);
+      return { line, status: "stopped" };
+    }
     if ("record" in read) {
       const { record } = read;
       const done = yield* finish(

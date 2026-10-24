@@ -1,6 +1,7 @@
 import { Effect, Result } from "effect";
 
 import type goalCheckTextTypes from "./goal-check-text.types.ts";
+import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
@@ -10,6 +11,7 @@ import worktreeModule from "./worktree.ts";
 
 const { pullRequests } = pullRequestsModule;
 const { problemsOf } = pullRequestProblems;
+const { mergedOutside, outsideMergeLine } = pullRequestOutside;
 const { worktrees } = worktreeModule;
 const { nowMillis } = runtimeModule;
 
@@ -28,8 +30,8 @@ function check(
       return {
         number: null,
         problems: [],
+        stop: `The harness cannot read the pull request of ${owner.branch} with gh, so it cannot check, review, or merge this task: ${found.failure.message}. Install gh, run gh auth login, or point origin at GitHub, then rerun the task.`,
         task,
-        unavailable: `The harness cannot read the pull request of ${owner.branch} with gh, so it cannot check, review, or merge this task: ${found.failure.message}. Install gh, run gh auth login, or point origin at GitHub, then rerun the task.`,
       };
     }
     const pull = found.success;
@@ -49,6 +51,10 @@ function check(
     const local = yield* worktrees.headOf(owner.cwd);
     if (!live()) return undefined;
     const unverified = pullRequests.save(runtime, task.id, pull, null, now);
+    if (mergedOutside(unverified)) {
+      const stop = yield* outsideMergeLine(runtime, task, owner.cwd, unverified);
+      return { number: unverified.number, problems: [], stop, task };
+    }
     const problems = problemsOf(
       unverified,
       local,

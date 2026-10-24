@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS task_pull_requests (
   verified_sha TEXT,
   verified_title TEXT,
   verified_body TEXT,
+  harness_merge_sha TEXT,
   checked_at INTEGER NOT NULL
 );
 `;
