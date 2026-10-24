@@ -1,10 +1,11 @@
 import type compatTypes from "@msa/ai/compat.types";
-import { Effect } from "effect";
+import { Duration, Effect } from "effect";
 
 import type AgentSession from "../agent-session.ts";
 import authGuidance from "../auth-guidance.ts";
 import decideModule from "../decision/decide.ts";
 import type decideTypes from "../decision/decide.types.ts";
+import decisionModel from "../decision/decision-model.ts";
 import modelResolver from "../model-resolver.ts";
 import type orchestratorTypes from "../orchestrator/orchestrator.types.ts";
 import nodeChildProcess from "../platform/node/child-process.ts";
@@ -12,6 +13,9 @@ import nodeChildProcess from "../platform/node/child-process.ts";
 const { execFile } = nodeChildProcess;
 const { resolveModelReference } = modelResolver;
 const { formatNoModelSelectedMessage } = authGuidance;
+const { decisionModelReference, prepareDecisionModel } = decisionModel;
+
+const DECISION_MODEL_WAIT = Duration.minutes(10);
 
 function exitCodeOf(error: { code?: unknown; killed?: boolean } | null): number | null {
   if (error === null) return 0;
@@ -83,7 +87,32 @@ function decide(
   session: AgentSession,
   request: decideTypes.DecideRequest,
 ): Promise<decideTypes.Decision> {
-  return Effect.runPromise(session.integrations.decision.provide(decideModule.decide(request)));
+  const settings = session.settingsManager.models;
+  const prepared = Effect.promise(() =>
+    prepareDecisionModel(settings, session.models.selection.modelRuntimeInternal),
+  ).pipe(
+    Effect.timeoutOrElse({
+      duration: DECISION_MODEL_WAIT,
+      orElse: () =>
+        Effect.succeed<decideTypes.DecisionModelPreparation>({
+          model: decisionModelReference(settings),
+          reason: `not loaded within ${Duration.format(DECISION_MODEL_WAIT)}`,
+          status: "failed",
+        }),
+    }),
+  );
+  return Effect.runPromise(
+    prepared.pipe(
+      Effect.flatMap((preparation) =>
+        preparation.status === "failed"
+          ? Effect.succeed<decideTypes.Decision>({
+              reason: `could not load ${preparation.model}: ${preparation.reason}`,
+              status: "undecided",
+            })
+          : session.integrations.decision.provide(decideModule.decide(request)),
+      ),
+    ),
+  );
 }
 
 const orchestratorCallbacks = { decide, defaults, resolveModel, runCommand };

@@ -7,6 +7,8 @@ import ModelRuntime from "../src/core/model-runtime.ts";
 import type modelRuntimeTypes from "../src/core/model-runtime.types.ts";
 import sdk from "../src/core/sdk.ts";
 import SessionManager from "../src/core/session-manager.ts";
+import SettingsManager from "../src/core/settings-manager.ts";
+import type settingsManagerTypes from "../src/core/settings-manager.types.ts";
 
 const { createAgentSession } = sdk;
 
@@ -39,7 +41,11 @@ function registerModel(
   });
 }
 
-function createHarness(options?: { isWorker?: boolean }) {
+function createHarness(options?: {
+  isWorker?: boolean;
+  settings?: Partial<settingsManagerTypes.Settings>;
+  register?: (modelRuntime: modelRuntimeTypes.ModelRuntime) => void;
+}) {
   return Effect.gen(function* () {
     yield* makeDirectory(tempDir);
     const sessionDir = `${tempDir}/sessions`;
@@ -58,6 +64,7 @@ function createHarness(options?: { isWorker?: boolean }) {
       ModelRuntime.create({ credentials: authStorage, modelsPath: `${tempDir}/models.json` }),
     );
     registerModel(modelRuntime, model);
+    options?.register?.(modelRuntime);
     const sessionManager = SessionManager.create(tempDir, sessionDir, { id: "sdk" });
     const { session } = yield* Effect.promise(() =>
       createAgentSession({
@@ -67,6 +74,9 @@ function createHarness(options?: { isWorker?: boolean }) {
         modelRuntime,
         sessionManager,
         ...(options?.isWorker === undefined ? {} : { isWorker: options.isWorker }),
+        ...(options?.settings === undefined
+          ? {}
+          : { settingsManager: SettingsManager.inMemory(options.settings) }),
       }),
     );
     sessionManager.appendMessage({ content: "start", role: "user", timestamp: 1 });

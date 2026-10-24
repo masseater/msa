@@ -8,18 +8,15 @@ const { captureProcess, processRunnerLayer } = captureProcessModule;
 const { runMainWith } = runMain;
 
 const PROBE_RESULT_FILE = "decide-probe.json";
+const PROBE_PROMPT = "decide-probe: create the probe task";
 const PROBE_SETTINGS = { decision: { model: "local/decide-probe" } };
+const DECIDED = /^Review verdict: (pass|fail) \(local\/decide-probe: /u;
 
 class DecideSmokeError extends Data.TaggedError("DecideSmokeError")<{
   readonly message: string;
 }> {}
 
-const AnsweredProbe = Schema.fromJsonString(
-  Schema.Struct({
-    answers: Schema.Record(Schema.String, Schema.Unknown),
-    stopReason: Schema.Literal("stop"),
-  }),
-);
+const ProbeResult = Schema.fromJsonString(Schema.Struct({ verdict: Schema.String }));
 
 const decideSmoke = (binary: string) =>
   Effect.gen(function* () {
@@ -34,10 +31,12 @@ const decideSmoke = (binary: string) =>
     );
     const { exitCode, stderr } = yield* captureProcess({
       args: [
-        "--mode",
-        "rpc",
         "-e",
         path.join(import.meta.dirname, "binary-smoke", "decide-probe.ts"),
+        "--model",
+        "probe/scripted",
+        "-p",
+        PROBE_PROMPT,
       ],
       command: binary,
       cwd: workDir,
@@ -47,18 +46,16 @@ const decideSmoke = (binary: string) =>
       Effect.mapError(
         () =>
           new DecideSmokeError({
-            message: `${binary} exited ${exitCode} without a decision probe result:\n${stderr}`,
+            message: `${binary} exited ${exitCode} without a review verdict:\n${stderr}`,
           }),
       ),
     );
-    yield* Schema.decodeEffect(AnsweredProbe)(raw).pipe(
-      Effect.mapError(
-        () =>
-          new DecideSmokeError({
-            message: `${binary} did not run the decision model: ${raw}\n${stderr}`,
-          }),
-      ),
-    );
+    const { verdict } = yield* Schema.decodeEffect(ProbeResult)(raw);
+    if (!DECIDED.test(verdict))
+      return yield* new DecideSmokeError({
+        message: `${binary} did not decide the review with the decision model: ${verdict}\n${stderr}`,
+      });
+    return verdict;
   }).pipe(Effect.scoped, Effect.orDie);
 
 const program = Effect.gen(function* () {
@@ -66,8 +63,8 @@ const program = Effect.gen(function* () {
   if (binary === undefined || rest.length > 0) {
     return yield* new DecideSmokeError({ message: "usage: smoke-binary-decide <msa binary>" });
   }
-  yield* decideSmoke(binary);
-  yield* Console.log(`==> ${binary} runs the decision model through node-llama-cpp`);
+  const verdict = yield* decideSmoke(binary);
+  yield* Console.log(`==> ${binary} decides a task review through node-llama-cpp: ${verdict}`);
 });
 
 runMainWith(program, Layer.mergeAll(NodeServices.layer, processRunnerLayer));

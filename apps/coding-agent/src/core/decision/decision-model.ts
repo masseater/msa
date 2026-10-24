@@ -63,6 +63,6 @@ function prepareDecisionModel(
   );
 }
 
-const decisionModel = { prepareDecisionModel, resolveDecisionModel };
+const decisionModel = { decisionModelReference, prepareDecisionModel, resolveDecisionModel };
 
 export default decisionModel;
