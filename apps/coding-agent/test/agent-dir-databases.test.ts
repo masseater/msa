@@ -16,11 +16,13 @@ const { ENV_AGENT_DIR } = config;
 const { deleteEnv, readEnv, writeEnv } = platform;
 const {
   awaited,
+  isAbsolutePath,
   joinPath,
   makeDirectory,
   makeTempDir,
   pathExists,
   readDirectory,
+  relativePath,
   removePath,
   runTest,
 } = testing;
@@ -45,7 +47,7 @@ const tempDirectory = (name: string) =>
     return directory;
   });
 
-it("keeps the orchestrator and memory databases in the agent dir the session was given", () =>
+it("keeps the orchestrator and memory databases and the handoffs in the agent dir the session was given", () =>
   runTest(
     Effect.gen(function* () {
       const ambient = yield* tempDirectory("ambient");
@@ -71,10 +73,22 @@ it("keeps the orchestrator and memory databases in the agent dir the session was
           settingsManager: SettingsManager.inMemory(),
         }),
       );
+      const orchestrator = session.integrations.orchestration.orchestrator;
+      if (orchestrator === undefined) throw new Error("orchestrator missing");
+      const handoff = yield* awaited(
+        orchestrator.handoff({ donts: "none", goals: "none", premise: "none" }),
+      );
       yield* awaited(session.dispose());
 
       expect(yield* pathExists(joinPath(given, "orchestrator.db"))).toBe(true);
       expect(yield* pathExists(joinPath(given, "memory.db"))).toBe(true);
+      const handoffs = joinPath(given, "handoffs");
+      const insideHandoffs = relativePath(handoffs, handoff.path);
+      expect(insideHandoffs).not.toBe("");
+      expect(insideHandoffs.startsWith("..")).toBe(false);
+      expect(isAbsolutePath(insideHandoffs)).toBe(false);
+      expect(joinPath(handoffs, insideHandoffs)).toBe(handoff.path);
+      expect(yield* pathExists(handoff.path)).toBe(true);
       expect(yield* readDirectory(ambient)).toEqual([]);
     }),
   ));
