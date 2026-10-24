@@ -17,7 +17,10 @@ done
 if [[ "$NO_ENV" == "true" ]]; then
   # Unset API keys (see libs/ai/src/env-api-keys.ts)
   unset ANTHROPIC_API_KEY
-  unset ANTHROPIC_OAUTH_TOKEN
+  unset ANTHROPIC_AUTH_TOKEN
+  unset ANTHROPIC_FEDERATION_RULE_ID
+  unset ANTHROPIC_ORGANIZATION_ID
+  unset ANTHROPIC_IDENTITY_TOKEN_FILE
   unset OPENAI_API_KEY
   unset OPENROUTER_API_KEY
   unset OPENCODE_API_KEY

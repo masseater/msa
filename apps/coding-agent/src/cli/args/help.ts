@@ -137,7 +137,6 @@ const EXAMPLES_HELP = `  # Print a provider API key for an external client
 
 const ENVIRONMENT_HELP = `  ANTHROPIC_AUTH_TOKEN             - Anthropic bearer auth token
   ANTHROPIC_API_KEY                - Anthropic Claude API key
-  ANTHROPIC_OAUTH_TOKEN            - Anthropic OAuth token (alternative to API key)
   OPENAI_API_KEY                   - OpenAI GPT API key
   OPENROUTER_API_KEY               - OpenRouter API key
   OPENCODE_API_KEY                 - OpenCode Zen/OpenCode Go API key
