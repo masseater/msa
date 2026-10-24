@@ -1,5 +1,6 @@
 import type AgentSession from "../agent-session.ts";
 import type extensionsTypes from "../extensions/index.types.ts";
+import ghGuard from "../orchestrator/gh-guard.ts";
 import orchestratorTools from "../orchestrator/tools.ts";
 import toolsModule from "../tools/index.ts";
 import toolsMemory from "../tools/memory.ts";
@@ -30,12 +31,15 @@ function defaultDefinitions(session: AgentSession): Record<string, unknown> {
   const settings = session.settingsManager;
   const memory = session.integrations.memory.memoryInternal;
   const modelRuntime = session.models.selection.modelRuntimeInternal;
+  const spawnHook = session.tools.policy.worker ? ghGuard.spawnHook(session.agentDir) : undefined;
   return {
     ...createAllToolDefinitions(session.cwd, {
       bash: {
         commandPrefix: settings.resources.getShellCommandPrefix(),
         shellPath: settings.resources.getShellPath(),
+        ...(spawnHook === undefined ? {} : { spawnHook }),
       },
+      ...(spawnHook === undefined ? {} : { powershell: { spawnHook } }),
       read: { autoResizeImages: settings.display.getImageAutoResize() },
     }),
     ...(memory === undefined ? {} : { memory: createMemoryToolDefinition(memory) }),

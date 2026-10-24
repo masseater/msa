@@ -42,6 +42,10 @@ export default class SessionToolPolicy {
         : createToolNameMatcher(config.excludedToolNames);
   }
 
+  get worker(): boolean {
+    return this.isWorker;
+  }
+
   refusal(name: string, args: unknown): string | undefined {
     return this.isWorker ? mergeGuard.refusal(name, args) : undefined;
   }
