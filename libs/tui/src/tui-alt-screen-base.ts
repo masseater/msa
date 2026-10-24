@@ -24,7 +24,7 @@ const {
   enterAltScreenSequence,
   exitAltScreenPreservingSequence,
   leaveAltScreenSequence,
-  restoreCapabilities,
+  resumeInlineImages,
   restoreDocumentSequence,
   restoredDocument,
   suspendInlineImages,
@@ -49,7 +49,7 @@ export default abstract class AltScreenTuiBase
   protected altScreenActive = false;
   protected images: altScreenTerminalModesTypes.ImageCapabilities = {
     protocol: null,
-    saved: undefined,
+    suspended: false,
   };
   private readonly mouseEnabled: boolean;
   private lastDocument: string[] = [];
@@ -156,9 +156,12 @@ export default abstract class AltScreenTuiBase
     this.flashes.dispose();
     this.altScreenActive = true;
     const images = suspendInlineImages();
-    this.images = { protocol: images.protocol, saved: images.saved ?? this.images.saved };
+    this.images = {
+      protocol: images.protocol,
+      suspended: images.suspended || this.images.suspended,
+    };
     this.clearImageCache();
-    if (images.saved !== undefined) this.invalidate();
+    if (images.suspended) this.invalidate();
     this.lastDocument = [];
     this.resetRenderState();
     this.terminal.write(enterAltScreenSequence(this.mouseEnabled));
@@ -182,7 +185,7 @@ export default abstract class AltScreenTuiBase
       this.lastDocument = restoredDocument(this.resolveFakeCursors(this.render(width)), width);
       this.terminal.write(restoreDocumentSequence(this.lastDocument));
     }
-    restoreCapabilities(this.images.saved);
-    this.images = { protocol: this.images.protocol, saved: undefined };
+    resumeInlineImages(this.images.suspended);
+    this.images = { protocol: this.images.protocol, suspended: false };
   }
 }

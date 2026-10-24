@@ -6,6 +6,7 @@ const { isEnvSet, readEnv } = env;
 
 let cachedCapabilities: terminalCapabilitiesTypes.TerminalCapabilities | null = null;
 let capabilitiesSetExplicitly = false;
+let inlineImagesSuspended = false;
 let capabilityOverrides: Partial<terminalCapabilitiesTypes.TerminalCapabilities> = {};
 
 let cellDimensions: terminalCapabilitiesTypes.CellDimensions = { heightPx: 18, widthPx: 9 };
@@ -171,7 +172,11 @@ function getCapabilities(): terminalCapabilitiesTypes.TerminalCapabilities {
       ...capabilityOverrides,
     };
   }
-  return cachedCapabilities;
+  return inlineImagesSuspended ? { ...cachedCapabilities, images: null } : cachedCapabilities;
+}
+
+function setInlineImagesSuspended(suspended: boolean): void {
+  inlineImagesSuspended = suspended;
 }
 
 function getTerminalColorMode(
@@ -214,6 +219,7 @@ const terminalCapabilities = {
   setCapabilities,
   setCapabilityOverrides,
   setCellDimensions,
+  setInlineImagesSuspended,
   setTmuxHyperlinkProbe,
 };
 

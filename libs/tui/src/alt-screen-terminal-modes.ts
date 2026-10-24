@@ -13,7 +13,7 @@ import utils from "./utils.ts";
 const { ansiSequences, env } = altScreenTerminalModesKit;
 
 const { deleteAllKittyImages, isImageLine } = terminalImageKitty;
-const { getCapabilities, setCapabilities } = terminalCapabilities;
+const { getCapabilities, setInlineImagesSuspended } = terminalCapabilities;
 const { readEnv } = env;
 const { visibleWidth } = utils;
 const { sliceByColumn } = textSlice;
@@ -36,16 +36,14 @@ function kittyImagesDeletion(protocol: terminalCapabilitiesTypes.ImageProtocol):
 }
 
 function suspendInlineImages(): altScreenTerminalModesTypes.ImageCapabilities {
-  const capabilities = getCapabilities();
-  if (capabilities.images !== "iterm2") return { protocol: capabilities.images, saved: undefined };
-  setCapabilities({ ...capabilities, images: null });
-  return { protocol: capabilities.images, saved: capabilities };
+  const protocol = getCapabilities().images;
+  const suspended = protocol === "iterm2";
+  if (suspended) setInlineImagesSuspended(true);
+  return { protocol, suspended };
 }
 
-function restoreCapabilities(
-  saved: terminalCapabilitiesTypes.TerminalCapabilities | undefined,
-): void {
-  if (saved !== undefined) setCapabilities(saved);
+function resumeInlineImages(suspended: boolean): void {
+  if (suspended) setInlineImagesSuspended(false);
 }
 
 function enterAltScreenSequence(mouseEnabled: boolean): string {
@@ -112,9 +110,9 @@ const altScreenTerminalModes = {
   fitLinesToWidth,
   kittyImagesDeletion,
   leaveAltScreenSequence,
-  restoreCapabilities,
   restoreDocumentSequence,
   restoredDocument,
+  resumeInlineImages,
   suspendInlineImages,
 };
 
