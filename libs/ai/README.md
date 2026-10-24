@@ -1754,24 +1754,26 @@ Provider notes:
 
 ## Migrating from the Old Global API
 
-Older versions exposed a global API: `stream()`/`complete()` dispatching on `model.api` via a global registry, sync `getModel()`/`getModels()`/`getProviders()` catalog reads, `registerApiProvider()`, `getEnvApiKey()`, and per-API lazy stream functions. That surface lives unchanged on the **compat entrypoint**:
+Older versions exposed a global API: `stream()`/`complete()` dispatching on `model.api` via a global registry, sync `getModel()`/`getModels()`/`getProviders()` catalog reads, `registerApiProvider()`, `getEnvApiKey()`, and per-API lazy stream functions. That surface lives on the **compat entrypoint**:
 
 ```typescript
 // Before
 import { getModel, complete } from "@msa/ai";
-// After (verbatim behavior, one import-path change)
+// After (one import-path change)
 import { getModel, complete } from "@msa/ai/compat";
 ```
 
-Compat is a strict superset of the root entrypoint, so a file can switch its import path wholesale. It will be removed in a future release; migrate to `createModels()` + provider factories:
+Compat is a strict superset of the root entrypoint, so a file can switch its import path wholesale. Its `stream()`/`complete()`/`streamSimple()`/`completeSimple()` authenticate the same way as `models.stream()` on a `builtinModels()` collection: the provider's auth resolver picks the credential (for `anthropic-api`, `ANTHROPIC_API_KEY` as the API key or `ANTHROPIC_AUTH_TOKEN` as a bearer token), the model's `headers` and the resolved `baseUrl` are applied, `options.signal` reaches the resolver, and an explicit `apiKey`, `env`, or `headers` in the options wins. When no auth resolves, the provider is not called and the request ends with `stopReason: "error"` and `Provider is not configured: <provider>`. Models whose `api` comes from `registerApiProvider()` get the same auth when their `provider` is a built-in one, and are called with the options unchanged otherwise. `resolveAuth(providerOrModel, { apiKey?, env?, signal? })` returns what such a request would use.
+
+It will be removed in a future release; migrate to `createModels()` + provider factories:
 
 | Old                                                                          | New                                                                                      |
 | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | `getModel('openai', 'gpt-4o-mini')`                                          | `models.getModel('openai', 'gpt-4o-mini')` or `getBuiltinModel()` from `providers/all`   |
 | `getModels('anthropic-api')` / `getProviders()`                              | `models.getModels('anthropic-api')` / `models.getProviders()` or `getBuiltin*`           |
-| `stream(model, ctx, opts)` (env-key injection)                               | `models.stream(model, ctx, opts)` (provider auth resolution)                             |
+| `stream(model, ctx, opts)`                                                   | `models.stream(model, ctx, opts)`                                                        |
 | `registerApiProvider({ api, stream, streamSimple })`                         | `createProvider({ id, auth, models, api })` + `models.setProvider()`                     |
-| `getEnvApiKey('openai')`                                                     | `await models.getAuth(model.provider)`                                                   |
+| `getEnvApiKey('openai')` / `resolveAuth(model)`                              | `await models.getAuth(model)`                                                            |
 | `streamAnthropic(model, ctx, opts)`                                          | `stream` from `@msa/ai/api/anthropic-messages`, or a provider in a collection            |
 | `registerFauxProvider()`                                                     | `fauxProvider()` + `models.setProvider()`                                                |
 | `getImageModel('openrouter', id)` / `generateImages(model, ctx, { apiKey })` | `models.getModelOfType('image', 'openrouter', id)` / `models.generateImages(model, ctx)` |
