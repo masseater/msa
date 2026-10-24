@@ -260,6 +260,9 @@ catalogs:
     diff:
       specifier: 8.0.4
       version: 8.0.4
+    es-module-lexer:
+      specifier: 2.3.2
+      version: 2.3.2
     esbuild:
       specifier: 0.28.2
       version: 0.28.2
@@ -323,6 +326,9 @@ catalogs:
     syncpack:
       specifier: 15.3.3
       version: 15.3.3
+    tree-sitter-bash:
+      specifier: 0.25.1
+      version: 0.25.1
     typebox:
       specifier: 1.3.27
       version: 1.3.27
@@ -338,6 +344,9 @@ catalogs:
     vitest-evals:
       specifier: 0.15.0
       version: 0.15.0
+    web-tree-sitter:
+      specifier: 0.27.1
+      version: 0.27.1
     ws:
       specifier: 8.21.0
       version: 8.21.0
@@ -405,6 +414,9 @@ importers:
       effect:
         specifier: 4.0.2
         version: 4.0.2
+      es-module-lexer:
+        specifier: 'catalog:'
+        version: 2.3.2
       esbuild:
         specifier: 'catalog:'
         version: 0.28.2
@@ -423,12 +435,18 @@ importers:
       syncpack:
         specifier: 'catalog:'
         version: 15.3.3
+      tree-sitter-bash:
+        specifier: 'catalog:'
+        version: 0.25.1
       typescript:
         specifier: 'catalog:'
         version: 7.0.2
       vite-plus:
         specifier: catalog:stack
         version: 1.3.0(@types/node@22.19.19)(@vitest/ui@5.0.5)(esbuild@0.28.2)(jiti@2.7.0)(typescript@7.0.2)(yaml@2.9.0)
+      web-tree-sitter:
+        specifier: 'catalog:'
+        version: 0.27.1
       yaml:
         specifier: 'catalog:'
         version: 2.9.0
@@ -3682,6 +3700,10 @@ packages:
     resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
     engines: {node: '>= 6.13.0'}
 
+  node-gyp-build@4.8.4:
+    resolution: {integrity: sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==}
+    hasBin: true
+
   node-llama-cpp@3.22.2:
     resolution: {integrity: sha512-kHggUzq5+8aShET07hlGllyo+t7gNOl+xLQyEeyERStkm8JdBGVh+Yh4Jd/uZ15xYt8lYJIDYkzToLjhe0eyZw==}
     engines: {node: '>=20.0.0'}
@@ -4240,6 +4262,14 @@ packages:
     resolution: {integrity: sha512-sf4i37nQ2LBx4m3wB74y+ubopq6W/dIzXg0FDGjsYnZHVa1Da8FH853wlL2gtUhg+xJXjfk3kUZS3BRoQeoQBQ==}
     engines: {node: '>=6'}
 
+  tree-sitter-bash@0.25.1:
+    resolution: {integrity: sha512-7hMytuYIMoXOq24yRulgIxthE9YmggZIOHCyPTTuJcu6EU54tYD+4G39cUb28kxC6jMf/AbPfWGLQtgPTdh3xw==}
+    peerDependencies:
+      tree-sitter: ^0.25.0
+    peerDependenciesMeta:
+      tree-sitter:
+        optional: true
+
   ts-algebra@2.0.0:
     resolution: {integrity: sha512-FPAhNPFMrkwz76P7cdjdmiShwMynZYN6SgOujD1urY4oNm80Ou9oMdmbR45LotcKOXoy7wSmHkRFE6Mxbrhefw==}
 
@@ -4388,6 +4418,9 @@ packages:
   web-streams-polyfill@3.3.3:
     resolution: {integrity: sha512-d2JWLCivmZYTSIoge9MsgFCZrt571BikcWGYkjC1khllbTeDlGqZ2D8vD8E/lJa8WGWbb7Plm8/XJYV7IJHZZw==}
     engines: {node: '>= 8'}
+
+  web-tree-sitter@0.27.1:
+    resolution: {integrity: sha512-qtx0VyUyNRHtL3ze7+v0hCKB/sLcAmY7ZAVp/ZK/bCj0yED8ptvNrr7Vd7DwDyKDWN9baqcUx4uaD2r2ql+6IA==}
 
   which@2.0.2:
     resolution: {integrity: sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA==}
@@ -6940,6 +6973,8 @@ snapshots:
 
   node-forge@1.4.0: {}
 
+  node-gyp-build@4.8.4: {}
+
   node-llama-cpp@3.22.2(typescript@7.0.2):
     dependencies:
       '@huggingface/jinja': 0.5.10
@@ -7566,6 +7601,11 @@ snapshots:
 
   totalist@3.0.1: {}
 
+  tree-sitter-bash@0.25.1:
+    dependencies:
+      node-addon-api: 8.9.2
+      node-gyp-build: 4.8.4
+
   ts-algebra@2.0.0: {}
 
   tslib@2.8.1: {}
@@ -7752,6 +7792,8 @@ snapshots:
       - yaml
 
   web-streams-polyfill@3.3.3: {}
+
+  web-tree-sitter@0.27.1: {}
 
   which@2.0.2:
     dependencies:

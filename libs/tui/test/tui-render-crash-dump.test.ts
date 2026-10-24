@@ -14,7 +14,7 @@ const fixture = pathOperations.join(import.meta.dirname, "fixtures", "overwide-r
 
 const crashInChildProcess = (options: { tmpDir: string; logDirectory: string }) =>
   runCommand({
-    args: [fixture, options.logDirectory],
+    args: ["--conditions=source", fixture, options.logDirectory],
     env: { TEMP: options.tmpDir, TMP: options.tmpDir, TMPDIR: options.tmpDir },
     file: process.execPath,
     timeout: 30000,

@@ -53,7 +53,14 @@ const runsFauxCompletion = (entry: string) =>
     Effect.gen(function* () {
       const result = yield* Effect.promise(() =>
         runNode(
-          ["--import", preload, "--input-type=module", "--eval", fauxCompletionScript(entry)],
+          [
+            "--conditions=source",
+            "--import",
+            preload,
+            "--input-type=module",
+            "--eval",
+            fauxCompletionScript(entry),
+          ],
           {
             cwd: packageRoot,
             timeout: "10 seconds",
