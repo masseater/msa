@@ -82,7 +82,7 @@ const allowsOnlyExplicitlyListedBuiltIn = Effect.gen(function* () {
       .sort(),
   ).toEqual(["dynamic_tool", "read"]);
   expect(session.tools.loadout.getActiveToolNames().sort()).toEqual(["dynamic_tool", "read"]);
-  expect(session.tools.prompt.systemPrompt).toContain("- read: Read file contents");
+  expect(session.tools.prompt.systemPrompt).toContain("\n- read: ");
   expect(session.tools.prompt.systemPrompt).toContain("- dynamic_tool: Run dynamic test behavior");
   expect(session.tools.prompt.systemPrompt).not.toContain("- bash:");
   expect(session.tools.prompt.systemPrompt).not.toContain("- edit:");

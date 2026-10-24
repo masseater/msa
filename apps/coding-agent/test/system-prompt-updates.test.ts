@@ -47,6 +47,7 @@ const declaresThePromptAndToolsOnceAnd = () =>
           "tools",
           "rules",
           "docs",
+          "development_style",
           "cwd",
           "timezone",
         ]);

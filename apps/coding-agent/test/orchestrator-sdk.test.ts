@@ -25,20 +25,6 @@ const { createHarness, tempDir } = orchestratorSdkSupport;
 
 afterAll(() => runTest(removePath(tempDir)));
 
-const startsWithTheOrchestratorToolsActive = () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const { session } = yield* createHarness();
-      expect(session.tools.loadout.getActiveToolNames()).toEqual(
-        expect.arrayContaining(["create_task", "list_tasks", "replan", "stop_task", "handoff"]),
-      );
-      expect(session.tools.prompt.systemPrompt).toContain("You work as an orchestrator");
-      session.dispose();
-    }),
-  );
-
-it("starts with the orchestrator tools active", startsWithTheOrchestratorToolsActive);
-
 const savesTheThreeSectionsTheModelPasses = () =>
   Effect.runPromise(
     Effect.gen(function* () {

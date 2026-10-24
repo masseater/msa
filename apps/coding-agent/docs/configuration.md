@@ -16,7 +16,7 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | `<agent-dir>/models.json`                                                               | [Compatible endpoints, models, and model overrides](models.md#configure-a-compatible-endpoint).                    |
 | `<agent-dir>/auth.json`                                                                 | Saved API keys and OAuth credentials.                                                                              |
 | `<agent-dir>/AGENTS.override.md`, `AGENTS.md`, `AGENTS.MD`, `CLAUDE.md`, or `CLAUDE.MD` | User instructions applied across working directories.                                                              |
-| `<agent-dir>/SYSTEM.md`                                                                 | Replaces msa’s default system prompt.                                                                              |
+| `<agent-dir>/SYSTEM.md`                                                                 | Replaces msa’s default system prompt except its development style.                                                 |
 | `<agent-dir>/APPEND_SYSTEM.md`                                                          | Adds instructions to msa’s system prompt.                                                                          |
 | `<agent-dir>/extensions/`                                                               | User [extensions](extensions.md).                                                                                  |
 | `<agent-dir>/skills/`                                                                   | User [skills](skills.md) and supporting files.                                                                     |
@@ -29,7 +29,7 @@ The agent directory is shown as `<agent-dir>` below. Set its location with the `
 | ----------------------- | ------------------------------------------------------------------------------------ |
 | `.msa/settings.json`    | Project-level [settings](settings.md), resource paths, and msa package declarations. |
 | `.msa/mcp.json`         | Project [MCP servers](mcp.md).                                                       |
-| `.msa/SYSTEM.md`        | Replaces the system prompt for the project.                                          |
+| `.msa/SYSTEM.md`        | Replaces the system prompt for the project except its development style.             |
 | `.msa/APPEND_SYSTEM.md` | Adds project-specific instructions to the system prompt.                             |
 | `.msa/extensions/`      | Project extensions.                                                                  |
 | `.msa/skills/`          | Project skills and supporting files.                                                 |

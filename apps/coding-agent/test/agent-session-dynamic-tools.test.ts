@@ -15,6 +15,11 @@ const { DefaultResourceLoader, SessionManager, SettingsManager } = codingAgent;
 
 const { createBashTool } = bash;
 const { createAgentSession } = sdk;
+const {
+  bashToolSystemPromptContribution: {
+    guidelines: [bashGuideline],
+  },
+} = bash;
 
 const { getModel } = compat;
 
@@ -127,9 +132,7 @@ const exposesSessionStateBeforeCustomBashSpawnStep3 = (input: {
     );
 
     const bashTool = session.agent.state.tools.find((tool) => tool.name === "bash")!;
-    expect(session.tools.prompt.systemPrompt).toContain(
-      "You can inspect MSA_* environment variables for current model and session details.",
-    );
+    expect(session.tools.prompt.systemPrompt).toContain(bashGuideline);
     yield* awaited(bashTool.execute("bash-env", { command: "printf ok" }));
     expect(envs.session).toMatchObject({
       MSA_MODEL: model.id,

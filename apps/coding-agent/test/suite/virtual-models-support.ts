@@ -74,7 +74,7 @@ function createRoutedHarness(
             registerAutoRouter(route, requests),
           ],
           models: [
-            { contextWindow: 1000, id: "small" },
+            { contextWindow: 1600, id: "small" },
             { contextWindow: 50_000, id: "large", maxTokens: 4000, reasoning: true },
           ],
           tools: [echoTool],

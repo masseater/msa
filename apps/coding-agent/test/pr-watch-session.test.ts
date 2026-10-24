@@ -58,9 +58,7 @@ const enablesPrWatchByDefaultAndLists = () =>
       try {
         expect(session.tools.registry.getAllTools().map((tool) => tool.name)).toContain("pr_watch");
         expect(session.tools.loadout.getActiveToolNames()).toContain("pr_watch");
-        expect(session.tools.prompt.systemPrompt).toContain(
-          "- pr_watch: Watch a GitHub pull request",
-        );
+        expect(session.tools.prompt.systemPrompt).toContain("\n- pr_watch: ");
         expect(session.integrations.prWatch.prWatch.entries).toEqual([]);
       } finally {
         session.dispose();

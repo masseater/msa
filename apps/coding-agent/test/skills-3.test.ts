@@ -10,7 +10,7 @@ import type skillsTypes from "../src/core/skills.types.ts";
 import sourceInfoModule from "../src/core/source-info.ts";
 import skillsSupport from "./skills-support.ts";
 
-const { formatSkillsForPrompt, loadSkills } = skillsModule;
+const { SKILLS_INTRO, SKILL_READER_HINTS, formatSkillsForPrompt, loadSkills } = skillsModule;
 const { createSyntheticSourceInfo } = sourceInfoModule;
 
 const { fixturesDir } = skillsSupport;
@@ -78,8 +78,8 @@ const shouldIncludeIntroTextBeforeXml = () => {
   const xmlStart = result.indexOf("<available_skills>");
   const introText = result.substring(0, xmlStart);
 
-  expect(introText).toContain("The following skills provide specialized instructions");
-  expect(introText).toContain("Use the read tool to load a skill's file");
+  expect(introText).toContain(SKILLS_INTRO);
+  expect(introText).toContain(SKILL_READER_HINTS.read);
 };
 
 const shouldEscapeXmlSpecialCharacters = () => {

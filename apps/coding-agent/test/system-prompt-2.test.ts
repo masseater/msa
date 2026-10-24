@@ -1,11 +1,13 @@
 import { describe, expect, test } from "vite-plus/test";
 
+import skillsModule from "../src/core/skills.ts";
 import type skillsTypes from "../src/core/skills.types.ts";
 import sourceInfoModule from "../src/core/source-info.ts";
 import systemPrompt from "../src/core/system-prompt.ts";
 
 const { createSyntheticSourceInfo } = sourceInfoModule;
-const { buildSystemPrompt } = systemPrompt;
+const { FILE_OPERATION_RULES, buildSystemPrompt } = systemPrompt;
+const { SKILL_READER_HINTS } = skillsModule;
 
 const testSkill: skillsTypes.Skill = {
   baseDir: "/skills/test-skill",
@@ -72,16 +74,16 @@ const leavesHiddenToolsOutOfTheTool = () => {
   expect(prompt).toContain("<tools>\n- run: Run a task\n");
   expect(prompt).not.toContain("- read: ");
   expect(prompt).not.toContain("Use read for files.");
-  expect(prompt).not.toContain("Use bash for file operations");
+  expect(prompt).not.toContain(FILE_OPERATION_RULES.bash);
   expect(prompt).toContain("- Prefer run.");
 };
 
 const keepsSkillsWithoutNamingAHiddenReader = () => {
-  expect(build(["read", "bash"])).toContain(
-    "\nLoad a skill's file when the task matches its description.",
-  );
-  expect(build(["read"])).toContain("Use bash to load a skill's file");
-  expect(build([])).toContain("Use the read tool to load a skill's file");
+  expect(build(["read", "bash"])).toContain(SKILL_READER_HINTS.indirect);
+  expect(build(["read", "bash"])).not.toContain(SKILL_READER_HINTS.read);
+  expect(build(["read", "bash"])).not.toContain(SKILL_READER_HINTS.bash);
+  expect(build(["read"])).toContain(SKILL_READER_HINTS.bash);
+  expect(build([])).toContain(SKILL_READER_HINTS.read);
 };
 
 describe("buildSystemPrompt", () => {
@@ -110,7 +112,7 @@ describe("buildSystemPrompt", () => {
       expect(prompt).toContain("<skills>");
       expect(prompt).toContain("<available_skills>");
       expect(prompt).toContain("<name>test-skill</name>");
-      expect(prompt).toContain("Use bash to load a skill's file");
+      expect(prompt).toContain(SKILL_READER_HINTS.bash);
     });
 
     test("omits skills without read or bash", omitsSkillsWithoutReadOrBash);

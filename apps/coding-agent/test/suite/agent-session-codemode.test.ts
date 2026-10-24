@@ -3,12 +3,18 @@ import type aiTypes from "@msa/ai/index.types";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import readContent from "../../src/core/tools/read-content.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
 
 const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools } = ai;
 
 const { harnesses, setup } = agentSessionCodemodeSupport2;
+const {
+  readToolSystemPromptContribution: {
+    guidelines: [readGuideline],
+  },
+} = readContent;
 
 const { codemodeResult, resultText, trackCodemodeWorkers } = agentSessionCodemodeSupport;
 
@@ -50,8 +56,8 @@ const presentsCallableToolsPerCodemodeMode = Effect.gen(function* () {
   expect(requestPrompts[1]).toContain("\n- codemode: ");
   expect(harness.session.tools.prompt.systemPrompt).not.toContain("\n- read: ");
 
-  expect(requestPrompts[1]).not.toContain("Use read to examine files");
-  expect(description("codemode")).toContain("- Use read to examine files instead of cat or sed.");
+  expect(requestPrompts[1]).not.toContain(readGuideline);
+  expect(description("codemode")).toContain(`- ${readGuideline}`);
 
   harness.session.tools.loadout.setActiveToolsByName(["echo"]);
   expect(description("echo")).toBe("Echo text back.\n\nSecond paragraph.");

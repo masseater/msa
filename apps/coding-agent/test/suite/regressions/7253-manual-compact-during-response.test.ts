@@ -48,7 +48,7 @@ const persistsTheAbortedResponseBeforeRunningSetup = () =>
             );
           },
         ],
-        models: [{ contextWindow: 1000, id: "faux-1", maxTokens: 1000 }],
+        models: [{ contextWindow: 1600, id: "faux-1", maxTokens: 1000 }],
         settings: { compaction: { enabled: true, keepRecentTokens: 2, reserveTokens: 200 } },
         tools: [createNoopTool()],
       }),

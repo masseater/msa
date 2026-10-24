@@ -42,12 +42,8 @@ describe("local time zone", () => {
         const tokyo = yield* startWithTimeZone("Asia/Tokyo");
         const saoPaulo = yield* startWithTimeZone("America/Sao_Paulo");
 
-        expect(tokyo.prompt).toContain(
-          "<timezone>\nThe user's time zone is Asia/Tokyo (UTC+09:00).",
-        );
-        expect(saoPaulo.prompt).toContain(
-          "<timezone>\nThe user's time zone is America/Sao_Paulo (UTC-03:00).",
-        );
+        expect(tokyo.prompt).toContain("Asia/Tokyo (UTC+09:00)");
+        expect(saoPaulo.prompt).toContain("America/Sao_Paulo (UTC-03:00)");
       }),
     ));
 
