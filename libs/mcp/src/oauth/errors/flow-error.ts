@@ -1,9 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class OAuthFlowError extends Data.TaggedError("OAuthFlowError")<{
-  readonly message: string;
-}> {
-  constructor(message: string) {
-    super({ message });
+export default class OAuthFlowError extends Schema.TaggedError<
+  OAuthFlowError,
+  { readonly brand: unique symbol }
+>()("OAuthFlowError", { message: Schema.String }) {
+  static create(message: string): OAuthFlowError {
+    return OAuthFlowError.make({ message });
   }
 }

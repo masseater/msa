@@ -38,7 +38,7 @@ export default class MemberReadable implements typesModule.Readable<unknown> {
     if (view === undefined) throw notReady(`${ref.address}.${this.#name}`);
     const source = this.#current();
     if (source === undefined) {
-      throw new ChordError(
+      throw ChordError.create(
         "not_in_variant",
         `${ref.address}: ${this.#name} is not a state member of variant ${variantOf(view) ?? "(local)"}`,
       );

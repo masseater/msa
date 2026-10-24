@@ -55,7 +55,7 @@ export default class OutputSpill {
   readonly fail = (error: unknown): void => {
     if (this.error !== undefined) return;
     const cause = toError(error);
-    this.error = new ExecutionError(
+    this.error = ExecutionError.create(
       "unknown",
       `Failed to preserve complete shell output: ${cause.message}`,
       cause,

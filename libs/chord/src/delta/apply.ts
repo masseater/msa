@@ -30,9 +30,9 @@ const write = (
 function resolveValue(root: jsonTypes.JsonValue, path: opsTypes.Path): jsonTypes.JsonValue {
   let node: jsonTypes.JsonValue = root;
   for (const seg of path) {
-    if (!isObj(node)) throw new PathError(path);
-    if (Array.isArray(node) && typeof seg !== "number") throw new UnsafePathError(seg);
-    if (!Object.hasOwn(node, seg as PropertyKey)) throw new PathError(path);
+    if (!isObj(node)) throw PathError.create(path);
+    if (Array.isArray(node) && typeof seg !== "number") throw UnsafePathError.create(seg);
+    if (!Object.hasOwn(node, seg as PropertyKey)) throw PathError.create(path);
     node = (node as Record<opsTypes.Seg, jsonTypes.JsonValue>)[seg]!;
   }
   return node;
@@ -40,7 +40,7 @@ function resolveValue(root: jsonTypes.JsonValue, path: opsTypes.Path): jsonTypes
 
 function resolve(root: jsonTypes.JsonValue, path: opsTypes.Path): jsonTypes.JsonValue {
   const node = resolveValue(root, path);
-  if (!isObj(node)) throw new PathError(path);
+  if (!isObj(node)) throw PathError.create(path);
   return node;
 }
 
@@ -50,7 +50,7 @@ function applySplice(
   op: Extract<opsTypes.Op, { 0: "p" }>,
 ): void {
   const spliced = path.length === 0 ? root : resolve(root, path);
-  if (!Array.isArray(spliced)) throw new PathError(path);
+  if (!Array.isArray(spliced)) throw PathError.create(path);
   spliced.splice(op[2], op[3]);
   for (let offset = 0; offset < op[4].length; offset += SPLICE_CHUNK) {
     spliced.splice(op[2] + offset, 0, ...op[4].slice(offset, offset + SPLICE_CHUNK));
@@ -59,7 +59,7 @@ function applySplice(
 
 function applyMove(root: jsonTypes.JsonValue, path: opsTypes.Path, order: readonly number[]): void {
   const moved = path.length === 0 ? root : resolve(root, path);
-  if (!Array.isArray(moved) || moved.length !== order.length) throw new PathError(path);
+  if (!Array.isArray(moved) || moved.length !== order.length) throw PathError.create(path);
   const previous = moved.slice();
   for (let index = 0; index < order.length; index++) moved[index] = previous[order[index]!]!;
 }
@@ -72,8 +72,8 @@ function applyLeaf(
   const parent = resolve(root, path.slice(0, -1)) as Record<opsTypes.Seg, jsonTypes.JsonValue>;
   const key = path[path.length - 1]!;
   if (Array.isArray(parent)) {
-    if (typeof key !== "number") throw new UnsafePathError(key);
-    if (key > parent.length) throw new UnsafePathError(key);
+    if (typeof key !== "number") throw UnsafePathError.create(key);
+    if (key > parent.length) throw UnsafePathError.create(key);
   }
   const current = Object.hasOwn(parent, key) ? parent[key] : undefined;
   switch (op[0]) {
@@ -82,16 +82,16 @@ function applyLeaf(
       return;
     case "d":
       if (Array.isArray(parent)) {
-        if (typeof key !== "number" || key >= parent.length) throw new PathError(path);
+        if (typeof key !== "number" || key >= parent.length) throw PathError.create(path);
         (parent as unknown as jsonTypes.JsonValue[]).splice(key, 1);
       } else delete parent[key];
       return;
     case "a":
-      if (typeof current !== "string") throw new PathError(path);
+      if (typeof current !== "string") throw PathError.create(path);
       write(parent, key, `${current}${op[2]}`);
       return;
     case "t":
-      if (typeof current !== "string") throw new PathError(path);
+      if (typeof current !== "string") throw PathError.create(path);
       write(parent, key, current.slice(op[2]));
   }
 }
@@ -148,7 +148,7 @@ function copyNode(
   path: opsTypes.Path,
 ): jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue> {
   if (Array.isArray(value)) return value.slice();
-  if (!isObj(value)) throw new PathError(path);
+  if (!isObj(value)) throw PathError.create(path);
   const result = Object.create(
     Object.getPrototypeOf(value) === null ? null : Object.prototype,
   ) as Record<string, jsonTypes.JsonValue>;
@@ -163,7 +163,7 @@ function copyContainers(
   path: opsTypes.Path,
   owned: WeakSet<object>,
 ): jsonTypes.JsonValue {
-  if (!isObj(root)) throw new PathError(path);
+  if (!isObj(root)) throw PathError.create(path);
   let copiedRoot: jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
   if (owned.has(root))
     copiedRoot = root as jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
@@ -173,11 +173,11 @@ function copyContainers(
   }
   let destination = copiedRoot;
   for (const segment of path) {
-    if (!Object.hasOwn(destination, segment)) throw new PathError(path);
+    if (!Object.hasOwn(destination, segment)) throw PathError.create(path);
     if (Array.isArray(destination) && typeof segment !== "number")
-      throw new UnsafePathError(segment);
+      throw UnsafePathError.create(segment);
     const child = (destination as Record<opsTypes.Seg, jsonTypes.JsonValue>)[segment]!;
-    if (!isObj(child)) throw new PathError(path);
+    if (!isObj(child)) throw PathError.create(path);
     if (owned.has(child)) {
       destination = child as jsonTypes.JsonValue[] | Record<string, jsonTypes.JsonValue>;
       continue;

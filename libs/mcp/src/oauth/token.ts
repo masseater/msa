@@ -62,7 +62,7 @@ const applyClientAuthentication = (
     const secret = information.client_secret;
     if (method === "client_secret_basic") {
       if (!present(secret))
-        return Effect.fail(new OAuthFlowError("client_secret_basic requires a client secret"));
+        return Effect.fail(OAuthFlowError.create("client_secret_basic requires a client secret"));
       headers.set(
         "Authorization",
         `Basic ${Buffer.from(`${information.client_id}:${secret}`).toString("base64")}`,
@@ -76,7 +76,7 @@ const applyClientAuthentication = (
 
 const tokenError = (value: unknown): errorsTypes.OAuthError | undefined => {
   if (!isObject(value) || typeof value["error"] !== "string") return undefined;
-  return new OAuthError(
+  return OAuthError.create(
     value["error"],
     typeof value["error_description"] === "string" ? value["error_description"] : value["error"],
     typeof value["error_uri"] === "string" ? value["error_uri"] : undefined,
@@ -119,7 +119,7 @@ const tokenRequest = Effect.fn("tokenRequest")(function* (
   const error = tokenError(value);
   if (error !== undefined) return yield* error;
   if (!response.ok)
-    return yield* new OAuthError("server_error", `HTTP ${response.status}: ${text}`);
+    return yield* OAuthError.create("server_error", `HTTP ${response.status}: ${text}`);
   return yield* fromSync(() => parseOAuthTokens(value));
 });
 

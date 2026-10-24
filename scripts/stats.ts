@@ -1,4 +1,4 @@
-import { Console, Data, DateTime, Effect, Option, Stream } from "effect";
+import { Console, DateTime, Effect, Option, Schema, Stream } from "effect";
 
 import cliOptions from "./cli-options.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
@@ -45,7 +45,10 @@ interface Args {
   sessionsBase: string;
 }
 
-class StatsError extends Data.TaggedError("StatsError")<{ readonly message: string }> {}
+class StatsError extends Schema.TaggedError<StatsError, { readonly brand: unique symbol }>()(
+  "StatsError",
+  { message: Schema.String },
+) {}
 
 const HELP = `Usage: scripts/stats.ts [options]
 
@@ -143,7 +146,7 @@ const parseArgs = (host: hostTypes.HostShape) =>
       unknown: ignoreUnknown,
     });
     if (!Number.isInteger(parsed.days) || parsed.days <= 0) {
-      return yield* new StatsError({ message: "--days must be a positive integer" });
+      return yield* StatsError.make({ message: "--days must be a positive integer" });
     }
     return { ...parsed, cwd: host.resolve(parsed.cwd) };
   });
@@ -248,7 +251,7 @@ const program = Effect.gen(function* () {
   const host = yield* Host;
   const args = yield* parseArgs(host);
   const sessionsDir = host.join(args.sessionsBase, encodeSessionDir(args.cwd));
-  yield* requireSessionsDir({ fail: (message) => new StatsError({ message }), host, sessionsDir });
+  yield* requireSessionsDir({ fail: (message) => StatsError.make({ message }), host, sessionsDir });
   const today = DateTime.startOf(yield* DateTime.nowInCurrentZone, "day");
   const start = DateTime.subtract(today, { days: args.days - 1 });
   const end = DateTime.add(today, { days: 1 });

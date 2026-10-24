@@ -1,9 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class HostKeyChangedError extends Data.TaggedError("HostKeyChangedError")<{
-  readonly message: string;
-}> {
-  constructor(message: string) {
-    super({ message });
+export default class HostKeyChangedError extends Schema.TaggedError<
+  HostKeyChangedError,
+  { readonly brand: unique symbol }
+>()("HostKeyChangedError", { message: Schema.String }) {
+  static create(message: string): HostKeyChangedError {
+    return HostKeyChangedError.make({ message });
   }
 }

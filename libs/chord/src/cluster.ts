@@ -49,7 +49,7 @@ const awaitVote = (
         Effect.sync(() => connection.votes.delete(id)).pipe(
           Effect.andThen(
             Effect.die(
-              new ChordError("aborted", `votes missing after ${deadline} ms`, {
+              ChordError.create("aborted", `votes missing after ${deadline} ms`, {
                 reason: "vote_deadline",
               }),
             ),
@@ -80,7 +80,7 @@ const requestVote = (
         Effect.catchCause((cause) => {
           const failure = reloadError(Cause.squash(cause));
           return Effect.die(
-            new ChordError(failure.code, `${name}: ${failure.message}`, {
+            ChordError.create(failure.code, `${name}: ${failure.message}`, {
               cause: failure,
               reason: failure.reason,
             }),

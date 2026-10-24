@@ -1,8 +1,9 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-import type ghTypes from "./gh.types.ts";
-
-export default class PrWatchGhError extends Data.TaggedError("PrWatchGhError")<{
-  readonly kind: ghTypes.PrWatchFailure;
-  readonly message: string;
-}> {}
+export default class PrWatchGhError extends Schema.TaggedError<
+  PrWatchGhError,
+  { readonly brand: unique symbol }
+>()("PrWatchGhError", {
+  kind: Schema.Literals(["missing", "auth", "not-found", "rate-limit", "other"]),
+  message: Schema.String,
+}) {}

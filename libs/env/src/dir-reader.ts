@@ -28,7 +28,7 @@ function collectEntries(
     const entryPath = paths.resolve(path, entry.name);
     if (entry.error !== undefined) {
       if (entry.error["code"] === "ENOENT") continue;
-      return err(toFileError(new RemoteError(entry.error), entryPath));
+      return err(toFileError(RemoteError.create(entry.error), entryPath));
     }
     const info = toInfo(entryPath, entry.info!, paths);
     if (info.ok) entries.push(info.value);
@@ -53,11 +53,11 @@ export default class RemoteDirReader implements envTypes.DirReader {
     const aborted = abortResult<Batch>(context.abortSignal, path);
     if (aborted !== undefined) return Promise.resolve(aborted);
     if (this.#closed) {
-      return Promise.resolve(err(new FileError("invalid", "Directory reader is closed", path)));
+      return Promise.resolve(err(FileError.create("invalid", "Directory reader is closed", path)));
     }
     if (!Number.isSafeInteger(maxEntries) || maxEntries <= 0) {
       return Promise.resolve(
-        err(new FileError("invalid", "maxEntries must be a positive safe integer", path)),
+        err(FileError.create("invalid", "maxEntries must be a positive safe integer", path)),
       );
     }
     return Effect.runPromise(recoverFileError(this.#read(maxEntries, context), path));

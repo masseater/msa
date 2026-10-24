@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import type ghTypes from "../src/core/pr-watch/gh.types.ts";
@@ -50,7 +50,7 @@ const scriptedGh = (
       view: () => {
         const step = steps[Math.min(calls.count, steps.length - 1)]!;
         calls.count += 1;
-        return step instanceof PrWatchGhError ? Effect.fail(step) : Effect.succeed(step);
+        return Schema.is(PrWatchGhError)(step) ? Effect.fail(step) : Effect.succeed(step);
       },
     },
   };
@@ -206,7 +206,7 @@ const showsABaseMoveInTheFooter = () => {
 };
 
 const showsABrokenReadAsAGhError = () => {
-  const missing = new PrWatchGhError({ kind: "missing", message: "gh is not on PATH" });
+  const missing = PrWatchGhError.make({ kind: "missing", message: "gh is not on PATH" });
   const host = createHost();
   return withService(scriptedGh([missing]).gh, host, (service) =>
     Effect.gen(function* () {

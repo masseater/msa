@@ -29,18 +29,18 @@ const scanStart: {
     fallback: typesModule.ScanOrder,
   ): scanTypes.ScanStart => {
     if (requested !== undefined && !isScanOrder(requested)) {
-      throw new StorageRequestError(`Invalid scan order: ${String(requested)}`);
+      throw StorageRequestError.create(`Invalid scan order: ${String(requested)}`);
     }
     if (cursor === undefined) return { after: undefined, order: requested ?? fallback };
     const { after, order: stored } = cursor;
     if (typeof after !== "number" || !Number.isSafeInteger(after))
-      throw new StorageRequestError("Invalid storage cursor");
+      throw StorageRequestError.create("Invalid storage cursor");
     if (stored !== undefined && !isScanOrder(stored)) {
-      throw new StorageRequestError("Invalid storage cursor");
+      throw StorageRequestError.create("Invalid storage cursor");
     }
     const order = stored ?? fallback;
     if (requested !== undefined && requested !== order) {
-      throw new StorageRequestError(
+      throw StorageRequestError.create(
         `The cursor continues a ${order} scan; the query asks for ${requested}`,
       );
     }

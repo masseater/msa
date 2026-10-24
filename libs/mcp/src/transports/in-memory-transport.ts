@@ -24,7 +24,7 @@ export default class InMemoryTransport
   start(): Promise<void> {
     return Effect.runPromise(
       Effect.suspend(() => {
-        if (this.closed) return Effect.fail(new McpConnectionClosedError());
+        if (this.closed) return Effect.fail(McpConnectionClosedError.create());
         this.started = true;
         return Effect.void;
       }),
@@ -34,10 +34,12 @@ export default class InMemoryTransport
   send(message: jsonrpcTypes.JsonRpcMessage): Promise<void> {
     return Effect.runPromise(
       Effect.suspend(() => {
-        if (!this.started || this.closed) return Effect.fail(new McpConnectionClosedError());
+        if (!this.started || this.closed) return Effect.fail(McpConnectionClosedError.create());
         const peer = this.peer;
         if (peer === undefined || !peer.started || peer.closed)
-          return Effect.fail(new McpConnectionClosedError("In-memory MCP peer is not connected"));
+          return Effect.fail(
+            McpConnectionClosedError.create("In-memory MCP peer is not connected"),
+          );
         const copy = structuredClone(message);
         queueMicrotask(() => peer.deliver(copy));
         return Effect.void;

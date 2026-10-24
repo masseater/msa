@@ -106,11 +106,10 @@ function startTelemetry(
 const receiverReady = HttpClient.get(`${LGTM_OTLP_ENDPOINT}/v1/traces`).pipe(
   Effect.asVoid,
   Effect.retry({ schedule: Schedule.spaced(Duration.seconds(1)), times: 600 }),
-  Effect.mapError(
-    () =>
-      new PodmanError({
-        message: `${LGTM_OTLP_ENDPOINT} did not answer within 10 minutes`,
-      }),
+  Effect.mapError(() =>
+    PodmanError.make({
+      message: `${LGTM_OTLP_ENDPOINT} did not answer within 10 minutes`,
+    }),
   ),
 );
 const layer = (inputs: telemetryTypesNs.TelemetryInputs): Layer.Layer<Telemetry> =>

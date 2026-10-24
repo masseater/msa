@@ -18,7 +18,7 @@ const IMAGE_MIME_TYPES: Readonly<Record<string, string>> = {
 type Visit = (guestPath: string, relativePath: string) => Effect.Effect<boolean, GondolinAborted>;
 const failIfAborted = (signal: AbortSignal | undefined) =>
   signal?.aborted === true
-    ? Effect.fail(new GondolinAborted({ message: "Operation aborted" }))
+    ? Effect.fail(GondolinAborted.make({ message: "Operation aborted" }))
     : Effect.void;
 const guestExists = (vm: VM, guestPath: string): Promise<boolean> =>
   vm.fs.access(guestPath).then(

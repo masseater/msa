@@ -30,7 +30,7 @@ function assertSessionCwdExists(
 ): Promise<void> {
   return getMissingSessionCwdIssue(sessionManager, fallbackCwd).then((issue) => {
     if (issue !== undefined) {
-      throw new MissingSessionCwdError(issue);
+      throw MissingSessionCwdError.create(issue);
     }
     return undefined;
   });

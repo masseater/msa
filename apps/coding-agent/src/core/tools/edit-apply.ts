@@ -23,7 +23,7 @@ const accessErrorMessage = (error: unknown): string =>
 const abortCheck = (signal: AbortSignal | undefined) =>
   Effect.suspend(() =>
     signal?.aborted === true
-      ? Effect.fail(new ToolFailure({ message: "Operation aborted" }))
+      ? Effect.fail(ToolFailure.make({ message: "Operation aborted" }))
       : Effect.void,
   );
 
@@ -33,7 +33,7 @@ const accessForEdit = ({ ops, path, absolutePath, signal }: editApplyTypes.EditR
       abortCheck(signal).pipe(
         Effect.andThen(
           Effect.fail(
-            new ToolFailure({
+            ToolFailure.make({
               cause: failure.cause,
               message: `Could not edit file: ${path}. ${accessErrorMessage(failure.cause)}.`,
             }),

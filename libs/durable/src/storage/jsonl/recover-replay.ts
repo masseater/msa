@@ -30,11 +30,11 @@ const confirmRecord = (
 ): formatTypes.SidecarRecord | undefined => {
   const key = sidecarKey(file, marker.seq, ordinal);
   if (replay.confirmed.has(key))
-    throw new JsonlCorruptionError(`Sidecar record is confirmed more than once`);
+    throw JsonlCorruptionError.create(`Sidecar record is confirmed more than once`);
   const line = replay.index.recordByKey.get(key);
   if (line === undefined) {
     if (optional) return undefined;
-    throw new JsonlCorruptionError(
+    throw JsonlCorruptionError.create(
       `Missing confirmed sidecar record ${file} at sequence ${marker.seq}`,
     );
   }
@@ -63,7 +63,7 @@ const taskWrite = (
   );
   if (record === undefined) return undefined;
   if (record.payload.type !== "task" || record.payload.value.id !== operation.id) {
-    throw new JsonlCorruptionError(
+    throw JsonlCorruptionError.create(
       `Confirmed task sidecar data does not match commit ${marker.seq}`,
     );
   }
@@ -77,7 +77,7 @@ const documentContent = (
 ): typesModule.DocumentContent | undefined => {
   if (record === undefined) return undefined;
   if (record.payload.type !== "document" || record.payload.id !== id) {
-    throw new JsonlCorruptionError(
+    throw JsonlCorruptionError.create(
       `Confirmed document sidecar data does not match commit ${marker.seq}`,
     );
   }
@@ -107,7 +107,7 @@ const documentWrite = (
       : undefined;
   }
   if (content !== undefined && content.kind !== "base") {
-    throw new JsonlCorruptionError(
+    throw JsonlCorruptionError.create(
       `Document creation lacks a confirmed base in commit ${marker.seq}`,
     );
   }
@@ -161,7 +161,7 @@ const replayMain: {
       try {
         memory.prepareCommit(writes, marker.seq).apply();
       } catch (error) {
-        throw new JsonlCorruptionError(
+        throw JsonlCorruptionError.create(
           `Invalid committed state at sequence ${marker.seq}`,
           error instanceof Error ? error : undefined,
         );
@@ -180,7 +180,9 @@ const unconfirmedStart = (
   for (const line of parsed.lines) {
     if (confirmed.has(sidecarKey(file, line.value.seq, line.value.ordinal))) {
       if (unconfirmedAt !== undefined) {
-        throw new JsonlCorruptionError(`Confirmed record follows an unconfirmed tail in ${file}`);
+        throw JsonlCorruptionError.create(
+          `Confirmed record follows an unconfirmed tail in ${file}`,
+        );
       }
     } else if (unconfirmedAt === undefined) {
       unconfirmedAt = line.start;

@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import interactiveModeFake from "../../interactive-mode-fake.ts";
@@ -28,7 +28,7 @@ function captureExit(fn: () => void): number | undefined {
   try {
     fn();
   } catch (error) {
-    if (error instanceof ProcessExitError) return error.code;
+    if (Schema.is(ProcessExitError)(error)) return error.code;
     throw error;
   }
   throw new Error("expected process.exit");
@@ -38,7 +38,7 @@ let context: SignalShutdownExtensionCleanupSupportTypes.HandlerContext | undefin
 
 function setup(): SignalShutdownExtensionCleanupSupportTypes.HandlerContext {
   vi.spyOn(process, "exit").mockImplementation(((code?: number) => {
-    throw new ProcessExitError(code === undefined ? {} : { code });
+    throw ProcessExitError.make(code === undefined ? {} : { code });
   }) as typeof process.exit);
   vi.spyOn(console, "error").mockImplementation(() => {});
   context = createHandlerContext();

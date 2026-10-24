@@ -1,9 +1,12 @@
 import { NodeServices } from "@effect/platform-node";
-import { Data, Effect, ManagedRuntime, Option, Stream } from "effect";
+import { Effect, ManagedRuntime, Option, Schema, Stream } from "effect";
 import { dual } from "effect/Function";
 import { ChildProcess } from "effect/process";
 
-class FixtureError extends Data.TaggedError("FixtureError")<{ readonly message: string }> {}
+class FixtureError extends Schema.TaggedError<FixtureError, { readonly brand: unique symbol }>()(
+  "FixtureError",
+  { message: Schema.String },
+) {}
 
 type Stdio = "ignore" | "inherit" | "pipe";
 
@@ -54,7 +57,9 @@ const firstLine: {
         );
         if (Option.isSome(line)) return [line.value.trim()];
         const code = yield* handle.exitCode;
-        return yield* new FixtureError({ message: `${command} exited with ${code} before output` });
+        return yield* FixtureError.make({
+          message: `${command} exited with ${code} before output`,
+        });
       }),
     ),
   ),
@@ -75,7 +80,7 @@ const allLines: {
         const stdout = yield* handle.stdout.pipe(Stream.decodeText(), Stream.mkString);
         const code = yield* handle.exitCode;
         if (code !== 0)
-          return yield* new FixtureError({ message: `${command} exited with ${code}` });
+          return yield* FixtureError.make({ message: `${command} exited with ${code}` });
         return stdout.trim().split(/\r?\n/u);
       }),
     ).pipe(Effect.timeout(20000)),

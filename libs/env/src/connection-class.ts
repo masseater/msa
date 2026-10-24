@@ -137,7 +137,7 @@ export default class Connection {
       if (this.#closed) return yield* closed();
       const [program, ...args] = command;
       if (program === undefined) {
-        return yield* new RemoteError({ code: "spawn_error", message: "No daemon command" });
+        return yield* RemoteError.create({ code: "spawn_error", message: "No daemon command" });
       }
       const startedAt = yield* Clock.currentTimeMillis;
       return yield* this.#hello(yield* this.#launch(program, args, startedAt));
@@ -149,7 +149,7 @@ export default class Connection {
     if (typeof option !== "function") return Effect.succeed(option);
     return Effect.tryPromise({
       catch: (error) =>
-        new RemoteError({ code: "spawn_error", lost: true, message: errorMessage(error) }),
+        RemoteError.create({ code: "spawn_error", lost: true, message: errorMessage(error) }),
       try: () => option(),
     });
   }
@@ -275,6 +275,6 @@ export default class Connection {
     if (pending === undefined) return;
     session.pending.delete(id);
     if (type === RESULT) pending.resolve({ json, payload, session: session.id });
-    else pending.reject(new RemoteError(json));
+    else pending.reject(RemoteError.create(json));
   }
 }

@@ -1,15 +1,17 @@
+import { Schema } from "effect";
+
 import RemoteError from "./remote-error-class.ts";
 
 function lost(message: string): RemoteError {
-  return new RemoteError({ code: "unknown", lost: true, message });
+  return RemoteError.create({ code: "unknown", lost: true, message });
 }
 
 function isConnectionLost(error: unknown): boolean {
-  return error instanceof RemoteError && error.fields["lost"] === true;
+  return Schema.is(RemoteError)(error) && error.fields["lost"] === true;
 }
 
 function closed(): RemoteError {
-  return new RemoteError({ code: "unknown", message: "Connection closed" });
+  return RemoteError.create({ code: "unknown", message: "Connection closed" });
 }
 
 function errorMessage(error: unknown): string {

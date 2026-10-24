@@ -39,7 +39,7 @@ export default class ReloadGate {
         const blocking = reload.gated.flatMap(({ object }) => [
           ...(object.gate?.grandfathered ?? []),
         ]);
-        throw new ChordError(
+        throw ChordError.create(
           "aborted",
           `gate deadline (${deadline} ms) missed; blocking roots: ${blocking.join(", ")}`,
           { details: { blocking }, reason: "gate_deadline" },
@@ -66,9 +66,9 @@ export default class ReloadGate {
       const reload = this.#reload;
       if (reload.rolledBack) return;
       reload.rolledBack = true;
-      reload.abort.abort(new ChordError("aborted", "reload aborted"));
+      reload.abort.abort(ChordError.create("aborted", "reload aborted"));
       for (const run of reload.facetRuns.values())
-        run.abort(new ChordError("aborted", "reload aborted"));
+        run.abort(ChordError.create("aborted", "reload aborted"));
       const host = reload.host;
       const report = (cause: Cause.Cause<unknown>): Effect.Effect<void> =>
         Effect.sync(() => host.report(Cause.squash(cause)));
@@ -84,7 +84,7 @@ export default class ReloadGate {
         object.openGate();
         object.startTasks();
       }
-      const reason = new ChordError("gone", "reload aborted; type not served");
+      const reason = ChordError.create("gone", "reload aborted; type not served");
       for (const object of [...host.objects.values()]) {
         if (!host.current.services.has(object.typeName))
           yield* Effect.promise(() =>
@@ -106,7 +106,7 @@ export default class ReloadGate {
             Effect.sync(() => {
               resource.markUnavailable();
               reload.host.report(
-                new ChordError(
+                ChordError.create(
                   "unavailable",
                   `${object.address}: resource ${resource.key} could not be restored`,
                   { cause: Cause.squash(cause) },

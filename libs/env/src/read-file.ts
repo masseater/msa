@@ -23,7 +23,7 @@ const READ_FILE_MAX = 2 ** 31 - 1;
 const abortedRead = (read: readFileTypes.FileRead): boolean => read.signal?.aborted === true;
 
 const abortError = (read: readFileTypes.FileRead): envTypes.FileError =>
-  new FileError("aborted", "The operation was aborted", read.handle.path);
+  FileError.create("aborted", "The operation was aborted", read.handle.path);
 
 const readUnknownSize = (
   read: readFileTypes.FileRead,
@@ -108,12 +108,12 @@ const readContents = (
   Effect.gen(function* () {
     const statError = read.opened["statError"];
     if (statError !== undefined)
-      return yield* Effect.die(new RemoteError(statError as connectionTypes.Json));
+      return yield* Effect.die(RemoteError.create(statError as connectionTypes.Json));
     if (abortedRead(read)) return yield* abortError(read);
     const stat = remoteFileInfo(read.opened["stat"] as connectionTypes.Json);
     const size = stat.kind === "file" ? stat.size : 0;
     if (size > READ_FILE_MAX) {
-      return yield* new FileError(
+      return yield* FileError.create(
         "unknown",
         `File size (${size}) is greater than 2 GiB`,
         read.handle.path,

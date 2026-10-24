@@ -16,7 +16,7 @@ const decodeLine = (bytes: Uint8Array, name: string, lineNumber: number): string
   try {
     return textDecoder.decode(bytes);
   } catch (error) {
-    throw new JsonlCorruptionError(
+    throw JsonlCorruptionError.create(
       `Invalid UTF-8 in complete ${name} line ${lineNumber}`,
       error instanceof Error ? error : undefined,
     );

@@ -6,7 +6,7 @@ import type editDiffTypes from "../src/core/tools/edit-diff.types.ts";
 const { awaited, currentTimeMillis, runTest } = testing;
 
 function waitForRender(): Promise<void> {
-  return runTest(Effect.sleep(0));
+  return runTest(Effect.yieldNow);
 }
 function waitForRenderedText(
   getRender: () => string,

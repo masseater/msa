@@ -1,6 +1,6 @@
 import { homedir, tmpdir } from "node:os";
 
-import { Console, Data, DateTime, Effect } from "effect";
+import { Console, DateTime, Effect, Schema } from "effect";
 
 import openBrowserModule from "../apps/coding-agent/src/utils/open-browser.ts";
 import cliOptions from "./cli-options.ts";
@@ -23,9 +23,10 @@ interface Args {
   sessionsDir: string;
 }
 
-class ToolStatsError extends Data.TaggedError("ToolStatsError")<{
-  readonly message: string;
-}> {}
+class ToolStatsError extends Schema.TaggedError<
+  ToolStatsError,
+  { readonly brand: unique symbol }
+>()("ToolStatsError", { message: Schema.String }) {}
 
 const BUCKETS: ReadonlyArray<number> = [
   0,
@@ -134,7 +135,7 @@ const program = Effect.gen(function* () {
   const host = yield* Host;
   const { output, sessionsDir } = yield* parseArgs(host);
   yield* requireSessionsDir({
-    fail: (message) => new ToolStatsError({ message }),
+    fail: (message) => ToolStatsError.make({ message }),
     host,
     sessionsDir,
   });

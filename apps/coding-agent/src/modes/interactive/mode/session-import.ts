@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import MissingSessionCwdError from "../../../core/missing-session-cwd-error.ts";
@@ -29,7 +29,7 @@ export default class SessionImport {
 
   private recoverFromImportError(inputPath: string, error: unknown): Effect.Effect<void> {
     return awaitingWith(function* () {
-      if (error instanceof MissingSessionCwdError) {
+      if (Schema.is(MissingSessionCwdError)(error)) {
         const selectedCwd = yield* awaited(
           this.mode.selectors.sessions.promptForMissingSessionCwd(error),
         );
@@ -40,7 +40,7 @@ export default class SessionImport {
         yield* performed(this.importSession(inputPath, selectedCwd));
         return;
       }
-      if (error instanceof SessionImportFileNotFoundError) {
+      if (Schema.is(SessionImportFileNotFoundError)(error)) {
         this.mode.display.status.showError(`Failed to import session: ${error.message}`);
         return;
       }

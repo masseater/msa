@@ -57,7 +57,7 @@ const stopsWaitingToRetryAConnectionWhen = () =>
   runTest(
     Effect.gen(function* () {
       const { connection } = connect(HTTP_ENTRY, [
-        failingTransport(new McpHttpError(503, "MCP HTTP request failed with status 503")),
+        failingTransport(McpHttpError.create(503, "MCP HTTP request failed with status 503")),
       ]);
       let failure: unknown;
       void connection.getClient().catch((error) => {
@@ -81,7 +81,9 @@ const retriesResourceReadsButNotToolCalls = () =>
         const method = "method" in message ? message.method : "";
         if ((method === "resources/read" || method === "tools/call") && !failed.has(method)) {
           failed.add(method);
-          return Promise.reject(new McpHttpError(502, "MCP HTTP request failed with status 502"));
+          return Promise.reject(
+            McpHttpError.create(502, "MCP HTTP request failed with status 502"),
+          );
         }
         return send(message);
       };
@@ -99,7 +101,7 @@ const asksOauthServersThatKeepRejectingRequests = () =>
     Effect.gen(function* () {
       const { connection } = connect(
         { config: { url: "http://unused.invalid" }, name: "fake", source: "test" },
-        [failingTransport(new McpAuthRequiredError(new Response(null, { status: 401 })))],
+        [failingTransport(McpAuthRequiredError.create(new Response(null, { status: 401 })))],
       );
       yield* awaited(
         expect(connection.getClient()).rejects.toThrow(

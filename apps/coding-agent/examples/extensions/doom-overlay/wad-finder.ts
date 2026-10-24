@@ -40,13 +40,13 @@ const downloadWad = Effect.gen(function* () {
   const client = yield* HttpClient.HttpClient;
   const response = yield* client.get(WAD_URL);
   if (response.status !== 200) {
-    return yield* new WadDownloadError({ message: `HTTP ${response.status}` });
+    return yield* WadDownloadError.make({ message: `HTTP ${response.status}` });
   }
 
   const bytes = yield* response.arrayBuffer;
   const wad = gunzipSync(Buffer.from(bytes));
   if (wad.subarray(0, 4).toString("ascii") !== "IWAD") {
-    return yield* new WadDownloadError({ message: "Downloaded file is not a valid IWAD" });
+    return yield* WadDownloadError.make({ message: "Downloaded file is not a valid IWAD" });
   }
 
   const fs = yield* FileSystem.FileSystem;

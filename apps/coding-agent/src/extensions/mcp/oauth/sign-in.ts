@@ -163,14 +163,14 @@ function signInMcpServer(options: SignInOptions): Promise<void> {
   return Effect.runPromise(
     awaiting(function* () {
       const { signal } = options;
-      if (signal?.aborted === true) throw new McpSignInCancelledError();
+      if (signal?.aborted === true) throw McpSignInCancelledError.create();
       const stored = yield* awaited(options.store.load());
       const context = yield* awaited(openCallback(options, stored));
       try {
         yield* awaited(resetStaleClient(context));
         yield* awaited(authorize(context));
       } catch (error) {
-        if (signal?.aborted ?? false) throw new McpSignInCancelledError();
+        if (signal?.aborted ?? false) throw McpSignInCancelledError.create();
         throw error;
       } finally {
         yield* awaited(context.callback.close());

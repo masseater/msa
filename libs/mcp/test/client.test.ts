@@ -130,7 +130,7 @@ const callsTools = Effect.gen(function* () {
   server.setHandler("tools/call", (request) => {
     const params = request.params as { name: string; arguments?: Record<string, unknown> };
     if (params.name === "fail")
-      return Effect.fail(new McpError(1234, "tool failed", { retryable: false }));
+      return Effect.fail(McpError.create(1234, "tool failed", { retryable: false }));
     return Effect.succeed({
       content: [{ text: "ok", type: "text" }],
       structuredContent: { count: params.arguments?.["count"] },

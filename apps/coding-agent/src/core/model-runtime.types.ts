@@ -26,11 +26,7 @@ declare namespace modelRuntimeTypes {
     minOAuthValidityMs?: number | undefined;
   }
 
-  type CredentialSynchronizationOperation =
-    | "login"
-    | "logout"
-    | "setRuntimeApiKey"
-    | "removeRuntimeApiKey";
+  type CredentialSynchronizationOperation = CredentialSynchronizationErrorClass["operation"];
 
   type CredentialSynchronizationError = (typeof CredentialSynchronizationErrorClass)["prototype"];
 

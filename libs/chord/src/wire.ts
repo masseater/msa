@@ -1,3 +1,4 @@
+import { Schema } from "effect";
 import { Value } from "typebox/value";
 
 import errorsModule from "./errors.ts";
@@ -18,7 +19,7 @@ const {
 const isFrame = (value: unknown): value is wireTypes.Frame => Value.Check(FrameSchema, value);
 
 function toWireError(error: unknown): wireTypes.WireError {
-  if (error instanceof ChordError) {
+  if (Schema.is(ChordError)(error)) {
     return error.reason === undefined
       ? { code: error.code, message: error.message }
       : { code: error.code, message: error.message, reason: error.reason };
@@ -27,7 +28,7 @@ function toWireError(error: unknown): wireTypes.WireError {
 }
 
 const fromWireError = (error: wireTypes.WireError): errorsTypes.ChordError =>
-  new ChordError(error.code, error.message.replace(/^[a-z_]+(\/[a-z_]+)?: /u, ""), {
+  ChordError.create(error.code, error.message.replace(/^[a-z_]+(\/[a-z_]+)?: /u, ""), {
     reason: error.reason,
   });
 

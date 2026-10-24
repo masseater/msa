@@ -87,7 +87,7 @@ const attachImages = <TApi extends typesModuleModule2.Api>({
       return Promise.resolve(
         imageErrorResult(
           model,
-          new ModelsError(
+          ModelsError.create(
             "provider",
             `Provider ${provider.id} has no image generation implementation for "${model.api}"`,
           ),
@@ -123,7 +123,7 @@ const attachClassifiers = <TApi extends typesModuleModule2.Api>({
       return Promise.resolve(
         classifierErrorResult(
           model,
-          new ModelsError(
+          ModelsError.create(
             "provider",
             `Provider ${provider.id} has no classifier implementation for "${model.api}"`,
           ),

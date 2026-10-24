@@ -1,9 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class McpConnectionClosedError extends Data.TaggedError("McpConnectionClosedError")<{
-  readonly message: string;
-}> {
-  constructor(message = "MCP connection closed") {
-    super({ message });
+export default class McpConnectionClosedError extends Schema.TaggedError<
+  McpConnectionClosedError,
+  { readonly brand: unique symbol }
+>()("McpConnectionClosedError", { message: Schema.String }) {
+  static create(message = "MCP connection closed"): McpConnectionClosedError {
+    return McpConnectionClosedError.make({ message });
   }
 }

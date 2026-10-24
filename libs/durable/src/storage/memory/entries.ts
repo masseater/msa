@@ -13,7 +13,7 @@ const assertConversation = (
   conversationId: typesModule.ConversationId,
 ): void => {
   if (!state.conversations.has(conversationId)) {
-    throw new StorageRequestError(`Unknown conversation: ${conversationId}`);
+    throw StorageRequestError.create(`Unknown conversation: ${conversationId}`);
   }
 };
 

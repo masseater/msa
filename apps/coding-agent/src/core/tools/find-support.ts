@@ -78,7 +78,7 @@ const globWithOperations = Effect.fn("findWithOperations")(function* (
   { pattern, searchPath, effectiveLimit }: findSupportTypes.FindRequest,
 ) {
   const exists = yield* fromPromise(() => ops.exists(searchPath));
-  if (!exists) return yield* new ToolFailure({ message: `Path not found: ${searchPath}` });
+  if (!exists) return yield* ToolFailure.make({ message: `Path not found: ${searchPath}` });
   const results = yield* fromPromise(() =>
     ops.glob(pattern, searchPath, {
       ignore: ["**/node_modules/**", "**/.git/**"],

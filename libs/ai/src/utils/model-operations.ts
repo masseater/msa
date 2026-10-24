@@ -27,7 +27,7 @@ function assertChatModel(
   model: typesModule.AnyModel,
 ): asserts model is typesModule.Model<typesModule.Api> {
   if (!isModelType(model, "chat")) {
-    throw new ModelsError("provider", `Model ${model.provider}/${model.id} is not a chat model`);
+    throw ModelsError.create("provider", `Model ${model.provider}/${model.id} is not a chat model`);
   }
 }
 
@@ -35,7 +35,10 @@ function assertImageModel(
   model: typesModule.AnyModel,
 ): asserts model is typesModule.ImageModel<typesModule.ImageApi> {
   if (!isModelType(model, "image")) {
-    throw new ModelsError("provider", `Model ${model.provider}/${model.id} is not an image model`);
+    throw ModelsError.create(
+      "provider",
+      `Model ${model.provider}/${model.id} is not an image model`,
+    );
   }
 }
 
@@ -43,7 +46,7 @@ function assertClassifierModel(
   model: typesModule.AnyModel,
 ): asserts model is typesModule.ClassifierModel<typesModule.ClassifierApi> {
   if (!isModelType(model, "classifier")) {
-    throw new ModelsError(
+    throw ModelsError.create(
       "provider",
       `Model ${model.provider}/${model.id} is not a classifier model`,
     );
@@ -69,7 +72,7 @@ const assertClassifierInputSupported: {
       context.images?.length > 0 &&
       !model.input.includes("image")
     ) {
-      throw new ModelsError(
+      throw ModelsError.create(
         "provider",
         `Model ${model.provider}/${model.id} does not accept image input`,
       );

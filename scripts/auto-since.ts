@@ -24,7 +24,7 @@ const isNonEmpty = (value: string | undefined): value is string =>
 const explicitSince = (since: string): Effect.Effect<autoSinceTypes.SinceFilter, SinceError> => {
   const parsed = DateTime.make(since);
   return Option.isNone(parsed)
-    ? Effect.fail(new SinceError({ message: `Invalid --since value: ${since}` }))
+    ? Effect.fail(SinceError.make({ message: `Invalid --since value: ${since}` }))
     : Effect.succeed({ ms: DateTime.toEpochMillis(parsed.value), source: `--since ${since}` });
 };
 

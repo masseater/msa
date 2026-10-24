@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import McpForeignError from "./mcp-foreign-error.ts";
 import jsonrpcModule from "./protocol/jsonrpc.ts";
@@ -6,7 +6,7 @@ import jsonrpcModule from "./protocol/jsonrpc.ts";
 const { toError } = jsonrpcModule;
 
 const foreign = (cause: unknown): McpForeignError =>
-  new McpForeignError({ cause, message: toError(cause).message });
+  McpForeignError.make({ cause, message: toError(cause).message });
 
 const fromPromise = <A>(evaluate: () => PromiseLike<A> | A): Effect.Effect<A, McpForeignError> =>
   Effect.tryPromise({ catch: foreign, try: () => Promise.resolve(evaluate()) });
@@ -19,7 +19,7 @@ const unwrapForeign = <A, E, R>(
 ): Effect.Effect<A, Exclude<E, McpForeignError>, R> =>
   effect.pipe(
     Effect.catch((error) =>
-      error instanceof McpForeignError
+      Schema.is(McpForeignError)(error)
         ? Effect.die(error.cause)
         : Effect.fail(error as Exclude<E, McpForeignError>),
     ),

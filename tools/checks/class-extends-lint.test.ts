@@ -10,7 +10,7 @@ type Cases = readonly (readonly [string, string | undefined, (readonly string[])
 
 const HEADER = [
   'import tui from "@msa/tui";',
-  'import { Context, Data, Unlisted } from "effect";',
+  'import { Context, Data, Schema, Unlisted } from "effect";',
   'import { TaggedError as Mixin } from "effect/Data";',
   'import * as DataNs from "effect/Data";',
   'import { lookup } from "@msa/tui";',
@@ -241,6 +241,10 @@ const cases: Cases = [
   ["export class H4 extends Mixin(() => { return tui.Container; }) {}", undefined],
   ['export class H5 extends Mixin(tui.Box, 1, `tag`, () => Data.TaggedError("X")) {}', undefined],
   ['export class H6 extends DataNs.TaggedError("H6") {}', undefined],
+  [
+    'export class H7 extends Schema.TaggedError<H7, { readonly brand: unique symbol }>()("H7", {}) {}',
+    undefined,
+  ],
 ];
 
 const probes = cases.map(([statement, expected, setup = []], index) => ({

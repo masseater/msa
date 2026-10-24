@@ -48,9 +48,9 @@ export default class StreamableHttpTransport
         > => {
           if (this.started)
             return Effect.fail(
-              new McpTransportError("MCP Streamable HTTP transport already started"),
+              McpTransportError.create("MCP Streamable HTTP transport already started"),
             );
-          if (this.closed) return Effect.fail(new McpConnectionClosedError());
+          if (this.closed) return Effect.fail(McpConnectionClosedError.create());
           this.started = true;
           return Effect.void;
         },
@@ -94,7 +94,7 @@ export default class StreamableHttpTransport
     signal: AbortSignal | undefined,
   ): Effect.Effect<void, streamableHttpConnectionTypes.HttpFailure> {
     return Effect.gen({ self: this }, function* () {
-      if (!this.started || this.closed) return yield* new McpConnectionClosedError();
+      if (!this.started || this.closed) return yield* McpConnectionClosedError.create();
       const body = yield* encodeJson(message).pipe(Effect.mapError(foreign));
       const response = yield* this.authorizedFetch(
         "POST",
@@ -126,7 +126,7 @@ export default class StreamableHttpTransport
   ): Effect.Effect<void, streamableHttpConnectionTypes.HttpFailure> {
     return Effect.gen({ self: this }, function* () {
       if (response.status === 202 || response.status === 204) {
-        return yield* new McpHttpError(
+        return yield* McpHttpError.create(
           response.status,
           `MCP server accepted request ${method} without a response`,
         );
@@ -145,7 +145,7 @@ export default class StreamableHttpTransport
         return;
       }
       yield* discard(response);
-      return yield* new McpHttpError(
+      return yield* McpHttpError.create(
         response.status,
         `Unsupported MCP response content type: ${type ?? "missing"}`,
       );

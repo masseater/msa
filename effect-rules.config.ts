@@ -30,12 +30,15 @@ const adoptedEffectRules = [
   "effecttsgo/effect-in-void-success",
   "effecttsgo/effect-map-flatten",
   "effecttsgo/effect-map-void",
+  "effecttsgo/effect-sleep-zero-to-yield-now",
   "effecttsgo/effect-succeed-with-void",
+  "effecttsgo/error-payload-shadows-name",
   "effecttsgo/experimental-api-usage",
   "effecttsgo/extends-native-error",
   "effecttsgo/flat-map-conditional-to-filter-or-fail",
   "effecttsgo/flat-map-ignored-param-to-and-then",
   "effecttsgo/flat-map-to-map",
+  "effecttsgo/flat-map-to-tap",
   "effecttsgo/floating-effect",
   "effecttsgo/floating-effect-in-vitest",
   "effecttsgo/generic-effect-services",
@@ -79,7 +82,10 @@ const adoptedEffectRules = [
   "effecttsgo/option-match-to-from-option",
   "effecttsgo/outdated-api",
   "effecttsgo/overridden-schema-constructor",
+  "effecttsgo/prefer-barrel-import",
+  "effecttsgo/prefer-namespace-import",
   "effecttsgo/prefer-schema-over-json",
+  "effecttsgo/prefer-schema-tagged-error",
   "effecttsgo/prefer-schema-type-property",
   "effecttsgo/prefer-succeed-some-or-none",
   "effecttsgo/prefer-typed-schema-decoder",
@@ -95,6 +101,8 @@ const adoptedEffectRules = [
   "effecttsgo/return-effect-in-gen",
   "effecttsgo/run-effect-inside-effect",
   "effecttsgo/run-of-exit-to-run-exit",
+  "effecttsgo/schema-class-missing-brand",
+  "effecttsgo/schema-class-object-literal",
   "effecttsgo/schema-literal-non-finite",
   "effecttsgo/schema-number",
   "effecttsgo/schema-opaque-instance-member",
@@ -120,7 +128,11 @@ const adoptedEffectRules = [
   "effecttsgo/unstable-api-usage",
 ];
 
-const declinedEffectRules: readonly string[] = [];
+const declinedEffectRules = [
+  "effecttsgo/prefer-effect-array",
+  "effecttsgo/prefer-effect-record",
+  "effecttsgo/prefer-effect-string",
+];
 
 const effectRules = { adoptedEffectRules, declinedEffectRules };
 

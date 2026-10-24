@@ -2,6 +2,7 @@ import { parentPort, workerData } from "node:worker_threads";
 
 import * as Cause from "effect/Cause";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import bridge from "./bridge.ts";
 import inline from "./inline.ts";
@@ -17,7 +18,7 @@ function post(message: protocolTypes.WorkerToHostMessage): void {
 }
 
 const original = (error: unknown): unknown =>
-  error instanceof RuntimeError && error.reason === "launch" ? error.cause : error;
+  Schema.is(RuntimeError)(error) && error.reason === "launch" ? error.cause : error;
 
 const main = (data: protocolTypes.WorkerData) =>
   Effect.suspend(() => {

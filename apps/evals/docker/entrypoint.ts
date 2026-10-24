@@ -2,7 +2,7 @@ import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
 
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Data, Effect, Runtime } from "effect";
+import { Effect, Runtime, Schema } from "effect";
 
 import platform from "../src/platform.ts";
 import sandbox from "../src/sandbox.ts";
@@ -10,7 +10,10 @@ import sandbox from "../src/sandbox.ts";
 const { files, pathOperations, readEnv, runCommand } = platform;
 const { chownTree } = sandbox;
 
-class ChildExit extends Data.TaggedError("ChildExit")<{ readonly status: number }> {
+class ChildExit extends Schema.TaggedError<ChildExit, { readonly brand: unique symbol }>()(
+  "ChildExit",
+  { status: Schema.Finite },
+) {
   override readonly [Runtime.errorExitCode] = this.status;
 }
 
@@ -227,7 +230,7 @@ const program = Effect.gen(function* () {
       uid: parseId("MSA_EVAL_ARTIFACT_UID"),
     });
   }
-  if (status !== 0) return yield* new ChildExit({ status });
+  if (status !== 0) return yield* ChildExit.make({ status });
 });
 
 NodeRuntime.runMain(program);

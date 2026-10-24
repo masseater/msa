@@ -1,4 +1,4 @@
-import { Deferred, Effect, type Fiber } from "effect";
+import { Deferred, Effect, type Fiber, Schema } from "effect";
 import { type Server, serve } from "srvx";
 
 import foreignModule from "../foreign.ts";
@@ -95,7 +95,7 @@ export default class OAuthCallbackServer {
         );
         const port = boundPort(server);
         if (port === undefined)
-          return yield* new OAuthCallbackError("OAuth callback server did not bind to TCP");
+          return yield* OAuthCallbackError.create("OAuth callback server did not bind to TCP");
         const bracketed = redirectHost.includes(":") ? `[${redirectHost}]` : redirectHost;
         instance = new OAuthCallbackServer(
           server,
@@ -110,7 +110,7 @@ export default class OAuthCallbackServer {
   }
 
   waitForCallback(state: string, path?: string): Promise<callbackTypes.OAuthCallback> {
-    if (this.pending.has(state)) throw new OAuthCallbackError("OAuth state is already pending");
+    if (this.pending.has(state)) throw OAuthCallbackError.create("OAuth state is already pending");
     const deferred = Deferred.makeUnsafe<
       callbackTypes.OAuthCallback,
       errorsTypes.OAuthCallbackError
@@ -119,7 +119,7 @@ export default class OAuthCallbackServer {
       this.pending.delete(state);
       Deferred.doneUnsafe(
         deferred,
-        Effect.fail(new OAuthCallbackError("OAuth callback timed out")),
+        Effect.fail(OAuthCallbackError.create("OAuth callback timed out")),
       );
     });
     const timer = Effect.runFork(Effect.delay(timedOut, this.timeoutMs));
@@ -132,7 +132,7 @@ export default class OAuthCallbackServer {
       pending.timer.interruptUnsafe();
       Deferred.doneUnsafe(
         pending.deferred,
-        Effect.fail(new OAuthCallbackError("OAuth callback server closed")),
+        Effect.fail(OAuthCallbackError.create("OAuth callback server closed")),
       );
     }
     this.pending.clear();
@@ -158,7 +158,7 @@ export default class OAuthCallbackServer {
   ): void {
     Deferred.doneUnsafe(
       pending.deferred,
-      outcome instanceof OAuthCallbackError ? Effect.fail(outcome) : Effect.succeed(outcome),
+      Schema.is(OAuthCallbackError)(outcome) ? Effect.fail(outcome) : Effect.succeed(outcome),
     );
   }
 
@@ -180,14 +180,14 @@ export default class OAuthCallbackServer {
     if (pending.path !== undefined && url.pathname !== pending.path) {
       this.settle(
         pending,
-        new OAuthCallbackError("The authorization response arrived on another redirect URI"),
+        OAuthCallbackError.create("The authorization response arrived on another redirect URI"),
       );
       return this.reply(400, { message: "Unexpected redirect URI", ok: false });
     }
     const error = url.searchParams.get("error");
     if (nonEmpty(error)) {
       const description = url.searchParams.get("error_description") ?? error;
-      this.settle(pending, new OAuthCallbackError(description));
+      this.settle(pending, OAuthCallbackError.create(description));
       return this.reply(200, {
         details: description,
         message: "Authorization failed. You may close this window.",
@@ -198,7 +198,7 @@ export default class OAuthCallbackServer {
     if (!nonEmpty(code)) {
       this.settle(
         pending,
-        new OAuthCallbackError("OAuth callback did not include an authorization code"),
+        OAuthCallbackError.create("OAuth callback did not include an authorization code"),
       );
       return this.reply(400, { message: "Missing authorization code", ok: false });
     }

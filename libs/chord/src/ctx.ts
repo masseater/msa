@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import type contractTypes from "./contract.types.ts";
 import type coreTypes from "./core.types.ts";
@@ -30,14 +30,14 @@ export default class CtxImpl implements typesModule.Ctx {
   check(host: coreTypes.HostCore | remoteTypesModule.RemoteHost): void {
     if (this.host !== host) throw invalid("foreign_ctx", "ctx belongs to another host");
     if (this.#closed)
-      throw new ChordError("aborted", "ctx expired: its call already settled", {
+      throw ChordError.create("aborted", "ctx expired: its call already settled", {
         reason: "expired",
       });
     if (this.signal.aborted) {
       const reason: unknown = this.signal.reason;
-      if (reason instanceof ChordError && reason.code === "superseded")
-        throw new ChordError("superseded", reason.message, { cause: reason });
-      throw new ChordError("aborted", "ctx aborted", { cause: reason });
+      if (Schema.is(ChordError)(reason) && reason.code === "superseded")
+        throw ChordError.create("superseded", reason.message, { cause: reason });
+      throw ChordError.create("aborted", "ctx aborted", { cause: reason });
     }
   }
 
@@ -94,7 +94,7 @@ export default class CtxImpl implements typesModule.Ctx {
   close(): void {
     this.#closed = true;
     this.#closing.abort(
-      new ChordError("aborted", "ctx expired: its call already settled", { reason: "expired" }),
+      ChordError.create("aborted", "ctx expired: its call already settled", { reason: "expired" }),
     );
     this.#release();
     for (const ref of this.#refs.splice(0)) ref.release();

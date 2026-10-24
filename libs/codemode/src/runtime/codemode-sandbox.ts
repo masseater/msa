@@ -48,7 +48,7 @@ const spawnWorker = (
 ) =>
   Effect.try({
     catch: (cause) =>
-      new RuntimeError({
+      RuntimeError.make({
         cause,
         message: `Failed to start worker: ${errorMessage(cause)}`,
         reason: "launch",
@@ -78,7 +78,7 @@ const reportStarted = (
   worker: Worker,
 ) =>
   Effect.try({
-    catch: (cause) => new RuntimeError({ cause, message: errorMessage(cause), reason: "launch" }),
+    catch: (cause) => RuntimeError.make({ cause, message: errorMessage(cause), reason: "launch" }),
     try: () => options.onWorkerStarted?.(exited(worker)),
   }).pipe(Effect.tapError(() => channel.stop));
 

@@ -1,12 +1,13 @@
-import { Console, Data, Effect } from "effect";
+import { Console, Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import BuildHost from "./build-host-service.ts";
 import type buildProcessTypes from "./build-process.types.ts";
 
-class Win32BuildError extends Data.TaggedError("Win32BuildError")<{
-  readonly message: string;
-}> {}
+class Win32BuildError extends Schema.TaggedError<
+  Win32BuildError,
+  { readonly brand: unique symbol }
+>()("Win32BuildError", { message: Schema.String }) {}
 
 const runInherited: {
   (
@@ -29,7 +30,7 @@ const runInherited: {
       const host = yield* BuildHost;
       const exitCode = yield* host.exitCode({ args, command, cwd, stdio: "inherit" });
       if (exitCode !== 0) {
-        return yield* new Win32BuildError({
+        return yield* Win32BuildError.make({
           message: `${command} failed with exit code ${exitCode}`,
         });
       }

@@ -120,7 +120,7 @@ export default class SessionTransitions {
       awaitingWith(function* () {
         const resolvedPath = resolvePath(inputPath);
         if (!(yield* awaited(exists(resolvedPath)))) {
-          throw new SessionImportFileNotFoundError(resolvedPath);
+          throw SessionImportFileNotFoundError.create(resolvedPath);
         }
         const sessionDir = this.runtime.session.sessionManager.getSessionDir();
         yield* awaited(makeDirectory({ path: sessionDir }));

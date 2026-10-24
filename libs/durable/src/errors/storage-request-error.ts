@@ -1,9 +1,10 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class StorageRequestError extends Data.TaggedError("StorageRequestError")<{
-  readonly message: string;
-}> {
-  constructor(message: string) {
-    super({ message });
+export default class StorageRequestError extends Schema.TaggedError<
+  StorageRequestError,
+  { readonly brand: unique symbol }
+>()("StorageRequestError", { message: Schema.String }) {
+  static create(message: string): StorageRequestError {
+    return StorageRequestError.make({ message });
   }
 }

@@ -34,7 +34,7 @@ const cancelsQueuedCredentialMutationsWithoutRunning = () => {
       yield* Effect.promise(() => expect(second).rejects.toMatchObject({ name: "AbortError" }));
       firstBlocked.resolve();
       yield* Effect.promise(() => first);
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
 
       expect(secondRan.value).toBe(false);
       expect(yield* Effect.promise(() => credentials.read("p1"))).toEqual({

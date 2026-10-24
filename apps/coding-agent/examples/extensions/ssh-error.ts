@@ -1,3 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class SshError extends Data.TaggedError("SshError")<{ readonly message: string }> {}
+export default class SshError extends Schema.TaggedError<
+  SshError,
+  { readonly brand: unique symbol }
+>()("SshError", { message: Schema.String }) {}

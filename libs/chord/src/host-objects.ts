@@ -23,7 +23,7 @@ interface Located {
 }
 
 const unknownType = (type: string, host: string): errorsTypes.ChordError =>
-  new ChordError("unavailable", `${type} is not served by ${host}`, { reason: "unknown_type" });
+  ChordError.create("unavailable", `${type} is not served by ${host}`, { reason: "unknown_type" });
 
 const reaches = (from: objectTypes.ObjectImpl, to: objectTypes.ObjectImpl): boolean => {
   const seen = new Set<objectTypes.ObjectImpl>();
@@ -152,7 +152,7 @@ export default abstract class HostObjects extends hostObjectsKit.HostRegistries 
       throw invalid("cycle", `${from.address} -> ${address} would create a ref cycle`);
     if (existing !== undefined) return existing;
     if (this.gating?.has(type.name) === true) {
-      throw new ChordError("upgrade_conflict", `${type.name} is being upgraded; retry`, {
+      throw ChordError.create("upgrade_conflict", `${type.name} is being upgraded; retry`, {
         reason: "gate",
       });
     }

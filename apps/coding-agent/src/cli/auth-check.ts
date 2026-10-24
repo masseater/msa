@@ -29,12 +29,12 @@ function checkProviderAuthImpl(
           (resolved.error !== undefined && resolved.error !== "") ||
           resolved.model === undefined
         ) {
-          throw new AuthCommandError(resolved.error ?? `Unable to resolve model "${cliModel}"`);
+          throw AuthCommandError.create(resolved.error ?? `Unable to resolve model "${cliModel}"`);
         }
         provider = resolved.model.provider;
       }
       if (provider === undefined || provider === "")
-        throw new AuthCommandError("Unable to resolve an auth provider");
+        throw AuthCommandError.create("Unable to resolve an auth provider");
       if (modelRuntime.getError() !== undefined) {
         return { provider, reason: "invalid_state", status: "invalid" };
       }

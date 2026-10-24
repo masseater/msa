@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class GondolinAborted extends Data.TaggedError("GondolinAborted")<{
-  readonly message: string;
-}> {}
+export default class GondolinAborted extends Schema.TaggedError<
+  GondolinAborted,
+  { readonly brand: unique symbol }
+>()("GondolinAborted", { message: Schema.String }) {}

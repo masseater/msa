@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import compatModule from "../src/compat.ts";
@@ -15,7 +15,10 @@ interface AnthropicPayload {
   }>;
 }
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
+class PayloadCaptured extends Schema.TaggedError<
+  PayloadCaptured,
+  { readonly brand: unique symbol }
+>()("PayloadCaptured", { message: Schema.String }) {}
 
 function makeModel(allowEmptySignature?: boolean): typesModule.Model<"anthropic-messages"> {
   return {
@@ -74,7 +77,7 @@ const capturePayload = Effect.fn("capturePayload")(function* (
     apiKey: "fake-key",
     onPayload: (payload) => {
       capturedPayload = payload as AnthropicPayload;
-      throw new PayloadCaptured({ message: "payload captured" });
+      throw PayloadCaptured.make({ message: "payload captured" });
     },
   });
   yield* Effect.promise(() => stream.result());

@@ -26,7 +26,7 @@ interface ProviderLookup {
 const requireProvider = ({ state, model }: ProviderLookup): providerTypesModule.Provider => {
   const provider = state.providers.get(model.provider);
   if (provider === undefined) {
-    throw new ModelsError("provider", `Unknown provider: ${model.provider}`);
+    throw ModelsError.create("provider", `Unknown provider: ${model.provider}`);
   }
   return provider;
 };
@@ -75,7 +75,7 @@ const authorize = <
     });
     if (resolution === undefined) {
       return yield* Effect.die(
-        new ModelsError("auth", `Provider is not configured: ${model.provider}`),
+        ModelsError.create("auth", `Provider is not configured: ${model.provider}`),
       );
     }
     const auth = resolution.auth;
@@ -161,7 +161,7 @@ const storeCredential = (
         Effect.sync(() => signal.throwIfAborted()).pipe(
           Effect.andThen(
             Effect.die(
-              new ModelsError("auth", `Credential store modify failed for ${providerId}`, {
+              ModelsError.create("auth", `Credential store modify failed for ${providerId}`, {
                 cause: error,
               }),
             ),
@@ -186,12 +186,12 @@ const login = (request: LoginRequest): Effect.Effect<typesModule.Credential> =>
     signal.throwIfAborted();
     const provider = state.providers.get(providerId);
     if (provider === undefined)
-      return yield* Effect.die(new ModelsError("provider", `Unknown provider: ${providerId}`));
+      return yield* Effect.die(ModelsError.create("provider", `Unknown provider: ${providerId}`));
     const method = type === "oauth" ? provider.auth.oauth : provider.auth.apiKey;
     const loginMethod = method?.login?.bind(method);
     if (loginMethod === undefined) {
       return yield* Effect.die(
-        new ModelsError("auth", `${provider.name} does not support ${type} login`),
+        ModelsError.create("auth", `${provider.name} does not support ${type} login`),
       );
     }
     const loginOperation: Promise<typesModule.Credential> = loginMethod(
@@ -221,7 +221,7 @@ const logout = ({ state, providerId, options }: LogoutRequest): Effect.Effect<vo
         Effect.sync(() => signal.throwIfAborted()).pipe(
           Effect.andThen(
             Effect.die(
-              new ModelsError("auth", `Credential store delete failed for ${providerId}`, {
+              ModelsError.create("auth", `Credential store delete failed for ${providerId}`, {
                 cause: error,
               }),
             ),

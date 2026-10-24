@@ -1,6 +1,6 @@
 import compatModule from "@msa/ai/compat";
 import type compatTypes from "@msa/ai/compat.types";
-import { Clock, Data, Effect, Stream } from "effect";
+import { Clock, Effect, Schema, Stream } from "effect";
 import { dual } from "effect/Function";
 
 import auth from "./auth.ts";
@@ -13,9 +13,10 @@ const { getDirectAccessToken } = auth;
 const { anthropicMessagesApi, createAssistantMessageEventStream, openAIResponsesApi } =
   compatModule;
 
-class GitLabStreamError extends Data.TaggedError("GitLabStreamError")<{
-  readonly message: string;
-}> {}
+class GitLabStreamError extends Schema.TaggedError<
+  GitLabStreamError,
+  { readonly brand: unique symbol }
+>()("GitLabStreamError", { message: Schema.String }) {}
 
 const errorEvent = (
   model: compatTypes.Model<compatTypes.Api>,
@@ -77,14 +78,14 @@ const runStream = (
   Effect.gen(function* () {
     const gitlabAccessToken = options?.apiKey;
     if (gitlabAccessToken === undefined || gitlabAccessToken.length === 0) {
-      return yield* new GitLabStreamError({
+      return yield* GitLabStreamError.make({
         message: "No GitLab access token. Run /login gitlab-duo or set GITLAB_TOKEN",
       });
     }
 
     const cfg = MODEL_MAP.get(model.id);
     if (cfg === undefined) {
-      return yield* new GitLabStreamError({ message: `Unknown model: ${model.id}` });
+      return yield* GitLabStreamError.make({ message: `Unknown model: ${model.id}` });
     }
 
     const directAccess = yield* getDirectAccessToken(gitlabAccessToken);
@@ -95,9 +96,8 @@ const runStream = (
     const innerStream = openInnerStream(cfg.backend, modelWithBaseUrl, context, streamOptions);
 
     yield* Stream.runForEach(
-      Stream.fromAsyncIterable(
-        innerStream,
-        (cause) => new GitLabStreamError({ message: String(cause) }),
+      Stream.fromAsyncIterable(innerStream, (cause) =>
+        GitLabStreamError.make({ message: String(cause) }),
       ),
       (event) => Effect.sync(() => stream.push(event)),
     );

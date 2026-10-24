@@ -1,5 +1,5 @@
 import testing from "@msa/testing";
-import { Cause, Data, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
 import interactiveModeFake from "../../interactive-mode-fake.ts";
@@ -17,7 +17,10 @@ type ShutdownThis = {
   stop: () => void;
 };
 
-class ProcessExitError extends Data.TaggedError("ProcessExitError")<{}> {}
+class ProcessExitError extends Schema.TaggedError<
+  ProcessExitError,
+  { readonly brand: unique symbol }
+>()("ProcessExitError", {}) {}
 
 function deferred(): { promise: Promise<void>; resolve: () => void } {
   const promise = gate();
@@ -36,7 +39,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
         );
         if (Exit.isFailure(tryExit5)) {
           const error = Cause.squash(tryExit5.cause);
-          if (!(error instanceof ProcessExitError)) throw error;
+          if (!Schema.is(ProcessExitError)(error)) throw error;
         }
       }
     }),
@@ -46,7 +49,7 @@ function callShutdown(context: ShutdownThis, options?: { fromSignal?: boolean })
 const keepsSignalHandlersRegisteredWhileSignal = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   vi.spyOn(process, "exit").mockImplementation((() => {
-    throw new ProcessExitError();
+    throw ProcessExitError.make();
   }) as typeof process.exit);
 
   const order: string[] = [];

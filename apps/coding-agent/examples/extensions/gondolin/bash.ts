@@ -1,6 +1,6 @@
 import type { VM } from "@earendil-works/gondolin";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
-import { Data, Duration, Effect, Stream } from "effect";
+import { Duration, Effect, Schema, Stream } from "effect";
 
 import paths from "./paths.ts";
 
@@ -15,13 +15,13 @@ interface ExecRequest {
   readonly guestCwd: string;
 }
 
-class GondolinExecFailure extends Data.TaggedError("GondolinExecFailure")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+class GondolinExecFailure extends Schema.TaggedError<
+  GondolinExecFailure,
+  { readonly brand: unique symbol }
+>()("GondolinExecFailure", { cause: Schema.optionalKey(Schema.Unknown), message: Schema.String }) {}
 
 const execFailure = (cause: unknown) =>
-  new GondolinExecFailure({
+  GondolinExecFailure.make({
     cause,
     message: cause instanceof Error ? cause.message : String(cause),
   });
@@ -55,7 +55,7 @@ const runCommand = (request: ExecRequest, options: ExecOptions) =>
 
 const failOnAbort = (signal: AbortSignal) =>
   Effect.callback<never, GondolinExecFailure>((resume) => {
-    const onAbort = () => resume(Effect.fail(new GondolinExecFailure({ message: "aborted" })));
+    const onAbort = () => resume(Effect.fail(GondolinExecFailure.make({ message: "aborted" })));
     signal.addEventListener("abort", onAbort, { once: true });
     return Effect.sync(() => signal.removeEventListener("abort", onAbort));
   });
@@ -63,13 +63,14 @@ const failOnAbort = (signal: AbortSignal) =>
 const execInVm = (request: ExecRequest, options: ExecOptions) =>
   Effect.gen(function* () {
     const { signal, timeout } = options;
-    if (signal?.aborted === true) return yield* new GondolinExecFailure({ message: "aborted" });
+    if (signal?.aborted === true) return yield* GondolinExecFailure.make({ message: "aborted" });
     const timed =
       timeout !== undefined && timeout > 0
         ? runCommand(request, options).pipe(
             Effect.timeoutOrElse({
               duration: Duration.seconds(timeout),
-              orElse: () => Effect.fail(new GondolinExecFailure({ message: `timeout:${timeout}` })),
+              orElse: () =>
+                Effect.fail(GondolinExecFailure.make({ message: `timeout:${timeout}` })),
             }),
           )
         : runCommand(request, options);

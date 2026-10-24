@@ -55,7 +55,7 @@ const doesNotCommit = Effect.gen(function* () {
 const failsStorageRequestErrorCommit = Effect.gen(function* () {
   const storage = new ControlledStorage();
   const { harness, root } = yield* started(storage);
-  const rejection = new StorageRequestError("bad batch");
+  const rejection = StorageRequestError.create("bad batch");
   storage.failNextCommit(rejection);
   yield* awaited(
     expect(root.commit((tx) => tx.appendEntry(root.id, { kind: "note" }), context)).rejects.toBe(

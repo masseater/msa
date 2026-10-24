@@ -44,7 +44,7 @@ function apiError(
       : undefined;
   const code = stringField(event, "code") ?? stringField(nested, "code");
   const message = stringField(event, "message") ?? stringField(nested, "message");
-  return new CodexStreamError({
+  return CodexStreamError.make({
     code,
     kind: "api",
     message: `Codex error: ${message || code || JSON.stringify(event)}`,
@@ -57,7 +57,7 @@ function failedResponseError(
 ): openaiCodexErrorTypes.CodexStreamError {
   const error = (event as { response?: { error?: { code?: string; message?: string } } }).response
     ?.error;
-  return new CodexStreamError({
+  return CodexStreamError.make({
     code: error?.code,
     kind: "api",
     message: error?.message || "Codex response failed",
@@ -127,7 +127,7 @@ function resolveCodexServiceTier(response: ServiceTier, request: ServiceTier): S
 }
 
 function callbackError(error: unknown): openaiCodexErrorTypes.CodexStreamError {
-  return new CodexStreamError({
+  return CodexStreamError.make({
     cause: error,
     kind: "callback",
     message: formatThrownValue(error),

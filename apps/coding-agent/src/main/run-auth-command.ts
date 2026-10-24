@@ -1,5 +1,5 @@
 import chalk from "chalk";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import argsModule from "../cli/args.ts";
 import AuthCommandError from "../cli/auth-command-error.ts";
@@ -27,8 +27,9 @@ function parseCommandOrReport(args: string[]): authCommandTypes.AuthCommand | un
   try {
     return parseAuthCommand(args);
   } catch (error) {
-    const message =
-      error instanceof AuthCommandError ? error.message : "Failed to parse auth command";
+    const message = Schema.is(AuthCommandError)(error)
+      ? error.message
+      : "Failed to parse auth command";
     writeError(chalk.red(`Error: ${message}`));
     process.exitCode = 1;
     return null;

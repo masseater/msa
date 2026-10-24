@@ -67,7 +67,7 @@ const materializeDocument: {
     );
     if (record === undefined) return undefined;
     if (at !== "current" && isCurrentOnly(record)) {
-      throw new StorageRequestError(`Document ${id} does not retain historical content`);
+      throw StorageRequestError.create(`Document ${id} does not retain historical content`);
     }
     if (!isAliveAt(record, at)) return undefined;
     const { base, tail } = yield* readRevisions(

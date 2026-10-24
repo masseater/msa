@@ -27,7 +27,7 @@ interface HydratedCatalog {
   readonly structure: modelDataTypes.ModelDataStructure;
 }
 
-const fail = (message: string) => Effect.fail(new ModelDataError({ message }));
+const fail = (message: string) => Effect.fail(ModelDataError.make({ message }));
 
 function isCatalogEntry(value: unknown): value is CatalogEntry {
   return (
@@ -43,7 +43,7 @@ const readCatalog = Effect.fn("readCatalog")(function* (catalogPath: string) {
   const files = yield* ScriptFiles;
   const catalog = yield* files.readText(catalogPath).pipe(
     Effect.flatMap(decodeJson),
-    Effect.mapError((error) => new ModelDataError({ message: error.message })),
+    Effect.mapError((error) => ModelDataError.make({ message: error.message })),
   );
   if (!isRecord(catalog)) return yield* fail("Model catalog must be an object");
   return catalog;

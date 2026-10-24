@@ -1,6 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class ToolFailure extends Data.TaggedError("ToolFailure")<{
-  readonly message: string;
-  readonly cause?: unknown;
-}> {}
+export default class ToolFailure extends Schema.TaggedError<
+  ToolFailure,
+  { readonly brand: unique symbol }
+>()("ToolFailure", { cause: Schema.optionalKey(Schema.Unknown), message: Schema.String }) {}

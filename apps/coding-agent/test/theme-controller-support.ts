@@ -57,7 +57,7 @@ function createController(
   });
 }
 
-const flush = () => Effect.sleep(0);
+const flush = () => Effect.yieldNow;
 
 const themeControllerSupport = {
   DARK,

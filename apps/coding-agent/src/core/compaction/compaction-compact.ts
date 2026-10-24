@@ -128,7 +128,7 @@ const compactEffect = Effect.fn("compact")(function* (
 
   const { readFiles, modifiedFiles } = computeFileLists(preparation.fileOps);
   if (preparation.firstKeptEntryId === "") {
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: "First kept entry has no UUID - session may need migration",
     });
   }

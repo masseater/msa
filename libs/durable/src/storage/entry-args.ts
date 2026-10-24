@@ -36,7 +36,7 @@ const forwardEntry: {
         idOrContext as chordTypes.Context,
       );
     if (typeof idOrContext !== "number")
-      throw new StorageRequestError("Storage.entry() requires an entry ID");
+      throw StorageRequestError.create("Storage.entry() requires an entry ID");
     return store.entry(
       idFromNumber<typesModule.ConversationId>(idOrConversationId),
       idFromNumber<typesModule.EntryId>(idOrContext),

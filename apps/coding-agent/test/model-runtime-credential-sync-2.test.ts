@@ -133,7 +133,7 @@ const waitsForACommittedCredentialMutationTo = Effect.gen(function* () {
   );
   yield* committed.promise;
   controller.abort();
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(settled).toBe(false);
 
   mutationFinished.open();

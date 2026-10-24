@@ -2,7 +2,7 @@ import { SandboxManager } from "@anthropic-ai/sandbox-runtime";
 import { NodeServices } from "@effect/platform-node";
 import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
-import { Data, Effect, FileSystem, ManagedRuntime, Option, Stream } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Option, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 
 import configModule from "./config.ts";
@@ -14,15 +14,18 @@ const { loadConfig } = configModule;
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fsService = runtime.runSync(FileSystem.FileSystem);
 
-class SandboxError extends Data.TaggedError("SandboxError")<{ readonly message: string }> {}
+class SandboxError extends Schema.TaggedError<SandboxError, { readonly brand: unique symbol }>()(
+  "SandboxError",
+  { message: Schema.String },
+) {}
 
 const abortEffect = (signal: AbortSignal): Effect.Effect<never, SandboxError> =>
   Effect.callback<never, SandboxError>((resume) => {
     if (signal.aborted) {
-      resume(Effect.fail(new SandboxError({ message: "aborted" })));
+      resume(Effect.fail(SandboxError.make({ message: "aborted" })));
       return;
     }
-    const listener = () => resume(Effect.fail(new SandboxError({ message: "aborted" })));
+    const listener = () => resume(Effect.fail(SandboxError.make({ message: "aborted" })));
     signal.addEventListener("abort", listener, { once: true });
     return Effect.sync(() => signal.removeEventListener("abort", listener));
   });
@@ -81,7 +84,7 @@ const runSandboxed = (request: SandboxExecRequest) =>
 
         if (Option.isNone(exitCode)) {
           yield* killGroup(pid);
-          return yield* new SandboxError({ message: `timeout:${request.timeout}` });
+          return yield* SandboxError.make({ message: `timeout:${request.timeout}` });
         }
         return { exitCode: Number(exitCode.value) };
       }),
@@ -93,7 +96,7 @@ const createSandboxedBashOps = (): codingAgentTypes.BashOperations => ({
     const sandboxed = runSandboxed({ command, cwd, onData, signal, timeout });
     const effect = Effect.gen(function* () {
       if (!(yield* fsService.exists(cwd).pipe(Effect.orElseSucceed(() => false)))) {
-        return yield* new SandboxError({ message: `Working directory does not exist: ${cwd}` });
+        return yield* SandboxError.make({ message: `Working directory does not exist: ${cwd}` });
       }
       return yield* sandboxed;
     });
@@ -169,7 +172,7 @@ const initializeSandbox = (
 
     yield* Effect.tryPromise({
       catch: (error) =>
-        new SandboxError({ message: error instanceof Error ? error.message : String(error) }),
+        SandboxError.make({ message: error instanceof Error ? error.message : String(error) }),
       try: () =>
         SandboxManager.initialize({
           enableWeakerNestedSandbox: extended.enableWeakerNestedSandbox,

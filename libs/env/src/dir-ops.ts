@@ -74,11 +74,11 @@ const listDirAt = (
           const infos: envTypes.FileInfo[] = [];
           for (const entry of entries) {
             if (signal?.aborted === true) {
-              return yield* new FileError("aborted", "aborted", resolved);
+              return yield* FileError.create("aborted", "aborted", resolved);
             }
             const entryPath = paths.resolve(resolved, entry.name);
             if (entry.error !== undefined) {
-              return yield* toFileError(new RemoteError(entry.error), entryPath);
+              return yield* toFileError(RemoteError.create(entry.error), entryPath);
             }
             const info = toInfo(entryPath, entry.info!, paths);
             if (info.ok) infos.push(info.value);

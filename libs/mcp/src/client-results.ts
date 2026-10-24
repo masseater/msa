@@ -23,13 +23,13 @@ function validateInitializeResult(value: unknown): typesModule.InitializeResult 
     typeof value["serverInfo"]["version"] !== "string" ||
     (value["instructions"] !== undefined && typeof value["instructions"] !== "string")
   ) {
-    throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP initialize result");
+    throw McpError.create(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP initialize result");
   }
   return value as unknown as typesModule.InitializeResult;
 }
 
 function invalid(message: string): jsonrpcTypes.McpError {
-  return new McpError(JSON_RPC_ERROR_CODES.invalidRequest, message);
+  return McpError.create(JSON_RPC_ERROR_CODES.invalidRequest, message);
 }
 
 function validateListPage(
@@ -88,7 +88,7 @@ function validateReadResourceResult(value: unknown): typesModule.ReadResourceRes
 
 function validateCallToolResult(value: unknown): contentTypes.CallToolResult {
   if (!isObject(value) || (value["content"] !== undefined && !Array.isArray(value["content"]))) {
-    throw new McpError(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP tools/call result");
+    throw McpError.create(JSON_RPC_ERROR_CODES.invalidRequest, "Invalid MCP tools/call result");
   }
   return (value["content"] === undefined
     ? { ...value, content: [] }
@@ -115,13 +115,13 @@ const listAll = Effect.fn("listAll")(function* (spec: clientResultsTypes.ListSpe
     items.push(...page.items);
     if (page.nextCursor === undefined) return items;
     if (cursors.has(page.nextCursor))
-      return yield* new McpClientError(
+      return yield* McpClientError.create(
         `MCP ${spec.method} returned duplicate cursor: ${page.nextCursor}`,
       );
     cursors.add(page.nextCursor);
     cursor = page.nextCursor;
   }
-  return yield* new McpClientError(`MCP ${spec.method} exceeded ${MAX_LIST_PAGES} pages`);
+  return yield* McpClientError.create(`MCP ${spec.method} exceeded ${MAX_LIST_PAGES} pages`);
 });
 
 const clientResults = {

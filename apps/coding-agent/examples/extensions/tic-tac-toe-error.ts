@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class TicTacToeError extends Data.TaggedError("TicTacToeError")<{
-  readonly message: string;
-}> {}
+export default class TicTacToeError extends Schema.TaggedError<
+  TicTacToeError,
+  { readonly brand: unique symbol }
+>()("TicTacToeError", { message: Schema.String }) {}

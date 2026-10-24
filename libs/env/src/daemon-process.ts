@@ -70,8 +70,8 @@ const launchDaemon = (
       stdin: Stream.fromQueue(input),
     }).pipe(
       Scope.provide(scope),
-      Effect.mapError(
-        (error) => new RemoteError({ code: "spawn_error", lost: true, message: error.message }),
+      Effect.mapError((error) =>
+        RemoteError.create({ code: "spawn_error", lost: true, message: error.message }),
       ),
       Effect.tapError(() => Scope.close(scope, Exit.void)),
     );

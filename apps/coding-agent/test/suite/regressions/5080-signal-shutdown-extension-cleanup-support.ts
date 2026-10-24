@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class ProcessExitError extends Data.TaggedError("ProcessExitError")<{
-  readonly code?: number;
-}> {}
+export default class ProcessExitError extends Schema.TaggedError<
+  ProcessExitError,
+  { readonly brand: unique symbol }
+>()("ProcessExitError", { code: Schema.optionalKey(Schema.Finite) }) {}

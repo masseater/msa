@@ -57,7 +57,7 @@ const ignoresLateUpdate = Effect.gen(function* () {
     yield* Effect.promise(() => agent.prompt("run tool"));
     const eventCountAfterPrompt = events.length;
     delayedUpdate?.(late);
-    yield* Effect.sleep(0);
+    yield* Effect.yieldNow;
     expect(events.filter((event) => event.type === "tool_execution_update")).toHaveLength(1);
     expect(events).toHaveLength(eventCountAfterPrompt);
     expect(unhandledRejections).toEqual([]);
@@ -101,7 +101,7 @@ const ignoresSettledParallelUpdate = Effect.gen(function* () {
   yield* Effect.all([Deferred.await(slowStarted), Deferred.await(settledEnded)]);
   const eventCountBeforeLateUpdate = events.length;
   settledUpdate?.(late);
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(events).toHaveLength(eventCountBeforeLateUpdate);
   release(releaseSlow);
   yield* Effect.promise(() => prompt);

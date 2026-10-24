@@ -15,7 +15,7 @@ const respond = (
   handler: inMemoryServerTypes.TestHandler | undefined,
 ): Effect.Effect<void> =>
   (handler === undefined
-    ? Effect.fail(new McpError(-32601, `Method not found: ${request.method}`))
+    ? Effect.fail(McpError.create(-32601, `Method not found: ${request.method}`))
     : handler(request)
   ).pipe(
     Effect.flatMap((result) =>

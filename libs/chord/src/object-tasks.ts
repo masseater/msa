@@ -39,7 +39,7 @@ export default class ObjectTasks {
         if (run !== this.#runs || this.#object.status !== "live") return;
         if (missed) {
           this.#object.host.report(
-            new ChordError(
+            ChordError.create(
               "aborted",
               `${this.#object.address}: aborted tasks still running after ${deadline} ms; starting their replacements anyway`,
             ),
@@ -53,7 +53,7 @@ export default class ObjectTasks {
   stop(): void {
     this.#runs += 1;
     for (const task of this.#tasks.values()) {
-      task.controller.abort(new ChordError("aborted", "task stopped"));
+      task.controller.abort(ChordError.create("aborted", "task stopped"));
       const done = task.done;
       this.stopped.add(done);
       void done.finally(() => this.stopped.delete(done));

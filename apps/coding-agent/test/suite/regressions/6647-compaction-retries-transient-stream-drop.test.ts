@@ -201,7 +201,7 @@ const abortsAnInFlightRetryBackoff = Effect.gen(function* () {
 
   const compactPromise = harness.session.compaction.manual.compact();
 
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   harness.session.compaction.manual.abortCompaction();
 
   yield* Effect.promise(() => expect(compactPromise).rejects.toThrow());

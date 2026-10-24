@@ -32,10 +32,12 @@ const startAuthorizationEffect = Effect.fn("startAuthorization")(function* (
 ) {
   const metadata = options.metadata;
   if (metadata !== undefined && !metadata.response_types_supported.includes("code"))
-    return yield* new OAuthFlowError("Authorization server does not support authorization codes");
+    return yield* OAuthFlowError.create(
+      "Authorization server does not support authorization codes",
+    );
   const challengeMethods = metadata?.code_challenge_methods_supported;
   if (challengeMethods !== undefined && !challengeMethods.includes("S256"))
-    return yield* new OAuthFlowError("Authorization server does not support PKCE S256");
+    return yield* OAuthFlowError.create("Authorization server does not support PKCE S256");
   const url = new URL(
     metadata?.authorization_endpoint ?? new URL("/authorize", authorizationServerUrl),
   );
@@ -81,7 +83,7 @@ const registerClientEffect = Effect.fn("registerClient")(function* (
 ) {
   const endpoint = options.metadata?.registration_endpoint;
   if (options.metadata !== undefined && !present(endpoint))
-    return yield* new OAuthFlowError(
+    return yield* OAuthFlowError.create(
       "Authorization server does not support dynamic client registration",
     );
   const fetch = options.fetch ?? globalThis.fetch;
@@ -102,7 +104,7 @@ const registerClientEffect = Effect.fn("registerClient")(function* (
   );
   if (!response.ok) {
     const text = yield* fromPromise(() => response.text());
-    return yield* new OAuthRegistrationError(response.status, text);
+    return yield* OAuthRegistrationError.create(response.status, text);
   }
   const value = yield* fromPromise((): Promise<unknown> => response.json());
   return yield* fromSync(() => parseClientInformation(value));

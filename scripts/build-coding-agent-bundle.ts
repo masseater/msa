@@ -1,6 +1,6 @@
 import { isBuiltin } from "node:module";
 
-import { Console, Data, Effect } from "effect";
+import { Console, Effect, Schema } from "effect";
 import { build } from "esbuild";
 import type { Metafile } from "esbuild";
 
@@ -23,7 +23,10 @@ enableCompileCache();
 createRequire(import.meta.url)("./cli-runtime.js");
 `;
 
-class BundleError extends Data.TaggedError("BundleError")<{ readonly message: string }> {}
+class BundleError extends Schema.TaggedError<BundleError, { readonly brand: unique symbol }>()(
+  "BundleError",
+  { message: Schema.String },
+) {}
 
 interface Layout {
   readonly aiDistDir: string;
@@ -45,13 +48,13 @@ const layoutOf = (host: hostTypes.HostShape): Layout => {
 
 const runBuild = (options: Parameters<typeof build>[0]) =>
   Effect.tryPromise({
-    catch: (cause) => new BundleError({ message: `esbuild failed: ${String(cause)}` }),
+    catch: (cause) => BundleError.make({ message: `esbuild failed: ${String(cause)}` }),
     try: () => build(options),
   });
 
 const metafileOf = (result: { readonly metafile?: Metafile | undefined }) =>
   result.metafile === undefined
-    ? Effect.fail(new BundleError({ message: "esbuild did not return a metafile" }))
+    ? Effect.fail(BundleError.make({ message: "esbuild did not return a metafile" }))
     : Effect.succeed(result.metafile);
 
 const unexpectedExternal = (path: string, external: boolean | undefined): boolean =>
@@ -69,7 +72,7 @@ const validateExternalImports = (metafiles: ReadonlyArray<Metafile>) => {
   );
   return unexpected.size > 0
     ? Effect.fail(
-        new BundleError({
+        BundleError.make({
           message: `Bundle left unexpected external imports: ${[...unexpected].sort().join(", ")}`,
         }),
       )
@@ -90,7 +93,7 @@ const findContainingOutput = (options: {
     if (hit) return Effect.succeed(options.host.resolve(options.repoRoot, outputPath));
   }
   return Effect.fail(
-    new BundleError({
+    BundleError.make({
       message: `Could not locate bundled output containing ${options.inputSuffix}`,
     }),
   );
@@ -117,7 +120,7 @@ const requireInputs = (host: hostTypes.HostShape, layout: Layout) =>
     (entry) =>
       Effect.gen(function* () {
         if (yield* host.exists(entry)) return;
-        return yield* new BundleError({
+        return yield* BundleError.make({
           message: `Bundle input is missing: ${host.relative(layout.repoRoot, entry)}. Build the workspace packages first.`,
         });
       }),
@@ -142,7 +145,7 @@ const requireOAuthEntries = (
     for (const match of source.matchAll(OAUTH_IMPORT)) {
       const flow = match[1];
       if (flow !== undefined && !(flow in lazyEntryPoints)) {
-        return yield* new BundleError({
+        return yield* BundleError.make({
           message: `OAuth flow "${flow}" is lazily imported but has no lazy bundle entry`,
         });
       }
@@ -156,13 +159,13 @@ const checkCodemodeWorker = (host: hostTypes.HostShape, layout: Layout, metafile
         (imported) => imported.kind !== "import-statement" || !isBuiltin(imported.path),
       );
       if (invalid.length > 0) {
-        return yield* new BundleError({
+        return yield* BundleError.make({
           message: `Codemode worker must only import Node builtins: ${invalid.map((imported) => imported.path).join(", ")}`,
         });
       }
       const contents = yield* host.readText(host.resolve(layout.repoRoot, outputPath));
       if (contents.includes("import.meta")) {
-        return yield* new BundleError({ message: "Codemode worker must not use import.meta" });
+        return yield* BundleError.make({ message: "Codemode worker must not use import.meta" });
       }
     }),
   );
@@ -170,7 +173,7 @@ const checkCodemodeWorker = (host: hostTypes.HostShape, layout: Layout, metafile
 const sameDirectory = (host: hostTypes.HostShape, left: string, right: string, message: string) =>
   host.dirname(left) === host.dirname(right)
     ? Effect.void
-    : Effect.fail(new BundleError({ message }));
+    : Effect.fail(BundleError.make({ message }));
 
 const buildMain = (host: hostTypes.HostShape, layout: Layout) =>
   Effect.gen(function* () {

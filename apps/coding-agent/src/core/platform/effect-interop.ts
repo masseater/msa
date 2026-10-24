@@ -1,4 +1,4 @@
-import { Cause, Effect, Predicate } from "effect";
+import { Cause, Effect, Predicate, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import ForeignError from "./foreign-error.ts";
@@ -17,7 +17,7 @@ const abortedBy =
           effect,
           Effect.callback<never, toolFailureTypes.ToolFailure>((resume, abortSignal) => {
             const fail = (): void =>
-              resume(Effect.fail(new ToolFailure({ message: "Operation aborted" })));
+              resume(Effect.fail(ToolFailure.make({ message: "Operation aborted" })));
             if (signal.aborted) fail();
             else signal.addEventListener("abort", fail, { once: true, signal: abortSignal });
           }),
@@ -57,7 +57,7 @@ const fromPromise = <A>(
 ): Effect.Effect<A, foreignErrorTypes.ForeignError> =>
   Effect.tryPromise({
     catch: (cause) =>
-      new ForeignError({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
+      ForeignError.make({ cause, message: cause instanceof Error ? cause.message : String(cause) }),
     try: (signal) => Promise.resolve(evaluate(signal)),
   });
 
@@ -66,7 +66,7 @@ const unwrapForeign = <A, E, R>(
 ): Effect.Effect<A, Exclude<E, foreignErrorTypes.ForeignError>, R> =>
   effect.pipe(
     Effect.catch((error) =>
-      error instanceof ForeignError
+      Schema.is(ForeignError)(error)
         ? Effect.die(error.cause)
         : Effect.fail(error as Exclude<E, foreignErrorTypes.ForeignError>),
     ),
@@ -74,7 +74,7 @@ const unwrapForeign = <A, E, R>(
 
 const errorFromCause = (cause: Cause.Cause<unknown>): unknown => {
   const squashed = Cause.squash(cause);
-  return squashed instanceof ForeignError ? squashed.cause : squashed;
+  return Schema.is(ForeignError)(squashed) ? squashed.cause : squashed;
 };
 
 const causeMessage = (cause: Cause.Cause<unknown>): string => {

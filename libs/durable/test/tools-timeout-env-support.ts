@@ -28,7 +28,7 @@ class TimeoutOutputExecutionEnv extends node.NodeExecutionEnv {
         );
         getOrThrow(yield* awaited(this.writeFile(spillPath, output, context)));
         options?.onOutput?.(output, context, { stream: "stdout" });
-        const error = new ExecutionError("timeout", `timeout:${options?.timeout}`);
+        const error = ExecutionError.create("timeout", `timeout:${options?.timeout}`);
         error.spillPath = spillPath;
         return err(error);
       }),

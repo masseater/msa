@@ -6,7 +6,7 @@ import RuntimeError from "./runtime-error.ts";
 
 const { PRELUDE_HEAD } = bridgePrelude;
 
-const bridgeError = (message: string) => new RuntimeError({ message, reason: "bridge" });
+const bridgeError = (message: string) => RuntimeError.make({ message, reason: "bridge" });
 
 function toCodemodeIdentifier(name: string): string {
   let identifier = "";

@@ -1,17 +1,18 @@
-import { Cause, Console, Data, Effect } from "effect";
+import { Cause, Console, Effect, Schema } from "effect";
 
 import http from "../../src/utils/http.ts";
 import type upstreamTypes from "./upstream.types.ts";
 
 const { httpRequest } = http;
 
-class UpstreamError extends Data.TaggedError("UpstreamError")<{
-  readonly message: string;
-}> {}
+class UpstreamError extends Schema.TaggedError<UpstreamError, { readonly brand: unique symbol }>()(
+  "UpstreamError",
+  { message: Schema.String },
+) {}
 
 const fetchJson = Effect.fn("fetchJson")(function* ({ url, label }: upstreamTypes.UpstreamRequest) {
   const reply = yield* httpRequest({ url });
-  if (!reply.ok) return yield* new UpstreamError({ message: `${label} returned ${reply.status}` });
+  if (!reply.ok) return yield* UpstreamError.make({ message: `${label} returned ${reply.status}` });
   return yield* reply.json;
 });
 

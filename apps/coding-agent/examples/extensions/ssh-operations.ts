@@ -24,7 +24,7 @@ const runSsh = (remote: string, command: string) =>
           { concurrency: 3 },
         );
         if (exitCode !== 0) {
-          return yield* new SshError({ message: `SSH failed (${exitCode}): ${stderr}` });
+          return yield* SshError.make({ message: `SSH failed (${exitCode}): ${stderr}` });
         }
         return stdout;
       }),
@@ -88,10 +88,10 @@ const createRemoteEditOps = (
 const abortEffect = (signal: AbortSignal): Effect.Effect<never, SshError> =>
   Effect.callback<never, SshError>((resume) => {
     if (signal.aborted) {
-      resume(Effect.fail(new SshError({ message: "aborted" })));
+      resume(Effect.fail(SshError.make({ message: "aborted" })));
       return;
     }
-    const listener = () => resume(Effect.fail(new SshError({ message: "aborted" })));
+    const listener = () => resume(Effect.fail(SshError.make({ message: "aborted" })));
     signal.addEventListener("abort", listener, { once: true });
     return Effect.sync(() => signal.removeEventListener("abort", listener));
   });
@@ -124,7 +124,7 @@ const runRemoteBash = (
             : yield* handle.exitCode.pipe(Effect.timeoutOption(timeout * 1000));
 
         if (Option.isNone(exitCode)) {
-          return yield* new SshError({ message: `timeout:${timeout}` });
+          return yield* SshError.make({ message: `timeout:${timeout}` });
         }
         return { exitCode: exitCode.value };
       }),

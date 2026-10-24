@@ -62,7 +62,7 @@ export default abstract class StreamableHttpConnection extends transport.Transpo
       const onUnauthorized = provider?.onUnauthorized?.bind(provider);
       for (let attempt = 0; ; attempt++) {
         const { headers, token } = yield* this.headers(init.headers);
-        if (signal?.aborted === true) return yield* new McpAbortError();
+        if (signal?.aborted === true) return yield* McpAbortError.create();
         const fetch = this.fetch;
         const url = this.url;
         const controllerSignal = this.controller.signal;
@@ -119,11 +119,11 @@ export default abstract class StreamableHttpConnection extends transport.Transpo
     return Effect.gen({ self: this }, function* () {
       const text = yield* Effect.promise(() => response.text().catch(() => ""));
       const body = text.slice(0, MAX_ERROR_BODY_BYTES);
-      if (response.status === 401) return yield* new McpAuthRequiredError(response, body);
+      if (response.status === 401) return yield* McpAuthRequiredError.create(response, body);
       const sessionId = this.sessionIdValue;
       if (response.status === 404 && sessionId !== undefined && sessionId !== "")
-        return yield* new McpSessionExpiredError(body);
-      return yield* new McpHttpError(
+        return yield* McpSessionExpiredError.create(body);
+      return yield* McpHttpError.create(
         response.status,
         describeHttpFailure(response.status, body),
         body,
@@ -183,7 +183,7 @@ export default abstract class StreamableHttpConnection extends transport.Transpo
       const type = contentType(response);
       if (type !== "text/event-stream" || response.body === null) {
         yield* discard(response);
-        return yield* new McpHttpError(
+        return yield* McpHttpError.create(
           response.status,
           `Unsupported MCP GET response content type: ${type ?? "missing"}`,
         );

@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class SinceError extends Data.TaggedError("SinceError")<{
-  readonly message: string;
-}> {}
+export default class SinceError extends Schema.TaggedError<
+  SinceError,
+  { readonly brand: unique symbol }
+>()("SinceError", { message: Schema.String }) {}

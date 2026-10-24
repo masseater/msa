@@ -61,7 +61,7 @@ const ordersSameProviderCredentialOperationsThroughLocal = Effect.gen(function* 
   });
   yield* loginStarted.promise;
   const logout = runtime.logout("ordered");
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(yield* awaited(credentials.read("ordered"))).toBeUndefined();
 
   blockedLogin.open();

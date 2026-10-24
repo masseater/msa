@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import discoverModule from "./discover.ts";
@@ -53,16 +53,16 @@ const resolveClient = Effect.fn("resolveClient")(function* (context: FlowContext
   if (clientDocument !== undefined) {
     const url = new URL(clientDocument.url);
     if (url.protocol !== "https:" || url.pathname === "/")
-      return yield* new OAuthFlowError("Invalid OAuth client metadata URL");
+      return yield* OAuthFlowError.create("Invalid OAuth client metadata URL");
   }
   const known: typesModule.OAuthClientInformationMixed | undefined =
     stored ?? (clientDocument === undefined ? undefined : { client_id: clientDocument.url });
   if (known !== undefined) return { client: known, clientDocument };
   if (present(options.authorizationCode))
-    return yield* new OAuthFlowError("OAuth client information is missing during code exchange");
+    return yield* OAuthFlowError.create("OAuth client information is missing during code exchange");
   const saveClientInformation = provider.saveClientInformation?.bind(provider);
   if (saveClientInformation === undefined)
-    return yield* new OAuthFlowError("OAuth client information cannot be persisted");
+    return yield* OAuthFlowError.create("OAuth client information cannot be persisted");
   const registered = yield* registerClient(discovered.authorizationServerUrl, {
     clientMetadata: provider.clientMetadata,
     fetch: options.fetch,
@@ -86,7 +86,7 @@ const exchangeCode = Effect.fn("exchangeCode")(function* (
     (iss !== undefined || metadata?.authorization_response_iss_parameter_supported === true) &&
     iss !== metadata?.issuer
   ) {
-    return yield* new OAuthIssuerMismatchError(metadata?.issuer, iss);
+    return yield* OAuthIssuerMismatchError.create(metadata?.issuer, iss);
   }
   const codeVerifier = yield* fromPromise(() => provider.codeVerifier());
   const tokens = yield* exchangeAuthorizationCode(discovered.authorizationServerUrl, {
@@ -104,8 +104,8 @@ const refreshIsFatal = (
   error: flowTypes.OAuthFlowFailure,
 ): boolean =>
   options.signal?.aborted === true ||
-  error instanceof OAuthInsecureEndpointError ||
-  (error instanceof OAuthError && error.code !== "server_error");
+  Schema.is(OAuthInsecureEndpointError)(error) ||
+  (Schema.is(OAuthError)(error) && error.code !== "server_error");
 
 const tryRefresh = Effect.fn("tryRefresh")(function* (
   context: FlowContext,
@@ -184,7 +184,7 @@ const runFlow = Effect.fn("runFlow")(function* (
 });
 
 const invalidationFor = (error: flowTypes.OAuthFlowFailure): "all" | "tokens" | undefined => {
-  if (!(error instanceof OAuthError)) return undefined;
+  if (!Schema.is(OAuthError)(error)) return undefined;
   if (error.code === "invalid_client" || error.code === "unauthorized_client") return "all";
   if (error.code === "invalid_grant") return "tokens";
   return undefined;

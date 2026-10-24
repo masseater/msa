@@ -146,17 +146,17 @@ class InstrumentedEnv extends node.NodeExecutionEnv {
           return yield* awaited(superAppendFile(path, content, appendContext));
         }
         if (failure.mode === "before")
-          return err(new FileError("unknown", "injected append failure", path));
+          return err(FileError.create("unknown", "injected append failure", path));
         if (failure.mode === "short") {
           const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
           const partial = bytes.subarray(0, Math.max(1, Math.floor(bytes.length / 2)));
           const written = yield* awaited(superAppendFile(path, partial, appendContext));
           if (!written.ok) return written;
-          return err(new FileError("unknown", "injected short append", path));
+          return err(FileError.create("unknown", "injected short append", path));
         }
         const written = yield* awaited(superAppendFile(path, content, appendContext));
         if (!written.ok) return written;
-        return err(new FileError("unknown", "injected post-append failure", path));
+        return err(FileError.create("unknown", "injected post-append failure", path));
       }),
     );
   }
@@ -178,7 +178,7 @@ class InstrumentedEnv extends node.NodeExecutionEnv {
           const flushed = yield* awaited(superFlushFile(path, flushContext));
           if (!flushed.ok) return flushed;
         }
-        return err(new FileError("unknown", "injected flush failure", path));
+        return err(FileError.create("unknown", "injected flush failure", path));
       }),
     );
   }
@@ -198,17 +198,17 @@ class InstrumentedEnv extends node.NodeExecutionEnv {
           return yield* awaited(superWriteFile(path, content, writeContext));
         }
         if (failure.mode === "before")
-          return err(new FileError("unknown", "injected write failure", path));
+          return err(FileError.create("unknown", "injected write failure", path));
         if (failure.mode === "short") {
           const bytes = typeof content === "string" ? new TextEncoder().encode(content) : content;
           const partial = bytes.subarray(0, Math.max(1, Math.floor(bytes.length / 2)));
           const written = yield* awaited(superWriteFile(path, partial, writeContext));
           if (!written.ok) return written;
-          return err(new FileError("unknown", "injected short write", path));
+          return err(FileError.create("unknown", "injected short write", path));
         }
         const written = yield* awaited(superWriteFile(path, content, writeContext));
         if (!written.ok) return written;
-        return err(new FileError("unknown", "injected post-write failure", path));
+        return err(FileError.create("unknown", "injected post-write failure", path));
       }),
     );
   }
@@ -233,7 +233,7 @@ class InstrumentedEnv extends node.NodeExecutionEnv {
           );
           if (!renamed.ok) return renamed;
         }
-        return err(new FileError("unknown", "injected rename failure", sourcePath));
+        return err(FileError.create("unknown", "injected rename failure", sourcePath));
       }),
     );
   }
@@ -256,7 +256,7 @@ class InstrumentedEnv extends node.NodeExecutionEnv {
           const removed = yield* awaited(superRemove(path, options, removeContext));
           if (!removed.ok) return removed;
         }
-        return err(new FileError("unknown", "injected remove failure", path));
+        return err(FileError.create("unknown", "injected remove failure", path));
       }),
     );
   }

@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import cliOptions from "./cli-options.ts";
 import type cliOptionsTypes from "./cli-options.types.ts";
@@ -29,9 +29,10 @@ Options:
   -h, --help             Show this help
 `;
 
-class ReadToolStatsError extends Data.TaggedError("ReadToolStatsError")<{
-  readonly message: string;
-}> {}
+class ReadToolStatsError extends Schema.TaggedError<
+  ReadToolStatsError,
+  { readonly brand: unique symbol }
+>()("ReadToolStatsError", { message: Schema.String }) {}
 
 const defaultArgs = (host: hostTypes.HostShape): readToolArgsTypes.Args => ({
   allSessions: false,
@@ -54,7 +55,7 @@ const defaultArgs = (host: hostTypes.HostShape): readToolArgsTypes.Args => ({
   top: DEFAULT_TOP,
 });
 
-const fail = (message: string) => new ReadToolStatsError({ message });
+const fail = (message: string) => ReadToolStatsError.make({ message });
 
 const parseBucket = (
   value: string | undefined,

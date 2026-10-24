@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import foreignModule from "./foreign.ts";
 import type incomingRequestsTypes from "./incoming-requests.types.ts";
@@ -10,8 +10,8 @@ const { McpForeignError, fromPromise } = foreignModule;
 const { JSON_RPC_ERROR_CODES, McpError, toError } = jsonrpcModule;
 
 const responseError = (failure: unknown): jsonrpcTypes.JsonRpcErrorObject => {
-  const error = failure instanceof McpForeignError ? failure.cause : failure;
-  return error instanceof McpError
+  const error = Schema.is(McpForeignError)(failure) ? failure.cause : failure;
+  return Schema.is(McpError)(error)
     ? { code: error.code, data: error.data, message: error.message }
     : { code: JSON_RPC_ERROR_CODES.internalError, message: toError(error).message };
 };

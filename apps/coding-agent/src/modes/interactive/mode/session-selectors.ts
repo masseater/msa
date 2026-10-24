@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import type extensionsTypes from "../../../core/extensions/index.types.ts";
@@ -54,7 +54,7 @@ export default class SessionSelectors {
         this.mode.display.status.showStatus("Resumed session");
         return result;
       } catch (error: unknown) {
-        if (error instanceof MissingSessionCwdError) {
+        if (Schema.is(MissingSessionCwdError)(error)) {
           const selectedCwd = yield* awaited(this.promptForMissingSessionCwd(error));
           if (selectedCwd === undefined || selectedCwd === "") {
             this.mode.display.status.showStatus("Resume cancelled");

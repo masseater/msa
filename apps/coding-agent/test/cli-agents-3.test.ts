@@ -1,6 +1,6 @@
 import type compatTypes from "@msa/ai/compat.types";
 import testing from "@msa/testing";
-import { Data, Effect, Stream } from "effect";
+import { Effect, Schema, Stream } from "effect";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vite-plus/test";
 
 import accounts from "../src/core/accounts.ts";
@@ -16,7 +16,10 @@ const { awaited, joinPath, runTest } = testing;
 const { cleanAgentDir, currentAgentDir, prepareAgentDir, writeAccounts, writeScript } =
   cliAgentsSupport;
 
-class StreamFailed extends Data.TaggedError("StreamFailed")<{ readonly cause: unknown }> {}
+class StreamFailed extends Schema.TaggedError<StreamFailed, { readonly brand: unique symbol }>()(
+  "StreamFailed",
+  { cause: Schema.Unknown },
+) {}
 
 beforeEach(() => runTest(prepareAgentDir));
 
@@ -100,9 +103,8 @@ const run = Effect.fn("run")(function* (script: string) {
   } as unknown as compatTypes.TranscriptContext;
   const events: compatTypes.AssistantMessageEvent[] = [];
   yield* Stream.runForEach(
-    Stream.fromAsyncIterable(
-      provider.streamSimple(model, context),
-      (cause) => new StreamFailed({ cause }),
+    Stream.fromAsyncIterable(provider.streamSimple(model, context), (cause) =>
+      StreamFailed.make({ cause }),
     ),
     (event) => Effect.sync(() => events.push(event)),
   ).pipe(Effect.orDie);

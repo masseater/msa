@@ -1,5 +1,6 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-export default class PodmanError extends Data.TaggedError("PodmanError")<{
-  readonly message: string;
-}> {}
+export default class PodmanError extends Schema.TaggedError<
+  PodmanError,
+  { readonly brand: unique symbol }
+>()("PodmanError", { message: Schema.String }) {}

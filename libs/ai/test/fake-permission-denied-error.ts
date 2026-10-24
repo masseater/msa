@@ -1,9 +1,12 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
-class FakePermissionDeniedError extends Data.TaggedError("PermissionDeniedError")<{
-  readonly message: string;
-  readonly status: number;
-  readonly error: unknown;
-}> {}
+class FakePermissionDeniedError extends Schema.TaggedError<
+  FakePermissionDeniedError,
+  { readonly brand: unique symbol }
+>()("PermissionDeniedError", {
+  error: Schema.Unknown,
+  message: Schema.String,
+  status: Schema.Finite,
+}) {}
 
 export default FakePermissionDeniedError;

@@ -2,6 +2,7 @@ import * as Deferred from "effect/Deferred";
 import * as Effect from "effect/Effect";
 import * as Exit from "effect/Exit";
 import { dual } from "effect/Function";
+import * as Schema from "effect/Schema";
 
 import type typesModule from "../types.ts";
 import bridge from "./bridge.ts";
@@ -113,7 +114,7 @@ const receive = (execution: protocolTypes.Execution, message: unknown): void => 
     finish(execution, {
       kind: "sandbox",
       message:
-        error instanceof RuntimeError && error.reason === "bridge"
+        Schema.is(RuntimeError)(error) && error.reason === "bridge"
           ? `Sandbox bridge broken: ${error.message}. The script may have modified built-ins such as a prototype's toJSON.`
           : `Sandbox host failed: ${errorMessage(error)}`,
     });

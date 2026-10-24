@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { Type } from "typebox";
 
 import compatModule from "../src/compat.ts";
@@ -6,7 +6,10 @@ import type typesModule from "../src/types.types.ts";
 
 const { streamSimple } = compatModule;
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured") {}
+class PayloadCaptured extends Schema.TaggedError<
+  PayloadCaptured,
+  { readonly brand: unique symbol }
+>()("PayloadCaptured", {}) {}
 
 function tool(name: string): typesModule.Tool {
   return { description: `${name} tool`, name, parameters: Type.Object({}) };
@@ -21,7 +24,7 @@ const capturePayload = Effect.fn("capturePayload")(function* <T>(
     apiKey: "test-key",
     onPayload: (payload) => {
       captured = payload as T;
-      throw new PayloadCaptured();
+      throw PayloadCaptured.make();
     },
   });
   yield* Effect.promise(() => stream.result());

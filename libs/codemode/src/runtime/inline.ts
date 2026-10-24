@@ -18,7 +18,7 @@ const DEFAULT_INTERRUPT_BUDGET = 100_000;
 const INLINE_MAX_STACK_SIZE = 256 * 1024;
 
 const launchError = (message: string, cause: unknown) =>
-  new RuntimeError({ cause, message, reason: "launch" });
+  RuntimeError.make({ cause, message, reason: "launch" });
 
 const virtualClock = (data: protocolTypes.VmStartData): vmSessionTypes.VirtualClock | undefined =>
   data.deterministic === undefined

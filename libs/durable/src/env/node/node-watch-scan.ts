@@ -80,7 +80,7 @@ class TreeScan {
     this.#counted.add(path);
     const max = this.#request.maxDirectories;
     if (this.#counted.size <= max) return Effect.void;
-    return Effect.fail(new BudgetExceeded({ message: `Watched paths exceed ${max} directories` }));
+    return Effect.fail(BudgetExceeded.make({ message: `Watched paths exceed ${max} directories` }));
   }
 
   #record(path: string, stats: nodeWatchScanTypes.WatchStats) {

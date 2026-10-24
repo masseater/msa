@@ -34,7 +34,7 @@ const secureEndpoint = (
   Effect.suspend(() => {
     const url = new URL(value);
     if (url.protocol !== "https:" && !loopback(url.hostname))
-      return Effect.fail(new OAuthInsecureEndpointError(url.href));
+      return Effect.fail(OAuthInsecureEndpointError.create(url.href));
     return Effect.succeed(url);
   });
 

@@ -1,4 +1,4 @@
-import { Clock, Data, Effect } from "effect";
+import { Clock, Effect, Schema } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
@@ -13,7 +13,10 @@ interface AnthropicToolPayload {
   tools?: Array<{ strict?: boolean; input_schema: Record<string, unknown> }>;
 }
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
+class PayloadCaptured extends Schema.TaggedError<
+  PayloadCaptured,
+  { readonly brand: unique symbol }
+>()("PayloadCaptured", { message: Schema.String }) {}
 
 function createModel(): typesModule.Model<"anthropic-messages"> {
   return {
@@ -64,7 +67,7 @@ const captureFirstTool = Effect.fn("captureFirstTool")(function* (tool: typesMod
       cacheRetention: "none",
       onPayload: (value) => {
         payload = value as AnthropicToolPayload;
-        throw new PayloadCaptured({ message: "payload captured" });
+        throw PayloadCaptured.make({ message: "payload captured" });
       },
     },
   );

@@ -39,7 +39,7 @@ Notes:
   - CPU profiles are kept in the selected profile directory for later analysis.
 `;
 
-const fail = (message: string) => new ProfileError({ message });
+const fail = (message: string) => ProfileError.make({ message });
 
 const parseIntegerFlag = (value: string, name: string) => {
   const parsed = Number.parseInt(value, 10);

@@ -2,7 +2,7 @@ import { Socket } from "node:net";
 
 import * as NodeSink from "@effect/platform-node/NodeSink";
 import * as NodeStream from "@effect/platform-node/NodeStream";
-import { Config, Deferred, Effect, Option, Scope } from "effect";
+import { Config, Deferred, Effect, Option, Schema, Scope } from "effect";
 
 import errorsModule from "./errors.ts";
 import StreamChannel from "./ipc-channel.ts";
@@ -18,7 +18,7 @@ const { acquireProcessLock } = managerLock;
 const fatalMessage = (error: unknown): managerTypesModule.ControlMessage => ({
   message: error instanceof Error ? error.message : String(error),
   type: "fatal",
-  ...(error instanceof ChordError && error.reason !== undefined ? { reason: error.reason } : {}),
+  ...(Schema.is(ChordError)(error) && error.reason !== undefined ? { reason: error.reason } : {}),
 });
 
 const lockFromEnvironment = Effect.fn(function* (fatal: (error: unknown) => void) {

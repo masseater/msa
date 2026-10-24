@@ -8,7 +8,7 @@ function throwingCreate() {
   const promise = Promise.resolve(undefined) as unknown as { withResponse: () => Promise<never> };
   promise.withResponse = () =>
     Promise.reject(
-      new FakePermissionDeniedError({
+      FakePermissionDeniedError.make({
         error: mockState.parsedBody,
         message: "403 status code (no body)",
         status: 403,

@@ -53,7 +53,11 @@ const program = Effect.gen(function* () {
   const host = yield* Host;
   const args = yield* parseArgs(host);
   const { meta, records } = yield* scanReadCalls(
-    yield* resolveScanScope({ args, fail: (message) => new ReadToolStatsError({ message }), host }),
+    yield* resolveScanScope({
+      args,
+      fail: (message) => ReadToolStatsError.make({ message }),
+      host,
+    }),
   );
   const filtered = records.filter((record) =>
     matchesModelFilter({ modelFilter: args.modelFilter, providerModel: record.providerModel }),

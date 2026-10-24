@@ -1,3 +1,5 @@
+import { Schema } from "effect";
+
 import diagnosticsModule from "../utils/diagnostics.ts";
 import CodexStreamError from "./codex-stream-error.ts";
 import type openaiCodexErrorTypes from "./openai-codex-error.types.ts";
@@ -12,7 +14,7 @@ function codexProtocolError({
   cause,
   payload,
 }: openaiCodexErrorTypes.CodexProtocolFailure) {
-  return new CodexStreamError({
+  return CodexStreamError.make({
     cause,
     kind: "protocol",
     message: `Invalid Codex ${source} JSON: ${formatThrownValue(cause)}`,
@@ -20,10 +22,10 @@ function codexProtocolError({
   });
 }
 
-const isCodexNonTransportError = (error: unknown): boolean => error instanceof CodexStreamError;
+const isCodexNonTransportError = (error: unknown): boolean => Schema.is(CodexStreamError)(error);
 
 const hasApiCode = (error: unknown, code: string): boolean =>
-  error instanceof CodexStreamError && error.kind === "api" && error.code === code;
+  Schema.is(CodexStreamError)(error) && error.kind === "api" && error.code === code;
 
 const isWebSocketConnectionLimitReachedError = (error: unknown): boolean =>
   hasApiCode(error, WEBSOCKET_CONNECTION_LIMIT_REACHED_CODE);

@@ -28,7 +28,9 @@ function closedError(session: {
   readonly failure: { readonly error: unknown } | undefined;
 }): Error {
   const failure = session.failure;
-  return failure === undefined ? new Error("Harness is closed") : new SessionFailed(failure.error);
+  return failure === undefined
+    ? new Error("Harness is closed")
+    : SessionFailed.create(failure.error);
 }
 
 const util = {

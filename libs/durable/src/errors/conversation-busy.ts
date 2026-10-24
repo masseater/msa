@@ -1,12 +1,22 @@
-import { Data } from "effect";
+import { Schema } from "effect";
 
 import type typesModule from "../types.types.ts";
 
-export default class ConversationBusy extends Data.TaggedError("ConversationBusy")<{
-  readonly message: string;
-  readonly conversationId: typesModule.ConversationId;
-}> {
-  constructor(conversationId: typesModule.ConversationId) {
-    super({ conversationId, message: `Conversation ${conversationId} is busy` });
+const ConversationId = Schema.declare(
+  (input: unknown): input is typesModule.ConversationId => typeof input === "number",
+);
+
+export default class ConversationBusy extends Schema.TaggedError<
+  ConversationBusy,
+  { readonly brand: unique symbol }
+>()("ConversationBusy", {
+  conversationId: ConversationId,
+  message: Schema.String,
+}) {
+  static create(conversationId: typesModule.ConversationId): ConversationBusy {
+    return ConversationBusy.make({
+      conversationId,
+      message: `Conversation ${conversationId} is busy`,
+    });
   }
 }

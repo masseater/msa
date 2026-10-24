@@ -60,18 +60,18 @@ const getDirectAccessToken = (gitlabAccessToken: string) =>
     if (!reply.ok) {
       const errorText = yield* reply.text;
       if (reply.status === 403) {
-        return yield* new GitLabAuthError({
+        return yield* GitLabAuthError.make({
           message: `GitLab Duo access denied. Ensure GitLab Duo is enabled for your account. Error: ${errorText}`,
         });
       }
-      return yield* new GitLabAuthError({
+      return yield* GitLabAuthError.make({
         message: `Failed to get direct access token: ${reply.status} ${errorText}`,
       });
     }
 
     const parsed = decodeDirectAccess(yield* reply.json);
     if (Option.isNone(parsed)) {
-      return yield* new GitLabAuthError({ message: "Unexpected direct access response" });
+      return yield* GitLabAuthError.make({ message: "Unexpected direct access response" });
     }
 
     cachedDirectAccess = {
@@ -111,14 +111,14 @@ const exchangeCode = (params: { code: string; verifier: string }) =>
     });
 
     if (!reply.ok) {
-      return yield* new GitLabAuthError({
+      return yield* GitLabAuthError.make({
         message: `Token exchange failed: ${yield* reply.text}`,
       });
     }
 
     const parsed = decodeToken(yield* reply.json);
     if (Option.isNone(parsed)) {
-      return yield* new GitLabAuthError({ message: "Unexpected token response" });
+      return yield* GitLabAuthError.make({ message: "Unexpected token response" });
     }
     return parsed.value;
   });
@@ -145,7 +145,7 @@ const loginGitLab = (
 
       const code = new URL(callbackUrl).searchParams.get("code");
       if (code === null || code.length === 0) {
-        return yield* new GitLabAuthError({
+        return yield* GitLabAuthError.make({
           message: "No authorization code found in callback URL",
         });
       }
@@ -178,14 +178,14 @@ const refreshGitLabTokenImpl = (
       });
 
       if (!reply.ok) {
-        return yield* new GitLabAuthError({
+        return yield* GitLabAuthError.make({
           message: `Token refresh failed: ${yield* reply.text}`,
         });
       }
 
       const parsed = decodeToken(yield* reply.json);
       if (Option.isNone(parsed)) {
-        return yield* new GitLabAuthError({ message: "Unexpected token response" });
+        return yield* GitLabAuthError.make({ message: "Unexpected token response" });
       }
 
       invalidateDirectAccessToken();

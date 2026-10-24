@@ -14,7 +14,7 @@ const { contract: contractModule, delta, errors: errorsModule } = servedKit;
 const { variantOf } = serviceModule;
 const { LOCAL_VARIANT, contractFromDescription, resolveHost } = contractModule;
 const { assertValid } = schemaModule;
-const { ChordError, invalid } = errorsModule;
+const { ChordError, invalid, isChordError } = errorsModule;
 const { toWireError } = wire;
 
 const { encoder } = delta;
@@ -36,8 +36,8 @@ const validateSnapshot = (ref: refTypes.RefImpl, member: string, value: unknown)
 };
 
 const clientError = (error: unknown): unknown =>
-  error instanceof ChordError && error.code === "contract_mismatch"
-    ? new ChordError("upgrade_required", error.message, { cause: error })
+  isChordError(error, "contract_mismatch")
+    ? ChordError.create("upgrade_required", error.message, { cause: error })
     : error;
 
 type HoldFrame = Extract<wireTypes.Frame, { t: "hold" }>;
@@ -98,7 +98,7 @@ export default class ServedHolds {
       client ? "client" : "connection",
     );
     if (!(acquired instanceof RefImpl))
-      throw new ChordError("unavailable", "not a local reference");
+      throw ChordError.create("unavailable", "not a local reference");
     return acquired;
   }
 
@@ -269,7 +269,7 @@ export default class ServedHolds {
     if (served === undefined) return;
     connection.served.delete(id);
     if (served.kind === "relay") {
-      served.relay.close(new ChordError("released", "relayed hold released"), {
+      served.relay.close(ChordError.create("released", "relayed hold released"), {
         notify: false,
         releaseDown: release,
       });

@@ -31,7 +31,7 @@ const materializeDocument: {
     const stored = state.documents.get(id);
     if (stored === undefined) return undefined;
     if (at !== "current" && isCurrentOnly(stored.record)) {
-      throw new StorageRequestError(`Document ${id} does not retain historical content`);
+      throw StorageRequestError.create(`Document ${id} does not retain historical content`);
     }
     if (!isAliveAt(stored.record, at)) return undefined;
     const revisions =

@@ -98,7 +98,7 @@ function readHeaderWithinLimit(
       complete,
     );
     if (header !== undefined) return header;
-    throw new SessionHeaderScanLimitError(filePath);
+    throw SessionHeaderScanLimitError.create(filePath);
   });
 }
 

@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import compatModule from "../src/compat.ts";
@@ -15,7 +15,10 @@ interface AnthropicTemperaturePayload {
   temperature?: number;
 }
 
-class PayloadCaptured extends Data.TaggedError("PayloadCaptured")<{ readonly message: string }> {}
+class PayloadCaptured extends Schema.TaggedError<
+  PayloadCaptured,
+  { readonly brand: unique symbol }
+>()("PayloadCaptured", { message: Schema.String }) {}
 
 function makeContext(): typesModule.Context {
   return {
@@ -57,7 +60,7 @@ const capturePayload = Effect.fn("capturePayload")(function* (
     apiKey: "fake-key",
     onPayload: (payload) => {
       capturedPayload = payload as AnthropicTemperaturePayload;
-      throw new PayloadCaptured({ message: "payload captured" });
+      throw PayloadCaptured.make({ message: "payload captured" });
     },
   });
 

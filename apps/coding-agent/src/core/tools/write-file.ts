@@ -31,7 +31,7 @@ const writeUnderQueue = (
 ) => {
   const throwIfAborted = Effect.suspend(() =>
     signal?.aborted === true
-      ? Effect.fail(new ToolFailure({ message: "Operation aborted" }))
+      ? Effect.fail(ToolFailure.make({ message: "Operation aborted" }))
       : Effect.void,
   );
   return Effect.gen(function* () {

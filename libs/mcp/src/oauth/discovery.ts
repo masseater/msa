@@ -1,4 +1,4 @@
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import type authProviderTypes from "../auth-provider.ts";
@@ -107,7 +107,7 @@ const discoverProtectedResourceMetadataEffect = Effect.fn("discoverProtectedReso
     }
     if (!response.ok) {
       discard(response);
-      return yield* new OAuthFlowError(
+      return yield* OAuthFlowError.create(
         `HTTP ${response.status} loading OAuth protected resource metadata`,
       );
     }
@@ -172,7 +172,7 @@ const discoverAuthorizationServerMetadataEffect = Effect.fn("discoverAuthorizati
       if (!response.ok) {
         discard(response);
         if (isDiscoveryMiss(response.status)) continue;
-        return yield* new OAuthFlowError(
+        return yield* OAuthFlowError.create(
           `HTTP ${response.status} loading authorization server metadata from ${url}`,
         );
       }
@@ -181,7 +181,7 @@ const discoverAuthorizationServerMetadataEffect = Effect.fn("discoverAuthorizati
       if (options.skipIssuerValidation !== true) {
         const expected = String(authorizationServerUrl);
         if (trimSlash(metadata.issuer) !== trimSlash(expected))
-          return yield* new OAuthIssuerMismatchError(expected, metadata.issuer);
+          return yield* OAuthIssuerMismatchError.create(expected, metadata.issuer);
       }
       return metadata;
     }
@@ -202,7 +202,7 @@ const discoverAuthorizationServerMetadata: {
 } = dual(isServerUrl, discoverAuthorizationServerMetadataEffect);
 
 const isNetworkFailure = (error: unknown): boolean =>
-  error instanceof McpForeignError && error.cause instanceof TypeError;
+  Schema.is(McpForeignError)(error) && error.cause instanceof TypeError;
 
 const configuredServerInfo = Effect.fn("configuredServerInfo")(function* (
   url: URL,
@@ -217,7 +217,7 @@ const configuredServerInfo = Effect.fn("configuredServerInfo")(function* (
   );
   if (!response.ok) {
     discard(response);
-    return yield* new OAuthFlowError(
+    return yield* OAuthFlowError.create(
       `HTTP ${response.status} loading authorization server metadata from ${url}`,
     );
   }

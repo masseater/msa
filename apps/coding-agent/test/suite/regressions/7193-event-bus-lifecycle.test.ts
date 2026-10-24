@@ -82,7 +82,7 @@ const removesExtensionOwnedEventBusListenersStep1 = () =>
           const extensionBefore = extensionCalls;
           const hostBefore = hostCalls;
           eventBus.emit("reload:test", undefined);
-          yield* Effect.sleep("0 millis");
+          yield* Effect.yieldNow;
           return { extension: extensionCalls - extensionBefore, host: hostCalls - hostBefore };
         }),
       );

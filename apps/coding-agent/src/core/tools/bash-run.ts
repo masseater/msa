@@ -30,14 +30,14 @@ const failedExec = (reporter: bashOutputTypes.BashOutputReporter, error: unknown
     const snapshot = yield* reporter.finish();
     const { text } = reporter.format(snapshot, "");
     if (error instanceof Error && error.message === "aborted") {
-      return yield* new ToolFailure({
+      return yield* ToolFailure.make({
         cause: error,
         message: appendStatus(text, "Command aborted"),
       });
     }
     if (error instanceof Error && error.message.startsWith("timeout:")) {
       const timeoutSecs = error.message.split(":")[1];
-      return yield* new ToolFailure({
+      return yield* ToolFailure.make({
         cause: error,
         message: appendStatus(text, `Command timed out after ${timeoutSecs} seconds`),
       });
@@ -64,7 +64,7 @@ const executeShell = Effect.fn("executeShell")(function* (
   const { text: outputText, details } = reporter.format(snapshot);
   const { exitCode } = result;
   if (exitCode === null) {
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: appendStatus(outputText, "Command terminated without an exit code"),
     });
   }

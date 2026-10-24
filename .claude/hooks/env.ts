@@ -4,7 +4,6 @@ import {
   Array as Arr,
   Cause,
   Config,
-  Data,
   Effect,
   Exit,
   FileSystem,
@@ -21,7 +20,10 @@ import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import HookPlatform from "./platform.ts";
 import type platformTypes from "./platform.types.ts";
 
-class HookBlocked extends Data.TaggedError("HookBlocked")<{ readonly reason: string }> {}
+class HookBlocked extends Schema.TaggedError<HookBlocked, { readonly brand: unique symbol }>()(
+  "HookBlocked",
+  { reason: Schema.String },
+) {}
 
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
@@ -44,7 +46,7 @@ const blockWhen = (reasons: readonly string[]): Effect.Effect<void, HookBlocked>
   if (!Arr.isReadonlyArrayNonEmpty(reasons)) {
     return Effect.void;
   }
-  return Effect.fail(new HookBlocked({ reason: reasons.join("\n") }));
+  return Effect.fail(HookBlocked.make({ reason: reasons.join("\n") }));
 };
 
 const writeTo = (
@@ -147,7 +149,7 @@ const runCommand: {
 
 const findBlocked = <Failure>(cause: Cause.Cause<Failure>): Option.Option<HookBlocked> =>
   Cause.findErrorOption(cause).pipe(
-    Option.filter((error): error is Failure & HookBlocked => error instanceof HookBlocked),
+    Option.filter((error): error is Failure & HookBlocked => Schema.is(HookBlocked)(error)),
   );
 
 const exitCodeOf = <Value, Failure>(exit: Exit.Exit<Value, Failure>): number => {

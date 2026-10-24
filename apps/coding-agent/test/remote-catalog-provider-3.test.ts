@@ -119,7 +119,7 @@ const letsANewerCatalogRequestBypassA = () =>
           headers: { "content-type": "application/json" },
         }),
       );
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
 
       expect(provider.getModels().map((entry) => entry.id)).toEqual(["static", "newer"]);
       expect((yield* awaited(store.read(provider.id)))?.models.map((entry) => entry.id)).toEqual([

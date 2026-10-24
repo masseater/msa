@@ -33,7 +33,9 @@ const readMain = Effect.fnUntraced(function* (
   let previousSeq = 0;
   for (const marker of main.lines) {
     if (marker.value.seq <= previousSeq) {
-      throw new JsonlCorruptionError(`Commit sequence does not strictly increase in ${MAIN_FILE}`);
+      throw JsonlCorruptionError.create(
+        `Commit sequence does not strictly increase in ${MAIN_FILE}`,
+      );
     }
     previousSeq = marker.value.seq;
   }
@@ -62,7 +64,7 @@ const checkOrder = (
       (line.value.seq < previous.seq ||
         (line.value.seq === previous.seq && line.value.ordinal <= previous.ordinal))
     ) {
-      throw new JsonlCorruptionError(`Sidecar records are out of order in ${file}`);
+      throw JsonlCorruptionError.create(`Sidecar records are out of order in ${file}`);
     }
     previous = line.value;
   }

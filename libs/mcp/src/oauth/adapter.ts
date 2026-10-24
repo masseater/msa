@@ -33,7 +33,7 @@ function adaptOAuthProvider(
         serverUrl: context.serverUrl,
         skipRefresh: insufficientScope,
       });
-      if (result === "REDIRECT") return yield* new McpOAuthAuthorizationRequiredError();
+      if (result === "REDIRECT") return yield* McpOAuthAuthorizationRequiredError.create();
     }).pipe(
       Effect.ensuring(
         Effect.sync(() => {

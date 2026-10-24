@@ -23,14 +23,14 @@ function exitFailure(
   diagnostics: string,
 ): runSshTypes.SshFailure {
   if (/REMOTE HOST IDENTIFICATION HAS CHANGED/u.test(diagnostics)) {
-    return new HostKeyChangedError(
+    return HostKeyChangedError.create(
       `The host key of ${target.host} changed; remove the old key to continue`,
     );
   }
   if (/Host key verification failed|No .* host key is known/u.test(diagnostics)) {
-    return new HostKeyUnknownError(`The host key of ${target.host} is not trusted yet`);
+    return HostKeyUnknownError.create(`The host key of ${target.host} is not trusted yet`);
   }
-  return new SshError(
+  return SshError.create(
     `ssh ${target.host} failed with exit code ${code}: ${diagnostics.trim()}`,
     code,
     diagnostics,
@@ -44,7 +44,7 @@ const collect = (target: sshArgsTypes.SshTarget, run: runSshTypes.SshRun, stderr
         args: [...(run.args ?? sshArguments(target)), run.command],
         command: target.ssh ?? "ssh",
         stdin: Stream.make(run.stdin ?? new Uint8Array(0)),
-      }).pipe(Effect.mapError((error) => new SshError(error.message, null, "")));
+      }).pipe(Effect.mapError((error) => SshError.create(error.message, null, "")));
       const [stdout, , code] = yield* Effect.all(
         [
           Stream.mkString(Stream.decodeText(child.stdout)),
@@ -72,7 +72,7 @@ function runSsh(run: runSshTypes.SshRun): Effect.Effect<string, runSshTypes.SshF
       orElse: () => {
         const diagnostics = Buffer.concat(stderr).toString("utf8");
         return Effect.fail(
-          new SshError(
+          SshError.create(
             `ssh ${target.host} did not finish within ${timeoutMs / 1000} s: ${diagnostics.trim()}`,
             null,
             diagnostics,

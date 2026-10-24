@@ -55,14 +55,14 @@ const requestToken = (body: typeof TokenRequestSchema.Type, signal?: AbortSignal
     });
 
     if (!reply.ok) {
-      return yield* new AnthropicAuthError({
+      return yield* AnthropicAuthError.make({
         message: `Token request failed: ${yield* reply.text}`,
       });
     }
 
     const parsed = decodeToken(yield* reply.json);
     if (Option.isNone(parsed)) {
-      return yield* new AnthropicAuthError({ message: "Unexpected token response" });
+      return yield* AnthropicAuthError.make({ message: "Unexpected token response" });
     }
     return parsed.value;
   });

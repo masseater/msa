@@ -1,13 +1,14 @@
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import scriptFiles from "../script-files.ts";
 import type optionsTypes from "./options.types.ts";
 
 const { ScriptFiles } = scriptFiles;
 
-class GeneratorUsageError extends Data.TaggedError("GeneratorUsageError")<{
-  readonly message: string;
-}> {}
+class GeneratorUsageError extends Schema.TaggedError<
+  GeneratorUsageError,
+  { readonly brand: unique symbol }
+>()("GeneratorUsageError", { message: Schema.String }) {}
 
 const FLAGS: Readonly<Record<string, keyof Omit<optionsTypes.GeneratorOptions, "jsonOutputDir">>> =
   {
@@ -17,7 +18,7 @@ const FLAGS: Readonly<Record<string, keyof Omit<optionsTypes.GeneratorOptions, "
     "--strict": "strict",
   };
 
-const usage = (message: string) => Effect.fail(new GeneratorUsageError({ message }));
+const usage = (message: string) => Effect.fail(GeneratorUsageError.make({ message }));
 
 const collectArgs = Effect.fn("collectArgs")(function* (args: readonly string[]) {
   const files = yield* ScriptFiles;

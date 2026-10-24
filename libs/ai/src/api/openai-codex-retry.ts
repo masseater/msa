@@ -48,7 +48,7 @@ function validateRetryDelayMs(
   return (delayMs) => {
     const maxRetryDelayMs = options?.maxRetryDelayMs ?? DEFAULT_MAX_RETRY_DELAY_MS;
     if (maxRetryDelayMs > 0 && delayMs > maxRetryDelayMs) {
-      throw new RetryDelayExceededError({
+      throw RetryDelayExceededError.make({
         message: `Server requested ${Math.ceil(delayMs / 1000)}s retry delay (max: ${Math.ceil(maxRetryDelayMs / 1000)}s)`,
       });
     }

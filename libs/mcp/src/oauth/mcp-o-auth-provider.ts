@@ -124,7 +124,7 @@ export default class McpOAuthProvider implements flowTypesModule.OAuthClientProv
       Effect.gen({ self: this }, function* () {
         const verifier = (yield* this.load()).codeVerifier;
         if (!present(verifier))
-          return yield* new OAuthFlowError("No OAuth PKCE code verifier is stored");
+          return yield* OAuthFlowError.create("No OAuth PKCE code verifier is stored");
         return verifier;
       }),
     );

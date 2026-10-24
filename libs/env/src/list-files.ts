@@ -20,7 +20,7 @@ function invalidLimit(
   for (const key of ["maxEntries", "maxBytes", "timeoutMs"] as const) {
     const value = options?.[key];
     if (value !== undefined && (!Number.isSafeInteger(value) || value < 0)) {
-      return err(new FileError("invalid", `${key} must be a non-negative safe integer`, path));
+      return err(FileError.create("invalid", `${key} must be a non-negative safe integer`, path));
     }
   }
   return undefined;
@@ -49,7 +49,11 @@ function requestListing(
     const info = yield* Effect.promise(() => connection.info());
     if (info.features?.includes("listFiles") !== true) {
       return err<envTypes.FileListing, envTypes.FileError>(
-        new FileError("not_supported", "The msa-env daemon does not list files; update it", path),
+        FileError.create(
+          "not_supported",
+          "The msa-env daemon does not list files; update it",
+          path,
+        ),
       );
     }
     const { json, payload } = yield* Effect.promise(() =>

@@ -1,5 +1,5 @@
 import sleep from "@msa/chord/sleep";
-import { Effect } from "effect";
+import { Effect, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import foreignModule from "../foreign.ts";
@@ -51,11 +51,11 @@ const describeHttpFailure: {
 } = dual(2, describe);
 
 const unwrapCause = (error: unknown): unknown =>
-  error instanceof McpForeignError ? error.cause : error;
+  Schema.is(McpForeignError)(error) ? error.cause : error;
 
 function isRetryable(failure: unknown): boolean {
   const error = unwrapCause(failure);
-  if (error instanceof McpHttpError) return isTransientStatus(error.status);
+  if (Schema.is(McpHttpError)(error)) return isTransientStatus(error.status);
   if (error instanceof TypeError) return true;
   const code = (error as { code?: unknown } | undefined)?.code;
   return typeof code === "string" && (code.startsWith("E") || code.startsWith("UND_ERR"));

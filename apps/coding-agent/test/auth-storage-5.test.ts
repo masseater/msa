@@ -72,7 +72,7 @@ const preservesTheStoredCredentialAfterCancellingAn = () =>
         effectRunPromise(awaited({ key: "other", type: "api_key" as const })),
       );
       const competing = storage.modify("other", competingMutation);
-      yield* Effect.sleep(0);
+      yield* Effect.yieldNow;
       expect(competingMutation).not.toHaveBeenCalled();
 
       blocked.resolve(undefined);

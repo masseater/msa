@@ -36,7 +36,7 @@ const fetchPage = Effect.fn("webFetch")(function* (
   if (title !== undefined && title !== "") details.title = title;
   const body = pickString(page, "text", "markdown", "content", "raw_content");
   if (body === undefined || body === "") {
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: `Could not read ${url}: no vendor returned its content.`,
     });
   }

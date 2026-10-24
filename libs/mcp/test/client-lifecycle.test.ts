@@ -9,7 +9,7 @@ const { McpAbortError, McpClient, McpTimeoutError } = mcp;
 
 const { connect, createServer } = inMemoryServer;
 
-const yieldMacrotask = Effect.sleep("0 millis");
+const yieldMacrotask = Effect.yieldNow;
 
 const progressTokenOf = (params: unknown): number =>
   (params as Record<string, { progressToken: number }>)["_meta"]?.progressToken ?? 0;

@@ -74,7 +74,7 @@ const buildWithMingw: {
     Effect.gen(function* () {
       const compiler = yield* resolveMingwCompiler(target);
       if (compiler === undefined) {
-        return yield* new Win32BuildError({
+        return yield* Win32BuildError.make({
           message: `No Windows cross-compiler found for ${target.arch}. Install Microsoft C++ Build Tools on Windows, or set ${target.envCompiler} to a MinGW-compatible compiler.`,
         });
       }

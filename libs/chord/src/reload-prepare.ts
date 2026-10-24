@@ -77,7 +77,7 @@ export default class ReloadPrepare {
       if (old === undefined || old.version !== next.version) continue;
       const reason = coverage(next.description, old.description);
       if (reason !== undefined) {
-        throw new ChordError(
+        throw ChordError.create(
           "contract_mismatch",
           `${name}@${next.version} changed incompatibly without a version bump (${reason})`,
         );

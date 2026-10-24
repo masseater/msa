@@ -15,7 +15,7 @@ const { ChordError, asChordError } = errorsModule;
 const reloadError = (error: unknown): errorsTypes.ChordError => {
   const cause = asChordError(error, "reload");
   if (/^reload aborted/u.test(cause.message.replace(/^[^:]*: /u, ""))) return cause;
-  return new ChordError(cause.code, `reload aborted: ${cause.message}`, {
+  return ChordError.create(cause.code, `reload aborted: ${cause.message}`, {
     cause,
     details: cause.details,
     reason: cause.reason,
@@ -39,7 +39,7 @@ const beginReload: {
   (host: hostLinksTypes.HostLinks, request: reloadTypes.ReloadRequest): Effect.Effect<Reload> =>
     Effect.gen(function* () {
       if (host.reloading) {
-        throw new ChordError("unavailable", "a reload is already running", {
+        throw ChordError.create("unavailable", "a reload is already running", {
           reason: "reload_running",
         });
       }

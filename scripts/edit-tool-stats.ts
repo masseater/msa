@@ -1,6 +1,6 @@
 import { homedir } from "node:os";
 
-import { Console, Data, Effect, Schema } from "effect";
+import { Console, Effect, Schema } from "effect";
 
 import cliOptions from "./cli-options.ts";
 import editToolReport from "./edit-tool-report.ts";
@@ -50,9 +50,10 @@ interface Args {
   top: number;
 }
 
-class EditToolStatsError extends Data.TaggedError("EditToolStatsError")<{
-  readonly message: string;
-}> {}
+class EditToolStatsError extends Schema.TaggedError<
+  EditToolStatsError,
+  { readonly brand: unique symbol }
+>()("EditToolStatsError", { message: Schema.String }) {}
 
 const encodeIndentedJson = Schema.encodeEffect(IndentedJson);
 
@@ -69,7 +70,7 @@ const defaultArgs = (host: editToolStatsTypes.HostShape): Args => ({
   top: DEFAULT_TOP,
 });
 
-const fail = (message: string) => new EditToolStatsError({ message });
+const fail = (message: string) => EditToolStatsError.make({ message });
 
 const OPTIONS: ReadonlyArray<
   readonly [string, editToolStatsTypes.CliOption<Args, EditToolStatsError>]

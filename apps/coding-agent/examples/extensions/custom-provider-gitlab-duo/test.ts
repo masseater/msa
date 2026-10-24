@@ -5,7 +5,6 @@ import codingAgent from "@msa/coding-agent";
 import {
   Clock,
   Console,
-  Data,
   Effect,
   FileSystem,
   ManagedRuntime,
@@ -36,13 +35,16 @@ const AuthSchema = Schema.Struct({
 
 const GitLabAuthSchema = Schema.Record(Schema.String, AuthSchema);
 
-class TestError extends Data.TaggedError("TestError")<{ readonly message: string }> {}
+class TestError extends Schema.TaggedError<TestError, { readonly brand: unique symbol }>()(
+  "TestError",
+  { message: Schema.String },
+) {}
 
 const readGitLabAccess = Effect.gen(function* () {
   const authPath = pathService.join(getAgentDir(), "extensions", "auth.json");
   const content = yield* fsService.readFileString(authPath).pipe(Effect.option);
   if (Option.isNone(content)) {
-    return yield* new TestError({
+    return yield* TestError.make({
       message: "No gitlab-duo credentials. Run /login gitlab-duo first.",
     });
   }
@@ -50,7 +52,7 @@ const readGitLabAccess = Effect.gen(function* () {
   const parsed = Schema.decodeOption(Schema.fromJsonString(GitLabAuthSchema))(content.value);
   const access = Option.isSome(parsed) ? parsed.value["gitlab-duo"]?.access : undefined;
   if (access === undefined || access.length === 0) {
-    return yield* new TestError({
+    return yield* TestError.make({
       message: "No gitlab-duo credentials. Run /login gitlab-duo first.",
     });
   }
@@ -139,11 +141,11 @@ const runTest = Effect.gen(function* () {
   });
 
   yield* Stream.runForEach(
-    Stream.fromAsyncIterable(stream, (error) => new TestError({ message: String(error) })),
+    Stream.fromAsyncIterable(stream, (error) => TestError.make({ message: String(error) })),
     (event) => Effect.sync(() => printEvent(event as ProviderEvent)),
   );
 });
 
 void runtime.runPromise(runTest).catch((error: unknown) => {
-  Effect.runSync(Console.error(error instanceof TestError ? error.message : String(error)));
+  Effect.runSync(Console.error(Schema.is(TestError)(error) ? error.message : String(error)));
 });

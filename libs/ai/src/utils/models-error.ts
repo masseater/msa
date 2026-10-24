@@ -11,7 +11,7 @@ const promiseOrModelsError: {
   <A>(run: () => Promise<A>, spec: modelsErrorTypes.ModelsErrorSpec): Effect.Effect<A> =>
     Effect.promise(() => run()).pipe(
       Effect.catchDefect((cause) =>
-        Effect.die(new ModelsError(spec.code, spec.message, { cause })),
+        Effect.die(ModelsError.create(spec.code, spec.message, { cause })),
       ),
     ),
 );

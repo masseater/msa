@@ -1,6 +1,7 @@
 import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import awaitingModule from "../../core/awaiting.ts";
 import type configTypes from "./config.types.ts";
@@ -15,7 +16,7 @@ const STDERR_TAIL_CHARS = 2_000;
 const CONNECT_RETRY_DELAYS_MS = [250, 1_000];
 
 function isTransientError(error: unknown): boolean {
-  if (error instanceof McpHttpError) {
+  if (Schema.is(McpHttpError)(error)) {
     return (
       error.status === 408 || error.status === 429 || (error.status >= 500 && error.status !== 501)
     );
@@ -42,7 +43,7 @@ function withoutTemplates<T>(list: () => Promise<T>, empty: T): Promise<T> {
       try {
         return yield* awaited(list());
       } catch (error) {
-        if (error instanceof McpError && error.code === JSON_RPC_ERROR_CODES.methodNotFound)
+        if (Schema.is(McpError)(error) && error.code === JSON_RPC_ERROR_CODES.methodNotFound)
           return empty;
         throw error;
       }

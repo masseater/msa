@@ -1,5 +1,5 @@
 import type chordTypes from "@msa/chord/index.types";
-import { Deferred, Effect } from "effect";
+import { Deferred, Effect, Schema } from "effect";
 
 import errors from "../errors.ts";
 import promiseTryModule from "../promise-try.ts";
@@ -216,13 +216,13 @@ export default class GuardedStorage implements typesModule.Storage {
     this.#assertHealthy();
     const exempt =
       read !== undefined &&
-      (error instanceof StorageRequestError || read.abortSignal?.aborted === true);
+      (Schema.is(StorageRequestError)(error) || read.abortSignal?.aborted === true);
     if (!exempt) this.#latch.fail(error);
     return error;
   }
 
   #assertHealthy(): void {
     const failure = this.#latch.failure;
-    if (failure !== undefined) throw new SessionFailed(failure.error);
+    if (failure !== undefined) throw SessionFailed.create(failure.error);
   }
 }

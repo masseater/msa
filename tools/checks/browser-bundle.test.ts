@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Data, Effect, FileSystem, ManagedRuntime, Path } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Path, Schema } from "effect";
 import { build } from "esbuild";
 import type { BuildOptions, Metafile, Plugin } from "esbuild";
 import { expect, it } from "vite-plus/test";
@@ -32,7 +32,10 @@ const AGENT_FORBIDDEN_INPUTS = [
 
 const AI_SDK_PACKAGES = ["@anthropic-ai/sdk", "@google/genai", "openai"];
 
-class BundleError extends Data.TaggedError("BundleError")<{ readonly message: string }> {}
+class BundleError extends Schema.TaggedError<BundleError, { readonly brand: unique symbol }>()(
+  "BundleError",
+  { message: Schema.String },
+) {}
 
 type Inputs = Metafile["inputs"];
 
@@ -79,7 +82,7 @@ const catalogDataPlugin = (
 
 const runBuild = (options: BuildOptions) =>
   Effect.tryPromise({
-    catch: (cause) => new BundleError({ message: `esbuild build failed: ${String(cause)}` }),
+    catch: (cause) => BundleError.make({ message: `esbuild build failed: ${String(cause)}` }),
     try: () =>
       build({
         ...options,
@@ -95,7 +98,7 @@ const metafileOf = (options: BuildOptions) =>
   runBuild({ ...options, metafile: true }).pipe(
     Effect.flatMap((result) =>
       result.metafile === undefined
-        ? Effect.fail(new BundleError({ message: "esbuild did not return a metafile" }))
+        ? Effect.fail(BundleError.make({ message: "esbuild did not return a metafile" }))
         : Effect.succeed(result.metafile),
     ),
   );

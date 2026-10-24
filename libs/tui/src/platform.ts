@@ -12,7 +12,7 @@ import type platformTypes from "./platform.types.ts";
 const failWith =
   (operation: string) =>
   (cause: unknown): platformFailureTypes.PlatformFailure =>
-    new PlatformFailure({ cause, operation });
+    PlatformFailure.make({ cause, operation });
 
 const platformServices = Layer.mergeAll(NodeFileSystem.layer, NodePath.layer);
 

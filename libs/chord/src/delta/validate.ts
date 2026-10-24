@@ -7,9 +7,9 @@ const { RESERVED_SEGMENTS } = opsModule;
 function assertSafePath(path: opsTypes.Path): void {
   for (const seg of path) {
     if (typeof seg === "string") {
-      if (RESERVED_SEGMENTS.has(seg)) throw new UnsafePathError(seg);
+      if (RESERVED_SEGMENTS.has(seg)) throw UnsafePathError.create(seg);
     } else if (!Number.isInteger(seg) || seg < 0) {
-      throw new UnsafePathError(seg);
+      throw UnsafePathError.create(seg);
     }
   }
 }

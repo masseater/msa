@@ -1,7 +1,7 @@
 import { Buffer } from "node:buffer";
 
 import * as NodePath from "@effect/platform-node/NodePath";
-import { Data, ManagedRuntime, Path } from "effect";
+import { ManagedRuntime, Path, Schema } from "effect";
 import { dual } from "effect/Function";
 
 import type sessionTypes from "./session.types.ts";
@@ -14,9 +14,10 @@ const SHARE_URL_RE = /^https:\/\/msa\.dev\/session\/#([0-9a-fA-F]{20,})(?:[/#?].
 const ISSUE_URL_RE = /^https:\/\/github\.com\/([^/]+)\/([^/]+)\/issues\/(\d+)(?:[/#?].*)?$/u;
 const SESSION_DATA_RE = /<script id="session-data" type="application\/json">([^<]+)<\/script>/u;
 
-class ImportReproError extends Data.TaggedError("ImportReproError")<{
-  readonly message: string;
-}> {}
+class ImportReproError extends Schema.TaggedError<
+  ImportReproError,
+  { readonly brand: unique symbol }
+>()("ImportReproError", { message: Schema.String }) {}
 
 interface ExportedSessionData {
   header: sessionTypes.SessionHeader | null;
@@ -47,7 +48,7 @@ const parseRef: {
 
   if (GIST_ID_RE.test(ref)) return { id: ref, type: "gist" };
 
-  throw new ImportReproError({
+  throw ImportReproError.make({
     message: `expected a gist ID, gist URL, pi.dev share URL, issue URL, .html file, or .jsonl file: ${ref}`,
   });
 });
@@ -56,7 +57,7 @@ function parseJson(text: string, message: string): unknown {
   try {
     return JSON.parse(text);
   } catch {
-    throw new ImportReproError({ message });
+    throw ImportReproError.make({ message });
   }
 }
 
@@ -73,7 +74,7 @@ function parseSessionJsonl(raw: string): sessionTypes.DecodedSession {
     typeof header.cwd !== "string" ||
     header.cwd === ""
   ) {
-    throw new ImportReproError({
+    throw ImportReproError.make({
       message: "session file has no valid session header with a cwd",
     });
   }
@@ -83,7 +84,7 @@ function parseSessionJsonl(raw: string): sessionTypes.DecodedSession {
 function decodeExportedHtml(html: string): sessionTypes.DecodedSession {
   const [, encoded] = SESSION_DATA_RE.exec(html) ?? [];
   if (!isPresent(encoded)) {
-    throw new ImportReproError({ message: "HTML does not contain embedded msa session data" });
+    throw ImportReproError.make({ message: "HTML does not contain embedded msa session data" });
   }
 
   const sessionData = parseJson(
@@ -98,12 +99,12 @@ function decodeExportedHtml(html: string): sessionTypes.DecodedSession {
     typeof header.id !== "string" ||
     typeof header.cwd !== "string"
   ) {
-    throw new ImportReproError({
+    throw ImportReproError.make({
       message: "embedded msa session data has no valid session header",
     });
   }
   if (!Array.isArray(sessionData.entries)) {
-    throw new ImportReproError({ message: "embedded msa session data has no entries array" });
+    throw ImportReproError.make({ message: "embedded msa session data has no entries array" });
   }
 
   const lines = [header, ...sessionData.entries].map((entry) => JSON.stringify(entry));

@@ -31,7 +31,7 @@ const openSession = (messages: readonly compatTypes.Message[], config: Config) =
   Effect.gen(function* () {
     const account = config.accounts[0];
     if (account === undefined)
-      return yield* new ClaudeCodeFailure({ message: "No Claude account available" });
+      return yield* ClaudeCodeFailure.make({ message: "No Claude account available" });
     const failure = (cause: unknown) => ClaudeCodeFailure.fromCause(cause);
     const sdk = yield* Effect.tryPromise({ catch: failure, try: loadSdk });
     const env = yield* Effect.tryPromise({ catch: failure, try: () => accountEnv(account) });

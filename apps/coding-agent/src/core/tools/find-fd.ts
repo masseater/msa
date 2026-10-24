@@ -48,7 +48,7 @@ const fdArguments = (
 const globWithFd = Effect.fn("findWithFd")(function* (request: findSupportTypes.FindRequest) {
   const fdPath = yield* fromPromise(() => ensureTool("fd"));
   if (fdPath === undefined || fdPath === "") {
-    return yield* new ToolFailure({ message: "fd is not available and could not be downloaded" });
+    return yield* ToolFailure.make({ message: "fd is not available and could not be downloaded" });
   }
   const insideGitRepo = yield* isInsideGitRepo(request.searchPath);
   const { lines, stderr, exitCode } = yield* fromPromise((signal) =>
@@ -57,7 +57,7 @@ const globWithFd = Effect.fn("findWithFd")(function* (request: findSupportTypes.
   const output = lines.join("\n");
   if (exitCode !== 0 && output === "") {
     const message = stderr.trim();
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: message === "" ? `fd exited with code ${exitCode}` : message,
     });
   }

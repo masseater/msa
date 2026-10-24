@@ -40,7 +40,7 @@ export default abstract class HostRegistries extends HostRoots {
     const table = (ctx?: typesModule.Ctx): registryTypes.RegistryTable<V> => {
       const codeVersion = ctx === undefined ? this.current : this.codeVersions.get(ctx.codeVersion);
       if (codeVersion === undefined)
-        throw new ChordError("superseded", `code version ${ctx?.codeVersion} is retired`);
+        throw ChordError.create("superseded", `code version ${ctx?.codeVersion} is retired`);
       return (codeVersion.tables.get(registry.name) ??
         EMPTY_TABLE) as registryTypes.RegistryTable<V>;
     };

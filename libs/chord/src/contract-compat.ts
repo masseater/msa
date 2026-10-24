@@ -62,7 +62,7 @@ function adapterFor(
 ): contractTypes.Adapter | undefined {
   if (provider.fingerprint === consumer.fingerprint) return undefined;
   if (!samePlacement(provider.description, consumer.description)) {
-    throw new ChordError(
+    throw ChordError.create(
       "contract_mismatch",
       `${provider.name} lives on ${placementOf(provider.description)}, the consumer expects ${placementOf(consumer.description)}`,
     );
@@ -70,14 +70,14 @@ function adapterFor(
   if (provider.version === consumer.version) {
     const reason = coverageGap(provider.description, consumer.description);
     if (reason === undefined) return undefined;
-    throw new ChordError(
+    throw ChordError.create(
       "contract_mismatch",
       `${provider.name}@${provider.version} does not cover the consumer's description (${reason}); forgotten version bump?`,
     );
   }
   const adapter = accepts?.[consumer.version];
   if (adapter === undefined) {
-    throw new ChordError(
+    throw ChordError.create(
       "contract_mismatch",
       `${provider.name}: provider version ${provider.version}, consumer version ${consumer.version}, no accepts adapter`,
     );

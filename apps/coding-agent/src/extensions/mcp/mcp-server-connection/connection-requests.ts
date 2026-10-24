@@ -1,6 +1,7 @@
 import mcp from "@msa/mcp";
 import type mcpTypes from "@msa/mcp/index.types";
 import * as Effect from "effect/Effect";
+import * as Schema from "effect/Schema";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import mcpServerConnectionHelpers from "../mcp-server-connection-helpers.ts";
@@ -80,13 +81,13 @@ export default class McpRequests {
             if (
               readOnly &&
               attempt === 1 &&
-              error instanceof McpHttpError &&
+              Schema.is(McpHttpError)(error) &&
               isTransientError(error)
             ) {
               yield* performed(Effect.sleep(CONNECT_RETRY_DELAYS_MS[0] ?? 0));
               continue;
             }
-            if (error instanceof McpSessionExpiredError && attempt === 1) {
+            if (Schema.is(McpSessionExpiredError)(error) && attempt === 1) {
               if (this.client === client) this.client = undefined;
               continue;
             }

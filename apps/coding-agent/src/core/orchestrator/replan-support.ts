@@ -11,7 +11,7 @@ const { orchestratorError } = errors;
 const { wrapping } = wrapUp;
 
 function fail(message: string): errorsTypes.OrchestratorError {
-  return new OrchestratorError({ message });
+  return OrchestratorError.make({ message });
 }
 
 function unique(values: readonly string[]): string[] {

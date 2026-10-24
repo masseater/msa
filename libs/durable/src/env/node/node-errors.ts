@@ -1,4 +1,4 @@
-import { Cause, Effect, Function, PlatformError } from "effect";
+import { Cause, Effect, Function, PlatformError, Schema } from "effect";
 
 import type dualTypes from "../../dual.ts";
 import FileError from "../file-error.ts";
@@ -18,18 +18,18 @@ const nodeFileError = (error: NodeJS.ErrnoException, path: string | undefined, c
   const message = error.message;
   switch (error.code) {
     case "ABORT_ERR":
-      return new FileError("aborted", message, path, cause);
+      return FileError.create("aborted", message, path, cause);
     case "ENOENT":
-      return new FileError("not_found", message, path, cause);
+      return FileError.create("not_found", message, path, cause);
     case "EACCES":
     case "EPERM":
-      return new FileError("permission_denied", message, path, cause);
+      return FileError.create("permission_denied", message, path, cause);
     case "ENOTDIR":
-      return new FileError("not_directory", message, path, cause);
+      return FileError.create("not_directory", message, path, cause);
     case "EISDIR":
-      return new FileError("is_directory", message, path, cause);
+      return FileError.create("is_directory", message, path, cause);
     case "EINVAL":
-      return new FileError("invalid", message, path, cause);
+      return FileError.create("invalid", message, path, cause);
     default:
       return undefined;
   }
@@ -40,12 +40,12 @@ const toFileError: dualTypes.Dual2<unknown, string | undefined, fileErrorTypes.F
     2,
     (thrown: unknown, fallbackPath: string | undefined): fileErrorTypes.FileError => {
       const error = nodeCause(thrown);
-      if (error instanceof FileError) return error;
+      if (Schema.is(FileError)(error)) return error;
       const cause = toError(error);
       const nodeError = isNodeError(error) ? error : undefined;
       const path = typeof nodeError?.path === "string" ? nodeError.path : fallbackPath;
       const mapped = nodeError === undefined ? undefined : nodeFileError(nodeError, path, cause);
-      return mapped ?? new FileError("unknown", cause.message, path, cause);
+      return mapped ?? FileError.create("unknown", cause.message, path, cause);
     },
   );
 
@@ -65,7 +65,7 @@ const abortResult: {
     signal: AbortSignal | undefined,
     path: string | undefined,
   ): resultTypes.Result<T, fileErrorTypes.FileError> | undefined =>
-    signal?.aborted === true ? err(new FileError("aborted", "aborted", path)) : undefined,
+    signal?.aborted === true ? err(FileError.create("aborted", "aborted", path)) : undefined,
 );
 
 const closedResult: {
@@ -74,14 +74,12 @@ const closedResult: {
 } = Function.dual(
   2,
   <T>(what: string, path: string): resultTypes.Result<T, fileErrorTypes.FileError> =>
-    err(new FileError("invalid", `${what} is closed`, path)),
+    err(FileError.create("invalid", `${what} is closed`, path)),
 );
 
 const symlinkRefused: dualTypes.Dual2<string, Error | undefined, fileErrorTypes.FileError> =
-  Function.dual(
-    2,
-    (path: string, cause: Error | undefined): fileErrorTypes.FileError =>
-      new FileError("invalid", "Refusing to follow a symbolic link", path, cause),
+  Function.dual(2, (path: string, cause: Error | undefined): fileErrorTypes.FileError =>
+    FileError.create("invalid", "Refusing to follow a symbolic link", path, cause),
   );
 
 const recoverFileError = Effect.fnUntraced(function* <T, E, R>(

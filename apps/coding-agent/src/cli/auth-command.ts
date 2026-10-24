@@ -51,7 +51,7 @@ function parseAuthCommand(args: string[]): authCommandTypes.AuthCommand | undefi
           ? "bearer_token"
           : undefined;
   if (kind === undefined) {
-    throw new AuthCommandError(
+    throw AuthCommandError.create(
       `Unknown auth command "${args[1] ?? ""}". Use "${APP_NAME} auth print-api-key", "${APP_NAME} auth print-bearer-token", or "${APP_NAME} auth check".`,
     );
   }
@@ -70,7 +70,7 @@ interface AuthCommandFlags {
 function parseMinExpiryMs(value: string | undefined): number {
   const match = value !== undefined && value !== "" ? /^(\d+)(ms|s|m|h)$/iu.exec(value) : null;
   if (match === null)
-    throw new AuthCommandError("--min-expiry must use a duration such as 30m or 1h");
+    throw AuthCommandError.create("--min-expiry must use a duration such as 30m or 1h");
   const amount = Number(match[1]);
   const unit = match[2];
   return amount * (unit === "ms" ? 1 : unit === "s" ? 1_000 : unit === "m" ? 60_000 : 3_600_000);
@@ -86,12 +86,12 @@ function parseAuthCommandOptions(
     if (arg === undefined) break;
     if (arg === "--min-expiry") {
       if (kind !== "bearer_token")
-        throw new AuthCommandError("--min-expiry is only supported by print-bearer-token");
+        throw AuthCommandError.create("--min-expiry is only supported by print-bearer-token");
       minExpiryMs = parseMinExpiryMs(args[++index]);
       continue;
     }
     if (arg === "--json" || arg === "--credentials" || arg === "--no-refresh") {
-      if (kind !== "check") throw new AuthCommandError(`${arg} is only supported by auth check`);
+      if (kind !== "check") throw AuthCommandError.create(`${arg} is only supported by auth check`);
       if (arg === "--json") flags.json = true;
       else if (arg === "--credentials") flags.credentials = true;
       else flags.noRefresh = true;
@@ -109,19 +109,19 @@ function validateAuthCommandArgsImpl(
   const model = args.model?.trim() || undefined;
   if (args.unknownFlags.size > 0) {
     const option = args.unknownFlags.keys().next().value;
-    throw new AuthCommandError(`Unknown option --${option} for "${getAuthCommandName(kind)}".`);
+    throw AuthCommandError.create(`Unknown option --${option} for "${getAuthCommandName(kind)}".`);
   }
   if (args.apiKey !== undefined || args.messages.length > 0 || args.fileArgs.length > 0) {
-    throw new AuthCommandError("Auth commands only accept --provider and --model");
+    throw AuthCommandError.create("Auth commands only accept --provider and --model");
   }
   if (kind === "check") {
     if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
-      throw new AuthCommandError("Auth checks require --provider <provider> or --model <model>");
+      throw AuthCommandError.create("Auth checks require --provider <provider> or --model <model>");
     }
     return { model, provider };
   }
   if ((provider === undefined || provider === "") && (model === undefined || model === "")) {
-    throw new AuthCommandError(
+    throw AuthCommandError.create(
       "Credential printing requires --provider <provider> or --model <model>",
     );
   }

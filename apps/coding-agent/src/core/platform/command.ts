@@ -34,12 +34,11 @@ const collect = (request: commandTypes.CommandRequest) =>
 const runCommand = (request: commandTypes.CommandRequest): Promise<commandTypes.CommandOutput> =>
   platformRuntime.runPromise(
     collect(request).pipe(
-      Effect.mapError(
-        (error) =>
-          new ToolFailure({
-            cause: error,
-            message: `Failed to run ${request.file}: ${error.message}`,
-          }),
+      Effect.mapError((error) =>
+        ToolFailure.make({
+          cause: error,
+          message: `Failed to run ${request.file}: ${error.message}`,
+        }),
       ),
     ),
     request.signal === undefined ? undefined : { signal: request.signal },
@@ -77,12 +76,11 @@ const streamLines = (request: commandTypes.StreamRequest) =>
 const streamCommand = (request: commandTypes.StreamRequest): Promise<commandTypes.StreamOutput> =>
   platformRuntime.runPromise(
     streamLines(request).pipe(
-      Effect.mapError(
-        (error) =>
-          new ToolFailure({
-            cause: error,
-            message: `Failed to run ${request.file}: ${error.message}`,
-          }),
+      Effect.mapError((error) =>
+        ToolFailure.make({
+          cause: error,
+          message: `Failed to run ${request.file}: ${error.message}`,
+        }),
       ),
     ),
     request.signal === undefined ? undefined : { signal: request.signal },

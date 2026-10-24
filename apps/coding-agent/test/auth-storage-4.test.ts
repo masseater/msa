@@ -186,7 +186,7 @@ const serializesInMemoryMutationsAcrossProviders = Effect.gen(function* () {
     effectRunPromise(awaited({ key: "openai-key", type: "api_key" as const })),
   );
   const second = storage.modify("openai", secondMutation);
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(secondMutation).not.toHaveBeenCalled();
 
   blocked.resolve(undefined);
@@ -228,7 +228,7 @@ const cancelsAQueuedInMemoryMutationWithout = Effect.gen(function* () {
   expect(secondMutation).not.toHaveBeenCalled();
   blocked.resolve(undefined);
   yield* awaited(first);
-  yield* Effect.sleep(0);
+  yield* Effect.yieldNow;
   expect(secondMutation).not.toHaveBeenCalled();
   expect(yield* awaited(storage.read("openai"))).toBeUndefined();
 });

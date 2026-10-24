@@ -2,7 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import type { MessageCreateParamsStreaming } from "@anthropic-ai/sdk/resources/messages.js";
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
-import { Clock, Data, Effect, Stream } from "effect";
+import { Clock, Effect, Schema, Stream } from "effect";
 import { dual } from "effect/Function";
 
 import auth from "./auth.ts";
@@ -20,9 +20,10 @@ const {
   getCurrentTools,
 } = ai;
 
-class AnthropicStreamError extends Data.TaggedError("AnthropicStreamError")<{
-  readonly message: string;
-}> {}
+class AnthropicStreamError extends Schema.TaggedError<
+  AnthropicStreamError,
+  { readonly brand: unique symbol }
+>()("AnthropicStreamError", { message: Schema.String }) {}
 
 const initialOutput = (
   model: aiTypes.Model<aiTypes.Api>,
@@ -188,15 +189,14 @@ const runStream = (
     stream.push({ partial: output, type: "start" });
 
     yield* Stream.runForEach(
-      Stream.fromAsyncIterable(
-        anthropicStream,
-        (cause) => new AnthropicStreamError({ message: String(cause) }),
+      Stream.fromAsyncIterable(anthropicStream, (cause) =>
+        AnthropicStreamError.make({ message: String(cause) }),
       ),
       (event) => Effect.sync(() => handleEvent({ event, isOAuth, model, output, stream, tools })),
     );
 
     if (options?.signal?.aborted === true) {
-      return yield* new AnthropicStreamError({ message: "Request was aborted" });
+      return yield* AnthropicStreamError.make({ message: "Request was aborted" });
     }
     finish(stream, output);
   });

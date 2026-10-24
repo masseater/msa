@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Config, Console, Crypto, Data, Effect, FileSystem, Layer, Path } from "effect";
+import { Config, Console, Crypto, Effect, FileSystem, Layer, Path, Schema } from "effect";
 import type { PlatformError } from "effect";
 import { Hex } from "effect/encoding";
 
@@ -30,9 +30,10 @@ const localLlmTests = Config.String(LOCAL_LLM_TESTS_ENV).pipe(
   Config.map((value) => value !== ""),
 );
 
-class BuildBinariesError extends Data.TaggedError("BuildBinariesError")<{
-  readonly message: string;
-}> {}
+class BuildBinariesError extends Schema.TaggedError<
+  BuildBinariesError,
+  { readonly brand: unique symbol }
+>()("BuildBinariesError", { message: Schema.String }) {}
 
 type FileSystemError = PlatformError.PlatformError;
 
@@ -245,7 +246,7 @@ const smokeTest = (context: Context) =>
     });
     const reported = stdout.trim();
     if (!versionMatches(context.version, exitCode, reported)) {
-      return yield* new BuildBinariesError({
+      return yield* BuildBinariesError.make({
         message: `${platform.name} reported "${reported}" (exit ${exitCode}), expected ${context.version}:\n${stderr}`,
       });
     }
@@ -256,7 +257,9 @@ const smokeTest = (context: Context) =>
 const program = Effect.gen(function* () {
   const unknown = unknownArguments();
   if (unknown.length > 0) {
-    return yield* new BuildBinariesError({ message: `unknown argument(s): ${unknown.join(", ")}` });
+    return yield* BuildBinariesError.make({
+      message: `unknown argument(s): ${unknown.join(", ")}`,
+    });
   }
   const context = yield* makeContext();
   yield* Console.log(

@@ -44,12 +44,10 @@ const isToolchainRequest = (value: string | undefined): value is Toolchain | und
   value === undefined || value === "msvc" || value === "mingw";
 
 const requestedToolchain = BuildHost.use((host) => host.env("MSA_TUI_WIN32_TOOLCHAIN")).pipe(
-  Effect.filterOrFail(
-    isToolchainRequest,
-    () =>
-      new Win32BuildError({
-        message: "MSA_TUI_WIN32_TOOLCHAIN must be either 'msvc' or 'mingw'",
-      }),
+  Effect.filterOrFail(isToolchainRequest, () =>
+    Win32BuildError.make({
+      message: "MSA_TUI_WIN32_TOOLCHAIN must be either 'msvc' or 'mingw'",
+    }),
   ),
 );
 
@@ -75,7 +73,7 @@ const build = Effect.gen(function* () {
     });
   }
   if (vsDevCmd === undefined || !hasMsvc) {
-    return yield* new Win32BuildError({
+    return yield* Win32BuildError.make({
       message:
         "Microsoft C++ Build Tools not found. Install the Visual Studio C++ workload or set MSA_TUI_WIN32_TOOLCHAIN=mingw.",
     });

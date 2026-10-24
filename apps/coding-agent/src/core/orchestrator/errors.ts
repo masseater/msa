@@ -1,7 +1,7 @@
 import OrchestratorError from "./orchestrator-error.ts";
 
 function orchestratorError(error: unknown): OrchestratorError {
-  return new OrchestratorError({
+  return OrchestratorError.make({
     cause: error,
     message: error instanceof Error ? error.message : String(error),
   });

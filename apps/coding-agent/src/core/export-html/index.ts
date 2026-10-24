@@ -28,11 +28,11 @@ const exportSession = Effect.fn("exportSessionToHtml")(function* (
   const opts = normalizeOptions(options);
   const sessionFile = sm.getSessionFile();
   if (sessionFile === undefined || sessionFile === "") {
-    return yield* new ToolFailure({ message: "Cannot export in-memory session to HTML" });
+    return yield* ToolFailure.make({ message: "Cannot export in-memory session to HTML" });
   }
   const exists = yield* FileSystem.FileSystem.use((fs) => fs.exists(sessionFile));
   if (!exists) {
-    return yield* new ToolFailure({
+    return yield* ToolFailure.make({
       message: "Nothing to export yet - start a conversation first",
     });
   }
@@ -64,7 +64,7 @@ const exportFile = Effect.fn("exportFromFile")(function* (
   const opts = normalizeOptions(options);
   const resolvedInputPath = resolvePath(inputPath);
   const exists = yield* FileSystem.FileSystem.use((fs) => fs.exists(resolvedInputPath));
-  if (!exists) return yield* new ToolFailure({ message: `File not found: ${resolvedInputPath}` });
+  if (!exists) return yield* ToolFailure.make({ message: `File not found: ${resolvedInputPath}` });
   const sm = yield* Effect.promise(() => SessionManager.open(resolvedInputPath));
   const sessionData: exportTypesTypes.SessionData = {
     entries: sm.getEntries(),

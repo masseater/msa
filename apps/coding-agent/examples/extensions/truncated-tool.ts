@@ -3,7 +3,7 @@ import codingAgent from "@msa/coding-agent";
 import type codingAgentTypes from "@msa/coding-agent/index.types";
 import tui from "@msa/tui";
 import type tuiTypes from "@msa/tui/index.types";
-import { Data, Effect, FileSystem, ManagedRuntime, Path, Stream } from "effect";
+import { Effect, FileSystem, ManagedRuntime, Path, Schema, Stream } from "effect";
 import { ChildProcess, ChildProcessSpawner } from "effect/process";
 import { Type } from "typebox";
 
@@ -36,7 +36,9 @@ interface RgParamsValue {
   glob?: string | undefined;
 }
 
-class RgError extends Data.TaggedError("RgError")<{ readonly message: string }> {}
+class RgError extends Schema.TaggedError<RgError, { readonly brand: unique symbol }>()("RgError", {
+  message: Schema.String,
+}) {}
 
 const buildArgs = (params: RgParamsValue): string[] => {
   const args = ["--line-number", "--color=never"];
@@ -103,7 +105,7 @@ const search = (cwd: string, params: RgParamsValue) =>
       return noMatchResult(params);
     }
     if (exitCode !== 0) {
-      return yield* new RgError({ message: `ripgrep failed with exit code ${exitCode}` });
+      return yield* RgError.make({ message: `ripgrep failed with exit code ${exitCode}` });
     }
 
     const truncation = truncateHead(stdout, {

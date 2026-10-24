@@ -75,7 +75,7 @@ const fileInfoFromStats: nodePathsTypes.Dual2<
     stats: nodePathsTypes.StatsLike,
   ): resultTypes.Result<typesModule.FileInfo, fileErrorTypes.FileError> => {
     const kind = fileKindOf(stats);
-    if (kind === undefined) return err(new FileError("invalid", "Unsupported file type", path));
+    if (kind === undefined) return err(FileError.create("invalid", "Unsupported file type", path));
     return ok({
       kind,
       mtimeMs: stats.mtimeMs,

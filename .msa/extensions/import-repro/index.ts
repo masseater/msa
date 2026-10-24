@@ -19,7 +19,7 @@ interface LoadedSession {
 }
 
 const toImportReproError = (error: { readonly message: string }): sessionTypes.ImportReproError =>
-  new ImportReproError({ message: error.message });
+  ImportReproError.make({ message: error.message });
 
 const loadSession = (
   parsedRef: sessionTypes.SessionRef,
@@ -37,7 +37,7 @@ const loadSession = (
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
     if (!(yield* fs.exists(parsedRef.path).pipe(Effect.orDie))) {
-      return yield* new ImportReproError({ message: `session file not found: ${parsedRef.path}` });
+      return yield* ImportReproError.make({ message: `session file not found: ${parsedRef.path}` });
     }
     const raw = yield* fs.readFileString(parsedRef.path).pipe(Effect.mapError(toImportReproError));
     const decoded = parsedRef.path.endsWith(".html")

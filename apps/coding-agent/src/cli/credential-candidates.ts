@@ -26,14 +26,16 @@ function namedProvider(
 ): CredentialCandidate {
   const provider = modelRuntime.getProvider(cliProvider);
   if (provider === undefined) {
-    throw new AuthCommandError(
+    throw AuthCommandError.create(
       `Unknown provider "${cliProvider}". Use --list-models to see available providers.`,
     );
   }
   if (cliModel === undefined || cliModel === "") return { id: provider.id };
   const resolved = resolveCliModel({ cliModel, cliProvider: provider.id, modelRuntime });
   if ((resolved.error !== undefined && resolved.error !== "") || resolved.model === undefined) {
-    throw new AuthCommandError(resolved.error ?? "Unable to resolve the requested provider/model");
+    throw AuthCommandError.create(
+      resolved.error ?? "Unable to resolve the requested provider/model",
+    );
   }
   return { id: provider.id, model: resolved.model };
 }
@@ -54,7 +56,7 @@ function providersServingModel({
     return resolved.status === "resolved" ? [{ id: provider.id, model: resolved.model }] : [];
   });
   if (candidates.length === 0) {
-    throw new AuthCommandError(
+    throw AuthCommandError.create(
       `Model "${cliModel}" not found. Use --list-models to see available models.`,
     );
   }

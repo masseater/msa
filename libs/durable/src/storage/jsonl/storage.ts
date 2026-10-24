@@ -224,7 +224,7 @@ export default class JsonlStorage implements typesModule.Storage {
   }
 
   private poison(cause: Error): storageTypes.JsonlStoragePoisonedError {
-    this.poisonError ??= new JsonlStoragePoisonedError(cause);
+    this.poisonError ??= JsonlStoragePoisonedError.create(cause);
     return this.poisonError;
   }
 

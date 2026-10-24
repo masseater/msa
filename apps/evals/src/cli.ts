@@ -1,5 +1,5 @@
 import * as NodeRuntime from "@effect/platform-node/NodeRuntime";
-import { Data, Effect } from "effect";
+import { Effect, Schema } from "effect";
 
 import caseDiscovery from "./case-discovery.ts";
 import cliOptions from "./cli-options.ts";
@@ -11,7 +11,10 @@ import runArtifacts from "./run-artifacts.ts";
 
 const { files, pathOperations } = platform;
 
-class BlockedPairsError extends Data.TaggedError("BlockedPairsError") {}
+class BlockedPairsError extends Schema.TaggedError<
+  BlockedPairsError,
+  { readonly brand: unique symbol }
+>()("BlockedPairsError", {}) {}
 
 const packageRoot = pathOperations.resolve(import.meta.dirname, "..");
 
@@ -78,7 +81,7 @@ const main = Effect.gen(function* () {
   const observations = yield* evalRunner.runAllTasks(docker, tasks);
   const report = reportSummary.summarizeEvalObservations(protocolDigest, tasks, observations);
   yield* runArtifacts.writeReport(artifactDirectory, report);
-  if (report.blockedPairs.length > 0) return yield* new BlockedPairsError();
+  if (report.blockedPairs.length > 0) return yield* BlockedPairsError.make();
 });
 
 NodeRuntime.runMain(main);

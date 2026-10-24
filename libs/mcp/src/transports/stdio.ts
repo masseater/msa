@@ -110,8 +110,8 @@ export default class StdioTransport
     return toPromise(
       Effect.suspend((): Effect.Effect<void, StartFailure> => {
         if (this.started)
-          return Effect.fail(new McpTransportError("MCP stdio transport already started"));
-        if (this.closed) return Effect.fail(new McpConnectionClosedError());
+          return Effect.fail(McpTransportError.create("MCP stdio transport already started"));
+        if (this.closed) return Effect.fail(McpConnectionClosedError.create());
         this.started = true;
         const child = this.spawnChild();
         return waitForSpawn(child).pipe(
@@ -130,7 +130,7 @@ export default class StdioTransport
   send(message: jsonrpcTypes.JsonRpcMessage): Promise<void> {
     const stdin = this.child?.stdin;
     if (!this.started || this.closed || stdin === null || stdin === undefined || !stdin.writable)
-      return toPromise(Effect.fail(new McpConnectionClosedError()));
+      return toPromise(Effect.fail(McpConnectionClosedError.create()));
     const payload = `${JSON.stringify(message)}\n`;
     return toPromise(
       Effect.callback<void, foreignTypes.McpForeignError>((resume) => {

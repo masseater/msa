@@ -99,7 +99,7 @@ export default class ReloadPublish {
   #dropRemoved(): void {
     const reload = this.#reload;
     const host = reload.host;
-    const reason = new ChordError("gone", "type no longer served");
+    const reason = ChordError.create("gone", "type no longer served");
     for (const object of [...host.objects.values()]) {
       if (reload.removed.has(object.typeName))
         object.dispose(true, reason).catch((error: unknown) => host.report(error));
@@ -178,7 +178,7 @@ export default class ReloadPublish {
           bind(service.contract, service.options.accepts, ref.contract);
         } catch (error) {
           ref.gone(
-            new ChordError(
+            ChordError.create(
               "upgrade_required",
               `${object.typeName} changed; reload the web facets`,
               {
