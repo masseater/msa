@@ -3,7 +3,10 @@ import { describe, inject, it } from "vite-plus/test";
 import type typesModule from "../src/types.types.ts";
 import contextOverflowSupport from "./context-overflow-support.ts";
 import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { expectOverflowDetected } = contextOverflowSupport;
 const { envValue, hasEnv, hasValue } = env;
@@ -25,10 +28,10 @@ const openRouterVendorModel = (vendor: string) =>
   );
 
 describe("Context overflow error handling", () => {
-  it.skipIf(!hasEnv("ANTHROPIC_API_KEY"))("detects Anthropic overflow", slow, () =>
+  it.skipIf(!hasLiveAuth("anthropic-api"))("detects Anthropic overflow", slow, () =>
     expectOverflowDetected(
       chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages")),
-      envValue("ANTHROPIC_API_KEY"),
+      undefined,
       /prompt is too long/iu,
     ),
   );

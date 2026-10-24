@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vite-plus/test";
 import compactionExtensionsSupport from "./compaction-extensions-support.ts";
 
 const { awaited, runTest } = testing;
-const { cleanUp, createSession, extensionFrom, hasApiKey, prepare } = compactionExtensionsSupport;
+const { cleanUp, createSession, extensionFrom, hasLiveAuth, prepare } = compactionExtensionsSupport;
 
 const recordingExtension = (name: string, callOrder: string[]) =>
   extensionFrom(
@@ -38,7 +38,7 @@ const callsMultipleExtensionsInOrder = () =>
     }),
   );
 
-describe.skipIf(!hasApiKey)("Compaction extensions", () => {
+describe.skipIf(!hasLiveAuth)("Compaction extensions", () => {
   beforeEach(prepare);
 
   afterEach(cleanUp);

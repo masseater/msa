@@ -7,10 +7,10 @@ import crossProviderHandoffSupport from "./cross-provider-handoff-support.ts";
 
 const { currentTimeMillis } = clock;
 
-const { apiKeyFor, completeOrReport, generateFixture, handoffTargets } =
+const { completeOrReport, generateFixture, handoffTargets, isAuthorized } =
   crossProviderHandoffSupport;
 
-const authorizedTargets = handoffTargets.filter((target) => apiKeyFor(target.model) !== undefined);
+const authorizedTargets = handoffTargets.filter((target) => isAuthorized(target.model));
 const fixtures = new Map<string, typesModule.Message[]>();
 
 const generateFixtures = () =>

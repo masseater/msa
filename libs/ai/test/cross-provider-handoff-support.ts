@@ -8,12 +8,14 @@ import type compatTypes from "../src/compat.types.ts";
 import type typesModule from "../src/types.types.ts";
 import clock from "../src/utils/clock.ts";
 import jsonCodec from "./json-codec.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
 
-const { completeSimple, getEnvApiKey } = compatModule;
+const { completeSimple } = compatModule;
 const { currentTimeMillis } = clock;
 
 const { encodeJsonPretty } = jsonCodec;
+const { hasLiveAuth } = liveAuth;
 const { chooseModel, modelsWhere } = modelChoice;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
@@ -59,8 +61,11 @@ const handoffTargets: HandoffTarget[] = [
 
 const apiKeyFor = (model: typesModule.Model<typesModule.Api>): string | undefined => {
   const stored = storedApiKeys[model.provider];
-  return stored !== undefined && stored !== "" ? stored : getEnvApiKey(model.provider);
+  return stored !== undefined && stored !== "" ? stored : undefined;
 };
+
+const isAuthorized = (model: typesModule.Model<typesModule.Api>): boolean =>
+  apiKeyFor(model) !== undefined || hasLiveAuth(model.provider);
 
 const dumpFailure = (
   label: string,
@@ -144,10 +149,10 @@ const generateFixture = Effect.fn("generateFixture")(function* (target: HandoffT
 });
 
 const crossProviderHandoffSupport = {
-  apiKeyFor,
   completeOrReport,
   generateFixture,
   handoffTargets,
+  isAuthorized,
 };
 
 export default crossProviderHandoffSupport;

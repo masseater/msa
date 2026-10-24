@@ -3,7 +3,10 @@ import { describe, it } from "vite-plus/test";
 
 import env from "./env.ts";
 import imageToolResultSupport from "./image-tool-result-support.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { chooseModel, usesApi } = modelChoice;
 
@@ -11,9 +14,7 @@ const { handleToolWithImageResult, handleToolWithTextAndImageResult } = imageToo
 const { envValue } = env;
 
 describe("Tool Results with Images", () => {
-  describe.skipIf(
-    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-  )("Anthropic Provider (claude-haiku-4-5)", () => {
+  describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic Provider (claude-haiku-4-5)", () => {
     const model = chooseModel(
       "anthropic-api",
       "vision Messages",

@@ -3,17 +3,16 @@ import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import compat from "../src/compat.ts";
-import envApiKeys from "../src/env-api-keys.ts";
 import type typesModule from "../src/types.types.ts";
 import typeboxHelpers from "../src/utils/typebox-helpers.ts";
-import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { StringEnum } = typeboxHelpers;
 const { completeSimple } = compat;
-const { getEnvApiKey } = envApiKeys;
 
-const { hasValue } = env;
 const { chooseModel, compatValue } = modelChoice;
 
 type Reasoning = "high" | "xhigh";
@@ -149,7 +148,7 @@ const assertSecondToolCallWithInterleavedThinking = <TApi extends typesModule.Ap
     yield* thinksAgainAfterTheToolResult(llm, reasoning, context, toolCall);
   });
 
-const hasAnthropicCredentials = hasValue(getEnvApiKey("anthropic-api"));
+const hasAnthropicCredentials = hasLiveAuth("anthropic-api");
 
 const budgetThinkingModel = chooseModel(
   "anthropic-api",

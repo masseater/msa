@@ -1,20 +1,18 @@
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
-import anthropicMessages from "../src/api/anthropic-messages.ts";
 import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
-import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
 
-const { stream } = anthropicMessages;
-const { normalizeContext } = compat;
+const { hasLiveAuth } = liveAuth;
+
+const { stream } = compat;
 
 const { chooseModel, compatValue, usesApi } = modelChoice;
 
-const { envValue } = env;
-
-const enabled = Boolean(envValue("ANTHROPIC_API_KEY"));
+const enabled = hasLiveAuth("anthropic-api");
 const model = chooseModel(
   "anthropic-api",
   "managed effort",
@@ -46,8 +44,7 @@ function request(
   effort: "low" | "high",
 ): Promise<typesModule.AssistantMessage> {
   return Promise.resolve(
-    stream(model, normalizeContext(context), {
-      apiKey: envValue("ANTHROPIC_API_KEY"),
+    stream(model, context, {
       cacheRetention: "none",
       effort,
       maxTokens: 1536,

@@ -1,5 +1,6 @@
 import testing from "@msa/testing";
-import { Config, Effect, Function, Option } from "effect";
+import { Effect, Function } from "effect";
+import { inject } from "vite-plus/test";
 
 import eventBusModule from "../src/core/event-bus.ts";
 import type extensionsTypes from "../src/core/extensions/index.types.ts";
@@ -12,10 +13,7 @@ const { createEventBus } = eventBusModule;
 
 const { currentTimeMillis, fromJsonText, readTextFile, runTest } = testing;
 
-const readEnv = (name: string): string | undefined =>
-  Option.getOrUndefined(Effect.runSync(Config.option(Config.String(name))));
-
-const API_KEY = readEnv("ANTHROPIC_OAUTH_TOKEN") ?? readEnv("ANTHROPIC_API_KEY");
+const hasLiveAuth = inject("liveAuthAvailable");
 
 function userMsg(text: string) {
   return { content: text, role: "user" as const, timestamp: currentTimeMillis() };
@@ -128,10 +126,10 @@ function createTestResourceLoader(
 }
 
 const utilities = {
-  API_KEY,
   assistantMsg,
   createTestExtensionsResult,
   createTestResourceLoader,
+  hasLiveAuth,
   readSessionFileRoles,
   userMsg,
 };

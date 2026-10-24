@@ -15,7 +15,7 @@ const { getModel, streamSimple } = compat;
 
 const { Agent } = agentModule;
 
-const { API_KEY, createTestResourceLoader } = utilities;
+const { createTestResourceLoader, hasLiveAuth } = utilities;
 
 const { createModelRegistry, getModelRuntime } = modelRuntimeTestUtils;
 
@@ -35,7 +35,6 @@ function createSession(inMemory = false) {
     Effect.gen(function* () {
       const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
       const agent = new Agent({
-        getApiKey: () => API_KEY,
         initialState: {
           model,
           systemPrompt: "You are a helpful assistant. Be concise.",
@@ -92,84 +91,74 @@ const afterEachHook4 = () =>
     }),
   );
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
-  "AgentSession compaction e2e",
-  () => {
-    beforeEach(beforeEachHook4);
+describe.skipIf(!hasLiveAuth)("AgentSession compaction e2e", () => {
+  beforeEach(beforeEachHook4);
 
-    afterEach(afterEachHook4);
+  afterEach(afterEachHook4);
 
-    it(
-      "should work with --no-session mode (in-memory only)",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            yield* awaited(createSession(true));
+  it(
+    "should work with --no-session mode (in-memory only)",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          yield* awaited(createSession(true));
 
-            yield* awaited(
-              session.run.prompting.prompt("What is 2+2? Reply with just the number."),
-            );
-            yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("What is 2+2? Reply with just the number."));
+          yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(
-              session.run.prompting.prompt("What is 3+3? Reply with just the number."),
-            );
-            yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("What is 3+3? Reply with just the number."));
+          yield* awaited(session.agent.waitForIdle());
 
-            const result = yield* awaited(session.compaction.manual.compact());
+          const result = yield* awaited(session.compaction.manual.compact());
 
-            expect(result.summary).toBeDefined();
-            expect(result.summary.length).toBeGreaterThan(0);
+          expect(result.summary).toBeDefined();
+          expect(result.summary.length).toBeGreaterThan(0);
 
-            const entries = sessionManager.getEntries();
-            const compactionEntries = entries.filter((e) => e.type === "compaction");
-            expect(compactionEntries.length).toBe(1);
-          }),
-        ),
-      120000,
-    );
-  },
-);
+          const entries = sessionManager.getEntries();
+          const compactionEntries = entries.filter((e) => e.type === "compaction");
+          expect(compactionEntries.length).toBe(1);
+        }),
+      ),
+    120000,
+  );
+});
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
-  "AgentSession compaction e2e",
-  () => {
-    beforeEach(beforeEachHook4);
+describe.skipIf(!hasLiveAuth)("AgentSession compaction e2e", () => {
+  beforeEach(beforeEachHook4);
 
-    afterEach(afterEachHook4);
+  afterEach(afterEachHook4);
 
-    it(
-      "should emit compaction events during manual compaction",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            yield* awaited(createSession());
+  it(
+    "should emit compaction events during manual compaction",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          yield* awaited(createSession());
 
-            yield* awaited(session.run.prompting.prompt("Say hello"));
-            yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("Say hello"));
+          yield* awaited(session.agent.waitForIdle());
 
-            yield* awaited(session.compaction.manual.compact());
+          yield* awaited(session.compaction.manual.compact());
 
-            const compactionEvents = events.filter(
-              (e) => e.type === "compaction_start" || e.type === "compaction_end",
-            );
-            expect(compactionEvents).toHaveLength(2);
-            expect(compactionEvents[0]).toEqual({
-              reason: "manual",
-              type: "compaction_start" as const,
-            });
-            expect(compactionEvents[1]).toMatchObject({
-              aborted: false,
-              reason: "manual",
-              type: "compaction_end" as const,
-              willRetry: false,
-            });
+          const compactionEvents = events.filter(
+            (e) => e.type === "compaction_start" || e.type === "compaction_end",
+          );
+          expect(compactionEvents).toHaveLength(2);
+          expect(compactionEvents[0]).toEqual({
+            reason: "manual",
+            type: "compaction_start" as const,
+          });
+          expect(compactionEvents[1]).toMatchObject({
+            aborted: false,
+            reason: "manual",
+            type: "compaction_end" as const,
+            willRetry: false,
+          });
 
-            const messageEndEvents = events.filter((e) => e.type === "message_end");
-            expect(messageEndEvents.length).toBeGreaterThan(0);
-          }),
-        ),
-      120000,
-    );
-  },
-);
+          const messageEndEvents = events.filter((e) => e.type === "message_end");
+          expect(messageEndEvents.length).toBeGreaterThan(0);
+        }),
+      ),
+    120000,
+  );
+});
