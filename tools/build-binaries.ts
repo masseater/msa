@@ -155,6 +155,7 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
         "--compile",
         "--no-compile-autoload-bunfig",
         "--no-compile-autoload-dotenv",
+        "--compile-autoload-package-json",
         "--external=node-llama-cpp",
         `--target=${platform.bunTarget}`,
         "./dist/bun/cli.js",
@@ -166,6 +167,11 @@ const buildPlatformArtifact = (context: Context, platform: releasePlatformsTypes
       cwd: context.codingAgentDir,
     });
     yield* copyPayload(context, platform, payloadDir);
+    yield* runInherit({
+      args: ["tools/deploy-node-llama-cpp.ts", platform.name, payloadDir],
+      command: "node",
+      cwd: context.repoRoot,
+    });
     const archivePath = archivePathFor(context, platform);
     yield* context.fs.remove(archivePath, { force: true });
     if (platform.archive === "zip") {
@@ -220,12 +226,16 @@ const smokeTest = (context: Context) =>
       cwd: smokeDir,
     });
     const reported = stdout.trim();
-    if (versionMatches(context.version, exitCode, reported)) {
-      yield* Console.log(`==> ${platform.name} archive runs: msa --version reports ${reported}`);
-      return;
+    if (!versionMatches(context.version, exitCode, reported)) {
+      return yield* new BuildBinariesError({
+        message: `${platform.name} reported "${reported}" (exit ${exitCode}), expected ${context.version}:\n${stderr}`,
+      });
     }
-    return yield* new BuildBinariesError({
-      message: `${platform.name} reported "${reported}" (exit ${exitCode}), expected ${context.version}:\n${stderr}`,
+    yield* Console.log(`==> ${platform.name} archive runs: msa --version reports ${reported}`);
+    yield* runInherit({
+      args: ["tools/smoke-binary-decide.ts", binary],
+      command: "node",
+      cwd: context.repoRoot,
     });
   });
 

@@ -22,7 +22,10 @@ const processRunnerLayer: Layer.Layer<ProcessRunner> = Layer.effect(
       spawner.spawn(
         ChildProcess.make(options.command, options.args, {
           cwd: options.cwd,
+          env: options.env,
+          extendEnv: true,
           stderr: inheritStdio ? "inherit" : "pipe",
+          stdin: inheritStdio ? "inherit" : "ignore",
           stdout: inheritStdio ? "inherit" : "pipe",
         }),
       );

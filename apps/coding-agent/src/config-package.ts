@@ -3,6 +3,7 @@ import { dual } from "effect/Function";
 import type configPackageTypes from "./config-package.types.ts";
 import platform from "./core/platform/index.ts";
 import nodeModule from "./core/platform/node/module.ts";
+import nodeLlamaCppModule from "./core/platform/node/node-llama-cpp.ts";
 import nodeOs from "./core/platform/node/os.ts";
 import packageFiles from "./core/platform/node/package-files.ts";
 import nodeUrl from "./core/platform/node/url.ts";
@@ -12,6 +13,7 @@ import text from "./utils/text.ts";
 const { createRequire } = nodeModule;
 const { homedir } = nodeOs;
 const { fileURLToPath } = nodeUrl;
+const { importNodeLlamaCppAt } = nodeLlamaCppModule;
 
 const { locatePackageDir, readStartupPackageJson, sourceLayoutOf } = packageFiles;
 
@@ -71,6 +73,12 @@ function getExportTemplateDir(): string {
   }
   const packageDir = getPackageDir();
   return join(packageDir, sourceLayout(packageDir), "core", "export-html");
+}
+
+function nodeLlamaCppLoader(): (() => ReturnType<typeof importNodeLlamaCppAt>) | undefined {
+  if (!isBunBinary) return undefined;
+  const entry = join(getPackageDir(), "node_modules", "node-llama-cpp", "dist", "index.js");
+  return () => importNodeLlamaCppAt(entry);
 }
 
 function getPackageJsonPath(): string {
@@ -277,6 +285,7 @@ const configPackage = {
   isBundledNode,
   moduleDirname,
   moduleFilename,
+  nodeLlamaCppLoader,
   resolveCodemodeWorkerSpecifier,
   setEmbeddedQuickJSWasmPath,
 };

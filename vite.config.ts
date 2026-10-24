@@ -179,6 +179,10 @@ export default defineConfig({
         cache: false,
         command: "node tools/render-homebrew-formula.ts",
       },
+      "smoke-binary-decide": {
+        cache: false,
+        command: "node tools/smoke-binary-decide.ts",
+      },
       syncpack: "syncpack lint",
       test: {
         cache: false,

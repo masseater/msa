@@ -11,7 +11,7 @@
     "apps/**",
     "libs/**",
   ],
-  "ignoreDependencies": ["@anthropic-ai/sandbox-runtime"],
+  "ignoreDependencies": ["@anthropic-ai/sandbox-runtime", "node-llama-cpp"],
   "audit": { "gate": "all" },
   "security": {
     "categories": {

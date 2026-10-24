@@ -1,0 +1,9 @@
+{
+  "name": "@msa/node-llama-cpp-payload",
+  "version": "0.0.4",
+  "private": true,
+  "type": "module",
+  "dependencies": {
+    "node-llama-cpp": "catalog:"
+  }
+}

@@ -71,7 +71,9 @@ const loadModel = Effect.fn("loadModel")(function* (
   contextSize: number,
   downloading: Deferred.Deferred<void>,
 ) {
-  const bindings = yield* Effect.tryPromise(() => import("node-llama-cpp"));
+  const bindings = yield* Effect.tryPromise(
+    (): Promise<Bindings> => config.loadBindings?.() ?? import("node-llama-cpp"),
+  );
   const path = yield* resolveFile(bindings, config, uri, downloading);
   const llama = yield* Effect.tryPromise(() =>
     bindings.getLlama({

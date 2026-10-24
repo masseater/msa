@@ -41,6 +41,7 @@ const config = {
   isBunBinary: configPackage.isBunBinary,
   isBunRuntime: configPackage.isBunRuntime,
   isBundledNode: configPackage.isBundledNode,
+  nodeLlamaCppLoader: configPackage.nodeLlamaCppLoader,
   resolveCodemodeWorkerSpecifier: configPackage.resolveCodemodeWorkerSpecifier,
   setEmbeddedQuickJSWasmPath: configPackage.setEmbeddedQuickJSWasmPath,
 };

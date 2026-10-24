@@ -132,6 +132,25 @@ const retriesAFailedDownload = () =>
     }),
   );
 
+const loadsBindingsFromTheGivenLoader = () =>
+  runTest(
+    Effect.gen(function* () {
+      const provider = localProvider(
+        {
+          directory: yield* tempDirectory,
+          loadBindings: () => Promise.reject(new Error("no node-llama-cpp next to the binary")),
+        },
+        [modelAt(FIXTURE)],
+      );
+
+      const failure = yield* Effect.tryPromise(() =>
+        provider.prepareClassifier!(modelAt(FIXTURE)),
+      ).pipe(Effect.flip);
+
+      expect(String(failure.cause)).toContain("no node-llama-cpp next to the binary");
+    }),
+  );
+
 describe("node-llama-cpp classifier", () => {
   it(
     "answers from the next-token probabilities of a GGUF model loaded once per process",
@@ -147,4 +166,6 @@ describe("node-llama-cpp classifier", () => {
     "answers at once while the model downloads, and prepares it again after a failure",
     retriesAFailedDownload,
   );
+
+  it("loads node-llama-cpp through the configured loader", loadsBindingsFromTheGivenLoader);
 });
