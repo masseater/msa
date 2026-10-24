@@ -5,6 +5,8 @@ import type terminalCapabilitiesTypes from "./terminal-capabilities.types.ts";
 const { isEnvSet, readEnv } = env;
 
 let cachedCapabilities: terminalCapabilitiesTypes.TerminalCapabilities | null = null;
+let capabilitiesSetExplicitly = false;
+let inlineImagesSuspended = false;
 let capabilityOverrides: Partial<terminalCapabilitiesTypes.TerminalCapabilities> = {};
 
 let cellDimensions: terminalCapabilitiesTypes.CellDimensions = { heightPx: 18, widthPx: 9 };
@@ -41,7 +43,7 @@ function needsTmuxHyperlinkProbe(): boolean {
 function setTmuxHyperlinkProbe(forwardsHyperlinks: boolean): void {
   if (tmuxHyperlinkProbe === forwardsHyperlinks) return;
   tmuxHyperlinkProbe = forwardsHyperlinks;
-  cachedCapabilities = null;
+  if (!capabilitiesSetExplicitly) cachedCapabilities = null;
 }
 
 interface TerminalHints {
@@ -170,7 +172,11 @@ function getCapabilities(): terminalCapabilitiesTypes.TerminalCapabilities {
       ...capabilityOverrides,
     };
   }
-  return cachedCapabilities;
+  return inlineImagesSuspended ? { ...cachedCapabilities, images: null } : cachedCapabilities;
+}
+
+function setInlineImagesSuspended(suspended: boolean): void {
+  inlineImagesSuspended = suspended;
 }
 
 function getTerminalColorMode(
@@ -181,6 +187,7 @@ function getTerminalColorMode(
 
 function resetCapabilitiesCache(): void {
   cachedCapabilities = null;
+  capabilitiesSetExplicitly = false;
 }
 
 function setCapabilityOverrides(
@@ -194,11 +201,12 @@ function setCapabilityOverrides(
     return;
   }
   capabilityOverrides = { ...overrides };
-  cachedCapabilities = null;
+  resetCapabilitiesCache();
 }
 
 function setCapabilities(caps: terminalCapabilitiesTypes.TerminalCapabilities): void {
   cachedCapabilities = caps;
+  capabilitiesSetExplicitly = true;
 }
 
 const terminalCapabilities = {
@@ -211,6 +219,7 @@ const terminalCapabilities = {
   setCapabilities,
   setCapabilityOverrides,
   setCellDimensions,
+  setInlineImagesSuspended,
   setTmuxHyperlinkProbe,
 };
 
