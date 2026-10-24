@@ -36,11 +36,25 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   };
 }
 
+type ReportStatus = workerTypes.ReportStatus;
+
+const SEVERITY: readonly ReportStatus[] = [
+  "failed",
+  "stopped",
+  "sent-back",
+  "waiting",
+  "completed",
+];
+
+function worse(left: ReportStatus, right: ReportStatus): ReportStatus {
+  return SEVERITY.indexOf(left) <= SEVERITY.indexOf(right) ? left : right;
+}
+
 interface Applied {
   review: orchestratorTypesTypes.Task[];
   sendBack: orchestratorTypesTypes.Task[];
   lines: string[];
-  held: boolean;
+  status: ReportStatus;
 }
 
 function applyOutcome(
@@ -51,7 +65,7 @@ function applyOutcome(
   verdict?: runtimeTypes.ReviewVerdict,
 ): Applied {
   const database = runtime.database;
-  const applied: Applied = { held: false, lines: [], review: [], sendBack: [] };
+  const applied: Applied = { lines: [], review: [], sendBack: [], status: "completed" };
   for (const assignment of assignments) {
     const judged =
       outcome.status === "completed" ? reviewVerdicts.judgedTask(runtime, assignment) : undefined;
@@ -69,11 +83,12 @@ function applyOutcome(
       verdict: result?.result ?? null,
     });
     if (outcome.status !== "completed") {
+      applied.status = "failed";
       store.setTaskStatus(database, assignment.taskId, "failed", now);
       continue;
     }
     if (judged !== undefined && result !== undefined && result.status !== "completed") {
-      applied.held = true;
+      applied.status = worse(applied.status, result.status);
       if (result.status === "sent-back") applied.sendBack.push(judged);
       else store.setTaskStatus(database, assignment.taskId, result.status, now);
       continue;
@@ -96,6 +111,7 @@ function reportText(
   runtime: runtimeTypes.Runtime,
   assignments: readonly orchestratorTypesTypes.Assignment[],
   outcome: outcomeTypes.Outcome,
+  status: ReportStatus,
   started: readonly string[],
 ): string {
   const titles = assignments.map((assignment) => {
@@ -107,7 +123,7 @@ function reportText(
       ? outcome.content
       : `${outcome.content.slice(0, REPORT_LIMIT)}\n[truncated]`;
   return [
-    `${titles.join(", ")} ${outcome.status}.${runTimeSuffix(runtime, assignments, outcome)}`,
+    `${titles.join(", ")} ${status}.${runTimeSuffix(runtime, assignments, outcome)}`,
     started.length > 0 ? `Started: ${started.join(", ")}.` : undefined,
     content === "" ? undefined : `<report>\n${content}\n</report>`,
   ]

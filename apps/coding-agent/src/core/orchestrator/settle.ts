@@ -62,12 +62,15 @@ function settleEffect(
     yield* Effect.sync(() => {
       runtime.publish();
       const first = assignments[0];
-      runtime.options.report(outcomes.reportText(runtime, assignments, judged, started), {
-        role: first?.role ?? "worker",
-        started,
-        status: outcome.status === "completed" && !applied.held ? "completed" : "failed",
-        taskId: first?.taskId ?? threadId,
-      });
+      runtime.options.report(
+        outcomes.reportText(runtime, assignments, judged, applied.status, started),
+        {
+          role: first?.role ?? "worker",
+          started,
+          status: applied.status,
+          taskId: first?.taskId ?? threadId,
+        },
+      );
     });
   });
 }

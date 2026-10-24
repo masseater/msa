@@ -48,10 +48,12 @@ declare namespace workerTypes {
     output: string;
   }
 
+  type ReportStatus = "completed" | "sent-back" | "waiting" | "stopped" | "failed";
+
   interface OrchestratorReport {
     taskId: string;
     role: "worker" | "reviewer";
-    status: "completed" | "failed";
+    status: ReportStatus;
     started: readonly string[];
   }
 

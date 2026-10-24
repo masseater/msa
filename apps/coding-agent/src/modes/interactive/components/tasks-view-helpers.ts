@@ -142,7 +142,7 @@ function createTaskReportRenderer(
         ? theme.fg("muted", ` · started ${details.started.join(", ")}`)
         : "";
     const lines = [
-      `${glyph({ kind: "work", status: details.status } as orchestratorTypesTypes.TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
+      `${glyph({ kind: "work", status: details.status === "sent-back" ? "running" : details.status } as orchestratorTypesTypes.TaskSnapshot)} ${theme.bold(title)} ${theme.fg("muted", details.role)} ${details.status}${started}`,
     ];
     const content = typeof message.content === "string" ? message.content : "";
     const report = /<report>\n([\s\S]*)\n<\/report>/u.exec(content)?.[1];

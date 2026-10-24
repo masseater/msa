@@ -37,6 +37,15 @@ const startCacheTask = (decide: ReturnType<typeof classifierDecide>, databasePat
     return { ...setUp, task };
   });
 
+type Reported = ReturnType<typeof setup>["reports"];
+
+const expectReported = (reports: Reported, status: string, verdict: string) => {
+  const last = reports.at(-1);
+  expect(last?.details.status).toBe(status);
+  expect(last?.text.split("\n\n")[0]).toBe(`cache reads (reviewer) ${status}.`);
+  expect(last?.text).toContain(`<report>\nReview verdict: ${verdict} (`);
+};
+
 const roles = (view: { assignments: readonly { role: string }[] }) =>
   view.assignments.map((assignment) => assignment.role);
 
@@ -54,7 +63,8 @@ const sendsAFailedReviewBackToTheWorker = () =>
       const sentBack = yield* Effect.promise(() => orchestrator.read(task.id));
       expect(roles(sentBack)).toEqual(["worker", "reviewer", "worker"]);
       expect(sentBack.reports.at(-1)?.content).toContain("fail 0.90");
-      expect(reports.at(-1)?.details).toMatchObject({ started: [task.id], status: "failed" });
+      expect(reports.at(-1)?.details).toMatchObject({ started: [task.id], status: "sent-back" });
+      expectReported(reports, "sent-back", "fail");
 
       workers[2]?.complete("covered the second read");
       yield* waitFor(() => workers.length === 4);
@@ -63,7 +73,7 @@ const sendsAFailedReviewBackToTheWorker = () =>
       yield* waitFor(() => taskStatus(orchestrator, task.id) === "completed");
       const passed = yield* Effect.promise(() => orchestrator.read(task.id));
       expect(passed.reports.at(-1)?.content).toContain("pass 0.90");
-      expect(reports.at(-1)?.details.status).toBe("completed");
+      expectReported(reports, "completed", "pass");
     }),
   );
 
@@ -86,6 +96,7 @@ const failsAfterThreeRoundsOfFixes = () =>
       yield* waitFor(() => taskStatus(orchestrator, task.id) === "failed");
       expect(workers).toHaveLength(8);
       expect(reports.at(-1)?.details).toMatchObject({ started: [], status: "failed" });
+      expectReported(reports, "failed", "fail");
     }),
   );
 
@@ -108,9 +119,9 @@ const doesNotCompleteAnUndecidedReview =
         expect(reports.at(-1)?.details).toMatchObject({
           role: "reviewer",
           started: [],
-          status: "failed",
+          status: "stopped",
         });
-        expect(reports.at(-1)?.text).toContain("undecided");
+        expectReported(reports, "stopped", "undecided");
         expect(reports.at(-1)?.text).toContain(reason);
         const view = yield* Effect.promise(() => orchestrator.read(task.id));
         expect(view.reports.at(-1)?.content).toContain("undecided");

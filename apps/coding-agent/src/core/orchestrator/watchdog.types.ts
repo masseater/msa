@@ -4,7 +4,7 @@ declare namespace watchdogTypes {
   interface Finding {
     thread: orchestratorTypesTypes.Thread;
     threadStatus: orchestratorTypesTypes.ThreadStatus;
-    taskStatus: orchestratorTypesTypes.TaskStatus;
+    taskStatus: Extract<orchestratorTypesTypes.TaskStatus, "stopped" | "failed">;
     reason: string;
   }
 

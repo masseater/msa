@@ -68,7 +68,7 @@ function resolveFinding(
     {
       role: first?.role ?? "worker",
       started: [],
-      status: "failed",
+      status: finding.taskStatus,
       taskId: first?.taskId ?? thread.id,
     },
   );
@@ -84,7 +84,7 @@ function resolveTaskWithoutThread(
   store.setTaskStatus(runtime.database, taskId, "stopped", now);
   runtime.options.report(
     `${taskLabel(runtime, taskId)} stopped.\n\nWatchdog: the task was running with no running thread for ${formatElapsed(now - task.updatedAt)}. Rerun the task to continue.`,
-    { role: "worker", started: [], status: "failed", taskId },
+    { role: "worker", started: [], status: "stopped", taskId },
   );
 }
 
@@ -148,7 +148,7 @@ function reportRecovered(runtime: runtimeTypes.Runtime): void {
       `${notices.length === 1 ? "A task was" : `${notices.length} tasks were`} left running by an earlier orchestrator and are waiting again; the scheduler restarts them.`,
       lines.join("\n"),
     ].join("\n\n"),
-    { role: "worker", started: [], status: "failed", taskId: first.taskId },
+    { role: "worker", started: [], status: "waiting", taskId: first.taskId },
   );
 }
 
