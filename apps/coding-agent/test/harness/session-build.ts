@@ -70,6 +70,7 @@ const buildHarness = Effect.fn("buildHarness")(function* (
   const settingsManager = yield* createSettingsManager(tempDir, options);
   const session = new AgentSession({
     agent,
+    agentDir: tempDir,
     cwd: tempDir,
     modelRuntime,
     resourceLoader,

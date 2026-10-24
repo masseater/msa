@@ -16,6 +16,7 @@ declare namespace agentSessionConfigTypes {
     sessionManager: sessionManagerTypes.SessionManager;
     settingsManager: settingsManagerTypes.SettingsManager;
     cwd: string;
+    agentDir: string;
     scopedModels?:
       | Array<{
           model: compatTypes.Model<any>;

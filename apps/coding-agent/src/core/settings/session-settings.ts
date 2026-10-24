@@ -1,4 +1,3 @@
-import config from "../../config.ts";
 import pathsModule from "../../utils/paths.ts";
 import httpDispatcher from "../http-dispatcher.ts";
 import platform from "../platform/index.ts";
@@ -12,8 +11,7 @@ const { parseTimeoutSetting } = settingsManagerHelpers;
 const { SETTINGS_DEFAULTS } = settingsDefaults;
 const { normalizePath, resolvePath } = pathsModule;
 const { CACHE_WARMING_MODES } = settingsManagerSupport;
-const { dirname, join } = platform;
-const { getAgentDir } = config;
+const { join } = platform;
 const { DEFAULT_HTTP_IDLE_TIMEOUT_MS } = httpDispatcher;
 
 export default class SessionSettings {
@@ -129,22 +127,14 @@ export default class SessionSettings {
     this.manager.persistence.setGlobalSetting("defaultProjectTrust", defaultProjectTrust);
   }
 
-  getOrchestratorDatabasePath(): string {
+  getOrchestratorDatabasePath(agentDir: string): string {
     const configured = this.manager.settings.orchestrator?.database?.trim();
-    const agentDir =
-      this.manager.settingsPaths.global !== undefined && this.manager.settingsPaths.global !== ""
-        ? dirname(this.manager.settingsPaths.global)
-        : getAgentDir();
     return configured !== undefined && configured !== ""
       ? resolvePath(configured, agentDir)
       : join(agentDir, "orchestrator.db");
   }
 
-  getHandoffDirectory(): string {
-    const agentDir =
-      this.manager.settingsPaths.global !== undefined && this.manager.settingsPaths.global !== ""
-        ? dirname(this.manager.settingsPaths.global)
-        : getAgentDir();
+  getHandoffDirectory(agentDir: string): string {
     return join(agentDir, "handoffs");
   }
 

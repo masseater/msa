@@ -130,6 +130,7 @@ const createHarness = (options: typesModule.HarnessOptions = {}): Promise<typesM
       const settingsManager = createSettingsManager({ settings: options.settings, tempDir });
       const session = new AgentSession({
         agent: createFauxAgent({ extensionRunnerRef, fauxProvider, model, withConfiguredAuth }),
+        agentDir: tempDir,
         cwd: tempDir,
         extensionRunnerRef,
         modelRuntime: getModelRuntime(modelRegistry),

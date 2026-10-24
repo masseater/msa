@@ -84,6 +84,7 @@ const startFallbackSession = Effect.fn("startFallbackSession")(function* (
   settingsManager.applyOverrides({ retry: { baseDelayMs: 1, enabled: true, maxRetries: 3 } });
   const session = new AgentSession({
     agent,
+    agentDir: cwd,
     cwd,
     modelRuntime,
     resourceLoader: createTestResourceLoader(),

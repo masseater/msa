@@ -10,7 +10,7 @@ import type codingAgentTypes from "../src/index.types.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import utilities from "./utilities.ts";
 
-const { AgentSession, SessionManager, SettingsManager } = codingAgent;
+const { AgentSession, SessionManager, SettingsManager, getAgentDir } = codingAgent;
 
 const { getModel, streamSimple } = compat;
 
@@ -90,6 +90,7 @@ function createSession() {
           },
           streamFn: streamSimple,
         }),
+        agentDir: getAgentDir(),
         cwd: process.cwd(),
         modelRuntime: getModelRuntime(yield* awaited(createInMemoryModelRegistry(authStorage))),
         resourceLoader: createTestResourceLoader(),

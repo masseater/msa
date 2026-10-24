@@ -23,6 +23,7 @@ function assembleSession(parts: SessionParts): AgentSession {
   const { agentDir, cwd, modelRuntime, options, sessionManager, settingsManager } = runtime;
   const session: AgentSession = new AgentSession({
     agent: created.agent,
+    agentDir,
     allowedToolNames: tools.allowedToolNames,
     cacheWarmer: created.cacheWarmer,
     createWorkerSession:
