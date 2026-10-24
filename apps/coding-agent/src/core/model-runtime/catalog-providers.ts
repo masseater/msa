@@ -13,7 +13,10 @@ const { localProvider } = localModule;
 const { getAgentDir } = configModule;
 const { join } = platform;
 
-const builtinCatalogProviders = (catalogBaseUrl: string | undefined): aiTypes.Provider[] => {
+const builtinCatalogProviders = (
+  catalogBaseUrl: string | undefined,
+  modelNetworkEnabled: boolean,
+): aiTypes.Provider[] => {
   const generatedAt = allModule.getBuiltinModelDataGeneratedAt();
   const catalog = allModule
     .builtinProviders()
@@ -27,7 +30,10 @@ const builtinCatalogProviders = (catalogBaseUrl: string | undefined): aiTypes.Pr
           )
         : withRemoteCatalog(provider, catalogBaseUrl, generatedAt),
     );
-  return [...catalog, localProvider({ directory: join(getAgentDir(), "models") })];
+  return [
+    ...catalog,
+    localProvider({ directory: join(getAgentDir(), "models"), download: modelNetworkEnabled }),
+  ];
 };
 
 const catalogProviders = { builtinCatalogProviders };

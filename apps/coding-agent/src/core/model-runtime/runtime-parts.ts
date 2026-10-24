@@ -32,14 +32,15 @@ const modelsStoreFor = (
 const loadRuntimeParts = (options: modelRuntimeTypes.CreateModelRuntimeOptions) => {
   const modelsPath =
     options.modelsPath === null ? undefined : (options.modelsPath ?? getModelsPath());
+  const modelNetworkEnabled = readEnv("MSA_OFFLINE") === undefined;
   return ModelConfig.load(modelsPath).then((config) => ({
     authContext: fileSystemAuthContext(),
-    catalogProviders: builtinCatalogProviders(options.catalogBaseUrl),
+    catalogProviders: builtinCatalogProviders(options.catalogBaseUrl, modelNetworkEnabled),
     config,
     credentials: new RuntimeCredentials(
       options.credentials ?? DefaultAuthStorage.create(options.authPath),
     ),
-    modelNetworkEnabled: readEnv("MSA_OFFLINE") === undefined,
+    modelNetworkEnabled,
     modelsPath,
     modelsStore: modelsStoreFor(options, modelsPath),
   }));

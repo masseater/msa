@@ -1,4 +1,4 @@
-import { Clock, Deferred, Effect, Option, Semaphore } from "effect";
+import { Clock, Data, Deferred, Effect, Option, Semaphore } from "effect";
 import type { ChatWrapper, LlamaContextSequence, LlamaModel, Token } from "node-llama-cpp";
 
 import type typesModule from "../types.types.ts";
@@ -29,6 +29,10 @@ type Bindings = typeof import("node-llama-cpp");
 const errorMessage = (error: unknown): string =>
   error instanceof Error ? error.message : String(error);
 
+class DownloadDisabledError extends Data.TaggedError("DownloadDisabledError")<{
+  readonly cause: Error;
+}> {}
+
 interface Load {
   readonly loaded: Deferred.Deferred<LoadedModel, string>;
   readonly downloading: Deferred.Deferred<void>;
@@ -53,6 +57,10 @@ const resolveFile = (
       resolveModelFile(uri, { ...options, download: false }),
     ).pipe(Effect.option);
     if (Option.isSome(existing)) return existing.value;
+    if (config.download === false)
+      return yield* new DownloadDisabledError({
+        cause: new Error(`${uri} is not in ${config.directory} and downloads are disabled`),
+      });
     yield* Deferred.succeed(downloading, undefined);
     return yield* Effect.tryPromise(() => resolveModelFile(uri, options));
   });
