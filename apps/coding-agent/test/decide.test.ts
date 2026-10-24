@@ -1,119 +1,15 @@
-import type aiTypes from "@msa/ai/index.types";
 import localModule from "@msa/ai/providers/local";
 import testing from "@msa/testing";
-import { Clock, Duration, Effect, Fiber } from "effect";
-import { TestClock } from "effect/testing";
+import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import Decide from "../src/core/decision/decide-service.ts";
-import decideModule from "../src/core/decision/decide.ts";
-import type decideTypes from "../src/core/decision/decide.types.ts";
+import decideSupport from "./decide-support.ts";
 
-const { closeServers, joinPath, listen, makeTempDir, removeDirs, runTest } = testing;
-const { LIQUID_D1, localProvider } = localModule;
-const { DECISION_TIMEOUT, decide: decideWith, makeDecide } = decideModule;
+const { listen, runTest } = testing;
+const { LIQUID_D1 } = localModule;
+const { FIXTURE, blocking, classifierAt, cleanUp, localDecide, request } = decideSupport;
 
-const FIXTURE = joinPath(
-  import.meta.dirname,
-  "..",
-  "..",
-  "..",
-  "libs",
-  "ai",
-  "test",
-  "fixtures",
-  "stories260K.gguf",
-);
-
-const directories: string[] = [];
-
-afterEach(() =>
-  runTest(
-    Effect.gen(function* () {
-      yield* closeServers;
-      yield* removeDirs(directories.splice(0));
-    }),
-  ),
-);
-
-const classifierAt = (baseUrl: string): aiTypes.ClassifierModel<"node-llama-cpp-classify"> => ({
-  ...LIQUID_D1,
-  baseUrl,
-  contextWindow: 4096,
-});
-
-const request = (
-  ticket: string,
-  thresholds: { route: number; severity: number },
-): decideTypes.DecideRequest => ({
-  name: "triage",
-  questions: {
-    route: {
-      criteria: { billing: "money", technical: "code" },
-      instructions: "Which team should answer?",
-      threshold: thresholds.route,
-      type: "choice",
-    },
-    severity: {
-      criteria: ["minor", "moderate", "severe"],
-      instructions: "How severe is it?",
-      threshold: thresholds.severity,
-      type: "score",
-    },
-  },
-  state: { ticket },
-});
-
-interface Recorded {
-  classifications: number;
-  undecided: Array<{ name: string; reason: string }>;
-  usage: aiTypes.ClassifierResult[];
-}
-
-const localDecide = Effect.fn("localDecide")(function* (
-  model: aiTypes.ClassifierModel<"node-llama-cpp-classify">,
-  options: {
-    endpoints?: { huggingFace: string };
-    thresholds?: Record<string, number>;
-    unavailable?: string;
-  } = {},
-) {
-  const directory = yield* makeTempDir("msa-decide-");
-  directories.push(directory);
-  const provider = localProvider(
-    { directory, ...(options.endpoints === undefined ? {} : { endpoints: options.endpoints }) },
-    [model],
-  );
-  const recorded: Recorded = { classifications: 0, undecided: [], usage: [] };
-  const host: decideTypes.DecisionHost = {
-    classify: (classifier, context, signal) => {
-      recorded.classifications += 1;
-      return provider.classify!(classifier, context, { signal });
-    },
-    model: () =>
-      options.unavailable === undefined ? { model } : { unavailable: options.unavailable },
-    recordUndecided: (name, reason) => recorded.undecided.push({ name, reason }),
-    recordUsage: (result) => recorded.usage.push(result),
-    threshold: (key) => options.thresholds?.[key],
-  };
-  const service = yield* makeDecide(host);
-  const decide = (decideRequest: decideTypes.DecideRequest) =>
-    decideWith(decideRequest).pipe(Effect.provideService(Decide, service));
-  return { decide, recorded };
-});
-
-const blocking = (threshold: number): decideTypes.DecideRequest => ({
-  name: "triage",
-  questions: {
-    blocking: {
-      criteria: { false: "others can keep working", true: "stops everyone" },
-      instructions: "Does it block the team?",
-      threshold,
-      type: "bool",
-    },
-  },
-  state: { ticket: "The build fails." },
-});
+afterEach(() => runTest(cleanUp));
 
 const holdsFromTheThresholdUp = () =>
   runTest(
@@ -235,33 +131,6 @@ const retriesAFailedDownloadOnTheNextCall = () =>
     }),
   );
 
-const isUndecidedWhenTheModelIsLate = () =>
-  runTest(
-    Effect.scoped(
-      Effect.gen(function* () {
-        const origin = yield* listen(() => Effect.never);
-        const { decide, recorded } = yield* localDecide(classifierAt("hf:example/slow/m.gguf"), {
-          endpoints: { huggingFace: `${origin}/` },
-        });
-        const clock = yield* TestClock.make();
-
-        const fiber = yield* decide(request("The build fails.", { route: 0, severity: 0 })).pipe(
-          Effect.provideService(Clock.Clock, clock),
-          Effect.forkChild,
-        );
-        yield* Effect.yieldNow;
-        yield* clock.adjust(Duration.sum(DECISION_TIMEOUT, Duration.millis(1)));
-        const decision = yield* Fiber.join(fiber);
-
-        expect(decision).toEqual({
-          reason: `no answer within ${Duration.format(DECISION_TIMEOUT)}`,
-          status: "undecided",
-        });
-        expect(recorded.undecided).toHaveLength(1);
-      }),
-    ),
-  );
-
 describe("decide", () => {
   it(
     "holds a bool answer when its probability reaches the threshold and not above it",
@@ -292,6 +161,4 @@ describe("decide", () => {
     "is undecided when the model cannot be downloaded, and tries again on the next call",
     retriesAFailedDownloadOnTheNextCall,
   );
-
-  it("is undecided when the model does not answer in time", isUndecidedWhenTheModelIsLate);
 });

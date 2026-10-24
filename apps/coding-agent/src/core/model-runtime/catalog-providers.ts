@@ -4,14 +4,12 @@ import localModule from "@msa/ai/providers/local";
 import openrouterUserModels from "@msa/ai/providers/openrouter-user-models";
 
 import configModule from "../../config.ts";
-import localModelEvents from "../decision/local-model-events.ts";
 import platform from "../platform/index.ts";
 import remoteCatalogProvider from "../remote-catalog-provider.ts";
 
 const { withPersonalizedCatalog, withRemoteCatalog } = remoteCatalogProvider;
 const { personalizeOpenRouterCatalog } = openrouterUserModels;
 const { localProvider } = localModule;
-const { emitLocalModelEvent } = localModelEvents;
 const { getAgentDir } = configModule;
 const { join } = platform;
 
@@ -29,10 +27,7 @@ const builtinCatalogProviders = (catalogBaseUrl: string | undefined): aiTypes.Pr
           )
         : withRemoteCatalog(provider, catalogBaseUrl, generatedAt),
     );
-  return [
-    ...catalog,
-    localProvider({ directory: join(getAgentDir(), "models"), onEvent: emitLocalModelEvent }),
-  ];
+  return [...catalog, localProvider({ directory: join(getAgentDir(), "models") })];
 };
 
 const catalogProviders = { builtinCatalogProviders };

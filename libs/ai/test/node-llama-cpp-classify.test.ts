@@ -2,7 +2,6 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
-import type nodeLlamaCppClassifyTypes from "../src/api/node-llama-cpp-classify.types.ts";
 import localModule from "../src/providers/local.ts";
 import type typesModule from "../src/types.types.ts";
 
@@ -54,18 +53,19 @@ const tempDirectory = Effect.gen(function* () {
 const answersFromNextTokenProbabilities = () =>
   runTest(
     Effect.gen(function* () {
-      const events: nodeLlamaCppClassifyTypes.LocalModelEvent[] = [];
+      const events: typesModule.ClassifierModelEvent[] = [];
+      const siblingEvents: typesModule.ClassifierModelEvent[] = [];
       const directory = yield* tempDirectory;
-      const provider = localProvider({ directory, onEvent: (event) => events.push(event) }, [
-        modelAt(FIXTURE),
-      ]);
-      const sibling = localProvider({ directory, onEvent: (event) => events.push(event) }, [
-        modelAt(FIXTURE),
-      ]);
+      const provider = localProvider({ directory }, [modelAt(FIXTURE)]);
+      const sibling = localProvider({ directory }, [modelAt(FIXTURE)]);
       const model = modelAt(FIXTURE);
 
-      const first = yield* Effect.promise(() => provider.classify!(model, context));
-      const second = yield* Effect.promise(() => sibling.classify!(model, context));
+      const first = yield* Effect.promise(() =>
+        provider.classify!(model, context, { onModelEvent: (event) => events.push(event) }),
+      );
+      const second = yield* Effect.promise(() =>
+        sibling.classify!(model, context, { onModelEvent: (event) => siblingEvents.push(event) }),
+      );
 
       expect(first.errorMessage).toBeUndefined();
       expect(first.stopReason).toBe("stop");
@@ -81,6 +81,7 @@ const answersFromNextTokenProbabilities = () =>
       expect(severity.score).toBeLessThanOrEqual(2);
       expect(second.answers).toEqual(first.answers);
       expect(events).toEqual([{ path: FIXTURE, type: "ready", uri: FIXTURE }]);
+      expect(siblingEvents).toEqual([]);
     }),
   );
 
@@ -94,27 +95,28 @@ const retriesAFailedDownload = () =>
           return new Response("not found", { status: 404 });
         }),
       );
-      const events: nodeLlamaCppClassifyTypes.LocalModelEvent[] = [];
+      const events: typesModule.ClassifierModelEvent[] = [];
+      const onModelEvent = (event: typesModule.ClassifierModelEvent) => events.push(event);
       const provider = localProvider(
-        {
-          directory: yield* tempDirectory,
-          endpoints: { huggingFace: `${origin}/` },
-          onEvent: (event) => events.push(event),
-        },
+        { directory: yield* tempDirectory, endpoints: { huggingFace: `${origin}/` } },
         [modelAt("hf:example/missing/missing.gguf")],
       );
       const model = modelAt("hf:example/missing/missing.gguf");
 
       const failures = Effect.sync(() => events.filter((event) => event.type === "failed").length);
 
-      const first = yield* Effect.promise(() => provider.classify!(model, context));
+      const first = yield* Effect.promise(() =>
+        provider.classify!(model, context, { onModelEvent }),
+      );
       yield* pollUntil(
         Effect.map(failures, (count) => count === 1),
         100,
         "20 millis",
       );
       const requestsAfterFirst = requested.length;
-      const second = yield* Effect.promise(() => provider.classify!(model, context));
+      const second = yield* Effect.promise(() =>
+        provider.classify!(model, context, { onModelEvent }),
+      );
       yield* pollUntil(
         Effect.map(failures, (count) => count === 2),
         100,

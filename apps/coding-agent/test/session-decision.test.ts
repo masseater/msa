@@ -1,17 +1,23 @@
+import nodeLlamaCppClassifyLazy from "@msa/ai/api/node-llama-cpp-classify.lazy";
 import localModule from "@msa/ai/providers/local";
 import testing from "@msa/testing";
 import { Effect } from "effect";
-import { describe, expect, it } from "vite-plus/test";
+import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import decideModule from "../src/core/decision/decide.ts";
-import localModelEvents from "../src/core/decision/local-model-events.ts";
+import type decideTypes from "../src/core/decision/decide.types.ts";
+import type srcTypes from "../src/index.types.ts";
+import decideSupport from "./decide-support.ts";
 import harnessModule from "./suite/harness.ts";
 
-const { awaited, runTest } = testing;
+const { awaited, listen, pollUntil, readBytesFile, runTest } = testing;
 const { LIQUID_D1 } = localModule;
 const { decide } = decideModule;
-const { emitLocalModelEvent } = localModelEvents;
+const { nodeLlamaCppClassifyApi } = nodeLlamaCppClassifyLazy;
 const { createHarness } = harnessModule;
+const { FIXTURE, cleanUp, tempDirectory } = decideSupport;
+
+afterEach(() => runTest(cleanUp));
 
 const customEntries = (
   entries: ReadonlyArray<{ type: string; customType?: string; data?: unknown }>,
@@ -71,34 +77,101 @@ const recordsAnUndecidedDecision = () =>
     }),
   );
 
-const recordsTheDownloadInTenths = () =>
+const FIXTURE_URI = "hf:example/fixture/stories260K.gguf";
+
+const fixtureProvider =
+  (directory: string, origin: string): srcTypes.ExtensionFactory =>
+  (msa) => {
+    msa.registerProvider("fixture", {
+      apiKey: "local",
+      classifiers: {
+        "node-llama-cpp-classify": nodeLlamaCppClassifyApi({
+          directory,
+          endpoints: { huggingFace: `${origin}/` },
+        }),
+      },
+      models: [
+        {
+          api: "node-llama-cpp-classify",
+          baseUrl: FIXTURE_URI,
+          contextWindow: 4096,
+          cost: { cacheRead: 0, cacheWrite: 0, input: 0, output: 0 },
+          id: "stories",
+          input: ["text"],
+          name: "Stories",
+          type: "classifier",
+        },
+      ],
+    });
+  };
+
+const urgent: decideTypes.DecideRequest = {
+  name: "triage",
+  questions: {
+    urgent: {
+      criteria: { false: "can wait", true: "needs action now" },
+      instructions: "Is it urgent?",
+      threshold: 0.5,
+      type: "bool",
+    },
+  },
+  state: { ticket: "The build fails." },
+};
+
+const fixtureHarnesses = Effect.gen(function* () {
+  const bytes = yield* readBytesFile(FIXTURE);
+  const origin = yield* listen(() =>
+    Effect.succeed(
+      new Response(bytes, {
+        headers: {
+          "content-length": String(bytes.byteLength),
+          "content-type": "application/octet-stream",
+        },
+      }),
+    ),
+  );
+  const options = {
+    extensionFactories: [fixtureProvider(yield* tempDirectory, origin)],
+    settings: { decision: { model: "fixture/stories" } },
+  };
+  return [yield* awaited(createHarness(options)), yield* awaited(createHarness(options))] as const;
+});
+
+const recordsTheDownloadOnlyInTheSessionThatStartedIt = () =>
   runTest(
     Effect.gen(function* () {
-      const harness = yield* awaited(createHarness());
+      const [starter, other] = yield* fixtureHarnesses;
       try {
-        const uri = LIQUID_D1.baseUrl;
-        const progress = (downloadedBytes: number) => ({
-          downloadedBytes,
-          totalBytes: 1000,
-          type: "download-progress" as const,
-          uri,
-        });
-        emitLocalModelEvent({ type: "download-started", uri });
-        for (const bytes of [0, 50, 100, 150, 990, 1000]) emitLocalModelEvent(progress(bytes));
-        emitLocalModelEvent({ path: "/models/d1.gguf", type: "ready", uri });
-        harness.cleanup();
-        emitLocalModelEvent({ message: "after close", type: "failed", uri });
+        const decideIn = (harness: typeof starter) =>
+          decide(urgent).pipe((effect) => harness.session.integrations.decision.provide(effect));
+        const modelEntries = (harness: typeof starter) =>
+          customEntries(harness.sessionManager.getEntries(), "decision_model") as Array<{
+            type: string;
+            downloadedBytes?: number;
+            totalBytes?: number;
+          }>;
 
-        expect(customEntries(harness.sessionManager.getEntries(), "decision_model")).toEqual([
-          { type: "download-started", uri },
-          progress(0),
-          progress(100),
-          progress(990),
-          progress(1000),
-          { path: "/models/d1.gguf", type: "ready", uri },
-        ]);
+        const first = yield* decideIn(starter);
+        yield* pollUntil(
+          Effect.sync(() => modelEntries(starter).some((entry) => entry.type === "ready")),
+          200,
+          "20 millis",
+        );
+        const second = yield* decideIn(other);
+
+        expect(first.status).toBe("undecided");
+        expect(second.status).toBe("decided");
+        const types = modelEntries(starter).map((entry) => entry.type);
+        expect(types[0]).toBe("download-started");
+        expect(types.at(-1)).toBe("ready");
+        const tenths = modelEntries(starter)
+          .filter((entry) => entry.type === "download-progress")
+          .map((entry) => Math.floor((entry.downloadedBytes! / entry.totalBytes!) * 10));
+        expect(tenths).toEqual([...new Set(tenths)].toSorted((a, b) => a - b));
+        expect(modelEntries(other)).toEqual([]);
       } finally {
-        harness.cleanup();
+        starter.cleanup();
+        other.cleanup();
       }
     }),
   );
@@ -112,7 +185,7 @@ describe("session decision", () => {
   );
 
   it(
-    "records the download of the local decision model in tenths and its outcome",
-    recordsTheDownloadInTenths,
+    "records the model download in tenths only in the session whose decide started it",
+    recordsTheDownloadOnlyInTheSessionThatStartedIt,
   );
 });

@@ -12,6 +12,7 @@ const { answerFromProbabilities, labelProbabilities } = llamaCppReadout;
 const { formatProviderError, normalizeProviderError } = errorBody;
 
 const LABEL = "node-llama-cpp";
+const EVALUATION_CHUNK = 128;
 
 interface LoadedModel {
   readonly model: LlamaModel;
@@ -22,6 +23,8 @@ interface LoadedModel {
 }
 
 type Config = nodeLlamaCppClassifyTypes.LocalClassifierConfig;
+
+type OnModelEvent = (event: typesModule.ClassifierModelEvent) => void;
 
 type Bindings = typeof import("node-llama-cpp");
 
@@ -40,6 +43,7 @@ const resolveFile = (
   config: Config,
   uri: string,
   downloading: Deferred.Deferred<void>,
+  onEvent: OnModelEvent,
 ) =>
   Effect.gen(function* () {
     const { resolveModelFile } = bindings;
@@ -53,12 +57,12 @@ const resolveFile = (
     ).pipe(Effect.option);
     if (Option.isSome(existing)) return existing.value;
     yield* Deferred.succeed(downloading, undefined);
-    config.onEvent?.({ type: "download-started", uri });
+    onEvent({ type: "download-started", uri });
     return yield* Effect.tryPromise(() =>
       resolveModelFile(uri, {
         ...options,
         onProgress: ({ downloadedSize, totalSize }) =>
-          config.onEvent?.({
+          onEvent({
             downloadedBytes: downloadedSize,
             totalBytes: totalSize,
             type: "download-progress",
@@ -73,9 +77,10 @@ const loadModel = Effect.fn("loadModel")(function* (
   uri: string,
   contextSize: number,
   downloading: Deferred.Deferred<void>,
+  onEvent: OnModelEvent,
 ) {
   const bindings = yield* Effect.tryPromise(() => import("node-llama-cpp"));
-  const path = yield* resolveFile(bindings, config, uri, downloading);
+  const path = yield* resolveFile(bindings, config, uri, downloading, onEvent);
   const llama = yield* Effect.tryPromise(() =>
     bindings.getLlama({
       build: "never",
@@ -94,11 +99,11 @@ const loadModel = Effect.fn("loadModel")(function* (
     model,
     sequence: context.getSequence(),
   };
-  config.onEvent?.({ path, type: "ready", uri });
+  onEvent({ path, type: "ready", uri });
   return loaded;
 });
 
-function startLoad(config: Config, uri: string, contextSize: number): Load {
+function startLoad(config: Config, uri: string, contextSize: number, onEvent: OnModelEvent): Load {
   const key = `${config.directory}\u0000${uri}`;
   const cached = loads.get(key);
   if (cached !== undefined) return cached;
@@ -108,12 +113,12 @@ function startLoad(config: Config, uri: string, contextSize: number): Load {
   };
   loads.set(key, load);
   Effect.runFork(
-    loadModel(config, uri, contextSize, load.downloading).pipe(
+    loadModel(config, uri, contextSize, load.downloading, onEvent).pipe(
       Effect.matchEffect({
         onFailure: (error) =>
           Effect.sync(() => {
             loads.delete(key);
-            config.onEvent?.({ message: errorMessage(error.cause), type: "failed", uri });
+            onEvent({ message: errorMessage(error.cause), type: "failed", uri });
           }).pipe(Effect.andThen(Deferred.fail(load.loaded, errorMessage(error.cause)))),
         onSuccess: (model) => Deferred.succeed(load.loaded, model),
       }),
@@ -162,14 +167,28 @@ function promptTokens(loaded: LoadedModel, content: string): Token[] {
   return contextText.tokenize(loaded.model.tokenizer);
 }
 
-const nextTokenProbabilities = (loaded: LoadedModel, tokens: Token[]) =>
+const lastTokenProbabilities = (loaded: LoadedModel, token: Token) =>
   Effect.gen(function* () {
-    yield* Effect.promise(() => loaded.sequence.clearHistory());
-    const evaluation = loaded.sequence.evaluateWithMetadata(tokens, { probabilities: true });
+    const evaluation = loaded.sequence.evaluateWithMetadata([token], { probabilities: true });
     const step = yield* Effect.tryPromise(() => evaluation.next());
     yield* Effect.promise(() => evaluation.return());
     if (step.done === true) return yield* Effect.die(new Error(`${LABEL} returned no next token`));
     return step.value.probabilities;
+  });
+
+const nextTokenProbabilities = (loaded: LoadedModel, tokens: Token[]) =>
+  Effect.gen(function* () {
+    yield* Effect.uninterruptible(Effect.promise(() => loaded.sequence.clearHistory()));
+    const prefix = tokens.slice(0, -1);
+    for (let start = 0; start < prefix.length; start += EVALUATION_CHUNK) {
+      const chunk = prefix.slice(start, start + EVALUATION_CHUNK);
+      yield* Effect.uninterruptible(
+        Effect.promise(() => loaded.sequence.evaluateWithoutGeneratingNewTokens(chunk)),
+      );
+    }
+    const last = tokens.at(-1);
+    if (last === undefined) return yield* Effect.die(new Error(`${LABEL} got an empty prompt`));
+    return yield* Effect.uninterruptible(lastTokenProbabilities(loaded, last));
   }).pipe(Semaphore.withPermit(loaded.lock));
 
 interface QuestionRequest {
@@ -221,17 +240,24 @@ const classifyAll = Effect.fn("classifyAll")(function* (
     );
   for (const id of Object.keys(context.questions)) renderQuestion(context, id);
   const loaded = yield* awaitLoad(
-    startLoad(config, model.baseUrl, model.contextWindow),
+    startLoad(config, model.baseUrl, model.contextWindow, options?.onModelEvent ?? (() => {})),
     model.baseUrl,
   );
   const answers: Array<[string, typesModule.ClassifierAnswer]> = [];
-  for (const [id, question] of Object.entries(context.questions)) {
-    if (options?.signal?.aborted === true)
-      return yield* Effect.die(new Error("Request was aborted"));
+  for (const [id, question] of Object.entries(context.questions))
     answers.push([id, yield* classifyQuestion(loaded, { context, id, question, temperature })]);
-  }
   return Object.fromEntries(answers);
 });
+
+const untilAborted = (signal: AbortSignal | undefined) =>
+  signal === undefined
+    ? Effect.never
+    : Effect.callback<never>((resume) => {
+        const abort = () => resume(Effect.die(new Error("Request was aborted")));
+        if (signal.aborted) return abort();
+        signal.addEventListener("abort", abort, { once: true });
+        return Effect.sync(() => signal.removeEventListener("abort", abort));
+      });
 
 function nodeLlamaCppClassifier(config: Config): typesModule.ProviderClassifier {
   return {
@@ -246,7 +272,10 @@ function nodeLlamaCppClassifier(config: Config): typesModule.ProviderClassifier 
             stopReason: "stop",
             timestamp: yield* Clock.currentTimeMillis,
           };
-          return yield* classifyAll(config, model, context, options).pipe(
+          return yield* Effect.raceFirst(
+            classifyAll(config, model, context, options),
+            untilAborted(options?.signal),
+          ).pipe(
             Effect.map((answers): typesModule.ClassifierResult => ({ ...output, answers })),
             Effect.catchDefect((error) =>
               Effect.succeed<typesModule.ClassifierResult>({

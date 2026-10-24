@@ -9,7 +9,19 @@ declare namespace providerApiTypesModule {
     modelTypesModule.ClassifierModel<typesModule.ClassifierApi>
   > {
     temperature?: number;
+    onModelEvent?: (event: ClassifierModelEvent) => void;
   }
+
+  type ClassifierModelEvent =
+    | { readonly type: "download-started"; readonly uri: string }
+    | {
+        readonly type: "download-progress";
+        readonly uri: string;
+        readonly downloadedBytes: number;
+        readonly totalBytes: number;
+      }
+    | { readonly type: "ready"; readonly uri: string; readonly path: string }
+    | { readonly type: "failed"; readonly uri: string; readonly message: string };
 
   interface ImagesOptions extends typesModule.ProviderRequestOptions<
     modelTypesModule.ImageModel<typesModule.ImageApi>

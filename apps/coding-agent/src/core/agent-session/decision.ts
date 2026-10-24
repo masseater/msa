@@ -1,4 +1,4 @@
-import type nodeLlamaCppClassifyTypes from "@msa/ai/api/node-llama-cpp-classify.types";
+import type aiTypes from "@msa/ai/index.types";
 import localModule from "@msa/ai/providers/local";
 import { Effect } from "effect";
 
@@ -6,19 +6,17 @@ import type AgentSession from "../agent-session.ts";
 import Decide from "../decision/decide-service.ts";
 import decideModule from "../decision/decide.ts";
 import type decideTypes from "../decision/decide.types.ts";
-import localModelEvents from "../decision/local-model-events.ts";
 
 const { LIQUID_D1 } = localModule;
 const { makeDecide } = decideModule;
-const { subscribeLocalModelEvents } = localModelEvents;
 
 const DECISION_ENTRY = "decision";
 const DECISION_MODEL_ENTRY = "decision_model";
 const PROGRESS_STEPS = 10;
 
 function progressLogger(
-  append: (event: nodeLlamaCppClassifyTypes.LocalModelEvent) => void,
-): (event: nodeLlamaCppClassifyTypes.LocalModelEvent) => void {
+  append: (event: aiTypes.ClassifierModelEvent) => void,
+): (event: aiTypes.ClassifierModelEvent) => void {
   let lastStep = -1;
   return (event) => {
     if (event.type === "download-progress") {
@@ -40,7 +38,7 @@ export default class SessionDecision {
 
   private readonly session: AgentSession;
 
-  private unsubscribe: (() => void) | undefined;
+  private closed = false;
 
   constructor(session: AgentSession) {
     this.session = session;
@@ -50,9 +48,13 @@ export default class SessionDecision {
     const { session } = this;
     const settings = session.settingsManager.models;
     const runtime = () => session.models.selection.modelRuntimeInternal;
+    const onModelEvent = progressLogger((event) => {
+      if (!this.closed) session.sessionManager.appendCustomEntry(DECISION_MODEL_ENTRY, event);
+    });
     this.service = Effect.runSync(
       makeDecide({
-        classify: (model, context, signal) => runtime().classify(model, context, { signal }),
+        classify: (model, context, signal) =>
+          runtime().classify(model, context, { onModelEvent, signal }),
         model: () => {
           const reference = settings.getDecisionModel() ?? `${LIQUID_D1.provider}/${LIQUID_D1.id}`;
           const slash = reference.indexOf("/");
@@ -87,11 +89,6 @@ export default class SessionDecision {
         threshold: (key) => settings.getDecisionThreshold(key),
       }),
     );
-    this.unsubscribe = subscribeLocalModelEvents(
-      progressLogger((event) => {
-        session.sessionManager.appendCustomEntry(DECISION_MODEL_ENTRY, event);
-      }),
-    );
   }
 
   provide<A, E, R>(effect: Effect.Effect<A, E, R>): Effect.Effect<A, E, Exclude<R, Decide>> {
@@ -101,7 +98,6 @@ export default class SessionDecision {
   }
 
   close(): void {
-    this.unsubscribe?.();
-    this.unsubscribe = undefined;
+    this.closed = true;
   }
 }
