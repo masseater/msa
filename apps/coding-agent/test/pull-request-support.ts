@@ -2,10 +2,15 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import FakeGitHub from "./fake-github.ts";
+import orchestratorHarness from "./orchestrator-harness.ts";
+import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
+import orchestratorSupport from "./orchestrator-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, makeTempDir, removePath } = testing;
-const { GIT, runCommand, sh } = worktreeSupport;
+const { GIT, runCommand, sh, shortId } = worktreeSupport;
+const { create } = orchestratorSupport;
+const { setup } = orchestratorHarness.harness;
 
 interface Remote {
   repository: string;
@@ -61,6 +66,29 @@ function advanceMain(origin: string, parent: string, file: string) {
   );
 }
 
-const pullRequestSupport = { advanceMain, commitAndPush, exists, rebaseAndPush, withRemote };
+function openedTask(remote: Remote, options: orchestratorHarnessTypes.HarnessOptions = {}) {
+  return Effect.gen(function* () {
+    const { github, repository } = remote;
+    const run = setup({ cwd: repository, runCommand, runGh: github.runGh, ...options });
+    const task = yield* create(run.orchestrator, {
+      currentState: "feature.txt is missing",
+      goalState: "feature.txt exists on main",
+      title: "feature",
+    });
+    const branch = `task/${shortId(task.id)}`;
+    yield* commitAndPush(run.workers[0]!.cwd, "feature.txt", branch);
+    const number = yield* github.open(branch);
+    return { ...run, branch, number, taskId: task.id };
+  });
+}
+
+const pullRequestSupport = {
+  advanceMain,
+  commitAndPush,
+  exists,
+  openedTask,
+  rebaseAndPush,
+  withRemote,
+};
 
 export default pullRequestSupport;

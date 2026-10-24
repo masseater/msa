@@ -27,7 +27,7 @@ function mergeAndSettle(
   void Effect.runPromise(threadRuns.whileCurrent(thread, merging)).then(
     (merged) =>
       merged === undefined || !threadRuns.current(thread)
-        ? undefined
+        ? thread.runtime.exclusive(pullRequestMerge.afterInterrupt(thread.runtime, task))
         : threadRuns.settle(
             thread,
             undefined,

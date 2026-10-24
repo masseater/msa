@@ -24,6 +24,14 @@ const MERGES = [
   "git push\ngh pr merge 12",
   'echo "$(gh pr merge 12)"',
   "bash -lc 'gh pr merge 12 --auto'",
+  "timeout 60 gh pr merge 1",
+  "nice gh pr merge 1",
+  "stdbuf -o0 gh pr merge 1",
+  "foo gh pr merge 1",
+  "/opt/homebrew/bin/gh pr merge 1 --squash",
+  "timeout 60 nice -n 5 gh -R owner/repo api -X PUT repos/owner/repo/pulls/1/merge",
+  "timeout 60 bash -c 'gh pr merge 1'",
+  "bash <<'EOF'\ngh pr merge 1\nEOF",
 ];
 
 const MERGE_TOOLS = ["mcp__github__merge_pull_request", "mcp__github__enable_auto_merge"];
@@ -37,6 +45,9 @@ const NOT_MERGES = [
   "git commit -F - <<'EOF'\nfeat: refuse gh pr merge\n\ngh api -X PUT repos/o/r/pulls/1/merge\nEOF",
   "cat <<-EOF > notes.md\n\tgh pr merge 12\n\tEOF\ngit add notes.md",
   "rg 'gh pr merge' src",
+  "echo 'timeout 60 gh pr merge 1'",
+  'git commit -m "run nice gh pr merge 1 in the harness, not here"',
+  "cat <<'EOF' | wc -l\ngh pr merge 1\nEOF",
 ];
 
 const refusesEveryMergeInAWorkerShell = () =>

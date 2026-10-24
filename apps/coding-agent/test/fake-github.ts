@@ -53,6 +53,9 @@ export default class FakeGitHub {
   readonly origin: string;
 
   unavailable: orchestratorTypes.GhResult | undefined;
+  beforeMerge: Effect.Effect<void> | undefined;
+  mergeAnswer: orchestratorTypes.GhResult | undefined;
+  mergeRefusal: orchestratorTypes.GhResult | undefined;
   calls = 0;
   answered = 0;
   private held: Promise<void> | undefined;
@@ -188,6 +191,8 @@ export default class FakeGitHub {
     const flag = (name: string) => args[args.indexOf(name) + 1] ?? "";
     const sha = flag("--match-head-commit");
     return Effect.gen({ self: this }, function* () {
+      if (this.beforeMerge !== undefined) yield* this.beforeMerge;
+      if (this.mergeRefusal !== undefined) return this.mergeRefusal;
       yield* this.refresh(pull);
       if (pull.state !== "OPEN") return refused(`pull request #${pull.number} is not open`);
       if (pull.head !== sha)
@@ -209,7 +214,7 @@ export default class FakeGitHub {
         sha,
         subject: flag("--subject"),
       });
-      return ok("");
+      return this.mergeAnswer ?? ok("");
     });
   }
 }

@@ -4,36 +4,13 @@ import { expect, it } from "vite-plus/test";
 
 import threadRun from "../src/core/orchestrator/thread-run.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
-import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
-import orchestratorSupport from "./orchestrator-support.ts";
 import pullRequestSupport from "./pull-request-support.ts";
-import worktreeSupport from "./worktree-support.ts";
 
 const { dirnameOf } = testing;
-const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
-const { setup, taskStatus, waitFor } = harness;
-const { runCommand, shortId } = worktreeSupport;
-const { advanceMain, commitAndPush, rebaseAndPush, withRemote } = pullRequestSupport;
+const { taskStatus, waitFor } = harness;
+const { advanceMain, openedTask, rebaseAndPush, withRemote } = pullRequestSupport;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
-
-type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
-
-function openedTask(remote: Remote, options: orchestratorHarnessTypes.HarnessOptions = {}) {
-  return Effect.gen(function* () {
-    const { github, repository } = remote;
-    const run = setup({ cwd: repository, runCommand, runGh: github.runGh, ...options });
-    const task = yield* create(run.orchestrator, {
-      currentState: "feature.txt is missing",
-      goalState: "feature.txt exists on main",
-      title: "feature",
-    });
-    const branch = `task/${shortId(task.id)}`;
-    yield* commitAndPush(run.workers[0]!.cwd, "feature.txt", branch);
-    const number = yield* github.open(branch);
-    return { ...run, branch, number, taskId: task.id };
-  });
-}
 
 const waitsForPendingCiBeforeMerging = () =>
   Effect.runPromise(

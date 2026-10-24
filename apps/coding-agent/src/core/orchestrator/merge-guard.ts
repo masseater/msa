@@ -4,24 +4,7 @@ const { commandsOf } = shellWords;
 
 const SHELL_TOOLS: ReadonlySet<string> = new Set(["bash", "powershell"]);
 const SHELLS: ReadonlySet<string> = new Set(["bash", "sh", "zsh", "dash", "fish", "ksh"]);
-const WRAPPERS: ReadonlySet<string> = new Set([
-  "sudo",
-  "env",
-  "command",
-  "exec",
-  "time",
-  "nohup",
-  "xargs",
-  "{",
-  "!",
-  "if",
-  "elif",
-  "then",
-  "else",
-  "while",
-  "until",
-  "do",
-]);
+const GH = /^gh(?:\.exe)?$/iu;
 const HTTP_CLIENTS: ReadonlySet<string> = new Set(["curl", "wget", "http", "https", "xh"]);
 
 const REST_MERGE = /\/pulls\/[^\s/]+\/(?:merge|auto-merge)\b/u;
@@ -32,22 +15,7 @@ const REASON =
   "Workers and reviewers do not merge pull requests or turn on auto-merge: the harness squash-merges a task's pull request at the head the review passed. Leave the pull request pushed, current with its base, and green on CI, then end your turn.";
 
 function baseName(word: string): string {
-  return word.slice(word.lastIndexOf("/") + 1);
-}
-
-function stripWrappers(words: readonly string[]): readonly string[] {
-  let rest = words;
-  while (rest.length > 0) {
-    const [first] = rest;
-    if (first === undefined) break;
-    if (/^[A-Za-z_][A-Za-z0-9_]*=/u.test(first) || first.startsWith("-")) {
-      rest = rest.slice(1);
-      continue;
-    }
-    if (!WRAPPERS.has(baseName(first))) break;
-    rest = rest.slice(1);
-  }
-  return rest;
+  return word.slice(Math.max(word.lastIndexOf("/"), word.lastIndexOf("\\")) + 1);
 }
 
 function positionals(args: readonly string[]): string[] {
@@ -66,25 +34,25 @@ function mergesWithGh(args: readonly string[]): boolean {
   return group === "api" && args.some((arg) => REST_MERGE.test(arg) || GRAPHQL_MERGE.test(arg));
 }
 
+function mergesAt(name: string, args: readonly string[], heredoc: string, depth: number): boolean {
+  if (GH.test(name)) return mergesWithGh(args);
+  if (HTTP_CLIENTS.has(name)) {
+    return args.some((arg) => REST_MERGE.test(arg) || GRAPHQL_MERGE.test(arg));
+  }
+  if (name === "eval") return merges(args.join(" "), depth + 1);
+  if (SHELLS.has(name)) {
+    const flag = args.findIndex((arg) => /^-[a-z]*c[a-z]*$/u.test(arg));
+    const script = flag === -1 ? heredoc : args[flag + 1];
+    return script !== undefined && merges(script, depth + 1);
+  }
+  return false;
+}
+
 function merges(command: string, depth = 0): boolean {
   if (depth > 4) return false;
-  return commandsOf(command).some((raw) => {
-    const words = stripWrappers(raw);
-    const [first, ...args] = words;
-    if (first === undefined) return false;
-    const name = baseName(first);
-    if (name === "gh") return mergesWithGh(args);
-    if (HTTP_CLIENTS.has(name)) {
-      return args.some((arg) => REST_MERGE.test(arg) || GRAPHQL_MERGE.test(arg));
-    }
-    if (name === "eval") return merges(args.join(" "), depth + 1);
-    if (SHELLS.has(name)) {
-      const flag = args.findIndex((arg) => /^-[a-z]*c[a-z]*$/u.test(arg));
-      const script = flag === -1 ? undefined : args[flag + 1];
-      return script !== undefined && merges(script, depth + 1);
-    }
-    return false;
-  });
+  return commandsOf(command).some(({ heredoc, words }) =>
+    words.some((word, index) => mergesAt(baseName(word), words.slice(index + 1), heredoc, depth)),
+  );
 }
 
 function refusal(toolName: string, args: unknown): string | undefined {

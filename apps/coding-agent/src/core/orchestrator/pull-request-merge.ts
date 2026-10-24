@@ -4,6 +4,7 @@ import pullRequestProblems from "./pull-request-problems.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
+import schedule from "./schedule.ts";
 import storeModule from "./store.ts";
 import threadRun from "./thread-run.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
@@ -15,6 +16,7 @@ const { worktrees } = worktreeModule;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
+const { scheduling } = schedule;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -60,18 +62,32 @@ function squash(
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
     const { owner, record, verified } = ready;
-    const merging = yield* Effect.result(
-      pullRequests.merge(runtime, owner.cwd, record.number, verified),
+    const [merging, after] = yield* Effect.uninterruptible(
+      Effect.all([
+        Effect.result(pullRequests.merge(runtime, owner.cwd, record.number, verified)),
+        Effect.result(pullRequests.view(runtime, owner.cwd, record.number)),
+      ]),
     );
-    const after = yield* Effect.result(pullRequests.view(runtime, owner.cwd, record.number));
-    if (Result.isSuccess(after) && after.success.state.toUpperCase() === "MERGED") {
-      const merged = pullRequests.save(runtime, task.id, after.success, verified, yield* nowMillis);
-      return yield* finish(
-        runtime,
-        task,
-        merged,
-        `Squash-merged PR #${merged.number} at head ${short(verified.sha)}.`,
-      );
+    if (Result.isSuccess(after)) {
+      const now = yield* nowMillis;
+      const saved = pullRequests.save(runtime, task.id, after.success, verified, now);
+      if (saved.state === "MERGED") {
+        return yield* finish(
+          runtime,
+          task,
+          saved,
+          `Squash-merged PR #${saved.number} at head ${short(verified.sha)}.`,
+        );
+      }
+      const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
+      if (fixes.length > 0) {
+        return blocked(
+          runtime,
+          task,
+          saved,
+          fixes.map((problem) => problem.text),
+        );
+      }
     }
     const why = Result.isFailure(merging)
       ? merging.failure.message
@@ -205,7 +221,66 @@ function afterReview(
   });
 }
 
-const pullRequestMerge = { afterReview };
+interface Ended {
+  status: "completed" | "stopped";
+  line: string;
+}
+
+function settleInterrupted(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+): Effect.Effect<Ended | undefined> {
+  return Effect.gen(function* () {
+    const recorded = store.pullRequestOf(runtime.database, task.id);
+    const owner = yield* pullRequests.ownerOf(runtime, task);
+    const status = store.getTask(runtime.database, task.id)?.status;
+    if (recorded === undefined || owner === undefined) return undefined;
+    if (status !== "running" && status !== "stopped") return undefined;
+    const found = yield* Effect.result(pullRequests.current(runtime, owner));
+    const pull = Result.isSuccess(found) ? found.success : undefined;
+    const now = yield* nowMillis;
+    if (pull?.number === recorded.number && pull.state.toUpperCase() === "MERGED") {
+      const record = pullRequests.save(runtime, task.id, pull, recorded.verified, now);
+      const done = yield* finish(
+        runtime,
+        task,
+        record,
+        `PR #${record.number} was merged while the run was ending, so ${task.id} is completed, not ${status}.`,
+      );
+      store.setTaskStatus(runtime.database, task.id, "completed", now);
+      return { line: done.line, status: "completed" };
+    }
+    if (status !== "running") return undefined;
+    store.setTaskStatus(runtime.database, task.id, "stopped", now);
+    const why = Result.isFailure(found)
+      ? found.failure.message
+      : `#${recorded.number} is ${pull?.state.toLowerCase() ?? "gone"}`;
+    return {
+      line: `The run of ${task.id} ended while the harness was merging PR #${recorded.number}, so the task is stopped, not completed: ${why}`,
+      status: "stopped",
+    };
+  });
+}
+
+function afterInterrupt(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+  return Effect.gen(function* () {
+    const ended = yield* settleInterrupted(runtime, task);
+    if (ended === undefined) return;
+    const started = yield* scheduling.scheduleEffect(runtime);
+    runtime.publish();
+    runtime.options.report(`${task.title} (${task.id}) ${ended.status}.\n\n${ended.line}`, {
+      role: "reviewer",
+      started,
+      status: ended.status,
+      taskId: task.id,
+    });
+  });
+}
+
+const pullRequestMerge = { afterInterrupt, afterReview };
 
 const pullRequestMergeModule = { pullRequestMerge };
 

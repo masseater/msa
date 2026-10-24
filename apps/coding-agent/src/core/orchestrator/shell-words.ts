@@ -1,14 +1,20 @@
+interface Command {
+  words: string[];
+  heredoc: string;
+}
+
 interface Heredoc {
   delimiter: string;
   stripTabs: boolean;
+  command: Command;
 }
 
 const SEPARATORS = ";&|()";
 const DELIMITER_END = /[\s;&|<>()]/u;
 
 class Lexer {
-  readonly commands: string[][] = [];
-  private words: string[] = [];
+  readonly commands: Command[] = [];
+  private command: Command = { heredoc: "", words: [] };
   private word = "";
   private inWord = false;
   private readonly heredocs: Heredoc[] = [];
@@ -19,7 +25,7 @@ class Lexer {
     this.script = script;
   }
 
-  run(): string[][] {
+  run(): Command[] {
     const { script } = this;
     while (this.index < script.length) this.step(script[this.index] ?? "");
     this.endCommand();
@@ -72,15 +78,15 @@ class Lexer {
   }
 
   private endWord(): void {
-    if (this.inWord) this.words.push(this.word);
+    if (this.inWord) this.command.words.push(this.word);
     this.word = "";
     this.inWord = false;
   }
 
   private endCommand(): void {
     this.endWord();
-    if (this.words.length > 0) this.commands.push(this.words);
-    this.words = [];
+    if (this.command.words.length > 0) this.commands.push(this.command);
+    this.command = { heredoc: "", words: [] };
   }
 
   private doubleQuoted(start: number): number {
@@ -150,7 +156,7 @@ class Lexer {
         index += 1;
       }
     }
-    if (delimiter !== "") this.heredocs.push({ delimiter, stripTabs });
+    if (delimiter !== "") this.heredocs.push({ command: this.command, delimiter, stripTabs });
     return index;
   }
 
@@ -163,14 +169,16 @@ class Lexer {
         const stop = end === -1 ? script.length : end;
         const line = script.slice(index, stop);
         index = stop + 1;
-        if ((heredoc.stripTabs ? line.replace(/^\t+/u, "") : line) === heredoc.delimiter) break;
+        const text = heredoc.stripTabs ? line.replace(/^\t+/u, "") : line;
+        if (text === heredoc.delimiter) break;
+        heredoc.command.heredoc += `${text}\n`;
       }
     }
     return index;
   }
 }
 
-function commandsOf(script: string): string[][] {
+function commandsOf(script: string): Command[] {
   return new Lexer(script).run();
 }
 
