@@ -33,6 +33,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
   const reports: Array<{ text: string; details: orchestratorTypes.OrchestratorReport }> = [];
   const telemetry = new InMemoryTelemetryContext();
   const orchestrator = new Orchestrator({
+    ciAppearMs: options.ciAppearMs ?? 20,
     ciPollMs: options.ciPollMs ?? 5,
     ciWaitMs: options.ciWaitMs,
     createWorker: (workerOptions) => {

@@ -2,6 +2,7 @@ import { Effect } from "effect";
 
 import type goalCheckTextTypes from "./goal-check-text.types.ts";
 import pullRequestGateModule from "./pull-request-gate.ts";
+import pullRequestsModule from "./pull-requests.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import text from "./text.ts";
@@ -10,6 +11,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { store } = storeModule;
 const { outputPattern } = text;
 const { pullRequestGate } = pullRequestGateModule;
+const { ciTiming } = pullRequestsModule.pullRequests;
 
 const CHECK_TIMEOUT_MS = 10 * 60_000;
 
@@ -76,6 +78,6 @@ function runAll(
   );
 }
 
-const goalCheckRun = { verifyAll, workerTasks };
+const goalCheckRun = { ciTiming, verifyAll, workerTasks };
 
 export default goalCheckRun;

@@ -18,6 +18,11 @@ const { RollupEntry, countChecks } = prWatchSnapshot;
 const FIELDS =
   "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup";
 const LIST_LIMIT = 20;
+const CI_POLL_MS = 30_000;
+const CI_WAIT_MS = 3 * 60 * 60_000;
+const CI_APPEAR_MS = 2 * 60_000;
+
+const noChecksSince = new WeakMap<runtimeTypes.Runtime, Map<string, number>>();
 
 const GhPull = Schema.Struct({
   baseRefName: Schema.String,
@@ -231,6 +236,23 @@ function save(
   return record;
 }
 
+function ciTiming(runtime: runtimeTypes.Runtime): { pollMs: number; waitMs: number } {
+  return {
+    pollMs: runtime.options.ciPollMs ?? CI_POLL_MS,
+    waitMs: runtime.options.ciWaitMs ?? CI_WAIT_MS,
+  };
+}
+
+function awaitingChecks(runtime: runtimeTypes.Runtime, record: PullRequest, now: number): boolean {
+  if (record.state !== "OPEN" || record.ci !== "none") return false;
+  const seen = noChecksSince.get(runtime) ?? new Map<string, number>();
+  noChecksSince.set(runtime, seen);
+  const key = `${record.number}@${record.headSha}`;
+  const since = seen.get(key) ?? now;
+  seen.set(key, since);
+  return now - since < (runtime.options.ciAppearMs ?? CI_APPEAR_MS);
+}
+
 function refresh(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<void> {
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, taskId);
@@ -247,6 +269,8 @@ function refresh(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<v
 }
 
 const pullRequests = {
+  awaitingChecks,
+  ciTiming,
   current,
   merge,
   ownerOf,

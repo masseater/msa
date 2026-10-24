@@ -7,6 +7,7 @@ declare namespace orchestratorHarnessTypes {
     pollIntervalMs?: number | null;
     ciPollMs?: number;
     ciWaitMs?: number;
+    ciAppearMs?: number;
     project?: string;
     runCommand?: orchestratorTypes.OrchestratorOptions["runCommand"];
     runGh?: orchestratorTypes.OrchestratorOptions["runGh"];

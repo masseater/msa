@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import actionHelpersModule from "./action-helpers.ts";
+import pullRequestNotice from "./pull-request-notice.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
@@ -35,7 +36,17 @@ function stop(runtime: runtimeTypes.Runtime, taskId: string) {
       if (review !== undefined) store.removeDependency(database, review.id, taskId);
     });
     yield* scheduling.scheduleEffect(runtime);
-    yield* Effect.sync(() => runtime.publish());
+    yield* Effect.sync(() => {
+      runtime.publish();
+      const notice = pullRequestNotice.openPullRequests(runtime, [taskId]);
+      if (notice === undefined) return;
+      runtime.options.report(`${task.title} (${taskId}) stopped.\n\n${notice}`, {
+        role: "worker",
+        started: [],
+        status: "stopped",
+        taskId,
+      });
+    });
     return actionHelpers.taskView(runtime, taskId);
   });
 }

@@ -12,7 +12,30 @@ function fix(text: string): Problem {
   return { kind: "fix", text };
 }
 
-function problemsOf(record: PullRequest, localHead: string | undefined): Problem[] {
+function ciProblems(record: PullRequest, awaitingChecks: boolean): Problem[] {
+  const name = `#${record.number}`;
+  const head = short(record.headSha);
+  if (record.ci === "failing")
+    return [fix(`CI fails on the head ${head} of ${name}. Fix it and push.`)];
+  if (record.ci === "pending") {
+    return [{ kind: "pending", text: `CI has not finished on the head ${head} of ${name}.` }];
+  }
+  if (record.ci === "none" && awaitingChecks) {
+    return [
+      {
+        kind: "pending",
+        text: `No CI check has registered on the head ${head} of ${name} yet.`,
+      },
+    ];
+  }
+  return [];
+}
+
+function problemsOf(
+  record: PullRequest,
+  localHead: string | undefined,
+  awaitingChecks: boolean,
+): Problem[] {
   const name = `#${record.number}`;
   if (record.state === "MERGED") return [];
   if (record.state !== "OPEN") {
@@ -43,17 +66,7 @@ function problemsOf(record: PullRequest, localHead: string | undefined): Problem
       ),
     );
   }
-  if (record.ci === "failing") {
-    problems.push(
-      fix(`CI fails on the head ${short(record.headSha)} of ${name}. Fix it and push.`),
-    );
-  } else if (record.ci === "pending") {
-    problems.push({
-      kind: "pending",
-      text: `CI has not finished on the head ${short(record.headSha)} of ${name}.`,
-    });
-  }
-  return problems;
+  return [...problems, ...ciProblems(record, awaitingChecks)];
 }
 
 const pullRequestProblems = { problemsOf, short };

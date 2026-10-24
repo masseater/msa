@@ -5,6 +5,7 @@ import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import threadRun from "./thread-run.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import worktreeModule from "./worktree.ts";
 
@@ -13,6 +14,7 @@ const { problemsOf, short } = pullRequestProblems;
 const { worktrees } = worktreeModule;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
+const { MAX_REJECTIONS } = threadRun.threadRuns;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -103,13 +105,41 @@ function changedSinceReview(number: number, now: Verified, verified: Verified | 
   ];
 }
 
-function afterReview(
+function blockedInARow(runtime: runtimeTypes.Runtime, taskId: string): number {
+  const verdicts = store
+    .reportsOfTask(runtime.database, taskId)
+    .flatMap((report) =>
+      report.role === "reviewer" && report.verdict !== null ? [report.verdict] : [],
+    );
+  return verdicts.length - 1 - verdicts.findLastIndex((verdict) => verdict !== "pass");
+}
+
+function blocked(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
-): Effect.Effect<MergeOutcome | undefined> {
+  record: PullRequest,
+  problems: readonly string[],
+): MergeOutcome {
+  if (blockedInARow(runtime, task.id) < MAX_REJECTIONS) return sendBack(problems, record.number);
+  return {
+    kind: "stopped",
+    line: `The review passed, but the harness could not merge PR #${record.number} (${record.branch}) after ${MAX_REJECTIONS + 1} passing reviews in a row, so the task is stopped, not completed: ${problems.join(" ")} Merge it by hand once it is current, or rerun the task.`,
+  };
+}
+
+interface Read {
+  owner: Ready["owner"];
+  record: PullRequest;
+  pull: Parameters<typeof pullRequests.verifiedOf>[0];
+  verified: Verified | null;
+}
+
+function read(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  owner: Ready["owner"],
+): Effect.Effect<Read | MergeOutcome> {
   return Effect.gen(function* () {
-    const owner = yield* pullRequests.ownerOf(runtime, task);
-    if (owner === undefined) return undefined;
     const recorded = store.pullRequestOf(runtime.database, task.id);
     const found = yield* Effect.result(pullRequests.current(runtime, owner));
     if (Result.isFailure(found)) {
@@ -129,15 +159,49 @@ function afterReview(
     }
     const verified = recorded?.number === pull.number ? recorded.verified : null;
     const record = pullRequests.save(runtime, task.id, pull, verified, yield* nowMillis);
-    if (record.state === "MERGED") {
-      return yield* finish(runtime, task, record, `PR #${record.number} was already merged.`);
+    return { owner, pull, record, verified };
+  });
+}
+
+function afterReview(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+): Effect.Effect<MergeOutcome | undefined> {
+  return Effect.gen(function* () {
+    const owner = yield* pullRequests.ownerOf(runtime, task);
+    if (owner === undefined) return undefined;
+    const { pollMs, waitMs } = pullRequests.ciTiming(runtime);
+    const since = yield* nowMillis;
+    for (;;) {
+      const got = yield* read(runtime, task, owner);
+      if ("kind" in got) return got;
+      const { pull, record, verified } = got;
+      if (record.state === "MERGED") {
+        return yield* finish(runtime, task, record, `PR #${record.number} was already merged.`);
+      }
+      const now = yield* nowMillis;
+      const changed = changedSinceReview(record.number, pullRequests.verifiedOf(pull), verified);
+      const problems = problemsOf(
+        record,
+        undefined,
+        pullRequests.awaitingChecks(runtime, record, now),
+      );
+      const fixes = [
+        ...problems.filter((problem) => problem.kind === "fix").map((problem) => problem.text),
+        ...changed,
+      ];
+      if (fixes.length > 0) return blocked(runtime, task, record, fixes);
+      if (problems.length === 0 && verified !== null) {
+        return yield* squash(runtime, task, { owner, record, verified });
+      }
+      if (now - since >= waitMs) {
+        return {
+          kind: "stopped",
+          line: `The review passed, but CI on PR #${record.number} (${record.branch}) did not finish within ${Math.round(waitMs / 60_000)} minutes, so the task is stopped, not completed: ${problems.map((problem) => problem.text).join(" ")}`,
+        };
+      }
+      yield* Effect.sleep(pollMs);
     }
-    const problems = [
-      ...problemsOf(record, undefined).map((problem) => problem.text),
-      ...changedSinceReview(record.number, pullRequests.verifiedOf(pull), verified),
-    ];
-    if (problems.length > 0 || verified === null) return sendBack(problems, record.number);
-    return yield* squash(runtime, task, { owner, record, verified });
   });
 }
 

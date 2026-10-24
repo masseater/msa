@@ -14,11 +14,8 @@ const { outcomes } = outcomeModule;
 const { failureText, passed, rejectionPrompt, unavailableText, waitingForCi } = goalCheckText;
 const { threadRuns } = threadRun;
 const { MAX_REJECTIONS } = threadRuns;
-const { verifyAll, workerTasks } = goalCheckRun;
+const { ciTiming, verifyAll, workerTasks } = goalCheckRun;
 const { nowMillis } = runtimeModule;
-
-const CI_POLL_MS = 30_000;
-const CI_WAIT_MS = 3 * 60 * 60_000;
 
 type Verification = goalCheckTextTypes.Verification;
 
@@ -33,7 +30,7 @@ const rejections = new WeakMap<runtimeTypes.WorkerSession, number>();
 function check(round: Round, waitingSince: number | undefined): void {
   const { thread, tasks } = round;
   const { runtime, threadId } = thread;
-  const pollMs = runtime.options.ciPollMs ?? CI_POLL_MS;
+  const { pollMs } = ciTiming(runtime);
   const checked = Effect.gen(function* () {
     if (waitingSince !== undefined) yield* Effect.sleep(pollMs);
     const results = yield* verifyAll(runtime, threadId, tasks, () => threadRuns.current(thread));
@@ -46,7 +43,7 @@ function check(round: Round, waitingSince: number | undefined): void {
 }
 
 function waitOrStop(round: Round, results: Verification, since: number, now: number): void {
-  const limit = round.thread.runtime.options.ciWaitMs ?? CI_WAIT_MS;
+  const limit = ciTiming(round.thread.runtime).waitMs;
   if (now - since < limit) {
     check(round, since);
     return;

@@ -49,7 +49,11 @@ function check(
     const local = yield* worktrees.headOf(owner.cwd);
     if (!live()) return undefined;
     const unverified = pullRequests.save(runtime, task.id, pull, null, now);
-    const problems = problemsOf(unverified, local);
+    const problems = problemsOf(
+      unverified,
+      local,
+      pullRequests.awaitingChecks(runtime, unverified, now),
+    );
     if (problems.length === 0) {
       pullRequests.save(runtime, task.id, pull, pullRequests.verifiedOf(pull), now);
     }

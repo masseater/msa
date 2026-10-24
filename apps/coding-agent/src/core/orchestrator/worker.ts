@@ -89,6 +89,8 @@ declare namespace workerTypes {
 
     ciWaitMs?: number | undefined;
 
+    ciAppearMs?: number | undefined;
+
     telemetry: telemetryTypes.TelemetryContext;
   }
 }

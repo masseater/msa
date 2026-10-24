@@ -11,11 +11,23 @@ import worktreeSupport from "./worktree-support.ts";
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
-const { runCommand, shortId } = worktreeSupport;
+const { read, runCommand, shortId } = worktreeSupport;
 const { commitAndPush, withRemote } = pullRequestSupport;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
 
 type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
+type Report = ReturnType<typeof setup>["reports"][number];
+
+function expectsOpenPullRequest(
+  report: Report | undefined,
+  status: string,
+  number: number,
+  branch: string,
+): void {
+  expect(report?.details.status).toBe(status);
+  expect(report?.text).toContain(`open pull request #${number}`);
+  expect(report?.text).toContain(branch);
+}
 
 function openedTask(remote: Remote, options: orchestratorHarnessTypes.HarnessOptions = {}) {
   return Effect.gen(function* () {
@@ -71,7 +83,8 @@ const countsFailingCi = () =>
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github } = remote;
-        const { orchestrator, workers, branch, taskId } = yield* openedTask(remote);
+        const { orchestrator, reports, workers, branch, number, taskId } =
+          yield* openedTask(remote);
         const worker = workers[0]!;
         for (let round = 1; round <= MAX_REJECTIONS; round++) {
           github.ci.set(yield* github.head(branch), "failure");
@@ -83,6 +96,7 @@ const countsFailingCi = () =>
         worker.complete("pushed once more");
         yield* waitFor(() => taskStatus(orchestrator, taskId) === "failed");
         expect(workers).toHaveLength(1);
+        expectsOpenPullRequest(reports.at(-1), "failed", number, branch);
       }),
     ),
   );
@@ -156,13 +170,15 @@ const stopsWhenGhCannotReadPullRequests = () =>
       withRemote((remote) =>
         Effect.gen(function* () {
           const { github } = remote;
-          const { orchestrator, reports, workers, taskId } = yield* openedTask(remote);
+          const { orchestrator, reports, workers, branch, number, taskId } =
+            yield* openedTask(remote);
+          yield* read(orchestrator, taskId);
           github.unavailable = failure;
           workers[0]!.complete("done");
           yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
           expect(workers[0]!.prompts).toHaveLength(1);
-          expect(reports.at(-1)?.details.status).toBe("stopped");
           expect(reports.at(-1)?.text).toContain(failure.stderr);
+          expectsOpenPullRequest(reports.at(-1), "stopped", number, branch);
         }),
       ),
     ),
@@ -178,14 +194,15 @@ const stopsWhenCiNeverFinishes = () =>
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github } = remote;
-        const { orchestrator, reports, workers, branch, taskId } = yield* openedTask(remote, {
-          ciWaitMs: 50,
-        });
+        const { orchestrator, reports, workers, branch, number, taskId } = yield* openedTask(
+          remote,
+          { ciWaitMs: 50 },
+        );
         github.ci.set(yield* github.head(branch), "pending");
         workers[0]!.complete("waiting for CI");
         yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
         expect(workers[0]!.prompts).toHaveLength(1);
-        expect(reports.at(-1)?.details.status).toBe("stopped");
+        expectsOpenPullRequest(reports.at(-1), "stopped", number, branch);
       }),
     ),
   );

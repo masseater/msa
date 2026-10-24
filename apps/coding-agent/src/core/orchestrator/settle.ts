@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import outcomeModule from "./outcome.ts";
+import pullRequestNotice from "./pull-request-notice.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
@@ -32,6 +33,19 @@ function startFollowUps(
   });
 }
 
+function reportContent(
+  runtime: runtimeTypes.Runtime,
+  assignments: readonly { taskId: string }[],
+  lines: readonly string[],
+  content: string,
+): string {
+  const notice = pullRequestNotice.openPullRequests(
+    runtime,
+    assignments.map((assignment) => assignment.taskId),
+  );
+  return [...lines, ...(notice === undefined ? [] : [notice]), content].join("\n\n");
+}
+
 function settleEffect(
   runtime: runtimeTypes.Runtime,
   threadId: string,
@@ -58,7 +72,10 @@ function settleEffect(
       return outcomes.applyOutcome(runtime, assignments, outcome, now, verdict);
     });
     const started = yield* startFollowUps(runtime, applied, outcome.content);
-    const judged = { ...outcome, content: [...applied.lines, outcome.content].join("\n\n") };
+    const judged = {
+      ...outcome,
+      content: reportContent(runtime, assignments, applied.lines, outcome.content),
+    };
     yield* Effect.sync(() => {
       runtime.publish();
       const first = assignments[0];
