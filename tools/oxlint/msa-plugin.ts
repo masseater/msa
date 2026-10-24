@@ -19,6 +19,9 @@ const REQUIRE_UNKNOWN_MESSAGE =
   "require・createRequire・import() をこの形で使うと読み込む先を判定できない。文字列リテラルで直接呼ぶ";
 const LOCAL_EXTENDS_MESSAGE =
   "同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む";
+const PROTOTYPE_MESSAGE =
+  "setPrototypeOf や __proto__ で prototype を書き換えない。継承は class 宣言の extends だけで決める";
+const PROTOTYPE_NAMES: ReadonlySet<string> = new Set(["__proto__", "setPrototypeOf"]);
 const SYNC_FS_MESSAGE =
   "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
 
@@ -119,15 +122,72 @@ const noSyncFs = defineRule({
   meta: { schema: listSchema("names"), type: "problem" },
 });
 
+type WorkspacePackage = { readonly dir: string; readonly specifiers: readonly string[] };
+
+const packagesOption = (context: Context): readonly WorkspacePackage[] => {
+  const [options] = context.options as readonly (
+    | { packages?: readonly WorkspacePackage[] }
+    | undefined
+  )[];
+  return options?.packages ?? [];
+};
+
+const selfSpecifiersOf = (context: Context): readonly string[] =>
+  packagesOption(context)
+    .filter(({ dir }) => context.filename.startsWith(`${dir}/`))
+    .reduce<WorkspacePackage | undefined>(
+      (owner, candidate) =>
+        owner === undefined || candidate.dir.length > owner.dir.length ? candidate : owner,
+      undefined,
+    )?.specifiers ?? [];
+
+const packagesSchema = [
+  {
+    additionalProperties: false,
+    properties: {
+      packages: {
+        items: {
+          additionalProperties: false,
+          properties: {
+            dir: { type: "string" },
+            specifiers: { items: { type: "string" }, type: "array" },
+          },
+          required: ["dir", "specifiers"],
+          type: "object",
+        },
+        type: "array",
+      },
+    },
+    type: "object",
+  },
+];
+
 const noLocalClassExtends = defineRule({
   create(context) {
+    const selfSpecifiers = selfSpecifiersOf(context);
+    const strings = new StaticString(context);
+    const reportPrototype = createReporter(context, PROTOTYPE_MESSAGE);
+    const checkName = (node: Node, name: string | undefined): void => {
+      if (PROTOTYPE_NAMES.has(name ?? "")) reportPrototype(node);
+    };
+    const checkString = (node: Node): void => checkName(node, strings.fold(node));
     const check = (node: ESTree.Class): void => {
-      if (node.superClass !== null && classOrigin.declaredInPackage(context, node.superClass))
+      if (
+        node.superClass !== null &&
+        classOrigin.declaredInPackage(context, node.superClass, selfSpecifiers)
+      )
         context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
     };
-    return { ClassDeclaration: check, ClassExpression: check };
+    return {
+      BinaryExpression: checkString,
+      ClassDeclaration: check,
+      ClassExpression: check,
+      Identifier: (node) => checkName(node, node.name),
+      Literal: checkString,
+      TemplateLiteral: checkString,
+    };
   },
-  meta: { type: "problem" },
+  meta: { schema: packagesSchema, type: "problem" },
 });
 
 const noRestrictedMember = defineRule({

@@ -2,6 +2,8 @@ import { builtinModules } from "node:module";
 
 import type { OxlintConfig } from "vite-plus/lint";
 
+import lintedPackages from "./tools/oxlint/workspace-packages.json" with { type: "json" };
+
 const EFFECT_ONLY_UTILS = "検証、日時、ログ、関数型ユーティリティは Effect だけで扱う";
 const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
@@ -252,6 +254,11 @@ const strictCategoryRules = [
   "promise/no-return-in-finally",
 ];
 
+const workspacePackages = lintedPackages.map(({ dir, specifiers }) => ({
+  dir: `${import.meta.dirname}/${dir}`,
+  specifiers,
+}));
+
 const lintConfig = {
   builtinModuleBases,
   effectReplaceableBuiltins,
@@ -265,6 +272,7 @@ const lintConfig = {
   restrictedProperties,
   strictCategories,
   strictCategoryRules,
+  workspacePackages,
 };
 
 export default lintConfig;
