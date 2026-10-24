@@ -6,7 +6,7 @@ import testSession from "./test-session.ts";
 import utilities from "./utilities.ts";
 import type utilitiesTypes from "./utilities.types.ts";
 
-const { API_KEY } = utilities;
+const { hasLiveAuth } = utilities;
 
 const { createTestSession } = testSession;
 
@@ -26,134 +26,125 @@ const beforeEachHook = () =>
     }),
   );
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
-  "AgentSession tree navigation e2e",
-  () => {
-    beforeEach(beforeEachHook);
+describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
+  beforeEach(beforeEachHook);
 
-    afterEach(() => {
-      ctx2.cleanup();
-    });
+  afterEach(() => {
+    ctx2.cleanup();
+  });
 
-    it(
-      "should navigate to user message and put text in editor",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            const { session } = ctx2;
+  it(
+    "should navigate to user message and put text in editor",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session } = ctx2;
 
-            yield* awaited(session.run.prompting.prompt("First message"));
-            yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.run.prompting.prompt("Second message"));
-            yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("First message"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("Second message"));
+          yield* awaited(session.agent.waitForIdle());
 
-            const tree = session.sessionManager.getTree();
-            expect(tree.length).toBe(1);
+          const tree = session.sessionManager.getTree();
+          expect(tree.length).toBe(1);
 
-            const rootNode = tree[0];
-            if (rootNode === undefined) throw new Error("expected a root node");
-            expect(rootNode.entry.type).toBe("message");
+          const rootNode = tree[0];
+          if (rootNode === undefined) throw new Error("expected a root node");
+          expect(rootNode.entry.type).toBe("message");
 
-            const result = yield* awaited(
-              session.context.tree.navigateTree(rootNode.entry.id, { summarize: false }),
-            );
+          const result = yield* awaited(
+            session.context.tree.navigateTree(rootNode.entry.id, { summarize: false }),
+          );
 
-            expect(result.cancelled).toBe(false);
-            expect(result.editorText).toBe("First message");
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBe("First message");
 
-            expect(session.sessionManager.getLeafId()).toBeNull();
-          }),
-        ),
-      60000,
-    );
-  },
-);
+          expect(session.sessionManager.getLeafId()).toBeNull();
+        }),
+      ),
+    60000,
+  );
+});
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
-  "AgentSession tree navigation e2e",
-  () => {
-    beforeEach(beforeEachHook);
+describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
+  beforeEach(beforeEachHook);
 
-    afterEach(() => {
-      ctx2.cleanup();
-    });
+  afterEach(() => {
+    ctx2.cleanup();
+  });
 
-    it(
-      "should navigate to non-user message without editor text",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            const { session, sessionManager } = ctx2;
+  it(
+    "should navigate to non-user message without editor text",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.run.prompting.prompt("Hello"));
-            yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("Hello"));
+          yield* awaited(session.agent.waitForIdle());
 
-            const entries = sessionManager.getEntries();
-            const assistantEntry = entries.find(
-              (e) => e.type === "message" && e.message.role === "assistant",
-            );
-            expect(assistantEntry).toBeDefined();
+          const entries = sessionManager.getEntries();
+          const assistantEntry = entries.find(
+            (e) => e.type === "message" && e.message.role === "assistant",
+          );
+          expect(assistantEntry).toBeDefined();
 
-            const result = yield* awaited(
-              session.context.tree.navigateTree(assistantEntry!.id, { summarize: false }),
-            );
+          const result = yield* awaited(
+            session.context.tree.navigateTree(assistantEntry!.id, { summarize: false }),
+          );
 
-            expect(result.cancelled).toBe(false);
-            expect(result.editorText).toBeUndefined();
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBeUndefined();
 
-            expect(sessionManager.getLeafId()).toBe(assistantEntry!.id);
-          }),
-        ),
-      60000,
-    );
-  },
-);
+          expect(sessionManager.getLeafId()).toBe(assistantEntry!.id);
+        }),
+      ),
+    60000,
+  );
+});
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
-  "AgentSession tree navigation e2e",
-  () => {
-    beforeEach(beforeEachHook);
+describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
+  beforeEach(beforeEachHook);
 
-    afterEach(() => {
-      ctx2.cleanup();
-    });
+  afterEach(() => {
+    ctx2.cleanup();
+  });
 
-    it(
-      "should create branch summary when navigating with summarize=true",
-      () =>
-        runTest(
-          Effect.gen(function* () {
-            const { session, sessionManager } = ctx2;
+  it(
+    "should create branch summary when navigating with summarize=true",
+    () =>
+      runTest(
+        Effect.gen(function* () {
+          const { session, sessionManager } = ctx2;
 
-            yield* awaited(session.run.prompting.prompt("What is 2+2?"));
-            yield* awaited(session.agent.waitForIdle());
-            yield* awaited(session.run.prompting.prompt("What is 3+3?"));
-            yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("What is 2+2?"));
+          yield* awaited(session.agent.waitForIdle());
+          yield* awaited(session.run.prompting.prompt("What is 3+3?"));
+          yield* awaited(session.agent.waitForIdle());
 
-            const tree = sessionManager.getTree();
-            const rootNode = tree[0];
-            if (rootNode === undefined) throw new Error("expected a root node");
+          const tree = sessionManager.getTree();
+          const rootNode = tree[0];
+          if (rootNode === undefined) throw new Error("expected a root node");
 
-            const result = yield* awaited(
-              session.context.tree.navigateTree(rootNode.entry.id, { summarize: true }),
-            );
+          const result = yield* awaited(
+            session.context.tree.navigateTree(rootNode.entry.id, { summarize: true }),
+          );
 
-            expect(result.cancelled).toBe(false);
-            expect(result.editorText).toBe("What is 2+2?");
-            expect(result.summaryEntry).toBeDefined();
-            expect(result.summaryEntry?.type).toBe("branch_summary");
-            expect(result.summaryEntry?.summary).toBeTruthy();
-            expect(result.summaryEntry?.summary.length).toBeGreaterThan(0);
+          expect(result.cancelled).toBe(false);
+          expect(result.editorText).toBe("What is 2+2?");
+          expect(result.summaryEntry).toBeDefined();
+          expect(result.summaryEntry?.type).toBe("branch_summary");
+          expect(result.summaryEntry?.summary).toBeTruthy();
+          expect(result.summaryEntry?.summary.length).toBeGreaterThan(0);
 
-            expect(result.summaryEntry?.parentId).toBeNull();
+          expect(result.summaryEntry?.parentId).toBeNull();
 
-            expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
-          }),
-        ),
-      120000,
-    );
-  },
-);
+          expect(sessionManager.getLeafId()).toBe(result.summaryEntry?.id);
+        }),
+      ),
+    120000,
+  );
+});
 
 const attachesSummaryToNestedUserMessageParent = Effect.gen(function* () {
   const { session, sessionManager } = ctx2;
@@ -189,19 +180,16 @@ const attachesSummaryToNestedUserMessageParent = Effect.gen(function* () {
   expect(childTypes).toContain("message");
 });
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))(
-  "AgentSession tree navigation e2e",
-  () => {
-    beforeEach(beforeEachHook);
+describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
+  beforeEach(beforeEachHook);
 
-    afterEach(() => {
-      ctx2.cleanup();
-    });
+  afterEach(() => {
+    ctx2.cleanup();
+  });
 
-    it(
-      "should attach summary to correct parent when navigating to nested user message",
-      () => runTest(attachesSummaryToNestedUserMessageParent),
-      120000,
-    );
-  },
-);
+  it(
+    "should attach summary to correct parent when navigating to nested user message",
+    () => runTest(attachesSummaryToNestedUserMessageParent),
+    120000,
+  );
+});

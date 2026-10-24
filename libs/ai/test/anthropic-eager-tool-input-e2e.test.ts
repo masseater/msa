@@ -4,11 +4,12 @@ import { describe, expect, it } from "vite-plus/test";
 
 import compatModule from "../src/compat.ts";
 import type compatTypes from "../src/compat.types.ts";
-import envApiKeys from "../src/env-api-keys.ts";
 import type typesModule from "../src/types.types.ts";
+import liveAuth from "./live-auth.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { complete, getModels, getProviders } = compatModule;
-const { getEnvApiKey } = envApiKeys;
 
 const echoToolSchema = Type.Object({
   value: Type.String({ description: "The value to echo" }),
@@ -24,7 +25,7 @@ interface AnthropicEagerE2ECase {
   name: string;
   provider: compatTypes.BuiltinProvider;
   model: typesModule.Model<"anthropic-messages">;
-  apiKey: string | undefined;
+  available: boolean;
 }
 
 function getAnthropicMessagesModels(
@@ -38,7 +39,7 @@ function getAnthropicMessagesModels(
 
 const anthropicMessagesCases: AnthropicEagerE2ECase[] = getProviders().flatMap((provider) =>
   getAnthropicMessagesModels(provider).map((model) => ({
-    apiKey: getEnvApiKey(provider),
+    available: hasLiveAuth(provider),
     model,
     name: `${provider}/${model.id}`,
     provider,
@@ -101,10 +102,8 @@ function withEagerToolInputStreaming(
 
 const expectToolEnabledRequestAccepted = Effect.fn("expectToolEnabledRequestAccepted")(function* (
   model: typesModule.Model<"anthropic-messages">,
-  apiKey: string | undefined,
 ) {
   const options: typesModule.ProviderStreamOptions = {
-    apiKey,
     maxTokens: 128,
     thinkingEnabled: false,
   };
@@ -143,10 +142,10 @@ describe("Anthropic Messages eager tool input streaming E2E", () => {
 
   describe("generated compatibility settings", () => {
     for (const testCase of generatedCompatCases) {
-      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
+      it.skipIf(!testCase.available)(
         `${testCase.name} accepts configured tool streaming`,
         { retry: 2 },
-        () => Effect.runPromise(expectToolEnabledRequestAccepted(testCase.model, testCase.apiKey)),
+        () => Effect.runPromise(expectToolEnabledRequestAccepted(testCase.model)),
       );
     }
   });
@@ -155,10 +154,10 @@ describe("Anthropic Messages eager tool input streaming E2E", () => {
     for (const testCase of forcedEagerProbeCases) {
       const model = withEagerToolInputStreaming(testCase.model);
 
-      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
+      it.skipIf(!testCase.available)(
         `${testCase.name} accepts forced eager_input_streaming`,
         { retry: 2 },
-        () => Effect.runPromise(expectToolEnabledRequestAccepted(model, testCase.apiKey)),
+        () => Effect.runPromise(expectToolEnabledRequestAccepted(model)),
       );
     }
   });

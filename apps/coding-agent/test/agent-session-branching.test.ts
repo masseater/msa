@@ -17,7 +17,7 @@ const { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSe
 const { SessionManager } = codingAgent;
 const { getModel } = compat;
 
-const { API_KEY } = utilities;
+const { hasLiveAuth } = utilities;
 
 const { awaited, currentTimeMillis, joinPath, makeDirectory, pathExists, removePath, runTest } =
   testing;
@@ -38,11 +38,6 @@ const createSessionSetup = (input: { readonly noSession: boolean }) =>
     const model = getModel("anthropic-api", "claude-sonnet-4-5")!;
     sessionManager = noSession ? SessionManager.inMemory(tempDir) : SessionManager.create(tempDir);
     const authStorage = AuthStorage.create(joinPath(tempDir, "auth.json"));
-    yield* awaited(
-      authStorage.modify("anthropic-api", () =>
-        effectRunPromise(awaited({ key: API_KEY!, type: "api_key" as const })),
-      ),
-    );
 
     const servicesOptions = {
       agentDir: tempDir,
@@ -174,7 +169,7 @@ const afterEachHook = () =>
     }),
   );
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession forking", () => {
+describe.skipIf(!hasLiveAuth)("AgentSession forking", () => {
   beforeEach(beforeEachHook);
 
   afterEach(afterEachHook);
@@ -184,7 +179,7 @@ describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession fo
   it("should support in-memory forking in --no-session mode", shouldSupportInMemoryForkingInNo);
 });
 
-describe.skipIf(!(API_KEY !== undefined && API_KEY.length > 0))("AgentSession forking", () => {
+describe.skipIf(!hasLiveAuth)("AgentSession forking", () => {
   beforeEach(beforeEachHook);
 
   afterEach(afterEachHook);

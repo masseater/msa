@@ -3,17 +3,18 @@ import { describe, expect, it } from "vite-plus/test";
 
 import compatModule from "../src/compat.ts";
 import type compatTypes from "../src/compat.types.ts";
-import envApiKeys from "../src/env-api-keys.ts";
 import type typesModule from "../src/types.types.ts";
+import liveAuth from "./live-auth.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { complete, getModels, getProviders } = compatModule;
-const { getEnvApiKey } = envApiKeys;
 
 interface AnthropicLongCacheRetentionE2ECase {
   name: string;
   provider: compatTypes.BuiltinProvider;
   model: typesModule.Model<"anthropic-messages">;
-  apiKey: string | undefined;
+  available: boolean;
 }
 
 function getAnthropicMessagesModels(
@@ -28,7 +29,7 @@ function getAnthropicMessagesModels(
 const anthropicMessagesCases: AnthropicLongCacheRetentionE2ECase[] = getProviders().flatMap(
   (provider) =>
     getAnthropicMessagesModels(provider).map((model) => ({
-      apiKey: getEnvApiKey(provider),
+      available: hasLiveAuth(provider),
       model,
       name: `${provider}/${model.id}`,
       provider,
@@ -88,10 +89,8 @@ function withLongCacheRetention(
 
 const expectLongCacheRetentionAccepted = Effect.fn("expectLongCacheRetentionAccepted")(function* (
   model: typesModule.Model<"anthropic-messages">,
-  apiKey: string | undefined,
 ) {
   const options: typesModule.ProviderStreamOptions = {
-    apiKey,
     cacheRetention: "long",
     maxTokens: 128,
     thinkingEnabled: false,
@@ -132,10 +131,10 @@ describe("Anthropic Messages long cache retention E2E", () => {
     for (const testCase of probeCases) {
       const model = withLongCacheRetention(testCase.model);
 
-      it.skipIf(testCase.apiKey === undefined || testCase.apiKey === "")(
+      it.skipIf(!testCase.available)(
         `${testCase.name} accepts long cache retention`,
         { retry: 2 },
-        () => Effect.runPromise(expectLongCacheRetentionAccepted(model, testCase.apiKey)),
+        () => Effect.runPromise(expectLongCacheRetentionAccepted(model)),
       );
     }
   });

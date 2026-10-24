@@ -4,7 +4,10 @@ import { describe, expect, inject, it } from "vite-plus/test";
 import compat from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { complete } = compat;
 
@@ -200,9 +203,7 @@ describe("AI Providers Empty Message Tests", () => {
 });
 
 describe("AI Providers Empty Message Tests", () => {
-  describe.skipIf(
-    envValue("ANTHROPIC_API_KEY") === undefined || envValue("ANTHROPIC_API_KEY") === "",
-  )("Anthropic Provider Empty Messages", () => {
+  describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic Provider Empty Messages", () => {
     const llm = chooseModel("anthropic-api", "Messages", usesApi("anthropic-messages"));
 
     it("should handle empty content array", { retry: 3, timeout: 30000 }, () =>

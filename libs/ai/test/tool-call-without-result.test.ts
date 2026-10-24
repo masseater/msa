@@ -6,7 +6,10 @@ import compatModule from "../src/compat.ts";
 import type typesModule from "../src/types.types.ts";
 import env from "./env.ts";
 import jsonCodec from "./json-codec.ts";
+import liveAuth from "./live-auth.ts";
 import modelChoice from "./model-choice.ts";
+
+const { hasLiveAuth } = liveAuth;
 
 const { complete } = compatModule;
 
@@ -116,7 +119,7 @@ describe("Tool Call Without Result Tests", () => {
     it(title, retried, runWith(chooseModel("openai", "reasoning", (model) => model.reasoning)));
   });
 
-  describe.skipIf(!hasEnv("ANTHROPIC_API_KEY"))("Anthropic Provider", () => {
+  describe.skipIf(!hasLiveAuth("anthropic-api"))("Anthropic Provider", () => {
     it(title, retried, runWith(chooseModel("anthropic-api", "chat")));
   });
 
