@@ -1,4 +1,5 @@
 import type agentTypes from "@msa/agent-core/index.types";
+import compat from "@msa/ai/compat";
 import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, test } from "vite-plus/test";
@@ -8,9 +9,15 @@ import rpcSupport from "./rpc-support.ts";
 
 const { readEnv } = platform;
 
-const { readSessionEntries, withClient } = rpcSupport;
+const { RPC_MODEL, readSessionEntries, withClient } = rpcSupport;
 
 const { awaited, currentTimeMillis, joinPath, pathExists, runTest } = testing;
+
+const { getModels } = compat;
+
+test("starts the RPC client on a model the catalog has", () => {
+  expect(getModels(RPC_MODEL.provider).map((model) => model.id)).toContain(RPC_MODEL.id);
+});
 
 describe.skipIf(
   readEnv("ANTHROPIC_API_KEY") === undefined && readEnv("ANTHROPIC_OAUTH_TOKEN") === undefined,
@@ -24,8 +31,8 @@ describe.skipIf(
             const state = yield* awaited(client.getState());
 
             expect(state.model).toBeDefined();
-            expect(state.model?.provider).toBe("anthropic");
-            expect(state.model?.id).toBe("claude-sonnet-4-5");
+            expect(state.model?.provider).toBe(RPC_MODEL.provider);
+            expect(state.model?.id).toBe(RPC_MODEL.id);
             expect(state.isStreaming).toBe(false);
             expect(state.messageCount).toBe(0);
           }),

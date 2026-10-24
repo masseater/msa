@@ -42,7 +42,10 @@ const closedConversations = Effect.fn("closedConversations")(function* () {
   const first = yield* openHarness(yield* awaited(openNodeSqliteStorage(path)), ["read"]);
   const root = yield* awaited(first.harness.root(context));
   yield* awaited(
-    root.configure({ cwd: "/repo", model: { modelId: "claude", provider: "anthropic" } }, context),
+    root.configure(
+      { cwd: "/repo", model: { modelId: "claude", provider: "anthropic-api" } },
+      context,
+    ),
   );
   const entry = yield* awaited(append(root, "hello"));
   const child = yield* awaited(
@@ -143,7 +146,7 @@ const keepsRootConversation = Effect.gen(function* () {
   expect(reopened.id).toBe(ROOT_CONVERSATION_ID);
   expect(yield* awaited(reopened.agent(context))).toMatchObject({
     cwd: "/repo",
-    model: { modelId: "claude", provider: "anthropic" },
+    model: { modelId: "claude", provider: "anthropic-api" },
     tools: [],
   });
   expect(yield* allEntries(reopened)).toEqual(["hello"]);
@@ -165,7 +168,7 @@ const keepsRootConversation = Effect.gen(function* () {
   expect(yield* allEntries(reopenedFork!)).toEqual(["hello"]);
   expect((yield* awaited(reopenedFork!.agent(context))).model).toEqual({
     modelId: "claude",
-    provider: "anthropic",
+    provider: "anthropic-api",
   });
   expect(
     yield* awaited(second.harness.conversation(999 as durableTypes.ConversationId, context)),
