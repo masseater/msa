@@ -101,6 +101,25 @@ const turnsGhJsonIntoStateReviewDecision = () =>
     }),
   );
 
+const RERUN = { __typename: "CheckRun", name: "verify", workflowName: "verify" };
+
+const countsACancelledRunOnlyWhenTheCheckDidNotRunAgain = () =>
+  runTest(
+    Effect.gen(function* () {
+      const view = (statusCheckRollup: readonly object[]) =>
+        runGh(execResult({ stdout: JSON.stringify({ state: "OPEN", statusCheckRollup }) })).view({
+          number: 12,
+        });
+      const superseded = yield* view([
+        { ...RERUN, conclusion: "CANCELLED", status: "COMPLETED" },
+        { ...RERUN, conclusion: "SUCCESS", status: "COMPLETED" },
+      ]);
+      expect(superseded.checks).toMatchObject({ failed: 0, passed: 1, total: 1 });
+      const cancelled = yield* view([{ ...RERUN, conclusion: "CANCELLED", status: "COMPLETED" }]);
+      expect(cancelled.checks).toMatchObject({ failed: 1, passed: 0, total: 1 });
+    }),
+  );
+
 const readsTheBehindCountFromGhApi = () =>
   runTest(
     Effect.gen(function* () {
@@ -198,6 +217,11 @@ describe("gh pull request reads", () => {
   it(
     "turns gh JSON into state, review decision, comment count, and check counts",
     turnsGhJsonIntoStateReviewDecision,
+  );
+
+  it(
+    "ignores a cancelled run of a check that ran again on the same head, and counts a lone cancelled run as failed",
+    countsACancelledRunOnlyWhenTheCheckDidNotRunAgain,
   );
 
   it("reads the behind count from gh api compare", readsTheBehindCountFromGhApi);

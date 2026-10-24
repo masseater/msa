@@ -15,6 +15,7 @@ const RollupEntry = Schema.Struct({
   name: Schema.optionalKey(Schema.String),
   state: optionalString,
   status: optionalString,
+  workflowName: optionalString,
 });
 
 const GhPrView = Schema.Struct({
@@ -63,7 +64,21 @@ function rollupName(entry: RollupEntryValue): string {
   return entry.name ?? entry.context ?? "";
 }
 
-function countChecks(entries: readonly RollupEntryValue[]): snapshotTypes.PrCheckCounts {
+function checkKey(entry: RollupEntryValue): string {
+  return `${entry.workflowName ?? ""}/${rollupName(entry)}`;
+}
+
+function isCancelled(entry: RollupEntryValue): boolean {
+  return (entry.conclusion ?? "").toUpperCase() === "CANCELLED";
+}
+
+function withoutSupersededRuns(entries: readonly RollupEntryValue[]): RollupEntryValue[] {
+  const rerun = new Set(entries.filter((entry) => !isCancelled(entry)).map(checkKey));
+  return entries.filter((entry) => !isCancelled(entry) || !rerun.has(checkKey(entry)));
+}
+
+function countChecks(all: readonly RollupEntryValue[]): snapshotTypes.PrCheckCounts {
+  const entries = withoutSupersededRuns(all);
   let passed = 0;
   let failed = 0;
   let pending = 0;

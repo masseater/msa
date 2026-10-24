@@ -92,6 +92,27 @@ it(
   countsFailingCi,
 );
 
+const passesAGreenRerunOfACancelledCheck = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { workers, branch } = yield* openedTask(remote);
+        const head = yield* github.head(branch);
+        github.ci.set(head, "success");
+        github.rerun.add(head);
+        workers[0]!.complete("the edited body restarted verify, which passed");
+        yield* waitFor(() => workers.length === 2);
+        expect(workers[0]!.prompts).toHaveLength(1);
+      }),
+    ),
+  );
+
+it(
+  "passes a pull request whose cancelled check ran again and passed on the same head",
+  passesAGreenRerunOfACancelledCheck,
+);
+
 const passesAPullRequestWithoutChecks = () =>
   Effect.runPromise(
     withRemote((remote) =>

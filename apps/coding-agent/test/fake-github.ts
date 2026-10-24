@@ -33,6 +33,8 @@ function git(origin: string, args: string): Effect.Effect<{ ok: boolean; output:
   );
 }
 
+const VERIFY = { __typename: "CheckRun", name: "verify", workflowName: "verify" };
+
 function ok(stdout: string): orchestratorTypes.GhResult {
   return { code: 0, stderr: "", stdout };
 }
@@ -45,6 +47,8 @@ export default class FakeGitHub {
   readonly pulls: FakePull[] = [];
   readonly ci = new Map<string, Ci>();
   readonly conflicting = new Set<number>();
+
+  readonly rerun = new Set<string>();
   readonly merged: Merged[] = [];
   readonly origin: string;
 
@@ -162,10 +166,12 @@ export default class FakeGitHub {
           ci === undefined
             ? []
             : [
+                ...(this.rerun.has(pull.head)
+                  ? [{ ...VERIFY, conclusion: "CANCELLED", status: "COMPLETED" }]
+                  : []),
                 {
-                  __typename: "CheckRun",
+                  ...VERIFY,
                   conclusion: ci === "pending" ? null : ci.toUpperCase(),
-                  name: "verify",
                   status: ci === "pending" ? "IN_PROGRESS" : "COMPLETED",
                 },
               ],
