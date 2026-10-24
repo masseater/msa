@@ -173,3 +173,30 @@ it(
   "completes the task and cleans up when its run is stopped right after GitHub reports the merge, before the harness settles it",
   completesWhenTheRunEndsRightAfterTheMerge,
 );
+
+const stopsWhenMergedOutsideAfterAFailedMerge = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github, origin, repository } = remote;
+        const { orchestrator, reports, workers, number, taskId } = yield* reviewed(remote);
+        github.beforeMerge = Effect.suspend(() => {
+          github.beforeMerge = undefined;
+          return advanceMain(origin, dirnameOf(repository), "moved.txt");
+        });
+        workers[1]!.complete("acceptable");
+        yield* waitFor(() => workers.length === 3);
+        const commit = yield* github.mergeOutside(number, "someone-else");
+        workers[2]!.complete("rebased");
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        expect(github.merged).toEqual([]);
+        expect(reports.at(-1)?.text).toContain("someone-else");
+        expect(reports.at(-1)?.text).toContain(commit.slice(0, 12));
+      }),
+    ),
+  );
+
+it(
+  "stops the task when the harness's merge failed, the task went back to the worker, and the pull request was then merged outside the harness at the head the harness had tried",
+  stopsWhenMergedOutsideAfterAFailedMerge,
+);

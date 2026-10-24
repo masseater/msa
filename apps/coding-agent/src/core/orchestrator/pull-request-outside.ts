@@ -17,7 +17,15 @@ const MergedBy = Schema.fromJsonString(
 type PullRequest = orchestratorTypesTypes.PullRequest;
 
 function mergedOutside(record: PullRequest): boolean {
-  return record.state === "MERGED" && record.harnessMerge === null;
+  return record.state === "MERGED" && record.harnessMerge !== record.headSha;
+}
+
+function autoMergeLine(
+  task: orchestratorTypesTypes.Task,
+  record: PullRequest,
+  enabledBy: string,
+): string {
+  return `PR #${record.number} (${record.branch}) has auto-merge enabled by ${enabledBy}, so GitHub would merge it without the harness and ${task.id} is stopped. Only the harness merges a task's pull request, after the review passes on the head it checked; disable auto-merge (gh pr merge ${record.number} --disable-auto) and decide what to do with the task.`;
 }
 
 function outsideMergeLine(
@@ -46,6 +54,19 @@ function outsideMergeLine(
   });
 }
 
-const pullRequestOutside = { mergedOutside, outsideMergeLine };
+function outsideLine(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  cwd: string,
+  record: PullRequest,
+  autoMergeBy: string | undefined,
+): Effect.Effect<string | undefined> {
+  return Effect.gen(function* () {
+    if (mergedOutside(record)) return yield* outsideMergeLine(runtime, task, cwd, record);
+    return autoMergeBy === undefined ? undefined : autoMergeLine(task, record, autoMergeBy);
+  });
+}
+
+const pullRequestOutside = { mergedOutside, outsideLine, outsideMergeLine };
 
 export default pullRequestOutside;

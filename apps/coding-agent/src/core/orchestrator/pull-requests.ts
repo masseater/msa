@@ -16,7 +16,7 @@ const { worktrees } = worktreeModule;
 const { RollupEntry, countChecks } = prWatchSnapshot;
 
 const FIELDS =
-  "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup";
+  "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest";
 const LIST_LIMIT = 20;
 const CI_POLL_MS = 30_000;
 const CI_WAIT_MS = 3 * 60 * 60_000;
@@ -24,7 +24,12 @@ const CI_APPEAR_MS = 2 * 60_000;
 
 const noChecksSince = new WeakMap<runtimeTypes.Runtime, Map<string, number>>();
 
+const AutoMergeRequest = Schema.Struct({
+  enabledBy: Schema.NullOr(Schema.Struct({ login: Schema.String })).pipe(Schema.optionalKey),
+});
+
 const GhPull = Schema.Struct({
+  autoMergeRequest: Schema.NullOr(AutoMergeRequest).pipe(Schema.optionalKey),
   baseRefName: Schema.String,
   body: Schema.optionalKey(Schema.String),
   headRefName: Schema.String,
@@ -94,6 +99,12 @@ function ciOf(pull: PullView): orchestratorTypesTypes.PullRequestCi {
   if (checks.failed > 0) return "failing";
   if (checks.pending > 0) return "pending";
   return "passing";
+}
+
+function autoMergeBy(pull: PullView): string | undefined {
+  const request = pull.autoMergeRequest;
+  if (request === null || request === undefined) return undefined;
+  return request.enabledBy?.login ?? "an account gh did not name";
 }
 
 function verifiedOf(pull: PullView): Verified {
@@ -269,6 +280,7 @@ function refresh(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<v
 }
 
 const pullRequests = {
+  autoMergeBy,
   awaitingChecks,
   ciTiming,
   current,

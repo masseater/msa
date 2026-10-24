@@ -11,7 +11,7 @@ import worktreeModule from "./worktree.ts";
 
 const { pullRequests } = pullRequestsModule;
 const { problemsOf } = pullRequestProblems;
-const { mergedOutside, outsideMergeLine } = pullRequestOutside;
+const { outsideLine } = pullRequestOutside;
 const { worktrees } = worktreeModule;
 const { nowMillis } = runtimeModule;
 
@@ -51,10 +51,9 @@ function check(
     const local = yield* worktrees.headOf(owner.cwd);
     if (!live()) return undefined;
     const unverified = pullRequests.save(runtime, task.id, pull, null, now);
-    if (mergedOutside(unverified)) {
-      const stop = yield* outsideMergeLine(runtime, task, owner.cwd, unverified);
-      return { number: unverified.number, problems: [], stop, task };
-    }
+    const autoMergeBy = pullRequests.autoMergeBy(pull);
+    const stop = yield* outsideLine(runtime, task, owner.cwd, unverified, autoMergeBy);
+    if (stop !== undefined) return { number: unverified.number, problems: [], stop, task };
     const problems = problemsOf(
       unverified,
       local,

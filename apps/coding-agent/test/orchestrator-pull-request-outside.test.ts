@@ -61,3 +61,50 @@ it(
   "stops the task and reports who merged it when the pull request was merged while it was under review",
   stopsWhenThePullRequestWasMergedDuringTheReview,
 );
+
+const stopsWhenTheWorkerEnabledAutoMerge = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { orchestrator, reports, workers, branch, number, taskId } =
+          yield* openedTask(remote);
+        github.ci.set(yield* github.head(branch), "success");
+        github.enableAutoMerge(number, "worker-account");
+        workers[0]!.complete("CI is green");
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        expect(workers).toHaveLength(1);
+        expect(github.merged).toEqual([]);
+        expect(reports.at(-1)?.text).toContain("auto-merge enabled by worker-account");
+      }),
+    ),
+  );
+
+it(
+  "stops the task and names who enabled it when the goal check finds auto-merge enabled on the pull request",
+  stopsWhenTheWorkerEnabledAutoMerge,
+);
+
+const stopsWhenAutoMergeWasEnabledDuringTheReview = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { orchestrator, reports, workers, branch, number, taskId } =
+          yield* openedTask(remote);
+        github.ci.set(yield* github.head(branch), "success");
+        workers[0]!.complete("CI is green");
+        yield* waitFor(() => workers.length === 2);
+        github.enableAutoMerge(number, "reviewer-account");
+        workers[1]!.complete("acceptable");
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
+        expect(github.merged).toEqual([]);
+        expect(reports.at(-1)?.text).toContain("auto-merge enabled by reviewer-account");
+      }),
+    ),
+  );
+
+it(
+  "stops the task instead of merging when auto-merge was enabled on the pull request while it was under review",
+  stopsWhenAutoMergeWasEnabledDuringTheReview,
+);

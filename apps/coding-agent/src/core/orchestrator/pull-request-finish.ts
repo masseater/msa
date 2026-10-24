@@ -41,16 +41,19 @@ function readBack(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   recorded: PullRequest,
-): Effect.Effect<{ record: PullRequest } | { why: string }> {
+): Effect.Effect<{ record: PullRequest } | { why: string; unmerged: boolean }> {
   return Effect.gen(function* () {
     if (recorded.state === "MERGED") return { record: recorded };
     const owner = yield* pullRequests.ownerOf(runtime, task);
-    if (owner === undefined) return { why: `the worktree of ${task.id} is gone` };
+    if (owner === undefined) return { unmerged: false, why: `the worktree of ${task.id} is gone` };
     const found = yield* Effect.result(pullRequests.current(runtime, owner));
-    if (Result.isFailure(found)) return { why: found.failure.message };
+    if (Result.isFailure(found)) return { unmerged: false, why: found.failure.message };
     const pull = found.success;
     if (pull?.number !== recorded.number || pull.state.toUpperCase() !== "MERGED") {
-      return { why: `#${recorded.number} is ${pull?.state.toLowerCase() ?? "gone"}` };
+      return {
+        unmerged: true,
+        why: `#${recorded.number} is ${pull?.state.toLowerCase() ?? "gone"}`,
+      };
     }
     const now = yield* nowMillis;
     return { record: pullRequests.save(runtime, task.id, pull, recorded.verified, now) };
@@ -85,6 +88,7 @@ function settleInterrupted(
       store.setTaskStatus(runtime.database, task.id, "completed", now);
       return { line: done.line, status: "completed" };
     }
+    if (read.unmerged) store.markHarnessMerge(runtime.database, task.id, null);
     if (status !== "running") return undefined;
     store.setTaskStatus(runtime.database, task.id, "stopped", now);
     return {

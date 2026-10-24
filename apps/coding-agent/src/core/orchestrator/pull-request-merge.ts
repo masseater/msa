@@ -13,7 +13,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { pullRequests } = pullRequestsModule;
 const { problemsOf, short } = pullRequestProblems;
 const { finish } = pullRequestFinish;
-const { mergedOutside, outsideMergeLine } = pullRequestOutside;
+const { outsideLine } = pullRequestOutside;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
@@ -56,6 +56,10 @@ function squash(
         Effect.result(pullRequests.view(runtime, owner.cwd, record.number)),
       ]),
     );
+    const landed = Result.isSuccess(after)
+      ? after.success.state.toUpperCase() === "MERGED"
+      : Result.isSuccess(merging);
+    if (!landed) store.markHarnessMerge(runtime.database, task.id, null);
     if (Result.isSuccess(after)) {
       const now = yield* nowMillis;
       const saved = pullRequests.save(runtime, task.id, after.success, verified, now);
@@ -180,9 +184,9 @@ function afterReview(
       const got = yield* readPull(runtime, task, owner);
       if ("kind" in got) return got;
       const { pull, record, verified } = got;
-      if (mergedOutside(record)) {
-        return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, owner.cwd, record) };
-      }
+      const autoMergeBy = pullRequests.autoMergeBy(pull);
+      const outside = yield* outsideLine(runtime, task, owner.cwd, record, autoMergeBy);
+      if (outside !== undefined) return { kind: "stopped", line: outside };
       if (record.state === "MERGED") {
         return yield* finish(runtime, task, record, `PR #${record.number} was already merged.`);
       }

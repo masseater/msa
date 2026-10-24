@@ -16,6 +16,7 @@ interface FakePull {
   state: "OPEN" | "MERGED" | "CLOSED";
   head: string;
   mergedBy?: { login: string; commit: string };
+  autoMergeBy?: string;
   title: string;
   body: string;
 }
@@ -169,6 +170,8 @@ export default class FakeGitHub {
       const conflicting = this.conflicting.has(pull.number);
       const behind = pull.state === "OPEN" && (yield* this.behind(pull));
       return {
+        autoMergeRequest:
+          pull.autoMergeBy === undefined ? null : { enabledBy: { login: pull.autoMergeBy } },
         baseRefName: pull.base,
         body: pull.body,
         headRefName: pull.branch,
@@ -194,6 +197,12 @@ export default class FakeGitHub {
         url: `https://github.invalid/pull/${pull.number}`,
       };
     });
+  }
+
+  enableAutoMerge(number: number, login: string): void {
+    const pull = this.pulls.find((candidate) => candidate.number === number);
+    if (pull === undefined) throw new Error(`no pull request #${number}`);
+    pull.autoMergeBy = login;
   }
 
   mergeOutside(number: number, login: string): Effect.Effect<string> {

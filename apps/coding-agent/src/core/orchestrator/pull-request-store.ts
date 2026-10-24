@@ -91,7 +91,7 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
     );
 }
 
-function markHarnessMerge(database: DatabaseSync, taskId: string, sha: string): void {
+function markHarnessMerge(database: DatabaseSync, taskId: string, sha: string | null): void {
   database
     .prepare("UPDATE task_pull_requests SET harness_merge_sha = ? WHERE task_id = ?")
     .run(sha, taskId);
