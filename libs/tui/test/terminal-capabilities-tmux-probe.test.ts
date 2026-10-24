@@ -1,13 +1,18 @@
 import assert from "node:assert";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 
 import terminalCapabilities from "../src/terminal-capabilities.ts";
 import TuiAltScreen from "../src/tui-alt-screen.ts";
 import terminalImageHelpers from "./terminal-image-helpers.ts";
 import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
 
-const { getCapabilities, resetCapabilitiesCache, setCapabilities, setTmuxHyperlinkProbe } =
-  terminalCapabilities;
+const {
+  getCapabilities,
+  resetCapabilitiesCache,
+  setCapabilities,
+  setInlineImagesSuspended,
+  setTmuxHyperlinkProbe,
+} = terminalCapabilities;
 const { withEnv } = terminalImageHelpers;
 
 const TMUX_ENV = {
@@ -16,12 +21,22 @@ const TMUX_ENV = {
   TMUX: "/tmp/tmux/default,1,0",
 };
 
+function startFromUnforwardedProbe(): void {
+  setTmuxHyperlinkProbe(false);
+  resetCapabilitiesCache();
+}
+
+function clearCapabilityState(): void {
+  setInlineImagesSuspended(false);
+  resetCapabilitiesCache();
+}
+
 describe("tmux hyperlink probe result", () => {
-  afterEach(resetCapabilitiesCache);
+  beforeEach(startFromUnforwardedProbe);
+  afterEach(clearCapabilityState);
 
   it("re-detects capabilities that came from the environment", () => {
     withEnv(TMUX_ENV, () => {
-      resetCapabilitiesCache();
       assert.strictEqual(getCapabilities().hyperlinks, false);
 
       setTmuxHyperlinkProbe(true);
@@ -32,12 +47,12 @@ describe("tmux hyperlink probe result", () => {
 
   it("keeps capabilities set explicitly", () => {
     withEnv(TMUX_ENV, () => {
-      setCapabilities({ hyperlinks: true, images: "kitty", trueColor: true });
+      setCapabilities({ hyperlinks: false, images: "kitty", trueColor: true });
 
-      setTmuxHyperlinkProbe(false);
+      setTmuxHyperlinkProbe(true);
 
       assert.deepStrictEqual(getCapabilities(), {
-        hyperlinks: true,
+        hyperlinks: false,
         images: "kitty",
         trueColor: true,
       });
@@ -46,11 +61,9 @@ describe("tmux hyperlink probe result", () => {
 
   it("keeps a result that arrives after the alt screen suspended inline images", () => {
     withEnv({ ...TMUX_ENV, MSA_IMAGE_PROTOCOL: "iterm2" }, () => {
-      setTmuxHyperlinkProbe(false);
-      resetCapabilitiesCache();
       const tui = new TuiAltScreen(new RecordingTerminal(20, 3));
-      tui.start();
       try {
+        tui.start();
         assert.strictEqual(getCapabilities().images, null);
 
         setTmuxHyperlinkProbe(true);
