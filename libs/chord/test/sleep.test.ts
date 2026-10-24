@@ -1,14 +1,11 @@
-import { createHook } from "node:async_hooks";
-
+import testing from "@msa/testing";
 import { Effect, Fiber } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import sleep from "../src/sleep.ts";
 
 const { MAX_TIMER_MS, unrefSleep } = sleep;
-
-const timersHoldingTheProcess = (): number =>
-  process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
+const { timersArmedBy } = testing;
 
 const settle = Effect.repeat(Effect.yieldNow, { times: 3 });
 
@@ -22,39 +19,20 @@ const stillWaitingAfter = (millis: number, settleMs: number): Effect.Effect<bool
   });
 
 const aPendingWaitLeavesTheProcessFree = Effect.gen(function* () {
-  const before = timersHoldingTheProcess();
-  const waiting = yield* Effect.forkDetach(unrefSleep(60_000));
-  yield* settle;
-  const pending = timersHoldingTheProcess();
+  const [waiting, timers] = yield* timersArmedBy(
+    Effect.forkDetach(unrefSleep(60_000)).pipe(Effect.tap(settle)),
+  );
   yield* Fiber.interrupt(waiting);
-  expect(pending).toBe(before);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
-const timersArmedWhile = <A>(effect: Effect.Effect<A>): Effect.Effect<number> =>
-  Effect.gen(function* () {
-    const armed = { count: 0 };
-    const hook = createHook({
-      init: (_id, type) => {
-        if (type === "Timeout") armed.count += 1;
-      },
-    });
-    yield* Effect.acquireUseRelease(
-      Effect.sync(() => hook.enable()),
-      () => effect,
-      () => Effect.sync(() => hook.disable()),
-    );
-    return armed.count;
-  });
-
 const anEndlessWaitArmsNoTimer = Effect.gen(function* () {
-  const armed = yield* timersArmedWhile(
-    Effect.gen(function* () {
-      const waiting = yield* Effect.forkDetach(unrefSleep(Number.POSITIVE_INFINITY));
-      yield* settle;
-      yield* Fiber.interrupt(waiting);
-    }),
+  const [waiting, timers] = yield* timersArmedBy(
+    Effect.forkDetach(unrefSleep(Number.POSITIVE_INFINITY)).pipe(Effect.tap(settle)),
   );
-  expect(armed).toBe(0);
+  yield* Fiber.interrupt(waiting);
+  expect(timers.armed).toBe(0);
 });
 
 const waitsBeyondTheTimerLimit = Effect.gen(function* () {

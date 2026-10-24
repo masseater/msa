@@ -7,23 +7,23 @@ import cacheWarmerSupport from "./cache-warmer-support.ts";
 
 const { execCommand } = exec;
 const { current, fakeRuntime, request } = cacheWarmerSupport;
-const { abortController, runTest } = testing;
-
-const timersHoldingTheProcess = (): number =>
-  process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
+const { abortController, runTest, timersArmedBy } = testing;
 
 const settle = Effect.repeat(Effect.yieldNow, { times: 10 });
 
 const cacheWarmerLeavesTheProcessFree = Effect.gen(function* () {
   const { warmer } = fakeRuntime();
-  warmer.start(request(), current);
-  yield* settle;
-  const status = warmer.status;
-  const pending = timersHoldingTheProcess();
+  const [status, timers] = yield* timersArmedBy(
+    Effect.gen(function* () {
+      warmer.start(request(), current);
+      yield* settle;
+      return warmer.status;
+    }),
+  );
   warmer.cancel();
-  const after = timersHoldingTheProcess();
   expect(status.state).toBe("scheduled");
-  expect(pending).toBe(after);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
 const killFallbackLeavesTheProcessFree = Effect.gen(function* () {
@@ -36,14 +36,17 @@ const killFallbackLeavesTheProcessFree = Effect.gen(function* () {
   });
   yield* Effect.sleep(200);
   yield* settle;
-  const before = timersHoldingTheProcess();
-  controller.abort();
-  const pending = timersHoldingTheProcess();
-  const stillRunning = !settled;
+  const [stillRunning, timers] = yield* timersArmedBy(
+    Effect.sync(() => {
+      controller.abort();
+      return !settled;
+    }),
+  );
   const finished = yield* Effect.promise(() => result);
   expect(stillRunning).toBe(true);
   expect(finished.killed).toBe(true);
-  expect(pending).toBe(before);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
 describe("background coding-agent timers leave the process free to exit", () => {

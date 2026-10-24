@@ -7,6 +7,8 @@ const EFFECT_ONLY_HTTP = "HTTP クライアントは Effect だけで扱う";
 const EFFECT_ONLY_TRACING = "計装は Effect のトレーシングだけで扱う";
 const ENV_ONLY_VIA_PROCESS_ENV =
   "環境変数は core/platform の readEnv・writeEnv・envSnapshot だけで扱う";
+const TIMERS_ARMED_BY_THE_RUN =
+  "タイマーはプロセス全体で数えず、@msa/testing の timersArmedBy で計測する処理が張ったものだけを数える";
 const LOOPBACK_TEST_SERVER =
   "テスト用の HTTP サーバーは @msa/testing の listen・serveLoopback で 127.0.0.1 に立てる";
 
@@ -81,6 +83,10 @@ const loopbackTestServerMembers: readonly Readonly<{
     module: "@effect/platform-node/NodeHttpServer",
     path: ["layerTest"],
   },
+];
+
+const restrictedProperties: readonly Readonly<{ property: string; message: string }>[] = [
+  { message: TIMERS_ARMED_BY_THE_RUN, property: "getActiveResourcesInfo" },
 ];
 
 const restrictedImports = {
@@ -256,6 +262,7 @@ const lintConfig = {
   platformOnlyImports,
   requiredStack,
   restrictedImports,
+  restrictedProperties,
   strictCategories,
   strictCategoryRules,
 };

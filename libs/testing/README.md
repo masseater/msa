@@ -11,6 +11,7 @@
 - `readJsonFile`・`writeJsonFile`・`toJsonText`・`fromJsonText`（JSON は Schema で読み書きする）
 - `joinPath`・`dirnameOf`・`basenameOf`・`resolvePath`・`relativePath`・`isAbsolutePath`・`pathDelimiter`
 - `currentTimeMillis`・`nowIso`・`randomSuffix`・`awaited`・`failure`・`pollUntil`・`abortController`
+- `timersArmedBy`（渡した Effect から辿れる非同期リソースが張ったタイマーだけを数える）
 - `runTest`（`it` から Effect を走らせる）・`testRuntime`・`provideNode`
 
 ## 使い方

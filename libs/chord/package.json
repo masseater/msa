@@ -146,6 +146,7 @@
     "typebox": "catalog:"
   },
   "devDependencies": {
+    "@msa/testing": "workspace:*",
     "@types/ws": "catalog:",
     "shx": "catalog:",
     "vitest": "catalog:",

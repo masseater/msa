@@ -6,6 +6,7 @@ import nodeScript from "./node-script.ts";
 import paths from "./paths.ts";
 import runtime from "./runtime.ts";
 import temp from "./temp.ts";
+import timers from "./timers.ts";
 
 const testing = {
   abortController: effectSupport.abortController,
@@ -67,6 +68,7 @@ const testing = {
   sleep: effectSupport.sleep,
   tempPath: temp.tempPath,
   tempRoot: temp.tempRoot,
+  timersArmedBy: timers.timersArmedBy,
   toJsonText: json.toJsonText,
   writeBytesFile: files.writeBytesFile,
   writeJsonFile: json.writeJsonFile,

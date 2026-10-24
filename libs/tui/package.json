@@ -58,6 +58,7 @@
     "marked": "catalog:"
   },
   "devDependencies": {
+    "@msa/testing": "workspace:*",
     "@types/culori": "catalog:",
     "@xterm/headless": "catalog:",
     "chalk": "catalog:"

@@ -13,6 +13,7 @@ const {
   loopbackTestServerMembers,
   platformOnlyImports,
   restrictedImports,
+  restrictedProperties,
   strictCategoryRules,
 } = lintConfig;
 const { onGitHubActions } = vitestShared;
@@ -102,6 +103,7 @@ export default defineConfig({
       "eslint/no-control-regex": "error",
       "eslint/no-duplicate-imports": ["error", { allowSeparateTypeImports: true }],
       "eslint/no-restricted-imports": ["error", restrictedImports],
+      "eslint/no-restricted-properties": ["error", ...restrictedProperties],
       "eslint/no-shadow": "error",
       "eslint/no-undef": "error",
       "eslint/no-underscore-dangle": "error",

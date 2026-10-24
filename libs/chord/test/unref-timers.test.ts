@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Effect, Exit, Scope } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -10,12 +11,10 @@ import managerKit from "./manager-kit.ts";
 const { manager: managerModule, src: chord } = managerKit;
 const { createHostManager } = managerModule;
 const { createHost, hostNamed, ipcLink, memoryLinkPair, remote } = chord;
-const { latch, ticks } = timing;
+const { latch, pollUntil, ticks } = timing;
+const { timersArmedBy } = testing;
 
 const LONG_MS = 60_000;
-
-const timersHoldingTheProcess = (): number =>
-  process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
 
 const Gated = remote("t.unref-gated", {
   host: hostNamed("server"),
@@ -53,42 +52,50 @@ const gatedServer = () => {
 const pendingHostTimersLeaveTheProcessFree = Effect.gen(function* () {
   const scope = yield* Scope.make();
   const timers = new HostTimers(scope);
-  const before = timersHoldingTheProcess();
-  const stopAfter = timers.after(LONG_MS, () => undefined);
-  const stopEvery = timers.every(LONG_MS, () => undefined);
-  yield* ticks(3);
-  const pending = timersHoldingTheProcess();
-  stopAfter();
-  stopEvery();
+  const [stops, armed] = yield* timersArmedBy(
+    Effect.gen(function* () {
+      const stopAfter = timers.after(LONG_MS, () => undefined);
+      const stopEvery = timers.every(LONG_MS, () => undefined);
+      yield* ticks(3);
+      return [stopAfter, stopEvery];
+    }),
+  );
+  for (const stop of stops) stop();
   yield* Scope.close(scope, Exit.void);
-  expect(pending).toBe(before);
+  expect(armed.armed).toBeGreaterThan(0);
+  expect(armed.holding).toBe(0);
 });
 
 const hostTimersStillFire = Effect.gen(function* () {
   const scope = yield* Scope.make();
   const timers = new HostTimers(scope);
   const fired: string[] = [];
+  const everyTicks = (): number => fired.filter((name) => name === "every").length;
   timers.after(5, () => fired.push("after"));
   const stopEvery = timers.every(5, () => fired.push("every"));
-  yield* Effect.sleep(40);
+  yield* pollUntil(() => fired.includes("after") && everyTicks() > 1, 400, Effect.sleep(5));
   stopEvery();
   yield* Scope.close(scope, Exit.void);
-  expect(fired).toContain("after");
-  expect(fired.filter((name) => name === "every").length).toBeGreaterThan(1);
+  expect(fired.filter((name) => name === "after")).toHaveLength(1);
+  expect(everyTicks()).toBeGreaterThan(1);
 });
 
 const activationReadyTimeoutLeavesTheProcessFree = Effect.gen(function* () {
   const { open, server } = gatedServer();
-  const before = timersHoldingTheProcess();
-  const held = server.hold(Dependent, {});
-  held.ready.catch(() => {});
-  yield* ticks(10);
-  const pending = timersHoldingTheProcess();
+  const [held, timers] = yield* timersArmedBy(
+    Effect.gen(function* () {
+      const holding = server.hold(Dependent, {});
+      holding.ready.catch(() => {});
+      yield* ticks(10);
+      return holding;
+    }),
+  );
   open();
   yield* Effect.promise(() => held.ready);
   held.release();
   yield* Effect.promise(() => server.close());
-  expect(pending).toBe(before);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
 const remoteReadyTimeoutLeavesTheProcessFree = Effect.gen(function* () {
@@ -104,17 +111,21 @@ const remoteReadyTimeoutLeavesTheProcessFree = Effect.gen(function* () {
     upstream: { link: up, principal: { kind: "server" } },
   });
   yield* ticks(10);
-  const before = timersHoldingTheProcess();
-  const got = browser.get(Gated, {});
-  got.catch(() => {});
-  yield* ticks(10);
-  const pending = timersHoldingTheProcess();
+  const [{ got }, timers] = yield* timersArmedBy(
+    Effect.gen(function* () {
+      const getting = browser.get(Gated, {});
+      getting.catch(() => {});
+      yield* ticks(10);
+      return { got: getting };
+    }),
+  );
   open();
   const ref = yield* Effect.promise(() => got);
   ref.release();
   yield* Effect.promise(() => browser.close());
   yield* Effect.promise(() => server.close());
-  expect(pending).toBe(before);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
 const fakeDriver = () => {
@@ -147,16 +158,19 @@ const fakeDriver = () => {
 const keepAliveLeavesTheProcessFree = Effect.gen(function* () {
   const { driver, emit, listeners } = fakeDriver();
   const manager = createHostManager({ checkInterval: LONG_MS, driver, keepAlive: () => true });
-  const before = timersHoldingTheProcess();
-  const started = manager.start();
-  for (let i = 0; i < 20 && listeners.size === 0; i++) yield* ticks(1);
-  emit({ type: "ready" });
-  yield* Effect.promise(() => started);
-  yield* ticks(3);
-  const pending = timersHoldingTheProcess();
+  const [, timers] = yield* timersArmedBy(
+    Effect.gen(function* () {
+      const started = manager.start();
+      for (let i = 0; i < 20 && listeners.size === 0; i++) yield* ticks(1);
+      emit({ type: "ready" });
+      yield* Effect.promise(() => started);
+      yield* ticks(3);
+    }),
+  );
   yield* Effect.promise(() => manager.stop());
   expect(manager.status).toBe("stopped");
-  expect(pending).toBe(before);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
 describe("background chord timers leave the process free to exit", () => {
