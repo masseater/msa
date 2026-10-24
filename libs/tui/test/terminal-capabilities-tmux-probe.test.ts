@@ -1,5 +1,5 @@
 import assert from "node:assert";
-import { describe, it } from "node:test";
+import { afterEach, describe, it } from "node:test";
 
 import terminalCapabilities from "../src/terminal-capabilities.ts";
 import TuiAltScreen from "../src/tui-alt-screen.ts";
@@ -17,6 +17,8 @@ const TMUX_ENV = {
 };
 
 describe("tmux hyperlink probe result", () => {
+  afterEach(resetCapabilitiesCache);
+
   it("re-detects capabilities that came from the environment", () => {
     withEnv(TMUX_ENV, () => {
       resetCapabilitiesCache();
@@ -25,7 +27,6 @@ describe("tmux hyperlink probe result", () => {
       setTmuxHyperlinkProbe(true);
 
       assert.strictEqual(getCapabilities().hyperlinks, true);
-      resetCapabilitiesCache();
     });
   });
 
@@ -40,7 +41,6 @@ describe("tmux hyperlink probe result", () => {
         images: "kitty",
         trueColor: true,
       });
-      resetCapabilitiesCache();
     });
   });
 
@@ -50,16 +50,18 @@ describe("tmux hyperlink probe result", () => {
       resetCapabilitiesCache();
       const tui = new TuiAltScreen(new RecordingTerminal(20, 3));
       tui.start();
-      assert.strictEqual(getCapabilities().images, null);
+      try {
+        assert.strictEqual(getCapabilities().images, null);
 
-      setTmuxHyperlinkProbe(true);
+        setTmuxHyperlinkProbe(true);
 
-      assert.strictEqual(getCapabilities().hyperlinks, true);
-      assert.strictEqual(getCapabilities().images, null);
-      tui.stop();
+        assert.strictEqual(getCapabilities().hyperlinks, true);
+        assert.strictEqual(getCapabilities().images, null);
+      } finally {
+        tui.stop();
+      }
       assert.strictEqual(getCapabilities().hyperlinks, true);
       assert.strictEqual(getCapabilities().images, "iterm2");
-      resetCapabilitiesCache();
     });
   });
 });
