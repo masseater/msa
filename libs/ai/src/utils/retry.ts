@@ -22,9 +22,28 @@ const NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN = buildProviderErrorPattern([
   "subscription_sharing_usage_limit_exceeded",
 ]);
 
+const PROVIDER_ACCOUNT_STATUSES: ReadonlySet<number> = new Set([401, 402, 403]);
+
+const RETRYABLE_PROVIDER_STATUSES: ReadonlySet<number> = new Set([
+  429, 500, 502, 503, 504, 520, 524,
+]);
+
+const HTTP_STATUS_PATTERNS: readonly RegExp[] = [
+  /^\s*(\d{3})(?=[\s:]|$)/u,
+  /^[^\n(]*\((\d{3})\):/u,
+  /\bstatus(?:\s+code)?\s*[:=]?\s*(\d{3})\b/iu,
+  /"(?:code|status)"\s*:\s*(\d{3})\b/u,
+];
+
+const httpStatus = (text: string): number | undefined => {
+  for (const pattern of HTTP_STATUS_PATTERNS) {
+    const status = pattern.exec(text)?.[1];
+    if (status !== undefined) return Number(status);
+  }
+  return undefined;
+};
+
 const PROVIDER_ACCOUNT_ERROR_PATTERN = buildProviderErrorPattern([
-  "^\\s*40[13]\\b",
-  "\\b402\\b",
   "payment.?required",
   "requires more credits",
   "credit balance",
@@ -43,13 +62,6 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
   "model is at capacity",
   "rate.?limit",
   "too many requests",
-  "429",
-  "500",
-  "502",
-  "503",
-  "504",
-  "520",
-  "524",
   "service.?(?:is.?)?(?:temporarily.?)?unavailable",
   "server.?error",
   "internal.?error",
@@ -248,6 +260,7 @@ const isProviderUnusableError = (message: typesModule.AssistantMessage): boolean
   return (
     text !== undefined &&
     (NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(text) ||
+      PROVIDER_ACCOUNT_STATUSES.has(httpStatus(text) ?? 0) ||
       PROVIDER_ACCOUNT_ERROR_PATTERN.test(text))
   );
 };
@@ -255,7 +268,10 @@ const isProviderUnusableError = (message: typesModule.AssistantMessage): boolean
 const isRetryableAssistantError = (message: typesModule.AssistantMessage): boolean => {
   const text = errorText(message);
   if (text === undefined || isProviderUnusableError(message)) return false;
-  return RETRYABLE_PROVIDER_ERROR_PATTERN.test(text);
+  return (
+    RETRYABLE_PROVIDER_STATUSES.has(httpStatus(text) ?? 0) ||
+    RETRYABLE_PROVIDER_ERROR_PATTERN.test(text)
+  );
 };
 
 const retry = {

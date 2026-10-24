@@ -112,6 +112,91 @@ const resumesWithTheReportsAfterTheModelIsSwitched = () =>
     }),
   );
 
+const choosesAFailedProviderAgainAfterASuccess = () =>
+  runTest(
+    Effect.gen(function* () {
+      const failing = new Set(["openrouter"]);
+      const stream = providerStream(failing);
+      const {
+        anthropic,
+        events,
+        openrouter,
+        session: created,
+      } = yield* start(stream, (models) => [models.openrouter, models.anthropic]);
+      yield* awaited(created.run.prompting.prompt("Go"));
+
+      failing.clear();
+      failing.add("anthropic-api");
+      yield* awaited(created.run.prompting.prompt("Again"));
+
+      expect(stream.calls).toEqual(["openrouter", "anthropic-api", "anthropic-api", "openrouter"]);
+      expect(events).toEqual([
+        `fallback:openrouter/${openrouter.id}->anthropic-api/${anthropic.id}`,
+        `fallback:anthropic-api/${anthropic.id}->openrouter/${openrouter.id}`,
+      ]);
+      expect(created.run.fallback.stalled).toBeUndefined();
+    }),
+  );
+
+const resumesWhenTheModelIsCycled = () =>
+  runTest(
+    Effect.gen(function* () {
+      const failing = new Set(["openrouter", "anthropic-api"]);
+      const stream = providerStream(failing);
+      const {
+        events,
+        openrouter,
+        session: created,
+      } = yield* start(stream, (models) => [models.openrouter, models.anthropic]);
+      yield* awaited(created.run.prompting.prompt("Go"));
+      expect(created.model?.provider).toBe("anthropic-api");
+      expect(created.run.fallback.stalled).toBeDefined();
+
+      failing.delete("openrouter");
+      yield* awaited(created.models.selection.cycleModel("forward"));
+      yield* pollUntil(
+        Effect.sync(() => events.includes(`recovered:openrouter/${openrouter.id}`)),
+        200,
+        5,
+      );
+      yield* awaited(created.run.lifecycle.waitForIdle());
+
+      expect(stream.calls.at(-1)).toBe("openrouter");
+      expect(created.run.fallback.stalled).toBeUndefined();
+    }),
+  );
+
+const notifiesASecondStopAfterTheModelIsSwitched = () =>
+  runTest(
+    Effect.gen(function* () {
+      const stream = providerStream(new Set(["openrouter", "anthropic-api"]));
+      const {
+        anthropic,
+        events,
+        openrouter,
+        session: created,
+      } = yield* start(stream, (models) => [models.openrouter]);
+      yield* awaited(created.run.prompting.prompt("Go"));
+
+      yield* awaited(created.models.selection.setModel(anthropic));
+      yield* pollUntil(
+        Effect.sync(() => events.filter((event) => event.startsWith("stalled:")).length === 2),
+        200,
+        5,
+      );
+      yield* awaited(created.run.lifecycle.waitForIdle());
+
+      expect(events).toEqual([
+        `stalled:openrouter/${openrouter.id}`,
+        `fallback:anthropic-api/${anthropic.id}->openrouter/${openrouter.id}`,
+        `stalled:openrouter/${openrouter.id}`,
+      ]);
+      expect(created.run.fallback.stalled).toBeDefined();
+      const transcript = yield* toJsonText(created.agent.state.messages);
+      expect(transcript.match(/Model calls stopped at/gu)).toHaveLength(2);
+    }),
+  );
+
 describe("provider fallback", () => {
   beforeEach(() =>
     runTest(
@@ -137,4 +222,9 @@ describe("provider fallback", () => {
     stopsOnceAndRecordsTheStop());
   it("resumes with the reports that arrived once the model is switched", () =>
     resumesWithTheReportsAfterTheModelIsSwitched());
+  it("can choose a provider that failed earlier once a request has succeeded", () =>
+    choosesAFailedProviderAgainAfterASuccess());
+  it("resumes when the model is cycled with Ctrl+P", () => resumesWhenTheModelIsCycled());
+  it("notifies and records a second stop after the model is switched", () =>
+    notifiesASecondStopAfterTheModelIsSwitched());
 });

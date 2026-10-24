@@ -22,6 +22,8 @@ export default class SessionProviderFallback {
 
   private stalledInternal: { at: number; model: string; errorMessage: string } | undefined;
 
+  private unrecoveredSince: number | undefined;
+
   constructor(session: AgentSession) {
     this.session = session;
   }
@@ -69,12 +71,13 @@ export default class SessionProviderFallback {
 
   private recordSuccess(message: compatTypes.AssistantMessage): void {
     this.failedProviders.clear();
-    const stalled = this.stalledInternal;
-    if (stalled === undefined) return;
+    const since = this.unrecoveredSince;
+    if (since === undefined) return;
+    this.unrecoveredSince = undefined;
     this.stalledInternal = undefined;
     this.session.emit({
       model: reference(message.provider, message.model),
-      since: stalled.at,
+      since,
       type: "provider_recovered",
     });
   }
@@ -84,6 +87,7 @@ export default class SessionProviderFallback {
     const model = this.session.model;
     if (stalled === undefined || model === undefined || this.session.isStreaming) return;
     this.failedProviders.clear();
+    this.stalledInternal = undefined;
     void this.session.run.prompting.sendCustomMessage(
       {
         content: `Switched to ${reference(model.provider, model.id)}. Continue from the stop at ${formatLocalDateTime(stalled.at)}, including every report that arrived since then.`,
@@ -102,6 +106,7 @@ export default class SessionProviderFallback {
       model: reference(message.provider, message.model),
     };
     this.stalledInternal = stalled;
+    this.unrecoveredSince ??= stalled.at;
     this.session.emit({ ...stalled, type: "provider_stalled" });
     void this.session.run.prompting.sendCustomMessage(
       {

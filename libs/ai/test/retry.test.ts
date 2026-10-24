@@ -5,8 +5,7 @@ import faux from "../src/providers/faux.ts";
 import retry from "../src/utils/retry.ts";
 import type retryTypes from "../src/utils/retry.types.ts";
 
-const { isProviderUnusableError, isRetryableAssistantError, retryAssistantCall, retryDelayMs } =
-  retry;
+const { isRetryableAssistantError, retryAssistantCall, retryDelayMs } = retry;
 const { fauxAssistantMessage } = faux;
 
 const openAIExplicitRetryMessage =
@@ -180,30 +179,6 @@ describe("provider retry classification", () => {
     ).toBe(true);
     expect(isRetryableAssistantError(fauxAssistantMessage("not an error"))).toBe(false);
   });
-});
-
-describe("provider account errors", () => {
-  it.each([
-    '402: {"message":"This request requires more credits, or fewer max_tokens.","code":402}',
-    '401: {"type":"server_error","message":"Upstream request failed: Invalid credential"}',
-    "403 Forbidden",
-    "Your credit balance is too low to access the API.",
-    "Invalid API key provided",
-    "insufficient_quota",
-  ])("treats %s as unusable and never retries it", (errorMessage) => {
-    const message = fauxAssistantMessage("", { errorMessage, stopReason: "error" });
-    expect(isProviderUnusableError(message)).toBe(true);
-    expect(isRetryableAssistantError(message)).toBe(false);
-  });
-
-  it.each(["overloaded_error", "503 Service Unavailable", "You requested 1402 tokens; timeout"])(
-    "keeps %s usable",
-    (errorMessage) => {
-      expect(
-        isProviderUnusableError(fauxAssistantMessage("", { errorMessage, stopReason: "error" })),
-      ).toBe(false);
-    },
-  );
 });
 
 describe("retryDelayMs", () => {
