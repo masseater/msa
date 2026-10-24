@@ -1,5 +1,6 @@
 import errorsModule from "../../utils/errors.ts";
 import type AgentSession from "../agent-session.ts";
+import mcpSignInStorage from "../mcp-sign-in-storage.ts";
 import legacyMigration from "../memory/legacy-migration.ts";
 import MemoryService from "../memory/memory-service.ts";
 import memoryModule from "../memory/memory.ts";
@@ -7,6 +8,7 @@ import memoryModule from "../memory/memory.ts";
 const { toErrorMessage } = errorsModule;
 const { legacyDatabasePath } = legacyMigration;
 const { SEPIACE_TOOL_NAME, resolveMemorySettings } = memoryModule;
+const { signInsNotSaved } = mcpSignInStorage;
 
 export default class SessionMemory {
   memoryInternal: MemoryService | undefined;
@@ -35,6 +37,7 @@ export default class SessionMemory {
             this.session.settingsManager.getSettings(),
           ),
           settings: () => this.settings(),
+          signInSaved: () => signInsNotSaved(this.session.agentDir) === undefined,
           tool: () => this.session.tools.registry.toolRegistry.get(SEPIACE_TOOL_NAME),
         })
       : undefined;

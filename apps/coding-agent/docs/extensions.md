@@ -61,7 +61,7 @@ Automatic retries, recovery, compaction, or queued work can continue afterward.
 | Capability                                    | Main API                                          |
 | --------------------------------------------- | ------------------------------------------------- |
 | Observe or modify lifecycle behavior          | `msa.on()`                                        |
-| Add a model-callable operation                | `msa.registerTool()`                              |
+| Add or remove a model-callable operation      | `msa.registerTool()` / `msa.unregisterTool()`     |
 | Add a `/` command                             | `msa.registerCommand()`                           |
 | Add a shortcut or CLI flag                    | `msa.registerShortcut()` or `msa.registerFlag()`  |
 | Send user or custom messages                  | `msa.sendUserMessage()` or `msa.sendMessage()`    |

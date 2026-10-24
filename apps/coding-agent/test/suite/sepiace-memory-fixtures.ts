@@ -43,6 +43,14 @@ const writeLegacyDatabase = (path: string) => {
   database.close();
 };
 
+const operationOf = (request: string): "forget" | "recall" | "save" => {
+  const [first = ""] = request.trim().split(/(?<=[.?!。？！])\s*/u);
+  if (/[?？]$/u.test(first)) return "recall";
+  if (/^forget\b|忘れて/iu.test(first)) return "forget";
+  if (/^remember\b|覚えて/iu.test(first)) return "save";
+  return "recall";
+};
+
 const waitForFile = (path: string) =>
   Effect.gen(function* () {
     for (let attempt = 0; attempt < 100 && !(yield* pathExists(path)); attempt++)
@@ -53,6 +61,7 @@ const waitForFile = (path: string) =>
 const sepiaceMemoryFixtures = {
   fakeGitHubToken,
   longMemorySentences,
+  operationOf,
   recalls,
   waitForFile,
   writeLegacyDatabase,

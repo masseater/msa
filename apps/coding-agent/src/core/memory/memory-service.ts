@@ -21,6 +21,8 @@ const { findSecrets } = secretCheckLazy;
 
 const REQUEST_TIMEOUT_MS = 60_000;
 const RECALL_TIMEOUT_MS = 5_000;
+const SIGN_IN_NOT_SAVED =
+  "not saved, it lasts until msa exits; set credentialHelper in mcp.json to keep it";
 
 const describeConnection = (connection: memoryTypes.MemoryConnection) =>
   connection.state === "ready"
@@ -61,6 +63,10 @@ export default class MemoryService {
 
   get connected(): boolean {
     return this.options.tool() !== undefined;
+  }
+
+  get signInSaved(): boolean {
+    return this.options.signInSaved();
   }
 
   get connection(): memoryTypes.MemoryConnection {
@@ -157,6 +163,7 @@ export default class MemoryService {
     if (!settings.enabled) return "Memory is off (settings: memory.enabled).";
     return [
       `Memory: sepiace (${describeConnection(this.connection)})`,
+      ...(this.signInSaved ? [] : [`Sign-in: ${SIGN_IN_NOT_SAVED}`]),
       `Recall on every prompt: ${settings.recall ? "on" : "off"}`,
       ...(legacyPending ? ["memory.db: waiting to be moved to sepiace"] : []),
       `Requests and the memories they changed: ${SEPIACE_REQUESTS_URL}`,

@@ -13,6 +13,7 @@ declare namespace memoryTypes {
     readonly legacyDatabase: string;
     readonly cwd: string;
     readonly settings: () => ResolvedMemorySettings;
+    readonly signInSaved: () => boolean;
     readonly tool: () => agentTypes.AgentTool | undefined;
   }
 

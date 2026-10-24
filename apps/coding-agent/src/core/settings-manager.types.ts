@@ -21,6 +21,7 @@ declare namespace settingsManagerTypes {
     scope: SettingsScope;
     path?: string;
     error: Error;
+    notice?: boolean;
   }
 
   type FileSettingsStorage = (typeof FileSettingsStorageClass)["prototype"];

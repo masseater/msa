@@ -48,6 +48,8 @@ export default class McpExtensionState {
 
   credentials: oauthTypesNs.McpOAuthCredentialStore | undefined;
 
+  warnSignInStorage: (notice: string) => void = () => {};
+
   modelRegistry: modelRegistryTypes.ModelRegistry | undefined;
 
   serverLog: runtimeTypes.McpServerLog | undefined;

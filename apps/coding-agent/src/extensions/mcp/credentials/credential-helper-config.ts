@@ -1,6 +1,8 @@
+import config from "../../../config.ts";
 import platform from "../../../core/platform/index.ts";
 import type secretStoresTypes from "./secret-stores.types.ts";
 
+const { APP_NAME } = config;
 const { join } = platform;
 const { exists, readText } = platform.files;
 
@@ -42,6 +44,20 @@ function readCredentialHelper(agentDir: string): Promise<CredentialHelperConfig 
     });
 }
 
-const credentialHelperConfig = { credentialHelperError, readCredentialHelper };
+function memoryOnlyNotice(parts: {
+  readonly reason: string;
+  readonly deleted: string | undefined;
+  readonly configPath: string;
+}): string {
+  return [
+    `MCP sign-ins are not saved, because ${parts.reason}; they last until ${APP_NAME} exits.`,
+    ...(parts.deleted === undefined
+      ? []
+      : [`${parts.deleted} was deleted so that its tokens are not left in a plain file.`]),
+    `To save sign-ins, set credentialHelper to a docker-credential helper in ${parts.configPath}, for example "credentialHelper": { "command": "docker-credential-pass" }.`,
+  ].join("\n");
+}
+
+const credentialHelperConfig = { credentialHelperError, memoryOnlyNotice, readCredentialHelper };
 
 export default credentialHelperConfig;

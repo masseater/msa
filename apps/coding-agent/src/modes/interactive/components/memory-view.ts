@@ -125,6 +125,11 @@ export default class MemoryView implements tuiTypes.Component, tuiTypes.Focusabl
           );
     return [
       ` sepiace  ${connection}`,
+      ...(service.signInSaved
+        ? []
+        : [
+            ` sign-in  ${theme.fg("warning", "not saved, lasts until msa exits · set credentialHelper in mcp.json")}`,
+          ]),
       ` recall   ${service.settings.recall ? "on every prompt" : theme.fg("dim", "off")}`,
       ...(this.legacyPending ? [` memory.db ${theme.fg("warning", "waiting to move")}`] : []),
       ` ${theme.fg("dim", SEPIACE_REQUESTS_URL)}`,

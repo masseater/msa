@@ -11,6 +11,7 @@ import type utilitiesTypes from "../../utilities.types.ts";
 
 declare namespace typesModule {
   interface HarnessOptions {
+    tempDir?: string;
     models?: compatTypes.FauxModelDefinition[];
     settings?: Partial<settingsManagerTypes.Settings>;
     tools?: agentTypes.AgentTool[];

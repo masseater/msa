@@ -93,6 +93,33 @@ function parseTimeoutSetting(value: unknown, settingName: string): number | unde
   return undefined;
 }
 
+const isSettingsRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const KEPT_RECALL_KEYS = new Set(["enabled"]);
+
+function removedSettingNotices(settings: settingsSchemaTypes.Settings): string[] {
+  const memory: unknown = settings.memory;
+  if (!isSettingsRecord(memory)) return [];
+  const notices: string[] = [];
+  if (memory["database"] !== undefined)
+    notices.push(
+      "memory.database is read only to move its memories to sepiace once; remove it after the move.",
+    );
+  const embedding = memory["embedding"];
+  const embeddingKeys = isSettingsRecord(embedding) ? Object.keys(embedding) : [];
+  if (embedding !== undefined && embeddingKeys.length === 0) embeddingKeys.push("");
+  for (const key of embeddingKeys)
+    notices.push(
+      `${key === "" ? "memory.embedding" : `memory.embedding.${key}`} is no longer used, because sepiace keeps memories; remove it.`,
+    );
+  const recall = memory["recall"];
+  for (const key of isSettingsRecord(recall) ? Object.keys(recall) : [])
+    if (!KEPT_RECALL_KEYS.has(key))
+      notices.push(`memory.recall.${key} is no longer used, because sepiace recalls; remove it.`);
+  return notices;
+}
+
 function toSettingsError(
   scope: settingsManagerTypes.SettingsScope,
   error: unknown,
@@ -113,6 +140,7 @@ const settingsManagerHelpers = {
   mergeDefaultTools,
   parseTimeoutSetting,
   readModelPolicy,
+  removedSettingNotices,
   resolveDefaultTools,
   toSettingsError,
 };

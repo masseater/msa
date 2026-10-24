@@ -16,9 +16,9 @@ function reportSettingsErrors(
   context: string,
 ): void {
   const errors = settingsManager.drainErrors();
-  for (const { scope, error } of errors) {
+  for (const { scope, error, notice } of errors) {
     writeError(chalk.yellow(`Warning (${context}, ${scope} settings): ${error.message}`));
-    if (error.stack !== undefined && error.stack !== "") {
+    if (notice !== true && error.stack !== undefined && error.stack !== "") {
       writeError(chalk.dim(error.stack));
     }
   }

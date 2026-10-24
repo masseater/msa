@@ -47,6 +47,12 @@ export default class McpSessionEvents {
     this.host.state.modelRegistry = ctx.modelRegistry;
     this.host.state.session = new AbortController();
     const { signal } = this.host.state.session;
+    this.host.state.warnSignInStorage = (notice) => {
+      if (signal.aborted) return;
+      try {
+        ctx.ui.notify(notice, "warning");
+      } catch {}
+    };
     this.host.state.configuredEntries = loaded.servers;
     const registered = this.host.state.registeredServers();
     this.host.state.overridden = registered.overridden;

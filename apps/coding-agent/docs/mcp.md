@@ -200,7 +200,7 @@ msa writes no token to a file. It keeps every MCP sign-in in one credential stor
 
 1. The `credentialHelper` in `~/.msa/agent/mcp.json`, a program that speaks the [Docker credential helper protocol](https://github.com/docker/docker-credential-helpers): msa runs it with `get` or `store` and passes the server URL `https://msa.invalid/mcp-oauth` or a JSON object with `ServerURL`, `Username`, and `Secret` on standard input, never in arguments. When it is set and fails, sign-in fails.
 2. The login keychain on macOS (`security`) or the Secret Service keyring on Linux (`secret-tool`), one item per agent directory.
-3. Memory: sign-ins last until msa exits, and msa says so after signing in. This happens over SSH on macOS, where the login keychain refuses access.
+3. Memory: sign-ins last until msa exits. This happens over SSH on macOS, where the login keychain refuses access. msa warns in the session as soon as it falls back to memory, whether at startup, when a token is refreshed, or when signing in, and `msa mcp list` and `/memory` say that sign-ins are not saved.
 
 ```json
 {
@@ -209,7 +209,7 @@ msa writes no token to a file. It keeps every MCP sign-in in one credential stor
 }
 ```
 
-`args` adds arguments before the action, and a leading `~/` in `command` or an argument names the home directory. A project `mcp.json` cannot set `credentialHelper`. An `mcp-auth.json` left by an older msa moves into the store the first time msa reads sign-ins, and is then deleted.
+`args` adds arguments before the action, and a leading `~/` in `command` or an argument names the home directory. A project `mcp.json` cannot set `credentialHelper`. An `mcp-auth.json` left by an older msa moves into the store the first time msa reads sign-ins, and is deleted once msa has read the tokens back from the store. When only memory can hold them, the file is still deleted, so no token stays in a plain file, and the warning says so.
 
 ## Control tool exposure
 

@@ -42,9 +42,12 @@ const startSepiace = (reply: (request: string) => string | { error: string } = (
 
 const openSession = (options: {
   url: string;
-  backend?: InMemoryAuthStorageBackend;
+  backend?: NonNullable<ConstructorParameters<typeof McpOAuthCredentialStore>[0]>;
+  agentDir?: string;
   signIn?: boolean;
   settings?: Record<string, unknown>;
+  tui?: boolean;
+  ui?: Parameters<typeof createTestUiContext>[0];
 }) =>
   runTest(
     Effect.gen(function* () {
@@ -61,9 +64,11 @@ const openSession = (options: {
               openUrl: (url) => {
                 void visitAuthorizationUrl(new URL(url), "follow");
               },
+              updateConfig: () => Promise.resolve(),
             }),
           ],
           initialActiveToolNames: ["memory"],
+          ...(options.agentDir === undefined ? {} : { tempDir: options.agentDir }),
           ...(options.settings === undefined ? {} : { settings: options.settings }),
         }),
       );
@@ -71,8 +76,14 @@ const openSession = (options: {
       const uiContext = createTestUiContext({
         input: (_title, _placeholder, opts) => untilAborted(opts?.signal),
         notify: (message) => notifications.push(message),
+        ...options.ui,
       });
-      yield* awaited(harness.session.extensions.binding.bindExtensions({ uiContext }));
+      yield* awaited(
+        harness.session.extensions.binding.bindExtensions({
+          uiContext,
+          ...(options.tui === true ? { mode: "tui" as const } : {}),
+        }),
+      );
       if (options.signIn !== false)
         yield* awaited(harness.session.run.prompting.prompt("/mcp login sepiace"));
       return { backend, harness, notifications };

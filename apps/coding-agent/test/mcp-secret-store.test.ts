@@ -155,7 +155,9 @@ const keepsSignInsInMemoryWithoutAStore = () =>
       expect((yield* awaited(store.tokens("docs", SERVER_URL)))?.access_token).toBe(
         "token-in-memory",
       );
-      expect(yield* awaited(store.persistenceNote())).toContain("User interaction is not allowed.");
+      const note = yield* awaited(store.persistenceNote());
+      expect(note).toContain("because User interaction is not allowed; they last until");
+      expect(note).not.toContain("..");
       expect(yield* filesHolding(agentDir, "token-in-memory")).toEqual([]);
       const restarted = new McpOAuthCredentialStore(
         new SecretStoreAuthBackend({ agentDir, defaultStore: failingStore }),
@@ -177,7 +179,7 @@ const fallsBackWhenTheStoreRejectsWrites = () =>
       expect((yield* awaited(store.tokens("docs", SERVER_URL)))?.access_token).toBe(
         "token-after-refusal",
       );
-      expect(yield* awaited(store.persistenceNote())).toContain("The keyring is locked.");
+      expect(yield* awaited(store.persistenceNote())).toContain("because The keyring is locked;");
       expect(yield* filesHolding(agentDir, "token-after-refusal")).toEqual([]);
     }),
   );

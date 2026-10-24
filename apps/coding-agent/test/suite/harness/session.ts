@@ -118,7 +118,7 @@ const harnessFor = (input: {
 const createHarness = (options: typesModule.HarnessOptions = {}): Promise<typesModule.Harness> =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const tempDir = yield* Effect.promise(() => createTempDir());
+      const tempDir = options.tempDir ?? (yield* Effect.promise(() => createTempDir()));
       const fauxProvider = createFauxProvider(options.models);
       const { authStorage, model, modelRegistry, withConfiguredAuth } = yield* createModelSetup(
         options,

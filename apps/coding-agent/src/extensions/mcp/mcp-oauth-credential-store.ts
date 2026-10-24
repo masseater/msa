@@ -8,7 +8,7 @@ import mcpRefreshLock from "./mcp-refresh-lock.ts";
 import type oauthTypesNs from "./oauth.types.ts";
 
 const { mcpNamespace } = mcpServers;
-const { APP_NAME, getAgentDir } = config;
+const { getAgentDir } = config;
 const { withRefreshLock } = mcpRefreshLock;
 type StoredStates = Record<string, oauthTypes.McpOAuthState>;
 function parseStates(content: string | undefined): StoredStates {
@@ -38,13 +38,12 @@ export default class McpOAuthCredentialStore {
   persistenceNote(): Promise<string | undefined> {
     const { backend } = this;
     if (!(backend instanceof SecretStoreAuthBackend)) return Promise.resolve(undefined);
-    return backend
-      .store()
-      .then((store) =>
-        store.persistent
-          ? undefined
-          : `The sign-in lasts until ${APP_NAME} exits because ${backend.fallbackReason ?? "no credential store is available"}. Set credentialHelper in ${backend.configPath} to keep sign-ins.`,
-      );
+    return backend.store().then(() => backend.memoryOnlyNotice);
+  }
+
+  onMemoryOnly(listener: (notice: string) => void): () => void {
+    const { backend } = this;
+    return backend instanceof SecretStoreAuthBackend ? backend.onMemoryOnly(listener) : () => {};
   }
 
   forServer(name: string, serverUrl: string): oauthTypesNs.McpOAuthServerStore {
