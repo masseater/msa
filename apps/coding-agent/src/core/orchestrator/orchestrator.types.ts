@@ -40,6 +40,8 @@ declare namespace orchestratorTypes {
 
   type OrchestratorReport = workerTypes.OrchestratorReport;
 
+  type ReportStatus = workerTypes.ReportStatus;
+
   type WorkerSession = workerTypes.WorkerSession;
 }
 
