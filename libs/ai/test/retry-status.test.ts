@@ -106,7 +106,11 @@ describe("an account error in the error text", () => {
     '{"error":{"code":402,"message":"Prompt tokens limit exceeded"}}',
     "Request failed with status code 401",
     "Your credit balance is too low to access the API.",
-    "Invalid API key provided",
+    '{"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+    '{"type":"error","error":{"type":"permission_error","message":"no access"}}',
+    '{"error":{"message":"Incorrect API key provided","code":"invalid_api_key"}}',
+    '{"error":{"code":403,"status":"PERMISSION_DENIED"}}',
+    '{"error":{"status":"UNAUTHENTICATED"}}',
     "insufficient_quota",
   ])("treats %s as unusable and never retries it", (errorMessage) => {
     expect(isProviderUnusableError(failed(errorMessage))).toBe(true);
@@ -147,6 +151,25 @@ describe("a number in the error text that is not its status", () => {
   });
 });
 
+describe("an error that is not the provider's", () => {
+  it.each([
+    "EACCES: permission denied, open '/x'",
+    "tool returned: unauthorized access to path",
+    "Permission denied (publickey).",
+    "git: Invalid credentials for remote",
+    "Invalid API key for the search tool",
+    "authentication error in hook",
+    "Disk quota exceeded",
+    "billing address is required",
+  ])("keeps the provider usable for %s", (errorMessage) => {
+    expect(providerUnusableReason(failed(errorMessage))).toBeUndefined();
+  });
+
+  it.each([401, 403])("still treats a real %i as auth", (status) => {
+    expect(providerUnusableReason(failed("permission denied", status))).toBe("auth");
+  });
+});
+
 describe("why a provider is unusable", () => {
   it.each([
     [402, "quota"],
@@ -162,7 +185,8 @@ describe("why a provider is unusable", () => {
     ["insufficient_quota", "quota"],
     ["Monthly usage limit reached", "quota"],
     ["Request failed with status code 401", "auth"],
-    ["Invalid API key provided", "auth"],
+    ['{"error":{"code":"invalid_api_key"}}', "auth"],
+    ['{"error":{"type":"permission_error"}}', "auth"],
     ["Proxy error: 403 ", "auth"],
   ] as const)("names %s as %s", (errorMessage, reason) => {
     expect(providerUnusableReason(failed(errorMessage))).toBe(reason);

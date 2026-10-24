@@ -65,19 +65,24 @@ const textStatus = (text: string): number | undefined => {
   return status === undefined ? undefined : Number(status);
 };
 
-const PROVIDER_CREDIT_ERROR_PATTERN = buildProviderErrorPattern([
-  "payment.?required",
+const PROVIDER_QUOTA_ERROR_PATTERN = buildProviderErrorPattern([
+  "GoUsageLimitError",
+  "FreeUsageLimitError",
+  "Monthly usage limit reached",
+  "\\binsufficient_quota\\b",
+  "\\bbilling_error\\b",
+  "\\bpayment_required\\b",
+  "subscription_sharing_usage_limit_exceeded",
   "requires more credits",
-  "credit balance",
-  "insufficient.?(?:credits|balance|funds)",
+  "credit balance is too low",
 ]);
 
-const PROVIDER_AUTH_ERROR_PATTERN = buildProviderErrorPattern([
-  "invalid.?(?:credential|api.?key|x-api-key)",
-  "unauthorized",
-  "authentication.?error",
-  "permission.?denied",
-]);
+const PROVIDER_ERROR_KIND_FIELD = String.raw`"(?:type|code|status)"\s*:\s*"`;
+
+const PROVIDER_AUTH_ERROR_PATTERN = new RegExp(
+  `${PROVIDER_ERROR_KIND_FIELD}(?:authentication_error|permission_error|invalid_api_key|PERMISSION_DENIED|UNAUTHENTICATED)"`,
+  "u",
+);
 
 const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
   "overloaded",
@@ -151,15 +156,13 @@ const unusableReason = ({
 }: ProviderFailure): providerFailureTypes.ProviderUnusableReason | undefined => {
   if (status === PAYMENT_REQUIRED_STATUS) return "quota";
   if (PROVIDER_ACCOUNT_STATUSES.has(status ?? 0)) return "auth";
-  if (
-    NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(text) ||
-    PROVIDER_CREDIT_ERROR_PATTERN.test(text)
-  )
-    return "quota";
+  if (PROVIDER_QUOTA_ERROR_PATTERN.test(text)) return "quota";
   return PROVIDER_AUTH_ERROR_PATTERN.test(text) ? "auth" : undefined;
 };
 
-const isUnusable = (failure: ProviderFailure): boolean => unusableReason(failure) !== undefined;
+const isNeverRetried = (failure: ProviderFailure): boolean =>
+  unusableReason(failure) !== undefined ||
+  NON_RETRYABLE_PROVIDER_LIMIT_ERROR_PATTERN.test(failure.text);
 
 const providerUnusableReason = (
   message: typesModule.AssistantMessage,
@@ -173,7 +176,7 @@ const isProviderUnusableError = (message: typesModule.AssistantMessage): boolean
 
 const isRetryableAssistantError = (message: typesModule.AssistantMessage): boolean => {
   const failure = providerFailure(message);
-  if (failure === undefined || isUnusable(failure)) return false;
+  if (failure === undefined || isNeverRetried(failure)) return false;
   return (
     RETRYABLE_PROVIDER_STATUSES.has(failure.status ?? 0) ||
     RETRYABLE_PROVIDER_ERROR_PATTERN.test(failure.text)
