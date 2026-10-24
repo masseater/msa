@@ -5,6 +5,7 @@ declare namespace captureProcessTypes {
     readonly args: ReadonlyArray<string>;
     readonly command: string;
     readonly cwd: string;
+    readonly env?: Readonly<Record<string, string>> | undefined;
   }
 
   interface CaptureResult {

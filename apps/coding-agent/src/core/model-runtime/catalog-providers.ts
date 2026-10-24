@@ -10,7 +10,7 @@ import remoteCatalogProvider from "../remote-catalog-provider.ts";
 const { withPersonalizedCatalog, withRemoteCatalog } = remoteCatalogProvider;
 const { personalizeOpenRouterCatalog } = openrouterUserModels;
 const { localProvider } = localModule;
-const { getAgentDir } = configModule;
+const { getAgentDir, nodeLlamaCppLoader } = configModule;
 const { join } = platform;
 
 const builtinCatalogProviders = (
@@ -32,7 +32,11 @@ const builtinCatalogProviders = (
     );
   return [
     ...catalog,
-    localProvider({ directory: join(getAgentDir(), "models"), download: modelNetworkEnabled }),
+    localProvider({
+      directory: join(getAgentDir(), "models"),
+      download: modelNetworkEnabled,
+      loadBindings: nodeLlamaCppLoader(),
+    }),
   ];
 };
 
