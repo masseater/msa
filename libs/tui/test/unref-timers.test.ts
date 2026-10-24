@@ -1,6 +1,7 @@
 import assert from "node:assert";
 import { describe, it } from "node:test";
 
+import testing from "@msa/testing";
 import { Effect } from "effect";
 
 import AltScreenFlashContainer from "../src/components/alt-screen-flash.ts";
@@ -10,11 +11,9 @@ import RecordingTerminal from "./tui-alt-screen-recording-terminal.ts";
 
 const { ScrollView, Text, TuiAltScreen } = tuiModule;
 const { renderLayoutFrame } = layout;
+const { timersArmedBy } = testing;
 
 const LONG_MS = 60_000;
-
-const timersHoldingTheProcess = (): number =>
-  process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
 
 const settle = Effect.repeat(Effect.yieldNow, { times: 3 });
 
@@ -27,22 +26,22 @@ const scrollbarHideLeavesTheProcessFree = Effect.gen(function* () {
     scrollbarHideDelayMs: LONG_MS,
   });
   renderLayoutFrame(scrollView, 10, 4, () => {});
-  const before = timersHoldingTheProcess();
-  scrollView.scrollBy(2);
-  yield* settle;
-  const pending = timersHoldingTheProcess();
+  const [, timers] = yield* timersArmedBy(
+    Effect.sync(() => scrollView.scrollBy(2)).pipe(Effect.andThen(settle)),
+  );
   scrollView.setScrollbar("hidden");
-  assert.strictEqual(pending, before);
+  assert.ok(timers.armed > 0);
+  assert.strictEqual(timers.holding, 0);
 });
 
 const flashLeavesTheProcessFree = Effect.gen(function* () {
   const flash = new AltScreenFlashContainer(() => {});
-  const before = timersHoldingTheProcess();
-  flash.flash("copied", LONG_MS);
-  yield* settle;
-  const pending = timersHoldingTheProcess();
+  const [, timers] = yield* timersArmedBy(
+    Effect.sync(() => flash.flash("copied", LONG_MS)).pipe(Effect.andThen(settle)),
+  );
   flash.dispose();
-  assert.strictEqual(pending, before);
+  assert.ok(timers.armed > 0);
+  assert.strictEqual(timers.holding, 0);
 });
 
 const selectionAutoScrollLeavesTheProcessFree = Effect.gen(function* () {
@@ -51,14 +50,17 @@ const selectionAutoScrollLeavesTheProcessFree = Effect.gen(function* () {
   tui.addChild(new Text(lines(200), 0, 0));
   tui.start();
   yield* Effect.promise(() => terminal.waitForRender());
-  const before = timersHoldingTheProcess();
-  terminal.sendInput("\x1b[<0;1;3M");
-  terminal.sendInput("\x1b[<32;1;1M");
-  yield* Effect.promise(() => terminal.waitForRender());
-  const pending = timersHoldingTheProcess();
+  const [, timers] = yield* timersArmedBy(
+    Effect.gen(function* () {
+      terminal.sendInput("\x1b[<0;1;3M");
+      terminal.sendInput("\x1b[<32;1;1M");
+      yield* Effect.promise(() => terminal.waitForRender());
+    }),
+  );
   terminal.sendInput("\x1b[<0;1;1m");
   tui.stop();
-  assert.strictEqual(pending, before);
+  assert.ok(timers.armed > 0);
+  assert.strictEqual(timers.holding, 0);
 });
 
 describe("background TUI timers leave the process free to exit", () => {

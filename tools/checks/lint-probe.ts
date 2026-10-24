@@ -54,19 +54,27 @@ const lintProbes = (probes: Readonly<Record<string, string>>): Promise<Diagnosti
       }).pipe(Effect.orDie),
   ).pipe((effect) => probeRuntime.runPromise(effect));
 
-const msaCodesOnLine = (report: Diagnostics, file: string, line: number): readonly string[] => [
+const codesOnLine = (
+  report: Diagnostics,
+  file: string,
+  line: number,
+  prefix: string,
+): readonly string[] => [
   ...new Set(
     report
       .filter(
         (diagnostic) =>
           diagnostic.filename === file &&
           diagnostic.labels[0]?.span.line === line &&
-          diagnostic.code.startsWith("msa("),
+          diagnostic.code.startsWith(prefix),
       )
       .map((diagnostic) => diagnostic.code),
   ),
 ];
 
-const lintProbe = { lintProbes, msaCodesOnLine, probePath, repoRoot };
+const msaCodesOnLine = (report: Diagnostics, file: string, line: number): readonly string[] =>
+  codesOnLine(report, file, line, "msa(");
+
+const lintProbe = { codesOnLine, lintProbes, msaCodesOnLine, probePath, repoRoot };
 
 export default lintProbe;

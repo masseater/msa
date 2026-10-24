@@ -6,20 +6,19 @@ import httpSupport from "../src/transports/http-support.ts";
 
 const { sleepUnlessAborted } = httpSupport;
 
-const { abortController } = testing;
-
-const timersHoldingTheProcess = (): number =>
-  process.getActiveResourcesInfo().filter((resource) => resource === "Timeout").length;
+const { abortController, timersArmedBy } = testing;
 
 const settle = Effect.repeat(Effect.yieldNow, { times: 3 });
 
 const aPendingBackoffLeavesTheProcessFreeToExit = Effect.gen(function* () {
-  const before = timersHoldingTheProcess();
-  const waiting = yield* Effect.forkDetach(sleepUnlessAborted(60_000, abortController().signal));
-  yield* settle;
-  const pending = timersHoldingTheProcess();
+  const [waiting, timers] = yield* timersArmedBy(
+    Effect.forkDetach(sleepUnlessAborted(60_000, abortController().signal)).pipe(
+      Effect.tap(settle),
+    ),
+  );
   yield* Fiber.interrupt(waiting);
-  expect(pending).toBe(before);
+  expect(timers.armed).toBeGreaterThan(0);
+  expect(timers.holding).toBe(0);
 });
 
 const theBackoffEndsOnTimeOrOnAbort = Effect.gen(function* () {
