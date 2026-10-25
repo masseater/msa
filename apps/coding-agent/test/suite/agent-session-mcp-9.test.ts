@@ -10,6 +10,8 @@ import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createCodemodeExtension } = extension;
 const { createMcpExtension } = extensionModule;
 
@@ -161,9 +163,7 @@ const reportsRegisteredServersWhenNoExtensionConnects = () =>
   Effect.runPromise(reportsRegisteredServersWhenNoExtension);
 
 describe("AgentSession MCP servers registered by extensions", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
   it(
     "connects servers registered while extensions load",
     connectsServersRegisteredWhileExtensionsLoad2,

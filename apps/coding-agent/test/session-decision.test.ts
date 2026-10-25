@@ -33,7 +33,7 @@ const offersLiquidD1 = () =>
         expect(model?.api).toBe("node-llama-cpp-classify");
         expect(model?.baseUrl).toBe(LIQUID_D1.baseUrl);
       } finally {
-        harness.cleanup();
+        yield* awaited(harness.cleanup());
       }
     }),
   );
@@ -64,7 +64,7 @@ const recordsAnUndecidedDecision = () =>
           { name: "triage", reason, status: "undecided" },
         ]);
       } finally {
-        harness.cleanup();
+        yield* awaited(harness.cleanup());
       }
     }),
   );

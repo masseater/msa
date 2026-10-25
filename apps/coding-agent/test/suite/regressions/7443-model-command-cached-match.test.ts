@@ -9,7 +9,7 @@ import type harnessTypes from "../harness.types.ts";
 const { bindModeFake } = interactiveModeFake;
 const { createHarness } = harnessModule;
 
-const { neverPromise } = testing;
+const { awaited, neverPromise, runTest } = testing;
 let harness!: harnessTypes.Harness;
 
 const matchesTheAvailabilitySnapshotWithoutStarting = Effect.gen(function* () {
@@ -60,8 +60,8 @@ const usesACallerOwnedDeadlineOnlyAfter = () => Effect.runPromise(usesACallerOwn
 
 describe("issue #7443 /model cached match", () => {
   afterEach(() => {
-    harness?.cleanup();
-    vi.restoreAllMocks();
+    const closing = harness?.cleanup();
+    return runTest(awaited(closing).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks()))));
   });
   it(
     "matches the availability snapshot without starting a catalog refresh",

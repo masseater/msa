@@ -5,6 +5,7 @@ import { Effect } from "effect";
 
 import codingAgent from "../src/index.ts";
 import type codingAgentTypes from "../src/index.types.ts";
+import closeAgentSessionModule from "./close-agent-session.ts";
 import modelRuntimeTestUtils from "./model-runtime-test-utils.ts";
 import type sessionKitTypes from "./session-kit.types.ts";
 import utilities from "./utilities.ts";
@@ -25,6 +26,7 @@ const {
   toJsonText,
   writeTextFile,
 } = testing;
+const { closeAgentSession } = closeAgentSessionModule;
 const { createKeyedModelRuntime } = modelRuntimeTestUtils;
 const { createTestExtensionsResult, createTestResourceLoader } = utilities;
 
@@ -176,12 +178,13 @@ const disposeWorkspace = (
   dir: string,
 ): Effect.Effect<void> =>
   Effect.gen(function* () {
-    session?.dispose();
+    if (session !== undefined) yield* awaited(closeAgentSession(session));
     if (dir.length > 0) yield* removePath(dir);
   });
 
 const sessionKit = {
   assistantMessage,
+  closeAgentSession,
   createAgentSession,
   disposeWorkspace,
   prepareWorkspace,

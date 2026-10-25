@@ -34,9 +34,7 @@ const stopsParsingOptionsWhileRetainingFile = () => {
 };
 
 describe("issue #7269 CLI end-of-options delimiter", () => {
-  afterEach(() => {
-    harness?.cleanup();
-  });
+  afterEach(() => harness?.cleanup());
   it.each(["- summarize the following points for me", "--answer my question briefly"])(
     "passes %j as a prompt after --",
     (prompt) =>

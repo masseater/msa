@@ -3,7 +3,10 @@ import type aiTypes from "@msa/ai/index.types";
 import testing from "@msa/testing";
 import { vi } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
@@ -94,9 +97,7 @@ const harnesses: harnessTypes.Harness[] = [];
 const afterEachHook = () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
+  return cleanupAll(harnesses);
 };
 
 const agentSessionCompactionSupport = {

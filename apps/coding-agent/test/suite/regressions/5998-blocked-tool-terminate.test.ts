@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getAssistantTexts } = harnessModule;
@@ -71,11 +73,7 @@ const letsAToolCallHandlerTerminateStep2 = (harness: harnessTypes.Harness) =>
 
 const letsAToolCallHandlerTerminateThe = () => Effect.runPromise(letsAToolCallHandlerTerminate);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("#5998 blocked tool termination", () => {
   afterEach(afterEachHook);

@@ -7,6 +7,8 @@ import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import ContextHandlerSystemMessagesSupport from "./9789-context-handler-system-messages-support.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, getCurrentSystemPrompt } = ai;
 
 const { captureRequest, compactSession, compactViaHook, toolNames } =
@@ -154,9 +156,7 @@ const keepsSystemMessagesAHandlerAddsAfter = () =>
   Effect.runPromise(keepsSystemMessagesAHandlerAdds);
 
 describe("context handlers and system messages", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
   it(
     "keeps the prompt and tools when a handler slices from the compaction summary",
     keepsThePromptAndToolsWhenA,

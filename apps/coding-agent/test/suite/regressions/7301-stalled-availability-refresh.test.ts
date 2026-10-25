@@ -193,7 +193,7 @@ const doesNotLetAStaleProviderScoped = () => Effect.runPromise(doesNotLetAStaleP
 describe("issue #7301 stalled availability refresh", () => {
   afterEach(() => {
     stalledList?.release();
-    harness?.cleanup();
+    return harness?.cleanup();
   });
   it(
     "recovers without letting the stalled refresh overwrite the newer snapshot",

@@ -10,6 +10,8 @@ import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { bindModeFake } = interactiveModeFake;
 const { setKeybindings } = tui;
 
@@ -200,9 +202,7 @@ describe("issue #6949 unavailable scoped models", () => {
   beforeEach(() => {
     setKeybindings(new KeybindingsManager());
   });
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
   it(
     "shows and removes an enabled model without a catalog entry",
     showsAndRemovesAnEnabledModelWithout,

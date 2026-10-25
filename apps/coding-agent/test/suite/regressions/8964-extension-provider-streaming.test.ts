@@ -13,7 +13,7 @@ const { getApiProvider } = compat;
 
 const { createHarness } = harnessModule;
 
-const { currentTimeMillis } = testing;
+const { awaited, currentTimeMillis } = testing;
 
 type Faux = ReturnType<typeof fauxProvider>;
 type Observed = {
@@ -91,7 +91,7 @@ const streamsThroughModelRegistry = (method: "stream" | "streamSimple") =>
       });
       expect(getApiProvider(faux.api)).toBeUndefined();
     } finally {
-      harness.cleanup();
+      yield* awaited(harness.cleanup());
     }
   });
 

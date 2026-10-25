@@ -110,9 +110,7 @@ const sessionPersistenceWorks = () =>
   );
 
 describe("test harness", () => {
-  afterEach(() => {
-    harness?.cleanup();
-  });
+  afterEach(() => harness?.cleanup());
 
   it(
     "loads inline extension factories and disambiguates duplicate commands",

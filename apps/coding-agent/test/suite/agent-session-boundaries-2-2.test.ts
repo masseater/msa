@@ -6,6 +6,8 @@ import agentSessionBoundariesSupport from "./agent-session-boundaries-support.ts
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { harnesses } = agentSessionBoundariesSupport;
@@ -223,9 +225,7 @@ const persistsCustomContextQueuedByAgentEnd = () =>
 const keepsAPreSettlementFollowUpDeferred = () => Effect.runPromise(keepsAPreSettlementFollowUp);
 
 describe("AgentSession actionable boundaries", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "refreshes canonical context before publishing boundary entry notifications",
@@ -239,9 +239,7 @@ describe("AgentSession actionable boundaries", () => {
 });
 
 describe("AgentSession actionable boundaries", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "persists custom context queued by agent_end before pre-settlement continuation",

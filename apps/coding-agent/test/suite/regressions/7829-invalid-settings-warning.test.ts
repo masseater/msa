@@ -16,7 +16,7 @@ const { Container } = tui;
 
 const { createHarness } = harnessModule;
 
-const { neverPromise } = testing;
+const { awaited, neverPromise } = testing;
 
 function render(container: tuiTypes.Container): string {
   return container.children.flatMap((child) => child.render(120)).join("\n");
@@ -57,7 +57,7 @@ const rendersStartupDiagnosticsInsideTheTranscript = Effect.gen(function* () {
     );
   } finally {
     vi.unstubAllEnvs();
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

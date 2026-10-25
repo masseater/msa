@@ -7,6 +7,8 @@ import SessionManager from "../../../src/core/session-manager.ts";
 import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { cleanupAll } = harnessModule;
 const { fauxAssistantMessage } = ai;
 
 const { awaited, joinPath, makeTempDir, pathExists, removeDirs, runTest } = testing;
@@ -40,11 +42,11 @@ const exportsWithTheActiveFallbackTheme = Effect.gen(function* () {
   expect(harness.settingsManager.display.getTheme()).toBe("missing-theme");
 });
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  initTheme("dark");
-  return runTest(removeDirs(sessionDirs.splice(0)));
-};
+const afterEachHook = () =>
+  cleanupAll(harnesses).then(() => {
+    initTheme("dark");
+    return runTest(removeDirs(sessionDirs.splice(0)));
+  });
 
 describe("regression #5596: missing configured theme export", () => {
   afterEach(afterEachHook);

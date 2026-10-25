@@ -10,9 +10,11 @@ import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
-const { removePath, runTest } = testing;
+const { awaited, removePath, runTest } = testing;
 
 const { harnesses, tempDirs } = agentSessionPromptSupport;
 
@@ -255,9 +257,7 @@ const afterEachHook = () =>
   runTest(
     Effect.gen(function* () {
       processImage.mockClear();
-      while (harnesses.length > 0) {
-        harnesses.pop()?.cleanup();
-      }
+      yield* awaited(cleanupAll(harnesses));
       while (tempDirs.length > 0) {
         const tempDir = tempDirs.pop();
         if (tempDir !== undefined && tempDir !== "") {

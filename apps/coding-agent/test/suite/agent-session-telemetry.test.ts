@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { InMemoryTelemetryContext } = telemetryModule;
@@ -154,9 +156,7 @@ const endsTheOpenTurnWhenTheSession = Effect.gen(function* () {
 });
 
 describe("AgentSession telemetry", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it("nests LLM requests and tool calls under each turn and counts tokens and tool failures", () =>
     runTest(nestsLlmRequestsAndToolCallsUnder));

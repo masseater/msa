@@ -15,12 +15,12 @@ const { runMigrations } = migrations;
 const { createHarness } = harnessModule;
 const { createModelRegistry } = modelRuntimeTestUtils;
 
-const { awaited, fromJsonText, joinPath, toJsonText } = testing;
+const { awaited, fromJsonText, joinPath, runTest, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-const cleanups: Array<() => void> = [];
+const cleanups: { cleanup: () => Promise<void> | void }[] = [];
 
 function withAgentDir<T>(agentDir: string, fn: () => T): T {
   vi.stubEnv(ENV_AGENT_DIR, agentDir);
@@ -33,11 +33,13 @@ function withAgentDir<T>(agentDir: string, fn: () => T): T {
 
 const keepsUppercaseHeaderStringsAsLiterals = Effect.gen(function* () {
   const harness = yield* Effect.promise(() => createHarness({ withConfiguredAuth: false }));
-  cleanups.push(harness.cleanup);
+  cleanups.push(harness);
   const envKeys = ["CUSTOM_API_KEY", "BEARER"];
   for (const key of envKeys) vi.stubEnv(key, `env-${key}`);
-  cleanups.push(() => {
-    vi.unstubAllEnvs();
+  cleanups.push({
+    cleanup: () => {
+      vi.unstubAllEnvs();
+    },
   });
   const modelsPath = joinPath(harness.tempDir, "models.json");
   yield* fs.writeFileString(
@@ -83,11 +85,12 @@ const keepsUppercaseHeaderStringsAsLiteralsStep1 = (
 const keepsUppercaseHeaderStringsAsLiteralsDuring = () =>
   Effect.runPromise(keepsUppercaseHeaderStringsAsLiterals);
 
-const afterEachHook = () => {
-  while (cleanups.length > 0) {
-    cleanups.pop()?.();
-  }
-};
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.cleanup());
+    }),
+  );
 
 describe("regression #5661: uppercase models.json header values", () => {
   afterEach(afterEachHook);

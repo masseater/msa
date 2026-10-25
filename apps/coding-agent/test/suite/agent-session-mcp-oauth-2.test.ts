@@ -82,9 +82,9 @@ const addsTheListeningPortToA = Effect.gen(function* () {
 const givesUpOnMsaMcpLogin = Effect.gen(function* () {
   const runPromise = Effect.runPromiseWith(yield* Effect.context<never>());
   const server = yield* Effect.promise(() => startOAuthMcpServer());
-  cleanups.push(server.close);
+  cleanups.push({ cleanup: server.close });
   const agentDir = yield* makeTempDir("msa-mcp-login-");
-  cleanups.push(() => runTest(removeDir(agentDir)));
+  cleanups.push({ cleanup: () => runTest(removeDir(agentDir)) });
   yield* writeTextFile(
     joinPath(agentDir, "mcp.json"),
     yield* toJsonText({ mcpServers: { issues: { url: server.url } } }),
@@ -120,7 +120,7 @@ const givesUpOnMsaMcpLogin = Effect.gen(function* () {
 const usesCredentialsFromMsaMcpLogin = Effect.gen(function* () {
   const { harness, server, backend } = yield* Effect.promise(() => setup("follow"));
   const agentDir = yield* makeTempDir("msa-mcp-login-");
-  cleanups.push(() => runTest(removeDir(agentDir)));
+  cleanups.push({ cleanup: () => runTest(removeDir(agentDir)) });
   yield* writeTextFile(
     joinPath(agentDir, "mcp.json"),
     yield* toJsonText({ mcpServers: { issues: { url: server.url } } }),

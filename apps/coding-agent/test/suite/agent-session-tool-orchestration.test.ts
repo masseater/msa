@@ -10,6 +10,8 @@ import extensionModule from "../../src/extensions/tool-search/extension.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createCodemodeExtension } = extension;
 const { createToolSearchExtension } = extensionModule;
 
@@ -196,9 +198,7 @@ const leavesResultsWithoutNestedCallsUnchanged2 = () =>
   Effect.runPromise(leavesResultsWithoutNestedCallsUnchanged);
 
 describe("AgentSession tool orchestration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
   it(
     "supports tools that call other tools under any name through the extension API",
     supportsToolsThatCallOtherToolsUnder,

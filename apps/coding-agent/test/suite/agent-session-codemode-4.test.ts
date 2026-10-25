@@ -4,9 +4,12 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type toolTypes from "../../src/extensions/codemode/tool.types.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
 import type harnessTypes from "./harness.types.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
@@ -118,9 +121,7 @@ const routesNestedCallsThroughExtensionHooks2 = () =>
   Effect.runPromise(routesNestedCallsThroughExtensionHooks);
 
 describe("AgentSession codemode tool", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "runs nested calls in parallel and returns only the script result",

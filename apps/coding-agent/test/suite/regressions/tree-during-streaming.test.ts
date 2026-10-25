@@ -1,9 +1,12 @@
 import ai from "@msa/ai";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
+
+const { awaited } = testing;
 
 const { fauxAssistantMessage } = ai;
 
@@ -41,7 +44,7 @@ const rejectsNavigationWithoutChangingTheActive = Effect.gen(function* () {
     );
     expect(leafUnchanged).toBe(true);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

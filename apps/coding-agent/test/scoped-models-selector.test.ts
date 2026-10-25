@@ -154,8 +154,9 @@ describe("scoped models selector", () => {
   });
 
   afterEach(() => {
-    harness?.cleanup();
+    const closing = harness?.cleanup();
     harness = undefined;
+    return closing;
   });
 
   it("marks every model after enabling all", marksEveryModelAfterEnablingAll);

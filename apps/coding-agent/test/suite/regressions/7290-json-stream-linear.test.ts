@@ -6,6 +6,8 @@ import jsonEvent from "../../../src/modes/json-event.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { toJsonEvent } = jsonEvent;
 
 const { fauxAssistantMessage } = ai;
@@ -51,11 +53,7 @@ const emitsDeltaOnlyMessageUpdatesWhose = Effect.gen(function* () {
 const emitsDeltaOnlyMessageUpdatesWhoseSize = () =>
   Effect.runPromise(emitsDeltaOnlyMessageUpdatesWhose);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("regression #7290: JSON event streams stay linear", () => {
   afterEach(afterEachHook);

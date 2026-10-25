@@ -8,6 +8,8 @@ import SessionManager from "../../src/core/session-manager.ts";
 import agentSessionGoalSupport from "./agent-session-goal-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { GOAL_ENTRY_TYPE } = goalModule;
 const { fauxAssistantMessage } = ai;
 
@@ -96,9 +98,7 @@ const restoresAnUnfinishedGoalWhenTheSession = () =>
 const stopsTheLoopWhenTheRunIs = () => Effect.runPromise(stopsTheLoopWhenTheRun);
 
 describe("AgentSession /goal", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "waits out a rate limit, and an abort during the wait keeps the goal",

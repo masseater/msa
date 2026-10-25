@@ -37,9 +37,7 @@ const includesCumulativeUsageWithoutCumulativeMessageSnapshots = () =>
   Effect.runPromise(includesCumulativeUsageWithoutCumulativeMessage);
 
 describe("regression #7911: JSON message updates retain usage", () => {
-  afterEach(() => {
-    harness?.cleanup();
-  });
+  afterEach(() => harness?.cleanup());
   it(
     "includes cumulative usage without cumulative message snapshots",
     includesCumulativeUsageWithoutCumulativeMessageSnapshots,

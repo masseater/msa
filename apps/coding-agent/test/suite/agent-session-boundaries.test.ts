@@ -6,6 +6,8 @@ import agentSessionBoundariesSupport from "./agent-session-boundaries-support.ts
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { harnesses } = agentSessionBoundariesSupport;
@@ -75,9 +77,7 @@ const commitsARetainNoneTurnEndStep1 = (
 const commitsARetainNoneTurnEndCompaction = () => Effect.runPromise(commitsARetainNoneTurnEnd);
 
 describe("AgentSession actionable boundaries", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "commits a retain-none turn_end compaction and explicitly continues once",
@@ -118,9 +118,7 @@ const harnessRecordingRequests = (input: {
   });
 
 describe("AgentSession actionable boundaries", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it.each(["steering", "follow-up", "both"] as const)(
     "preserves %s queue scheduling around a turn_end handoff",

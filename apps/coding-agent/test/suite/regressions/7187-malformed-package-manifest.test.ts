@@ -8,7 +8,7 @@ import SettingsManager from "../../../src/core/settings-manager.ts";
 import harnessModule from "../harness.ts";
 const { createHarness } = harnessModule;
 
-const { joinPath, toJsonText } = testing;
+const { awaited, joinPath, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -47,7 +47,7 @@ const ignoresInvalidResourceFieldsWithoutDropping = Effect.gen(function* () {
     expect(resources.prompts.map((prompt) => prompt.path)).toContain(promptPath);
   } finally {
     yield* fs.remove(tempDir, { force: true, recursive: true });
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

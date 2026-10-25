@@ -6,6 +6,8 @@ import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
@@ -113,11 +115,7 @@ const reportsThresholdReasonForAutoCompaction2 = () =>
 const reportsOverflowReasonAndWillretryForOverflow = () =>
   Effect.runPromise(reportsOverflowReasonAndWillretryFor);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #5217 compaction reason on extension events", () => {
   afterEach(afterEachHook);

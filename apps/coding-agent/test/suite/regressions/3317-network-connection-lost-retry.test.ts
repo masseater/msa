@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness, getAssistantTexts } = harnessModule;
@@ -39,11 +41,7 @@ const retriesTransientNetworkConnectionLostFailures = Effect.gen(function* () {
 const retriesTransientNetworkConnectionLostFailures2 = () =>
   Effect.runPromise(retriesTransientNetworkConnectionLostFailures);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #3317 network connection lost retry", () => {
   afterEach(afterEachHook);

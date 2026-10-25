@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createAssistantMessageEventStream, fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
@@ -219,11 +221,7 @@ const stopsRetryingAfterMaxretriesAndReportsFailure = () =>
 
 const abortsAnInFlightRetryBackoffVia = () => Effect.runPromise(abortsAnInFlightRetryBackoff);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("#6647 compaction retries transient summarization failures", () => {
   afterEach(afterEachHook);

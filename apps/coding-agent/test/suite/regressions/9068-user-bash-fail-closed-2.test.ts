@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -6,6 +7,8 @@ import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
+
+const { awaited } = testing;
 
 const { bindModeFake } = interactiveModeFake;
 const { localResult } = UserBashFailClosedSupport;
@@ -135,7 +138,7 @@ describe("Interactive user_bash failure handling (#9068)", () => {
           expect(executeBash).not.toHaveBeenCalled();
         } finally {
           executeBash.mockRestore();
-          harness.cleanup();
+          yield* awaited(harness.cleanup());
         }
       }),
     ),

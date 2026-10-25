@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
@@ -125,11 +127,7 @@ const keepsPersistedAssistantToolresultMessageOrderWhen = () =>
 
 const runsToolCallHandlersAfterTheAssistant = () => Effect.runPromise(runsToolCallHandlersAfterThe);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("regressions #1717/#2113: agent session event settlement", () => {
   afterEach(afterEachHook);

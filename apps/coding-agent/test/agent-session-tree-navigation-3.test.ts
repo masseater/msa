@@ -29,9 +29,7 @@ const beforeEachHook9 = () =>
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook9);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should support custom summarization instructions",
@@ -79,9 +77,7 @@ const beforeEachHook10 = () =>
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation - branch scenarios", () => {
   beforeEach(beforeEachHook10);
 
-  afterEach(() => {
-    ctx3.cleanup();
-  });
+  afterEach(() => ctx3.cleanup());
 
   it(
     "should navigate between branches correctly",

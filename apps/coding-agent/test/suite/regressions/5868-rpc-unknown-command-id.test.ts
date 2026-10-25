@@ -11,7 +11,7 @@ const { runRpcMode } = rpcMode;
 
 const { createHarness } = harnessModule;
 
-const { toJsonText } = testing;
+const { awaited, toJsonText } = testing;
 
 const rpcIo = vi.hoisted(() => ({
   lineHandler: undefined as ((line: string) => void) | undefined,
@@ -121,7 +121,7 @@ const preservesTheRequestIdOnUnknown = Effect.gen(function* () {
       }),
     );
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
     restoreListeners(listenerSnapshot);
   }
 });

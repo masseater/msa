@@ -8,6 +8,8 @@ import messagesModule from "../../src/core/messages.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { apportion, measureContextBreakdown } = contextBreakdown;
 const { convertToLlm } = messagesModule;
 
@@ -19,9 +21,7 @@ const { createHarness } = harnessModule;
 
 const harnesses: harnessTypes.Harness[] = [];
 
-afterEach(() => {
-  for (const harness of harnesses.splice(0)) harness.cleanup();
-});
+afterEach(() => cleanupAll(harnesses));
 
 const countsTheSystemPromptAndToolDeclarations = () =>
   runTest(

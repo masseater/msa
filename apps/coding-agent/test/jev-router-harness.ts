@@ -12,7 +12,7 @@ import type harnessTypes from "./suite/harness.types.ts";
 
 const { VIRTUAL_MODEL_STATE_ENTRY } = codingAgent;
 const { createRouterProviders } = jevRouterProviders;
-const { createHarness } = harnessModule;
+const { cleanupAll, createHarness } = harnessModule;
 const { awaited, runTest } = testing;
 
 const harnesses: harnessTypes.Harness[] = [];
@@ -61,9 +61,7 @@ function setup(complex: number, tools: agentTypes.AgentTool[]) {
   );
 }
 
-const cleanupHarnesses = () => {
-  for (const harness of harnesses.splice(0)) harness.cleanup();
-};
+const cleanupHarnesses = () => cleanupAll(harnesses);
 
 const jevRouterHarness = { cleanupHarnesses, setup };
 

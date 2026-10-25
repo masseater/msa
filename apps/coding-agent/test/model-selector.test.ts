@@ -129,8 +129,9 @@ describe("model selector", () => {
   });
 
   afterEach(() => {
-    harness?.cleanup();
+    const closing = harness?.cleanup();
     harness = undefined;
+    return closing;
   });
 
   it("keeps the current model marked while browsing", keepsTheCurrentModelMarkedWhileBrowsing);

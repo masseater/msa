@@ -17,7 +17,7 @@ const { initTheme, stripAnsi, theme } = tuiKit;
 
 const { createHarness } = harnessModule;
 
-const { fromJsonText, joinPath } = testing;
+const { awaited, fromJsonText, joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -45,7 +45,7 @@ const rendersCallsToMcpToolsThat = Effect.gen(function* () {
       harness.session.tools.registry.getToolDefinition("read")?.renderCall,
     );
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -98,7 +98,7 @@ const rendersThemInHtmlExportsToo = Effect.gen(function* () {
     appendMcpToolTurn(sessionManager);
     expect(stripAnsi(yield* exportedToolCallHtml(harness, dir))).toContain("my_docs/search");
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
     yield* fs.remove(dir, { force: true, recursive: true });
   }
 });

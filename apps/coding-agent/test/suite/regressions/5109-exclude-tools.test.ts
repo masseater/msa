@@ -1,9 +1,12 @@
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
 
 import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
+
+const { awaited } = testing;
 
 const { createHarness } = harnessModule;
 
@@ -73,7 +76,7 @@ const filtersBuiltInAndExtensionTools = Effect.gen(function* () {
       "- dynamic_tool: Run dynamic test behavior",
     );
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -95,7 +98,7 @@ const letsExcludedToolsOverrideTheAllowlist = Effect.gen(function* () {
     expect(harness.session.tools.prompt.systemPrompt).not.toContain("- read:");
     expect(harness.session.tools.prompt.systemPrompt).not.toContain("ask_question");
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -120,7 +123,7 @@ const matchesAllowlistAndDenylistPatterns = Effect.gen(function* () {
       "read",
     ]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

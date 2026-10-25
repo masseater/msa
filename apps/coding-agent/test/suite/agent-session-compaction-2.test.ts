@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { harnesses, seedCompactableSession, useSummaryStreamFn } = agentSessionCompactionSupport;
@@ -137,9 +139,7 @@ const compactsAndResumesAfterALengthStop = () => Effect.runPromise(compactsAndRe
 const afterEachHook2 = () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
+  return cleanupAll(harnesses);
 };
 
 describe("AgentSession compaction characterization", () => {

@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import tui from "@msa/tui";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
@@ -7,6 +8,8 @@ import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { awaited } = testing;
 
 const { bindModeFake } = interactiveModeFake;
 
@@ -118,7 +121,7 @@ const rendersReplacementSessionStateBeforeSession = Effect.gen(function* () {
 
     expect(events).toEqual(["apply", "render", "subscribe", "bind", "notify:Hello Error"]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -191,7 +194,7 @@ const subscribesBeforeReplacementSessionStartHandlers = Effect.gen(function* () 
       "message_end:custom:custom from start",
     ]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

@@ -3,8 +3,11 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import type toolTypes from "../../src/extensions/codemode/tool.types.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
@@ -73,9 +76,7 @@ const reportsScriptFailuresAsResultsThatKeep = () =>
   Effect.runPromise(reportsScriptFailuresAsResultsThat);
 
 describe("AgentSession codemode tool", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "marks where each text item starts and puts console lines last in one text block",
@@ -84,9 +85,7 @@ describe("AgentSession codemode tool", () => {
 });
 
 describe("AgentSession codemode tool", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "reports script failures as results that keep partial output and the calls that ran",

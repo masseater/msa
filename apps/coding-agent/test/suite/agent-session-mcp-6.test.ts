@@ -9,6 +9,8 @@ import extension from "../../src/extensions/mcp/extension.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { MCP_SERVERS_SECTION } = extension;
 
 const { fauxAssistantMessage } = ai;
@@ -165,9 +167,7 @@ const keepsTheCodemodeDescriptionUnchangedWhenThe = () =>
 const listsAServerBeforeItConnectsAnd = () => Effect.runPromise(listsAServerBeforeItConnects);
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "warns when deferred MCP tools have neither tool_search nor codemode",

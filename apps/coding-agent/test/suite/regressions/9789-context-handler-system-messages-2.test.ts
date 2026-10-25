@@ -6,6 +6,8 @@ import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import ContextHandlerSystemMessagesSupport from "./9789-context-handler-system-messages-support.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { captureRequest, compactSession, compactViaHook, toolNames } =
   ContextHandlerSystemMessagesSupport;
 
@@ -109,9 +111,7 @@ const runsAfterContextHandlersOnTheRestored = () =>
 const reportsAHandlerThatDropsTheLeading = () => Effect.runPromise(reportsAHandlerThatDropsThe);
 
 describe("context_with_system handlers", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
   it(
     "runs after context handlers on the restored transcript and sends its output verbatim",
     runsAfterContextHandlersOnTheRestored,

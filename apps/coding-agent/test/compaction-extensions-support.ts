@@ -15,8 +15,8 @@ const { createCodingTools } = src;
 
 const { streamSimple } = compat;
 
-const { createAgentSession } = sessionKit;
-const { makeTempDir, removePath, runTest } = testing;
+const { closeAgentSession, createAgentSession } = sessionKit;
+const { awaited, makeTempDir, removePath, runTest } = testing;
 
 const hasLiveAuth = inject("liveAuthAvailable");
 
@@ -102,7 +102,7 @@ const prepare = (): Promise<void> =>
 const cleanUp = (): Promise<void> =>
   runTest(
     Effect.gen(function* () {
-      for (const session of sessions.splice(0)) session.dispose();
+      yield* awaited(Promise.all(sessions.splice(0).map((session) => closeAgentSession(session))));
       yield* removePath(tempDir);
     }),
   );

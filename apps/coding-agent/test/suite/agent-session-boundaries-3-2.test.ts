@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import agentSessionBoundariesSupport from "./agent-session-boundaries-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { harnesses } = agentSessionBoundariesSupport;
@@ -111,9 +113,7 @@ const persistsCustomContextSentDuringPreSettlement = () =>
   Effect.runPromise(persistsCustomContextSentDuringPre);
 
 describe("AgentSession actionable boundaries", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "does not trigger threshold compaction from post-edit usage captured before a later compaction",
@@ -127,9 +127,7 @@ describe("AgentSession actionable boundaries", () => {
 });
 
 describe("AgentSession actionable boundaries", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "persists custom context sent during pre-settlement before continuing",

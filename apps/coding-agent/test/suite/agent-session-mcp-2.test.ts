@@ -2,16 +2,17 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { SERVER_TOOLS, harnesses, setup } = agentSessionMcpSupport;
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it.each([false, true])(
     "routes tools whose names differ only in - and _ (reverse: %s)",

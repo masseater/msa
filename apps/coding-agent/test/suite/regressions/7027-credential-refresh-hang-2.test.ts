@@ -13,7 +13,7 @@ const { complete } = CredentialRefreshHangSupport;
 
 const { createHarness } = harnessModule;
 
-const { deferredPromise } = testing;
+const { awaited, deferredPromise, runTest } = testing;
 
 let harness3!: harnessTypes.Harness;
 
@@ -150,8 +150,8 @@ const boundsRefreshTo15Seconds2 = () => Effect.runPromise(boundsRefreshTo15Secon
 
 const afterEachHook2 = () => {
   vi.useRealTimers();
-  harness3?.cleanup();
-  vi.restoreAllMocks();
+  const closing = harness3?.cleanup();
+  return runTest(awaited(closing).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks()))));
 };
 
 describe("post-login model discovery", () => {

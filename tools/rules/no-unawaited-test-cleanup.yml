@@ -1,0 +1,105 @@
+id: no-unawaited-test-cleanup
+language: typescript
+severity: error
+message: "cleanup() は session_shutdown で extension を閉じてから一時ディレクトリを消す Promise を返す。その場で await（yield* awaited）するか、return（矢印関数の本体を含む）するか、変数に受けてあとで await か return する。test と hook 以外の callback の中では呼ばず、関数として渡さない。"
+files:
+  - apps/coding-agent/test/**
+utils:
+  cleanup-call:
+    kind: call_expression
+    has:
+      field: function
+      any:
+        - kind: identifier
+          regex: ^cleanup$
+        - kind: member_expression
+          has:
+            field: property
+            regex: ^cleanup$
+  function-node:
+    any:
+      - kind: arrow_function
+      - kind: function_expression
+      - kind: function_declaration
+      - kind: generator_function
+      - kind: generator_function_declaration
+      - kind: method_definition
+  framework-call:
+    kind: call_expression
+    has:
+      field: function
+      any:
+        - regex: ^((it|test|describe)(\.[A-Za-z]+)*|beforeEach|afterEach|beforeAll|afterAll|Effect\.gen)$
+        - kind: call_expression
+          has:
+            field: function
+            regex: ^(it|test|describe)(\.[A-Za-z]+)*$
+  callback:
+    matches: function-node
+    inside:
+      kind: arguments
+      not:
+        inside:
+          matches: framework-call
+  awaited-here:
+    any:
+      - inside:
+          kind: await_expression
+      - inside:
+          kind: return_statement
+      - inside:
+          kind: arrow_function
+          field: body
+      - inside:
+          kind: arguments
+          inside:
+            kind: call_expression
+            has:
+              field: function
+              regex: ^awaited$
+            inside:
+              kind: yield_expression
+              regex: ^yield\*
+  awaited-later:
+    inside:
+      kind: variable_declarator
+      has:
+        field: name
+        pattern: $VAR
+      inside:
+        kind: lexical_declaration
+        precedes:
+          stopBy: end
+          any:
+            - has:
+                stopBy: end
+                any:
+                  - pattern: await $VAR
+                  - pattern: return $VAR
+                  - pattern: awaited($VAR)
+            - any:
+                - kind: return_statement
+                  has:
+                    pattern: $VAR
+  cleanup-reference:
+    kind: member_expression
+    has:
+      field: property
+      regex: ^cleanup$
+    not:
+      inside:
+        kind: call_expression
+        field: function
+rule:
+  any:
+    - matches: cleanup-reference
+    - all:
+        - matches: cleanup-call
+        - any:
+            - not:
+                any:
+                  - matches: awaited-here
+                  - matches: awaited-later
+            - inside:
+                stopBy: end
+                matches: callback

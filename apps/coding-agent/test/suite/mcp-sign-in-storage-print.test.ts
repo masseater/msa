@@ -14,13 +14,13 @@ const { writeTextFile } = testing;
 const { createHarness } = harnessModule;
 const { startOAuthMcpServer } = mcpOauthServer;
 
-const cleanups: (() => Promise<void> | void)[] = [];
+const cleanups: { cleanup: () => Promise<void> | void }[] = [];
 
 afterEach(() =>
   runTest(
     Effect.gen(function* () {
       vi.restoreAllMocks();
-      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.());
+      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.cleanup());
     }),
   ),
 );
@@ -34,7 +34,7 @@ const lockedKeychain = {
 
 const agentDirWithLegacySignIn = Effect.fn("agentDirWithLegacySignIn")(function* (url: string) {
   const root = yield* makeTempDir("msa-sign-in-print-");
-  cleanups.push(() => runTest(removeDir(root)));
+  cleanups.push({ cleanup: () => runTest(removeDir(root)) });
   const agentDir = joinPath(root, "agent");
   yield* makeDirectory(agentDir);
   yield* writeTextFile(
@@ -67,7 +67,7 @@ const printSession = Effect.fn("printSession")(function* (agentDir: string, url:
       initialActiveToolNames: [],
     }),
   );
-  cleanups.push(() => harness.cleanup());
+  cleanups.push(harness);
   yield* awaited(harness.session.extensions.binding.bindExtensions({}));
 });
 
@@ -75,7 +75,7 @@ const printsTheNoticeOnStderrWithoutAUi = () =>
   runTest(
     Effect.gen(function* () {
       const server = yield* awaited(startOAuthMcpServer());
-      cleanups.push(server.close);
+      cleanups.push({ cleanup: server.close });
       const agentDir = yield* agentDirWithLegacySignIn(server.url);
       const errors: string[] = [];
       vi.spyOn(console, "error").mockImplementation((...args: unknown[]) => {

@@ -7,6 +7,8 @@ import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createEventBus } = eventBusModule;
 const { createExtensionRuntime, loadExtensionFromFactory } = loader;
 
@@ -104,11 +106,7 @@ const removesExtensionOwnedEventBusListeners = Effect.gen(function* () {
 const removesExtensionOwnedEventBusListenersOn = () =>
   Effect.runPromise(removesExtensionOwnedEventBusListeners);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #7193 extension event-bus lifecycle", () => {
   afterEach(afterEachHook);

@@ -7,6 +7,8 @@ import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createCodemodeExtension } = extension;
 
 const { awaited, runTest } = testing;
@@ -17,9 +19,7 @@ const { createHarness } = harnessModule;
 
 const harnesses4: harnessTypes.Harness[] = [];
 
-const cleanupModelHarnesses = (): void => {
-  while (harnesses4.length > 0) harnesses4.pop()?.cleanup();
-};
+const cleanupModelHarnesses = (): Promise<void> => cleanupAll(harnesses4);
 
 const scorerModel: aiTypes.ClassifierModel<"test-classifier"> = {
   api: "test-classifier",

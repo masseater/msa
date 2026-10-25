@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { afterEach, describe, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionBashPersistenceCases from "./agent-session-bash-persistence-cases.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const {
   abortsAllActiveBashExecutions,
@@ -63,11 +66,7 @@ const flushesAnIncompleteMultiByteCharacterAt = () =>
 
 const doesNotHoldBackOutputBehindA = () => Effect.runPromise(doesNotHoldBackOutputBehind);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("AgentSession bash and persistence characterization", () => {
   afterEach(afterEachHook);

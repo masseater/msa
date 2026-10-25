@@ -63,7 +63,7 @@ const declaresThePromptAndToolsOnceAnd = () =>
         ]);
         expect(getSystemMessageText(head)).toBe(harness.session.tools.prompt.systemPrompt);
       } finally {
-        harness.cleanup();
+        yield* awaited(harness.cleanup());
       }
     }),
   );

@@ -9,6 +9,8 @@ import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { TOOL_SEARCH_DESCRIPTION } = toolModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
@@ -240,9 +242,7 @@ const reachesDeferredMcpToolsThroughCodemode = Effect.gen(function* () {
 });
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it("lists and reads resources with Codex's resource tools", () =>
     Effect.runPromise(listsAndReadsResourcesWithCodex));
