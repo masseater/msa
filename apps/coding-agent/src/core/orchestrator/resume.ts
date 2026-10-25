@@ -49,6 +49,7 @@ function resume(
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     yield* advisors.stopRunning(runtime, task.id, now);
+    yield* Effect.sync(() => store.clearProviderResumed(runtime.database, task.id));
     const target = resumeTarget(runtime, task);
     if (target === undefined) {
       yield* startTasks(runtime, task, "worker", "", decision);

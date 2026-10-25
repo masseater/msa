@@ -130,6 +130,36 @@ function settleAssignment(ending: Ending, assignment: orchestratorTypesTypes.Ass
   }
 }
 
+function settleLimit(
+  ending: Ending,
+  assignment: orchestratorTypesTypes.Assignment,
+  limit: outcomeTypes.ProviderLimit,
+): void {
+  const { applied, now, runtime } = ending;
+  const stall = providerWaits.stallOf(runtime, assignment.taskId, limit);
+  if (stall === undefined) {
+    providerWaits.record(runtime, assignment, limit, now);
+    applied.status = worse(
+      applied.status,
+      assignment.role === "advisor" ? "needs-decision" : "waiting",
+    );
+    return;
+  }
+  store.clearProviderResumed(runtime.database, assignment.taskId);
+  if (providerWaits.helperRole(assignment.role)) {
+    settleAssignment(ending, assignment);
+    return;
+  }
+  record({ ...ending, asked: stall }, assignment, undefined, undefined);
+  applied.lines.push(stall.text);
+  triageOutcome.askTriage(applied, {
+    key: stall.key,
+    request: stall.text,
+    taskId: assignment.taskId,
+    threadId: assignment.threadId,
+  });
+}
+
 function applyOutcome(
   runtime: runtimeTypes.Runtime,
   assignments: readonly orchestratorTypesTypes.Assignment[],
@@ -150,8 +180,7 @@ function applyOutcome(
   const ending: Ending = { applied, asked, now, outcome, runtime, verdict };
   for (const assignment of assignments) {
     if (outcome.limit !== undefined) {
-      providerWaits.record(runtime, assignment, outcome.limit, now);
-      applied.status = worse(applied.status, "waiting");
+      settleLimit(ending, assignment, outcome.limit);
       continue;
     }
     store.clearProviderResumed(runtime.database, assignment.taskId);

@@ -5,12 +5,35 @@ import providerWaitModule from "./provider-wait.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import start from "./start.ts";
 import storeModule from "./store.ts";
+import triageRestart from "./triage-restart.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { newId } = ids;
 const { providerWaits } = providerWaitModule;
 const { starting } = start;
 const { store } = storeModule;
+
+function stillWaiting(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task | undefined,
+  wait: orchestratorTypesTypes.ProviderWait,
+): task is orchestratorTypesTypes.Task {
+  if (task === undefined) return false;
+  if (wait.role === "advisor") return task.status === "needs-decision";
+  if (wait.role === "triage")
+    return task.status === "running" && store.hasTriageAsk(runtime.database, wait.threadId);
+  return task.status === "waiting";
+}
+
+function startOver(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  wait: orchestratorTypesTypes.ProviderWait,
+): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+  if (wait.role !== "triage") return Effect.asVoid(starting.startTasks(runtime, task, wait.role));
+  const ask = store.takeTriageAsk(runtime.database, wait.threadId);
+  return ask === undefined ? Effect.void : triageRestart.launchTriage(runtime, task, ask);
+}
 
 function resumeTask(
   runtime: runtimeTypes.Runtime,
@@ -20,9 +43,9 @@ function resumeTask(
   const { database } = runtime;
   store.deleteProviderWait(database, wait.taskId);
   store.markProviderResumed(database, task.id, wait.reason);
-  if (wait.sessionFile === null)
-    return Effect.asVoid(starting.startTasks(runtime, task, wait.role));
+  if (wait.sessionFile === null) return startOver(runtime, task, wait);
   const threadId = newId("th");
+  if (wait.role === "triage") store.moveTriageAsk(database, wait.threadId, threadId);
   const seen = new Set(store.notesReadBy(database, wait.threadId).map((note) => note.id));
   const notes = store.unreadNotes(database, runtime.options.project, task.id, threadId);
   const plan = {
@@ -46,9 +69,9 @@ function resumeDue(
   return Effect.gen(function* () {
     const started: string[] = [];
     for (const wait of store.listProviderWaits(runtime.database, runtime.options.project)) {
-      if (started.length >= free || wait.resumeAt === null || wait.resumeAt > now) break;
+      if (started.length >= free || wait.resumeAt > now) break;
       const task = store.getTask(runtime.database, wait.taskId);
-      if (task?.status !== "waiting") {
+      if (!stillWaiting(runtime, task, wait)) {
         store.deleteProviderWait(runtime.database, wait.taskId);
         continue;
       }
@@ -59,15 +82,6 @@ function resumeDue(
   });
 }
 
-function awaitingDecision(
-  runtime: runtimeTypes.Runtime,
-  taskId: string,
-): orchestratorTypesTypes.ProviderWait | undefined {
-  return store
-    .listProviderWaits(runtime.database, runtime.options.project)
-    .find((wait) => wait.taskId === taskId && wait.resumeAt === null);
-}
-
-const providerResume = { awaitingDecision, resumeDue, resumeTask };
+const providerResume = { resumeDue };
 
 export default providerResume;

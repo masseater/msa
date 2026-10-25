@@ -182,7 +182,7 @@ declare namespace orchestratorTypesTypes {
     sessionFile: string | null;
     reason: "auth" | "quota";
     error: string;
-    resumeAt: number | null;
+    resumeAt: number;
     createdAt: number;
   }
 

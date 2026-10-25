@@ -24,6 +24,7 @@ function runningTasksWithoutThread(database: DatabaseSync, project: string): str
       `SELECT id FROM tasks WHERE project = ? AND status = 'running' AND NOT EXISTS (
          SELECT 1 FROM assignments a JOIN threads th ON th.id = a.thread_id
          WHERE a.task_id = tasks.id AND th.status = 'running')
+         AND NOT EXISTS (SELECT 1 FROM provider_waits w WHERE w.task_id = tasks.id)
        ORDER BY created_at, id`,
     )
     .all(project) as unknown as { id: string }[];

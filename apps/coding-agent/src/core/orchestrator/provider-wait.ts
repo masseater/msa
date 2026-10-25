@@ -4,6 +4,7 @@ import type compatTypes from "@msa/ai/compat.types";
 import platform from "../platform/index.ts";
 import type outcomeTypes from "./outcome.types.ts";
 import promptsModule from "./prompts.ts";
+import providerWaitText from "./provider-wait-text.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
@@ -13,14 +14,10 @@ const { providerUnusableReason } = compat;
 const { formatLocalDateTime } = platform;
 const { prompts } = promptsModule;
 const { store } = storeModule;
+const { REASON_LABEL, cause } = providerWaitText;
 
 const RETRY_WITHOUT_RESET_MS = 15 * 60_000;
 const AFTER_RESET_MS = 60_000;
-
-const REASON_LABEL: Record<orchestratorTypesTypes.ProviderWait["reason"], string> = {
-  auth: "provider rejected the credentials",
-  quota: "provider limit",
-};
 
 function limitOf(worker: workerTypes.WorkerSession): outcomeTypes.ProviderLimit | undefined {
   const last = worker.messages.findLast(
@@ -56,6 +53,19 @@ function resumeAt(limit: outcomeTypes.ProviderLimit, now: number): number {
     : limit.resetsAt + AFTER_RESET_MS;
 }
 
+function stallOf(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+  limit: outcomeTypes.ProviderLimit,
+): runtimeTypes.DecisionAsk | undefined {
+  if (limit.progressed || store.providerResumedFor(runtime.database, taskId) !== limit.reason)
+    return undefined;
+  return {
+    key: providerWaitText.stallKey(limit.reason, limit.error),
+    text: providerWaitText.stallText(limit.reason, limit.error),
+  };
+}
+
 function record(
   runtime: runtimeTypes.Runtime,
   assignment: orchestratorTypesTypes.Assignment,
@@ -63,15 +73,14 @@ function record(
   now: number,
 ): void {
   const { database } = runtime;
-  const stalled =
-    !limit.progressed && store.providerResumedFor(database, assignment.taskId) === limit.reason;
-  store.setTaskStatus(database, assignment.taskId, "waiting", now);
+  if (!helperRole(assignment.role))
+    store.setTaskStatus(database, assignment.taskId, "waiting", now);
   store.insertProviderWait(database, {
     createdAt: now,
     error: limit.error,
     project: runtime.options.project,
     reason: limit.reason,
-    resumeAt: stalled ? null : resumeAt(limit, now),
+    resumeAt: resumeAt(limit, now),
     role: assignment.role,
     sessionFile: limit.sessionFile,
     taskId: assignment.taskId,
@@ -79,26 +88,29 @@ function record(
   });
 }
 
-function firstLine(text: string): string {
-  return (text.split("\n").find((line) => line.trim() !== "") ?? text).trim();
+function helperRole(role: orchestratorTypesTypes.ThreadRole): boolean {
+  return role === "advisor" || role === "triage";
 }
 
 function waitingDetail(wait: orchestratorTypesTypes.ProviderWait): string {
-  const cause = `${REASON_LABEL[wait.reason]} (${firstLine(wait.error)})`;
-  return wait.resumeAt === null
-    ? `${cause}; resumed and stopped on it again without progress, waits for a decision`
-    : `${cause}; resumes ${formatLocalDateTime(wait.resumeAt)}`;
+  const who = helperRole(wait.role) ? `the ${wait.role} ` : "";
+  return `${cause(wait.reason, wait.error)}; ${who}resumes ${formatLocalDateTime(wait.resumeAt)}`;
 }
 
-function waitingLine(runtime: runtimeTypes.Runtime, taskId: string): string {
+function helperWaitingLine(wait: orchestratorTypesTypes.ProviderWait): string {
+  const at = formatLocalDateTime(wait.resumeAt);
+  return wait.role === "advisor"
+    ? ` stopped, not failed. The ${cause(wait.reason, wait.error)} stopped the advisor; the same advisor thread resumes automatically at ${at}. The task still waits for your decision, and send_message answers it without waiting for the advice.`
+    : ` waiting, not failed. The ${cause(wait.reason, wait.error)} stopped the triage; the same triage thread resumes automatically at ${at}, and you hear from it either way.`;
+}
+
+function waitingLine(runtime: runtimeTypes.Runtime, taskId: string): string | undefined {
   const wait = store
     .listProviderWaits(runtime.database, runtime.options.project)
     .find((candidate) => candidate.taskId === taskId);
-  if (wait === undefined) return " waiting.";
-  const cause = `the ${REASON_LABEL[wait.reason]} (${firstLine(wait.error)})`;
-  return wait.resumeAt === null
-    ? ` waiting for your decision, not failed. It was resumed after ${cause} and stopped on it again before making any progress, so it is not resumed on its own. send_message resumes the same thread with your message, rerun_task starts it over in a new thread, and stop_task stops it.`
-    : ` waiting, not failed. ${cause.charAt(0).toUpperCase()}${cause.slice(1)} stopped it; the same thread resumes automatically at ${formatLocalDateTime(wait.resumeAt)}.`;
+  if (wait === undefined) return undefined;
+  if (helperRole(wait.role)) return helperWaitingLine(wait);
+  return ` waiting, not failed. The ${cause(wait.reason, wait.error)} stopped it; the same thread resumes automatically at ${formatLocalDateTime(wait.resumeAt)}.`;
 }
 
 function resumePrompt(
@@ -113,7 +125,15 @@ function resumePrompt(
     .join("\n\n");
 }
 
-const providerWaits = { limitOf, record, resumePrompt, waitingDetail, waitingLine };
+const providerWaits = {
+  helperRole,
+  limitOf,
+  record,
+  resumePrompt,
+  stallOf,
+  waitingDetail,
+  waitingLine,
+};
 
 const providerWait = {
   providerWaits,

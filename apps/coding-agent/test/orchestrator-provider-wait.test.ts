@@ -1,43 +1,23 @@
-import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import { Clock, Effect } from "effect";
 import { afterEach, expect, it, vi } from "vite-plus/test";
 
-import claudeCodeRun from "../src/core/cli-agents/claude-code-run.ts";
 import platform from "../src/core/platform/index.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
-import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
+import providerWaitSupport from "./provider-wait-support.ts";
 
-const { create } = orchestratorSupport;
-const { harness } = orchestratorHarness;
-const { setup, taskStatus } = harness;
-const { TASK, advance, fakeClock } = watchdogSupport;
+const { taskStatus } = orchestratorHarness.harness;
+const { advance } = watchdogSupport;
 const { formatLocalDateTime } = platform;
-const { fauxAssistantMessage } = ai;
-const { usageLimited } = claudeCodeRun;
-
-const MINUTE = 60_000;
-const HOUR = 60 * MINUTE;
-const SESSION_LIMIT = "You've hit your session limit · resets 8am (Asia/Tokyo)";
-
-const sessionLimit = (resetsAt: number): Partial<aiTypes.AssistantMessage> => {
-  const failed = usageLimited(SESSION_LIMIT, resetsAt);
-  return { errorMessage: failed.message, errorResetsAt: resetsAt };
-};
+const { HOUR, MINUTE, SESSION_LIMIT, limitAgain, resumeAll, sessionLimit, snapshotOf } =
+  providerWaitSupport;
 
 afterEach(() => {
   vi.useRealTimers();
 });
 
-const startedTask = Effect.gen(function* () {
-  yield* fakeClock();
-  const started = setup({ pollIntervalMs: 5000 });
-  const task = yield* create(started.orchestrator, TASK);
-  const worker = started.workers[0];
-  if (worker === undefined) throw new Error("no worker started");
-  return { ...started, task, worker };
-});
+const startedTask = providerWaitSupport.startedTask();
 
 type Started = Effect.Success<typeof startedTask>;
 
@@ -46,9 +26,6 @@ const endWith = (started: Started, failure: Partial<aiTypes.AssistantMessage>) =
     started.worker.endTurnWithError(failure);
     yield* advance(0);
   });
-
-const snapshotOf = (started: Started) =>
-  started.orchestrator.snapshot.tasks.find((task) => task.id === started.task.id);
 
 const waitsUntilTheResetAndResumesTheSameThread = () =>
   Effect.runPromise(
@@ -156,58 +133,6 @@ const dropsTheWaitWhenTheTaskIsStopped = () =>
   );
 
 it("drops the wait when the task is stopped", dropsTheWaitWhenTheTaskIsStopped);
-
-const limitAgain = (
-  started: Started,
-  index: number,
-  progressed: boolean,
-  failure: (resetsAt: number) => Partial<aiTypes.AssistantMessage> = sessionLimit,
-) =>
-  Effect.gen(function* () {
-    const worker = started.workers[index];
-    if (worker === undefined) throw new Error(`worker ${index} did not start`);
-    if (progressed) worker.messages = [fauxAssistantMessage("did some work")];
-    worker.endTurnWithError(failure((yield* Clock.currentTimeMillis) + HOUR));
-    yield* advance(0);
-  });
-
-const resumeAll = (started: Started, count: number) =>
-  Effect.gen(function* () {
-    yield* advance(HOUR + MINUTE + 10_000);
-    expect(started.workers).toHaveLength(count);
-  });
-
-const asksForADecisionWhenAResumeMakesNoProgress = () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const started = yield* startedTask;
-      yield* limitAgain(started, 0, false);
-      yield* resumeAll(started, 2);
-      yield* limitAgain(started, 1, false);
-
-      expect(taskStatus(started.orchestrator, started.task.id)).toBe("waiting");
-      expect(snapshotOf(started)?.waitingReason?.kind).toBe("provider");
-      expect(snapshotOf(started)?.waitingReason?.detail).toContain("waits for a decision");
-      expect(started.reports.at(-1)?.details.status).toBe("waiting");
-      expect(started.reports.at(-1)?.text).toContain("waiting for your decision, not failed");
-      yield* advance(3 * HOUR);
-      expect(started.workers).toHaveLength(2);
-
-      yield* Effect.promise(() =>
-        started.orchestrator.sendMessage(started.task.id, "The limit is lifted; go on."),
-      );
-      expect(started.workers).toHaveLength(3);
-      expect(started.workers[2]?.openedSessionFile).toBe(started.workers[1]?.sessionFile);
-      expect(started.workers[2]?.prompts[0]).toContain("The limit is lifted; go on.");
-      expect(taskStatus(started.orchestrator, started.task.id)).toBe("running");
-      yield* Effect.promise(() => started.orchestrator.dispose());
-    }),
-  );
-
-it(
-  "stops resuming and asks for a decision when a resumed thread stops on the same error without progress",
-  asksForADecisionWhenAResumeMakesNoProgress,
-);
 
 const keepsWaitingWhileResumesMakeProgress = () =>
   Effect.runPromise(

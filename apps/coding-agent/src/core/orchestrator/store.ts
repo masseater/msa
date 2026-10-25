@@ -26,6 +26,8 @@ const store = {
   ...watchdogStore,
   ...providerWaitStore,
   ...pullRequestStore,
+  hasTriageAsk: progressStore.hasTriageAsk,
+  moveTriageAsk: progressStore.moveTriageAsk,
   reviewContentsOf: progressStore.reviewContentsOf,
   saveReviewContents: progressStore.saveReviewContents,
   saveTriageAsk: progressStore.saveTriageAsk,

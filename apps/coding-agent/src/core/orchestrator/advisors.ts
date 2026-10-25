@@ -13,6 +13,13 @@ const { newId } = idsModule;
 const STOPPED =
   "Stopped: the orchestrator answered the decision before this advisor finished, so its advice would be stale. Its checkout was removed.";
 
+function dropProviderWait(runtime: runtimeTypes.Runtime, taskId: string): void {
+  const waiting = store
+    .listProviderWaits(runtime.database, runtime.options.project)
+    .some((wait) => wait.taskId === taskId && wait.role === "advisor");
+  if (waiting) store.deleteProviderWait(runtime.database, taskId);
+}
+
 function stopRunning(
   runtime: runtimeTypes.Runtime,
   taskId: string,
@@ -20,6 +27,7 @@ function stopRunning(
 ): Effect.Effect<void> {
   return Effect.gen(function* () {
     const database = runtime.database;
+    yield* Effect.sync(() => dropProviderWait(runtime, taskId));
     for (const assignment of store.assignmentsOfTask(database, taskId)) {
       if (assignment.role !== "advisor") continue;
       const thread = store.getThread(database, assignment.threadId);
