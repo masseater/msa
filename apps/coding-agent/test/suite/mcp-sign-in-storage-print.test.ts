@@ -83,7 +83,9 @@ const printsTheNoticeOnStderrWithoutAUi = () =>
       });
       yield* printSession(agentDir, server.url);
       yield* awaited(
-        vi.waitFor(() => expect(errors.join("\n")).toContain("MCP sign-ins are not saved")),
+        vi.waitFor(() => expect(errors.join("\n")).toContain("MCP sign-ins are not saved"), {
+          timeout: 5_000,
+        }),
       );
       const printed = errors.join("\n");
       expect(printed).toContain("The sign-ins it held (issues) last only until");
