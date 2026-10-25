@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
@@ -102,11 +104,7 @@ const persistsTheAbortedResponseBeforeRunning = Effect.gen(function* () {
 const persistsTheAbortedResponseBeforeRunningThe = () =>
   Effect.runPromise(persistsTheAbortedResponseBeforeRunning);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #7253: manual compaction during an active response", () => {
   afterEach(afterEachHook);

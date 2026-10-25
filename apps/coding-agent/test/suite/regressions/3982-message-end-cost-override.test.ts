@@ -6,6 +6,8 @@ import type messageTypesModule from "../../../../../libs/ai/src/message-types.ty
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
@@ -67,11 +69,7 @@ const allowsExtensionsToReplaceFinalizedAssistantStep1 = (
 const allowsExtensionsToReplaceFinalizedAssistantUsage = () =>
   Effect.runPromise(allowsExtensionsToReplaceFinalizedAssistant);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("regression #3982: message_end cost override", () => {
   afterEach(afterEachHook);

@@ -1,8 +1,11 @@
 import ai from "@msa/ai";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessModule from "../harness.ts";
+
+const { awaited } = testing;
 
 const { fauxAssistantMessage } = ai;
 
@@ -41,7 +44,7 @@ describe("regression: issue 6019 explicit provider retry messages", () => {
             true,
           ]);
         } finally {
-          harness.cleanup();
+          yield* awaited(harness.cleanup());
         }
       }),
     ),

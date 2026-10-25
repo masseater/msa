@@ -161,8 +161,9 @@ describe("SettingsSelectorComponent", () => {
   });
 
   afterEach(() => {
-    harness?.cleanup();
+    const closing = harness?.cleanup();
     harness = undefined;
+    return closing;
   });
 
   it("cycles through fullscreen settings", cyclesThroughFullscreenSettings);

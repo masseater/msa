@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses4, loadDocsSearch, setup4 } = agentSessionMcpSupport;
@@ -44,9 +46,7 @@ const declaresToolsToolSearchLoadedAgainOn = () =>
   Effect.runPromise(declaresToolsToolSearchLoadedAgain);
 
 describe("AgentSession MCP tools after resume and reload", () => {
-  afterEach(() => {
-    while (harnesses4.length > 0) harnesses4.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses4));
 
   it(
     "declares tools tool_search loaded again on resume once their server connects",

@@ -3,9 +3,12 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "./close-agent-session.ts";
 import harnessModule from "./suite/harness.ts";
 import type harnessTypes from "./suite/harness.types.ts";
 import utilities from "./utilities.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { createHarness } = harnessModule;
 const { assistantMsg, userMsg } = utilities;
@@ -77,11 +80,7 @@ const persistsExtensionProvidedSummaryUsageInSession = () =>
     }),
   );
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("Branch summary extensions", () => {
   afterEach(afterEachHook);

@@ -48,9 +48,7 @@ const includesTheToolCallIdAnd = Effect.gen(function* () {
 const includesTheToolCallIdAndName = () => Effect.runPromise(includesTheToolCallIdAnd);
 
 describe("regression #7925: tool-call metadata is available when streaming starts", () => {
-  afterEach(() => {
-    harness?.cleanup();
-  });
+  afterEach(() => harness?.cleanup());
   it(
     "includes the tool call id and name without cumulative snapshots",
     includesTheToolCallIdAndName,

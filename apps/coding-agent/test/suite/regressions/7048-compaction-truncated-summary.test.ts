@@ -60,8 +60,6 @@ const doesNotPersistALengthLimited = Effect.gen(function* () {
 const doesNotPersistALengthLimitedSummary = () => Effect.runPromise(doesNotPersistALengthLimited);
 
 describe("#7048 truncated compaction summaries", () => {
-  afterEach(() => {
-    harness?.cleanup();
-  });
+  afterEach(() => harness?.cleanup());
   it("does not persist a length-limited summary", doesNotPersistALengthLimitedSummary);
 });

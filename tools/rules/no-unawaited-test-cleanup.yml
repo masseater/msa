@@ -1,0 +1,16 @@
+id: no-unawaited-test-cleanup
+language: typescript
+severity: error
+message: "テストの harness の cleanup は session_shutdown で extension を閉じてから一時ディレクトリを消す Promise を返す。結果を捨てず、await するか hook から返す。"
+files:
+  - apps/coding-agent/test/**
+rule:
+  kind: call_expression
+  has:
+    field: function
+    kind: member_expression
+    has:
+      field: property
+      regex: ^cleanup$
+  inside:
+    kind: expression_statement

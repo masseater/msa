@@ -6,6 +6,8 @@ import tools from "../../src/extensions/mcp/tools.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createMcpToolName } = tools;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
@@ -68,9 +70,7 @@ const declaresDirectlyExposedMcpToolsToThe = () =>
   Effect.runPromise(declaresDirectlyExposedMcpToolsTo);
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "rejects direct model calls to codemode-only MCP tools",

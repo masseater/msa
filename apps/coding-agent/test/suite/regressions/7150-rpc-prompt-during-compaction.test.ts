@@ -7,6 +7,8 @@ import type agentSessionTypes from "../../../src/core/agent-session.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness, getMessageText, getUserTexts } = harnessModule;
@@ -114,11 +116,7 @@ const rejectsAnRpcPromptWhileManual = Effect.gen(function* () {
 const rejectsAnRpcPromptWhileManualCompaction = () =>
   Effect.runPromise(rejectsAnRpcPromptWhileManual);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #7150: RPC prompt during manual compaction", () => {
   afterEach(afterEachHook);

@@ -12,7 +12,7 @@ import type typesModule from "./types.ts";
 
 const { AgentSession } = codingAgent;
 
-const { createTempDir, removeTempDir } = runtime;
+const { closeSession, createTempDir } = runtime;
 const {
   createAuthStorage,
   createFauxProvider,
@@ -91,11 +91,7 @@ const harnessFor = (input: {
   return {
     appendResponses: fauxProvider.appendResponses,
     authStorage: input.authStorage,
-    cleanup() {
-      session.dispose();
-      fauxProvider.unregister();
-      void removeTempDir(tempDir);
-    },
+    cleanup: () => closeSession({ fauxProvider, session, tempDir }),
     events,
     eventsOfType<T extends codingAgentTypes.AgentSessionEvent["type"]>(type: T) {
       return events.filter(

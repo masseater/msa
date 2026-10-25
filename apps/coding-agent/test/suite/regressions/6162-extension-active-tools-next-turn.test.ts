@@ -1,5 +1,6 @@
 import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { Type } from "typebox";
 import { describe, expect, it } from "vite-plus/test";
@@ -7,6 +8,8 @@ import { describe, expect, it } from "vite-plus/test";
 import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
+
+const { awaited } = testing;
 
 const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools } = ai;
 
@@ -72,7 +75,7 @@ const appliesMsaSetactivetoolsBeforeTheNext = Effect.gen(function* () {
     expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["after_switch"]);
     expect(providerToolNames).toEqual([["switch_tools"], ["after_switch"]]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -105,7 +108,7 @@ const reportsTheRefreshedSystemPromptDuring = Effect.gen(function* () {
     expect(providerPrompts[0]).not.toBe(providerPrompts[1]);
     expect(sessionPrompts).toEqual(providerPrompts);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -161,7 +164,7 @@ const preservesBeforeAgentStartSystemPromptStep1 = (harness: harnessTypes.Harnes
       expect(providerSystemPrompts[0]).toContain("keep this run override");
       expect(providerSystemPrompts[1]).toContain("keep this run override");
     } finally {
-      harness.cleanup();
+      yield* awaited(harness.cleanup());
     }
   });
 

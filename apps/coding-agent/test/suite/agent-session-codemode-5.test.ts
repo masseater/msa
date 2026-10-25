@@ -6,8 +6,11 @@ import { Type } from "typebox";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import toolDefinitionWrapper from "../../src/core/tools/tool-definition-wrapper.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { createToolDefinitionFromAgentTool } = toolDefinitionWrapper;
 
@@ -154,9 +157,7 @@ const attachesOnlyTheImagesTheScriptPasses = () =>
   Effect.runPromise(attachesOnlyTheImagesTheScript);
 
 describe("AgentSession codemode tool", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it("adds the usage of nested results to the codemode result", addsTheUsageOfNestedResultsTo);
 
@@ -167,9 +168,7 @@ describe("AgentSession codemode tool", () => {
 });
 
 describe("AgentSession codemode tool", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "attaches only the images the script passes to image(), in output order, each after its saved path",

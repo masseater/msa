@@ -8,6 +8,8 @@ import toolsModule from "../../src/extensions/mcp/tools.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createMcpToolName } = toolsModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
@@ -246,9 +248,7 @@ const keepsCodemodeOnlyMcpToolsCallable = Effect.gen(function* () {
 });
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it("keeps MCP tools when --tools names no MCP tool", () =>
     Effect.runPromise(keepsMcpToolsWhenToolsNames));

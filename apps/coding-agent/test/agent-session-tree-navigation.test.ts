@@ -29,9 +29,7 @@ const beforeEachHook = () =>
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should navigate to user message and put text in editor",
@@ -69,9 +67,7 @@ describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should navigate to non-user message without editor text",
@@ -106,9 +102,7 @@ describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should create branch summary when navigating with summarize=true",
@@ -183,9 +177,7 @@ const attachesSummaryToNestedUserMessageParent = Effect.gen(function* () {
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should attach summary to correct parent when navigating to nested user message",

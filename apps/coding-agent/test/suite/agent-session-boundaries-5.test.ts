@@ -9,6 +9,8 @@ import agentSessionBoundaries5Support from "./agent-session-boundaries-5-support
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses3 } = agentSessionBoundaries5Support;
@@ -213,9 +215,7 @@ const finishesRetryBookkeepingWhenARetryReceives = () =>
   Effect.runPromise(finishesRetryBookkeepingWhenARetry);
 
 describe("durable length recovery", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
 
   it(
     "keeps truncated tool attempts in context for the natural next turn",
@@ -229,9 +229,7 @@ describe("durable length recovery", () => {
 });
 
 describe("durable length recovery", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
 
   it(
     "gives a distinct queued follow-up its own length-recovery budget",

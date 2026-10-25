@@ -75,7 +75,7 @@ const aForcedPromptIsSentAsThe = Effect.gen(function* () {
       harness.session.tools.prompt.systemPrompt,
     );
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -155,7 +155,7 @@ const setactivetoolsEmitsPromptSectionsAndToolChanges = Effect.gen(function* () 
     expect(current?.toolsAdded?.map((value) => value.name)).toEqual(["second"]);
     expect(getSystemMessageText(current!)).toBe(harness.session.tools.prompt.systemPrompt);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -206,7 +206,7 @@ const setactivetoolsInBeforeAgentStartControlsThe = Effect.gen(function* () {
     expect(update?.toolsAdded).toBeUndefined();
     expect(harness.session.tools.loadout.getActiveToolNames()).toEqual(["second"]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

@@ -49,7 +49,7 @@ const keepsToolDeclarationsStableAcrossASession = () =>
           harness.session.messages.filter((message) => message.role === "system"),
         ).toHaveLength(1);
       } finally {
-        harness.cleanup();
+        yield* awaited(harness.cleanup());
       }
     }),
   );

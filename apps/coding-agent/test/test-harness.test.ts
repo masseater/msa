@@ -176,9 +176,7 @@ const customUsageNumbers = () =>
   );
 
 describe("test harness", () => {
-  afterEach(() => {
-    harness?.cleanup();
-  });
+  afterEach(() => harness?.cleanup());
 
   it("simple text response", simpleTextResponse);
 

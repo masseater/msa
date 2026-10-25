@@ -5,6 +5,8 @@ import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createHarness } = harnessModule;
 const { assistantMsg, userMsg } = utilities;
 
@@ -40,11 +42,7 @@ const clearsBranchSummaryStateWhenSession = Effect.gen(function* () {
 const clearsBranchSummaryStateWhenSessionBefore = () =>
   Effect.runPromise(clearsBranchSummaryStateWhenSession);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #3688 tree cancellation compaction state", () => {
   afterEach(afterEachHook);

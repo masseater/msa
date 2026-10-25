@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
@@ -72,9 +74,7 @@ const passesImageSettingsAndTheCurrentModel = () =>
 
 const afterEachHook = () => {
   normalizeToolResultImages.mockClear();
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
+  return cleanupAll(harnesses);
 };
 
 describe("AgentSession tool result images", () => {

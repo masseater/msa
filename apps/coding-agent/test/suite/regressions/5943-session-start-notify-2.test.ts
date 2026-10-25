@@ -1,4 +1,5 @@
 import ai from "@msa/ai";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it, vi } from "vite-plus/test";
 
@@ -7,6 +8,8 @@ import interactiveModeFake from "../../interactive-mode-fake.ts";
 import harnessModule from "../harness.ts";
 import SessionStartNotifySupport from "./5943-session-start-notify-support.ts";
 import type SessionStartNotifySupportTypes from "./5943-session-start-notify-support.types.ts";
+
+const { awaited } = testing;
 
 const { bindModeFake } = interactiveModeFake;
 
@@ -82,7 +85,7 @@ const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* ()
     expect(events).toContain("message_end:user:user from start");
     expect(events).toContain("message_end:assistant:assistant from start");
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -119,7 +122,7 @@ const runsTheReloadRenderHookBefore = Effect.gen(function* () {
     expect(beforeSessionStart).toHaveBeenCalledTimes(1);
     expect(events).toEqual(["render", "start:reload", "notify:reload"]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

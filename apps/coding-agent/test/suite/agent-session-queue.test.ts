@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { afterEach, describe, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionQueueCases from "./agent-session-queue-cases.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const {
   deliversAllFollowUpMessagesIn,
@@ -66,11 +69,7 @@ const throwsWhenQueueingAnExtensionCommandWith2 = () =>
 const deliversFollowUpsQueuedDuringAgentEnd = () =>
   Effect.runPromise(deliversFollowUpsQueuedDuringAgent);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("AgentSession queue characterization", () => {
   afterEach(afterEachHook);

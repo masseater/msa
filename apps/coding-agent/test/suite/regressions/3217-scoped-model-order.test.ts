@@ -10,6 +10,8 @@ import tuiKit from "../../tui-kit.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { ModelSelectorComponent, ScopedModelsSelectorComponent } = components;
 
 const { setKeybindings } = tui;
@@ -116,11 +118,7 @@ const propagatesReorderedScopedModelsBackToThe = () =>
 
 const preservesScopedModelOrderInTheModel = () => Effect.runPromise(preservesScopedModelOrderInThe);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #3217 scoped model ordering", () => {
   beforeAll(() => {

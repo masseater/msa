@@ -5,6 +5,8 @@ import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createHarness } = harnessModule;
 
 const harnesses: harnessTypes.Harness[] = [];
@@ -74,11 +76,7 @@ const emitsSessionInfoChangedWhenAnExtension = () =>
 const emitsSessionInfoChangedToExtensions2 = () =>
   Effect.runPromise(emitsSessionInfoChangedToExtensions);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("regression #3686: session name changes emit an event", () => {
   afterEach(afterEachHook);

@@ -8,6 +8,8 @@ import messagesModule from "../../../src/core/messages.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { convertToLlm } = messagesModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
@@ -186,11 +188,7 @@ const keepsSessionEntriesAndMessageEventsIn = () =>
 
 const producesAnLlmHistoryWhereEveryTool = () => Effect.runPromise(producesAnLlmHistoryWhereEvery);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("#8537 custom messages injected during tool execution", () => {
   afterEach(afterEachHook);

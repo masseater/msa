@@ -9,6 +9,8 @@ import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createMcpToolName } = toolsModule;
 const { TOOL_SEARCH_DESCRIPTION } = toolModule;
 
@@ -87,9 +89,7 @@ const activatesToolSearchForDeferredMcpTools = () =>
 const findsNothingToLoadWhenEveryMatching = () => Effect.runPromise(findsNothingToLoadWhenEvery);
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "activates tool_search for deferred MCP tools and keeps loaded tools declared on the branch",

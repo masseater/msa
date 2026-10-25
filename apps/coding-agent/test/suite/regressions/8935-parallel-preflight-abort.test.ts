@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getMessageText } = harnessModule;
@@ -102,11 +104,7 @@ const doesNotStartPreparedToolsAfter = Effect.gen(function* () {
 
 const doesNotStartPreparedToolsAfterA = () => Effect.runPromise(doesNotStartPreparedToolsAfter);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("#8935 parallel preflight abort", () => {
   afterEach(afterEachHook);

@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { afterEach, describe, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionModelExtensionCases from "./agent-session-model-extension-cases.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const {
   allowsBeforeAgentStartHandlersTo,
@@ -77,11 +80,7 @@ const allowsBeforeAgentStartHandlersToInject = () =>
 const bindextensionsEmitsSessionStartAndReloadEmits = () =>
   Effect.runPromise(bindextensionsEmitsSessionStartAndReload);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("AgentSession model and extension characterization", () => {
   afterEach(afterEachHook);

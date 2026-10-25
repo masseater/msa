@@ -5,6 +5,8 @@ import type srcTypes from "../../../src/index.types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createHarness } = harnessModule;
 
 const harnesses: harnessTypes.Harness[] = [];
@@ -48,11 +50,7 @@ const filtersNewlinesWhenAgentsessionSetsessionnameIsCalled = () =>
 const filtersNewlinesWhenAnExtensionCallsMsa = () =>
   Effect.runPromise(filtersNewlinesWhenAnExtensionCalls);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("regression #5996: session names do not contain newlines", () => {
   afterEach(afterEachHook);

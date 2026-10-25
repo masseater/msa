@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { declaredToolNames, harnesses, nestedToolNames, serversSection, setup, setupSlow } =
@@ -219,9 +221,7 @@ const findsToolsFromScriptsWithSearchtoolsAnd = () =>
   Effect.runPromise(findsToolsFromScriptsWithSearchtools);
 
 describe("AgentSession MCP integration", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "waits for servers with direct tools before listing the servers",

@@ -4,8 +4,11 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import virtualModels from "../../src/core/virtual-models.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
 import type virtualModelsSupportTypes from "./virtual-models-support.types.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { VIRTUAL_MODEL_STATE_ENTRY } = virtualModels;
 
@@ -221,9 +224,7 @@ const routesCompactionSummariesBeforeSizingThem2 = () =>
   Effect.runPromise(routesCompactionSummariesBeforeSizingThem);
 
 describe("AgentSession virtual models", () => {
-  afterEach(() => {
-    for (const harness of harnesses.splice(0)) harness.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "compacts before a request routed to a model with a smaller window",

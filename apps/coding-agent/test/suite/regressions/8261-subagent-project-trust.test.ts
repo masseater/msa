@@ -12,7 +12,7 @@ const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getMessageText } = harnessModule;
 
-const { joinPath } = testing;
+const { awaited, joinPath } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
@@ -93,7 +93,7 @@ function runProjectAgent(
           toolResult: getMessageText(toolResult),
         };
       } finally {
-        harness.cleanup();
+        yield* awaited(harness.cleanup());
       }
     }),
   );

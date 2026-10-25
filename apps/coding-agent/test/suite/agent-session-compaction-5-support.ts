@@ -1,15 +1,16 @@
 import { vi } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionCompactionSupport from "./agent-session-compaction-support.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { harnesses } = agentSessionCompactionSupport;
 
 const afterEachHook5 = () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
+  return cleanupAll(harnesses);
 };
 
 const agentSessionCompaction5Support = {

@@ -59,10 +59,7 @@ const matchesTheAvailabilitySnapshotWithoutStartingA = () =>
 const usesACallerOwnedDeadlineOnlyAfter = () => Effect.runPromise(usesACallerOwnedDeadlineOnly);
 
 describe("issue #7443 /model cached match", () => {
-  afterEach(() => {
-    harness?.cleanup();
-    vi.restoreAllMocks();
-  });
+  afterEach(() => Promise.resolve(harness?.cleanup()).finally(() => vi.restoreAllMocks()));
   it(
     "matches the availability snapshot without starting a catalog refresh",
     matchesTheAvailabilitySnapshotWithoutStartingA,

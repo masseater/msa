@@ -7,6 +7,8 @@ import type srcTypes from "../../src/index.types.ts";
 import agentSessionBoundaries5Support from "./agent-session-boundaries-5-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { harnesses3 } = agentSessionBoundaries5Support;
@@ -224,9 +226,7 @@ const marksTheExhaustedRetryRunAsFinal = () => Effect.runPromise(marksTheExhaust
 const keepsOmissionsAndDoesNotRetryWhen = () => Effect.runPromise(keepsOmissionsAndDoesNotRetry);
 
 describe("durable length recovery", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
 
   it(
     "omits a recoverable projected replacement by its source entry ID",
@@ -244,9 +244,7 @@ describe("durable length recovery", () => {
 });
 
 describe("durable length recovery", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
 
   it(
     "keeps omissions and does not retry when recovery compaction fails",

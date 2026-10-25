@@ -29,9 +29,7 @@ const beforeEachHook5 = () =>
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook5);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should attach summary to selected node when navigating to assistant message",
@@ -72,9 +70,7 @@ describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook5);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should handle abort during summarization",
@@ -123,9 +119,7 @@ describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook5);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should not create summary when navigating without summarize option",
@@ -161,9 +155,7 @@ describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
 describe.skipIf(!hasLiveAuth)("AgentSession tree navigation e2e", () => {
   beforeEach(beforeEachHook5);
 
-  afterEach(() => {
-    ctx2.cleanup();
-  });
+  afterEach(() => ctx2.cleanup());
 
   it(
     "should handle navigation to same position (no-op)",

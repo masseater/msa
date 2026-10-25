@@ -5,8 +5,11 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import type sessionManagerTypes from "../../src/core/session-manager.types.ts";
 import executeModule from "../../src/extensions/codemode/execute.ts";
 import toolModule from "../../src/extensions/codemode/tool.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionCodemode2Support from "./agent-session-codemode-2-support.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { CODEMODE_STORE_ENTRY_TYPE, createCodemodeTool } = toolModule;
 const { readCodemodeStore } = executeModule;
@@ -64,9 +67,7 @@ const runsWithoutASessionStartingFromAn = () => Effect.runPromise(runsWithoutASe
 const loadsTheValuesWrittenOnTheCurrent = () => Effect.runPromise(loadsTheValuesWrittenOnThe);
 
 describe("codemode options and store", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
 
   it("runs without a session, starting from an empty store", runsWithoutASessionStartingFromAn);
 

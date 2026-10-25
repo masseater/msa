@@ -8,6 +8,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getUserTexts } = harnessModule;
@@ -187,11 +189,7 @@ const settlesOnlyAfterFollowUpsQueuedBy = () => Effect.runPromise(settlesOnlyAft
 const extensionCommandWaitforidleWaitsForSessionLevel = () =>
   Effect.runPromise(extensionCommandWaitforidleWaitsForSession);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("regression #6363: agent settled event and idle waiting", () => {
   afterEach(afterEachHook);

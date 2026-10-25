@@ -150,8 +150,7 @@ const boundsRefreshTo15Seconds2 = () => Effect.runPromise(boundsRefreshTo15Secon
 
 const afterEachHook2 = () => {
   vi.useRealTimers();
-  harness3?.cleanup();
-  vi.restoreAllMocks();
+  return Promise.resolve(harness3?.cleanup()).finally(() => vi.restoreAllMocks());
 };
 
 describe("post-login model discovery", () => {

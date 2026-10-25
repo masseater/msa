@@ -7,6 +7,8 @@ import type extensionsTypes from "../../src/core/extensions/index.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
@@ -194,7 +196,7 @@ const triggerCompaction = (harness: harnessTypes.Harness, path: CompactionPath) 
 describe("AgentSession compaction model overrides", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    while (harnesses.length !== 0) harnesses.pop()?.cleanup();
+    return cleanupAll(harnesses);
   });
 
   it.each(["manual", "pre-prompt", "post-run", "overflow"] as const)(
@@ -235,7 +237,7 @@ describe("AgentSession compaction model overrides", () => {
 describe("AgentSession compaction model overrides", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    while (harnesses.length !== 0) harnesses.pop()?.cleanup();
+    return cleanupAll(harnesses);
   });
 
   it.each(["manual", "automatic"] as const)(
@@ -284,7 +286,7 @@ describe("AgentSession compaction model overrides", () => {
 describe("AgentSession compaction model overrides", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    while (harnesses.length !== 0) harnesses.pop()?.cleanup();
+    return cleanupAll(harnesses);
   });
 
   it("uses the newly selected model without changing ordinary settings", () =>

@@ -10,6 +10,8 @@ import ansi from "../../../src/utils/ansi.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { ModelSelectorComponent } = codingAgent;
 const { initTheme } = codingAgent;
 
@@ -121,11 +123,7 @@ const movesSelectionToTheFirstRowIn = () => Effect.runPromise(movesSelectionToTh
 
 const movesSelectionToTheFirstRowIn2 = () => Effect.runPromise(movesSelectionToTheFirstRow2);
 
-const afterAllHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterAllHook = () => cleanupAll(harnesses);
 
 describe("model selector filter resets selection to top", () => {
   beforeAll(() => {

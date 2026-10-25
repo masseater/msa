@@ -35,7 +35,7 @@ declare namespace sessionTypesModule {
       type: T,
     ): Extract<agentSessionTypes.AgentSessionEvent, { type: T }>[];
     tempDir: string;
-    cleanup: () => void;
+    cleanup: () => Promise<void>;
   }
 }
 

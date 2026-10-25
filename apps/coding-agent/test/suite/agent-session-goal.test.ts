@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import agentSessionGoalSupport from "./agent-session-goal-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, getCurrentSystemPrompt } = ai;
 
 const { goalEvents, harnesses, setup, touchTool, workTurn } = agentSessionGoalSupport;
@@ -172,9 +174,7 @@ const clearsTheGoalOnAnAuthenticationFailure = () =>
 const retriesOtherErrorsAndPausesWithThe = () => Effect.runPromise(retriesOtherErrorsAndPausesWith);
 
 describe("AgentSession /goal", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "works from the condition alone and stops when the evaluator says it is met",
@@ -192,9 +192,7 @@ describe("AgentSession /goal", () => {
 });
 
 describe("AgentSession /goal", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it("replaces an active goal with a new one", replacesAnActiveGoalWithANew);
 

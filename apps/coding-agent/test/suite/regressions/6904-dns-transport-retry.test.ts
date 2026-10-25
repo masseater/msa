@@ -1,8 +1,11 @@
 import ai from "@msa/ai";
+import testing from "@msa/testing";
 import { Effect } from "effect";
 import { describe, expect, it } from "vite-plus/test";
 
 import harnessModule from "../harness.ts";
+
+const { awaited } = testing;
 
 const { fauxAssistantMessage } = ai;
 
@@ -31,7 +34,7 @@ const retriesATransientDnsLookupFailure = Effect.gen(function* () {
     ]);
     expect(harness.eventsOfType("auto_retry_end").map((event) => event.success)).toEqual([true]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

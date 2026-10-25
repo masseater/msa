@@ -6,6 +6,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createHarness } = harnessModule;
 
 const { currentTimeMillis } = testing;
@@ -97,9 +99,7 @@ const doesNotCompactWhenTheZeroUsage = () => Effect.runPromise(doesNotCompactWhe
 
 const afterEachHook = () => {
   vi.restoreAllMocks();
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
+  return cleanupAll(harnesses);
 };
 
 describe("issue #8328 zero-usage auto-compaction", () => {

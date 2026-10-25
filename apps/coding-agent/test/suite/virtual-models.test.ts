@@ -3,7 +3,10 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import virtualModelsSupport from "./virtual-models-support.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
@@ -201,9 +204,7 @@ const checksCompactionAgainstThePhysicalModelThat = () =>
   Effect.runPromise(checksCompactionAgainstThePhysicalModel);
 
 describe("AgentSession virtual models", () => {
-  afterEach(() => {
-    for (const harness of harnesses.splice(0)) harness.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it(
     "routes each request, including retries, while the selection stays virtual",

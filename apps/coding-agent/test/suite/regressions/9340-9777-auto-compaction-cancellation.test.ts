@@ -7,6 +7,8 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness } = harnessModule;
@@ -166,7 +168,7 @@ const reportsExtensionCancellationAsAborted2 = () =>
 describe("automatic compaction cancellation regressions", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
+    return cleanupAll(harnesses);
   });
   it("does not start post-run auto-compaction after abort", doesNotStartPostRunAutoCompaction);
   it("cancels summarization authentication", cancelsSummarizationAuthentication2);

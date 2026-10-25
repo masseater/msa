@@ -1,3 +1,4 @@
+import testing from "@msa/testing";
 import { Cause, Effect, Exit } from "effect";
 import { afterEach, describe, expect, test, vi } from "vite-plus/test";
 
@@ -7,6 +8,8 @@ import rpcMode from "../../../src/modes/rpc/rpc-mode.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
+
+const { awaited } = testing;
 
 const { runRpcMode } = rpcMode;
 
@@ -107,7 +110,7 @@ function createRuntimeHost(
 function startRpcHarness(extension: (msa: extensionsTypesTypes.ExtensionAPI) => void): Promise<{
   harness: harnessTypes.Harness;
   send(command: Record<string, unknown>): void;
-  cleanup(): void;
+  cleanup(): Promise<void>;
 }> {
   return Effect.runPromise(
     Effect.gen(function* () {
@@ -115,10 +118,7 @@ function startRpcHarness(extension: (msa: extensionsTypesTypes.ExtensionAPI) => 
       const harness = yield* Effect.promise(() =>
         createHarness({ extensionFactories: [extension] }),
       );
-      const cleanup = () => {
-        harness.cleanup();
-        restoreListeners(listenerSnapshot);
-      };
+      const cleanup = () => harness.cleanup().finally(() => restoreListeners(listenerSnapshot));
 
       {
         const tryExit7 = yield* Effect.exit(
@@ -129,7 +129,7 @@ function startRpcHarness(extension: (msa: extensionsTypesTypes.ExtensionAPI) => 
         );
         if (Exit.isFailure(tryExit7)) {
           const error = Cause.squash(tryExit7.cause);
-          cleanup();
+          yield* awaited(cleanup());
           throw error;
         }
       }
@@ -233,7 +233,7 @@ describe("RPC user_bash failure handling (#9068)", () => {
           expect(executeBash).toHaveBeenCalledTimes(executeCount);
         } finally {
           executeBash.mockRestore();
-          rpc.cleanup();
+          yield* awaited(rpc.cleanup());
         }
       }),
     ),

@@ -9,13 +9,15 @@ import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import agentSessionPromptSupport from "./agent-session-prompt-support.ts";
 import harnessModule from "./harness.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { harnesses, tempDirs } = agentSessionPromptSupport;
 
 const { createHarness } = harnessModule;
 
-const { gate, removePath, runTest } = testing;
+const { awaited, gate, removePath, runTest } = testing;
 
 const processImage = vi.hoisted(() =>
   vi.fn((_bytes: Uint8Array, mimeType: string) =>
@@ -164,9 +166,7 @@ const afterEachHook3 = () =>
   runTest(
     Effect.gen(function* () {
       processImage.mockClear();
-      while (harnesses.length > 0) {
-        harnesses.pop()?.cleanup();
-      }
+      yield* awaited(cleanupAll(harnesses));
       while (tempDirs.length > 0) {
         const tempDir = tempDirs.pop();
         if (tempDir !== undefined && tempDir !== "") {

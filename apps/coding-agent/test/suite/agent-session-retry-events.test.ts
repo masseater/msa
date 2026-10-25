@@ -1,7 +1,10 @@
 import { Effect } from "effect";
 import { afterEach, describe, it } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionRetryEventsCases from "./agent-session-retry-events-cases.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const {
   cancelsRetrySleepWhenAbortretryIs,
@@ -59,11 +62,7 @@ const emitsAgentEndForErrorResponses2 = () => Effect.runPromise(emitsAgentEndFor
 
 const emitsAgentEndForAbortedRunsAnd = () => Effect.runPromise(emitsAgentEndForAbortedRuns);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("AgentSession retry and event characterization", () => {
   afterEach(afterEachHook);

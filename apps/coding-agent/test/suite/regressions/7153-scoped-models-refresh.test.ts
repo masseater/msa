@@ -137,10 +137,7 @@ const cancelsTheBackgroundRefreshWhenTheSelector = () =>
 describe("issue #7153 scoped models refresh", () => {
   beforeAll(() => initTheme("dark"));
   beforeEach(() => setKeybindings(new KeybindingsManager()));
-  afterEach(() => {
-    harness?.cleanup();
-    vi.restoreAllMocks();
-  });
+  afterEach(() => Promise.resolve(harness?.cleanup()).finally(() => vi.restoreAllMocks()));
   it(
     "renders cached models immediately and updates after background refresh",
     rendersCachedModelsImmediatelyAndUpdatesAfter,

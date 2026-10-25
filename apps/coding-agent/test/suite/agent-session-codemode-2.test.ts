@@ -10,6 +10,8 @@ import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createCodemodeExtension } = extension;
 
 const { CODEMODE_STORE_ENTRY_TYPE } = tool;
@@ -244,9 +246,7 @@ const appendsNothingForFailedScriptsOrScripts = () =>
   Effect.runPromise(appendsNothingForFailedScriptsOr);
 
 describe("codemode options and store", () => {
-  afterEach(() => {
-    while (harnesses3.length > 0) harnesses3.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses3));
 
   it(
     "applies the timeout_ms option and rejects invalid options",

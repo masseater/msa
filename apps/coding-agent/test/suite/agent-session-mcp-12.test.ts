@@ -2,7 +2,10 @@ import ai from "@msa/ai";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { fauxAssistantMessage } = ai;
 
@@ -51,9 +54,7 @@ const declaresToolsToolSearchLoadedAgainAfter = () =>
   Effect.runPromise(declaresToolsToolSearchLoadedAgain2);
 
 describe("AgentSession MCP tools after resume and reload", () => {
-  afterEach(() => {
-    while (harnesses4.length > 0) harnesses4.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses4));
 
   it(
     "does not activate restored tools that register after the next prompt starts",

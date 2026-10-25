@@ -7,6 +7,8 @@ import utilities from "../../utilities.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { createAssistantMessageEventStream } = ai;
 
 const { createHarness } = harnessModule;
@@ -69,11 +71,7 @@ const summarizesTreeBranchesWhenRequestAuth = Effect.gen(function* () {
 const summarizesTreeBranchesWhenRequestAuthHas = () =>
   Effect.runPromise(summarizesTreeBranchesWhenRequestAuth);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #6324 branch summary ambient auth", () => {
   afterEach(afterEachHook);

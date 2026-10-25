@@ -8,6 +8,8 @@ import type modelTypesModule from "../../../../../libs/ai/src/model-types.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage } = ai;
 
 const { createHarness, getUserTexts } = harnessModule;
@@ -97,9 +99,7 @@ const compactsLengthStopOverflowBeforeANew = () =>
 
 const afterEachHook = () => {
   vi.restoreAllMocks();
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
+  return cleanupAll(harnesses);
 };
 
 describe("pre-prompt compaction regression", () => {

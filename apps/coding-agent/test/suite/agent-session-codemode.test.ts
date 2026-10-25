@@ -4,8 +4,11 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import readContent from "../../src/core/tools/read-content.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionCodemodeSupport from "./agent-session-codemode-support.ts";
 import agentSessionCodemodeSupport2 from "./agent-session-codemode-support2.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 
 const { fauxAssistantMessage, fauxToolCall, getCurrentSystemPrompt, getCurrentTools } = ai;
 
@@ -89,9 +92,7 @@ const presentsCallableToolsPerCodemodeMode2 = () =>
 const showsTheGuidelinesOfToolsThatDo = () => Effect.runPromise(showsTheGuidelinesOfToolsThat);
 
 describe("AgentSession codemode tool", () => {
-  afterEach(() => {
-    while (harnesses.length > 0) harnesses.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses));
 
   it("presents callable tools per codemode.mode", presentsCallableToolsPerCodemodeMode2);
 

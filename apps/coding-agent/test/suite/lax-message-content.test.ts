@@ -16,7 +16,7 @@ const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
 
-const { currentTimeMillis, nowIso } = testing;
+const { awaited, currentTimeMillis, nowIso } = testing;
 
 function messageEntry(message: Record<string, unknown>): sessionManagerTypes.SessionEntry {
   return {
@@ -57,7 +57,7 @@ const normalizesToolResultsFromUntypedTools = Effect.gen(function* () {
 
     expect(harness.getPendingResponseCount()).toBe(0);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -90,7 +90,7 @@ const normalizesNullContentInMessageEnd = Effect.gen(function* () {
     expect(assistantMessages).toHaveLength(1);
     expect(assistantMessages[0]?.content).toEqual([]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 
@@ -111,7 +111,7 @@ const normalizesNullContentInCustomMessages = Effect.gen(function* () {
     expect(customMessages).toHaveLength(1);
     expect(customMessages[0]?.content).toEqual([]);
   } finally {
-    harness.cleanup();
+    yield* awaited(harness.cleanup());
   }
 });
 

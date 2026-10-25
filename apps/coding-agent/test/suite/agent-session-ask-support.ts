@@ -8,6 +8,8 @@ import type srcTypes from "../../src/index.types.ts";
 import harnessModule from "./harness.ts";
 import type harnessTypes from "./harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { getCurrentTools } = ai;
 
 const { awaited } = testing;
@@ -83,9 +85,7 @@ function record(
 const declared = (request: aiTypes.TranscriptContext | undefined) =>
   getCurrentTools(request?.messages ?? []).map((tool) => tool.name);
 
-const cleanupHarnesses = (): void => {
-  while (harnesses.length > 0) harnesses.pop()?.cleanup();
-};
+const cleanupHarnesses = (): Promise<void> => cleanupAll(harnesses);
 
 const agentSessionAskSupport = {
   BUILTIN_TOOLS,

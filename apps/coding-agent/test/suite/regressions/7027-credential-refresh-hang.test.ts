@@ -151,8 +151,7 @@ const completesInteractiveLoginBeforeItsBoundedBackground = () =>
 
 const afterEachHook = () => {
   vi.useRealTimers();
-  harness?.cleanup();
-  vi.restoreAllMocks();
+  return Promise.resolve(harness?.cleanup()).finally(() => vi.restoreAllMocks());
 };
 
 describe("issues #7027 and #7113 credential refresh hang", () => {

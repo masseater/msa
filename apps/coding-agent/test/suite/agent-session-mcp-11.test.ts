@@ -2,13 +2,14 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
 import type extensionsTypesTypes from "../../src/core/extensions/types.types.ts";
+import closeAgentSessionModule from "../close-agent-session.ts";
 import agentSessionMcpSupport from "./agent-session-mcp-support.ts";
+
+const { cleanupAll } = closeAgentSessionModule;
 const { harnesses4, loadDocsSearch, setup4 } = agentSessionMcpSupport;
 
 describe("AgentSession MCP tools after resume and reload", () => {
-  afterEach(() => {
-    while (harnesses4.length > 0) harnesses4.pop()?.cleanup();
-  });
+  afterEach(() => cleanupAll(harnesses4));
 
   it.each([
     ["drops", ["read"], false],

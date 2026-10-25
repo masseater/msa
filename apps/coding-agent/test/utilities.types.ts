@@ -15,7 +15,7 @@ declare namespace utilitiesTypes {
     session: agentSessionTypes.AgentSession;
     sessionManager: sessionManagerTypes.SessionManager;
     tempDir: string;
-    cleanup: () => void;
+    cleanup: () => Promise<void>;
   }
 
   interface CreateTestExtensionsResultInput {

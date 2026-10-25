@@ -71,7 +71,7 @@ const skipsOfflineAndPrintMode = () =>
         expect(print).toBeUndefined();
         expect(server.state.requests).toBe(0);
       } finally {
-        harness.cleanup();
+        yield* awaited(harness.cleanup());
       }
     }),
   );

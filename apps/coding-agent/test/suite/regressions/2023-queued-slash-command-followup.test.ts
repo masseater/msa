@@ -8,6 +8,8 @@ import agentSessionQueueCases1 from "../agent-session-queue-cases-1.ts";
 import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 
+const { cleanupAll } = harnessModule;
+
 const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness, getAssistantTexts, getUserTexts } = harnessModule;
@@ -75,11 +77,7 @@ const treatsExtensionOriginQueuedSlashCommand = Effect.gen(function* () {
 const treatsExtensionOriginQueuedSlashCommandFollow = () =>
   Effect.runPromise(treatsExtensionOriginQueuedSlashCommand);
 
-const afterEachHook = () => {
-  while (harnesses.length > 0) {
-    harnesses.pop()?.cleanup();
-  }
-};
+const afterEachHook = () => cleanupAll(harnesses);
 
 describe("issue #2023 queued slash-command follow-up", () => {
   afterEach(afterEachHook);
