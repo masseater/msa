@@ -68,16 +68,18 @@ function squashMessageAt<E, R>(
 
 function mergeArgs(number: number, head: string, message: SquashMessage): readonly string[] {
   return [
-    "pr",
-    "merge",
-    String(number),
-    "--squash",
-    "--match-head-commit",
-    head,
-    "--subject",
-    message.subject,
-    "--body",
-    message.body,
+    "api",
+    "--method",
+    "PUT",
+    `repos/{owner}/{repo}/pulls/${number}/merge`,
+    "-f",
+    "merge_method=squash",
+    "-f",
+    `sha=${head}`,
+    "-f",
+    `commit_title=${message.subject}`,
+    "-f",
+    `commit_message=${message.body}`,
   ];
 }
 

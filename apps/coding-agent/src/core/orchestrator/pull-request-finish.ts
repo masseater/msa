@@ -42,7 +42,7 @@ function settleMerged(
   return Effect.gen(function* () {
     const by = mergedBy(record);
     if (by === undefined) return undefined;
-    if (by === "outside") {
+    if (by !== "harness") {
       return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, cwd, record) };
     }
     return yield* finish(runtime, task, record, merged);
@@ -87,7 +87,6 @@ function settleInterrupted(
     const now = yield* nowMillis;
     if ("record" in read) {
       const { record } = read;
-      if (status !== "running" && mergedBy(record) === "outside") return undefined;
       const settled = yield* settleMerged(
         runtime,
         task,

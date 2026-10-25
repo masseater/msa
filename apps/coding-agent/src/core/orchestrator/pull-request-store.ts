@@ -17,8 +17,10 @@ interface PullRequestRow {
   verified_sha: string | null;
   verified_title: string | null;
   verified_body: string | null;
+  merge_commit: string | null;
   harness_merge_sha: string | null;
   blocked_head: string | null;
+  harness_merge_commit: string | null;
   checked_at: number;
 }
 
@@ -29,8 +31,10 @@ function toPullRequest(row: PullRequestRow): PullRequest {
     branch: row.branch,
     checkedAt: row.checked_at,
     ci: row.ci as orchestratorTypesTypes.PullRequestCi,
+    harnessCommit: row.harness_merge_commit,
     harnessMerge: row.harness_merge_sha,
     headSha: row.head_sha,
+    mergeCommit: row.merge_commit,
     mergeState: row.merge_state,
     mergeable: row.mergeable,
     number: row.number,
@@ -68,18 +72,21 @@ function savePullRequest(
   database
     .prepare(
       `INSERT INTO task_pull_requests (task_id, number, url, branch, base, state, head_sha, ci,
-         mergeable, merge_state, verified_sha, verified_title, verified_body, checked_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         mergeable, merge_state, verified_sha, verified_title, verified_body, merge_commit,
+         checked_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (task_id) DO UPDATE SET number = excluded.number, url = excluded.url,
          branch = excluded.branch, base = excluded.base, state = excluded.state,
          head_sha = excluded.head_sha, ci = excluded.ci, mergeable = excluded.mergeable,
          merge_state = excluded.merge_state, verified_sha = excluded.verified_sha,
          verified_title = excluded.verified_title, verified_body = excluded.verified_body,
-         checked_at = excluded.checked_at,
+         merge_commit = excluded.merge_commit, checked_at = excluded.checked_at,
          harness_merge_sha = CASE WHEN task_pull_requests.number = excluded.number
            AND (? OR excluded.state = 'MERGED') THEN task_pull_requests.harness_merge_sha END,
          blocked_head = CASE WHEN task_pull_requests.number = excluded.number
-           THEN task_pull_requests.blocked_head END`,
+           THEN task_pull_requests.blocked_head END,
+         harness_merge_commit = CASE WHEN task_pull_requests.number = excluded.number
+           THEN task_pull_requests.harness_merge_commit END`,
     )
     .run(
       pullRequest.taskId,
@@ -95,6 +102,7 @@ function savePullRequest(
       pullRequest.verified?.sha ?? null,
       pullRequest.verified?.title ?? null,
       pullRequest.verified?.body ?? null,
+      pullRequest.mergeCommit,
       pullRequest.checkedAt,
       keepHarnessMerge ? 1 : 0,
     );
@@ -112,6 +120,12 @@ function markBlockedHead(database: DatabaseSync, taskId: string, sha: string | n
     .run(sha, taskId);
 }
 
+function markHarnessCommit(database: DatabaseSync, taskId: string, commit: string): void {
+  database
+    .prepare("UPDATE task_pull_requests SET harness_merge_commit = ? WHERE task_id = ?")
+    .run(commit, taskId);
+}
+
 function movePullRequest(database: DatabaseSync, from: string, to: string): void {
   database.prepare("DELETE FROM task_pull_requests WHERE task_id = ?").run(to);
   database.prepare("UPDATE task_pull_requests SET task_id = ? WHERE task_id = ?").run(to, from);
@@ -120,6 +134,7 @@ function movePullRequest(database: DatabaseSync, from: string, to: string): void
 const pullRequestStore = {
   listPullRequests,
   markBlockedHead,
+  markHarnessCommit,
   markHarnessMerge,
   movePullRequest,
   pullRequestOf,

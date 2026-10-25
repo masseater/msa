@@ -37,9 +37,9 @@ const FAKE_GH = (dir: string) =>
     "#!/bin/sh",
     `printf '%s\\n' "$*" >> "${dir}/calls.txt"`,
     'case "$1 $2" in',
+    `  "api --method") for arg in "$@"; do printf '%s\\0' "$arg"; done > "${dir}/merge.txt"; printf '{"merged":true,"sha":"m1"}' ;;`,
     `  "api "*) cat "${dir}/commits.json" ;;`,
     `  "pr view") cat "${dir}/pull.json" ;;`,
-    `  "pr merge") for arg in "$@"; do printf '%s\\0' "$arg"; done > "${dir}/merge.txt" ;;`,
     "esac",
     "",
   ].join("\n");
@@ -101,7 +101,10 @@ const commitlint = (message: string) =>
     });
   }).pipe(Effect.scoped);
 
-const valueAfter = (args: readonly string[], flag: string) => args[args.indexOf(flag) + 1];
+const fieldOf = (args: readonly string[], key: string) =>
+  args
+    .find((arg, index) => args[index - 1] === "-f" && arg.startsWith(`${key}=`))
+    ?.slice(key.length + 1);
 
 it(`runs ${LINT} with the number, title and tested head of the pull request in the commits job`, () =>
   runtime.runPromise(
@@ -177,16 +180,16 @@ it(`${MERGE} squash-merges at the given head with the message GitHub's default m
         "b2",
       ]);
       expect(result.exitCode, result.stderr).toBe(0);
-      expect(result.merged.slice(0, 6)).toEqual([
-        "pr",
-        "merge",
-        "7",
-        "--squash",
-        "--match-head-commit",
-        "b2",
+      expect(result.merged.slice(0, 4)).toEqual([
+        "api",
+        "--method",
+        "PUT",
+        "repos/{owner}/{repo}/pulls/7/merge",
       ]);
-      const subject = valueAfter(result.merged, "--subject");
-      const body = valueAfter(result.merged, "--body");
+      expect(fieldOf(result.merged, "merge_method")).toBe("squash");
+      expect(fieldOf(result.merged, "sha")).toBe("b2");
+      const subject = fieldOf(result.merged, "commit_title");
+      const body = fieldOf(result.merged, "commit_message");
       expect(subject).toBe(`${TITLE} (#7)`);
       expect(body).toBe(`${first}\n\n${second}`);
       const ours = yield* commitlint(`${subject}\n\n${body}\n`);

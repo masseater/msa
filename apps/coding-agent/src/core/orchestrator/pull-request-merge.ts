@@ -40,27 +40,37 @@ interface Ready {
   verified: Verified;
 }
 
-type Attempt<A> = Result.Result<A, runtimeTypes.OrchestratorError>;
+type MergeAttempt = orchestratorTypesTypes.MergeAttempt;
 
 function unmerged(
   number: number,
-  verified: Verified,
-  merging: Attempt<void>,
-  after: Attempt<{ state: string }>,
+  attempt: MergeAttempt,
+  after: PullRequest | undefined,
 ): MergeOutcome {
-  if (Result.isSuccess(merging) && Result.isFailure(after)) {
-    return {
-      kind: "stopped",
-      line: `gh pr merge reported that PR #${number} was squash-merged at head ${short(verified.sha)}, but the harness could not read it back to confirm, so the task is stopped, not completed: ${after.failure.message} Rerun the task once gh can read the pull request; it completes if #${number} reads back as merged at that head.`,
-    };
-  }
-  const why = Result.isFailure(merging)
-    ? merging.failure.message
-    : `#${number} is still ${Result.isSuccess(after) ? after.success.state.toLowerCase() : "unread"}`;
+  const why =
+    attempt.kind === "merged"
+      ? `#${number} is still ${after?.state.toLowerCase() ?? "unread"}`
+      : attempt.why;
   return {
     kind: "stopped",
     line: `The review passed, but the harness could not merge PR #${number}, so the task is stopped, not completed: ${why}`,
   };
+}
+
+function landed(
+  runtime: runtimeTypes.Runtime,
+  read: PullRequest,
+  commit: string,
+  now: number,
+): PullRequest {
+  if (read.state === "MERGED" && read.mergeCommit !== null) return read;
+  store.savePullRequest(
+    runtime.database,
+    { ...read, checkedAt: now, mergeCommit: commit, state: "MERGED" },
+    true,
+  );
+  runtime.publish();
+  return store.pullRequestOf(runtime.database, read.taskId) ?? read;
 }
 
 function squash(
@@ -70,25 +80,33 @@ function squash(
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
     const { owner, record, verified } = ready;
-    store.markHarnessMerge(runtime.database, task.id, verified.sha);
-    const [merging, after] = yield* Effect.uninterruptible(
-      Effect.all([
-        Effect.result(pullRequests.merge(runtime, owner.cwd, record.number, verified)),
-        Effect.result(pullRequests.view(runtime, owner.cwd, record.number)),
-      ]),
+    const [attempt, after] = yield* Effect.uninterruptible(
+      Effect.gen(function* () {
+        store.markHarnessMerge(runtime.database, task.id, verified.sha);
+        const tried = yield* pullRequests.merge(runtime, owner.cwd, record.number, verified);
+        if (tried.kind === "merged") {
+          store.markHarnessCommit(runtime.database, task.id, tried.commit);
+        }
+        if (tried.kind === "refused") store.markHarnessMerge(runtime.database, task.id, null);
+        const read = yield* Effect.result(pullRequests.view(runtime, owner.cwd, record.number));
+        return [tried, read] as const;
+      }),
     );
-    if (Result.isFailure(merging) && Result.isFailure(after)) {
-      store.markHarnessMerge(runtime.database, task.id, null);
-    }
-    if (Result.isSuccess(after)) {
-      const now = yield* nowMillis;
-      const saved = pullRequests.save(runtime, task.id, after.success, verified, now);
+    const now = yield* nowMillis;
+    const read = Result.isSuccess(after)
+      ? pullRequests.save(runtime, task.id, after.success, verified, now)
+      : undefined;
+    const saved =
+      attempt.kind === "merged"
+        ? landed(runtime, read ?? { ...record, harnessCommit: attempt.commit }, attempt.commit, now)
+        : read;
+    if (saved !== undefined) {
       const settled = yield* settleMerged(
         runtime,
         task,
         owner.cwd,
         saved,
-        `Squash-merged PR #${saved.number} at head ${short(verified.sha)}.`,
+        `Squash-merged PR #${saved.number} at head ${short(verified.sha)} as merge commit ${short(saved.mergeCommit ?? "")}.`,
       );
       if (settled !== undefined) return settled;
       const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
@@ -101,7 +119,7 @@ function squash(
         );
       }
     }
-    return unmerged(record.number, verified, merging, after);
+    return unmerged(record.number, attempt, read);
   });
 }
 

@@ -18,7 +18,7 @@ const { RollupEntry, countChecks } = prWatchSnapshot;
 const { pullRequestSquash } = pullRequestSquashModule;
 
 const FIELDS =
-  "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest";
+  "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest,mergeCommit";
 const LIST_LIMIT = 20;
 const CI_POLL_MS = 30_000;
 const CI_WAIT_MS = 3 * 60 * 60_000;
@@ -36,6 +36,7 @@ const GhPull = Schema.Struct({
   body: Schema.optionalKey(Schema.String),
   headRefName: Schema.String,
   headRefOid: Schema.String,
+  mergeCommit: Schema.NullOr(Schema.Struct({ oid: Schema.String })).pipe(Schema.optionalKey),
   mergeStateStatus: Schema.optionalKey(Schema.String),
   mergeable: Schema.optionalKey(Schema.String),
   number: Schema.Finite,
@@ -126,8 +127,10 @@ function recordOf(
     branch: pull.headRefName,
     checkedAt: now,
     ci: ciOf(pull),
+    harnessCommit: null,
     harnessMerge: null,
     headSha: pull.headRefOid,
+    mergeCommit: pull.mergeCommit?.oid ?? null,
     mergeState: (pull.mergeStateStatus ?? "UNKNOWN").toUpperCase(),
     mergeable: (pull.mergeable ?? "UNKNOWN").toUpperCase(),
     number: pull.number,
@@ -182,8 +185,17 @@ function merge(
   cwd: string,
   number: number,
   verified: Verified,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
-  return pullRequestSquash.merge((args) => gh(runtime, args, cwd), number, verified);
+): Effect.Effect<orchestratorTypesTypes.MergeAttempt> {
+  return pullRequestSquash.merge(
+    (args) =>
+      Effect.promise(() =>
+        runtime.options
+          .runGh(args, cwd)
+          .catch((error: unknown) => ({ code: 1, stderr: String(error), stdout: "" })),
+      ),
+    number,
+    verified,
+  );
 }
 
 function latestThreadOf(

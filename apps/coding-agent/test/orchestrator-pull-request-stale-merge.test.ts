@@ -103,33 +103,26 @@ it(
   stopsWhenTheSameHeadIsMergedOutsideAfterItReadAsOpen,
 );
 
-const completesOnRerunWhenTheMergeLandedButCouldNotBeRead = () =>
+const completesWhenGitHubConfirmsTheMergeButItCannotBeRead = () =>
   Effect.runPromise(
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github } = remote;
-        const run = yield* reviewed(remote);
-        const { orchestrator, reports, workers, branch, head, number, taskId, worktree } = run;
-        github.beforeMerge = Effect.sync(() => {
-          github.beforeMerge = undefined;
+        const { orchestrator, reports, workers, branch, head, number, taskId, worktree } =
+          yield* reviewed(remote);
+        let unreadFrom = 0;
+        github.afterMerge = Effect.sync(() => {
+          github.afterMerge = undefined;
           github.unavailable = UNREADABLE;
+          unreadFrom = github.calls;
         });
         workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
-        expect(github.merged).toMatchObject([{ number, sha: head }]);
-        const stopped = reports.at(-1)?.text ?? "";
-        expect(stopped).toContain(`PR #${number} was squash-merged`);
-        expect(stopped).toContain("could not read it back");
-        expect(stopped).toContain(UNREADABLE.stderr);
-
+        yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+        expect(github.calls).toBeGreaterThan(unreadFrom);
         github.unavailable = undefined;
-        const worker = yield* rerun(run);
-        const count = workers.length;
-        worker.complete("the pull request is merged");
-        const reviewer = yield* nextWorker(workers, count);
-        reviewer.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
-        expect(github.merged).toHaveLength(1);
+        expect(taskStatus(orchestrator, taskId)).toBe("completed");
+        expect(github.merged).toMatchObject([{ number, sha: head }]);
+        expect(reports.at(-1)?.text).toContain(github.pulls[0]!.mergedBy!.commit.slice(0, 12));
         expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
           local: false,
           remote: false,
@@ -140,6 +133,6 @@ const completesOnRerunWhenTheMergeLandedButCouldNotBeRead = () =>
   );
 
 it(
-  "stops the task saying the merge was not confirmed when gh pr merge succeeds but the read back fails, and completes it with cleanup on rerun",
-  completesOnRerunWhenTheMergeLandedButCouldNotBeRead,
+  "completes the task and cleans up when GitHub confirms the harness's merge with its merge commit but the pull request cannot be read back",
+  completesWhenGitHubConfirmsTheMergeButItCannotBeRead,
 );

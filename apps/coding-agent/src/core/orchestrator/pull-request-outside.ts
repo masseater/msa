@@ -10,17 +10,20 @@ const { short } = pullRequestProblems;
 const MergedBy = Schema.fromJsonString(
   Schema.Struct({
     mergeCommit: Schema.NullOr(Schema.Struct({ oid: Schema.String })).pipe(Schema.optionalKey),
+    mergedAt: Schema.NullOr(Schema.String).pipe(Schema.optionalKey),
     mergedBy: Schema.NullOr(Schema.Struct({ login: Schema.String })).pipe(Schema.optionalKey),
   }),
 );
 
 type PullRequest = orchestratorTypesTypes.PullRequest;
 
-type Merger = "harness" | "outside";
+type Merger = "harness" | "outside" | "unconfirmed";
 
 function mergedBy(record: PullRequest): Merger | undefined {
   if (record.state !== "MERGED") return undefined;
-  return record.harnessMerge === record.headSha ? "harness" : "outside";
+  if (record.harnessCommit !== null) return "harness";
+  if (record.harnessMerge !== null) return "unconfirmed";
+  return "outside";
 }
 
 function autoMergeLine(
@@ -40,7 +43,10 @@ function outsideMergeLine(
   return Effect.gen(function* () {
     const result = yield* Effect.promise(() =>
       runtime.options
-        .runGh(["pr", "view", String(record.number), "--json", "mergedBy,mergeCommit"], cwd)
+        .runGh(
+          ["pr", "view", String(record.number), "--json", "mergedBy,mergeCommit,mergedAt"],
+          cwd,
+        )
         .catch((error: unknown) => ({ code: 1, stderr: String(error), stdout: "" })),
     );
     const merged =
@@ -48,12 +54,18 @@ function outsideMergeLine(
         ? Option.getOrUndefined(Schema.decodeOption(MergedBy)(result.stdout))
         : undefined;
     const login = merged?.mergedBy?.login;
-    const commit = merged?.mergeCommit?.oid;
+    const commit = merged?.mergeCommit?.oid ?? record.mergeCommit ?? undefined;
     const who = login ?? "an account gh did not name";
     const as = commit === undefined ? "an unknown merge commit" : `merge commit ${short(commit)}`;
+    const when =
+      merged?.mergedAt === undefined || merged.mergedAt === null ? "" : ` at ${merged.mergedAt}`;
     const why =
       result.code === 0 ? "" : ` (gh pr view failed: ${(result.stderr || result.stdout).trim()})`;
-    return `PR #${record.number} (${record.branch}) was merged by ${who} as ${as} before the harness merged it${why}, so ${task.id} is stopped, not completed. Only the harness merges a task's pull request, after the review passes on the head it checked; check what reached ${record.base} and decide what to do with the task.`;
+    const decide = `Only the harness merges a task's pull request, after the review passes on the head it checked; check what reached ${record.base} and decide what to do with the task.`;
+    if (mergedBy(record) === "unconfirmed") {
+      return `PR #${record.number} (${record.branch}) was merged by ${who} as ${as}${when}${why}, but GitHub never confirmed the harness's own merge of head ${short(record.harnessMerge ?? record.headSha)}, so the harness cannot tell that this merge is its own and ${task.id} is stopped, not completed. ${decide}`;
+    }
+    return `PR #${record.number} (${record.branch}) was merged by ${who} as ${as}${when}${why}, not by the harness, so ${task.id} is stopped, not completed. ${decide}`;
   });
 }
 
@@ -65,7 +77,10 @@ function outsideLine(
   autoMergeBy: string | undefined,
 ): Effect.Effect<string | undefined> {
   return Effect.gen(function* () {
-    if (mergedBy(record) === "outside") return yield* outsideMergeLine(runtime, task, cwd, record);
+    const by = mergedBy(record);
+    if (by === "outside" || by === "unconfirmed") {
+      return yield* outsideMergeLine(runtime, task, cwd, record);
+    }
     return autoMergeBy === undefined ? undefined : autoMergeLine(task, record, autoMergeBy);
   });
 }
