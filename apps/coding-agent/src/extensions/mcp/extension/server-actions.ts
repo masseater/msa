@@ -102,6 +102,10 @@ export default class McpServerActions {
         );
         const removed = yield* awaited(credentials.remove(server.entry.name, url));
         yield* awaited(connection.signOut());
+        if (server.entry.scope === "builtin") {
+          this.host.tools.hideTools(server.entry.name);
+          this.host.state.emitChange();
+        }
         return removed;
       }, this),
     );

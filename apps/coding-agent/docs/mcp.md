@@ -31,6 +31,8 @@ Use `/mcp` inside an interactive session to inspect connections, sign in, reconn
 
 msa reads user-level servers from `~/.msa/agent/mcp.json` and project servers from `.msa/mcp.json`. Project configuration is read only after [project trust](security.md#understand-project-trust) is granted. A project entry replaces a user-level entry with the same name.
 
+msa also lists the built-in `sepiace` server for [long-term memory](memory.md), turned on while `memory.enabled` is on. Its tool is `hidden`: the model and codemode cannot call it, and msa calls it itself for the `memory` tool and recall. An entry named `sepiace` in either file can set `enabled`, and one with a `url` in the user-level file replaces its address. Its exposure stays `hidden` whatever the entry says, so the requests always pass msa's secret check.
+
 A project entry without `command`, `url`, or `type` overrides only `enabled`, `exposure`, and `toolExposure` of the user-level server with the same name and keeps the rest, including `env`, `headers`, and `auth`. For example, this turns off a user-level server in one project:
 
 ```json
@@ -97,7 +99,7 @@ Run `msa mcp list` to connect to every enabled server and print its state, tools
 
 msa reports configuration errors, failed connections, and required sign-ins once after startup. Server logging notifications are appended to `~/.msa/agent/mcp.log` as `<time> [<server>] <level> <logger>: <message>`. The file moves to `mcp.log.1` after it grows past 5 MB.
 
-msa connects every enabled server in the background when a session starts. A server's tools appear once it connects; the `codemode` description does not list them, so it does not change when servers connect. The first prompt waits up to 10 seconds only for servers with `direct` tools, which must be declared in its request. Other servers are waited for when they are needed: a codemode script waits for the servers it names (`mcp__<server>`) and, when it calls `searchTools()` or reads `ALL_TOOLS`, for all of them; `tool_search` and the resource tools also wait for all of them. HTTP network errors and transient statuses (408, 429, and 5xx) are retried twice. A dropped connection is shown as disconnected and reconnects on the next call. When a server announces a changed tool list, new tools are added and withdrawn tools become unreachable.
+msa connects every enabled server in the background when a session starts. A server's tools appear once it connects; the `codemode` description does not list them, so it does not change when servers connect. The first prompt waits up to 10 seconds only for servers with `direct` tools, which must be declared in its request, and for built-in servers such as `sepiace`, which recall asks before the prompt is sent. Other servers are waited for when they are needed: a codemode script waits for the servers it names (`mcp__<server>`) and, when it calls `searchTools()` or reads `ALL_TOOLS`, for all of them; `tool_search` and the resource tools also wait for all of them. HTTP network errors and transient statuses (408, 429, and 5xx) are retried twice. A dropped connection is shown as disconnected and reconnects on the next call. When a server announces a changed tool list, new tools are added and withdrawn tools become unreachable.
 
 Stopping a stdio server closes its stdin, sends SIGTERM, then sends SIGKILL to its process group. This also stops servers launched through wrappers such as `npx` or `uvx`.
 
@@ -126,7 +128,7 @@ Remote servers that use OAuth, such as Sentry, need no credentials in `mcp.json`
 
 When the server rejects an unauthenticated connection, `/mcp` shows that it needs sign-in. Select "Sign in", run `/mcp login sentry`, or run `msa mcp login sentry`. msa opens the authorization page and waits for approval. If the browser runs on another machine, such as over SSH, paste its redirected URL into the sign-in screen. A running session uses the new credentials on its next turn.
 
-msa registers itself with the authorization server, stores tokens in `~/.msa/agent/mcp-auth.json`, and refreshes access tokens when they expire or the server rejects them. If a server later requests additional scope, msa asks for sign-in again. Signing out deletes the stored credentials.
+msa registers itself with the authorization server, keeps tokens as described in [Store sign-ins](#store-sign-ins), and refreshes access tokens when they expire or the server rejects them. If a server later requests additional scope, msa asks for sign-in again. Signing out deletes the stored credentials.
 
 Credentials belong to a server name and URL. Servers with the same URL under different names, such as one per account, sign in separately; servers with the same name and URL in different `mcp.json` files share one sign-in.
 
@@ -191,6 +193,23 @@ msa finds the authorization server through the server's protected resource metad
 ```
 
 msa uses that document instead of discovery and trusts it as configured, so only point it at a document you trust. The URL must use HTTPS, except on `localhost`, `127.0.0.1`, or `[::1]`.
+
+### Store sign-ins
+
+msa writes no token to a file. It keeps every MCP sign-in in one credential store, the first that works of:
+
+1. The `credentialHelper` in `~/.msa/agent/mcp.json`, a program that speaks the [Docker credential helper protocol](https://github.com/docker/docker-credential-helpers): msa runs it with `get` or `store` and passes the server URL `https://msa.invalid/mcp-oauth` or a JSON object with `ServerURL`, `Username`, and `Secret` on standard input, never in arguments. When it is set and fails, sign-in fails.
+2. The login keychain on macOS (`security`) or the Secret Service keyring on Linux (`secret-tool`), one item per agent directory.
+3. Memory: sign-ins last until msa exits. This happens over SSH on macOS, where the login keychain refuses access. msa warns as soon as it falls back to memory, whether at startup, when a token is refreshed, or when signing in: in the session, or on standard error in `msa -p` and JSON mode. When it moved sign-ins out of an old `mcp-auth.json`, the warning names those servers. `msa mcp list` and `/memory` say that sign-ins are not saved.
+
+```json
+{
+  "credentialHelper": { "command": "docker-credential-pass" },
+  "mcpServers": {}
+}
+```
+
+`args` adds arguments before the action, and a leading `~/` in `command` or an argument names the home directory. A project `mcp.json` cannot set `credentialHelper`. An `mcp-auth.json` left by an older msa moves into the store the first time msa reads sign-ins, and is deleted once msa has read the tokens back from the store. When only memory can hold them, the file is still deleted, so no token stays in a plain file, and the warning says so.
 
 ## Control tool exposure
 

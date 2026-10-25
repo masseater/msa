@@ -47,7 +47,7 @@ const tempDirectory = (name: string) =>
     return directory;
   });
 
-it("keeps the orchestrator and memory databases and the handoffs in the agent dir the session was given", () =>
+it("keeps the orchestrator database and the handoffs in the agent dir the session was given", () =>
   runTest(
     Effect.gen(function* () {
       const ambient = yield* tempDirectory("ambient");
@@ -81,7 +81,6 @@ it("keeps the orchestrator and memory databases and the handoffs in the agent di
       yield* awaited(session.dispose());
 
       expect(yield* pathExists(joinPath(given, "orchestrator.db"))).toBe(true);
-      expect(yield* pathExists(joinPath(given, "memory.db"))).toBe(true);
       const handoffs = joinPath(given, "handoffs");
       const insideHandoffs = relativePath(handoffs, handoff.path);
       expect(insideHandoffs).not.toBe("");

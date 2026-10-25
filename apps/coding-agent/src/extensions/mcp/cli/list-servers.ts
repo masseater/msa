@@ -119,15 +119,25 @@ function list(
       const reports = yield* awaited(
         Promise.all(loaded.servers.map((entry) => reportServer(entry, options, credentials))),
       );
+      const signIns = yield* awaited(credentials.persistenceNote());
       const failed =
         loaded.errors.length > 0 ||
         reports.some((report) => report.enabled && report.state !== "connected");
       if (json) {
         const note =
           untrustedNote !== undefined && untrustedNote !== "" ? { note: untrustedNote } : {};
-        log(JSON.stringify({ errors: loaded.errors, servers: reports, ...note }, null, 2));
+        const notSaved = signIns === undefined ? {} : { signInsNotSaved: signIns };
+        log(
+          JSON.stringify(
+            { errors: loaded.errors, servers: reports, ...note, ...notSaved },
+            null,
+            2,
+          ),
+        );
       } else {
         printReports(reports, loaded, untrustedNote, options, log);
+        if (signIns !== undefined)
+          log(`sign-ins are not saved:\n  ${signIns.split("\n").join("\n  ")}`);
       }
       return failed ? 1 : 0;
     }),

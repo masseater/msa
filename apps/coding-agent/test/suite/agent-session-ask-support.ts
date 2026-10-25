@@ -22,7 +22,6 @@ const BUILTIN_TOOLS = [
   "grep",
   "find",
   "ls",
-  "memory",
   "pr_watch",
   "model_policy",
   "model_upgrade",

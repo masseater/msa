@@ -61,7 +61,7 @@ Automatic retries, recovery, compaction, or queued work can continue afterward.
 | Capability                                    | Main API                                          |
 | --------------------------------------------- | ------------------------------------------------- |
 | Observe or modify lifecycle behavior          | `msa.on()`                                        |
-| Add a model-callable operation                | `msa.registerTool()`                              |
+| Add or remove a model-callable operation      | `msa.registerTool()` / `msa.unregisterTool()`     |
 | Add a `/` command                             | `msa.registerCommand()`                           |
 | Add a shortcut or CLI flag                    | `msa.registerShortcut()` or `msa.registerFlag()`  |
 | Send user or custom messages                  | `msa.sendUserMessage()` or `msa.sendMessage()`    |
@@ -109,6 +109,7 @@ A `user_bash` handler that returns `undefined` passes the command to the next ha
 
 A custom tool defines a name, model-facing description, TypeBox parameter schema, and `execute()` function.
 Its result requires model-facing `content` and a `details` field for rendering or state reconstruction.
+`msa.unregisterTool(name)` removes a tool that the same extension registered with `msa.registerTool()`, and does nothing for a name it did not register.
 Use `details: undefined` when there are no structured details. If the tool makes nested model calls, include their `usage` in the result so session totals remain accurate.
 
 Throw from `execute()` to produce a failed tool result.

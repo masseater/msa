@@ -34,9 +34,7 @@ const declaresOnlyTheReadOnlyToolsIn = () =>
       yield* awaited(harness.session.run.prompting.prompt("/ask what does the lookup tool do?"));
 
       const names = declared(requests[0]);
-      expect(names).toEqual(
-        expect.arrayContaining([...READ_ONLY_BUILTINS, "lookup", "memory", "pr_watch"]),
-      );
+      expect(names).toEqual(expect.arrayContaining([...READ_ONLY_BUILTINS, "lookup", "pr_watch"]));
       expect(names).toEqual(expect.arrayContaining(["model_policy", "model_upgrade"]));
       for (const name of [...WRITING_BUILTINS, "deploy"]) expect(names).not.toContain(name);
     }),
@@ -60,7 +58,6 @@ const narrowsTheToolsThatReadAndWrite = () =>
           ? [action.const]
           : action.anyOf.map((entry) => entry.const);
       };
-      expect(actions("memory")).toEqual(["search", "list"]);
       expect(actions("pr_watch")).toEqual(["list"]);
       expect(actions("model_policy")).toEqual(["list"]);
       expect(actions("model_upgrade")).toEqual(["list"]);
@@ -105,8 +102,10 @@ const goesBackToEveryToolOnThe = () =>
 
       const names = declared(requests[1]);
       expect(names).toEqual(expect.arrayContaining([...BUILTIN_TOOLS, "lookup", "deploy"]));
-      const actions = getCurrentTools(requests[1]?.messages ?? []).find((t) => t.name === "memory");
-      expect(yield* toJsonText(actions?.parameters)).toContain("forget");
+      const actions = getCurrentTools(requests[1]?.messages ?? []).find(
+        (t) => t.name === "pr_watch",
+      );
+      expect(yield* toJsonText(actions?.parameters)).toContain("stop");
     }),
   );
 

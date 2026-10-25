@@ -4,11 +4,7 @@ import type externalServicesTypes from "../external-services.types.ts";
 import type loaderScopeTypes from "./loader-scope.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 
-const toolAndCommandMembers = ({
-  extension,
-  runtime,
-  assertActive,
-}: loaderScopeTypes.ApiScope) => ({
+const commandMembers = ({ extension, assertActive }: loaderScopeTypes.ApiScope) => ({
   registerCommand(
     name: string,
     options: Omit<extensionsTypesTypes.RegisteredCommand, "name" | "sourceInfo">,
@@ -37,7 +33,9 @@ const toolAndCommandMembers = ({
     assertActive();
     extension.shortcuts.set(shortcut, { extensionPath: extension.path, shortcut, ...options });
   },
+});
 
+const toolMembers = ({ extension, runtime, assertActive }: loaderScopeTypes.ApiScope) => ({
   registerTool(tool: extensionsTypesTypes.ToolDefinition): void {
     assertActive();
     if (
@@ -51,6 +49,11 @@ const toolAndCommandMembers = ({
     }
     extension.tools.set(tool.name, { definition: tool, sourceInfo: extension.sourceInfo });
     runtime.refreshTools();
+  },
+
+  unregisterTool(name: string): void {
+    assertActive();
+    if (extension.tools.delete(name)) runtime.refreshTools();
   },
 });
 
@@ -123,9 +126,10 @@ const rendererMembers = ({ extension, assertActive }: loaderScopeTypes.ApiScope)
 });
 
 const loaderApiRegistration = {
+  commandMembers,
   flagMembers,
   rendererMembers,
-  toolAndCommandMembers,
+  toolMembers,
 };
 
 export default loaderApiRegistration;

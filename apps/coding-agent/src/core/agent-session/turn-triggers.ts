@@ -6,14 +6,12 @@ import imageProcess from "../../utils/image-process.ts";
 import type AgentSession from "../agent-session.ts";
 import awaitingModule from "../awaiting.ts";
 import type runnerTypes from "../extensions/runner.types.ts";
-import memoryFormat from "../memory/memory-format.ts";
 import memoryModule from "../memory/memory.ts";
 import platform from "../platform/index.ts";
 
 const { nowMs } = platform;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { processImage } = imageProcess;
-const { formatRecallBlock } = memoryFormat;
 const { MEMORY_RECALL_MESSAGE_TYPE } = memoryModule;
 
 export default class SessionTurnTriggers {
@@ -70,14 +68,19 @@ export default class SessionTurnTriggers {
           timestamp: nowMs(),
         },
       ];
-      if (this.session.integrations.memory.memoryInternal === undefined) return messages;
-      const recalled = yield* awaited(
-        this.session.integrations.memory.memoryInternal.recall(trigger.prompt),
-      );
-      if (recalled.length === 0) return messages;
+      const memory = this.session.integrations.memory.memoryInternal;
+      if (memory === undefined) return messages;
+      this.session.integrations.memory.migrateInBackground();
+      const recalled = yield* awaited(memory.recall(trigger.prompt));
+      if (recalled === undefined) return messages;
       return [
         {
-          content: formatRecallBlock(recalled),
+          content: [
+            "<memory>",
+            "Long-term memory from sepiace, recalled for this request. The memory tool can remember, recall, and forget.",
+            recalled,
+            "</memory>",
+          ].join("\n"),
           customType: MEMORY_RECALL_MESSAGE_TYPE,
           display: false,
           role: "custom",

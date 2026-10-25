@@ -2,14 +2,12 @@ import type oauthTypes from "@msa/mcp/oauth.types";
 
 import config from "../../config.ts";
 import type authStorageTypes from "../../core/auth-storage.types.ts";
-import FileAuthStorageBackend from "../../core/file-auth-storage-backend.ts";
 import mcpServers from "../../core/mcp-servers.ts";
-import platform from "../../core/platform/index.ts";
+import SecretStoreAuthBackend from "./credentials/secret-store-backend.ts";
 import mcpRefreshLock from "./mcp-refresh-lock.ts";
 import type oauthTypesNs from "./oauth.types.ts";
 
 const { mcpNamespace } = mcpServers;
-const { join } = platform;
 const { getAgentDir } = config;
 const { withRefreshLock } = mcpRefreshLock;
 type StoredStates = Record<string, oauthTypes.McpOAuthState>;
@@ -33,8 +31,19 @@ export default class McpOAuthCredentialStore {
   private readonly lockDir: string | undefined;
 
   constructor(backend?: authStorageTypes.AuthStorageBackend, lockDir?: string) {
-    this.backend = backend ?? new FileAuthStorageBackend(join(getAgentDir(), "mcp-auth.json"));
+    this.backend = backend ?? new SecretStoreAuthBackend({ agentDir: getAgentDir() });
     this.lockDir = backend === undefined ? getAgentDir() : lockDir;
+  }
+
+  persistenceNote(): Promise<string | undefined> {
+    const { backend } = this;
+    if (!(backend instanceof SecretStoreAuthBackend)) return Promise.resolve(undefined);
+    return backend.store().then(() => backend.memoryOnlyNotice);
+  }
+
+  onMemoryOnly(listener: (notice: string) => void): () => void {
+    const { backend } = this;
+    return backend instanceof SecretStoreAuthBackend ? backend.onMemoryOnly(listener) : () => {};
   }
 
   forServer(name: string, serverUrl: string): oauthTypesNs.McpOAuthServerStore {

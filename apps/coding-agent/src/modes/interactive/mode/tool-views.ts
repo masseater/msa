@@ -31,21 +31,20 @@ export default class ToolViews {
   showMemoryView(): void {
     const memory = this.mode.session.integrations.memory.memory;
     if (memory === undefined) {
-      this.mode.display.status.showStatus("Memory is disabled (settings: memory.enabled)");
+      this.mode.display.status.showStatus("Memory is off (settings: memory.enabled)");
       return;
     }
     this.mode.editorSlot.showSelector((done) => {
       const view = new MemoryView({
-        confirm: (message) =>
-          this.mode.extensions.dialogs.extensionDialogs.confirm("Forget memory", message),
         maxHeight: () => this.mode.ui.terminal.rows - 4,
         onClose: () => {
           done();
           this.mode.ui.requestRender();
         },
-        onError: (message) => this.mode.display.status.showError(message),
         requestRender: () => this.mode.ui.requestRender(),
         service: memory,
+        setRecall: (enabled) =>
+          this.mode.session.settingsManager.context.setMemoryRecallEnabled(enabled),
       });
       return { component: view, focus: view };
     });

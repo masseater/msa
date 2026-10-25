@@ -11,7 +11,7 @@ import sessionConfig from "./session-config.ts";
 import toolCallReach from "./tool-call-reach.ts";
 
 const { MCP_SERVERS_SECTION, renderServersSection } = serversSection;
-const { defaultLoadConfig } = sessionConfig;
+const { defaultLoadConfig, signInStorageWarning } = sessionConfig;
 const { RESOURCE_TOOL_NAMES, reachesServer } = toolCallReach;
 const { isEnabled } = serverState;
 const { awaited, awaitingWith } = awaitingModule;
@@ -26,9 +26,12 @@ export default class McpSessionEvents {
   }
 
   onSessionStart(ctx: extensionsTypesTypes.ExtensionContext): Promise<void> {
-    return Promise.resolve((this.host.state.options.loadConfig ?? defaultLoadConfig)(ctx)).then(
-      (loaded) => this.startSession(loaded, ctx),
-    );
+    const { loadConfig } = this.host.state.options;
+    return Promise.resolve(
+      loadConfig === undefined
+        ? defaultLoadConfig(ctx, this.host.state.msa.getSettings())
+        : loadConfig(ctx),
+    ).then((loaded) => this.startSession(loaded, ctx));
   }
 
   private startSession(
@@ -44,6 +47,7 @@ export default class McpSessionEvents {
     this.host.state.modelRegistry = ctx.modelRegistry;
     this.host.state.session = new AbortController();
     const { signal } = this.host.state.session;
+    this.host.state.warnSignInStorage = signInStorageWarning(ctx, signal);
     this.host.state.configuredEntries = loaded.servers;
     const registered = this.host.state.registeredServers();
     this.host.state.overridden = registered.overridden;

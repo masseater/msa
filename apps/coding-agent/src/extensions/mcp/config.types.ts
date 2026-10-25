@@ -7,7 +7,7 @@ declare namespace configTypes {
 
     source: string;
 
-    scope?: "global" | "project" | "extension";
+    scope?: "builtin" | "global" | "project" | "extension";
 
     override?: string;
   }

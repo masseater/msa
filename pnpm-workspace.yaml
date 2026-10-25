@@ -19,6 +19,8 @@ catalog:
   "@effect/platform-node": 4.0.2
   "@google/genai": 2.21.0
   "@modelcontextprotocol/sdk": 1.32.1
+  "@secretlint/core": 13.0.7
+  "@secretlint/secretlint-rule-preset-recommend": 13.0.7
   "@silvia-odwyer/photon": 0.3.3
   "@silvia-odwyer/photon-node": 0.3.4
   "@types/cross-spawn": 6.0.6

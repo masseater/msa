@@ -15,8 +15,14 @@ export default class McpRuntimeResources {
     this.host = host;
   }
 
+  private watched: oauthTypesNs.McpOAuthCredentialStore | undefined;
+
   readonly getCredentials = (runtime: typeof McpRuntime): oauthTypesNs.McpOAuthCredentialStore => {
     const credentials = (this.host.state.credentials ??= new runtime.McpOAuthCredentialStore());
+    if (this.watched !== credentials) {
+      this.watched = credentials;
+      credentials.onMemoryOnly((notice) => this.host.state.warnSignInStorage(notice));
+    }
     return credentials;
   };
 

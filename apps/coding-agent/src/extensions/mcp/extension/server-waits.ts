@@ -65,7 +65,9 @@ export default class McpServerWaits {
         if (this.host.state.waitedForStartup) return;
         this.host.state.waitedForStartup = true;
         const ready = this.host.state.servers.flatMap((server) =>
-          isEnabled(server) && hasDirectTools(server.entry) && server.ready !== undefined
+          isEnabled(server) &&
+          (hasDirectTools(server.entry) || server.entry.scope === "builtin") &&
+          server.ready !== undefined
             ? [server.ready]
             : [],
         );

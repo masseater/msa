@@ -5,6 +5,7 @@ declare namespace commandTypes {
     readonly cwd?: string;
     readonly env?: Readonly<Record<string, string>>;
     readonly signal?: AbortSignal;
+    readonly input?: string;
   }
 
   interface CommandOutput {

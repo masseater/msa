@@ -11,7 +11,10 @@ const collect = (request: commandTypes.CommandRequest) =>
       const spawner = yield* ChildProcessSpawner.ChildProcessSpawner;
       const handle = yield* spawner.spawn(
         ChildProcess.make(request.file, [...request.args], {
-          stdin: "ignore",
+          stdin:
+            request.input === undefined
+              ? "ignore"
+              : Stream.make(new TextEncoder().encode(request.input)),
           ...(request.cwd === undefined ? {} : { cwd: request.cwd }),
           ...(request.env === undefined ? {} : { env: request.env, extendEnv: true }),
         }),

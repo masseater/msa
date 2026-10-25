@@ -10,7 +10,7 @@ import type settingsManagerTypes from "../settings-manager.types.ts";
 import type settingsSchemaTypes from "../settings-schema.types.ts";
 
 const { stripBom } = text;
-const { deepMergeSettings, toSettingsError } = settingsManagerHelpers;
+const { deepMergeSettings, removedSettingNotices, toSettingsError } = settingsManagerHelpers;
 const { resolvePath } = pathsModule;
 const { join } = platform;
 const { getAgentDir, CONFIG_DIR_NAME } = config;
@@ -150,6 +150,16 @@ function stateFrom(parts: {
   }
   if (projectLoad.error !== null) {
     errors.push(toSettingsError("project", projectLoad.error, settingsPaths.project));
+  }
+  for (const [scope, load] of [
+    ["global", globalLoad],
+    ["project", projectLoad],
+  ] as const) {
+    for (const notice of removedSettingNotices(load.settings))
+      errors.push({
+        ...toSettingsError(scope, new Error(notice), settingsPaths[scope]),
+        notice: true,
+      });
   }
   return {
     errors,

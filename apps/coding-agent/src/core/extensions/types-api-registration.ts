@@ -15,6 +15,8 @@ declare namespace typesApiRegistrationTypes {
       tool: typesToolsTypes.ToolDefinition<TParams, TDetails, TState>,
     ): void;
 
+    unregisterTool(name: string): void;
+
     registerCommand(
       name: string,
       options: Omit<typesRenderTypes.RegisteredCommand, "name" | "sourceInfo">,

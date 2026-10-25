@@ -137,7 +137,7 @@ The MCP resource tools (`list_mcp_resources`, `list_mcp_resource_templates`, `re
 | `grep`                     | Search file contents                                             |
 | `find`                     | Find paths using glob patterns                                   |
 | `ls`                       | List directory contents                                          |
-| `memory`                   | Save, search, list, and forget long-term memories                |
+| `memory`                   | Remember, recall, and forget long-term memories in sepiace       |
 | `pr_watch`                 | Watch a pull request and report CI, review, and merge changes    |
 | `model_policy`             | Read and change `modelPolicy` from the model's side              |
 | `model_upgrade`            | List and apply model upgrades                                    |

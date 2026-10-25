@@ -4,13 +4,14 @@ import type settingsManagerTypes from "./settings-manager.types.ts";
 function collectSettingsDiagnostics(
   settingsManager: settingsManagerTypes.SettingsManager,
 ): agentSessionServicesTypes.AgentSessionRuntimeDiagnostic[] {
-  return settingsManager.drainErrors().map(({ scope, path, error }) => ({
-    message:
-      path !== undefined && path !== ""
-        ? `Invalid settings file ${path}: ${error.message}`
-        : `Invalid ${scope} settings: ${error.message}`,
-    type: "warning",
-  }));
+  return settingsManager.drainErrors().map(({ scope, path, error, notice }) => {
+    const where = path !== undefined && path !== "" ? `settings file ${path}` : `${scope} settings`;
+    return {
+      message:
+        notice === true ? `In ${where}: ${error.message}` : `Invalid ${where}: ${error.message}`,
+      type: "warning",
+    };
+  });
 }
 
 function deduplicateDiagnostics(

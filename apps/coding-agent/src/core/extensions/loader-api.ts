@@ -6,7 +6,7 @@ import ExtensionApiLifecycle from "./loader-lifecycle.ts";
 import type loaderScopeTypes from "./loader-scope.ts";
 import type extensionsTypesTypes from "./types.types.ts";
 const { eventMembers, messageMembers, stateMembers } = loaderApiSession;
-const { flagMembers, rendererMembers, toolAndCommandMembers } = loaderApiRegistration;
+const { commandMembers, flagMembers, rendererMembers, toolMembers } = loaderApiRegistration;
 const { mcpMembers, providerMembers } = loaderApiProviders;
 
 function createExtensionAPI({
@@ -41,7 +41,8 @@ function createExtensionAPI({
 
   const api = {
     ...eventMembers(scope),
-    ...toolAndCommandMembers(scope),
+    ...commandMembers(scope),
+    ...toolMembers(scope),
     ...flagMembers(scope),
     ...rendererMembers(scope),
     ...messageMembers(scope),
