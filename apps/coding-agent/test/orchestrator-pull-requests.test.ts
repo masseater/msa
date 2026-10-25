@@ -86,7 +86,7 @@ function mergesAfterTheReview(run: Merging, opened: { head: string; number: numb
     yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
     expect(github.merged).toEqual([
       {
-        body: "",
+        body: expect.stringMatching(/^Msa-Merge: [0-9a-f-]{36}$/u),
         number: opened.number,
         sha: opened.head,
         subject: `Add ${run.branch} (#${opened.number})`,

@@ -109,6 +109,11 @@ declare namespace orchestratorTypesTypes {
     body: string;
   }
 
+  type MergeAttempt =
+    | { kind: "merged"; commit: string }
+    | { kind: "refused"; why: string }
+    | { kind: "unanswered"; why: string };
+
   interface PullRequest {
     taskId: string;
     number: number;
@@ -121,8 +126,11 @@ declare namespace orchestratorTypesTypes {
     mergeable: string;
     mergeState: string;
     verified: VerifiedPullRequest | null;
+    mergeCommit: string | null;
     harnessMerge: string | null;
+    harnessNonce: string | null;
     blockedHead: string | null;
+    harnessCommit: string | null;
     checkedAt: number;
   }
 

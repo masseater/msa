@@ -15,13 +15,22 @@ CREATE TABLE IF NOT EXISTS task_pull_requests (
   verified_sha TEXT,
   verified_title TEXT,
   verified_body TEXT,
+  merge_commit TEXT,
   harness_merge_sha TEXT,
   blocked_head TEXT,
+  harness_merge_commit TEXT,
+  harness_merge_nonce TEXT,
   checked_at INTEGER NOT NULL
 );
 `;
 
-const ADDED_COLUMNS = ["harness_merge_sha", "blocked_head"] as const;
+const ADDED_COLUMNS = [
+  "merge_commit",
+  "harness_merge_sha",
+  "harness_merge_commit",
+  "harness_merge_nonce",
+  "blocked_head",
+] as const;
 
 function addPullRequestColumns(database: DatabaseSync): void {
   const columns = database.prepare("PRAGMA table_info(task_pull_requests)").all() as unknown as {

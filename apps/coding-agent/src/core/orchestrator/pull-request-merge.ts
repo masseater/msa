@@ -3,6 +3,7 @@ import { Effect, Result } from "effect";
 import pullRequestFinish from "./pull-request-finish.ts";
 import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
+import pullRequestSquashModule from "./pull-request-squash.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -10,6 +11,7 @@ import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { pullRequests } = pullRequestsModule;
+const { pullRequestSquash } = pullRequestSquashModule;
 const { problemsOf, short } = pullRequestProblems;
 const { settleMerged } = pullRequestFinish;
 const { autoMergeLine } = pullRequestOutside;
@@ -40,27 +42,65 @@ interface Ready {
   verified: Verified;
 }
 
-type Attempt<A> = Result.Result<A, runtimeTypes.OrchestratorError>;
+type MergeAttempt = orchestratorTypesTypes.MergeAttempt;
 
 function unmerged(
   number: number,
-  verified: Verified,
-  merging: Attempt<void>,
-  after: Attempt<{ state: string }>,
+  attempt: MergeAttempt,
+  after: PullRequest | undefined,
 ): MergeOutcome {
-  if (Result.isSuccess(merging) && Result.isFailure(after)) {
-    return {
-      kind: "stopped",
-      line: `gh pr merge reported that PR #${number} was squash-merged at head ${short(verified.sha)}, but the harness could not read it back to confirm, so the task is stopped, not completed: ${after.failure.message} Rerun the task once gh can read the pull request; it completes if #${number} reads back as merged at that head.`,
-    };
-  }
-  const why = Result.isFailure(merging)
-    ? merging.failure.message
-    : `#${number} is still ${Result.isSuccess(after) ? after.success.state.toLowerCase() : "unread"}`;
+  const why =
+    attempt.kind === "merged"
+      ? `#${number} is still ${after?.state.toLowerCase() ?? "unread"}`
+      : attempt.why;
   return {
     kind: "stopped",
     line: `The review passed, but the harness could not merge PR #${number}, so the task is stopped, not completed: ${why}`,
   };
+}
+
+function landed(
+  runtime: runtimeTypes.Runtime,
+  read: PullRequest,
+  commit: string,
+  now: number,
+): PullRequest {
+  if (read.state === "MERGED" && read.mergeCommit !== null) return read;
+  store.savePullRequest(
+    runtime.database,
+    { ...read, checkedAt: now, mergeCommit: commit, state: "MERGED" },
+    true,
+  );
+  runtime.publish();
+  return store.pullRequestOf(runtime.database, read.taskId) ?? read;
+}
+
+function requestMerge(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  ready: Ready,
+  prepared: { nonce: string; squashed: { subject: string; body: string } },
+) {
+  const { owner, record, verified } = ready;
+  return Effect.uninterruptible(
+    Effect.gen(function* () {
+      store.markHarnessMerge(runtime.database, task.id, {
+        nonce: prepared.nonce,
+        sha: verified.sha,
+      });
+      const tried = yield* pullRequestSquash.merge(
+        runtime,
+        owner.cwd,
+        record.number,
+        verified,
+        prepared.squashed,
+      );
+      if (tried.kind === "merged") store.markHarnessCommit(runtime.database, task.id, tried.commit);
+      if (tried.kind === "refused") store.markHarnessMerge(runtime.database, task.id, null);
+      const read = yield* Effect.result(pullRequests.view(runtime, owner.cwd, record.number));
+      return [tried, read] as const;
+    }),
+  );
 }
 
 function squash(
@@ -70,38 +110,38 @@ function squash(
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
     const { owner, record, verified } = ready;
-    store.markHarnessMerge(runtime.database, task.id, verified.sha);
-    const [merging, after] = yield* Effect.uninterruptible(
-      Effect.all([
-        Effect.result(pullRequests.merge(runtime, owner.cwd, record.number, verified)),
-        Effect.result(pullRequests.view(runtime, owner.cwd, record.number)),
-      ]),
+    const prepared = yield* Effect.result(
+      pullRequestSquash.prepare(runtime, owner.cwd, record.number, verified),
     );
-    if (Result.isFailure(merging) && Result.isFailure(after)) {
-      store.markHarnessMerge(runtime.database, task.id, null);
+    if (Result.isFailure(prepared)) {
+      return unmerged(record.number, { kind: "refused", why: prepared.failure }, undefined);
     }
-    if (Result.isSuccess(after)) {
-      const now = yield* nowMillis;
-      const saved = pullRequests.save(runtime, task.id, after.success, verified, now);
-      const settled = yield* settleMerged(
-        runtime,
-        task,
-        owner.cwd,
-        saved,
-        `Squash-merged PR #${saved.number} at head ${short(verified.sha)}.`,
-      );
-      if (settled !== undefined) return settled;
-      const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
-      if (fixes.length > 0) {
-        return blocked(
-          runtime,
-          task,
-          saved,
-          fixes.map((problem) => problem.text),
-        );
-      }
-    }
-    return unmerged(record.number, verified, merging, after);
+    const [tried, after] = yield* requestMerge(runtime, task, ready, prepared.success);
+    const now = yield* nowMillis;
+    const read = Result.isSuccess(after)
+      ? pullRequests.save(runtime, task.id, after.success, verified, now)
+      : undefined;
+    const saved =
+      tried.kind === "merged"
+        ? landed(runtime, read ?? { ...record, harnessCommit: tried.commit }, tried.commit, now)
+        : read;
+    if (saved === undefined) return unmerged(record.number, tried, read);
+    const settled = yield* settleMerged(
+      runtime,
+      task,
+      owner.cwd,
+      saved,
+      `Squash-merged PR #${saved.number} at head ${short(verified.sha)} as merge commit ${short(saved.mergeCommit ?? "")}.`,
+    );
+    if (settled !== undefined) return settled;
+    const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
+    if (fixes.length === 0) return unmerged(record.number, tried, read);
+    return blocked(
+      runtime,
+      task,
+      saved,
+      fixes.map((problem) => problem.text),
+    );
   });
 }
 

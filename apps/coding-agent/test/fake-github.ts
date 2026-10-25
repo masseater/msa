@@ -1,11 +1,13 @@
 import testing from "@msa/testing";
-import { Effect } from "effect";
+import { DateTime, Effect } from "effect";
 
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import fakeGitHubMerge from "./fake-github-merge.ts";
 
 const { encodeJson } = testing;
 const { runCommand } = orchestratorCallbacks;
+const { commitOf, mergeRequestOf } = fakeGitHubMerge;
 
 type Ci = "pending" | "success" | "failure" | "cancelled";
 
@@ -15,7 +17,7 @@ interface FakePull {
   base: string;
   state: "OPEN" | "MERGED" | "CLOSED";
   head: string;
-  mergedBy?: { login: string; commit: string };
+  mergedBy?: { login: string; commit: string; at: string };
   autoMergeBy?: string;
   title: string;
   body: string;
@@ -56,8 +58,11 @@ export default class FakeGitHub {
 
   unavailable: orchestratorTypes.GhResult | undefined;
   beforeMerge: Effect.Effect<void> | undefined;
+  afterMerge: Effect.Effect<void> | undefined;
   mergeAnswer: orchestratorTypes.GhResult | undefined;
   mergeRefusal: orchestratorTypes.GhResult | undefined;
+  commitRefusal: orchestratorTypes.GhResult | undefined;
+  readonly messages = new Map<string, string>();
   calls = 0;
   answered = 0;
   private held: Promise<void> | undefined;
@@ -120,6 +125,10 @@ export default class FakeGitHub {
     return Effect.gen({ self: this }, function* () {
       if (this.unavailable !== undefined) return this.unavailable;
       const [group, command, target] = args;
+      if (group === "api" && args.includes("PUT")) return yield* this.mergeRequest(args);
+      if (group === "api" && /\/commits\/[0-9a-f]+$/u.test(command ?? "")) {
+        return yield* commitOf(this.messages, this.commitRefusal, command ?? "");
+      }
       if (group === "api") return yield* this.commits(args);
       if (group !== "pr") return refused(`fake gh does not know ${args.join(" ")}`);
       if (command === "list") {
@@ -138,13 +147,13 @@ export default class FakeGitHub {
           yield* Effect.orDie(
             encodeJson({
               mergeCommit: by === undefined ? null : { oid: by.commit },
+              mergedAt: by === undefined ? null : by.at,
               mergedBy: by === undefined ? null : { login: by.login },
             }),
           ),
         );
       }
       if (command === "view") return ok(yield* Effect.orDie(encodeJson(yield* this.view(pull))));
-      if (command === "merge") return yield* this.merge(pull, args);
       return refused(`fake gh does not know pr ${command}`);
     });
   }
@@ -201,6 +210,7 @@ export default class FakeGitHub {
         body: pull.body,
         headRefName: pull.branch,
         headRefOid: pull.head,
+        mergeCommit: pull.mergedBy === undefined ? null : { oid: pull.mergedBy.commit },
         mergeStateStatus: conflicting ? "DIRTY" : behind ? "BEHIND" : "CLEAN",
         mergeable: conflicting ? "CONFLICTING" : "MERGEABLE",
         number: pull.number,
@@ -239,7 +249,7 @@ export default class FakeGitHub {
     });
   }
 
-  private land(pull: FakePull, login: string): Effect.Effect<string> {
+  private land(pull: FakePull, login: string, message?: string): Effect.Effect<string> {
     return Effect.gen({ self: this }, function* () {
       const commit = yield* git(
         this.origin,
@@ -247,37 +257,44 @@ export default class FakeGitHub {
       );
       yield* git(this.origin, `update-ref refs/heads/${pull.base} ${commit.output}`);
       pull.state = "MERGED";
-      pull.mergedBy = { commit: commit.output, login };
+      const at = DateTime.formatIso(yield* DateTime.now);
+      pull.mergedBy = { at, commit: commit.output, login };
+      this.messages.set(commit.output, message ?? `pull #${pull.number}`);
       return commit.output;
     });
   }
 
-  private merge(
-    pull: FakePull,
-    args: readonly string[],
-  ): Effect.Effect<orchestratorTypes.GhResult> {
-    const flag = (name: string) => args[args.indexOf(name) + 1] ?? "";
-    const sha = flag("--match-head-commit");
+  private mergeRequest(args: readonly string[]): Effect.Effect<orchestratorTypes.GhResult> {
+    const { body, method, number, sha, subject } = mergeRequestOf(args);
     return Effect.gen({ self: this }, function* () {
+      const pull = this.pulls.find((candidate) => String(candidate.number) === number);
+      if (pull === undefined) return refused("gh: Not Found (HTTP 404)");
+      if (method !== "squash") return refused("gh: squash only (HTTP 405)");
       if (this.beforeMerge !== undefined) yield* this.beforeMerge;
       if (this.mergeRefusal !== undefined) return this.mergeRefusal;
       yield* this.refresh(pull);
-      if (pull.state !== "OPEN") return refused(`pull request #${pull.number} is not open`);
-      if (pull.head !== sha)
-        return refused("Head branch was modified. Review and try the merge again.");
-      if (yield* this.behind(pull))
-        return refused("the head branch is not up to date with the base branch");
+      if (pull.state !== "OPEN") return refused("gh: Pull Request is not mergeable (HTTP 405)");
+      if (pull.head !== sha) {
+        return refused("gh: Head branch was modified. Review and try the merge again. (HTTP 409)");
+      }
+      if (yield* this.behind(pull)) {
+        return refused("gh: Head branch is out of date (HTTP 405)");
+      }
       const ci = this.ci.get(pull.head);
-      if (ci !== undefined && ci !== "success")
-        return refused("required status checks have not passed");
-      yield* this.land(pull, "harness");
-      this.merged.push({
-        body: flag("--body"),
-        number: pull.number,
-        sha,
-        subject: flag("--subject"),
-      });
-      return this.mergeAnswer ?? ok("");
+      if (ci !== undefined && ci !== "success") {
+        return refused('gh: Required status check "verify" is expected. (HTTP 405)');
+      }
+      const commit = yield* this.land(pull, "harness", `${subject}\n\n${body}`);
+      this.merged.push({ body, number: pull.number, sha, subject });
+      if (this.afterMerge !== undefined) yield* this.afterMerge;
+      return (
+        this.mergeAnswer ??
+        ok(
+          yield* Effect.orDie(
+            encodeJson({ merged: true, message: "Pull Request successfully merged", sha: commit }),
+          ),
+        )
+      );
     });
   }
 }

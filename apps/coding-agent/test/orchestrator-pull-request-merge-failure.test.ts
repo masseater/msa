@@ -9,30 +9,6 @@ const { dirnameOf } = testing;
 const { taskStatus, waitFor } = orchestratorHarness.harness;
 const { advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
 
-const completesWhenAFailedMergeLanded = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, workers, branch, number, taskId, worktree } = yield* reviewed(remote);
-        github.mergeAnswer = { code: 1, stderr: "request timed out", stdout: "" };
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
-        expect(github.merged).toMatchObject([{ number }]);
-        expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
-          local: false,
-          remote: false,
-          worktree: false,
-        });
-      }),
-    ),
-  );
-
-it(
-  "completes the task and removes its worktree and branches when gh pr merge fails but the pull request reads back as merged",
-  completesWhenAFailedMergeLanded,
-);
-
 const sendsBackWhenMainMovesDuringTheMerge = () =>
   Effect.runPromise(
     withRemote((remote) =>

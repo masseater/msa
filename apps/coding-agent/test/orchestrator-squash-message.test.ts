@@ -7,6 +7,7 @@ import orchestratorSupport from "./orchestrator-support.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
+const TRAILER = /\n\nMsa-Merge: [0-9a-f-]{36}$/u;
 const { joinPath, writeTextFile } = testing;
 const { create } = orchestratorSupport;
 const { setup, taskStatus, waitFor } = orchestratorHarness.harness;
@@ -75,7 +76,8 @@ const squashesWithTheCommitBodies = () =>
 
         const [merged] = github.merged;
         expect(merged?.subject).toBe(`feat: add the feature flag (#${number})`);
-        expect(merged?.body).toBe(`${FIRST}\n\n${SECOND}`);
+        expect(merged?.body).toMatch(TRAILER);
+        expect(merged?.body.replace(TRAILER, "")).toBe(`${FIRST}\n\n${SECOND}`);
         const lint = yield* commitlint(`${merged?.subject}\n\n${merged?.body}\n`, repository);
         expect(lint.exitCode, lint.output).toBe(0);
 
