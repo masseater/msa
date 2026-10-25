@@ -6,7 +6,7 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
 
-const { fauxAssistantMessage } = ai;
+const { fauxAssistantMessage, fauxToolCall } = ai;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus } = harness;
@@ -63,7 +63,7 @@ const givesARunningToolCall60Minutes = () =>
   Effect.runPromise(
     Effect.gen(function* () {
       const { orchestrator, reports, task, worker } = yield* startedTask;
-      worker.messages = [fauxAssistantMessage("", { stopReason: "toolUse" })];
+      worker.messages = [fauxAssistantMessage(fauxToolCall("bash", {}), { stopReason: "toolUse" })];
 
       yield* advance(59 * MINUTE);
       expect(taskStatus(orchestrator, task.id)).toBe("running");
@@ -76,6 +76,63 @@ const givesARunningToolCall60Minutes = () =>
   );
 
 it("gives a running tool call 60 minutes", givesARunningToolCall60Minutes);
+
+const toolResult = (toolCallId: string) => ({
+  content: [],
+  isError: false,
+  role: "toolResult" as const,
+  timestamp: 0,
+  toolCallId,
+  toolName: "bash",
+});
+
+const parallelTurn = () =>
+  fauxAssistantMessage(
+    [fauxToolCall("bash", {}, { id: "first" }), fauxToolCall("bash", {}, { id: "second" })],
+    { stopReason: "toolUse" },
+  );
+
+const givesParallelToolCalls60MinutesWhileOneIsRunning = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, reports, task, worker } = yield* startedTask;
+      worker.messages = [parallelTurn(), toolResult("first")];
+
+      yield* advance(59 * MINUTE);
+      expect(taskStatus(orchestrator, task.id)).toBe("running");
+      yield* advance(2 * MINUTE);
+
+      expect(taskStatus(orchestrator, task.id)).toBe("stopped");
+      expect(reports.at(-1)?.text).toMatch(/one tool call has run for 1h 0m/u);
+      yield* Effect.promise(() => orchestrator.dispose());
+    }),
+  );
+
+it(
+  "gives parallel tool calls 60 minutes while one has not returned",
+  givesParallelToolCalls60MinutesWhileOneIsRunning,
+);
+
+const stopsAfter30MinutesOnceEveryParallelToolCallReturned = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, reports, task, worker } = yield* startedTask;
+      worker.messages = [parallelTurn(), toolResult("first"), toolResult("second")];
+
+      yield* advance(29 * MINUTE);
+      expect(taskStatus(orchestrator, task.id)).toBe("running");
+      yield* advance(2 * MINUTE);
+
+      expect(taskStatus(orchestrator, task.id)).toBe("stopped");
+      expect(reports.at(-1)?.text).toMatch(/no tool call or message for 30m/u);
+      yield* Effect.promise(() => orchestrator.dispose());
+    }),
+  );
+
+it(
+  "stops after 30 minutes once every parallel tool call returned",
+  stopsAfter30MinutesOnceEveryParallelToolCallReturned,
+);
 
 const abortedTurn = () =>
   fauxAssistantMessage("", { errorMessage: "The operation was aborted.", stopReason: "aborted" });
