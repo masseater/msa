@@ -13,6 +13,7 @@ const LintReport = Schema.fromJsonString(
       Schema.Struct({
         code: Schema.String,
         filename: Schema.String,
+        help: Schema.optional(Schema.String),
         labels: Schema.Array(Schema.Struct({ span: Schema.Struct({ line: Schema.Finite }) })),
       }),
     ),
@@ -29,6 +30,8 @@ const repoRoot = `${import.meta.dirname}/../..`;
 
 const probePath = (dir: string, kind: string): string => `${dir}/lint-${kind}-probe.ts`;
 
+const TSCONFIG_ERROR = "typescript(tsconfig-error)";
+
 const lintFiles = (files: readonly string[]) =>
   Effect.gen(function* () {
     const { stdout } = yield* captureProcess({
@@ -36,7 +39,16 @@ const lintFiles = (files: readonly string[]) =>
       command: "vp",
       cwd: repoRoot,
     });
-    return (yield* Schema.decodeEffect(LintReport)(stdout)).diagnostics;
+    const { diagnostics } = yield* Schema.decodeEffect(LintReport)(stdout);
+    const tsconfigErrors = diagnostics.filter(({ code }) => code === TSCONFIG_ERROR);
+    if (tsconfigErrors.length > 0) {
+      return yield* Effect.die(
+        new Error(
+          `vp lint dropped its type-aware diagnostics: ${tsconfigErrors.map(({ help }) => help).join("; ")}`,
+        ),
+      );
+    }
+    return diagnostics;
   });
 
 const probeRuntime = ManagedRuntime.make(
