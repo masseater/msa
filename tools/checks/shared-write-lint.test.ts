@@ -39,6 +39,15 @@ const writerCases: Cases = [
   ["pkgAlias.Box = Base as never;", LOCAL_EXTENDS],
   ["laterAlias!.Box = Base as never;", LOCAL_EXTENDS],
   ["Box.prototype.render = () => [];", LOCAL_EXTENDS],
+  ["Object.assign(tui, { Container: Base });", LOCAL_EXTENDS],
+  ['Object.defineProperty(pkgAlias, "Container", { value: Base });', LOCAL_EXTENDS],
+  ["Object.defineProperties(Container.prototype, { render: { value: () => [] } });", LOCAL_EXTENDS],
+  ['Reflect.set(laterAlias!, "Box", Base);', LOCAL_EXTENDS],
+  ['Reflect.defineProperty(tui, "Box", { value: Base });', LOCAL_EXTENDS],
+  ['Reflect.deleteProperty(Box.prototype, "render");', LOCAL_EXTENDS],
+  ["Object.assign({}, tui);", undefined],
+  ["Object.assign(local, { Container: Base });", undefined],
+  ["Object.keys(tui);", undefined],
   ["globalThis.Error = Base as never;", undefined],
   ["fsNs.readFileSync = fsNs.readFileSync;", undefined],
   ["local.Container = Base;", undefined],
@@ -51,10 +60,11 @@ const readerCases: Cases = [
   ["export class R2 extends tui.Box {}", undefined],
   ["export class R3 extends EventEmitter {}", LOCAL_EXTENDS],
   ["export class R4 extends events.EventEmitter {}", LOCAL_EXTENDS],
+  ["export class R5 extends Container {}", undefined],
 ];
 
 const READER_HEADER = [
-  'import tui from "@msa/tui";',
+  'import tui, { Container } from "@msa/tui";',
   'import events, { EventEmitter } from "events";',
 ];
 

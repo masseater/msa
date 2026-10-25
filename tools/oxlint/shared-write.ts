@@ -63,6 +63,28 @@ function targetsOf(node: Node): readonly Node[] {
   return PATTERN_TARGETS[value.type]?.(value) ?? [];
 }
 
+const WRITING_APIS: Readonly<Record<string, ReadonlySet<string>>> = {
+  Object: new Set(["assign", "defineProperties", "defineProperty"]),
+  Reflect: new Set(["defineProperty", "deleteProperty", "set"]),
+};
+
+const WRITING_OWNERS: ReadonlySet<string> = new Set(Object.keys(WRITING_APIS));
+
+const isWritingApi = (walk: Walk, callee: Node): boolean => {
+  if (callee.type !== "MemberExpression") return false;
+  const { object } = callee;
+  if (!scopeLookup.isGlobalNamed(walk.context, object, WRITING_OWNERS)) return false;
+  const name = scopeLookup.staticMemberName(callee);
+  return name !== undefined && WRITING_APIS[(object as ESTree.IdentifierReference).name]!.has(name);
+};
+
+const writtenArgument = (walk: Walk, call: ESTree.CallExpression): Node | undefined => {
+  const [target] = call.arguments;
+  return target?.type !== "SpreadElement" && isWritingApi(walk, strip(call.callee))
+    ? target
+    : undefined;
+};
+
 const createSharedWrite = (walk: Walk, report: (node: Node) => void) => {
   const checkTargets = (target: Node): void => {
     for (const member of targetsOf(target) as readonly ESTree.MemberExpression[])
@@ -70,6 +92,10 @@ const createSharedWrite = (walk: Walk, report: (node: Node) => void) => {
   };
   return {
     AssignmentExpression: (node: ESTree.AssignmentExpression) => checkTargets(node.left),
+    CallExpression: (node: ESTree.CallExpression) => {
+      const target = writtenArgument(walk, node);
+      if (target !== undefined && reachesShared(walk, target, new Set())) report(target);
+    },
     ForInStatement: (node: ESTree.ForInStatement) => checkTargets(node.left),
     ForOfStatement: (node: ESTree.ForOfStatement) => checkTargets(node.left),
     UnaryExpression: (node: ESTree.UnaryExpression) => {
