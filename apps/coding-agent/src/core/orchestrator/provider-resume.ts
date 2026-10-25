@@ -20,7 +20,8 @@ function resumeTask(
   const { database } = runtime;
   store.deleteProviderWait(database, wait.taskId);
   store.markProviderResumed(database, task.id, wait.reason);
-  if (wait.sessionFile === null) return starting.startTasks(runtime, task, wait.role);
+  if (wait.sessionFile === null)
+    return Effect.asVoid(starting.startTasks(runtime, task, wait.role));
   const threadId = newId("th");
   const seen = new Set(store.notesReadBy(database, wait.threadId).map((note) => note.id));
   const notes = store.unreadNotes(database, runtime.options.project, task.id, threadId);
@@ -34,7 +35,7 @@ function resumeTask(
     sessionFile: wait.sessionFile,
     threadId,
   };
-  return starting.launchPlan(runtime, plan, task, wait.role);
+  return Effect.asVoid(starting.launchPlan(runtime, plan, task, wait.role));
 }
 
 function resumeDue(

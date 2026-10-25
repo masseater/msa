@@ -7,7 +7,7 @@ import toolsReplan from "./tools-replan.ts";
 import toolsTask from "./tools-task.ts";
 
 const { createAndReadTaskTools, editTaskTools } = toolsTask;
-const { messageToolsA, messageToolsB, messageToolsC } = toolsMessage;
+const { decisionTools, messageToolsA, messageToolsB, messageToolsC } = toolsMessage;
 const { replanTools } = toolsReplan;
 const { handoffTools } = toolsHandoff;
 
@@ -18,6 +18,7 @@ function createOrchestratorToolDefinitions(
     ...createAndReadTaskTools(orchestrator),
     ...editTaskTools(orchestrator),
     ...messageToolsA(orchestrator),
+    ...decisionTools(orchestrator),
     ...messageToolsC(orchestrator),
     ...messageToolsB(orchestrator),
     ...replanTools(orchestrator),

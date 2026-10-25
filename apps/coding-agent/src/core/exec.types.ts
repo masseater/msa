@@ -3,6 +3,7 @@ declare namespace execTypes {
     signal?: AbortSignal;
     timeout?: number;
     cwd?: string;
+    env?: Readonly<Record<string, string>>;
   }
 
   interface ExecResult {

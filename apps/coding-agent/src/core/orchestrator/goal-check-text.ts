@@ -56,6 +56,20 @@ function rejectionPrompt(verification: Verification): string {
   ].join("\n");
 }
 
+function stuckText(verification: Verification): string {
+  return [
+    "The goal's checks failed again with exactly the same result as after the previous turn, and the working tree holds the same files as then, so the work is not moving and the task waits for a decision instead of going back to the worker again: decide how to proceed and answer with send_message; the worker continues with your answer.",
+    failureText(verification),
+  ].join("\n");
+}
+
+function ciStalledText(verification: Verification, minutes: number): string {
+  return [
+    `CI has not finished for ${minutes} minutes, so the task waits for a decision instead of being checked further: find out why CI does not finish, then answer with send_message; the worker continues with your answer.`,
+    failureText(verification),
+  ].join("\n");
+}
+
 function passed(verification: Verification): boolean {
   return (
     verification.checks.every((result) => result.passed) &&
@@ -77,6 +91,14 @@ function waitingForCi(verification: Verification): boolean {
   );
 }
 
-const goalCheckText = { failureText, passed, rejectionPrompt, stopText, waitingForCi };
+const goalCheckText = {
+  ciStalledText,
+  failureText,
+  passed,
+  rejectionPrompt,
+  stopText,
+  stuckText,
+  waitingForCi,
+};
 
 export default goalCheckText;

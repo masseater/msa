@@ -3,7 +3,9 @@ import type compatTypes from "@msa/ai/compat.types";
 import type telemetryTypes from "@msa/telemetry/index.types";
 
 import type decideTypes from "../decision/decide.types.ts";
+import type extensionsTypesTypes from "../extensions/types.types.ts";
 import type sessionTelemetryTypes from "../observability/session-telemetry.types.ts";
+import type orchestratorTypesTypes from "./types.types.ts";
 
 declare namespace workerTypes {
   interface WorkerSession {
@@ -33,6 +35,9 @@ declare namespace workerTypes {
     thinkingLevel: agentTypes.ThinkingLevel;
     sessionFile?: string | undefined;
     telemetry: sessionTelemetryTypes.SessionTelemetryOptions;
+    tools: readonly extensionsTypesTypes.ToolDefinition[];
+
+    readOnly: boolean;
   }
 
   interface OrchestratorDefaults {
@@ -54,11 +59,17 @@ declare namespace workerTypes {
     stderr: string;
   }
 
-  type ReportStatus = "completed" | "sent-back" | "waiting" | "stopped" | "failed";
+  type ReportStatus =
+    | "completed"
+    | "sent-back"
+    | "waiting"
+    | "needs-decision"
+    | "stopped"
+    | "failed";
 
   interface OrchestratorReport {
     taskId: string;
-    role: "worker" | "reviewer";
+    role: orchestratorTypesTypes.ThreadRole;
     status: ReportStatus;
     started: readonly string[];
   }

@@ -3,15 +3,9 @@ import textModule from "@msa/ai/utils/text";
 
 import type outcomeTypes from "./outcome.types.ts";
 import providerWaitModule from "./provider-wait.ts";
-import reviewVerdictModule from "./review-verdict.ts";
-import type runtimeTypes from "./runtime.types.ts";
-import storeModule from "./store.ts";
 import TaskStopped from "./task-stopped.ts";
-import type orchestratorTypesTypes from "./types.types.ts";
 import type workerTypes from "./worker.ts";
 
-const { store } = storeModule;
-const { reviewVerdicts } = reviewVerdictModule;
 const { providerWaits } = providerWaitModule;
 
 const { contentText } = textModule;
@@ -40,110 +34,7 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   };
 }
 
-type ReportStatus = workerTypes.ReportStatus;
-
-const SEVERITY: readonly ReportStatus[] = [
-  "failed",
-  "stopped",
-  "sent-back",
-  "waiting",
-  "completed",
-];
-
-function worse(left: ReportStatus, right: ReportStatus): ReportStatus {
-  return SEVERITY.indexOf(left) <= SEVERITY.indexOf(right) ? left : right;
-}
-
-interface SendBack {
-  task: orchestratorTypesTypes.Task;
-  prompt: string;
-}
-
-interface Applied {
-  review: orchestratorTypesTypes.Task[];
-  sendBack: SendBack[];
-  lines: string[];
-  status: ReportStatus;
-}
-
-function endTask(
-  database: runtimeTypes.Runtime["database"],
-  taskId: string,
-  outcome: outcomeTypes.Outcome,
-  now: number,
-): ReportStatus {
-  const status = outcome.status === "stopped" ? "stopped" : "failed";
-  store.setTaskStatus(database, taskId, status, now);
-  return status;
-}
-
-function insertReport(
-  database: runtimeTypes.Runtime["database"],
-  assignment: orchestratorTypesTypes.Assignment,
-  outcome: outcomeTypes.Outcome,
-  result: ReturnType<typeof reviewVerdicts.apply> | undefined,
-  now: number,
-): void {
-  store.insertReport(database, {
-    content: result === undefined ? outcome.content : `${result.line}\n\n${outcome.content}`,
-    createdAt: now,
-    id: `rep-${assignment.threadId}-${assignment.role}`,
-    role: assignment.role,
-    status: outcome.status,
-    taskId: assignment.taskId,
-    threadId: assignment.threadId,
-    verdict: result?.result ?? null,
-  });
-}
-
-function applyOutcome(
-  runtime: runtimeTypes.Runtime,
-  assignments: readonly orchestratorTypesTypes.Assignment[],
-  outcome: outcomeTypes.Outcome,
-  now: number,
-  verdict?: runtimeTypes.ReviewVerdict,
-): Applied {
-  const database = runtime.database;
-  const applied: Applied = { lines: [], review: [], sendBack: [], status: "completed" };
-  for (const assignment of assignments) {
-    if (outcome.limit !== undefined) {
-      providerWaits.record(runtime, assignment, outcome.limit, now);
-      applied.status = worse(applied.status, "waiting");
-      continue;
-    }
-    store.clearProviderResumed(database, assignment.taskId);
-    const judged =
-      outcome.status === "completed" ? reviewVerdicts.judgedTask(runtime, assignment) : undefined;
-    const result =
-      judged === undefined ? undefined : reviewVerdicts.apply(runtime, judged.id, verdict);
-    if (result !== undefined) applied.lines.push(result.line);
-    insertReport(database, assignment, outcome, result, now);
-    if (outcome.status !== "completed") {
-      applied.status = worse(applied.status, endTask(database, assignment.taskId, outcome, now));
-      continue;
-    }
-    if (judged !== undefined && result !== undefined && result.status !== "completed") {
-      applied.status = worse(applied.status, result.status);
-      if (result.status === "sent-back")
-        applied.sendBack.push({ prompt: result.prompt ?? "", task: judged });
-      else store.setTaskStatus(database, assignment.taskId, result.status, now);
-      continue;
-    }
-    if (store.unfinishedDependencies(database, assignment.taskId).length > 0) {
-      store.setTaskStatus(database, assignment.taskId, "waiting", now);
-      continue;
-    }
-    if (assignment.role === "reviewer") {
-      store.setTaskStatus(database, assignment.taskId, "completed", now);
-      continue;
-    }
-    const task = store.getTask(database, assignment.taskId);
-    if (task !== undefined) applied.review.push(task);
-  }
-  return applied;
-}
-
-const outcomes = { applyOutcome, errorText, outcomeOf };
+const outcomes = { errorText, outcomeOf };
 
 const outcome = {
   outcomes,

@@ -10,16 +10,6 @@ const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { GIT, gatedTarget, read, runCommand, sh, shortId, withRepository } = worktreeSupport;
 
-function failChecks(worker: { prompts: string[]; complete: (reply: string) => void }) {
-  return Effect.gen(function* () {
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      worker.complete(`done, try ${attempt}`);
-      yield* waitFor(() => worker.prompts.length === attempt + 1);
-    }
-    worker.complete("done, try 4");
-  });
-}
-
 function rejection(attempt: () => Promise<unknown>) {
   return Effect.promise(() =>
     attempt().then(
@@ -127,9 +117,9 @@ const listsOnlyTheSourcesStillWorking = () =>
             title,
           });
         const dropped = yield* part("dropped part");
-        const failed = yield* part("failed part", [{ command: "false" }]);
+        const failed = yield* part("failed part");
         const kept = yield* part("kept part");
-        yield* failChecks(workers[2]!);
+        workers[2]!.fail(new Error("the worker crashed"));
         yield* waitFor(() => taskStatus(orchestrator, failed.id) === "failed");
         yield* Effect.promise(() =>
           orchestrator.setDepends({ remove: [failed.id], taskIds: [target.id] }),

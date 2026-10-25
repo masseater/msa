@@ -110,7 +110,7 @@ const keepsWorkerTranscriptsOutOfTheSessions = () =>
         return status !== "waiting" && status !== "running";
       });
       const worker = yield* Effect.promise(() => orchestrator.read(task.id));
-      expect(worker.status).toBe("stopped");
+      expect(worker.status).toBe("needs-decision");
       const assignment = worker.assignments.find((item) => item.role === "worker");
       const sessionFile = orchestrator.snapshot.threads.find(
         (candidate) => candidate.id === assignment?.threadId,

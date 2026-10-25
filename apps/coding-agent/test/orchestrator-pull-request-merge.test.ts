@@ -2,15 +2,17 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import threadRun from "../src/core/orchestrator/thread-run.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
+import triageSupport from "./triage-support.ts";
 
 const { dirnameOf } = testing;
+const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
 const { taskStatus, waitFor } = harness;
 const { advanceMain, openedTask, rebaseAndPush, withRemote } = pullRequestSupport;
-const { MAX_REJECTIONS } = threadRun.threadRuns;
+
+const MANY_ROUNDS = 5;
 
 const waitsForPendingCiBeforeMerging = () =>
   Effect.runPromise(
@@ -79,15 +81,14 @@ it(
   waitsForChecksToRegister,
 );
 
-const stopsAfterTheMergeKeepsFallingBehind = () =>
+const keepsSendingBackAPullRequestThatFallsBehind = () =>
   Effect.runPromise(
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github, origin, repository } = remote;
-        const { orchestrator, reports, workers, branch, number, taskId } =
-          yield* openedTask(remote);
+        const { orchestrator, workers, branch, number, taskId } = yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "success");
-        for (let round = 0; round <= MAX_REJECTIONS; round++) {
+        for (let round = 0; round < MANY_ROUNDS; round++) {
           const worker = workers.at(-1)!;
           if (round > 0) {
             yield* rebaseAndPush(worker.cwd, branch);
@@ -98,19 +99,55 @@ const stopsAfterTheMergeKeepsFallingBehind = () =>
           yield* waitFor(() => workers.length === reviewing);
           yield* advanceMain(origin, dirnameOf(repository), `main-${round}.txt`);
           workers.at(-1)!.complete("acceptable");
-          if (round < MAX_REJECTIONS) yield* waitFor(() => workers.length === reviewing + 1);
+          yield* waitFor(() => workers.length === reviewing + 1);
+          expect(taskStatus(orchestrator, taskId)).toBe("running");
         }
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
         expect(github.merged).toEqual([]);
-        expect(workers).toHaveLength(2 * (MAX_REJECTIONS + 1));
-        expect(reports.at(-1)?.details.status).toBe("stopped");
-        expect(reports.at(-1)?.text).toContain(`open pull request #${number}`);
-        expect(reports.at(-1)?.text).toContain(branch);
+
+        const worker = workers.at(-1)!;
+        yield* rebaseAndPush(worker.cwd, branch);
+        const head = yield* github.head(branch);
+        github.ci.set(head, "success");
+        worker.complete("current with main at last");
+        yield* waitFor(() => workers.length === 2 * MANY_ROUNDS + 2);
+        workers.at(-1)!.complete("acceptable");
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
+        expect(github.merged).toMatchObject([{ number, sha: head }]);
       }),
     ),
   );
 
 it(
-  "stops the task, instead of sending it back again, once the pull request has fallen behind at the merge after every allowed round",
-  stopsAfterTheMergeKeepsFallingBehind,
+  "sends a pull request that falls behind at the merge back for as many rounds as it takes, and merges it once it is current",
+  keepsSendingBackAPullRequestThatFallsBehind,
+);
+
+const asksForADecisionWhenTheMergeIsBlockedAtTheSameHead = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { orchestrator, reports, workers, branch, taskId } = yield* openedTask(remote);
+        const head = yield* github.head(branch);
+        for (let round = 0; round < 2; round++) {
+          github.ci.set(head, "success");
+          workers.at(-1)!.complete(`CI is green (${round})`);
+          yield* waitFor(() => workers.length === 2 * round + 2);
+          github.ci.set(head, "failure");
+          workers.at(-1)!.complete("acceptable");
+          if (round === 0) yield* waitFor(() => workers.length === 3);
+        }
+        yield* escalateTriage(workers);
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "needs-decision");
+        expect(github.merged).toEqual([]);
+        expect(workers).toHaveLength(5);
+        expect(reports.at(-1)?.details.status).toBe("needs-decision");
+        expect(reports.at(-1)?.text).toContain("the work is not moving");
+      }),
+    ),
+  );
+
+it(
+  "waits for a decision instead of sending the work back again when the merge is blocked again at the head it was already sent back with",
+  asksForADecisionWhenTheMergeIsBlockedAtTheSameHead,
 );

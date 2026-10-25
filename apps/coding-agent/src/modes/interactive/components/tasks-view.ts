@@ -165,6 +165,11 @@ export default class TasksView implements tuiTypes.Component, tuiTypes.Focusable
       this.options.orchestrator.stop(selected.id).catch(failed);
     } else if (kb.matches(data, "app.orchestrator.rerun")) {
       this.options.orchestrator.rerun(selected.id).catch(failed);
+    } else if (
+      kb.matches(data, "app.orchestrator.advise") &&
+      selected.status === "needs-decision"
+    ) {
+      this.options.orchestrator.advise(selected.id).catch(failed);
     } else if (kb.matches(data, "app.orchestrator.model")) {
       this.options.onPickModel(selected.id);
       return false;

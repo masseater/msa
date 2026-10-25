@@ -17,6 +17,22 @@ const { nowMillis } = runtimeModule;
 
 type GateResult = goalCheckTextTypes.GateResult;
 
+function missing(
+  task: orchestratorTypesTypes.Task,
+  owner: { branch: string; base: string },
+): GateResult {
+  return {
+    number: null,
+    problems: [
+      {
+        kind: "fix",
+        text: `No pull request has ${owner.branch} as its head. Push ${owner.branch} and open a pull request into ${owner.base}.`,
+      },
+    ],
+    task,
+  };
+}
+
 function check(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
@@ -35,18 +51,7 @@ function check(
       };
     }
     const pull = found.success;
-    if (pull === undefined) {
-      return {
-        number: null,
-        problems: [
-          {
-            kind: "fix",
-            text: `No pull request has ${owner.branch} as its head. Push ${owner.branch} and open a pull request into ${owner.base}.`,
-          },
-        ],
-        task,
-      };
-    }
+    if (pull === undefined) return missing(task, owner);
     const now = yield* nowMillis;
     const local = yield* worktrees.headOf(owner.cwd);
     if (!live()) return undefined;

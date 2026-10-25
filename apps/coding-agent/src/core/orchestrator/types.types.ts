@@ -1,11 +1,11 @@
 import type agentTypes from "@msa/agent-core/index.types";
 
 declare namespace orchestratorTypesTypes {
-  type TaskStatus = "waiting" | "running" | "completed" | "failed" | "stopped";
+  type TaskStatus = "waiting" | "running" | "needs-decision" | "completed" | "failed" | "stopped";
 
   type TaskKind = "work" | "review";
 
-  type ThreadRole = "worker" | "reviewer";
+  type ThreadRole = "worker" | "reviewer" | "advisor" | "triage";
 
   type ThreadStatus = "running" | "completed" | "failed" | "stopped";
 
@@ -69,6 +69,8 @@ declare namespace orchestratorTypesTypes {
     targetBranch: string | null;
     target: Task | null;
     sources: readonly WorkspaceSource[];
+    work?: string;
+    history?: string;
   }
 
   interface Assignment {
@@ -120,6 +122,7 @@ declare namespace orchestratorTypesTypes {
     mergeState: string;
     verified: VerifiedPullRequest | null;
     harnessMerge: string | null;
+    blockedHead: string | null;
     checkedAt: number;
   }
 

@@ -23,6 +23,7 @@ function createTasksViewState(): tasksViewHelpersTypes.TasksViewState {
 const STATUS_LABEL: Record<orchestratorTypesTypes.TaskStatus, string> = {
   completed: "Done",
   failed: "Failed",
+  "needs-decision": "Needs decision",
   running: "Running",
   stopped: "Stopped",
   waiting: "Waiting",
@@ -36,6 +37,7 @@ interface Glyph {
 const TASK_GLYPH: Record<orchestratorTypesTypes.TaskStatus, Glyph> = {
   completed: { color: "success", symbol: "✓" },
   failed: { color: "error", symbol: "✗" },
+  "needs-decision": { color: "warning", symbol: "?" },
   running: { color: "accent", symbol: "●" },
   stopped: { color: "dim", symbol: "■" },
   waiting: { color: "muted", symbol: "○" },
@@ -44,6 +46,7 @@ const TASK_GLYPH: Record<orchestratorTypesTypes.TaskStatus, Glyph> = {
 const REPORT_GLYPH: Record<orchestratorTypes.ReportStatus, Glyph> = {
   completed: TASK_GLYPH.completed,
   failed: TASK_GLYPH.failed,
+  "needs-decision": TASK_GLYPH["needs-decision"],
   "sent-back": TASK_GLYPH.running,
   stopped: TASK_GLYPH.stopped,
   waiting: TASK_GLYPH.waiting,
@@ -67,7 +70,7 @@ function finished(task: orchestratorTypesTypes.TaskSnapshot): boolean {
 }
 
 function stoppable(task: orchestratorTypesTypes.TaskSnapshot): boolean {
-  return task.status === "running" || task.status === "waiting";
+  return task.status === "running" || task.status === "waiting" || task.status === "needs-decision";
 }
 
 function modelName(reference: string): string {
@@ -133,6 +136,7 @@ function describeTaskCounts(
   const parts = [
     [count("running"), theme.fg("accent", "●"), "running"],
     [count("waiting"), theme.fg("muted", "○"), "waiting"],
+    [count("needs-decision"), theme.fg("warning", "?"), "need a decision"],
     [count("failed"), theme.fg("error", "✗"), "failed"],
     [count("completed"), theme.fg("success", "✓"), "done"],
     [count("stopped"), theme.fg("dim", "■"), "stopped"],

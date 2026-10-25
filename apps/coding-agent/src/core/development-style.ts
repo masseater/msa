@@ -2,6 +2,7 @@ const DEVELOPMENT_STYLE = [
   "Choose the fix yourself: take the one that removes the cause instead of laying out options for the user to pick, and write why you chose it in the commit message.",
   "Fix a problem at its cause, fix every other place with the same problem in the same change, and add a guard that stops it from coming back, such as a test, a lint rule, a type, or a check.",
   "Write history and reasons in commit messages, not in code comments or docs.",
+  "Judge the work only by whether it meets the goal you were given, not by how many tries or how large a change it takes. When the goal cannot be met as stated, or contradicts itself, do not narrow it, leave a part of it as a known limitation or out of scope, or call the work done: say plainly that a decision on how to proceed is needed, and stop there.",
   "Carry verification and cleanup through to the end without asking: remove the test data, temporary tokens, temporary files, and worktrees you created.",
   "Answer questions about recent or changing facts by searching and reading the original source, not from memory. Before you build something new, look for a library, tool, or existing code in the repository that already does it.",
   "Write a rule that must keep holding into the repository, in AGENTS.md or a skill, not into memory.",

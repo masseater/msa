@@ -9,29 +9,62 @@ import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.
 const { LIQUID_D1 } = localModule;
 const { decide, makeDecide } = decideModule;
 
-type Odds = Readonly<Record<"pass" | "fail", number>>;
+type Odds = Readonly<Record<string, number>>;
 
 type Judgement = (state: aiTypes.JsonObject) => Odds;
 
-function verdictAnswer(odds: Odds): aiTypes.ClassifierAnswer {
-  const choice = odds.fail > odds.pass ? "fail" : "pass";
-  return { choice, confidence: odds[choice], probabilities: { ...odds }, type: "choice" };
+interface Judges {
+  verdict: Judgement;
+  goal?: Judgement;
+  progress?: Judgement;
+}
+
+function choiceAnswer(odds: Odds): aiTypes.ClassifierAnswer {
+  const [choice, confidence] = Object.entries(odds).reduce((best, entry) =>
+    entry[1] > best[1] ? entry : best,
+  );
+  return { choice, confidence, probabilities: { ...odds }, type: "choice" };
+}
+
+function judgesOf(judgement: Judgement | Judges): Required<Judges> {
+  const judges = typeof judgement === "function" ? { verdict: judgement } : judgement;
+  return {
+    goal:
+      judges.goal ??
+      ((state) => {
+        const odds = judges.verdict(state);
+        return { met: odds["pass"] ?? 0, unmet: odds["fail"] ?? 0 };
+      }),
+    progress: judges.progress ?? (() => ({ moving: 1, stuck: 0 })),
+    verdict: judges.verdict,
+  };
+}
+
+function answersFor(
+  judges: Required<Judges>,
+  questions: readonly string[],
+  state: aiTypes.JsonObject,
+): Record<string, aiTypes.ClassifierAnswer> {
+  return Object.fromEntries(
+    questions.map((id) => {
+      const judge =
+        id === "goal" ? judges.goal : id === "progress" ? judges.progress : judges.verdict;
+      return [id, choiceAnswer(judge(state))];
+    }),
+  );
 }
 
 function classifierDecide(
-  judgement: Judgement | { unavailable: string },
+  judgement: Judgement | Judges | { unavailable: string },
 ): orchestratorTypes.OrchestratorOptions["decide"] {
+  const available = "unavailable" in judgement ? undefined : judgesOf(judgement);
   const service = Effect.runSync(
     makeDecide({
       classify: (model, context) => {
-        if (typeof judgement !== "function") throw new Error(judgement.unavailable);
+        if (available === undefined)
+          throw new Error((judgement as { unavailable: string }).unavailable);
         return Promise.resolve({
-          answers: Object.fromEntries(
-            Object.keys(context.questions).map((id) => [
-              id,
-              verdictAnswer(judgement(context.state)),
-            ]),
-          ),
+          answers: answersFor(available, Object.keys(context.questions), context.state),
           api: model.api,
           model: model.id,
           provider: model.provider,
@@ -40,9 +73,9 @@ function classifierDecide(
         });
       },
       model: () =>
-        typeof judgement === "function"
-          ? { model: LIQUID_D1 }
-          : { unavailable: judgement.unavailable },
+        available === undefined
+          ? { unavailable: (judgement as { unavailable: string }).unavailable }
+          : { model: LIQUID_D1 },
       recordUndecided: () => undefined,
       recordUsage: () => undefined,
       threshold: () => undefined,

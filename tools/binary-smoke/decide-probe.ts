@@ -74,15 +74,27 @@ const mainReply = (context: aiTypes.TranscriptContext): aiTypes.AssistantMessage
     : createProbeTask();
 };
 
-const reviewerReply = () =>
+const recordGoalItems = () =>
   ai.fauxAssistantMessage(
-    "The probe task's goal is met: probe.txt exists and holds the agreed text. No problem remains.",
+    ai.fauxToolCall("record_goal_items", {
+      items: [{ evidence: "probe.txt holds the agreed text.", item: 1, status: "met" }],
+    }),
+    { stopReason: "toolUse" },
   );
+
+const reviewerReply = (context: aiTypes.TranscriptContext) =>
+  context.messages.at(-1)?.role === "toolResult"
+    ? ai.fauxAssistantMessage(
+        "The probe task's goal is met: probe.txt exists and holds the agreed text. No problem remains.",
+      )
+    : recordGoalItems();
 
 const reply = (context: aiTypes.TranscriptContext): aiTypes.AssistantMessage => {
   const opening = firstUserText(context);
   if (opening === PROBE_PROMPT) return mainReply(context);
-  return opening.includes(REVIEWER_OPENING) ? reviewerReply() : ai.fauxAssistantMessage("Done.");
+  return opening.includes(REVIEWER_OPENING)
+    ? reviewerReply(context)
+    : ai.fauxAssistantMessage("Done.");
 };
 
 const decideProbe = (msa: codingAgentTypes.ExtensionAPI) => {

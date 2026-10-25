@@ -8,8 +8,10 @@ import goalChecksSupport from "./orchestrator-goal-checks-support.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import watchdogSupport from "./orchestrator-watchdog-support.ts";
+import triageSupport from "./triage-support.ts";
 
 const { joinPath, writeTextFile } = testing;
+const { escalateTriage } = triageSupport;
 const { LINT_CHECK, SHORTCUT_CHECK, heldCommand, withRepo } = goalChecksSupport;
 const { orchestratorError } = errors;
 const { create } = orchestratorSupport;
@@ -70,7 +72,7 @@ it(
   returnsAFailingReportToTheWorker,
 );
 
-const failsTheTaskWhenTheChecksKeepFailing = () =>
+const asksForADecisionWhenTheChecksStopMoving = () =>
   Effect.runPromise(
     withRepo((directory) =>
       Effect.gen(function* () {
@@ -78,30 +80,44 @@ const failsTheTaskWhenTheChecksKeepFailing = () =>
           cwd: directory,
           runCommand: orchestratorCallbacks.runCommand,
         });
-        yield* writeTextFile(joinPath(directory, "lint.txt"), "3 errors\n");
+        yield* writeTextFile(joinPath(directory, "lint.txt"), "9 errors\n");
         const task = yield* create(orchestrator, {
           checks: [LINT_CHECK],
-          currentState: "lint reports 3 errors",
+          currentState: "lint reports 9 errors",
           goalState: "lint reports 0 errors",
           title: "lint",
         });
-        for (let attempt = 1; attempt <= 3; attempt++) {
+        for (let attempt = 1; attempt <= 5; attempt++) {
           workers[0]?.complete(`done, try ${attempt}`);
           yield* waitFor(() => workers[0]?.prompts.length === attempt + 1);
+          yield* writeTextFile(joinPath(directory, "lint.txt"), `${9 - attempt} errors\n`);
         }
-        workers[0]?.complete("done, try 4");
-        yield* waitFor(() => taskStatus(orchestrator, task.id) === "failed");
-        expect(workers).toHaveLength(1);
-        expect(reports.at(-1)?.details.status).toBe("failed");
-        expect(reports.at(-1)?.text).toContain("still fail after 3 rounds of fixes");
-        expect(reports.at(-1)?.text).toContain("3 errors");
+        expect(taskStatus(orchestrator, task.id)).toBe("running");
+        expect(reports).toEqual([]);
+
+        workers[0]?.complete("done, try 6");
+        yield* waitFor(() => workers[0]?.prompts.length === 7);
+        workers[0]?.complete("done, try 7");
+        yield* escalateTriage(workers);
+        yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
+        expect(workers).toHaveLength(2);
+        expect(reports.at(-1)?.details.status).toBe("needs-decision");
+        expect(reports.at(-1)?.text).toContain("exactly the same result");
+        expect(reports.at(-1)?.text).toContain("4 errors");
+
+        yield* writeTextFile(joinPath(directory, "lint.txt"), "0 errors\n");
+        yield* Effect.promise(() => orchestrator.sendMessage(task.id, "Fix the remaining four."));
+        yield* waitFor(() => workers[0]?.prompts.length === 8);
+        expect(workers[0]?.prompts[7]).toContain("Fix the remaining four.");
+        workers[0]?.complete("fixed the remaining four");
+        yield* waitFor(() => workers.length === 3);
       }),
     ),
   );
 
 it(
-  "fails the task without a review when the checks still fail after three rounds",
-  failsTheTaskWhenTheChecksKeepFailing,
+  "returns failing checks to the worker for as many turns as their result changes, and waits for a decision when a turn ends with the same result",
+  asksForADecisionWhenTheChecksStopMoving,
 );
 
 const deliversANoteSentWhileTheChecksRun = () =>

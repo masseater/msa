@@ -110,6 +110,10 @@ export default class Orchestrator {
     return this.state.exclusive(actions.sendMessage(this.state, taskId, message));
   }
 
+  advise(taskId: string, question = ""): Promise<orchestratorTypes.TaskView> {
+    return this.state.exclusive(actions.advise(this.state, taskId, question));
+  }
+
   stop(taskId: string): Promise<orchestratorTypes.TaskView> {
     return this.state.exclusive(actions.stop(this.state, taskId));
   }

@@ -36,6 +36,10 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly runStartedAt = new Map<string, number>();
   readonly activity = new Map<string, runtimeTypes.ThreadActivity>();
   readonly wrapUps = new Map<string, wrapUpTypes.WrapUp>();
+  readonly decisionRequests: runtimeTypes.Runtime["decisionRequests"] = new Map();
+  readonly triageConclusions: runtimeTypes.Runtime["triageConclusions"] = new Map();
+  readonly triageAsks: runtimeTypes.Runtime["triageAsks"] = new Map();
+  readonly goalChecklists: runtimeTypes.Runtime["goalChecklists"] = new Map();
   readonly listeners = new Set<() => void>();
   replanning = false;
   snapshot: Snapshot = EMPTY;
@@ -91,8 +95,9 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
     worker: runtimeTypes.WorkerSession,
     error: unknown,
     verdict?: runtimeTypes.ReviewVerdict,
+    decision?: runtimeTypes.DecisionAsk,
   ): Promise<void> {
-    return settling.settle(this, threadId, run, worker, error, verdict);
+    return settling.settle(this, threadId, run, worker, error, verdict, decision);
   }
 
   afterTurn(threadId: string, run: number, worker: runtimeTypes.WorkerSession): void {

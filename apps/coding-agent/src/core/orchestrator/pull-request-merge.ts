@@ -7,7 +7,6 @@ import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
-import threadRun from "./thread-run.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { pullRequests } = pullRequestsModule;
@@ -16,7 +15,6 @@ const { settleMerged } = pullRequestFinish;
 const { autoMergeLine } = pullRequestOutside;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
-const { MAX_REJECTIONS } = threadRun.threadRuns;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -127,25 +125,34 @@ function changedSinceReview(number: number, now: Verified, verified: Verified | 
   ];
 }
 
-function blockedInARow(runtime: runtimeTypes.Runtime, taskId: string): number {
-  const verdicts = store
-    .reportsOfTask(runtime.database, taskId)
-    .flatMap((report) =>
-      report.role === "reviewer" && report.verdict !== null ? [report.verdict] : [],
-    );
-  return verdicts.length - 1 - verdicts.findLastIndex((verdict) => verdict !== "pass");
-}
-
 function blocked(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   record: PullRequest,
   problems: readonly string[],
 ): MergeOutcome {
-  if (blockedInARow(runtime, task.id) < MAX_REJECTIONS) return sendBack(problems, record.number);
+  const previous = store.pullRequestOf(runtime.database, task.id)?.blockedHead ?? null;
+  if (previous !== record.headSha) {
+    store.markBlockedHead(runtime.database, task.id, record.headSha);
+    return sendBack(problems, record.number);
+  }
+  store.markBlockedHead(runtime.database, task.id, null);
   return {
-    kind: "stopped",
-    line: `The review passed, but the harness could not merge PR #${record.number} (${record.branch}) after ${MAX_REJECTIONS + 1} passing reviews in a row, so the task is stopped, not completed: ${problems.join(" ")} Merge it by hand once it is current, or rerun the task.`,
+    kind: "needs-decision",
+    line: `The review passed, but the harness still cannot merge PR #${record.number} (${record.branch}), and its head ${short(record.headSha)} is the one the work was already sent back with for this, so the work is not moving and the task waits for a decision: ${problems.join(" ")} Decide how to proceed and answer with send_message; the worker continues with your answer.`,
+    triage: true,
+  };
+}
+
+function ciStalled(
+  record: PullRequest,
+  waitMs: number,
+  problems: readonly { text: string }[],
+): MergeOutcome {
+  return {
+    kind: "needs-decision",
+    line: `The review passed, but CI on PR #${record.number} (${record.branch}) has not finished for ${Math.round(waitMs / 60_000)} minutes, so the task waits for a decision: ${problems.map((problem) => problem.text).join(" ")} Find out why CI does not finish, then answer with send_message; the worker continues with your answer.`,
+    triage: false,
   };
 }
 
@@ -225,12 +232,7 @@ function afterReview(
       if (problems.length === 0 && verified !== null) {
         return yield* squash(runtime, task, { owner, record, verified });
       }
-      if (now - since >= waitMs) {
-        return {
-          kind: "stopped",
-          line: `The review passed, but CI on PR #${record.number} (${record.branch}) did not finish within ${Math.round(waitMs / 60_000)} minutes, so the task is stopped, not completed: ${problems.map((problem) => problem.text).join(" ")}`,
-        };
-      }
+      if (now - since >= waitMs) return ciStalled(record, waitMs, problems);
       yield* Effect.sleep(pollMs);
     }
   });

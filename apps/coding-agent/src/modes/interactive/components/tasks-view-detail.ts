@@ -142,7 +142,11 @@ function detailWriters(
 
 function hints(task: orchestratorTypesTypes.TaskSnapshot): string {
   return ` ${[
-    keyHint("app.orchestrator.message", task.status === "running" ? "steer" : "message"),
+    keyHint(
+      "app.orchestrator.message",
+      task.status === "running" ? "steer" : task.status === "needs-decision" ? "decide" : "message",
+    ),
+    task.status === "needs-decision" ? keyHint("app.orchestrator.advise", "advisor") : undefined,
     keyHint("app.orchestrator.note", "note to round"),
     stoppable(task) ? keyHint("app.orchestrator.stop", "stop") : undefined,
     keyHint("app.orchestrator.depends", "deps"),

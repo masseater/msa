@@ -18,6 +18,8 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   model: aiTypes.Model<any>;
   thinkingLevel: agentTypes.ThinkingLevel;
   telemetry: orchestratorTypes.CreateWorkerOptions["telemetry"];
+  tools: orchestratorTypes.CreateWorkerOptions["tools"];
+  readOnly: boolean;
   state: { streamingMessage?: agentTypes.AgentMessage } = {};
   private readonly pending: Array<{
     resolve: (message: aiTypes.AssistantMessage) => void;
@@ -29,6 +31,8 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
     this.model = options.model;
     this.thinkingLevel = options.thinkingLevel;
     this.telemetry = options.telemetry;
+    this.tools = options.tools;
+    this.readOnly = options.readOnly;
     this.openedSessionFile = options.sessionFile;
     this.sessionFile = options.sessionFile ?? `/sessions/${index}.jsonl`;
   }
@@ -100,8 +104,73 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
 
   subscribe = () => () => {};
 
+  private recorded = false;
+
+  goalItemCount(): number | undefined {
+    const tool = this.tools.find((candidate) => candidate.name === "record_goal_items");
+    const items = (
+      tool?.parameters as { properties?: { items?: { minItems?: number } } } | undefined
+    )?.properties?.items;
+    return items?.minItems;
+  }
+
+  recordGoalItems(
+    items: readonly { item: number; status: "met" | "unmet"; evidence: string }[],
+  ): Promise<unknown> {
+    const tool = this.tools.find((candidate) => candidate.name === "record_goal_items");
+    if (tool === undefined)
+      return Promise.reject(new Error("this thread has no record_goal_items"));
+    this.recorded = true;
+    const execute = tool.execute as (callId: string, params: unknown) => Promise<unknown>;
+    return execute("call", { items });
+  }
+
   complete(reply: string): void {
+    const count = this.goalItemCount();
+    if (count !== undefined && !this.recorded) {
+      void this.recordGoalItems(
+        Array.from({ length: count }, (_, index) => ({
+          evidence: "checked",
+          item: index + 1,
+          status: "met" as const,
+        })),
+      ).catch(() => undefined);
+    }
+    this.completeUnrecorded(reply);
+  }
+
+  completeUnrecorded(reply: string): void {
+    this.recorded = false;
     this.pending.shift()?.resolve(fauxAssistantMessage(reply));
+  }
+
+  requestDecision(request: Record<string, unknown>, reply = ""): Promise<void> {
+    const tool = this.tools.find((candidate) => candidate.name === "request_decision");
+    if (tool === undefined) return Promise.reject(new Error("this thread has no request_decision"));
+    const execute = tool.execute as (callId: string, params: unknown) => Promise<unknown>;
+    return execute("call", request).then(() => this.completeUnrecorded(reply));
+  }
+
+  concludeTriage(conclusion: Record<string, unknown>, reply = ""): Promise<void> {
+    const tool = this.tools.find((candidate) => candidate.name === "conclude_triage");
+    if (tool === undefined) return Promise.reject(new Error("this thread has no conclude_triage"));
+    const execute = tool.execute as (callId: string, params: unknown) => Promise<unknown>;
+    return execute("call", {
+      leavesLimitation: false,
+      narrowsGoal: false,
+      relaxesRule: false,
+      ...conclusion,
+    }).then(() => this.completeUnrecorded(reply));
+  }
+
+  escalate(): Promise<void> {
+    return this.concludeTriage({
+      conclusion: "needs-human",
+      decision: "Which of the two to keep.",
+      grounds: "Both options break a stated constraint.",
+      humanReason: "undecided-spec",
+      noPrecedent: "No commit, issue, or report chose between them.",
+    });
   }
 
   fail(error: Error): void {

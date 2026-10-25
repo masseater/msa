@@ -141,6 +141,8 @@ release. Add a tool name to select part of the graph. For example, run
 
 - PR を判定するのは orchestrator の reviewer だけにする。ほかに PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
 - reviewer の指摘のうちタスクのゴールに入るものは、深刻度に関係なく同じ PR で直し、再レビューで合格してからマージする。マージしてから別 issue に分けない。別 issue にしてよいのは、タスクのゴールの外の問題だけ。
+- 合格・完了の基準は、指示されたゴールを満たしたかどうかだけにする。ゴールの項目が 1 つでも満たされていなければ不合格にし（reviewer は `record_goal_items` で項目ごとに met / unmet を記録し、ハーネスは全項目が met のときだけ合格にする）、「既知の限界」「範囲外」として PR 本文に残して合格にしない。ハーネスは差し戻しの回数・差分の大きさ・時間でタスクを打ち切らず、目的を満たすまで worker に返す。
+- 止まってよいのは、worker か reviewer が `request_decision` で「方針の判断が要る」と終えたとき、同じ指摘や check の出力が繰り返され、しかも作業ツリーのファイル（コミット前も含む）が前と変わっていないとハーネスが判定したとき、ユーザーか orchestrator が止めたときだけにする。前の 2 つは、まず読み取り専用の triage スレッドが本当に人の判断が要るかを判定する。ゴール・コード・過去の決定（コミットログ・issue・関連タスクの報告・AGENTS.md）から全部の制約を満たす方針が出せれば、根拠と一緒に止まったスレッドへ返して続きから再開させ、task は `needs-decision` にしない。課金・個人情報・既存キーの無効化・未決の仕様の選択のように人しか決められないとき、方針が妥協（ゴールを削る・規則を緩める・既知の限界として残す）になるとき、triage が決めた依頼がまた戻ってきたときだけ task を `needs-decision` にして orchestrator に判断を求め、failed にしない。orchestrator はユーザーか `consult_advisor` の検討エージェントと方針を決め、`send_message` で返すと止まったスレッドが続きから再開する。
 - マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージする。マージしてよいかは聞かない。手でマージするときは `node scripts/squash-message.ts merge <PR 番号> <CI が通った head SHA>` を使い、`gh pr merge` や GitHub の画面では squash しない。ルールセットのバイパスや `--admin` は使わない。
 - orchestrator の work task は自分の PR を持ち、ハーネスがタスクの枝から PR を見つける。PR が無い・push されていない・CI が落ちた・BEHIND か衝突のときは worker に差し戻し、CI が走っているあいだは worker を起こさずに待ち、reviewer の合格後にハーネスが合格した head で squash merge し、マージを確かめてから task を completed にして worktree と枝を消す。
 - orchestrator の worker は次のとおりにする。
