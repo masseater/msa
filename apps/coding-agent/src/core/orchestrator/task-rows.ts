@@ -109,6 +109,9 @@ function updateTask(
   database
     .prepare(`UPDATE tasks SET ${assignments}, updated_at = ? WHERE id = ?`)
     .run(...entries.map(([, value]) => value), now, id);
+  if (patch.status !== undefined && patch.status !== "waiting") {
+    database.prepare("DELETE FROM provider_waits WHERE task_id = ?").run(id);
+  }
 }
 
 function setTaskStatus(
@@ -128,6 +131,7 @@ function deleteTask(database: DatabaseSync, taskId: string): void {
   database.prepare("DELETE FROM reports WHERE task_id = ?").run(taskId);
   database.prepare("DELETE FROM note_targets WHERE task_id = ?").run(taskId);
   database.prepare("DELETE FROM task_pull_requests WHERE task_id = ?").run(taskId);
+  database.prepare("DELETE FROM provider_waits WHERE task_id = ?").run(taskId);
   database.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
 }
 

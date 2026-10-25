@@ -44,20 +44,36 @@ const usableAccounts = (
       )
     : Promise.resolve([fixed]);
 
-function noAccountMessage(failures: readonly string[]): Promise<string> {
+interface NoAccount {
+  readonly message: string;
+  readonly resetsAt: number | undefined;
+}
+
+function noAccount(failures: readonly string[]): Promise<NoAccount> {
   const failed = new Set(failures.map((line) => line.slice(0, line.indexOf(":"))));
   return rotationAccounts()
     .then((accounts) =>
       Promise.all(
-        accounts
-          .filter((candidate) => !failed.has(candidate.name))
-          .map((candidate) =>
-            blockOf(candidate).then((block) => `${candidate.name}: ${block?.reason ?? "?"}`),
-          ),
+        accounts.map((account) => blockOf(account).then((block) => ({ account, block }))),
       ),
     )
-    .then((blocked) => `No Claude account available.\n${[...failures, ...blocked].join("\n")}`);
+    .then((blocks) => {
+      const blocked = blocks
+        .filter(({ account }) => !failed.has(account.name))
+        .map(({ account, block }) => `${account.name}: ${block?.reason ?? "?"}`);
+      const until = blocks.flatMap(({ block }) => (block === undefined ? [] : [block.until]));
+      return {
+        message: `No Claude account available.\n${[...failures, ...blocked].join("\n")}`,
+        resetsAt:
+          until.length === blocks.length && until.length > 0 ? Math.min(...until) : undefined,
+      };
+    });
 }
+
+const limitResetsAt = (account: claudeAccountsTypes.Account, failure: AccountFailure["failure"]) =>
+  failure.cause === "usage_limit"
+    ? blockOf(account).then((block) => block?.until ?? failure.resetsAt)
+    : Promise.resolve(undefined);
 
 const runAccount = (request: RunRequest, state: RunState, account: claudeAccountsTypes.Account) =>
   Effect.gen(function* () {
@@ -82,7 +98,8 @@ const runAccounts = (request: RunRequest, state: RunState) =>
     while (true) {
       const account = config.accounts[0];
       if (account === undefined) {
-        reply.fail("error", yield* Effect.promise(() => noAccountMessage(failures)));
+        const none = yield* Effect.promise(() => noAccount(failures));
+        reply.fail("error", none.message, none.resetsAt);
         return;
       }
       const outcome = yield* runAccount(request, state, account);
@@ -92,7 +109,7 @@ const runAccounts = (request: RunRequest, state: RunState) =>
       const detail = `${failed.name}: ${failure.error}`;
       failures.push(detail);
       if (request.fixed !== undefined || !blocked || reply.hasContent) {
-        reply.fail("error", detail);
+        reply.fail("error", detail, yield* Effect.promise(() => limitResetsAt(failed, failure)));
         return;
       }
       config.accounts = config.accounts.filter((candidate) => candidate.name !== failed.name);

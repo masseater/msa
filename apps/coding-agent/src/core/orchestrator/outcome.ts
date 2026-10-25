@@ -2,8 +2,8 @@ import type compatTypes from "@msa/ai/compat.types";
 import textModule from "@msa/ai/utils/text";
 
 import type outcomeTypes from "./outcome.types.ts";
+import providerWaitModule from "./provider-wait.ts";
 import reviewVerdictModule from "./review-verdict.ts";
-import runTimeNotice from "./run-time-notice.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
 import TaskStopped from "./task-stopped.ts";
@@ -11,12 +11,10 @@ import type orchestratorTypesTypes from "./types.types.ts";
 import type workerTypes from "./worker.ts";
 
 const { store } = storeModule;
-const { runTimeSuffix } = runTimeNotice;
 const { reviewVerdicts } = reviewVerdictModule;
+const { providerWaits } = providerWaitModule;
 
 const { contentText } = textModule;
-
-const REPORT_LIMIT = 4000;
 
 function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -30,7 +28,11 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   if (error !== undefined) return { content: errorText(error), status: "failed" };
   if (last?.stopReason === "error" || last?.stopReason === "aborted") {
     const text = contentText(last.content, "\n").trim();
-    return { content: [text, last.errorMessage].filter(Boolean).join("\n"), status: "failed" };
+    const content = [text, last.errorMessage].filter(Boolean).join("\n");
+    const limit = providerWaits.limitOf(worker);
+    return limit === undefined
+      ? { content, status: "failed" }
+      : { content, limit, status: "stopped" };
   }
   return {
     content: last === undefined ? "" : contentText(last.content, "\n").trim(),
@@ -75,6 +77,25 @@ function endTask(
   return status;
 }
 
+function insertReport(
+  database: runtimeTypes.Runtime["database"],
+  assignment: orchestratorTypesTypes.Assignment,
+  outcome: outcomeTypes.Outcome,
+  result: ReturnType<typeof reviewVerdicts.apply> | undefined,
+  now: number,
+): void {
+  store.insertReport(database, {
+    content: result === undefined ? outcome.content : `${result.line}\n\n${outcome.content}`,
+    createdAt: now,
+    id: `rep-${assignment.threadId}-${assignment.role}`,
+    role: assignment.role,
+    status: outcome.status,
+    taskId: assignment.taskId,
+    threadId: assignment.threadId,
+    verdict: result?.result ?? null,
+  });
+}
+
 function applyOutcome(
   runtime: runtimeTypes.Runtime,
   assignments: readonly orchestratorTypesTypes.Assignment[],
@@ -85,21 +106,17 @@ function applyOutcome(
   const database = runtime.database;
   const applied: Applied = { lines: [], review: [], sendBack: [], status: "completed" };
   for (const assignment of assignments) {
+    if (outcome.limit !== undefined) {
+      providerWaits.record(runtime, assignment, outcome.limit, now);
+      applied.status = worse(applied.status, "waiting");
+      continue;
+    }
     const judged =
       outcome.status === "completed" ? reviewVerdicts.judgedTask(runtime, assignment) : undefined;
     const result =
       judged === undefined ? undefined : reviewVerdicts.apply(runtime, judged.id, verdict);
     if (result !== undefined) applied.lines.push(result.line);
-    store.insertReport(database, {
-      content: result === undefined ? outcome.content : `${result.line}\n\n${outcome.content}`,
-      createdAt: now,
-      id: `rep-${assignment.threadId}-${assignment.role}`,
-      role: assignment.role,
-      status: outcome.status,
-      taskId: assignment.taskId,
-      threadId: assignment.threadId,
-      verdict: result?.result ?? null,
-    });
+    insertReport(database, assignment, outcome, result, now);
     if (outcome.status !== "completed") {
       applied.status = worse(applied.status, endTask(database, assignment.taskId, outcome, now));
       continue;
@@ -125,31 +142,7 @@ function applyOutcome(
   return applied;
 }
 
-function reportText(
-  runtime: runtimeTypes.Runtime,
-  assignments: readonly orchestratorTypesTypes.Assignment[],
-  outcome: outcomeTypes.Outcome,
-  status: ReportStatus,
-  started: readonly string[],
-): string {
-  const titles = assignments.map((assignment) => {
-    const task = store.getTask(runtime.database, assignment.taskId);
-    return `${task?.title ?? assignment.taskId} (${assignment.role})`;
-  });
-  const content =
-    outcome.content.length <= REPORT_LIMIT
-      ? outcome.content
-      : `${outcome.content.slice(0, REPORT_LIMIT)}\n[truncated]`;
-  return [
-    `${titles.join(", ")} ${status}.${runTimeSuffix(runtime, assignments, outcome)}`,
-    started.length > 0 ? `Started: ${started.join(", ")}.` : undefined,
-    content === "" ? undefined : `<report>\n${content}\n</report>`,
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-}
-
-const outcomes = { applyOutcome, errorText, outcomeOf, reportText };
+const outcomes = { applyOutcome, errorText, outcomeOf };
 
 const outcome = {
   outcomes,

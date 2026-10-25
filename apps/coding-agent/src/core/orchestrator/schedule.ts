@@ -3,6 +3,7 @@ import { Effect, Fiber } from "effect";
 import conditionModule from "./condition.ts";
 import errors from "./errors.ts";
 import type errorsTypes from "./errors.types.ts";
+import providerResumeModule from "./provider-resume.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import start from "./start.ts";
@@ -13,6 +14,7 @@ const { orchestratorError } = errors;
 const { store } = storeModule;
 const { starting } = start;
 const { conditions } = conditionModule;
+const { resumeDue } = providerResumeModule;
 
 function scheduleEffect(
   runtime: runtimeTypes.Runtime,
@@ -23,7 +25,8 @@ function scheduleEffect(
     const project = runtime.options.project;
     const running = store.runningThreads(database, project);
     let free = runtime.maxConcurrentThreads - running.length;
-    const started: string[] = [];
+    const started = yield* resumeDue(runtime, free, yield* nowMillis);
+    free -= started.length;
     for (const task of store.readyTasks(database, project, "work")) {
       if (free <= 0) break;
       yield* starting.startTasks(runtime, task, "worker");

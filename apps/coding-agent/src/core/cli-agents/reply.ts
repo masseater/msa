@@ -111,11 +111,12 @@ class Reply {
     this.stream.end();
   };
 
-  readonly fail = (reason: "error" | "aborted", errorMessage: string): void => {
+  readonly fail = (reason: "error" | "aborted", errorMessage: string, resetsAt?: number): void => {
     if (this.ended) return;
     this.ended = true;
     this.finish(reason);
     this.message.errorMessage = errorMessage;
+    if (resetsAt !== undefined) this.message.errorResetsAt = resetsAt;
     this.stream.push({ error: this.message, reason, type: "error" });
     this.stream.end();
   };

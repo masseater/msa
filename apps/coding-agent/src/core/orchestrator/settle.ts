@@ -1,5 +1,6 @@
 import { Effect } from "effect";
 
+import outcomeReport from "./outcome-report.ts";
 import outcomeModule from "./outcome.ts";
 import pullRequestNotice from "./pull-request-notice.ts";
 import runtimeModule from "./runtime.ts";
@@ -80,7 +81,7 @@ function settleEffect(
       runtime.publish();
       const first = assignments[0];
       runtime.options.report(
-        outcomes.reportText(runtime, assignments, judged, applied.status, started),
+        outcomeReport.reportText(runtime, assignments, judged, applied.status, started),
         {
           role: first?.role ?? "worker",
           started,

@@ -1,16 +1,20 @@
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import providerWaitModule from "./provider-wait.ts";
 import replanStoreModule from "./replan-store.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { store } = storeModule;
 const { replanStore } = replanStoreModule;
+const { providerWaits } = providerWaitModule;
 
 function reasonFor(
   task: orchestratorTypesTypes.TaskView,
   byId: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
   free: number,
+  wait: orchestratorTypesTypes.ProviderWait | undefined,
 ): orchestratorTypesTypes.WaitingReason {
+  if (wait !== undefined) return { detail: providerWaits.waitingDetail(wait), kind: "provider" };
   const unfinished = task.dependsOn.filter(
     (dependency) => byId.get(dependency)?.status !== "completed",
   );
@@ -107,11 +111,15 @@ function buildSnapshot(
     maxConcurrentThreads - threads.filter((thread) => thread.status === "running").length;
   const replans = replanStore.listReplans(database, project, 10);
   const byTask = taskMarks(replans[0]);
+  const waits = new Map(
+    store.listProviderWaits(database, project).map((wait) => [wait.taskId, wait] as const),
+  );
   const snapshots: orchestratorTypesTypes.TaskSnapshot[] = views.map((task) => ({
     ...task,
     handoff: handoffOf(task),
     replan: byTask.get(task.id) ?? null,
-    waitingReason: task.status === "waiting" ? reasonFor(task, byId, free) : null,
+    waitingReason:
+      task.status === "waiting" ? reasonFor(task, byId, free, waits.get(task.id)) : null,
   }));
   return {
     maxConcurrentThreads,

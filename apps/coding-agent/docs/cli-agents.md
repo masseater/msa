@@ -35,7 +35,7 @@ List accounts in `~/.msa/agent/claude-code-accounts.json`:
 
 - `configDir` uses the Claude Code login stored for that config directory. On macOS it is in the login keychain, which an SSH session cannot read.
 - `tokenCommand` runs in `$SHELL` and prints a `claude setup-token` token. The token goes only to that account's Claude Code process.
-- `claude-subs` uses the first account that is not blocked. An account that hits its usage limit is blocked until the reset time in the message; a logged-out account for 10 minutes. The request then moves to the next account.
+- `claude-subs` uses the first account that is not blocked. An account that hits its usage limit is blocked until the reset time in the message; a logged-out account for 10 minutes. The request then moves to the next account. When the account in use hits its usage limit, or every account is blocked, the error carries the time the first block ends, and the orchestrator waits until then before it resumes the task ([tools](cli.md#tools)).
 - `claude-subs-<name>` always uses that account. `"auto": false` keeps an account out of `claude-subs`.
 
 `/accounts claude` lists the accounts and their blocks; `/accounts claude clear` lifts the blocks. `/accounts claude add|login|logout|remove|use|enable|disable <name>` manages them.
