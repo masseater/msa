@@ -1,4 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-node scripts/squash-message.ts "$1" "$2" | vp exec commitlint --verbose
+message="$(node scripts/squash-message.ts print "$1" "$3" "$2")" || {
+  printf '%s\n' "$message" >&2
+  exit 1
+}
+printf '%s\n' "$message" | vp exec commitlint --verbose

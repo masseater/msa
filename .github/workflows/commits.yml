@@ -52,7 +52,7 @@ jobs:
           git fetch --no-tags --depth="$((COMMITS + 2))" origin "$GITHUB_SHA"
           vp exec commitlint --from HEAD^1 --to HEAD^2 --verbose
           printf '%s\n' "$PR_TITLE" | vp exec commitlint --verbose
-          scripts/lint-squash-message.sh "$PR_NUMBER" "$PR_TITLE"
+          scripts/lint-squash-message.sh "$PR_NUMBER" "$PR_TITLE" "$(git rev-parse HEAD^2)"
       - if: github.event_name == 'push'
         run: vp run gitleaks
         env:

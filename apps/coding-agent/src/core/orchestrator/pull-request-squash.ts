@@ -6,7 +6,7 @@ import squashMessageModule from "./squash-message.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { orchestratorError } = errors;
-const { squashMessageOf } = squashMessageModule;
+const { mergeArgs, squashMessageAt } = squashMessageModule;
 
 type Verified = orchestratorTypesTypes.VerifiedPullRequest;
 
@@ -16,31 +16,14 @@ function merge(
   verified: Verified,
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
-    const { head, message } = yield* squashMessageOf(
+    const message = yield* squashMessageAt(
       gh,
-      () => orchestratorError(new Error("gh api printed commits JSON this msa cannot read")),
+      (reason) => orchestratorError(new Error(reason)),
       number,
       verified.title,
-    );
-    if (head !== verified.sha) {
-      return yield* orchestratorError(
-        new Error(
-          `GitHub lists the commits of #${number} up to ${head ?? "none"}, not ${verified.sha}`,
-        ),
-      );
-    }
-    yield* gh([
-      "pr",
-      "merge",
-      String(number),
-      "--squash",
-      "--match-head-commit",
       verified.sha,
-      "--subject",
-      message.subject,
-      "--body",
-      message.body,
-    ]);
+    );
+    yield* gh(mergeArgs(number, verified.sha, message));
   });
 }
 

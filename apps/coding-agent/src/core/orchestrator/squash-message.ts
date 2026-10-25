@@ -11,11 +11,6 @@ interface SquashMessage {
   body: string;
 }
 
-interface SquashOfHead {
-  head: string | undefined;
-  message: SquashMessage;
-}
-
 function normalized(message: string): string {
   return message.replaceAll("\r\n", "\n").trim();
 }
@@ -40,12 +35,13 @@ function textOf(message: SquashMessage): string {
   return message.body === "" ? `${message.subject}\n` : `${message.subject}\n\n${message.body}\n`;
 }
 
-function squashMessageOf<E, R>(
+function squashMessageAt<E, R>(
   gh: (args: readonly string[]) => Effect.Effect<string, E, R>,
-  unreadable: () => E,
+  failure: (reason: string) => E,
   number: number,
   title: string,
-): Effect.Effect<SquashOfHead, E, R> {
+  head: string,
+): Effect.Effect<SquashMessage, E, R> {
   return Effect.gen(function* () {
     const json = yield* gh([
       "api",
@@ -55,12 +51,36 @@ function squashMessageOf<E, R>(
     ]);
     const commits = yield* Effect.fromOption(
       Option.map(Schema.decodeOption(PullCommitPagesJson)(json), (pages) => pages.flat()),
-    ).pipe(Effect.mapError(unreadable));
-    const messages = commits.map((entry) => entry.commit.message);
-    return { head: commits.at(-1)?.sha, message: squashMessage(number, title, messages) };
+    ).pipe(Effect.mapError(() => failure("gh api printed commits JSON that cannot be read")));
+    const listed = commits.at(-1)?.sha;
+    if (listed !== head) {
+      return yield* Effect.fail(
+        failure(`GitHub lists the commits of #${number} up to ${listed ?? "none"}, not ${head}`),
+      );
+    }
+    return squashMessage(
+      number,
+      title,
+      commits.map((entry) => entry.commit.message),
+    );
   });
 }
 
-const squashMessageModule = { squashMessageOf, textOf };
+function mergeArgs(number: number, head: string, message: SquashMessage): readonly string[] {
+  return [
+    "pr",
+    "merge",
+    String(number),
+    "--squash",
+    "--match-head-commit",
+    head,
+    "--subject",
+    message.subject,
+    "--body",
+    message.body,
+  ];
+}
+
+const squashMessageModule = { mergeArgs, squashMessageAt, textOf };
 
 export default squashMessageModule;
