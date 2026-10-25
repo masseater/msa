@@ -4,10 +4,12 @@ import type OpenAI from "openai";
 import hooks from "../utils/hooks.ts";
 import providerRetry from "../utils/provider-retry.ts";
 import openaiCompletionsClient from "./openai-completions-client.ts";
+import openaiCompletionsOllama from "./openai-completions-ollama.ts";
 import openaiCompletionsParams from "./openai-completions-params.ts";
 import type openaiCompletionsRequestTypes from "./openai-completions-request.types.ts";
 
-const { buildParams } = openaiCompletionsParams;
+const { buildParams, requestedMaxTokens } = openaiCompletionsParams;
+const { resolveMaxTokensField } = openaiCompletionsOllama;
 const { createClient, getClientApiKey } = openaiCompletionsClient;
 const { callHook } = hooks;
 const { providerRequestWithRetry } = providerRetry;
@@ -32,7 +34,11 @@ function createRequestStream(
     sessionId: cacheSessionId,
   });
   return Effect.gen(function* () {
-    let params = buildParams(input);
+    const requestCompat =
+      requestedMaxTokens(options) === undefined
+        ? compat
+        : yield* resolveMaxTokensField({ client, compat, model, signal: options?.signal });
+    let params = buildParams({ ...input, compat: requestCompat });
     const nextParams = yield* callHook(() => options?.onPayload?.(params, model));
     if (nextParams !== undefined) {
       params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;

@@ -18,16 +18,37 @@ function resolveCacheRetention(input: {
   return "short";
 }
 
+type CompletionsModel = typesModule.Model<"openai-completions">;
+
+function isOpenRouterEndpoint(model: CompletionsModel): boolean {
+  return model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai");
+}
+
+function isNonStandardEndpoint(model: CompletionsModel): boolean {
+  return (
+    model.baseUrl.includes("chutes.ai") ||
+    model.provider === "opencode" ||
+    model.baseUrl.includes("opencode.ai")
+  );
+}
+
+function isKnownHostedEndpoint(model: CompletionsModel): boolean {
+  return (
+    isOpenRouterEndpoint(model) ||
+    isNonStandardEndpoint(model) ||
+    model.baseUrl.includes("api.openai.com")
+  );
+}
+
 function detectCompat(
   model: typesModule.Model<"openai-completions">,
 ): openaiCompletionsTypesModule.ResolvedOpenAICompletionsCompat {
   const provider = model.provider;
   const baseUrl = model.baseUrl;
 
-  const isOpenRouter = provider === "openrouter" || baseUrl.includes("openrouter.ai");
+  const isOpenRouter = isOpenRouterEndpoint(model);
 
-  const isNonStandard =
-    baseUrl.includes("chutes.ai") || provider === "opencode" || baseUrl.includes("opencode.ai");
+  const isNonStandard = isNonStandardEndpoint(model);
 
   const isOllama = provider === "ollama" || baseUrl.includes(":11434");
 
@@ -116,6 +137,7 @@ function getCompat(
 
 const openaiCompletionsCompat = {
   getCompat,
+  isKnownHostedEndpoint,
   resolveCacheRetention,
 };
 
