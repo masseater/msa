@@ -6,7 +6,7 @@ import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callba
 import decideSupport from "./decide-support.ts";
 import orchestratorSdkSupport from "./orchestrator-sdk-support.ts";
 
-const { removePath, runTest } = testing;
+const { localLlmTests, removePath, runTest } = testing;
 const { FIXTURE } = decideSupport;
 const { createHarness, tempDir } = orchestratorSdkSupport;
 
@@ -64,7 +64,7 @@ const decidesAReviewThatArrivesBeforeTheDecisionModelLoads = () =>
     }),
   );
 
-it(
+it.skipIf(!localLlmTests)(
   "decides a task review that arrives before the decision model has loaded, instead of leaving it undecided",
   decidesAReviewThatArrivesBeforeTheDecisionModelLoads,
   60_000,
@@ -87,7 +87,7 @@ const namesTheLoadFailureWhenTheDecisionModelCannotLoad = () =>
     }),
   );
 
-it(
+it.skipIf(!localLlmTests)(
   "leaves a task review undecided with the reason the decision model could not load",
   namesTheLoadFailureWhenTheDecisionModelCannotLoad,
   60_000,

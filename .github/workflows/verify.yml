@@ -50,6 +50,7 @@ jobs:
       - run: vp run --log grouped verify
         env:
           GH_TOKEN: ${{ github.token }}
+          MSA_LOCAL_LLM_TESTS: "1"
 
   binary:
     runs-on: ubuntu-latest
@@ -69,6 +70,8 @@ jobs:
           bun-version: 1.4.2
           no-cache: true
       - run: vp run build-binaries linux-x64
+        env:
+          MSA_LOCAL_LLM_TESTS: "1"
 
   autofix:
     needs: verify

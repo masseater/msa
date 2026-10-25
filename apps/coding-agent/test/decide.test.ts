@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import decideSupport from "./decide-support.ts";
 
-const { listen, runTest } = testing;
+const { listen, localLlmTests, runTest } = testing;
 const { LIQUID_D1 } = localModule;
 const { FIXTURE, blocking, classifierAt, cleanUp, loadedDecide, localDecide, request } =
   decideSupport;
@@ -133,22 +133,22 @@ const retriesAFailedDownloadOnTheNextCall = () =>
   );
 
 describe("decide", () => {
-  it(
+  it.skipIf(!localLlmTests)(
     "holds a bool answer when its probability reaches the threshold and not above it",
     holdsFromTheThresholdUp,
   );
 
-  it(
+  it.skipIf(!localLlmTests)(
     "turns the model's probabilities into answers through each question's threshold",
     appliesEachQuestionsThreshold,
   );
 
-  it(
+  it.skipIf(!localLlmTests)(
     "lets the settings threshold of a decision question override the tool's own",
     letsSettingsOverrideTheThreshold,
   );
 
-  it(
+  it.skipIf(!localLlmTests)(
     "answers the same input from its cache and asks the model again for a new input",
     answersTheSameInputFromItsCache,
   );
@@ -158,7 +158,7 @@ describe("decide", () => {
     isUndecidedWithoutADecisionModel,
   );
 
-  it(
+  it.skipIf(!localLlmTests)(
     "is undecided when the model cannot be downloaded, and tries again on the next call",
     retriesAFailedDownloadOnTheNextCall,
   );

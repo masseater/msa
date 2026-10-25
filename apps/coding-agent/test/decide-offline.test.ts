@@ -10,7 +10,7 @@ import decideSupport from "./decide-support.ts";
 import decisionModelStartupSupport from "./decision-model-startup-support.ts";
 
 const { LIQUID_D1, LOCAL_PROVIDER_ID } = localModule;
-const { awaited, runTest } = testing;
+const { awaited, localLlmTests, runTest } = testing;
 const { decide } = decideModule;
 const { startRuntime } = runtimeStart;
 const { prepareStartup } = startupModule;
@@ -59,6 +59,6 @@ const neverDownloadsOffline = () =>
     }),
   );
 
-describe("decide offline", () => {
+describe.skipIf(!localLlmTests)("decide offline", () => {
   it("uses only model files on disk and never downloads the decision model", neverDownloadsOffline);
 });

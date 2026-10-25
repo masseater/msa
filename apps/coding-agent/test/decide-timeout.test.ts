@@ -6,7 +6,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import decideModule from "../src/core/decision/decide.ts";
 import decideSupport from "./decide-support.ts";
 
-const { runTest } = testing;
+const { localLlmTests, runTest } = testing;
 const { DECISION_TIMEOUT } = decideModule;
 const { FIXTURE, blocking, classifierAt, cleanUp, loadedDecide, request } = decideSupport;
 
@@ -64,7 +64,7 @@ const decidesRightAfterSlowInferencesTimeOut = () =>
     ),
   );
 
-describe("decide time limit", () => {
+describe.skipIf(!localLlmTests)("decide time limit", () => {
   it("is undecided when the model does not answer in time", isUndecidedWhenTheModelIsLate);
 
   it(

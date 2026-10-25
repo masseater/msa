@@ -56,6 +56,8 @@ jobs:
 
       - name: Build release binaries
         run: vp run build-binaries
+        env:
+          MSA_LOCAL_LLM_TESTS: "1"
 
       - name: Render the Homebrew formula
         run: vp run render-homebrew-formula

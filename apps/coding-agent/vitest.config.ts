@@ -4,7 +4,7 @@ import { defineConfig, mergeConfig } from "vite-plus";
 
 import vitestShared from "../../vitest.shared.ts";
 
-const { onGitHubActions, testBaseConfig, workspaceSourcePaths } = vitestShared;
+const { noLocalLlmSetup, onGitHubActions, testBaseConfig, workspaceSourcePaths } = vitestShared;
 
 const agentDir = `${tmpdir()}/msa-test-agent-${process.pid}`;
 
@@ -37,6 +37,7 @@ export default mergeConfig(
           external: [/@silvia-odwyer\/photon-node/u],
         },
       },
+      setupFiles: [noLocalLlmSetup],
       silent: "passed-only",
       testTimeout: 30000,
       unstubEnvs: true,

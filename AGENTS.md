@@ -80,7 +80,8 @@ release. Add a tool name to select part of the graph. For example, run
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
 - squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも orchestrator の `merge_pull_request` もこれを使い、CI の `commits` ジョブは検査した head で `msa squash-message` が出すメッセージを commitlint にかける。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
-  - 手元の LLM サーバー（Ollama・LM Studio・llama.cpp）を呼ぶ `libs/ai/test/*-local.test.ts` は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。
+  - 手元の LLM を動かすもの（Ollama・LM Studio・llama.cpp のサーバーを呼ぶ `libs/ai/test/*-local.test.ts`、node-llama-cpp でモデルを読み込むテスト、`vp run build-binaries` の判断モデルの smoke）は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。CI の verify は付けて流す。手元では付けない。
+  - `libs/ai` と `apps/coding-agent` のテストでは、opt-in なしの node-llama-cpp は `libs/ai/test/no-local-llm-setup.ts` が止める。node-llama-cpp を使うテストは `@msa/testing` の `localLlmTests` で `it.skipIf(!localLlmTests)` にする。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。
 - `libs/ai/src/models.generated.ts` は直接編集せず、`vp run generate:models` で作り直す。clone 直後に typecheck が通らないときは `vp run hydrate:model-data` を回す。
 

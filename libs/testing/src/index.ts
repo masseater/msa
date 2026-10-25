@@ -2,6 +2,7 @@ import effectSupport from "./effect-support.ts";
 import files from "./files.ts";
 import httpServer from "./http-server.ts";
 import json from "./json.ts";
+import localLlm from "./local-llm.ts";
 import nodeScript from "./node-script.ts";
 import paths from "./paths.ts";
 import runtime from "./runtime.ts";
@@ -33,6 +34,7 @@ const testing = {
   isoFromMillis: effectSupport.isoFromMillis,
   joinPath: paths.joinPath,
   listen: httpServer.listen,
+  localLlmTests: localLlm.localLlmTests,
   makeDirectory: files.makeDirectory,
   makeSymlink: files.makeSymlink,
   makeTempDir: temp.makeTempDir,
