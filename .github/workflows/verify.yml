@@ -2,7 +2,7 @@ name: verify
 
 on:
   push:
-    branches: [main]
+    branches: [main, "claude/fix-verify-*"]
   pull_request:
     types: [opened, synchronize, reopened]
   workflow_dispatch:
@@ -90,7 +90,7 @@ jobs:
 
   deploy:
     needs: verify
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref_name == github.event.repository.default_branch
     runs-on: ubuntu-latest
     permissions:
       contents: read

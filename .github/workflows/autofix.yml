@@ -22,9 +22,12 @@ jobs:
   autofix:
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      pull-requests: write
-      actions: write
+      contents: read
+      pull-requests: read
+      actions: read
+    outputs:
+      branch: ${{ steps.target.outputs.branch }}
+      sha: ${{ steps.fix.outputs.sha }}
     concurrency:
       group: verify-autofix-${{ inputs.branch }}
     env:
@@ -35,6 +38,7 @@ jobs:
       FAILED_RUN_ID: ${{ inputs.run_id }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       FAILED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.run_id }}
+      AUTOFIX_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
       CLAUDE_ANSWER: '[.[] | select(.type == "result")] | last | .result // "no answer" | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -44,6 +48,18 @@ jobs:
       - run: .github/scripts/claude-preflight.sh
         env:
           CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+      - name: Check the push credentials and the failed commit
+        env:
+          AUTOFIX_DEPLOY_KEY: ${{ secrets.AUTOFIX_DEPLOY_KEY }}
+        run: |
+          if [ -z "$AUTOFIX_DEPLOY_KEY" ]; then
+            echo "::error::The AUTOFIX_DEPLOY_KEY secret is empty, so autofix cannot push a fix that runs the pull request checks"
+            exit 1
+          fi
+          if [ "$(gh api "repos/$GITHUB_REPOSITORY/commits/$HEAD_SHA" --jq .commit.author.email)" = "$AUTOFIX_EMAIL" ]; then
+            echo "::error::verify failed on the fix autofix pushed ($HEAD_SHA); autofix does not retry its own fix"
+            exit 1
+          fi
       - id: target
         run: |
           if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
@@ -59,7 +75,7 @@ jobs:
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
           echo "failed_job=$(gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "verify") | .databaseId')" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.email "$AUTOFIX_EMAIL"
       - if: steps.target.outputs.stale != 'true'
         name: Install system dependencies
         run: |
@@ -114,26 +130,61 @@ jobs:
         run: |
           echo "::error::Claude failed: $(jq -r "$CLAUDE_ANSWER" "$RUNNER_TEMP/claude-execution-output.json")"
       - if: steps.target.outputs.stale != 'true'
-        env:
-          BRANCH: ${{ steps.target.outputs.branch }}
+        id: fix
         run: |
           if [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ]; then
             echo "::error::Claude did not commit a fix: $(jq -r "$CLAUDE_ANSWER" "$RUNNER_TEMP/claude-execution-output.json")"
             exit 1
           fi
-          gh auth setup-git
-          git push --no-verify origin "HEAD:refs/heads/$BRANCH"
-          gh workflow run verify.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
-          gh workflow run up-to-date.yml --repo "$GITHUB_REPOSITORY" --ref "$BRANCH"
+          git bundle create "$RUNNER_TEMP/fix.bundle" "$HEAD_SHA..HEAD"
+          echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - if: steps.fix.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: autofix-${{ github.run_id }}
+          path: ${{ runner.temp }}/fix.bundle
+          if-no-files-found: error
+          retention-days: 1
+
+  push:
+    needs: [autofix]
+    if: needs.autofix.outputs.sha != ''
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: ${{ needs.autofix.outputs.branch }}
+      FIX_SHA: ${{ needs.autofix.outputs.sha }}
+      HEAD_BRANCH: ${{ inputs.branch }}
+      HEAD_SHA: ${{ inputs.sha }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+      FAILED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.run_id }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha }}
+          ssh-key: ${{ secrets.AUTOFIX_DEPLOY_KEY }}
+          persist-credentials: true
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+        with:
+          name: autofix-${{ github.run_id }}
+          path: ${{ runner.temp }}/autofix
+      - run: |
+          git fetch --no-tags "$RUNNER_TEMP/autofix/fix.bundle" HEAD
+          test "$(git rev-parse FETCH_HEAD)" = "$FIX_SHA"
+          git merge-base --is-ancestor "$HEAD_SHA" "$FIX_SHA"
+          git push --no-verify origin "$FIX_SHA:refs/heads/$BRANCH"
           if [ "$BRANCH" != "$HEAD_BRANCH" ]; then
             gh pr create --base "$DEFAULT_BRANCH" --head "$BRANCH" --draft \
-              --title "$(git log -1 --format=%s)" \
+              --title "$(git log -1 --format=%s "$FIX_SHA")" \
               --body "Fixes verify failure $FAILED_RUN_URL" ||
               echo "::warning::Could not open a pull request; open one from $BRANCH manually"
           fi
 
   ci-telemetry:
-    needs: [autofix]
+    needs: [autofix, push]
     if: always()
     runs-on: ubuntu-latest
     permissions:

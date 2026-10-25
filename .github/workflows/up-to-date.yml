@@ -1,6 +1,8 @@
 name: up-to-date
 
 on:
+  push:
+    branches: ["claude/fix-verify-*"]
   pull_request:
   workflow_dispatch:
 
