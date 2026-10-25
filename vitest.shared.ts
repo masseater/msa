@@ -33,6 +33,10 @@ const workspaceSourcePaths = {
   tuiIndex: fileURLToPath(new URL("./libs/tui/src/index.ts", import.meta.url)),
 } as const;
 
+const noLocalLlmSetup = fileURLToPath(
+  new URL("./libs/ai/test/no-local-llm-setup.ts", import.meta.url),
+);
+
 const onGitHubActions = Effect.runSync(Config.withDefault(Config.Boolean("GITHUB_ACTIONS"), false));
 
 const testBaseConfig = {
@@ -90,6 +94,7 @@ const testBaseConfig = {
 };
 
 const vitestShared = {
+  noLocalLlmSetup,
   onGitHubActions,
   testBaseConfig,
   workspaceSourcePaths,

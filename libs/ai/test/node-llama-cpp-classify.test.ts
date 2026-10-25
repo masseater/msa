@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import localModule from "../src/providers/local.ts";
 import type typesModule from "../src/types.types.ts";
 
-const { closeServers, joinPath, listen, makeTempDir, removeDirs, runTest } = testing;
+const { closeServers, joinPath, listen, localLlmTests, makeTempDir, removeDirs, runTest } = testing;
 const { LIQUID_D1, localProvider } = localModule;
 
 const FIXTURE = joinPath(import.meta.dirname, "fixtures", "stories260K.gguf");
@@ -152,17 +152,17 @@ const loadsBindingsFromTheGivenLoader = () =>
   );
 
 describe("node-llama-cpp classifier", () => {
-  it(
+  it.skipIf(!localLlmTests)(
     "answers from the next-token probabilities of a GGUF model loaded once per process",
     answersFromNextTokenProbabilities,
   );
 
-  it(
+  it.skipIf(!localLlmTests)(
     "answers at once while a model already on disk is loaded into memory",
     answersAtOnceWhileTheModelLoads,
   );
 
-  it(
+  it.skipIf(!localLlmTests)(
     "answers at once while the model downloads, and prepares it again after a failure",
     retriesAFailedDownload,
   );

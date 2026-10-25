@@ -8,7 +8,7 @@ import startupChecks from "../src/main/startup-checks.ts";
 import decideSupport from "./decide-support.ts";
 import decisionModelStartupSupport from "./decision-model-startup-support.ts";
 
-const { awaited, pollUntil, runTest } = testing;
+const { awaited, localLlmTests, pollUntil, runTest } = testing;
 const { decide } = decideModule;
 const { startDecisionModel } = decisionModelStartup;
 const { checkStartup } = startupChecks;
@@ -77,7 +77,7 @@ const skipsOfflineAndPrintMode = () =>
   );
 
 describe("decision model at startup", () => {
-  it(
+  it.skipIf(!localLlmTests)(
     "starts the download at startup, stays undecided until it lands, and retries after a failure",
     startsAtStartupAndRetriesAfterAFailure,
   );

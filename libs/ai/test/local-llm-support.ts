@@ -1,13 +1,13 @@
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import * as NodeServices from "@effect/platform-node/NodeServices";
+import testing from "@msa/testing";
 import { Effect, Exit, Layer, ManagedRuntime, Schedule, Scope, Stream } from "effect";
 import { HttpClient, type HttpClientResponse } from "effect/http";
 import { ChildProcess } from "effect/process";
 
 import type typesModule from "../src/types.types.ts";
-import env from "./env.ts";
 
-const { hasEnv } = env;
+const { localLlmTests } = testing;
 
 const runtime = ManagedRuntime.make(Layer.mergeAll(NodeServices.layer, NodeHttpClient.layerUndici));
 
@@ -84,7 +84,7 @@ const llamaCppCompletionStatus = commandOutput("curl", [
 ]).pipe(Effect.map((status) => Number(status ?? 0)));
 
 const probeLocalLlms = Effect.gen(function* () {
-  if (!hasEnv("MSA_LOCAL_LLM_TESTS")) return { llamaCpp: false, lmStudio: false, ollama: false };
+  if (!localLlmTests) return { llamaCpp: false, lmStudio: false, ollama: false };
   const [ollama, lmStudio, llamaHealth, llamaCompletions] = yield* Effect.all(
     [
       commandOutput("ollama", ["--version"]),

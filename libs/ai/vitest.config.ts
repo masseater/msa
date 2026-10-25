@@ -4,7 +4,7 @@ import { defineConfig } from "vite-plus";
 
 import vitestShared from "../../vitest.shared.ts";
 
-const { onGitHubActions } = vitestShared;
+const { noLocalLlmSetup, onGitHubActions } = vitestShared;
 
 const telemetrySrcIndex = fileURLToPath(new URL("../telemetry/src/index.ts", import.meta.url));
 
@@ -19,6 +19,7 @@ export default defineConfig({
     globalSetup: ["./test/global-setup.ts"],
     globals: true,
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
+    setupFiles: [noLocalLlmSetup],
     silent: "passed-only",
     testTimeout: 30000,
   },

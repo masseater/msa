@@ -1,5 +1,5 @@
 import { NodeServices } from "@effect/platform-node";
-import { Console, Crypto, Data, Effect, FileSystem, Layer, Path } from "effect";
+import { Config, Console, Crypto, Data, Effect, FileSystem, Layer, Path } from "effect";
 import type { PlatformError } from "effect";
 import { Hex } from "effect/encoding";
 
@@ -23,6 +23,12 @@ const { runMainWith } = runMain;
 
 const DEFAULT_OUT_DIR = [".artifacts", "binaries"];
 const SKIP_BUILD_FLAG = "--skip-build";
+const LOCAL_LLM_TESTS_ENV = "MSA_LOCAL_LLM_TESTS";
+
+const localLlmTests = Config.String(LOCAL_LLM_TESTS_ENV).pipe(
+  Config.withDefault(""),
+  Config.map((value) => value !== ""),
+);
 
 class BuildBinariesError extends Data.TaggedError("BuildBinariesError")<{
   readonly message: string;
@@ -52,6 +58,7 @@ const makeContext = () =>
     const path = yield* Path.Path;
     return {
       codingAgentDir: path.join(repoRoot, "apps", "coding-agent"),
+      decideSmoke: yield* localLlmTests,
       fs,
       outDir: path.join(repoRoot, ...DEFAULT_OUT_DIR),
       path,
@@ -203,6 +210,17 @@ const writeChecksums = (context: Context) =>
 const versionMatches = (expected: string, exitCode: number, reported: string) =>
   exitCode === 0 && reported === expected;
 
+const decideSmokeTest = (context: Context, binary: string) =>
+  context.decideSmoke
+    ? runInherit({
+        args: ["tools/smoke-binary-decide.ts", binary],
+        command: "node",
+        cwd: context.repoRoot,
+      })
+    : Console.log(
+        `==> skipping the node-llama-cpp decide smoke test: set ${LOCAL_LLM_TESTS_ENV}=1 to run it`,
+      );
+
 const smokeTest = (context: Context) =>
   Effect.gen(function* () {
     const host = hostPlatformName();
@@ -232,11 +250,7 @@ const smokeTest = (context: Context) =>
       });
     }
     yield* Console.log(`==> ${platform.name} archive runs: msa --version reports ${reported}`);
-    yield* runInherit({
-      args: ["tools/smoke-binary-decide.ts", binary],
-      command: "node",
-      cwd: context.repoRoot,
-    });
+    yield* decideSmokeTest(context, binary);
   });
 
 const program = Effect.gen(function* () {

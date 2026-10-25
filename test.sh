@@ -80,7 +80,7 @@ done
 value="${NODE_EXTRA_CA_CERTS-}"
 [[ -z "$value" ]] || test_env+=("NODE_EXTRA_CA_CERTS=$value")
 
-# Pass the opt-in for the tests that call local LLM servers.
+# Pass the opt-in for the tests that run a local LLM (local servers or node-llama-cpp).
 value="${MSA_LOCAL_LLM_TESTS-}"
 [[ -z "$value" ]] || test_env+=("MSA_LOCAL_LLM_TESTS=$value")
 

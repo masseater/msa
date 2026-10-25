@@ -92,7 +92,7 @@ vp run install-local  # Build and install the host binary to ~/.local
 
 ### Release binaries
 
-`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`). Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release. `vp run render-homebrew-formula` renders `Formula/msa.rb` from `SHA256SUMS` into `.artifacts/homebrew`; the workflow pushes it to [masseater/homebrew-tap](https://github.com/masseater/homebrew-tap) once the release is published.
+`vp run build-binaries` builds `msa` for every release platform into `.artifacts/binaries` (`msa-<platform>.tar.gz`, `msa-<platform>.zip`, and `SHA256SUMS`) and runs `msa --version` from the host platform's archive; with `MSA_LOCAL_LLM_TESTS=1`, which CI sets, it also has that binary decide a task review through node-llama-cpp. Pushing a `v*` tag runs `.github/workflows/release.yml`, which builds them in CI, smoke-tests the result, and publishes a GitHub Release. `vp run render-homebrew-formula` renders `Formula/msa.rb` from `SHA256SUMS` into `.artifacts/homebrew`; the workflow pushes it to [masseater/homebrew-tap](https://github.com/masseater/homebrew-tap) once the release is published.
 
 ## License
 

@@ -13,6 +13,7 @@
 - `currentTimeMillis`・`nowIso`・`randomSuffix`・`awaited`・`failure`・`pollUntil`・`abortController`
 - `timersArmedBy`（渡した Effect から辿れる非同期リソースが張ったタイマーだけを数える）
 - `runTest`（`it` から Effect を走らせる）・`testRuntime`・`provideNode`
+- `localLlmTests`（`MSA_LOCAL_LLM_TESTS` が空でない時だけ `true`。手元の LLM を動かすテストを `it.skipIf(!localLlmTests)` にする）
 
 ## 使い方
 
