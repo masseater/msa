@@ -39,6 +39,14 @@ const searchSchema = Type.Object({
   query: Type.String({ description: "Words to find in reports across every task and thread." }),
 });
 
+const mergeSchema = Type.Object({
+  head: Type.String({
+    description:
+      "Full SHA of the head you checked. The pull request merges only while this is still its head.",
+  }),
+  number: Type.Integer({ description: "Pull request number.", minimum: 1 }),
+});
+
 const maxConcurrentSchema = Type.Object({
   value: Type.Integer({ description: "Threads that may run at the same time.", minimum: 1 }),
 });
@@ -124,6 +132,18 @@ function messageToolsB(
   orchestrator: orchestratorTypes.Orchestrator,
 ): Record<string, extensionsTypesTypes.ToolDefinition> {
   return {
+    merge_pull_request: tool({
+      description:
+        "Squash-merge a pull request the way the harness merges a task's pull request: only at the head you name, only while it is open, current with its base, free of conflicts and auto-merge, and green in CI, with its title and the commit messages of the pull request as the commit message. A task's pull request merges only while the task is stopped, failed, or completed; the task then completes and its worktree and branch are removed.",
+      label: "merge pull request",
+      name: "merge_pull_request",
+      parameters: mergeSchema,
+      promptGuidelines: [
+        "Merge pull requests with merge_pull_request, never with gh pr merge, gh api, or the GitHub page: it checks the head you name and records the merge so the harness knows it as its own. When it refuses because CI is still running, wait for CI and call it again.",
+      ],
+      promptSnippet: "Squash-merge a pull request at a checked head",
+      run: ({ number, head }) => orchestrator.mergePullRequest(number, head),
+    }),
     rerun_task: tool({
       description:
         "Run a finished, failed, or stopped task again in a new thread. Dependencies and notes apply as usual.",

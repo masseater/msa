@@ -78,7 +78,7 @@ release. Add a tool name to select part of the graph. For example, run
 - ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
-- squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも、手でのマージ（`scripts/squash-message.ts merge`）も、CI の `commits` ジョブ（`scripts/lint-squash-message.sh`）もこれを使い、CI は検査した head までのコミットから作ったメッセージを commitlint にかける。
+- squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも orchestrator の `merge_pull_request` もこれを使い、CI の `commits` ジョブは検査した head で `msa squash-message` が出すメッセージを commitlint にかける。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
   - 手元の LLM サーバー（Ollama・LM Studio・llama.cpp）を呼ぶ `libs/ai/test/*-local.test.ts` は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。
@@ -143,7 +143,7 @@ release. Add a tool name to select part of the graph. For example, run
 - reviewer の指摘のうちタスクのゴールに入るものは、深刻度に関係なく同じ PR で直し、再レビューで合格してからマージする。マージしてから別 issue に分けない。別 issue にしてよいのは、タスクのゴールの外の問題だけ。
 - 合格・完了の基準は、指示されたゴールを満たしたかどうかだけにする。ゴールの項目が 1 つでも満たされていなければ不合格にし（reviewer は `record_goal_items` で項目ごとに met / unmet を記録し、ハーネスは全項目が met のときだけ合格にする）、「既知の限界」「範囲外」として PR 本文に残して合格にしない。ハーネスは差し戻しの回数・差分の大きさ・時間でタスクを打ち切らず、目的を満たすまで worker に返す。
 - 止まってよいのは、worker か reviewer が `request_decision` で「方針の判断が要る」と終えたとき、同じ指摘や check の出力が繰り返され、しかも作業ツリーのファイル（コミット前も含む）が前と変わっていないとハーネスが判定したとき、ユーザーか orchestrator が止めたときだけにする。前の 2 つは、まず読み取り専用の triage スレッドが本当に人の判断が要るかを判定する。ゴール・コード・過去の決定（コミットログ・issue・関連タスクの報告・AGENTS.md）から全部の制約を満たす方針が出せれば、根拠と一緒に止まったスレッドへ返して続きから再開させ、task は `needs-decision` にしない。課金・個人情報・既存キーの無効化・未決の仕様の選択のように人しか決められないとき、方針が妥協（ゴールを削る・規則を緩める・既知の限界として残す）になるとき、triage が決めた依頼が一字一句同じまま戻ってきたとき、または triage が前の決定（依頼と決めた方針、その後にファイルが変わったか）を渡されたうえで同じ依頼の繰り返しと判定したときだけ task を `needs-decision` にして orchestrator に判断を求め、failed にしない。orchestrator はユーザーか `consult_advisor` の検討エージェントと方針を決め、`send_message` で返すと止まったスレッドが続きから再開する。
-- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージする。マージしてよいかは聞かない。手でマージするときは `node scripts/squash-message.ts merge <PR 番号> <CI が通った head SHA>` を使い、`gh pr merge` や GitHub の画面では squash しない。ルールセットのバイパスや `--admin` は使わない。
+- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージする。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
 - orchestrator の work task は自分の PR を持ち、ハーネスがタスクの枝から PR を見つける。PR が無い・push されていない・CI が落ちた・BEHIND か衝突のときは worker に差し戻し、CI が走っているあいだは worker を起こさずに待ち、reviewer の合格後にハーネスが合格した head で squash merge し、マージを確かめてから task を completed にして worktree と枝を消す。
 - orchestrator の worker は次のとおりにする。
   - PR を自分でマージしない。`gh pr merge` と auto-merge は worker と reviewer の shell が早めに拒み、すり抜けてもハーネスが見つけて task を stopped にする。

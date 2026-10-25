@@ -3,7 +3,7 @@ import { Effect, Result } from "effect";
 import pullRequestFinish from "./pull-request-finish.ts";
 import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
-import pullRequestSquashModule from "./pull-request-squash.ts";
+import pullRequestRequest from "./pull-request-request.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -11,7 +11,6 @@ import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { pullRequests } = pullRequestsModule;
-const { pullRequestSquash } = pullRequestSquashModule;
 const { problemsOf, short } = pullRequestProblems;
 const { settleMerged } = pullRequestFinish;
 const { autoMergeLine } = pullRequestOutside;
@@ -75,32 +74,46 @@ function landed(
   return store.pullRequestOf(runtime.database, read.taskId) ?? read;
 }
 
-function requestMerge(
+interface Landed {
+  settled: MergeOutcome | undefined;
+  saved: PullRequest | undefined;
+  tried: MergeAttempt;
+  read: PullRequest | undefined;
+}
+
+function land(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
   ready: Ready,
-  prepared: { nonce: string; squashed: { subject: string; body: string } },
-) {
-  const { owner, record, verified } = ready;
-  return Effect.uninterruptible(
-    Effect.gen(function* () {
-      store.markHarnessMerge(runtime.database, task.id, {
-        nonce: prepared.nonce,
-        sha: verified.sha,
-      });
-      const tried = yield* pullRequestSquash.merge(
-        runtime,
-        owner.cwd,
-        record.number,
-        verified,
-        prepared.squashed,
-      );
-      if (tried.kind === "merged") store.markHarnessCommit(runtime.database, task.id, tried.commit);
-      if (tried.kind === "refused") store.markHarnessMerge(runtime.database, task.id, null);
-      const read = yield* Effect.result(pullRequests.view(runtime, owner.cwd, record.number));
-      return [tried, read] as const;
-    }),
-  );
+): Effect.Effect<Landed> {
+  return Effect.gen(function* () {
+    const { owner, record, verified } = ready;
+    const { tried, read: after } = yield* pullRequestRequest.request(
+      runtime,
+      owner.cwd,
+      record.number,
+      verified,
+      pullRequestRequest.storeMarks(runtime, task.id),
+    );
+    const now = yield* nowMillis;
+    const read =
+      after !== undefined && Result.isSuccess(after)
+        ? pullRequests.save(runtime, task.id, after.success, verified, now)
+        : undefined;
+    const saved =
+      tried.kind === "merged"
+        ? landed(runtime, read ?? { ...record, harnessCommit: tried.commit }, tried.commit, now)
+        : read;
+    if (saved === undefined) return { read, saved, settled: undefined, tried };
+    const settled = yield* settleMerged(
+      runtime,
+      task,
+      owner.cwd,
+      saved,
+      `Squash-merged PR #${saved.number} at head ${short(verified.sha)} as merge commit ${short(saved.mergeCommit ?? "")}.`,
+    );
+    return { read, saved, settled, tried };
+  });
 }
 
 function squash(
@@ -109,31 +122,10 @@ function squash(
   ready: Ready,
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
-    const { owner, record, verified } = ready;
-    const prepared = yield* Effect.result(
-      pullRequestSquash.prepare(runtime, owner.cwd, record.number, verified),
-    );
-    if (Result.isFailure(prepared)) {
-      return unmerged(record.number, { kind: "refused", why: prepared.failure }, undefined);
-    }
-    const [tried, after] = yield* requestMerge(runtime, task, ready, prepared.success);
-    const now = yield* nowMillis;
-    const read = Result.isSuccess(after)
-      ? pullRequests.save(runtime, task.id, after.success, verified, now)
-      : undefined;
-    const saved =
-      tried.kind === "merged"
-        ? landed(runtime, read ?? { ...record, harnessCommit: tried.commit }, tried.commit, now)
-        : read;
-    if (saved === undefined) return unmerged(record.number, tried, read);
-    const settled = yield* settleMerged(
-      runtime,
-      task,
-      owner.cwd,
-      saved,
-      `Squash-merged PR #${saved.number} at head ${short(verified.sha)} as merge commit ${short(saved.mergeCommit ?? "")}.`,
-    );
+    const { record } = ready;
+    const { read, saved, settled, tried } = yield* land(runtime, task, ready);
     if (settled !== undefined) return settled;
+    if (saved === undefined) return unmerged(record.number, tried, read);
     const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
     if (fixes.length === 0) return unmerged(record.number, tried, read);
     return blocked(
@@ -143,26 +135,6 @@ function squash(
       fixes.map((problem) => problem.text),
     );
   });
-}
-
-function changedSinceReview(number: number, now: Verified, verified: Verified | null): string[] {
-  const name = `#${number}`;
-  if (verified === null) {
-    return [
-      `The goal check never passed on ${name}, so the reviewer did not read it. End your turn again so it is checked and reviewed.`,
-    ];
-  }
-  const changed = [
-    ...(verified.sha === now.sha
-      ? []
-      : [`its head moved from ${short(verified.sha)} to ${short(now.sha)}`]),
-    ...(verified.title === now.title ? [] : ["its title changed"]),
-    ...(verified.body === now.body ? [] : ["its body changed"]),
-  ];
-  if (changed.length === 0) return [];
-  return [
-    `${name} changed after the review (${changed.join(", ")}), so the reviewed pull request is not the one that would merge. Make the title and body describe the final diff, then end your turn so it is checked and reviewed again.`,
-  ];
 }
 
 function blocked(
@@ -256,16 +228,13 @@ function afterReview(
         return { kind: "stopped", line: autoMergeLine(task, record, autoMergeBy) };
       }
       const now = yield* nowMillis;
-      const changed = changedSinceReview(record.number, pullRequests.verifiedOf(pull), verified);
-      const problems = problemsOf(
+      const { fixes, problems } = pullRequestRequest.readiness(
+        runtime,
         record,
-        undefined,
-        pullRequests.awaitingChecks(runtime, record, now),
+        pull,
+        verified,
+        now,
       );
-      const fixes = [
-        ...problems.filter((problem) => problem.kind === "fix").map((problem) => problem.text),
-        ...changed,
-      ];
       if (fixes.length > 0) return blocked(runtime, task, record, fixes);
       if (problems.length === 0 && verified !== null) {
         return yield* squash(runtime, task, { owner, record, verified });
@@ -276,7 +245,11 @@ function afterReview(
   });
 }
 
-const pullRequestMerge = { afterInterrupt: pullRequestFinish.afterInterrupt, afterReview };
+const pullRequestMerge = {
+  afterInterrupt: pullRequestFinish.afterInterrupt,
+  afterReview,
+  land,
+};
 
 const pullRequestMergeModule = { pullRequestMerge };
 

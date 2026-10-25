@@ -122,6 +122,12 @@ export default class Orchestrator {
     return this.state.exclusive(actions.rerun(this.state, taskId, extra));
   }
 
+  mergePullRequest(number: number, head: string): Promise<string> {
+    return Effect.runPromise(actions.mergePullRequest(this.state, number, head)).finally(() =>
+      this.state.publish(),
+    );
+  }
+
   setMaxConcurrentThreads(value: number): Promise<number> {
     return this.state.exclusive(actions.setMaxConcurrent(this.state, value));
   }

@@ -25,10 +25,18 @@ type Judgement =
   | { by: "harness"; record: PullRequest }
   | { by: "outside" | "unread"; record: PullRequest; reason: string };
 
+function rememberInStore(runtime: runtimeTypes.Runtime, taskId: string) {
+  return (commit: string): void => {
+    store.markHarnessCommit(runtime.database, taskId, commit);
+    runtime.publish();
+  };
+}
+
 function judgeMerge(
   runtime: runtimeTypes.Runtime,
   cwd: string,
   record: PullRequest,
+  remember: (commit: string) => void = rememberInStore(runtime, record.taskId),
 ): Effect.Effect<Judgement | undefined> {
   return Effect.gen(function* () {
     if (record.state !== "MERGED") return undefined;
@@ -67,8 +75,7 @@ function judgeMerge(
         record,
       };
     }
-    store.markHarnessCommit(runtime.database, record.taskId, mergeCommit);
-    runtime.publish();
+    remember(mergeCommit);
     return { by: "harness", record: { ...record, harnessCommit: mergeCommit } };
   });
 }

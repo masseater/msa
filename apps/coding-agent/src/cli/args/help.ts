@@ -17,7 +17,8 @@ const COMMANDS_HELP = `  ${APP_NAME} install <source> [-l]     Install extension
   ${APP_NAME} config [-l]               Open TUI to enable/disable package resources (Tab switches scope)
   ${APP_NAME} auth <command>            Print credentials or check provider readiness
   ${APP_NAME} mcp <command>             Check MCP servers, sign in to or out of OAuth servers
-  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list/config/auth/mcp`;
+  ${APP_NAME} squash-message <n> <sha>  Print the commit message the harness squash-merges PR <n> with at <sha>
+  ${APP_NAME} <command> --help          Show help for install/remove/uninstall/update/list/config/auth/mcp/squash-message`;
 
 const OPTIONS_HELP = `  --provider <name>              Provider to search for --model (requires --model)
   --model <pattern>              Model pattern or ID (supports "provider/id" and optional ":<thinking>")

@@ -66,21 +66,6 @@ function squashMessageAt<E, R>(
   });
 }
 
-function mergeArgs(number: number, head: string, message: SquashMessage): readonly string[] {
-  return [
-    "pr",
-    "merge",
-    String(number),
-    "--squash",
-    "--match-head-commit",
-    head,
-    "--subject",
-    message.subject,
-    "--body",
-    message.body,
-  ];
-}
-
-const squashMessageModule = { mergeArgs, squashMessageAt, textOf };
+const squashMessageModule = { squashMessageAt, textOf };
 
 export default squashMessageModule;

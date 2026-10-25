@@ -11,6 +11,7 @@ const ORCHESTRATOR_TOOL_NAMES = [
   "search_reports",
   "stop_task",
   "rerun_task",
+  "merge_pull_request",
   "set_max_concurrent_threads",
   "replan",
   "handoff",

@@ -32,6 +32,14 @@ function mergeRequestOf(args: readonly string[]): MergeRequest {
   };
 }
 
+function ok(stdout: string): orchestratorTypes.GhResult {
+  return { code: 0, stderr: "", stdout };
+}
+
+function refused(stderr: string): orchestratorTypes.GhResult {
+  return { code: 1, stderr, stdout: "" };
+}
+
 function commitOf(
   messages: ReadonlyMap<string, string>,
   refusal: orchestratorTypes.GhResult | undefined,
@@ -51,6 +59,6 @@ function commitOf(
   });
 }
 
-const fakeGitHubMerge = { commitOf, mergeRequestOf };
+const fakeGitHubMerge = { commitOf, mergeRequestOf, ok, refused };
 
 export default fakeGitHubMerge;
