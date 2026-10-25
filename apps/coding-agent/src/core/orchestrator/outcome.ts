@@ -18,7 +18,7 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   const last = worker.messages.findLast(
     (message): message is compatTypes.AssistantMessage => message.role === "assistant",
   );
-  if (error instanceof TaskStopped) return { content: error.message, status: "stopped" };
+  if (TaskStopped.isStopped(error)) return { content: error.message, status: "stopped" };
   if (error !== undefined) return { content: errorText(error), status: "failed" };
   if (last?.stopReason === "error" || last?.stopReason === "aborted") {
     const text = contentText(last.content, "\n").trim();
