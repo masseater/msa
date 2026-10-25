@@ -21,11 +21,7 @@ interface AskRow {
   created_at: number;
 }
 
-interface PendingAsk {
-  triageThreadId: string;
-  ask: triageTypes.Ask;
-  createdAt: number;
-}
+type PendingAsk = triageTypes.PendingAsk;
 
 function toPending(row: AskRow): PendingAsk {
   return {
@@ -77,13 +73,10 @@ function takePendingTriageAsks(database: DatabaseSync, project: string): Pending
   return rows.map(toPending);
 }
 
-interface ReadOnlyCheckout {
-  threadId: string;
-  cwd: string;
-  repository: string;
-}
-
-function stoppedReadOnlyCheckouts(database: DatabaseSync, project: string): ReadOnlyCheckout[] {
+function stoppedReadOnlyCheckouts(
+  database: DatabaseSync,
+  project: string,
+): triageTypes.ReadOnlyCheckout[] {
   const rows = database
     .prepare(
       `SELECT DISTINCT threads.id AS thread_id, threads.cwd AS cwd, tasks.cwd AS repository

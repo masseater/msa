@@ -28,6 +28,18 @@ declare namespace triageTypes {
     request: string;
     key: string;
   }
+
+  interface PendingAsk {
+    triageThreadId: string;
+    ask: Ask;
+    createdAt: number;
+  }
+
+  interface ReadOnlyCheckout {
+    threadId: string;
+    cwd: string;
+    repository: string;
+  }
 }
 
 export type { triageTypes as default };
