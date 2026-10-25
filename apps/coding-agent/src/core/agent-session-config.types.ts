@@ -44,6 +44,7 @@ declare namespace agentSessionConfigTypes {
         ) => Promise<orchestratorTypes.WorkerSession>)
       | undefined;
     telemetry?: sessionTelemetryTypes.SessionTelemetryOptions | undefined;
+    isWorker?: boolean | undefined;
   }
 
   interface ExtensionBindings {

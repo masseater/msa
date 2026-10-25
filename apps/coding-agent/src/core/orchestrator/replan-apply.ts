@@ -25,7 +25,9 @@ function apply(
     const now = yield* nowMillis;
     const replanId = newId("rp");
     const handoffs = yield* collect(runtime, memos);
-    const changes = yield* Effect.sync(() => write(runtime, prepared, handoffs, replanId, now));
+    const { changes, handover } = yield* Effect.sync(() =>
+      write(runtime, prepared, handoffs, replanId, now),
+    );
     runtime.replanning = false;
     yield* Effect.sync(() => runtime.publish());
     const started =
@@ -35,7 +37,9 @@ function apply(
       aborted: null,
       created: changes.created,
       dropped: changes.dropped,
+      handedOver: handover.handedOver,
       kept: changes.kept,
+      orphaned: handover.orphaned,
       replanId,
       rewired: changes.rewired,
       started,

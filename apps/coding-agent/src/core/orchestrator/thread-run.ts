@@ -32,7 +32,7 @@ function whileCurrent<A>(
   const ended = Effect.gen(function* () {
     while (current(thread)) {
       yield* markActive(thread);
-      yield* Effect.sleep(RUN_POLL_MS);
+      yield* Effect.sleep(thread.runtime.options.runPollMs ?? RUN_POLL_MS);
     }
     return undefined;
   });

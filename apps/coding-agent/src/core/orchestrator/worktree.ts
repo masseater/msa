@@ -56,6 +56,27 @@ function branchOf(taskId: string): string {
   return `task/${shortId(taskId)}`;
 }
 
+function taskBranch(runtime: runtimeTypes.Runtime, task: orchestratorTypesTypes.Task): string {
+  return store.pullRequestOf(runtime.database, task.id)?.branch ?? branchOf(task.id);
+}
+
+function worktreePath(repository: Repository, branch: string): string {
+  return platformPath.join(
+    platformPath.dirname(repository.root),
+    `${platformPath.basename(repository.root)}-${branch.replace(/^task\//u, "").replaceAll("/", "-")}`,
+  );
+}
+
+function headOf(cwd: string): Effect.Effect<string | undefined> {
+  return Effect.map(git(cwd, ["rev-parse", "HEAD"]), (result) =>
+    result.ok ? result.output : undefined,
+  );
+}
+
+function hasOrigin(cwd: string): Effect.Effect<boolean> {
+  return Effect.map(git(cwd, ["remote", "get-url", "origin"]), (result) => result.ok);
+}
+
 function repositoryOf(cwd: string): Effect.Effect<Repository | undefined> {
   return Effect.gen(function* () {
     const common = yield* git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
@@ -153,7 +174,61 @@ function sourcesOf(
 ): orchestratorTypesTypes.WorkspaceSource[] {
   return store
     .mergeSourcesOf(runtime.database, runtime.options.project, task.id)
-    .map((source) => ({ branch: branchOf(source.id), task: source }));
+    .map((source) => ({ branch: taskBranch(runtime, source), task: source }));
+}
+
+function removeWorktree(repository: Repository, branch: string): Effect.Effect<string[]> {
+  return Effect.gen(function* () {
+    const removed: string[] = [];
+    const path = worktreePath(repository, branch);
+    const current = yield* git(path, ["rev-parse", "--abbrev-ref", "HEAD"]);
+    if (current.ok && current.output === branch) {
+      const worktree = yield* git(repository.root, ["worktree", "remove", "--force", path]);
+      if (worktree.ok) removed.push(`worktree ${path}`);
+    }
+    if (yield* branchExists(repository, branch)) {
+      const local = yield* git(repository.root, ["branch", "-D", branch]);
+      if (local.ok) removed.push(`branch ${branch}`);
+    }
+    const remote = yield* git(repository.root, [
+      "ls-remote",
+      "--exit-code",
+      "--heads",
+      "origin",
+      branch,
+    ]);
+    if (remote.ok) {
+      const deleted = yield* git(repository.root, [
+        "push",
+        "--quiet",
+        "origin",
+        "--delete",
+        branch,
+      ]);
+      if (deleted.ok) removed.push(`origin/${branch}`);
+    }
+    return removed;
+  });
+}
+
+function cleanUp(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  branch: string,
+): Effect.Effect<string[]> {
+  return Effect.gen(function* () {
+    const repository = yield* repositoryOf(task.cwd);
+    if (repository === undefined) return [];
+    const merged = store
+      .listTasks(runtime.database, runtime.options.project)
+      .filter((source) => source.mergeInto === task.id && source.status !== "running")
+      .map((source) => taskBranch(runtime, source));
+    const removed: string[] = [];
+    for (const name of [branch, ...merged]) {
+      removed.push(...(yield* removeWorktree(repository, name)));
+    }
+    return removed;
+  });
 }
 
 function prepare(
@@ -173,13 +248,10 @@ function prepare(
     if (repository === undefined) return unmanaged;
     const target = yield* targetOf(runtime, task);
     const fallback = yield* defaultBase(repository);
-    const targetBranch = target === null ? upstreamName(fallback) : branchOf(target.id);
+    const targetBranch = target === null ? upstreamName(fallback) : taskBranch(runtime, target);
     if (target !== null) yield* ensureBranch(repository, targetBranch, fallback);
-    const branch = branchOf(task.id);
-    const path = platformPath.join(
-      platformPath.dirname(repository.root),
-      `${platformPath.basename(repository.root)}-${shortId(task.id)}`,
-    );
+    const branch = taskBranch(runtime, task);
+    const path = worktreePath(repository, branch);
     yield* checkout(repository, path, branch, target === null ? fallback : targetBranch);
     return {
       branch,
@@ -191,7 +263,7 @@ function prepare(
   });
 }
 
-const worktrees = { branchOf, prepare };
+const worktrees = { branchOf, cleanUp, hasOrigin, headOf, prepare };
 
 const worktreeModule = {
   worktrees,

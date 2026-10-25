@@ -33,6 +33,9 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
   const reports: Array<{ text: string; details: orchestratorTypes.OrchestratorReport }> = [];
   const telemetry = new InMemoryTelemetryContext();
   const orchestrator = new Orchestrator({
+    ciAppearMs: options.ciAppearMs ?? 20,
+    ciPollMs: options.ciPollMs ?? 5,
+    ciWaitMs: options.ciWaitMs,
     createWorker: (workerOptions) => {
       const worker = new FakeWorker(workerOptions, workers.length);
       workers.push(worker);
@@ -60,6 +63,10 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
       return found;
     },
     runCommand: options.runCommand ?? (() => Promise.resolve({ exitCode: 0, output: "" })),
+    runGh:
+      options.runGh ??
+      (() => Promise.resolve({ code: 1, stderr: "this test has no GitHub", stdout: "" })),
+    runPollMs: options.runPollMs,
     telemetry,
     version: "0.0.0-test",
   });

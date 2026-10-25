@@ -73,6 +73,8 @@ export default class SessionToolCalls {
     parentToolCallId?: string,
   ): Effect.Effect<agentTypes.BeforeToolCallResult | undefined> {
     return awaitingWith(function* () {
+      const refused = this.session.tools.policy.refusal(toolCall.name, args);
+      if (refused !== undefined) return { block: true, reason: refused };
       const runner = this.session.extensions.binding.extensionRunnerInternal;
       if (!runner.hasHandlers("tool_call")) {
         return undefined;

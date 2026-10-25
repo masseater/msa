@@ -31,6 +31,9 @@ function taskViews(database: DatabaseSync, project: string): orchestratorTypesTy
   const dependencies = store.listDependencyPairs(database, project);
   const assignments = store.listAssignments(database, project);
   const reports = store.listReports(database, project);
+  const pulls = new Map(
+    store.listPullRequests(database, project).map((pull) => [pull.taskId, pull] as const),
+  );
   return tasks.map((task) =>
     Object.assign(task, {
       assignments: assignments.filter((assignment) => assignment.taskId === task.id),
@@ -42,6 +45,9 @@ function taskViews(database: DatabaseSync, project: string): orchestratorTypesTy
         .filter((pair) => pair.taskId === task.id)
         .map((pair) => pair.dependsOn)
         .toSorted(),
+      pullRequest:
+        pulls.get(task.id) ??
+        (task.mergeInto === null ? null : (pulls.get(task.mergeInto) ?? null)),
       reports: reports.filter((report) => report.taskId === task.id),
     }),
   );

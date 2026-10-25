@@ -38,6 +38,8 @@ Each change produces one message, written as the next step rather than as a stat
 | Conflicts with the base branch | `#74: now conflicts with its base. Rebase onto the base branch and push.`                                      |
 | Base branch moved ahead        | `#74: its base moved ahead by 2 commits. Rebase or update the branch; CI does not run until it is up to date.` |
 
+A check run that was cancelled because the same check started again on the head, as when editing a pull request restarts its workflow, is left out of the counts; a cancelled run with no later run of the same check counts as failed.
+
 A conflict and a base that moved ahead are different problems: a conflict needs the two sides of the change merged, while a base that moved ahead needs a rebase or "Update branch". GitHub runs no checks on a branch that is behind its base, so a pull request that suddenly stops reporting CI is usually this one.
 
 The same state is never reported twice. A merge or a close ends the watch, because nothing is left to follow.

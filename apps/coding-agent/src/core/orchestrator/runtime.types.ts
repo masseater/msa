@@ -19,9 +19,15 @@ declare namespace runtimeTypes {
     at: number;
   }
 
+  type MergeOutcome =
+    | { kind: "merged"; line: string }
+    | { kind: "sent-back"; line: string; prompt: string }
+    | { kind: "stopped"; line: string };
+
   interface ReviewVerdict {
     result: orchestratorTypesTypes.ReviewVerdictResult;
     reason: string;
+    merge?: MergeOutcome;
   }
 
   interface Runtime {

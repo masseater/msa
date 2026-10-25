@@ -1,4 +1,9 @@
+import html from "../../utils/html.ts";
+import textModule from "./text.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
+
+const { pullRequestText } = textModule;
+const { escapeXml } = html;
 
 const REPORT_LIMIT = 6000;
 
@@ -84,7 +89,7 @@ function workspaceBlock(
   }
   const target =
     workspace.target === null
-      ? `When the work is done, push ${workspace.branch} and open a pull request into ${workspace.targetBranch}.`
+      ? `When the work is done, push ${workspace.branch}, open a pull request into ${workspace.targetBranch} whose title and body describe the final diff, and end your turn; do not wait for CI or watch the pull request. The harness finds the pull request from ${workspace.branch} and waits for CI on its head. It sends the work back when the pull request is missing, unpushed, behind, conflicting, or failing CI, and squash-merges it after the review passes; do not merge it or turn on auto-merge.`
       : `This work merges into task ${workspace.target.id} "${workspace.target.title}" on branch ${workspace.targetBranch}, which opens the pull request. Commit and push ${workspace.branch}; do not open a pull request.`;
   const sources =
     workspace.sources.length === 0
@@ -134,6 +139,18 @@ function workerPrompt(
     .join("\n\n");
 }
 
+function pullRequestBlock(task: orchestratorTypesTypes.TaskView): string {
+  const pull = task.pullRequest;
+  if (pull?.verified === null || pull?.verified === undefined) return "";
+  return [
+    `<pull-request number="${pull.number}" head="${pull.verified.sha}" url="${escapeXml(pull.url)}">`,
+    `<title>${escapeXml(pull.verified.title)}</title>`,
+    `<body>\n${escapeXml(pull.verified.body)}\n</body>`,
+    "</pull-request>",
+    `The harness squash-merges this pull request at this head after you pass it, with this title and body as the commit message. Check that the body describes the final diff of ${pull.branch} against ${pull.base}: what it changes, why, and how it was verified, with nothing from earlier attempts that the diff no longer does. A body that does not match the diff is a finding within the goal.`,
+  ].join("\n");
+}
+
 function taskReviewerPrompt(
   task: orchestratorTypesTypes.TaskView,
   workerReport: string,
@@ -145,7 +162,10 @@ function taskReviewerPrompt(
     stateBlock("goal-state", task.goalState),
     "</task>",
     `<worker-report>\n${truncateReport(workerReport)}\n</worker-report>`,
-  ].join("\n");
+    pullRequestBlock(task),
+  ]
+    .filter(Boolean)
+    .join("\n");
   return [
     "You are reviewing work another thread just did. You did not write it.",
     "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
@@ -205,7 +225,8 @@ function assignmentText(task: orchestratorTypesTypes.TaskView): string {
 function describeTask(task: orchestratorTypesTypes.TaskView): string {
   const dependencies = task.dependsOn.length > 0 ? task.dependsOn.join(", ") : "-";
   const condition = task.condition === null ? "" : ` condition "${task.condition}"`;
-  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}`;
+  const pull = task.pullRequest === null ? "" : `; ${pullRequestText(task.pullRequest)}`;
+  return `${taskHeading(task)} — depends on ${dependencies}; ${assignmentText(task)}${condition}${pull}`;
 }
 
 function formatTaskDetail(
@@ -220,6 +241,9 @@ function formatTaskDetail(
     describeTask(task),
     `Dependents: ${task.dependents.join(", ") || "-"}`,
     threads.length > 0 ? `Threads: ${threads.join(", ")}` : "Threads: -",
+    task.pullRequest === null
+      ? "Pull request: -"
+      : `Pull request: ${task.pullRequest.url} (${task.pullRequest.branch} into ${task.pullRequest.base}, ${pullRequestText(task.pullRequest)}, head ${task.pullRequest.headSha})`,
     stateBlock("current-state", task.currentState),
     stateBlock("goal-state", task.goalState),
     ...(task.checks.length === 0 ? [] : [`Checks:\n${checkLines(task.checks).join("\n")}`]),
@@ -227,59 +251,10 @@ function formatTaskDetail(
   ].join("\n\n");
 }
 
-function memoFirstLine(memo: string): string {
-  const line = memo.split("\n").find((candidate) => candidate.trim() !== "");
-  return line?.trim() ?? "(no memo)";
-}
-
-function formatReplan(result: orchestratorTypesTypes.ReplanResult): string {
-  if (result.aborted !== null) {
-    return `Replan aborted: ${result.aborted}. No task was created, dropped, or rewired.`;
-  }
-  const lines = [`Replanned ${result.replanId}.`];
-  if (result.stopped.length > 0) {
-    lines.push(
-      `Stopped:\n${result.stopped
-        .map((item) => `- ${item.taskId} ${item.title}: ${memoFirstLine(item.memo)}`)
-        .join("\n")}`,
-    );
-  }
-  if (result.dropped.length > 0) {
-    lines.push(
-      `Dropped:\n${result.dropped
-        .map((item) => `- ${item.taskId} ${item.title}: ${item.reason}`)
-        .join("\n")}`,
-    );
-  }
-  if (result.created.length > 0) {
-    lines.push(
-      `Created:\n${result.created
-        .map(
-          (item) =>
-            `- ${item.taskId} ${item.title}${item.from.length > 0 ? ` from ${item.from.join(", ")}` : ""}`,
-        )
-        .join("\n")}`,
-    );
-  }
-  if (result.kept.length > 0) lines.push(`Kept: ${result.kept.join(", ")}.`);
-  if (result.rewired.length > 0) {
-    lines.push(
-      `Rewired: ${result.rewired
-        .map((item) => `${item.taskId} depends on ${item.dependsOn.join(", ") || "-"}`)
-        .join("; ")}.`,
-    );
-  }
-  lines.push(
-    result.started.length > 0 ? `Started: ${result.started.join(", ")}.` : "Nothing started.",
-  );
-  return lines.join("\n");
-}
-
 const prompts = {
   checkExpectation,
   checksBlock,
   dependencyBlock,
-  formatReplan,
   formatTaskDetail,
   formatTaskList,
   latestReport,

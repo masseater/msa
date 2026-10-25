@@ -1,3 +1,4 @@
+import pullRequestHandover from "./pull-request-handover.ts";
 import type replanApplyInternalTypes from "./replan-apply-internal.types.ts";
 import replanHandoffs from "./replan-handoffs.ts";
 import replanStoreModule from "./replan-store.ts";
@@ -38,7 +39,10 @@ function write(
   handoffs: readonly replanApplyInternalTypes.Handoff[],
   replanId: string,
   now: number,
-): orchestratorTypesTypes.ReplanChanges {
+): {
+  changes: orchestratorTypesTypes.ReplanChanges;
+  handover: ReturnType<typeof pullRequestHandover.handOver>;
+} {
   const database = runtime.database;
   const project = runtime.options.project;
   return store.transaction(database, () => {
@@ -47,6 +51,7 @@ function write(
     const rewired = rewire(runtime, prepared, creation.byKey);
     keep(runtime, prepared, now);
     relinkMerges(runtime, prepared, creation.inheritors, now);
+    const handover = pullRequestHandover.handOver(runtime, prepared.sources, creation.inheritors);
     if (prepared.input.maxConcurrentThreads !== undefined) {
       store.storeMaxConcurrent(database, project, prepared.input.maxConcurrentThreads);
       runtime.maxConcurrentThreads = prepared.input.maxConcurrentThreads;
@@ -72,7 +77,7 @@ function write(
       project,
       reason: prepared.input.reason,
     });
-    return changes;
+    return { changes, handover };
   });
 }
 

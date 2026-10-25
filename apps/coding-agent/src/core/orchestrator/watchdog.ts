@@ -1,6 +1,5 @@
 import { Effect, Fiber } from "effect";
 
-import elapsedModule from "../../utils/elapsed.ts";
 import processAliveModule from "../platform/node/process-alive.ts";
 import errors from "./errors.ts";
 import runtimeModule from "./runtime.ts";
@@ -8,13 +7,13 @@ import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
 import storeModule from "./store.ts";
 import watchdogInspect from "./watchdog-inspect.ts";
+import watchdogReport from "./watchdog-report.ts";
 import type watchdogTypes from "./watchdog.types.ts";
 
 const { nowMillis, releaseThread } = runtimeModule;
 const { orchestratorError } = errors;
 const { store } = storeModule;
 const { scheduling } = schedule;
-const { formatElapsed } = elapsedModule;
 const { INTERVAL_MS, inspect } = watchdogInspect;
 const { currentPid, processAlive } = processAliveModule;
 
@@ -26,11 +25,6 @@ function release(runtime: runtimeTypes.Runtime, threadId: string): void {
   runtime.wrapUps.delete(threadId);
   releaseThread(runtime, threadId);
   void worker?.run.lifecycle.abort().catch(() => undefined);
-}
-
-function taskLabel(runtime: runtimeTypes.Runtime, taskId: string): string {
-  const task = store.getTask(runtime.database, taskId);
-  return task === undefined ? taskId : `${task.title} (${taskId})`;
 }
 
 function resolveFinding(
@@ -59,12 +53,14 @@ function resolveFinding(
     store.setTaskStatus(database, assignment.taskId, finding.taskStatus, now);
   }
   const first = assignments[0];
-  const tasks = assignments.map((assignment) => taskLabel(runtime, assignment.taskId));
   runtime.options.report(
-    [
-      `${tasks.length > 0 ? tasks.join(", ") : `Thread ${thread.id}`} ${finding.taskStatus}.`,
-      `${content} Rerun the task to continue.`,
-    ].join("\n\n"),
+    watchdogReport.findingText(
+      runtime,
+      thread.id,
+      assignments.map((assignment) => assignment.taskId),
+      finding.taskStatus,
+      content,
+    ),
     {
       role: first?.role ?? "worker",
       started: [],
@@ -82,10 +78,12 @@ function resolveTaskWithoutThread(
   const task = store.getTask(runtime.database, taskId);
   if (task === undefined) return;
   store.setTaskStatus(runtime.database, taskId, "stopped", now);
-  runtime.options.report(
-    `${taskLabel(runtime, taskId)} stopped.\n\nWatchdog: the task was running with no running thread for ${formatElapsed(now - task.updatedAt)}. Rerun the task to continue.`,
-    { role: "worker", started: [], status: "stopped", taskId },
-  );
+  runtime.options.report(watchdogReport.threadlessText(runtime, taskId, now - task.updatedAt), {
+    role: "worker",
+    started: [],
+    status: "stopped",
+    taskId,
+  });
 }
 
 function recoverElsewhere(runtime: runtimeTypes.Runtime, now: number): number {
@@ -139,17 +137,12 @@ function reportRecovered(runtime: runtimeTypes.Runtime): void {
   const notices = store.takeRecoveryNotices(runtime.database, runtime.options.project);
   const first = notices[0];
   if (first === undefined) return;
-  const lines = notices.map(
-    (notice) =>
-      `- ${notice.title} (${notice.taskId}): running when ${notice.cause}, ${formatElapsed(notice.recoveredAt - notice.lastUpdate)} after its last update`,
-  );
-  runtime.options.report(
-    [
-      `${notices.length === 1 ? "A task was" : `${notices.length} tasks were`} left running by an earlier orchestrator and are waiting again; the scheduler restarts them.`,
-      lines.join("\n"),
-    ].join("\n\n"),
-    { role: "worker", started: [], status: "waiting", taskId: first.taskId },
-  );
+  runtime.options.report(watchdogReport.recoveredText(notices), {
+    role: "worker",
+    started: [],
+    status: "waiting",
+    taskId: first.taskId,
+  });
 }
 
 function open(runtime: runtimeTypes.Runtime, now: number): void {

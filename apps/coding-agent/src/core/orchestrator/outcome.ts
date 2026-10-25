@@ -6,6 +6,7 @@ import reviewVerdictModule from "./review-verdict.ts";
 import runTimeNotice from "./run-time-notice.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import TaskStopped from "./task-stopped.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import type workerTypes from "./worker.ts";
 
@@ -25,6 +26,7 @@ function outcomeOf(worker: workerTypes.WorkerSession, error: unknown): outcomeTy
   const last = worker.messages.findLast(
     (message): message is compatTypes.AssistantMessage => message.role === "assistant",
   );
+  if (error instanceof TaskStopped) return { content: error.message, status: "stopped" };
   if (error !== undefined) return { content: errorText(error), status: "failed" };
   if (last?.stopReason === "error" || last?.stopReason === "aborted") {
     const text = contentText(last.content, "\n").trim();
@@ -50,11 +52,27 @@ function worse(left: ReportStatus, right: ReportStatus): ReportStatus {
   return SEVERITY.indexOf(left) <= SEVERITY.indexOf(right) ? left : right;
 }
 
+interface SendBack {
+  task: orchestratorTypesTypes.Task;
+  prompt: string;
+}
+
 interface Applied {
   review: orchestratorTypesTypes.Task[];
-  sendBack: orchestratorTypesTypes.Task[];
+  sendBack: SendBack[];
   lines: string[];
   status: ReportStatus;
+}
+
+function endTask(
+  database: runtimeTypes.Runtime["database"],
+  taskId: string,
+  outcome: outcomeTypes.Outcome,
+  now: number,
+): ReportStatus {
+  const status = outcome.status === "stopped" ? "stopped" : "failed";
+  store.setTaskStatus(database, taskId, status, now);
+  return status;
 }
 
 function applyOutcome(
@@ -83,13 +101,13 @@ function applyOutcome(
       verdict: result?.result ?? null,
     });
     if (outcome.status !== "completed") {
-      applied.status = "failed";
-      store.setTaskStatus(database, assignment.taskId, "failed", now);
+      applied.status = worse(applied.status, endTask(database, assignment.taskId, outcome, now));
       continue;
     }
     if (judged !== undefined && result !== undefined && result.status !== "completed") {
       applied.status = worse(applied.status, result.status);
-      if (result.status === "sent-back") applied.sendBack.push(judged);
+      if (result.status === "sent-back")
+        applied.sendBack.push({ prompt: result.prompt ?? "", task: judged });
       else store.setTaskStatus(database, assignment.taskId, result.status, now);
       continue;
     }

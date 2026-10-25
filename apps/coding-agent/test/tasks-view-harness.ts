@@ -34,6 +34,7 @@ function task(
     mergeInto: null,
     model: "fast/flash",
     project: "p",
+    pullRequest: null,
     replan: null,
     reports: [],
     round: "main",
