@@ -37,12 +37,13 @@ function stoppedWhileGhReportedAMergeThatDidNotLand(remote: Remote) {
     github.beforeMerge = Effect.andThen(Deferred.succeed(merging, undefined), Deferred.await(gate));
     run.workers[1]!.complete("acceptable");
     yield* Deferred.await(merging);
-    yield* Effect.promise(() => run.orchestrator.stop(run.taskId));
+    const stopping = run.orchestrator.stop(run.taskId);
     const answered = github.answered;
     github.beforeMerge = undefined;
     github.mergeRefusal = { code: 0, stderr: "", stdout: "" };
     github.unavailable = UNREADABLE;
     yield* Deferred.succeed(gate, undefined);
+    yield* Effect.promise(() => stopping);
     yield* waitFor(() => github.answered >= answered + 3);
     github.mergeRefusal = undefined;
     github.unavailable = undefined;

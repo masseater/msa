@@ -44,12 +44,12 @@ function settleEffect(
   error: unknown,
   verdict?: runtimeTypes.ReviewVerdict,
   decision?: runtimeTypes.DecisionAsk,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+): Effect.Effect<boolean, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
-    if (runtime.runs.get(threadId) !== run) return;
+    if (runtime.runs.get(threadId) !== run) return false;
     const now = yield* nowMillis;
     const thread = store.getThread(runtime.database, threadId);
-    if (thread === undefined) return;
+    if (thread === undefined) return false;
     const assignments = store.assignmentsOfThread(runtime.database, threadId);
     forgetRun(runtime, threadId);
     const outcome = outcomes.outcomeOf(worker, error);
@@ -83,6 +83,7 @@ function settleEffect(
         },
       );
     });
+    return true;
   });
 }
 
@@ -94,7 +95,7 @@ function settle(
   error: unknown,
   verdict?: runtimeTypes.ReviewVerdict,
   decision?: runtimeTypes.DecisionAsk,
-): Promise<void> {
+): Promise<boolean> {
   return runtime.exclusive(settleEffect(runtime, threadId, run, worker, error, verdict, decision));
 }
 

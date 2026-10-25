@@ -7,7 +7,7 @@ import fakeGitHubMerge from "./fake-github-merge.ts";
 
 const { encodeJson } = testing;
 const { runCommand } = orchestratorCallbacks;
-const { commitOf, mergeRequestOf } = fakeGitHubMerge;
+const { commitOf, mergeRequestOf, ok, refused } = fakeGitHubMerge;
 
 type Ci = "pending" | "success" | "failure" | "cancelled";
 
@@ -39,21 +39,13 @@ function git(origin: string, args: string): Effect.Effect<{ ok: boolean; output:
 
 const VERIFY = { __typename: "CheckRun", name: "verify", workflowName: "verify" };
 
-function ok(stdout: string): orchestratorTypes.GhResult {
-  return { code: 0, stderr: "", stdout };
-}
-
-function refused(stderr: string): orchestratorTypes.GhResult {
-  return { code: 1, stderr, stdout: "" };
-}
-
 export default class FakeGitHub {
   readonly pulls: FakePull[] = [];
   readonly ci = new Map<string, Ci>();
   readonly conflicting = new Set<number>();
-
   readonly rerun = new Set<string>();
   readonly merged: Merged[] = [];
+  readonly requests: { number: string | undefined; sha: string }[] = [];
   readonly origin: string;
 
   unavailable: orchestratorTypes.GhResult | undefined;
@@ -267,6 +259,7 @@ export default class FakeGitHub {
   private mergeRequest(args: readonly string[]): Effect.Effect<orchestratorTypes.GhResult> {
     const { body, method, number, sha, subject } = mergeRequestOf(args);
     return Effect.gen({ self: this }, function* () {
+      this.requests.push({ number, sha });
       const pull = this.pulls.find((candidate) => String(candidate.number) === number);
       if (pull === undefined) return refused("gh: Not Found (HTTP 404)");
       if (method !== "squash") return refused("gh: squash only (HTTP 405)");

@@ -36,13 +36,18 @@ const CommitAnswer = Schema.fromJsonString(
 
 const HTTP_REFUSAL = /\(HTTP 4\d\d\)/u;
 
-function ghOf(runtime: runtimeTypes.Runtime, cwd: string): Gh {
+function ghWith(
+  runGh: (args: readonly string[], cwd: string) => Promise<GhResult>,
+  cwd: string,
+): Gh {
   return (args) =>
     Effect.promise(() =>
-      runtime.options
-        .runGh(args, cwd)
-        .catch((error: unknown) => ({ code: 1, stderr: String(error), stdout: "" })),
+      runGh(args, cwd).catch((error: unknown) => ({ code: 1, stderr: String(error), stdout: "" })),
     );
+}
+
+function ghOf(runtime: runtimeTypes.Runtime, cwd: string): Gh {
+  return ghWith(runtime.options.runGh, cwd);
 }
 
 function stdoutOf(gh: Gh): (args: readonly string[]) => Effect.Effect<string, string> {
@@ -103,15 +108,14 @@ function attemptOf(result: GhResult): MergeAttempt {
 }
 
 function prepare(
-  runtime: runtimeTypes.Runtime,
-  cwd: string,
+  gh: Gh,
   number: number,
-  verified: Verified,
+  verified: Pick<Verified, "sha" | "title">,
 ): Effect.Effect<HarnessMerge, string> {
   return Effect.gen(function* () {
     const nonce = platformCrypto.randomUuid();
     const squashed = yield* squashMessageAt(
-      stdoutOf(ghOf(runtime, cwd)),
+      stdoutOf(gh),
       (reason) => reason,
       number,
       verified.title,
@@ -122,13 +126,12 @@ function prepare(
 }
 
 function merge(
-  runtime: runtimeTypes.Runtime,
-  cwd: string,
+  gh: Gh,
   number: number,
-  verified: Verified,
+  head: string,
   squashed: SquashMessage,
 ): Effect.Effect<MergeAttempt> {
-  return Effect.map(ghOf(runtime, cwd)(mergeArgs(number, verified.sha, squashed)), attemptOf);
+  return Effect.map(gh(mergeArgs(number, head, squashed)), attemptOf);
 }
 
 function commitMessage(
@@ -149,6 +152,8 @@ function commitMessage(
 const pullRequestSquash = {
   carriesNonce,
   commitMessage,
+  ghOf,
+  ghWith,
   merge,
   prepare,
   trailerOf,

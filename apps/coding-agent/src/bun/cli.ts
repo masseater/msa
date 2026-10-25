@@ -1,3 +1,4 @@
+import lightCommands from "../cli/light-commands.ts";
 import nodeLlamaCppModule from "../core/platform/node/node-llama-cpp.ts";
 import restoreSandboxEnvModule from "./restore-sandbox-env.ts";
 
@@ -11,12 +12,13 @@ const startCli = () =>
       runtimeSetup.setupBunRuntime();
       return import("../cli/setup.ts");
     })
-    .then(({ default: setup }) =>
-      import("../main.ts").then(({ default: mainModule }) => ({ mainModule, setup })),
-    )
-    .then(({ mainModule, setup }) => {
+    .then(({ default: setup }) => {
       setup.setupCli();
-      return mainModule.main(process.argv.slice(2));
+      const args = process.argv.slice(2);
+      return (
+        lightCommands.runLightCommand(args) ??
+        import("../main.ts").then(({ default: mainModule }) => mainModule.main(args))
+      );
     });
 
 const bindingTest = bindingTestScript(process.argv.slice(2));

@@ -20,18 +20,27 @@ function mergeAndSettle(
   task: orchestratorTypesTypes.Task,
   verdict: runtimeTypes.ReviewVerdict,
 ): void {
-  const merging = Effect.map(pullRequestMerge.afterReview(thread.runtime, task), (merge) => ({
-    merge,
-  }));
+  const merging = Effect.map(
+    pullRequestMerge.afterReview(thread.runtime, task, () => threadRuns.current(thread)),
+    (merge) => ({
+      merge,
+    }),
+  );
+  const { runtime, threadId, run, worker } = thread;
   void Effect.runPromise(threadRuns.whileCurrent(thread, merging)).then(
     (merged) =>
-      merged === undefined || !threadRuns.current(thread)
-        ? thread.runtime.exclusive(pullRequestMerge.afterInterrupt(thread.runtime, task))
-        : threadRuns.settle(
-            thread,
+      (merged === undefined || !threadRuns.current(thread)
+        ? Promise.resolve(false)
+        : runtime.settle(
+            threadId,
+            run,
+            worker,
             undefined,
             merged.merge === undefined ? verdict : { ...verdict, merge: merged.merge },
-          ),
+          )
+      ).then((settled) =>
+        settled ? undefined : runtime.exclusive(pullRequestMerge.afterInterrupt(runtime, task)),
+      ),
     (error: unknown) => threadRuns.settle(thread, error),
   );
 }

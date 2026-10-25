@@ -155,7 +155,7 @@ function pullRequestBlock(task: orchestratorTypesTypes.TaskView): string {
     `<title>${escapeXml(pull.verified.title)}</title>`,
     `<body>\n${escapeXml(pull.verified.body)}\n</body>`,
     "</pull-request>",
-    `The harness squash-merges this pull request at this head after you pass it, with this title and body as the commit message. Check that the body describes the final diff of ${pull.branch} against ${pull.base}: what it changes, why, and how it was verified, with nothing from earlier attempts that the diff no longer does. A body that does not match the diff is a finding within the goal.`,
+    `The harness squash-merges this pull request at this head after you pass it, with this title as the commit subject and the messages of its commits as the commit body. Check that the body describes the final diff of ${pull.branch} against ${pull.base}: what it changes, why, and how it was verified, with nothing from earlier attempts that the diff no longer does. A body that does not match the diff is a finding within the goal.`,
   ].join("\n");
 }
 

@@ -265,6 +265,7 @@ const pullRequests = {
   ciTiming,
   current,
   ownerOf,
+  recordOf,
   refresh,
   save,
   verifiedOf,
