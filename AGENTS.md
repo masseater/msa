@@ -151,6 +151,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 ## CI
 
+- PR の `edited`（タイトル・本文・base の変更）で起動するのは `commits` workflow だけにし、`commits` ジョブのほかに置けるのは `ci-telemetry` だけにする。`tools/checks/pull-request-edited.test.ts` が検査する。
 - 各 workflow の最後には、ほかの全ジョブを `needs` に並べ `if: always()` で `.github/scripts/ci-telemetry.sh` を動かす `ci-telemetry` ジョブを置く。`tools/checks/ci-telemetry-job.test.ts` が検査する。
 - `.github/scripts/ci-telemetry.sh` は土台のテンプレートと同じ中身に保ち、手で書き換えない。同じ検査が中身の SHA-256 を突き合わせ、`template-drift` workflow が毎日テンプレートの最新の中身と比べて、違えば issue を開く。テンプレートのリポジトリ名は repository variable `TEMPLATE_REPOSITORY` に置く。送り先は `apps/web` の Worker で、main への push で verify の `deploy` ジョブがデプロイする。
 
