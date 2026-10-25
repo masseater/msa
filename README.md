@@ -63,6 +63,11 @@ This monorepo contains the msa CLI and its supporting libraries.
 | **[@msa/agent-core](libs/agent)**          | Agent runtime with tool calling and state management                                                |
 | **[@msa/coding-agent](apps/coding-agent)** | Interactive coding agent CLI                                                                        |
 | **[@msa/tui](libs/tui)**                   | Terminal UI library with differential rendering                                                     |
+| **[@msa/web](apps/web)**                   | Cloudflare Worker that records CI job and step timings                                              |
+
+## Deployments
+
+- CI telemetry receiver: https://msa-ci-telemetry.masseater.workers.dev (deployed by the `deploy` job of `.github/workflows/verify.yml` on `main`)
 
 ## Permissions & Containerization
 

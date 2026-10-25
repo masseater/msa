@@ -47,3 +47,4 @@ plans/
 .msa/hf-sessions-backup/
 collect.sh
 libs/agent/docs/extensions/msa-server-artifact/index.md
+.alchemy

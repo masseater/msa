@@ -52,6 +52,7 @@ catalog:
   hosted-git-info: 9.0.3
   ignore: 7.0.8
   jiti: 2.7.0
+  jose: 6.2.12
   marked: 18.0.11
   minimatch: 10.2.6
   ms: 2.1.3
@@ -79,6 +80,7 @@ catalogs:
   stack:
     "@effect/tsgo": 0.51.1
     "@effect/vitest": 4.0.2
+    alchemy: 2.0.0-beta.81
     effect: 4.0.2
     fallow: 3.34.0
     vite-plus: 1.3.0
@@ -92,11 +94,16 @@ overrides:
   oxlint-tsgolint: 7.0.2003
   "@anthropic-ai/sandbox-runtime>zod": 4.6.7
   simple-git: 4.0.2
+  "@hono/node-server@<1.19.15": ^1.19.15
+  hono@<4.13.7: ^4.13.7
+  lodash@<=4.17.23: ^4.18.1
+  valibot@<=1.4.1: ^1.4.2
 
 allowBuilds:
   "@ast-grep/cli": true
   canvas: true
   esbuild: true
+  workerd: true
   "@google/genai": false
   autoevals: false
   cpu-features: false

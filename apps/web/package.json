@@ -1,0 +1,17 @@
+{
+  "name": "@msa/web",
+  "version": "0.0.4",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "alchemy deploy",
+    "destroy": "alchemy destroy"
+  },
+  "dependencies": {
+    "effect": "catalog:stack",
+    "jose": "catalog:"
+  },
+  "devDependencies": {
+    "alchemy": "catalog:stack"
+  }
+}
