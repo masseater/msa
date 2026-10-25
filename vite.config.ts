@@ -17,7 +17,7 @@ const {
   strictCategoryRules,
   workspacePackages,
 } = lintConfig;
-const { onGitHubActions } = vitestShared;
+const { onGitHubActions, testShard } = vitestShared;
 
 type Rules = Readonly<Record<string, "error">>;
 
@@ -154,6 +154,18 @@ export default defineConfig({
         cache: false,
         command: "node tools/build-binaries.ts",
       },
+      checks: {
+        command: "vp check",
+        dependsOn: [
+          "syncpack",
+          "actions-lint",
+          "code-rules",
+          "lockfile-policy",
+          "mcp-conformance",
+          "fallow-all",
+          "audit",
+        ],
+      },
       "code-rules": {
         command:
           "ast-grep scan --rule tools/rules/no-sync-run-of-async-fs.yml apps libs tools .msa",
@@ -200,17 +212,8 @@ export default defineConfig({
         dependsOn: ["build", "daemon-build"],
       },
       verify: {
-        command: "vp check",
-        dependsOn: [
-          "syncpack",
-          "actions-lint",
-          "code-rules",
-          "lockfile-policy",
-          "mcp-conformance",
-          "fallow-all",
-          "audit",
-          "test-all",
-        ],
+        command: [],
+        dependsOn: ["checks", "test-all"],
       },
     },
   },
@@ -224,5 +227,6 @@ export default defineConfig({
       "tools/vitest.config.ts",
     ],
     reporters: onGitHubActions ? ["dot", "github-actions"] : ["dot"],
+    shard: testShard,
   },
 });

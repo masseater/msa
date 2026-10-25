@@ -84,6 +84,10 @@ value="${NODE_EXTRA_CA_CERTS-}"
 value="${MSA_LOCAL_LLM_TESTS-}"
 [[ -z "$value" ]] || test_env+=("MSA_LOCAL_LLM_TESTS=$value")
 
+# Pass the shard that CI splits the vitest files into.
+value="${MSA_TEST_SHARD-}"
+[[ -z "$value" ]] || test_env+=("MSA_TEST_SHARD=$value")
+
 # Preserve CI detection only for runner behavior and test reporting.
 for name in CI GITHUB_ACTIONS; do
 	value="${!name-}"

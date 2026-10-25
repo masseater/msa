@@ -31,6 +31,7 @@ const READS_NO_DIST: ReadonlyArray<ReadonlyArray<string>> = [
   ["syncpack"],
   ["test"],
   ["uvx"],
+  ["vp", "check"],
   ["vp", "pm", "audit"],
 ];
 const NODE_OPTIONS = "NODE_OPTIONS";

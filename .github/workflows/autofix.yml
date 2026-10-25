@@ -53,7 +53,6 @@ jobs:
             branch="$HEAD_BRANCH"
           fi
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          echo "failed_job=$(gh run view "$FAILED_RUN_ID" --repo "$GITHUB_REPOSITORY" --json jobs --jq '.jobs[] | select(.name == "verify") | .databaseId')" >> "$GITHUB_OUTPUT"
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
       - if: steps.target.outputs.stale != 'true'
@@ -95,7 +94,7 @@ jobs:
             The verify job failed on branch ${{ inputs.branch }} (run ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.run_id }}).
             The working tree is checked out on branch ${{ steps.target.outputs.branch }}.
 
-            1. Read the failure with `gh run view --job ${{ steps.target.outputs.failed_job }} --log-failed`.
+            1. Read the failure with `gh run view ${{ inputs.run_id }} --log-failed`.
             2. Fix the root cause in the code, following AGENTS.md. Do not change lint or commitlint rules in either direction, add disable directives, or skip checks to make verify pass.
             3. Run `vp run verify` and repeat until it passes.
             4. Commit the fix with a Conventional Commits message whose body explains the cause. Do not push.
