@@ -17,7 +17,7 @@ const { KeybindingsManager, initTheme, stripAnsi } = tuiKit;
 
 const { createHarness } = harnessModule;
 
-const { deferredPromise } = testing;
+const { awaited, deferredPromise, runTest } = testing;
 type SelectorFactory = (close: () => void) => {
   component: scopedModelsSelectorTypes.ScopedModelsSelectorComponent;
   dispose?: () => void;
@@ -137,7 +137,10 @@ const cancelsTheBackgroundRefreshWhenTheSelector = () =>
 describe("issue #7153 scoped models refresh", () => {
   beforeAll(() => initTheme("dark"));
   beforeEach(() => setKeybindings(new KeybindingsManager()));
-  afterEach(() => Promise.resolve(harness?.cleanup()).finally(() => vi.restoreAllMocks()));
+  afterEach(() => {
+    const closing = harness?.cleanup();
+    return runTest(awaited(closing).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks()))));
+  });
   it(
     "renders cached models immediately and updates after background refresh",
     rendersCachedModelsImmediatelyAndUpdatesAfter,

@@ -18,12 +18,12 @@ const { startOAuthMcpServer } = mcpOauthServer;
 
 type Browser = "follow" | "paste";
 
-const cleanups: (() => Promise<void> | void)[] = [];
+const cleanups: { cleanup: () => Promise<void> | void }[] = [];
 
 const runCleanups = (): Promise<void> =>
   runTest(
     Effect.gen(function* () {
-      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.());
+      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.cleanup());
     }),
   );
 
@@ -67,7 +67,7 @@ const startServer = Effect.fn("startServer")(function* (
   oauth: configTypes.McpOAuthConfig | undefined,
 ) {
   const server = yield* awaited(startOAuthMcpServer());
-  cleanups.push(server.close);
+  cleanups.push({ cleanup: server.close });
   const entry: configTypes.McpServerEntry = {
     config: { exposure: "direct", url: server.url, ...(oauth === undefined ? {} : { oauth }) },
     name: "issues",
@@ -99,7 +99,7 @@ const setup = (browser: Browser, oauth?: configTypes.McpOAuthConfig) =>
           initialActiveToolNames: [],
         }),
       );
-      cleanups.push(() => harness.cleanup());
+      cleanups.push(harness);
       const input = (_title: string, _placeholder?: string, opts?: { signal?: AbortSignal }) =>
         browser === "paste" ? Promise.resolve(redirectLocation) : untilAborted(opts?.signal);
       const uiContext = createTestUiContext({

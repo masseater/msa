@@ -15,12 +15,12 @@ const { createAgentSessionFromServices, createAgentSessionRuntime, createAgentSe
 const { ModelRuntime, SessionManager } = codingAgent;
 const { registerFauxProvider } = compat;
 
-const { joinPath, toJsonText } = testing;
+const { awaited, joinPath, runTest, toJsonText } = testing;
 
 const runtime = ManagedRuntime.make(NodeServices.layer);
 const fs = runtime.runSync(FileSystem.FileSystem.useSync((service) => service));
 
-const cleanups: Array<() => void> = [];
+const cleanups: Array<() => Promise<void>> = [];
 
 type Faux = ReturnType<typeof registerFauxProvider>;
 
@@ -111,7 +111,7 @@ const startSessionRuntime = Effect.gen(function* () {
   cleanups.push(() =>
     runtime.runPromise(
       Effect.gen(function* () {
-        sessionRuntime.session.dispose();
+        yield* Effect.promise(() => sessionRuntime.dispose());
         faux.unregister();
         if (yield* fs.exists(tempDir)) {
           yield* fs.remove(tempDir, { force: true, recursive: true });
@@ -142,11 +142,12 @@ const appliesUpdatedTopLevelPromptSettings = Effect.gen(function* () {
 const appliesUpdatedTopLevelPromptSettingsOn = () =>
   Effect.runPromise(appliesUpdatedTopLevelPromptSettings);
 
-const afterEachHook = () => {
-  while (cleanups.length > 0) {
-    cleanups.pop()?.();
-  }
-};
+const afterEachHook = () =>
+  runTest(
+    Effect.gen(function* () {
+      while (cleanups.length > 0) yield* awaited(cleanups.pop()?.());
+    }),
+  );
 
 describe("issue #2753 reload stale resource settings", () => {
   afterEach(afterEachHook);

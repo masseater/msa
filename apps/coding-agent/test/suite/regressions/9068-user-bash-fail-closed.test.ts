@@ -9,7 +9,7 @@ import harnessModule from "../harness.ts";
 import type harnessTypes from "../harness.types.ts";
 import UserBashFailClosedSupport from "./9068-user-bash-fail-closed-support.ts";
 
-const { awaited } = testing;
+const { awaited, runTest } = testing;
 
 const { runRpcMode } = rpcMode;
 
@@ -118,7 +118,14 @@ function startRpcHarness(extension: (msa: extensionsTypesTypes.ExtensionAPI) => 
       const harness = yield* Effect.promise(() =>
         createHarness({ extensionFactories: [extension] }),
       );
-      const cleanup = () => harness.cleanup().finally(() => restoreListeners(listenerSnapshot));
+      const cleanup = () => {
+        const closing = harness.cleanup();
+        return runTest(
+          awaited(closing).pipe(
+            Effect.ensuring(Effect.sync(() => restoreListeners(listenerSnapshot))),
+          ),
+        );
+      };
 
       {
         const tryExit7 = yield* Effect.exit(

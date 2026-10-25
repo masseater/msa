@@ -12,7 +12,7 @@ const { complete } = CredentialRefreshHangSupport;
 
 const { createHarness } = harnessModule;
 
-const { deferredPromise, gate } = testing;
+const { awaited, deferredPromise, gate, runTest } = testing;
 
 const dynamicModel: aiTypes.Model<"openai-completions"> = {
   api: "openai-completions",
@@ -151,7 +151,8 @@ const completesInteractiveLoginBeforeItsBoundedBackground = () =>
 
 const afterEachHook = () => {
   vi.useRealTimers();
-  return Promise.resolve(harness?.cleanup()).finally(() => vi.restoreAllMocks());
+  const closing = harness?.cleanup();
+  return runTest(awaited(closing).pipe(Effect.ensuring(Effect.sync(() => vi.restoreAllMocks()))));
 };
 
 describe("issues #7027 and #7113 credential refresh hang", () => {

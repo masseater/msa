@@ -1,7 +1,11 @@
+import testing from "@msa/testing";
+import { Effect, Exit } from "effect";
+
 import type AgentSession from "../src/core/agent-session.ts";
 import runnerEvents from "../src/core/extensions/runner-events.ts";
 
 const { emitSessionShutdownEvent } = runnerEvents;
+const { awaited } = testing;
 
 const closeAgentSession = (session: AgentSession): Promise<void> =>
   emitSessionShutdownEvent(session.extensions.binding.extensionRunner, {
@@ -13,7 +17,17 @@ const closeAgentSession = (session: AgentSession): Promise<void> =>
   );
 
 const cleanupAll = (harnesses: { cleanup: () => Promise<void> }[]): Promise<void> =>
-  Promise.all(harnesses.splice(0).map((harness) => harness.cleanup())).then(() => undefined);
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const exits: Exit.Exit<void>[] = [];
+      for (const harness of harnesses.splice(0)) {
+        const closing = harness.cleanup();
+        exits.push(yield* Effect.exit(awaited(closing)));
+      }
+      const failed = exits.find(Exit.isFailure);
+      if (failed !== undefined) return yield* Effect.failCause(failed.cause);
+    }),
+  );
 
 const closeAgentSessionModule = { cleanupAll, closeAgentSession };
 

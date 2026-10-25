@@ -16,9 +16,9 @@ const { fauxAssistantMessage, fauxToolCall } = ai;
 
 const { createHarness } = harnessModule;
 
-const { deferredPromise, gate, runTest } = testing;
+const { awaited, deferredPromise, gate, runTest } = testing;
 
-const cleanups: Array<() => Promise<void> | void> = [];
+const cleanups: { cleanup: () => Promise<void> }[] = [];
 
 const blockingTool = (toolStarted: ReturnType<typeof gate>): agentTypes.AgentTool => ({
   description: "Wait until aborted",
@@ -62,11 +62,15 @@ const createForkableRuntime = (toolStarted: ReturnType<typeof gate>) =>
         noTools: "all",
       }).then((created) => ({ ...created, diagnostics: [], services }));
     const runtime = new AgentSessionRuntime(harness.session, services, createRuntime);
-    cleanups.push(() =>
-      runtime.session === harness.session
-        ? harness.cleanup()
-        : runtime.dispose().then(() => harness.cleanup()),
-    );
+    cleanups.push({
+      cleanup: () =>
+        runTest(
+          Effect.gen(function* () {
+            if (runtime.session !== harness.session) yield* awaited(runtime.dispose());
+            yield* awaited(harness.cleanup());
+          }),
+        ),
+    });
     return { harness, runtime };
   });
 
@@ -115,7 +119,7 @@ const doesNotAppendTheAbortedTurnTo = () => Effect.runPromise(doesNotAppendTheAb
 
 const afterEachHook = Effect.gen(function* () {
   while (cleanups.length > 0) {
-    yield* Effect.promise(() => Promise.resolve(cleanups.pop()?.()));
+    yield* awaited(cleanups.pop()?.cleanup());
   }
 });
 

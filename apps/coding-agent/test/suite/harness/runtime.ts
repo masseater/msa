@@ -18,10 +18,17 @@ const closeSession = (input: {
   fauxProvider: { unregister: () => void };
   session: codingAgentTypes.AgentSession;
   tempDir: string;
-}): Promise<void> =>
-  closeAgentSession(input.session)
+}): Promise<void> => {
+  const removeTempDir = () => Effect.runPromise(removeDir(input.tempDir));
+  return closeAgentSession(input.session)
     .finally(() => input.fauxProvider.unregister())
-    .then(() => Effect.runPromise(removeDir(input.tempDir)));
+    .then(removeTempDir, (error: unknown) =>
+      removeTempDir().then(
+        () => Promise.reject(error),
+        () => Promise.reject(error),
+      ),
+    );
+};
 
 const runtime = {
   closeSession,

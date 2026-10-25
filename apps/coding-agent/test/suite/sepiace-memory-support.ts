@@ -35,7 +35,7 @@ const startSepiace = (reply: (request: string) => string | { error: string } = (
   runTest(
     Effect.gen(function* () {
       const server = yield* awaited(startOAuthMcpServer({ memory: reply }));
-      cleanups.push(server.close);
+      cleanups.push({ cleanup: server.close });
       return server;
     }),
   );
@@ -72,7 +72,7 @@ const openSession = (options: {
           ...(options.settings === undefined ? {} : { settings: options.settings }),
         }),
       );
-      cleanups.push(() => harness.cleanup());
+      cleanups.push(harness);
       const uiContext = createTestUiContext({
         input: (_title, _placeholder, opts) => untilAborted(opts?.signal),
         notify: (message) => notifications.push(message),
