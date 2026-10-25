@@ -35,6 +35,7 @@ jobs:
       FAILED_RUN_ID: ${{ inputs.run_id }}
       DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
       FAILED_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ inputs.run_id }}
+      CLAUDE_ANSWER: '[.[] | select(.type == "result")] | last | .result // "no answer" | gsub("%"; "%25") | gsub("\r"; "%0D") | gsub("\n"; "%0A")'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -108,13 +109,13 @@ jobs:
             --allowedTools "Edit,MultiEdit,Write,Read,Glob,Grep,LS,Bash"
       - if: failure() && steps.claude.outcome == 'failure'
         run: |
-          jq -r '.[] | select(.type == "result" and .is_error) | "::error::Claude failed: \(.result)"' "$RUNNER_TEMP/claude-execution-output.json"
+          echo "::error::Claude failed: $(jq -r "$CLAUDE_ANSWER" "$RUNNER_TEMP/claude-execution-output.json")"
       - if: steps.target.outputs.stale != 'true'
         env:
           BRANCH: ${{ steps.target.outputs.branch }}
         run: |
           if [ "$(git rev-parse HEAD)" = "$HEAD_SHA" ]; then
-            echo "::error::Claude did not commit a fix"
+            echo "::error::Claude did not commit a fix: $(jq -r "$CLAUDE_ANSWER" "$RUNNER_TEMP/claude-execution-output.json")"
             exit 1
           fi
           gh auth setup-git
