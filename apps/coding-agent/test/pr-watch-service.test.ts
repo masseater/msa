@@ -21,7 +21,7 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",
@@ -173,7 +173,9 @@ const reportsEachChangeOnce = () => {
 
 const showsAWatchedPullRequestInTheFooter = () => {
   const script = scriptedGh([
-    snapshotOf({ checks: { failed: 1, passed: 2, pending: 0, pendingNames: [], total: 2 } }),
+    snapshotOf({
+      checks: { cancelled: 0, failed: 1, passed: 2, pending: 0, pendingNames: [], total: 2 },
+    }),
   ]);
   return withService(script.gh, createHost(), (service) =>
     Effect.gen(function* () {

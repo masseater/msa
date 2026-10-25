@@ -2,12 +2,14 @@ import type ghTypes from "./gh.types.ts";
 import type snapshotTypes from "./snapshot.types.ts";
 
 declare namespace watchTypes {
+  type CiConclusion = "passed" | "failed" | "cancelled";
+
   interface PrNotification {
     readonly label: string;
     readonly text: string;
     readonly wake: boolean;
 
-    readonly ci?: { readonly durationMs: number; readonly conclusion: "passed" | "failed" };
+    readonly ci?: { readonly durationMs: number; readonly conclusion: CiConclusion };
   }
 
   interface PrWatchHost {

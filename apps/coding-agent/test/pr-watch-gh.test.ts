@@ -84,6 +84,7 @@ const turnsGhJsonIntoStateReviewDecision = () =>
         baseRefName: "main",
         behindBy: undefined,
         checks: {
+          cancelled: 0,
           failed: 1,
           passed: 2,
           pending: 1,
@@ -114,9 +115,19 @@ const countsACancelledRunOnlyWhenTheCheckDidNotRunAgain = () =>
         { ...RERUN, conclusion: "CANCELLED", status: "COMPLETED" },
         { ...RERUN, conclusion: "SUCCESS", status: "COMPLETED" },
       ]);
-      expect(superseded.checks).toMatchObject({ failed: 0, passed: 1, total: 1 });
+      expect(superseded.checks).toMatchObject({ cancelled: 0, failed: 0, passed: 1, total: 1 });
+      const rerunning = yield* view([
+        { ...RERUN, conclusion: "CANCELLED", status: "COMPLETED" },
+        { ...RERUN, conclusion: null, status: "IN_PROGRESS" },
+      ]);
+      expect(rerunning.checks).toMatchObject({ cancelled: 0, failed: 0, pending: 1, total: 1 });
       const cancelled = yield* view([{ ...RERUN, conclusion: "CANCELLED", status: "COMPLETED" }]);
-      expect(cancelled.checks).toMatchObject({ failed: 1, passed: 0, total: 1 });
+      expect(cancelled.checks).toMatchObject({ cancelled: 1, failed: 0, passed: 0, total: 1 });
+      const failedRerun = yield* view([
+        { ...RERUN, conclusion: "CANCELLED", status: "COMPLETED" },
+        { ...RERUN, conclusion: "FAILURE", status: "COMPLETED" },
+      ]);
+      expect(failedRerun.checks).toMatchObject({ cancelled: 0, failed: 1, passed: 0, total: 1 });
     }),
   );
 
@@ -220,7 +231,7 @@ describe("gh pull request reads", () => {
   );
 
   it(
-    "ignores a cancelled run of a check that ran again on the same head, and counts a lone cancelled run as failed",
+    "ignores a cancelled run of a check that ran again on the same head, keeps a failed rerun as failed, and counts a lone cancelled run apart from failures",
     countsACancelledRunOnlyWhenTheCheckDidNotRunAgain,
   );
 

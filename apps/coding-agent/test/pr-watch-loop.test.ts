@@ -9,12 +9,32 @@ const { awaited, runTest } = testing;
 const { INTERVAL_MS, pendingChecks, runPolls, scriptedGh, seen, snapshotOf } = prWatchLoopSupport;
 
 const finishedChecks = snapshotOf({
-  checks: { failed: 1, passed: 2, pending: 0, pendingNames: [], total: 3 },
+  checks: { cancelled: 0, failed: 1, passed: 2, pending: 0, pendingNames: [], total: 3 },
 });
 
 const passedChecks = snapshotOf({
-  checks: { failed: 0, passed: 2, pending: 0, pendingNames: [], total: 2 },
+  checks: { cancelled: 0, failed: 0, passed: 2, pending: 0, pendingNames: [], total: 2 },
 });
+
+const cancelledChecks = snapshotOf({
+  checks: { cancelled: 1, failed: 0, passed: 2, pending: 0, pendingNames: [], total: 3 },
+});
+
+const reportsALoneCancelledCheckApartFromFailures = () =>
+  runTest(
+    Effect.gen(function* () {
+      const result = yield* awaited(
+        runPolls(scriptedGh([pendingChecks, cancelledChecks]), [INTERVAL_MS]),
+      );
+
+      expect(seen(result)).toEqual([
+        {
+          label: "CI cancelled",
+          text: "#12: CI finished: 2 passed, 1 cancelled. Run the cancelled checks again or push.",
+        },
+      ]);
+    }),
+  );
 
 const reportsCiPassingWithThePassCount = () =>
   runTest(
@@ -170,6 +190,11 @@ describe("pull request watch loop", () => {
   );
 
   it("reports CI passing with the pass count", reportsCiPassingWithThePassCount);
+
+  it(
+    "reports a cancelled check that did not run again apart from failures",
+    reportsALoneCancelledCheckApartFromFailures,
+  );
 
   it("reports an approval", reportsAnApproval);
 

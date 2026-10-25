@@ -98,6 +98,7 @@ function ciOf(pull: PullView): orchestratorTypesTypes.PullRequestCi {
   if (checks.total === 0) return "none";
   if (checks.failed > 0) return "failing";
   if (checks.pending > 0) return "pending";
+  if (checks.cancelled > 0) return "cancelled";
   return "passing";
 }
 

@@ -34,7 +34,7 @@ const GhPrViewJson = Schema.fromJsonString(GhPrView);
 
 type RollupEntryValue = typeof RollupEntry.Type;
 
-type CheckOutcome = "passed" | "failed" | "pending";
+type CheckOutcome = "passed" | "failed" | "cancelled" | "pending";
 
 function statusContextOutcome(state: string): CheckOutcome {
   if (state === "SUCCESS") return "passed";
@@ -47,6 +47,7 @@ function checkRunOutcome(status: string, conclusion: string): CheckOutcome {
   if (conclusion === "SUCCESS" || conclusion === "NEUTRAL" || conclusion === "SKIPPED") {
     return "passed";
   }
+  if (conclusion === "CANCELLED") return "cancelled";
   return "failed";
 }
 
@@ -81,6 +82,7 @@ function countChecks(all: readonly RollupEntryValue[]): snapshotTypes.PrCheckCou
   const entries = withoutSupersededRuns(all);
   let passed = 0;
   let failed = 0;
+  let cancelled = 0;
   let pending = 0;
   const pendingNames: string[] = [];
   for (const entry of entries) {
@@ -91,6 +93,9 @@ function countChecks(all: readonly RollupEntryValue[]): snapshotTypes.PrCheckCou
       case "failed":
         failed += 1;
         break;
+      case "cancelled":
+        cancelled += 1;
+        break;
       case "pending": {
         pending += 1;
         const name = rollupName(entry);
@@ -99,7 +104,7 @@ function countChecks(all: readonly RollupEntryValue[]): snapshotTypes.PrCheckCou
       }
     }
   }
-  return { failed, passed, pending, pendingNames, total: entries.length };
+  return { cancelled, failed, passed, pending, pendingNames, total: entries.length };
 }
 
 function parsePrView(json: string): snapshotTypes.PrSnapshot | undefined {
@@ -124,6 +129,7 @@ function describeChecks(checks: snapshotTypes.PrCheckCounts): string {
   const parts: string[] = [];
   if (checks.passed > 0) parts.push(`${checks.passed} passed`);
   if (checks.failed > 0) parts.push(`${checks.failed} failed`);
+  if (checks.cancelled > 0) parts.push(`${checks.cancelled} cancelled`);
   if (checks.pending > 0) parts.push(`${checks.pending} pending`);
   return parts.length > 0 ? parts.join(", ") : "no checks";
 }

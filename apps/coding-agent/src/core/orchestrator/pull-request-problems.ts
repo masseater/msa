@@ -17,6 +17,13 @@ function ciProblems(record: PullRequest, awaitingChecks: boolean): Problem[] {
   const head = short(record.headSha);
   if (record.ci === "failing")
     return [fix(`CI fails on the head ${head} of ${name}. Fix it and push.`)];
+  if (record.ci === "cancelled") {
+    return [
+      fix(
+        `CI was cancelled on the head ${head} of ${name} and did not run again. Run the cancelled checks again or push.`,
+      ),
+    ];
+  }
   if (record.ci === "pending") {
     return [{ kind: "pending", text: `CI has not finished on the head ${head} of ${name}.` }];
   }

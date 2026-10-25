@@ -8,6 +8,7 @@ declare namespace snapshotTypes {
     readonly total: number;
     readonly passed: number;
     readonly failed: number;
+    readonly cancelled: number;
     readonly pending: number;
     readonly pendingNames: readonly string[];
   }

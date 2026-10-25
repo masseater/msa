@@ -21,7 +21,7 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",

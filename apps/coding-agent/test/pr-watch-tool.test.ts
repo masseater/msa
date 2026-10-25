@@ -19,7 +19,7 @@ const snapshotOf = (
 ): snapshotTypes.PrSnapshot => ({
   baseRefName: "main",
   behindBy: undefined,
-  checks: { failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
+  checks: { cancelled: 0, failed: 0, passed: 0, pending: 2, pendingNames: ["verify"], total: 2 },
   comments: 0,
   headRefOid: "head-oid",
   mergeStateStatus: "CLEAN",
@@ -126,7 +126,7 @@ const stopsAWatch = () =>
 
 const listsTheWatchesWithTheirLastState = () => {
   const failed = snapshotOf({
-    checks: { failed: 1, passed: 1, pending: 0, pendingNames: [], total: 2 },
+    checks: { cancelled: 0, failed: 1, passed: 1, pending: 0, pendingNames: [], total: 2 },
   });
   let polls = 0;
   const gh: ghTypes.PrWatchGh = {

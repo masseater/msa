@@ -5,6 +5,7 @@ declare namespace changesTypes {
     | "conflict"
     | "base-moved"
     | "checks-failed"
+    | "checks-cancelled"
     | "checks-passed"
     | "review"
     | "comment";
