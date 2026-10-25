@@ -73,7 +73,7 @@ function settleJudged(
 ): void {
   const { applied } = ending;
   const { result, task } = judged;
-  if (result.status === "needs-decision" && result.triage === true) {
+  if (result.status === "needs-decision") {
     const request = `${result.line}\n\n${ending.outcome.content}`;
     const key = result.result === "pass" ? result.line : ending.outcome.content;
     triageOutcome.askTriage(applied, {
@@ -116,16 +116,13 @@ function settleAssignment(ending: Ending, assignment: orchestratorTypesTypes.Ass
     applied.status = worse(applied.status, "needs-decision");
   } else if (ending.outcome.status !== "completed") {
     applied.status = worse(applied.status, endTask(ending, assignment.taskId));
-  } else if (asked?.triage === true) {
+  } else if (asked !== undefined) {
     triageOutcome.askTriage(applied, {
       key: asked.key,
       request: asked.text,
       taskId: assignment.taskId,
       threadId: assignment.threadId,
     });
-  } else if (asked !== undefined) {
-    applied.status = worse(applied.status, "needs-decision");
-    store.setTaskStatus(runtime.database, assignment.taskId, "needs-decision", ending.now);
   } else if (judged !== undefined && judged.result.status !== "completed") {
     settleJudged(ending, judged, assignment);
   } else {

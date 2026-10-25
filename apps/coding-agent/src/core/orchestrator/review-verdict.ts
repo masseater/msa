@@ -20,7 +20,6 @@ interface ReviewResult {
   result: orchestratorTypesTypes.ReviewVerdictResult;
   line: string;
   prompt?: string;
-  triage?: boolean;
 }
 
 function passed(head: string, merge: runtimeTypes.MergeOutcome | undefined): ReviewResult {
@@ -29,7 +28,7 @@ function passed(head: string, merge: runtimeTypes.MergeOutcome | undefined): Rev
   if (merge.kind === "merged") return { line, result: "pass", status: "completed" };
   if (merge.kind === "stopped") return { line, result: "pass", status: "stopped" };
   if (merge.kind === "needs-decision") {
-    return { line, result: "pass", status: "needs-decision", triage: merge.triage };
+    return { line, result: "pass", status: "needs-decision" };
   }
   return { line, prompt: merge.prompt, result: "pass", status: "sent-back" };
 }
@@ -192,7 +191,6 @@ function applyVerdict(verdict: Verdict | undefined): ReviewResult {
       line: `${head} The review repeats the previous review's findings within the goal with none of them fixed, and the working tree holds the same files as at that review, so the work is not moving and the task waits for a decision instead of going back to the worker again: decide how to proceed and answer with send_message; the worker continues with your answer.`,
       result: "fail",
       status: "needs-decision",
-      triage: true,
     };
   }
   return {

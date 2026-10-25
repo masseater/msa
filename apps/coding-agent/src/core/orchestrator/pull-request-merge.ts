@@ -140,7 +140,6 @@ function blocked(
   return {
     kind: "needs-decision",
     line: `The review passed, but the harness still cannot merge PR #${record.number} (${record.branch}), and its head ${short(record.headSha)} is the one the work was already sent back with for this, so the work is not moving and the task waits for a decision: ${problems.join(" ")} Decide how to proceed and answer with send_message; the worker continues with your answer.`,
-    triage: true,
   };
 }
 
@@ -152,7 +151,6 @@ function ciStalled(
   return {
     kind: "needs-decision",
     line: `The review passed, but CI on PR #${record.number} (${record.branch}) has not finished for ${Math.round(waitMs / 60_000)} minutes, so the task waits for a decision: ${problems.map((problem) => problem.text).join(" ")} Find out why CI does not finish, then answer with send_message; the worker continues with your answer.`,
-    triage: false,
   };
 }
 

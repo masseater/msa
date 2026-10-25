@@ -28,7 +28,11 @@ const store = {
   ...pullRequestStore,
   reviewContentsOf: progressStore.reviewContentsOf,
   saveReviewContents: progressStore.saveReviewContents,
+  saveTriageAsk: progressStore.saveTriageAsk,
   saveTriageDecision: progressStore.saveTriageDecision,
+  stoppedReadOnlyCheckouts: progressStore.stoppedReadOnlyCheckouts,
+  takePendingTriageAsks: progressStore.takePendingTriageAsks,
+  takeTriageAsk: progressStore.takeTriageAsk,
   triageDecisionsOf: progressStore.triageDecisionsOf,
 };
 

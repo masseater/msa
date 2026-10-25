@@ -222,31 +222,6 @@ it(
   stopsWhenGhCannotReadPullRequests,
 );
 
-const asksForADecisionWhenCiNeverFinishes = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, branch, number, taskId } = yield* openedTask(
-          remote,
-          { ciWaitMs: 50 },
-        );
-        github.ci.set(yield* github.head(branch), "pending");
-        workers[0]!.complete("waiting for CI");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "needs-decision");
-        expect(workers[0]!.prompts).toHaveLength(1);
-        expect(reports.at(-1)?.details.status).toBe("needs-decision");
-        expect(reports.at(-1)?.text).toContain(`CI has not finished on the head`);
-        expect(reports.at(-1)?.text).toContain(`#${number}`);
-      }),
-    ),
-  );
-
-it(
-  "waits for a decision, instead of stopping or passing, when CI stays pending past the wait limit",
-  asksForADecisionWhenCiNeverFinishes,
-);
-
 const sendsBackWhenTheBodyChangedAfterReview = () =>
   Effect.runPromise(
     withRemote((remote) =>

@@ -50,8 +50,7 @@ function settleTriage(
   const { threadId, taskId } = assignment;
   const conclusion =
     ending.outcome.status === "completed" ? runtime.triageConclusions.get(threadId) : undefined;
-  const ask = runtime.triageAsks.get(threadId);
-  runtime.triageAsks.delete(threadId);
+  const ask = store.takeTriageAsk(runtime.database, threadId);
   runtime.triageConclusions.delete(threadId);
   const task = store.getTask(runtime.database, taskId);
   if (conclusion?.conclusion === "decided" && task !== undefined) {

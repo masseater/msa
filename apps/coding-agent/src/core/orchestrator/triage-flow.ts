@@ -2,15 +2,14 @@ import { Effect } from "effect";
 
 import resumeModule from "./resume.ts";
 import type runtimeTypes from "./runtime.types.ts";
-import startModule from "./start.ts";
 import storeModule from "./store.ts";
 import triageMemory from "./triage-memory.ts";
 import triageOutcome from "./triage-outcome.ts";
 import type triageOutcomeTypes from "./triage-outcome.types.ts";
+import triageRestart from "./triage-restart.ts";
 import triageText from "./triage-text.ts";
 
 const { store } = storeModule;
-const { starting } = startModule;
 const { resuming } = resumeModule;
 
 type Applied = triageOutcomeTypes.Applied;
@@ -29,8 +28,7 @@ function startTriage(
       applied.lines.push(triageText.repeatLine(ask.request));
       return;
     }
-    const threadId = yield* starting.startTasks(runtime, task, "triage", "", ask.request);
-    if (threadId !== undefined) runtime.triageAsks.set(threadId, ask);
+    yield* triageRestart.launchTriage(runtime, task, ask);
   });
 }
 
@@ -47,6 +45,6 @@ function followUps(
   });
 }
 
-const triageFlow = { followUps };
+const triageFlow = { followUps, restartInterrupted: triageRestart.restartInterrupted };
 
 export default triageFlow;

@@ -5,6 +5,7 @@ import type outcomeApply from "./outcome-apply.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
 import start from "./start.ts";
+import threadTools from "./thread-tools.ts";
 import triageFlow from "./triage-flow.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
@@ -24,7 +25,7 @@ function startFollowUps(
 ): Effect.Effect<string[], runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const { applied, report } = settled;
-    if (settled.assignments.some((assignment) => assignment.role === "advisor")) {
+    if (settled.assignments.some((assignment) => threadTools.readOnly(assignment.role))) {
       yield* advisorWorkspace.remove(settled.cwd);
     }
     yield* triageFlow.followUps(runtime, applied);

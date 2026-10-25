@@ -59,7 +59,6 @@ function requestDecisionTool(
       runtime.decisionRequests.set(threadId, {
         key: progressStore.askKey(params.unmet),
         text: requestText(role, params),
-        triage: true,
       });
       return Promise.resolve({
         content: [

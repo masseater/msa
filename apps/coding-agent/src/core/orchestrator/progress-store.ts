@@ -1,4 +1,5 @@
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import triageAskStore from "./triage-ask-store.ts";
 import type triageTypes from "./triage.types.ts";
 import type worktreeSnapshotTypes from "./worktree-snapshot.types.ts";
 
@@ -83,14 +84,18 @@ function saveTriageDecision(
     .run(taskId, decision.requestKey, decision.contentsId, now);
 }
 
-const PROGRESS_SCHEMA = `${REVIEW_CONTENTS_SCHEMA}\n${TRIAGE_SCHEMA}`;
+const PROGRESS_SCHEMA = `${REVIEW_CONTENTS_SCHEMA}\n${TRIAGE_SCHEMA}\n${triageAskStore.TRIAGE_ASK_SCHEMA}`;
 
 const progressStore = {
   PROGRESS_SCHEMA,
   askKey,
   reviewContentsOf,
   saveReviewContents,
+  saveTriageAsk: triageAskStore.saveTriageAsk,
   saveTriageDecision,
+  stoppedReadOnlyCheckouts: triageAskStore.stoppedReadOnlyCheckouts,
+  takePendingTriageAsks: triageAskStore.takePendingTriageAsks,
+  takeTriageAsk: triageAskStore.takeTriageAsk,
   triageDecisionsOf,
 };
 

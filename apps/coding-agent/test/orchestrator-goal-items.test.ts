@@ -76,7 +76,7 @@ it.each(PARAPHRASES)(
 const doesNotPassWithoutARecord = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const { orchestrator, reports, reviewer, task } = yield* reviewing();
+      const { orchestrator, reports, reviewer, task, workers } = yield* reviewing();
       reviewer.completeUnrecorded("Acceptable. Every item is met.");
       yield* waitFor(() => reviewer.prompts.length === 2);
       expect(reviewer.prompts[1]).toContain("goal-items-not-recorded");
@@ -94,6 +94,7 @@ const doesNotPassWithoutARecord = () =>
         ),
       );
       reviewer.completeUnrecorded("Acceptable, I said so already.");
+      yield* escalateTriage(workers);
       yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
       expect(reports.at(-1)?.text).toContain("Review verdict: undecided");
       expect(reports.at(-1)?.text).toContain("did not record whether each goal item is met");

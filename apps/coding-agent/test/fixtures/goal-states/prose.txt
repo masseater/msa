@@ -1,0 +1,1 @@
+vite-plus・vitest 系を修正版に上げて、audit が advisory を無視リストに足さずに通る。同じ run で落ちていた audit 以外の task も、原因を確かめたうえで通っている。上げたことで壊れたテストや設定は直してある。main から切った専用 worktree と枝で作業し、PR を出して CI 全 green を pr_watch（repository に masseater/msa を指定）で確かめ、PR 番号と head SHA を報告する。マージ・auto-merge・--no-verify・抑止コメント・audit の ignore 追加は禁止。理由はコミットログに書く。

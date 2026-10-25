@@ -30,7 +30,7 @@ const startsWithTheOrchestratorToolsActive = () =>
         expect.arrayContaining(["create_task", "list_tasks", "replan", "stop_task", "handoff"]),
       );
       expect(session.tools.prompt.systemPrompt).toContain(ORCHESTRATOR_PREAMBLE);
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 
@@ -66,7 +66,7 @@ const endsAWorkerTurnWithADecisionRequest = () =>
       const read = yield* Effect.promise(() => orchestrator.read(task.id));
       expect(read.status).toBe("needs-decision");
       expect(read.reports.at(-1)?.content).toContain(UNMET);
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 
@@ -126,7 +126,7 @@ const givesTriageAndAdvisorOnlyReadTools = () =>
       yield* waitFor(() =>
         orchestrator.snapshot.threads.every((thread) => thread.status !== "running"),
       );
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 

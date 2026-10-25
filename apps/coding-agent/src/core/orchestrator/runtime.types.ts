@@ -24,14 +24,12 @@ declare namespace runtimeTypes {
   type MergeOutcome =
     | { kind: "merged"; line: string }
     | { kind: "sent-back"; line: string; prompt: string }
-    | { kind: "needs-decision"; line: string; triage: boolean }
+    | { kind: "needs-decision"; line: string }
     | { kind: "stopped"; line: string };
 
   interface DecisionAsk {
     text: string;
-
     key: string;
-    triage: boolean;
   }
 
   interface ReviewVerdict {
@@ -53,7 +51,6 @@ declare namespace runtimeTypes {
     wrapUps: Map<string, wrapUpTypes.WrapUp>;
     decisionRequests: Map<string, DecisionAsk>;
     triageConclusions: Map<string, triageTypes.Conclusion>;
-    triageAsks: Map<string, triageTypes.Ask>;
     goalChecklists: Map<string, reviewChecklistTypes.Checklist>;
     replanning: boolean;
     maxConcurrentThreads: number;

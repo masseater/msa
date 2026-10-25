@@ -60,7 +60,7 @@ function waitOrAsk(round: Round, results: Verification, since: number, now: numb
     return;
   }
   const text = ciStalledText(results, Math.round(limit / 60_000));
-  threadRuns.askForDecision(round.thread, { key: text, text, triage: false });
+  threadRuns.askForDecision(round.thread, { key: text, text });
 }
 
 function decide(round: Round, checked: Checked, waitingSince: number | undefined): void {
@@ -89,7 +89,7 @@ function decide(round: Round, checked: Checked, waitingSince: number | undefined
   }
   const output = failureText(results);
   if (workProgress.failedWithoutMoving(worker, output, contents)) {
-    threadRuns.askForDecision(thread, { key: output, text: stuckText(results), triage: true });
+    threadRuns.askForDecision(thread, { key: output, text: stuckText(results) });
     return;
   }
   threadRuns.continueWith(thread, rejectionPrompt(results));

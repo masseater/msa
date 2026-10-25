@@ -5,6 +5,7 @@ import platform from "../platform/index.ts";
 import platformPath from "../platform/path.ts";
 import errors from "./errors.ts";
 import type runtimeTypes from "./runtime.types.ts";
+import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 import worktreeSnapshot from "./worktree-snapshot.ts";
 import worktreeModule from "./worktree.ts";
@@ -13,6 +14,7 @@ const { execCommand } = exec;
 const { files } = platform;
 const { orchestratorError } = errors;
 const { worktrees } = worktreeModule;
+const { store } = storeModule;
 
 const GIT_TIMEOUT_MS = 60_000;
 const ADVISOR_MARK = "msa-advisor-";
@@ -137,6 +139,51 @@ function remove(cwd: string): Effect.Effect<void> {
   });
 }
 
-const advisorWorkspace = { prepare, remove };
+function checkoutRoot(path: string): string | undefined {
+  if (platformPath.basename(path).startsWith(ADVISOR_MARK)) return path;
+  const parent = platformPath.dirname(path);
+  return parent === path ? undefined : checkoutRoot(parent);
+}
+
+function registeredCheckouts(repository: string): Effect.Effect<Set<string>> {
+  return Effect.map(git(repository, ["worktree", "list", "--porcelain"]), (listed) => {
+    if (!listed.ok) return new Set<string>();
+    const paths = listed.output
+      .split("\n")
+      .filter((line) => line.startsWith("worktree "))
+      .map((line) => platformPath.basename(line.slice("worktree ".length)));
+    return new Set(paths.filter((name) => name.startsWith(ADVISOR_MARK)));
+  });
+}
+
+function sweep(runtime: runtimeTypes.Runtime): Effect.Effect<void> {
+  return Effect.gen(function* () {
+    const byRepository = new Map<string, string[]>();
+    for (const checkout of store.stoppedReadOnlyCheckouts(
+      runtime.database,
+      runtime.options.project,
+    )) {
+      const root = checkoutRoot(checkout.cwd);
+      if (root === undefined) continue;
+      byRepository.set(checkout.repository, [
+        ...(byRepository.get(checkout.repository) ?? []),
+        root,
+      ]);
+    }
+    for (const [repository, roots] of byRepository) {
+      const registered = yield* registeredCheckouts(repository);
+      for (const root of roots) {
+        if (registered.has(platformPath.basename(root))) {
+          yield* git(repository, ["worktree", "remove", "--force", root]);
+        }
+        yield* Effect.tryPromise(() =>
+          files.remove({ force: true, path: root, recursive: true }),
+        ).pipe(Effect.ignore);
+      }
+    }
+  });
+}
+
+const advisorWorkspace = { prepare, remove, sweep };
 
 export default advisorWorkspace;

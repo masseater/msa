@@ -38,7 +38,6 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   readonly wrapUps = new Map<string, wrapUpTypes.WrapUp>();
   readonly decisionRequests: runtimeTypes.Runtime["decisionRequests"] = new Map();
   readonly triageConclusions: runtimeTypes.Runtime["triageConclusions"] = new Map();
-  readonly triageAsks: runtimeTypes.Runtime["triageAsks"] = new Map();
   readonly goalChecklists: runtimeTypes.Runtime["goalChecklists"] = new Map();
   readonly listeners = new Set<() => void>();
   replanning = false;
@@ -47,6 +46,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   private queue: Promise<void> = Promise.resolve();
   private runCount = 0;
   private fibers: Fiber.Fiber<never, never>[] = [];
+  private disposed: Promise<void> | undefined;
 
   constructor(options: runtimeTypes.OrchestratorOptions) {
     this.telemetry = new OrchestratorTelemetry(options.telemetry);
@@ -105,6 +105,11 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
   }
 
   dispose(): Promise<void> {
+    this.disposed ??= this.close();
+    return this.disposed;
+  }
+
+  private close(): Promise<void> {
     const fibers = this.fibers;
     this.fibers = [];
     this.telemetry.close();
@@ -122,10 +127,9 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
         }
         self.workers.clear();
         const now = yield* nowMillis;
-        yield* Effect.sync(() => {
-          background.close(self, now);
-          self.database.close();
-        });
+        if (!self.database.isOpen) return;
+        yield* background.close(self, now);
+        yield* Effect.sync(() => self.database.close());
       }),
     );
   }

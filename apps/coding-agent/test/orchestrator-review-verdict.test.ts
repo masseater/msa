@@ -9,7 +9,7 @@ import reviewVerdictSupport from "./review-verdict-support.ts";
 import triageSupport from "./triage-support.ts";
 
 const { joinPath, makeDirectory, makeTempDir, removePath } = testing;
-const { escalateTriage } = triageSupport;
+const { escalateTriage, runningTriage } = triageSupport;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
@@ -161,38 +161,51 @@ it(
   asksForADecisionWhenTheReviewRepeats,
 );
 
+const JUDGE_AGAIN = {
+  conclusion: "decided",
+  decision: "Record each goal item from the diff again and end the turn with the report.",
+  goalItems: [{ how: "The diff shows the cache and its test; the reviewer records it.", item: 1 }],
+  grounds: "The work is in the diff; only the judgement is missing.",
+};
+
+const undecidedReview = (decide: ReturnType<typeof classifierDecide>) =>
+  Effect.gen(function* () {
+    const setUp = yield* startCacheTask(decide);
+    setUp.workers[1]?.complete("Acceptable. Nothing within the goal remains.");
+    yield* waitFor(() => runningTriage(setUp.workers) !== undefined);
+    expect(taskStatus(setUp.orchestrator, setUp.task.id)).toBe("running");
+    expect(setUp.reports.at(-1)?.details).toMatchObject({ role: "reviewer", status: "waiting" });
+    expect(setUp.reports.at(-1)?.text).toContain("<report>\nReview verdict: undecided (");
+    return { ...setUp, triage: runningTriage(setUp.workers)! };
+  });
+
 const doesNotCompleteAnUndecidedReview =
   (decide: ReturnType<typeof classifierDecide>, reason: string) => () =>
     Effect.runPromise(
       Effect.gen(function* () {
-        const { orchestrator, reports, task, workers } = yield* startCacheTask(decide);
-
-        workers[1]?.complete("Acceptable. Nothing within the goal remains.");
+        const { orchestrator, reports, task, triage, workers } = yield* undecidedReview(decide);
+        expect(triage.prompts[0]).toContain(reason);
+        yield* Effect.promise(() => triage.escalate());
         yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
         yield* Effect.sleep(20);
         expect(taskStatus(orchestrator, task.id)).toBe("needs-decision");
-        expect(workers).toHaveLength(2);
-        expect(reports.at(-1)?.details).toMatchObject({
-          role: "reviewer",
-          started: [],
-          status: "needs-decision",
-        });
-        expectReported(reports, "needs-decision", "undecided");
+        expect(workers).toHaveLength(3);
+        expect(reports.at(-1)?.details).toMatchObject({ role: "triage", status: "needs-decision" });
         expect(reports.at(-1)?.text).toContain(reason);
         const view = yield* Effect.promise(() => orchestrator.read(task.id));
-        expect(view.reports.at(-1)?.content).toContain("undecided");
+        expect(view.reports.some((report) => report.content.includes("undecided"))).toBe(true);
 
         yield* Effect.promise(() =>
           orchestrator.sendMessage(task.id, "The cache test is in the diff; judge it again."),
         );
         yield* waitFor(() => workers[1]?.prompts.length === 2);
-        expect(workers).toHaveLength(2);
+        expect(workers).toHaveLength(3);
         expect(workers[1]?.prompts[1]).toContain("The cache test is in the diff; judge it again.");
       }),
     );
 
 it(
-  "waits for a decision instead of completing the task when the decision model is unavailable, and continues the reviewer with the answer",
+  "waits for a decision instead of completing the task when the decision model is unavailable and the triage finds a human must decide, and continues the reviewer with the answer",
   doesNotCompleteAnUndecidedReview(
     classifierDecide({ unavailable: "the classifier backend cannot load" }),
     "the classifier backend cannot load",
@@ -200,11 +213,30 @@ it(
 );
 
 it(
-  "waits for a decision instead of completing the task when no verdict reaches the threshold",
+  "waits for a decision instead of completing the task when no verdict reaches the threshold and the triage finds a human must decide",
   doesNotCompleteAnUndecidedReview(
     classifierDecide(() => ({ fail: 0.4, pass: 0.6 })),
     "no answer reached the threshold",
   ),
+);
+
+const continuesTheReviewerWithTheTriage = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const { orchestrator, reports, task, triage, workers } = yield* undecidedReview(
+        classifierDecide({ unavailable: "the classifier backend cannot load" }),
+      );
+      yield* Effect.promise(() => triage.concludeTriage(JUDGE_AGAIN));
+      yield* waitFor(() => workers[1]?.prompts.length === 2);
+      expect(workers[1]?.prompts[1]).toContain(JUDGE_AGAIN.decision);
+      expect(taskStatus(orchestrator, task.id)).toBe("running");
+      expect(reports.map((report) => report.details.status)).not.toContain("needs-decision");
+    }),
+  );
+
+it(
+  "continues the reviewer with the triage's decision, without asking a human, when the review cannot be judged",
+  continuesTheReviewerWithTheTriage,
 );
 
 const judgesAgainstTheFindingsBeforeARestart = () =>
