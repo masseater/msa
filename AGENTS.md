@@ -149,6 +149,11 @@ release. Add a tool name to select part of the graph. For example, run
   - reviewer から差し戻された指摘は、同じ枝に足して同じ PR で直す。
   - main の `verify` が赤いときは自分で直さず、直す担当のタスクが main に入るのを待ち、rebase してから進める。
 
+## CI
+
+- 各 workflow の最後には、ほかの全ジョブを `needs` に並べ `if: always()` で `.github/scripts/ci-telemetry.sh` を動かす `ci-telemetry` ジョブを置く。`tools/checks/ci-telemetry-job.test.ts` が検査する。
+- `.github/scripts/ci-telemetry.sh` は土台のテンプレートと同じ中身に保ち、手で書き換えない。同じ検査が中身の SHA-256 を突き合わせる。送り先は `apps/web` の Worker で、main への push で verify の `deploy` ジョブがデプロイする。
+
 ## 公開先
 
 - デプロイ先や外部公開しているもの（サイト、API、npm パッケージなど）があれば、その URL を README に一覧で載せる。

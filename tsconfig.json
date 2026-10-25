@@ -120,6 +120,7 @@
     "apps/*/src/**/*",
     "apps/*/test/**/*",
     "apps/coding-agent/scripts/**/*.ts",
+    "apps/web/*.ts",
     "libs/*/src/**/*",
     "libs/*/test/**/*",
     "libs/ai/scripts/**/*.ts",

@@ -44,6 +44,10 @@
     "specifiers": ["@msa/evals", "@msa/evals/*"]
   },
   {
+    "dir": "apps/web",
+    "specifiers": ["@msa/web", "@msa/web/*"]
+  },
+  {
     "dir": "libs/agent",
     "specifiers": [
       "@msa/agent-core",
