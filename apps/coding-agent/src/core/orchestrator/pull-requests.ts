@@ -241,8 +241,9 @@ function save(
   pull: PullView,
   verified: Verified | null,
   now: number,
+  keepHarnessMerge = false,
 ): PullRequest {
-  store.savePullRequest(runtime.database, recordOf(taskId, pull, verified, now));
+  store.savePullRequest(runtime.database, recordOf(taskId, pull, verified, now), keepHarnessMerge);
   runtime.publish();
   return store.pullRequestOf(runtime.database, taskId) ?? recordOf(taskId, pull, verified, now);
 }
@@ -275,7 +276,7 @@ function refresh(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<v
     if (Result.isFailure(found) || found.success === undefined) return;
     const recorded = store.pullRequestOf(runtime.database, task.id);
     const verified = recorded?.number === found.success.number ? recorded.verified : null;
-    save(runtime, task.id, found.success, verified, yield* nowMillis);
+    save(runtime, task.id, found.success, verified, yield* nowMillis, true);
   });
 }
 

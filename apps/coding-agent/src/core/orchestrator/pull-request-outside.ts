@@ -16,8 +16,11 @@ const MergedBy = Schema.fromJsonString(
 
 type PullRequest = orchestratorTypesTypes.PullRequest;
 
-function mergedOutside(record: PullRequest): boolean {
-  return record.state === "MERGED" && record.harnessMerge !== record.headSha;
+type Merger = "harness" | "outside";
+
+function mergedBy(record: PullRequest): Merger | undefined {
+  if (record.state !== "MERGED") return undefined;
+  return record.harnessMerge === record.headSha ? "harness" : "outside";
 }
 
 function autoMergeLine(
@@ -62,11 +65,11 @@ function outsideLine(
   autoMergeBy: string | undefined,
 ): Effect.Effect<string | undefined> {
   return Effect.gen(function* () {
-    if (mergedOutside(record)) return yield* outsideMergeLine(runtime, task, cwd, record);
+    if (mergedBy(record) === "outside") return yield* outsideMergeLine(runtime, task, cwd, record);
     return autoMergeBy === undefined ? undefined : autoMergeLine(task, record, autoMergeBy);
   });
 }
 
-const pullRequestOutside = { mergedOutside, outsideLine, outsideMergeLine };
+const pullRequestOutside = { autoMergeLine, mergedBy, outsideLine, outsideMergeLine };
 
 export default pullRequestOutside;

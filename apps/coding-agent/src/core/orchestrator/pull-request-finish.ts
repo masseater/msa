@@ -14,7 +14,7 @@ const { worktrees } = worktreeModule;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { scheduling } = schedule;
-const { mergedOutside, outsideMergeLine } = pullRequestOutside;
+const { mergedBy, outsideMergeLine } = pullRequestOutside;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -32,6 +32,23 @@ function finish(
   });
 }
 
+function settleMerged(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  cwd: string,
+  record: PullRequest,
+  merged: string,
+): Effect.Effect<MergeOutcome | undefined> {
+  return Effect.gen(function* () {
+    const by = mergedBy(record);
+    if (by === undefined) return undefined;
+    if (by === "outside") {
+      return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, cwd, record) };
+    }
+    return yield* finish(runtime, task, record, merged);
+  });
+}
+
 interface Ended {
   status: "completed" | "stopped";
   line: string;
@@ -43,7 +60,7 @@ function readBack(
   recorded: PullRequest,
 ): Effect.Effect<{ record: PullRequest } | { why: string }> {
   return Effect.gen(function* () {
-    if (recorded.state === "MERGED") return { record: recorded };
+    if (mergedBy(recorded) !== undefined) return { record: recorded };
     const owner = yield* pullRequests.ownerOf(runtime, task);
     if (owner === undefined) return { why: `the worktree of ${task.id} is gone` };
     const found = yield* Effect.result(pullRequests.current(runtime, owner));
@@ -52,7 +69,7 @@ function readBack(
     if (pull?.number !== recorded.number) return { why: `#${recorded.number} is gone` };
     const now = yield* nowMillis;
     const record = pullRequests.save(runtime, task.id, pull, recorded.verified, now);
-    if (record.state === "MERGED") return { record };
+    if (mergedBy(record) !== undefined) return { record };
     return { why: `#${recorded.number} is ${record.state.toLowerCase()}` };
   });
 }
@@ -68,22 +85,20 @@ function settleInterrupted(
     if (status !== "running" && status !== "stopped") return undefined;
     const read = yield* readBack(runtime, task, recorded);
     const now = yield* nowMillis;
-    if ("record" in read && mergedOutside(read.record)) {
-      if (status !== "running") return undefined;
-      store.setTaskStatus(runtime.database, task.id, "stopped", now);
-      const line = yield* outsideMergeLine(runtime, task, task.cwd, read.record);
-      return { line, status: "stopped" };
-    }
     if ("record" in read) {
       const { record } = read;
-      const done = yield* finish(
+      if (status !== "running" && mergedBy(record) === "outside") return undefined;
+      const settled = yield* settleMerged(
         runtime,
         task,
+        task.cwd,
         record,
         `PR #${record.number} was merged while the run was ending, so ${task.id} is completed, not ${status}.`,
       );
-      store.setTaskStatus(runtime.database, task.id, "completed", now);
-      return { line: done.line, status: "completed" };
+      if (settled === undefined) return undefined;
+      const ended = settled.kind === "merged" ? "completed" : "stopped";
+      store.setTaskStatus(runtime.database, task.id, ended, now);
+      return { line: settled.line, status: ended };
     }
     if (status !== "running") return undefined;
     store.setTaskStatus(runtime.database, task.id, "stopped", now);
@@ -112,6 +127,6 @@ function afterInterrupt(
   });
 }
 
-const pullRequestFinish = { afterInterrupt, finish };
+const pullRequestFinish = { afterInterrupt, settleMerged };
 
 export default pullRequestFinish;

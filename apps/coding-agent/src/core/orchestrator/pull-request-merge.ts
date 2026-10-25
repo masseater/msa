@@ -12,8 +12,8 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { pullRequests } = pullRequestsModule;
 const { problemsOf, short } = pullRequestProblems;
-const { finish } = pullRequestFinish;
-const { outsideLine } = pullRequestOutside;
+const { settleMerged } = pullRequestFinish;
+const { autoMergeLine } = pullRequestOutside;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { MAX_REJECTIONS } = threadRun.threadRuns;
@@ -85,14 +85,14 @@ function squash(
     if (Result.isSuccess(after)) {
       const now = yield* nowMillis;
       const saved = pullRequests.save(runtime, task.id, after.success, verified, now);
-      if (saved.state === "MERGED") {
-        return yield* finish(
-          runtime,
-          task,
-          saved,
-          `Squash-merged PR #${saved.number} at head ${short(verified.sha)}.`,
-        );
-      }
+      const settled = yield* settleMerged(
+        runtime,
+        task,
+        owner.cwd,
+        saved,
+        `Squash-merged PR #${saved.number} at head ${short(verified.sha)}.`,
+      );
+      if (settled !== undefined) return settled;
       const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
       if (fixes.length > 0) {
         return blocked(
@@ -199,10 +199,16 @@ function afterReview(
       if ("kind" in got) return got;
       const { pull, record, verified } = got;
       const autoMergeBy = pullRequests.autoMergeBy(pull);
-      const outside = yield* outsideLine(runtime, task, owner.cwd, record, autoMergeBy);
-      if (outside !== undefined) return { kind: "stopped", line: outside };
-      if (record.state === "MERGED") {
-        return yield* finish(runtime, task, record, `PR #${record.number} was already merged.`);
+      const settled = yield* settleMerged(
+        runtime,
+        task,
+        owner.cwd,
+        record,
+        `PR #${record.number} was already merged.`,
+      );
+      if (settled !== undefined) return settled;
+      if (autoMergeBy !== undefined) {
+        return { kind: "stopped", line: autoMergeLine(task, record, autoMergeBy) };
       }
       const now = yield* nowMillis;
       const changed = changedSinceReview(record.number, pullRequests.verifiedOf(pull), verified);

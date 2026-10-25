@@ -58,7 +58,11 @@ function listPullRequests(database: DatabaseSync, project: string): PullRequest[
   return rows.map(toPullRequest);
 }
 
-function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void {
+function savePullRequest(
+  database: DatabaseSync,
+  pullRequest: PullRequest,
+  keepHarnessMerge: boolean,
+): void {
   database
     .prepare(
       `INSERT INTO task_pull_requests (task_id, number, url, branch, base, state, head_sha, ci,
@@ -71,7 +75,7 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
          verified_title = excluded.verified_title, verified_body = excluded.verified_body,
          checked_at = excluded.checked_at,
          harness_merge_sha = CASE WHEN task_pull_requests.number = excluded.number
-           AND excluded.state = 'MERGED' THEN task_pull_requests.harness_merge_sha END`,
+           AND (? OR excluded.state = 'MERGED') THEN task_pull_requests.harness_merge_sha END`,
     )
     .run(
       pullRequest.taskId,
@@ -88,6 +92,7 @@ function savePullRequest(database: DatabaseSync, pullRequest: PullRequest): void
       pullRequest.verified?.title ?? null,
       pullRequest.verified?.body ?? null,
       pullRequest.checkedAt,
+      keepHarnessMerge ? 1 : 0,
     );
 }
 
