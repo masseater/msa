@@ -7,7 +7,7 @@ import fakeGitHubMerge from "./fake-github-merge.ts";
 
 const { encodeJson } = testing;
 const { runCommand } = orchestratorCallbacks;
-const { mergeRequestOf } = fakeGitHubMerge;
+const { commitOf, mergeRequestOf } = fakeGitHubMerge;
 
 type Ci = "pending" | "success" | "failure" | "cancelled";
 
@@ -61,6 +61,8 @@ export default class FakeGitHub {
   afterMerge: Effect.Effect<void> | undefined;
   mergeAnswer: orchestratorTypes.GhResult | undefined;
   mergeRefusal: orchestratorTypes.GhResult | undefined;
+  commitRefusal: orchestratorTypes.GhResult | undefined;
+  readonly messages = new Map<string, string>();
   calls = 0;
   answered = 0;
   private held: Promise<void> | undefined;
@@ -124,6 +126,9 @@ export default class FakeGitHub {
       if (this.unavailable !== undefined) return this.unavailable;
       const [group, command, target] = args;
       if (group === "api" && args.includes("PUT")) return yield* this.mergeRequest(args);
+      if (group === "api" && /\/commits\/[0-9a-f]+$/u.test(command ?? "")) {
+        return yield* commitOf(this.messages, this.commitRefusal, command ?? "");
+      }
       if (group === "api") return yield* this.commits(args);
       if (group !== "pr") return refused(`fake gh does not know ${args.join(" ")}`);
       if (command === "list") {
@@ -244,7 +249,7 @@ export default class FakeGitHub {
     });
   }
 
-  private land(pull: FakePull, login: string): Effect.Effect<string> {
+  private land(pull: FakePull, login: string, message?: string): Effect.Effect<string> {
     return Effect.gen({ self: this }, function* () {
       const commit = yield* git(
         this.origin,
@@ -254,6 +259,7 @@ export default class FakeGitHub {
       pull.state = "MERGED";
       const at = DateTime.formatIso(yield* DateTime.now);
       pull.mergedBy = { at, commit: commit.output, login };
+      this.messages.set(commit.output, message ?? `pull #${pull.number}`);
       return commit.output;
     });
   }
@@ -278,7 +284,7 @@ export default class FakeGitHub {
       if (ci !== undefined && ci !== "success") {
         return refused('gh: Required status check "verify" is expected. (HTTP 405)');
       }
-      const commit = yield* this.land(pull, "harness");
+      const commit = yield* this.land(pull, "harness", `${subject}\n\n${body}`);
       this.merged.push({ body, number: pull.number, sha, subject });
       if (this.afterMerge !== undefined) yield* this.afterMerge;
       return (

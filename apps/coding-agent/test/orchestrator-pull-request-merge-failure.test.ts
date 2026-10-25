@@ -9,28 +9,6 @@ const { dirnameOf } = testing;
 const { taskStatus, waitFor } = orchestratorHarness.harness;
 const { advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
 
-const stopsWhenAnUnansweredMergeLanded = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, head, number, taskId } = yield* reviewed(remote);
-        github.mergeAnswer = { code: 1, stderr: "request timed out", stdout: "" };
-        workers[1]!.complete("acceptable");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
-        expect(github.merged).toMatchObject([{ number, sha: head }]);
-        const stopped = reports.at(-1)?.text ?? "";
-        expect(stopped).toContain("GitHub never confirmed the harness's own merge");
-        expect(stopped).toContain(github.pulls[0]!.mergedBy!.commit.slice(0, 12));
-      }),
-    ),
-  );
-
-it(
-  "stops the task, naming who merged it and the merge commit, when gh's merge request ends without GitHub's answer even though the pull request reads back as merged",
-  stopsWhenAnUnansweredMergeLanded,
-);
-
 const sendsBackWhenMainMovesDuringTheMerge = () =>
   Effect.runPromise(
     withRemote((remote) =>

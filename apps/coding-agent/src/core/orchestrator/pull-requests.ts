@@ -3,7 +3,6 @@ import * as Schema from "effect/Schema";
 
 import prWatchSnapshot from "../pr-watch/snapshot.ts";
 import errors from "./errors.ts";
-import pullRequestSquashModule from "./pull-request-squash.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
@@ -15,7 +14,6 @@ const { nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { worktrees } = worktreeModule;
 const { RollupEntry, countChecks } = prWatchSnapshot;
-const { pullRequestSquash } = pullRequestSquashModule;
 
 const FIELDS =
   "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest,mergeCommit";
@@ -129,6 +127,7 @@ function recordOf(
     ci: ciOf(pull),
     harnessCommit: null,
     harnessMerge: null,
+    harnessNonce: null,
     headSha: pull.headRefOid,
     mergeCommit: pull.mergeCommit?.oid ?? null,
     mergeState: (pull.mergeStateStatus ?? "UNKNOWN").toUpperCase(),
@@ -177,24 +176,6 @@ function view(
   return Effect.flatMap(
     gh(runtime, ["pr", "view", String(number), "--json", FIELDS], cwd),
     (json) => decoded(PullViewJson, json, "pr view"),
-  );
-}
-
-function merge(
-  runtime: runtimeTypes.Runtime,
-  cwd: string,
-  number: number,
-  verified: Verified,
-): Effect.Effect<orchestratorTypesTypes.MergeAttempt> {
-  return pullRequestSquash.merge(
-    (args) =>
-      Effect.promise(() =>
-        runtime.options
-          .runGh(args, cwd)
-          .catch((error: unknown) => ({ code: 1, stderr: String(error), stdout: "" })),
-      ),
-    number,
-    verified,
   );
 }
 
@@ -283,7 +264,6 @@ const pullRequests = {
   awaitingChecks,
   ciTiming,
   current,
-  merge,
   ownerOf,
   refresh,
   save,

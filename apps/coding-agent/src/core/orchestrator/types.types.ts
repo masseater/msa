@@ -128,6 +128,7 @@ declare namespace orchestratorTypesTypes {
     verified: VerifiedPullRequest | null;
     mergeCommit: string | null;
     harnessMerge: string | null;
+    harnessNonce: string | null;
     blockedHead: string | null;
     harnessCommit: string | null;
     checkedAt: number;

@@ -1,3 +1,10 @@
+import testing from "@msa/testing";
+import { Effect } from "effect";
+
+import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+
+const { encodeJson } = testing;
+
 interface MergeRequest {
   number: string | undefined;
   method: string | undefined;
@@ -25,6 +32,25 @@ function mergeRequestOf(args: readonly string[]): MergeRequest {
   };
 }
 
-const fakeGitHubMerge = { mergeRequestOf };
+function commitOf(
+  messages: ReadonlyMap<string, string>,
+  refusal: orchestratorTypes.GhResult | undefined,
+  path: string,
+): Effect.Effect<orchestratorTypes.GhResult> {
+  return Effect.gen(function* () {
+    if (refusal !== undefined) return refusal;
+    const message = messages.get(path.slice(path.lastIndexOf("/") + 1));
+    if (message === undefined) {
+      return { code: 1, stderr: "gh: No commit found for SHA (HTTP 422)", stdout: "" };
+    }
+    return {
+      code: 0,
+      stderr: "",
+      stdout: yield* Effect.orDie(encodeJson({ commit: { message } })),
+    };
+  });
+}
+
+const fakeGitHubMerge = { commitOf, mergeRequestOf };
 
 export default fakeGitHubMerge;

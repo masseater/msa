@@ -14,7 +14,7 @@ const { worktrees } = worktreeModule;
 const { store } = storeModule;
 const { nowMillis } = runtimeModule;
 const { scheduling } = schedule;
-const { mergedBy, outsideMergeLine } = pullRequestOutside;
+const { judgeMerge, outsideMergeLine } = pullRequestOutside;
 
 type MergeOutcome = runtimeTypes.MergeOutcome;
 type PullRequest = orchestratorTypesTypes.PullRequest;
@@ -40,12 +40,12 @@ function settleMerged(
   merged: string,
 ): Effect.Effect<MergeOutcome | undefined> {
   return Effect.gen(function* () {
-    const by = mergedBy(record);
-    if (by === undefined) return undefined;
-    if (by !== "harness") {
-      return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, cwd, record) };
+    const judged = yield* judgeMerge(runtime, cwd, record);
+    if (judged === undefined) return undefined;
+    if (judged.by !== "harness") {
+      return { kind: "stopped", line: yield* outsideMergeLine(runtime, task, cwd, judged) };
     }
-    return yield* finish(runtime, task, record, merged);
+    return yield* finish(runtime, task, judged.record, merged);
   });
 }
 
@@ -60,7 +60,7 @@ function readBack(
   recorded: PullRequest,
 ): Effect.Effect<{ record: PullRequest } | { why: string }> {
   return Effect.gen(function* () {
-    if (mergedBy(recorded) !== undefined) return { record: recorded };
+    if (recorded.state === "MERGED") return { record: recorded };
     const owner = yield* pullRequests.ownerOf(runtime, task);
     if (owner === undefined) return { why: `the worktree of ${task.id} is gone` };
     const found = yield* Effect.result(pullRequests.current(runtime, owner));
@@ -69,7 +69,7 @@ function readBack(
     if (pull?.number !== recorded.number) return { why: `#${recorded.number} is gone` };
     const now = yield* nowMillis;
     const record = pullRequests.save(runtime, task.id, pull, recorded.verified, now);
-    if (mergedBy(record) !== undefined) return { record };
+    if (record.state === "MERGED") return { record };
     return { why: `#${recorded.number} is ${record.state.toLowerCase()}` };
   });
 }

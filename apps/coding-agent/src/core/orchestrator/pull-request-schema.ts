@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS task_pull_requests (
   harness_merge_sha TEXT,
   blocked_head TEXT,
   harness_merge_commit TEXT,
+  harness_merge_nonce TEXT,
   checked_at INTEGER NOT NULL
 );
 `;
@@ -27,6 +28,7 @@ const ADDED_COLUMNS = [
   "merge_commit",
   "harness_merge_sha",
   "harness_merge_commit",
+  "harness_merge_nonce",
   "blocked_head",
 ] as const;
 

@@ -3,6 +3,7 @@ import { Effect, Result } from "effect";
 import pullRequestFinish from "./pull-request-finish.ts";
 import pullRequestOutside from "./pull-request-outside.ts";
 import pullRequestProblems from "./pull-request-problems.ts";
+import pullRequestSquashModule from "./pull-request-squash.ts";
 import pullRequestsModule from "./pull-requests.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
@@ -10,6 +11,7 @@ import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { pullRequests } = pullRequestsModule;
+const { pullRequestSquash } = pullRequestSquashModule;
 const { problemsOf, short } = pullRequestProblems;
 const { settleMerged } = pullRequestFinish;
 const { autoMergeLine } = pullRequestOutside;
@@ -73,6 +75,34 @@ function landed(
   return store.pullRequestOf(runtime.database, read.taskId) ?? read;
 }
 
+function requestMerge(
+  runtime: runtimeTypes.Runtime,
+  task: orchestratorTypesTypes.Task,
+  ready: Ready,
+  prepared: { nonce: string; squashed: { subject: string; body: string } },
+) {
+  const { owner, record, verified } = ready;
+  return Effect.uninterruptible(
+    Effect.gen(function* () {
+      store.markHarnessMerge(runtime.database, task.id, {
+        nonce: prepared.nonce,
+        sha: verified.sha,
+      });
+      const tried = yield* pullRequestSquash.merge(
+        runtime,
+        owner.cwd,
+        record.number,
+        verified,
+        prepared.squashed,
+      );
+      if (tried.kind === "merged") store.markHarnessCommit(runtime.database, task.id, tried.commit);
+      if (tried.kind === "refused") store.markHarnessMerge(runtime.database, task.id, null);
+      const read = yield* Effect.result(pullRequests.view(runtime, owner.cwd, record.number));
+      return [tried, read] as const;
+    }),
+  );
+}
+
 function squash(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
@@ -80,46 +110,38 @@ function squash(
 ): Effect.Effect<MergeOutcome> {
   return Effect.gen(function* () {
     const { owner, record, verified } = ready;
-    const [attempt, after] = yield* Effect.uninterruptible(
-      Effect.gen(function* () {
-        store.markHarnessMerge(runtime.database, task.id, verified.sha);
-        const tried = yield* pullRequests.merge(runtime, owner.cwd, record.number, verified);
-        if (tried.kind === "merged") {
-          store.markHarnessCommit(runtime.database, task.id, tried.commit);
-        }
-        if (tried.kind === "refused") store.markHarnessMerge(runtime.database, task.id, null);
-        const read = yield* Effect.result(pullRequests.view(runtime, owner.cwd, record.number));
-        return [tried, read] as const;
-      }),
+    const prepared = yield* Effect.result(
+      pullRequestSquash.prepare(runtime, owner.cwd, record.number, verified),
     );
+    if (Result.isFailure(prepared)) {
+      return unmerged(record.number, { kind: "refused", why: prepared.failure }, undefined);
+    }
+    const [tried, after] = yield* requestMerge(runtime, task, ready, prepared.success);
     const now = yield* nowMillis;
     const read = Result.isSuccess(after)
       ? pullRequests.save(runtime, task.id, after.success, verified, now)
       : undefined;
     const saved =
-      attempt.kind === "merged"
-        ? landed(runtime, read ?? { ...record, harnessCommit: attempt.commit }, attempt.commit, now)
+      tried.kind === "merged"
+        ? landed(runtime, read ?? { ...record, harnessCommit: tried.commit }, tried.commit, now)
         : read;
-    if (saved !== undefined) {
-      const settled = yield* settleMerged(
-        runtime,
-        task,
-        owner.cwd,
-        saved,
-        `Squash-merged PR #${saved.number} at head ${short(verified.sha)} as merge commit ${short(saved.mergeCommit ?? "")}.`,
-      );
-      if (settled !== undefined) return settled;
-      const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
-      if (fixes.length > 0) {
-        return blocked(
-          runtime,
-          task,
-          saved,
-          fixes.map((problem) => problem.text),
-        );
-      }
-    }
-    return unmerged(record.number, attempt, read);
+    if (saved === undefined) return unmerged(record.number, tried, read);
+    const settled = yield* settleMerged(
+      runtime,
+      task,
+      owner.cwd,
+      saved,
+      `Squash-merged PR #${saved.number} at head ${short(verified.sha)} as merge commit ${short(saved.mergeCommit ?? "")}.`,
+    );
+    if (settled !== undefined) return settled;
+    const fixes = problemsOf(saved, undefined, false).filter((problem) => problem.kind === "fix");
+    if (fixes.length === 0) return unmerged(record.number, tried, read);
+    return blocked(
+      runtime,
+      task,
+      saved,
+      fixes.map((problem) => problem.text),
+    );
   });
 }
 

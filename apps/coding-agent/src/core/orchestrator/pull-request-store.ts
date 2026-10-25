@@ -21,6 +21,7 @@ interface PullRequestRow {
   harness_merge_sha: string | null;
   blocked_head: string | null;
   harness_merge_commit: string | null;
+  harness_merge_nonce: string | null;
   checked_at: number;
 }
 
@@ -33,6 +34,7 @@ function toPullRequest(row: PullRequestRow): PullRequest {
     ci: row.ci as orchestratorTypesTypes.PullRequestCi,
     harnessCommit: row.harness_merge_commit,
     harnessMerge: row.harness_merge_sha,
+    harnessNonce: row.harness_merge_nonce,
     headSha: row.head_sha,
     mergeCommit: row.merge_commit,
     mergeState: row.merge_state,
@@ -83,6 +85,8 @@ function savePullRequest(
          merge_commit = excluded.merge_commit, checked_at = excluded.checked_at,
          harness_merge_sha = CASE WHEN task_pull_requests.number = excluded.number
            AND (? OR excluded.state = 'MERGED') THEN task_pull_requests.harness_merge_sha END,
+         harness_merge_nonce = CASE WHEN task_pull_requests.number = excluded.number
+           AND (? OR excluded.state = 'MERGED') THEN task_pull_requests.harness_merge_nonce END,
          blocked_head = CASE WHEN task_pull_requests.number = excluded.number
            THEN task_pull_requests.blocked_head END,
          harness_merge_commit = CASE WHEN task_pull_requests.number = excluded.number
@@ -105,13 +109,21 @@ function savePullRequest(
       pullRequest.mergeCommit,
       pullRequest.checkedAt,
       keepHarnessMerge ? 1 : 0,
+      keepHarnessMerge ? 1 : 0,
     );
 }
 
-function markHarnessMerge(database: DatabaseSync, taskId: string, sha: string | null): void {
+function markHarnessMerge(
+  database: DatabaseSync,
+  taskId: string,
+  merge: { sha: string; nonce: string } | null,
+): void {
   database
-    .prepare("UPDATE task_pull_requests SET harness_merge_sha = ? WHERE task_id = ?")
-    .run(sha, taskId);
+    .prepare(
+      `UPDATE task_pull_requests SET harness_merge_sha = ?, harness_merge_nonce = ?,
+         harness_merge_commit = NULL WHERE task_id = ?`,
+    )
+    .run(merge?.sha ?? null, merge?.nonce ?? null, taskId);
 }
 
 function markBlockedHead(database: DatabaseSync, taskId: string, sha: string | null): void {
