@@ -6,6 +6,7 @@ import type flowTypes from "./flow.types.ts";
 import LookupFlow from "./lookup-flow.ts";
 import RequireFlow from "./require-flow.ts";
 import restrictedMember from "./restricted-member.ts";
+import sharedWrite from "./shared-write.ts";
 import StaticString from "./static-string.ts";
 
 const LOOKUP = "getBuiltinModule";
@@ -19,6 +20,11 @@ const REQUIRE_UNKNOWN_MESSAGE =
   "require・createRequire・import() をこの形で使うと読み込む先を判定できない。文字列リテラルで直接呼ぶ";
 const LOCAL_EXTENDS_MESSAGE =
   "同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む";
+const PROTOTYPE_MESSAGE =
+  "setPrototypeOf や __proto__ で prototype を書き換えない。継承は class 宣言の extends だけで決める";
+const SHARED_WRITE_MESSAGE =
+  "package から import した値を書き換えない。差し替える値は引数か Layer で渡す";
+const PROTOTYPE_NAMES: ReadonlySet<string> = new Set(["__proto__", "setPrototypeOf"]);
 const SYNC_FS_MESSAGE =
   "同期の fs を使わない。Effect の FileSystem か platform の非同期 API を使い、同期が要るなら platform/node の名前付き関数に閉じる";
 
@@ -119,15 +125,93 @@ const noSyncFs = defineRule({
   meta: { schema: listSchema("names"), type: "problem" },
 });
 
+type WorkspacePackage = { readonly dir: string; readonly specifiers: readonly string[] };
+
+type ClassExtendsOptions = {
+  readonly builtins: readonly string[];
+  readonly packages: readonly WorkspacePackage[];
+};
+
+const classExtendsOptions = (context: Context): ClassExtendsOptions => {
+  const [options] = context.options as unknown as readonly (ClassExtendsOptions | undefined)[];
+  if (options === undefined)
+    throw new TypeError("msa/no-local-class-extends には builtins と packages を渡す");
+  return options;
+};
+
+const selfSpecifiersOf = (
+  context: Context,
+  packages: readonly WorkspacePackage[],
+): readonly string[] =>
+  packages
+    .filter(({ dir }) => context.filename.startsWith(`${dir}/`))
+    .reduce<WorkspacePackage | undefined>(
+      (owner, candidate) =>
+        owner === undefined || candidate.dir.length > owner.dir.length ? candidate : owner,
+      undefined,
+    )?.specifiers ?? [];
+
+const packagesSchema = {
+  items: [
+    {
+      additionalProperties: false,
+      properties: {
+        builtins: { items: { type: "string" }, type: "array" },
+        packages: {
+          items: {
+            additionalProperties: false,
+            properties: {
+              dir: { type: "string" },
+              specifiers: { items: { type: "string" }, type: "array" },
+            },
+            required: ["dir", "specifiers"],
+            type: "object",
+          },
+          type: "array",
+        },
+      },
+      required: ["builtins", "packages"],
+      type: "object",
+    },
+  ],
+  maxItems: 1,
+  minItems: 1,
+  type: "array",
+} as const;
+
 const noLocalClassExtends = defineRule({
   create(context) {
+    const { builtins, packages } = classExtendsOptions(context);
+    const walk = {
+      builtins: new Set(builtins),
+      context,
+      selfSpecifiers: selfSpecifiersOf(context, packages),
+    };
+    const strings = new StaticString(context);
+    const reportPrototype = createReporter(context, PROTOTYPE_MESSAGE);
+    const checkName = (node: Node, name: string | undefined): void => {
+      if (PROTOTYPE_NAMES.has(name ?? "")) reportPrototype(node);
+    };
+    const checkString = (node: Node): void => checkName(node, strings.fold(node));
+    const shared = sharedWrite.createSharedWrite(
+      walk,
+      createReporter(context, SHARED_WRITE_MESSAGE),
+    );
     const check = (node: ESTree.Class): void => {
-      if (node.superClass !== null && classOrigin.declaredInPackage(context, node.superClass))
+      if (node.superClass !== null && classOrigin.declaredInPackage(walk, node.superClass))
         context.report({ message: LOCAL_EXTENDS_MESSAGE, node: node.superClass });
     };
-    return { ClassDeclaration: check, ClassExpression: check };
+    return {
+      ...shared,
+      BinaryExpression: checkString,
+      ClassDeclaration: check,
+      ClassExpression: check,
+      Identifier: (node) => checkName(node, node.name),
+      Literal: checkString,
+      TemplateLiteral: checkString,
+    };
   },
-  meta: { type: "problem" },
+  meta: { schema: packagesSchema, type: "problem" },
 });
 
 const noRestrictedMember = defineRule({

@@ -15,6 +15,7 @@ const {
   restrictedImports,
   restrictedProperties,
   strictCategoryRules,
+  workspacePackages,
 } = lintConfig;
 const { onGitHubActions } = vitestShared;
 
@@ -65,7 +66,10 @@ export default defineConfig({
         rules: {
           "eslint/no-restricted-imports": ["error", platformOnlyImports],
           "msa/no-builtin-require": ["error", { modules: builtinModuleBases }],
-          "msa/no-local-class-extends": "error",
+          "msa/no-local-class-extends": [
+            "error",
+            { builtins: builtinModuleBases, packages: workspacePackages },
+          ],
         },
       },
       {

@@ -1,0 +1,202 @@
+[
+  {
+    "dir": ".claude",
+    "specifiers": ["claude-harness", "claude-harness/*"]
+  },
+  {
+    "dir": "apps/coding-agent",
+    "specifiers": [
+      "@msa/coding-agent",
+      "@msa/coding-agent/*",
+      "@msa/coding-agent/index.types",
+      "@msa/coding-agent/rpc-entry",
+      "@msa/coding-agent/hooks"
+    ]
+  },
+  {
+    "dir": "apps/coding-agent/examples/extensions/custom-provider-anthropic",
+    "specifiers": [
+      "msa-extension-custom-provider-anthropic",
+      "msa-extension-custom-provider-anthropic/*"
+    ]
+  },
+  {
+    "dir": "apps/coding-agent/examples/extensions/custom-provider-gitlab-duo",
+    "specifiers": [
+      "msa-extension-custom-provider-gitlab-duo",
+      "msa-extension-custom-provider-gitlab-duo/*"
+    ]
+  },
+  {
+    "dir": "apps/coding-agent/examples/extensions/gondolin",
+    "specifiers": ["msa-extension-gondolin", "msa-extension-gondolin/*"]
+  },
+  {
+    "dir": "apps/coding-agent/examples/extensions/sandbox",
+    "specifiers": ["msa-extension-sandbox", "msa-extension-sandbox/*"]
+  },
+  {
+    "dir": "apps/coding-agent/examples/extensions/with-deps",
+    "specifiers": ["msa-extension-with-deps", "msa-extension-with-deps/*"]
+  },
+  {
+    "dir": "apps/evals",
+    "specifiers": ["@msa/evals", "@msa/evals/*"]
+  },
+  {
+    "dir": "libs/agent",
+    "specifiers": [
+      "@msa/agent-core",
+      "@msa/agent-core/*",
+      "@msa/agent-core/index.types",
+      "@msa/agent-core/package.json"
+    ]
+  },
+  {
+    "dir": "libs/ai",
+    "specifiers": [
+      "@msa/ai",
+      "@msa/ai/*",
+      "@msa/ai/index.types",
+      "@msa/ai/models/types",
+      "@msa/ai/models",
+      "@msa/ai/models.types",
+      "@msa/ai/compat",
+      "@msa/ai/compat.types",
+      "@msa/ai/providers/*",
+      "@msa/ai/api/*",
+      "@msa/ai/utils/*",
+      "@msa/ai/oauth",
+      "@msa/ai/oauth.types",
+      "@msa/ai/*.types",
+      "@msa/ai/dist/*"
+    ]
+  },
+  {
+    "dir": "libs/chord",
+    "specifiers": [
+      "@msa/chord",
+      "@msa/chord/*",
+      "@msa/chord/index.types",
+      "@msa/chord/context",
+      "@msa/chord/context.types",
+      "@msa/chord/json",
+      "@msa/chord/json.types",
+      "@msa/chord/sleep",
+      "@msa/chord/state",
+      "@msa/chord/state.types",
+      "@msa/chord/output",
+      "@msa/chord/output.types",
+      "@msa/chord/progress",
+      "@msa/chord/progress.types",
+      "@msa/chord/delta",
+      "@msa/chord/delta.types",
+      "@msa/chord/delta/apply",
+      "@msa/chord/delta/overlap",
+      "@msa/chord/delta/tracker",
+      "@msa/chord/delta/tracker.types",
+      "@msa/chord/node",
+      "@msa/chord/node.types",
+      "@msa/chord/package.json"
+    ]
+  },
+  {
+    "dir": "libs/codemode",
+    "specifiers": [
+      "@msa/codemode",
+      "@msa/codemode/*",
+      "@msa/codemode/index.types",
+      "@msa/codemode/types",
+      "@msa/codemode/declarations",
+      "@msa/codemode/declarations.types",
+      "@msa/codemode/source",
+      "@msa/codemode/source.types",
+      "@msa/codemode/portable",
+      "@msa/codemode/portable.types",
+      "@msa/codemode/cloudflare",
+      "@msa/codemode/cloudflare.types",
+      "@msa/codemode/worker",
+      "@msa/codemode/worker-main"
+    ]
+  },
+  {
+    "dir": "libs/durable",
+    "specifiers": [
+      "@msa/durable",
+      "@msa/durable/*",
+      "@msa/durable/index.types",
+      "@msa/durable/harness",
+      "@msa/durable/harness.types",
+      "@msa/durable/session",
+      "@msa/durable/env",
+      "@msa/durable/env.types",
+      "@msa/durable/env/node",
+      "@msa/durable/env/node.types",
+      "@msa/durable/codemode",
+      "@msa/durable/codemode.types",
+      "@msa/durable/tool-search",
+      "@msa/durable/tool-search.types",
+      "@msa/durable/tools",
+      "@msa/durable/tools.types",
+      "@msa/durable/images",
+      "@msa/durable/images/node",
+      "@msa/durable/images/node.types",
+      "@msa/durable/images/cloudflare",
+      "@msa/durable/storage/memory",
+      "@msa/durable/storage/memory.types",
+      "@msa/durable/storage/jsonl",
+      "@msa/durable/storage/jsonl.types",
+      "@msa/durable/storage/jsonl/node",
+      "@msa/durable/storage/jsonl/node.types",
+      "@msa/durable/storage/sqlite",
+      "@msa/durable/storage/sqlite.types",
+      "@msa/durable/storage/sqlite/cloudflare",
+      "@msa/durable/storage/sqlite/cloudflare.types",
+      "@msa/durable/storage/sqlite/node",
+      "@msa/durable/storage/sqlite/node.types",
+      "@msa/durable/testing",
+      "@msa/durable/testing.types",
+      "@msa/durable/package.json"
+    ]
+  },
+  {
+    "dir": "libs/env",
+    "specifiers": ["@msa/env", "@msa/env/*", "@msa/env/index.types"]
+  },
+  {
+    "dir": "libs/mcp",
+    "specifiers": [
+      "@msa/mcp",
+      "@msa/mcp/*",
+      "@msa/mcp/index.types",
+      "@msa/mcp/oauth",
+      "@msa/mcp/oauth.types",
+      "@msa/mcp/testing",
+      "@msa/mcp/testing.types"
+    ]
+  },
+  {
+    "dir": "libs/telemetry",
+    "specifiers": [
+      "@msa/telemetry",
+      "@msa/telemetry/*",
+      "@msa/telemetry/index.types",
+      "@msa/telemetry/otlp",
+      "@msa/telemetry/otlp.types",
+      "@msa/telemetry/testing",
+      "@msa/telemetry/testing.types"
+    ]
+  },
+  {
+    "dir": "libs/testing",
+    "specifiers": ["@msa/testing", "@msa/testing/*", "@msa/testing/index.types"]
+  },
+  {
+    "dir": "libs/tui",
+    "specifiers": ["@msa/tui", "@msa/tui/*", "@msa/tui/index.types"]
+  },
+  {
+    "dir": "tools/node-llama-cpp-payload",
+    "specifiers": ["@msa/node-llama-cpp-payload", "@msa/node-llama-cpp-payload/*"]
+  }
+]
