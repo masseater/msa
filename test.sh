@@ -67,6 +67,7 @@ test_env=(
 	"NPM_CONFIG_USERCONFIG=$test_root/npm-userconfig"
 	"NPM_CONFIG_GLOBALCONFIG=$test_root/npm-globalconfig"
 	"NPM_CONFIG_CACHE=$test_root/cache/npm"
+	"FORCE_COLOR=0"
 )
 
 # Native Windows needs these inherited values to launch child processes.
@@ -83,6 +84,10 @@ value="${NODE_EXTRA_CA_CERTS-}"
 # Pass the opt-in for the tests that run a local LLM (local servers or node-llama-cpp).
 value="${MSA_LOCAL_LLM_TESTS-}"
 [[ -z "$value" ]] || test_env+=("MSA_LOCAL_LLM_TESTS=$value")
+
+# Pass the shard that CI splits the vitest files into.
+value="${MSA_TEST_SHARD-}"
+[[ -z "$value" ]] || test_env+=("MSA_TEST_SHARD=$value")
 
 # Preserve CI detection only for runner behavior and test reporting.
 for name in CI GITHUB_ACTIONS; do
@@ -110,4 +115,4 @@ if [[ "${CLAUDE_CODE_REMOTE-}" == true ]]; then
 fi
 
 echo "Running tests without API keys in isolated home: $test_root/home"
-"${wrapper[@]}" "${test_env[@]}" vp run test
+"${wrapper[@]}" "${test_env[@]}" vp run --concurrency-limit 1 test

@@ -10,6 +10,7 @@ declare namespace vitestImportsTypes {
   interface Options {
     readonly childProblems: (file: string, text: string) => Effect.Effect<ReadonlyArray<string>>;
     readonly cwd: string;
+    readonly inputs: ReadonlyArray<string> | undefined;
     readonly isWorkspaceSpec: (spec: string) => boolean;
     readonly projects: ReadonlyArray<string>;
     readonly readText: (file: string) => Effect.Effect<string>;

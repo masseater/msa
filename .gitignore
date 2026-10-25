@@ -1,7 +1,8 @@
 node_modules
 dist/
 .artifacts/
-.fallow
+.fallow/*
+!.fallow/.gitignore
 *.log
 .DS_Store
 *.tsbuildinfo
@@ -49,5 +50,7 @@ collect.sh
 libs/agent/docs/extensions/msa-server-artifact/index.md
 .alchemy
 
-lint-probe/
-apps/coding-agent/.class-seal-probe/
+lint-probe/*
+!lint-probe/.gitkeep
+apps/coding-agent/.class-seal-probe/*
+!apps/coding-agent/.class-seal-probe/.gitkeep

@@ -59,12 +59,18 @@ const resumeAll = (started: Started, count: number) =>
     expect(started.workers).toHaveLength(count);
   });
 
+const SETTLE_TIMEOUT_MS = 30_000;
+
+const realElapsedMs = (start: bigint): number => Number(process.hrtime.bigint() - start) / 1e6;
+
 const settledUntil = (predicate: () => boolean) =>
   Effect.gen(function* () {
-    for (let attempt = 0; attempt < 100_000; attempt++) {
+    const start = process.hrtime.bigint();
+    while (realElapsedMs(start) < SETTLE_TIMEOUT_MS) {
       if (predicate()) return;
       yield* advance(0);
     }
+    if (predicate()) return;
     throw new Error(`timed out waiting for the orchestrator: ${String(predicate)}`);
   });
 

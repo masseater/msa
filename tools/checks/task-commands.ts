@@ -4,6 +4,8 @@ import type taskCommandTypes from "./task-commands.types.ts";
 type ExportTarget = taskCommandTypes.ExportTarget;
 type PackageEntry = taskCommandTypes.PackageEntry;
 type RunRef = taskCommandTypes.RunRef;
+type TaskCommand = taskCommandTypes.TaskCommand;
+type TaskEntry = taskCommandTypes.TaskEntry;
 
 type NodeFlags = taskCommandTypes.NodeFlags;
 type FlagRead = taskCommandTypes.FlagRead;
@@ -22,7 +24,7 @@ const EXEC_PREFIXES: ReadonlyArray<ReadonlyArray<string>> = [
   ["npx"],
 ];
 const RUN_VALUE_FLAGS = new Set(["--concurrency-limit", "--filter"]);
-const RUN_SWITCHES = new Set(["--no-cache", "--recursive", "-r"]);
+const RUN_SWITCHES = new Set(["--cache", "--no-cache", "--recursive", "-r"]);
 
 const flagName = (token: string): string => token.match(FLAG_NAME)?.[0] ?? token;
 
@@ -215,6 +217,17 @@ const packageTarget = (
   return pickTarget(found[0], conditions)?.replaceAll("*", found[1]);
 };
 
+const commandText = (command: TaskCommand): string =>
+  typeof command === "string" ? command : command.join(" && ");
+
+const taskCommand = (task: TaskEntry): string =>
+  typeof task === "object" && "command" in task ? commandText(task.command) : commandText(task);
+
+const taskScripts = (
+  tasks: Readonly<Record<string, TaskEntry>>,
+): Readonly<Record<string, string>> =>
+  Object.fromEntries(Object.entries(tasks).map(([name, task]) => [name, taskCommand(task)]));
+
 const taskCommands = {
   isBuild,
   matchesFilter,
@@ -222,6 +235,8 @@ const taskCommands = {
   packageTarget,
   parseNode,
   parseRun,
+  taskCommand,
+  taskScripts,
   unwrap,
 };
 

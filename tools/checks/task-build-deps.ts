@@ -11,7 +11,7 @@ import vitestImports from "./vitest-imports.ts";
 import workspacePackages from "./workspace-packages.ts";
 
 const { nodeFlags } = taskCommands;
-const { checkRun } = taskGraph;
+const { checkRun, packageTasks } = taskGraph;
 const { findWorkspace, loadWorkspaces, relativeTo } = workspacePackages;
 
 type Graph = taskBuildDepsTypes.Graph;
@@ -30,6 +30,7 @@ const walkVitest = (repo: Scope, run: taskBuildDepsTypes.VitestRun, label: strin
       childProblems: (file, text) => nodeImports.childProblems(repo, file, text),
       cwd: run.cwd,
       importsOf: (file, text) => nodeImports.importsOf(repo, file, text),
+      inputs: run.inputs,
       isWorkspaceSpec: (spec) => findWorkspace(repo, spec) !== undefined,
       projects: run.projects,
       readText: repo.read,
@@ -48,6 +49,34 @@ const withRootScripts = (
     workspace.dir === root
       ? { ...workspace, scripts: { ...workspace.scripts, ...scripts } }
       : workspace,
+  );
+
+const withPackageTasks = (
+  scope: Pick<Scope, "path" | "root">,
+  workspaces: ReadonlyArray<Workspace>,
+) =>
+  workspaces.map((workspace) => {
+    const tasks = packageTasks[scope.path.relative(scope.root, workspace.dir)];
+    return tasks === undefined
+      ? workspace
+      : { ...workspace, scripts: { ...workspace.scripts, ...tasks } };
+  });
+
+const unregisteredConfigs = (host: Host, root: string, workspaces: ReadonlyArray<Workspace>) =>
+  Effect.map(
+    Effect.filter(
+      workspaces.filter((workspace) => workspace.dir !== root),
+      (workspace) =>
+        Effect.map(
+          host.isFile(host.path.resolve(workspace.dir, "vite.config.ts")),
+          (found) => found && packageTasks[host.path.relative(root, workspace.dir)] === undefined,
+        ),
+    ),
+    (missing) =>
+      missing.map(
+        (workspace) =>
+          `${host.path.relative(root, workspace.dir)}/vite.config.ts: add it to packageConfigs in tools/checks/task-graph.ts so its tasks are checked`,
+      ),
   );
 
 const makeGraph = (scope: Scope, tasks: Tasks, grammar: Uint8Array) =>
@@ -92,7 +121,8 @@ const collectViolations = (tasks: Tasks, rootScripts: Scripts) =>
     const path = yield* Path.Path;
     const host = hostOf(fs, path);
     const root = path.resolve(import.meta.dirname, "../..");
-    const workspaces = withRootScripts(yield* loadWorkspaces(host, root), root, rootScripts);
+    const loaded = yield* loadWorkspaces(host, root);
+    const workspaces = withPackageTasks({ path, root }, withRootScripts(loaded, root, rootScripts));
     const rootWorkspace = workspaces.find((workspace) => workspace.dir === root);
     if (rootWorkspace === undefined) return ["no package.json at the repository root"];
     const grammar = yield* fs.readFile(path.resolve(root, GRAMMAR)).pipe(Effect.orDie);
@@ -102,7 +132,8 @@ const collectViolations = (tasks: Tasks, rootScripts: Scripts) =>
     const results = yield* Effect.forEach(Object.keys(tasks), (name) =>
       checkRun(graph, start, name),
     );
-    return [...new Set(results.flat())];
+    const unregistered = yield* unregisteredConfigs(host, root, loaded);
+    return [...new Set([...unregistered, ...results.flat()])];
   });
 
 const runtime = ManagedRuntime.make(

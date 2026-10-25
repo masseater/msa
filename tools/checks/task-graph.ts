@@ -1,11 +1,17 @@
 import { Effect } from "effect";
 
+import harnessConfig from "../../.claude/vite.config.ts";
+import codingAgentConfig from "../../apps/coding-agent/vite.config.ts";
+import aiConfig from "../../libs/ai/vite.config.ts";
 import viteConfig from "../../vite.config.ts";
+import libConfigs from "./lib-configs.ts";
 import type shellSyntaxTypes from "./shell-syntax.types.ts";
 import type taskBuildDepsTypes from "./task-build-deps.types.ts";
+import taskCommands from "./task-commands.ts";
 import taskPrograms from "./task-programs.ts";
 
 const { afterBuild, checkProgram, failed, isBuild, ok } = taskPrograms;
+const { taskCommand } = taskCommands;
 
 type Checked = taskBuildDepsTypes.Checked;
 type Graph = taskBuildDepsTypes.Graph;
@@ -30,20 +36,48 @@ interface Progress {
 const taskObject = (task: TaskConfig) =>
   typeof task === "string" || Array.isArray(task) ? { command: task } : task;
 
-const commandOf = (command: string | ReadonlyArray<string>): string =>
-  typeof command === "string" ? command : command.join(" && ");
-
 const depName = (dep: string | { readonly task: string }): string =>
   typeof dep === "string" ? dep : dep.task;
+
+const isPatternList = (input: unknown): input is ReadonlyArray<string> =>
+  Array.isArray(input) && input.every((entry) => typeof entry === "string");
+
+const inputOf = (cache: unknown): unknown =>
+  typeof cache === "object" && cache !== null && "input" in cache ? cache.input : undefined;
+
+const declaredInputs = (cache: unknown): ReadonlyArray<string> | undefined => {
+  const input = inputOf(cache);
+  return isPatternList(input) ? input : undefined;
+};
 
 const toTaskDef = (task: TaskConfig): TaskDef => {
   const def = taskObject(task);
   return {
-    command: commandOf(def.command),
+    command: taskCommand(def),
     cwd: def.cwd ?? ".",
     dependsOn: (def.dependsOn ?? []).map(depName),
+    inputs: declaredInputs("cache" in def ? def.cache : undefined),
   };
 };
+
+const packageConfigs = {
+  ...libConfigs,
+  ".claude": harnessConfig,
+  "apps/coding-agent": codingAgentConfig,
+  "libs/ai": aiConfig,
+};
+
+const packageTasks: Readonly<Record<string, Readonly<Record<string, string>>>> = Object.fromEntries(
+  Object.entries(packageConfigs).map(([dir, config]) => [
+    dir,
+    Object.fromEntries(
+      Object.entries(config.run?.tasks ?? {}).map(([name, task]) => [
+        name,
+        taskCommand(taskObject(task)),
+      ]),
+    ),
+  ]),
+);
 
 const loadTasks = (): Tasks =>
   Object.fromEntries(
@@ -119,7 +153,7 @@ function checkCommand(graph: Graph, step: Step, command: string): Problems {
 function checkTask(graph: Graph, step: Step, name: string, task: TaskDef): Problems {
   const built = step.built || dependsOnBuild(graph, name, new Set());
   const cwd = graph.resolve(step.workspace.dir, task.cwd);
-  return checkCommand(graph, { ...step, built, cwd }, task.command);
+  return checkCommand(graph, { ...step, built, cwd, inputs: task.inputs }, task.command);
 }
 
 function checkScriptOf(graph: Graph, step: Step, name: string): Problems {
@@ -135,6 +169,6 @@ function checkRun(graph: Graph, step: Step, name: string): Problems {
   return task === undefined ? checkScriptOf(graph, next, name) : checkTask(graph, next, name, task);
 }
 
-const taskGraph = { checkRun, loadTasks };
+const taskGraph = { checkRun, loadTasks, packageTasks };
 
 export default taskGraph;

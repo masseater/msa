@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url";
 
-import { Config, Effect } from "effect";
+import { Config, Effect, Option } from "effect";
 
 const workspaceSourcePaths = {
   agentIndex: fileURLToPath(new URL("./libs/agent/src/index.ts", import.meta.url)),
@@ -38,6 +38,10 @@ const noLocalLlmSetup = fileURLToPath(
 );
 
 const onGitHubActions = Effect.runSync(Config.withDefault(Config.Boolean("GITHUB_ACTIONS"), false));
+
+const testShard = Option.getOrUndefined(
+  Effect.runSync(Config.option(Config.NonEmptyString("MSA_TEST_SHARD"))),
+);
 
 const testBaseConfig = {
   resolve: {
@@ -97,6 +101,7 @@ const vitestShared = {
   noLocalLlmSetup,
   onGitHubActions,
   testBaseConfig,
+  testShard,
   workspaceSourcePaths,
 };
 
