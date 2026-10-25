@@ -40,6 +40,9 @@ jobs:
         with:
           ref: ${{ inputs.branch }}
           persist-credentials: false
+      - run: .github/scripts/claude-preflight.sh
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
       - id: target
         run: |
           if [ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]; then
