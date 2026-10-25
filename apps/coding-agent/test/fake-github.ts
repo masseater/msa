@@ -7,7 +7,7 @@ import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.
 const { encodeJson } = testing;
 const { runCommand } = orchestratorCallbacks;
 
-type Ci = "pending" | "success" | "failure";
+type Ci = "pending" | "success" | "failure" | "cancelled";
 
 interface FakePull {
   number: number;

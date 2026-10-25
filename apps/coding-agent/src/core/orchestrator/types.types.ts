@@ -99,7 +99,7 @@ declare namespace orchestratorTypesTypes {
     createdAt: number;
   }
 
-  type PullRequestCi = "passing" | "pending" | "failing" | "none";
+  type PullRequestCi = "passing" | "pending" | "failing" | "cancelled" | "none";
 
   interface VerifiedPullRequest {
     sha: string;

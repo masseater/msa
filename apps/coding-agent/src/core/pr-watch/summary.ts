@@ -39,6 +39,7 @@ function checksLabel(entry: watchTypes.PrWatchEntry, now: number): string {
     return `checks running${names}`;
   }
   if (checks.failed > 0) return `${checks.failed} failed`;
+  if (checks.cancelled > 0) return `${checks.cancelled} cancelled`;
   return "CI passed";
 }
 
@@ -79,9 +80,11 @@ function describePrWatchState(entry: watchTypes.PrWatchEntry): string {
   if (isConflicting(snapshot)) return "conflict";
   if (isBehind(snapshot)) return behindLabel(snapshot);
   if (snapshot.checks.pending > 0) {
-    return `CI ${snapshot.checks.passed + snapshot.checks.failed}/${snapshot.checks.total}`;
+    const done = snapshot.checks.passed + snapshot.checks.failed + snapshot.checks.cancelled;
+    return `CI ${done}/${snapshot.checks.total}`;
   }
   if (snapshot.checks.failed > 0) return `${snapshot.checks.failed} failed`;
+  if (snapshot.checks.cancelled > 0) return `${snapshot.checks.cancelled} cancelled`;
   if (snapshot.reviewDecision === "APPROVED") return "approved";
   if (snapshot.reviewDecision === "CHANGES_REQUESTED") return "changes requested";
   if (snapshot.reviewDecision === "REVIEW_REQUIRED") return "review";

@@ -127,6 +127,30 @@ it(
   passesAGreenRerunOfACancelledCheck,
 );
 
+const sendsBackALoneCancelledCheck = () =>
+  Effect.runPromise(
+    withRemote((remote) =>
+      Effect.gen(function* () {
+        const { github } = remote;
+        const { workers, branch } = yield* openedTask(remote);
+        const worker = workers[0]!;
+        const head = yield* github.head(branch);
+        github.ci.set(head, "cancelled");
+        worker.complete("pushed");
+        yield* waitFor(() => worker.prompts.length === 2);
+        expect(workers).toHaveLength(1);
+        github.ci.set(head, "success");
+        worker.complete("ran the cancelled check again");
+        yield* waitFor(() => workers.length === 2);
+      }),
+    ),
+  );
+
+it(
+  "sends the worker back on a cancelled check that did not run again, and starts the review once it passes",
+  sendsBackALoneCancelledCheck,
+);
+
 const passesAPullRequestWithoutChecks = () =>
   Effect.runPromise(
     withRemote((remote) =>

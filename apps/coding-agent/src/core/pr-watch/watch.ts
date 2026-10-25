@@ -1,6 +1,7 @@
 import { Clock, Duration, Effect, Option, Result } from "effect";
 
 import changesModule from "./changes.ts";
+import type changesTypes from "./changes.types.ts";
 import type ghTypes from "./gh.types.ts";
 import snapshotModule from "./snapshot.ts";
 import type snapshotTypes from "./snapshot.types.ts";
@@ -18,6 +19,13 @@ const FATAL_FAILURES: ReadonlySet<ghTypes.PrWatchFailure> = new Set([
   "auth",
   "not-found",
 ]);
+
+function ciConclusion(kind: changesTypes.PrChangeKind): watchTypes.CiConclusion | undefined {
+  if (kind === "checks-passed") return "passed";
+  if (kind === "checks-failed") return "failed";
+  if (kind === "checks-cancelled") return "cancelled";
+  return undefined;
+}
 
 const RATE_LIMIT_BACKOFF = 4;
 const ERROR_BACKOFF = 2;
@@ -119,9 +127,9 @@ function applySnapshot(
   if (previous === undefined) return false;
   const changes = describeChanges(previous, current);
   if (changes.length === 0) return false;
-  const checks = changes.find(
-    (change) => change.kind === "checks-passed" || change.kind === "checks-failed",
-  );
+  const checks = changes
+    .map((change) => ciConclusion(change.kind))
+    .find((conclusion) => conclusion !== undefined);
   const notification: watchTypes.PrNotification = {
     label: changes.map((change) => change.label).join(", "),
     text: describeChangeText(entry.label, changes),
@@ -130,7 +138,7 @@ function applySnapshot(
       ? {}
       : {
           ci: {
-            conclusion: checks.kind === "checks-passed" ? "passed" : "failed",
+            conclusion: checks,
             durationMs: now - pendingSince,
           },
         }),

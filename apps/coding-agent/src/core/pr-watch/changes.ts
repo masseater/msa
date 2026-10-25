@@ -26,7 +26,8 @@ function checkChange(
   const unchanged =
     previous.total === current.total &&
     previous.passed === current.passed &&
-    previous.failed === current.failed;
+    previous.failed === current.failed &&
+    previous.cancelled === current.cancelled;
   if (unchanged) return undefined;
   const summary = describeChecks(current);
   if (current.failed > 0) {
@@ -34,6 +35,13 @@ function checkChange(
       "checks-failed",
       "CI failed",
       `CI finished: ${summary}. Fix the failing checks and push.`,
+    );
+  }
+  if (current.cancelled > 0) {
+    return change(
+      "checks-cancelled",
+      "CI cancelled",
+      `CI finished: ${summary}. Run the cancelled checks again or push.`,
     );
   }
   return change(
