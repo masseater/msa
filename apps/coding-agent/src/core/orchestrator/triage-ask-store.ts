@@ -61,6 +61,22 @@ function takeTriageAsk(
   return row === undefined ? undefined : toPending(row).ask;
 }
 
+function moveTriageAsk(database: DatabaseSync, from: string, to: string): boolean {
+  return (
+    Number(
+      database.prepare("UPDATE triage_asks SET thread_id = ? WHERE thread_id = ?").run(to, from)
+        .changes,
+    ) > 0
+  );
+}
+
+function hasTriageAsk(database: DatabaseSync, triageThreadId: string): boolean {
+  return (
+    database.prepare("SELECT 1 FROM triage_asks WHERE thread_id = ?").get(triageThreadId) !==
+    undefined
+  );
+}
+
 function takePendingTriageAsks(database: DatabaseSync, project: string): PendingAsk[] {
   const rows = database
     .prepare(
@@ -91,6 +107,8 @@ function stoppedReadOnlyCheckouts(
 
 const triageAskStore = {
   TRIAGE_ASK_SCHEMA,
+  hasTriageAsk,
+  moveTriageAsk,
   saveTriageAsk,
   stoppedReadOnlyCheckouts,
   takePendingTriageAsks,

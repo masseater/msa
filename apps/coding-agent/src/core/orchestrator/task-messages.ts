@@ -1,7 +1,6 @@
 import { Effect } from "effect";
 
 import actionHelpersModule from "./action-helpers.ts";
-import providerResume from "./provider-resume.ts";
 import resumeModule from "./resume.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import startModule from "./start.ts";
@@ -29,11 +28,6 @@ function sendMessage(runtime: runtimeTypes.Runtime, taskId: string, message: str
       return actionHelpers.taskView(runtime, taskId);
     }
     yield* sendNote(runtime, { audience: "tasks", content: message, taskIds: [taskId] });
-    const decided = providerResume.awaitingDecision(runtime, taskId);
-    if (decided !== undefined && task.status === "waiting") {
-      yield* providerResume.resumeTask(runtime, task, decided);
-      yield* Effect.sync(() => runtime.publish());
-    }
     return actionHelpers.taskView(runtime, taskId);
   });
 }

@@ -9,7 +9,7 @@ interface ProviderWaitRow {
   session_file: string | null;
   reason: string;
   error: string;
-  resume_at: number | null;
+  resume_at: number;
   created_at: number;
 }
 
@@ -55,9 +55,7 @@ function listProviderWaits(
   project: string,
 ): orchestratorTypesTypes.ProviderWait[] {
   const rows = database
-    .prepare(
-      "SELECT * FROM provider_waits WHERE project = ? ORDER BY resume_at IS NULL, resume_at, task_id",
-    )
+    .prepare("SELECT * FROM provider_waits WHERE project = ? ORDER BY resume_at, task_id")
     .all(project) as unknown as ProviderWaitRow[];
   return rows.map(toWait);
 }

@@ -253,6 +253,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec(SCHEMA);
   database.exec(pullRequestSchema.PULL_REQUEST_SCHEMA);
   database.exec(providerWaitSchema.PROVIDER_WAIT_SCHEMA);
+  transaction(database, () => providerWaitSchema.moveUndatedWaits(database));
   database.exec(progressStore.PROGRESS_SCHEMA);
   progressStore.addTriageDecisionText(database);
   dropReplanUndoColumns(database);

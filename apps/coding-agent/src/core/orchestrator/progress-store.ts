@@ -123,6 +123,8 @@ const progressStore = {
   PROGRESS_SCHEMA,
   addTriageDecisionText,
   askKey,
+  hasTriageAsk: triageAskStore.hasTriageAsk,
+  moveTriageAsk: triageAskStore.moveTriageAsk,
   reviewContentsOf,
   saveReviewContents,
   saveTriageAsk: triageAskStore.saveTriageAsk,

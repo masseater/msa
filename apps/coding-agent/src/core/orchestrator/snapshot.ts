@@ -30,6 +30,18 @@ function reasonFor(
   return { detail: "about to start", kind: "scheduling" };
 }
 
+function waitingReason(
+  task: orchestratorTypesTypes.TaskView,
+  byId: ReadonlyMap<string, orchestratorTypesTypes.TaskView>,
+  free: number,
+  wait: orchestratorTypesTypes.ProviderWait | undefined,
+): orchestratorTypesTypes.WaitingReason | null {
+  if (task.status === "waiting") return reasonFor(task, byId, free, wait);
+  return wait === undefined
+    ? null
+    : { detail: providerWaits.waitingDetail(wait), kind: "provider" };
+}
+
 function taskViews(database: DatabaseSync, project: string): orchestratorTypesTypes.TaskView[] {
   const tasks = store.listTasks(database, project);
   const dependencies = store.listDependencyPairs(database, project);
@@ -118,8 +130,7 @@ function buildSnapshot(
     ...task,
     handoff: handoffOf(task),
     replan: byTask.get(task.id) ?? null,
-    waitingReason:
-      task.status === "waiting" ? reasonFor(task, byId, free, waits.get(task.id)) : null,
+    waitingReason: waitingReason(task, byId, free, waits.get(task.id)),
   }));
   return {
     maxConcurrentThreads,
