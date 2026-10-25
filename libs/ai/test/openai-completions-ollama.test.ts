@@ -14,19 +14,22 @@ const context = normalizeContext({
   messages: [{ content: "hello", role: "user", timestamp: 1 }],
 });
 
-const finishedChunk = {
-  choices: [{ delta: { content: "ok" }, finish_reason: "stop", index: 0 }],
-  created: 0,
-  id: "chatcmpl-test",
-  model: "test-model",
-  object: "chat.completion.chunk",
-};
+const OLLAMA_FINGERPRINT = "fp_ollama";
 
-const chatStream = () =>
-  new Response(`data: ${JSON.stringify(finishedChunk)}\n\ndata: [DONE]\n\n`, {
+const chatStream = (fingerprint?: string) => () => {
+  const chunk = {
+    choices: [{ delta: { content: "ok" }, finish_reason: "stop", index: 0 }],
+    created: 0,
+    id: "chatcmpl-test",
+    model: "test-model",
+    object: "chat.completion.chunk",
+    ...(fingerprint === undefined ? {} : { system_fingerprint: fingerprint }),
+  };
+  return new Response(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`, {
     headers: { "content-type": "text/event-stream" },
     status: 200,
   });
+};
 
 const ollamaRoot = () =>
   new Response("Ollama is running", {
@@ -34,8 +37,10 @@ const ollamaRoot = () =>
     status: 200,
   });
 
-const notFound = (body: string) =>
-  new Response(body, { headers: { "content-type": "application/json" }, status: 404 });
+const jsonError = (status: number, body: string) => () =>
+  new Response(body, { headers: { "content-type": "application/json" }, status });
+
+const notFound = (body: string) => jsonError(404, body);
 
 interface Exchange {
   readonly method: string;
@@ -48,17 +53,33 @@ const readBody = (request: Request): Promise<Record<string, unknown> | undefined
     ? Promise.resolve(undefined)
     : request.json().then((body) => body as Record<string, unknown>);
 
-function serverAt(root: () => Response) {
+interface ServerShape {
+  readonly root: (request: Request) => Promise<Response>;
+  readonly chat: () => Response;
+}
+
+function serverAt(shape: ServerShape) {
   const exchanges: Exchange[] = [];
   const fetch = vi.fn<typesModule.FetchFunction>((input, init) => {
     const request = new Request(input, init);
     return readBody(request).then((body) => {
       exchanges.push({ body, method: request.method, url: request.url });
-      return request.method === "GET" ? root() : chatStream();
+      return request.method === "GET" ? shape.root(request) : shape.chat();
     });
   });
   return { exchanges, fetch };
 }
+
+const answering =
+  (response: () => Response): ServerShape["root"] =>
+  () =>
+    Promise.resolve(response());
+
+const ollamaServer = () =>
+  serverAt({ chat: chatStream(OLLAMA_FINGERPRINT), root: answering(ollamaRoot) });
+
+const otherServer = (root: () => Response, fingerprint?: string) =>
+  serverAt({ chat: chatStream(fingerprint), root: answering(root) });
 
 const customModel = (
   provider: string,
@@ -105,25 +126,31 @@ const expectField = (
   expect(payload?.[other]).toBeUndefined();
 };
 
+const sentFields = (exchanges: readonly Exchange[]) =>
+  chatPayloads(exchanges).map((payload) =>
+    payload?.["max_tokens"] === 123 ? "max_tokens" : "max_completion_tokens",
+  );
+
 const sendsMaxTokensToOllama = ([provider, baseUrl, root]: readonly [string, string, string]) =>
   Effect.runPromise(
     Effect.gen(function* () {
       vi.stubGlobal("fetch", () => Promise.reject(new Error("ambient fetch must not be called")));
-      const server = serverAt(ollamaRoot);
+      const server = ollamaServer();
       yield* send(customModel(provider, baseUrl), server.fetch);
       expect(probedUrls(server.exchanges)).toEqual([root]);
       expectField(server.exchanges, "max_tokens");
     }),
   );
 
-const sendsMaxCompletionTokensToNonOllama = ([provider, baseUrl, root]: readonly [
+const sendsMaxCompletionTokensToNonOllama = ([provider, baseUrl, root, fingerprint]: readonly [
   string,
   string,
   () => Response,
+  string | undefined,
 ]) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const server = serverAt(root);
+      const server = otherServer(root, fingerprint);
       yield* send(customModel(provider, baseUrl), server.fetch);
       expect(probedUrls(server.exchanges)).toHaveLength(1);
       expectField(server.exchanges, "max_completion_tokens");
@@ -133,7 +160,7 @@ const sendsMaxCompletionTokensToNonOllama = ([provider, baseUrl, root]: readonly
 const skipsProbe = (model: typesModule.Model<"openai-completions">) => () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const server = serverAt(ollamaRoot);
+      const server = ollamaServer();
       yield* send(model, server.fetch);
       expect(probedUrls(server.exchanges)).toEqual([]);
       expectField(server.exchanges, "max_completion_tokens");
@@ -143,93 +170,81 @@ const skipsProbe = (model: typesModule.Model<"openai-completions">) => () =>
 const reusesProbeAnswer = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const server = serverAt(ollamaRoot);
+      const server = ollamaServer();
       const model = customModel("home-box", "http://127.0.0.1:8282/v1");
       yield* send(model, server.fetch);
       yield* send(model, server.fetch);
       expect(probedUrls(server.exchanges)).toHaveLength(1);
-      expect(chatPayloads(server.exchanges).map((payload) => payload?.["max_tokens"])).toEqual([
-        123, 123,
-      ]);
-    }),
-  );
-
-const probesAgainAfterUnreachable = () =>
-  Effect.runPromise(
-    Effect.gen(function* () {
-      const model = customModel("home-box", "http://127.0.0.1:8383/v1");
-      const down = serverAt(ollamaRoot);
-      down.fetch.mockImplementationOnce(() => Promise.reject(new TypeError("fetch failed")));
-      yield* send(model, down.fetch);
-      expectField(down.exchanges, "max_completion_tokens");
-      const up = serverAt(ollamaRoot);
-      yield* send(model, up.fetch);
-      expect(probedUrls(up.exchanges)).toHaveLength(1);
-      expectField(up.exchanges, "max_tokens");
+      expect(sentFields(server.exchanges)).toEqual(["max_tokens", "max_tokens"]);
     }),
   );
 
 const sharesConcurrentProbe = () =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const server = serverAt(ollamaRoot);
+      const server = ollamaServer();
       const model = customModel("home-box", "http://127.0.0.1:8585/v1");
       yield* Effect.all([send(model, server.fetch), send(model, server.fetch)], {
         concurrency: "unbounded",
       });
       expect(probedUrls(server.exchanges)).toHaveLength(1);
-      expect(chatPayloads(server.exchanges).map((payload) => payload?.["max_tokens"])).toEqual([
-        123, 123,
-      ]);
+      expect(sentFields(server.exchanges)).toEqual(["max_tokens", "max_tokens"]);
     }),
   );
 
-const probesAgainAfterUnauthorized = () =>
+const followsSwappedServer = ([port, before, after]: readonly [
+  number,
+  () => ReturnType<typeof serverAt>,
+  () => ReturnType<typeof serverAt>,
+]) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = customModel("home-box", "http://127.0.0.1:8686/v1");
-      const locked = serverAt(() => new Response('{"error":"unauthorized"}', { status: 401 }));
-      yield* send(model, locked.fetch);
-      expectField(locked.exchanges, "max_completion_tokens");
-      const open = serverAt(ollamaRoot);
-      yield* send(model, open.fetch);
-      expect(probedUrls(open.exchanges)).toHaveLength(1);
-      expectField(open.exchanges, "max_tokens");
+      const model = customModel("home-box", `http://127.0.0.1:${port}/v1`);
+      const first = before();
+      yield* send(model, first.fetch);
+      const second = after();
+      yield* send(model, second.fetch);
+      yield* send(model, second.fetch);
+      expect(probedUrls(second.exchanges)).toEqual([]);
+      const [beforeField] = sentFields(first.exchanges);
+      const afterFields = sentFields(second.exchanges);
+      expect(afterFields[0]).toBe(beforeField);
+      expect(afterFields[1]).not.toBe(beforeField);
     }),
   );
 
-const hangingRoot = (fetch: ReturnType<typeof serverAt>["fetch"]) => {
-  const answer = fetch.getMockImplementation();
-  fetch.mockImplementation((input, init) => {
-    const request = new Request(input, init);
-    return request.method === "GET"
-      ? Effect.runPromise(Effect.never, { signal: request.signal })
-      : (answer?.(input, init) ?? Promise.reject(new Error("no server")));
-  });
-};
+const lmStudio = () => otherServer(notFound('{"error":"Unexpected endpoint"}'));
 
-const remembersTimedOutProbe = () =>
+const hangs: ServerShape["root"] = (request) =>
+  Effect.runPromise(Effect.never, { signal: request.signal });
+
+const refuses: ServerShape["root"] = () => Promise.reject(new TypeError("fetch failed"));
+
+const HOUR_MS = 3_600_000;
+
+const boundsProbesOfFailingRoot = ([port, root]: readonly [number, ServerShape["root"]]) =>
   Effect.runPromise(
     Effect.gen(function* () {
-      const model = customModel("slow-root", "http://127.0.0.1:8484/v1");
-      const server = serverAt(ollamaRoot);
-      hangingRoot(server.fetch);
-      yield* send(model, server.fetch);
-      yield* send(model, server.fetch);
-      const getCalls = server.fetch.mock.calls.filter(
-        ([input, init]) => new Request(input, init).method === "GET",
-      );
-      expect(getCalls).toHaveLength(1);
-      expect(chatPayloads(server.exchanges).map((payload) => payload?.["max_tokens"])).toEqual([
-        undefined,
-        undefined,
-      ]);
-      expectField(server.exchanges, "max_completion_tokens");
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(0);
+      const model = customModel("gateway", `http://127.0.0.1:${port}/v1`);
+      const failing = serverAt({ chat: jsonError(502, '{"error":"bad gateway"}'), root });
+      for (let attempt = 0; attempt < 20; attempt += 1) {
+        yield* send(model, failing.fetch);
+      }
+      expect(probedUrls(failing.exchanges)).toHaveLength(1);
+      expect(new Set(sentFields(failing.exchanges))).toEqual(new Set(["max_completion_tokens"]));
+      vi.setSystemTime(HOUR_MS);
+      const recovered = ollamaServer();
+      yield* send(model, recovered.fetch);
+      expect(probedUrls(recovered.exchanges)).toHaveLength(1);
+      expectField(recovered.exchanges, "max_tokens");
     }),
   );
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 describe("openai-completions max tokens field for Ollama", () => {
@@ -238,9 +253,19 @@ describe("openai-completions max tokens field for Ollama", () => {
     ["remote", "https://llm.example.test/ollama/v1/", "https://llm.example.test/ollama/"],
   ] as const)("sends max_tokens to Ollama for %s at %s", sendsMaxTokensToOllama);
   it.for([
-    ["lm-studio", "http://127.0.0.1:1234/v1", () => notFound('{"error":"Unexpected endpoint"}')],
-    ["vllm", "http://127.0.0.1:8000/v1", () => notFound('{"detail":"Not Found"}')],
-    ["llama-cpp", "http://127.0.0.1:9090/v1", () => new Response("<html>llama.cpp</html>")],
+    [
+      "lm-studio",
+      "http://127.0.0.1:1234/v1",
+      notFound('{"error":"Unexpected endpoint"}'),
+      undefined,
+    ],
+    ["vllm", "http://127.0.0.1:8000/v1", notFound('{"detail":"Not Found"}'), undefined],
+    [
+      "llama-cpp",
+      "http://127.0.0.1:9090/v1",
+      () => new Response("<html>llama.cpp</html>"),
+      "b4567-0123abcd",
+    ],
   ] as const)("sends max_completion_tokens to %s at %s", sendsMaxCompletionTokensToNonOllama);
   it("sends max_completion_tokens to OpenAI without probing it", skipsProbe(directOpenAIModel()));
   it(
@@ -251,8 +276,24 @@ describe("openai-completions max tokens field for Ollama", () => {
     }),
   );
   it("probes each server once and reuses the answer", reusesProbeAnswer);
-  it("probes again after the server could not be reached", probesAgainAfterUnreachable);
-  it("remembers a probe that timed out", remembersTimedOutProbe);
   it("shares one probe between concurrent first requests", sharesConcurrentProbe);
-  it("probes again after the root refused the credentials", probesAgainAfterUnauthorized);
+  it.for([
+    [8686, lmStudio, ollamaServer],
+    [8787, ollamaServer, lmStudio],
+  ] as const)(
+    "follows the server at port %i to its next answer after it is replaced",
+    followsSwappedServer,
+  );
+  it.for([
+    [8484, hangs],
+    [8383, refuses],
+    [8901, answering(jsonError(401, '{"error":"unauthorized"}'))],
+    [8903, answering(jsonError(403, '{"error":"forbidden"}'))],
+    [8929, answering(jsonError(429, '{"error":"rate limited"}'))],
+    [8950, answering(jsonError(500, '{"error":"internal"}'))],
+    [8953, answering(jsonError(503, '{"error":"unavailable"}'))],
+  ] as const)(
+    "asks the failing root at port %i once per interval and asks again after it",
+    boundsProbesOfFailingRoot,
+  );
 });
