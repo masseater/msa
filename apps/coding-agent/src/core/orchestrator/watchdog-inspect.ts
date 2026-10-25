@@ -18,6 +18,18 @@ function lastTurn(worker: runtimeTypes.WorkerSession): compatTypes.AssistantMess
   return last?.role === "assistant" ? (last as compatTypes.AssistantMessage) : undefined;
 }
 
+function awaitingToolResult(worker: runtimeTypes.WorkerSession): boolean {
+  const index = worker.messages.findLastIndex((message) => message.role === "assistant");
+  const turn = worker.messages[index] as compatTypes.AssistantMessage | undefined;
+  if (turn?.stopReason !== "toolUse") return false;
+  const returned = new Set(
+    worker.messages
+      .slice(index + 1)
+      .flatMap((message) => (message.role === "toolResult" ? [message.toolCallId] : [])),
+  );
+  return turn.content.some((part) => part.type === "toolCall" && !returned.has(part.id));
+}
+
 function stoppedTurn(worker: runtimeTypes.WorkerSession): compatTypes.AssistantMessage | undefined {
   const turn = lastTurn(worker);
   return turn?.stopReason === "error" || turn?.stopReason === "aborted" ? turn : undefined;
@@ -29,7 +41,7 @@ function idleFinding(
   since: number,
   now: number,
 ): watchdogTypes.Finding | undefined {
-  const toolCall = worker.isStreaming && lastTurn(worker)?.stopReason === "toolUse";
+  const toolCall = worker.isStreaming && awaitingToolResult(worker);
   if (since < (toolCall ? TOOL_CALL_MS : IDLE_MS)) return undefined;
   const running = formatElapsed(now - thread.createdAt);
   return {
