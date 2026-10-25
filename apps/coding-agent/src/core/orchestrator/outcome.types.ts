@@ -4,6 +4,7 @@ declare namespace outcomeTypes {
   interface ProviderLimit {
     reason: orchestratorTypesTypes.ProviderWait["reason"];
     error: string;
+    progressed: boolean;
     resetsAt: number | undefined;
     sessionFile: string | null;
   }

@@ -10,6 +10,10 @@ CREATE TABLE IF NOT EXISTS provider_waits (
   resume_at INTEGER NOT NULL,
   created_at INTEGER NOT NULL
 );
+CREATE TABLE IF NOT EXISTS provider_wait_attempts (
+  task_id TEXT PRIMARY KEY,
+  attempts INTEGER NOT NULL
+);
 `;
 
 const providerWaitSchema = { PROVIDER_WAIT_SCHEMA };

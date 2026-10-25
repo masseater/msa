@@ -64,6 +64,30 @@ function deleteProviderWait(database: DatabaseSync, taskId: string): void {
   database.prepare("DELETE FROM provider_waits WHERE task_id = ?").run(taskId);
 }
 
-const providerWaitStore = { deleteProviderWait, insertProviderWait, listProviderWaits };
+function providerWaitAttempts(database: DatabaseSync, taskId: string): number {
+  const row = database
+    .prepare("SELECT attempts FROM provider_wait_attempts WHERE task_id = ?")
+    .get(taskId) as { attempts: number } | undefined;
+  return row?.attempts ?? 0;
+}
+
+function setProviderWaitAttempts(database: DatabaseSync, taskId: string, attempts: number): void {
+  database
+    .prepare("INSERT OR REPLACE INTO provider_wait_attempts (task_id, attempts) VALUES (?, ?)")
+    .run(taskId, attempts);
+}
+
+function clearProviderWaitAttempts(database: DatabaseSync, taskId: string): void {
+  database.prepare("DELETE FROM provider_wait_attempts WHERE task_id = ?").run(taskId);
+}
+
+const providerWaitStore = {
+  clearProviderWaitAttempts,
+  deleteProviderWait,
+  insertProviderWait,
+  listProviderWaits,
+  providerWaitAttempts,
+  setProviderWaitAttempts,
+};
 
 export default providerWaitStore;

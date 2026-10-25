@@ -16,6 +16,7 @@ const { store } = storeModule;
 
 const RETRY_WITHOUT_RESET_MS = 15 * 60_000;
 const AFTER_RESET_MS = 60_000;
+const MAX_IDLE_ATTEMPTS = 3;
 
 const REASON_LABEL: Record<orchestratorTypesTypes.ProviderWait["reason"], string> = {
   auth: "provider rejected the credentials",
@@ -31,16 +32,29 @@ function limitOf(worker: workerTypes.WorkerSession): outcomeTypes.ProviderLimit 
   if (reason === undefined) return undefined;
   return {
     error: (last.errorMessage ?? "").trim() || "provider error",
+    progressed: progressedSincePrompt(worker.messages),
     reason,
     resetsAt: last.errorResetsAt,
     sessionFile: worker.sessionFile ?? null,
   };
 }
 
+function progressedSincePrompt(messages: workerTypes.WorkerSession["messages"]): boolean {
+  const prompt = messages.findLastIndex((message) => message.role === "user");
+  return messages
+    .slice(prompt + 1)
+    .some(
+      (message) =>
+        message.role === "assistant" &&
+        message.stopReason !== "error" &&
+        message.stopReason !== "aborted",
+    );
+}
+
 function resumeAt(limit: outcomeTypes.ProviderLimit, now: number): number {
-  return limit.resetsAt === undefined
+  return limit.resetsAt === undefined || limit.resetsAt <= now
     ? now + RETRY_WITHOUT_RESET_MS
-    : Math.max(now, limit.resetsAt + AFTER_RESET_MS);
+    : limit.resetsAt + AFTER_RESET_MS;
 }
 
 function record(
@@ -48,8 +62,18 @@ function record(
   assignment: orchestratorTypesTypes.Assignment,
   limit: outcomeTypes.ProviderLimit,
   now: number,
-): void {
-  store.setTaskStatus(runtime.database, assignment.taskId, "waiting", now);
+): "waiting" | "failed" {
+  const { database } = runtime;
+  const attempts = limit.progressed
+    ? 1
+    : store.providerWaitAttempts(database, assignment.taskId) + 1;
+  if (attempts > MAX_IDLE_ATTEMPTS) {
+    store.clearProviderWaitAttempts(database, assignment.taskId);
+    store.setTaskStatus(database, assignment.taskId, "failed", now);
+    return "failed";
+  }
+  store.setProviderWaitAttempts(database, assignment.taskId, attempts);
+  store.setTaskStatus(database, assignment.taskId, "waiting", now);
   store.insertProviderWait(runtime.database, {
     createdAt: now,
     error: limit.error,
@@ -61,6 +85,7 @@ function record(
     taskId: assignment.taskId,
     threadId: assignment.threadId,
   });
+  return "waiting";
 }
 
 function firstLine(text: string): string {
@@ -79,6 +104,10 @@ function waitingLine(runtime: runtimeTypes.Runtime, taskId: string): string {
   return ` The ${REASON_LABEL[wait.reason]} stopped it; the same thread resumes automatically at ${formatLocalDateTime(wait.resumeAt)}.`;
 }
 
+function givenUpLine(limit: outcomeTypes.ProviderLimit): string {
+  return ` It was resumed ${MAX_IDLE_ATTEMPTS} times in a row after the ${REASON_LABEL[limit.reason]} (${firstLine(limit.error)}) and stopped on it each time before doing any work, so it is not resumed again.`;
+}
+
 function resumePrompt(
   wait: orchestratorTypesTypes.ProviderWait,
   notes: readonly orchestratorTypesTypes.Note[],
@@ -91,7 +120,7 @@ function resumePrompt(
     .join("\n\n");
 }
 
-const providerWaits = { limitOf, record, resumePrompt, waitingDetail, waitingLine };
+const providerWaits = { givenUpLine, limitOf, record, resumePrompt, waitingDetail, waitingLine };
 
 const providerWait = {
   providerWaits,

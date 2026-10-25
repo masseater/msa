@@ -1,3 +1,4 @@
+import ai from "@msa/ai";
 import type aiTypes from "@msa/ai/index.types";
 import { Clock, Effect } from "effect";
 import { afterEach, expect, it, vi } from "vite-plus/test";
@@ -12,6 +13,7 @@ const { harness } = orchestratorHarness;
 const { setup, taskStatus } = harness;
 const { TASK, advance, fakeClock } = watchdogSupport;
 const { formatLocalDateTime } = platform;
+const { fauxAssistantMessage } = ai;
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -146,3 +148,67 @@ const dropsTheWaitWhenTheTaskIsStopped = () =>
   );
 
 it("drops the wait when the task is stopped", dropsTheWaitWhenTheTaskIsStopped);
+
+const limitAgain = (started: Started, index: number, progressed: boolean) =>
+  Effect.gen(function* () {
+    const worker = started.workers[index];
+    if (worker === undefined) throw new Error(`worker ${index} did not start`);
+    if (progressed) worker.messages = [fauxAssistantMessage("did some work")];
+    const resetsAt = (yield* Clock.currentTimeMillis) + HOUR;
+    worker.endTurnWithError({ errorMessage: SESSION_LIMIT, errorResetsAt: resetsAt });
+    yield* advance(0);
+  });
+
+const resumeAll = (started: Started, count: number) =>
+  Effect.gen(function* () {
+    yield* advance(HOUR + MINUTE + 10_000);
+    expect(started.workers).toHaveLength(count);
+  });
+
+const givesUpAfterResumesThatDoNoWork = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const started = yield* startedTask;
+      yield* limitAgain(started, 0, false);
+      for (const index of [1, 2]) {
+        yield* resumeAll(started, index + 1);
+        yield* limitAgain(started, index, false);
+        expect(taskStatus(started.orchestrator, started.task.id)).toBe("waiting");
+      }
+      yield* resumeAll(started, 4);
+      yield* limitAgain(started, 3, false);
+
+      expect(taskStatus(started.orchestrator, started.task.id)).toBe("failed");
+      expect(started.reports.at(-1)?.details.status).toBe("failed");
+      expect(started.reports.at(-1)?.text).toContain("not resumed again");
+      yield* advance(3 * HOUR);
+      expect(started.workers).toHaveLength(4);
+      yield* Effect.promise(() => started.orchestrator.dispose());
+    }),
+  );
+
+it(
+  "fails the task once three resumes in a row stop on the error before doing any work",
+  givesUpAfterResumesThatDoNoWork,
+);
+
+const keepsWaitingWhileResumesMakeProgress = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const started = yield* startedTask;
+      yield* limitAgain(started, 0, false);
+      for (const index of [1, 2, 3, 4]) {
+        yield* resumeAll(started, index + 1);
+        yield* limitAgain(started, index, index === 3);
+      }
+
+      expect(taskStatus(started.orchestrator, started.task.id)).toBe("waiting");
+      yield* resumeAll(started, 6);
+      yield* Effect.promise(() => started.orchestrator.dispose());
+    }),
+  );
+
+it(
+  "keeps resuming when a resumed thread did work before it hit the limit again",
+  keepsWaitingWhileResumesMakeProgress,
+);

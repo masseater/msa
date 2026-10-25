@@ -27,18 +27,28 @@ function reportText(
     outcome.content.length <= REPORT_LIMIT
       ? outcome.content
       : `${outcome.content.slice(0, REPORT_LIMIT)}\n[truncated]`;
-  const first = assignments[0]?.taskId;
-  const summary =
-    outcome.limit === undefined || first === undefined
-      ? `${titles.join(", ")} ${status}.${runTimeSuffix(runtime, assignments, outcome)}`
-      : `${titles.join(", ")} waiting, not failed.${providerWaits.waitingLine(runtime, first)}`;
   return [
-    summary,
+    summaryLine(runtime, assignments, outcome, status, titles.join(", ")),
     started.length > 0 ? `Started: ${started.join(", ")}.` : undefined,
     content === "" ? undefined : `<report>\n${content}\n</report>`,
   ]
     .filter(Boolean)
     .join("\n\n");
+}
+
+function summaryLine(
+  runtime: runtimeTypes.Runtime,
+  assignments: readonly orchestratorTypesTypes.Assignment[],
+  outcome: outcomeTypes.Outcome,
+  status: workerTypes.ReportStatus,
+  titles: string,
+): string {
+  const first = assignments[0]?.taskId;
+  if (outcome.limit === undefined || first === undefined)
+    return `${titles} ${status}.${runTimeSuffix(runtime, assignments, outcome)}`;
+  return status === "waiting"
+    ? `${titles} waiting, not failed.${providerWaits.waitingLine(runtime, first)}`
+    : `${titles} ${status}.${providerWaits.givenUpLine(outcome.limit)}`;
 }
 
 const outcomeReport = { reportText };
