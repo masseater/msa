@@ -114,6 +114,7 @@ function readyTasks(
       `SELECT t.* FROM tasks t
        WHERE t.project = ? AND t.status = 'waiting' AND t.kind = ?
          AND (t.condition IS NULL OR t.condition = '')
+         AND NOT EXISTS (SELECT 1 FROM provider_waits w WHERE w.task_id = t.id)
          AND NOT EXISTS (
            SELECT 1 FROM task_dependencies d JOIN tasks dep ON dep.id = d.depends_on
            WHERE d.task_id = t.id AND dep.status <> 'completed'

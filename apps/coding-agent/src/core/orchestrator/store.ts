@@ -1,5 +1,6 @@
 import dbModule from "./db.ts";
 import noteStoreModule from "./note-store.ts";
+import providerWaitStore from "./provider-wait-store.ts";
 import pullRequestStore from "./pull-request-store.ts";
 import reportStoreModule from "./report-store.ts";
 import stateStoreModule from "./state-store.ts";
@@ -22,6 +23,7 @@ const store = {
   ...noteStore,
   ...stateStore,
   ...watchdogStore,
+  ...providerWaitStore,
   ...pullRequestStore,
 };
 

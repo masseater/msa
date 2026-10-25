@@ -1,9 +1,9 @@
 import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import providerWaitSchema from "./provider-wait-schema.ts";
 import pullRequestSchema from "./pull-request-schema.ts";
 
 const { openSqliteFile } = sqliteFile;
-const { PULL_REQUEST_SCHEMA } = pullRequestSchema;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -255,7 +255,8 @@ function openDatabase(path: string): DatabaseSync {
   database.exec("PRAGMA foreign_keys = OFF");
   renameSessionsToThreads(database);
   database.exec(SCHEMA);
-  database.exec(PULL_REQUEST_SCHEMA);
+  database.exec(pullRequestSchema.PULL_REQUEST_SCHEMA);
+  database.exec(providerWaitSchema.PROVIDER_WAIT_SCHEMA);
   dropReplanUndoColumns(database);
   migrateTasks(database);
   addOwnerPid(database);

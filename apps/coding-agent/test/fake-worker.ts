@@ -12,6 +12,7 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   isStreaming = false;
   messages: agentTypes.AgentMessage[] = [];
   sessionFile: string;
+  openedSessionFile: string | undefined;
   prompts: string[] = [];
   steered: string[] = [];
   model: aiTypes.Model<any>;
@@ -19,7 +20,7 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   telemetry: orchestratorTypes.CreateWorkerOptions["telemetry"];
   state: { streamingMessage?: agentTypes.AgentMessage } = {};
   private readonly pending: Array<{
-    resolve: (reply: string) => void;
+    resolve: (message: aiTypes.AssistantMessage) => void;
     reject: (error: unknown) => void;
   }> = [];
 
@@ -28,7 +29,8 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
     this.model = options.model;
     this.thinkingLevel = options.thinkingLevel;
     this.telemetry = options.telemetry;
-    this.sessionFile = `/sessions/${index}.jsonl`;
+    this.openedSessionFile = options.sessionFile;
+    this.sessionFile = options.sessionFile ?? `/sessions/${index}.jsonl`;
   }
 
   prompt = (text: string) => {
@@ -40,8 +42,8 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
         this.isStreaming = false;
         reject(error);
       },
-      resolve: (reply) => {
-        this.messages = [...this.messages, fauxAssistantMessage(reply)];
+      resolve: (message) => {
+        this.messages = [...this.messages, message];
         this.isStreaming = false;
         resolve();
       },
@@ -99,10 +101,16 @@ export default class FakeWorker implements orchestratorTypes.WorkerSession {
   subscribe = () => () => {};
 
   complete(reply: string): void {
-    this.pending.shift()?.resolve(reply);
+    this.pending.shift()?.resolve(fauxAssistantMessage(reply));
   }
 
   fail(error: Error): void {
     this.pending.shift()?.reject(error);
+  }
+
+  endTurnWithError(failure: Partial<aiTypes.AssistantMessage>): void {
+    this.pending
+      .shift()
+      ?.resolve({ ...fauxAssistantMessage("", { stopReason: "error" }), ...failure });
   }
 }

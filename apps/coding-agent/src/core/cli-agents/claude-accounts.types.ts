@@ -21,6 +21,7 @@ declare namespace claudeAccountsTypes {
   interface AccountBlock {
     until: number;
     reason: string;
+    usageLimit?: boolean;
   }
 
   interface RunFailure {

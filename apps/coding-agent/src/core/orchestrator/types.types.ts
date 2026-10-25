@@ -155,7 +155,25 @@ declare namespace orchestratorTypesTypes {
     taskIds: readonly string[];
   }
 
-  type WaitingKind = "dependencies" | "condition" | "capacity" | "scheduling" | "review";
+  type WaitingKind =
+    | "dependencies"
+    | "condition"
+    | "provider"
+    | "capacity"
+    | "scheduling"
+    | "review";
+
+  interface ProviderWait {
+    taskId: string;
+    project: string;
+    threadId: string;
+    role: ThreadRole;
+    sessionFile: string | null;
+    reason: "auth" | "quota";
+    error: string;
+    resumeAt: number | null;
+    createdAt: number;
+  }
 
   interface WaitingReason {
     kind: WaitingKind;

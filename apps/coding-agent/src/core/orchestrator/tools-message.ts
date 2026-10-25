@@ -42,7 +42,7 @@ function messageToolsA(
   return {
     send_message: tool({
       description:
-        "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a finished task reruns in a new thread.",
+        "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a task waiting for a decision after a provider error resumes its thread with it; a finished task reruns in a new thread.",
       label: "send message",
       name: "send_message",
       parameters: messageSchema,
