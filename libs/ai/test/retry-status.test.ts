@@ -54,23 +54,6 @@ describe("the HTTP status recorded on the message", () => {
   });
 });
 
-describe("a reset time recorded on the message", () => {
-  const limited = (errorMessage: string) => ({
-    ...failed(errorMessage),
-    errorResetsAt: Date.UTC(2026, 9, 21, 23),
-  });
-
-  it("marks the provider unusable until then, whatever the text says", () => {
-    expect(providerUnusableReason(limited("You've hit your session limit"))).toBe("quota");
-    expect(providerUnusableReason(limited(""))).toBe("quota");
-    expect(isRetryableAssistantError(limited("rate limit"))).toBe(false);
-  });
-
-  it("is what separates a limit from the same text without one", () => {
-    expect(providerUnusableReason(failed("You've hit your session limit"))).toBeUndefined();
-  });
-});
-
 describe("a retryable status in the error text", () => {
   it.each([
     "Proxy error: 502 Bad Gateway",

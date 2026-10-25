@@ -22,7 +22,10 @@ const { createTestResourceLoader } = utilities;
 const CREDITS_ERROR =
   '402: {"message":"This request requires more credits, or fewer max_tokens.","code":402}';
 
-const providerStream = (failing: ReadonlySet<string>) => {
+const providerStream = (
+  failing: ReadonlySet<string>,
+  failure: Parameters<typeof assistantMessage>[1] = { errorMessage: CREDITS_ERROR },
+) => {
   const calls: string[] = [];
   const contexts: agentTypes.AgentContext[] = [];
   const streamFn: agentTypes.StreamFn = (model, context) => {
@@ -32,11 +35,7 @@ const providerStream = (failing: ReadonlySet<string>) => {
       calls.push(model.provider);
       const base = { model: model.id, provider: model.provider };
       if (failing.has(model.provider)) {
-        const error = assistantMessage("", {
-          ...base,
-          errorMessage: CREDITS_ERROR,
-          stopReason: "error",
-        });
+        const error = assistantMessage("", { ...base, ...failure, stopReason: "error" });
         stream.push({ partial: error, type: "start" });
         stream.push({ error, reason: "error", type: "error" });
         return;

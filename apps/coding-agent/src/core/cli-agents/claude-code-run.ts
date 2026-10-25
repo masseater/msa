@@ -44,12 +44,19 @@ const usableAccounts = (
       )
     : Promise.resolve([fixed]);
 
-interface NoAccount {
+const USAGE_LIMIT_KIND = "insufficient_quota";
+
+interface Failed {
   readonly message: string;
-  readonly resetsAt: number | undefined;
+  readonly resetsAt?: number;
 }
 
-function noAccount(failures: readonly string[]): Promise<NoAccount> {
+const usageLimited = (message: string, resetsAt: number | undefined): Failed => ({
+  message: `${message}\n(error: ${USAGE_LIMIT_KIND})`,
+  ...(resetsAt === undefined ? {} : { resetsAt }),
+});
+
+function noAccount(failures: readonly string[]): Promise<Failed> {
   const failed = new Set(failures.map((line) => line.slice(0, line.indexOf(":"))));
   return rotationAccounts()
     .then((accounts) =>
@@ -61,19 +68,22 @@ function noAccount(failures: readonly string[]): Promise<NoAccount> {
       const blocked = blocks
         .filter(({ account }) => !failed.has(account.name))
         .map(({ account, block }) => `${account.name}: ${block?.reason ?? "?"}`);
-      const until = blocks.flatMap(({ block }) => (block === undefined ? [] : [block.until]));
-      return {
-        message: `No Claude account available.\n${[...failures, ...blocked].join("\n")}`,
-        resetsAt:
-          until.length === blocks.length && until.length > 0 ? Math.min(...until) : undefined,
-      };
+      const message = `No Claude account available.\n${[...failures, ...blocked].join("\n")}`;
+      const limits = blocks.flatMap(({ block }) => (block?.usageLimit === true ? [block] : []));
+      return limits.length === blocks.length && limits.length > 0
+        ? usageLimited(message, Math.min(...limits.map((block) => block.until)))
+        : { message };
     });
 }
 
-const limitResetsAt = (account: claudeAccountsTypes.Account, failure: AccountFailure["failure"]) =>
+const accountFailed = (
+  account: claudeAccountsTypes.Account,
+  failure: AccountFailure["failure"],
+  message: string,
+): Promise<Failed> =>
   failure.cause === "usage_limit"
-    ? blockOf(account).then((block) => block?.until ?? failure.resetsAt)
-    : Promise.resolve(undefined);
+    ? blockOf(account).then((block) => usageLimited(message, block?.until ?? failure.resetsAt))
+    : Promise.resolve({ message });
 
 const runAccount = (request: RunRequest, state: RunState, account: claudeAccountsTypes.Account) =>
   Effect.gen(function* () {
@@ -109,7 +119,8 @@ const runAccounts = (request: RunRequest, state: RunState) =>
       const detail = `${failed.name}: ${failure.error}`;
       failures.push(detail);
       if (request.fixed !== undefined || !blocked || reply.hasContent) {
-        reply.fail("error", detail, yield* Effect.promise(() => limitResetsAt(failed, failure)));
+        const failedRun = yield* Effect.promise(() => accountFailed(failed, failure, detail));
+        reply.fail("error", failedRun.message, failedRun.resetsAt);
         return;
       }
       config.accounts = config.accounts.filter((candidate) => candidate.name !== failed.name);
@@ -168,6 +179,6 @@ const run = (request: RunRequest): Effect.Effect<void> => {
   );
 };
 
-const claudeCodeRun = { run };
+const claudeCodeRun = { run, usageLimited };
 
 export default claudeCodeRun;

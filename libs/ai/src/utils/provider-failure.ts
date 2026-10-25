@@ -141,27 +141,21 @@ const RETRYABLE_PROVIDER_ERROR_PATTERN = buildProviderErrorPattern([
 interface ProviderFailure {
   readonly text: string;
   readonly status: number | undefined;
-  readonly resetsAt: number | undefined;
 }
 
 const providerFailure = (message: typesModule.AssistantMessage): ProviderFailure | undefined => {
   if (message.stopReason !== "error") return undefined;
   const text = message.errorMessage ?? "";
   const status = message.errorStatus ?? textStatus(text);
-  const resetsAt = message.errorResetsAt;
-  return text === "" && status === undefined && resetsAt === undefined
-    ? undefined
-    : { resetsAt, status, text };
+  return text === "" && status === undefined ? undefined : { status, text };
 };
 
 const unusableReason = ({
-  resetsAt,
   status,
   text,
 }: ProviderFailure): providerFailureTypes.ProviderUnusableReason | undefined => {
   if (status === PAYMENT_REQUIRED_STATUS) return "quota";
   if (PROVIDER_ACCOUNT_STATUSES.has(status ?? 0)) return "auth";
-  if (resetsAt !== undefined) return "quota";
   if (PROVIDER_QUOTA_ERROR_PATTERN.test(text)) return "quota";
   return PROVIDER_AUTH_ERROR_PATTERN.test(text) ? "auth" : undefined;
 };

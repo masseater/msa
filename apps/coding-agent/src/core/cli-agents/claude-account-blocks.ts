@@ -76,7 +76,11 @@ function blockIfUnusable(
   if (until === undefined) return Promise.resolve(false);
   return loadBlocks()
     .then((blocks) => {
-      blocks[account.name] = { reason: failure.error.split("\n")[0]!.slice(0, 200), until };
+      blocks[account.name] = {
+        reason: failure.error.split("\n")[0]!.slice(0, 200),
+        until,
+        ...(failure.cause === "usage_limit" ? { usageLimit: true } : {}),
+      };
       return saveBlocks(blocks);
     })
     .then(() => true);
