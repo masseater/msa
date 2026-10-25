@@ -7,12 +7,12 @@ CREATE TABLE IF NOT EXISTS provider_waits (
   session_file TEXT,
   reason TEXT NOT NULL,
   error TEXT NOT NULL,
-  resume_at INTEGER NOT NULL,
+  resume_at INTEGER,
   created_at INTEGER NOT NULL
 );
-CREATE TABLE IF NOT EXISTS provider_wait_attempts (
+CREATE TABLE IF NOT EXISTS provider_resumes (
   task_id TEXT PRIMARY KEY,
-  attempts INTEGER NOT NULL
+  reason TEXT NOT NULL
 );
 `;
 

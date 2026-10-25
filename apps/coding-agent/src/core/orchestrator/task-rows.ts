@@ -132,7 +132,7 @@ function deleteTask(database: DatabaseSync, taskId: string): void {
   database.prepare("DELETE FROM note_targets WHERE task_id = ?").run(taskId);
   database.prepare("DELETE FROM task_pull_requests WHERE task_id = ?").run(taskId);
   database.prepare("DELETE FROM provider_waits WHERE task_id = ?").run(taskId);
-  database.prepare("DELETE FROM provider_wait_attempts WHERE task_id = ?").run(taskId);
+  database.prepare("DELETE FROM provider_resumes WHERE task_id = ?").run(taskId);
   database.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
 }
 

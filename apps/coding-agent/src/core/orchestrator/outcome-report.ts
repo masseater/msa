@@ -46,9 +46,7 @@ function summaryLine(
   const first = assignments[0]?.taskId;
   if (outcome.limit === undefined || first === undefined)
     return `${titles} ${status}.${runTimeSuffix(runtime, assignments, outcome)}`;
-  return status === "waiting"
-    ? `${titles} waiting, not failed.${providerWaits.waitingLine(runtime, first)}`
-    : `${titles} ${status}.${providerWaits.givenUpLine(outcome.limit)}`;
+  return `${titles}${providerWaits.waitingLine(runtime, first)}`;
 }
 
 const outcomeReport = { reportText };

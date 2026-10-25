@@ -9,7 +9,7 @@ interface ProviderWaitRow {
   session_file: string | null;
   reason: string;
   error: string;
-  resume_at: number;
+  resume_at: number | null;
   created_at: number;
 }
 
@@ -55,7 +55,9 @@ function listProviderWaits(
   project: string,
 ): orchestratorTypesTypes.ProviderWait[] {
   const rows = database
-    .prepare("SELECT * FROM provider_waits WHERE project = ? ORDER BY resume_at, task_id")
+    .prepare(
+      "SELECT * FROM provider_waits WHERE project = ? ORDER BY resume_at IS NULL, resume_at, task_id",
+    )
     .all(project) as unknown as ProviderWaitRow[];
   return rows.map(toWait);
 }
@@ -64,30 +66,37 @@ function deleteProviderWait(database: DatabaseSync, taskId: string): void {
   database.prepare("DELETE FROM provider_waits WHERE task_id = ?").run(taskId);
 }
 
-function providerWaitAttempts(database: DatabaseSync, taskId: string): number {
+function providerResumedFor(
+  database: DatabaseSync,
+  taskId: string,
+): orchestratorTypesTypes.ProviderWait["reason"] | undefined {
   const row = database
-    .prepare("SELECT attempts FROM provider_wait_attempts WHERE task_id = ?")
-    .get(taskId) as { attempts: number } | undefined;
-  return row?.attempts ?? 0;
+    .prepare("SELECT reason FROM provider_resumes WHERE task_id = ?")
+    .get(taskId) as { reason: orchestratorTypesTypes.ProviderWait["reason"] } | undefined;
+  return row?.reason;
 }
 
-function setProviderWaitAttempts(database: DatabaseSync, taskId: string, attempts: number): void {
+function markProviderResumed(
+  database: DatabaseSync,
+  taskId: string,
+  reason: orchestratorTypesTypes.ProviderWait["reason"],
+): void {
   database
-    .prepare("INSERT OR REPLACE INTO provider_wait_attempts (task_id, attempts) VALUES (?, ?)")
-    .run(taskId, attempts);
+    .prepare("INSERT OR REPLACE INTO provider_resumes (task_id, reason) VALUES (?, ?)")
+    .run(taskId, reason);
 }
 
-function clearProviderWaitAttempts(database: DatabaseSync, taskId: string): void {
-  database.prepare("DELETE FROM provider_wait_attempts WHERE task_id = ?").run(taskId);
+function clearProviderResumed(database: DatabaseSync, taskId: string): void {
+  database.prepare("DELETE FROM provider_resumes WHERE task_id = ?").run(taskId);
 }
 
 const providerWaitStore = {
-  clearProviderWaitAttempts,
+  clearProviderResumed,
   deleteProviderWait,
   insertProviderWait,
   listProviderWaits,
-  providerWaitAttempts,
-  setProviderWaitAttempts,
+  markProviderResumed,
+  providerResumedFor,
 };
 
 export default providerWaitStore;

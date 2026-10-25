@@ -107,13 +107,11 @@ function applyOutcome(
   const applied: Applied = { lines: [], review: [], sendBack: [], status: "completed" };
   for (const assignment of assignments) {
     if (outcome.limit !== undefined) {
-      const status = providerWaits.record(runtime, assignment, outcome.limit, now);
-      if (status === "failed")
-        insertReport(database, assignment, { ...outcome, status: "failed" }, undefined, now);
-      applied.status = worse(applied.status, status);
+      providerWaits.record(runtime, assignment, outcome.limit, now);
+      applied.status = worse(applied.status, "waiting");
       continue;
     }
-    store.clearProviderWaitAttempts(database, assignment.taskId);
+    store.clearProviderResumed(database, assignment.taskId);
     const judged =
       outcome.status === "completed" ? reviewVerdicts.judgedTask(runtime, assignment) : undefined;
     const result =

@@ -171,7 +171,7 @@ declare namespace orchestratorTypesTypes {
     sessionFile: string | null;
     reason: "auth" | "quota";
     error: string;
-    resumeAt: number;
+    resumeAt: number | null;
     createdAt: number;
   }
 

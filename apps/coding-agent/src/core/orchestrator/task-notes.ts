@@ -6,7 +6,6 @@ import idsModule from "./ids.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import snapshotModule from "./snapshot.ts";
-import startModule from "./start.ts";
 import storeModule from "./store.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
@@ -15,7 +14,6 @@ const { store } = storeModule;
 const { orchestratorError } = errors;
 const { newId } = idsModule;
 const { snapshots } = snapshotModule;
-const { starting } = startModule;
 const { actionHelpers } = actionHelpersModule;
 
 function sendNote(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.SendNoteInput) {
@@ -66,20 +64,6 @@ function sendNote(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.S
   });
 }
 
-function sendMessage(runtime: runtimeTypes.Runtime, taskId: string, message: string) {
-  return Effect.gen(function* () {
-    const task = store.getTask(runtime.database, taskId);
-    if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
-    if (task.status === "completed" || task.status === "failed" || task.status === "stopped") {
-      yield* starting.startTasks(runtime, task, "worker", "", message);
-      yield* Effect.sync(() => runtime.publish());
-      return actionHelpers.taskView(runtime, taskId);
-    }
-    yield* sendNote(runtime, { audience: "tasks", content: message, taskIds: [taskId] });
-    return actionHelpers.taskView(runtime, taskId);
-  });
-}
-
-const taskNotes = { sendMessage, sendNote };
+const taskNotes = { sendNote };
 
 export default taskNotes;

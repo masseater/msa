@@ -16,7 +16,6 @@ const { store } = storeModule;
 
 const RETRY_WITHOUT_RESET_MS = 15 * 60_000;
 const AFTER_RESET_MS = 60_000;
-const MAX_IDLE_ATTEMPTS = 3;
 
 const REASON_LABEL: Record<orchestratorTypesTypes.ProviderWait["reason"], string> = {
   auth: "provider rejected the credentials",
@@ -62,30 +61,22 @@ function record(
   assignment: orchestratorTypesTypes.Assignment,
   limit: outcomeTypes.ProviderLimit,
   now: number,
-): "waiting" | "failed" {
+): void {
   const { database } = runtime;
-  const attempts = limit.progressed
-    ? 1
-    : store.providerWaitAttempts(database, assignment.taskId) + 1;
-  if (attempts > MAX_IDLE_ATTEMPTS) {
-    store.clearProviderWaitAttempts(database, assignment.taskId);
-    store.setTaskStatus(database, assignment.taskId, "failed", now);
-    return "failed";
-  }
-  store.setProviderWaitAttempts(database, assignment.taskId, attempts);
+  const stalled =
+    !limit.progressed && store.providerResumedFor(database, assignment.taskId) === limit.reason;
   store.setTaskStatus(database, assignment.taskId, "waiting", now);
-  store.insertProviderWait(runtime.database, {
+  store.insertProviderWait(database, {
     createdAt: now,
     error: limit.error,
     project: runtime.options.project,
     reason: limit.reason,
-    resumeAt: resumeAt(limit, now),
+    resumeAt: stalled ? null : resumeAt(limit, now),
     role: assignment.role,
     sessionFile: limit.sessionFile,
     taskId: assignment.taskId,
     threadId: assignment.threadId,
   });
-  return "waiting";
 }
 
 function firstLine(text: string): string {
@@ -93,19 +84,21 @@ function firstLine(text: string): string {
 }
 
 function waitingDetail(wait: orchestratorTypesTypes.ProviderWait): string {
-  return `${REASON_LABEL[wait.reason]} (${firstLine(wait.error)}); resumes ${formatLocalDateTime(wait.resumeAt)}`;
+  const cause = `${REASON_LABEL[wait.reason]} (${firstLine(wait.error)})`;
+  return wait.resumeAt === null
+    ? `${cause}; resumed and stopped on it again without progress, waits for a decision`
+    : `${cause}; resumes ${formatLocalDateTime(wait.resumeAt)}`;
 }
 
 function waitingLine(runtime: runtimeTypes.Runtime, taskId: string): string {
   const wait = store
     .listProviderWaits(runtime.database, runtime.options.project)
     .find((candidate) => candidate.taskId === taskId);
-  if (wait === undefined) return "";
-  return ` The ${REASON_LABEL[wait.reason]} stopped it; the same thread resumes automatically at ${formatLocalDateTime(wait.resumeAt)}.`;
-}
-
-function givenUpLine(limit: outcomeTypes.ProviderLimit): string {
-  return ` It was resumed ${MAX_IDLE_ATTEMPTS} times in a row after the ${REASON_LABEL[limit.reason]} (${firstLine(limit.error)}) and stopped on it each time before doing any work, so it is not resumed again.`;
+  if (wait === undefined) return " waiting.";
+  const cause = `the ${REASON_LABEL[wait.reason]} (${firstLine(wait.error)})`;
+  return wait.resumeAt === null
+    ? ` waiting for your decision, not failed. It was resumed after ${cause} and stopped on it again before making any progress, so it is not resumed on its own. send_message resumes the same thread with your message, rerun_task starts it over in a new thread, and stop_task stops it.`
+    : ` waiting, not failed. ${cause.charAt(0).toUpperCase()}${cause.slice(1)} stopped it; the same thread resumes automatically at ${formatLocalDateTime(wait.resumeAt)}.`;
 }
 
 function resumePrompt(
@@ -120,7 +113,7 @@ function resumePrompt(
     .join("\n\n");
 }
 
-const providerWaits = { givenUpLine, limitOf, record, resumePrompt, waitingDetail, waitingLine };
+const providerWaits = { limitOf, record, resumePrompt, waitingDetail, waitingLine };
 
 const providerWait = {
   providerWaits,
