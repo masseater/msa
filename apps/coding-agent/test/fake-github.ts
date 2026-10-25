@@ -120,6 +120,7 @@ export default class FakeGitHub {
     return Effect.gen({ self: this }, function* () {
       if (this.unavailable !== undefined) return this.unavailable;
       const [group, command, target] = args;
+      if (group === "api") return yield* this.commits(args);
       if (group !== "pr") return refused(`fake gh does not know ${args.join(" ")}`);
       if (command === "list") {
         const branch = args[args.indexOf("--head") + 1];
@@ -145,6 +146,30 @@ export default class FakeGitHub {
       if (command === "view") return ok(yield* Effect.orDie(encodeJson(yield* this.view(pull))));
       if (command === "merge") return yield* this.merge(pull, args);
       return refused(`fake gh does not know pr ${command}`);
+    });
+  }
+
+  private commits(args: readonly string[]): Effect.Effect<orchestratorTypes.GhResult> {
+    return Effect.gen({ self: this }, function* () {
+      const number = /^repos\/\{owner\}\/\{repo\}\/pulls\/(\d+)\/commits$/u.exec(
+        args.at(-1) ?? "",
+      )?.[1];
+      const pull = this.pulls.find((candidate) => String(candidate.number) === number);
+      if (pull === undefined) return refused(`fake gh does not know ${args.join(" ")}`);
+      yield* this.refresh(pull);
+      const log = yield* git(
+        this.origin,
+        `log --reverse --format=%H%x1f%B%x1e refs/heads/${pull.base}..${pull.head}`,
+      );
+      const commits = log.output
+        .split("\u001E")
+        .map((entry) => entry.trim())
+        .filter((entry) => entry !== "")
+        .map((entry) => {
+          const [sha = "", message = ""] = entry.split("\u001F");
+          return { commit: { message: message.trim() }, sha };
+        });
+      return ok(yield* Effect.orDie(encodeJson([commits])));
     });
   }
 

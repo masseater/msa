@@ -78,7 +78,7 @@ release. Add a tool name to select part of the graph. For example, run
 - ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
-- squash merge の本文は手で書き直さず、PR の検査を通ったコミットメッセージを使う。
+- squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも CI の `commits` ジョブ（`scripts/lint-squash-message.sh`）もこれを使い、CI は作ったメッセージを commitlint にかける。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
   - 手元の LLM サーバー（Ollama・LM Studio・llama.cpp）を呼ぶ `libs/ai/test/*-local.test.ts` は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。

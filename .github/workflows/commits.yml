@@ -46,11 +46,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           COMMITS: ${{ github.event.pull_request.commits }}
           PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
           gh auth setup-git
           git fetch --no-tags --depth="$((COMMITS + 2))" origin "$GITHUB_SHA"
           vp exec commitlint --from HEAD^1 --to HEAD^2 --verbose
           printf '%s\n' "$PR_TITLE" | vp exec commitlint --verbose
+          scripts/lint-squash-message.sh "$PR_NUMBER" "$PR_TITLE"
       - if: github.event_name == 'push'
         run: vp run gitleaks
         env:
