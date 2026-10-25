@@ -5,6 +5,7 @@
 ### Changed
 
 - The `CodemodeRuntimeError` a run fails with and the `CodemodeSourceError` that `@msa/codemode/source` throws are `Schema.TaggedError` values. `_tag`, `message` and the fields keep their names and values
+- `new CodemodeSourceError` takes one `{ message }` object; the old positional argument moved to the static `create(message)`, and `make({...})` builds one from the fields
 - Encoding one of these errors to JSON lists its keys in the schema's order and drops keys the schema does not declare
 
 ## [0.0.1] - 2026-10-16
