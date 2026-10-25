@@ -2,6 +2,7 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 
+import runnerEvents from "../../src/core/extensions/runner-events.ts";
 import SecretStoreAuthBackend from "../../src/extensions/mcp/credentials/secret-store-backend.ts";
 import extension from "../../src/extensions/mcp/extension.ts";
 import McpOAuthCredentialStore from "../../src/extensions/mcp/mcp-oauth-credential-store.ts";
@@ -9,6 +10,7 @@ import harnessModule from "./harness.ts";
 import mcpOauthServer from "./mcp-oauth-server.ts";
 
 const { createMcpExtension } = extension;
+const { emitSessionShutdownEvent } = runnerEvents;
 const { awaited, joinPath, makeDirectory, makeTempDir, removeDir, runTest, toJsonText } = testing;
 const { writeTextFile } = testing;
 const { createHarness } = harnessModule;
@@ -50,14 +52,12 @@ const agentDirWithLegacySignIn = Effect.fn("agentDirWithLegacySignIn")(function*
 });
 
 const printSession = Effect.fn("printSession")(function* (agentDir: string, url: string) {
+  const backend = new SecretStoreAuthBackend({ agentDir, defaultStore: lockedKeychain });
   const harness = yield* awaited(
     createHarness({
       extensionFactories: [
         createMcpExtension({
-          credentials: new McpOAuthCredentialStore(
-            new SecretStoreAuthBackend({ agentDir, defaultStore: lockedKeychain }),
-            agentDir,
-          ),
+          credentials: new McpOAuthCredentialStore(backend, agentDir),
           loadConfig: () => ({
             errors: [],
             servers: [{ config: { exposure: "direct", url }, name: "issues", source: "test" }],
@@ -67,7 +67,15 @@ const printSession = Effect.fn("printSession")(function* (agentDir: string, url:
       initialActiveToolNames: [],
     }),
   );
-  cleanups.push(() => harness.cleanup());
+  cleanups.push(() =>
+    emitSessionShutdownEvent(harness.session.extensions.binding.extensionRunner, {
+      reason: "quit",
+      type: "session_shutdown",
+    }).then(() => {
+      harness.cleanup();
+      return backend.withLockAsync(() => Promise.resolve({ result: undefined }));
+    }),
+  );
   yield* awaited(harness.session.extensions.binding.bindExtensions({}));
 });
 
