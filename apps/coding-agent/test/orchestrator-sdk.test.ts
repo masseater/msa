@@ -49,7 +49,7 @@ const savesTheThreeSectionsTheModelPasses = () =>
       const [saved] = yield* Effect.promise(() => pendingHandoffs(`${tempDir}/handoffs`));
       expect(result?.content).toEqual([{ text: `${saved?.path} を読んで再開して`, type: "text" }]);
       expect(yield* readTextFile(saved?.path ?? "")).toContain("premise from the conversation");
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 
@@ -71,7 +71,7 @@ const writesAHandoffUnderTheAgentDir = () =>
 
       expect(result.path.startsWith(`${tempDir}/handoffs/`)).toBe(true);
       expect(yield* readTextFile(result.path)).toContain(`- msa: ${VERSION}`);
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 
@@ -86,7 +86,7 @@ const doesNotStartAnOrchestratorInsideA = () =>
       const { session } = yield* createHarness({ isWorker: true });
       expect(session.integrations.orchestration.orchestrator).toBeUndefined();
       expect(session.tools.loadout.getActiveToolNames()).not.toContain("create_task");
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 
@@ -110,7 +110,7 @@ const keepsWorkerTranscriptsOutOfTheSessions = () =>
         return status !== "waiting" && status !== "running";
       });
       const worker = yield* Effect.promise(() => orchestrator.read(task.id));
-      expect(worker.status).toBe("stopped");
+      expect(worker.status).toBe("needs-decision");
       const assignment = worker.assignments.find((item) => item.role === "worker");
       const sessionFile = orchestrator.snapshot.threads.find(
         (candidate) => candidate.id === assignment?.threadId,
@@ -126,7 +126,7 @@ const keepsWorkerTranscriptsOutOfTheSessions = () =>
           SessionManager.continueRecent(tempDir, sessionDir),
         )).getSessionFile(),
       ).toBe(sessionManager.getSessionFile());
-      session.dispose();
+      yield* Effect.promise(() => session.dispose());
     }),
   );
 

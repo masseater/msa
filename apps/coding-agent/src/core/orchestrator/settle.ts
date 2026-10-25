@@ -1,12 +1,12 @@
 import { Effect } from "effect";
 
+import outcomeApply from "./outcome-apply.ts";
 import outcomeReport from "./outcome-report.ts";
 import outcomeModule from "./outcome.ts";
 import pullRequestNotice from "./pull-request-notice.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
-import schedule from "./schedule.ts";
-import start from "./start.ts";
+import settleFollowUps from "./settle-follow-ups.ts";
 import storeModule from "./store.ts";
 import wrapUp from "./wrap-up.ts";
 
@@ -14,25 +14,6 @@ const { nowMillis, releaseThread } = runtimeModule;
 const { store } = storeModule;
 const { outcomes } = outcomeModule;
 const { wrapping } = wrapUp;
-const { starting } = start;
-const { scheduling } = schedule;
-
-function startFollowUps(
-  runtime: runtimeTypes.Runtime,
-  applied: ReturnType<typeof outcomes.applyOutcome>,
-  report: string,
-): Effect.Effect<string[], runtimeTypes.OrchestratorError> {
-  return Effect.gen(function* () {
-    for (const task of applied.review) {
-      yield* starting.startTasks(runtime, task, "reviewer", report);
-    }
-    for (const item of applied.sendBack) {
-      yield* starting.startTasks(runtime, item.task, "worker", "", item.prompt);
-    }
-    const scheduled = yield* scheduling.scheduleEffect(runtime);
-    return [...applied.sendBack.map((item) => item.task.id), ...scheduled];
-  });
-}
 
 function reportContent(
   runtime: runtimeTypes.Runtime,
@@ -47,6 +28,14 @@ function reportContent(
   return [...lines, ...(notice === undefined ? [] : [notice]), content].join("\n\n");
 }
 
+function forgetRun(runtime: runtimeTypes.Runtime, threadId: string): void {
+  runtime.runs.delete(threadId);
+  runtime.runStartedAt.delete(threadId);
+  runtime.decisionRequests.delete(threadId);
+  runtime.goalChecklists.delete(threadId);
+  releaseThread(runtime, threadId);
+}
+
 function settleEffect(
   runtime: runtimeTypes.Runtime,
   threadId: string,
@@ -54,6 +43,7 @@ function settleEffect(
   worker: runtimeTypes.WorkerSession,
   error: unknown,
   verdict?: runtimeTypes.ReviewVerdict,
+  decision?: runtimeTypes.DecisionAsk,
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     if (runtime.runs.get(threadId) !== run) return;
@@ -61,18 +51,21 @@ function settleEffect(
     const thread = store.getThread(runtime.database, threadId);
     if (thread === undefined) return;
     const assignments = store.assignmentsOfThread(runtime.database, threadId);
-    runtime.runs.delete(threadId);
-    runtime.runStartedAt.delete(threadId);
-    releaseThread(runtime, threadId);
+    forgetRun(runtime, threadId);
     const outcome = outcomes.outcomeOf(worker, error);
     if (outcome.status !== "completed") {
       wrapping.fail(runtime, threadId, `wrap-up failed: ${outcome.content}`);
     }
     const applied = yield* Effect.sync(() => {
       store.updateThread(runtime.database, threadId, { status: outcome.status }, now);
-      return outcomes.applyOutcome(runtime, assignments, outcome, now, verdict);
+      return outcomeApply.applyOutcome(runtime, assignments, outcome, now, verdict, decision);
     });
-    const started = yield* startFollowUps(runtime, applied, outcome.content);
+    const started = yield* settleFollowUps.startFollowUps(runtime, {
+      applied,
+      assignments,
+      cwd: thread.cwd,
+      report: outcome.content,
+    });
     const judged = {
       ...outcome,
       content: reportContent(runtime, assignments, applied.lines, outcome.content),
@@ -100,8 +93,9 @@ function settle(
   worker: runtimeTypes.WorkerSession,
   error: unknown,
   verdict?: runtimeTypes.ReviewVerdict,
+  decision?: runtimeTypes.DecisionAsk,
 ): Promise<void> {
-  return runtime.exclusive(settleEffect(runtime, threadId, run, worker, error, verdict));
+  return runtime.exclusive(settleEffect(runtime, threadId, run, worker, error, verdict, decision));
 }
 
 const settling = { settle };

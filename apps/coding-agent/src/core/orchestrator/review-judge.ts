@@ -1,16 +1,15 @@
 import { Effect } from "effect";
 
-import type decideTypes from "../decision/decide.types.ts";
 import outcomeModule from "./outcome.ts";
 import pullRequestMergeModule from "./pull-request-merge.ts";
+import reviewEvidence from "./review-evidence.ts";
+import type reviewEvidenceTypes from "./review-evidence.types.ts";
 import reviewVerdictModule from "./review-verdict.ts";
 import type runtimeTypes from "./runtime.types.ts";
-import storeModule from "./store.ts";
 import threadRun from "./thread-run.ts";
 import type threadRunTypes from "./thread-run.types.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
-const { store } = storeModule;
 const { outcomes } = outcomeModule;
 const { threadRuns } = threadRun;
 const { reviewVerdicts } = reviewVerdictModule;
@@ -37,22 +36,62 @@ function mergeAndSettle(
   );
 }
 
+type Recorded = Extract<reviewEvidenceTypes.Evidence, { kind: "recorded" }>;
+
+type Decision = Awaited<ReturnType<runtimeTypes.OrchestratorOptions["decide"]>>;
+
+const askedToRecord = new WeakSet<runtimeTypes.WorkerSession>();
+
 function conclude(
   thread: threadRunTypes.ThreadRun,
   task: orchestratorTypesTypes.Task,
-  decided: decideTypes.Decision | undefined,
+  judged: { decided: Decision; evidence: Recorded } | undefined,
   readBefore: ReadonlySet<string>,
 ): void {
   const { runtime, threadId, run, worker } = thread;
-  if (decided === undefined || !threadRuns.current(thread)) return;
+  if (judged === undefined || !threadRuns.current(thread)) return;
   if (runtime.wrapUps.has(threadId)) {
     runtime.afterTurn(threadId, run, worker);
     return;
   }
   if (threadRuns.continueWithNotes(thread, readBefore)) return;
-  const verdict = reviewVerdicts.verdictOf(decided);
+  const { checklist, unchanged } = judged.evidence;
+  const verdict = reviewVerdicts.verdictOf(judged.decided, { checklist, unchanged });
   if (verdict.result === "pass") mergeAndSettle(thread, task, verdict);
   else threadRuns.settle(thread, undefined, verdict);
+}
+
+function unrecorded(
+  thread: threadRunTypes.ThreadRun,
+  evidence: Exclude<reviewEvidenceTypes.Evidence, Recorded>,
+): void {
+  if (!askedToRecord.has(thread.worker)) {
+    askedToRecord.add(thread.worker);
+    threadRuns.continueWith(thread, evidence.prompt);
+    return;
+  }
+  askedToRecord.delete(thread.worker);
+  threadRuns.settle(thread, undefined, {
+    checklist: evidence.checklist.text,
+    reason: "the reviewer was asked to record every goal item and did not",
+    result: "undecided",
+    stuck: false,
+  });
+}
+
+function decideRecorded(
+  runtime: runtimeTypes.Runtime,
+  evidence: Recorded,
+): Effect.Effect<{ decided: Decision; evidence: Recorded }> {
+  return Effect.map(
+    Effect.promise(() =>
+      runtime.options.decide(evidence.request).catch((error: unknown) => ({
+        reason: outcomes.errorText(error),
+        status: "undecided" as const,
+      })),
+    ),
+    (decided) => ({ decided, evidence }),
+  );
 }
 
 function judge(
@@ -62,23 +101,21 @@ function judge(
   worker: runtimeTypes.WorkerSession,
 ): boolean {
   const thread = { run, runtime, threadId, worker };
-  const tasks = store
-    .assignmentsOfThread(runtime.database, threadId)
-    .flatMap((assignment) => reviewVerdicts.judgedTask(runtime, assignment) ?? []);
-  const task = tasks[0];
+  const task = reviewVerdicts.judgedTaskOfThread(runtime, threadId);
   const outcome = outcomes.outcomeOf(worker, undefined);
   if (task === undefined || outcome.status !== "completed") return false;
   const readBefore = threadRuns.readIds(thread);
-  const decision = Effect.promise(() =>
-    runtime.options
-      .decide(reviewVerdicts.verdictRequest(task, outcome.content))
-      .catch((error: unknown) => ({
-        reason: outcomes.errorText(error),
-        status: "undecided" as const,
-      })),
-  );
-  void Effect.runPromise(threadRuns.whileCurrent(thread, decision)).then(
-    (decided) => conclude(thread, task, decided, readBefore),
+  const judging = Effect.gen(function* () {
+    const evidence = yield* reviewEvidence.gather(runtime, task, threadId, outcome.content);
+    if (evidence.kind === "unrecorded") return evidence;
+    askedToRecord.delete(worker);
+    return yield* decideRecorded(runtime, evidence);
+  });
+  void Effect.runPromise(threadRuns.whileCurrent(thread, judging)).then(
+    (judged) =>
+      judged !== undefined && "kind" in judged
+        ? unrecorded(thread, judged)
+        : conclude(thread, task, judged, readBefore),
     (error: unknown) => threadRuns.settle(thread, error),
   );
   return true;

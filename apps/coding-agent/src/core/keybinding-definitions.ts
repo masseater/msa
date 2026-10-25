@@ -79,6 +79,10 @@ const APP_KEYBINDINGS = {
     defaultKeys: "ctrl+p",
     description: "Toggle all models for provider",
   },
+  "app.orchestrator.advise": {
+    defaultKeys: "a",
+    description: "Have an advisor weigh the options of the selected task that needs a decision",
+  },
   "app.orchestrator.back": {
     defaultKeys: "shift+left",
     description: "Leave the threads view",

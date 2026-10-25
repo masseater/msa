@@ -1,5 +1,6 @@
 import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import progressStore from "./progress-store.ts";
 import providerWaitSchema from "./provider-wait-schema.ts";
 import pullRequestSchema from "./pull-request-schema.ts";
 
@@ -186,11 +187,6 @@ function addReportVerdict(database: DatabaseSync): void {
   database.exec("ALTER TABLE reports ADD COLUMN verdict TEXT");
 }
 
-function addHarnessMerge(database: DatabaseSync): void {
-  if (columnNames(database, "task_pull_requests").includes("harness_merge_sha")) return;
-  database.exec("ALTER TABLE task_pull_requests ADD COLUMN harness_merge_sha TEXT");
-}
-
 function addMissingRounds(database: DatabaseSync): void {
   database.exec(
     `INSERT OR IGNORE INTO rounds (id, project, title, created_at)
@@ -257,13 +253,15 @@ function openDatabase(path: string): DatabaseSync {
   database.exec(SCHEMA);
   database.exec(pullRequestSchema.PULL_REQUEST_SCHEMA);
   database.exec(providerWaitSchema.PROVIDER_WAIT_SCHEMA);
+  database.exec(progressStore.PROGRESS_SCHEMA);
+  progressStore.addTriageDecisionText(database);
   dropReplanUndoColumns(database);
   migrateTasks(database);
   addOwnerPid(database);
   addTaskChecks(database);
   addWorkspaceColumns(database);
   addReportVerdict(database);
-  addHarnessMerge(database);
+  pullRequestSchema.addPullRequestColumns(database);
   addMissingRounds(database);
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;

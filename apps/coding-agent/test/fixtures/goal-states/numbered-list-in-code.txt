@@ -1,0 +1,13 @@
+Every command in the guide runs as written. The guide keeps this example:
+
+```sh
+1. pnpm install
+- vp check
+(1) not an item
+```
+
+1. `vp check` passes on a clean checkout.
+2) The guide names the version it was checked with.
+   It says where the command came from.
+・ The changelog mentions the guide.
+① The release notes link to it. ② The README links to it too.

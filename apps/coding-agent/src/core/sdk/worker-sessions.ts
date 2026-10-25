@@ -40,6 +40,32 @@ const workerSessionManager = (parent: WorkerParent, worker: Worker): Promise<Ses
         ),
       );
 
+const READ_ONLY_TOOL_NAMES = ["read", "grep", "find", "ls"];
+
+const readOnlyWorkerOptions = (options: {
+  parent: WorkerParent;
+  worker: Worker;
+  resourceLoader: DefaultResourceLoader;
+  sessionManager: SessionManager;
+}): sdkInternalTypes.Options => {
+  const { parent, worker, resourceLoader, sessionManager } = options;
+  return {
+    agentDir: parent.agentDir,
+    customTools: [...worker.tools],
+    cwd: worker.cwd,
+    excludeTools: [...ORCHESTRATOR_TOOL_NAMES, "mcp__*"],
+    isWorker: true,
+    model: worker.model,
+    modelRuntime: parent.modelRuntime,
+    resourceLoader,
+    sessionManager,
+    settingsManager: parent.settingsManager,
+    telemetry: worker.telemetry,
+    thinkingLevel: worker.thinkingLevel,
+    tools: [...READ_ONLY_TOOL_NAMES, ...worker.tools.map((tool) => tool.name)],
+  };
+};
+
 const workerOptions = (options: {
   parent: WorkerParent;
   worker: Worker;
@@ -47,19 +73,20 @@ const workerOptions = (options: {
   sessionManager: SessionManager;
 }): sdkInternalTypes.Options => {
   const { parent, worker, resourceLoader, sessionManager } = options;
+  if (worker.readOnly) return readOnlyWorkerOptions(options);
   const { options: parentOptions, toolModifiers } = parent;
   const workerTools = parentOptions.tools?.filter(
     (entry) => !isOrchestratorTool(entry.replace(/^[+-]/u, "")),
   );
   return {
     agentDir: parent.agentDir,
+    customTools: [...(parentOptions.customTools ?? []), ...worker.tools],
     cwd: worker.cwd,
+    isWorker: true,
+    model: worker.model,
     modelRuntime: parent.modelRuntime,
     resourceLoader,
     settingsManager: parent.settingsManager,
-    ...(parentOptions.customTools === undefined ? {} : { customTools: parentOptions.customTools }),
-    isWorker: true,
-    model: worker.model,
     telemetry: worker.telemetry,
     thinkingLevel: worker.thinkingLevel,
     ...(workerTools !== undefined && !(workerTools.length === 0 && toolModifiers !== undefined)

@@ -1,3 +1,5 @@
+import type DatabaseSync from "../platform/node/sqlite.ts";
+
 const PULL_REQUEST_SCHEMA = `
 CREATE TABLE IF NOT EXISTS task_pull_requests (
   task_id TEXT PRIMARY KEY,
@@ -14,10 +16,25 @@ CREATE TABLE IF NOT EXISTS task_pull_requests (
   verified_title TEXT,
   verified_body TEXT,
   harness_merge_sha TEXT,
+  blocked_head TEXT,
   checked_at INTEGER NOT NULL
 );
 `;
 
-const pullRequestSchema = { PULL_REQUEST_SCHEMA };
+const ADDED_COLUMNS = ["harness_merge_sha", "blocked_head"] as const;
+
+function addPullRequestColumns(database: DatabaseSync): void {
+  const columns = database.prepare("PRAGMA table_info(task_pull_requests)").all() as unknown as {
+    name: string;
+  }[];
+  const names = new Set(columns.map((column) => column.name));
+  for (const column of ADDED_COLUMNS) {
+    if (!names.has(column)) {
+      database.exec(`ALTER TABLE task_pull_requests ADD COLUMN ${column} TEXT`);
+    }
+  }
+}
+
+const pullRequestSchema = { PULL_REQUEST_SCHEMA, addPullRequestColumns };
 
 export default pullRequestSchema;

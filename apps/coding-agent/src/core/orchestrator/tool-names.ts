@@ -6,6 +6,7 @@ const ORCHESTRATOR_TOOL_NAMES = [
   "set_task_state",
   "set_task_model",
   "send_message",
+  "consult_advisor",
   "send_note",
   "search_reports",
   "stop_task",

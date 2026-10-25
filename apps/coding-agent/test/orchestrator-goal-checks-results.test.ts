@@ -84,29 +84,27 @@ const countsTheRoundsAgainAfterTheChecksPass = () =>
         goalState: "lint reports 0 errors",
         title: "lint",
       });
-      for (let attempt = 1; attempt <= 3; attempt++) {
-        workers[0]?.complete(`done, try ${attempt}`);
-        yield* waitFor(() => held.calls.length === attempt);
-        held.calls[attempt - 1]?.release("3 errors\n");
-        yield* waitFor(() => workers[0]?.prompts.length === attempt + 1);
-      }
-      workers[0]?.complete("done, try 4");
-      yield* waitFor(() => held.calls.length === 4);
+      workers[0]?.complete("done, try 1");
+      yield* waitFor(() => held.calls.length === 1);
+      held.calls[0]?.release("3 errors\n");
+      yield* waitFor(() => workers[0]?.prompts.length === 2);
+      workers[0]?.complete("done, try 2");
+      yield* waitFor(() => held.calls.length === 2);
       yield* Effect.promise(() => orchestrator.sendMessage(task.id, "also keep the old API"));
-      held.calls[3]?.release();
-      yield* waitFor(() => workers[0]?.prompts.length === 5);
-      expect(workers[0]?.prompts[4]).toContain("also keep the old API");
+      held.calls[1]?.release();
+      yield* waitFor(() => workers[0]?.prompts.length === 3);
+      expect(workers[0]?.prompts[2]).toContain("also keep the old API");
 
       workers[0]?.complete("kept the old API");
-      yield* waitFor(() => held.calls.length === 5);
-      held.calls[4]?.release("1 errors\n");
-      yield* waitFor(() => workers[0]?.prompts.length === 6);
-      expect(workers[0]?.prompts[5]).toContain("goal-checks-failed");
+      yield* waitFor(() => held.calls.length === 3);
+      held.calls[2]?.release("3 errors\n");
+      yield* waitFor(() => workers[0]?.prompts.length === 4);
+      expect(workers[0]?.prompts[3]).toContain("goal-checks-failed");
       expect(taskStatus(orchestrator, task.id)).toBe("running");
     }),
   );
 
 it(
-  "counts the rounds of fixes from zero again once the checks have passed",
+  "sends a failure that comes back after the checks passed to the worker again, instead of taking it for the same failure repeating",
   countsTheRoundsAgainAfterTheChecksPass,
 );

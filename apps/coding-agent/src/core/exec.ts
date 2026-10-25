@@ -73,6 +73,9 @@ function execCommand(
         Effect.callback<execTypes.ExecResult>((resume) => {
           const proc = spawn(command, args, {
             cwd,
+            ...(options?.env === undefined
+              ? {}
+              : { env: { ...platform.envSnapshot(), ...options.env } }),
             shell: false,
             stdio: ["ignore", "pipe", "pipe"],
           });

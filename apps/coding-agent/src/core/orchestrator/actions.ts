@@ -1,13 +1,13 @@
 import taskCreate from "./task-create.ts";
 import taskEdit from "./task-edit.ts";
-import taskMessage from "./task-message.ts";
+import taskMessages from "./task-messages.ts";
 import taskNotes from "./task-notes.ts";
 import taskRunControl from "./task-run-control.ts";
 
 const actions = {
   ...taskCreate,
   ...taskEdit,
-  ...taskMessage,
+  ...taskMessages,
   ...taskNotes,
   ...taskRunControl,
 };

@@ -34,10 +34,16 @@ function afterTurn(
   );
   const pending = [...new Map(notes.map((note) => [note.id, note])).values()];
   if (pending.length === 0) {
+    const request = runtime.decisionRequests.get(threadId);
+    if (request !== undefined) {
+      void runtime.settle(threadId, run, worker, undefined, undefined, request);
+      return;
+    }
     if (!reviewJudge.judge(runtime, threadId, run, worker))
       goalChecks.verify(runtime, threadId, run, worker);
     return;
   }
+  runtime.decisionRequests.delete(threadId);
   const now = Effect.runSync(nowMillis);
   for (const note of pending) store.markNoteRead(runtime.database, note.id, threadId, now);
   void worker.run.prompting.prompt(prompts.notesBlock(pending)).then(

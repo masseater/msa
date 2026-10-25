@@ -122,6 +122,7 @@ function recordOf(
 ): PullRequest {
   return {
     base: pull.baseRefName,
+    blockedHead: null,
     branch: pull.headRefName,
     checkedAt: now,
     ci: ciOf(pull),

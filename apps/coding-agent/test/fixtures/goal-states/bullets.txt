@@ -1,0 +1,4 @@
+- ハーネスが squash するとき、件名は確かめた PR タイトル、本文は PR のコミット（lint 済み）の本文から作る。PR 本文は squash の本文に使わない（マージ直前の title・body の照合はそのまま残す）。
+- PR の `commits` ジョブで、同じ作り方で作った squash メッセージを commitlint にかけ、マージ前に落とす。作り方は 1 か所の実装を両方から使う。
+- PR 本文に 100 文字を超える行があっても、作ったメッセージが commitlint を通ることと、コミット本文に違反があれば PR の `commits` ジョブが落ちることをテストで固定する。
+- docs・CHANGELOG を合わせる。専用の worktree と枝から最新 main に rebase した PR を出し、CI 全 green の PR 番号と head SHA を報告する（マージ・auto-merge はしない）。.github/workflows を触るので、#228（ci-telemetry）が先に main に入っていれば rebase してから出す。

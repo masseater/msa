@@ -1,9 +1,8 @@
-import { tmpdir } from "node:os";
-
 import type aiTypes from "@msa/ai/index.types";
 import telemetryModule from "@msa/telemetry";
 import testing from "@msa/testing";
 import { Effect } from "effect";
+import { onTestFinished } from "vite-plus/test";
 
 import Orchestrator from "../src/core/orchestrator/orchestrator.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
@@ -11,7 +10,7 @@ import FakeWorker from "./fake-worker.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import reviewVerdictSupport from "./review-verdict-support.ts";
 const { InMemoryTelemetryContext } = telemetryModule;
-const { joinPath } = testing;
+const { joinPath, tempRoot } = testing;
 
 function model(provider: string, id: string): aiTypes.Model<aiTypes.Api> {
   return {
@@ -51,7 +50,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
       workerModel: "fast/flash",
       workerThinkingLevel: "low",
     }),
-    handoffDirectory: options.handoffDirectory ?? joinPath(tmpdir(), "msa-orchestrator-handoffs"),
+    handoffDirectory: options.handoffDirectory ?? joinPath(tempRoot(), "msa-orchestrator-handoffs"),
     pollIntervalMs: options.pollIntervalMs ?? null,
     project: options.project ?? "project",
     report: (text, details) => reports.push({ details, text }),
@@ -70,6 +69,7 @@ function setup(options: orchestratorHarnessTypes.HarnessOptions = {}) {
     telemetry,
     version: "0.0.0-test",
   });
+  onTestFinished(() => orchestrator.dispose());
   return { orchestrator, reports, telemetry, workers };
 }
 function waitFor(predicate: () => boolean, attempts = 10_000): Effect.Effect<void> {

@@ -11,8 +11,15 @@ const { prompts } = promptsModule;
 const messageSchema = Type.Object({
   message: Type.String({
     description:
-      "Steers a running thread, waits in the prompt of one that has not started, or reruns a finished one.",
+      "Steers a running thread, waits in the prompt of one that has not started, answers a task that waits for a decision, or reruns a finished one.",
   }),
+  taskId: taskIdSchema,
+});
+
+const adviseSchema = Type.Object({
+  question: Type.Optional(
+    Type.String({ description: "What you want the advisor to weigh, beyond the request." }),
+  ),
   taskId: taskIdSchema,
 });
 
@@ -42,11 +49,11 @@ function messageToolsA(
   return {
     send_message: tool({
       description:
-        "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a task waiting for a decision after a provider error resumes its thread with it; a finished task reruns in a new thread.",
+        "Send a message to a task. A running thread is steered at once; a task that has not started keeps it and receives it in its prompt when it starts; a task that waits for a decision continues in the thread that stopped, with the message as the decision, and so does one waiting for a decision after a provider error; a finished task reruns in a new thread.",
       label: "send message",
       name: "send_message",
       parameters: messageSchema,
-      promptSnippet: "Steer, queue a message for, or rerun a task",
+      promptSnippet: "Steer, queue a message for, answer, or rerun a task",
       run: ({ taskId, message }) =>
         orchestrator.sendMessage(taskId, message).then((task) => prompts.formatTaskList([task])),
     }),
@@ -151,7 +158,28 @@ function messageToolsB(
   };
 }
 
+function decisionTools(
+  orchestrator: orchestratorTypes.Orchestrator,
+): Record<string, extensionsTypesTypes.ToolDefinition> {
+  return {
+    consult_advisor: tool({
+      description:
+        "Start an advisor thread for a task that waits for a decision. The advisor reads the task, its decision request, its reports, and the code, weighs the options, and recommends one; its report comes back to you, and the task keeps waiting for your send_message.",
+      label: "consult advisor",
+      name: "consult_advisor",
+      parameters: adviseSchema,
+      promptGuidelines: [
+        "A decision request or a stop for work that is not moving reaches needs-decision only after a triage thread found that only the user can decide (billing, personal data, revoking an existing key, or a choice of specification nobody has made), found only a compromise, or saw the same request come back after it decided it, in which case the report shows the earlier request and the way it decided beside this one, so a request that does not repeat it is answered with send_message; CI that does not finish and a review the harness cannot judge go through the same triage. Do not lower the goal to let it pass: decide with the user, or after consult_advisor, then answer with send_message, or change the goal with set_task_state first when the user agrees.",
+      ],
+      promptSnippet: "Have an independent thread weigh a decision's options",
+      run: ({ taskId, question }) =>
+        orchestrator.advise(taskId, question ?? "").then((task) => prompts.formatTaskList([task])),
+    }),
+  };
+}
+
 const toolsMessage = {
+  decisionTools,
   messageToolsA,
   messageToolsB,
   messageToolsC,

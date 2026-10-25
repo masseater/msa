@@ -150,6 +150,7 @@ On native Windows, `app.suspend` has no default because Windows terminals do not
 | `app.orchestrator.note`           | `b`                | Send a shared note to the selected task's round    |
 | `app.orchestrator.toggleFinished` | `c`                | Show or hide finished tasks                        |
 | `app.orchestrator.rerun`          | `r`                | Rerun the selected task in a new thread            |
+| `app.orchestrator.advise`         | `a`                | Have an advisor weigh a decision's options         |
 | `app.orchestrator.stop`           | `s`                | Stop the selected task                             |
 | `app.orchestrator.model`          | `m`                | Switch the selected task's model                   |
 | `app.orchestrator.depends`        | `d`                | Change the selected task's dependencies            |

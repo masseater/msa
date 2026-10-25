@@ -267,6 +267,10 @@
       "$ref": "#/$defs/KeybindingValue",
       "description": "Toggle all models for provider"
     },
+    "app.orchestrator.advise": {
+      "$ref": "#/$defs/KeybindingValue",
+      "description": "Have an advisor weigh the options of the selected task that needs a decision"
+    },
     "app.orchestrator.back": {
       "$ref": "#/$defs/KeybindingValue",
       "description": "Leave the threads view"

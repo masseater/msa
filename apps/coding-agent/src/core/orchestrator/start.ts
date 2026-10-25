@@ -1,117 +1,31 @@
 import { Effect, Result } from "effect";
 
 import errors from "./errors.ts";
-import ids from "./ids.ts";
-import promptsModule from "./prompts.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
-import snapshot from "./snapshot.ts";
 import storeModule from "./store.ts";
+import threadPlanModule from "./thread-plan.ts";
+import threadTools from "./thread-tools.ts";
+import threadWorkspace from "./thread-workspace.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
-import worktreeModule from "./worktree.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { snapshots } = snapshot;
-const { prompts } = promptsModule;
-const { newId } = ids;
 const { orchestratorError } = errors;
-const { worktrees } = worktreeModule;
+const { toolsFor } = threadTools;
+const { markRead, planThread, threadModel } = threadPlanModule.threadPlans;
 
-interface ThreadPlan {
-  threadId: string;
-  prompt: string;
-  model: string;
-  thinkingLevel: orchestratorTypesTypes.Task["thinkingLevel"];
-  notes: readonly orchestratorTypesTypes.Note[];
-  sessionFile?: string;
-}
-
-function viewsById(runtime: runtimeTypes.Runtime): Map<string, orchestratorTypesTypes.TaskView> {
-  return new Map(
-    snapshots
-      .taskViews(runtime.database, runtime.options.project)
-      .map((view) => [view.id, view] as const),
-  );
-}
-
-function dependencyViews(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.TaskView,
-): orchestratorTypesTypes.TaskView[] {
-  const byId = viewsById(runtime);
-  return task.dependsOn.flatMap((id) => byId.get(id) ?? []);
-}
-
-function reviewerPrompt(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.TaskView,
-  workerReport: string,
-  notes: readonly orchestratorTypesTypes.Note[],
-): string {
-  if (task.kind === "review") {
-    const byId = viewsById(runtime);
-    const roundTasks = store
-      .workTasksOfRound(runtime.database, runtime.options.project, task.round)
-      .flatMap((work) => byId.get(work.id) ?? []);
-    return prompts.roundReviewPrompt(task.round, roundTasks, notes);
-  }
-  return prompts.taskReviewerPrompt(task, workerReport, notes);
-}
-
-function promptFor(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.TaskView,
-  role: orchestratorTypesTypes.ThreadRole,
-  workerReport: string,
-  notes: readonly orchestratorTypesTypes.Note[],
-  extra: string,
-): string {
-  const base =
-    role === "reviewer"
-      ? reviewerPrompt(runtime, task, workerReport, notes)
-      : prompts.workerPrompt(task, dependencyViews(runtime, task), notes);
-  return [base, extra].filter(Boolean).join("\n\n");
-}
-
-function planThread(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.Task,
-  role: orchestratorTypesTypes.ThreadRole,
-  workerReport: string,
-  extra: string,
-): ThreadPlan {
-  const threadId = newId("th");
-  const view = viewsById(runtime).get(task.id);
-  if (view === undefined) throw new Error(`Unknown task: ${task.id}`);
-  const notes = store.unreadNotes(runtime.database, runtime.options.project, task.id, threadId);
-  const prompt = promptFor(runtime, view, role, workerReport, notes, extra);
-  return { ...threadModel(runtime, task, role), notes, prompt, threadId };
-}
-
-function threadModel(
-  runtime: runtimeTypes.Runtime,
-  task: orchestratorTypesTypes.Task,
-  role: orchestratorTypesTypes.ThreadRole,
-): Pick<ThreadPlan, "model" | "thinkingLevel"> {
-  const defaults = runtime.options.defaults();
-  return role === "worker"
-    ? {
-        model: task.model ?? defaults.workerModel,
-        thinkingLevel: task.thinkingLevel ?? defaults.workerThinkingLevel,
-      }
-    : { model: defaults.reviewModel, thinkingLevel: defaults.reviewThinkingLevel };
-}
+type ThreadPlan = ReturnType<typeof planThread>;
 
 function failThread(
   runtime: runtimeTypes.Runtime,
-  plan: ThreadPlan,
+  threadId: string,
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
   now: number,
   message: string,
 ): void {
-  store.updateThread(runtime.database, plan.threadId, { status: "failed" }, now);
+  store.updateThread(runtime.database, threadId, { status: "failed" }, now);
   store.setTaskStatus(runtime.database, task.id, "failed", now);
   runtime.publish();
   runtime.options.report(message, { role, started: [], status: "failed", taskId: task.id });
@@ -144,8 +58,8 @@ function insertRunningThread(
     taskId: task.id,
     threadId: plan.threadId,
   });
-  store.setTaskStatus(database, task.id, "running", now);
-  for (const note of plan.notes) store.markNoteRead(database, note.id, plan.threadId, now);
+  if (role !== "advisor") store.setTaskStatus(database, task.id, "running", now);
+  markRead(runtime, plan.notes, plan.threadId, now);
 }
 
 interface OpenedWorker {
@@ -161,10 +75,12 @@ function openWorkspace(
   now: number,
 ): Effect.Effect<orchestratorTypesTypes.Workspace | undefined> {
   return Effect.gen(function* () {
-    const prepared = yield* Effect.result(worktrees.prepare(runtime, task));
+    const prepared = yield* Effect.result(
+      threadWorkspace.prepare(runtime, task, role, plan.threadId),
+    );
     if (Result.isFailure(prepared)) {
       yield* Effect.sync(() =>
-        failThread(runtime, plan, task, role, now, prepared.failure.message),
+        failThread(runtime, plan.threadId, task, role, now, prepared.failure.message),
       );
       return undefined;
     }
@@ -173,7 +89,9 @@ function openWorkspace(
       store.updateThread(
         runtime.database,
         plan.threadId,
-        { branch: workspace.branch, cwd: workspace.cwd, targetBranch: workspace.targetBranch },
+        threadTools.readOnly(role)
+          ? { cwd: workspace.cwd }
+          : { branch: workspace.branch, cwd: workspace.cwd, targetBranch: workspace.targetBranch },
         now,
       ),
     );
@@ -204,14 +122,18 @@ function openWorker(
           runtime.options.createWorker({
             cwd: workspace.cwd,
             model: runtime.options.resolveModel(plan.model),
+            readOnly: threadTools.readOnly(role),
             sessionFile: plan.sessionFile,
             telemetry,
             thinkingLevel,
+            tools: toolsFor(runtime, plan.threadId, role, task),
           }),
       }),
     );
     if (Result.isFailure(created)) {
-      yield* Effect.sync(() => failThread(runtime, plan, task, role, now, created.failure.message));
+      yield* Effect.sync(() =>
+        failThread(runtime, plan.threadId, task, role, now, created.failure.message),
+      );
       return undefined;
     }
     return { worker: created.success, workspace };
@@ -239,13 +161,19 @@ function launch(
   now: number,
 ): void {
   const run = runtime.nextRun();
+  runtime.decisionRequests.delete(threadId);
+  runtime.goalChecklists.delete(threadId);
+  runtime.triageConclusions.delete(threadId);
   store.updateThread(runtime.database, threadId, { sessionFile: worker.sessionFile ?? null }, now);
+  const reopened = runtime.workers.get(threadId) === worker;
   runtime.workers.set(threadId, worker);
   runtime.activity.set(threadId, { at: now, messages: worker.messages.length });
-  worker.subscribe(() => {
-    noteActivity(runtime, threadId, worker);
-    runtime.publish();
-  });
+  if (!reopened) {
+    worker.subscribe(() => {
+      noteActivity(runtime, threadId, worker);
+      runtime.publish();
+    });
+  }
   runtime.runs.set(threadId, run);
   runtime.runStartedAt.set(threadId, performance.now());
   void worker.run.prompting.prompt(prompt).then(
@@ -259,15 +187,16 @@ function launchPlan(
   plan: ThreadPlan,
   task: orchestratorTypesTypes.Task,
   role: orchestratorTypesTypes.ThreadRole,
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+): Effect.Effect<string | undefined, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const opened = yield* openWorker(runtime, plan, task, role, now);
-    if (opened === undefined) return;
+    if (opened === undefined) return undefined;
     const workspace =
-      plan.sessionFile === undefined ? prompts.workspaceBlock(role, opened.workspace) : "";
+      plan.sessionFile === undefined ? threadWorkspace.block(role, opened.workspace) : "";
     const prompt = [plan.prompt, workspace].filter(Boolean).join("\n\n");
     yield* Effect.sync(() => launch(runtime, plan.threadId, opened.worker, prompt, now));
+    return plan.threadId;
   });
 }
 
@@ -277,13 +206,13 @@ function startTasks(
   role: orchestratorTypesTypes.ThreadRole,
   workerReport = "",
   extra = "",
-): Effect.Effect<void, runtimeTypes.OrchestratorError> {
+): Effect.Effect<string | undefined, runtimeTypes.OrchestratorError> {
   return Effect.suspend(() =>
     launchPlan(runtime, planThread(runtime, task, role, workerReport, extra), task, role),
   );
 }
 
-const starting = { launchPlan, startTasks, threadModel };
+const starting = { failThread, launch, launchPlan, startTasks, threadModel };
 
 const start = {
   starting,

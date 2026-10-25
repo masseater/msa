@@ -11,7 +11,6 @@ const { prompts } = promptsModule;
 const { nowMillis } = runtimeModule;
 
 const RUN_POLL_MS = 100;
-const MAX_REJECTIONS = 3;
 
 type ThreadRun = threadRunTypes.ThreadRun;
 
@@ -55,6 +54,17 @@ function settle(thread: ThreadRun, error: unknown, verdict?: runtimeTypes.Review
   void thread.runtime.settle(thread.threadId, thread.run, thread.worker, error, verdict);
 }
 
+function askForDecision(thread: ThreadRun, request: runtimeTypes.DecisionAsk): void {
+  void thread.runtime.settle(
+    thread.threadId,
+    thread.run,
+    thread.worker,
+    undefined,
+    undefined,
+    request,
+  );
+}
+
 function continueWith(thread: ThreadRun, prompt: string): void {
   const { runtime, threadId, run, worker } = thread;
   void worker.run.prompting.prompt(prompt).then(
@@ -71,7 +81,7 @@ function continueWithNotes(thread: ThreadRun, readBefore: ReadonlySet<string>): 
 }
 
 const threadRuns = {
-  MAX_REJECTIONS,
+  askForDecision,
   continueWith,
   continueWithNotes,
   current,

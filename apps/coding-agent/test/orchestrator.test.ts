@@ -6,6 +6,7 @@ import { expect, it } from "vite-plus/test";
 
 import errors from "../src/core/orchestrator/errors.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
+import promptsModule from "../src/core/orchestrator/prompts.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 
@@ -35,13 +36,14 @@ const buildsTheWorkerPromptFromTheTwo = () =>
         [
           "<current-state>\nsrc/cache.ts has no cache and repeated reads go to the network\n</current-state>",
           "<goal-state>\nrepeated reads hit the cache and a test covers the second read\n</goal-state>",
+          promptsModule.prompts.GOAL_RULE,
         ].join("\n\n"),
       );
     }),
   );
 
 it(
-  "builds the worker prompt from the two states and nothing else",
+  "builds the worker prompt from the two states and the rule against narrowing the goal, and nothing else",
   buildsTheWorkerPromptFromTheTwo,
 );
 

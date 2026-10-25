@@ -2,22 +2,22 @@ import { Effect } from "effect";
 
 import goalCheckRun from "./goal-check-run.ts";
 import goalCheckText from "./goal-check-text.ts";
-import type goalCheckTextTypes from "./goal-check-text.types.ts";
 import outcomeModule from "./outcome.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import TaskStopped from "./task-stopped.ts";
 import threadRun from "./thread-run.ts";
 import type threadRunTypes from "./thread-run.types.ts";
+import workProgress from "./work-progress.ts";
 
 const { outcomes } = outcomeModule;
-const { failureText, passed, rejectionPrompt, stopText, waitingForCi } = goalCheckText;
+const { ciStalledText, failureText, passed, rejectionPrompt, stopText, stuckText, waitingForCi } =
+  goalCheckText;
 const { threadRuns } = threadRun;
-const { MAX_REJECTIONS } = threadRuns;
 const { ciTiming, verifyAll, workerTasks } = goalCheckRun;
 const { nowMillis } = runtimeModule;
 
-type Verification = goalCheckTextTypes.Verification;
+type Verification = Parameters<typeof passed>[0];
 
 interface Round {
   thread: threadRunTypes.ThreadRun;
@@ -25,7 +25,15 @@ interface Round {
   readBefore: ReadonlySet<string>;
 }
 
-const rejections = new WeakMap<runtimeTypes.WorkerSession, number>();
+interface Checked {
+  at: number;
+  results: Verification;
+  contents: Effect.Success<ReturnType<typeof workProgress.contentsOf>>;
+}
+
+function failedOutright(results: Verification): boolean {
+  return !passed(results) && stopText(results) === undefined && !waitingForCi(results);
+}
 
 function check(round: Round, waitingSince: number | undefined): void {
   const { thread, tasks } = round;
@@ -34,34 +42,29 @@ function check(round: Round, waitingSince: number | undefined): void {
   const checked = Effect.gen(function* () {
     if (waitingSince !== undefined) yield* Effect.sleep(pollMs);
     const results = yield* verifyAll(runtime, threadId, tasks, () => threadRuns.current(thread));
-    return { at: yield* nowMillis, results };
+    const contents = failedOutright(results)
+      ? yield* workProgress.contentsOf(runtime, threadId)
+      : undefined;
+    return { at: yield* nowMillis, contents, results } satisfies Checked;
   });
   void Effect.runPromise(threadRuns.whileCurrent(thread, checked)).then(
-    (done) => (done === undefined ? undefined : decide(round, done.results, waitingSince, done.at)),
+    (done) => (done === undefined ? undefined : decide(round, done, waitingSince)),
     (error: unknown) => threadRuns.settle(thread, error),
   );
 }
 
-function waitOrStop(round: Round, results: Verification, since: number, now: number): void {
+function waitOrAsk(round: Round, results: Verification, since: number, now: number): void {
   const limit = ciTiming(round.thread.runtime).waitMs;
   if (now - since < limit) {
     check(round, since);
     return;
   }
-  threadRuns.settle(
-    round.thread,
-    new TaskStopped({
-      message: `CI did not finish within ${Math.round(limit / 60_000)} minutes, so the task is stopped, not completed. Check whether CI is stuck, then rerun the task.\n${failureText(results)}`,
-    }),
-  );
+  const text = ciStalledText(results, Math.round(limit / 60_000));
+  threadRuns.askForDecision(round.thread, { key: text, text });
 }
 
-function decide(
-  round: Round,
-  results: Verification,
-  waitingSince: number | undefined,
-  now: number,
-): void {
+function decide(round: Round, checked: Checked, waitingSince: number | undefined): void {
+  const { at: now, contents, results } = checked;
   const { thread, readBefore } = round;
   const { runtime, threadId, run, worker } = thread;
   if (!threadRuns.current(thread)) return;
@@ -70,7 +73,7 @@ function decide(
     return;
   }
   if (passed(results)) {
-    rejections.delete(worker);
+    workProgress.forget(worker);
     if (!threadRuns.continueWithNotes(thread, readBefore)) threadRuns.settle(thread, undefined);
     return;
   }
@@ -81,18 +84,12 @@ function decide(
   }
   if (waitingForCi(results)) {
     if (threadRuns.continueWithNotes(thread, readBefore)) return;
-    waitOrStop(round, results, waitingSince ?? now, now);
+    waitOrAsk(round, results, waitingSince ?? now, now);
     return;
   }
-  const count = (rejections.get(worker) ?? 0) + 1;
-  rejections.set(worker, count);
-  if (count > MAX_REJECTIONS) {
-    threadRuns.settle(
-      thread,
-      new Error(
-        `The goal's checks still fail after ${MAX_REJECTIONS} rounds of fixes.\n${failureText(results)}`,
-      ),
-    );
+  const output = failureText(results);
+  if (workProgress.failedWithoutMoving(worker, output, contents)) {
+    threadRuns.askForDecision(thread, { key: output, text: stuckText(results) });
     return;
   }
   threadRuns.continueWith(thread, rejectionPrompt(results));

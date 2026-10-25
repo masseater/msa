@@ -1,19 +1,21 @@
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
-import threadRun from "../src/core/orchestrator/thread-run.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import type orchestratorHarnessTypes from "./orchestrator-harness.types.ts";
 import orchestratorSupport from "./orchestrator-support.ts";
 import pullRequestSupport from "./pull-request-support.ts";
+import triageSupport from "./triage-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { create } = orchestratorSupport;
+const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { read, runCommand, shortId } = worktreeSupport;
 const { commitAndPush, withRemote } = pullRequestSupport;
-const { MAX_REJECTIONS } = threadRun.threadRuns;
+
+const MANY_TURNS = 5;
 
 type Remote = Parameters<Parameters<typeof withRemote>[0]>[0];
 type Report = ReturnType<typeof setup>["reports"][number];
@@ -54,7 +56,7 @@ const waitsOnPendingCiWithoutCountingIt = () =>
         const worker = workers[0]!;
         github.ci.set(yield* github.head(branch), "pending");
 
-        for (let turn = 1; turn <= MAX_REJECTIONS + 2; turn++) {
+        for (let turn = 1; turn <= MANY_TURNS; turn++) {
           const polled = github.calls + 2;
           worker.complete(`CI is still running (${turn})`);
           yield* waitFor(() => github.calls >= polled);
@@ -78,32 +80,39 @@ it(
   waitsOnPendingCiWithoutCountingIt,
 );
 
-const countsFailingCi = () =>
+const sendsFailingCiBackUntilItStopsMoving = () =>
   Effect.runPromise(
     withRemote((remote) =>
       Effect.gen(function* () {
         const { github } = remote;
-        const { orchestrator, reports, workers, branch, number, taskId } =
-          yield* openedTask(remote);
+        const { orchestrator, reports, workers, branch, taskId } = yield* openedTask(remote);
         const worker = workers[0]!;
-        for (let round = 1; round <= MAX_REJECTIONS; round++) {
+        for (let round = 1; round <= MANY_TURNS; round++) {
           github.ci.set(yield* github.head(branch), "failure");
           worker.complete(`pushed (${round})`);
           yield* waitFor(() => worker.prompts.length === round + 1);
+          expect(worker.prompts.at(-1)).toContain("goal-checks-failed");
           yield* commitAndPush(worker.cwd, `fix-${round}.txt`, branch);
         }
+        expect(taskStatus(orchestrator, taskId)).toBe("running");
+        expect(reports).toEqual([]);
+
         github.ci.set(yield* github.head(branch), "failure");
         worker.complete("pushed once more");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "failed");
-        expect(workers).toHaveLength(1);
-        expectsOpenPullRequest(reports.at(-1), "failed", number, branch);
+        yield* waitFor(() => worker.prompts.length === MANY_TURNS + 2);
+        worker.complete("tried again without pushing");
+        yield* escalateTriage(workers);
+        yield* waitFor(() => taskStatus(orchestrator, taskId) === "needs-decision");
+        expect(workers).toHaveLength(2);
+        expect(reports.at(-1)?.details.status).toBe("needs-decision");
+        expect(reports.at(-1)?.text).toContain("CI fails on the head");
       }),
     ),
   );
 
 it(
-  "counts each failing CI run against the worker and fails the task once the rounds of fixes run out",
-  countsFailingCi,
+  "sends failing CI back for as many pushes as it takes, and waits for a decision only when a turn ends on the same failure at the same head",
+  sendsFailingCiBackUntilItStopsMoving,
 );
 
 const passesAGreenRerunOfACancelledCheck = () =>
@@ -212,26 +221,6 @@ it(
   "stops the task with gh's reason when gh is missing, logged out, or origin is not on GitHub, instead of sending the worker back",
   stopsWhenGhCannotReadPullRequests,
 );
-
-const stopsWhenCiNeverFinishes = () =>
-  Effect.runPromise(
-    withRemote((remote) =>
-      Effect.gen(function* () {
-        const { github } = remote;
-        const { orchestrator, reports, workers, branch, number, taskId } = yield* openedTask(
-          remote,
-          { ciWaitMs: 50 },
-        );
-        github.ci.set(yield* github.head(branch), "pending");
-        workers[0]!.complete("waiting for CI");
-        yield* waitFor(() => taskStatus(orchestrator, taskId) === "stopped");
-        expect(workers[0]!.prompts).toHaveLength(1);
-        expectsOpenPullRequest(reports.at(-1), "stopped", number, branch);
-      }),
-    ),
-  );
-
-it("stops the task when CI stays pending past the wait limit", stopsWhenCiNeverFinishes);
 
 const sendsBackWhenTheBodyChangedAfterReview = () =>
   Effect.runPromise(
