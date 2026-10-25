@@ -3,6 +3,7 @@ import * as Schema from "effect/Schema";
 
 import prWatchSnapshot from "../pr-watch/snapshot.ts";
 import errors from "./errors.ts";
+import pullRequestSquashModule from "./pull-request-squash.ts";
 import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
@@ -14,6 +15,7 @@ const { nowMillis } = runtimeModule;
 const { store } = storeModule;
 const { worktrees } = worktreeModule;
 const { RollupEntry, countChecks } = prWatchSnapshot;
+const { pullRequestSquash } = pullRequestSquashModule;
 
 const FIELDS =
   "number,url,title,body,state,headRefName,headRefOid,baseRefName,mergeable,mergeStateStatus,statusCheckRollup,autoMergeRequest";
@@ -180,25 +182,7 @@ function merge(
   number: number,
   verified: Verified,
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
-  const subject = verified.title === "" ? `#${number}` : `${verified.title} (#${number})`;
-  return Effect.asVoid(
-    gh(
-      runtime,
-      [
-        "pr",
-        "merge",
-        String(number),
-        "--squash",
-        "--match-head-commit",
-        verified.sha,
-        "--subject",
-        subject,
-        "--body",
-        verified.body,
-      ],
-      cwd,
-    ),
-  );
+  return pullRequestSquash.merge((args) => gh(runtime, args, cwd), number, verified);
 }
 
 function latestThreadOf(

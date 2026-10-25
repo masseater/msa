@@ -78,7 +78,7 @@ release. Add a tool name to select part of the graph. For example, run
 - ユーザーと対話するセッションを始めたら、引数なしの `/loop` を起動する。
 - pnpm は直接呼ばない。install・add・remove は `vp install`・`vp add`・`vp remove`、script は `vp run <script>`、binary は `vp exec <bin>`。`vp` が持たないサブコマンドだけ `vp pm <subcommand>` を使う。
 - `vp run verify` が唯一のゲート。PR と main への push で CI の verify が走る。pre-push フックは gitleaks だけを走らせる。
-- squash merge の本文は手で書き直さず、PR の検査を通ったコミットメッセージを使う。
+- squash merge のメッセージは、件名を PR タイトル、本文を PR のコミットの本文から `apps/coding-agent/src/core/orchestrator/squash-message.ts` で作る。PR 本文は使わない。ハーネスのマージも、手でのマージ（`scripts/squash-message.ts merge`）も、CI の `commits` ジョブ（`scripts/lint-squash-message.sh`）もこれを使い、CI は検査した head までのコミットから作ったメッセージを commitlint にかける。
 - テストは `bash test.sh`（verify の `test-all` が回す）。API キーを抜いた隔離環境で全 package をテストする。1 つだけ走らせるときは package のルートで `vp test --run test/<file>.test.ts`（`libs/tui` は `node --test`）。
   - 手元の LLM サーバー（Ollama・LM Studio・llama.cpp）を呼ぶ `libs/ai/test/*-local.test.ts` は、`MSA_LOCAL_LLM_TESTS=1` を付けた時だけ流れる。
 - パッケージは `apps/`（配布する CLI と eval）・`libs/`（共有するライブラリ）・`tools/`（リポジトリの道具）に置く。`packages/` は作らない（`tools/checks` のテストが落とす）。
@@ -141,7 +141,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 - PR を判定するのは orchestrator の reviewer だけにする。ほかに PR のレビュー、PR ごとの動作検証・デプロイはしない。動作は main にマージしてから確かめる。
 - reviewer の指摘のうちタスクのゴールに入るものは、深刻度に関係なく同じ PR で直し、再レビューで合格してからマージする。マージしてから別 issue に分けない。別 issue にしてよいのは、タスクのゴールの外の問題だけ。
-- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージする。マージしてよいかは聞かない。ルールセットのバイパスや `--admin` は使わない。
+- マージ前に base を取り込み、PR の `verify` と `up-to-date` が通ってからマージする。対話セッションでは自分でマージする。マージしてよいかは聞かない。手でマージするときは `node scripts/squash-message.ts merge <PR 番号> <CI が通った head SHA>` を使い、`gh pr merge` や GitHub の画面では squash しない。ルールセットのバイパスや `--admin` は使わない。
 - orchestrator の work task は自分の PR を持ち、ハーネスがタスクの枝から PR を見つける。PR が無い・push されていない・CI が落ちた・BEHIND か衝突のときは worker に差し戻し、CI が走っているあいだは worker を起こさずに待ち、reviewer の合格後にハーネスが合格した head で squash merge し、マージを確かめてから task を completed にして worktree と枝を消す。
 - orchestrator の worker は次のとおりにする。
   - PR を自分でマージしない。`gh pr merge` と auto-merge は worker と reviewer の shell が早めに拒み、すり抜けてもハーネスが見つけて task を stopped にする。

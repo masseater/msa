@@ -251,13 +251,13 @@ const sendsBackWhenTheBodyChangedAfterReview = () =>
         yield* waitFor(() => workers.length === 4);
         workers[3]!.complete("acceptable");
         yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
-        expect(github.merged).toMatchObject([{ body: "Rewritten after the review.", number }]);
+        expect(github.merged).toMatchObject([{ number }]);
       }),
     ),
   );
 
 it(
-  "does not merge a pull request whose body changed after the review, and merges it with the body the next review read",
+  "does not merge a pull request whose body changed after the review, and merges it once the next review read the new body",
   sendsBackWhenTheBodyChangedAfterReview,
 );
 
