@@ -3,6 +3,7 @@ import { Effect, Stream } from "effect";
 import headersModule from "../utils/headers.ts";
 import hooks from "../utils/hooks.ts";
 import openaiCompletionsCompat from "./openai-completions-compat.ts";
+import openaiCompletionsOllama from "./openai-completions-ollama.ts";
 import openaiCompletionsRequest from "./openai-completions-request.ts";
 import openaiCompletionsStreamChunk from "./openai-completions-stream-chunk.ts";
 import openaiCompletionsStreamFinalize from "./openai-completions-stream-finalize.ts";
@@ -14,6 +15,7 @@ const { getCompat, resolveCacheRetention } = openaiCompletionsCompat;
 const { callHook } = hooks;
 const { headersToRecord } = headersModule;
 const { processChunk } = openaiCompletionsStreamChunk;
+const { learnFromChunk } = openaiCompletionsOllama;
 const { failCompletionsStream, finalizeCompletionsStream } = openaiCompletionsStreamFinalize;
 
 type RequestInput = Parameters<typeof createRequestStream>[0];
@@ -50,10 +52,15 @@ function runCompletionsStream(input: RunCompletionsStreamInput): Effect.Effect<v
       ),
     );
     events.push({ partial: output, type: "start" });
+    let learned = false;
     yield* Stream.fromAsyncIterable(openaiStream, (error) => error).pipe(
       Stream.orDie,
       Stream.runForEach((chunk) =>
         Effect.gen(function* () {
+          if (!learned) {
+            learned = true;
+            learnFromChunk({ chunk, compat, model });
+          }
           yield* callHook(() => options?.onProviderStreamEvent?.(chunk, model));
           yield* Effect.sync(() => processChunk({ chunk, state }));
         }),

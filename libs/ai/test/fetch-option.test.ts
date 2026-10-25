@@ -53,7 +53,11 @@ describe("fetch stream option", () => {
         for (const run of adapters) {
           yield* Effect.promise(() => run());
         }
-        expect(custom).toHaveBeenCalledTimes(adapters.length);
+        const urls = custom.mock.calls.map(([input]) =>
+          input instanceof Request ? input.url : String(input),
+        );
+        expect(urls).toContain("https://upstream.test/v1/chat/completions");
+        expect(urls).toContain("https://upstream.test/v1/responses");
         expect(fallback).not.toHaveBeenCalled();
         expect(globalThis.fetch).toBe(fallback);
       }),

@@ -45,13 +45,21 @@ function applyStreamingOptions(
   }
 }
 
+function requestedMaxTokens(
+  options: openaiCompletionsCompatTypes.OpenAICompletionsOptions | undefined,
+): number | undefined {
+  const maxTokens = options?.maxTokens;
+  if (maxTokens === undefined || maxTokens === 0 || Number.isNaN(maxTokens)) return undefined;
+  return maxTokens;
+}
+
 function applyMaxTokens(
   params: OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming,
   options: openaiCompletionsCompatTypes.OpenAICompletionsOptions | undefined,
   compat: openaiCompletionsCompatTypes.ResolvedOpenAICompletionsCompat,
 ): void {
-  const maxTokens = options?.maxTokens;
-  if (maxTokens === undefined || maxTokens === 0 || Number.isNaN(maxTokens)) return;
+  const maxTokens = requestedMaxTokens(options);
+  if (maxTokens === undefined) return;
   if (compat.maxTokensField === "max_tokens") {
     (params as { max_tokens?: number }).max_tokens = maxTokens;
   } else {
@@ -157,6 +165,7 @@ function buildParams(
 
 const openaiCompletionsParams = {
   buildParams,
+  requestedMaxTokens,
 };
 
 export default openaiCompletionsParams;

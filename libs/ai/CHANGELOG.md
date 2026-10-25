@@ -14,7 +14,7 @@
 
 ### Fixed
 
-- OpenAI Completions requests to Ollama (the `ollama` provider, or any `baseUrl` on port 11434) send `maxTokens` as `max_tokens`. Ollama ignores `max_completion_tokens`, so the limit had no effect and generation ran until the model stopped
+- OpenAI Completions requests to Ollama send `maxTokens` as `max_tokens`. Ollama ignores `max_completion_tokens`, so the limit had no effect and generation ran until the model stopped. The `ollama` provider and a `baseUrl` on port 11434 are taken as Ollama directly. For any other `baseUrl` outside OpenAI, OpenRouter, OpenCode, and Chutes, the first request with `maxTokens` reads the server root (the `baseUrl` without `/v1`) and treats a server that answers `Ollama is running` as Ollama; concurrent first requests share one check. Every chat response then corrects the answer: a stream whose first chunk carries `system_fingerprint: "fp_ollama"` marks the server as Ollama, any other first chunk marks it as not Ollama, so replacing the server behind the same URL takes effect from the next request without a restart. A root check that timed out, could not connect, was refused for credentials (401, 403, 407), was rate limited (408, 429), or failed with a 5xx decides nothing; the root is asked again at most once a minute until a check or a chat response settles it. `compat.maxTokensField` still overrides this and skips the check
 
 ## [0.0.1] - 2026-10-16
 
