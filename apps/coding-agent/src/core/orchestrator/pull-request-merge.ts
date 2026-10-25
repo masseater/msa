@@ -202,9 +202,24 @@ function readPull(
   });
 }
 
+function locked<A>(
+  runtime: runtimeTypes.Runtime,
+  live: () => boolean,
+  effect: Effect.Effect<A>,
+): Effect.Effect<{ value: A } | null> {
+  return Effect.promise(() =>
+    runtime.exclusive(
+      Effect.suspend(() =>
+        live() ? Effect.map(effect, (value) => ({ value })) : Effect.succeed(null),
+      ),
+    ),
+  );
+}
+
 function afterReview(
   runtime: runtimeTypes.Runtime,
   task: orchestratorTypesTypes.Task,
+  live: () => boolean,
 ): Effect.Effect<MergeOutcome | undefined> {
   return Effect.gen(function* () {
     const owner = yield* pullRequests.ownerOf(runtime, task);
@@ -216,14 +231,13 @@ function afterReview(
       if ("kind" in got) return got;
       const { pull, record, verified } = got;
       const autoMergeBy = pullRequests.autoMergeBy(pull);
-      const settled = yield* settleMerged(
+      const held = yield* locked(
         runtime,
-        task,
-        owner.cwd,
-        record,
-        `PR #${record.number} was already merged.`,
+        live,
+        settleMerged(runtime, task, owner.cwd, record, `PR #${record.number} was already merged.`),
       );
-      if (settled !== undefined) return settled;
+      if (held === null) return undefined;
+      if (held.value !== undefined) return held.value;
       if (autoMergeBy !== undefined) {
         return { kind: "stopped", line: autoMergeLine(task, record, autoMergeBy) };
       }
@@ -237,7 +251,12 @@ function afterReview(
       );
       if (fixes.length > 0) return blocked(runtime, task, record, fixes);
       if (problems.length === 0 && verified !== null) {
-        return yield* squash(runtime, task, { owner, record, verified });
+        const squashed = yield* locked(
+          runtime,
+          live,
+          squash(runtime, task, { owner, record, verified }),
+        );
+        return squashed?.value;
       }
       if (now - since >= waitMs) return ciStalled(record, waitMs, problems);
       yield* Effect.sleep(pollMs);

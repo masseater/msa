@@ -49,6 +49,12 @@ function settleMerged(
   });
 }
 
+function hasLiveRun(runtime: runtimeTypes.Runtime, taskId: string): boolean {
+  return store
+    .assignmentsOfTask(runtime.database, taskId)
+    .some((assignment) => assignment.role !== "advisor" && runtime.runs.has(assignment.threadId));
+}
+
 interface Ended {
   status: "completed" | "stopped";
   line: string;
@@ -83,6 +89,7 @@ function settleInterrupted(
     const status = store.getTask(runtime.database, task.id)?.status;
     if (recorded === undefined) return undefined;
     if (status !== "running" && status !== "stopped") return undefined;
+    if (hasLiveRun(runtime, task.id)) return undefined;
     const read = yield* readBack(runtime, task, recorded);
     const now = yield* nowMillis;
     if ("record" in read) {

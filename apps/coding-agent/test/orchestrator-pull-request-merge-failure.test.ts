@@ -68,10 +68,9 @@ const completesWhenTheRunEndsMidMerge = () =>
         );
         workers[1]!.complete("acceptable");
         yield* Deferred.await(merging);
-        yield* Effect.promise(() => orchestrator.stop(taskId));
-        expect(taskStatus(orchestrator, taskId)).toBe("stopped");
-
+        const stopping = orchestrator.stop(taskId);
         yield* Deferred.succeed(gate, undefined);
+        yield* Effect.promise(() => stopping);
         yield* waitFor(() => taskStatus(orchestrator, taskId) === "completed");
         expect(github.merged).toMatchObject([{ number }]);
         expect(reports.at(-1)?.details.status).toBe("completed");

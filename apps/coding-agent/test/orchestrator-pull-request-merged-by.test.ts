@@ -43,13 +43,19 @@ const completesWhenTheTaskIsReadWhileTheHarnessMerges = () =>
         const { github } = remote;
         const { orchestrator, workers, branch, head, number, taskId, worktree } =
           yield* reviewed(remote);
+        let reading: Promise<unknown> | undefined;
+        let readAs: string | undefined;
         github.beforeMerge = Effect.gen(function* () {
           github.beforeMerge = undefined;
-          const view = yield* Effect.promise(() => orchestrator.read(taskId));
-          expect(view.pullRequest?.state).toBe("OPEN");
+          const answered = github.answered;
+          reading = orchestrator.read(taskId);
+          yield* waitFor(() => github.answered > answered);
+          readAs = github.pulls[0]?.state;
         });
         workers[1]!.complete("acceptable");
         yield* waitFor(() => taskStatus(orchestrator, taskId) !== "running");
+        yield* Effect.promise(() => reading!);
+        expect(readAs).toBe("OPEN");
         expect(taskStatus(orchestrator, taskId)).toBe("completed");
         expect(github.merged).toMatchObject([{ number, sha: head }]);
         expect(yield* cleanedUp(remote, worktree, branch)).toEqual({
@@ -117,10 +123,11 @@ const staysStoppedWhenTheSameHeadIsMergedOutsideWhileTheRunEnds = () =>
         });
         workers[1]!.complete("acceptable");
         yield* Deferred.await(merging);
-        yield* Effect.promise(() => orchestrator.stop(taskId));
+        const stopping = orchestrator.stop(taskId);
         const before = reports.length;
         const answered = github.answered;
         yield* Deferred.succeed(gate, undefined);
+        yield* Effect.promise(() => stopping);
         yield* waitFor(() => github.answered >= answered + 3);
         yield* waitFor(() => reports.length > before);
         expect(taskStatus(orchestrator, taskId)).toBe("stopped");

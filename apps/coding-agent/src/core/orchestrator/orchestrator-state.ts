@@ -96,7 +96,7 @@ export default class OrchestratorState implements runtimeTypes.Runtime {
     error: unknown,
     verdict?: runtimeTypes.ReviewVerdict,
     decision?: runtimeTypes.DecisionAsk,
-  ): Promise<void> {
+  ): Promise<boolean> {
     return settling.settle(this, threadId, run, worker, error, verdict, decision);
   }
 

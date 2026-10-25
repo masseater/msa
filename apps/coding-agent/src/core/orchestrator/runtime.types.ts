@@ -64,7 +64,7 @@ declare namespace runtimeTypes {
       error: unknown,
       verdict?: ReviewVerdict,
       decision?: DecisionAsk,
-    ): Promise<void>;
+    ): Promise<boolean>;
     afterTurn(threadId: string, run: number, worker: workerTypes.WorkerSession): void;
   }
 }

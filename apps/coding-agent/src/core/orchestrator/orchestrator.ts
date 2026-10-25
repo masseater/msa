@@ -123,9 +123,9 @@ export default class Orchestrator {
   }
 
   mergePullRequest(number: number, head: string): Promise<string> {
-    return Effect.runPromise(actions.mergePullRequest(this.state, number, head)).finally(() =>
-      this.state.publish(),
-    );
+    return this.state
+      .exclusive(actions.mergePullRequest(this.state, number, head))
+      .finally(() => this.state.publish());
   }
 
   setMaxConcurrentThreads(value: number): Promise<number> {
