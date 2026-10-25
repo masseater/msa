@@ -10,6 +10,8 @@
 
 ### Changed
 
+- The error class `ModelsError` is a `Schema.TaggedError` class. `new` takes one `{...}` object of its fields; the old positional arguments moved to the static `create(...)`, and `make({...})` builds one from the fields. `_tag`, `message` and the fields keep their names and values
+- Encoding one of these errors to JSON lists its keys in the schema's order and drops keys the schema does not declare
 - `stream()`, `complete()`, `streamSimple()`, and `completeSimple()` on `@msa/ai/compat` authenticate through `applyAuth`, the same path as `models.stream()`, instead of putting the provider's environment key into `apiKey`. `ANTHROPIC_AUTH_TOKEN` is sent as a bearer token, the model's `headers` and the resolved `baseUrl` are applied, and `options.signal` reaches the provider's auth resolver. When no auth resolves for a built-in provider, they no longer call the provider without a key: the request ends with `stopReason: "error"` and `Provider is not configured: <provider>`, as `models.stream()` does. The new `resolveAuth(providerOrModel, overrides)` returns the auth such a request would use
 
 ### Fixed
