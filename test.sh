@@ -67,7 +67,6 @@ test_env=(
 	"NPM_CONFIG_USERCONFIG=$test_root/npm-userconfig"
 	"NPM_CONFIG_GLOBALCONFIG=$test_root/npm-globalconfig"
 	"NPM_CONFIG_CACHE=$test_root/cache/npm"
-	"MSA_NO_LOCAL_LLM=1"
 )
 
 # Native Windows needs these inherited values to launch child processes.
@@ -80,6 +79,10 @@ done
 # Network tests fail with self-signed certificate errors without it.
 value="${NODE_EXTRA_CA_CERTS-}"
 [[ -z "$value" ]] || test_env+=("NODE_EXTRA_CA_CERTS=$value")
+
+# Pass the opt-in for the tests that call local LLM servers.
+value="${MSA_LOCAL_LLM_TESTS-}"
+[[ -z "$value" ]] || test_env+=("MSA_LOCAL_LLM_TESTS=$value")
 
 # Preserve CI detection only for runner behavior and test reporting.
 for name in CI GITHUB_ACTIONS; do

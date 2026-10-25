@@ -84,7 +84,7 @@ const llamaCppCompletionStatus = commandOutput("curl", [
 ]).pipe(Effect.map((status) => Number(status ?? 0)));
 
 const probeLocalLlms = Effect.gen(function* () {
-  if (hasEnv("MSA_NO_LOCAL_LLM")) return { llamaCpp: false, lmStudio: false, ollama: false };
+  if (!hasEnv("MSA_LOCAL_LLM_TESTS")) return { llamaCpp: false, lmStudio: false, ollama: false };
   const [ollama, lmStudio, llamaHealth, llamaCompletions] = yield* Effect.all(
     [
       commandOutput("ollama", ["--version"]),
