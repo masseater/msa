@@ -11,6 +11,10 @@
 
 - `stream()`, `complete()`, `streamSimple()`, and `completeSimple()` on `@msa/ai/compat` authenticate through `applyAuth`, the same path as `models.stream()`, instead of putting the provider's environment key into `apiKey`. `ANTHROPIC_AUTH_TOKEN` is sent as a bearer token, the model's `headers` and the resolved `baseUrl` are applied, and `options.signal` reaches the provider's auth resolver. When no auth resolves for a built-in provider, they no longer call the provider without a key: the request ends with `stopReason: "error"` and `Provider is not configured: <provider>`, as `models.stream()` does. The new `resolveAuth(providerOrModel, overrides)` returns the auth such a request would use
 
+### Fixed
+
+- OpenAI Completions requests to Ollama (the `ollama` provider, or any `baseUrl` on port 11434) send `maxTokens` as `max_tokens`. Ollama ignores `max_completion_tokens`, so the limit had no effect and generation ran until the model stopped
+
 ## [0.0.1] - 2026-10-16
 
 Forked from pi at [`4a5d372`](https://github.com/earendil-works/pi/tree/4a5d37291531ad48b8e536c892557877d219463c), after pi 1.2.0. Changes up to the fork are in [pi's changelog](https://github.com/earendil-works/pi/blob/4a5d37291531ad48b8e536c892557877d219463c/packages/ai/CHANGELOG.md).
