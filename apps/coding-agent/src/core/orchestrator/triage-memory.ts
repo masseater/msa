@@ -17,14 +17,31 @@ interface Earlier {
   filesChanged: boolean;
 }
 
-function repeats(runtime: runtimeTypes.Runtime, ask: triageTypes.Ask): boolean {
+function repeated(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+  matches: (decision: triageTypes.Decision, number: number) => boolean,
+): triageTypes.Repeated | undefined {
+  const decisions = store.triageDecisionsOf(runtime.database, taskId);
+  const index = decisions.findIndex((decision, at) => matches(decision, at + 1));
+  return index === -1 ? undefined : { decision: decisions[index]!, number: index + 1 };
+}
+
+function repeats(
+  runtime: runtimeTypes.Runtime,
+  ask: triageTypes.Ask,
+): triageTypes.Repeated | undefined {
   const key = askKey(ask.key);
-  return (
-    key !== "" &&
-    store
-      .triageDecisionsOf(runtime.database, ask.taskId)
-      .some((decision) => decision.requestKey === key)
-  );
+  if (key === "") return undefined;
+  return repeated(runtime, ask.taskId, (decision) => decision.requestKey === key);
+}
+
+function decisionNumber(
+  runtime: runtimeTypes.Runtime,
+  taskId: string,
+  number: number,
+): triageTypes.Repeated | undefined {
+  return repeated(runtime, taskId, (_decision, at) => at === number);
 }
 
 function earlier(runtime: runtimeTypes.Runtime, ask: triageTypes.Ask): Effect.Effect<Earlier[]> {
@@ -70,6 +87,6 @@ function escalate(runtime: runtimeTypes.Runtime, taskId: string): Effect.Effect<
   );
 }
 
-const triageMemory = { earlier, escalate, remember, repeats };
+const triageMemory = { decisionNumber, earlier, escalate, remember, repeats };
 
 export default triageMemory;

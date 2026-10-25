@@ -169,7 +169,7 @@ function decisionTools(
       name: "consult_advisor",
       parameters: adviseSchema,
       promptGuidelines: [
-        "A decision request or a stop for work that is not moving reaches needs-decision only after a triage thread found that only the user can decide (billing, personal data, revoking an existing key, or a choice of specification nobody has made), found only a compromise, or saw the same request come back after it decided it; CI that does not finish and a review the harness cannot judge go through the same triage. Do not lower the goal to let it pass: decide with the user, or after consult_advisor, then answer with send_message, or change the goal with set_task_state first when the user agrees.",
+        "A decision request or a stop for work that is not moving reaches needs-decision only after a triage thread found that only the user can decide (billing, personal data, revoking an existing key, or a choice of specification nobody has made), found only a compromise, or saw the same request come back after it decided it, in which case the report shows the earlier request and the way it decided beside this one, so a request that does not repeat it is answered with send_message; CI that does not finish and a review the harness cannot judge go through the same triage. Do not lower the goal to let it pass: decide with the user, or after consult_advisor, then answer with send_message, or change the goal with set_task_state first when the user agrees.",
       ],
       promptSnippet: "Have an independent thread weigh a decision's options",
       run: ({ taskId, question }) =>

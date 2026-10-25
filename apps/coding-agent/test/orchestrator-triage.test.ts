@@ -2,60 +2,16 @@ import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
+import type FakeWorker from "./fake-worker.ts";
 import orchestratorHarness from "./orchestrator-harness.ts";
-import orchestratorSupport from "./orchestrator-support.ts";
-import triageSupport from "./triage-support.ts";
+import triageRequestSupport from "./triage-request-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
 const { joinPath, writeTextFile } = testing;
-const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
-const { setup, taskStatus, waitFor } = harness;
-const { runningTriage } = triageSupport;
+const { taskStatus, waitFor } = harness;
+const { DECIDED, REQUEST, decideOnce, stoppedTask } = triageRequestSupport;
 const { withRepository } = worktreeSupport;
-
-const REQUEST = {
-  options: [
-    { choice: "Keep the old API beside the new one", tradeoffs: "Two APIs to keep" },
-    { choice: "Drop the old API", tradeoffs: "Breaks callers outside the goal" },
-  ],
-  unmet: "The goal asks to remove the old API and to keep every caller working; both cannot hold.",
-};
-
-const DECIDED = {
-  conclusion: "decided",
-  decision:
-    "Route the old API's callers through an adapter over the new API, then remove the old API.",
-  goalItems: [
-    { how: "The old API is deleted once the adapter carries its callers.", item: 1 },
-    { how: "Every caller goes through the adapter and keeps working.", item: 2 },
-  ],
-  grounds: "Both items hold with the adapter; the commit log already moved two APIs this way.",
-};
-
-const GOAL = ["- the old API is gone", "- every caller still works"].join("\n");
-
-const stoppedTask = (repository: string) =>
-  Effect.gen(function* () {
-    const setUp = setup({ cwd: repository });
-    const statuses: (string | undefined)[] = [];
-    const task = yield* create(setUp.orchestrator, {
-      currentState: "the old API is used by every caller",
-      goalState: GOAL,
-      title: "remove the old API",
-    });
-    const dependent = yield* create(setUp.orchestrator, {
-      currentState: "the docs describe the old API",
-      dependsOn: [task.id],
-      goalState: "the docs describe the new API",
-      title: "update the docs",
-    });
-    setUp.orchestrator.onChange(() => statuses.push(taskStatus(setUp.orchestrator, task.id)));
-    const worker = setUp.workers[0]!;
-    yield* Effect.promise(() => worker.requestDecision(REQUEST, "Stopping for a decision."));
-    yield* waitFor(() => runningTriage(setUp.workers) !== undefined);
-    return { ...setUp, dependent, statuses, task, triage: runningTriage(setUp.workers)!, worker };
-  });
 
 const resumesTheWorkerWithTheTriageDecision = () =>
   Effect.runPromise(
@@ -102,10 +58,7 @@ it(
   resumesTheWorkerWithTheTriageDecision,
 );
 
-const escalates = (
-  conclude: (triage: ReturnType<typeof runningTriage> & object) => Promise<void>,
-  says: string,
-) =>
+const escalates = (conclude: (triage: FakeWorker) => Promise<void>, says: string) =>
   Effect.runPromise(
     withRepository((repository) =>
       Effect.gen(function* () {
@@ -161,76 +114,6 @@ const refusesAnIncompleteConclusion = () =>
 it(
   "refuses a decided conclusion that skips a goal item and a needs-human one without the reason only the user can decide",
   refusesAnIncompleteConclusion,
-);
-
-const decideOnce = (repository: string) =>
-  Effect.gen(function* () {
-    const stopped = yield* stoppedTask(repository);
-    yield* Effect.promise(() => stopped.triage.concludeTriage(DECIDED));
-    yield* waitFor(() => stopped.worker.prompts.length === 2);
-    return stopped;
-  });
-
-const sendsTheSameRequestToTheOrchestrator = () =>
-  Effect.runPromise(
-    withRepository((repository) =>
-      Effect.gen(function* () {
-        const { orchestrator, reports, task, worker, workers } = yield* decideOnce(repository);
-        yield* Effect.promise(() => worker.requestDecision(REQUEST));
-        yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
-        expect(workers).toHaveLength(2);
-        expect(reports.at(-1)?.details).toMatchObject({ role: "worker", status: "needs-decision" });
-        expect(reports.at(-1)?.text).toContain(
-          "The same request came back word for word after a triage decided it",
-        );
-      }),
-    ),
-  );
-
-it(
-  "sends the same request to the orchestrator instead of another triage when the worker stops with it again after a triage decided it",
-  sendsTheSameRequestToTheOrchestrator,
-);
-
-const REWORDED = { ...REQUEST, unmet: "Removing the old API still breaks a caller." };
-
-const rewordedTriage = (repository: string) =>
-  Effect.gen(function* () {
-    const decided = yield* decideOnce(repository);
-    yield* Effect.promise(() => decided.worker.requestDecision(REWORDED));
-    yield* waitFor(() => decided.workers.length === 3);
-    return { ...decided, second: decided.workers[2]! };
-  });
-
-const letsTheTriageJudgeARewordedRequest = () =>
-  Effect.runPromise(
-    withRepository((repository) =>
-      Effect.gen(function* () {
-        const { orchestrator, reports, second, task } = yield* rewordedTriage(repository);
-        expect(second.tools.map((tool) => tool.name)).toEqual(["conclude_triage"]);
-        expect(second.prompts[0]).toContain(REWORDED.unmet);
-        expect(second.prompts[0]).toContain('<decision number="1" files-changed-since="no">');
-        expect(second.prompts[0]).toContain(DECIDED.decision);
-        expect(taskStatus(orchestrator, task.id)).toBe("running");
-
-        yield* Effect.promise(() =>
-          second.concludeTriage({
-            conclusion: "repeat",
-            decision: "The adapter way again.",
-            grounds: "It asks what decision 1 answered.",
-            repeats: 1,
-          }),
-        );
-        yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
-        expect(reports.at(-1)?.details).toMatchObject({ role: "triage", status: "needs-decision" });
-        expect(reports.at(-1)?.text).toContain("asks the same thing as earlier triage decision 1");
-      }),
-    ),
-  );
-
-it(
-  "triages a reworded request even when no file changed since the last decision, shows the triage the earlier decisions, and hands it to the orchestrator when the triage finds it repeats one",
-  letsTheTriageJudgeARewordedRequest,
 );
 
 const refusesARepeatOfNothing = () =>

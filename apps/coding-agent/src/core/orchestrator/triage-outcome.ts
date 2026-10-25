@@ -1,6 +1,7 @@
 import type outcomeTypes from "./outcome.types.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import storeModule from "./store.ts";
+import triageMemory from "./triage-memory.ts";
 import type triageOutcomeTypes from "./triage-outcome.types.ts";
 import triageText from "./triage-text.ts";
 import type triageTypes from "./triage.types.ts";
@@ -62,7 +63,15 @@ function settleTriage(
   }
   store.setTaskStatus(runtime.database, taskId, "needs-decision", ending.now);
   applied.status = worse(applied.status, "needs-decision");
-  const line = triageText.escalationLine(conclusion, ask?.request ?? lastRequest(runtime, taskId));
+  const repeated =
+    conclusion?.conclusion === "repeat"
+      ? triageMemory.decisionNumber(runtime, taskId, conclusion.repeats)
+      : undefined;
+  const line = triageText.escalationLine(
+    conclusion,
+    ask?.request ?? lastRequest(runtime, taskId),
+    repeated,
+  );
   applied.lines.push(line);
   return line;
 }

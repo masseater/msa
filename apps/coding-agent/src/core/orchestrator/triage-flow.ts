@@ -22,10 +22,11 @@ function startTriage(
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, ask.taskId);
     if (task === undefined) return;
-    if (triageMemory.repeats(runtime, ask)) {
+    const repeated = triageMemory.repeats(runtime, ask);
+    if (repeated !== undefined) {
       yield* triageMemory.escalate(runtime, task.id);
       applied.status = triageOutcome.worse(applied.status, "needs-decision");
-      applied.lines.push(triageText.repeatLine(ask.request));
+      applied.lines.push(triageText.repeatLine(ask.request, repeated));
       return;
     }
     yield* triageRestart.launchTriage(runtime, task, ask);

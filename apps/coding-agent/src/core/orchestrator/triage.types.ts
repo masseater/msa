@@ -25,6 +25,11 @@ declare namespace triageTypes {
     decision: string;
   }
 
+  interface Repeated {
+    number: number;
+    decision: Decision;
+  }
+
   interface Ask {
     taskId: string;
     threadId: string;

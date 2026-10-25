@@ -47,15 +47,37 @@ function why(conclusion: Conclusion | undefined): string {
   return "";
 }
 
-function escalationLine(conclusion: Conclusion | undefined, request: string): string {
-  return [why(conclusion), ANSWER, `<request>\n${request}\n</request>`].join("\n");
+const NOT_A_REPEAT =
+  "If this request does not repeat that decision, answer with send_message with the way to proceed; the thread that stopped continues from where it stopped with your answer as the decision.";
+
+function repeatedBlock(repeated: triageTypes.Repeated): string {
+  return [
+    `<repeated-decision number="${repeated.number}">`,
+    `<earlier-request>\n${repeated.decision.request || "(not recorded)"}\n</earlier-request>`,
+    `<earlier-way>\n${repeated.decision.decision || "(not recorded)"}\n</earlier-way>`,
+    "</repeated-decision>",
+  ].join("\n");
 }
 
-function repeatLine(request: string): string {
+function escalationLine(
+  conclusion: Conclusion | undefined,
+  request: string,
+  repeated?: triageTypes.Repeated,
+): string {
   return [
-    "The same request came back word for word after a triage decided it, so it goes to you instead of to another triage.",
-    ANSWER,
+    why(conclusion),
+    repeated === undefined ? ANSWER : `${ANSWER} ${NOT_A_REPEAT}`,
     `<request>\n${request}\n</request>`,
+    ...(repeated === undefined ? [] : [repeatedBlock(repeated)]),
+  ].join("\n");
+}
+
+function repeatLine(request: string, repeated: triageTypes.Repeated): string {
+  return [
+    `The same request came back word for word after triage decision ${repeated.number} decided it, so it goes to you instead of to another triage.`,
+    `${ANSWER} ${NOT_A_REPEAT}`,
+    `<request>\n${request}\n</request>`,
+    repeatedBlock(repeated),
   ].join("\n");
 }
 
