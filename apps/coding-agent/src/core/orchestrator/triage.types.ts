@@ -15,11 +15,14 @@ declare namespace triageTypes {
         humanReason: HumanReason;
         noPrecedent: string;
       }
-    | { conclusion: "compromise"; decision: string; grounds: string; compromises: string[] };
+    | { conclusion: "compromise"; decision: string; grounds: string; compromises: string[] }
+    | { conclusion: "repeat"; decision: string; grounds: string; repeats: number };
 
   interface Decision {
     requestKey: string;
     contentsId: string | null;
+    request: string;
+    decision: string;
   }
 
   interface Ask {

@@ -254,6 +254,7 @@ function openDatabase(path: string): DatabaseSync {
   database.exec(pullRequestSchema.PULL_REQUEST_SCHEMA);
   database.exec(providerWaitSchema.PROVIDER_WAIT_SCHEMA);
   database.exec(progressStore.PROGRESS_SCHEMA);
+  progressStore.addTriageDecisionText(database);
   dropReplanUndoColumns(database);
   migrateTasks(database);
   addOwnerPid(database);

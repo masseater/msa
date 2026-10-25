@@ -13,10 +13,13 @@ const { store } = storeModule;
 const CONCLUDE_TRIAGE = "conclude_triage";
 
 const schema = Type.Object({
-  conclusion: Type.Union([Type.Literal("decided"), Type.Literal("needs-human")], {
-    description:
-      "decided: no human is needed, and the thread that stopped continues with your way. needs-human: only the user can decide.",
-  }),
+  conclusion: Type.Union(
+    [Type.Literal("decided"), Type.Literal("needs-human"), Type.Literal("repeat")],
+    {
+      description:
+        "decided: no human is needed, and the thread that stopped continues with your way. needs-human: only the user can decide. repeat: the request asks the same thing as an earlier triage decision of this task, so following it again would not move the work.",
+    },
+  ),
   decision: Type.String({
     description:
       "decided: the way to proceed, as the thread that stopped should follow it. needs-human: what exactly the user has to decide.",
@@ -64,6 +67,12 @@ const schema = Type.Object({
     description:
       "Whether the way relaxes a rule of the repository, its AGENTS.md, or the task's checks.",
   }),
+  repeats: Type.Optional(
+    Type.Integer({
+      description: "repeat: the number of the earlier decision in <earlier-triage-decisions>.",
+      minimum: 1,
+    }),
+  ),
 });
 
 type Params = Static<typeof schema>;
@@ -88,8 +97,21 @@ function itemsProblem(params: Params, count: number): string | undefined {
   return `A decided way says how it meets each of the ${count} goal items; none says how it meets item ${missing.join(", ")}.`;
 }
 
-function conclusionOf(params: Params, count: number): triageTypes.Conclusion {
+function repeatOf(params: Params, earlier: number): triageTypes.Conclusion {
+  const { decision, grounds, repeats } = params;
+  if (repeats === undefined || repeats > earlier) {
+    throw new Error(
+      earlier === 0
+        ? "No earlier triage of this task decided anything, so nothing repeats: decide or hand it to a human."
+        : `repeat needs repeats, the number (1 to ${earlier}) of the earlier decision this request repeats.`,
+    );
+  }
+  return { conclusion: "repeat", decision, grounds, repeats };
+}
+
+function conclusionOf(params: Params, count: number, earlier: number): triageTypes.Conclusion {
   const { decision, grounds } = params;
+  if (params.conclusion === "repeat") return repeatOf(params, earlier);
   const compromises = compromisesOf(params);
   if (compromises.length > 0) return { compromises, conclusion: "compromise", decision, grounds };
   if (params.conclusion === "needs-human") {
@@ -113,11 +135,18 @@ function concludeTool(
 ): extensionsTypesTypes.ToolDefinition {
   const definition: extensionsTypesTypes.ToolDefinition<typeof schema, undefined> = {
     description:
-      "Conclude the triage of a decision request, once, and end the turn: decided hands your way to the thread that stopped, which continues with it; needs-human hands the request to the orchestrator. A way that narrows the goal, relaxes a rule, or leaves a known limitation goes to the orchestrator as a compromise.",
+      "Conclude the triage of a decision request, once, and end the turn: decided hands your way to the thread that stopped, which continues with it; needs-human hands the request to the orchestrator; repeat, for a request an earlier triage of this task already decided, hands it to the orchestrator too. A way that narrows the goal, relaxes a rule, or leaves a known limitation goes to the orchestrator as a compromise.",
     execute: (_toolCallId, params) => {
       const goalState = store.getTask(runtime.database, task.id)?.goalState ?? task.goalState;
       try {
-        runtime.triageConclusions.set(threadId, conclusionOf(params, goalItems(goalState).length));
+        runtime.triageConclusions.set(
+          threadId,
+          conclusionOf(
+            params,
+            goalItems(goalState).length,
+            store.triageDecisionsOf(runtime.database, task.id).length,
+          ),
+        );
       } catch (error) {
         return Promise.reject(error);
       }

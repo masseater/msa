@@ -22,7 +22,7 @@ function startTriage(
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, ask.taskId);
     if (task === undefined) return;
-    if (yield* triageMemory.repeats(runtime, ask)) {
+    if (triageMemory.repeats(runtime, ask)) {
       yield* triageMemory.escalate(runtime, task.id);
       applied.status = triageOutcome.worse(applied.status, "needs-decision");
       applied.lines.push(triageText.repeatLine(ask.request));
@@ -39,7 +39,7 @@ function followUps(
   return Effect.gen(function* () {
     for (const ask of applied.triage) yield* startTriage(runtime, applied, ask);
     for (const item of applied.resumes) {
-      yield* triageMemory.remember(runtime, item.task.id, item.ask);
+      yield* triageMemory.remember(runtime, item.task.id, item.ask, item.decision);
       yield* resuming.resume(runtime, item.task, item.decision, "triage");
     }
   });

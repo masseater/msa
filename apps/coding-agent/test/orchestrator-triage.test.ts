@@ -171,20 +171,17 @@ const decideOnce = (repository: string) =>
     return stopped;
   });
 
-const sendsARepeatedRequestToTheOrchestrator = (rephrase: boolean) => () =>
+const sendsTheSameRequestToTheOrchestrator = () =>
   Effect.runPromise(
     withRepository((repository) =>
       Effect.gen(function* () {
         const { orchestrator, reports, task, worker, workers } = yield* decideOnce(repository);
-        const again = rephrase
-          ? { ...REQUEST, unmet: "Removing the old API still breaks a caller." }
-          : REQUEST;
-        yield* Effect.promise(() => worker.requestDecision(again));
+        yield* Effect.promise(() => worker.requestDecision(REQUEST));
         yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
         expect(workers).toHaveLength(2);
         expect(reports.at(-1)?.details).toMatchObject({ role: "worker", status: "needs-decision" });
         expect(reports.at(-1)?.text).toContain(
-          "The same request came back after a triage decided it",
+          "The same request came back word for word after a triage decided it",
         );
       }),
     ),
@@ -192,12 +189,72 @@ const sendsARepeatedRequestToTheOrchestrator = (rephrase: boolean) => () =>
 
 it(
   "sends the same request to the orchestrator instead of another triage when the worker stops with it again after a triage decided it",
-  sendsARepeatedRequestToTheOrchestrator(false),
+  sendsTheSameRequestToTheOrchestrator,
 );
 
+const REWORDED = { ...REQUEST, unmet: "Removing the old API still breaks a caller." };
+
+const rewordedTriage = (repository: string) =>
+  Effect.gen(function* () {
+    const decided = yield* decideOnce(repository);
+    yield* Effect.promise(() => decided.worker.requestDecision(REWORDED));
+    yield* waitFor(() => decided.workers.length === 3);
+    return { ...decided, second: decided.workers[2]! };
+  });
+
+const letsTheTriageJudgeARewordedRequest = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const { orchestrator, reports, second, task } = yield* rewordedTriage(repository);
+        expect(second.tools.map((tool) => tool.name)).toEqual(["conclude_triage"]);
+        expect(second.prompts[0]).toContain(REWORDED.unmet);
+        expect(second.prompts[0]).toContain('<decision number="1" files-changed-since="no">');
+        expect(second.prompts[0]).toContain(DECIDED.decision);
+        expect(taskStatus(orchestrator, task.id)).toBe("running");
+
+        yield* Effect.promise(() =>
+          second.concludeTriage({
+            conclusion: "repeat",
+            decision: "The adapter way again.",
+            grounds: "It asks what decision 1 answered.",
+            repeats: 1,
+          }),
+        );
+        yield* waitFor(() => taskStatus(orchestrator, task.id) === "needs-decision");
+        expect(reports.at(-1)?.details).toMatchObject({ role: "triage", status: "needs-decision" });
+        expect(reports.at(-1)?.text).toContain("asks the same thing as earlier triage decision 1");
+      }),
+    ),
+  );
+
 it(
-  "sends a reworded request to the orchestrator instead of another triage when the worker changed no file since the triage decided",
-  sendsARepeatedRequestToTheOrchestrator(true),
+  "triages a reworded request even when no file changed since the last decision, shows the triage the earlier decisions, and hands it to the orchestrator when the triage finds it repeats one",
+  letsTheTriageJudgeARewordedRequest,
+);
+
+const refusesARepeatOfNothing = () =>
+  Effect.runPromise(
+    withRepository((repository) =>
+      Effect.gen(function* () {
+        const { triage } = yield* stoppedTask(repository);
+        yield* Effect.promise(() =>
+          expect(
+            triage.concludeTriage({
+              conclusion: "repeat",
+              decision: "?",
+              grounds: "?",
+              repeats: 1,
+            }),
+          ).rejects.toThrow("No earlier triage of this task decided anything"),
+        );
+      }),
+    ),
+  );
+
+it(
+  "refuses a repeat conclusion when no earlier triage of the task decided anything",
+  refusesARepeatOfNothing,
 );
 
 const triagesANewRequestAfterWork = () =>

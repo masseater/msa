@@ -4,6 +4,8 @@ import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import startModule from "./start.ts";
 import storeModule from "./store.ts";
+import triageMemory from "./triage-memory.ts";
+import triagePrompts from "./triage-prompts.ts";
 import type triageTypes from "./triage.types.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
@@ -17,7 +19,14 @@ function launchTriage(
   ask: triageTypes.Ask,
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
-    const threadId = yield* starting.startTasks(runtime, task, "triage", "", ask.request);
+    const earlier = yield* triageMemory.earlier(runtime, ask);
+    const threadId = yield* starting.startTasks(
+      runtime,
+      task,
+      "triage",
+      "",
+      triagePrompts.requestBlocks(ask.request, earlier),
+    );
     const now = yield* nowMillis;
     if (threadId !== undefined) store.saveTriageAsk(runtime.database, threadId, ask, now);
   });

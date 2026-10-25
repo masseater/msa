@@ -51,6 +51,8 @@ CREATE TABLE IF NOT EXISTS triage_decisions (
   task_id TEXT NOT NULL,
   request_key TEXT NOT NULL,
   contents_id TEXT,
+  request TEXT NOT NULL DEFAULT '',
+  decision TEXT NOT NULL DEFAULT '',
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS triage_decisions_task ON triage_decisions(task_id, created_at);
@@ -62,13 +64,37 @@ function askKey(text: string): string {
   return text.toLowerCase().replaceAll(/\s+/gu, " ").trim();
 }
 
+interface TriageDecisionRow {
+  request_key: string;
+  contents_id: string | null;
+  request: string;
+  decision: string;
+}
+
 function triageDecisionsOf(database: DatabaseSync, taskId: string): TriageDecision[] {
   const rows = database
     .prepare(
-      "SELECT request_key, contents_id FROM triage_decisions WHERE task_id = ? ORDER BY created_at",
+      "SELECT request_key, contents_id, request, decision FROM triage_decisions WHERE task_id = ? ORDER BY created_at",
     )
-    .all(taskId) as unknown as { request_key: string; contents_id: string | null }[];
-  return rows.map((row) => ({ contentsId: row.contents_id, requestKey: row.request_key }));
+    .all(taskId) as unknown as TriageDecisionRow[];
+  return rows.map((row) => ({
+    contentsId: row.contents_id,
+    decision: row.decision,
+    request: row.request,
+    requestKey: row.request_key,
+  }));
+}
+
+function addTriageDecisionText(database: DatabaseSync): void {
+  const rows = database.prepare("PRAGMA table_info(triage_decisions)").all() as unknown as {
+    name: string;
+  }[];
+  const names = new Set(rows.map((row) => row.name));
+  for (const column of ["request", "decision"]) {
+    if (!names.has(column)) {
+      database.exec(`ALTER TABLE triage_decisions ADD COLUMN ${column} TEXT NOT NULL DEFAULT ''`);
+    }
+  }
 }
 
 function saveTriageDecision(
@@ -79,15 +105,23 @@ function saveTriageDecision(
 ): void {
   database
     .prepare(
-      "INSERT INTO triage_decisions (task_id, request_key, contents_id, created_at) VALUES (?, ?, ?, ?)",
+      "INSERT INTO triage_decisions (task_id, request_key, contents_id, request, decision, created_at) VALUES (?, ?, ?, ?, ?, ?)",
     )
-    .run(taskId, decision.requestKey, decision.contentsId, now);
+    .run(
+      taskId,
+      decision.requestKey,
+      decision.contentsId,
+      decision.request,
+      decision.decision,
+      now,
+    );
 }
 
 const PROGRESS_SCHEMA = `${REVIEW_CONTENTS_SCHEMA}\n${TRIAGE_SCHEMA}\n${triageAskStore.TRIAGE_ASK_SCHEMA}`;
 
 const progressStore = {
   PROGRESS_SCHEMA,
+  addTriageDecisionText,
   askKey,
   reviewContentsOf,
   saveReviewContents,

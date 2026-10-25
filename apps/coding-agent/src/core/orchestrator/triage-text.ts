@@ -38,6 +38,9 @@ function why(conclusion: Conclusion | undefined): string {
   if (conclusion.conclusion === "compromise") {
     return `The only way the triage found ${conclusion.compromises.join(", ")}, which is a compromise rather than a way to proceed, so the decision goes to you.\n<triage-view>\n${conclusion.decision}\n${conclusion.grounds}\n</triage-view>`;
   }
+  if (conclusion.conclusion === "repeat") {
+    return `Triage: this request asks the same thing as earlier triage decision ${conclusion.repeats}, which did not get the work moving, so the decision goes to you.\n<triage-view>\n${conclusion.decision}\n${conclusion.grounds}\n</triage-view>`;
+  }
   if (conclusion.conclusion === "needs-human") {
     return `Triage: only the user can decide this (${HUMAN_REASONS[conclusion.humanReason]}). ${conclusion.noPrecedent}\n<triage-view>\n${conclusion.decision}\n${conclusion.grounds}\n</triage-view>`;
   }
@@ -50,7 +53,7 @@ function escalationLine(conclusion: Conclusion | undefined, request: string): st
 
 function repeatLine(request: string): string {
   return [
-    "The same request came back after a triage decided it, with the request repeated or no file changed since that decision, so it goes to you instead of to another triage.",
+    "The same request came back word for word after a triage decided it, so it goes to you instead of to another triage.",
     ANSWER,
     `<request>\n${request}\n</request>`,
   ].join("\n");
