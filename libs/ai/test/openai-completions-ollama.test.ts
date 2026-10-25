@@ -169,6 +169,35 @@ const probesAgainAfterUnreachable = () =>
     }),
   );
 
+const sharesConcurrentProbe = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const server = serverAt(ollamaRoot);
+      const model = customModel("home-box", "http://127.0.0.1:8585/v1");
+      yield* Effect.all([send(model, server.fetch), send(model, server.fetch)], {
+        concurrency: "unbounded",
+      });
+      expect(probedUrls(server.exchanges)).toHaveLength(1);
+      expect(chatPayloads(server.exchanges).map((payload) => payload?.["max_tokens"])).toEqual([
+        123, 123,
+      ]);
+    }),
+  );
+
+const probesAgainAfterUnauthorized = () =>
+  Effect.runPromise(
+    Effect.gen(function* () {
+      const model = customModel("home-box", "http://127.0.0.1:8686/v1");
+      const locked = serverAt(() => new Response('{"error":"unauthorized"}', { status: 401 }));
+      yield* send(model, locked.fetch);
+      expectField(locked.exchanges, "max_completion_tokens");
+      const open = serverAt(ollamaRoot);
+      yield* send(model, open.fetch);
+      expect(probedUrls(open.exchanges)).toHaveLength(1);
+      expectField(open.exchanges, "max_tokens");
+    }),
+  );
+
 const hangingRoot = (fetch: ReturnType<typeof serverAt>["fetch"]) => {
   const answer = fetch.getMockImplementation();
   fetch.mockImplementation((input, init) => {
@@ -224,4 +253,6 @@ describe("openai-completions max tokens field for Ollama", () => {
   it("probes each server once and reuses the answer", reusesProbeAnswer);
   it("probes again after the server could not be reached", probesAgainAfterUnreachable);
   it("remembers a probe that timed out", remembersTimedOutProbe);
+  it("shares one probe between concurrent first requests", sharesConcurrentProbe);
+  it("probes again after the root refused the credentials", probesAgainAfterUnauthorized);
 });
