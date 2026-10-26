@@ -38,10 +38,12 @@ function roundTitle(inRound: Task[], title: string): string {
 function finishedSummary(inRound: Task[], context: RoundContext): string | undefined {
   const done = inRound.filter((task) => task.status === "completed").length;
   const stopped = inRound.filter((task) => task.status === "stopped").length;
-  if (done + stopped === 0) return undefined;
+  const closed = inRound.filter((task) => task.status === "closed").length;
+  if (done + stopped + closed === 0) return undefined;
   const counts = [
     done > 0 ? `${theme.fg("success", "✓")} ${done} done` : undefined,
     stopped > 0 ? `${theme.fg("dim", "■")} ${stopped} stopped` : undefined,
+    closed > 0 ? `${theme.fg("dim", "–")} ${closed} closed` : undefined,
   ]
     .filter(Boolean)
     .join("  ");

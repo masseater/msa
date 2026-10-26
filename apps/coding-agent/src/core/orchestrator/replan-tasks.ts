@@ -33,7 +33,7 @@ function closeDropped(
     const task = store.getTask(database, item.taskId);
     if (task === undefined) continue;
     detachReview(runtime, task);
-    store.setTaskStatus(database, task.id, "stopped", now);
+    store.closeTask(database, task.id, replanId, now);
     writeReport(runtime, task.id, "replan", `dropped by replan ${replanId}: ${item.reason}`, now);
     dropped.push({ reason: item.reason, taskId: task.id, title: task.title });
   }
@@ -42,7 +42,7 @@ function closeDropped(
       const task = store.getTask(database, id);
       if (task === undefined) continue;
       detachReview(runtime, task);
-      store.setTaskStatus(database, id, "stopped", now);
+      store.closeTask(database, id, replanId, now);
     }
   }
   return dropped;
@@ -161,7 +161,9 @@ function createTasks(
   for (const item of pending) {
     for (const ref of unique(item.refs)) {
       const id = byKey.get(ref) ?? ref;
-      if (!item.explicit && closed.has(id)) continue;
+      if (!item.explicit && (closed.has(id) || store.getTask(database, id)?.status === "closed")) {
+        continue;
+      }
       if (item.explicit && closed.has(id)) {
         throw fail(`${item.taskId} cannot depend on ${id}, which this replan closes`);
       }
@@ -189,6 +191,48 @@ function rewire(
   return rewired;
 }
 
+function successorsOf(
+  prepared: replanTypes.Prepared,
+  inheritors: ReadonlyMap<string, readonly string[]>,
+  closed: ReadonlySet<string>,
+  source: string,
+): string[] {
+  const heirs = inheritors.get(source);
+  if (heirs !== undefined) return [...heirs];
+  return (prepared.views.get(source)?.dependsOn ?? []).flatMap((id) =>
+    closed.has(id) ? successorsOf(prepared, inheritors, closed, id) : [id],
+  );
+}
+
+function redirectDependents(
+  runtime: runtimeTypes.Runtime,
+  prepared: replanTypes.Prepared,
+  inheritors: ReadonlyMap<string, readonly string[]>,
+): orchestratorTypesTypes.ReplanRewired[] {
+  const database = runtime.database;
+  const closed = new Set(prepared.sources);
+  const moved = new Set<string>();
+  for (const source of prepared.sources) {
+    for (const dependentId of store.dependentsOf(database, source)) {
+      const dependent = store.getTask(database, dependentId);
+      if (dependent === undefined || closed.has(dependentId)) continue;
+      if (dependent.status === "completed") continue;
+      store.removeDependency(database, dependentId, source);
+      moved.add(dependentId);
+      if (dependent.kind === "review") continue;
+      for (const heir of unique(successorsOf(prepared, inheritors, closed, source))) {
+        if (heir !== dependentId) {
+          store.addDependency(database, runtime.options.project, dependentId, heir);
+        }
+      }
+    }
+  }
+  return [...moved].map((taskId) => ({
+    dependsOn: store.dependenciesOf(database, taskId),
+    taskId,
+  }));
+}
+
 function keep(runtime: runtimeTypes.Runtime, prepared: replanTypes.Prepared, now: number): void {
   const database = runtime.database;
   for (const id of prepared.keep) {
@@ -197,6 +241,6 @@ function keep(runtime: runtimeTypes.Runtime, prepared: replanTypes.Prepared, now
   }
 }
 
-const replanTasks = { closeDropped, createTasks, keep, rewire };
+const replanTasks = { closeDropped, createTasks, keep, redirectDependents, rewire };
 
 export default replanTasks;

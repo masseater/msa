@@ -6,7 +6,11 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { addDependency, removeDependency } = taskDependencies;
 const { getTask, listTasks, updateTask } = taskRows;
 
-const ENDED: ReadonlySet<orchestratorTypesTypes.TaskStatus> = new Set(["failed", "stopped"]);
+const ENDED: ReadonlySet<orchestratorTypesTypes.TaskStatus> = new Set([
+  "failed",
+  "stopped",
+  "closed",
+]);
 
 function mergeSourcesOf(
   database: DatabaseSync,

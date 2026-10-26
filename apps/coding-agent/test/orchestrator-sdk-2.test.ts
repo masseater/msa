@@ -57,7 +57,7 @@ const endsAWorkerTurnWithADecisionRequest = () =>
         ),
       ]);
       const task = yield* Effect.promise(() =>
-        orchestrator.createTask({ currentState: "a", goalState: "b", title: "t" }),
+        orchestrator.createTask({ currentState: "a", goalState: "b", title: "request a decision" }),
       );
       yield* waitFor(() => {
         const status = orchestrator.snapshot.tasks.find((item) => item.id === task.id)?.status;
@@ -107,7 +107,7 @@ const givesTriageAndAdvisorOnlyReadTools = () =>
         ...Array.from({ length: 6 }, () => recordingDeclaredTools(declared)),
       ]);
       const task = yield* Effect.promise(() =>
-        orchestrator.createTask({ currentState: "a", goalState: "b", title: "t" }),
+        orchestrator.createTask({ currentState: "a", goalState: "b", title: "read-only tools" }),
       );
       yield* waitFor(
         () =>

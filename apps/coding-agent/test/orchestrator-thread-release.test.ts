@@ -96,7 +96,7 @@ it("stops the pr watches of a thread that wraps up for a replan", () =>
       });
       yield* stopAndWrapUp(orchestrator, [workers[0]!], "branch feat/a, nothing left");
       yield* Effect.promise(() => pending);
-      expect(taskStatus(orchestrator, a.id)).toBe("stopped");
+      expect(taskStatus(orchestrator, a.id)).toBe("closed");
       expect(workers[0]?.prWatchClosed).toBe(1);
     }),
   ));

@@ -70,7 +70,7 @@ const closesADroppedTaskWithItsReason = () =>
       >;
       expect(result.dropped).toEqual([{ reason: "a already does it", taskId: b.id, title: "b" }]);
       const dropped = yield* read(orchestrator, b.id);
-      expect(dropped.status).toBe("stopped");
+      expect(dropped.status).toBe("closed");
       expect(dropped.reports.at(-1)?.content).toContain("a already does it");
       const review = orchestrator.snapshot.tasks.find((task) => task.kind === "review");
       expect(review?.dependsOn).not.toContain(b.id);
@@ -109,8 +109,8 @@ const mergesSeveralTasksIntoOneAndCarries = () =>
       >;
       const merged = result.created[0]!;
       expect(merged.from).toEqual([a.id, b.id]);
-      expect(taskStatus(orchestrator, a.id)).toBe("stopped");
-      expect(taskStatus(orchestrator, b.id)).toBe("stopped");
+      expect(taskStatus(orchestrator, a.id)).toBe("closed");
+      expect(taskStatus(orchestrator, b.id)).toBe("closed");
       yield* waitFor(() => workers.length === 2);
       expect(workers[1]?.prompts[0]).toContain("a is not written");
       expect(workers[1]?.prompts[0]).toContain("b is not written");

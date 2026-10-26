@@ -25,6 +25,7 @@ const SETTLED: ReadonlySet<orchestratorTypesTypes.TaskStatus> = new Set([
   "completed",
   "failed",
   "stopped",
+  "closed",
 ]);
 
 function linkedTask(

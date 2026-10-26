@@ -55,7 +55,7 @@ const stopsAtTheTurnBoundaryHandsThe = Effect.gen(function* () {
   expect(result.stopped.map((item) => item.taskId)).toEqual([a.id]);
   expect(result.stopped[0]?.memo).toBe(memo);
   expect(result.created.map((item) => item.title)).toEqual(["a client", "a docs"]);
-  expect(taskStatus(orchestrator, a.id)).toBe("stopped");
+  expect(taskStatus(orchestrator, a.id)).toBe("closed");
 
   yield* waitFor(() => workers.length === 3);
   const [client, docs] = result.created;

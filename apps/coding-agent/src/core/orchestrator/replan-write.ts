@@ -11,7 +11,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 const { replanStore } = replanStoreModule;
 const { store } = storeModule;
 const { writeHandoffs } = replanHandoffs;
-const { keep, rewire, createTasks, closeDropped } = replanTasks;
+const { keep, rewire, createTasks, closeDropped, redirectDependents } = replanTasks;
 
 function relinkMerges(
   runtime: runtimeTypes.Runtime,
@@ -48,7 +48,10 @@ function write(
   return store.transaction(database, () => {
     const dropped = closeDropped(runtime, prepared, replanId, now);
     const creation = createTasks(runtime, prepared, now);
-    const rewired = rewire(runtime, prepared, creation.byKey);
+    const rewired = [
+      ...rewire(runtime, prepared, creation.byKey),
+      ...redirectDependents(runtime, prepared, creation.inheritors),
+    ];
     keep(runtime, prepared, now);
     relinkMerges(runtime, prepared, creation.inheritors, now);
     const handover = pullRequestHandover.handOver(runtime, prepared.sources, creation.inheritors);

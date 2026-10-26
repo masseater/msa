@@ -9,6 +9,7 @@ declare namespace taskStoreInternalTypes {
     goal_state: string;
     checks: string;
     status: string;
+    closed_by?: string | null;
     cwd: string;
     merge_into: string | null;
     condition: string | null;

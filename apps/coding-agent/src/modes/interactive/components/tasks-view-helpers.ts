@@ -21,6 +21,7 @@ function createTasksViewState(): tasksViewHelpersTypes.TasksViewState {
 }
 
 const STATUS_LABEL: Record<orchestratorTypesTypes.TaskStatus, string> = {
+  closed: "Closed",
   completed: "Done",
   failed: "Failed",
   "needs-decision": "Needs decision",
@@ -35,6 +36,7 @@ interface Glyph {
 }
 
 const TASK_GLYPH: Record<orchestratorTypesTypes.TaskStatus, Glyph> = {
+  closed: { color: "dim", symbol: "–" },
   completed: { color: "success", symbol: "✓" },
   failed: { color: "error", symbol: "✗" },
   "needs-decision": { color: "warning", symbol: "?" },
@@ -66,7 +68,7 @@ function glyph(task: orchestratorTypesTypes.TaskSnapshot): string {
 }
 
 function finished(task: orchestratorTypesTypes.TaskSnapshot): boolean {
-  return task.status === "completed" || task.status === "stopped";
+  return task.status === "completed" || task.status === "stopped" || task.status === "closed";
 }
 
 function stoppable(task: orchestratorTypesTypes.TaskSnapshot): boolean {
@@ -140,6 +142,7 @@ function describeTaskCounts(
     [count("failed"), theme.fg("error", "✗"), "failed"],
     [count("completed"), theme.fg("success", "✓"), "done"],
     [count("stopped"), theme.fg("dim", "■"), "stopped"],
+    [count("closed"), theme.fg("dim", "–"), "closed"],
   ] as const;
   return parts
     .filter(([value]) => value > 0)

@@ -7,7 +7,12 @@ function orchestratorError(error: unknown): OrchestratorError {
   });
 }
 
+function closedTaskMessage(taskId: string): string {
+  return `${taskId} was closed by a replan and does not run again. Message the task that replaced it, or create a new task.`;
+}
+
 const errors = {
+  closedTaskMessage,
   orchestratorError,
 };
 
