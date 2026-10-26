@@ -156,6 +156,7 @@ release. Add a tool name to select part of the graph. For example, run
 
 - PR の `edited`（タイトル・本文・base の変更）で起動するのは `commits` workflow だけにし、`commits` ジョブのほかに置けるのは `ci-telemetry` だけにする。`tools/checks/pull-request-edited.test.ts` が検査する。
 - 各 workflow の最後には、ほかの全ジョブを `needs` に並べ `if: always()` で `.github/scripts/ci-telemetry.sh` を動かす `ci-telemetry` ジョブを置く。`tools/checks/ci-telemetry-job.test.ts` が検査する。
+- 一時的な例外の期限を、時刻を条件にしたタスクで管理しない。外せるかは、例外の今の状態を毎日見る workflow に判定させ、issue にする。`pnpm-workspace.yaml` の `minimumReleaseAgeExclude` は、`audit` workflow の `release-age` ジョブが、公開から `minimumReleaseAge` を過ぎた版を issue にする。
 - `.github/scripts/ci-telemetry.sh` は土台のテンプレートと同じ中身に保ち、手で書き換えない。同じ検査が中身の SHA-256 を突き合わせ、`template-drift` workflow が毎日テンプレートの最新の中身と比べて、違えば issue を開く。テンプレートのリポジトリ名は repository variable `TEMPLATE_REPOSITORY` に置く。送り先は `apps/web` の Worker で、main への push で verify の `deploy` ジョブがデプロイする。
 
 ## 公開先
