@@ -4,7 +4,8 @@ import taskRounds from "./task-rounds.ts";
 import taskRows from "./task-rows.ts";
 
 const { workTasksOfRound, reviewTaskOfRound, listRoundIds, insertRound } = taskRounds;
-const { updateTask, setTaskStatus, listTasks, insertTask, getTask, deleteTask } = taskRows;
+const { closeTask, updateTask, setTaskStatus, listTasks, insertTask, getTask, deleteTask } =
+  taskRows;
 const {
   unfinishedDependencies,
   tasksWithCondition,
@@ -22,6 +23,7 @@ const taskStore = {
   ...taskMerges,
   addDependency,
   clearDependencies,
+  closeTask,
   deleteTask,
   dependenciesOf,
   dependentsOf,

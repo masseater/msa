@@ -5,6 +5,11 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { db } = dbModule;
 
+function statusOf(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.TaskStatus {
+  if ((row.closed_by ?? null) !== null) return "closed";
+  return row.status as orchestratorTypesTypes.TaskStatus;
+}
+
 function toTask(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.Task {
   return {
     checks: JSON.parse(row.checks) as orchestratorTypesTypes.TaskCheck[],
@@ -19,7 +24,7 @@ function toTask(row: taskStoreInternalTypes.TaskRow): orchestratorTypesTypes.Tas
     model: row.model,
     project: row.project,
     round: row.round,
-    status: row.status as orchestratorTypesTypes.TaskStatus,
+    status: statusOf(row),
     thinkingLevel: row.thinking_level as orchestratorTypesTypes.Task["thinkingLevel"],
     title: row.title,
     updatedAt: row.updated_at,
@@ -105,6 +110,8 @@ function updateTask(
       key === "checks" ? JSON.stringify(value) : value,
     ]) as [string, string | number | null][];
   if (entries.length === 0) return;
+  if (patch.status === "closed")
+    throw new Error(`Close ${id} with closeTask, which records the replan`);
   const assignments = entries.map(([column]) => `${column} = ?`).join(", ");
   database
     .prepare(`UPDATE tasks SET ${assignments}, updated_at = ? WHERE id = ?`)
@@ -123,6 +130,13 @@ function setTaskStatus(
   updateTask(database, id, { status }, now);
 }
 
+function closeTask(database: DatabaseSync, id: string, replanId: string, now: number): void {
+  database
+    .prepare("UPDATE tasks SET status = 'stopped', closed_by = ?, updated_at = ? WHERE id = ?")
+    .run(replanId, now, id);
+  database.prepare("DELETE FROM provider_waits WHERE task_id = ?").run(id);
+}
+
 function deleteTask(database: DatabaseSync, taskId: string): void {
   database
     .prepare("DELETE FROM task_dependencies WHERE task_id = ? OR depends_on = ?")
@@ -136,6 +150,15 @@ function deleteTask(database: DatabaseSync, taskId: string): void {
   database.prepare("DELETE FROM tasks WHERE id = ?").run(taskId);
 }
 
-const taskRows = { deleteTask, getTask, insertTask, listTasks, setTaskStatus, toTask, updateTask };
+const taskRows = {
+  closeTask,
+  deleteTask,
+  getTask,
+  insertTask,
+  listTasks,
+  setTaskStatus,
+  toTask,
+  updateTask,
+};
 
 export default taskRows;

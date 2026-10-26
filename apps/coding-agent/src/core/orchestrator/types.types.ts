@@ -1,7 +1,14 @@
 import type agentTypes from "@msa/agent-core/index.types";
 
 declare namespace orchestratorTypesTypes {
-  type TaskStatus = "waiting" | "running" | "needs-decision" | "completed" | "failed" | "stopped";
+  type TaskStatus =
+    | "waiting"
+    | "running"
+    | "needs-decision"
+    | "completed"
+    | "failed"
+    | "stopped"
+    | "closed";
 
   type TaskKind = "work" | "review";
 

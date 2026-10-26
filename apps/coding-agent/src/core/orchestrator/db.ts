@@ -1,10 +1,13 @@
 import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import closedMigration from "./closed-migration.ts";
+import columnMigrations from "./column-migrations.ts";
 import progressStore from "./progress-store.ts";
 import providerWaitSchema from "./provider-wait-schema.ts";
 import pullRequestSchema from "./pull-request-schema.ts";
 
 const { openSqliteFile } = sqliteFile;
+const { columnNames } = columnMigrations;
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS tasks (
@@ -135,13 +138,6 @@ function dropReplanUndoColumns(database: DatabaseSync): void {
   });
 }
 
-function columnNames(database: DatabaseSync, table: string): string[] {
-  const rows = database.prepare(`PRAGMA table_info(${table})`).all() as unknown as {
-    name: string;
-  }[];
-  return rows.map((row) => row.name);
-}
-
 const LEGACY_TASK_COLUMNS = ["prompt", "priority", "paths", "repos"] as const;
 
 function migrateTasks(database: DatabaseSync): void {
@@ -160,31 +156,6 @@ function migrateTasks(database: DatabaseSync): void {
       if (names.has(column)) database.exec(`ALTER TABLE tasks DROP COLUMN ${column}`);
     }
   });
-}
-
-function addOwnerPid(database: DatabaseSync): void {
-  if (columnNames(database, "orchestrator_state").includes("owner_pid")) return;
-  database.exec("ALTER TABLE orchestrator_state ADD COLUMN owner_pid INTEGER");
-}
-
-function addTaskChecks(database: DatabaseSync): void {
-  if (columnNames(database, "tasks").includes("checks")) return;
-  database.exec("ALTER TABLE tasks ADD COLUMN checks TEXT NOT NULL DEFAULT '[]'");
-}
-
-function addWorkspaceColumns(database: DatabaseSync): void {
-  const tasks = columnNames(database, "tasks");
-  if (!tasks.includes("merge_into")) database.exec("ALTER TABLE tasks ADD COLUMN merge_into TEXT");
-  const threads = columnNames(database, "threads");
-  if (!threads.includes("branch")) database.exec("ALTER TABLE threads ADD COLUMN branch TEXT");
-  if (!threads.includes("target_branch")) {
-    database.exec("ALTER TABLE threads ADD COLUMN target_branch TEXT");
-  }
-}
-
-function addReportVerdict(database: DatabaseSync): void {
-  if (columnNames(database, "reports").includes("verdict")) return;
-  database.exec("ALTER TABLE reports ADD COLUMN verdict TEXT");
 }
 
 function addMissingRounds(database: DatabaseSync): void {
@@ -258,12 +229,10 @@ function openDatabase(path: string): DatabaseSync {
   progressStore.addTriageDecisionText(database);
   dropReplanUndoColumns(database);
   migrateTasks(database);
-  addOwnerPid(database);
-  addTaskChecks(database);
-  addWorkspaceColumns(database);
-  addReportVerdict(database);
+  columnMigrations.addColumns(database);
   pullRequestSchema.addPullRequestColumns(database);
   addMissingRounds(database);
+  transaction(database, () => closedMigration.closeReplacedTasks(database));
   database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   return database;
 }

@@ -1,6 +1,7 @@
 import { Effect } from "effect";
 
 import actionHelpersModule from "./action-helpers.ts";
+import errors from "./errors.ts";
 import resumeModule from "./resume.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import startModule from "./start.ts";
@@ -17,6 +18,9 @@ function sendMessage(runtime: runtimeTypes.Runtime, taskId: string, message: str
   return Effect.gen(function* () {
     const task = store.getTask(runtime.database, taskId);
     if (task === undefined) throw new Error(`Unknown task: ${taskId}`);
+    if (task.status === "closed") {
+      throw new Error(errors.closedTaskMessage(taskId));
+    }
     if (task.status === "needs-decision") {
       yield* resuming.resume(runtime, task, message);
       yield* Effect.sync(() => runtime.publish());

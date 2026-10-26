@@ -7,6 +7,7 @@ const TASK_STATUSES: readonly orchestratorTypesTypes.TaskStatus[] = [
   "completed",
   "failed",
   "stopped",
+  "closed",
 ];
 
 const THREAD_ROLES: readonly orchestratorTypesTypes.ThreadRole[] = [

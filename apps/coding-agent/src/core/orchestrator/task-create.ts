@@ -7,71 +7,23 @@ import runtimeModule from "./runtime.ts";
 import type runtimeTypes from "./runtime.types.ts";
 import schedule from "./schedule.ts";
 import storeModule from "./store.ts";
-import text from "./text.ts";
+import taskAdmission from "./task-admission.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { requireChecks, requireMergeTarget, requireStates } = text;
 const { newId } = idsModule;
 const { rounds } = roundsModule;
 const { scheduling } = schedule;
 const { actionHelpers } = actionHelpersModule;
-
-const UNFINISHED_TASKS_REQUIRING_DEPENDENCIES = 3;
-
-function requireDependenciesWhenBusy(
-  runtime: runtimeTypes.Runtime,
-  input: orchestratorTypesTypes.CreateTaskInput,
-): void {
-  if ((input.dependsOn ?? []).length > 0 || input.mergeInto !== undefined) return;
-  const unfinished = store
-    .listTasks(runtime.database, runtime.options.project)
-    .filter(
-      (task) => task.kind === "work" && (task.status === "waiting" || task.status === "running"),
-    );
-  if (unfinished.length < UNFINISHED_TASKS_REQUIRING_DEPENDENCIES) return;
-  throw new Error(
-    `Task ${input.title} has no dependsOn while ${unfinished.length} tasks are unfinished (${unfinished
-      .map((task) => task.id)
-      .join(
-        ", ",
-      )}). With ${UNFINISHED_TASKS_REQUIRING_DEPENDENCIES} or more unfinished tasks, a new task must name what it waits for in dependsOn, or the task it merges into in mergeInto. If it must run before existing tasks, insert it into the DAG with replan instead.`,
-  );
-}
-
-function resolveRound(
-  runtime: runtimeTypes.Runtime,
-  input: orchestratorTypesTypes.CreateTaskInput,
-): string {
-  if (input.round !== undefined) return input.round;
-  const dependencies = input.dependsOn ?? [];
-  if (dependencies.length === 0) return "main";
-  const dependencyRounds = new Set<string>();
-  for (const id of dependencies) {
-    const task = store.getTask(runtime.database, id);
-    if (task === undefined) throw new Error(`Unknown task: ${id}`);
-    dependencyRounds.add(task.round);
-  }
-  if (dependencyRounds.size !== 1) {
-    throw new Error("Dependencies belong to different rounds; pass round explicitly.");
-  }
-  return [...dependencyRounds][0]!;
-}
+const { admitTask } = taskAdmission;
 
 function createTask(runtime: runtimeTypes.Runtime, input: orchestratorTypesTypes.CreateTaskInput) {
   return Effect.gen(function* () {
     const now = yield* nowMillis;
     const database = runtime.database;
     const project = runtime.options.project;
-    const states = requireStates(`Task ${input.title}`, input.currentState, input.goalState);
-    const checks = requireChecks(`Task ${input.title}`, input.checks);
-    if (input.model !== undefined) runtime.options.resolveModel(input.model);
-    requireDependenciesWhenBusy(runtime, input);
-    const round = resolveRound(runtime, input);
-    const mergeInto = requireMergeTarget(input.mergeInto, runtime.options.project, (id) =>
-      store.getTask(runtime.database, id),
-    );
+    const { checks, mergeInto, round, states } = yield* admitTask(runtime, input);
     const id = newId("t");
     const task: orchestratorTypesTypes.Task = {
       checks,

@@ -65,7 +65,7 @@ function recoverProject(database: DatabaseSync, project: string, cause: string, 
       .run(now, project);
     database
       .prepare(
-        "UPDATE tasks SET status = 'waiting', updated_at = ? WHERE project = ? AND status = 'running'",
+        "UPDATE tasks SET status = CASE WHEN closed_by IS NULL THEN 'waiting' ELSE 'stopped' END, updated_at = ? WHERE project = ? AND status = 'running'",
       )
       .run(now, project);
   });

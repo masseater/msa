@@ -25,7 +25,7 @@ const createSchema = Type.Object({
   condition: Type.Optional(
     Type.String({
       description:
-        "Shell command that must exit 0 before the task starts, for external waits such as a merged PR or a green CI.",
+        "POSIX /bin/sh command that must exit 0 before the task starts, for external waits such as a merged PR or a green CI. Use $(...), not fish syntax; a command /bin/sh cannot parse is refused.",
     }),
   ),
   currentState: Type.String({

@@ -61,6 +61,11 @@ function addDependency(
   if (dependency === undefined || dependency.project !== project) {
     throw new Error(`Unknown task: ${dependsOn}`);
   }
+  if (dependency.status === "closed") {
+    throw new Error(
+      `${taskId} cannot depend on ${dependsOn}: a replan closed it, so it never completes. Depend on the task that replaced it.`,
+    );
+  }
   if (reaches(database, dependsOn, taskId)) {
     throw new Error(`Adding ${dependsOn} to ${taskId} would make a dependency cycle`);
   }
@@ -112,12 +117,12 @@ function readyTasks(
   const rows = database
     .prepare(
       `SELECT t.* FROM tasks t
-       WHERE t.project = ? AND t.status = 'waiting' AND t.kind = ?
+       WHERE t.project = ? AND t.status = 'waiting' AND t.closed_by IS NULL AND t.kind = ?
          AND (t.condition IS NULL OR t.condition = '')
          AND NOT EXISTS (SELECT 1 FROM provider_waits w WHERE w.task_id = t.id)
          AND NOT EXISTS (
            SELECT 1 FROM task_dependencies d JOIN tasks dep ON dep.id = d.depends_on
-           WHERE d.task_id = t.id AND dep.status <> 'completed'
+           WHERE d.task_id = t.id AND (dep.status <> 'completed' OR dep.closed_by IS NOT NULL)
          )
        ORDER BY t.created_at, t.id`,
     )
@@ -131,7 +136,7 @@ function tasksWithCondition(
 ): orchestratorTypesTypes.Task[] {
   const rows = database
     .prepare(
-      `SELECT * FROM tasks WHERE project = ? AND status = 'waiting' AND kind = 'work'
+      `SELECT * FROM tasks WHERE project = ? AND status = 'waiting' AND closed_by IS NULL AND kind = 'work'
          AND condition IS NOT NULL AND condition <> '' ORDER BY created_at, id`,
     )
     .all(project) as unknown as taskStoreInternalTypes.TaskRow[];

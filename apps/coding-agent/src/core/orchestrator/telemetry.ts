@@ -13,6 +13,7 @@ const FINISHED_TASK: ReadonlySet<orchestratorTypesTypes.TaskStatus> = new Set([
   "completed",
   "failed",
   "stopped",
+  "closed",
 ]);
 
 function endStatus(

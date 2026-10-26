@@ -11,7 +11,7 @@ import type orchestratorTypesTypes from "./types.types.ts";
 
 const { nowMillis } = runtimeModule;
 const { store } = storeModule;
-const { orchestratorError } = errors;
+const { closedTaskMessage, orchestratorError } = errors;
 const { toolsFor } = threadTools;
 const { markRead, planThread, threadModel } = threadPlanModule.threadPlans;
 
@@ -207,6 +207,9 @@ function startTasks(
   workerReport = "",
   extra = "",
 ): Effect.Effect<string | undefined, runtimeTypes.OrchestratorError> {
+  if (task.status === "closed") {
+    return Effect.fail(orchestratorError(closedTaskMessage(task.id)));
+  }
   return Effect.suspend(() =>
     launchPlan(runtime, planThread(runtime, task, role, workerReport, extra), task, role),
   );
