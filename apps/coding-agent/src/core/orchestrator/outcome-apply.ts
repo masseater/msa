@@ -179,6 +179,10 @@ function applyOutcome(
   };
   const ending: Ending = { applied, asked, now, outcome, runtime, verdict };
   for (const assignment of assignments) {
+    if (store.getTask(runtime.database, assignment.taskId)?.status === "closed") {
+      record(ending, assignment, undefined, undefined);
+      continue;
+    }
     if (outcome.limit !== undefined) {
       settleLimit(ending, assignment, outcome.limit);
       continue;

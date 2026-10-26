@@ -80,15 +80,22 @@ function settleClosed(database: DatabaseSync): void {
     .all() as unknown as { id: string }[];
   const clearWait = database.prepare("DELETE FROM provider_waits WHERE task_id = ?");
   for (const row of settled) clearWait.run(row.id);
+  database.exec(
+    `UPDATE threads SET status = 'stopped' WHERE status = 'running'
+       AND EXISTS (SELECT 1 FROM assignments a WHERE a.thread_id = threads.id)
+       AND NOT EXISTS (
+         SELECT 1 FROM assignments a JOIN tasks t ON t.id = a.task_id
+         WHERE a.thread_id = threads.id AND t.closed_by IS NULL)`,
+  );
 }
 
 function closeReplacedTasks(database: DatabaseSync): void {
-  settleClosed(database);
   const { closedBy, heirs } = replacements(database);
   const close = database.prepare(
-    "UPDATE tasks SET closed_by = ? WHERE id = ? AND status = 'stopped' AND closed_by IS NULL",
+    "UPDATE tasks SET closed_by = ? WHERE id = ? AND closed_by IS NULL",
   );
   for (const [id, replanId] of closedBy) close.run(replanId, id);
+  settleClosed(database);
   const waitedOn = database
     .prepare(
       `SELECT DISTINCT d.depends_on FROM task_dependencies d
