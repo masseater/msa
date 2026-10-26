@@ -4,6 +4,9 @@ import lockfile from "proper-lockfile";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/test";
 
 import FileAuthStorageBackend from "../src/core/file-auth-storage-backend.ts";
+import lockAttempts from "./lock-attempts.ts";
+
+const { freezeLockRetries, observeLockAttempts } = lockAttempts;
 
 const {
   abortController,
@@ -29,6 +32,7 @@ beforeEach(() => runTest(makeDirectory(dir)));
 afterEach(() =>
   runTest(
     Effect.gen(function* () {
+      yield* Effect.sync(() => vi.useRealTimers());
       yield* removePath(dir);
       yield* Effect.sync(() => vi.restoreAllMocks());
     }),
@@ -66,7 +70,9 @@ const abortsWhileWaitingForAHeldFile = () =>
       const effectRunPromise = Effect.runPromiseWith(yield* Effect.context<never>());
 
       yield* writeAuthJson({ "anthropic-api": { key: "stored", type: "api_key" as const } });
+      freezeLockRetries();
       const release = yield* awaited(lockfile.lock(authJsonPath, { realpath: false }));
+      const { refused, spy: lockSpy } = observeLockAttempts();
       const backend = new FileAuthStorageBackend(authJsonPath);
       const controller = abortController();
       const update = vi.fn(() =>
@@ -74,13 +80,14 @@ const abortsWhileWaitingForAHeldFile = () =>
       );
       const pending = backend.withLockAsync(update, { signal: controller.signal });
 
-      yield* Effect.sleep(10);
+      yield* awaited(refused);
       controller.abort();
       yield* awaited(expect(pending).rejects.toMatchObject({ name: "AbortError" }));
       expect(update).not.toHaveBeenCalled();
 
       yield* awaited(release());
-      yield* Effect.sleep(150);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(lockSpy).toHaveBeenCalledTimes(1);
       expect(update).not.toHaveBeenCalled();
       expect(yield* fromJsonText(yield* readTextFile(authJsonPath))).toEqual({
         "anthropic-api": { key: "stored", type: "api_key" as const },

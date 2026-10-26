@@ -5,6 +5,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vite-plus/tes
 
 import AuthStorage from "../src/core/auth-storage.ts";
 import FileAuthStorageBackend from "../src/core/file-auth-storage-backend.ts";
+import lockAttempts from "./lock-attempts.ts";
+
+const { freezeLockRetries, observeLockAttempts } = lockAttempts;
 
 const {
   abortController,
@@ -30,6 +33,7 @@ beforeEach(() => runTest(makeDirectory(dir)));
 afterEach(() =>
   runTest(
     Effect.gen(function* () {
+      yield* Effect.sync(() => vi.useRealTimers());
       yield* removePath(dir);
       yield* Effect.sync(() => vi.restoreAllMocks());
     }),
@@ -101,6 +105,7 @@ const holdsTheFileLockUntilACancelled = Effect.gen(function* () {
 
   yield* awaited(started.promise);
   controller.abort();
+  const { refused } = observeLockAttempts();
   const competingMutation = vi.fn(() =>
     effectRunPromise(
       Effect.gen(function* () {
@@ -114,7 +119,7 @@ const holdsTheFileLockUntilACancelled = Effect.gen(function* () {
     ),
   );
   const competing = backend.withLockAsync(competingMutation);
-  yield* Effect.sleep(20);
+  yield* awaited(refused);
   expect(competingMutation).not.toHaveBeenCalled();
 
   blocked.resolve(undefined);
@@ -130,16 +135,17 @@ const cancelsASignalledCredentialReadWaitingFor = Effect.gen(function* () {
   yield* writeAuthJson({ "anthropic-api": { key: "old", type: "api_key" as const } });
   const storage = AuthStorage.create(authJsonPath);
   yield* writeAuthJson({ "anthropic-api": { key: "new-value", type: "api_key" as const } });
+  freezeLockRetries();
   const release = yield* awaited(lockfile.lock(authJsonPath, { realpath: false }));
-  const lockSpy = vi.spyOn(lockfile, "lock");
+  const { refused, spy: lockSpy } = observeLockAttempts();
   const controller = abortController();
   const pending = storage.read("anthropic-api", { signal: controller.signal });
 
-  yield* Effect.sleep(10);
+  yield* awaited(refused);
   controller.abort();
   yield* awaited(expect(pending).rejects.toMatchObject({ name: "AbortError" }));
   yield* awaited(release());
-  yield* Effect.sleep(150);
+  expect(vi.getTimerCount()).toBe(0);
   expect(lockSpy).toHaveBeenCalledTimes(1);
   yield* awaited(
     expect(storage.read("anthropic-api")).resolves.toEqual({

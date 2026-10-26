@@ -5,6 +5,9 @@ import lockfile from "proper-lockfile";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vite-plus/test";
 
 import FileModelsStore from "../src/core/file-models-store.ts";
+import lockAttempts from "./lock-attempts.ts";
+
+const { freezeLockRetries, observeLockAttempts } = lockAttempts;
 
 const {
   abortController,
@@ -36,6 +39,7 @@ beforeAll(() => runTest(makeDirectory(sharedTempDir)));
 afterAll(() => runTest(removePath(sharedTempDir)));
 
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -186,7 +190,9 @@ const cancelsACatalogWriteWaitingForA = () =>
         yield* toJsonText({ one: { models: [model("one", "existing")] } }),
       );
       const store = new FileModelsStore(sharedModelsPath);
+      freezeLockRetries();
       const release = yield* awaited(lockfile.lock(sharedModelsPath, { realpath: false }));
+      const { refused, spy: lockSpy } = observeLockAttempts();
       const controller = abortController();
       const pending = store.write(
         "two",
@@ -194,11 +200,12 @@ const cancelsACatalogWriteWaitingForA = () =>
         { signal: controller.signal },
       );
 
-      yield* Effect.sleep(10);
+      yield* awaited(refused);
       controller.abort();
       yield* awaited(expect(pending).rejects.toMatchObject({ name: "AbortError" }));
       yield* awaited(release());
-      yield* Effect.sleep(150);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(lockSpy).toHaveBeenCalledTimes(1);
 
       const stored = (yield* fromJsonText(yield* readTextFile(sharedModelsPath))) as Record<
         string,
