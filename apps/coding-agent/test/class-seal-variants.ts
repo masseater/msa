@@ -216,11 +216,10 @@ const outcomesOf = (
         const written = yield* writeVariants(root, guard, selection);
         const path = yield* Path.Path;
         const resolver = path.join(import.meta.dirname, "../src/experimental/source-resolver.ts");
+        const outcomeFile = path.join(root, "outcomes.mjs");
+        yield* fs.writeFileString(outcomeFile, outcomeScript(written));
         const { stderr, stdout } = yield* Effect.promise(() =>
-          runNode(
-            ["--import", resolver, "--input-type=module", "--eval", outcomeScript(written)],
-            packageRoot,
-          ),
+          runNode(["--import", resolver, outcomeFile], packageRoot),
         );
         if (stdout === "") return yield* Effect.die(new Error(stderr));
         return yield* Schema.decodeEffect(Outcomes)(stdout).pipe(Effect.orDie);
