@@ -42,7 +42,7 @@ function normalizeBuildSystemPromptOptions(
 ): systemPromptTypes.NormalizedBuildSystemPromptOptions {
   return {
     appendSystemPrompt: input.appendSystemPrompt ?? "",
-    contextFiles: (input.contextFiles ?? []).map((file) => Object.assign({}, file)),
+    contextFiles: [...(input.contextFiles ?? [])],
     customPrompt: input.customPrompt,
     cwd: input.cwd,
     forceSystemPrompt: input.forceSystemPrompt,
@@ -50,7 +50,7 @@ function normalizeBuildSystemPromptOptions(
     promptGuidelines: [...(input.promptGuidelines ?? [])],
     sections: { ...(input.sections ?? {}) },
     selectedTools: [...(input.selectedTools ?? ["read", "bash", "edit", "write"])],
-    skills: (input.skills ?? []).map((skill) => Object.assign({}, skill)),
+    skills: [...(input.skills ?? [])],
     toolGuidelines: Object.fromEntries(
       Object.entries(input.toolGuidelines ?? {}).map(([name, guidelines]) => [
         name,
@@ -99,8 +99,9 @@ function buildRules(
     );
   }
 
+  const guidelinesByTool = new Map(Object.entries(toolGuidelines));
   for (const name of selectedTools) {
-    for (const rule of toolGuidelines[name] ?? []) addRule(rule);
+    for (const rule of guidelinesByTool.get(name) ?? []) addRule(rule);
   }
   for (const rule of promptGuidelines) addRule(rule);
   addRule("Be concise in your responses");
@@ -133,8 +134,8 @@ function buildSystemPromptSections(
   }
 
   const declaredTools = selectedTools.filter((name) => !hiddenTools.includes(name));
-  const promptSections: Record<string, string> = {};
-  const sections: systemPromptTypes.SystemPromptSections = fillPromptSections(
+  const promptSections = new Map<string, string>();
+  const preamble = fillPromptSections(
     customPrompt,
     promptSections,
     declaredTools,
@@ -148,10 +149,14 @@ function buildSystemPromptSections(
     cwd,
     customSections,
   );
-  for (const [name, content] of Object.entries(promptSections)) {
-    if (name !== "preamble") sections[name] = `<${name}>\n${content}\n</${name}>`;
-  }
-  return sections;
+  return {
+    preamble,
+    ...Object.fromEntries(
+      [...promptSections]
+        .filter(([name]) => name !== "preamble")
+        .map(([name, content]) => [name, `<${name}>\n${content}\n</${name}>`]),
+    ),
+  };
 }
 
 const docsSection = (): string =>
@@ -165,31 +170,31 @@ const docsSection = (): string =>
 - Always read msa .md files completely and follow links to related docs (e.g., tui.md for TUI API details)`;
 
 function addDefaultSections(
-  promptSections: Record<string, string>,
+  promptSections: Map<string, string>,
   declaredTools: string[],
   toolSnippets: Record<string, string>,
   guidelines: { toolGuidelines: Record<string, string[]>; promptGuidelines: string[] },
 ): void {
-  const visibleTools = declaredTools.filter(
-    (name) => !(toolSnippets[name] === undefined || toolSnippets[name] === ""),
+  const snippets = new Map(Object.entries(toolSnippets));
+  const visibleTools = declaredTools.flatMap((name) => {
+    const snippet = snippets.get(name);
+    return snippet === undefined || snippet === "" ? [] : [`- ${name}: ${snippet}`];
+  });
+  const tools = visibleTools.length > 0 ? visibleTools.join("\n") : "(none)";
+  promptSections.set(
+    "tools",
+    `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`,
   );
-  const tools =
-    visibleTools.length > 0
-      ? visibleTools.map((name) => `- ${name}: ${toolSnippets[name]}`).join("\n")
-      : "(none)";
-  promptSections["tools"] =
-    `${tools}\n\nIn addition to the tools above, you may have access to other custom tools depending on the project.`;
-  promptSections["rules"] = buildRules(
-    declaredTools,
-    guidelines.toolGuidelines,
-    guidelines.promptGuidelines,
+  promptSections.set(
+    "rules",
+    buildRules(declaredTools, guidelines.toolGuidelines, guidelines.promptGuidelines),
   );
-  promptSections["docs"] = docsSection();
+  promptSections.set("docs", docsSection());
 }
 
 function fillPromptSections(
   customPrompt: string | undefined,
-  promptSections: Record<string, string>,
+  promptSections: Map<string, string>,
   declaredTools: string[],
   toolSnippets: Record<string, string>,
   toolGuidelines: Record<string, string[]>,
@@ -207,16 +212,16 @@ function fillPromptSections(
     : declaredTools.includes("create_task")
       ? ORCHESTRATOR_PREAMBLE
       : CODING_PREAMBLE;
-  promptSections["preamble"] = preamble;
+  promptSections.set("preamble", preamble);
   if (!hasCustomPrompt) {
     addDefaultSections(promptSections, declaredTools, toolSnippets, {
       promptGuidelines,
       toolGuidelines,
     });
   }
-  promptSections["development_style"] = DEVELOPMENT_STYLE;
+  promptSections.set("development_style", DEVELOPMENT_STYLE);
 
-  if (appendSystemPrompt !== "") promptSections["addendum"] = appendSystemPrompt;
+  if (appendSystemPrompt !== "") promptSections.set("addendum", appendSystemPrompt);
   fillContextSections(
     contextFiles,
     promptSections,
@@ -227,13 +232,12 @@ function fillPromptSections(
     customSections,
   );
 
-  const sections: systemPromptTypes.SystemPromptSections = { preamble };
-  return sections;
+  return preamble;
 }
 
 function fillContextSections(
   contextFiles: { path: string; content: string }[] & { path: string; content: string }[],
-  promptSections: Record<string, string>,
+  promptSections: Map<string, string>,
   declaredTools: string[],
   selectedTools: string[],
   skills: skillsTypes.Skill[],
@@ -241,19 +245,19 @@ function fillContextSections(
   customSections: Record<string, string>,
 ) {
   if (contextFiles.length > 0)
-    promptSections["project_context"] = renderProjectContext(contextFiles);
+    promptSections.set("project_context", renderProjectContext(contextFiles));
   const readers = ["read", "bash"] as const;
   const skillFileReadTool =
     readers.find((tool) => declaredTools.includes(tool)) ??
     (readers.some((tool) => selectedTools.includes(tool)) ? "indirect" : undefined);
   if (skillFileReadTool !== undefined && skills.length > 0) {
     const skillsPrompt = formatSkillsForPrompt(skills, skillFileReadTool).trim();
-    if (skillsPrompt !== "") promptSections["skills"] = skillsPrompt;
+    if (skillsPrompt !== "") promptSections.set("skills", skillsPrompt);
   }
-  promptSections["cwd"] = cwd.replace(/\\/gu, "/");
-  promptSections["timezone"] = timeZoneSection();
+  promptSections.set("cwd", cwd.replace(/\\/gu, "/"));
+  promptSections.set("timezone", timeZoneSection());
   for (const [name, content] of Object.entries(customSections)) {
-    if (content !== "") promptSections[name] = content;
+    if (content !== "") promptSections.set(name, content);
   }
 }
 
@@ -273,14 +277,13 @@ function diffSystemPromptSections(
   previous: Record<string, string | null>,
   current: systemPromptTypes.SystemPromptSections,
 ): Record<string, string | null> | undefined {
-  const patch: Record<string, string | null> = {};
-  for (const [name, text] of Object.entries(current)) {
-    if (previous[name] !== text) patch[name] = text;
-  }
-  for (const name of Object.keys(previous)) {
-    if (current[name] === undefined) patch[name] = null;
-  }
-  return Object.keys(patch).length > 0 ? patch : undefined;
+  const before = new Map(Object.entries(previous));
+  const after = new Map(Object.entries(current));
+  const patch = [
+    ...[...after].filter(([name, text]) => before.get(name) !== text),
+    ...[...before.keys()].filter((name) => !after.has(name)).map((name) => [name, null] as const),
+  ];
+  return patch.length > 0 ? Object.fromEntries(patch) : undefined;
 }
 
 const systemPrompt = {

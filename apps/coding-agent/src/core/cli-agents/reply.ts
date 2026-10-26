@@ -54,7 +54,12 @@ class Reply {
   };
 
   readonly replaceUsage = (usage: replyTypes.Usage): void => {
-    Object.assign(this.message.usage, usage);
+    const total = this.message.usage;
+    total.input = usage.input;
+    total.output = usage.output;
+    total.cacheRead = usage.cacheRead;
+    total.cacheWrite = usage.cacheWrite;
+    if (usage.reasoning !== undefined) total.reasoning = usage.reasoning;
   };
 
   readonly appendText = (key: string, delta: string): void => {

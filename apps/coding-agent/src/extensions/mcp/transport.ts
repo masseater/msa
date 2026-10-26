@@ -36,10 +36,12 @@ function createDefaultTransportImpl(
       ...(authProvider === undefined ? {} : { authProvider }),
     });
   }
-  const env: Record<string, string> = {};
-  for (const [key, value] of Object.entries(config.env ?? {})) {
-    env[key] = resolveConfigValueOrThrow(value, `MCP server "${name}" env "${key}"`);
-  }
+  const env = Object.fromEntries(
+    Object.entries(config.env ?? {}).map(([key, value]) => [
+      key,
+      resolveConfigValueOrThrow(value, `MCP server "${name}" env "${key}"`),
+    ]),
+  );
   return new StdioTransport({
     command: expandHome(config.command),
     ...(config.args === undefined ? {} : { args: config.args.map(expandHome) }),

@@ -106,7 +106,7 @@ function resizeImageImpl(
         try {
           return yield* awaited(
             resizeImageInWorker(
-              "./src/utils/image-resize-worker.ts",
+              "./dist/utils/image-resize-worker.js",
               inputBytes,
               mimeType,
               options,

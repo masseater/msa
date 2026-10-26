@@ -1,3 +1,4 @@
+import classSealTransform from "../../../../tools/class-seal/transform.ts";
 import moduleHookFiles from "../core/platform/node/module-hook-files.ts";
 import nodeModuleHooks from "../core/platform/node/module-hooks.ts";
 import nodeUrl from "../core/platform/node/url.ts";
@@ -24,6 +25,10 @@ interface SourceAlias {
 }
 
 const repositoryRoot = fileURLToPath(new URL("../../../..", import.meta.url));
+const packageRoot = fileURLToPath(new URL("../..", import.meta.url)).replace(/\/$/u, "");
+const sourceRoot = `${packageRoot}/src/`;
+const classSealRuntime = `${sourceRoot}core/platform/node/class-seal.ts`;
+const classSealTui = `${sourceRoot}core/platform/node/class-seal-tui.ts`;
 const tsconfigPath = resolve(repositoryRoot, "tsconfig.json");
 const tsconfig = JSON.parse(readTextForModuleHook(tsconfigPath)) as TsConfig;
 const paths = tsconfig.compilerOptions?.paths;
@@ -47,6 +52,25 @@ const aliases: SourceAlias[] = Object.entries(paths)
   .sort((left, right) => right.pattern.length - left.pattern.length);
 
 registerHooks({
+  load(url, context, nextLoad) {
+    const loaded = nextLoad(url, context);
+    if (!url.startsWith("file:")) return loaded;
+    const file = fileURLToPath(url);
+    if (!isSealedSource(file) || loaded.source === undefined || loaded.source === null)
+      return loaded;
+    const sealed = classSealTransform.sealModule(sourceText(loaded.source), {
+      filename: file,
+      module: classSealTransform.moduleOf(packageRoot, file),
+      runtime: classSealTransform.relativeSpecifier(file, classSealRuntime),
+      shared: classSealTransform.relativeSpecifier(file, classSealTui),
+    });
+    if (sealed === undefined) return loaded;
+    const map = Buffer.from(sealed.map.toString()).toString("base64");
+    return {
+      ...loaded,
+      source: `${sealed.code}\n//# sourceMappingURL=data:application/json;base64,${map}\n`,
+    };
+  },
   resolve(specifier, context, nextResolve) {
     let matchedPattern: string | undefined;
     for (const alias of aliases) {
@@ -67,6 +91,19 @@ registerHooks({
     return nextResolve(specifier, context);
   },
 });
+
+function sourceText(source: string | ArrayBuffer | NodeJS.TypedArray): string {
+  return typeof source === "string" ? source : new TextDecoder().decode(source);
+}
+
+function isSealedSource(file: string): boolean {
+  return (
+    file.startsWith(sourceRoot) &&
+    file.endsWith(".ts") &&
+    !file.endsWith(".d.ts") &&
+    file !== classSealRuntime
+  );
+}
 
 function matchAlias(alias: SourceAlias, specifier: string): string | undefined {
   if (!alias.pattern.includes("*")) return specifier === alias.pattern ? "" : undefined;

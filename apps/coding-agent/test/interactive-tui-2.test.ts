@@ -23,6 +23,7 @@ const clipboardMocks = vi.hoisted(() => ({
 vi.mock("../src/utils/clipboard.ts", () => ({ default: clipboardMocks }));
 
 type CopyCommandContext = {
+  lifecycle: { screen: { renderer: ReturnType<typeof createInteractiveTui> } };
   session: { context: { transcript: { getLastAssistantText: () => string | undefined } } };
   ui: ReturnType<typeof createInteractiveTui>;
   showStatus: (message: string) => void;
@@ -55,6 +56,7 @@ const copyWithActiveSelection = (
       terminal,
     };
     const context: CopyCommandContext = {
+      lifecycle: { screen: { renderer: ui } },
       session: { context: { transcript: { getLastAssistantText: probe.getLastAssistantText } } },
       showError: probe.showError,
       showStatus: probe.showStatus,
@@ -147,6 +149,7 @@ describe("InteractiveMode copy confirmation", () => {
         const showStatus = vi.fn();
         const showError = vi.fn();
         const context: CopyCommandContext = {
+          lifecycle: { screen: { renderer: ui } },
           session: {
             context: { transcript: { getLastAssistantText: () => "assistant response" } },
           },
@@ -195,6 +198,7 @@ describe("InteractiveMode copy confirmation", () => {
         const showStatus = vi.fn();
         const showError = vi.fn();
         const context: CopyCommandContext = {
+          lifecycle: { screen: { renderer: ui } },
           session: {
             context: { transcript: { getLastAssistantText: () => "assistant response" } },
           },

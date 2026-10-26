@@ -137,10 +137,7 @@ export default class ContextEmitter {
     return Effect.gen({ self: this }, function* () {
       const currentOptions = normalizeBuildSystemPromptOptions(systemPromptOptions);
       const renderCurrentSystemPrompt = (): string => buildSystemPrompt(currentOptions);
-      const ctx = Object.defineProperties(
-        {},
-        Object.getOwnPropertyDescriptors(this.host.createContext()),
-      ) as extensionsTypesTypes.ExtensionContext;
+      const ctx = this.host.createContext();
       ctx.getSystemPrompt = () => {
         this.host.assertActive();
         return renderCurrentSystemPrompt();

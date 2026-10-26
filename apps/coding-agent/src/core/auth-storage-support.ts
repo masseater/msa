@@ -11,7 +11,9 @@ const { stripBom } = text;
 type AuthStorageData = Record<string, aiTypes.Credential>;
 const credentialIn = (content: string, providerId: string): aiTypes.Credential | undefined => {
   try {
-    return (JSON.parse(stripBom(content)) as AuthStorageData)[providerId];
+    return new Map(Object.entries(JSON.parse(stripBom(content)) as AuthStorageData)).get(
+      providerId,
+    );
   } catch {
     return undefined;
   }

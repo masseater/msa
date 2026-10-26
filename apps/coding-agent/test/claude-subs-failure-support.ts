@@ -1,5 +1,5 @@
 import type compatTypes from "@msa/ai/compat.types";
-import { Data, Effect, Stream } from "effect";
+import { Effect, Schema, Stream } from "effect";
 
 import claudeAccounts from "../src/core/cli-agents/claude-accounts.ts";
 import type claudeAccountsTypes from "../src/core/cli-agents/claude-accounts.types.ts";
@@ -8,7 +8,10 @@ import claudeCode from "../src/core/cli-agents/claude-code.ts";
 const { blockIfUnusable, loadAccounts } = claudeAccounts;
 const { claudeCodeProviders } = claudeCode;
 
-class StreamFailed extends Data.TaggedError("StreamFailed")<{ readonly cause: unknown }> {}
+class StreamFailed extends Schema.TaggedError<StreamFailed, { readonly brand: unique symbol }>()(
+  "StreamFailed",
+  { cause: Schema.Unknown },
+) {}
 
 const blockAccounts = (failures: readonly claudeAccountsTypes.RunFailure[]) =>
   Effect.gen(function* () {
@@ -28,9 +31,8 @@ const claudeSubsFailure = Effect.gen(function* () {
   } as unknown as compatTypes.TranscriptContext;
   const events: compatTypes.AssistantMessageEvent[] = [];
   yield* Stream.runForEach(
-    Stream.fromAsyncIterable(
-      provider.streamSimple(model, context),
-      (cause) => new StreamFailed({ cause }),
+    Stream.fromAsyncIterable(provider.streamSimple(model, context), (cause) =>
+      StreamFailed.make({ cause }),
     ),
     (event) => Effect.sync(() => events.push(event)),
   ).pipe(Effect.orDie);

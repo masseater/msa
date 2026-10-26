@@ -101,8 +101,9 @@ export default class ComposedProvider {
         ...models.filter((model) => !isModelType(model, "chat")),
       ];
     }
+    const overrides = new Map(Object.entries(config?.modelOverrides ?? {}));
     return models.map((model) => {
-      const override = config?.modelOverrides?.[model.id];
+      const override = overrides.get(model.id);
       return override !== undefined && isModelType(model, "chat")
         ? applyModelOverride(model, override)
         : model;

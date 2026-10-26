@@ -60,6 +60,7 @@ function parseOptions(
   const positional: string[] = [];
   const values = new Map<string, string | true>();
   const lists = new Map<string, string[]>();
+  const kinds = new Map(Object.entries(known));
   for (let index = 0; index < args.length; index++) {
     const rawArg = args[index];
     if (rawArg === undefined) break;
@@ -73,7 +74,7 @@ function parseOptions(
       continue;
     }
     const name = arg.slice(2);
-    const kind = known[name];
+    const kind = kinds.get(name);
     if (kind === undefined) {
       error(`Unknown option ${arg}.\n${HELP_HINT}`);
       return undefined;
@@ -95,16 +96,16 @@ function parseOptions(
 
 function parsePairs(option: string, pairs: string[] | undefined, error: (line: string) => void) {
   if (pairs === undefined) return {};
-  const record: Record<string, string> = {};
+  const entries: (readonly [string, string])[] = [];
   for (const pair of pairs) {
     const separator = pair.indexOf("=");
     if (separator <= 0) {
       error(`--${option} expects KEY=VALUE, got "${pair}".`);
       return undefined;
     }
-    record[pair.slice(0, separator)] = pair.slice(separator + 1);
+    entries.push([pair.slice(0, separator), pair.slice(separator + 1)]);
   }
-  return record;
+  return Object.fromEntries(entries);
 }
 
 const cliOptions = { HELP, HELP_HINT, parseOptions, parsePairs };

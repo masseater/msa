@@ -53,7 +53,7 @@ const {
   VStack,
 } = indexKit;
 
-const tui = {
+const tui = Object.freeze({
   Box: Box,
   CURSOR_MARKER: tuiComponent.CURSOR_MARKER,
   CancellableLoader: CancellableLoader,
@@ -149,6 +149,6 @@ const tui = {
   truncateToWidth: textTruncate.truncateToWidth,
   visibleWidth: utils.visibleWidth,
   wrapTextWithAnsi: textWrap.wrapTextWithAnsi,
-};
+});
 
 export default tui;

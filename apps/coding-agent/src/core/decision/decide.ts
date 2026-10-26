@@ -99,8 +99,9 @@ const thresholdedAnswers = Effect.fn("thresholdedAnswers")(function* (
   answers: Readonly<Record<string, aiTypes.ClassifierAnswer>>,
 ) {
   const decided: Array<[string, decideTypes.DecisionAnswer]> = [];
+  const answered = new Map(Object.entries(answers));
   for (const [id, question] of Object.entries(request.questions)) {
-    const answer = answers[id];
+    const answer = answered.get(id);
     if (answer === undefined) return yield* Undecided.make({ reason: `no answer for ${id}` });
     const threshold = host.threshold(`${request.name}.${id}`) ?? question.threshold;
     decided.push([id, applyThreshold(answer, threshold)]);

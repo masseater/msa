@@ -72,17 +72,17 @@ function listTasks(database: DatabaseSync, project: string): orchestratorTypesTy
   return rows.map(toTask);
 }
 
-const PATCH_COLUMNS: Readonly<Record<string, string>> = {
-  checks: "checks",
-  condition: "condition",
-  currentState: "current_state",
-  goalState: "goal_state",
-  mergeInto: "merge_into",
-  model: "model",
-  status: "status",
-  thinkingLevel: "thinking_level",
-  title: "title",
-};
+const PATCH_COLUMNS: ReadonlyMap<string, string> = new Map([
+  ["checks", "checks"],
+  ["condition", "condition"],
+  ["currentState", "current_state"],
+  ["goalState", "goal_state"],
+  ["mergeInto", "merge_into"],
+  ["model", "model"],
+  ["status", "status"],
+  ["thinkingLevel", "thinking_level"],
+  ["title", "title"],
+]);
 
 function updateTask(
   database: DatabaseSync,
@@ -106,7 +106,7 @@ function updateTask(
   const entries = db
     .definedEntries(patch)
     .map(([key, value]) => [
-      PATCH_COLUMNS[key] ?? key,
+      PATCH_COLUMNS.get(key) ?? key,
       key === "checks" ? JSON.stringify(value) : value,
     ]) as [string, string | number | null][];
   if (entries.length === 0) return;

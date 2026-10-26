@@ -141,10 +141,8 @@ export default class AutocompleteSetup {
       .filter((cmd) => !isBuiltinSlashCommandName(cmd.name))
       .map((cmd) => {
         const slashCommand: tuiTypes.SlashCommand = { name: cmd.invocationName };
-        Object.assign(
-          slashCommand,
-          labels.autocompleteDescription(cmd.description, cmd.sourceInfo),
-        );
+        const { description } = labels.autocompleteDescription(cmd.description, cmd.sourceInfo);
+        if (description !== undefined) slashCommand.description = description;
         if (cmd.getArgumentCompletions !== undefined) {
           slashCommand.getArgumentCompletions = cmd.getArgumentCompletions;
         }

@@ -6,7 +6,7 @@ const { resolveCodemodeWorkerSpecifier } = config;
 
 const usesARelativeSourceEntrypointInBun = () => {
   expect(resolveCodemodeWorkerSpecifier("bun-binary", "file:///B:/~BUN/root/config.js")).toBe(
-    "./src/extensions/codemode/worker.ts",
+    "./dist/extensions/codemode/worker.js",
   );
 };
 

@@ -57,7 +57,9 @@ const loadThemeFromPath: {
     readThemeFile(themePath).then((json) => createTheme(json, mode, themePath)),
 );
 
-function loadTheme(name: string, mode?: tuiTypes.TerminalColorMode): Theme {
+type LoadedTheme = Parameters<typeof themeState.setGlobalTheme>[0];
+
+function loadTheme(name: string, mode?: tuiTypes.TerminalColorMode): LoadedTheme {
   if (name === SYSTEM_THEME_NAME) return createSystemTheme(mode);
   const registeredTheme = themeState.registeredThemes.get(name);
   if (registeredTheme !== undefined) {
@@ -66,7 +68,7 @@ function loadTheme(name: string, mode?: tuiTypes.TerminalColorMode): Theme {
   return createTheme(loadThemeJson(name), mode);
 }
 
-function getThemeByName(name: string): Theme | undefined {
+function getThemeByName(name: string): LoadedTheme | undefined {
   try {
     return loadTheme(name);
   } catch {

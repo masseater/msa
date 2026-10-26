@@ -1,13 +1,14 @@
 import { Function as Fn } from "effect";
 
 import syntaxHighlight from "../../../utils/syntax-highlight.ts";
-import type Theme from "./theme-class.ts";
 import themeState from "./theme-state.ts";
+import type themeTypes from "./theme.types.ts";
 
 const { highlight, supportsLanguage } = syntaxHighlight;
 const { theme } = themeState;
 
 type CliHighlightTheme = Record<string, (s: string) => string>;
+type Theme = themeTypes.Theme;
 
 let cachedHighlightThemeFor: Theme | undefined;
 let cachedCliHighlightTheme: CliHighlightTheme | undefined;
@@ -85,71 +86,73 @@ function highlightMarkdownCode(code: string, lang?: string): string[] {
   return highlightLines(code, lang, codeBlockLines);
 }
 
-const LANGUAGE_BY_EXTENSION: Readonly<Record<string, string>> = {
-  bash: "bash",
-  c: "c",
-  cc: "cpp",
-  cjs: "javascript",
-  clj: "clojure",
-  cmake: "cmake",
-  cpp: "cpp",
-  cs: "csharp",
-  css: "css",
-  cxx: "cpp",
-  dockerfile: "dockerfile",
-  erl: "erlang",
-  ex: "elixir",
-  exs: "elixir",
-  fish: "fish",
-  go: "go",
-  graphql: "graphql",
-  h: "c",
-  hcl: "hcl",
-  hpp: "cpp",
-  hs: "haskell",
-  htm: "html",
-  html: "html",
-  java: "java",
-  js: "javascript",
-  json: "json",
-  jsx: "javascript",
-  kt: "kotlin",
-  less: "less",
-  lua: "lua",
-  makefile: "makefile",
-  markdown: "markdown",
-  md: "markdown",
-  mjs: "javascript",
-  ml: "ocaml",
-  perl: "perl",
-  php: "php",
-  proto: "protobuf",
-  ps1: "powershell",
-  py: "python",
-  r: "r",
-  rb: "ruby",
-  rs: "rust",
-  sass: "sass",
-  scala: "scala",
-  scss: "scss",
-  sh: "bash",
-  sql: "sql",
-  swift: "swift",
-  tf: "hcl",
-  toml: "toml",
-  ts: "typescript",
-  tsx: "typescript",
-  vim: "vim",
-  xml: "xml",
-  yaml: "yaml",
-  yml: "yaml",
-  zsh: "bash",
-};
+const LANGUAGE_BY_EXTENSION: ReadonlyMap<string, string> = new Map(
+  Object.entries({
+    bash: "bash",
+    c: "c",
+    cc: "cpp",
+    cjs: "javascript",
+    clj: "clojure",
+    cmake: "cmake",
+    cpp: "cpp",
+    cs: "csharp",
+    css: "css",
+    cxx: "cpp",
+    dockerfile: "dockerfile",
+    erl: "erlang",
+    ex: "elixir",
+    exs: "elixir",
+    fish: "fish",
+    go: "go",
+    graphql: "graphql",
+    h: "c",
+    hcl: "hcl",
+    hpp: "cpp",
+    hs: "haskell",
+    htm: "html",
+    html: "html",
+    java: "java",
+    js: "javascript",
+    json: "json",
+    jsx: "javascript",
+    kt: "kotlin",
+    less: "less",
+    lua: "lua",
+    makefile: "makefile",
+    markdown: "markdown",
+    md: "markdown",
+    mjs: "javascript",
+    ml: "ocaml",
+    perl: "perl",
+    php: "php",
+    proto: "protobuf",
+    ps1: "powershell",
+    py: "python",
+    r: "r",
+    rb: "ruby",
+    rs: "rust",
+    sass: "sass",
+    scala: "scala",
+    scss: "scss",
+    sh: "bash",
+    sql: "sql",
+    swift: "swift",
+    tf: "hcl",
+    toml: "toml",
+    ts: "typescript",
+    tsx: "typescript",
+    vim: "vim",
+    xml: "xml",
+    yaml: "yaml",
+    yml: "yaml",
+    zsh: "bash",
+  }),
+);
 
 function getLanguageFromPath(filePath: string): string | undefined {
   const ext = filePath.split(".").pop()?.toLowerCase();
   if (ext === undefined || ext === "") return undefined;
-  return LANGUAGE_BY_EXTENSION[ext];
+  return LANGUAGE_BY_EXTENSION.get(ext);
 }
 
 const themeHighlight = {

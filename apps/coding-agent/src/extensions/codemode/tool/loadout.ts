@@ -20,12 +20,12 @@ function prepareCodemodeLoadout(
   const isDirect = (tool: agentTypes.AgentTool) => loadout.getExposure(tool.name) === "direct";
   const callable = getCodemodeCallableTools(loadout.callable);
   const callableNames = new Set(callable.map((tool) => tool.name));
-  const descriptions: Record<string, string> = {};
-  if (mode === "on") {
-    for (const tool of loadout.declared) {
-      if (callableNames.has(tool.name)) descriptions[tool.name] = describeScriptCall(tool);
-    }
-  }
+  const scriptCallDescriptions =
+    mode === "on"
+      ? loadout.declared
+          .filter((tool) => callableNames.has(tool.name))
+          .map((tool) => [tool.name, describeScriptCall(tool)] as const)
+      : [];
   const listed = mode === "only" ? callable : callable.filter((tool) => !isDirect(tool));
   const namespaces = new Map(
     listed.flatMap((tool) => {
@@ -36,7 +36,7 @@ function prepareCodemodeLoadout(
   const guidelines = new Map(
     listed.map((tool) => [tool.name, loadout.getPromptGuidelines(tool.name)] as const),
   );
-  descriptions[CODEMODE_TOOL_NAME] = createCodemodeDescription(listed, {
+  const codemodeDescription = createCodemodeDescription(listed, {
     deferred: new Set(
       listed
         .filter((tool) => loadout.getExposure(tool.name) === "deferred")
@@ -49,7 +49,10 @@ function prepareCodemodeLoadout(
   });
   const declaredNames = new Set(loadout.declared.map((tool) => tool.name));
   return {
-    descriptions,
+    descriptions: {
+      ...Object.fromEntries(scriptCallDescriptions),
+      [CODEMODE_TOOL_NAME]: codemodeDescription,
+    },
     hiddenDeclarations:
       mode === "only"
         ? callable

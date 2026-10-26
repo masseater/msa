@@ -11,6 +11,11 @@ import type extensionsTypesTypes from "./types.types.ts";
 
 const { buildBuiltinKeybindings } = runnerKeybindings;
 
+const withInvocationName = (
+  command: extensionsTypesTypes.RegisteredCommand,
+  invocationName: string,
+): extensionsTypesTypes.ResolvedCommand => ({ ...command, invocationName });
+
 export default class RunnerQueries {
   private readonly extensions: extensionsTypesTypes.Extension[];
   private readonly runtime: extensionsTypesTypes.ExtensionRuntime;
@@ -224,7 +229,7 @@ export default class RunnerQueries {
       }
 
       takenInvocationNames.add(invocationName);
-      return Object.assign({}, command, { invocationName });
+      return withInvocationName(command, invocationName);
     });
   }
 }

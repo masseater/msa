@@ -78,15 +78,15 @@ function getThread(database: DatabaseSync, id: string): orchestratorTypesTypes.T
   return row === undefined ? undefined : toThread(row);
 }
 
-const THREAD_COLUMNS: Readonly<Record<string, string>> = {
-  branch: "branch",
-  cwd: "cwd",
-  model: "model",
-  sessionFile: "session_file",
-  status: "status",
-  targetBranch: "target_branch",
-  thinkingLevel: "thinking_level",
-};
+const THREAD_COLUMNS: ReadonlyMap<string, string> = new Map([
+  ["branch", "branch"],
+  ["cwd", "cwd"],
+  ["model", "model"],
+  ["sessionFile", "session_file"],
+  ["status", "status"],
+  ["targetBranch", "target_branch"],
+  ["thinkingLevel", "thinking_level"],
+]);
 
 function updateThread(
   database: DatabaseSync,
@@ -101,7 +101,7 @@ function updateThread(
 ): void {
   const entries = db
     .definedEntries(patch)
-    .map(([key, value]) => [THREAD_COLUMNS[key] ?? key, value]) as [string, string | null][];
+    .map(([key, value]) => [THREAD_COLUMNS.get(key) ?? key, value]) as [string, string | null][];
   if (entries.length === 0) return;
   const assignments = entries.map(([column]) => `${column} = ?`).join(", ");
   database

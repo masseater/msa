@@ -94,11 +94,14 @@ release. Add a tool name to select part of the graph. For example, run
 - msa の機能は本体（`apps/coding-agent/src/core` など）に実装する。拡張機能（extensions）は msa の外の機能を簡易に取り込むための仕組みで、msa 自身の機能をそこに置かない。
 - 機能はコマンドラインやツールだけで終わらせず、人間が使う画面（TUI）も作る。状態をひと目で見られ、キー操作で覗く・指示する・止められるようにする。
 - `apps/coding-agent/src` では、同じパッケージで定義したクラスを継承しない。責務ごとの部品をフィールドに持たせ、委譲して組む（`msa/no-local-class-extends`）。`tui.Container` や `Schema.TaggedError` のような、別パッケージが継承して使う前提で出している基底は継承してよい。
+  - 継承元は、build・vitest・開発用の起動の変換が全 class に入れる実行時の検査で確かめる。検査が通すのは、外の package の import から凍結された入れ物を辿った値と、信頼する factory（`tools/oxlint/class-factories.ts`）の返り値だけで、ローカルの関数・bind・Proxy を含むそれ以外は断る。class はモジュールの直下に書く（`msa/no-nested-class`）
+  - prototype の書き換え・文字列からのコード生成・計算したキーでのアクセスは使わない（`msa/no-prototype-write`、`tools/checks/typed-access.ts`）
 
 ## 環境変数
 
 - 環境変数は環境ごとに変わる値だけにする。変わらない値はコードかフラグにする。
 - 読み書きは `apps/coding-agent/src/core/platform/index.ts` の `readEnv`・`writeEnv`・`deleteEnv`・`envSnapshot` を通す。`process.env` と `node:process` の `env` は lint で禁じている。
+- 実際の `process.env` に書く必要があるとき（子プロセスや `Bun.env` に見せる）は、`platform/env.ts` の `assignProcessEnv` だけを使う。書き込みはこの関数の 1 か所だけに置き、`msa/process-env-writer` と `tools/checks/typed-access.ts` がほかの形を断る。
 
 ## node の組み込み
 

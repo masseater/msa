@@ -59,6 +59,7 @@
     "rules": [
       { "from": "tools", "allow": [] },
       { "from": "tools/checks", "allow": ["tools"] },
+      { "from": "tools/class-seal", "allow": ["tools", "tools/oxlint"] },
     ],
   },
   "duplicates": { "threshold": 1, "ignore": ["**/generated/**"] },

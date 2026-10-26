@@ -18,7 +18,7 @@ const withoutImages = (message: compatTypes.Message): compatTypes.Message => {
   const filteredContent = content
     .map((c) => (c.type === "image" ? { text: IMAGE_PLACEHOLDER, type: "text" as const } : c))
     .filter((c, i, arr) => !(isPlaceholder(c) && i > 0 && isPlaceholder(arr[i - 1])));
-  return Object.assign({}, message, { content: filteredContent });
+  return { ...message, content: filteredContent };
 };
 
 const convertToLlmFor =

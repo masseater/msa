@@ -40,6 +40,11 @@ declare namespace agentOptionsTypes {
     | typesModule.AgentLoopTurnUpdate
     | undefined;
 
+  type FinalizeMessage = (
+    message: typesModule.AgentMessage,
+    signal: AbortSignal,
+  ) => Promise<typesModule.AgentMessage | undefined> | typesModule.AgentMessage | undefined;
+
   type AgentListener = (event: typesModule.AgentEvent, signal: AbortSignal) => Promise<void> | void;
 
   interface AgentOptions {
@@ -53,6 +58,7 @@ declare namespace agentOptionsTypes {
     onProviderStreamEvent?: aiTypes.SimpleStreamOptions["onProviderStreamEvent"];
     beforeToolCall?: BeforeToolCall;
     afterToolCall?: AfterToolCall;
+    finalizeMessage?: FinalizeMessage;
     finishTurn?: typesModule.FinishTurn;
     prepareRequest?: typesModule.PrepareRequest;
     prepareNextTurn?: PrepareNextTurn;

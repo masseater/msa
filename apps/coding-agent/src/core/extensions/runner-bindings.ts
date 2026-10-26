@@ -74,22 +74,33 @@ const applyRuntimeActions = (
   runtime.setThinkingLevel = actions.setThinkingLevel;
 };
 
-const commandBindings = (actions?: extensionsTypesTypes.ExtensionCommandContextActions) =>
-  actions === undefined
-    ? idleCommandBindings()
-    : {
-        forkHandler: actions.fork,
-        navigateTreeHandler: actions.navigateTree,
-        newSessionHandler: actions.newSession,
-        reloadHandler: actions.reload,
-        switchSessionHandler: actions.switchSession,
-        waitForIdleFn: actions.waitForIdle,
-      };
+const applyCommandActions = (
+  bindings: runnerBindingsTypes.RunnerBindings,
+  actions?: extensionsTypesTypes.ExtensionCommandContextActions,
+): void => {
+  const next =
+    actions === undefined
+      ? idleCommandBindings()
+      : {
+          forkHandler: actions.fork,
+          navigateTreeHandler: actions.navigateTree,
+          newSessionHandler: actions.newSession,
+          reloadHandler: actions.reload,
+          switchSessionHandler: actions.switchSession,
+          waitForIdleFn: actions.waitForIdle,
+        };
+  bindings.forkHandler = next.forkHandler;
+  bindings.navigateTreeHandler = next.navigateTreeHandler;
+  bindings.newSessionHandler = next.newSessionHandler;
+  bindings.reloadHandler = next.reloadHandler;
+  bindings.switchSessionHandler = next.switchSessionHandler;
+  bindings.waitForIdleFn = next.waitForIdleFn;
+};
 
 const runnerBindings = {
+  applyCommandActions,
   applyContextActions,
   applyRuntimeActions,
-  commandBindings,
   createBindings,
   idleCommandBindings,
 };

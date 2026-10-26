@@ -38,6 +38,11 @@ export default class CustomMessageComponent extends tui.Container {
     this.rebuild();
   }
 
+  setMessage(message: messagesTypes.CustomMessage<unknown>): void {
+    this.message = message;
+    this.rebuild();
+  }
+
   setExpanded(expanded: boolean): void {
     if (this.expandedState !== expanded) {
       this.expandedState = expanded;

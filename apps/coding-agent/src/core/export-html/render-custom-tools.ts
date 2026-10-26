@@ -10,14 +10,14 @@ type MessageEntry = Extract<sessionManagerTypes.SessionEntry, { type: "message" 
 function renderToolCalls(
   message: MessageEntry["message"],
   toolRenderer: exportTypesTypes.ToolHtmlRenderer,
-  renderedTools: Record<string, exportTypesTypes.RenderedToolHtml>,
+  renderedTools: Map<string, exportTypesTypes.RenderedToolHtml>,
 ): void {
   if (message.role !== "assistant" || !Array.isArray(message.content)) return;
   for (const block of message.content) {
     if (block.type !== "toolCall" || TEMPLATE_RENDERED_TOOLS.has(block.name)) continue;
     const callHtml = toolRenderer.renderCall(block.id, block.name, block.arguments);
     if (callHtml !== undefined && callHtml !== "") {
-      renderedTools[block.id] = { callHtml };
+      renderedTools.set(block.id, { callHtml });
     }
   }
 }
@@ -25,11 +25,11 @@ function renderToolCalls(
 function renderToolResult(
   message: MessageEntry["message"],
   toolRenderer: exportTypesTypes.ToolHtmlRenderer,
-  renderedTools: Record<string, exportTypesTypes.RenderedToolHtml>,
+  renderedTools: Map<string, exportTypesTypes.RenderedToolHtml>,
 ): void {
   if (message.role !== "toolResult" || message.toolCallId === "") return;
   const toolName = message.toolName || "";
-  const existing = renderedTools[message.toolCallId];
+  const existing = renderedTools.get(message.toolCallId);
   if (existing === undefined && TEMPLATE_RENDERED_TOOLS.has(toolName)) return;
   const rendered = toolRenderer.renderResult(
     message.toolCallId,
@@ -39,11 +39,11 @@ function renderToolResult(
     message.isError || false,
   );
   if (rendered !== undefined) {
-    renderedTools[message.toolCallId] = {
+    renderedTools.set(message.toolCallId, {
       ...existing,
       resultHtmlCollapsed: rendered.collapsed,
       resultHtmlExpanded: rendered.expanded,
-    };
+    });
   }
 }
 
@@ -63,13 +63,13 @@ const preRenderCustomTools: {
     entries: sessionManagerTypes.SessionEntry[],
     toolRenderer: exportTypesTypes.ToolHtmlRenderer,
   ): Record<string, exportTypesTypes.RenderedToolHtml> => {
-    const renderedTools: Record<string, exportTypesTypes.RenderedToolHtml> = {};
+    const renderedTools = new Map<string, exportTypesTypes.RenderedToolHtml>();
     for (const entry of entries) {
       if (entry.type !== "message") continue;
       renderToolCalls(entry.message, toolRenderer, renderedTools);
       renderToolResult(entry.message, toolRenderer, renderedTools);
     }
-    return renderedTools;
+    return Object.fromEntries(renderedTools);
   },
 );
 

@@ -2,7 +2,6 @@ import { Function as Fn } from "effect";
 
 import errors from "../../../utils/errors.ts";
 import systemTheme from "./system-theme.ts";
-import type Theme from "./theme-class.ts";
 import themeLoader from "./theme-loader.ts";
 import themeState from "./theme-state.ts";
 import themeWatcher from "./theme-watcher.ts";
@@ -10,6 +9,7 @@ import type themeTypes from "./theme.types.ts";
 
 const { SYSTEM_THEME_NAME } = systemTheme;
 const { selection } = themeState;
+type Theme = themeTypes.Theme;
 
 function applyNamedTheme(name: string, enableWatcher: boolean): void {
   selection.currentName = name;

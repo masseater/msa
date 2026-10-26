@@ -134,7 +134,7 @@ export default class NpmTool {
       dependencies?: Record<string, { path?: string }>;
     }>;
     for (const entry of entries) {
-      const path = entry.dependencies?.[packageName]?.path;
+      const path = new Map(Object.entries(entry.dependencies ?? {})).get(packageName)?.path;
       if (path !== undefined && path !== "") return path;
     }
     return undefined;

@@ -4,6 +4,8 @@ import { definePlugin, defineRule } from "vite-plus/lint/plugins";
 import classOrigin from "./class-origin.ts";
 import type flowTypes from "./flow.types.ts";
 import LookupFlow from "./lookup-flow.ts";
+import nestedClass from "./nested-class.ts";
+import prototypeGuard from "./prototype-guard.ts";
 import RequireFlow from "./require-flow.ts";
 import restrictedMember from "./restricted-member.ts";
 import sharedWrite from "./shared-write.ts";
@@ -130,21 +132,28 @@ type WorkspacePackage = { readonly dir: string; readonly specifiers: readonly st
 type ClassExtendsOptions = {
   readonly builtins: readonly string[];
   readonly packages: readonly WorkspacePackage[];
+  readonly probeRoot: string;
 };
 
 const classExtendsOptions = (context: Context): ClassExtendsOptions => {
   const [options] = context.options as unknown as readonly (ClassExtendsOptions | undefined)[];
   if (options === undefined)
-    throw new TypeError("msa/no-local-class-extends には builtins と packages を渡す");
+    throw new TypeError("msa/no-local-class-extends には builtins と packages と probeRoot を渡す");
   return options;
+};
+
+const sourcePathOf = (filename: string, probeRoot: string): string => {
+  if (!filename.startsWith(`${probeRoot}/`)) return filename;
+  const inRun = filename.slice(probeRoot.length + 1);
+  return `${probeRoot.slice(0, probeRoot.lastIndexOf("/"))}/${inRun.slice(inRun.indexOf("/") + 1)}`;
 };
 
 const selfSpecifiersOf = (
   context: Context,
-  packages: readonly WorkspacePackage[],
+  { packages, probeRoot }: ClassExtendsOptions,
 ): readonly string[] =>
   packages
-    .filter(({ dir }) => context.filename.startsWith(`${dir}/`))
+    .filter(({ dir }) => sourcePathOf(context.filename, probeRoot).startsWith(`${dir}/`))
     .reduce<WorkspacePackage | undefined>(
       (owner, candidate) =>
         owner === undefined || candidate.dir.length > owner.dir.length ? candidate : owner,
@@ -169,8 +178,9 @@ const packagesSchema = {
           },
           type: "array",
         },
+        probeRoot: { type: "string" },
       },
-      required: ["builtins", "packages"],
+      required: ["builtins", "packages", "probeRoot"],
       type: "object",
     },
   ],
@@ -181,11 +191,11 @@ const packagesSchema = {
 
 const noLocalClassExtends = defineRule({
   create(context) {
-    const { builtins, packages } = classExtendsOptions(context);
+    const options = classExtendsOptions(context);
     const walk = {
-      builtins: new Set(builtins),
+      builtins: new Set(options.builtins),
       context,
-      selfSpecifiers: selfSpecifiersOf(context, packages),
+      selfSpecifiers: selfSpecifiersOf(context, options),
     };
     const strings = new StaticString(context);
     const reportPrototype = createReporter(context, PROTOTYPE_MESSAGE);
@@ -212,6 +222,19 @@ const noLocalClassExtends = defineRule({
     };
   },
   meta: { schema: packagesSchema, type: "problem" },
+});
+
+const noPrototypeWrite = defineRule({
+  create(context) {
+    const reporters = Object.fromEntries(
+      Object.entries(prototypeGuard.MESSAGES).map(([kind, message]) => [
+        kind,
+        createReporter(context, message),
+      ]),
+    );
+    return prototypeGuard.createPrototypeGuard(context, (kind, node) => reporters[kind]!(node));
+  },
+  meta: { type: "problem" },
 });
 
 const noRestrictedMember = defineRule({
@@ -255,8 +278,11 @@ const msaPlugin = definePlugin({
     "no-builtin-module-lookup": noBuiltinModuleLookup,
     "no-builtin-require": noBuiltinRequire,
     "no-local-class-extends": noLocalClassExtends,
+    "no-nested-class": nestedClass.noNestedClass,
+    "no-prototype-write": noPrototypeWrite,
     "no-restricted-member": noRestrictedMember,
     "no-sync-fs": noSyncFs,
+    "process-env-writer": restrictedMember.processEnvWriter,
   },
 });
 

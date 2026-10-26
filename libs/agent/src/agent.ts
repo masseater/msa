@@ -14,7 +14,7 @@ const { agentConfig, agentRun, agentState, loopRun } = agentKit;
 
 const { getCurrentSystemMessage } = ai;
 
-const { AgentRuns, busy, notifyListeners } = agentRun;
+const { AgentRuns, busy, finalizeEndMessage, notifyListeners } = agentRun;
 const {
   createMutableAgentState,
   defaultConvertToLlm,
@@ -56,6 +56,7 @@ export default class Agent {
   public onProviderStreamEvent?: aiTypes.SimpleStreamOptions["onProviderStreamEvent"];
   public beforeToolCall?: agentOptionsTypes.BeforeToolCall | undefined;
   public afterToolCall?: agentOptionsTypes.AfterToolCall | undefined;
+  public finalizeMessage?: agentOptionsTypes.FinalizeMessage | undefined;
   public finishTurn?: typesModule.FinishTurn | undefined;
   public prepareRequest?: typesModule.PrepareRequest | undefined;
   public prepareNextTurn?: agentOptionsTypes.PrepareNextTurn | undefined;
@@ -78,6 +79,7 @@ export default class Agent {
     this.onProviderStreamEvent = runtimeOptions.onProviderStreamEvent;
     this.beforeToolCall = runtimeOptions.beforeToolCall;
     this.afterToolCall = runtimeOptions.afterToolCall;
+    this.finalizeMessage = runtimeOptions.finalizeMessage;
     this.finishTurn = runtimeOptions.finishTurn;
     this.prepareRequest = runtimeOptions.prepareRequest;
     this.prepareNextTurn = runtimeOptions.prepareNextTurn;
@@ -261,19 +263,25 @@ export default class Agent {
 
   #handleRunFailure(error: unknown, aborted: boolean): Effect.Effect<void> {
     const message = runFailureMessage({ aborted, error, model: this.#state.model });
-    const events: typesModule.AgentEvent[] = [
-      { message, type: "message_start" },
-      { message, type: "message_end" },
-      { message, toolResults: [], type: "turn_end" },
-      { messages: [message], type: "agent_end" },
-    ];
-    return Effect.forEach(events, (event) => this.#processEvent(event), { discard: true });
+    const end = { message, type: "message_end" as const };
+    return Effect.gen({ self: this }, function* () {
+      yield* this.#processEvent({ message, type: "message_start" });
+      yield* this.#processEvent(end);
+      yield* this.#processEvent({ message: end.message, toolResults: [], type: "turn_end" });
+      yield* this.#processEvent({ messages: [end.message], type: "agent_end" });
+    });
   }
 
   #processEvent(event: typesModule.AgentEvent): Effect.Effect<void> {
-    return Effect.suspend(() => {
+    return Effect.gen({ self: this }, function* () {
+      if (event.type === "message_end")
+        yield* finalizeEndMessage({
+          event,
+          finalize: this.finalizeMessage,
+          signal: this.#runs.signal,
+        });
       reduceAgentEvent({ event, state: this.#state });
-      return notifyListeners({ event, listeners: this.#listeners, signal: this.#runs.signal });
+      yield* notifyListeners({ event, listeners: this.#listeners, signal: this.#runs.signal });
     });
   }
 }

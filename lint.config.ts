@@ -255,6 +255,12 @@ const strictCategoryRules = [
   "promise/no-return-in-finally",
 ];
 
+const lintProbeRoot = "lint-probe";
+
+const processEnvWriter = "apps/coding-agent/src/core/platform/env.ts";
+
+const lintProbeDir = `${import.meta.dirname}/${lintProbeRoot}`;
+
 const workspacePackages = lintedPackages.map(({ dir, specifiers }) => ({
   dir: `${import.meta.dirname}/${dir}`,
   specifiers,
@@ -270,8 +276,11 @@ const lintConfig = {
   fsSyncFunctions,
   generated,
   lintPlugins,
+  lintProbeDir,
+  lintProbeRoot,
   loopbackTestServerMembers,
   platformOnlyImports,
+  processEnvWriter,
   requiredStack,
   restrictedImports,
   restrictedProperties,

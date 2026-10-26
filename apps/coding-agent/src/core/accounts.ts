@@ -27,7 +27,7 @@ function completeAccountsArgument(prefix: string): tuiTypes.AutocompleteItem[] |
   return (
     kind
       ?.complete(trimmed.slice(space).trimStart())
-      ?.map((item) => Object.assign({}, item, { value: `${kind.name} ${item.value}` })) ?? null
+      ?.map((item) => Object.assign(item, { value: `${kind.name} ${item.value}` })) ?? null
   );
 }
 

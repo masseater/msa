@@ -157,11 +157,12 @@ function updateMcpServerConfigImpl(
   patch: configTypes.McpServerConfigPatch,
   options: { override?: boolean } = {},
 ): Promise<void> {
-  return editMcpServers(path, (servers, parsed) => {
-    let server = servers?.[name];
+  return editMcpServers(path, (servers) => {
+    const next = new Map(servers);
+    let server = next.get(name);
     if (server === undefined && options.override === true) {
       server = {};
-      parsed["mcpServers"] = { ...servers, [name]: server };
+      next.set(name, server);
     }
     if (!isRecord(server)) throw new Error(`${path} does not define MCP server "${name}"`);
     const keepDefaults = isOverride(server);
@@ -173,7 +174,7 @@ function updateMcpServerConfigImpl(
       if (patch.exposure === "codemode" && !keepDefaults) delete server["exposure"];
       else server["exposure"] = patch.exposure;
     }
-    return true;
+    return next;
   });
 }
 
@@ -197,12 +198,10 @@ function addMcpServerConfigImpl(
   config: mcpServersTypes.McpServerConfig,
 ): Promise<boolean> {
   let replaced = false;
-  return editMcpServers(path, (servers, parsed) => {
-    const target = servers ?? {};
-    replaced = target[name] !== undefined;
-    target[name] = config;
-    parsed["mcpServers"] = target;
-    return true;
+  return editMcpServers(path, (servers) => {
+    const next = new Map(servers);
+    replaced = next.get(name) !== undefined;
+    return next.set(name, config);
   }).then(() => replaced);
 }
 
@@ -216,10 +215,11 @@ function removeMcpServerConfigImpl(path: string, name: string): Promise<boolean>
   return exists(path).then((found) =>
     found
       ? editMcpServers(path, (servers) => {
-          if (servers === undefined || servers[name] === undefined) return false;
-          delete servers[name];
+          if (servers === undefined || servers.get(name) === undefined) return undefined;
+          const next = new Map(servers);
+          next.delete(name);
           removed = true;
-          return true;
+          return next;
         }).then(() => removed)
       : false,
   );
@@ -230,22 +230,20 @@ const removeMcpServerConfig: {
   (name: string): (path: string) => Promise<boolean>;
 } = dual((args: IArguments) => args.length >= 2, removeMcpServerConfigImpl);
 
-function editMcpServers(
-  path: string,
-  edit: (servers: Record<string, unknown> | undefined, parsed: Record<string, unknown>) => boolean,
-): Promise<void> {
+function editMcpServers(path: string, edit: McpServersEdit): Promise<void> {
   return exists(path)
     .then((found) => (found ? readText(path) : undefined))
     .then((content) => writeEdited({ content, edit, path }));
 }
 
+type McpServersEdit = (
+  servers: ReadonlyMap<string, unknown> | undefined,
+) => ReadonlyMap<string, unknown> | undefined;
+
 function writeEdited(input: {
   readonly content: string | undefined;
   readonly path: string;
-  readonly edit: (
-    servers: Record<string, unknown> | undefined,
-    parsed: Record<string, unknown>,
-  ) => boolean;
+  readonly edit: McpServersEdit;
 }): Promise<void> {
   const { content: text, edit, path } = input;
   const parsed: unknown = text === undefined ? {} : JSON.parse(text);
@@ -255,11 +253,15 @@ function writeEdited(input: {
   ) {
     throw new Error(`${path}: expected an object with an "mcpServers" object`);
   }
-  const servers = isRecord(parsed["mcpServers"]) ? parsed["mcpServers"] : undefined;
-  if (!edit(servers, parsed)) return Promise.resolve();
+  const servers = isRecord(parsed["mcpServers"])
+    ? new Map(Object.entries(parsed["mcpServers"]))
+    : undefined;
+  const next = edit(servers);
+  if (next === undefined) return Promise.resolve();
+  const written = { ...parsed, mcpServers: Object.fromEntries(next) };
   const indent = (text && /^([ \t]+)\S/mu.exec(text)?.[1]) || "  ";
   return makeDirectory({ path: dirname(path) }).then(() =>
-    writeFile({ data: `${JSON.stringify(parsed, null, indent)}\n`, path }),
+    writeFile({ data: `${JSON.stringify(written, null, indent)}\n`, path }),
   );
 }
 

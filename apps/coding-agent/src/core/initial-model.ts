@@ -19,6 +19,13 @@ type InitialModelOptions = {
   modelRuntime: modelRuntimeTypes.ModelRuntime;
 };
 
+const savedThinkingLevel = (
+  options: InitialModelOptions,
+  provider: string,
+  modelId: string,
+): agentTypes.ThinkingLevel | undefined =>
+  new Map(Object.entries(options.modelThinkingLevels ?? {})).get(`${provider}/${modelId}`);
+
 const configuredDefaultModel = (
   options: InitialModelOptions,
 ): modelResolverTypes.InitialModelResult | undefined => {
@@ -37,7 +44,7 @@ const configuredDefaultModel = (
     fallbackMessage: undefined,
     model: found,
     thinkingLevel:
-      options.modelThinkingLevels?.[`${defaultProvider}/${defaultModelId}`] ??
+      savedThinkingLevel(options, defaultProvider, defaultModelId) ??
       options.defaultThinkingLevel ??
       DEFAULT_THINKING_LEVEL,
   };
@@ -52,7 +59,7 @@ const pickInitialModel = (options: InitialModelOptions): modelResolverTypes.Init
       model,
       thinkingLevel:
         scopedModel.thinkingLevel ??
-        options.modelThinkingLevels?.[`${model.provider}/${model.id}`] ??
+        savedThinkingLevel(options, model.provider, model.id) ??
         options.defaultThinkingLevel ??
         DEFAULT_THINKING_LEVEL,
     };

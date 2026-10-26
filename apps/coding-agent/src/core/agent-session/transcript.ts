@@ -100,21 +100,6 @@ export default class SessionTranscript {
     return undefined;
   }
 
-  replaceMessageInPlace(
-    target: agentTypes.AgentMessage,
-    replacement: agentTypes.AgentMessage,
-  ): void {
-    if (target === replacement) {
-      return;
-    }
-
-    const targetRecord = target as unknown as Record<string, unknown>;
-    for (const key of Object.keys(targetRecord)) {
-      delete targetRecord[key];
-    }
-    Object.assign(targetRecord, replacement);
-  }
-
   getLastAssistantText(): string | undefined {
     const lastAssistant = this.session.messages
       .slice()

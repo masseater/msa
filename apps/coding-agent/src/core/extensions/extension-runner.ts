@@ -13,7 +13,7 @@ type Queries = Parts["queries"];
 type Events = Parts["events"];
 
 const { noOpUIContext } = runnerUi;
-const { applyContextActions, applyRuntimeActions, commandBindings, createBindings } =
+const { applyCommandActions, applyContextActions, applyRuntimeActions, createBindings } =
   runnerBindings;
 const { createRunnerParts } = runnerParts;
 
@@ -88,7 +88,7 @@ export default class ExtensionRunner {
   }
 
   bindCommandContext(actions?: extensionsTypesTypes.ExtensionCommandContextActions): void {
-    Object.assign(this.bindings, commandBindings(actions));
+    applyCommandActions(this.bindings, actions);
   }
 
   setUIContext(

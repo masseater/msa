@@ -8,15 +8,13 @@ const { KEYBINDINGS } = keybindings;
 
 const properties: Record<string, TSchema> = {
   $schema: Type.Optional(Type.String()),
+  ...Object.fromEntries(
+    Object.entries(KEYBINDINGS).map(([id, definition]) => [
+      id,
+      Type.Optional(keybindingValueSchema({ description: definition.description })),
+    ]),
+  ),
 };
-
-for (const [id, definition] of Object.entries(KEYBINDINGS)) {
-  properties[id] = Type.Optional(
-    keybindingValueSchema({
-      description: definition.description,
-    }),
-  );
-}
 
 const KeybindingsSchema = Type.Object(properties, {
   additionalProperties: KeybindingValueSchema,

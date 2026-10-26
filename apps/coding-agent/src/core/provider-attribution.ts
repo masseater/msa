@@ -63,16 +63,13 @@ function mergeProviderAttributionHeaders(
   sessionId: string | undefined,
   ...headerSources: Array<aiTypes.ProviderHeaders | undefined>
 ): aiTypes.ProviderHeaders | undefined {
-  const merged: aiTypes.ProviderHeaders = {
-    ...getSessionHeaders(model, sessionId),
-    ...getDefaultAttributionHeaders(model, settingsManager),
-  };
-
-  for (const headers of headerSources) {
-    if (headers !== undefined) {
-      Object.assign(merged, headers);
-    }
-  }
+  const merged: aiTypes.ProviderHeaders = Object.fromEntries(
+    [
+      getSessionHeaders(model, sessionId),
+      getDefaultAttributionHeaders(model, settingsManager),
+      ...headerSources,
+    ].flatMap((headers) => Object.entries(headers ?? {})),
+  );
 
   return Object.keys(merged).length > 0 ? merged : undefined;
 }

@@ -37,13 +37,26 @@ export default class SessionAskMode {
     if (options.forceSystemPrompt !== undefined) {
       options.forceSystemPrompt = `${options.forceSystemPrompt}\n\n${ASK_SECTION_TEXT}`;
     }
-    for (const [name, { definition }] of this.askVariants) {
-      options.toolSnippets[name] =
-        this.session.tools.prompt.normalizePromptSnippet(definition.promptSnippet) ?? "";
-      options.toolGuidelines[name] = this.session.tools.prompt.normalizePromptGuidelines(
-        definition.promptGuidelines,
-      );
-    }
+    const { prompt } = this.session.tools;
+    const variants = [...this.askVariants].map(([name, { definition }]) => ({ definition, name }));
+    options.toolSnippets = {
+      ...options.toolSnippets,
+      ...Object.fromEntries(
+        variants.map(({ definition, name }) => [
+          name,
+          prompt.normalizePromptSnippet(definition.promptSnippet) ?? "",
+        ]),
+      ),
+    };
+    options.toolGuidelines = {
+      ...options.toolGuidelines,
+      ...Object.fromEntries(
+        variants.map(({ definition, name }) => [
+          name,
+          prompt.normalizePromptGuidelines(definition.promptGuidelines),
+        ]),
+      ),
+    };
   }
 
   endAskRun(): void {

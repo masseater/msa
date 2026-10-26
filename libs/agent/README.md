@@ -120,6 +120,8 @@ The `beforeToolCall` hook runs after `tool_execution_start` and validated argume
 
 Tools, blocked `beforeToolCall` results, and `afterToolCall` overrides can return `terminate: true` to hint that the automatic follow-up LLM call should be skipped. The loop only stops early when every finalized tool result in that batch sets `terminate: true`. Mixed batches continue normally.
 
+`finalizeMessage` runs once for each `message_end`, before the agent records the message in its state and before any listener is called. A returned message replaces the completed one: every `message_end` listener, `agent.state.messages`, the loop's context for the next request, and `turn_end`/`agent_end` receive it, and the object passed to `message_start` stays as it was. Return `undefined` to keep the message. Listeners do not replace messages.
+
 When you use the `Agent` class, assistant `message_end` processing is treated as a barrier before tool preflight begins. That means `beforeToolCall` sees agent state that already includes the assistant message that requested the tool call.
 
 ### Request preparation and turn finalization
@@ -255,6 +257,9 @@ const agent = new Agent({
       return { details: { ...result.details, audited: true } };
     }
   },
+
+  // Replace a completed message before any message_end listener sees it.
+  finalizeMessage: async (message, signal) => undefined,
 
   // Rebuild finalized context immediately before every provider request.
   prepareRequest: async ({ context }, signal) => {

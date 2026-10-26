@@ -15,7 +15,7 @@ const { normalizePath } = paths;
 const { stripBom } = text;
 const { toErrorMessage } = errors;
 const { isCommandConfigValue, resolveConfigValue } = resolveConfigValueModule;
-type AuthStorageData = Record<string, aiTypes.Credential>;
+type AuthStorageData = ReadonlyMap<string, aiTypes.Credential>;
 function validateAuthData(content: string): AuthStorageData {
   let parsed: unknown;
   try {
@@ -52,12 +52,12 @@ function validateAuthData(content: string): AuthStorageData {
     throw new Error(`Invalid auth.json credential for provider "${providerId}"`);
   }
 
-  return parsed as AuthStorageData;
+  return new Map(Object.entries(parsed as Record<string, aiTypes.Credential>));
 }
 
 const readAuthData = (authPath: string): Promise<AuthStorageData> =>
   platform.files.readText(authPath).then(validateAuthData, (error: unknown) => {
-    if (platform.isMissingPath(error)) return {};
+    if (platform.isMissingPath(error)) return new Map();
     throw new Error(`Failed to read auth.json: ${toErrorMessage(error)}`, { cause: error });
   });
 
@@ -99,7 +99,7 @@ export default class ReadOnlyAuthStorage implements aiTypes.CredentialStore {
     return Effect.runPromise(
       awaitingWith(function* () {
         options?.signal?.throwIfAborted();
-        const credential = (yield* awaited(this.load()))[providerId];
+        const credential = (yield* awaited(this.load())).get(providerId);
         options?.signal?.throwIfAborted();
         return resolvedCredential(credential);
       }, this),
@@ -110,12 +110,10 @@ export default class ReadOnlyAuthStorage implements aiTypes.CredentialStore {
     return Effect.runPromise(
       awaitingWith(function* () {
         options?.signal?.throwIfAborted();
-        const credentials = Object.entries(yield* awaited(this.load())).map(
-          ([providerId, credential]) => ({
-            providerId,
-            type: credential.type,
-          }),
-        );
+        const credentials = [...(yield* awaited(this.load()))].map(([providerId, credential]) => ({
+          providerId,
+          type: credential.type,
+        }));
         options?.signal?.throwIfAborted();
         return credentials;
       }, this),

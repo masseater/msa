@@ -88,13 +88,14 @@ export default class InfoCommands {
   ): Promise<void> {
     return Effect.runPromise(
       awaitingWith(function* () {
+        const { renderer } = this.mode.lifecycle.screen;
         if (
           options.preferSelection === true &&
-          this.mode.ui instanceof TuiAltScreen &&
-          !this.mode.ui.getCopyOnSelect() &&
-          this.mode.ui.hasActiveSelection()
+          renderer instanceof TuiAltScreen &&
+          !renderer.getCopyOnSelect() &&
+          renderer.hasActiveSelection()
         ) {
-          yield* awaited(this.mode.ui.copyActiveSelectionToClipboard());
+          yield* awaited(renderer.copyActiveSelectionToClipboard());
           return;
         }
 
@@ -106,8 +107,9 @@ export default class InfoCommands {
 
         try {
           yield* awaited(copyToClipboard(text));
-          if (options.flashConfirmation === true && this.mode.ui instanceof TuiAltScreen) {
-            this.mode.ui.flash("Copied!");
+          const current = this.mode.lifecycle.screen.renderer;
+          if (options.flashConfirmation === true && current instanceof TuiAltScreen) {
+            current.flash("Copied!");
           } else {
             this.mode.display.status.showStatus("Copied last agent message to clipboard");
           }

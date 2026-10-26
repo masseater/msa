@@ -1,9 +1,10 @@
 import type themeTokensTypes from "./theme-tokens.types.ts";
 
 function defineThemeTokens<const T extends themeTokensTypes.ThemeTokenDescriptors>(tokens: T): T {
-  for (const [name, descriptor] of Object.entries(tokens)) {
+  const byName = new Map(Object.entries(tokens));
+  for (const [name, descriptor] of byName) {
     if (descriptor.fallback === undefined) continue;
-    const fallback = tokens[descriptor.fallback];
+    const fallback = byName.get(descriptor.fallback);
     if (fallback === undefined) {
       throw new Error(`Theme token ${name} has unknown fallback ${descriptor.fallback}`);
     }

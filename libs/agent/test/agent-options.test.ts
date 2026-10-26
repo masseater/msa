@@ -128,7 +128,47 @@ const forwardsSessionId = Effect.gen(function* () {
   expect(receivedSessionId).toBe("session-def");
 });
 
+const finalizesBeforeListeners = Effect.gen(function* () {
+  const replacements: agentTypes.AgentMessage[] = [];
+  const delivered: { readonly first: unknown[]; readonly second: unknown[] } = {
+    first: [],
+    second: [],
+  };
+  const script = scripted(toolCallMessage([{ id: "tool-1", name: "noop" }]), textMessage("done"));
+  const agent = new Agent({
+    finalizeMessage: (message) => {
+      if (message.role !== "user") return undefined;
+      const replacement = { ...message, content: "replaced" };
+      replacements.push(replacement);
+      return replacement;
+    },
+    initialState: { tools: [noop("ok")] },
+    streamFn: script.streamFn,
+  });
+  agent.subscribe((event) => {
+    if (event.type === "message_end") delivered.first.push(event.message);
+  });
+  agent.subscribe((event) => {
+    if (event.type === "message_end") delivered.second.push(event.message);
+  });
+  yield* Effect.promise(() => agent.prompt("start"));
+  const [replacement] = replacements;
+  expect(replacements).toHaveLength(1);
+  expect(delivered.first).toContain(replacement);
+  expect(delivered.second).toContain(replacement);
+  expect(delivered.first).toEqual(delivered.second);
+  expect(agent.state.messages).toContain(replacement);
+  const secondUsers = (script.contexts[1]?.messages ?? []).flatMap((message) => {
+    if (message.role !== "user") return [];
+    if (typeof message.content === "string") return [message.content];
+    return message.content.flatMap((part) => (part.type === "text" ? [part.text] : []));
+  });
+  expect(secondUsers).toEqual(["replaced"]);
+});
+
 describe("Agent options", () => {
+  it("delivers the message finalizeMessage returns to every message_end listener, the state and the next turn", () =>
+    Effect.runPromise(finalizesBeforeListeners));
   it("keeps legacy prepareNextTurn signal callback behavior", () =>
     Effect.runPromise(legacyPrepareNextTurn));
   it("forwards finishTurn through AgentOptions with the active abort signal", () =>

@@ -61,9 +61,10 @@ const appendMessages = (
     });
     for (const message of messages) {
       yield* state.emit({ message, type: "message_start" });
-      yield* state.emit({ message, type: "message_end" });
-      state.context.messages.push(message);
-      state.newMessages.push(message);
+      const end = { message, type: "message_end" as const };
+      yield* state.emit(end);
+      state.context.messages.push(end.message);
+      state.newMessages.push(end.message);
     }
     state.pendingMessages = [];
   });

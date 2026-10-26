@@ -38,11 +38,11 @@ const attachTokenCounting = (composed: ComposedProvider, provider: aiTypes.Provi
 
 const attachImages = (composed: ComposedProvider, provider: aiTypes.Provider): void => {
   const { providerId } = composed;
-  const extensionImages = composed.extension?.images;
+  const extensionImages = new Map(Object.entries(composed.extension?.images ?? {}));
   const generateImages = composed.base?.generateImages;
-  if (generateImages === undefined && Object.keys(extensionImages ?? {}).length === 0) return;
+  if (generateImages === undefined && extensionImages.size === 0) return;
   provider.generateImages = (model, context, options) => {
-    const implementation = extensionImages?.[model.api];
+    const implementation = extensionImages.get(model.api);
     if (implementation !== undefined) return implementation.generateImages(model, context, options);
     if (generateImages !== undefined) return generateImages(model, context, options);
     return Promise.resolve(
@@ -56,11 +56,11 @@ const attachImages = (composed: ComposedProvider, provider: aiTypes.Provider): v
 
 const attachClassifiers = (composed: ComposedProvider, provider: aiTypes.Provider): void => {
   const { providerId } = composed;
-  const extensionClassifiers = composed.extension?.classifiers;
+  const extensionClassifiers = new Map(Object.entries(composed.extension?.classifiers ?? {}));
   const classify = composed.base?.classify;
-  if (classify === undefined && Object.keys(extensionClassifiers ?? {}).length === 0) return;
+  if (classify === undefined && extensionClassifiers.size === 0) return;
   provider.classify = (model, context, options) => {
-    const implementation = extensionClassifiers?.[model.api];
+    const implementation = extensionClassifiers.get(model.api);
     if (implementation !== undefined) return implementation.classify(model, context, options);
     if (classify !== undefined) return classify(model, context, options);
     return Promise.resolve(
@@ -72,7 +72,7 @@ const attachClassifiers = (composed: ComposedProvider, provider: aiTypes.Provide
   };
   const prepareClassifier = composed.base?.prepareClassifier;
   provider.prepareClassifier = (model) => {
-    const implementation = extensionClassifiers?.[model.api];
+    const implementation = extensionClassifiers.get(model.api);
     if (implementation !== undefined)
       return implementation.prepare?.(model) ?? Promise.resolve({ fetched: false });
     return prepareClassifier?.(model) ?? Promise.resolve({ fetched: false });

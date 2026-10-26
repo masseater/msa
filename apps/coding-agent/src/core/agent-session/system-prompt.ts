@@ -64,11 +64,12 @@ export default class SessionSystemPrompt {
     const validToolNames = toolNames.filter((name) =>
       this.session.tools.registry.toolRegistry.has(name),
     );
-    const toolSnippets: Record<string, string> = {};
-    for (const name of this.session.tools.registry.toolRegistry.keys()) {
-      const snippet = this.toolPromptSnippets.get(name);
-      if (snippet !== undefined && snippet !== "") toolSnippets[name] = snippet;
-    }
+    const toolSnippets = Object.fromEntries(
+      [...this.session.tools.registry.toolRegistry.keys()].flatMap((name) => {
+        const snippet = this.toolPromptSnippets.get(name);
+        return snippet === undefined || snippet === "" ? [] : [[name, snippet] as const];
+      }),
+    );
 
     const loaderSystemPrompt = this.session.resourceLoader.getSystemPrompt();
     const loaderAppendSystemPrompt = this.session.resourceLoader.getAppendSystemPrompt();

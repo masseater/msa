@@ -4,6 +4,8 @@
 
 ### Added
 
+- `finalizeMessage` (an `AgentOptions` field and an `Agent` property) replaces a completed message before the agent records it and before any `message_end` listener runs, so every listener, `agent.state.messages`, the next request's context, `turn_end`, and `agent_end` get the same replacement. The object given to `message_start` is not rewritten ([docs](README.md))
+
 - `streamProxy` sets `errorStatus` on the message when the proxy answers with an HTTP error, and passes on `errorStatus` from a proxy `error` event, so retry and the provider switch see the status even when the proxy's error field replaces the status line
 
 ## [0.0.1] - 2026-10-16

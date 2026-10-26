@@ -37,7 +37,7 @@ function resolveVarRefs(
   if (visited.has(value)) {
     throw new Error(`Circular variable reference detected: ${value}`);
   }
-  const reference = vars[value];
+  const reference = new Map(Object.entries(vars)).get(value);
   if (reference === undefined) {
     throw new Error(`Variable reference not found: ${value}`);
   }
@@ -49,11 +49,9 @@ function resolveThemeColors<T extends Record<string, themeSchemaTypes.ThemeColor
   colors: T,
   vars: Record<string, themeSchemaTypes.ThemeColorValue> = {},
 ): Record<keyof T, string | number> {
-  const resolved: Record<string, string | number> = {};
-  for (const [key, value] of Object.entries(colors)) {
-    resolved[key] = resolveVarRefs(value, vars);
-  }
-  return resolved as Record<keyof T, string | number>;
+  return Object.fromEntries(
+    Object.entries(colors).map(([key, value]) => [key, resolveVarRefs(value, vars)]),
+  ) as Record<keyof T, string | number>;
 }
 
 const builtinThemes: Readonly<Record<string, themeSchemaTypes.ValidatedThemeJson>> = {
@@ -141,7 +139,7 @@ function readThemeFile(
 }
 
 function loadThemeJson(name: string): themeSchemaTypes.ValidatedThemeJson {
-  const builtinTheme = getBuiltinThemes()[name];
+  const builtinTheme = new Map(Object.entries(getBuiltinThemes())).get(name);
   if (builtinTheme !== undefined) {
     return builtinTheme;
   }

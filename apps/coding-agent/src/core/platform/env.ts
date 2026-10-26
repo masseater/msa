@@ -3,20 +3,21 @@ import { dual } from "effect/Function";
 
 import type platformTypes from "./index.types.ts";
 
-let overrides: Readonly<Record<string, string>> = {};
+let overrides: ReadonlyMap<string, string> = new Map();
 
 const liveProvider = (): ConfigProvider.ConfigProvider =>
   ConfigProvider.fromEnv({ preserveEmptyStrings: true });
 
-const liveValues = ConfigProvider.fromEnv({
-  env: process.env as Record<string, string>,
-  preserveEmptyStrings: true,
-});
+const liveValues = (): ConfigProvider.ConfigProvider =>
+  ConfigProvider.fromEnv({
+    env: process.env as Record<string, string>,
+    preserveEmptyStrings: true,
+  });
 
 const readEnv = (name: string): string | undefined => {
-  const override = overrides[name];
+  const override = overrides.get(name);
   if (override !== undefined) return override;
-  const node = Effect.runSync(liveValues.load([name]));
+  const node = Effect.runSync(liveValues().load([name]));
   return node === undefined ? undefined : node.value;
 };
 
@@ -24,21 +25,26 @@ const writeEnv: {
   (value: string): (name: string) => void;
   (name: string, value: string): void;
 } = dual(2, (name: string, value: string): void => {
-  overrides = { ...overrides, [name]: value };
+  overrides = new Map(overrides).set(name, value);
 });
 
 const deleteEnv = (name: string): void => {
-  const { [name]: _removed, ...rest } = overrides;
+  const rest = new Map(overrides);
+  rest.delete(name);
   overrides = rest;
+};
+
+const assignProcessEnv = (values: Readonly<Record<string, string>>): void => {
+  for (const name of Object.keys(values)) process.env[name] = String(values[name]);
 };
 
 const collectNode = (
   provider: ConfigProvider.ConfigProvider,
   node: ConfigProvider.Node,
   path: ReadonlyArray<string>,
-  into: Record<string, string>,
+  into: Map<string, string>,
 ): void => {
-  if (path.length > 0 && node.value !== undefined) into[path.join("_")] = node.value;
+  if (path.length > 0 && node.value !== undefined) into.set(path.join("_"), node.value);
   if (Predicate.isTagged(node, "Value")) return;
   const children = Predicate.isTagged(node, "Record")
     ? [...node.keys]
@@ -49,23 +55,24 @@ const collectNode = (
   }
 };
 
-const liveSnapshot = (): Record<string, string> => {
+const liveSnapshot = (): Map<string, string> => {
   const provider = liveProvider();
   const root = Effect.runSync(provider.load([]));
-  const into: Record<string, string> = {};
+  const into = new Map<string, string>();
   if (root !== undefined) collectNode(provider, root, [], into);
   return into;
 };
 
-const envSnapshot = (): Record<string, string> => ({ ...liveSnapshot(), ...overrides });
+const envSnapshot = (): Record<string, string> =>
+  Object.fromEntries([...liveSnapshot(), ...overrides]);
 
 const envNames = (): ReadonlyArray<string> => Object.keys(envSnapshot());
 
 const applyValues = (values: platformTypes.EnvValues): void => {
-  const next: Record<string, string> = { ...overrides };
+  const next = new Map(overrides);
   for (const [name, value] of Object.entries(values)) {
-    if (value === undefined) delete next[name];
-    else next[name] = value;
+    if (value === undefined) next.delete(name);
+    else next.set(name, value);
   }
   overrides = next;
 };
@@ -87,6 +94,7 @@ const withEnv =
     );
 
 const platformEnv = {
+  assignProcessEnv,
   deleteEnv,
   envNames,
   envSnapshot,

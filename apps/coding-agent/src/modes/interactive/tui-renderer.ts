@@ -68,34 +68,63 @@ function createInteractiveTui(
   return new TuiMainScreen(terminal, options.showHardwareCursor, options.logDirectory);
 }
 
+type TuiState = "children" | "fullRedraws" | "mode" | "onDebug" | "terminal";
+
+const forwardedTuiMethods = (getTui: () => tuiTypes.TUI): Omit<tuiTypes.TUI, TuiState> => ({
+  addChild: (component) => getTui().addChild(component),
+  addInputListener: (listener) => getTui().addInputListener(listener),
+  clear: () => getTui().clear(),
+  getClearOnShrink: () => getTui().getClearOnShrink(),
+  getShowHardwareCursor: () => getTui().getShowHardwareCursor(),
+  handleMouse: (event) => getTui().handleMouse?.(event),
+  hasOverlay: () => getTui().hasOverlay(),
+  hideOverlay: () => getTui().hideOverlay(),
+  invalidate: () => getTui().invalidate(),
+  onTerminalColorSchemeChange: (listener) => getTui().onTerminalColorSchemeChange(listener),
+  queryTerminalColors: (options) => getTui().queryTerminalColors(options),
+  removeChild: (component) => getTui().removeChild(component),
+  removeInputListener: (listener) => getTui().removeInputListener(listener),
+  render: (width) => getTui().render(width),
+  renderNow: (force) => getTui().renderNow(force),
+  requestRender: (force) => getTui().requestRender(force),
+  setClearOnShrink: (enabled) => getTui().setClearOnShrink(enabled),
+  setFocus: (component) => getTui().setFocus(component),
+  setShowHardwareCursor: (enabled) => getTui().setShowHardwareCursor(enabled),
+  setTerminalColorSchemeNotifications: (enabled) =>
+    getTui().setTerminalColorSchemeNotifications(enabled),
+  showOverlay: (component, options) => getTui().showOverlay(component, options),
+  start: () => getTui().start(),
+  stop: (options) => getTui().stop(options),
+});
+
 function createInteractiveTuiReference(getTui: () => tuiTypes.TUI): tuiTypes.TUI {
-  return new Proxy({} as tuiTypes.TUI, {
-    get: (_target, property) => {
-      const tui = getTui();
-      const value = Reflect.get(tui, property, tui);
-      if (typeof value !== "function") return value;
-      let methodTui = tui;
-      let method = value;
-      return (...args: unknown[]) => {
-        const currentTui = getTui();
-        if (currentTui !== methodTui) {
-          const currentMethod = Reflect.get(currentTui, property, currentTui);
-          if (typeof currentMethod !== "function") {
-            throw new TypeError(`TUI property ${String(property)} is not callable`);
-          }
-          methodTui = currentTui;
-          method = currentMethod;
-        }
-        return Reflect.apply(method, methodTui, args);
-      };
+  return {
+    ...forwardedTuiMethods(getTui),
+    get children() {
+      return getTui().children;
     },
-    getPrototypeOf: () => Reflect.getPrototypeOf(getTui()),
-    has: (_target, property) => Reflect.has(getTui(), property),
-    set: (_target, property, value) => {
-      const tui = getTui();
-      return Reflect.set(tui, property, value, tui);
+    set children(children) {
+      getTui().children = children;
     },
-  });
+    get fullRedraws() {
+      return getTui().fullRedraws;
+    },
+    get mode() {
+      return getTui().mode;
+    },
+    get onDebug() {
+      return () => getTui().onDebug?.();
+    },
+    set onDebug(onDebug: () => void) {
+      getTui().onDebug = onDebug;
+    },
+    get terminal() {
+      return getTui().terminal;
+    },
+    set terminal(terminal) {
+      getTui().terminal = terminal;
+    },
+  };
 }
 
 const tuiRenderer = {

@@ -9,7 +9,11 @@ import ToolRow from "./tool-row.ts";
 const { theme } = themeModule;
 const { Container, MouseRegion, Spacer, truncateToWidth } = tui;
 
-const FILE_VERBS: Record<string, string> = { edit: "edited", read: "read", write: "wrote" };
+const FILE_VERBS: ReadonlyMap<string, string> = new Map([
+  ["edit", "edited"],
+  ["read", "read"],
+  ["write", "wrote"],
+]);
 const SEARCH_TOOLS = new Set(["grep", "find", "ls"]);
 function plural(count: number, noun: string): string {
   return `${count} ${noun}${count === 1 ? "" : "s"}`;
@@ -34,7 +38,7 @@ function summarize(calls: readonly toolExecutionTypes.ToolCallSummary[], thought
   for (const call of calls) {
     if (!call.done) running++;
     else if (call.isError) failed++;
-    const verb = FILE_VERBS[call.toolName];
+    const verb = FILE_VERBS.get(call.toolName);
     if (verb !== undefined && verb !== "") {
       const path = call.args?.path ?? call.args?.file_path ?? "";
       const paths = files.get(verb) ?? new Set<string>();

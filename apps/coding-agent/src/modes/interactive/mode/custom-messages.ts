@@ -12,6 +12,8 @@ const { ORCHESTRATOR_REPORT_MESSAGE_TYPE } = orchestratorSupport;
 export default class CustomMessagesView {
   private readonly mode: InteractiveMode;
 
+  private readonly components = new WeakMap<object, CustomMessageComponent>();
+
   constructor(mode: InteractiveMode) {
     this.mode = mode;
   }
@@ -33,6 +35,18 @@ export default class CustomMessagesView {
       this.mode.display.thinking.outputPad,
     );
     component.setExpanded(this.mode.display.resources.toolOutputExpanded);
+    this.components.set(message, component);
     this.mode.layout.chatContainer.addChild(component);
+  }
+
+  replaceCustomMessage(
+    shown: Extract<agentTypes.AgentMessage, { role: "custom" }>,
+    replacement: Extract<agentTypes.AgentMessage, { role: "custom" }>,
+  ): void {
+    const component = this.components.get(shown);
+    if (component === undefined || shown === replacement) return;
+    this.components.delete(shown);
+    this.components.set(replacement, component);
+    component.setMessage(replacement);
   }
 }

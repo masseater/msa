@@ -19,7 +19,12 @@ export default class SessionExtensionEvents {
 
   turnIndex = 0;
 
-  private applyMessageEndReplacement(message: agentTypes.AgentMessage) {
+  installMessageFinalizer(): void {
+    this.session.agent.finalizeMessage = (message) =>
+      Effect.runPromise(this.messageEndReplacement(message));
+  }
+
+  private messageEndReplacement(message: agentTypes.AgentMessage) {
     return awaitingWith(function* () {
       const replacement = yield* awaited(
         this.session.extensions.binding.extensionRunnerInternal.emitMessageEnd({
@@ -27,16 +32,14 @@ export default class SessionExtensionEvents {
           type: "message_end",
         }),
       );
-      if (replacement === undefined) return;
-      const normalized =
-        (replacement.role === "user" ||
-          replacement.role === "assistant" ||
-          replacement.role === "toolResult" ||
-          replacement.role === "custom") &&
+      if (replacement === undefined) return undefined;
+      return (replacement.role === "user" ||
+        replacement.role === "assistant" ||
+        replacement.role === "toolResult" ||
+        replacement.role === "custom") &&
         isNullish(replacement.content)
-          ? ({ ...replacement, content: [] } as agentTypes.AgentMessage)
-          : replacement;
-      this.session.context.transcript.replaceMessageInPlace(message, normalized);
+        ? ({ ...replacement, content: [] } as agentTypes.AgentMessage)
+        : replacement;
     }, this);
   }
 
@@ -132,10 +135,7 @@ export default class SessionExtensionEvents {
           this.turnIndex++;
           return;
         }
-        if (event.type === "message_end") {
-          yield* performed(this.applyMessageEndReplacement(event.message));
-          return;
-        }
+        if (event.type === "message_end") return;
         const forwarded = this.forwardedExtensionEvent(event);
         if (forwarded !== undefined)
           yield* awaited(this.session.extensions.binding.extensionRunnerInternal.emit(forwarded));

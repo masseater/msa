@@ -36,7 +36,7 @@ function readAccounts(): Promise<Account[]> {
 
 function withExpandedConfigDir(account: Account): Account {
   if (account.configDir === undefined || account.configDir === "") return account;
-  return Object.assign({}, account, { configDir: expandTildePath(account.configDir) });
+  return { ...account, configDir: expandTildePath(account.configDir) };
 }
 
 function loadAccounts(): Promise<Account[]> {

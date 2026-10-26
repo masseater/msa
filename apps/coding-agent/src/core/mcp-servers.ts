@@ -33,10 +33,10 @@ function getMcpToolExposure(
   config: mcpServersTypes.McpServerConfig,
   toolName: string,
 ): mcpServersTypes.McpExposure {
-  const overrides = config.toolExposure ?? {};
-  const exact = overrides[toolName];
+  const overrides = new Map(Object.entries(config.toolExposure ?? {}));
+  const exact = overrides.get(toolName);
   if (exact !== undefined) return exact;
-  for (const [pattern, exposure] of Object.entries(overrides)) {
+  for (const [pattern, exposure] of overrides) {
     if (pattern.includes("*") && toolPatternRegExp(pattern).test(toolName)) return exposure;
   }
   return config.exposure ?? "codemode";

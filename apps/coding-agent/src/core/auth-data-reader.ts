@@ -12,7 +12,7 @@ const { awaited, awaitingWith } = awaitingModule;
 const { stripBom } = text;
 const { raceWithAbortSignal } = abortModule;
 
-type AuthStorageData = Record<string, aiTypes.Credential>;
+type AuthStorageData = ReadonlyMap<string, aiTypes.Credential>;
 type AuthFileReload = {
   controller: AbortController;
   promise: Promise<AuthStorageData>;
@@ -37,7 +37,7 @@ export default class AuthDataReader {
     this.readState =
       this.authPath !== undefined && sharedAuthFileReadState?.authPath === this.authPath
         ? sharedAuthFileReadState.readState
-        : { data: {} };
+        : { data: new Map() };
     if (this.authPath !== undefined && sharedAuthFileReadState === undefined) {
       sharedAuthFileReadState = { authPath: this.authPath, readState: this.readState };
     }
@@ -61,8 +61,10 @@ export default class AuthDataReader {
   }
 
   parse(content: string | undefined): AuthStorageData {
-    if (content === undefined || content === "") return {};
-    return JSON.parse(stripBom(content)) as AuthStorageData;
+    if (content === undefined || content === "") return new Map();
+    return new Map(
+      Object.entries(JSON.parse(stripBom(content)) as Record<string, aiTypes.Credential>),
+    );
   }
 
   update(data: AuthStorageData, revision?: string): void {

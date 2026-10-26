@@ -14,8 +14,6 @@ const { normalizePath } = paths;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { resolveConfigValue } = resolveConfigValueModule;
 
-type AuthStorageData = Record<string, aiTypes.Credential>;
-
 export default class AuthStorage implements aiTypes.CredentialStore {
   private storage: authStorageTypes.AuthStorageBackend;
   private reader: AuthDataReader;
@@ -34,7 +32,7 @@ export default class AuthStorage implements aiTypes.CredentialStore {
     return new AuthStorage(storage);
   }
 
-  static inMemory(data: AuthStorageData = {}): AuthStorage {
+  static inMemory(data: Readonly<Record<string, aiTypes.Credential>> = {}): AuthStorage {
     return AuthStorage.fromStorage(new InMemoryAuthStorageBackend(prettyJson(data)));
   }
 
@@ -48,7 +46,7 @@ export default class AuthStorage implements aiTypes.CredentialStore {
   ): Promise<aiTypes.Credential | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const credential = (yield* performed(this.reader.latest(options)))[provider];
+        const credential = (yield* performed(this.reader.latest(options))).get(provider);
         options?.signal?.throwIfAborted();
         if (credential?.type !== "api_key") return credential;
         if (credential.key === undefined) return credential;
@@ -72,16 +70,16 @@ export default class AuthStorage implements aiTypes.CredentialStore {
               Effect.runPromise(
                 awaitingWith(function* () {
                   const currentData = this.reader.parse(content);
-                  const next = yield* awaited(fn(currentData[provider]));
+                  const next = yield* awaited(fn(currentData.get(provider)));
                   if (next === undefined) {
                     latestData = currentData;
                     revision = yield* awaited(this.reader.fileRevision());
-                    return { result: currentData[provider] };
+                    return { result: currentData.get(provider) };
                   }
 
-                  const merged: AuthStorageData = { ...currentData, [provider]: next };
+                  const merged = new Map(currentData).set(provider, next);
                   latestData = merged;
-                  return { next: prettyJson(merged), result: next };
+                  return { next: prettyJson(Object.fromEntries(merged)), result: next };
                 }, this),
               ),
             options,
@@ -102,10 +100,10 @@ export default class AuthStorage implements aiTypes.CredentialStore {
             (content) =>
               Effect.runPromise(
                 Effect.sync(() => {
-                  const currentData = this.reader.parse(content);
-                  delete currentData[provider];
-                  latestData = currentData;
-                  return { next: prettyJson(currentData), result: undefined };
+                  const remaining = new Map(this.reader.parse(content));
+                  remaining.delete(provider);
+                  latestData = remaining;
+                  return { next: prettyJson(Object.fromEntries(remaining)), result: undefined };
                 }),
               ),
             options,
@@ -119,7 +117,7 @@ export default class AuthStorage implements aiTypes.CredentialStore {
   list(options?: aiTypes.AuthOperationOptions): Promise<readonly aiTypes.CredentialInfo[]> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const entries = Object.entries(yield* performed(this.reader.latest(options)));
+        const entries = [...(yield* performed(this.reader.latest(options)))];
         options?.signal?.throwIfAborted();
         return entries.map(([providerId, credential]) => ({ providerId, type: credential.type }));
       }, this),

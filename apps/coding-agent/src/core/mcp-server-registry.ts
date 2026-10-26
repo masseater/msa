@@ -20,9 +20,10 @@ export default class McpServerRegistry {
   }
 
   list(): mcpServersTypes.RegisteredMcpServer[] {
-    return [...this.servers.values()].map((server) =>
-      Object.assign({}, server, { config: structuredClone(server.config) }),
-    );
+    return Array.from(this.servers.values(), (server) => ({
+      ...server,
+      config: structuredClone(server.config),
+    }));
   }
 
   setChangeListener(listener: (() => void) | undefined): void {

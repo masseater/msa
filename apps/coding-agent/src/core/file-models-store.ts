@@ -17,7 +17,7 @@ const { stripBom } = text;
 const { awaited, awaitingWith, performed } = awaitingModule;
 const { raceWithAbortSignal } = abortModule;
 
-type StoredModels = Record<string, aiTypes.ModelsStoreEntry>;
+type StoredModels = Map<string, aiTypes.ModelsStoreEntry>;
 type ModelsFileReload = {
   controller: AbortController;
   promise: Promise<StoredModels>;
@@ -40,7 +40,7 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
     this.readState =
       sharedModelsFileReadState?.path === this.path
         ? sharedModelsFileReadState.readState
-        : { data: {} };
+        : { data: new Map() };
     if (sharedModelsFileReadState === undefined) {
       sharedModelsFileReadState = { path: this.path, readState: this.readState };
     }
@@ -48,8 +48,10 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
 
   private parse(content: string | undefined): StoredModels {
     return content !== undefined && content !== ""
-      ? (JSON.parse(stripBom(content)) as StoredModels)
-      : {};
+      ? new Map(
+          Object.entries(JSON.parse(stripBom(content)) as Record<string, aiTypes.ModelsStoreEntry>),
+        )
+      : new Map();
   }
 
   private updateReadState(
@@ -124,7 +126,7 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
   ): Promise<aiTypes.ModelsStoreEntry | undefined> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const entry = (yield* performed(this.readLatest(this.readState, options)))[providerId];
+        const entry = (yield* performed(this.readLatest(this.readState, options))).get(providerId);
         options?.signal?.throwIfAborted();
         return entry === undefined ? undefined : structuredClone(entry);
       }, this),
@@ -145,9 +147,9 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
               Effect.runPromise(
                 Effect.sync(() => {
                   const current = this.parse(content);
-                  current[providerId] = structuredClone(entry);
+                  current.set(providerId, structuredClone(entry));
                   latest = current;
-                  return { next: prettyJson(current), result: undefined };
+                  return { next: prettyJson(Object.fromEntries(current)), result: undefined };
                 }),
               ),
             options,
@@ -168,9 +170,9 @@ export default class FileModelsStore implements aiTypes.ModelsStore {
               Effect.runPromise(
                 Effect.sync(() => {
                   const current = this.parse(content);
-                  delete current[providerId];
+                  current.delete(providerId);
                   latest = current;
-                  return { next: prettyJson(current), result: undefined };
+                  return { next: prettyJson(Object.fromEntries(current)), result: undefined };
                 }),
               ),
             options,
