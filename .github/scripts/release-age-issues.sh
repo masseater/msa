@@ -16,7 +16,11 @@ gh label create "$label" --color FBCA04 --description "minimumReleaseAgeExclude 
 
 open_issues="$(gh issue list --label "$label" --state open --limit 500 --json number,title)"
 
-while IFS=$'\t' read -r spec entry published; do
+reported_specs="$(cut -f1 "$expired" | sort -u)"
+
+for spec in $reported_specs; do
+  entry="$(awk -F '\t' -v s="$spec" '$1 == s { print $2 }' "$expired" | tr ',' '\n' | sed 's/^ *//' | sort -u | paste -sd ',' - | sed 's/,/, /g')"
+  published="$(awk -F '\t' -v s="$spec" '$1 == s { print $3; exit }' "$expired")"
   {
     echo "| | |"
     echo "| --- | --- |"
@@ -38,12 +42,12 @@ while IFS=$'\t' read -r spec entry published; do
   else
     gh issue create --label "$label" --title "$prefix$spec を minimumReleaseAgeExclude から外す" --body-file "$body" </dev/null
   fi
-done <"$expired"
+done
 
 jq -r '.[] | "\(.number)\t\(.title)"' <<<"$open_issues" | while IFS=$'\t' read -r number title; do
   [[ "$title" == "$prefix"* ]] || continue
   spec="$(awk '{ print $2 }' <<<"$title")"
-  if [ -n "$spec" ] && ! cut -f1 "$expired" | grep -qxF "$spec"; then
+  if [ -n "$spec" ] && ! grep -qxF "$spec" <<<"$reported_specs"; then
     gh issue close "$number" --reason completed --comment "minimumReleaseAgeExclude に $spec が無くなった: $run_url" </dev/null >/dev/null
     echo "closed #$number for $spec"
   fi
