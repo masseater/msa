@@ -18,10 +18,11 @@ class DecideSmokeError extends Data.TaggedError("DecideSmokeError")<{
 
 const ProbeResult = Schema.fromJsonString(Schema.Struct({ verdict: Schema.String }));
 
-const decideSmoke = (binary: string) =>
+const decideSmoke = (binaryArgument: string) =>
   Effect.gen(function* () {
     const fs = yield* FileSystem.FileSystem;
     const path = yield* Path.Path;
+    const binary = path.resolve(binaryArgument);
     const workDir = yield* fs.makeTempDirectoryScoped({ prefix: "msa-decide-smoke-" });
     const agentDir = path.join(workDir, "agent");
     yield* fs.makeDirectory(agentDir, { recursive: true });
