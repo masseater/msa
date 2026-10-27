@@ -73,24 +73,6 @@ jobs:
         env:
           MSA_LOCAL_LLM_TESTS: "1"
 
-  autofix:
-    needs: verify
-    if: >-
-      failure() && github.actor != 'github-actions[bot]' &&
-      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
-    runs-on: ubuntu-latest
-    permissions:
-      actions: write
-    steps:
-      - env:
-          GH_TOKEN: ${{ github.token }}
-          HEAD_BRANCH: ${{ github.head_ref || github.ref_name }}
-          HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
-          FAILED_RUN_ID: ${{ github.run_id }}
-        run: >-
-          gh workflow run autofix.yml --repo "$GITHUB_REPOSITORY" --ref "$HEAD_BRANCH"
-          -f run_id="$FAILED_RUN_ID" -f branch="$HEAD_BRANCH" -f sha="$HEAD_SHA"
-
   deploy:
     needs: verify
     if: github.event_name == 'push'
@@ -128,7 +110,7 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
 
   ci-telemetry:
-    needs: [verify, binary, autofix, deploy]
+    needs: [verify, binary, deploy]
     if: always()
     runs-on: ubuntu-latest
     permissions:
