@@ -181,6 +181,7 @@ const scanFile = Effect.fnUntraced(function* (
   const { base, bytes, from } = yield* readWindow(fileSystem, file, known);
   const scan = scanLines(bytes.subarray(from - base), from);
   const update: sessionSearchTypes.FileUpdate = {
+    failure: undefined,
     from,
     header: scan.header,
     indexed: scan.end,
@@ -192,6 +193,22 @@ const scanFile = Effect.fnUntraced(function* (
     tail: bytes.slice(Math.max(0, scan.end - TAIL_BYTES - base), scan.end - base),
   };
   return update;
+});
+
+const reasonOf = (defect: unknown): string =>
+  defect instanceof Error ? `${defect.name}: ${defect.message}` : String(defect);
+
+const skippedUpdate = (file: FoundFile, defect: unknown): sessionSearchTypes.FileUpdate => ({
+  failure: reasonOf(defect),
+  from: 0,
+  header: undefined,
+  indexed: 0,
+  mtime: file.mtime,
+  orchestrator: false,
+  parts: [],
+  path: file.path,
+  size: file.size,
+  tail: new Uint8Array(0),
 });
 
 const BATCH_BYTES = 32 << 20;
@@ -214,13 +231,16 @@ const updateIndexEffect = Effect.fnUntraced(function* (
     return row === undefined || row.size !== file.size || row.mtime !== file.mtime;
   });
   let parts = 0;
+  const skipped: sessionSearchTypes.SkippedFile[] = [];
   let batch: sessionSearchTypes.FileUpdate[] = [];
   let batchBytes = 0;
   for (const file of changed) {
     const update = yield* scanFile(fileSystem, file, known.get(file.path)).pipe(
       Effect.orElseSucceed(() => undefined),
+      Effect.catchDefect((defect) => Effect.succeed(skippedUpdate(file, defect))),
     );
     if (update === undefined) continue;
+    if (update.failure !== undefined) skipped.push({ path: file.path, reason: update.failure });
     batch.push(update);
     batchBytes += bodyBytes(update);
     parts += update.parts.length;
@@ -235,6 +255,7 @@ const updateIndexEffect = Effect.fnUntraced(function* (
     files: found.size,
     parts,
     removedFiles: removed.length,
+    skipped,
   };
   return update;
 });

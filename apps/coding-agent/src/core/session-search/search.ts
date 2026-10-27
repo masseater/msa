@@ -29,7 +29,6 @@ interface HitRow {
 }
 
 interface FileInfoRow {
-  id: number;
   path: string;
   orchestrator: number;
 }
@@ -68,9 +67,9 @@ function allowedFiles(
   database: DatabaseSync,
   links: ReadonlyMap<string, ThreadLink>,
   filters: Filters,
-): number[] {
+): string[] {
   const rows = database
-    .prepare("SELECT id, path, orchestrator FROM files")
+    .prepare("SELECT path, orchestrator FROM files")
     .all() as unknown as FileInfoRow[];
   return rows
     .filter((row) => {
@@ -80,7 +79,7 @@ function allowedFiles(
         (filters.roles === undefined || filters.roles.includes(role)) && linkMatches(link, filters)
       );
     })
-    .map((row) => row.id);
+    .map((row) => row.path);
 }
 
 interface Clause {
@@ -95,12 +94,12 @@ function listClause(column: string, values: readonly (string | number)[] | undef
   ];
 }
 
-function clauses(filters: Filters, files: number[] | undefined): Clause[] {
+function clauses(filters: Filters, files: string[] | undefined): Clause[] {
   return [
     { sql: "(p.tool IS NULL OR p.tool != ?)", values: [OWN_TOOL] },
     ...listClause("p.kind", filters.kinds),
     ...listClause("p.tool", filters.tools),
-    ...listClause("p.file_id", files),
+    ...listClause("f.path", files),
     ...(filters.cwd === undefined
       ? []
       : [{ sql: "substr(f.cwd, 1, length(?)) = ?", values: [filters.cwd, filters.cwd] }]),

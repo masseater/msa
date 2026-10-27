@@ -126,17 +126,22 @@ const rebuildsAnIndexWrittenByAnother = () =>
     Effect.gen(function* () {
       const locations = yield* makeLocations(directories);
       const old = new DatabaseSync(locations.indexPath);
-      old.exec("CREATE TABLE files (path TEXT); PRAGMA user_version = 99;");
+      old.exec(
+        "CREATE TABLE files (path TEXT); CREATE TABLE parts (id INTEGER); CREATE VIRTUAL TABLE parts_fts USING fts5(body); PRAGMA user_version = 1;",
+      );
       old.close();
-      const database = indexStore.openIndex(locations.indexPath);
-      const columns = database.prepare("PRAGMA table_info(files)").all() as { name: string }[];
-      database.close();
-      expect(columns.map((column) => column.name)).toContain("indexed");
+      const opened = indexStore.openIndex(locations.indexPath);
+      expect(indexStore.indexState(opened)).toBe("stale");
+      opened.close();
       yield* writeSession(joinPath(locations.roots[0] ?? "", "--w--", "s.jsonl"), [
         header("s", "/w", DAY),
         user("u", DAY, "delta"),
       ]);
       expect(yield* find(locations, "delta")).toEqual(["u"]);
+      const database = new DatabaseSync(locations.indexPath);
+      const columns = database.prepare("PRAGMA table_info(files)").all() as { name: string }[];
+      database.close();
+      expect(columns.map((column) => column.name)).toContain("indexed");
     }),
   );
 

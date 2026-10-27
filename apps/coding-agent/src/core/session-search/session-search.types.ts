@@ -52,6 +52,14 @@ declare namespace sessionSearchTypes {
     readonly changedFiles: number;
     readonly removedFiles: number;
     readonly parts: number;
+    readonly skipped: readonly SkippedFile[];
+  }
+
+  type IndexState = "intact" | "stale" | "newer";
+
+  interface SkippedFile {
+    readonly path: string;
+    readonly reason: string;
   }
 
   interface FileRow {
@@ -90,6 +98,7 @@ declare namespace sessionSearchTypes {
     header: SessionHeader | undefined;
     orchestrator: boolean;
     parts: readonly PartRow[];
+    failure: string | undefined;
   }
 
   type Order = "relevance" | "newest" | "oldest";

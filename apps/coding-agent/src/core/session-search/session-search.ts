@@ -1,6 +1,6 @@
-import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import entryRead from "./entry-read.ts";
+import indexOpen from "./index-open.ts";
 import indexStore from "./index-store.ts";
 import indexer from "./indexer.ts";
 import reading from "./reading.ts";
@@ -9,6 +9,7 @@ import type sessionSearchTypes from "./session-search.types.ts";
 import threadLinksModule from "./thread-links.ts";
 
 const { readEntry } = entryRead;
+const { isLockWait, lockedError } = indexOpen;
 
 type Locations = sessionSearchTypes.Locations;
 
@@ -17,63 +18,55 @@ const READ_BUDGET = 50_000;
 const connections = new Map<string, DatabaseSync>();
 const updates = new Map<string, Promise<sessionSearchTypes.IndexUpdate>>();
 
-const causeOf = (error: unknown): string =>
-  error instanceof Error ? error.message : String(error);
+const { causeOf } = indexOpen;
 
-function openOrReplace(indexPath: string): DatabaseSync {
-  try {
-    return indexStore.openIndex(indexPath);
-  } catch (failure) {
-    try {
-      sqliteFile.removeSqliteFile(indexPath);
-      return indexStore.openIndex(indexPath);
-    } catch (error) {
-      throw new Error(
-        `The session index ${indexPath} could not be opened (${causeOf(failure)}) or replaced (${causeOf(error)})`,
-        { cause: error },
-      );
+function openConnection(
+  indexPath: string,
+): Promise<{ database: DatabaseSync; state: sessionSearchTypes.IndexState }> {
+  const existing = connections.get(indexPath);
+  if (existing !== undefined) return Promise.resolve({ database: existing, state: "intact" });
+  return indexOpen.openIndexWaiting(indexPath).then((database) => {
+    const state = indexStore.indexState(database);
+    if (state === "newer") {
+      database.close();
+      throw new Error(`The session index ${indexPath} was written by a newer msa`);
     }
-  }
+    connections.set(indexPath, database);
+    return { database, state };
+  });
 }
 
 function connection(indexPath: string): DatabaseSync {
   const existing = connections.get(indexPath);
-  if (existing !== undefined) return existing;
-  const opened = openOrReplace(indexPath);
-  connections.set(indexPath, opened);
-  return opened;
+  if (existing === undefined) throw new Error(`The session index ${indexPath} is not open`);
+  return existing;
 }
-
-const SQLITE_BUSY = 5;
-const SQLITE_LOCKED = 6;
-
-const isLockWait = (error: unknown): boolean => {
-  if (typeof error !== "object" || error === null || !("errcode" in error)) return false;
-  const code = typeof error.errcode === "number" ? error.errcode & 0xff : -1;
-  return code === SQLITE_BUSY || code === SQLITE_LOCKED;
-};
 
 function rebuild(
   database: DatabaseSync,
   locations: Locations,
   failure: unknown,
 ): Promise<sessionSearchTypes.IndexUpdate> {
-  if (isLockWait(failure)) {
-    return Promise.reject(
-      new Error(
-        `The session index ${locations.indexPath} stayed locked by another process (${causeOf(failure)}); search again once it finishes`,
-        { cause: failure },
-      ),
-    );
-  }
-  return Promise.resolve()
-    .then(() => {
-      indexStore.resetIndex(database);
-      return indexer.updateIndex(database, locations.roots);
-    })
+  if (isLockWait(failure)) return Promise.reject(lockedError(locations.indexPath, failure));
+  return indexStore
+    .rebuildIndex(database, true, () => indexer.updateIndex(database, locations.roots))
     .catch((error: unknown) => {
       throw new Error(
         `The session index ${locations.indexPath} could not be updated (${causeOf(failure)}) or rebuilt (${causeOf(error)})`,
+        { cause: error },
+      );
+    });
+}
+
+function build(
+  database: DatabaseSync,
+  locations: Locations,
+): Promise<sessionSearchTypes.IndexUpdate> {
+  return indexStore
+    .rebuildIndex(database, false, () => indexer.updateIndex(database, locations.roots))
+    .catch((error: unknown) => {
+      throw new Error(
+        `The session index ${locations.indexPath} could not be built (${causeOf(error)})`,
         { cause: error },
       );
     });
@@ -83,8 +76,9 @@ function refresh(locations: Locations): Promise<sessionSearchTypes.IndexUpdate> 
   const previous = updates.get(locations.indexPath) ?? Promise.resolve(undefined);
   const next = previous
     .catch(() => undefined)
-    .then(() => {
-      const database = connection(locations.indexPath);
+    .then(() => openConnection(locations.indexPath))
+    .then(({ database, state }) => {
+      if (state === "stale") return build(database, locations);
       return indexer
         .updateIndex(database, locations.roots)
         .catch((failure: unknown) => rebuild(database, locations, failure));

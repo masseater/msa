@@ -17,6 +17,7 @@ afterEach(() => runTest(removeDirs(directories.splice(0))));
 
 const DAY = "2026-10-01T12:00:00.000Z";
 const MAX_SAFE = BigInt(Number.MAX_SAFE_INTEGER);
+const BULK_FILES = 300;
 const searchModule = new URL("../src/core/session-search/session-search.ts", import.meta.url).href;
 const sourceResolver = new URL("../src/experimental/source-resolver.ts", import.meta.url).href;
 
@@ -89,10 +90,11 @@ const dropsARemovedFile = () =>
 const SEARCH_IN_A_PROCESS = `
 const { default: sessionSearch } = await import(process.env.SEARCH_MODULE);
 const locations = JSON.parse(process.env.SEARCH_LOCATIONS);
+const { changedFiles } = await sessionSearch.refresh(locations);
 const hits = await sessionSearch.searchSessions(locations, {
   filters: {}, limit: 100, order: "oldest", query: "target",
 });
-console.log(hits.map((hit) => hit.entryId).join(","));
+console.log(JSON.stringify({ changedFiles, ids: hits.map((hit) => hit.entryId).join(",") }));
 `;
 
 const searchInAProcess = (locationsText: string) =>
@@ -113,16 +115,29 @@ const updatesFromProcessesAtOnce = () =>
           ...entries(name, 8, "other"),
         ]);
       }
+      for (let file = 0; file < BULK_FILES; file += 1) {
+        yield* writeSession(joinPath(root, "--bulk--", `${file}.jsonl`), [
+          header(`bulk${file}`, "/w", DAY),
+          ...entries(`bulk${file}-`, 40, "bulk ".repeat(200)),
+        ]);
+      }
       yield* seedTwoSessions(locations);
       const locationsText = yield* toJsonText(locations);
       const results = yield* Effect.all(
         Array.from({ length: 4 }, () => searchInAProcess(locationsText)),
         { concurrency: "unbounded" },
       );
-      for (const result of results) {
+      const outputs = results.map((result) => {
         expect(result.code, result.stderr).toBe(0);
-        expect(result.stdout.trim()).toBe(ids("t", 8).join(","));
-      }
+        return JSON.parse(result.stdout) as { changedFiles: number; ids: string };
+      });
+      for (const output of outputs) expect(output.ids).toBe(ids("t", 8).join(","));
+      expect(outputs.map((output) => output.changedFiles).toSorted()).toEqual([
+        0,
+        0,
+        0,
+        6 + BULK_FILES,
+      ]);
       expect(yield* find(locations, "target")).toEqual(ids("t", 8));
       expect((yield* find(locations, "other")).length).toBe(32);
     }),

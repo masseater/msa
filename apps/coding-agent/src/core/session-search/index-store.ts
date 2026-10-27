@@ -2,7 +2,8 @@ import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
+const TABLES = ["files", "parts", "parts_fts"];
 
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
@@ -15,7 +16,8 @@ CREATE TABLE IF NOT EXISTS files (
   session_id TEXT,
   cwd TEXT,
   started_at INTEGER,
-  orchestrator INTEGER NOT NULL DEFAULT 0
+  orchestrator INTEGER NOT NULL DEFAULT 0,
+  error TEXT
 );
 CREATE TABLE IF NOT EXISTS parts (
   id INTEGER PRIMARY KEY,
@@ -36,6 +38,7 @@ type FileRow = sessionSearchTypes.FileRow;
 type FileUpdate = sessionSearchTypes.FileUpdate;
 type PartRow = sessionSearchTypes.PartRow;
 type RowId = number | bigint;
+type IndexState = sessionSearchTypes.IndexState;
 
 function write(database: DatabaseSync, sql: string) {
   const statement = database.prepare(sql);
@@ -49,17 +52,28 @@ function resetSchema(database: DatabaseSync): void {
   database.exec("DROP TABLE IF EXISTS files");
 }
 
-function openIndex(path: string): DatabaseSync {
-  const database = sqliteFile.openSqliteFile(path, { timeout: 30_000 });
-  database.exec("PRAGMA journal_mode = WAL");
-  database.exec("PRAGMA synchronous = NORMAL");
+function indexState(database: DatabaseSync): IndexState {
   const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
     user_version: number;
   };
-  if (version !== SCHEMA_VERSION) resetSchema(database);
-  database.exec(SCHEMA);
-  database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-  return database;
+  if (version > SCHEMA_VERSION) return "newer";
+  if (version !== SCHEMA_VERSION) return "stale";
+  const present = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
+    name: string;
+  }[];
+  return TABLES.every((table) => present.some((row) => row.name === table)) ? "intact" : "stale";
+}
+
+function openIndex(path: string): DatabaseSync {
+  const database = sqliteFile.openSqliteFile(path, { timeout: 30_000 });
+  try {
+    database.exec("PRAGMA journal_mode = WAL");
+    database.exec("PRAGMA synchronous = NORMAL");
+    return database;
+  } catch (error) {
+    database.close();
+    throw error;
+  }
 }
 
 function fileRows(database: DatabaseSync): FileRow[] {
@@ -69,6 +83,7 @@ function fileRows(database: DatabaseSync): FileRow[] {
 }
 
 function transaction<T>(database: DatabaseSync, body: () => T): T {
+  if (database.isTransaction) return body();
   database.exec("BEGIN IMMEDIATE");
   try {
     const result = body();
@@ -78,6 +93,35 @@ function transaction<T>(database: DatabaseSync, body: () => T): T {
     database.exec("ROLLBACK");
     throw error;
   }
+}
+
+function rebuildIndex<T>(
+  database: DatabaseSync,
+  force: boolean,
+  body: () => Promise<T>,
+): Promise<T> {
+  return Promise.resolve()
+    .then(() => {
+      database.exec("BEGIN IMMEDIATE");
+      const state = indexState(database);
+      if (state === "newer") throw new Error("the index was written by a newer msa");
+      if (force || state === "stale") {
+        resetSchema(database);
+        database.exec(SCHEMA);
+        database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+      }
+      return body();
+    })
+    .then(
+      (result) => {
+        database.exec("COMMIT");
+        return result;
+      },
+      (error: unknown) => {
+        if (database.isTransaction) database.exec("ROLLBACK");
+        throw error;
+      },
+    );
 }
 
 function deleteParts(database: DatabaseSync, fileId: RowId): void {
@@ -98,13 +142,6 @@ function removeFiles(database: DatabaseSync, paths: readonly string[]): void {
       deleteParts(database, row.id);
       write(database, "DELETE FROM files WHERE id = ?").run(row.id);
     }
-  });
-}
-
-function resetIndex(database: DatabaseSync): void {
-  transaction(database, () => {
-    resetSchema(database);
-    database.exec(SCHEMA);
   });
 }
 
@@ -186,6 +223,7 @@ function applyFileUpdate(database: DatabaseSync, update: FileUpdate): void {
   if (update.orchestrator) {
     write(database, "UPDATE files SET orchestrator = 1 WHERE id = ?").run(fileId);
   }
+  write(database, "UPDATE files SET error = ? WHERE id = ?").run(update.failure ?? null, fileId);
 }
 
 function applyUpdates(database: DatabaseSync, updates: readonly FileUpdate[]): void {
@@ -195,6 +233,6 @@ function applyUpdates(database: DatabaseSync, updates: readonly FileUpdate[]): v
   });
 }
 
-const indexStore = { applyUpdates, fileRows, openIndex, removeFiles, resetIndex };
+const indexStore = { applyUpdates, fileRows, indexState, openIndex, rebuildIndex, removeFiles };
 
 export default indexStore;
