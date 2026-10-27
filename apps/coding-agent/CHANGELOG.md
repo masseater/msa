@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- `msa --help` and `msa --list-models` no longer start the orchestrator, so they no longer open `orchestrator.db` or migrate it.
+
 ## [0.0.6] - 2026-10-27
 
 ### Added

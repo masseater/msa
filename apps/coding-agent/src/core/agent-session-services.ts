@@ -41,6 +41,7 @@ function createAgentSessionFromServices(
           customTools: options.customTools,
           cwd: options.services.cwd,
           excludeTools: options.excludeTools,
+          inspectOnly: options.inspectOnly,
           model: options.model,
           modelRuntime: options.services.modelRuntime,
           noTools: options.noTools,

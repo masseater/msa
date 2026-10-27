@@ -37,6 +37,7 @@ declare namespace sdkOptionsTypes {
     settingsManager?: settingsManagerTypes.SettingsManager;
     sessionStartEvent?: extensionsTypes.SessionStartEvent | undefined;
     isWorker?: boolean | undefined;
+    inspectOnly?: boolean | undefined;
     telemetry?: sessionTelemetryTypes.SessionTelemetryOptions | undefined;
   }
 

@@ -52,6 +52,7 @@ function* createSessionFromServices(
     createAgentSessionFromServices({
       customTools: sessionOptions.customTools,
       excludeTools: sessionOptions.excludeTools,
+      inspectOnly: parsed.help === true || parsed.listModels !== undefined,
       model: sessionOptions.model,
       noTools: sessionOptions.noTools,
       scopedModels: sessionOptions.scopedModels,

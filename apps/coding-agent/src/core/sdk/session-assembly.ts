@@ -27,7 +27,9 @@ function assembleSession(parts: SessionParts): AgentSession {
     allowedToolNames: tools.allowedToolNames,
     cacheWarmer: created.cacheWarmer,
     createWorkerSession:
-      options.isWorker !== true && resourceLoader instanceof DefaultResourceLoader
+      options.isWorker !== true &&
+      options.inspectOnly !== true &&
+      resourceLoader instanceof DefaultResourceLoader
         ? workerSessionFactory({
             agentDir,
             createAgentSession: parts.createAgentSession,
