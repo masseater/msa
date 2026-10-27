@@ -208,7 +208,7 @@ const updateIndexEffect = Effect.fnUntraced(function* (
   const found = new Map(listed.flat().map((file) => [file.path, file]));
   const known = new Map(indexStore.fileRows(database).map((row) => [row.path, row]));
   const removed = [...known.keys()].filter((path) => !found.has(path));
-  for (const path of removed) indexStore.removeFile(database, path);
+  indexStore.removeFiles(database, removed);
   const changed = [...found.values()].filter((file) => {
     const row = known.get(file.path);
     return row === undefined || row.size !== file.size || row.mtime !== file.mtime;

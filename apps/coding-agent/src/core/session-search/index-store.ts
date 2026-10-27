@@ -35,6 +35,13 @@ CREATE VIRTUAL TABLE IF NOT EXISTS parts_fts USING fts5(body, content='', conten
 type FileRow = sessionSearchTypes.FileRow;
 type FileUpdate = sessionSearchTypes.FileUpdate;
 type PartRow = sessionSearchTypes.PartRow;
+type RowId = number | bigint;
+
+function write(database: DatabaseSync, sql: string) {
+  const statement = database.prepare(sql);
+  statement.setReadBigInts(true);
+  return statement;
+}
 
 function resetSchema(database: DatabaseSync): void {
   database.exec("DROP TABLE IF EXISTS parts_fts");
@@ -73,53 +80,70 @@ function transaction<T>(database: DatabaseSync, body: () => T): T {
   }
 }
 
-function deleteParts(database: DatabaseSync, fileId: number): void {
-  database
-    .prepare("DELETE FROM parts_fts WHERE rowid IN (SELECT id FROM parts WHERE file_id = ?)")
-    .run(fileId);
-  database.prepare("DELETE FROM parts WHERE file_id = ?").run(fileId);
+function deleteParts(database: DatabaseSync, fileId: RowId): void {
+  write(
+    database,
+    "DELETE FROM parts_fts WHERE rowid IN (SELECT id FROM parts WHERE file_id = ?)",
+  ).run(fileId);
+  write(database, "DELETE FROM parts WHERE file_id = ?").run(fileId);
 }
 
-function removeFile(database: DatabaseSync, path: string): void {
+function removeFiles(database: DatabaseSync, paths: readonly string[]): void {
+  if (paths.length === 0) return;
   transaction(database, () => {
-    const row = database.prepare("SELECT id FROM files WHERE path = ?").get(path) as
-      | { id: number }
-      | undefined;
-    if (row === undefined) return;
-    deleteParts(database, row.id);
-    database.prepare("DELETE FROM files WHERE id = ?").run(row.id);
+    const find = database.prepare("SELECT id FROM files WHERE path = ?");
+    for (const path of paths) {
+      const row = find.get(path) as { id: number } | undefined;
+      if (row === undefined) continue;
+      deleteParts(database, row.id);
+      write(database, "DELETE FROM files WHERE id = ?").run(row.id);
+    }
   });
 }
 
-function upsertFile(database: DatabaseSync, update: FileUpdate, current: FileRow | undefined) {
+function resetIndex(database: DatabaseSync): void {
+  transaction(database, () => {
+    resetSchema(database);
+    database.exec(SCHEMA);
+  });
+}
+
+function upsertFile(
+  database: DatabaseSync,
+  update: FileUpdate,
+  current: FileRow | undefined,
+): RowId {
   if (current === undefined) {
-    const inserted = database
-      .prepare(
-        "INSERT INTO files (path, size, mtime, indexed, tail) VALUES (?, ?, ?, ?, ?) RETURNING id",
-      )
-      .get(update.path, update.size, update.mtime, update.indexed, update.tail) as { id: number };
+    const inserted = write(
+      database,
+      "INSERT INTO files (path, size, mtime, indexed, tail) VALUES (?, ?, ?, ?, ?) RETURNING id",
+    ).get(update.path, update.size, update.mtime, update.indexed, update.tail) as { id: bigint };
     return inserted.id;
   }
   if (update.from === 0) deleteParts(database, current.id);
-  database
-    .prepare("UPDATE files SET size = ?, mtime = ?, indexed = ?, tail = ? WHERE id = ?")
-    .run(update.size, update.mtime, update.indexed, update.tail, current.id);
+  write(database, "UPDATE files SET size = ?, mtime = ?, indexed = ?, tail = ? WHERE id = ?").run(
+    update.size,
+    update.mtime,
+    update.indexed,
+    update.tail,
+    current.id,
+  );
   if (update.from === 0) {
-    database
-      .prepare(
-        "UPDATE files SET session_id = NULL, cwd = NULL, started_at = NULL, orchestrator = 0 WHERE id = ?",
-      )
-      .run(current.id);
+    write(
+      database,
+      "UPDATE files SET session_id = NULL, cwd = NULL, started_at = NULL, orchestrator = 0 WHERE id = ?",
+    ).run(current.id);
   }
   return current.id;
 }
 
-function insertParts(database: DatabaseSync, fileId: number, parts: readonly PartRow[]): void {
-  const insertPart = database.prepare(
+function insertParts(database: DatabaseSync, fileId: RowId, parts: readonly PartRow[]): void {
+  const insertPart = write(
+    database,
     `INSERT INTO parts (file_id, offset, length, part, kind, tool, entry_id, at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
   );
-  const insertBody = database.prepare("INSERT INTO parts_fts (rowid, body) VALUES (?, ?)");
+  const insertBody = write(database, "INSERT INTO parts_fts (rowid, body) VALUES (?, ?)");
   for (const part of parts) {
     const { id } = insertPart.get(
       fileId,
@@ -130,7 +154,7 @@ function insertParts(database: DatabaseSync, fileId: number, parts: readonly Par
       part.tool,
       part.entryId,
       part.at,
-    ) as { id: number };
+    ) as { id: bigint };
     insertBody.run(id, part.body);
   }
 }
@@ -139,17 +163,28 @@ function applyFileUpdate(database: DatabaseSync, update: FileUpdate): void {
   const current = database
     .prepare("SELECT id, path, size, mtime, indexed, tail FROM files WHERE path = ?")
     .get(update.path) as FileRow | undefined;
+  if (
+    current !== undefined &&
+    current.size === update.size &&
+    current.mtime === update.mtime &&
+    current.indexed === update.indexed
+  ) {
+    return;
+  }
   const expected = current === undefined ? 0 : current.indexed;
   if (update.from !== 0 && update.from !== expected) return;
   const fileId = upsertFile(database, update, current);
   insertParts(database, fileId, update.parts);
   if (update.header !== undefined) {
-    database
-      .prepare("UPDATE files SET session_id = ?, cwd = ?, started_at = ? WHERE id = ?")
-      .run(update.header.sessionId, update.header.cwd, update.header.startedAt, fileId);
+    write(database, "UPDATE files SET session_id = ?, cwd = ?, started_at = ? WHERE id = ?").run(
+      update.header.sessionId,
+      update.header.cwd,
+      update.header.startedAt,
+      fileId,
+    );
   }
   if (update.orchestrator) {
-    database.prepare("UPDATE files SET orchestrator = 1 WHERE id = ?").run(fileId);
+    write(database, "UPDATE files SET orchestrator = 1 WHERE id = ?").run(fileId);
   }
 }
 
@@ -160,6 +195,6 @@ function applyUpdates(database: DatabaseSync, updates: readonly FileUpdate[]): v
   });
 }
 
-const indexStore = { applyUpdates, fileRows, openIndex, removeFile };
+const indexStore = { applyUpdates, fileRows, openIndex, removeFiles, resetIndex };
 
 export default indexStore;
