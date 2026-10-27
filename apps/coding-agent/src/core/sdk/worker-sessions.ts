@@ -40,7 +40,7 @@ const workerSessionManager = (parent: WorkerParent, worker: Worker): Promise<Ses
         ),
       );
 
-const READ_ONLY_TOOL_NAMES = ["read", "grep", "find", "ls"];
+const READ_ONLY_TOOL_NAMES = ["read", "grep", "find", "ls", "search_sessions"];
 
 const readOnlyWorkerOptions = (options: {
   parent: WorkerParent;

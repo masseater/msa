@@ -184,7 +184,7 @@ function decisionTools(
   return {
     consult_advisor: tool({
       description:
-        "Start an advisor thread for a task that waits for a decision. The advisor reads the task, its decision request, its reports, and the code, weighs the options, and recommends one; its report comes back to you, and the task keeps waiting for your send_message.",
+        "Start an advisor thread for a task that waits for a decision. The advisor reads the task, its decision request, its reports, and the code, looks up the user's earlier instructions and decisions with search_sessions, weighs the options, and recommends one; its report comes back to you, and the task keeps waiting for your send_message.",
       label: "consult advisor",
       name: "consult_advisor",
       parameters: adviseSchema,

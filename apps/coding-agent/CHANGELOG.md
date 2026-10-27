@@ -8,6 +8,7 @@
 
 ### Fixed
 
+- Triage and advisor threads get `search_sessions` beside `read`, `grep`, `find`, and `ls`, and the triage, advisor, reviewer, and round review prompts tell them to look up the user's earlier instructions and decisions with it, narrowed to the task, round, or role ([docs](docs/session-search.md))
 - `msa --help` and `msa --list-models` no longer start the orchestrator, so they no longer open `orchestrator.db` or migrate it.
 
 ## [0.0.6] - 2026-10-27
