@@ -58,6 +58,7 @@ const declaresThePromptAndToolsOnceAnd = () =>
           "write",
           "memory",
           "pr_watch",
+          "search_sessions",
           "model_policy",
           "model_upgrade",
         ]);

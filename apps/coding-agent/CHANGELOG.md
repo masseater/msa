@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Added
+
+- `search_sessions` searches the conversations and work of past sessions and every orchestrator thread: user messages, assistant text, tool calls with their arguments, and whole tool results however long. All words of a query must appear in one message part; Japanese, Chinese, and Korean words match anywhere inside longer text, and quoted words stay together. Results can be narrowed by kind, tool, role (`orchestrator`, `worker`, `reviewer`, `triage`, `advisor`, or an ordinary `session`), task, thread, round, working directory, and time, and name the session, its role, task, round, and thread, the entry, and a passage around the match; `action: "read"` continues reading the session from that entry, page by page. It is a default tool, read-only, so it also stays in `/ask`, and `/search [words]` opens the same search in interactive mode. The session files stay the record: the index under `<agent dir>/session-index/v<format>/` only points into them, and each msa uses the directory of its own format, so going back to an earlier msa keeps searching; each search first indexes what was appended since the last one, rereads rewritten files, and drops deleted ones of the session directories it searches; a result from a session directory it does not search is checked first, so deleted or rewritten files do not show. Updates from several processes at once are applied only to the state they were read from, so a search finds what was appended before it. A rebuild, when the index cannot be opened, records another format, fails to update or read, or stays locked for 10 seconds, writes a new file and switches to it once complete, so searches in other processes keep answering from the file they have open, appends included, without waiting; waiting for a lock does not hold up the rest of msa. A session file that cannot be read into parts is skipped and listed with the reason under the results until it changes ([docs](docs/session-search.md))
+
 ### Fixed
 
 - `msa --help` and `msa --list-models` no longer start the orchestrator, so they no longer open `orchestrator.db` or migrate it.

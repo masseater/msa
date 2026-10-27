@@ -30,6 +30,7 @@ const keepsExtensionToolsActiveWhenBuilt = Effect.gen(function* () {
       "powershell",
       "pr_watch",
       "read",
+      "search_sessions",
       "write",
       ...ORCHESTRATOR_TOOL_NAMES,
     ].sort(),

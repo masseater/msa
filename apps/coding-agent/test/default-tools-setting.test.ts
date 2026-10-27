@@ -34,6 +34,7 @@ const usesTheConfiguredListAsTheInitial = Effect.gen(function* () {
       "powershell",
       "pr_watch",
       "read",
+      "search_sessions",
       "write",
       ...ORCHESTRATOR_TOOL_NAMES,
     ].sort(),
@@ -89,6 +90,7 @@ const activatesAnInactiveExtensionToolWithName = Effect.gen(function* () {
       "model_upgrade",
       "pr_watch",
       "read",
+      "search_sessions",
       ...ORCHESTRATOR_TOOL_NAMES,
     ].sort(),
   );

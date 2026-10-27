@@ -13,6 +13,7 @@ const DEFAULT_TOOL_NAMES: readonly string[] = [
   "write",
   "memory",
   "pr_watch",
+  "search_sessions",
   "model_policy",
   "model_upgrade",
   ...ORCHESTRATOR_TOOL_NAMES,

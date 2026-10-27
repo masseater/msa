@@ -68,6 +68,7 @@ const filtersBuiltInAndExtensionTools = Effect.gen(function* () {
       "model_policy",
       "model_upgrade",
       "pr_watch",
+      "search_sessions",
       "write",
     ]);
     expect(harness.session.tools.prompt.systemPrompt).not.toContain("- read:");

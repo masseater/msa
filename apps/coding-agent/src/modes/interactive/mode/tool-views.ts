@@ -1,7 +1,9 @@
+import sessionToolDefinitions from "../../../core/agent-session/session-tool-definitions.ts";
 import errorsModule from "../../../utils/errors.ts";
 import interval from "../../interval.ts";
 import MemoryView from "../components/memory-view.ts";
 import ModelSelectorComponent from "../components/model-selector.ts";
+import SessionSearchView from "../components/session-search-view.ts";
 import tasksViewHelpers from "../components/tasks-view-helpers.ts";
 import TasksView from "../components/tasks-view.ts";
 import type InteractiveMode from "../interactive-mode.ts";
@@ -45,6 +47,23 @@ export default class ToolViews {
         service: memory,
         setRecall: (enabled) =>
           this.mode.session.settingsManager.context.setMemoryRecallEnabled(enabled),
+      });
+      return { component: view, focus: view };
+    });
+  }
+
+  showSessionSearchView(initialQuery: string | undefined): void {
+    const service = sessionToolDefinitions.sessionSearchService(this.mode.session);
+    this.mode.editorSlot.showSelector((done) => {
+      const view = new SessionSearchView({
+        ...service,
+        initialQuery,
+        maxHeight: () => this.mode.ui.terminal.rows - 4,
+        onClose: () => {
+          done();
+          this.mode.ui.requestRender();
+        },
+        requestRender: () => this.mode.ui.requestRender(),
       });
       return { component: view, focus: view };
     });

@@ -61,6 +61,7 @@ const appliesNameAndNameToolOptionsTo = Effect.gen(function* () {
       "model_upgrade",
       "pr_watch",
       "read",
+      "search_sessions",
       ...ORCHESTRATOR_TOOL_NAMES,
     ].sort(),
   );

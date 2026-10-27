@@ -44,6 +44,10 @@
               "path": "pr-watch.md"
             },
             {
+              "title": "Search Past Sessions",
+              "path": "session-search.md"
+            },
+            {
               "title": "Read Telemetry",
               "path": "telemetry.md"
             },
