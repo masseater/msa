@@ -1,4 +1,4 @@
-import { Data, Effect } from "effect";
+import { Effect } from "effect";
 
 import ForeignError from "../platform/foreign-error.ts";
 
@@ -16,14 +16,9 @@ const primaryCode = (error: unknown): number => {
 const isLockWait = (error: unknown): boolean =>
   [SQLITE_BUSY, SQLITE_LOCKED].includes(primaryCode(error));
 
-class IndexLocked extends Data.TaggedError("IndexLocked")<{
-  readonly cause: unknown;
-  readonly message: string;
-}> {}
-
 const foreign = <A>(body: () => A): Effect.Effect<A, ForeignError> =>
   Effect.try({ catch: (cause) => new ForeignError({ cause, message: causeOf(cause) }), try: body });
 
-const indexOpen = { IndexLocked, causeOf, foreign, isLockWait };
+const indexOpen = { causeOf, foreign, isLockWait };
 
 export default indexOpen;

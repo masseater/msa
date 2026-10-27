@@ -3,10 +3,11 @@ import { Duration, Effect, Schedule } from "effect";
 import type ForeignError from "../platform/foreign-error.ts";
 import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import IndexLocked from "./index-locked.ts";
 import indexOpen from "./index-open.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
 
-const { IndexLocked, foreign, isLockWait } = indexOpen;
+const { foreign, isLockWait } = indexOpen;
 
 const LOCK_RETRY = Schedule.spaced(Duration.millis(20));
 const LOCK_RETRIES = 500;
@@ -14,7 +15,7 @@ const LOCK_RETRIES = 500;
 const whileLocked = <A>(
   indexPath: string,
   body: () => A,
-): Effect.Effect<A, ForeignError | InstanceType<typeof IndexLocked>> =>
+): Effect.Effect<A, ForeignError | IndexLocked> =>
   foreign(body).pipe(
     Effect.retry({
       schedule: LOCK_RETRY,

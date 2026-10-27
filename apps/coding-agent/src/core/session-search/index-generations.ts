@@ -4,12 +4,13 @@ import ForeignError from "../platform/foreign-error.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import platformRuntime from "../platform/runtime.ts";
 import indexFiles from "./index-files.ts";
+import IndexLocked from "./index-locked.ts";
 import indexOpen from "./index-open.ts";
 import indexStore from "./index-store.ts";
 import indexer from "./indexer.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
 
-const { IndexLocked, causeOf, foreign } = indexOpen;
+const { causeOf, foreign } = indexOpen;
 const { whileLocked } = indexStore;
 
 type Locations = sessionSearchTypes.Locations;
