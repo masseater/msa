@@ -42,6 +42,7 @@ declare namespace agentSessionServicesTypes {
     excludeTools?: sdkTypes.CreateAgentSessionOptions["excludeTools"] | undefined;
     noTools?: sdkTypes.CreateAgentSessionOptions["noTools"] | undefined;
     customTools?: extensionsTypes.ToolDefinition[] | undefined;
+    inspectOnly?: boolean | undefined;
     telemetry?: sessionTelemetryTypes.SessionTelemetryOptions | undefined;
   }
 
