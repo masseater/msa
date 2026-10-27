@@ -152,6 +152,18 @@ release. Add a tool name to select part of the graph. For example, run
   - reviewer から差し戻された指摘は、同じ枝に足して同じ PR で直す。
   - main の `verify` が赤いときは自分で直さず、直す担当のタスクが main に入るのを待ち、rebase してから進める。
 
+## リリース
+
+- 版は `apps/coding-agent/package.json` の `version` で決まる。ほかの package の `version` は上げない。release workflow は `v*` の tag の push で走り、tag が `apps/coding-agent/package.json` の `version` と違えば build で落ちる。
+- 番号は 0.0.x の patch を 1 つ上げる。0.0.4・0.0.5 は provider 名や DB の変更を含んでいたが、どちらも patch だった。1.0 までは破壊的な変更の有無で minor を上げない。
+- 手順は次のとおり。
+  1. 最新の main から枝を切り、`apps/coding-agent/CHANGELOG.md` の `[Unreleased]` の下に `## [x.y.z] - YYYY-MM-DD` の見出しを足し、`apps/coding-agent/package.json` の `version` を上げる。この 2 ファイルだけを `chore(release): vx.y.z` の PR にする。本文には、番号をその値にした理由と、何を含むかを書く。
+  2. orchestrator が PR を squash merge する。
+  3. マージ commit に annotated tag を付けて push する: `git fetch origin && git tag -a vx.y.z -m "msa vx.y.z" origin/main && git push origin vx.y.z`（`origin/main` がマージ commit を指しているときに限る）。
+  4. release workflow が success になり、GitHub Release が Latest になり、`masseater/homebrew-tap` の `Formula/msa.rb` が `msa x.y.z` の commit で更新されたことを確かめる。
+  5. `brew update && brew upgrade msa` のあと `msa --version` が `x.y.z` を返すことを確かめる。
+- release workflow が途中で落ちて GitHub Release が draft のままなら、`cleanup-draft-release` が draft を消す。公開済みの release は書き換えず、直した版を新しい番号で出す。tag を打ち直すときは、先に release が公開されていないことを確かめる。
+
 ## CI
 
 - PR の `edited`（タイトル・本文・base の変更）で起動するのは `commits` workflow だけにし、`commits` ジョブのほかに置けるのは `ci-telemetry` だけにする。`tools/checks/pull-request-edited.test.ts` が検査する。
