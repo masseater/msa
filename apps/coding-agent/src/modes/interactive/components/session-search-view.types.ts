@@ -2,7 +2,7 @@ import type sessionSearchTypes from "../../../core/session-search/session-search
 
 declare namespace sessionSearchViewTypes {
   interface SessionSearchViewOptions {
-    search: (query: string) => Promise<sessionSearchTypes.Hit[]>;
+    search: (query: string) => Promise<sessionSearchTypes.SearchResult>;
     read: (request: {
       path: string;
       entry: string;

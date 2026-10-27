@@ -1,10 +1,39 @@
+import { Duration, Effect, Schedule } from "effect";
+
+import type ForeignError from "../platform/foreign-error.ts";
 import sqliteFile from "../platform/node/sqlite-file.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
+import indexOpen from "./index-open.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
 
-const SCHEMA_VERSION = 2;
-const TABLES = ["files", "parts", "parts_fts"];
+const { IndexLocked, foreign, isLockWait } = indexOpen;
 
+const LOCK_RETRY = Schedule.spaced(Duration.millis(20));
+const LOCK_RETRIES = 500;
+
+const whileLocked = <A>(
+  indexPath: string,
+  body: () => A,
+): Effect.Effect<A, ForeignError | InstanceType<typeof IndexLocked>> =>
+  foreign(body).pipe(
+    Effect.retry({
+      schedule: LOCK_RETRY,
+      times: LOCK_RETRIES,
+      while: (failure) => isLockWait(failure.cause),
+    }),
+    Effect.catchIf(
+      (failure) => isLockWait(failure.cause),
+      (failure) =>
+        Effect.fail(
+          new IndexLocked({
+            cause: failure.cause,
+            message: `The session index ${indexPath} stayed locked by another process (${failure.message}); search again once it finishes`,
+          }),
+        ),
+    ),
+  );
+
+const SCHEMA_VERSION = 2;
 const SCHEMA = `
 CREATE TABLE IF NOT EXISTS files (
   id INTEGER PRIMARY KEY,
@@ -38,7 +67,6 @@ type FileRow = sessionSearchTypes.FileRow;
 type FileUpdate = sessionSearchTypes.FileUpdate;
 type PartRow = sessionSearchTypes.PartRow;
 type RowId = number | bigint;
-type IndexState = sessionSearchTypes.IndexState;
 
 function write(database: DatabaseSync, sql: string) {
   const statement = database.prepare(sql);
@@ -46,26 +74,28 @@ function write(database: DatabaseSync, sql: string) {
   return statement;
 }
 
-function resetSchema(database: DatabaseSync): void {
-  database.exec("DROP TABLE IF EXISTS parts_fts");
-  database.exec("DROP TABLE IF EXISTS parts");
-  database.exec("DROP TABLE IF EXISTS files");
+function openCurrent(path: string): DatabaseSync | undefined {
+  const database = openIndex(path);
+  try {
+    const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
+      user_version: number;
+    };
+    if (version === SCHEMA_VERSION) return database;
+  } catch (error) {
+    database.close();
+    throw error;
+  }
+  database.close();
+  return undefined;
 }
 
-function indexState(database: DatabaseSync): IndexState {
-  const { user_version: version } = database.prepare("PRAGMA user_version").get() as {
-    user_version: number;
-  };
-  if (version > SCHEMA_VERSION) return "newer";
-  if (version !== SCHEMA_VERSION) return "stale";
-  const present = database.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all() as {
-    name: string;
-  }[];
-  return TABLES.every((table) => present.some((row) => row.name === table)) ? "intact" : "stale";
+function createSchema(database: DatabaseSync): void {
+  database.exec(SCHEMA);
+  database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
 }
 
 function openIndex(path: string): DatabaseSync {
-  const database = sqliteFile.openSqliteFile(path, { timeout: 30_000 });
+  const database = sqliteFile.openSqliteFile(path, { timeout: 0 });
   try {
     database.exec("PRAGMA journal_mode = WAL");
     database.exec("PRAGMA synchronous = NORMAL");
@@ -93,35 +123,6 @@ function transaction<T>(database: DatabaseSync, body: () => T): T {
     database.exec("ROLLBACK");
     throw error;
   }
-}
-
-function rebuildIndex<T>(
-  database: DatabaseSync,
-  force: boolean,
-  body: () => Promise<T>,
-): Promise<T> {
-  return Promise.resolve()
-    .then(() => {
-      database.exec("BEGIN IMMEDIATE");
-      const state = indexState(database);
-      if (state === "newer") throw new Error("the index was written by a newer msa");
-      if (force || state === "stale") {
-        resetSchema(database);
-        database.exec(SCHEMA);
-        database.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-      }
-      return body();
-    })
-    .then(
-      (result) => {
-        database.exec("COMMIT");
-        return result;
-      },
-      (error: unknown) => {
-        if (database.isTransaction) database.exec("ROLLBACK");
-        throw error;
-      },
-    );
 }
 
 function deleteParts(database: DatabaseSync, fileId: RowId): void {
@@ -233,6 +234,22 @@ function applyUpdates(database: DatabaseSync, updates: readonly FileUpdate[]): v
   });
 }
 
-const indexStore = { applyUpdates, fileRows, indexState, openIndex, rebuildIndex, removeFiles };
+function skippedFiles(database: DatabaseSync): sessionSearchTypes.SkippedFile[] {
+  return database
+    .prepare("SELECT path, error AS reason FROM files WHERE error IS NOT NULL ORDER BY path")
+    .all() as unknown as sessionSearchTypes.SkippedFile[];
+}
+
+const indexStore = {
+  SCHEMA_VERSION,
+  applyUpdates,
+  createSchema,
+  fileRows,
+  openCurrent,
+  openIndex,
+  removeFiles,
+  skippedFiles,
+  whileLocked,
+};
 
 export default indexStore;

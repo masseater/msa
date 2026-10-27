@@ -5,10 +5,12 @@ import { Effect } from "effect";
 import storeModule from "../src/core/orchestrator/store.ts";
 import type orchestratorTypesTypes from "../src/core/orchestrator/types.types.ts";
 import type sessionManagerTypes from "../src/core/session-manager.types.ts";
+import indexStore from "../src/core/session-search/index-store.ts";
 import type sessionSearchTypes from "../src/core/session-search/session-search.types.ts";
 
 const { store } = storeModule;
-const { dirnameOf, joinPath, makeDirectory, makeTempDir, toJsonText, writeTextFile } = testing;
+const { dirnameOf, joinPath, makeDirectory, makeTempDir, readTextFile, toJsonText, writeTextFile } =
+  testing;
 
 type FileEntry = sessionManagerTypes.FileEntry;
 
@@ -93,11 +95,27 @@ const makeLocations = Effect.fn("makeLocations")(function* (directories: string[
   const agentDir = yield* makeTempDir("msa-session-search-");
   directories.push(agentDir);
   const locations: sessionSearchTypes.Locations = {
-    indexPath: joinPath(agentDir, "session-index.db"),
+    indexDirectory: joinPath(agentDir, "session-index"),
     orchestratorDatabase: joinPath(agentDir, "orchestrator.db"),
     roots: [joinPath(agentDir, "sessions")],
   };
   return locations;
+});
+
+const DEPTH = 30_000;
+
+const deeplyNestedCall = (id: string, timestamp = "2026-10-01T12:00:00.000Z"): string =>
+  `{"type":"message","id":"${id}","parentId":null,"timestamp":"${timestamp}","message":{"role":"assistant","content":[{"type":"toolCall","id":"call","name":"bash","arguments":${'{"a":'.repeat(DEPTH)}"deep"${"}".repeat(DEPTH)}}],"api":"anthropic-messages","model":"m","provider":"anthropic","stopReason":"toolUse","timestamp":0,"usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}}}}\n`;
+
+const indexVersionDirectory = (locations: sessionSearchTypes.Locations): string =>
+  joinPath(locations.indexDirectory, `v${indexStore.SCHEMA_VERSION}`);
+
+const currentIndexPath = Effect.fn("currentIndexPath")(function* (
+  locations: sessionSearchTypes.Locations,
+) {
+  const directory = indexVersionDirectory(locations);
+  const name = (yield* readTextFile(joinPath(directory, "current"))).trim();
+  return joinPath(directory, name);
 });
 
 interface ThreadSeed {
@@ -160,7 +178,10 @@ function seedThreads(orchestratorDatabase: string, seeds: readonly ThreadSeed[])
 
 const sessionSearchFixture = {
   assistant,
+  currentIndexPath,
+  deeplyNestedCall,
   header,
+  indexVersionDirectory,
   makeLocations,
   seedThreads,
   sessionText,

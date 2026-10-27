@@ -14,13 +14,14 @@ const {
   joinPath,
   makeDirectory,
   removeDirs,
+  removePath,
   runNodeScript,
   runTest,
   sleep,
   toJsonText,
   writeTextFile,
 } = testing;
-const { header, makeLocations, user, writeSession } = fixture;
+const { currentIndexPath, deeplyNestedCall, header, makeLocations, user, writeSession } = fixture;
 
 const directories: string[] = [];
 
@@ -35,7 +36,7 @@ const search = (locations: sessionSearchTypes.Locations, query: string) =>
     sessionSearch
       .searchSessions(locations, { filters: {}, limit: 50, order: "oldest", query })
       .then(
-        (hits) => ({ ids: hits.map((hit) => hit.entryId) }),
+        ({ hits }) => ({ ids: hits.map((hit) => hit.entryId) }),
         (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
       ),
   );
@@ -52,7 +53,7 @@ const rebuildsAfterAFailedUpdate = () =>
       const locations = yield* makeLocations(directories);
       yield* writeOne(locations, "alpha one", "alpha two", "alpha three");
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1", "u2"] });
-      const other = new DatabaseSync(locations.indexPath);
+      const other = new DatabaseSync(yield* currentIndexPath(locations));
       other.exec("DROP TABLE parts_fts");
       other.close();
       yield* writeOne(locations, "alpha one");
@@ -68,7 +69,7 @@ const rebuildsWhenATableLosesItsColumns = () =>
       const locations = yield* makeLocations(directories);
       yield* writeOne(locations, "alpha one", "alpha two");
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1"] });
-      const other = new DatabaseSync(locations.indexPath);
+      const other = new DatabaseSync(yield* currentIndexPath(locations));
       other.exec("DROP TABLE files; CREATE TABLE files (path TEXT)");
       other.close();
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1"] });
@@ -80,8 +81,31 @@ const replacesAnIndexThatIsNotADatabase = () =>
     Effect.gen(function* () {
       const locations = yield* makeLocations(directories);
       yield* writeOne(locations, "gamma");
-      yield* writeTextFile(locations.indexPath, "not a database\n".repeat(400));
       expect(yield* search(locations, "gamma")).toEqual({ ids: ["u0"] });
+      yield* writeTextFile(yield* currentIndexPath(locations), "not a database\n".repeat(400));
+      const fresh = yield* searchInANewProcess(locations);
+      expect(fresh.code, fresh.stderr).toBe(0);
+      expect(fresh.stdout.trim()).toBe("");
+      yield* writeOne(locations, "gamma", "alpha");
+      expect(yield* search(locations, "gamma")).toEqual({ ids: ["u0"] });
+      expect((yield* searchInANewProcess(locations)).stdout.trim()).toBe("u1");
+    }),
+  );
+
+const rebuildsWhenTheCurrentIndexCannotBeOpened = () =>
+  runTest(
+    Effect.gen(function* () {
+      const locations = yield* makeLocations(directories);
+      yield* writeOne(locations, "alpha one");
+      const first = yield* searchInANewProcess(locations);
+      expect(first.stdout.trim()).toBe("u0");
+      const indexPath = yield* currentIndexPath(locations);
+      yield* removePath(indexPath);
+      yield* makeDirectory(indexPath);
+      const fresh = yield* searchInANewProcess(locations);
+      expect(fresh.code, fresh.stderr).toBe(0);
+      expect(fresh.stdout.trim()).toBe("u0");
+      expect(yield* currentIndexPath(locations)).not.toBe(indexPath);
     }),
   );
 
@@ -90,9 +114,9 @@ const namesTheIndexItCannotOpen = () =>
     Effect.gen(function* () {
       const locations = yield* makeLocations(directories);
       yield* writeOne(locations, "delta");
-      yield* makeDirectory(locations.indexPath);
+      yield* writeTextFile(locations.indexDirectory, "not a directory\n");
       const result = yield* search(locations, "delta");
-      expect(result).toEqual({ error: expect.stringContaining(locations.indexPath) });
+      expect(result).toEqual({ error: expect.stringContaining(locations.indexDirectory) });
     }),
   );
 
@@ -103,21 +127,21 @@ const namesTheIndexInADirectoryItCannotWrite = () =>
       const locked = joinPath(base.roots[0] ?? "", "..", "locked");
       yield* makeDirectory(locked);
       yield* changeMode(locked, 0o500);
-      const locations = { ...base, indexPath: joinPath(locked, "session-index.db") };
+      const locations = { ...base, indexDirectory: joinPath(locked, "session-index") };
       yield* writeOne(locations, "delta");
       const result = yield* search(locations, "delta");
       yield* changeMode(locked, 0o700);
-      expect(result).toEqual({ error: expect.stringContaining(locations.indexPath) });
+      expect(result).toEqual({ error: expect.stringContaining(locations.indexDirectory) });
     }),
   );
 
-const DEPTH = 30_000;
-
-const deeplyNestedCall = (id: string): string =>
-  `{"type":"message","id":"${id}","parentId":null,"timestamp":"${DAY}","message":{"role":"assistant","content":[{"type":"toolCall","id":"call","name":"bash","arguments":${'{"a":'.repeat(DEPTH)}"deep"${"}".repeat(DEPTH)}}],"api":"anthropic-messages","model":"m","provider":"anthropic","stopReason":"toolUse","timestamp":0,"usage":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"totalTokens":0,"cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0,"total":0}}}}\n`;
-
 const refresh = (locations: sessionSearchTypes.Locations) =>
   Effect.promise(() => sessionSearch.refresh(locations));
+
+const skippedIn = (locations: sessionSearchTypes.Locations, query: string) =>
+  Effect.promise(() =>
+    sessionSearch.searchSessions(locations, { filters: {}, limit: 50, order: "oldest", query }),
+  ).pipe(Effect.map(({ skipped }) => skipped));
 
 const skipsAFileItCannotParse = () =>
   runTest(
@@ -132,20 +156,19 @@ const skipsAFileItCannotParse = () =>
       expect(yield* refresh(locations)).toMatchObject({ changedFiles: 1, skipped });
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1"] });
       expect(yield* refresh(locations)).toMatchObject({ changedFiles: 0, skipped: [] });
-      const index = new DatabaseSync(locations.indexPath, { readOnly: true });
-      const row = index.prepare("SELECT error FROM files WHERE path = ?").get(deep);
-      index.close();
-      expect(row).toEqual({ error: expect.stringContaining("call stack") });
+      expect(yield* skippedIn(locations, "alpha")).toEqual(skipped);
       yield* appendTextFile(deep, deeplyNestedCall("d2"));
       expect(yield* refresh(locations)).toMatchObject({ changedFiles: 1, skipped });
+      expect(yield* skippedIn(locations, "nothing-matches")).toEqual(skipped);
       yield* writeSession(deep, [header("d", "/w", DAY), user("d0", DAY, "alpha deep")]);
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1", "d0"] });
+      expect(yield* skippedIn(locations, "alpha")).toEqual([]);
     }),
   );
 
 const SEARCH_IN_A_NEW_PROCESS = `
 const { default: sessionSearch } = await import(process.env.SEARCH_MODULE);
-const hits = await sessionSearch.searchSessions(JSON.parse(process.env.SEARCH_LOCATIONS), {
+const { hits } = await sessionSearch.searchSessions(JSON.parse(process.env.SEARCH_LOCATIONS), {
   filters: {}, limit: 50, order: "oldest", query: "alpha",
 });
 console.log(hits.map((hit) => hit.entryId).join(","));
@@ -157,7 +180,7 @@ const rebuildsAnIndexMissingATableWhenOpened = () =>
       const locations = yield* makeLocations(directories);
       yield* writeOne(locations, "alpha one", "alpha two");
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1"] });
-      const other = new DatabaseSync(locations.indexPath);
+      const other = new DatabaseSync(yield* currentIndexPath(locations));
       other.exec("DROP TABLE parts_fts");
       other.close();
       const result = yield* searchInANewProcess(locations);
@@ -181,7 +204,8 @@ const waitsForALockedIndexInsteadOfReplacingIt = () =>
       const locations = yield* makeLocations(directories);
       yield* writeOne(locations, "alpha one", "alpha two");
       expect((yield* searchInANewProcess(locations)).stdout.trim()).toBe("u0,u1");
-      const holder = new DatabaseSync(locations.indexPath);
+      const indexPath = yield* currentIndexPath(locations);
+      const holder = new DatabaseSync(indexPath);
       holder.exec(
         "PRAGMA journal_mode = DELETE; CREATE TABLE kept (x); INSERT INTO kept VALUES (1)",
       );
@@ -199,34 +223,10 @@ const waitsForALockedIndexInsteadOfReplacingIt = () =>
       });
       expect(result.code, result.stderr).toBe(0);
       expect(result.stdout.trim()).toBe("u0,u1");
-      const index = new DatabaseSync(locations.indexPath, { readOnly: true });
+      const index = new DatabaseSync(indexPath, { readOnly: true });
       const kept = index.prepare("SELECT count(*) AS n FROM kept").get();
       index.close();
       expect(kept).toEqual({ n: 2 });
-    }),
-  );
-
-const leavesAnIndexFromANewerMsaAlone = () =>
-  runTest(
-    Effect.gen(function* () {
-      const locations = yield* makeLocations(directories);
-      yield* writeOne(locations, "alpha one", "alpha two");
-      expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0", "u1"] });
-      const newer = new DatabaseSync(locations.indexPath);
-      newer.exec("PRAGMA user_version = 99; DROP TABLE files; CREATE TABLE files (path TEXT)");
-      newer.close();
-      const fresh = yield* searchInANewProcess(locations);
-      expect(fresh.code).not.toBe(0);
-      expect(fresh.stderr).toContain(`${locations.indexPath} was written by a newer msa`);
-      expect(yield* search(locations, "alpha")).toEqual({
-        error: expect.stringContaining("written by a newer msa"),
-      });
-      const index = new DatabaseSync(locations.indexPath, { readOnly: true });
-      const version = index.prepare("PRAGMA user_version").get();
-      const columns = index.prepare("PRAGMA table_info(files)").all();
-      index.close();
-      expect(version).toEqual({ user_version: 99 });
-      expect(columns).toHaveLength(1);
     }),
   );
 
@@ -237,6 +237,10 @@ describe("search_sessions index recovery", () => {
     rebuildsWhenATableLosesItsColumns,
   );
   it("replaces an index file that is not a database", replacesAnIndexThatIsNotADatabase);
+  it(
+    "rebuilds the index when the current index file cannot be opened",
+    rebuildsWhenTheCurrentIndexCannotBeOpened,
+  );
   it(
     "names the index in the error when it can neither open nor replace it",
     namesTheIndexItCannotOpen,
@@ -253,7 +257,6 @@ describe("search_sessions index recovery", () => {
     "rebuilds an index that lost a table before it was opened",
     rebuildsAnIndexMissingATableWhenOpened,
   );
-  it("leaves an index written by a newer msa alone", leavesAnIndexFromANewerMsaAlone);
   it(
     "waits for an index another process holds instead of replacing it",
     waitsForALockedIndexInsteadOfReplacingIt,

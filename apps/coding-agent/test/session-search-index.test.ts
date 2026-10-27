@@ -5,14 +5,24 @@ import { Effect } from "effect";
 import { afterEach, describe, expect, it } from "vite-plus/test";
 
 import SessionManager from "../src/core/session-manager.ts";
-import indexStore from "../src/core/session-search/index-store.ts";
 import sessionSearch from "../src/core/session-search/session-search.ts";
 import type sessionSearchTypes from "../src/core/session-search/session-search.types.ts";
 import fixture from "./session-search-fixture.ts";
 
-const { appendTextFile, joinPath, removeDirs, removePath, runTest } = testing;
-const { assistant, header, makeLocations, sessionText, toolCall, toolResult, user, writeSession } =
-  fixture;
+const { appendTextFile, joinPath, makeDirectory, removeDirs, removePath, runTest, writeTextFile } =
+  testing;
+const {
+  assistant,
+  currentIndexPath,
+  header,
+  indexVersionDirectory,
+  makeLocations,
+  sessionText,
+  toolCall,
+  toolResult,
+  user,
+  writeSession,
+} = fixture;
 
 const directories: string[] = [];
 
@@ -23,7 +33,7 @@ const DAY = "2026-10-01T12:00:00.000Z";
 const find = (locations: sessionSearchTypes.Locations, query: string) =>
   Effect.promise(() =>
     sessionSearch.searchSessions(locations, { filters: {}, limit: 50, order: "oldest", query }),
-  ).pipe(Effect.map((hits) => hits.map((hit) => hit.entryId)));
+  ).pipe(Effect.map(({ hits }) => hits.map((hit) => hit.entryId)));
 
 const indexesAppendedLinesOnceTheyEnd = () =>
   runTest(
@@ -125,20 +135,23 @@ const rebuildsAnIndexWrittenByAnother = () =>
   runTest(
     Effect.gen(function* () {
       const locations = yield* makeLocations(directories);
-      const old = new DatabaseSync(locations.indexPath);
+      const oldPath = joinPath(indexVersionDirectory(locations), "000000000000001-1.db");
+      yield* makeDirectory(indexVersionDirectory(locations));
+      yield* writeTextFile(
+        joinPath(indexVersionDirectory(locations), "current"),
+        "000000000000001-1.db\n",
+      );
+      const old = new DatabaseSync(oldPath);
       old.exec(
         "CREATE TABLE files (path TEXT); CREATE TABLE parts (id INTEGER); CREATE VIRTUAL TABLE parts_fts USING fts5(body); PRAGMA user_version = 1;",
       );
       old.close();
-      const opened = indexStore.openIndex(locations.indexPath);
-      expect(indexStore.indexState(opened)).toBe("stale");
-      opened.close();
       yield* writeSession(joinPath(locations.roots[0] ?? "", "--w--", "s.jsonl"), [
         header("s", "/w", DAY),
         user("u", DAY, "delta"),
       ]);
       expect(yield* find(locations, "delta")).toEqual(["u"]);
-      const database = new DatabaseSync(locations.indexPath);
+      const database = new DatabaseSync(yield* currentIndexPath(locations));
       const columns = database.prepare("PRAGMA table_info(files)").all() as { name: string }[];
       database.close();
       expect(columns.map((column) => column.name)).toContain("indexed");

@@ -129,8 +129,13 @@ function runSearch(locations: sessionSearchTypes.Locations, input: Input): Promi
       order: input.order ?? "relevance",
       query,
     })
-    .then((hits) =>
-      hits.length === 0 ? "No matching messages." : hits.map(formatHit).join("\n\n"),
+    .then(({ hits, skipped }) =>
+      [
+        hits.length === 0 ? "No matching messages." : hits.map(formatHit).join("\n\n"),
+        hitFormat.skippedLines(skipped).join("\n"),
+      ]
+        .filter((section) => section !== "")
+        .join("\n\n"),
     );
 }
 

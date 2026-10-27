@@ -31,6 +31,18 @@ function hitLocation(hit: sessionSearchTypes.Hit): string[] {
   ];
 }
 
-const hitFormat = { hitHeading, hitLocation };
+const SKIPPED_SHOWN = 10;
+
+function skippedLines(skipped: readonly sessionSearchTypes.SkippedFile[]): string[] {
+  if (skipped.length === 0) return [];
+  const more = skipped.length - SKIPPED_SHOWN;
+  return [
+    `Not searched: ${skipped.length} session file${skipped.length === 1 ? "" : "s"} could not be indexed`,
+    ...skipped.slice(0, SKIPPED_SHOWN).map((file) => `- ${file.path}: ${file.reason}`),
+    ...(more > 0 ? [`- and ${more} more`] : []),
+  ];
+}
+
+const hitFormat = { hitHeading, hitLocation, skippedLines };
 
 export default hitFormat;

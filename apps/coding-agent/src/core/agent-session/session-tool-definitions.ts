@@ -19,7 +19,7 @@ const { sessionRoots } = sessionRootsModule;
 
 function sessionSearchLocations(session: AgentSession): sessionSearchTypes.Locations {
   return {
-    indexPath: join(session.agentDir, "session-index.db"),
+    indexDirectory: join(session.agentDir, "session-index"),
     orchestratorDatabase: session.settingsManager.session.getOrchestratorDatabasePath(
       session.agentDir,
     ),

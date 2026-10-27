@@ -58,7 +58,7 @@ const entries = (locations: sessionSearchTypes.Locations, filters: sessionSearch
       order: "oldest",
       query: "release checklist",
     }),
-  ).pipe(Effect.map((hits) => hits.map((hit) => hit.entryId ?? "").toSorted()));
+  ).pipe(Effect.map(({ hits }) => hits.map((hit) => hit.entryId ?? "").toSorted()));
 
 const toolText = (locations: sessionSearchTypes.Locations, input: Record<string, unknown>) =>
   Effect.promise(() =>

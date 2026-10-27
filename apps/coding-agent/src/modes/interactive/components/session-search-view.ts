@@ -14,7 +14,7 @@ const { toErrorMessage } = errors;
 const { theme } = themeModule;
 const { rawKeyHint } = keybindingHints;
 const { fitView } = scrollWindow;
-const { hitHeading, hitLocation } = hitFormat;
+const { hitHeading, hitLocation, skippedLines } = hitFormat;
 
 type Options = sessionSearchViewTypes.SessionSearchViewOptions;
 
@@ -31,7 +31,9 @@ export default class SessionSearchView implements tuiTypes.Component, tuiTypes.F
 
   error: string | undefined;
 
-  hits: sessionSearchTypes.Hit[] | undefined;
+  hits: readonly sessionSearchTypes.Hit[] | undefined;
+
+  skipped: readonly sessionSearchTypes.SkippedFile[] = [];
 
   selected = 0;
 
@@ -123,8 +125,9 @@ export default class SessionSearchView implements tuiTypes.Component, tuiTypes.F
     this.busy = true;
     this.page = undefined;
     void this.options.search(query).then(
-      (hits) => {
+      ({ hits, skipped }) => {
         this.hits = hits;
+        this.skipped = skipped;
         this.selected = 0;
         return this.finish();
       },
@@ -152,9 +155,19 @@ export default class SessionSearchView implements tuiTypes.Component, tuiTypes.F
 
   private listBody(width: number): { body: string[]; cursor: number | undefined } {
     if (this.hits === undefined) return { body: [], cursor: undefined };
-    if (this.hits.length === 0)
-      return { body: [theme.fg("dim", " No matching messages.")], cursor: undefined };
-    const body = this.hits.flatMap((hit, index) => {
+    const skipped = skippedLines(this.skipped).map((line) =>
+      truncateToWidth(theme.fg("warning", ` ${line}`), width),
+    );
+    if (this.hits.length === 0) {
+      return {
+        body: [
+          theme.fg("dim", " No matching messages."),
+          ...(skipped.length > 0 ? ["", ...skipped] : []),
+        ],
+        cursor: undefined,
+      };
+    }
+    const hitLines = this.hits.flatMap((hit, index) => {
       const chosen = index === this.selected;
       const heading = `${chosen ? "›" : " "} ${hitHeading(hit)}`;
       return [
@@ -162,6 +175,7 @@ export default class SessionSearchView implements tuiTypes.Component, tuiTypes.F
         truncateToWidth(theme.fg("dim", `   ${hit.snippet}`), width),
       ];
     });
+    const body = [...hitLines, ...(skipped.length > 0 ? ["", ...skipped] : [])];
     return { body, cursor: this.selected * 2 };
   }
 

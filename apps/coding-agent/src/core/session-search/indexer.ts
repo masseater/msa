@@ -10,10 +10,11 @@ import indexStore from "./index-store.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
 import terms from "./terms.ts";
 
-const { join, toEpochMs } = platform;
+const { isAbsolute, join, relative, toEpochMs } = platform;
 const { parseSessionEntryLine } = sessionFormat;
 const { entryParts, isRecord } = entryPartsModule;
 const { isOrchestratorTool } = toolNames;
+const { whileLocked } = indexStore;
 
 const TAIL_BYTES = 256;
 const MAX_DEPTH = 2;
@@ -24,6 +25,12 @@ interface FoundFile {
   size: number;
   mtime: number;
 }
+
+const under = (path: string, roots: readonly string[]): boolean =>
+  roots.some((root) => {
+    const inside = relative(root, path);
+    return inside !== "" && !inside.startsWith("..") && !isAbsolute(inside);
+  });
 
 const statOf = (fileSystem: FileSystem.FileSystem, path: string) =>
   fileSystem.stat(path).pipe(
@@ -211,21 +218,23 @@ const skippedUpdate = (file: FoundFile, defect: unknown): sessionSearchTypes.Fil
   tail: new Uint8Array(0),
 });
 
-const BATCH_BYTES = 32 << 20;
+const BATCH_BYTES = 8 << 20;
 
 const bodyBytes = (update: sessionSearchTypes.FileUpdate): number =>
   update.parts.reduce((total, part) => total + part.body.length, 0);
 
-const updateIndexEffect = Effect.fnUntraced(function* (
+const updateWith = Effect.fnUntraced(function* (
+  fileSystem: FileSystem.FileSystem,
   database: DatabaseSync,
   roots: readonly string[],
+  indexPath: string,
 ) {
-  const fileSystem = yield* FileSystem.FileSystem;
   const listed = yield* Effect.forEach([...new Set(roots)], (root) => walk(fileSystem, root, 0));
   const found = new Map(listed.flat().map((file) => [file.path, file]));
-  const known = new Map(indexStore.fileRows(database).map((row) => [row.path, row]));
-  const removed = [...known.keys()].filter((path) => !found.has(path));
-  indexStore.removeFiles(database, removed);
+  const rows = yield* whileLocked(indexPath, () => indexStore.fileRows(database));
+  const known = new Map(rows.map((row) => [row.path, row]));
+  const removed = [...known.keys()].filter((path) => !found.has(path) && under(path, roots));
+  yield* whileLocked(indexPath, () => indexStore.removeFiles(database, removed));
   const changed = [...found.values()].filter((file) => {
     const row = known.get(file.path);
     return row === undefined || row.size !== file.size || row.mtime !== file.mtime;
@@ -245,11 +254,13 @@ const updateIndexEffect = Effect.fnUntraced(function* (
     batchBytes += bodyBytes(update);
     parts += update.parts.length;
     if (batchBytes < BATCH_BYTES) continue;
-    indexStore.applyUpdates(database, batch);
+    const full = batch;
+    yield* whileLocked(indexPath, () => indexStore.applyUpdates(database, full));
     batch = [];
     batchBytes = 0;
   }
-  indexStore.applyUpdates(database, batch);
+  const last = batch;
+  yield* whileLocked(indexPath, () => indexStore.applyUpdates(database, last));
   const update: sessionSearchTypes.IndexUpdate = {
     changedFiles: changed.length,
     files: found.size,
@@ -263,8 +274,11 @@ const updateIndexEffect = Effect.fnUntraced(function* (
 const updateIndex = (
   database: DatabaseSync,
   roots: readonly string[],
+  indexPath: string,
 ): Promise<sessionSearchTypes.IndexUpdate> =>
-  platformRuntime.runPromise(updateIndexEffect(database, roots));
+  platformRuntime.runPromise(
+    FileSystem.FileSystem.use((fileSystem) => updateWith(fileSystem, database, roots, indexPath)),
+  );
 
 const readSlice = (path: string, start: number, end: number): Promise<Uint8Array> =>
   platformRuntime.runPromise(

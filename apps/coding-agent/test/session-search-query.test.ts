@@ -42,7 +42,7 @@ const find = (
 ) =>
   Effect.promise(() =>
     sessionSearch.searchSessions(locations, { filters, limit: 50, order: "oldest", query }),
-  ).pipe(Effect.map((hits) => hits.map((hit) => `${hit.entryId ?? "?"}:${hit.kind}`)));
+  ).pipe(Effect.map(({ hits }) => hits.map((hit) => `${hit.entryId ?? "?"}:${hit.kind}`)));
 
 const matchesJapaneseWordsInsideLongerRuns = () =>
   runTest(
@@ -89,7 +89,9 @@ const indexesToolCallArgumentsAndWhole = () =>
       expect(yield* find(locations, "timeout 30")).toEqual(["a1:tool_call"]);
       expect(yield* find(locations, '"edits newText bar"')).toEqual(["a1:tool_call"]);
       expect(yield* find(locations, "tail-marker")).toEqual(["r1:tool_result"]);
-      const [hit] = yield* Effect.promise(() =>
+      const {
+        hits: [hit],
+      } = yield* Effect.promise(() =>
         sessionSearch.searchSessions(locations, {
           filters: {},
           limit: 5,
@@ -115,7 +117,7 @@ const cutsTheSnippetAroundAWhole = () =>
             order: "relevance",
             query,
           }),
-        ).pipe(Effect.map((hits) => hits[0]?.snippet ?? ""));
+        ).pipe(Effect.map(({ hits }) => hits[0]?.snippet ?? ""));
       expect(yield* snippetOf("fail")).toContain("FAIL here");
       expect(yield* snippetOf("の設定")).toContain("の設定 there");
     }),

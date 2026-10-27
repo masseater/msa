@@ -55,8 +55,6 @@ declare namespace sessionSearchTypes {
     readonly skipped: readonly SkippedFile[];
   }
 
-  type IndexState = "intact" | "stale" | "newer";
-
   interface SkippedFile {
     readonly path: string;
     readonly reason: string;
@@ -102,6 +100,11 @@ declare namespace sessionSearchTypes {
   }
 
   type Order = "relevance" | "newest" | "oldest";
+
+  interface SearchResult {
+    readonly hits: readonly Hit[];
+    readonly skipped: readonly SkippedFile[];
+  }
 
   interface Located {
     readonly session: SessionInfo;
@@ -152,7 +155,7 @@ declare namespace sessionSearchTypes {
   }
 
   interface Locations {
-    readonly indexPath: string;
+    readonly indexDirectory: string;
     readonly roots: readonly string[];
     readonly orchestratorDatabase: string;
   }

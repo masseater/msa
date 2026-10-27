@@ -9,7 +9,7 @@ import type sessionSearchTypes from "../src/core/session-search/session-search.t
 import fixture from "./session-search-fixture.ts";
 
 const { joinPath, removeDirs, removePath, runNodeScript, runTest, toJsonText } = testing;
-const { header, makeLocations, user, writeSession } = fixture;
+const { currentIndexPath, header, makeLocations, user, writeSession } = fixture;
 
 const directories: string[] = [];
 
@@ -24,7 +24,7 @@ const sourceResolver = new URL("../src/experimental/source-resolver.ts", import.
 const find = (locations: sessionSearchTypes.Locations, query: string) =>
   Effect.promise(() =>
     sessionSearch.searchSessions(locations, { filters: {}, limit: 100, order: "oldest", query }),
-  ).pipe(Effect.map((hits) => hits.map((hit) => hit.entryId)));
+  ).pipe(Effect.map(({ hits }) => hits.map((hit) => hit.entryId)));
 
 const refresh = (locations: sessionSearchTypes.Locations) =>
   Effect.promise(() => sessionSearch.refresh(locations));
@@ -64,7 +64,7 @@ const reindexesAShortenedFile = () =>
       yield* writeSession(target, [header("t", "/w", DAY), ...entries("t", 2, "target")]);
       expect(yield* refresh(locations)).toMatchObject({ changedFiles: 1, files: 2 });
       expect(yield* find(locations, "target")).toEqual(ids("t", 2));
-      expect(rowidsBeyondNumbers(locations.indexPath)).toBeGreaterThan(0n);
+      expect(rowidsBeyondNumbers(yield* currentIndexPath(locations))).toBeGreaterThan(0n);
       yield* writeSession(target, [header("t", "/w", DAY), ...entries("t", 1, "target")]);
       expect(yield* find(locations, "target")).toEqual(ids("t", 1));
       expect(yield* find(locations, "anchor")).toEqual(ids("a", 8));
@@ -80,7 +80,7 @@ const dropsARemovedFile = () =>
       yield* removePath(target);
       expect(yield* refresh(locations)).toMatchObject({ changedFiles: 0, removedFiles: 1 });
       expect(yield* find(locations, "target")).toEqual([]);
-      expect(rowidsBeyondNumbers(locations.indexPath)).toBeGreaterThan(0n);
+      expect(rowidsBeyondNumbers(yield* currentIndexPath(locations))).toBeGreaterThan(0n);
       expect(yield* find(locations, "anchor")).toEqual(ids("a", 8));
       yield* writeSession(anchor, [header("a", "/w", DAY), ...entries("a", 3, "anchor")]);
       expect(yield* find(locations, "anchor")).toEqual(ids("a", 3));
@@ -91,7 +91,7 @@ const SEARCH_IN_A_PROCESS = `
 const { default: sessionSearch } = await import(process.env.SEARCH_MODULE);
 const locations = JSON.parse(process.env.SEARCH_LOCATIONS);
 const { changedFiles } = await sessionSearch.refresh(locations);
-const hits = await sessionSearch.searchSessions(locations, {
+const { hits } = await sessionSearch.searchSessions(locations, {
   filters: {}, limit: 100, order: "oldest", query: "target",
 });
 console.log(JSON.stringify({ changedFiles, ids: hits.map((hit) => hit.entryId).join(",") }));
