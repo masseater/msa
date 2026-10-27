@@ -140,6 +140,7 @@ const usesTheDefaultToolsWhenTheTranscript = () =>
           "model_upgrade",
           "pr_watch",
           "read",
+          "search_sessions",
           "write",
           ...ORCHESTRATOR_TOOL_NAMES,
         ].sort(),

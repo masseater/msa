@@ -80,6 +80,11 @@ const BUILTIN_SLASH_COMMANDS: ReadonlyArray<slashCommandsTypes.BuiltinSlashComma
     description: "Open the sepiace memory view, or send sepiace a request such as forget X",
     name: "memory",
   },
+  {
+    argumentHint: "[words]",
+    description: "Search past sessions and orchestrator threads, and read on from a match",
+    name: "search",
+  },
   { aliases: ["threads"], description: "Show the task DAG the orchestrator runs", name: "tasks" },
   {
     argumentHint: "[path]",

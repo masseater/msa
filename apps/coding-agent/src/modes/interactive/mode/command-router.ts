@@ -108,6 +108,11 @@ export default class BuiltinCommandRouter {
       "/rename": entry(false, (text) =>
         Effect.sync(() => this.mode.commands.session.handleNameCommand(text)),
       ),
+      "/search": entry(true, (text) =>
+        Effect.sync(() =>
+          this.mode.selectors.views.showSessionSearchView(argument(text, "/search")),
+        ),
+      ),
     };
   }
 
