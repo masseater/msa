@@ -1,6 +1,6 @@
 # Search Past Sessions
 
-`search_sessions` finds words in the conversations and work of past sessions: what the user asked for and decided, what the assistant answered, which tools it called with which arguments, and what those tools returned. It searches ordinary sessions and every orchestrator thread alike, so the orchestrator, its workers and reviewers, and an ordinary session can all look up how earlier work went.
+`search_sessions` finds words in the conversations and work of past sessions: what the user asked for and decided, what the assistant answered, which tools it called with which arguments, and what those tools returned. It searches ordinary sessions and every orchestrator thread alike, so the orchestrator, its workers and reviewers, and an ordinary session can all look up how earlier work went. The read-only triage and advisor threads have it too, and they, the reviewers, and the round's closing review are told to check the user's earlier instructions and decisions with it, narrowed to the task, round, or role.
 
 `search_sessions` is one of the default tools, and it is read-only, so it also stays in an [`/ask`](slash-commands.md#ask-a-question) turn. To drop it, name the tools you want in `defaultTools`, or remove it with `--tools -search_sessions`.
 

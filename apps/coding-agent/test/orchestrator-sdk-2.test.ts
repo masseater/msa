@@ -115,14 +115,14 @@ const givesTriageAndAdvisorOnlyReadTools = () =>
           "needs-decision",
       );
       const triage = declared.find((names) => names.includes("conclude_triage"));
-      expect(triage).toEqual(["conclude_triage", "find", "grep", "ls", "read"]);
+      expect(triage).toEqual(["conclude_triage", "find", "grep", "ls", "read", "search_sessions"]);
       yield* Effect.promise(() => orchestrator.advise(task.id));
       const advisor = () =>
         declared.find(
           (names) => !names.includes("create_task") && !names.includes("conclude_triage"),
         );
       yield* waitFor(() => advisor() !== undefined);
-      expect(advisor()).toEqual(["find", "grep", "ls", "read"]);
+      expect(advisor()).toEqual(["find", "grep", "ls", "read", "search_sessions"]);
       yield* waitFor(() =>
         orchestrator.snapshot.threads.every((thread) => thread.status !== "running"),
       );

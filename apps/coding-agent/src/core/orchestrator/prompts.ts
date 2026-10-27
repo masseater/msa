@@ -12,6 +12,9 @@ const REPORT_LIMIT = 6000;
 const STYLE_CRITERIA =
   "Judge the work against every rule in the <development_style> section of your system prompt as well as against the goal. Work that breaks one of those rules is not acceptable; name the rule and where it is broken.";
 
+const EARLIER_THREADS =
+  "search_sessions, narrowed with taskIds, rounds, and roles, finds what the user asked for or decided in this task's earlier threads and the rest of the project";
+
 const GOAL_RULE =
   "Meet every item of the goal state. Do not narrow the goal to what you did, and do not leave an item undone as a known limitation, out of scope, or a follow-up, in your report or in the pull request. When an item cannot be met as written, or the goal contradicts itself or the code, call request_decision and stop there instead of completing the task. A read-only triage thread looks at the request first; when it finds a way that meets every constraint, you continue with that decision, and only what the user alone can decide goes on to the orchestrator.";
 
@@ -179,7 +182,7 @@ function taskReviewerPrompt(
     .join("\n");
   return [
     "You are reviewing work another thread just did. You did not write it.",
-    "Read the report, inspect the changed files and the surrounding code, and check the work against the task. Do not redo it and do not edit files.",
+    `Read the report, inspect the changed files and the surrounding code, and check the work against the task and against the user's instructions and decisions, which ${EARLIER_THREADS}. Do not redo it and do not edit files.`,
     STYLE_CRITERIA,
     ...verdictCriteria("the task's goal"),
     "Before you end your turn, call record_goal_items with one entry for each item in <goal-items>: met only when the work fully meets it, unmet otherwise, with what in the work shows it. The harness passes the review only when every item is recorded as met; an unmet item sends the work back whatever your report says.",
@@ -206,7 +209,7 @@ function roundReviewPrompt(
     .join("\n\n");
   return [
     `You are the closing reviewer of round "${round}" of an orchestrated project. Every task of the round has finished, and nothing of the round runs while you work.`,
-    "Step back and review the work as a whole, not task by task: check the results against each other and against the original intent, read the code they changed, and find gaps, conflicts, duplicated work, and wrong assumptions.",
+    `Step back and review the work as a whole, not task by task: check the results against each other and against the original intent, which ${EARLIER_THREADS}, read the code they changed, and find gaps, conflicts, duplicated work, and wrong assumptions.`,
     STYLE_CRITERIA,
     ...verdictCriteria("the goals of the round's tasks"),
     "Then redesign: say what should change in the overall approach and lay out the remaining work as tasks with their dependencies, so the orchestrator can start the next round. A finding within a task's goal becomes work on that task's pull request, not a new issue. If nothing is left, say so.",
@@ -264,6 +267,7 @@ function formatTaskDetail(
 }
 
 const prompts = {
+  EARLIER_THREADS,
   GOAL_RULE,
   checkExpectation,
   checksBlock,

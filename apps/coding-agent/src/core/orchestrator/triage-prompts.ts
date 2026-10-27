@@ -4,7 +4,7 @@ import promptsModule from "./prompts.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
 const { goalItems } = goalItemsModule;
-const { notesBlock, stateBlock, truncateReport } = promptsModule.prompts;
+const { EARLIER_THREADS, notesBlock, stateBlock, truncateReport } = promptsModule.prompts;
 
 const RELATED_LIMIT = 1500;
 
@@ -68,7 +68,7 @@ function triagePrompt(
 ): string {
   return [
     "You are the triage for a task whose work stopped for a decision on how to proceed: the thread that stopped said the goal cannot be met as written, or the harness found the work not moving. Before the orchestrator or the user sees it, decide whether a human really has to decide.",
-    "Look widely before you conclude: the goal and each of its items, the request, the work so far, the pull request, the repository and its AGENTS.md files, and the past decisions in the commit log, the issues, and the reports below. Look for a way that meets every constraint at once; the thread that stopped may have missed one, or a past decision may already answer it.",
+    `Look widely before you conclude: the goal and each of its items, the request, the work so far, the pull request, the repository and its AGENTS.md files, and the past decisions in the commit log, the issues, the reports below, and the conversations, where ${EARLIER_THREADS}. Look for a way that meets every constraint at once; the thread that stopped may have missed one, or a past decision may already answer it.`,
     "Conclude with conclude_triage, once. decided: no human is needed; give the way to proceed, its grounds (which constraint each part meets and how, and which past decision it follows), and how it meets each goal item. The thread that stopped continues with it from where it stopped. needs-human: only the user can decide, because the way forward involves billing, personal data, revoking an existing key or token, or a choice of specification nobody has made yet, and neither the goal, the code, nor any past decision answers it; say which, and why the past decisions do not answer it.",
     "Narrowing the goal, relaxing a rule, or leaving something as a known limitation, out of scope, or for later is a compromise, not a way to proceed; when it is the only way you see, say so in conclude_triage, and the decision goes to the orchestrator. <earlier-triage-decisions>, when present, lists what earlier triages of this task decided and whether any file changed since. When this request asks the same thing as one of them, so that following that way again would not move the work, conclude repeat with its number: the decision goes to the orchestrator. A request about something else is yours to triage, even when no file changed since an earlier decision. You cannot edit files, commit, or push; your tools only read. The thread that continues with a decided way can: it edits, pushes, re-runs CI with `gh run rerun`, or records a review again, so a stall that such a step clears, as CI that never finished or a review the harness could not judge, is decided, not a question for a human.",
     "",
