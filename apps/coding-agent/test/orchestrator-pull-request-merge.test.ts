@@ -4,15 +4,13 @@ import { expect, it } from "vite-plus/test";
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 import triageSupport from "./triage-support.ts";
-import worktreeSupport from "./worktree-support.ts";
 
 const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
 const { taskStatus, waitFor } = harness;
 const { advanceMain, openedTask, rebaseAndPush, withRemote } = pullRequestSupport;
-const { GIT_ROUNDS_TIMEOUT_MS } = worktreeSupport;
-
 const MANY_ROUNDS = 5;
+const ROUNDS_TIMEOUT_MS = 120_000;
 
 const waitsForPendingCiBeforeMerging = () =>
   Effect.runPromise(
@@ -120,7 +118,7 @@ const keepsSendingBackAPullRequestThatFallsBehind = () =>
 it(
   "sends a pull request that falls behind at the merge back for as many rounds as it takes, and merges it once it is current",
   keepsSendingBackAPullRequestThatFallsBehind,
-  GIT_ROUNDS_TIMEOUT_MS,
+  ROUNDS_TIMEOUT_MS,
 );
 
 const asksForADecisionWhenTheMergeIsBlockedAtTheSameHead = () =>
