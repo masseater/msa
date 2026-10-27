@@ -79,16 +79,15 @@ function hasOrigin(cwd: string): Effect.Effect<boolean> {
 
 function repositoryOf(cwd: string): Effect.Effect<Repository | undefined> {
   return Effect.gen(function* () {
-    const common = yield* git(cwd, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-    const prefix = yield* git(cwd, ["rev-parse", "--show-prefix"]);
-    if (!common.ok || !prefix.ok || platformPath.basename(common.output) !== ".git") {
-      return undefined;
-    }
-    return {
-      commonDir: common.output,
-      prefix: prefix.output,
-      root: platformPath.dirname(common.output),
-    };
+    const found = yield* git(cwd, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+      "--show-prefix",
+    ]);
+    const [commonDir = "", prefix = ""] = found.output.split("\n");
+    if (!found.ok || platformPath.basename(commonDir) !== ".git") return undefined;
+    return { commonDir, prefix, root: platformPath.dirname(commonDir) };
   });
 }
 
@@ -140,10 +139,16 @@ function checkout(
   base: string,
 ): Effect.Effect<void, runtimeTypes.OrchestratorError> {
   return Effect.gen(function* () {
-    const owner = yield* git(path, ["rev-parse", "--path-format=absolute", "--git-common-dir"]);
-    const current = yield* git(path, ["rev-parse", "--abbrev-ref", "HEAD"]);
-    if (owner.ok && owner.output === repository.commonDir && current.output === branch) return;
-    if (owner.ok) {
+    const found = yield* git(path, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-common-dir",
+      "--abbrev-ref",
+      "HEAD",
+    ]);
+    const [owner, current] = found.output.split("\n");
+    if (found.ok && owner === repository.commonDir && current === branch) return;
+    if (found.ok) {
       return yield* orchestratorError(
         new Error(`${path} already exists and is not the worktree of ${branch}`),
       );

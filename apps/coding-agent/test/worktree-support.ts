@@ -9,6 +9,8 @@ const { runCommand } = orchestratorCallbacks;
 
 const GIT = "git -c user.name=t -c user.email=t@example.invalid";
 
+const GIT_ROUNDS_TIMEOUT_MS = 120_000;
+
 function sh(command: string, cwd: string): Effect.Effect<string> {
   return Effect.flatMap(
     Effect.promise((signal) => runCommand(command, cwd, 30_000, signal)),
@@ -70,6 +72,7 @@ function gatedTarget(orchestrator: orchestratorTypes.Orchestrator) {
 
 const worktreeSupport = {
   GIT,
+  GIT_ROUNDS_TIMEOUT_MS,
   commitOnBranch,
   gatedTarget,
   read,

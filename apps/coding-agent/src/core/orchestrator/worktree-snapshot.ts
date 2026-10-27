@@ -44,20 +44,28 @@ function promised<A>(run: () => Promise<A>): Effect.Effect<A | undefined> {
 
 function gitSnapshot(cwd: string): Effect.Effect<Snapshot | undefined> {
   return Effect.gen(function* () {
-    const root = yield* git(cwd, ["rev-parse", "--show-toplevel"]);
-    const gitDirectory = yield* git(cwd, ["rev-parse", "--absolute-git-dir"]);
-    const index = yield* git(cwd, ["rev-parse", "--path-format=absolute", "--git-path", "index"]);
-    if (!root.ok || !gitDirectory.ok || !index.ok) return undefined;
-    const temporary = platformPath.join(gitDirectory.output, `msa-snapshot-${randomHex(6)}`);
-    if ((yield* promised(() => files.exists(index.output))) === true) {
-      yield* promised(() => files.copyFile({ from: index.output, to: temporary }));
+    const located = yield* git(cwd, [
+      "rev-parse",
+      "--show-toplevel",
+      "--absolute-git-dir",
+      "--path-format=absolute",
+      "--git-path",
+      "index",
+    ]);
+    const [root, gitDirectory, index] = located.output.split("\n");
+    if (!located.ok || root === undefined || gitDirectory === undefined || index === undefined) {
+      return undefined;
+    }
+    const temporary = platformPath.join(gitDirectory, `msa-snapshot-${randomHex(6)}`);
+    if ((yield* promised(() => files.exists(index))) === true) {
+      yield* promised(() => files.copyFile({ from: index, to: temporary }));
     }
     const env = { GIT_INDEX_FILE: temporary };
-    const added = yield* git(root.output, ["add", "--all"], env);
-    const written = added.ok ? yield* git(root.output, ["write-tree"], env) : added;
+    const added = yield* git(root, ["add", "--all"], env);
+    const written = added.ok ? yield* git(root, ["write-tree"], env) : added;
     yield* promised(() => files.remove({ force: true, path: temporary }));
     if (!written.ok || written.output === "") return undefined;
-    return { id: `tree:${written.output}`, root: root.output, tree: written.output };
+    return { id: `tree:${written.output}`, root, tree: written.output };
   });
 }
 

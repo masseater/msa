@@ -12,7 +12,7 @@ const { create } = orchestratorSupport;
 const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
-const { read, runCommand, shortId } = worktreeSupport;
+const { GIT_ROUNDS_TIMEOUT_MS, read, runCommand, shortId } = worktreeSupport;
 const { commitAndPush, withRemote } = pullRequestSupport;
 
 const MANY_TURNS = 5;
@@ -113,6 +113,7 @@ const sendsFailingCiBackUntilItStopsMoving = () =>
 it(
   "sends failing CI back for as many pushes as it takes, and waits for a decision only when a turn ends on the same failure at the same head",
   sendsFailingCiBackUntilItStopsMoving,
+  GIT_ROUNDS_TIMEOUT_MS,
 );
 
 const passesAGreenRerunOfACancelledCheck = () =>

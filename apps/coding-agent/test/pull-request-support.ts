@@ -25,12 +25,16 @@ function withRemote<A, E>(body: (remote: Remote) => Effect.Effect<A, E>) {
       Effect.gen(function* () {
         const repository = joinPath(parent, "repo");
         const origin = joinPath(parent, "origin.git");
-        yield* sh(`git init -q --bare -b main origin.git`, parent);
-        yield* sh(`mkdir repo && echo app > repo/README && git -C repo init -q -b main`, parent);
-        yield* sh(`git add . && ${GIT} commit -q -m init`, repository);
         yield* sh(
-          `git remote add origin ${origin} && git push -q -u origin main && git remote set-head origin main`,
-          repository,
+          [
+            `git init -q --bare -b main origin.git`,
+            `mkdir repo && echo app > repo/README && git -C repo init -q -b main`,
+            `cd repo && git add . && ${GIT} commit -q -m init`,
+            `git remote add origin ${origin} && git push -q -u origin main && git remote set-head origin main`,
+            `echo ${repository}/.git/objects > ${origin}/objects/info/alternates`,
+            `echo ${origin}/objects > ${repository}/.git/objects/info/alternates`,
+          ].join(" && "),
+          parent,
         );
         return yield* body({ github: new FakeGitHub(origin), origin, repository });
       }),
@@ -52,17 +56,34 @@ function exists(command: string, cwd: string) {
   );
 }
 
-function rebaseAndPush(cwd: string, branch: string) {
+function rebaseAndPush(cwd: string, origin: string, branch: string) {
   return sh(
-    `git fetch -q origin main && ${GIT} rebase -q origin/main && git push -q -f origin ${branch}`,
+    [
+      `git update-ref refs/remotes/origin/main $(git --git-dir=${origin} rev-parse refs/heads/main)`,
+      `${GIT} rebase -q origin/main`,
+      `git --git-dir=${origin} update-ref refs/heads/${branch} $(git rev-parse HEAD)`,
+    ].join(" && "),
     cwd,
   );
 }
 
-function advanceMain(origin: string, parent: string, file: string) {
+function advanceMain(origin: string, file: string) {
   return sh(
-    `git clone -q ${origin} side-${file} && cd side-${file} && echo ${file} > ${file} && git add ${file} && ${GIT} commit -q -m ${file} && git push -q origin main && cd .. && rm -rf side-${file}`,
-    parent,
+    [
+      "git fast-import --quiet <<'EOF'",
+      "commit refs/heads/main",
+      "committer t <t@example.invalid> 1700000000 +0000",
+      "data <<MESSAGE",
+      file,
+      "MESSAGE",
+      "from refs/heads/main^0",
+      `M 100644 inline ${file}`,
+      "data <<CONTENT",
+      file,
+      "CONTENT",
+      "EOF",
+    ].join("\n"),
+    origin,
   );
 }
 

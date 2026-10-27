@@ -1,11 +1,9 @@
-import testing from "@msa/testing";
 import { Deferred, Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
 import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 
-const { dirnameOf } = testing;
 const { taskStatus, waitFor } = orchestratorHarness.harness;
 const { advanceMain, cleanedUp, reviewed, withRemote } = pullRequestSupport;
 
@@ -13,11 +11,11 @@ const sendsBackWhenMainMovesDuringTheMerge = () =>
   Effect.runPromise(
     withRemote((remote) =>
       Effect.gen(function* () {
-        const { github, origin, repository } = remote;
+        const { github, origin } = remote;
         const { orchestrator, workers, taskId } = yield* reviewed(remote);
         github.beforeMerge = Effect.suspend(() => {
           github.beforeMerge = undefined;
-          return advanceMain(origin, dirnameOf(repository), "moved.txt");
+          return advanceMain(origin, "moved.txt");
         });
         workers[1]!.complete("acceptable");
         yield* waitFor(() => workers.length === 3);
@@ -128,11 +126,11 @@ const stopsWhenMergedOutsideAfterAFailedMerge = () =>
   Effect.runPromise(
     withRemote((remote) =>
       Effect.gen(function* () {
-        const { github, origin, repository } = remote;
+        const { github, origin } = remote;
         const { orchestrator, reports, workers, number, taskId } = yield* reviewed(remote);
         github.beforeMerge = Effect.suspend(() => {
           github.beforeMerge = undefined;
-          return advanceMain(origin, dirnameOf(repository), "moved.txt");
+          return advanceMain(origin, "moved.txt");
         });
         workers[1]!.complete("acceptable");
         yield* waitFor(() => workers.length === 3);

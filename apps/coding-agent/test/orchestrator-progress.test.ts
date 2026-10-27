@@ -17,7 +17,7 @@ const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
 const { classifierDecide, reportOf } = reviewVerdictSupport;
-const { withRepository } = worktreeSupport;
+const { GIT_ROUNDS_TIMEOUT_MS, withRepository } = worktreeSupport;
 const { runCommand } = orchestratorCallbacks;
 
 type State = Parameters<typeof reportOf>[0];
@@ -71,6 +71,7 @@ it(
 it(
   "returns failing checks with the same output to a worker that reworks a tracked file without committing, and waits for a decision only after a turn that changes no file",
   keepsReturningChecksWhileTheFilesChange(true),
+  GIT_ROUNDS_TIMEOUT_MS,
 );
 
 function changesOf(state: State): string {
@@ -136,4 +137,5 @@ it(
 it(
   "keeps sending back a review that repeats its findings while the worker reworks files without committing, and waits for a decision once a round changes nothing",
   keepsSendingBackWhileTheFilesChange(true),
+  GIT_ROUNDS_TIMEOUT_MS,
 );
