@@ -14,11 +14,13 @@ const {
   changeMode,
   joinPath,
   makeDirectory,
+  makeSymlink,
   readDirectory,
   readTextFile,
   removeDirs,
   removePath,
   runTest,
+  sleep,
   writeTextFile,
 } = testing;
 const {
@@ -89,6 +91,38 @@ const takesOverALockThatStaysUnreadable = () =>
       yield* writeOne(locations, "alpha one");
       yield* leaveLock(locations, "");
       expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0"] });
+    }),
+  );
+
+const waitsWhenTheLockIsGoneRightAfterItWasTaken = () =>
+  runTest(
+    Effect.gen(function* () {
+      const locations = yield* makeLocations(directories);
+      yield* writeOne(locations, "alpha one");
+      const directory = indexVersionDirectory(locations);
+      const lock = joinPath(directory, "build.lock");
+      yield* makeDirectory(directory);
+      yield* makeSymlink(joinPath(directory, "missing"), lock);
+      const [result] = yield* Effect.all(
+        [search(locations, "alpha"), sleep("300 millis").pipe(Effect.andThen(removePath(lock)))],
+        { concurrency: "unbounded" },
+      );
+      expect(result).toEqual({ ids: ["u0"] });
+    }),
+  );
+
+const removesTheStagedPointerOfAProcessThatIsGone = () =>
+  runTest(
+    Effect.gen(function* () {
+      const locations = yield* makeLocations(directories);
+      yield* writeOne(locations, "alpha one");
+      const directory = indexVersionDirectory(locations);
+      yield* makeDirectory(directory);
+      yield* writeTextFile(joinPath(directory, `current.${GONE_PID}.tmp`), "stale.db\n");
+      expect(yield* search(locations, "alpha")).toEqual({ ids: ["u0"] });
+      const name = (yield* readTextFile(joinPath(directory, "current"))).trim();
+      const left = (yield* readDirectory(directory)).filter((file) => !file.startsWith(name));
+      expect(left).toEqual(["current"]);
     }),
   );
 
@@ -220,6 +254,14 @@ describe("search_sessions index lock and files", () => {
     takesOverALockLeftByAProcessThatIsGone,
   );
   it("takes over a build lock that stays unreadable", takesOverALockThatStaysUnreadable, 20_000);
+  it(
+    "waits when the build lock is gone right after another process held it",
+    waitsWhenTheLockIsGoneRightAfterItWasTaken,
+  );
+  it(
+    "removes the staged pointer a process that is gone left behind",
+    removesTheStagedPointerOfAProcessThatIsGone,
+  );
   it("names the index when it cannot take the build lock", namesTheIndexWhenItCannotTakeTheLock);
   it("keeps only the current generation after a rebuild", keepsOnlyTheCurrentGeneration);
   it(
