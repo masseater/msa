@@ -29,21 +29,14 @@ const repoRoot = `${import.meta.dirname}/../..`;
 
 const probePath = (dir: string, kind: string): string => `${dir}/lint-${kind}-probe.ts`;
 
-const lintFiles = (run: string, files: readonly string[]) =>
+const lintFiles = (files: readonly string[]) =>
   Effect.gen(function* () {
-    const path = yield* Path.Path;
-    const prefix = `${path.relative(repoRoot, run)}/`;
     const { stdout } = yield* captureProcess({
-      args: ["lint", "--format=json", ...files.map((file) => `${prefix}${file}`)],
+      args: ["lint", "--format=json", ...files],
       command: "vp",
       cwd: repoRoot,
     });
-    const { diagnostics } = yield* Schema.decodeEffect(LintReport)(stdout);
-    return diagnostics.map(({ code, filename, labels }) => ({
-      code,
-      filename: filename.startsWith(prefix) ? filename.slice(prefix.length) : filename,
-      labels,
-    }));
+    return (yield* Schema.decodeEffect(LintReport)(stdout)).diagnostics;
   });
 
 const probeRuntime = ManagedRuntime.make(
@@ -52,7 +45,7 @@ const probeRuntime = ManagedRuntime.make(
 
 const withProbes = <A, E, R>(
   probes: Readonly<Record<string, string>>,
-  use: (run: string) => Effect.Effect<A, E, R>,
+  use: (run: string, lint: ReturnType<typeof lintFiles>) => Effect.Effect<A, E, R>,
 ) =>
   Effect.scoped(
     Effect.gen(function* () {
@@ -76,21 +69,32 @@ const withProbes = <A, E, R>(
         yield* fs.makeDirectory(path.dirname(target), { recursive: true });
         yield* fs.writeFileString(target, source);
       }
-      return yield* use(run);
+      const prefix = `${path.relative(repoRoot, run)}/`;
+      const lint = lintFiles(Object.keys(probes).map((file) => `${prefix}${file}`)).pipe(
+        Effect.map((diagnostics) =>
+          diagnostics.map((diagnostic) => ({
+            ...diagnostic,
+            filename: diagnostic.filename.startsWith(prefix)
+              ? diagnostic.filename.slice(prefix.length)
+              : diagnostic.filename,
+          })),
+        ),
+      );
+      return yield* use(run, lint);
     }),
   );
 
 const lintProbes = (probes: Readonly<Record<string, string>>): Promise<Diagnostics> =>
-  probeRuntime.runPromise(withProbes(probes, (run) => lintFiles(run, Object.keys(probes))));
+  probeRuntime.runPromise(withProbes(probes, (_run, lint) => lint));
 
 const lintAndInspectProbes = <A>(
   probes: Readonly<Record<string, string>>,
   inspect: (run: string) => A,
 ): Promise<{ readonly diagnostics: Diagnostics; readonly inspected: A }> =>
   probeRuntime.runPromise(
-    withProbes(probes, (run) =>
+    withProbes(probes, (run, lint) =>
       Effect.all({
-        diagnostics: lintFiles(run, Object.keys(probes)),
+        diagnostics: lint,
         inspected: Effect.sync(() => inspect(run)),
       }),
     ),
