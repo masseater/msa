@@ -11,7 +11,7 @@ import worktreeSupport from "./worktree-support.ts";
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
-const { GIT, GIT_ROUNDS_TIMEOUT_MS, read, runCommand, sh, shortId } = worktreeSupport;
+const { GIT, read, runCommand, sh, shortId } = worktreeSupport;
 const { advanceMain, commitAndPush, exists, rebaseAndPush, withRemote } = pullRequestSupport;
 
 type Workers = ReturnType<typeof setup>["workers"];
@@ -284,5 +284,4 @@ const sendsBackWhenThePullRequestCannotMergeAfterReview = () =>
 it(
   "sends the task back instead of completing it when its pull request fell behind or its head moved after the review passed",
   sendsBackWhenThePullRequestCannotMergeAfterReview,
-  GIT_ROUNDS_TIMEOUT_MS,
 );

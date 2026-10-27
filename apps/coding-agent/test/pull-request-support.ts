@@ -25,15 +25,10 @@ function withRemote<A, E>(body: (remote: Remote) => Effect.Effect<A, E>) {
       Effect.gen(function* () {
         const repository = joinPath(parent, "repo");
         const origin = joinPath(parent, "origin.git");
+        yield* sh(`git init -q --bare -b main origin.git`, parent);
+        yield* importCommit(origin, "README", null);
         yield* sh(
-          [
-            `git init -q --bare -b main origin.git`,
-            `mkdir repo && echo app > repo/README && git -C repo init -q -b main`,
-            `cd repo && git add . && ${GIT} commit -q -m init`,
-            `git remote add origin ${origin} && git push -q -u origin main && git remote set-head origin main`,
-            `echo ${repository}/.git/objects > ${origin}/objects/info/alternates`,
-            `echo ${origin}/objects > ${repository}/.git/objects/info/alternates`,
-          ].join(" && "),
+          `git clone -q ${origin} repo && echo ${repository}/.git/objects > ${origin}/objects/info/alternates && echo ${origin}/objects > ${repository}/.git/objects/info/alternates`,
           parent,
         );
         return yield* body({ github: new FakeGitHub(origin), origin, repository });
@@ -67,7 +62,7 @@ function rebaseAndPush(cwd: string, origin: string, branch: string) {
   );
 }
 
-function advanceMain(origin: string, file: string) {
+function importCommit(origin: string, file: string, parent: string | null) {
   return sh(
     [
       "git fast-import --quiet <<'EOF'",
@@ -76,7 +71,7 @@ function advanceMain(origin: string, file: string) {
       "data <<MESSAGE",
       file,
       "MESSAGE",
-      "from refs/heads/main^0",
+      ...(parent === null ? [] : [`from ${parent}`]),
       `M 100644 inline ${file}`,
       "data <<CONTENT",
       file,
@@ -85,6 +80,10 @@ function advanceMain(origin: string, file: string) {
     ].join("\n"),
     origin,
   );
+}
+
+function advanceMain(origin: string, file: string) {
+  return importCommit(origin, file, "refs/heads/main^0");
 }
 
 function openedTask(remote: Remote, options: orchestratorHarnessTypes.HarnessOptions = {}) {
