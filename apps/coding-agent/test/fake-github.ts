@@ -4,6 +4,7 @@ import { DateTime, Effect } from "effect";
 import orchestratorCallbacks from "../src/core/agent-session/orchestrator-callbacks.ts";
 import type orchestratorTypes from "../src/core/orchestrator/orchestrator.types.ts";
 import fakeGitHubMerge from "./fake-github-merge.ts";
+import OriginRefs from "./fake-github-origin.ts";
 
 const { encodeJson } = testing;
 const { runCommand } = orchestratorCallbacks;
@@ -47,6 +48,7 @@ export default class FakeGitHub {
   readonly merged: Merged[] = [];
   readonly requests: { number: string | undefined; sha: string }[] = [];
   readonly origin: string;
+  private readonly refs: OriginRefs;
 
   unavailable: orchestratorTypes.GhResult | undefined;
   beforeMerge: Effect.Effect<void> | undefined;
@@ -62,6 +64,7 @@ export default class FakeGitHub {
 
   constructor(origin: string) {
     this.origin = origin;
+    this.refs = new OriginRefs(origin);
   }
 
   open(branch: string, base = "main", body = `Adds ${branch}.`): Effect.Effect<number> {
@@ -157,7 +160,7 @@ export default class FakeGitHub {
       )?.[1];
       const pull = this.pulls.find((candidate) => String(candidate.number) === number);
       if (pull === undefined) return refused(`fake gh does not know ${args.join(" ")}`);
-      yield* this.refresh(pull);
+      yield* this.sync(pull);
       const log = yield* git(
         this.origin,
         `log --reverse --format=%H%x1f%B%x1e refs/heads/${pull.base}..${pull.head}`,
@@ -174,27 +177,20 @@ export default class FakeGitHub {
     });
   }
 
-  private refresh(pull: FakePull): Effect.Effect<void> {
+  private sync(pull: FakePull): Effect.Effect<{ behind: boolean }> {
     return Effect.gen({ self: this }, function* () {
-      if (pull.state !== "OPEN") return;
-      const head = yield* git(this.origin, `rev-parse refs/heads/${pull.branch}`);
-      if (head.ok) pull.head = head.output;
+      if (pull.state !== "OPEN") return { behind: false };
+      const synced = yield* this.refs.sync(pull.branch, pull.base, pull.head);
+      pull.head = synced.head;
+      return { behind: synced.behind };
     });
-  }
-
-  private behind(pull: FakePull): Effect.Effect<boolean> {
-    return Effect.map(
-      git(this.origin, `merge-base --is-ancestor refs/heads/${pull.base} ${pull.head}`),
-      (result) => !result.ok,
-    );
   }
 
   private view(pull: FakePull) {
     return Effect.gen({ self: this }, function* () {
-      yield* this.refresh(pull);
+      const { behind } = yield* this.sync(pull);
       const ci = this.ci.get(pull.head);
       const conflicting = this.conflicting.has(pull.number);
-      const behind = pull.state === "OPEN" && (yield* this.behind(pull));
       return {
         autoMergeRequest:
           pull.autoMergeBy === undefined ? null : { enabledBy: { login: pull.autoMergeBy } },
@@ -236,7 +232,7 @@ export default class FakeGitHub {
     return Effect.gen({ self: this }, function* () {
       const pull = this.pulls.find((candidate) => candidate.number === number);
       if (pull === undefined) throw new Error(`no pull request #${number}`);
-      yield* this.refresh(pull);
+      yield* this.sync(pull);
       return yield* this.land(pull, login);
     });
   }
@@ -265,12 +261,12 @@ export default class FakeGitHub {
       if (method !== "squash") return refused("gh: squash only (HTTP 405)");
       if (this.beforeMerge !== undefined) yield* this.beforeMerge;
       if (this.mergeRefusal !== undefined) return this.mergeRefusal;
-      yield* this.refresh(pull);
+      const { behind } = yield* this.sync(pull);
       if (pull.state !== "OPEN") return refused("gh: Pull Request is not mergeable (HTTP 405)");
       if (pull.head !== sha) {
         return refused("gh: Head branch was modified. Review and try the merge again. (HTTP 409)");
       }
-      if (yield* this.behind(pull)) {
+      if (behind) {
         return refused("gh: Head branch is out of date (HTTP 405)");
       }
       const ci = this.ci.get(pull.head);

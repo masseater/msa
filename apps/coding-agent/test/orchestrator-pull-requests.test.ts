@@ -1,4 +1,3 @@
-import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
@@ -9,7 +8,6 @@ import orchestratorSupport from "./orchestrator-support.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 import worktreeSupport from "./worktree-support.ts";
 
-const { dirnameOf } = testing;
 const { create } = orchestratorSupport;
 const { harness } = orchestratorHarness;
 const { setup, taskStatus, waitFor } = harness;
@@ -199,13 +197,13 @@ const sendsBackAPullRequestBehindItsBase = () =>
         yield* commitAndPush(worker.cwd, "behind.txt", branch);
         yield* github.open(branch);
         github.ci.set(yield* github.head(branch), "success");
-        yield* advanceMain(origin, dirnameOf(repository), "main-moved.txt");
+        yield* advanceMain(origin, "main-moved.txt");
         worker.complete("green");
         yield* waitFor(() => worker.prompts.length === 2);
         expect(workers).toHaveLength(1);
         expect((yield* read(orchestrator, task.id)).pullRequest?.mergeState).toBe("BEHIND");
 
-        yield* rebaseAndPush(worker.cwd, branch);
+        yield* rebaseAndPush(worker.cwd, origin, branch);
         const rebased = yield* github.head(branch);
         github.ci.set(rebased, "success");
         worker.complete("rebased");
@@ -223,11 +221,10 @@ it(
 function sendsBackWhenBehindAtMerge(
   run: Merging & { reports: ReturnType<typeof setup>["reports"] },
   origin: string,
-  parent: string,
 ) {
   const { orchestrator, workers, github, taskId, reports } = run;
   return Effect.gen(function* () {
-    yield* advanceMain(origin, parent, "other.txt");
+    yield* advanceMain(origin, "other.txt");
     workers[1]!.complete("acceptable");
     yield* waitFor(() => workers.length === 3);
     expect(github.merged).toEqual([]);
@@ -241,7 +238,7 @@ function sendsBackWhenTheHeadMovedAfterReview(
 ) {
   const { workers, github, branch, reports } = run;
   return Effect.gen(function* () {
-    yield* rebaseAndPush(workers[2]!.cwd, branch);
+    yield* rebaseAndPush(workers[2]!.cwd, github.origin, branch);
     github.ci.set(yield* github.head(branch), "success");
     workers[2]!.complete("rebased");
     yield* waitFor(() => workers.length === 4);
@@ -271,7 +268,7 @@ const sendsBackWhenThePullRequestCannotMergeAfterReview = () =>
         yield* waitFor(() => workers.length === 2);
         const run = { branch, github, orchestrator, reports, taskId: task.id, workers };
 
-        yield* sendsBackWhenBehindAtMerge(run, origin, dirnameOf(repository));
+        yield* sendsBackWhenBehindAtMerge(run, origin);
         yield* sendsBackWhenTheHeadMovedAfterReview(run);
 
         const late = yield* github.head(branch);

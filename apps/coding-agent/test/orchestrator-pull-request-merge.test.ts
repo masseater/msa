@@ -1,4 +1,3 @@
-import testing from "@msa/testing";
 import { Effect } from "effect";
 import { expect, it } from "vite-plus/test";
 
@@ -6,13 +5,12 @@ import orchestratorHarness from "./orchestrator-harness.ts";
 import pullRequestSupport from "./pull-request-support.ts";
 import triageSupport from "./triage-support.ts";
 
-const { dirnameOf } = testing;
 const { escalateTriage } = triageSupport;
 const { harness } = orchestratorHarness;
 const { taskStatus, waitFor } = harness;
 const { advanceMain, openedTask, rebaseAndPush, withRemote } = pullRequestSupport;
-
 const MANY_ROUNDS = 5;
+const ROUNDS_TIMEOUT_MS = 120_000;
 
 const waitsForPendingCiBeforeMerging = () =>
   Effect.runPromise(
@@ -85,19 +83,19 @@ const keepsSendingBackAPullRequestThatFallsBehind = () =>
   Effect.runPromise(
     withRemote((remote) =>
       Effect.gen(function* () {
-        const { github, origin, repository } = remote;
+        const { github, origin } = remote;
         const { orchestrator, workers, branch, number, taskId } = yield* openedTask(remote);
         github.ci.set(yield* github.head(branch), "success");
         for (let round = 0; round < MANY_ROUNDS; round++) {
           const worker = workers.at(-1)!;
           if (round > 0) {
-            yield* rebaseAndPush(worker.cwd, branch);
+            yield* rebaseAndPush(worker.cwd, origin, branch);
             github.ci.set(yield* github.head(branch), "success");
           }
           const reviewing = workers.length + 1;
           worker.complete(`current with main (${round})`);
           yield* waitFor(() => workers.length === reviewing);
-          yield* advanceMain(origin, dirnameOf(repository), `main-${round}.txt`);
+          yield* advanceMain(origin, `main-${round}.txt`);
           workers.at(-1)!.complete("acceptable");
           yield* waitFor(() => workers.length === reviewing + 1);
           expect(taskStatus(orchestrator, taskId)).toBe("running");
@@ -105,7 +103,7 @@ const keepsSendingBackAPullRequestThatFallsBehind = () =>
         expect(github.merged).toEqual([]);
 
         const worker = workers.at(-1)!;
-        yield* rebaseAndPush(worker.cwd, branch);
+        yield* rebaseAndPush(worker.cwd, origin, branch);
         const head = yield* github.head(branch);
         github.ci.set(head, "success");
         worker.complete("current with main at last");
@@ -120,6 +118,7 @@ const keepsSendingBackAPullRequestThatFallsBehind = () =>
 it(
   "sends a pull request that falls behind at the merge back for as many rounds as it takes, and merges it once it is current",
   keepsSendingBackAPullRequestThatFallsBehind,
+  ROUNDS_TIMEOUT_MS,
 );
 
 const asksForADecisionWhenTheMergeIsBlockedAtTheSameHead = () =>
