@@ -2,6 +2,8 @@
 
 ## [Unreleased]
 
+## [0.0.6] - 2026-10-27
+
 ### Added
 
 - Built-in tools can ask a classifier for a decision with `decide({ name, state, questions })`. The classifier is `decision.model`, by default `local/liquid-d1-3b`, Liquid D1 run in process through `node-llama-cpp`; each question carries its own threshold, which `decision.thresholds` overrides. msa starts fetching the classifier `decision.model` is set to into `<agent dir>/models` and loading it when it starts in interactive or RPC mode, and shows a warning if that fails; until the model is fetched and loaded a decision is `undecided` at once, and the next decision after a failure fetches it again. Offline, no path downloads it: msa uses only a model file already on disk, and decisions stay `undecided` without one ([docs](docs/settings.md))
