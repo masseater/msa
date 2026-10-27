@@ -60,6 +60,12 @@ declare namespace sessionSearchTypes {
     readonly reason: string;
   }
 
+  interface FoundFile {
+    path: string;
+    size: number;
+    mtime: number;
+  }
+
   interface FileRow {
     id: number;
     path: string;
@@ -88,6 +94,7 @@ declare namespace sessionSearchTypes {
 
   interface FileUpdate {
     path: string;
+    basis: FileRow | undefined;
     size: number;
     mtime: number;
     from: number;

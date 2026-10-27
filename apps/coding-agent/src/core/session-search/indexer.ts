@@ -1,36 +1,21 @@
 import { Effect, FileSystem, Option, Stream } from "effect";
 
-import toolNames from "../orchestrator/tool-names.ts";
 import platform from "../platform/index.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
 import platformRuntime from "../platform/runtime.ts";
-import sessionFormat from "../session-manager/session-format.ts";
-import entryPartsModule from "./entry-parts.ts";
 import indexStore from "./index-store.ts";
+import lineScan from "./line-scan.ts";
 import type sessionSearchTypes from "./session-search.types.ts";
-import terms from "./terms.ts";
 
-const { isAbsolute, join, relative, toEpochMs } = platform;
-const { parseSessionEntryLine } = sessionFormat;
-const { entryParts, isRecord } = entryPartsModule;
-const { isOrchestratorTool } = toolNames;
+const { join } = platform;
+const { BATCH_BYTES, bodyBytes, changedSince, sameBytes, scanLines, skippedUpdate, under } =
+  lineScan;
 const { whileLocked } = indexStore;
 
 const TAIL_BYTES = 256;
 const MAX_DEPTH = 2;
-const NEWLINE = 10;
 
-interface FoundFile {
-  path: string;
-  size: number;
-  mtime: number;
-}
-
-const under = (path: string, roots: readonly string[]): boolean =>
-  roots.some((root) => {
-    const inside = relative(root, path);
-    return inside !== "" && !inside.startsWith("..") && !isAbsolute(inside);
-  });
+type FoundFile = sessionSearchTypes.FoundFile;
 
 const statOf = (fileSystem: FileSystem.FileSystem, path: string) =>
   fileSystem.stat(path).pipe(
@@ -71,9 +56,18 @@ const walk: (
   return [...found, ...deeper.flat()];
 });
 
-const readRange = (fileSystem: FileSystem.FileSystem, path: string, start: number, end: number) =>
+const readRange = (
+  fileSystem: FileSystem.FileSystem,
+  path: string,
+  start: number,
+  end: number | undefined,
+) =>
   Stream.runFold(
-    fileSystem.stream(path, { bytesToRead: end - start, chunkSize: 1 << 20, offset: start }),
+    fileSystem.stream(path, {
+      ...(end === undefined ? {} : { bytesToRead: end - start }),
+      chunkSize: 1 << 20,
+      offset: start,
+    }),
     (): Uint8Array[] => [],
     (chunks, chunk) => {
       chunks.push(chunk);
@@ -91,68 +85,6 @@ const readRange = (fileSystem: FileSystem.FileSystem, path: string, start: numbe
     }),
   );
 
-const sameBytes = (left: Uint8Array, right: Uint8Array): boolean =>
-  left.length === right.length && left.every((byte, index) => byte === right[index]);
-
-const timeOf = (value: unknown): number | null => {
-  if (typeof value !== "string") return null;
-  const time = toEpochMs(value);
-  return Number.isNaN(time) ? null : time;
-};
-
-interface LineScan {
-  parts: sessionSearchTypes.PartRow[];
-  header: sessionSearchTypes.SessionHeader | undefined;
-  orchestrator: boolean;
-}
-
-function headerOf(entry: Record<string, unknown>): sessionSearchTypes.SessionHeader | undefined {
-  if (entry["type"] !== "session" || typeof entry["id"] !== "string") return undefined;
-  return {
-    cwd: typeof entry["cwd"] === "string" ? entry["cwd"] : "",
-    sessionId: entry["id"],
-    startedAt: timeOf(entry["timestamp"]),
-  };
-}
-
-function scanLine(scan: LineScan, line: string, offset: number, length: number): void {
-  const entry = parseSessionEntryLine(line);
-  if (!isRecord(entry)) return;
-  scan.header ??= headerOf(entry);
-  const entryId = typeof entry["id"] === "string" ? entry["id"] : null;
-  const at = timeOf(entry["timestamp"]);
-  entryParts(entry).forEach((part, index) => {
-    if (part.kind === "tool_call" && part.tool !== null && isOrchestratorTool(part.tool)) {
-      scan.orchestrator = true;
-    }
-    if (part.text.trim() === "") return;
-    scan.parts.push({
-      at,
-      body: terms.indexText(part.text),
-      entryId,
-      kind: part.kind,
-      length,
-      offset,
-      part: index,
-      tool: part.tool,
-    });
-  });
-}
-
-function scanLines(bytes: Uint8Array, base: number): LineScan & { end: number } {
-  const decoder = new TextDecoder();
-  const scan: LineScan = { header: undefined, orchestrator: false, parts: [] };
-  let start = 0;
-  let newline = bytes.indexOf(NEWLINE, start);
-  while (newline !== -1) {
-    const line = decoder.decode(bytes.subarray(start, newline));
-    scanLine(scan, line, base + start, newline - start);
-    start = newline + 1;
-    newline = bytes.indexOf(NEWLINE, start);
-  }
-  return { ...scan, end: base + start };
-}
-
 interface Window {
   bytes: Uint8Array;
   base: number;
@@ -164,9 +96,9 @@ const readWindow = Effect.fnUntraced(function* (
   file: FoundFile,
   known: sessionSearchTypes.FileRow | undefined,
 ) {
-  if (known !== undefined && known.indexed > 0 && file.size >= known.indexed) {
+  if (known !== undefined) {
     const base = known.indexed - known.tail.length;
-    const bytes = yield* readRange(fileSystem, file.path, base, file.size);
+    const bytes = yield* readRange(fileSystem, file.path, base, undefined);
     if (sameBytes(bytes.subarray(0, known.tail.length), known.tail)) {
       const window: Window = { base, bytes, from: known.indexed };
       return window;
@@ -174,7 +106,7 @@ const readWindow = Effect.fnUntraced(function* (
   }
   const window: Window = {
     base: 0,
-    bytes: yield* readRange(fileSystem, file.path, 0, file.size),
+    bytes: yield* readRange(fileSystem, file.path, 0, undefined),
     from: 0,
   };
   return window;
@@ -188,6 +120,7 @@ const scanFile = Effect.fnUntraced(function* (
   const { base, bytes, from } = yield* readWindow(fileSystem, file, known);
   const scan = scanLines(bytes.subarray(from - base), from);
   const update: sessionSearchTypes.FileUpdate = {
+    basis: known,
     failure: undefined,
     from,
     header: scan.header,
@@ -196,32 +129,93 @@ const scanFile = Effect.fnUntraced(function* (
     orchestrator: scan.orchestrator,
     parts: scan.parts,
     path: file.path,
-    size: file.size,
+    size: base + bytes.length,
     tail: bytes.slice(Math.max(0, scan.end - TAIL_BYTES - base), scan.end - base),
   };
   return update;
 });
 
-const reasonOf = (defect: unknown): string =>
-  defect instanceof Error ? `${defect.name}: ${defect.message}` : String(defect);
+interface Synced {
+  changedFiles: number;
+  parts: number;
+  skipped: sessionSearchTypes.SkippedFile[];
+}
 
-const skippedUpdate = (file: FoundFile, defect: unknown): sessionSearchTypes.FileUpdate => ({
-  failure: reasonOf(defect),
-  from: 0,
-  header: undefined,
-  indexed: 0,
-  mtime: file.mtime,
-  orchestrator: false,
-  parts: [],
-  path: file.path,
-  size: file.size,
-  tail: new Uint8Array(0),
+const MAX_ATTEMPTS = 20;
+
+const applyScanned = Effect.fnUntraced(function* (
+  fileSystem: FileSystem.FileSystem,
+  database: DatabaseSync,
+  indexPath: string,
+  files: readonly FoundFile[],
+  known: ReadonlyMap<string, sessionSearchTypes.FileRow>,
+  synced: Synced,
+) {
+  const conflicts: string[] = [];
+  let batch: sessionSearchTypes.FileUpdate[] = [];
+  let batchBytes = 0;
+  const flush = Effect.fnUntraced(function* () {
+    const full = batch;
+    batch = [];
+    batchBytes = 0;
+    const lost = new Set(
+      yield* whileLocked(indexPath, () => indexStore.applyUpdates(database, full)),
+    );
+    for (const update of full) {
+      if (lost.has(update.path)) continue;
+      synced.parts += update.parts.length;
+      if (update.failure !== undefined) {
+        synced.skipped.push({ path: update.path, reason: update.failure });
+      }
+    }
+    conflicts.push(...lost);
+  });
+  for (const file of files) {
+    const basis = known.get(file.path);
+    const update = yield* scanFile(fileSystem, file, basis).pipe(
+      Effect.orElseSucceed(() => undefined),
+      Effect.catchDefect((defect) => Effect.succeed(skippedUpdate(file, basis, defect))),
+    );
+    if (update === undefined) continue;
+    batch.push(update);
+    batchBytes += bodyBytes(update);
+    if (batchBytes >= BATCH_BYTES) yield* flush();
+  }
+  yield* flush();
+  return conflicts;
 });
 
-const BATCH_BYTES = 8 << 20;
-
-const bodyBytes = (update: sessionSearchTypes.FileUpdate): number =>
-  update.parts.reduce((total, part) => total + part.body.length, 0);
+const syncFiles = Effect.fnUntraced(function* (
+  fileSystem: FileSystem.FileSystem,
+  database: DatabaseSync,
+  indexPath: string,
+  found: readonly FoundFile[],
+  rows: ReadonlyMap<string, sessionSearchTypes.FileRow>,
+) {
+  const known = new Map(rows);
+  let pending = found.filter((file) => changedSince(file, known.get(file.path)));
+  const synced: Synced = { changedFiles: pending.length, parts: 0, skipped: [] };
+  for (let attempt = 0; pending.length > 0 && attempt < MAX_ATTEMPTS; attempt += 1) {
+    const conflicts = yield* applyScanned(fileSystem, database, indexPath, pending, known, synced);
+    const fresh = yield* whileLocked(indexPath, () =>
+      conflicts.map((path) => [path, indexStore.fileRow(database, path)] as const),
+    );
+    const stats = yield* Effect.forEach(conflicts, (path) => statOf(fileSystem, path), {
+      concurrency: 32,
+    });
+    pending = [];
+    for (const [path, row] of fresh) {
+      if (row === undefined) known.delete(path);
+      else known.set(path, row);
+    }
+    for (const stat of stats) {
+      if (stat?.file !== true) continue;
+      const file: FoundFile = { mtime: stat.mtime, path: stat.path, size: stat.size };
+      if (changedSince(file, known.get(file.path))) pending.push(file);
+    }
+  }
+  return synced;
+});
 
 const updateWith = Effect.fnUntraced(function* (
   fileSystem: FileSystem.FileSystem,
@@ -229,46 +223,49 @@ const updateWith = Effect.fnUntraced(function* (
   roots: readonly string[],
   indexPath: string,
 ) {
-  const listed = yield* Effect.forEach([...new Set(roots)], (root) => walk(fileSystem, root, 0));
-  const found = new Map(listed.flat().map((file) => [file.path, file]));
   const rows = yield* whileLocked(indexPath, () => indexStore.fileRows(database));
   const known = new Map(rows.map((row) => [row.path, row]));
-  const removed = [...known.keys()].filter((path) => !found.has(path) && under(path, roots));
+  const listed = yield* Effect.forEach([...new Set(roots)], (root) => walk(fileSystem, root, 0));
+  const found = new Map(listed.flat().map((file) => [file.path, file]));
+  const removed = rows
+    .map((row) => row.path)
+    .filter((path) => !found.has(path) && under(path, roots));
   yield* whileLocked(indexPath, () => indexStore.removeFiles(database, removed));
-  const changed = [...found.values()].filter((file) => {
-    const row = known.get(file.path);
-    return row === undefined || row.size !== file.size || row.mtime !== file.mtime;
-  });
-  let parts = 0;
-  const skipped: sessionSearchTypes.SkippedFile[] = [];
-  let batch: sessionSearchTypes.FileUpdate[] = [];
-  let batchBytes = 0;
-  for (const file of changed) {
-    const update = yield* scanFile(fileSystem, file, known.get(file.path)).pipe(
-      Effect.orElseSucceed(() => undefined),
-      Effect.catchDefect((defect) => Effect.succeed(skippedUpdate(file, defect))),
-    );
-    if (update === undefined) continue;
-    if (update.failure !== undefined) skipped.push({ path: file.path, reason: update.failure });
-    batch.push(update);
-    batchBytes += bodyBytes(update);
-    parts += update.parts.length;
-    if (batchBytes < BATCH_BYTES) continue;
-    const full = batch;
-    yield* whileLocked(indexPath, () => indexStore.applyUpdates(database, full));
-    batch = [];
-    batchBytes = 0;
-  }
-  const last = batch;
-  yield* whileLocked(indexPath, () => indexStore.applyUpdates(database, last));
+  const synced = yield* syncFiles(fileSystem, database, indexPath, [...found.values()], known);
   const update: sessionSearchTypes.IndexUpdate = {
-    changedFiles: changed.length,
+    changedFiles: synced.changedFiles,
     files: found.size,
-    parts,
+    parts: synced.parts,
     removedFiles: removed.length,
-    skipped,
+    skipped: synced.skipped,
   };
   return update;
+});
+
+const updatePathsWith = Effect.fnUntraced(function* (
+  fileSystem: FileSystem.FileSystem,
+  database: DatabaseSync,
+  paths: readonly string[],
+  indexPath: string,
+) {
+  const unique = [...new Set(paths)];
+  const rows = yield* whileLocked(indexPath, () =>
+    unique.flatMap((path) => indexStore.fileRow(database, path) ?? []),
+  );
+  const known = new Map(rows.map((row) => [row.path, row]));
+  const stats = yield* Effect.forEach(unique, (path) => statOf(fileSystem, path), {
+    concurrency: 32,
+  });
+  const found: FoundFile[] = [];
+  const gone: string[] = [];
+  for (const [index, path] of unique.entries()) {
+    const stat = stats[index];
+    if (stat?.file === true) found.push({ mtime: stat.mtime, path, size: stat.size });
+    else gone.push(path);
+  }
+  const removed = yield* whileLocked(indexPath, () => indexStore.removeFiles(database, gone));
+  const synced = yield* syncFiles(fileSystem, database, indexPath, found, known);
+  return removed + synced.changedFiles;
 });
 
 const updateIndex = (
@@ -280,11 +277,22 @@ const updateIndex = (
     FileSystem.FileSystem.use((fileSystem) => updateWith(fileSystem, database, roots, indexPath)),
   );
 
+const updatePaths = (
+  database: DatabaseSync,
+  paths: readonly string[],
+  indexPath: string,
+): Promise<number> =>
+  platformRuntime.runPromise(
+    FileSystem.FileSystem.use((fileSystem) =>
+      updatePathsWith(fileSystem, database, paths, indexPath),
+    ),
+  );
+
 const readSlice = (path: string, start: number, end: number): Promise<Uint8Array> =>
   platformRuntime.runPromise(
     FileSystem.FileSystem.use((fileSystem) => readRange(fileSystem, path, start, end)),
   );
 
-const indexer = { readSlice, timeOf, updateIndex };
+const indexer = { readSlice, updateIndex, updatePaths };
 
 export default indexer;

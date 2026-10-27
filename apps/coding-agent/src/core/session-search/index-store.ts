@@ -107,11 +107,18 @@ function openIndex(path: string): DatabaseSync {
   }
 }
 
+const FILE_ROW = "SELECT id, path, size, mtime, indexed, tail FROM files";
+
 function fileRows(database: DatabaseSync): FileRow[] {
-  return database
-    .prepare("SELECT id, path, size, mtime, indexed, tail FROM files")
-    .all() as unknown as FileRow[];
+  return database.prepare(FILE_ROW).all() as unknown as FileRow[];
 }
+
+function fileRow(database: DatabaseSync, path: string): FileRow | undefined {
+  return database.prepare(`${FILE_ROW} WHERE path = ?`).get(path) as FileRow | undefined;
+}
+
+const sameRow = (left: FileRow | undefined, right: FileRow | undefined): boolean =>
+  left === undefined || right === undefined ? left === right : left.size === right.size;
 
 function transaction<T>(database: DatabaseSync, body: () => T): T {
   if (database.isTransaction) return body();
@@ -134,17 +141,17 @@ function deleteParts(database: DatabaseSync, fileId: RowId): void {
   write(database, "DELETE FROM parts WHERE file_id = ?").run(fileId);
 }
 
-function removeFiles(database: DatabaseSync, paths: readonly string[]): void {
-  if (paths.length === 0) return;
-  transaction(database, () => {
-    const find = database.prepare("SELECT id FROM files WHERE path = ?");
-    for (const path of paths) {
-      const row = find.get(path) as { id: number } | undefined;
-      if (row === undefined) continue;
-      deleteParts(database, row.id);
-      write(database, "DELETE FROM files WHERE id = ?").run(row.id);
-    }
-  });
+function removeFiles(database: DatabaseSync, paths: readonly string[]): number {
+  if (paths.length === 0) return 0;
+  return transaction(database, () =>
+    paths
+      .flatMap((path) => fileRow(database, path) ?? [])
+      .map((current) => {
+        deleteParts(database, current.id);
+        write(database, "DELETE FROM files WHERE id = ?").run(current.id);
+        return current.path;
+      }),
+  ).length;
 }
 
 function upsertFile(
@@ -198,20 +205,9 @@ function insertParts(database: DatabaseSync, fileId: RowId, parts: readonly Part
   }
 }
 
-function applyFileUpdate(database: DatabaseSync, update: FileUpdate): void {
-  const current = database
-    .prepare("SELECT id, path, size, mtime, indexed, tail FROM files WHERE path = ?")
-    .get(update.path) as FileRow | undefined;
-  if (
-    current !== undefined &&
-    current.size === update.size &&
-    current.mtime === update.mtime &&
-    current.indexed === update.indexed
-  ) {
-    return;
-  }
-  const expected = current === undefined ? 0 : current.indexed;
-  if (update.from !== 0 && update.from !== expected) return;
+function applyFileUpdate(database: DatabaseSync, update: FileUpdate): boolean {
+  const current = fileRow(database, update.path);
+  if (!sameRow(current, update.basis)) return false;
   const fileId = upsertFile(database, update, current);
   insertParts(database, fileId, update.parts);
   if (update.header !== undefined) {
@@ -226,13 +222,14 @@ function applyFileUpdate(database: DatabaseSync, update: FileUpdate): void {
     write(database, "UPDATE files SET orchestrator = 1 WHERE id = ?").run(fileId);
   }
   write(database, "UPDATE files SET error = ? WHERE id = ?").run(update.failure ?? null, fileId);
+  return true;
 }
 
-function applyUpdates(database: DatabaseSync, updates: readonly FileUpdate[]): void {
-  if (updates.length === 0) return;
-  transaction(database, () => {
-    for (const update of updates) applyFileUpdate(database, update);
-  });
+function applyUpdates(database: DatabaseSync, updates: readonly FileUpdate[]): string[] {
+  if (updates.length === 0) return [];
+  return transaction(database, () =>
+    updates.filter((update) => !applyFileUpdate(database, update)).map((update) => update.path),
+  );
 }
 
 function skippedFiles(database: DatabaseSync): sessionSearchTypes.SkippedFile[] {
@@ -245,6 +242,7 @@ const indexStore = {
   SCHEMA_VERSION,
   applyUpdates,
   createSchema,
+  fileRow,
   fileRows,
   openCurrent,
   openIndex,

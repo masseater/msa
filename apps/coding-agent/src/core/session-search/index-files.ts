@@ -1,4 +1,4 @@
-import { Clock, Duration, Effect, Exit, FileSystem, Schedule } from "effect";
+import { Clock, Duration, Effect, FileSystem, Predicate, Schedule } from "effect";
 
 import platform from "../platform/index.ts";
 import processAliveModule from "../platform/node/process-alive.ts";
@@ -55,19 +55,16 @@ const lockHolder = (fileSystem: FileSystem.FileSystem, lock: string) =>
 const holderGone = (pid: number): boolean => !Number.isNaN(pid) && !processAlive(pid);
 
 const tryLock = (directory: string) =>
-  FileSystem.FileSystem.use(
-    Effect.fnUntraced(function* (fileSystem) {
-      const lock = join(directory, LOCK);
-      const created = yield* Effect.exit(
-        fileSystem.writeFileString(lock, `${currentPid()}\n`, { flag: "wx", mode: 0o600 }),
-      );
-      if (Exit.isSuccess(created)) return true;
-      if (!(yield* fileSystem.exists(lock))) return yield* created.pipe(Effect.as(false));
-      if (holderGone(yield* lockHolder(fileSystem, lock))) {
-        yield* fileSystem.remove(lock, { force: true });
-      }
-      return false;
-    }),
+  FileSystem.FileSystem.use((fileSystem) =>
+    fileSystem
+      .writeFileString(join(directory, LOCK), `${currentPid()}\n`, { flag: "wx", mode: 0o600 })
+      .pipe(
+        Effect.as(true),
+        Effect.catchIf(
+          (error) => Predicate.isTagged(error.reason, "AlreadyExists"),
+          () => Effect.succeed(false),
+        ),
+      ),
   );
 
 const waitForLock = (directory: string) =>
@@ -104,7 +101,7 @@ const removeOtherGenerations = (directory: string, kept: string) =>
       const names = yield* fileSystem
         .readDirectory(directory)
         .pipe(Effect.orElseSucceed((): readonly string[] => []));
-      const others = names.filter((name) => !keep.has(name) && !name.endsWith(".tmp"));
+      const others = names.filter((name) => !keep.has(name));
       yield* Effect.forEach(
         others,
         (name) => fileSystem.remove(join(directory, name), { force: true }).pipe(Effect.ignore),

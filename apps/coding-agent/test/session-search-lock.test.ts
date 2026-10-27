@@ -17,6 +17,7 @@ const {
   readDirectory,
   readTextFile,
   removeDirs,
+  removePath,
   runTest,
   writeTextFile,
 } = testing;
@@ -46,6 +47,13 @@ const search = (locations: sessionSearchTypes.Locations, query: string) =>
         (error: unknown) => ({ error: error instanceof Error ? error.message : String(error) }),
       ),
   );
+
+const request = (query: string): sessionSearchTypes.SearchRequest => ({
+  filters: {},
+  limit: 50,
+  order: "oldest",
+  query,
+});
 
 const sessionFile = (locations: sessionSearchTypes.Locations, root = locations.roots[0] ?? "") =>
   joinPath(root, "--w--", "s.jsonl");
@@ -160,6 +168,52 @@ const keepsTheSessionsOfOtherRoots = () =>
     }),
   );
 
+const dropsSessionsOfOtherRootsOnceTheyAreGone = () =>
+  runTest(
+    Effect.gen(function* () {
+      const mine = yield* makeLocations(directories);
+      const otherRoot = joinPath(mine.roots[0] ?? "", "..", "elsewhere");
+      const theirs = { ...mine, roots: [otherRoot] };
+      const gone = sessionFile(theirs, otherRoot);
+      const rewritten = joinPath(otherRoot, "--w--", "r.jsonl");
+      const deep = joinPath(otherRoot, "--w--", "deep.jsonl");
+      const unread = joinPath(otherRoot, "--w--", "unread.jsonl");
+      yield* writeOne(mine, "alpha mine");
+      yield* writeSession(gone, [header("o", "/o", DAY), user("o0", DAY, "alpha theirs")]);
+      yield* writeSession(rewritten, [
+        header("r", "/o", DAY),
+        user("r0", DAY, `alpha before ${"words that make the file long ".repeat(40)}`),
+      ]);
+      yield* writeSession(unread, [header("n", "/o", DAY), user("n0", DAY, "zeta")]);
+      yield* writeTextFile(
+        deep,
+        `${yield* sessionText([header("d", "/o", DAY)])}${fixture.deeplyNestedCall("d0")}`,
+      );
+      expect(yield* search(theirs, "alpha")).toEqual({ ids: expect.arrayContaining(["r0", "o0"]) });
+      const readUnread = () =>
+        awaited(
+          sessionSearch.readSession(mine, {
+            after: 1,
+            before: 0,
+            entry: "n0",
+            from: 0,
+            path: unread,
+          }),
+        );
+      expect(yield* readUnread()).toMatchObject({ text: expect.stringContaining("zeta") });
+      yield* removePath(unread);
+      expect(yield* readUnread()).toBeUndefined();
+      yield* removePath(gone);
+      yield* removePath(deep);
+      yield* writeSession(rewritten, [header("r", "/o", DAY), user("r1", DAY, "after")]);
+      const found = yield* awaited(sessionSearch.searchSessions(mine, request("alpha")));
+      expect(found.hits.map((hit) => hit.entryId)).toEqual(["u0"]);
+      expect(found.skipped).toEqual([]);
+      expect(yield* search(mine, "theirs")).toEqual({ ids: [] });
+      expect(yield* search(mine, "before")).toEqual({ ids: [] });
+    }),
+  );
+
 describe("search_sessions index lock and files", () => {
   it(
     "takes over a build lock left by a process that is gone",
@@ -174,4 +228,8 @@ describe("search_sessions index lock and files", () => {
     30_000,
   );
   it("keeps the sessions of roots another process searches", keepsTheSessionsOfOtherRoots);
+  it(
+    "drops sessions of other roots that are gone or rewritten before showing them",
+    dropsSessionsOfOtherRootsOnceTheyAreGone,
+  );
 });
