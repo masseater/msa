@@ -17,7 +17,10 @@ const isLockWait = (error: unknown): boolean =>
   [SQLITE_BUSY, SQLITE_LOCKED].includes(primaryCode(error));
 
 const foreign = <A>(body: () => A): Effect.Effect<A, ForeignError> =>
-  Effect.try({ catch: (cause) => new ForeignError({ cause, message: causeOf(cause) }), try: body });
+  Effect.try({
+    catch: (cause) => ForeignError.make({ cause, message: causeOf(cause) }),
+    try: body,
+  });
 
 const indexOpen = { causeOf, foreign, isLockWait };
 

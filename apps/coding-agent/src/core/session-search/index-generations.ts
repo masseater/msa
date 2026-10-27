@@ -1,4 +1,4 @@
-import { Cause, Effect, Exit } from "effect";
+import { Cause, Effect, Exit, Schema } from "effect";
 
 import ForeignError from "../platform/foreign-error.ts";
 import type DatabaseSync from "../platform/node/sqlite.ts";
@@ -40,7 +40,7 @@ const directoryOf = (locations: Locations): string =>
 const promised = <A>(run: () => Promise<A>) =>
   Effect.tryPromise({
     catch: (cause) =>
-      cause instanceof IndexLocked ? cause : new ForeignError({ cause, message: causeOf(cause) }),
+      Schema.is(IndexLocked)(cause) ? cause : ForeignError.make({ cause, message: causeOf(cause) }),
     try: run,
   });
 
@@ -133,7 +133,7 @@ const current = Effect.fnUntraced(function* (
 });
 
 const failure = (message: string, cause: unknown): ForeignError =>
-  new ForeignError({ cause, message });
+  ForeignError.make({ cause, message });
 
 const rebuilt = Effect.fnUntraced(function* (
   opened: Opened,
@@ -186,12 +186,11 @@ const updated = Effect.fnUntraced(function* (
 const refreshed = Effect.fnUntraced(function* (opened: Opened, locations: Locations) {
   const directory = directoryOf(locations);
   yield* promised(() => indexFiles.makeDirectory(directory)).pipe(
-    Effect.mapError(
-      (cause) =>
-        new ForeignError({
-          cause,
-          message: `The session index ${locations.indexDirectory} could not be opened (${causeOf(cause)})`,
-        }),
+    Effect.mapError((cause) =>
+      ForeignError.make({
+        cause,
+        message: `The session index ${locations.indexDirectory} could not be opened (${causeOf(cause)})`,
+      }),
     ),
   );
   return yield* updated(opened, locations, directory);
