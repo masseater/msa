@@ -2,6 +2,10 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- The task reviewer, advisor, and round review prompts read as English again around the `search_sessions` hint, which had been inserted as a relative clause with a second object. The hint is one sentence from one place for all four roles (triage, advisor, task reviewer, round review), and it names the narrowing that fits the role: `taskIds` for the roles that look at a task, `rounds` for the round review, `roles` for all, and no filter for the rest of the project ([docs](docs/session-search.md))
+
 ### Changed
 
 - Classes defined in msa's own source, including every class the package entry point exports such as `AgentSession`, `AgentSessionRuntime` and `SessionManager`, are sealed with `Object.preventExtensions` on the constructor and on `prototype` as soon as they are defined. In strict mode code (ES modules), adding a static or a prototype property by assignment throws `TypeError: Cannot add property <name>, object is not extensible`, `Object.defineProperty` throws `TypeError: Cannot define property <name>, object is not extensible`, and `Object.setPrototypeOf` throws a `TypeError` ending in `is not extensible`: on `prototype` it reads `#<ClassName> is not extensible`, and on the class itself V8 prints the class source in place of the name (`class ClassName { ... } is not extensible`). Replacing or deleting a property the class already has still works, for example `SessionManager.prototype.getCwd = ...`, but a deleted property cannot be put back: assigning it throws `Cannot add property`, and `Object.defineProperty` throws `Cannot define property`. A getter-only accessor such as `AgentSession.prototype.state` still throws on assignment as before. Instances stay extensible
