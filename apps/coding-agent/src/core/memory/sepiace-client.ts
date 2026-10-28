@@ -38,6 +38,8 @@ export default class SepiaceClient {
 
   private signedOut = false;
 
+  private storeError: string | undefined;
+
   constructor(options: memoryTypes.SepiaceClientOptions) {
     this.options = options;
   }
@@ -48,6 +50,7 @@ export default class SepiaceClient {
 
   get state(): memoryTypes.SepiaceState {
     if (this.closed) return "closed";
+    if (this.storeError !== undefined) return "failed";
     if (this.signedOut) return "needs-auth";
     const state = this.connectionInternal?.state;
     if (state === undefined) return this.attempt === undefined ? "idle" : "connecting";
@@ -56,7 +59,10 @@ export default class SepiaceClient {
   }
 
   get error(): string | undefined {
-    return this.state === "failed" ? this.connectionInternal?.error : undefined;
+    if (this.state !== "failed") return undefined;
+    if (this.storeError !== undefined) return this.storeError;
+    const reason = this.connectionInternal?.error;
+    return reason === undefined ? undefined : `failed to connect: ${reason}`;
   }
 
   private load(): Promise<Runtime> {
@@ -94,9 +100,24 @@ export default class SepiaceClient {
   private open(): Promise<boolean> {
     return Effect.runPromise(
       awaitingWith(function* () {
-        const credentials = yield* awaited(this.credentials());
-        const tokens = yield* awaited(credentials.tokens(SEPIACE_NAME, this.options.url));
+        this.storeError = undefined;
+        const saved = yield* awaited(
+          this.credentials()
+            .then((credentials) => credentials.tokens(SEPIACE_NAME, this.options.url))
+            .then(
+              (tokens) => ({ tokens }),
+              (error: unknown) => ({
+                error: `could not read the saved sign-in: ${toErrorMessage(error)}`,
+              }),
+            ),
+        );
         if (this.closed) return false;
+        if ("error" in saved) {
+          this.storeError = saved.error;
+          this.options.onChange?.();
+          return false;
+        }
+        const { tokens } = saved;
         this.signedOut = tokens === undefined;
         if (this.signedOut) {
           this.options.onChange?.();
@@ -147,7 +168,7 @@ export default class SepiaceClient {
   notConnected(): string {
     const state = this.state;
     if (state === "failed")
-      return `sepiace is not connected: ${this.error ?? "the connection failed"}.`;
+      return `sepiace is not connected: ${this.error ?? "failed to connect"}.`;
     if (state === "closed") return "sepiace is not connected: the session is closed.";
     return `sepiace is not connected; ${SIGN_IN_HINT}.`;
   }

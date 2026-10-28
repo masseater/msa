@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it } from "vite-plus/test";
 import memoryStartupSupport from "./memory-startup-support.ts";
 
 const { closeServers, readTextFile, removeDirs, runTest } = testing;
-const { prepare, toolNames } = memoryStartupSupport;
+const { prepare, toolNames, toolResults } = memoryStartupSupport;
 
 const tempDirs: string[] = [];
 const closers: (() => Promise<void>)[] = [];
@@ -73,6 +73,50 @@ const ignoresMcpJsonEntriesForSepiace = Effect.gen(function* () {
   expect(yield* readTextFile(agent.mcpConfig)).toBe(before);
 });
 
+const survivesAnExtensionReplacingMcp = Effect.gen(function* () {
+  const agent = yield* setUp({
+    mcpServers: SEPIACE_ENTRIES,
+    memoryToolRequest: "where does the release go?",
+    replaceMcp: true,
+    signedIn: true,
+  });
+  const result = yield* agent.prompt("where does the release go?");
+  expect(result.code, result.stderr).toBe(0);
+  expect(result.stderr).toContain("built-in extension `mcp` was not loaded");
+  expect(result.stderr).toContain('MCP server "sepiace" is ignored');
+  const [request = "", answer = ""] = agent.model.bodies;
+  expect(request).toContain("Releases go to the tap.");
+  const tools = yield* toolNames(request);
+  expect(tools).toContain("memory");
+  expect(tools.filter((name) => name.startsWith("mcp__"))).toEqual([]);
+  expect((yield* toolResults(answer)).join("\n")).toContain("Releases go to the tap.");
+});
+
+const explainsAnUnreadableCredentialStore = Effect.gen(function* () {
+  const agent = yield* setUp({
+    memoryToolRequest: "where does the release go?",
+    signedIn: true,
+    storeFails: true,
+  });
+  const reason = "could not read the saved sign-in";
+  const status = yield* agent.run(["memory", "status"]);
+  expect(status.stdout).toContain(reason);
+  expect(status.stdout).toContain("gpg: decryption failed");
+  expect(status.stdout).not.toContain("connecting");
+  const { notices, stderr } = yield* agent.rpc(["/memory"]);
+  expect(notices, stderr).toHaveLength(1);
+  expect(notices[0]).toContain(reason);
+  expect(notices[0]).toContain("gpg: decryption failed");
+  const result = yield* agent.prompt("where does the release go?");
+  expect(result.code, result.stderr).toBe(0);
+  const [, answer = ""] = agent.model.bodies;
+  const toolResult = (yield* toolResults(answer)).join("\n");
+  expect(toolResult).toContain(reason);
+  expect(toolResult).toContain("gpg: decryption failed");
+  expect(toolResult).not.toContain("sign in with");
+  expect(signInsAsked(agent.sepiace.log)).toEqual([]);
+});
+
 const leavesSepiaceOutOfSlashMcp = Effect.gen(function* () {
   const agent = yield* setUp({ mcpServers: SEPIACE_ENTRIES, signedIn: true });
   const { notices, stderr } = yield* agent.rpc(["/mcp", "/mcp login sepiace"]);
@@ -133,6 +177,16 @@ describe.skipIf(process.platform === "win32")("long-term memory from the msa com
   it(
     "warns about and ignores mcp.json entries for sepiace, and passes no mcp__ tools for it",
     () => runTest(ignoresMcpJsonEntriesForSepiace),
+    90_000,
+  );
+  it(
+    "recalls and offers the memory tool when an extension replaces the MCP support",
+    () => runTest(survivesAnExtensionReplacingMcp),
+    90_000,
+  );
+  it(
+    "shows why when the credential store cannot be read",
+    () => runTest(explainsAnUnreadableCredentialStore),
     90_000,
   );
   it(

@@ -79,7 +79,7 @@ export default class MemoryService {
       return { detail: `not signed in; ${SIGN_IN_HINT}`, state: "missing" };
     if (this.lastFailure !== undefined) return { detail: this.lastFailure, state: "failing" };
     if (client.state === "failed")
-      return { detail: `failed to connect: ${client.error ?? "unknown error"}`, state: "missing" };
+      return { detail: client.error ?? "failed to connect", state: "missing" };
     return this.connected ? { state: "ready" } : { detail: "connecting", state: "missing" };
   }
 

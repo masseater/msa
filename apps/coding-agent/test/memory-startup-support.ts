@@ -1,6 +1,7 @@
 import testing from "@msa/testing";
 import { Config, Effect, Schema } from "effect";
 
+import memoryStartupScripts from "./memory-startup-scripts.ts";
 import mcpOauthServer from "./suite/mcp-oauth-server.ts";
 
 const {
@@ -17,83 +18,21 @@ const {
   writeTextFile,
 } = testing;
 const { startOAuthMcpServer } = mcpOauthServer;
+const {
+  BROWSER,
+  COMPLETION_STREAM,
+  CREDENTIAL_HELPER,
+  REPLACING_MCP_EXTENSION,
+  RPC_DRIVER,
+  RUN_CLI,
+  memoryToolCallStream,
+} = memoryStartupScripts;
 
 const cliPath = resolvePath(import.meta.dirname, "../src/cli.ts");
 const sourceResolverUrl = new URL("../src/experimental/source-resolver.ts", import.meta.url).href;
 
 const HELPER_SERVER_URL = "https://msa.invalid/mcp-oauth";
 const LEGACY_TOKEN = "token-saved-by-msa-mcp-login";
-
-const CREDENTIAL_HELPER = `import { existsSync, readFileSync, writeFileSync } from "node:fs";
-const [, , file, action] = process.argv;
-const input = readFileSync(0, "utf8");
-const data = existsSync(file) ? JSON.parse(readFileSync(file, "utf8")) : {};
-if (action === "store") {
-  const entry = JSON.parse(input);
-  data[entry.ServerURL] = entry;
-  writeFileSync(file, JSON.stringify(data));
-} else if (action === "erase") {
-  delete data[input.trim()];
-  writeFileSync(file, JSON.stringify(data));
-} else {
-  const entry = data[input.trim()];
-  if (entry === undefined) {
-    process.stdout.write("credentials not found in native keychain");
-    process.exit(1);
-  }
-  process.stdout.write(JSON.stringify(entry));
-}
-`;
-
-const BROWSER = `const url = process.argv.at(-1);
-await fetch(url, { redirect: "follow" }).then((response) => response.text());
-`;
-
-const chunk = (delta: string, finishReason: string) =>
-  `data: {"id":"chatcmpl-memory","object":"chat.completion.chunk","created":0,"model":"memory-model","choices":[{"index":0,"delta":${delta},"finish_reason":${finishReason}}]}\n\n`;
-
-const COMPLETION_STREAM = [
-  chunk('{"role":"assistant","content":""}', "null"),
-  chunk('{"content":"memory check done"}', "null"),
-  chunk("{}", '"stop"'),
-  "data: [DONE]\n\n",
-].join("");
-
-const RPC_DRIVER = `
-import { spawn } from "node:child_process";
-const commands = JSON.parse(process.argv.at(-1));
-const child = spawn(process.execPath, ["--import", process.env.MEMORY_CHECK_RESOLVER,
-  process.env.MEMORY_CHECK_CLI, "--no-session", "--mode", "rpc"], { stdio: ["pipe", "pipe", "pipe"] });
-const notices = [];
-let buffer = "";
-let stderr = "";
-let next = 0;
-const send = () => {
-  if (next >= commands.length) { child.stdin.end(); return; }
-  child.stdin.write(JSON.stringify({ id: "c" + next, type: "prompt", message: commands[next] }) + "\\n");
-  next += 1;
-};
-child.stderr.on("data", (data) => { stderr += data; });
-child.stdout.on("data", (data) => {
-  buffer += data;
-  const lines = buffer.split("\\n");
-  buffer = lines.pop();
-  for (const line of lines) {
-    let event;
-    try { event = JSON.parse(line); } catch { continue; }
-    if (event.type === "extension_ui_request" && event.method === "notify") {
-      notices.push(event.message);
-      if (notices.length === next) send();
-    }
-  }
-});
-send();
-const timer = setTimeout(() => child.kill(), 30000);
-child.on("exit", () => {
-  clearTimeout(timer);
-  console.log(JSON.stringify({ notices, stderr: stderr.slice(-4000) }));
-});
-`;
 
 const RunResult = Schema.Struct({
   code: Schema.NullOr(Schema.Finite),
@@ -104,6 +43,14 @@ const RunResult = Schema.Struct({
 const RpcResult = Schema.Struct({ notices: Schema.Array(Schema.String), stderr: Schema.String });
 
 const ModelRequest = Schema.Struct({
+  messages: Schema.optional(
+    Schema.Array(
+      Schema.Struct({
+        content: Schema.optional(Schema.Unknown),
+        role: Schema.String,
+      }),
+    ),
+  ),
   tools: Schema.optional(
     Schema.Array(
       Schema.Struct({ function: Schema.optional(Schema.Struct({ name: Schema.String })) }),
@@ -130,21 +77,36 @@ const legacySignIn = (url: string) =>
     }),
   );
 
-const startModel = Effect.gen(function* () {
-  const bodies: string[] = [];
-  const origin = yield* listen((request) =>
-    Effect.promise(() => request.text()).pipe(
-      Effect.map((body) => {
-        if (!request.url.endsWith("/chat/completions")) return new Response(null, { status: 404 });
-        bodies.push(body);
-        return new Response(COMPLETION_STREAM, {
-          headers: { "Content-Type": "text/event-stream" },
-        });
-      }),
+const startModel = (memoryToolRequest: string | undefined) =>
+  Effect.gen(function* () {
+    const bodies: string[] = [];
+    const origin = yield* listen((request) =>
+      Effect.promise(() => request.text()).pipe(
+        Effect.map((body) => {
+          if (!request.url.endsWith("/chat/completions"))
+            return new Response(null, { status: 404 });
+          bodies.push(body);
+          const stream =
+            memoryToolRequest !== undefined && bodies.length === 1
+              ? memoryToolCallStream(memoryToolRequest)
+              : COMPLETION_STREAM;
+          return new Response(stream, {
+            headers: { "Content-Type": "text/event-stream" },
+          });
+        }),
+      ),
+    );
+    return { bodies, origin };
+  });
+
+const toolResults = (body: string) =>
+  Effect.map(Effect.orDie(decodeModelRequest(body)), (request) =>
+    (request.messages ?? []).flatMap((message) =>
+      message.role === "tool"
+        ? [typeof message.content === "string" ? message.content : JSON.stringify(message.content)]
+        : [],
     ),
   );
-  return { bodies, origin };
-});
 
 const toolNames = (body: string) =>
   Effect.map(Effect.orDie(decodeModelRequest(body)), (request) =>
@@ -161,11 +123,6 @@ interface Layout {
   readonly store: string;
   readonly mcpConfig: string;
 }
-
-const RUN_CLI = `import { spawnSync } from "node:child_process";
-const result = spawnSync(process.execPath, ["--import", process.env.MEMORY_CHECK_RESOLVER,
-  process.env.MEMORY_CHECK_CLI, ...JSON.parse(process.argv.at(-1))], { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
-console.log(JSON.stringify({ code: result.status, stderr: result.stderr, stdout: result.stdout }));`;
 
 const makeLayout = Effect.gen(function* () {
   const root = yield* makeTempDir("msa-memory-startup-");
@@ -202,6 +159,11 @@ const writeAgentFiles = (
   Effect.gen(function* () {
     const helper = joinPath(layout.root, "credential-helper.mjs");
     yield* writeTextFile(helper, CREDENTIAL_HELPER);
+    if (options.replaceMcp === true) {
+      const extensions = joinPath(layout.agentDir, "extensions");
+      yield* makeDirectory(extensions);
+      yield* writeTextFile(joinPath(extensions, "other-mcp.js"), REPLACING_MCP_EXTENSION);
+    }
     yield* writeJsonFile(layout.store, options.signedIn ? yield* legacySignIn(urls.sepiace) : {});
     yield* writeJsonFile(layout.mcpConfig, {
       credentialHelper: { args: [helper, layout.store], command: process.execPath },
@@ -222,12 +184,13 @@ const writeAgentFiles = (
     });
   });
 
-const runners = (layout: Layout) =>
+const runners = (layout: Layout, options: PrepareOptions) =>
   Effect.gen(function* () {
     const inheritedPath = yield* Config.String("PATH").pipe(Config.withDefault(""));
     const env = {
       MEMORY_CHECK_CLI: cliPath,
       MEMORY_CHECK_RESOLVER: sourceResolverUrl,
+      MEMORY_CHECK_STORE_FAILS: options.storeFails === true ? "1" : "0",
       MSA_CODING_AGENT_DIR: layout.agentDir,
       MSA_OFFLINE: "1",
       MSA_SKIP_VERSION_CHECK: "1",
@@ -264,6 +227,9 @@ interface PrepareOptions {
   readonly signedIn: boolean;
   readonly mcpServers?: (sepiaceUrl: string) => Record<string, unknown>;
   readonly memory?: Record<string, unknown>;
+  readonly memoryToolRequest?: string;
+  readonly replaceMcp?: boolean;
+  readonly storeFails?: boolean;
 }
 
 const prepare = (options: PrepareOptions) =>
@@ -274,13 +240,13 @@ const prepare = (options: PrepareOptions) =>
       }),
     );
     sepiace.trustToken(LEGACY_TOKEN);
-    const model = yield* startModel;
+    const model = yield* startModel(options.memoryToolRequest);
     const layout = yield* makeLayout;
     yield* writeBrowser(layout);
     yield* writeAgentFiles(layout, { model: model.origin, sepiace: sepiace.url }, options);
-    return { ...layout, ...(yield* runners(layout)), model, sepiace };
+    return { ...layout, ...(yield* runners(layout, options)), model, sepiace };
   });
 
-const memoryStartupSupport = { prepare, toolNames };
+const memoryStartupSupport = { prepare, toolNames, toolResults };
 
 export default memoryStartupSupport;
