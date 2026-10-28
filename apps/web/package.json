@@ -12,6 +12,7 @@
     "jose": "catalog:"
   },
   "devDependencies": {
+    "@alchemy.run/cloudflare": "catalog:stack",
     "alchemy": "catalog:stack"
   }
 }

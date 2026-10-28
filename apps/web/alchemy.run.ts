@@ -1,5 +1,5 @@
+import { providers, state } from "@alchemy.run/cloudflare";
 import { Stack } from "alchemy";
-import { providers, state } from "alchemy/Cloudflare";
 import { Effect } from "effect";
 
 import APP_NAME from "./app-name.ts";

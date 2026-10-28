@@ -13,7 +13,7 @@ const { httpRequest } = http;
 
 const cryptoRuntime = ManagedRuntime.make(NodeCrypto.layer);
 const randomUuid = (): string =>
-  cryptoRuntime.runSync(Crypto.Crypto.use((crypto) => crypto.randomUUIDv4));
+  cryptoRuntime.runSync(Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()));
 const DirectAccessSchema = Schema.Struct({
   headers: Schema.Record(Schema.String, Schema.String),
   token: Schema.String,

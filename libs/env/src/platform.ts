@@ -68,7 +68,7 @@ const withCrypto = <A>(
 const randomHex = (bytes: number): Effect.Effect<string> =>
   withCrypto((crypto) => Effect.map(crypto.randomBytes(bytes), Hex.encode));
 
-const randomUuid: Effect.Effect<string> = withCrypto((crypto) => crypto.randomUUIDv4);
+const randomUuid: Effect.Effect<string> = withCrypto((crypto) => crypto.randomUUIDv4());
 
 const sha256Hex = (data: Uint8Array): Effect.Effect<string> =>
   withCrypto((crypto) => Effect.map(crypto.digest("SHA-256", data), Hex.encode));

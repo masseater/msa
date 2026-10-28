@@ -26,7 +26,7 @@ const digest: {
     Effect.orDie(webCrypto.digest(algorithm, data)),
 );
 
-const randomUuid = (): string => Effect.runSync(Effect.orDie(webCrypto.randomUUIDv4));
+const randomUuid = (): string => Effect.runSync(Effect.orDie(webCrypto.randomUUIDv4()));
 
 const cryptoModule = {
   digest,

@@ -120,7 +120,7 @@ const sha256Hex = (text: string): Effect.Effect<string> =>
   ).pipe(Effect.map(Hex.encode), Effect.orDie);
 
 const randomUuid: Effect.Effect<string> = provideNodeServices(
-  Crypto.Crypto.use((crypto) => crypto.randomUUIDv4),
+  Crypto.Crypto.use((crypto) => crypto.randomUUIDv4()),
 ).pipe(Effect.orDie);
 
 const STDOUT_MODES = { capture: "pipe", ignore: "ignore", inherit: "inherit" } as const;

@@ -232,7 +232,7 @@ const createEmptyTempFile = ({
   nodeRuntime.runPromise(
     Effect.gen(function* () {
       const crypto = yield* Crypto.Crypto;
-      const id = yield* Effect.orDie(crypto.randomUUIDv4);
+      const id = yield* Effect.orDie(crypto.randomUUIDv4());
       const path = joinPaths(directory, `${prefix}${id}${suffix}`);
       return yield* fileResult(
         Effect.as(
