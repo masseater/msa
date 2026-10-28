@@ -1,7 +1,9 @@
 import promptsModule from "./prompts.ts";
+import sessionSearchHintModule from "./session-search-hint.ts";
 import type orchestratorTypesTypes from "./types.types.ts";
 
-const { EARLIER_THREADS, notesBlock, stateBlock, truncateReport } = promptsModule.prompts;
+const { notesBlock, stateBlock, truncateReport } = promptsModule.prompts;
+const { searchSessionsHint } = sessionSearchHintModule;
 
 function reportsBlock(reports: readonly orchestratorTypesTypes.Report[]): string {
   if (reports.length === 0) return "";
@@ -18,7 +20,7 @@ function advisorPrompt(
   const request = task.reports.findLast((report) => report.role !== "advisor");
   return [
     "You are an advisor to the orchestrator. The task below stopped because it needs a decision on how to proceed: its goal cannot be met as it stands, or the work is not moving. You did not do the work, and you do not decide.",
-    `Read the task, the request, the reports, and the code, and the user's instructions and decisions that bear on the request, which ${EARLIER_THREADS}. Weigh each option the request names, and any better one you find, against the goal: what it meets, what it gives up, what it would take, and what could go wrong. Then recommend one, and say what the orchestrator should tell the worker if it agrees. Do not edit files, commit, or push.`,
+    `Read the task, the request, the reports, and the code, and the user's instructions and decisions that bear on the request. ${searchSessionsHint({ kind: "task", taskId: task.id })} Weigh each option the request names, and any better one you find, against the goal: what it meets, what it gives up, what it would take, and what could go wrong. Then recommend one, and say what the orchestrator should tell the worker if it agrees. Do not edit files, commit, or push.`,
     "",
     `<task id="${task.id}" title="${task.title}">`,
     stateBlock("current-state", task.currentState),
