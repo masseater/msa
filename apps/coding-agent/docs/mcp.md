@@ -31,7 +31,7 @@ Use `/mcp` inside an interactive session to inspect connections, sign in, reconn
 
 msa reads user-level servers from `~/.msa/agent/mcp.json` and project servers from `.msa/mcp.json`. Project configuration is read only after [project trust](security.md#understand-project-trust) is granted. A project entry replaces a user-level entry with the same name.
 
-msa also lists the built-in `sepiace` server for [long-term memory](memory.md), turned on while `memory.enabled` is on. Its tool is `hidden`: the model and codemode cannot call it, and msa calls it itself for the `memory` tool and recall. An entry named `sepiace` in either file can set `enabled`, and one with a `url` in the user-level file replaces its address. Its exposure stays `hidden` whatever the entry says, so the requests always pass msa's secret check.
+sepiace, which keeps [long-term memory](memory.md), is not an MCP server here: memory connects to it itself. An entry named `sepiace`, or one whose `url` is on `hi.sepiace.io`, is ignored with a warning at startup, and `msa mcp add` refuses one. `/mcp login sepiace` and `msa mcp login sepiace` point to `/memory` and `msa memory login`.
 
 A project entry without `command`, `url`, or `type` overrides only `enabled`, `exposure`, and `toolExposure` of the user-level server with the same name and keeps the rest, including `env`, `headers`, and `auth`. For example, this turns off a user-level server in one project:
 
@@ -99,7 +99,7 @@ Run `msa mcp list` to connect to every enabled server and print its state, tools
 
 msa reports configuration errors, failed connections, and required sign-ins once after startup. Server logging notifications are appended to `~/.msa/agent/mcp.log` as `<time> [<server>] <level> <logger>: <message>`. The file moves to `mcp.log.1` after it grows past 5 MB.
 
-msa connects every enabled server in the background when a session starts. A server's tools appear once it connects; the `codemode` description does not list them, so it does not change when servers connect. The first prompt waits up to 10 seconds only for servers with `direct` tools, which must be declared in its request, and for built-in servers such as `sepiace`, which recall asks before the prompt is sent. Other servers are waited for when they are needed: a codemode script waits for the servers it names (`mcp__<server>`) and, when it calls `searchTools()` or reads `ALL_TOOLS`, for all of them; `tool_search` and the resource tools also wait for all of them. HTTP network errors and transient statuses (408, 429, and 5xx) are retried twice. A dropped connection is shown as disconnected and reconnects on the next call. When a server announces a changed tool list, new tools are added and withdrawn tools become unreachable.
+msa connects every enabled server in the background when a session starts. A server's tools appear once it connects; the `codemode` description does not list them, so it does not change when servers connect. The first prompt waits up to 10 seconds only for servers with `direct` tools, which must be declared in its request. Other servers are waited for when they are needed: a codemode script waits for the servers it names (`mcp__<server>`) and, when it calls `searchTools()` or reads `ALL_TOOLS`, for all of them; `tool_search` and the resource tools also wait for all of them. HTTP network errors and transient statuses (408, 429, and 5xx) are retried twice. A dropped connection is shown as disconnected and reconnects on the next call. When a server announces a changed tool list, new tools are added and withdrawn tools become unreachable.
 
 Stopping a stdio server closes its stdin, sends SIGTERM, then sends SIGKILL to its process group. This also stops servers launched through wrappers such as `npx` or `uvx`.
 
@@ -196,9 +196,9 @@ msa uses that document instead of discovery and trusts it as configured, so only
 
 ### Store sign-ins
 
-msa writes no token to a file. It keeps every MCP sign-in in one credential store, the first that works of:
+msa writes no token to a file. It keeps every MCP sign-in, and the [sepiace sign-in of long-term memory](memory.md#sign-in), in one credential store, the first that works of:
 
-1. The `credentialHelper` in `~/.msa/agent/mcp.json`, a program that speaks the [Docker credential helper protocol](https://github.com/docker/docker-credential-helpers): msa runs it with `get` or `store` and passes the server URL `https://msa.invalid/mcp-oauth` or a JSON object with `ServerURL`, `Username`, and `Secret` on standard input, never in arguments. When it is set and fails, sign-in fails.
+1. The `credentialHelper` in `~/.msa/agent/mcp.json`, a program that speaks the [Docker credential helper protocol](https://github.com/docker/docker-credential-helpers): msa runs it with `get` or `store` and passes the server URL `https://msa.invalid/mcp-oauth` or a JSON object with `ServerURL`, `Username`, and `Secret` on standard input, never in arguments. When it is set and fails, sign-in fails, and msa runs it again the next time it needs a sign-in, so a helper that fails only while a keychain is locked works once the keychain unlocks.
 2. The login keychain on macOS (`security`) or the Secret Service keyring on Linux (`secret-tool`), one item per agent directory.
 3. Memory: sign-ins last until msa exits. This happens over SSH on macOS, where the login keychain refuses access. msa warns as soon as it falls back to memory, whether at startup, when a token is refreshed, or when signing in: in the session, or on standard error in `msa -p` and JSON mode. When it moved sign-ins out of an old `mcp-auth.json`, the warning names those servers. `msa mcp list` and `/memory` say that sign-ins are not saved.
 

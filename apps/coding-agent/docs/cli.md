@@ -12,6 +12,7 @@ msa list
 msa config [options]
 msa auth <check|print-api-key|print-bearer-token> [options]
 msa mcp <list|login|logout> [options]
+msa memory <status|login|logout> [options]
 msa squash-message <pull request number> <head sha>
 ```
 
@@ -324,6 +325,16 @@ These commands work outside a session, so agents can run them through `bash`. Se
 `add` and `remove` change `~/.msa/agent/mcp.json`, or `.msa/mcp.json` in the current directory with `--local` (`-l`). `add` also takes `--exposure <mode>` (see [Exposure](mcp.md#control-tool-exposure)) and `--description <text>` and does not connect; run `msa mcp list` to check the server.
 
 Project `.msa/mcp.json` files are only read for projects that are already trusted.
+
+## Memory commands
+
+These commands manage the sepiace sign-in of [long-term memory](memory.md) outside a session.
+
+| Command                                  | Description                                                                                                                                     |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `msa memory status`                      | Print whether memory is on, signed in, and connected, the same status as `/memory`                                                              |
+| `msa memory login [--timeout <seconds>]` | Sign in to sepiace: open the authorization page and wait for the browser; a terminal also accepts the pasted redirect URL (default 300 seconds) |
+| `msa memory logout`                      | Delete the stored sepiace sign-in                                                                                                               |
 
 ## Squash message
 

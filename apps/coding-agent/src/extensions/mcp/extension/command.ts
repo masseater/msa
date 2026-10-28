@@ -2,6 +2,7 @@ import * as Effect from "effect/Effect";
 
 import awaitingModule from "../../../core/awaiting.ts";
 import type extensionsTypesTypes from "../../../core/extensions/types.types.ts";
+import memoryModule from "../../../core/memory/memory.ts";
 import type extensionInternalTypes from "../extension-internal.types.ts";
 import uiModule from "../ui.ts";
 import type McpExtensionHost from "./host.ts";
@@ -11,6 +12,7 @@ const MCP_USAGE = "Usage: /mcp, /mcp login [server], /mcp logout [server], /mcp 
 const { describeState } = serverState;
 const { awaited, awaitingWith } = awaitingModule;
 const { showMcpManager } = uiModule;
+const { notAnMcpServer } = memoryModule;
 
 export default class McpCommand {
   private readonly host: McpExtensionHost;
@@ -32,7 +34,8 @@ export default class McpCommand {
       awaitingWith(function* () {
         if (name !== undefined && name !== "") {
           const server = this.host.state.findServer(name);
-          if (server === undefined) ctx.ui.notify(`No MCP server named "${name}".`, "error");
+          if (server === undefined)
+            ctx.ui.notify(notAnMcpServer(name) ?? `No MCP server named "${name}".`, "error");
           else if (!criteria.eligible(server)) ctx.ui.notify(criteria.none, "error");
           return server !== undefined && criteria.eligible(server) ? server : undefined;
         }

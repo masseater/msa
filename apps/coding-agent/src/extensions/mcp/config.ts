@@ -3,6 +3,7 @@ import { dual } from "effect/Function";
 import configModule from "../../config.ts";
 import mcpServers from "../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../core/mcp-servers.types.ts";
+import memoryModule from "../../core/memory/memory.ts";
 import platformModule from "../../core/platform/index.ts";
 import errorsModule from "../../utils/errors.ts";
 import configOverrides from "./config-overrides.ts";
@@ -11,7 +12,8 @@ import credentialHelperConfig from "./credentials/credential-helper-config.ts";
 
 const { mcpNamespace, validateMcpServerConfig } = mcpServers;
 const { credentialHelperError } = credentialHelperConfig;
-const { applyOverride, applyToBuiltin, isOverride } = configOverrides;
+const { applyOverride, isOverride } = configOverrides;
+const { isSepiaceServer } = memoryModule;
 const { toErrorMessage } = errorsModule;
 const { dirname, join } = platformModule;
 const { exists, makeDirectory, readText, writeFile } = platformModule.files;
@@ -84,14 +86,10 @@ function applyServers(input: {
   const { path, scope, state } = input;
   const { servers, errors } = state;
   for (const [name, value] of Object.entries(input.servers)) {
-    const base = servers.get(name);
-    if (base?.scope === "builtin") {
-      const error = applyToBuiltin({ base, name, path, scope, servers, value });
-      if (error !== undefined) errors.push(error);
-      continue;
-    }
+    const url = isRecord(value) && typeof value["url"] === "string" ? value["url"] : undefined;
+    if (isSepiaceServer(name, url)) continue;
     if (scope === "project" && isRecord(value) && isOverride(value)) {
-      applyOverride(value, base, errors, path, name, servers);
+      applyOverride(value, servers.get(name), errors, path, name, servers);
       continue;
     }
     const config = validateMcpServerConfig(name, value);
@@ -119,12 +117,8 @@ function loadMcpConfig(options: {
   agentDir: string;
   cwd: string;
   projectTrusted: boolean;
-  builtins?: readonly configTypes.McpServerEntry[];
 }): Promise<configTypes.LoadedMcpConfig> {
-  const state: McpConfigState = {
-    errors: [],
-    servers: new Map((options.builtins ?? []).map((entry) => [entry.name, entry])),
-  };
+  const state: McpConfigState = { errors: [], servers: new Map() };
   const projectConfig = options.projectTrusted
     ? join(options.cwd, CONFIG_DIR_NAME, "mcp.json")
     : undefined;

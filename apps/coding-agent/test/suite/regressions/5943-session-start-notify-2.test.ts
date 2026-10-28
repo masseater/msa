@@ -39,6 +39,16 @@ const subscribesBeforeReplacementSessionStartHandlers2Setup = () =>
     return { events, harness, runPromise };
   });
 
+const untilAnswered = (events: readonly string[]) =>
+  Effect.gen(function* () {
+    for (
+      let attempt = 0;
+      attempt < 250 && !events.includes("message_end:assistant:assistant from start");
+      attempt++
+    )
+      yield* Effect.sleep("20 millis");
+  });
+
 const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* () {
   const { events, harness, runPromise } =
     yield* subscribesBeforeReplacementSessionStartHandlers2Setup();
@@ -78,6 +88,7 @@ const subscribesBeforeReplacementSessionStartHandlers2 = Effect.gen(function* ()
     yield* Effect.promise(() =>
       bindModeFake(context).extensions.binding.rebindCurrentSession({ renderBeforeBind: true }),
     );
+    yield* untilAnswered(events);
     yield* Effect.promise(() => harness.session.agent.waitForIdle());
 
     expect(events.slice(0, 3)).toEqual(["render", "subscribe", "bind"]);

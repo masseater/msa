@@ -1,6 +1,7 @@
 import configModule from "../../../config.ts";
 import mcpServers from "../../../core/mcp-servers.ts";
 import type mcpServersTypes from "../../../core/mcp-servers.types.ts";
+import memoryModule from "../../../core/memory/memory.ts";
 import platform from "../../../core/platform/index.ts";
 import type cliInternalTypes from "../cli-internal.types.ts";
 import type cliTypes from "../cli.types.ts";
@@ -9,6 +10,7 @@ import serverPersist from "./server-persist.ts";
 
 const { APP_NAME, CONFIG_DIR_NAME } = configModule;
 const { validateMcpServerConfig } = mcpServers;
+const { SIGN_IN_HINT, isSepiaceServer } = memoryModule;
 const { join } = platform;
 const { removeConfiguredServer, saveAddedServer } = serverPersist;
 const { HELP_HINT, parseOptions, parsePairs } = cliOptions;
@@ -134,6 +136,12 @@ function add(
   }
   const validated = buildServerConfig(name, command, parsed, error);
   if (validated === undefined) return Promise.resolve(1);
+  if (isSepiaceServer(name, "url" in validated ? validated.url : undefined)) {
+    error(
+      `sepiace is long-term memory, not an MCP server, so mcp.json does not take it; ${SIGN_IN_HINT}.`,
+    );
+    return Promise.resolve(1);
+  }
   const project = parsed.values.has("local");
   const path = project ? projectConfig : join(options.agentDir, "mcp.json");
   return saveAddedServer({ error, log, name, options, path, project, validated }).then((saved) => {

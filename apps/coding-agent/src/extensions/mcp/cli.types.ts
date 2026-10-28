@@ -1,4 +1,3 @@
-import type configTypes from "./config.types.ts";
 import type runtimeTypes from "./runtime.types.ts";
 
 declare namespace cliTypes {
@@ -7,8 +6,6 @@ declare namespace cliTypes {
     agentDir: string;
 
     credentials?: runtimeTypes.McpOAuthCredentialStore;
-
-    builtins?: readonly configTypes.McpServerEntry[];
 
     openUrl?: (url: string) => void;
 

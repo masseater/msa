@@ -27,6 +27,7 @@ declare namespace typesModule {
 
     sessionManager?: sessionManagerTypes.SessionManager | undefined;
     telemetry?: sessionTelemetryTypes.SessionTelemetryOptions | undefined;
+    memoryConnection?: agentSessionTypes.AgentSessionConfig["memoryConnection"];
   }
 
   interface Harness {

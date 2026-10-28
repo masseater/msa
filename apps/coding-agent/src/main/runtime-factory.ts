@@ -38,7 +38,12 @@ export default class RuntimeFactory {
         const { parsed, telemetry } = this.startup;
         const trustDiagnostics: Diagnostic[] = [];
         const services = yield* awaited(this.servicesFor(args, trustDiagnostics));
-        const diagnostics = runtimeDiagnostics(services, trustDiagnostics);
+        const diagnostics = yield* awaited(
+          runtimeDiagnostics(services, trustDiagnostics, {
+            agentDir: args.agentDir,
+            cwd: args.cwd,
+          }),
+        );
         const scopedModels = yield* awaited(scopedModelsFor(parsed, services));
         return yield* sessionFromServices(parsed, services, scopedModels, diagnostics, {
           sessionManager: args.sessionManager,

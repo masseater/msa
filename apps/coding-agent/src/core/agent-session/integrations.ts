@@ -28,6 +28,7 @@ export default class SessionIntegrations {
   }
 
   start(config: agentSessionTypes.AgentSessionConfig): void {
+    this.memory.configure(config.memoryConnection);
     this.decision.start();
     this.goal.start();
     const telemetryContext = this.telemetry.start(config.telemetry);
@@ -36,6 +37,10 @@ export default class SessionIntegrations {
   }
 
   close(): Promise<void> {
-    return Promise.all([this.orchestration.close(), this.prWatch.close()]).then(() => undefined);
+    return Promise.all([
+      this.orchestration.close(),
+      this.prWatch.close(),
+      this.memory.close(),
+    ]).then(() => undefined);
   }
 }

@@ -21,7 +21,7 @@ const {
   registerFauxModels,
   writeModelsJson,
 } = auth;
-const { createSessionManager, createSettingsManager } = state;
+const { createMemoryConnection, createSessionManager, createSettingsManager } = state;
 const { createFauxAgent } = agentModule;
 const { createTestExtensionsResult, createTestResourceLoader } = utilities;
 const { getModelRuntime } = modelRuntimeTestUtils;
@@ -129,6 +129,7 @@ const createHarness = (options: typesModule.HarnessOptions = {}): Promise<typesM
         agentDir: tempDir,
         cwd: tempDir,
         extensionRunnerRef,
+        memoryConnection: createMemoryConnection(options.memoryConnection),
         modelRuntime: getModelRuntime(modelRegistry),
         resourceLoader: yield* resolveResourceLoader(options, tempDir),
         sessionManager,

@@ -2,13 +2,13 @@ import { Effect } from "effect";
 
 import awaitingModule from "../core/awaiting.ts";
 import type extensionsTypesTypes from "../core/extensions/types.types.ts";
-import builtinServersModule from "../extensions/mcp/builtin-servers.ts";
+import memoryCliLazy from "../core/memory/memory-cli.lazy.ts";
 import cliLazy from "../extensions/mcp/cli.lazy.ts";
 import packageManagerCli from "../package-manager-cli.ts";
 
 const { awaited, awaiting } = awaitingModule;
 const { loadMcpCommand } = cliLazy;
-const { shellBuiltinServers } = builtinServersModule;
+const { loadMemoryCli } = memoryCliLazy;
 const { handleConfigCommand, handlePackageCommand } = packageManagerCli;
 
 type Context = {
@@ -29,13 +29,12 @@ function runSubcommand(args: string[], context: Context): Promise<boolean> {
       if (yield* awaited(handleConfigCommand(args, { extensionFactories }))) return true;
       if (args[0] === "mcp") {
         const { runMcpCommand } = yield* awaited(loadMcpCommand());
-        process.exitCode = yield* awaited(
-          runMcpCommand(args.slice(1), {
-            agentDir,
-            builtins: yield* awaited(shellBuiltinServers(cwd, agentDir)),
-            cwd,
-          }),
-        );
+        process.exitCode = yield* awaited(runMcpCommand(args.slice(1), { agentDir, cwd }));
+        return true;
+      }
+      if (args[0] === "memory") {
+        const { runMemoryCli } = yield* awaited(loadMemoryCli());
+        process.exitCode = yield* awaited(runMemoryCli(args.slice(1), { agentDir, cwd }));
         return true;
       }
       return false;

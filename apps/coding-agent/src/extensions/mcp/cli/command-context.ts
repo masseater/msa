@@ -28,7 +28,6 @@ function loadCommandContext(
       const loaded = yield* awaited(
         loadMcpConfig({
           agentDir: options.agentDir,
-          builtins: options.builtins ?? [],
           cwd: options.cwd,
           projectTrusted,
         }),

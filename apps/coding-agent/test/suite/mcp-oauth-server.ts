@@ -279,6 +279,7 @@ const startOAuthMcpServer = (options: mcpOauthServerTypes.ServerOptions = {}) =>
         stall: state.stall,
         stalled: state.stalled,
         tokenRequests: state.tokenRequests,
+        trustToken: (token: string) => state.validTokens.add(token),
         url: `${state.origin}/mcp`,
       };
     }),

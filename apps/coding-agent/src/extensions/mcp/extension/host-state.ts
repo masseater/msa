@@ -124,7 +124,7 @@ export default class McpExtensionState {
       options.updateConfig ??
       ((entry, patch) =>
         updateMcpServerConfig(entry.override ?? entry.source, entry.name, patch, {
-          override: entry.override !== undefined || entry.scope === "builtin",
+          override: entry.override !== undefined,
         }));
   }
 }

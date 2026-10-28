@@ -145,10 +145,16 @@ const MemorySettingsSchema = Type.Object({
     Type.Boolean({
       default: SETTINGS_DEFAULTS.memory.enabled,
       description:
-        "Long-term memory in sepiace: the built-in sepiace MCP server, the memory tool, recall, and the /memory command.",
+        "Long-term memory in sepiace: the connection to sepiace, the memory tool, recall, and the /memory command.",
     }),
   ),
   recall: Type.Optional(MemoryRecallSettingsSchema),
+  url: Type.Optional(
+    Type.String({
+      description:
+        "The sepiace MCP endpoint memory connects to. Read only from the global settings.json.",
+    }),
+  ),
 });
 
 function thinkingBudgetsSettings(options?: TSchemaOptions) {

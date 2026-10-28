@@ -155,7 +155,7 @@ function stateFrom(parts: {
     ["global", globalLoad],
     ["project", projectLoad],
   ] as const) {
-    for (const notice of removedSettingNotices(load.settings))
+    for (const notice of removedSettingNotices(load.settings, scope))
       errors.push({
         ...toSettingsError(scope, new Error(notice), settingsPaths[scope]),
         notice: true,
